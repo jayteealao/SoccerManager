@@ -12,7 +12,7 @@ metric-lines-added: 4022
 metric-lines-removed: 0
 metric-deviations-from-plan: 8
 metric-review-fixes-applied: 0
-commit-sha: ""
+commit-sha: "3dd2a82e7fa99eb4465eb5b1df1a445cc1523f12"
 tags: [engine, rust, benchmark, determinism]
 refs:
   index: 00-index.md
