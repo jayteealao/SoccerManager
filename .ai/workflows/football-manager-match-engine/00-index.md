@@ -4,13 +4,13 @@ type: index
 slug: football-manager-match-engine
 title: "Football manager game: match engine and 2D match viewer"
 status: active
-current-stage: plan
-stage-number: 4
+current-stage: implement
+stage-number: 5
 created-at: "2026-09-21T16:46:41Z"
-updated-at: "2026-09-21T21:57:49Z"
+updated-at: "2026-09-21T22:35:04Z"
 selected-slice: "engine-core"
 branch-strategy: dedicated
-branch: ""
+branch: "feat/football-manager-match-engine"
 base-branch: "main"
 review-scope: slug-wide
 review-scope-confirmed: true
@@ -133,7 +133,7 @@ charter:
     status: honored
     po-ratified: true
 slices:
-  - {slug: engine-core, status: defined, complexity: l, depends-on: []}
+  - {slug: engine-core, status: complete, complexity: l, depends-on: []}
   - {slug: data-schemas-generator, status: defined, complexity: m, depends-on: [engine-core]}
   - {slug: stream-protocol, status: defined, complexity: m, depends-on: [engine-core]}
   - {slug: viewer-pitch, status: defined, complexity: m, depends-on: [stream-protocol]}
@@ -153,8 +153,8 @@ augmentations:
   - {type: instrument, artifact: 04b-instrument.md, status: ready, created-at: "2026-09-21T21:57:49Z"}
   - {type: benchmark, artifact: 05c-benchmark.md, mode: baseline, status: ready, created-at: "2026-09-21T21:57:49Z"}
   - {type: experiment, artifact: 04c-experiment.md, status: deferred-to-experiment-flags, created-at: "2026-09-21T21:57:49Z"}
-next-command: wf-implement
-next-invocation: "/wf implement football-manager-match-engine engine-core"
+next-command: wf-verify
+next-invocation: "/wf verify football-manager-match-engine engine-core"
 workflow-files:
   - 00-index.md
   - 01-intake.md
@@ -192,13 +192,15 @@ workflow-files:
   - 05c-benchmark.md
   - 05c-benchmark.yaml
   - 05c-benchmark.html.fragment
+  - 05-implement.md
+  - 05-implement-engine-core.md
   - po-answers.md
 progress:
   intake: complete
   shape: complete
   slice: complete
-  plan: in-progress
-  implement: not-started
+  plan: complete
+  implement: in-progress
   verify: not-started
   review: not-started
   handoff: not-started
