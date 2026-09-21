@@ -1,0 +1,14 @@
+artifact: benchmark
+target: "engine-cli bench --seed 42 --matches 1 --json (one 90-minute match, one thread, reference machine)"
+language: rust
+framework: "timing-fallback (engine-cli bench with std::time::Instant, GetProcessTimes, GetProcessMemoryInfo) plus criterion 0.8 for the tick step"
+mode: baseline
+measured_at: "2026-09-21T21:57:49Z"
+baseline_commit: "none"
+metrics:
+  - { name: "budget.match_wall_ms", after: 2000, unit: "ms", direction: lower-is-better }
+  - { name: "budget.ticks_per_s", after: 135000, unit: "ticks/s", direction: higher-is-better }
+  - { name: "budget.batch_1000_wall_min", after: 30, unit: "min", direction: lower-is-better }
+  - { name: "tripwire.cpu_regression_pct", after: 10, unit: "%", direction: lower-is-better }
+  - { name: "tripwire.memory_regression_pct", after: 25, unit: "%", direction: lower-is-better }
+notes: "Greenfield baseline: no code exists and no measurement ran. The after column holds the NFR-1 budget and the tripwires from the shape, so compare mode reports the first measured numbers against the budget. Compare mode fills before with these budget values and after with the measured medians of the same target."

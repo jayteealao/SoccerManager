@@ -1,0 +1,43 @@
+<section class="fragment-plan" data-artifact="plan" data-slice="engine-core" data-rev="0">
+  <table class="files-touched pl-files">
+    <thead><tr><th>File</th><th>Status</th><th>Module</th><th>Lines</th></tr></thead>
+    <tbody>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">config</span> Cargo.toml</summary><div class="pl-card">Workspace with members crates/engine and crates/engine-cli; edition 2024; license MIT OR Apache-2.0; workspace dependencies pinned.</div></details></td><td>new</td><td>workspace root</td><td>+30</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">config</span> LICENSE-MIT, LICENSE-APACHE, README.md, .gitignore, rustfmt.toml</summary><div class="pl-card">License texts, build and run commands, ignore rules for target/, .scratch/, and *.ticks; rustfmt edition 2024.</div></details></td><td>new</td><td>workspace root</td><td>+258</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">config</span> crates/engine/Cargo.toml, build.rs</summary><div class="pl-card">Library crate manifest with glam, rand, rand_chacha, serde, serde_json, thiserror, tracing, sha2, windows-sys; criterion dev-dependency with harness = false. build.rs sets ENGINE_BUILD_HASH from git with a -dirty suffix.</div></details></td><td>new</td><td>crates/engine/src</td><td>+50</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/lib.rs, error.rs, math.rs, rng.rs, tuning.rs</summary><div class="pl-card">Public API; EngineError (thiserror); glam re-exports; EngineRng over ChaCha8Rng::seed_from_u64; Tuning defaults including decision interval 1 tick.</div></details></td><td>new</td><td>crates/engine/src</td><td>+200</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/pitch.rs, ball.rs, player.rs, team.rs</summary><div class="pl-card">Pitch 105 m by 68 m; ball with x, y, z, drag, friction, gravity, restitution; player state with the built-in six attributes; team with attack direction and the formation anchor mechanism.</div></details></td><td>new</td><td>crates/engine/src</td><td>+300</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/steering.rs, decision.rs, sim.rs</summary><div class="pl-card">seek, arrive, separation; pass-or-dribble scoring every tick; fixed-timestep loop with the order decisions, steering, integrate players, integrate ball, resolve possession.</div></details></td><td>new</td><td>crates/engine/src</td><td>+390</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/record.rs, validate.rs</summary><div class="pl-card">The .ticks file: 64-byte header, 192-byte records with f32 positions, trailer with the written count, fail-closed reader; the validator with four rules.</div></details></td><td>new</td><td>crates/engine/src</td><td>+260</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">observability</span> crates/engine/src/observe/mod.rs, process_win.rs</summary><div class="pl-card">build_info, machine_hash, MatchStats and RunReport per the observability contract; GetProcessTimes and GetProcessMemoryInfo behind cfg(windows).</div></details></td><td>new</td><td>crates/engine/src/observe</td><td>+180</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">test</span> crates/engine/tests/full_match.rs, determinism.rs, validator.rs, common/mod.rs; benches/tick_step.rs</summary><div class="pl-card">One integration test per criterion over the full 270,000 ticks with seed 42; shared fixture; criterion benches for one tick step and one steering pass.</div></details></td><td>new</td><td>crates/engine/tests and benches</td><td>+250</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">cli</span> crates/engine-cli/Cargo.toml, src/main.rs, cli.rs, simulate.rs, bench.rs; tests/cli_args.rs</summary><div class="pl-card">clap derive commands simulate and bench; simulate writes the .ticks file and one match-stats record; bench prints one run-report record with wall, CPU, peak memory, ticks per second, machine.hash, CPU model, and build.hash; the argument test drives the binary.</div></details></td><td>new</td><td>crates/engine-cli</td><td>+350</td></tr>
+    </tbody>
+  </table>
+  <div class="pl-risks">
+    <aside class="callout callout-risk"><div class="callout-hd">R1 · Benchmark misses 2 seconds at 50 decisions per second</div><div class="callout-body">Decisions every tick are the dominant cost. Step 15 measures early; a miss reopens the decision rate and the tick rate with the product owner (NFR-1 yields to C2). Levers in order: decision interval, spatial grid, fewer pass candidates.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R2 · Byte-identical output breaks</div><div class="callout-body">No HashMap on the simulation path; pairwise loops by index; the determinism test runs on every verify; the reproducibility boundary is same machine, same build, same C runtime.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R3 · Steering oscillation around anchors</div><div class="callout-body">Arrive radius and damping live in tuning; the validator test tunes them before the visible milestone.</div></aside>
+    <aside class="callout callout-info"><div class="callout-hd">R4 · crates.io unreachable at first build</div><div class="callout-body">Cargo uses its own fetch path. If it fails, implement records the wall and falls back to the cached rand 0.8.5 and clap 4.5.60 with the API differences noted.</div></aside>
+    <aside class="callout callout-info"><div class="callout-hd">R5 · Partial tick file after an abort</div><div class="callout-body">The reader fails closed on a missing trailer or a count mismatch; the dark-path signal in the instrumentation plan covers it.</div></aside>
+  </div>
+  <details class="pl-revs"><summary>0 prior revisions</summary><ul></ul></details>
+  <style>
+    .fragment-plan .pl-files { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-plan .pl-files th, .fragment-plan .pl-files td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
+    .fragment-plan .pl-files summary { cursor: pointer; }
+    .fragment-plan .pl-chip { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; opacity: 0.8; }
+    .fragment-plan .pl-card { padding: 6px 0 4px 18px; opacity: 0.9; }
+    .fragment-plan .pl-risks { display: grid; gap: 8px; margin-top: 12px; }
+    .fragment-plan .pl-revs { margin-top: 12px; }
+    @media (max-width: 480px) { .fragment-plan .pl-files th:nth-child(3), .fragment-plan .pl-files td:nth-child(3) { display: none; } }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-plan');
+      var files = 34, modules = 5;
+      var risks = root ? root.querySelectorAll('.pl-risks .callout').length : 0;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'plan', artifact: 'plan', counts: { files: files, modules: modules, risks: risks } } }));
+    })();
+  </script>
+</section>

@@ -1,0 +1,40 @@
+<section class="fragment-instrument" data-artifact="instrument" data-slice="engine-core">
+  <table class="in-signals">
+    <thead><tr><th>Signal</th><th>Kind</th><th>Where</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td>match-stats.simulate</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine-cli/src/simulate.rs:end</td><td>One record per simulate run with the canonical keys, ticks written, validator outcome, possession changes, and ball idle ticks.</td></tr>
+      <tr><td>run-report.bench</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine-cli/src/bench.rs:end</td><td>One record per bench run with wall, CPU, peak memory, ticks per second, machine.hash, CPU model, power plan, and budget.pass.</td></tr>
+      <tr><td>engine.ticks_per_s</td><td><span class="in-kind in-kind-gauge">gauge</span></td><td>crates/engine/src/sim.rs:run</td><td>Ticks divided by elapsed wall seconds.</td></tr>
+      <tr><td>bench.cpu_wall_ratio</td><td><span class="in-kind in-kind-gauge">gauge</span></td><td>crates/engine-cli/src/bench.rs:measure</td><td>Below 0.9 flags contention on the benchmark machine.</td></tr>
+      <tr><td>validate.violation</td><td><span class="in-kind in-kind-log">log</span></td><td>crates/engine/src/validate.rs:check</td><td>One line per violation: tick, rule, player.id, value.</td></tr>
+      <tr><td>tickfile.header</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine/src/record.rs:write_header</td><td>magic, schema.version, seed, dt_ms, expected ticks, float width.</td></tr>
+      <tr><td>tickfile.trailer</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine/src/record.rs:finish</td><td>ticks.written and byte length; a reader refuses a file without it.</td></tr>
+      <tr><td>diag.simulate.span</td><td><span class="in-kind in-kind-trace">trace</span></td><td>crates/engine-cli/src/simulate.rs:run</td><td>tracing span on stderr; never in a record.</td></tr>
+    </tbody>
+  </table>
+  <div class="in-dark">
+    <aside class="callout callout-warn"><div class="callout-hd">Dark path · simulate abort</div><div class="callout-body">A killed simulate leaves a header and no trailer; nothing said the file was partial. Covered by tickfile.trailer and the fail-closed reader.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">Dark path · validator never ran</div><div class="callout-body">A validator that never ran looks the same as one that passed. Covered by validate.ran in match-stats.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">Dark path · benchmark contention</div><div class="callout-body">A benchmark on a busy machine passes or fails for the wrong reason. Covered by bench.cpu_wall_ratio and machine.power_plan.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">Dark path · no possession</div><div class="callout-body">A match where nobody gains possession runs silently to full time. Covered by possession.changes and ball.idle_ticks.</div></aside>
+  </div>
+  <style>
+    .fragment-instrument .in-signals { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-instrument .in-signals th, .fragment-instrument .in-signals td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
+    .fragment-instrument .in-kind { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; }
+    .fragment-instrument .in-kind-event { opacity: 0.95; }
+    .fragment-instrument .in-kind-gauge { opacity: 0.8; }
+    .fragment-instrument .in-kind-log { opacity: 0.7; }
+    .fragment-instrument .in-kind-trace { opacity: 0.6; }
+    .fragment-instrument .in-dark { display: grid; gap: 8px; margin-top: 12px; }
+    @media (max-width: 480px) { .fragment-instrument .in-signals th:nth-child(3), .fragment-instrument .in-signals td:nth-child(3) { display: none; } }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-instrument');
+      var signals = root ? root.querySelectorAll('.in-signals tbody tr').length : 0;
+      var dark = root ? root.querySelectorAll('.in-dark .callout').length : 0;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'instrument', artifact: 'instrument', counts: { signals: signals, darkPaths: dark, pii: 0 } } }));
+    })();
+  </script>
+</section>

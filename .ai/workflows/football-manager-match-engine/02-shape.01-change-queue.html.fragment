@@ -1,0 +1,44 @@
+<section class="shape-change-queue">
+  <h3>Stoppage-gated change queue</h3>
+  <svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A manager change is queued at any time and applies at the next qualifying stoppage defined by the rule pack">
+    <defs><marker id="cq-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="currentColor"/></marker></defs>
+    <g font-family="system-ui, sans-serif" font-size="12" fill="currentColor">
+      <rect x="10" y="30" width="150" height="60" rx="8" fill="none" stroke="currentColor"/>
+      <text x="85" y="55" text-anchor="middle" font-weight="600">Manager request</text>
+      <text x="85" y="74" text-anchor="middle" font-size="11">any time · paused or running</text>
+
+      <rect x="220" y="30" width="150" height="60" rx="8" fill="none" stroke="currentColor"/>
+      <text x="295" y="55" text-anchor="middle" font-weight="600">Queue</text>
+      <text x="295" y="74" text-anchor="middle" font-size="11">pending chip in the viewer</text>
+
+      <rect x="430" y="30" width="150" height="60" rx="8" fill="none" stroke="currentColor" stroke-width="2"/>
+      <text x="505" y="55" text-anchor="middle" font-weight="600">Next qualifying stoppage</text>
+      <text x="505" y="74" text-anchor="middle" font-size="11">from the rule pack</text>
+
+      <rect x="620" y="30" width="130" height="60" rx="8" fill="none" stroke="currentColor"/>
+      <text x="685" y="55" text-anchor="middle" font-weight="600">Applied</text>
+      <text x="685" y="74" text-anchor="middle" font-size="11">event + commentary line</text>
+
+      <line x1="160" y1="60" x2="218" y2="60" stroke="currentColor" marker-end="url(#cq-arrow)"/>
+      <line x1="370" y1="60" x2="428" y2="60" stroke="currentColor" marker-end="url(#cq-arrow)"/>
+      <line x1="580" y1="60" x2="618" y2="60" stroke="currentColor" marker-end="url(#cq-arrow)"/>
+
+      <rect x="430" y="120" width="150" height="50" rx="8" fill="none" stroke="currentColor" stroke-dasharray="4 3"/>
+      <text x="505" y="141" text-anchor="middle" font-size="11">Tactics change</text>
+      <text x="505" y="158" text-anchor="middle" font-size="11">applies at any dead ball</text>
+
+      <rect x="430" y="185" width="150" height="55" rx="8" fill="none" stroke="currentColor" stroke-dasharray="4 3"/>
+      <text x="505" y="205" text-anchor="middle" font-size="11">Substitution</text>
+      <text x="505" y="222" text-anchor="middle" font-size="11">any dead ball · 5 in 3 windows + HT</text>
+
+      <line x1="505" y1="90" x2="505" y2="118" stroke="currentColor" marker-end="url(#cq-arrow)"/>
+      <line x1="505" y1="170" x2="505" y2="183" stroke="currentColor" marker-end="url(#cq-arrow)"/>
+
+      <text x="85" y="130" font-size="11">Rejected with a reason when:</text>
+      <text x="85" y="148" font-size="11">· the substitution limit is used (AC-8)</text>
+      <text x="85" y="166" font-size="11">· the substitute is injured or on the pitch</text>
+      <text x="85" y="184" font-size="11">· two changes target one player (substitution wins)</text>
+      <text x="85" y="215" font-size="11">Snapshot written at every stoppage (AC-14).</text>
+    </g>
+  </svg>
+</section>

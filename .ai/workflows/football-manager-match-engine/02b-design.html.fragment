@@ -1,0 +1,185 @@
+<section class="fragment-design" data-artifact="design" data-component="match-control">
+  <h2 class="sdlc-h2">Swatch matrix · light theme</h2>
+  <div class="dz-matrix dz-theme-light">
+    <div class="dz-mat-label"><b>light theme</b> · 3 states × 4 sizes</div>
+    <div class="dz-mat-grid">
+      <span></span>
+      <span class="dz-mat-col-label">sm · 28h</span>
+      <span class="dz-mat-col-label">md · 36h</span>
+      <span class="dz-mat-col-label">lg · 44h</span>
+      <span class="dz-mat-col-label">xl · 52h</span>
+
+      <span class="dz-mat-row-label">default</span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-sm is-default">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-md is-default">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-lg is-default">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-xl is-default">Resume play</button></span>
+
+      <span class="dz-mat-row-label">hover</span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-sm is-hover">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-md is-hover">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-lg is-hover">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-xl is-hover">Resume play</button></span>
+
+      <span class="dz-mat-row-label">pressed</span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-sm is-pressed">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-md is-pressed">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-lg is-pressed">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-xl is-pressed">Resume play</button></span>
+    </div>
+  </div>
+
+  <h2 class="sdlc-h2">Swatch matrix · pitchside theme</h2>
+  <div class="dz-matrix dz-theme-pitchside">
+    <div class="dz-mat-label"><b>pitchside theme</b> · overlays on the pitch, same scale</div>
+    <div class="dz-mat-grid">
+      <span></span>
+      <span class="dz-mat-col-label">sm</span>
+      <span class="dz-mat-col-label">md</span>
+      <span class="dz-mat-col-label">lg</span>
+      <span class="dz-mat-col-label">xl</span>
+
+      <span class="dz-mat-row-label">default</span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-sm is-default">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-md is-default">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-lg is-default">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-xl is-default">Resume play</button></span>
+
+      <span class="dz-mat-row-label">hover</span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-sm is-hover">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-md is-hover">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-lg is-hover">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-xl is-hover">Resume play</button></span>
+
+      <span class="dz-mat-row-label">pressed</span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-sm is-pressed">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-md is-pressed">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-lg is-pressed">Resume play</button></span>
+      <span class="dz-mat-cell"><button type="button" class="ck-btn ck-xl is-pressed">Resume play</button></span>
+    </div>
+  </div>
+
+  <h2 class="sdlc-h2">Design tokens</h2>
+  <div class="dz-tokens-wrap">
+    <table class="dz-tokens">
+      <thead>
+        <tr><th>Token</th><th>Category</th><th>Value</th><th>Preview</th><th style="text-align:right">Copy</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="tk-name">--mv-bg</td><td><span class="tk-cat">color</span></td><td class="tk-value">oklch(0.985 0.006 250)</td><td><span class="tk-swatch" style="background:oklch(0.985 0.006 250)"></span>paper</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-bg: oklch(0.985 0.006 250);">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-fg</td><td><span class="tk-cat">color</span></td><td class="tk-value">oklch(0.24 0.02 250)</td><td><span class="tk-swatch" style="background:oklch(0.24 0.02 250)"></span>ink</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-fg: oklch(0.24 0.02 250);">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-brand</td><td><span class="tk-cat">color</span></td><td class="tk-value">oklch(0.55 0.17 250)</td><td><span class="tk-swatch" style="background:oklch(0.55 0.17 250)"></span>brand blue</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-brand: oklch(0.55 0.17 250);">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-brand-hover</td><td><span class="tk-cat">color</span></td><td class="tk-value">oklch(0.49 0.17 250)</td><td><span class="tk-swatch" style="background:oklch(0.49 0.17 250)"></span>−6 L</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-brand-hover: oklch(0.49 0.17 250);">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-brand-pressed</td><td><span class="tk-cat">color</span></td><td class="tk-value">oklch(0.43 0.17 250)</td><td><span class="tk-swatch" style="background:oklch(0.43 0.17 250)"></span>−12 L</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-brand-pressed: oklch(0.43 0.17 250);">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-on-brand</td><td><span class="tk-cat">color</span></td><td class="tk-value">oklch(0.985 0.006 250)</td><td><span class="tk-swatch" style="background:oklch(0.985 0.006 250)"></span>label on brand</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-on-brand: oklch(0.985 0.006 250);">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-pitch</td><td><span class="tk-cat">color</span></td><td class="tk-value">oklch(0.62 0.13 145)</td><td><span class="tk-swatch" style="background:oklch(0.62 0.13 145)"></span>turf</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-pitch: oklch(0.62 0.13 145);">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-pitch-line</td><td><span class="tk-cat">color</span></td><td class="tk-value">oklch(0.97 0.01 145)</td><td><span class="tk-swatch" style="background:oklch(0.97 0.01 145)"></span>markings</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-pitch-line: oklch(0.97 0.01 145);">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-pitchside-bg</td><td><span class="tk-cat">color</span></td><td class="tk-value">oklch(0.28 0.03 250)</td><td><span class="tk-swatch" style="background:oklch(0.28 0.03 250)"></span>score bug</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-pitchside-bg: oklch(0.28 0.03 250);">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-ring</td><td><span class="tk-cat">color</span></td><td class="tk-value">oklch(0.55 0.17 250 / 0.35)</td><td><span class="tk-swatch" style="background:oklch(0.55 0.17 250 / 0.35)"></span>focus ring</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-ring: oklch(0.55 0.17 250 / 0.35);">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-radius-sm</td><td><span class="tk-cat">radius</span></td><td class="tk-value">4px</td><td><span class="tk-radius" style="border-radius:4px"></span>4px</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-radius-sm: 4px;">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-radius-md</td><td><span class="tk-cat">radius</span></td><td class="tk-value">6px</td><td><span class="tk-radius" style="border-radius:6px"></span>6px</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-radius-md: 6px;">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-radius-lg</td><td><span class="tk-cat">radius</span></td><td class="tk-value">8px</td><td><span class="tk-radius" style="border-radius:8px"></span>8px</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-radius-lg: 8px;">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-radius-xl</td><td><span class="tk-cat">radius</span></td><td class="tk-value">10px</td><td><span class="tk-radius" style="border-radius:10px"></span>10px</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-radius-xl: 10px;">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-padx-md / --mv-pady-md</td><td><span class="tk-cat">spacing</span></td><td class="tk-value">14px / 8px</td><td><span class="tk-bar" style="width:28px"></span><span class="tk-bar" style="width:16px"></span></td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-padx-md: 14px; --mv-pady-md: 8px;">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-gap</td><td><span class="tk-cat">spacing</span></td><td class="tk-value">8px</td><td><span class="tk-bar" style="width:16px"></span>icon to label</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-gap: 8px;">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-font-md</td><td><span class="tk-cat">font</span></td><td class="tk-value">14px / 600</td><td><span class="tk-num-preview" style="font-size:14px;font-weight:600">Aa</span>control label</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-font-md: 14px;">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-font-num</td><td><span class="tk-cat">font</span></td><td class="tk-value">14px / 500 tabular-nums</td><td><span class="tk-num-preview" style="font-size:14px;font-weight:500;font-variant-numeric:tabular-nums">67:12</span>clock and score</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-font-num: 14px;">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-ease</td><td><span class="tk-cat">easing</span></td><td class="tk-value">cubic-bezier(0.32, 0.72, 0, 1)</td><td><svg class="tk-curve" viewBox="0 0 36 18" aria-hidden="true"><path d="M2 16 C 13.5 12.96, 2 0.36, 34 2" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>ease-out</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-ease: cubic-bezier(0.32, 0.72, 0, 1);">copy</button></td></tr>
+        <tr><td class="tk-name">--mv-shadow-1</td><td><span class="tk-cat">shadow</span></td><td class="tk-value">0 1px 2px oklch(0.24 0.02 250 / 0.12)</td><td><span class="tk-shadow"></span>elevation</td><td style="text-align:right"><button class="tk-copy" data-token-copy="--mv-shadow-1: 0 1px 2px oklch(0.24 0.02 250 / 0.12);">copy</button></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="sdlc-h2">Specs · reference render (md, default, light)</h2>
+  <div class="dz-specs-wrap">
+    <svg class="dz-specs" viewBox="0 0 920 240" preserveAspectRatio="xMidYMid meet" aria-label="Annotated specs for the medium-size default match control">
+      <rect x="330" y="92" width="260" height="36" rx="6" fill="oklch(0.55 0.17 250)"/>
+      <g transform="translate(348, 102)" fill="oklch(0.985 0.006 250)"><path d="M0 0 L14 8 L0 16 Z"/></g>
+      <text x="370" y="115" fill="oklch(0.985 0.006 250)" font-family="ui-sans-serif, system-ui" font-size="14" font-weight="600">Resume play · 67:12</text>
+      <g>
+        <line class="spec-line is-dim" x1="180" y1="92" x2="320" y2="92"/>
+        <line class="spec-line is-dim" x1="180" y1="100" x2="320" y2="100"/>
+        <line class="spec-line" x1="200" y1="92" x2="200" y2="100"/>
+        <text x="120" y="100" class="spec-label">padding-y</text>
+        <text x="120" y="116" class="spec-num">8px · --mv-pady-md</text>
+      </g>
+      <g>
+        <line class="spec-line is-dim" x1="330" y1="140" x2="330" y2="180"/>
+        <line class="spec-line is-dim" x1="344" y1="140" x2="344" y2="180"/>
+        <line class="spec-line" x1="330" y1="170" x2="344" y2="170"/>
+        <text x="300" y="200" class="spec-label">padding-x</text>
+        <text x="300" y="216" class="spec-num">14px · --mv-padx-md</text>
+      </g>
+      <g>
+        <line class="spec-line is-dim" x1="362" y1="140" x2="362" y2="160"/>
+        <line class="spec-line is-dim" x1="370" y1="140" x2="370" y2="160"/>
+        <line class="spec-line" x1="362" y1="155" x2="370" y2="155"/>
+        <text x="380" y="176" class="spec-label">gap</text>
+        <text x="380" y="192" class="spec-num">8px · --mv-gap</text>
+      </g>
+      <g>
+        <line class="spec-line" x1="590" y1="86" x2="640" y2="60"/>
+        <text x="646" y="58" class="spec-label">border-radius</text>
+        <text x="646" y="74" class="spec-num">6px · --mv-radius-md</text>
+      </g>
+      <g>
+        <line class="spec-line is-dim" x1="600" y1="92" x2="700" y2="92"/>
+        <line class="spec-line is-dim" x1="600" y1="128" x2="700" y2="128"/>
+        <line class="spec-line" x1="680" y1="92" x2="680" y2="128"/>
+        <text x="700" y="106" class="spec-label">height</text>
+        <text x="700" y="122" class="spec-num">36px · md</text>
+      </g>
+    </svg>
+  </div>
+
+  <style>
+    .fragment-design { --mv-bg: oklch(0.985 0.006 250); --mv-fg: oklch(0.24 0.02 250); --mv-brand: oklch(0.55 0.17 250); --mv-brand-hover: oklch(0.49 0.17 250); --mv-brand-pressed: oklch(0.43 0.17 250); --mv-on-brand: oklch(0.985 0.006 250); --mv-pitchside-bg: oklch(0.28 0.03 250); --mv-ring: oklch(0.55 0.17 250 / 0.35); --mv-ease: cubic-bezier(0.32, 0.72, 0, 1); }
+    .fragment-design .dz-matrix { padding: 12px; border-radius: 8px; margin-bottom: 20px; }
+    .fragment-design .dz-theme-light { background: var(--mv-bg); color: var(--mv-fg); }
+    .fragment-design .dz-theme-pitchside { background: oklch(0.62 0.13 145); color: oklch(0.97 0.01 145); }
+    .fragment-design .dz-mat-label { font-size: 12px; margin-bottom: 8px; opacity: 0.85; }
+    .fragment-design .dz-mat-grid { display: grid; grid-template-columns: 80px repeat(4, 1fr); gap: 8px; align-items: center; }
+    .fragment-design .dz-mat-col-label, .fragment-design .dz-mat-row-label { font-size: 11px; opacity: 0.8; }
+    .fragment-design .ck-btn { display: inline-flex; align-items: center; gap: 8px; border: 0; cursor: default; font-family: ui-sans-serif, system-ui, sans-serif; font-weight: 600; background: var(--mv-brand); color: var(--mv-on-brand); box-shadow: 0 1px 2px oklch(0.24 0.02 250 / 0.12); transition: background 160ms var(--mv-ease); }
+    .fragment-design .dz-theme-pitchside .ck-btn { background: var(--mv-pitchside-bg); color: oklch(0.97 0.01 145); }
+    .fragment-design .ck-btn.is-hover { background: var(--mv-brand-hover); }
+    .fragment-design .dz-theme-pitchside .ck-btn.is-hover { background: oklch(0.34 0.03 250); }
+    .fragment-design .ck-btn.is-pressed { background: var(--mv-brand-pressed); box-shadow: none; }
+    .fragment-design .dz-theme-pitchside .ck-btn.is-pressed { background: oklch(0.22 0.03 250); box-shadow: none; }
+    .fragment-design .ck-sm { height: 28px; padding: 5px 10px; font-size: 12px; border-radius: 4px; }
+    .fragment-design .ck-md { height: 36px; padding: 8px 14px; font-size: 14px; border-radius: 6px; }
+    .fragment-design .ck-lg { height: 44px; padding: 11px 18px; font-size: 15px; border-radius: 8px; }
+    .fragment-design .ck-xl { height: 52px; padding: 14px 22px; font-size: 16px; border-radius: 10px; }
+    .fragment-design .dz-tokens { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .fragment-design .dz-tokens th, .fragment-design .dz-tokens td { padding: 6px 8px; border-bottom: 1px solid oklch(0.85 0.01 250); text-align: left; vertical-align: middle; }
+    .fragment-design .tk-name { font-family: ui-monospace, monospace; }
+    .fragment-design .tk-cat { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: oklch(0.93 0.01 250); color: var(--mv-fg); }
+    .fragment-design .tk-swatch { display: inline-block; width: 18px; height: 18px; border-radius: 4px; vertical-align: -4px; margin-right: 6px; border: 1px solid oklch(0.8 0.01 250); }
+    .fragment-design .tk-radius { display: inline-block; width: 20px; height: 20px; background: var(--mv-brand); vertical-align: -5px; margin-right: 6px; }
+    .fragment-design .tk-bar { display: inline-block; height: 8px; background: var(--mv-brand); margin-right: 4px; vertical-align: middle; }
+    .fragment-design .tk-num-preview { display: inline-block; margin-right: 6px; }
+    .fragment-design .tk-curve { width: 36px; height: 18px; vertical-align: middle; margin-right: 6px; }
+    .fragment-design .tk-shadow { display: inline-block; width: 20px; height: 20px; border-radius: 4px; background: var(--mv-bg); box-shadow: 0 1px 2px oklch(0.24 0.02 250 / 0.12); vertical-align: -5px; margin-right: 6px; }
+    .fragment-design .tk-copy { font-size: 11px; padding: 2px 8px; border-radius: 4px; border: 1px solid oklch(0.8 0.01 250); background: transparent; color: inherit; cursor: pointer; }
+    .fragment-design .tk-copy.is-copied { background: var(--mv-brand); color: var(--mv-on-brand); border-color: var(--mv-brand); }
+    .fragment-design .dz-specs { width: 100%; max-width: 920px; display: block; }
+    .fragment-design .spec-line { stroke: var(--mv-brand); stroke-width: 1.2; }
+    .fragment-design .spec-line.is-dim { stroke: oklch(0.7 0.02 250); stroke-dasharray: 3 3; }
+    .fragment-design .spec-label { font-size: 12px; fill: currentColor; font-family: ui-sans-serif, system-ui; }
+    .fragment-design .spec-num { font-size: 11px; fill: currentColor; font-family: ui-monospace, monospace; opacity: 0.8; }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-design');
+      if (!root) return;
+      root.querySelectorAll('[data-token-copy]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var text = btn.getAttribute('data-token-copy');
+          var done = function () { btn.classList.add('is-copied'); setTimeout(function () { btn.classList.remove('is-copied'); }, 900); };
+          if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(done, done); } else { done(); }
+        });
+      });
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'design', artifact: 'design', counts: { tokens: 21, sizes: 4, states: 3 } } }));
+    })();
+  </script>
+</section>

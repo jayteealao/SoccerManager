@@ -1,0 +1,34 @@
+artifact: design
+component: match-control
+themes: [light, pitchside]
+states: [default, hover, pressed]
+sizes:
+  - { id: sm, height: 28, padx: 10, pady: 5, font: 12, radius: 4 }
+  - { id: md, height: 36, padx: 14, pady: 8, font: 14, radius: 6 }
+  - { id: lg, height: 44, padx: 18, pady: 11, font: 15, radius: 8 }
+  - { id: xl, height: 52, padx: 22, pady: 14, font: 16, radius: 10 }
+tokens:
+  - { name: --mv-bg, category: color, value: "oklch(0.985 0.006 250)", note: "paper, tinted toward the brand hue" }
+  - { name: --mv-fg, category: color, value: "oklch(0.24 0.02 250)", note: "ink, never pure black" }
+  - { name: --mv-brand, category: color, value: "oklch(0.55 0.17 250)", note: "committed brand blue" }
+  - { name: --mv-brand-hover, category: color, value: "oklch(0.49 0.17 250)", note: "-6 L" }
+  - { name: --mv-brand-pressed, category: color, value: "oklch(0.43 0.17 250)", note: "-12 L" }
+  - { name: --mv-on-brand, category: color, value: "oklch(0.985 0.006 250)", note: "label on brand" }
+  - { name: --mv-pitch, category: color, value: "oklch(0.62 0.13 145)", note: "pitch turf" }
+  - { name: --mv-pitch-line, category: color, value: "oklch(0.97 0.01 145)", note: "pitch markings" }
+  - { name: --mv-pitchside-bg, category: color, value: "oklch(0.28 0.03 250)", note: "score bug and overlays on the pitch" }
+  - { name: --mv-ring, category: color, value: "oklch(0.55 0.17 250 / 0.35)", note: "focus ring, 3:1 against paper" }
+  - { name: --mv-radius-sm, category: radius, value: "4px" }
+  - { name: --mv-radius-md, category: radius, value: "6px" }
+  - { name: --mv-radius-lg, category: radius, value: "8px" }
+  - { name: --mv-radius-xl, category: radius, value: "10px" }
+  - { name: --mv-padx-md, category: spacing, value: "14px" }
+  - { name: --mv-pady-md, category: spacing, value: "8px" }
+  - { name: --mv-gap, category: spacing, value: "8px", note: "icon to label" }
+  - { name: --mv-font-md, category: font, value: "14px / 600", note: "control label" }
+  - { name: --mv-font-num, category: font, value: "14px / 500 tabular-nums", note: "clock, score, statistics" }
+  - { name: --mv-ease, category: easing, value: "cubic-bezier(0.32, 0.72, 0, 1)", note: "ease-out, sub-300ms" }
+  - { name: --mv-shadow-1, category: shadow, value: "0 1px 2px oklch(0.24 0.02 250 / 0.12)", note: "elevation over borders" }
+specs:
+  reference: "md / default / light"
+  annotate: [padding-y, padding-x, gap, border-radius, height]
