@@ -4,7 +4,7 @@
 // Neither reaches a browser: a page cannot write a file, and the socket carries
 // engine-to-page messages only. Until a browser transport exists, every page-side signal
 // is one JSON Lines row on console.info plus a short ring a test or a drive can read.
-// That is enough to verify a slice and not enough for a dashboard.
+// That is enough to verify this feature and not enough for a dashboard.
 
 /// Rows kept in memory. A drive reads the ring; the console keeps the full history.
 const RING_LIMIT = 256;

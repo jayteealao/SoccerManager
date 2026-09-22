@@ -163,10 +163,10 @@ Pauses production at the current tick. No fields.
 | Field | Type | Meaning |
 |---|---|---|
 | `change.kind` | string | `tactics` or `substitution`; any other value is refused by name |
-| `detail` | object | opaque in this build; the match-rules slice reads it when it applies the change |
+| `detail` | object | opaque in this build; not yet read by the engine |
 
-This build queues the change and answers. Nothing is applied to play: the match-rules slice
-takes the queue and applies each change at a qualifying stoppage.
+This build queues the change and answers. Nothing is applied to play: the engine announces
+each stoppage, and a later version applies each queued change at a qualifying stoppage.
 
 ## The page server
 
@@ -199,7 +199,7 @@ Every response carries three headers:
 | `Cache-Control` | `no-store` | a reload always shows the current file |
 
 `require-corp` refuses every cross-origin subresource. Everything the page loads is
-same-origin, including both fonts, so nothing is lost today; a later slice that wants an
+same-origin, including both fonts, so nothing is lost today; a later version that wants an
 external resource will meet this rule.
 
 One path is generated rather than read from the folder. `GET /engine.json` answers

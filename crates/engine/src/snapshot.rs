@@ -119,7 +119,13 @@ impl Snapshot {
     /// Parses a whole file. `shown` names the file in a refusal.
     pub fn from_bytes(bytes: &[u8], shown: &str) -> Result<Self, EngineError> {
         let refuse = |reason: String| {
-            tracing::error!(signal = "snapshot.refused", path = shown, reason = %reason);
+            let data_dir =
+                std::env::var_os(crate::observe::identity::DATA_DIR_ENV).map(PathBuf::from);
+            tracing::error!(
+                signal = "snapshot.refused",
+                path = %shorten_for_log(shown, data_dir.as_deref()),
+                reason = %reason
+            );
             EngineError::Snapshot {
                 path: shown.to_string(),
                 reason,
@@ -284,7 +290,7 @@ impl TickSink for SnapshotSink {
                     match.id = %self.match_id,
                     snapshot.tick = stoppage.tick,
                     path = %self.shown,
-                    reason = %err
+                    reason = %full_reason(&err)
                 );
             }
         }
@@ -300,6 +306,40 @@ fn put_text(slot: &mut [u8], text: &str) {
 fn get_text(slot: &[u8]) -> String {
     let end = slot.iter().position(|&b| b == 0).unwrap_or(slot.len());
     String::from_utf8_lossy(&slot[..end]).into_owned()
+}
+
+/// Shortens `shown` for a log signal: relative to `data_dir` (normally `SM_DATA_DIR`) or
+/// the working directory when the path falls under one of them, otherwise just the file
+/// name. A signal never carries an absolute path, so a user name in a home folder never
+/// reaches a log; the error text shown to the user on stderr keeps the path as typed.
+pub fn shorten_for_log(shown: &str, data_dir: Option<&Path>) -> String {
+    let path = Path::new(shown);
+    if !path.is_absolute() {
+        return shown.to_string();
+    }
+    let cwd = std::env::current_dir().ok();
+    for base in [data_dir, cwd.as_deref()].into_iter().flatten() {
+        if let Ok(rel) = path.strip_prefix(base) {
+            return rel.to_string_lossy().replace('\\', "/");
+        }
+    }
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| shown.to_string())
+}
+
+/// Formats `err` together with its source chain, one cause per `: `, the way the error
+/// line shown to the user already renders it (`anyhow`'s alternate `{:#}`). Used so a
+/// signal's `reason` carries the underlying OS error instead of just the top-level text.
+fn full_reason(err: &EngineError) -> String {
+    let mut out = err.to_string();
+    let mut source = std::error::Error::source(err);
+    while let Some(s) = source {
+        out.push_str(": ");
+        out.push_str(&s.to_string());
+        source = s.source();
+    }
+    out
 }
 
 /// The longest prefix of `text` that fits `len` bytes.
@@ -671,5 +711,65 @@ mod tests {
             .err()
             .unwrap();
         assert!(err.to_string().contains("content mismatch"), "{err}");
+    }
+
+    #[test]
+    fn shorten_for_log_hides_everything_outside_the_data_folder_or_cwd() {
+        // Outside both the data folder and the working directory: only the file name
+        // survives, so a user name in a home folder never reaches a log.
+        let outside = if cfg!(windows) {
+            r"C:\Users\alice\AppData\Local\Temp\x\empty.smsn"
+        } else {
+            "/home/alice/tmp/x/empty.smsn"
+        };
+        assert_eq!(shorten_for_log(outside, None), "empty.smsn");
+
+        // Under the data folder: shortened to the path relative to it.
+        let data_dir = if cfg!(windows) {
+            r"C:\Users\alice\AppData\Local\SoccerManager"
+        } else {
+            "/home/alice/.local/share/SoccerManager"
+        };
+        let under = if cfg!(windows) {
+            r"C:\Users\alice\AppData\Local\SoccerManager\matches\42\snapshot.smsn"
+        } else {
+            "/home/alice/.local/share/SoccerManager/matches/42/snapshot.smsn"
+        };
+        assert_eq!(
+            shorten_for_log(under, Some(Path::new(data_dir))),
+            "matches/42/snapshot.smsn"
+        );
+
+        // Already relative: passed through unchanged.
+        assert_eq!(
+            shorten_for_log("matches/42/snapshot.smsn", Some(Path::new(data_dir))),
+            "matches/42/snapshot.smsn"
+        );
+    }
+
+    #[test]
+    fn write_failed_reason_carries_the_underlying_os_error() {
+        // A destination that cannot be created (its parent is a plain file, not a folder)
+        // fails with an io error; the signal's reason must keep the OS error text, not
+        // just the top-level "io error" summary.
+        let dir = std::env::temp_dir().join(format!(
+            "engine-snapshot-write-failed-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let blocking_file = dir.join("blocked");
+        std::fs::write(&blocking_file, b"x").unwrap();
+        let path = blocking_file.join("snapshot.smsn");
+
+        let snapshot = Snapshot::capture(&played(1), [0; 16], 1);
+        let err = snapshot.write_atomic(&path).unwrap_err();
+        let reason = full_reason(&err);
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert!(
+            reason.len() > "io error".len() && reason.starts_with("io error"),
+            "{reason}"
+        );
     }
 }

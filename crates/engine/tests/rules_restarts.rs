@@ -122,3 +122,53 @@ fn opponents_are_ten_yards_away_when_a_free_kick_is_taken() {
         assert!(d >= KICK_DISTANCE, "away slot {} at {d:.2} m", p.slot);
     }
 }
+
+/// A free kick given close to a touchline, near the halfway line, used to stall to the hard
+/// time limit: an opponent's formation anchor there fell just off the pitch, and clamping it
+/// back onto the pitch pulled it inside the ten-yard circle around the spot again, so it could
+/// never satisfy the distance the law requires and just stood there instead of clearing.
+#[test]
+fn opponents_are_ten_yards_away_when_a_free_kick_is_taken_near_a_touchline() {
+    const CARRIER: usize = 5;
+    const TACKLER: usize = 16;
+    let config = quiet_match(90);
+    let plain = Simulation::new(config.clone()).unwrap();
+    let tackler = plain.players()[TACKLER].derived;
+    let carrier = plain.players()[CARRIER].derived;
+    let p_win = 0.05 * tackler.tackling / (tackler.tackling + carrier.dribbling);
+    let p_foul = foul_chance(&tackler, &config.tuning);
+    // Close to the touchline (34 m) but not on it, and not near a corner: the ten-yard circle
+    // around this spot still spills off the pitch, which is what traps an opponent's anchor.
+    let at = DVec2::new(4.0, 29.2);
+    let mut sim = spread(Scene::new(config), -30.0, 30.0)
+        .place(CARRIER, at)
+        .place(TACKLER, at + DVec2::new(0.3, 0.0))
+        .ball(DVec3::new(at.x, at.y, 0.0))
+        .carrier(Some(CARRIER))
+        .tick(1_001)
+        .rolls(&[p_win + 0.1 * p_foul, 0.99])
+        .build();
+    sim.step();
+    let dead = sim.dead_ball().expect("a free kick");
+    assert_eq!(dead.kind, StoppageKind::FreeKick);
+    assert_eq!(dead.team, 0, "the fouled side takes the kick");
+    let mut taken = None;
+    for _ in 0..dead.hard_limit() - dead.since + 2 {
+        let before = sim.players().to_vec();
+        let now = sim.tick() + 1;
+        sim.step();
+        if sim.dead_ball().is_none() {
+            taken = Some((before, now));
+            break;
+        }
+    }
+    let (players, taken_at) = taken.expect("the free kick was taken");
+    assert!(
+        taken_at < dead.hard_limit(),
+        "the kick waited for the hard limit at {taken_at} instead of being taken on time"
+    );
+    for p in players.iter().filter(|p| p.team == 1 && p.active()) {
+        let d = (p.pos - dead.spot).length();
+        assert!(d >= KICK_DISTANCE, "away slot {} at {d:.2} m", p.slot);
+    }
+}

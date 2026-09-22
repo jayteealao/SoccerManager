@@ -4,9 +4,13 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
 
-/// Headless football match engine.
+/// Headless command line for the football match engine.
 #[derive(Debug, Parser)]
-#[command(name = "engine-cli", version, about)]
+#[command(
+    name = "engine-cli",
+    version,
+    about = "Headless command line for the football match engine."
+)]
 pub struct Cli {
     /// Folder holding the content files (attributes, tuning, rules, teams).
     #[arg(
@@ -68,9 +72,8 @@ pub struct SimulateOpts {
     /// Do not write a snapshot at each stoppage.
     #[arg(
         long,
-        long_help = "Do not write a snapshot at each stoppage.
-
-                     By default the latest snapshot is written to
+        long_help = "Do not write a snapshot at each stoppage.\n\n\
+                     By default the latest snapshot is written to\n\
                      SM_DATA_DIR/matches/<match.id>/snapshot.smsn."
     )]
     pub no_snapshot: bool,

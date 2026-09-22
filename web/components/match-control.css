@@ -1,7 +1,7 @@
 /* `match-control`: the button primitive of record.
  *
- * Four sizes, five states, two themes, all defined here. This slice uses the `sm` and `md`
- * sizes in the light theme; the rest ship defined and unused so a later viewer slice adds
+ * Four sizes, five states, two themes, all defined here. Today the page uses the `sm` and
+ * `md` sizes in the light theme; the rest ship defined and unused so a later addition needs
  * no new geometry and invents no second button style.
  *
  * The playback controls are pressed tens of times a match, so they take a colour
@@ -118,8 +118,8 @@
 
 /* The play triangle sits two pixels right of geometric centre, because a triangle's mass
  * is left of its bounding box and a centred one reads as leaning back. The rule lives
- * here because the primitive owns it; `viewer-pitch` ships a worded play control and
- * `viewer-match-day` is the first slice to draw the glyph. */
+ * here because the primitive owns it; today's page ships a worded play control, and the
+ * glyph is drawn by a later version. */
 .match-control__glyph--play {
   display: inline-block;
   transform: translateX(2px);

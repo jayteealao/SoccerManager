@@ -62,7 +62,13 @@ pub fn run(content_dir: Option<&Path>, opts: &ResumeOpts) -> anyhow::Result<i32>
         Ok(sim) => sim,
         Err(err) => {
             if let EngineError::Snapshot { reason, .. } = &err {
-                tracing::error!(signal = "snapshot.refused", path = %shown, reason = %reason);
+                let data_dir = std::env::var_os(engine::observe::identity::DATA_DIR_ENV)
+                    .map(std::path::PathBuf::from);
+                tracing::error!(
+                    signal = "snapshot.refused",
+                    path = %engine::snapshot::shorten_for_log(&shown, data_dir.as_deref()),
+                    reason = %reason
+                );
             }
             eprintln!("error: {err}");
             return Ok(1);

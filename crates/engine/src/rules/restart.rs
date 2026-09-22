@@ -122,6 +122,51 @@ fn outside(p: DVec2, centre: DVec2, radius: f64, away: DVec2) -> DVec2 {
     centre + dir * radius
 }
 
+/// `p` moved onto the circle of `radius` around `centre`, biased `away`, then clamped inside
+/// the pitch without slipping back inside the circle. Near a touchline or goal line, clamping
+/// the primary point straight back onto the pitch can pull it within `radius` of `centre`
+/// again (the circle spills off the pitch there), and a player sent to that point would never
+/// clear the circle, stalling the restart until the hard time limit.
+///
+/// When that happens, the direction from `centre` is mirrored across whichever line the clamp
+/// touched, so the point swings back onto the pitch instead of piling up on the line. Mirroring
+/// keeps the direction tied to `p`, so two players pushed off the same spot from different
+/// angles still land on different points instead of colliding on one. If the mirrored point is
+/// still pulled back (a spot pinned in a corner, against both a touchline and a goal line), the
+/// point falls back to sliding straight toward the centre of the pitch, which the circle always
+/// reaches without spilling off since `radius` is well under both the pitch's half-length and
+/// half-width.
+fn outside_on_pitch(p: DVec2, centre: DVec2, radius: f64, away: DVec2, margin: f64) -> DVec2 {
+    let clear_of_circle = |q: DVec2| (q - centre).length() >= radius - 1e-9;
+
+    let raw = outside(p, centre, radius, away);
+    let primary = pitch::clamp(raw, margin);
+    if clear_of_circle(primary) {
+        return primary;
+    }
+
+    let mut dir = toward(centre, p);
+    if dir == DVec2::ZERO {
+        dir = away;
+    }
+    if primary.x != raw.x {
+        dir.x = -dir.x;
+    }
+    if primary.y != raw.y {
+        dir.y = -dir.y;
+    }
+    let mirrored = pitch::clamp(centre + dir * radius, margin);
+    if clear_of_circle(mirrored) {
+        return mirrored;
+    }
+
+    let mut inward = toward(centre, DVec2::ZERO);
+    if inward == DVec2::ZERO {
+        inward = away;
+    }
+    pitch::clamp(centre + inward * radius, margin)
+}
+
 /// `p` moved out of the penalty area at the `side` end.
 fn out_of_area(p: DVec2, side: f64) -> DVec2 {
     if pitch::in_penalty_area(p, side) {
@@ -154,11 +199,15 @@ pub fn target(
     let keep = KICK_DISTANCE + TARGET_MARGIN;
     let at = match dead.kind {
         StoppageKind::KickOff | StoppageKind::FreeKick | StoppageKind::Corner if opponent => {
-            outside(base, dead.spot, keep, away)
+            outside_on_pitch(base, dead.spot, keep, away, 0.5)
         }
-        StoppageKind::ThrowIn if opponent => {
-            outside(base, dead.spot, THROW_IN_DISTANCE + TARGET_MARGIN, away)
-        }
+        StoppageKind::ThrowIn if opponent => outside_on_pitch(
+            base,
+            dead.spot,
+            THROW_IN_DISTANCE + TARGET_MARGIN,
+            away,
+            0.5,
+        ),
         StoppageKind::GoalKick if opponent => out_of_area(base, end_of(dead.spot)),
         StoppageKind::Penalty => {
             let side = end_of(dead.spot);
@@ -166,7 +215,7 @@ pub fn target(
                 DVec2::new(side * (HALF_LENGTH - 0.3), 0.0)
             } else {
                 let behind = DVec2::new(-side, 0.0);
-                outside(out_of_area(base, side), dead.spot, keep, behind)
+                outside_on_pitch(out_of_area(base, side), dead.spot, keep, behind, 0.5)
             }
         }
         _ => base,

@@ -1,11 +1,11 @@
 /* The 1280 by 800 screen.
  *
- * Fixed tracks, no breakpoints and no fluid columns: the target is one desktop size and
- * `stack.platforms` carries no mobile and no tablet. The header and both side columns are
- * built here and left empty; `viewer-match-day` fills the header and the right column,
- * `viewer-lineup-tactics` fills the tactics panel, and the statistics region under the
- * controls stays empty until then. Building the frame now means the pitch is measured in
- * its shipping position, so a frame-rate reading describes the real screen.
+ * Fixed tracks, no breakpoints and no fluid columns: the target is one desktop size, with
+ * no mobile and no tablet layout. The header and both side columns are built here and left
+ * empty; a later version fills the header, the right column, and the tactics panel, and the
+ * statistics region under the controls stays empty until then. Building the frame now means
+ * the pitch is measured in its shipping position, so a frame-rate reading describes the
+ * real screen.
  */
 
 * {
@@ -89,7 +89,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* A region a later slice fills. It is a labelled empty panel, not a blank space, so the
+/* A region a later version fills. It is a labelled empty panel, not a blank space, so the
  * screen reads as unfinished rather than broken. */
 .region--empty {
   min-height: 120px;
@@ -236,8 +236,8 @@ body {
     transform 200ms var(--tl-ease);
 }
 
-/* The error state of the page and of the canvas, stubbed here and completed by
- * viewer-reports-recovery. It is a different colour AND a different word. */
+/* The error state of the page and of the canvas, stubbed here and completed in a later
+ * version. It is a different colour AND a different word. */
 .notice[data-kind="error"] {
   border-color: var(--tl-danger);
   background: color-mix(in oklch, var(--tl-danger) 8%, var(--tl-panel));

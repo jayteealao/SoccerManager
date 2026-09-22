@@ -72,7 +72,7 @@
  * banner, an overlay control — where a light panel disappears into the pitch markings.
  * It is not a dark theme for the page: DESIGN.md rules that out for the first release,
  * and no page panel carries this attribute. It changes surfaces only, so every other
- * token still holds. `viewer-match-day` is the first slice to use it. */
+ * token still holds. A later version is the first to use it. */
 [data-theme="pitchside"] {
   --tl-bg: var(--tl-pitchside-bg);
   --tl-panel: oklch(0.34 0.03 250);

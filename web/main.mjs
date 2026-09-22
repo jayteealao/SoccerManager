@@ -260,8 +260,8 @@ async function main() {
     onMessage,
   });
   socket.onClose = () => {
-    // The canvas error state, stubbed here and completed by viewer-reports-recovery: the
-    // panel and the text, with no recovery action yet.
+    // The canvas error state, stubbed here and completed in a later version: the panel and
+    // the text, with no recovery action yet.
     showNotice('The match is no longer live. Start the engine again to watch another.', 'error');
     announce('The stream ended. The match is no longer live.');
   };

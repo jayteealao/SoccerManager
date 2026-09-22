@@ -1,7 +1,7 @@
-//! AC-f (stream-protocol) on the command line: `record` writes a fixture and prints its
-//! counts, `replay` refuses a missing fixture naming the path, and `serve` prints a port,
-//! writes `engine.port`, and streams to a client that connects to it. The last test holds
-//! the exit code when a viewer closes its page in mid-match.
+//! Checks the streaming commands on the command line: `record` writes a fixture and prints
+//! its counts, `replay` refuses a missing fixture naming the path, and `serve` prints a
+//! port, writes `engine.port`, and streams to a client that connects to it. The last test
+//! holds the exit code when a viewer closes its page in mid-match.
 
 use std::io::{BufRead, BufReader, Read};
 use std::path::PathBuf;

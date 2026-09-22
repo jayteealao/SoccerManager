@@ -1,7 +1,7 @@
-//! AC-f (engine-core): an invalid seed exits non-zero with a message naming the argument; a
-//! valid seed exits zero. AC-f (data-schemas-generator): `generate` writes team files and
-//! `simulate --team-a --team-b` on them completes with the engine-core tick count. Plus: a
-//! missing content folder exits 1 naming every path tried.
+//! Checks the command-line argument handling: an invalid seed exits non-zero with a message
+//! naming the argument, and a valid seed exits zero. `generate` writes team files, and
+//! `simulate --team-a --team-b` on them completes with the tick count. Plus: a missing
+//! content folder exits 1 naming every path tried.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
