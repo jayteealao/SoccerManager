@@ -142,7 +142,7 @@ pub struct Tuning {
 /// The weights of the scored-options decision layer (named mechanism). The ball carrier
 /// scores every option as a weighted sum of its features, plus the team plan's offsets
 /// (mentality, instructions, role, and duty), plus noise, and takes the highest. Every
-/// weight is a tuning value, so calibration moves behaviour without code.
+/// weight is a tuning value, so retuning moves behaviour without code.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct DecisionWeights {
@@ -312,7 +312,7 @@ impl Default for Tuning {
 const FOUL_BASE: f64 = 0.1;
 
 /// The shipped injury rates: a planning estimate of about 0.6 injuries per match with the
-/// default teams, which calibration replaces with a sourced rate.
+/// default teams, to be replaced with a sourced rate.
 const INJURY_PER_TACKLE: f64 = 0.004;
 const INJURY_PER_MINUTE: f64 = 0.0002;
 
