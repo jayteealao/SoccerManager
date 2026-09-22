@@ -1,0 +1,82 @@
+//! AC-a: the shipped attribute schema loads with 30 to 50 named, grouped attributes on the
+//! 1 to 100 scale. AC-c: a rule pack with an unknown schema version is refused naming the
+//! version, and the current version loads. Plus: the tuning file equals `Tuning::default()`
+//! and a missing file names its path.
+
+mod common;
+
+use engine::EngineError;
+use engine::data::{RULES_VERSION, RulePack, load_json};
+use engine::{ContentDir, Tuning};
+
+#[test]
+fn the_shipped_attribute_schema_has_thirty_to_fifty_grouped_names() {
+    let content = common::content();
+    let n = content.attributes.len();
+    assert!((30..=50).contains(&n), "{n} attributes");
+    for def in &content.attributes.attributes {
+        assert!(!def.name.is_empty());
+        // The group is an enum: every loaded definition carries one of the four.
+        let _ = def.group;
+    }
+    // Every generated value on every default player lies on the 1 to 100 scale.
+    for team in common::default_teams(&content) {
+        for p in &team.players {
+            assert_eq!(p.attributes.len(), n, "player {} attribute count", p.id);
+            for (name, v) in &p.attributes {
+                assert!((1..=100).contains(v), "player {} {name} = {v}", p.id);
+            }
+        }
+    }
+}
+
+#[test]
+fn an_unknown_rule_pack_version_is_refused_naming_the_version() {
+    let path = common::fixture_path("rules-unknown-version.json");
+    let err = load_json::<RulePack>(
+        "rules",
+        &path,
+        "rules-unknown-version.json",
+        RULES_VERSION,
+        &(),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(
+            err,
+            EngineError::Version {
+                found: 99,
+                expected: 1,
+                ..
+            }
+        ),
+        "{err}"
+    );
+    assert_eq!(
+        err.to_string(),
+        "content refused: rules rules-unknown-version.json: schema_version 99; this build reads 1"
+    );
+}
+
+#[test]
+fn the_current_rule_pack_version_loads() {
+    let content = common::content();
+    assert_eq!(content.rules.schema_version, RULES_VERSION);
+    assert_eq!(content.rules.halves, 2);
+    assert_eq!(content.rules.stoppages.len(), 9);
+}
+
+#[test]
+fn the_shipped_tuning_equals_the_documented_default() {
+    let content = common::content();
+    assert_eq!(content.tuning.engine, Tuning::default());
+    assert_eq!(content.tuning.generator.squad_size, 22);
+}
+
+#[test]
+fn a_missing_content_file_names_its_path() {
+    let dir = ContentDir::at(std::env::temp_dir().join("engine-no-such-content"));
+    let err = engine::Content::load(&dir).unwrap_err();
+    assert_eq!(err.to_string(), "cannot read attributes.json");
+    assert!(matches!(err, EngineError::Read { .. }));
+}

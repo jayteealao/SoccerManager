@@ -1,0 +1,18 @@
+artifact: benchmark
+target: "engine-cli bench --seed 42 --matches 5 --json (one 90-minute match, one thread, reference machine)"
+language: rust
+framework: "timing-fallback (engine-cli bench with std::time::Instant, GetProcessTimes, GetProcessMemoryInfo) plus criterion 0.8 for the tick step"
+mode: compare
+measured_at: "2026-09-21T22:40:58Z"
+baseline_commit: "none"
+compare_commit: "27d21f5"
+metrics:
+  - { name: "budget.match_wall_ms", before: 2000, after: 395, unit: "ms", delta_pct: -80.3, direction: lower-is-better }
+  - { name: "budget.ticks_per_s", before: 135000, after: 683544, unit: "ticks/s", delta_pct: 406.3, direction: higher-is-better }
+  - { name: "budget.tick_step_us", before: 7.4, after: 1.4615, unit: "us", delta_pct: -80.2, direction: lower-is-better }
+  - { name: "bench.cpu_ms_per_match", after: 391, unit: "ms", direction: lower-is-better }
+  - { name: "bench.peak_mem_mb", after: 5.05, unit: "MB", direction: lower-is-better }
+  - { name: "budget.batch_1000_wall_min", before: 30, after: 6.6, unit: "min", delta_pct: -78.0, direction: lower-is-better }
+regressions: []
+improvements: ["budget.match_wall_ms", "budget.ticks_per_s", "budget.tick_step_us", "budget.batch_1000_wall_min"]
+notes: "The before column is the NFR-1 budget line from the shape, because no code existed at baseline. The after column holds the medians measured by verify on commit 27d21f5. The batch value is a projection from the single-match median, not a measurement. CPU per match and peak memory are first measurements and become the tripwire base for the next engine slice."

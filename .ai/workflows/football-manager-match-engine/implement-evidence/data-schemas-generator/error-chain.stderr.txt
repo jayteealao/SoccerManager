@@ -1,0 +1,6 @@
+2026-09-22T07:17:57.179849Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T07:17:57.180008Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3703 hash=be104d740f46
+2026-09-22T07:17:57.180083Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=1 bytes=858 hash=6ebfdf131295
+2026-09-22T07:17:57.180302Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
+2026-09-22T07:17:57.181054Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a
+error: cannot create C:/Windows/System32/nope/x.ticks: io error: The system cannot find the path specified. (os error 3)

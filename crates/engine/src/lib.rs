@@ -5,6 +5,7 @@
 //! for the same seed, the same build, and the same machine.
 
 pub mod ball;
+pub mod data;
 pub mod decision;
 pub mod error;
 pub mod math;
@@ -19,8 +20,9 @@ pub mod team;
 pub mod tuning;
 pub mod validate;
 
+pub use data::{Content, ContentDir};
 pub use error::EngineError;
-pub use record::{FileSink, NullSink, TickRecord, TickSink, VecSink, read_ticks};
+pub use record::{FileSink, NullSink, TickHeader, TickRecord, TickSink, VecSink, read_ticks};
 pub use sim::{MatchConfig, Simulation};
 pub use tuning::Tuning;
 pub use validate::{Validator, Violation};

@@ -1,0 +1,1 @@
+[2m2026-09-21T22:45:44.843090Z[0m [32m INFO[0m [1msimulate[0m[1m{[0m[3mseed[0m[2m=[0m42 [3mminutes[0m[2m=[0m90[1m}[0m[2m:[0m [2mengine::record[0m[2m:[0m [3msignal[0m[2m=[0m"tickfile.header" [3mschema_version[0m[2m=[0m1 [3mseed[0m[2m=[0m42 [3mdt_ms[0m[2m=[0m20.0 [3mticks_expected[0m[2m=[0m270000 [3mfloat_width[0m[2m=[0m4

@@ -178,7 +178,7 @@ impl Simulation {
             if keeper || score > dribble {
                 let mate_pos = self.players[j].pos;
                 let d = (mate_pos - carrier.pos).length();
-                let skill = f64::from(carrier.attributes.passing) / 100.0;
+                let skill = carrier.derived.passing / 100.0;
                 let noise = t.aim_noise * (1.5 - skill);
                 let dir = rotate(
                     toward(carrier.pos, mate_pos),
@@ -228,11 +228,11 @@ fn rotate(v: DVec2, angle: f64) -> DVec2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sim::MatchConfig;
+    use crate::data::test_support::shipped_config;
 
     #[test]
     fn an_open_teammate_draws_a_pass_or_a_shot() {
-        let mut sim = Simulation::new(MatchConfig::new(7, 1).unwrap()).unwrap();
+        let mut sim = Simulation::new(shipped_config(7, 1).unwrap()).unwrap();
         // Give the ball to the home striker (slot 9) deep in the away half with a teammate open.
         let striker = 9;
         sim.players[striker].pos = DVec2::new(20.0, 0.0);

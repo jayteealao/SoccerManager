@@ -1,14 +1,18 @@
 artifact: benchmark
-target: "engine-cli bench --seed 42 --matches 1 --json (one 90-minute match, one thread, reference machine)"
+target: "engine-cli bench --seed 42 --matches 5 --json (one 90-minute match, one thread, reference machine) and cargo bench -p engine --bench tick_step"
 language: rust
 framework: "timing-fallback (engine-cli bench with std::time::Instant, GetProcessTimes, GetProcessMemoryInfo) plus criterion 0.8 for the tick step"
 mode: baseline
-measured_at: "2026-09-21T21:57:49Z"
-baseline_commit: "none"
+measured_at: "2026-09-22T06:37:07Z"
+baseline_commit: "27d21f5"
+compare_commit: ""
 metrics:
-  - { name: "budget.match_wall_ms", after: 2000, unit: "ms", direction: lower-is-better }
-  - { name: "budget.ticks_per_s", after: 135000, unit: "ticks/s", direction: higher-is-better }
-  - { name: "budget.batch_1000_wall_min", after: 30, unit: "min", direction: lower-is-better }
-  - { name: "tripwire.cpu_regression_pct", after: 10, unit: "%", direction: lower-is-better }
-  - { name: "tripwire.memory_regression_pct", after: 25, unit: "%", direction: lower-is-better }
-notes: "Greenfield baseline: no code exists and no measurement ran. The after column holds the NFR-1 budget and the tripwires from the shape, so compare mode reports the first measured numbers against the budget. Compare mode fills before with these budget values and after with the measured medians of the same target."
+  - { name: "bench.match_wall_ms", before: 393, unit: "ms", direction: lower-is-better }
+  - { name: "engine.ticks_per_s", before: 687023, unit: "ticks/s", direction: higher-is-better }
+  - { name: "bench.cpu_ms_per_match", before: 387, unit: "ms", direction: lower-is-better }
+  - { name: "bench.peak_mem_mb", before: 5.06, unit: "MB", direction: lower-is-better }
+  - { name: "criterion.tick_step_us", before: 1.4611, unit: "us", direction: lower-is-better }
+  - { name: "criterion.steering_pass_22_ns", before: 880.97, unit: "ns", direction: lower-is-better }
+regressions: []
+improvements: []
+notes: "Baseline for the data-schemas-generator slice, measured on commit 27d21f5 (engine-core complete) before any code change. The tripwires bind against bench.cpu_ms_per_match 387 ms (10 percent) and bench.peak_mem_mb 5.06 MB (25 percent). The slice replaces the uniform-60 built-in teams with loaded team files, so a small wall-time shift is expected from different attribute values; the tripwires, not equality, are the gate. The engine-core baseline and compare record is byte-copied at history/05c-benchmark-0.md."

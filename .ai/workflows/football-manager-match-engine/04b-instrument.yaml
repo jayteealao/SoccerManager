@@ -1,45 +1,41 @@
 artifact: instrument
 framework: "serde_json JSON Lines per .ai/observability.md plan-version 1; tracing to stderr for diagnostics"
 signals:
-  - name: "match-stats.simulate"
+  - name: "content.loaded"
+    kind: event
+    path: "crates/engine/src/data/mod.rs:load_json"
+    note: "One tracing info line per content file: kind (attributes, tuning, rules, team), path relative to the content folder, schema_version, item count, and the 12-hex file hash."
+  - name: "content.refused"
+    kind: log
+    path: "crates/engine/src/data/mod.rs:load_json"
+    note: "One tracing error line per refused file before the error returns: kind, relative path, field path, reason. The same text becomes the EngineError::Data message."
+  - name: "content.hash"
+    kind: gauge
+    path: "crates/engine/src/data/mod.rs:Content::hash"
+    note: "12 hex characters of SHA-256 over attributes, tuning, rules, team A, team B in that order; carried in match-stats and run-report so a record names the content it ran on."
+  - name: "match-stats.teams"
     kind: event
     path: "crates/engine-cli/src/simulate.rs:end"
-    note: "One record per simulate run: record.kind, schema.version, match.id, owner.id, seed, service, version, build.hash, env, operation, duration_ms, outcome, engine.ticks_per_s, ticks.written, validate.ran, validate.violations, possession.changes, ball.max_speed, ball.idle_ticks."
-  - name: "run-report.bench"
+    note: "match-stats gains teams: [{team.id, team.name}] for sides A and B, from the loaded club ids; additive to the engine-core key set."
+  - name: "generator.league"
     kind: event
-    path: "crates/engine-cli/src/bench.rs:end"
-    note: "One record per bench run: record.kind, schema.version, run.id, seed, service, version, build.hash, env, operation, outcome, bench.matches, bench.match_wall_ms (median), bench.cpu_ms, bench.peak_mem_mb, engine.ticks_per_s, bench.cpu_wall_ratio, machine.hash, machine.cpu_model, machine.power_plan, budget.pass."
-  - name: "engine.ticks_per_s"
-    kind: gauge
-    path: "crates/engine/src/sim.rs:run"
-    note: "Ticks divided by elapsed wall seconds; carried in both records."
-  - name: "bench.cpu_wall_ratio"
-    kind: gauge
-    path: "crates/engine-cli/src/bench.rs:measure"
-    note: "CPU time over wall time for one thread; below 0.9 flags contention on the benchmark machine."
-  - name: "validate.violation"
-    kind: log
-    path: "crates/engine/src/validate.rs:check"
-    note: "One line per violation: tick, rule, player.id, value; the count rides in match-stats as validate.violations."
+    path: "crates/engine/src/data/generator.rs:generate_league"
+    note: "One tracing info line per generated league: seed, clubs, players, attribute mean, min, and max across the league, and the content.hash of the schema and tuning used."
+  - name: "identity.owner_created"
+    kind: event
+    path: "crates/engine/src/observe/identity.rs:load_or_create"
+    note: "One tracing info line when owner.id is created for the first time: the relative path owner.id inside the runtime data folder; the value itself rides only in records."
   - name: "tickfile.header"
     kind: event
     path: "crates/engine/src/record.rs:write_header"
-    note: "magic, schema.version, seed, dt_ms, expected ticks, float width; emitted as a tracing info line."
-  - name: "tickfile.trailer"
-    kind: event
-    path: "crates/engine/src/record.rs:finish"
-    note: "ticks.written and the byte length; a reader that finds no trailer or a count mismatch refuses the file."
-  - name: "diag.simulate.span"
-    kind: trace
-    path: "crates/engine-cli/src/simulate.rs:run"
-    note: "tracing span with seed and minutes; stderr only; never in a record."
+    note: "Existing signal extended: schema.version 2 adds owner.id (16 bytes) and the match.id millisecond stamp (8 bytes) to the header line."
 dark_paths:
-  - path: "crates/engine-cli/src/simulate.rs:abort"
-    reason: "A killed simulate leaves a header and no trailer; nothing said the file was partial."
-  - path: "crates/engine/src/validate.rs:pass"
-    reason: "A validator that never ran looks the same as one that passed; match-stats carries validate.ran."
-  - path: "crates/engine-cli/src/bench.rs:contention"
-    reason: "A benchmark on a busy machine fails or passes for the wrong reason; the CPU-to-wall ratio and the power plan make it visible."
-  - path: "crates/engine/src/decision.rs:no-possession"
-    reason: "A match where nobody gains possession runs silently to full time; possession.changes and ball.idle_ticks expose it."
+  - path: "crates/engine/src/data/mod.rs:refusal"
+    reason: "A refused content file exits 1 with one stderr line and no record; nothing else says which file and field failed. content.refused carries kind, path, field, and reason."
+  - path: "crates/engine-cli/src/simulate.rs:unknown-content"
+    reason: "A match that ran on edited content looks identical to one on the shipped defaults. content.hash in match-stats and run-report names the content."
+  - path: "crates/engine/src/data/generator.rs:drift"
+    reason: "A generator whose distribution drifted outside the tuning bounds produces squads that look valid. generator.league reports league-wide mean, min, and max; the calibration slice checks the bands."
+  - path: "crates/engine/src/observe/identity.rs:regenerated"
+    reason: "A deleted owner.id file is silently recreated and every later record carries a new owner. identity.owner_created marks the creation."
 pii_warnings: 0

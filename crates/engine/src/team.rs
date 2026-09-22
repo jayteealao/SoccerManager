@@ -1,11 +1,16 @@
-//! Teams, the built-in 4-4-2 formation, and the formation anchor mechanism.
+//! Teams, the 4-4-2 formation, and the formation anchor mechanism.
 //!
 //! A formation anchor is a slot position plus a fraction of the ball offset, so the whole
 //! team shifts toward the ball while keeping its shape. It replaces free-roaming agents.
+//! A team is built from a validated team file; the first eleven entries in file order fill
+//! the formation slots.
 
+use crate::data::attributes::AttributeSchema;
+use crate::data::team::{Kit, TeamFile};
+use crate::error::EngineError;
 use crate::math::DVec2;
 use crate::pitch;
-use crate::player::{Attributes, Player};
+use crate::player::{Attributes, Derived, Player};
 use crate::tuning::Tuning;
 
 /// Number of players per team.
@@ -26,23 +31,81 @@ pub const FORMATION_442: [(f64, f64); PLAYERS_PER_TEAM] = [
     (65.0, 8.0),
 ];
 
-/// A team: an attack direction and a formation.
+/// A team: club identity, an attack direction, and a formation.
 #[derive(Debug, Clone)]
 pub struct Team {
     pub index: usize,
     /// +1.0 attacks toward positive `x`; -1.0 toward negative `x`.
     pub attack_x: f64,
     pub formation: [(f64, f64); PLAYERS_PER_TEAM],
+    pub club_id: String,
+    pub name: String,
+    pub kit: Kit,
+    /// Every player id in the team file, in file order; the first eleven start.
+    pub player_ids: Vec<String>,
 }
 
 impl Team {
-    /// The built-in home (index 0) or away (index 1) team.
-    pub fn builtin(index: usize) -> Self {
+    /// A team with a club identity and no players yet; `index` 0 attacks positive `x`.
+    pub fn new(index: usize, club_id: String, name: String, kit: Kit) -> Self {
         Self {
             index,
             attack_x: if index == 0 { 1.0 } else { -1.0 },
             formation: FORMATION_442,
+            club_id,
+            name,
+            kit,
+            player_ids: Vec::new(),
         }
+    }
+
+    /// Builds the team and its eleven starters from a validated team file. Player ids run
+    /// from `first_id`.
+    pub fn from_file(
+        index: usize,
+        file: &TeamFile,
+        schema: &AttributeSchema,
+        tuning: &Tuning,
+    ) -> Result<(Self, Vec<Player>), EngineError> {
+        if file.players.len() < PLAYERS_PER_TEAM {
+            return Err(EngineError::InvalidConfig(format!(
+                "club {} has {} players; a match needs {PLAYERS_PER_TEAM}",
+                file.club.id,
+                file.players.len()
+            )));
+        }
+        let mut team = Self::new(
+            index,
+            file.club.id.clone(),
+            file.club.name.clone(),
+            file.club.kit.clone(),
+        );
+        team.player_ids = file.players.iter().map(|p| p.id.clone()).collect();
+        let first_id = index * PLAYERS_PER_TEAM;
+        let players = file
+            .players
+            .iter()
+            .take(PLAYERS_PER_TEAM)
+            .enumerate()
+            .map(|(slot, entry)| {
+                let attributes = Attributes::from_entry(&entry.attributes, schema);
+                let derived = Derived::from_attributes(&attributes, schema, tuning);
+                let pos = team.slot_base(slot);
+                Player {
+                    id: first_id + slot,
+                    team: index,
+                    slot,
+                    shirt: entry.shirt,
+                    attributes,
+                    derived,
+                    pos,
+                    vel: DVec2::ZERO,
+                    target: pos,
+                    facing: DVec2::new(team.attack_x, 0.0),
+                }
+            })
+            .collect();
+        Ok((team, players))
     }
 
     /// The goal this team attacks.
@@ -74,37 +137,36 @@ impl Team {
         let shift = DVec2::new(ball.x * t.compactness_x, ball.y * t.compactness_y);
         pitch::clamp(base + shift, 0.5)
     }
+}
 
-    /// The eleven players of this team at their kick-off positions.
-    pub fn players(&self, first_id: usize, attributes: Attributes) -> Vec<Player> {
-        (0..PLAYERS_PER_TEAM)
-            .map(|slot| {
-                let pos = self.slot_base(slot);
-                Player {
-                    id: first_id + slot,
-                    team: self.index,
-                    slot,
-                    shirt: u8::try_from(slot + 1).unwrap_or(0),
-                    attributes,
-                    pos,
-                    vel: DVec2::ZERO,
-                    target: pos,
-                    facing: DVec2::new(self.attack_x, 0.0),
-                }
-            })
-            .collect()
+#[cfg(test)]
+pub(crate) mod test_support {
+    use super::*;
+
+    /// A team with a placeholder identity, for tests of geometry alone.
+    pub(crate) fn bare(index: usize) -> Team {
+        Team::new(
+            index,
+            format!("test-{index}"),
+            format!("Test {index}"),
+            Kit {
+                primary: "#ffffff".into(),
+                secondary: "#000000".into(),
+            },
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::test_support::bare;
     use super::*;
 
     #[test]
     fn anchors_stay_inside_the_pitch_for_every_corner() {
         let t = Tuning::default();
         for index in 0..2 {
-            let team = Team::builtin(index);
+            let team = bare(index);
             for ball in [
                 DVec2::new(52.5, 34.0),
                 DVec2::new(-52.5, 34.0),
@@ -120,8 +182,8 @@ mod tests {
 
     #[test]
     fn away_team_mirrors_home() {
-        let home = Team::builtin(0);
-        let away = Team::builtin(1);
+        let home = bare(0);
+        let away = bare(1);
         assert_eq!(home.slot_base(0).x, -away.slot_base(0).x);
         assert!(home.slot_base(9).x > 0.0 && away.slot_base(9).x < 0.0);
     }

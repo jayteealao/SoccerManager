@@ -1,18 +1,20 @@
-<section class="fragment-benchmark" data-artifact="benchmark" data-slice="engine-core" data-mode="baseline">
+<section class="fragment-benchmark" data-artifact="benchmark" data-slice="data-schemas-generator" data-mode="baseline">
   <table class="bm-metrics">
-    <thead><tr><th>Metric</th><th>Budget</th><th>Unit</th><th>Direction</th></tr></thead>
+    <thead><tr><th>Metric</th><th>Baseline (27d21f5)</th><th>Compare</th><th>Unit</th><th>Tripwire</th><th>Direction</th></tr></thead>
     <tbody>
-      <tr><td>budget.match_wall_ms</td><td>2000</td><td>ms</td><td>lower is better</td></tr>
-      <tr><td>budget.ticks_per_s</td><td>135000</td><td>ticks/s</td><td>higher is better</td></tr>
-      <tr><td>budget.batch_1000_wall_min</td><td>30</td><td>min</td><td>lower is better</td></tr>
-      <tr><td>tripwire.cpu_regression_pct</td><td>10</td><td>%</td><td>lower is better</td></tr>
-      <tr><td>tripwire.memory_regression_pct</td><td>25</td><td>%</td><td>lower is better</td></tr>
+      <tr data-tone="neutral"><td>bench.match_wall_ms</td><td>393</td><td>-</td><td>ms</td><td>budget 2000 ms (NFR-1)</td><td>lower is better</td></tr>
+      <tr data-tone="neutral"><td>engine.ticks_per_s</td><td>687023</td><td>-</td><td>ticks/s</td><td>budget 135000</td><td>higher is better</td></tr>
+      <tr data-tone="neutral"><td>bench.cpu_ms_per_match</td><td>387</td><td>-</td><td>ms</td><td>+10% = 426 ms</td><td>lower is better</td></tr>
+      <tr data-tone="neutral"><td>bench.peak_mem_mb</td><td>5.06</td><td>-</td><td>MB</td><td>+25% = 6.33 MB</td><td>lower is better</td></tr>
+      <tr data-tone="neutral"><td>criterion.tick_step_us</td><td>1.4611</td><td>-</td><td>us</td><td>budget 7.4 us</td><td>lower is better</td></tr>
+      <tr data-tone="neutral"><td>criterion.steering_pass_22_ns</td><td>880.97</td><td>-</td><td>ns</td><td>informational</td><td>lower is better</td></tr>
     </tbody>
   </table>
-  <aside class="callout callout-info"><div class="callout-hd">Greenfield baseline</div><div class="callout-body">No code exists and no measurement ran. The budget column holds the NFR-1 budget and the tripwires from the shape. Compare mode, run by verify after implement, reports the first measured medians against these values.</div></aside>
+  <aside class="callout callout-info"><div class="callout-hd">Baseline for data-schemas-generator</div><div class="callout-body">Measured on commit 27d21f5 before any code change, one thread, Ultimate Performance plan, CPU-to-wall ratio 0.985. Verify runs compare mode after implement with the same two commands. The loaded team files change attribute values, so a small wall-time shift is expected; the 10 percent CPU and 25 percent memory tripwires are the gate. The engine-core record is at history/05c-benchmark-0.md.</div></aside>
   <style>
     .fragment-benchmark .bm-metrics { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     .fragment-benchmark .bm-metrics th, .fragment-benchmark .bm-metrics td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); }
+    .fragment-benchmark .bm-metrics tr[data-tone="improved"] td:nth-child(5) { color: #1a7f37; font-weight: 600; }
     .fragment-benchmark .callout { margin-top: 12px; }
   </style>
   <script>

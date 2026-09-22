@@ -1,0 +1,1 @@
+error: invalid configuration: minutes must be 1 to 200, got 0

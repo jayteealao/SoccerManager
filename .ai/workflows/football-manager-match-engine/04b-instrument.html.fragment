@@ -1,22 +1,21 @@
-<section class="fragment-instrument" data-artifact="instrument" data-slice="engine-core">
+<section class="fragment-instrument" data-artifact="instrument" data-slice="data-schemas-generator">
   <table class="in-signals">
     <thead><tr><th>Signal</th><th>Kind</th><th>Where</th><th>Note</th></tr></thead>
     <tbody>
-      <tr><td>match-stats.simulate</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine-cli/src/simulate.rs:end</td><td>One record per simulate run with the canonical keys, ticks written, validator outcome, possession changes, and ball idle ticks.</td></tr>
-      <tr><td>run-report.bench</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine-cli/src/bench.rs:end</td><td>One record per bench run with wall, CPU, peak memory, ticks per second, machine.hash, CPU model, power plan, and budget.pass.</td></tr>
-      <tr><td>engine.ticks_per_s</td><td><span class="in-kind in-kind-gauge">gauge</span></td><td>crates/engine/src/sim.rs:run</td><td>Ticks divided by elapsed wall seconds.</td></tr>
-      <tr><td>bench.cpu_wall_ratio</td><td><span class="in-kind in-kind-gauge">gauge</span></td><td>crates/engine-cli/src/bench.rs:measure</td><td>Below 0.9 flags contention on the benchmark machine.</td></tr>
-      <tr><td>validate.violation</td><td><span class="in-kind in-kind-log">log</span></td><td>crates/engine/src/validate.rs:check</td><td>One line per violation: tick, rule, player.id, value.</td></tr>
-      <tr><td>tickfile.header</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine/src/record.rs:write_header</td><td>magic, schema.version, seed, dt_ms, expected ticks, float width.</td></tr>
-      <tr><td>tickfile.trailer</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine/src/record.rs:finish</td><td>ticks.written and byte length; a reader refuses a file without it.</td></tr>
-      <tr><td>diag.simulate.span</td><td><span class="in-kind in-kind-trace">trace</span></td><td>crates/engine-cli/src/simulate.rs:run</td><td>tracing span on stderr; never in a record.</td></tr>
+      <tr><td>content.loaded</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine/src/data/mod.rs:load_json</td><td>One line per content file: kind, relative path, schema_version, item count, 12-hex file hash.</td></tr>
+      <tr><td>content.refused</td><td><span class="in-kind in-kind-log">log</span></td><td>crates/engine/src/data/mod.rs:load_json</td><td>One error line per refused file: kind, relative path, field path, reason; the same text is the error message.</td></tr>
+      <tr><td>content.hash</td><td><span class="in-kind in-kind-gauge">gauge</span></td><td>crates/engine/src/data/mod.rs:Content::hash</td><td>12 hex characters over attributes, tuning, rules, team A, team B; carried in match-stats and run-report.</td></tr>
+      <tr><td>match-stats.teams</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine-cli/src/simulate.rs:end</td><td>teams: [{team.id, team.name}] for sides A and B; additive to the engine-core keys.</td></tr>
+      <tr><td>generator.league</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine/src/data/generator.rs:generate_league</td><td>seed, clubs, players, attribute mean, min, max, and the content.hash used.</td></tr>
+      <tr><td>identity.owner_created</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine/src/observe/identity.rs:load_or_create</td><td>Marks the first creation of owner.id; the value rides only in records.</td></tr>
+      <tr><td>tickfile.header</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine/src/record.rs:write_header</td><td>Extended: schema.version 2 adds owner.id and the match.id stamp.</td></tr>
     </tbody>
   </table>
   <div class="in-dark">
-    <aside class="callout callout-warn"><div class="callout-hd">Dark path · simulate abort</div><div class="callout-body">A killed simulate leaves a header and no trailer; nothing said the file was partial. Covered by tickfile.trailer and the fail-closed reader.</div></aside>
-    <aside class="callout callout-warn"><div class="callout-hd">Dark path · validator never ran</div><div class="callout-body">A validator that never ran looks the same as one that passed. Covered by validate.ran in match-stats.</div></aside>
-    <aside class="callout callout-warn"><div class="callout-hd">Dark path · benchmark contention</div><div class="callout-body">A benchmark on a busy machine passes or fails for the wrong reason. Covered by bench.cpu_wall_ratio and machine.power_plan.</div></aside>
-    <aside class="callout callout-warn"><div class="callout-hd">Dark path · no possession</div><div class="callout-body">A match where nobody gains possession runs silently to full time. Covered by possession.changes and ball.idle_ticks.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">Dark path · silent refusal</div><div class="callout-body">A refused content file exits 1 with one stderr line and no record. Covered by content.refused with kind, path, field, and reason.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">Dark path · unknown content</div><div class="callout-body">A match on edited content looks identical to one on the shipped defaults. Covered by content.hash in match-stats and run-report.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">Dark path · generator drift</div><div class="callout-body">A generator outside the tuning bounds still produces valid-looking squads. Covered by generator.league mean, min, and max; the calibration slice checks the bands.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">Dark path · owner regenerated</div><div class="callout-body">A deleted owner.id is recreated and later records carry a new owner. Covered by identity.owner_created.</div></aside>
   </div>
   <style>
     .fragment-instrument .in-signals { width: 100%; border-collapse: collapse; font-size: 0.9rem; }

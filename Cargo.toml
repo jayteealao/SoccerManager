@@ -6,7 +6,7 @@ members = ["crates/engine", "crates/engine-cli"]
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-rust-version = "1.86"
+rust-version = "1.87"
 repository = ""
 
 [workspace.dependencies]
@@ -21,6 +21,7 @@ anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 sha2 = "0.10"
+garde = { version = "0.23", default-features = false, features = ["derive"] }
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_System_ProcessStatus"] }
 criterion = "0.8"
 

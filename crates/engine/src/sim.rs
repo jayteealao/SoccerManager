@@ -1,39 +1,72 @@
 //! The fixed-timestep simulation loop (named mechanism: tick count is a function of match
 //! time alone). Order per tick: decisions, steering, ball, possession, overlap resolution.
 
+use sha2::{Digest, Sha256};
+
 use crate::ball::Ball;
+use crate::data::team::TeamFile;
+use crate::data::{Content, hex12};
 use crate::decision::Kick;
 use crate::error::EngineError;
 use crate::math::{DVec2, DVec3};
 use crate::pitch;
-use crate::player::{Attributes, Player};
+use crate::player::Player;
 use crate::record::{TickRecord, TickSink};
 use crate::rng::EngineRng;
 use crate::steering;
 use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::Tuning;
 
-/// Everything a match needs to start.
+/// Everything a match needs to start: the seed, the length, the tuning from the content,
+/// the two teams with their starters, and a hash of the content they came from.
 #[derive(Debug, Clone)]
 pub struct MatchConfig {
     pub seed: u64,
     pub minutes: u32,
     pub tuning: Tuning,
+    pub teams: [Team; 2],
+    pub players: Vec<Player>,
+    /// Twelve hex characters over the content files and the two team files.
+    pub content_hash: String,
 }
 
 impl MatchConfig {
-    /// A configuration with the default tuning. `minutes` must be 1 to 200.
-    pub fn new(seed: u64, minutes: u32) -> Result<Self, EngineError> {
+    /// Builds a match from loaded content and two validated team files. `minutes` must be
+    /// 1 to 200; the home team is `files[0]`.
+    pub fn new(
+        seed: u64,
+        minutes: u32,
+        content: &Content,
+        files: [&TeamFile; 2],
+    ) -> Result<Self, EngineError> {
         if !(1..=200).contains(&minutes) {
             return Err(EngineError::InvalidConfig(format!(
                 "minutes must be 1 to 200, got {minutes}"
             )));
         }
+        let tuning = content.tuning.engine.clone();
+        let (home, mut players) = Team::from_file(0, files[0], &content.attributes, &tuning)?;
+        let (away, away_players) = Team::from_file(1, files[1], &content.attributes, &tuning)?;
+        players.extend(away_players);
+        let mut hasher = Sha256::new();
+        hasher.update(content.digest);
+        for file in files {
+            let json = serde_json::to_vec(file).map_err(|e| EngineError::Format(e.to_string()))?;
+            hasher.update(json);
+        }
         Ok(Self {
             seed,
             minutes,
-            tuning: Tuning::default(),
+            tuning,
+            teams: [home, away],
+            players,
+            content_hash: hex12(&hasher.finalize()),
         })
+    }
+
+    /// The two club identifiers, home first.
+    pub fn club_ids(&self) -> [&str; 2] {
+        [&self.teams[0].club_id, &self.teams[1].club_id]
     }
 }
 
@@ -62,16 +95,17 @@ pub struct Simulation {
 }
 
 impl Simulation {
-    /// Places both built-in teams for kick-off.
+    /// Places both teams for kick-off.
     pub fn new(config: MatchConfig) -> Result<Self, EngineError> {
-        if config.tuning.dt <= 0.0 || config.tuning.decision_interval_ticks == 0 {
-            return Err(EngineError::InvalidConfig(
-                "dt and decision_interval_ticks must be positive".into(),
-            ));
+        if config.players.len() != 2 * PLAYERS_PER_TEAM {
+            return Err(EngineError::InvalidConfig(format!(
+                "a match needs {} players, got {}",
+                2 * PLAYERS_PER_TEAM,
+                config.players.len()
+            )));
         }
-        let teams = [Team::builtin(0), Team::builtin(1)];
-        let mut players = teams[0].players(0, Attributes::uniform(60));
-        players.extend(teams[1].players(PLAYERS_PER_TEAM, Attributes::uniform(60)));
+        let teams = config.teams.clone();
+        let players = config.players.clone();
         let rng = EngineRng::from_seed(config.seed);
         let mut sim = Self {
             config,
@@ -118,7 +152,7 @@ impl Simulation {
     /// Advances the match by one tick.
     pub fn step(&mut self) {
         let t = self.config.tuning.clone();
-        let kick = if self.tick % t.decision_interval_ticks == 0 {
+        let kick = if self.tick.is_multiple_of(t.decision_interval_ticks) {
             self.decide()
         } else {
             None
@@ -266,8 +300,8 @@ impl Simulation {
                     if p.team == carrier.team || (p.pos - ball_xy).length() > t.reach_radius {
                         continue;
                     }
-                    let tackle = f64::from(p.attributes.tackling);
-                    let dribble = f64::from(carrier.attributes.dribbling);
+                    let tackle = p.derived.tackling;
+                    let dribble = carrier.derived.dribbling;
                     let p_win = 0.05 * tackle / (tackle + dribble);
                     if self.rng.chance(p_win) {
                         self.gain(i, t);
@@ -292,11 +326,12 @@ impl Simulation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::data::test_support::shipped_config;
     use crate::record::VecSink;
 
     #[test]
     fn five_minutes_produce_fifteen_thousand_ticks() {
-        let mut sim = Simulation::new(MatchConfig::new(42, 5).unwrap()).unwrap();
+        let mut sim = Simulation::new(shipped_config(42, 5).unwrap()).unwrap();
         let mut sink = VecSink::default();
         sim.run(crate::ticks_for_minutes(5), &mut sink).unwrap();
         assert_eq!(sink.records.len(), 15_000);
@@ -309,6 +344,14 @@ mod tests {
 
     #[test]
     fn zero_minutes_is_rejected() {
-        assert!(MatchConfig::new(1, 0).is_err());
+        assert!(shipped_config(1, 0).is_err());
+    }
+
+    #[test]
+    fn the_config_names_both_clubs_and_the_content() {
+        let config = shipped_config(1, 1).unwrap();
+        assert_ne!(config.club_ids()[0], config.club_ids()[1]);
+        assert_eq!(config.content_hash.len(), 12);
+        assert_eq!(config.players.len(), 22);
     }
 }

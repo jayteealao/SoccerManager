@@ -122,9 +122,10 @@ impl Validator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::team::test_support::bare;
 
     fn record(tick: u32) -> TickRecord {
-        let teams = [Team::builtin(0), Team::builtin(1)];
+        let teams = [bare(0), bare(1)];
         let mut players = [[0.0f32; 2]; PLAYER_COUNT];
         for (i, p) in players.iter_mut().enumerate() {
             let base = teams[i / PLAYERS_PER_TEAM].slot_base(i % PLAYERS_PER_TEAM);
@@ -139,7 +140,7 @@ mod tests {
 
     #[test]
     fn a_hand_built_overlap_is_one_violation() {
-        let v = Validator::new(Tuning::default(), [Team::builtin(0), Team::builtin(1)]);
+        let v = Validator::new(Tuning::default(), [bare(0), bare(1)]);
         let mut r = record(10);
         r.players[1] = r.players[0];
         let out = v.check(&[record(9), r]);
@@ -150,7 +151,7 @@ mod tests {
 
     #[test]
     fn a_ball_faster_than_the_cap_is_a_violation() {
-        let v = Validator::new(Tuning::default(), [Team::builtin(0), Team::builtin(1)]);
+        let v = Validator::new(Tuning::default(), [bare(0), bare(1)]);
         let mut r = record(2);
         r.ball = [0.9, 0.0, 0.0];
         let out = v.check(&[record(1), r]);

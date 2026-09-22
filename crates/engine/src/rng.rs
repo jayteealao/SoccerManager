@@ -39,6 +39,19 @@ impl EngineRng {
     pub fn chance(&mut self, p: f64) -> bool {
         self.next_f64() < p
     }
+
+    /// A bell-curve draw: `mean` plus `spread` times a unit normal approximated by the sum of
+    /// twelve uniform draws minus six (Irwin-Hall; product-owner choice, plan Q5).
+    pub fn bell(&mut self, mean: f64, spread: f64) -> f64 {
+        let sum: f64 = (0..12).map(|_| self.next_f64()).sum();
+        mean + spread * (sum - 6.0)
+    }
+
+    /// A bell-curve draw rounded and clamped to the 1 to 100 attribute scale.
+    pub fn attribute(&mut self, mean: f64, spread: f64) -> u8 {
+        // The clamp keeps the value inside 1..=100, so the cast cannot truncate.
+        self.bell(mean, spread).round().clamp(1.0, 100.0) as u8
+    }
 }
 
 #[cfg(test)]
@@ -59,5 +72,18 @@ mod tests {
         let mut a = EngineRng::from_seed(1);
         let mut b = EngineRng::from_seed(2);
         assert_ne!(a.next_f64().to_bits(), b.next_f64().to_bits());
+    }
+
+    #[test]
+    fn attribute_draws_centre_on_the_mean_and_stay_in_range() {
+        let mut rng = EngineRng::from_seed(7);
+        let mut sum = 0.0;
+        for _ in 0..10_000 {
+            let v = rng.attribute(50.0, 10.0);
+            assert!((1..=100).contains(&v));
+            sum += f64::from(v);
+        }
+        let mean = sum / 10_000.0;
+        assert!((49.0..=51.0).contains(&mean), "sample mean {mean}");
     }
 }

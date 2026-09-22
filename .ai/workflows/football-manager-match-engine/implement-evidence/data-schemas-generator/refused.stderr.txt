@@ -1,0 +1,5 @@
+2026-09-22T07:17:57.227252Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T07:17:57.227402Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3703 hash=be104d740f46
+2026-09-22T07:17:57.227471Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=1 bytes=858 hash=6ebfdf131295
+2026-09-22T07:17:57.227685Z ERROR simulate{seed=1 minutes=1}: engine::data: signal="content.refused" kind="team" path="team-bad-attribute.json" field=players reason=player p-club-00000001-00-03: attribute pace is 120; allowed 1 to 100
+error: content refused: team team-bad-attribute.json: players: player p-club-00000001-00-03: attribute pace is 120; allowed 1 to 100

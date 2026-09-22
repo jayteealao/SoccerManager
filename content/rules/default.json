@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "halves": 2,
+  "half_minutes": 45,
+  "substitutions": { "limit": 5, "windows": 3 },
+  "stoppages": [
+    { "kind": "kick_off", "admits_tactics": true, "admits_substitution": true },
+    { "kind": "throw_in", "admits_tactics": true, "admits_substitution": true },
+    { "kind": "corner", "admits_tactics": true, "admits_substitution": true },
+    { "kind": "goal_kick", "admits_tactics": true, "admits_substitution": true },
+    { "kind": "free_kick", "admits_tactics": true, "admits_substitution": true },
+    { "kind": "penalty", "admits_tactics": false, "admits_substitution": false },
+    { "kind": "goal", "admits_tactics": true, "admits_substitution": true },
+    { "kind": "half_time", "admits_tactics": true, "admits_substitution": true },
+    { "kind": "injury", "admits_tactics": true, "admits_substitution": true }
+  ]
+}

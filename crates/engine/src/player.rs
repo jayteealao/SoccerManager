@@ -1,32 +1,78 @@
-//! Player state and the built-in attribute set.
+//! Player state, the attribute array, and the derived values the hot path reads.
 //!
-//! The six attributes are a stopgap; the data-schemas slice replaces them with the
-//! data-driven schema of 30 to 50 attributes on the 1 to 100 scale.
+//! `Attributes` is a fixed array in schema order so `Player` stays `Copy` and no name lookup
+//! happens during a tick. `Derived` is computed once at load from the six required
+//! attributes.
 
+use std::collections::BTreeMap;
+
+use crate::data::attributes::{AttributeSchema, MAX_ATTRIBUTES};
 use crate::math::DVec2;
 use crate::tuning::Tuning;
 
-/// Attribute values on the 1 to 100 scale.
+/// Attribute values on the 1 to 100 scale, in schema order.
 #[derive(Debug, Clone, Copy)]
 pub struct Attributes {
-    pub pace: u8,
-    pub acceleration: u8,
-    pub passing: u8,
-    pub dribbling: u8,
-    pub tackling: u8,
-    pub positioning: u8,
+    pub values: [u8; MAX_ATTRIBUTES],
+    pub len: u8,
 }
 
 impl Attributes {
-    /// A uniform attribute set.
-    pub const fn uniform(v: u8) -> Self {
+    /// The values of a validated team-file entry, in schema order.
+    pub fn from_entry(entry: &BTreeMap<String, u8>, schema: &AttributeSchema) -> Self {
+        let mut values = [0u8; MAX_ATTRIBUTES];
+        for (slot, def) in values.iter_mut().zip(&schema.attributes) {
+            *slot = entry.get(&def.name).copied().unwrap_or(1);
+        }
         Self {
-            pace: v,
-            acceleration: v,
-            passing: v,
-            dribbling: v,
-            tackling: v,
-            positioning: v,
+            values,
+            // The schema holds at most MAX_ATTRIBUTES (50) entries.
+            len: schema.len() as u8,
+        }
+    }
+
+    /// The value at schema index `index`.
+    pub fn get(&self, index: usize) -> u8 {
+        self.values[index]
+    }
+
+    /// The values in schema order.
+    pub fn iter(&self) -> impl Iterator<Item = u8> + '_ {
+        self.values[..usize::from(self.len)].iter().copied()
+    }
+}
+
+/// Values the simulation reads every tick, computed once from the attributes.
+#[derive(Debug, Clone, Copy)]
+pub struct Derived {
+    /// Maximum speed in metres per second.
+    pub max_speed: f64,
+    /// Maximum acceleration in metres per second squared.
+    pub max_accel: f64,
+    pub passing: f64,
+    pub dribbling: f64,
+    pub tackling: f64,
+    pub positioning: f64,
+}
+
+impl Derived {
+    /// Derives from the six required attributes of a validated schema.
+    pub fn from_attributes(a: &Attributes, schema: &AttributeSchema, t: &Tuning) -> Self {
+        let [
+            pace,
+            acceleration,
+            passing,
+            dribbling,
+            tackling,
+            positioning,
+        ] = schema.required_indices().map(|i| f64::from(a.get(i)));
+        Self {
+            max_speed: t.base_speed + t.pace_speed * pace / 100.0,
+            max_accel: t.base_accel + t.accel_bonus * acceleration / 100.0,
+            passing,
+            dribbling,
+            tackling,
+            positioning,
         }
     }
 }
@@ -42,6 +88,7 @@ pub struct Player {
     pub slot: usize,
     pub shirt: u8,
     pub attributes: Attributes,
+    pub derived: Derived,
     pub pos: DVec2,
     pub vel: DVec2,
     /// Where steering drives the player this tick.
@@ -52,36 +99,83 @@ pub struct Player {
 
 impl Player {
     /// Maximum speed in metres per second.
-    pub fn max_speed(&self, t: &Tuning) -> f64 {
-        t.base_speed + t.pace_speed * f64::from(self.attributes.pace) / 100.0
+    pub fn max_speed(&self) -> f64 {
+        self.derived.max_speed
     }
 
     /// Maximum acceleration in metres per second squared.
-    pub fn max_accel(&self, t: &Tuning) -> f64 {
-        t.base_accel + t.accel_bonus * f64::from(self.attributes.acceleration) / 100.0
+    pub fn max_accel(&self) -> f64 {
+        self.derived.max_accel
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod test_support {
+    use super::*;
+
+    /// A player with every attribute at `v`, for unit tests that need no schema.
+    pub(crate) fn flat_player(id: usize, v: u8, t: &Tuning) -> Player {
+        let attributes = Attributes {
+            values: [v; MAX_ATTRIBUTES],
+            len: 6,
+        };
+        let value = f64::from(v);
+        Player {
+            id,
+            team: 0,
+            slot: 0,
+            shirt: 1,
+            attributes,
+            derived: Derived {
+                max_speed: t.base_speed + t.pace_speed * value / 100.0,
+                max_accel: t.base_accel + t.accel_bonus * value / 100.0,
+                passing: value,
+                dribbling: value,
+                tackling: value,
+                positioning: value,
+            },
+            pos: DVec2::ZERO,
+            vel: DVec2::ZERO,
+            target: DVec2::ZERO,
+            facing: DVec2::X,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::data::attributes::{ATTRIBUTES_VERSION, AttributeDef, Group, REQUIRED};
+
+    fn schema() -> AttributeSchema {
+        let mut names: Vec<String> = REQUIRED.iter().map(|s| s.to_string()).collect();
+        for i in 0..24 {
+            names.push(format!("attr_{i}"));
+        }
+        AttributeSchema {
+            schema_version: ATTRIBUTES_VERSION,
+            attributes: names
+                .into_iter()
+                .map(|name| AttributeDef {
+                    name,
+                    group: Group::Physical,
+                })
+                .collect(),
+        }
+    }
 
     #[test]
-    fn attributes_scale_speed() {
+    fn derived_speed_scales_with_pace() {
         let t = Tuning::default();
-        let mut p = Player {
-            id: 0,
-            team: 0,
-            slot: 0,
-            shirt: 1,
-            attributes: Attributes::uniform(0),
-            pos: DVec2::ZERO,
-            vel: DVec2::ZERO,
-            target: DVec2::ZERO,
-            facing: DVec2::X,
-        };
-        assert_eq!(p.max_speed(&t), t.base_speed);
-        p.attributes.pace = 100;
-        assert_eq!(p.max_speed(&t), t.base_speed + t.pace_speed);
+        let s = schema();
+        let mut entry: BTreeMap<String, u8> =
+            s.attributes.iter().map(|a| (a.name.clone(), 1)).collect();
+        let a = Attributes::from_entry(&entry, &s);
+        assert_eq!(a.len, 30);
+        let d = Derived::from_attributes(&a, &s, &t);
+        assert_eq!(d.max_speed, t.base_speed + t.pace_speed * 0.01);
+        entry.insert("pace".into(), 100);
+        let d = Derived::from_attributes(&Attributes::from_entry(&entry, &s), &s, &t);
+        assert_eq!(d.max_speed, t.base_speed + t.pace_speed);
     }
 }

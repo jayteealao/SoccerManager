@@ -300,3 +300,48 @@ scope: decides the error model; does NOT decide message wording.
 **Consult record.** Trigger `appetite-medium-or-larger` holds (appetite large). The PO excluded `consult` at intake; not fired.
 
 **Design contract.** `02b-design.md` exists without `02c-craft.md`. The contract is not authored in this plan: the slice has no user-interface surface, and the contract build gate requires PRODUCT.md without a `[TODO]` marker, which the PO chose to keep (design setup Q4/Q5). The `viewer-pitch` plan authors the contract once a name is written.
+
+## 2026-09-22T06:26:14Z · plan · data-schemas-generator Round 1 (loading and identity)
+
+**Q1 Validation.** PO answer: garde declarative validation. Structs derive `Deserialize` and carry `#[garde(...)]` range and length rules; garde 0.23 (MIT/Apache-2.0) reports the field path; the loader wraps garde's report with the file path. Rung 1 (AskUserQuestion).
+scope: decides the validation mechanism and adds one dependency; does NOT decide the file format (JSON is fixed by the slice criterion `--team-a a.json`) and does NOT decide error wording.
+
+**Q2 Default data.** PO answer: on-disk data folder only. The binary reads every content file (attribute schema, tuning, teams, rule pack) from a content folder on disk; no embedded copy; a missing file exits non-zero naming the path. Rung 1.
+scope: decides where shipped content lives and that a missing file fails; does NOT fix the folder's name or the flag that points at it (plan Round 3 confirms `content/` versus `data/` to keep the observability contract's "data folder" for SM_DATA_DIR only).
+
+**Q3 Match record.** PO answer: also write the identifiers into the tick-file header. The match-stats record is saved as `stats.json` and loaded back, and `owner.id` and `match.id` also enter the reserved bytes of the tick-file header and are read back by `read_ticks`. Rung 1.
+scope: decides that both the stats file and the tick header carry identity; does NOT decide the wire encoding (U-1 stays with stream-protocol) and does NOT change the 192-byte record layout.
+
+**Q4 Owner id.** PO answer: generate and persist an id now. On first run the binary creates `owner.id` in the runtime data folder (SM_DATA_DIR) with a random opaque value and reuses it on later runs. Rung 1.
+scope: decides that headless runs carry a real per-machine identifier from this slice; does NOT decide accounts, servers, or the viewer's handling of the id (RIM-2 stays adjudicated as single-player).
+
+## 2026-09-22T06:31:26Z · plan · data-schemas-generator Round 2 (generator and tests)
+
+**Q5 Distributions.** PO answer: bell curve from summed uniform draws, no new dependency. `EngineRng` gains a `bell(mean, spread)` method (Irwin-Hall approximation, clamped to 1..100); per-position means and spreads live in the tuning file. Rung 1 (AskUserQuestion).
+scope: decides the sampling method and keeps the dependency set unchanged; does NOT fix the per-position numbers (the calibration slice tunes them).
+
+**Q6 Generator CLI.** PO answer: library API plus `engine-cli generate`. The library exposes league generation; the binary adds `generate --seed N --clubs 20 --out <folder>` writing one team file per club. Rung 1.
+scope: decides the generator's two entry points; does NOT decide league or season structure (out of scope per the shape).
+
+**Q7 Existing tests.** PO answer: default team files replace the built-ins everywhere. `Team::builtin` and `Attributes::uniform(60)` are deleted; `simulate` with no team flags loads the two shipped default teams; the three engine-core tests re-record their bounds; the benchmark re-baselines. Rung 1.
+scope: decides one code path for teams and accepts a moved benchmark line; does NOT relax any engine-core criterion (270,000 ticks, byte-identical output, zero violations still hold).
+
+**Q8 Tuning bounds.** PO answer: bounds in code, values in the file. A garde range rule per field holds the bound; the shipped file holds values only; a companion reference page lists field, unit, default, and bound. Rung 1.
+scope: decides where bounds live; does NOT decide the bound values (the plan carries the engine-core defaults with a stated margin).
+
+## 2026-09-22T06:33:39Z · plan · data-schemas-generator Round 3 (vocabulary, folders, augmentations)
+
+**Q9 Positions.** PO answer: ten detailed positions: GK, CB, LB, RB, DM, CM, AM, LW, RW, ST. Each formation slot names one position; the generator draws per-position means. Rung 1 (AskUserQuestion).
+scope: decides the position vocabulary in team files and the rule that a slot names one position; does NOT decide roles or duties (the tactics slice maps roles onto these codes).
+
+**Q10 Folders.** PO answer: `content/` beside the binary (flag `--content-dir`) for shipped files; SM_DATA_DIR for runtime writes, defaulting to `%LOCALAPPDATA%\SoccerManager` on Windows. Rung 1.
+scope: decides the two folder names and defaults; does NOT decide packaging or other operating systems (U-3).
+
+**Q11 Augmentations.** PO answer: re-author both `04b-instrument.md` and `05c-benchmark.md` for this slice, with the engine-core versions byte-copied into `history/` first; the benchmark re-baselines on the measured engine-core numbers. Rung 1.
+scope: decides the augmentation artifacts for this slice; does NOT change the tripwire thresholds (10 percent CPU, 25 percent memory).
+
+**Pre-filled (not asked; source recorded):** file format JSON with `serde_json` (the slice criterion names `a.json`; `toml` is not in the registry); schema version as an integer field peeked before full deserialization so an unknown version reports "file X carries schema version N; this build reads version M" (research: a tagged enum cannot phrase a newer-than-loader message); the default attribute list fixed by the plan at 36 attributes in four groups (the slice assigns the list to plan); kit colors as hex strings; identifiers as strings (`sha2` already installed; `uuid` not in the registry); the tick-file record layout unchanged at 192 bytes.
+
+**Consult record.** Trigger `appetite-medium-or-larger` holds (appetite large). The PO excluded `consult` at intake; not fired.
+
+**Design contract.** `02b-design.md` exists without `02c-craft.md`. Not authored in this plan: the slice has no user-interface surface and PRODUCT.md keeps its `[TODO]` marker by PO choice; the `viewer-pitch` plan authors it.

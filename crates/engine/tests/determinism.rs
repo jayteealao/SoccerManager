@@ -9,7 +9,7 @@ fn write(name: &str) -> Vec<u8> {
     let config = common::full_match();
     let ticks = ticks_for_minutes(90);
     let mut sim = Simulation::new(config.clone()).unwrap();
-    let mut sink = FileSink::create(&path, config.seed, config.tuning.dt, ticks).unwrap();
+    let mut sink = FileSink::create(&path, &common::header(&config, ticks)).unwrap();
     sim.run(ticks, &mut sink).unwrap();
     sink.finish().unwrap();
     let bytes = std::fs::read(&path).unwrap();

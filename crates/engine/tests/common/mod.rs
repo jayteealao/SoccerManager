@@ -1,15 +1,58 @@
 #![allow(dead_code)]
 
-//! Shared fixture: the seed-42 configuration with the built-in teams, and temp paths.
+//! Shared fixture: the shipped content, the two default team files, the seed-42
+//! configuration built from them, and temp paths.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use engine::MatchConfig;
+use engine::data::{TEAM_A_FILE, TEAM_B_FILE, TeamFile};
+use engine::{Content, ContentDir, MatchConfig, TickHeader};
 
 pub const SEED: u64 = 42;
 
+/// The `content/` folder at the workspace root.
+pub fn content_dir() -> ContentDir {
+    ContentDir::at(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content"))
+}
+
+pub fn content() -> Content {
+    Content::load(&content_dir()).expect("the shipped content loads")
+}
+
+pub fn default_teams(content: &Content) -> [TeamFile; 2] {
+    let dir = content_dir();
+    let a = content
+        .load_team(&dir, &dir.path(TEAM_A_FILE))
+        .expect("default-a loads");
+    let b = content
+        .load_team(&dir, &dir.path(TEAM_B_FILE))
+        .expect("default-b loads");
+    [a.value, b.value]
+}
+
+/// A path inside `tests/fixtures/`.
+pub fn fixture_path(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(name)
+}
+
+/// The seed-42, 90-minute match on the shipped content and default teams.
 pub fn full_match() -> MatchConfig {
-    MatchConfig::new(SEED, 90).unwrap()
+    let content = content();
+    let [a, b] = default_teams(&content);
+    MatchConfig::new(SEED, 90, &content, [&a, &b]).unwrap()
+}
+
+/// A tick-file header for `config` with a fixed test identity.
+pub fn header(config: &MatchConfig, ticks: u32) -> TickHeader {
+    TickHeader {
+        seed: config.seed,
+        dt: config.tuning.dt,
+        expected_ticks: ticks,
+        owner_id: [0x42; 16],
+        match_millis: 1_700_000_000_000,
+    }
 }
 
 pub fn temp_path(name: &str) -> PathBuf {

@@ -1,0 +1,6 @@
+match.jsonl
+match.ticks
+noext
+noext.jsonl
+two.dots.bin
+two.dots.jsonl

@@ -1,6 +1,7 @@
 //! The tick record and the `.ticks` file: a 64-byte header, one 192-byte record per tick,
 //! and a 16-byte trailer with the written count. A reader refuses a file without the
-//! trailer or with a count mismatch.
+//! trailer or with a count mismatch. Header schema 2 carries `owner.id` and the match
+//! stamp in the bytes schema 1 reserved (product-owner choice, plan Q3).
 
 use std::fs::File;
 use std::io::{BufWriter, Read, Write};
@@ -20,7 +21,11 @@ pub const HEADER_BYTES: usize = 64;
 /// Trailer bytes.
 pub const TRAILER_BYTES: usize = 16;
 /// Schema version of the file layout.
-pub const SCHEMA_VERSION: u16 = 1;
+pub const SCHEMA_VERSION: u16 = 2;
+/// Header offset of the 16-byte owner identifier.
+const OWNER_AT: usize = 28;
+/// Header offset of the 8-byte match stamp (milliseconds since the Unix epoch).
+const MILLIS_AT: usize = 44;
 
 const MAGIC: &[u8; 4] = b"SMTK";
 const TRAILER_MAGIC: &[u8; 4] = b"SMTE";
@@ -69,6 +74,59 @@ impl TickRecord {
     }
 }
 
+/// The header of a `.ticks` file: what the reader needs to interpret the records, plus the
+/// identity of the match.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TickHeader {
+    pub seed: u64,
+    pub dt: f64,
+    pub expected_ticks: u32,
+    /// The owner identifier as 16 bytes; see `observe::identity`.
+    pub owner_id: [u8; 16],
+    /// The match stamp; with `seed` it forms `match.id`.
+    pub match_millis: u64,
+}
+
+impl TickHeader {
+    fn write_to(&self, header: &mut [u8; HEADER_BYTES]) {
+        header[0..4].copy_from_slice(MAGIC);
+        header[4..6].copy_from_slice(&SCHEMA_VERSION.to_le_bytes());
+        header[6] = 4;
+        header[7] = PLAYER_COUNT as u8;
+        header[8..16].copy_from_slice(&self.seed.to_le_bytes());
+        header[16..24].copy_from_slice(&self.dt.to_le_bytes());
+        header[24..28].copy_from_slice(&self.expected_ticks.to_le_bytes());
+        header[OWNER_AT..OWNER_AT + 16].copy_from_slice(&self.owner_id);
+        header[MILLIS_AT..MILLIS_AT + 8].copy_from_slice(&self.match_millis.to_le_bytes());
+    }
+
+    fn read_from(bytes: &[u8]) -> Result<Self, EngineError> {
+        if &bytes[0..4] != MAGIC {
+            return Err(EngineError::Format("bad magic".into()));
+        }
+        let version = u16::from_le_bytes([bytes[4], bytes[5]]);
+        if version != SCHEMA_VERSION {
+            return Err(EngineError::Format(format!(
+                "unknown schema version {version}; this build reads {SCHEMA_VERSION}"
+            )));
+        }
+        if bytes[6] != 4 || bytes[7] as usize != PLAYER_COUNT {
+            return Err(EngineError::Format(
+                "unexpected float width or player count".into(),
+            ));
+        }
+        Ok(Self {
+            seed: u64::from_le_bytes(bytes[8..16].try_into().expect("8 bytes")),
+            dt: f64::from_le_bytes(bytes[16..24].try_into().expect("8 bytes")),
+            expected_ticks: u32::from_le_bytes(bytes[24..28].try_into().expect("4 bytes")),
+            owner_id: bytes[OWNER_AT..OWNER_AT + 16].try_into().expect("16 bytes"),
+            match_millis: u64::from_le_bytes(
+                bytes[MILLIS_AT..MILLIS_AT + 8].try_into().expect("8 bytes"),
+            ),
+        })
+    }
+}
+
 /// A consumer of tick records.
 pub trait TickSink {
     fn on_tick(&mut self, record: &TickRecord) -> Result<(), EngineError>;
@@ -105,29 +163,20 @@ pub struct FileSink {
 
 impl FileSink {
     /// Creates the file and writes the header.
-    pub fn create(
-        path: &Path,
-        seed: u64,
-        dt: f64,
-        expected_ticks: u32,
-    ) -> Result<Self, EngineError> {
+    pub fn create(path: &Path, header: &TickHeader) -> Result<Self, EngineError> {
         let mut writer = BufWriter::with_capacity(1 << 20, File::create(path)?);
-        let mut header = [0u8; HEADER_BYTES];
-        header[0..4].copy_from_slice(MAGIC);
-        header[4..6].copy_from_slice(&SCHEMA_VERSION.to_le_bytes());
-        header[6] = 4;
-        header[7] = PLAYER_COUNT as u8;
-        header[8..16].copy_from_slice(&seed.to_le_bytes());
-        header[16..24].copy_from_slice(&dt.to_le_bytes());
-        header[24..28].copy_from_slice(&expected_ticks.to_le_bytes());
-        writer.write_all(&header)?;
+        let mut bytes = [0u8; HEADER_BYTES];
+        header.write_to(&mut bytes);
+        writer.write_all(&bytes)?;
         tracing::info!(
             signal = "tickfile.header",
             schema_version = SCHEMA_VERSION,
-            seed,
-            dt_ms = dt * 1000.0,
-            ticks_expected = expected_ticks,
-            float_width = 4
+            seed = header.seed,
+            dt_ms = header.dt * 1000.0,
+            ticks_expected = header.expected_ticks,
+            float_width = 4,
+            owner_id = %hex(&header.owner_id),
+            match_id = %format!("{:016x}-{}", header.seed, header.match_millis)
         );
         Ok(Self {
             writer,
@@ -162,12 +211,15 @@ impl TickSink for FileSink {
     }
 }
 
+/// Lower-case hex of a byte slice.
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
 /// A parsed `.ticks` file.
 #[derive(Debug)]
 pub struct TickFile {
-    pub seed: u64,
-    pub dt: f64,
-    pub expected_ticks: u32,
+    pub header: TickHeader,
     pub records: Vec<TickRecord>,
 }
 
@@ -180,23 +232,7 @@ pub fn read_ticks(path: &Path) -> Result<TickFile, EngineError> {
             "file shorter than header plus trailer".into(),
         ));
     }
-    if &bytes[0..4] != MAGIC {
-        return Err(EngineError::Format("bad magic".into()));
-    }
-    let version = u16::from_le_bytes([bytes[4], bytes[5]]);
-    if version != SCHEMA_VERSION {
-        return Err(EngineError::Format(format!(
-            "unknown schema version {version}"
-        )));
-    }
-    if bytes[6] != 4 || bytes[7] as usize != PLAYER_COUNT {
-        return Err(EngineError::Format(
-            "unexpected float width or player count".into(),
-        ));
-    }
-    let seed = u64::from_le_bytes(bytes[8..16].try_into().expect("8 bytes"));
-    let dt = f64::from_le_bytes(bytes[16..24].try_into().expect("8 bytes"));
-    let expected_ticks = u32::from_le_bytes(bytes[24..28].try_into().expect("4 bytes"));
+    let header = TickHeader::read_from(&bytes)?;
     let trailer = &bytes[bytes.len() - TRAILER_BYTES..];
     if &trailer[0..4] != TRAILER_MAGIC {
         return Err(EngineError::Format(
@@ -215,12 +251,7 @@ pub fn read_ticks(path: &Path) -> Result<TickFile, EngineError> {
         .chunks_exact(RECORD_BYTES)
         .map(TickRecord::read_from)
         .collect();
-    Ok(TickFile {
-        seed,
-        dt,
-        expected_ticks,
-        records,
-    })
+    Ok(TickFile { header, records })
 }
 
 /// Writes records as JSON Lines, one object per tick, positions in roster order.
@@ -240,6 +271,16 @@ mod tests {
 
     fn temp(name: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("engine-record-{}-{name}.ticks", std::process::id()))
+    }
+
+    fn header(seed: u64, expected_ticks: u32) -> TickHeader {
+        TickHeader {
+            seed,
+            dt: 0.02,
+            expected_ticks,
+            owner_id: [0xab; 16],
+            match_millis: 1_700_000_000_000,
+        }
     }
 
     fn sample(tick: u32) -> TickRecord {
@@ -265,15 +306,14 @@ mod tests {
     #[test]
     fn file_round_trips_a_thousand_records() {
         let path = temp("roundtrip");
-        let mut sink = FileSink::create(&path, 42, 0.02, 1000).unwrap();
+        let mut sink = FileSink::create(&path, &header(42, 1000)).unwrap();
         for i in 0..1000 {
             sink.on_tick(&sample(i)).unwrap();
         }
         assert_eq!(sink.finish().unwrap(), 1000);
         let file = read_ticks(&path).unwrap();
         std::fs::remove_file(&path).unwrap();
-        assert_eq!(file.seed, 42);
-        assert_eq!(file.expected_ticks, 1000);
+        assert_eq!(file.header, header(42, 1000));
         assert_eq!(file.records.len(), 1000);
         assert_eq!(file.records[999], sample(999));
     }
@@ -281,7 +321,7 @@ mod tests {
     #[test]
     fn a_truncated_file_is_refused() {
         let path = temp("truncated");
-        let mut sink = FileSink::create(&path, 1, 0.02, 10).unwrap();
+        let mut sink = FileSink::create(&path, &header(1, 10)).unwrap();
         for i in 0..10 {
             sink.on_tick(&sample(i)).unwrap();
         }
@@ -291,5 +331,21 @@ mod tests {
         let err = read_ticks(&path).unwrap_err();
         std::fs::remove_file(&path).unwrap();
         assert!(matches!(err, EngineError::Format(_)), "{err}");
+    }
+
+    #[test]
+    fn a_version_one_file_is_refused_naming_both_versions() {
+        let path = temp("v1");
+        let sink = FileSink::create(&path, &header(1, 0)).unwrap();
+        sink.finish().unwrap();
+        let mut bytes = std::fs::read(&path).unwrap();
+        bytes[4..6].copy_from_slice(&1u16.to_le_bytes());
+        std::fs::write(&path, &bytes).unwrap();
+        let err = read_ticks(&path).unwrap_err();
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(
+            err.to_string(),
+            "tick file format error: unknown schema version 1; this build reads 2"
+        );
     }
 }

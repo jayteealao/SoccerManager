@@ -1,11 +1,28 @@
 //! criterion benches: one tick step on a warmed simulation, and one steering pass.
 
+use std::path::Path;
+
 use criterion::{Criterion, criterion_group, criterion_main};
-use engine::{MatchConfig, Simulation};
+use engine::data::{TEAM_A_FILE, TEAM_B_FILE};
+use engine::{Content, ContentDir, MatchConfig, Simulation};
 use std::hint::black_box;
 
+fn config() -> MatchConfig {
+    let dir = ContentDir::at(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content"));
+    let content = Content::load(&dir).unwrap();
+    let a = content
+        .load_team(&dir, &dir.path(TEAM_A_FILE))
+        .unwrap()
+        .value;
+    let b = content
+        .load_team(&dir, &dir.path(TEAM_B_FILE))
+        .unwrap()
+        .value;
+    MatchConfig::new(42, 90, &content, [&a, &b]).unwrap()
+}
+
 fn tick_step(c: &mut Criterion) {
-    let mut sim = Simulation::new(MatchConfig::new(42, 90).unwrap()).unwrap();
+    let mut sim = Simulation::new(config()).unwrap();
     for _ in 0..500 {
         sim.step();
     }
@@ -18,11 +35,9 @@ fn tick_step(c: &mut Criterion) {
 }
 
 fn steering_pass(c: &mut Criterion) {
-    let sim = Simulation::new(MatchConfig::new(42, 90).unwrap()).unwrap();
-    let tuning = sim.tuning().clone();
-    let teams = sim.teams();
-    let mut players = teams[0].players(0, engine::player::Attributes::uniform(60));
-    players.extend(teams[1].players(11, engine::player::Attributes::uniform(60)));
+    let config = config();
+    let tuning = config.tuning.clone();
+    let mut players = config.players.clone();
     let mut scratch = Vec::new();
     c.bench_function("steering_pass_22", |b| {
         b.iter(|| {

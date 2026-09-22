@@ -53,8 +53,8 @@ pub fn separation(players: &[Player], i: usize, t: &Tuning) -> DVec2 {
 /// The velocity of player `i` after one tick of steering toward its target.
 pub fn next_velocity(players: &[Player], i: usize, t: &Tuning) -> DVec2 {
     let p = &players[i];
-    let max_speed = p.max_speed(t);
-    let max_accel = p.max_accel(t);
+    let max_speed = p.max_speed();
+    let max_accel = p.max_accel();
     let desired =
         arrive(p.pos, p.target, max_speed, max_accel, t.arrive_radius) + separation(players, i, t);
     let change = clamp_len(desired - p.vel, max_accel * t.dt);
@@ -100,20 +100,13 @@ pub fn resolve_overlaps(players: &mut [Player], t: &Tuning) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::player::Attributes;
+    use crate::player::test_support::flat_player;
 
     fn player(id: usize, pos: DVec2, target: DVec2) -> Player {
-        Player {
-            id,
-            team: 0,
-            slot: 0,
-            shirt: 1,
-            attributes: Attributes::uniform(50),
-            pos,
-            vel: DVec2::ZERO,
-            target,
-            facing: DVec2::X,
-        }
+        let mut p = flat_player(id, 50, &Tuning::default());
+        p.pos = pos;
+        p.target = target;
+        p
     }
 
     #[test]

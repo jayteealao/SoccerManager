@@ -7,8 +7,8 @@ status: active
 current-stage: implement
 stage-number: 5
 created-at: "2026-09-21T16:46:41Z"
-updated-at: "2026-09-21T22:35:04Z"
-selected-slice: "engine-core"
+updated-at: "2026-09-22T07:18:04Z"
+selected-slice: "data-schemas-generator"
 branch-strategy: dedicated
 branch: "feat/football-manager-match-engine"
 base-branch: "main"
@@ -134,7 +134,7 @@ charter:
     po-ratified: true
 slices:
   - {slug: engine-core, status: complete, complexity: l, depends-on: []}
-  - {slug: data-schemas-generator, status: defined, complexity: m, depends-on: [engine-core]}
+  - {slug: data-schemas-generator, status: in-progress, complexity: m, depends-on: [engine-core]}
   - {slug: stream-protocol, status: defined, complexity: m, depends-on: [engine-core]}
   - {slug: viewer-pitch, status: defined, complexity: m, depends-on: [stream-protocol]}
   - {slug: match-rules, status: defined, complexity: l, depends-on: [engine-core, data-schemas-generator]}
@@ -150,11 +150,18 @@ slices:
   - {slug: scripting-runtime, status: defined, complexity: l, depends-on: [data-schemas-generator, tactics-and-ai, calibration], deferred: true}
   - {slug: distribution, status: defined, complexity: m, depends-on: [integration], deferred: true}
 augmentations:
-  - {type: instrument, artifact: 04b-instrument.md, status: ready, created-at: "2026-09-21T21:57:49Z"}
-  - {type: benchmark, artifact: 05c-benchmark.md, mode: baseline, status: ready, created-at: "2026-09-21T21:57:49Z"}
+  - {type: instrument, artifact: 04b-instrument.md, slice: data-schemas-generator, status: ready, created-at: "2026-09-22T06:37:07Z", prior: history/04b-instrument-0.md}
+  - {type: benchmark, artifact: 05c-benchmark.md, slice: data-schemas-generator, mode: baseline, status: ready, created-at: "2026-09-22T06:37:07Z", prior: history/05c-benchmark-0.md}
   - {type: experiment, artifact: 04c-experiment.md, status: deferred-to-experiment-flags, created-at: "2026-09-21T21:57:49Z"}
+evidence-quality:
+  live: 1
+  n-a: 5
+metric-acceptance-mock-rung: 0
+runtime-evidence-deferrals: []
+compressed-slices:
+  - {slug: probe-engine-core, slice-type: probe, created-at: "2026-09-22T06:03:50Z"}
 next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine engine-core"
+next-invocation: "/wf verify football-manager-match-engine data-schemas-generator"
 workflow-files:
   - 00-index.md
   - 01-intake.md
@@ -186,22 +193,38 @@ workflow-files:
   - 04-plan-engine-core.md
   - 04-plan-engine-core.yaml
   - 04-plan-engine-core.html.fragment
+  - 04-plan-data-schemas-generator.md
+  - 04-plan-data-schemas-generator.yaml
+  - 04-plan-data-schemas-generator.html.fragment
   - 04b-instrument.md
   - 04b-instrument.yaml
   - 04b-instrument.html.fragment
   - 05c-benchmark.md
   - 05c-benchmark.yaml
   - 05c-benchmark.html.fragment
+  - history/04-plan-0.md
+  - history/04b-instrument-0.md
+  - history/04b-instrument-0.yaml
+  - history/04b-instrument-0.html.fragment
+  - history/05c-benchmark-0.md
+  - history/05c-benchmark-0.yaml
+  - history/05c-benchmark-0.html.fragment
   - 05-implement.md
   - 05-implement-engine-core.md
+  - 05-implement-data-schemas-generator.md
+  - 06-verify.md
+  - 06-verify-engine-core.md
+  - 06-verify-engine-core.01-benchmark-drives.html.fragment
   - po-answers.md
+  - 03-slice-probe-engine-core.md
+  - 03-slice-probe-engine-core.01-dump-path.html.fragment
 progress:
   intake: complete
   shape: complete
   slice: complete
   plan: complete
   implement: in-progress
-  verify: not-started
+  verify: in-progress
   review: not-started
   handoff: not-started
   ship: not-started

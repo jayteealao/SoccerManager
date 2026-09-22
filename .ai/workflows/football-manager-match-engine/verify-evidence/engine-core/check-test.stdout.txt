@@ -1,0 +1,67 @@
+
+running 26 tests
+test ball::tests::a_kicked_ball_stops ... ok
+test ball::tests::a_lofted_ball_lands ... ok
+test math::tests::toward_is_unit_or_zero ... ok
+test math::tests::segment_distance_projects_inside_and_clamps_outside ... ok
+test math::tests::clamp_len_limits_long_vectors_only ... ok
+test ball::tests::speed_never_exceeds_the_cap ... ok
+test observe::process::tests::measurements_are_available_on_windows ... ok
+test decision::tests::an_open_teammate_draws_a_pass_or_a_shot ... ok
+test observe::tests::machine_hash_is_twelve_hex_characters ... ok
+test observe::tests::both_records_carry_every_contract_key ... ok
+test pitch::tests::contains_and_clamp ... ok
+test pitch::tests::goal_detection_uses_the_posts ... ok
+test player::tests::attributes_scale_speed ... ok
+test record::tests::record_round_trips_through_bytes ... ok
+test rng::tests::different_seed_different_stream ... ok
+test sim::tests::zero_minutes_is_rejected ... ok
+test steering::tests::arrive_converges_without_overshoot ... ok
+test steering::tests::separation_pushes_overlapping_players_apart ... ok
+test team::tests::away_team_mirrors_home ... ok
+test team::tests::anchors_stay_inside_the_pitch_for_every_corner ... ok
+test rng::tests::same_seed_same_stream ... ok
+test validate::tests::a_hand_built_overlap_is_one_violation ... ok
+test validate::tests::a_ball_faster_than_the_cap_is_a_violation ... ok
+test record::tests::a_truncated_file_is_refused ... ok
+test record::tests::file_round_trips_a_thousand_records ... ok
+test sim::tests::five_minutes_produce_fifteen_thousand_ticks ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+
+running 1 test
+test two_runs_are_byte_identical ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.65s
+
+
+running 1 test
+test ninety_minutes_write_270_000_records ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.40s
+
+
+running 2 tests
+test a_corrupted_stream_reports_the_overlap ... ok
+test a_seeded_full_match_has_no_violations ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.68s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test invalid_seed_exits_non_zero_and_names_the_argument ... ok
+test valid_seed_exits_zero ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

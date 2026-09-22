@@ -1,0 +1,32 @@
+Headless command line for the football match engine: simulate and bench
+
+Usage: engine-cli.exe <COMMAND>
+
+Commands:
+  simulate  Simulate one match and write every tick to a file
+  bench     Time whole matches on one thread and print a run report
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+Simulate one match and write every tick to a file
+
+Usage: engine-cli.exe simulate [OPTIONS] --seed <SEED> --ticks-out <FILE>
+
+Options:
+      --seed <SEED>        Seed for the engine's random-number generator
+      --ticks-out <FILE>   Path of the tick file to write
+      --minutes <MINUTES>  Minutes of play to simulate [default: 90]
+      --json               Also write a JSON Lines dump of every tick next to the tick file (`<FILE>.jsonl`)
+  -h, --help               Print help
+Time whole matches on one thread and print a run report
+
+Usage: engine-cli.exe bench [OPTIONS] --seed <SEED>
+
+Options:
+      --seed <SEED>        Seed for the engine's random-number generator
+      --matches <MATCHES>  Number of timed matches after one warm-up match [default: 5]
+      --minutes <MINUTES>  Minutes of play per match [default: 90]
+      --json               Print the run report as one JSON line (the default output is the same record)
+  -h, --help               Print help

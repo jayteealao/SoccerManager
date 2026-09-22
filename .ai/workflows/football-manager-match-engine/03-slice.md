@@ -5,8 +5,8 @@ slug: football-manager-match-engine
 status: complete
 stage-number: 3
 created-at: "2026-09-21T19:50:41Z"
-updated-at: "2026-09-21T22:35:04Z"
-total-slices: 16
+updated-at: "2026-09-22T07:18:04Z"
+total-slices: 17
 best-first-slice: engine-core
 tags: [game, simulation, match-engine, 2d-viewer, rust]
 consult-runs: []
@@ -16,7 +16,7 @@ slices:
     complexity: l
     depends-on: []
   - slug: data-schemas-generator
-    status: defined
+    status: in-progress
     complexity: m
     depends-on: [engine-core]
   - slug: stream-protocol
@@ -75,6 +75,10 @@ slices:
     status: defined
     complexity: m
     depends-on: [integration]
+  - slug: probe-engine-core
+    status: defined
+    slice-type: probe
+    compressed: true
 refs:
   index: 00-index.md
   shape: 02-shape.md

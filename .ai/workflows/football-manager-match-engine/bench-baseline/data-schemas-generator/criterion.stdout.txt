@@ -1,0 +1,14 @@
+tick_step               time:   [1.4525 µs 1.4611 µs 1.4728 µs]
+                        change: [−1.7452% −0.8405% −0.0290%] (p = 0.06 > 0.05)
+                        No change in performance detected.
+Found 3 outliers among 100 measurements (3.00%)
+  1 (1.00%) high mild
+  2 (2.00%) high severe
+
+steering_pass_22        time:   [871.66 ns 880.97 ns 897.62 ns]
+                        change: [−0.2974% +0.4437% +1.4787%] (p = 0.38 > 0.05)
+                        No change in performance detected.
+Found 4 outliers among 100 measurements (4.00%)
+  2 (2.00%) high mild
+  2 (2.00%) high severe
+
