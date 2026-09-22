@@ -40,8 +40,12 @@ fn a_slow_client_pauses_the_producer_and_loses_no_tick() {
         gauge.pauses() > 0,
         "a slow client must pause the producer at the bound"
     );
+    // `sync_channel(bound)` holds at most `bound` frames, and that channel is the bound the
+    // acceptance criterion names. The gauge counts `entered - left`, so it reads up to two
+    // higher: one frame sits at a blocked sender, which counts itself in before it tries to
+    // send, and one frame is received but not yet counted out.
     assert!(
-        gauge.high_water() <= bound + 1,
+        gauge.high_water() <= bound + 2,
         "the buffer reached {} against a bound of {bound}",
         gauge.high_water()
     );

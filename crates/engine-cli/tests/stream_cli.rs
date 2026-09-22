@@ -1,8 +1,9 @@
 //! AC-f (stream-protocol) on the command line: `record` writes a fixture and prints its
 //! counts, `replay` refuses a missing fixture naming the path, and `serve` prints a port,
-//! writes `engine.port`, and streams to a client that connects to it.
+//! writes `engine.port`, and streams to a client that connects to it. The last test holds
+//! the exit code when a viewer closes its page in mid-match.
 
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
@@ -129,5 +130,50 @@ fn no_help_line_of_the_streaming_commands_exceeds_eighty_columns() {
             assert!(line.len() <= 80, "{args:?}: {} columns: {line}", line.len());
         }
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_viewer_that_closes_in_mid_match_ends_the_run_without_an_error() {
+    let dir = temp("serve-viewer-gone");
+    let mut child = bin(&dir)
+        .args(["serve", "--seed", "42", "--minutes", "90"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stderr = child.stderr.take().expect("serve logs to stderr");
+    let logs = std::thread::spawn(move || {
+        let mut text = String::new();
+        let _ = stderr.read_to_string(&mut text);
+        text
+    });
+    let mut stdout = BufReader::new(child.stdout.take().expect("serve prints its port"));
+    let mut line = String::new();
+    stdout.read_line(&mut line).unwrap();
+    let port: u16 = line.trim().parse().unwrap();
+
+    let mut client = Client::connect_local(port).unwrap();
+    let mut ticks = 0u32;
+    while ticks < 200 {
+        match client.read().unwrap() {
+            Incoming::Tick(_, _) => ticks += 1,
+            Incoming::Message(_) => continue,
+            Incoming::Closed => break,
+        }
+    }
+    // A closed page drops the socket; it sends no close frame.
+    drop(client);
+
+    let status = child.wait().unwrap();
+    let text = logs.join().expect("the log reader does not panic");
+    // 2 is the short-run code. 1 would say the run failed, and a viewer that closes its
+    // page has not failed anything.
+    assert_eq!(status.code(), Some(2), "serve exited with {status}: {text}");
+    assert!(
+        text.contains("signal=\"socket.client_gone\""),
+        "the run must name the viewer that went away: {text}"
+    );
+    assert!(!dir.join("engine.port").exists());
     let _ = std::fs::remove_dir_all(&dir);
 }

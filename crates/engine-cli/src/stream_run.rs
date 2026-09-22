@@ -55,10 +55,12 @@ pub fn drive<S: TickSink>(
     }
     sim.finish();
     for event in sim.take_events() {
-        route(ServerMessage::Event(match_event(&event, opts)))?;
+        if let Err(err) = route(ServerMessage::Event(match_event(&event, opts))) {
+            return closing_or_fail(err, written);
+        }
     }
     let summary = sim.summary();
-    route(ServerMessage::Stats(Stats {
+    if let Err(err) = route(ServerMessage::Stats(Stats {
         tick: sim.tick(),
         minute: sim.tick() / TICKS_PER_MINUTE,
         home_score: summary.goals[0],
@@ -66,7 +68,9 @@ pub fn drive<S: TickSink>(
         possession_changes: summary.possession_changes,
         ball_max_speed: summary.ball_max_speed,
         ball_idle_ticks: summary.ball_idle_ticks,
-    }))?;
+    })) {
+        return closing_or_fail(err, written);
+    }
     Ok(written)
 }
 
@@ -78,6 +82,22 @@ fn finish_or_fail(err: engine::EngineError, written: u32) -> Result<u32, StreamE
             Ok(written)
         }
         other => Err(StreamError::from(other)),
+    }
+}
+
+/// The same rule for the closing messages. A viewer that closes its page before full time
+/// must not turn a finished run into a failure, and the caller still reports the short run.
+fn closing_or_fail(err: StreamError, written: u32) -> Result<u32, StreamError> {
+    match err {
+        StreamError::ClientGone => {
+            tracing::info!(
+                signal = "socket.client_gone",
+                written,
+                reason = "the viewer disconnected before the closing messages"
+            );
+            Ok(written)
+        }
+        other => Err(other),
     }
 }
 

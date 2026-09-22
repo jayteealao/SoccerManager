@@ -100,6 +100,25 @@ impl From<StreamError> for engine::EngineError {
     }
 }
 
+/// True when the peer is gone: it closed, it reset the connection, or it went away without
+/// the closing handshake. A viewer that closes its page ends here, and that is not a failure.
+pub(crate) fn peer_gone(err: &tungstenite::Error) -> bool {
+    match err {
+        tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed => true,
+        tungstenite::Error::Protocol(
+            tungstenite::error::ProtocolError::ResetWithoutClosingHandshake,
+        ) => true,
+        tungstenite::Error::Io(e) => matches!(
+            e.kind(),
+            std::io::ErrorKind::ConnectionReset
+                | std::io::ErrorKind::ConnectionAborted
+                | std::io::ErrorKind::BrokenPipe
+                | std::io::ErrorKind::NotConnected
+        ),
+        _ => false,
+    }
+}
+
 /// True when an error only says the non-blocking socket has nothing to do yet.
 pub(crate) fn would_block(err: &std::io::Error) -> bool {
     matches!(

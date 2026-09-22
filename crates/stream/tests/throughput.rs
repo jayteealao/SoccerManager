@@ -47,10 +47,12 @@ fn a_full_match_arrives_in_order_with_no_gap() {
     assert_eq!(keyframes + deltas, 270_000);
     assert!(keyframes >= 5_400, "a keyframe opens every 50-tick cycle");
     assert!(full_time, "the stream names full time before it closes");
-    // `sync_channel(bound)` holds at most `bound` frames. The gauge can read one higher
-    // during the hand-off between a blocked send and the matching receive.
+    // `sync_channel(bound)` holds at most `bound` frames, and that channel is the bound the
+    // acceptance criterion names. The gauge counts `entered - left`, so it reads up to two
+    // higher: one frame sits at a blocked sender, which counts itself in before it tries to
+    // send, and one frame is received but not yet counted out.
     assert!(
-        gauge.high_water() <= bound + 1,
+        gauge.high_water() <= bound + 2,
         "the buffer reached {} against a bound of {bound}",
         gauge.high_water()
     );

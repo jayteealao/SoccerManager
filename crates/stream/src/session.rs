@@ -22,7 +22,7 @@ use tungstenite::{Message, WebSocket};
 use crate::control::CommandContext;
 use crate::events::EventWriter;
 use crate::server::Connection;
-use crate::{StreamError, would_block};
+use crate::{StreamError, peer_gone, would_block};
 
 /// Messages the socket thread holds before it writes them.
 const OUTBOX_LIMIT: usize = 32;
@@ -363,7 +363,7 @@ fn pump(
                 }
                 Ok(_) => idle = false,
                 Err(tungstenite::Error::Io(e)) if would_block(&e) => break,
-                Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed) => {
+                Err(e) if peer_gone(&e) => {
                     commands.gate.stop();
                     return Ok(());
                 }
@@ -405,7 +405,7 @@ fn pump(
                     outbox.push_front(*message);
                     break;
                 }
-                Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed) => {
+                Err(e) if peer_gone(&e) => {
                     commands.gate.stop();
                     return Ok(());
                 }
@@ -418,7 +418,7 @@ fn pump(
         match socket.flush() {
             Ok(()) => {}
             Err(tungstenite::Error::Io(e)) if would_block(&e) => {}
-            Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed) => {
+            Err(e) if peer_gone(&e) => {
                 commands.gate.stop();
                 return Ok(());
             }
@@ -447,9 +447,7 @@ fn finish_socket(socket: &mut WebSocket<TcpStream>) -> Result<(), StreamError> {
             Err(tungstenite::Error::Io(e)) if would_block(&e) => {
                 std::thread::sleep(IDLE_SLEEP);
             }
-            Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed) => {
-                return Ok(());
-            }
+            Err(e) if peer_gone(&e) => return Ok(()),
             Err(e) => return Err(e.into()),
         }
     }
