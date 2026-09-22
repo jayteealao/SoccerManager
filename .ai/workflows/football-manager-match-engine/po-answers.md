@@ -345,3 +345,51 @@ scope: decides the augmentation artifacts for this slice; does NOT change the tr
 **Consult record.** Trigger `appetite-medium-or-larger` holds (appetite large). The PO excluded `consult` at intake; not fired.
 
 **Design contract.** `02b-design.md` exists without `02c-craft.md`. Not authored in this plan: the slice has no user-interface surface and PRODUCT.md keeps its `[TODO]` marker by PO choice; the `viewer-pitch` plan authors it.
+
+## 2026-09-22T11:28:51Z · plan (stream-protocol) · Round 1 (transport, encoding, layout, pacing)
+
+**Q1 Transport.** `tungstenite` 0.30, the blocking WebSocket library, on `std::net`. A browser page reaches a local program over WebSocket or HTTP only; a raw TCP stream and a Windows named pipe are unreachable from page code, so the "TCP on loopback" default in the slice needs WebSocket framing above it. The product owner added: decide synchronous against asynchronous now (answered in Round 2 Q5). Rung 1 (AskUserQuestion).
+scope: decides the wire transport and the one new dependency tree; does NOT decide the tick encoding (Q2) or the concurrency model (Q5).
+
+**Q2 Tick encoding.** Binary keyframe plus delta, closing shape unknown U-1. A 98-byte keyframe every 50 ticks (tick `u32`, ball three `i16` in centimetres, 22 players two `i16` in centimetres) and 47-byte delta frames of `i8` centimetre steps between them; about 48 bytes per tick and 13 MB per match against 51.8 MB raw and a 300 MB budget (NFR-3). Rung 1 (AskUserQuestion).
+scope: closes U-1 and fixes the tick frame layout; does NOT decide the control-channel encoding (JSON by pre-fill) or the fixture file layout (Q6).
+
+**Q3 Crate layout.** Two new crates. `crates/protocol` holds the message types, the tick codec, the version constant, and the document-enumeration test, with no input or output and no network dependency. `crates/stream` holds the server, the socket sink, the bounded buffer, the recorder, and the replayer. `crates/engine` stays network-free, which keeps the later WebAssembly build open (RIM-3) and honours NFR-8. Rung 1 (AskUserQuestion).
+scope: decides package boundaries; does NOT decide the module names inside either crate.
+
+**Q4 Pacing.** Client-pull, bounded. The engine simulates as fast as the client reads, up to a bounded lead; the read rate of the client is the only pace. `set speed` is stored and echoed in acknowledgements so the viewer paces its own playback; `pause` stops production and `start` resumes it. The mock replayer paces itself at speed times 50 frames per second because it has no simulation to run. Rung 1 (AskUserQuestion).
+scope: decides the live-stream pacing semantic; does NOT decide the bound (Round 3 Q10) or the buffer inside the viewer.
+
+## 2026-09-22T11:28:51Z · plan (stream-protocol) · Round 2 (concurrency, fixture, events, commands)
+
+**Q5 Concurrency.** Blocking, one thread per client, `tungstenite` on `std::net::TcpListener`, `std::sync::mpsc::sync_channel` as the bounded buffer. Version 1 serves one viewer per match and the observability contract adds the debug dashboard later, so two or three connections in total; `tokio` would add about twenty-five crates and an executor for concurrency the engine does not have, and the simulation loop would run on `spawn_blocking` regardless. Rung 1 (AskUserQuestion).
+scope: decides the concurrency model and closes the Round 1 Q1 follow-up; does NOT forbid a later change, which the split into `crates/protocol` and `crates/stream` contains to `crates/stream`.
+
+**Q6 Fixture format.** Capture the wire bytes. `engine-cli record` writes every frame exactly as the server would send it, hello and control messages included, each with its tick index, in one new file; replay writes the stored bytes back out, so byte-identity holds by construction and no re-encoding happens on replay. Rung 1 (AskUserQuestion).
+scope: decides the fixture layout and the replay mechanism; does NOT change the `.ticks` file, which keeps its validator and benchmark job.
+
+**Q7 Event stream.** Envelope plus the events that exist. The event message follows the key vocabulary of the observability contract, and the engine emits the three it can produce today: kick-off or restart, goal, and full-time. The restart event retires the `sdlc-debt:` marker at `crates/engine/src/validate.rs:77`, where the validator reads any ball jump above two metres as a restart because the tick record carries no restart flag. Rung 1 (AskUserQuestion).
+scope: decides which event types this slice emits; does NOT decide fouls, cards, or set-piece events, which `match-rules` owns, nor commentary text.
+
+**Q8 Change queue.** Hold the queue, apply nothing. The server validates a change type against the loaded rule pack, assigns a queue identifier, keeps the change in an ordered queue, and reports it as pending; nothing reaches play until `match-rules` lands, and the identifiers are then already in place. Rung 1 (AskUserQuestion).
+scope: decides the queue semantics of the command channel; does NOT decide when a change applies, which is the stoppage-gated queue `match-rules` builds.
+
+## 2026-09-22T11:28:51Z · plan (stream-protocol) · Round 3 (discovery, bound, version, benchmark)
+
+**Q9 Port and access.** Operating-system-assigned port with an Origin allowlist. The server binds `127.0.0.1:0`, writes the chosen port to `SM_DATA_DIR/engine.port` and to stderr, and refuses any handshake whose `Origin` header is not `null`, `file://`, or `http://localhost`. No port clash, and a stray page in the same browser cannot drive a match. Rung 1 (AskUserQuestion).
+scope: decides port discovery and the connection guard; does NOT add a session token, which the Origin check covers on a single-player local machine.
+
+**Q10 Buffer bound.** 500 ticks, held in `content/tuning.json`. Ten simulated seconds of lead, about 50 kilobytes per client; a browser stall never pauses the engine needlessly, and the throttled-client test still exercises the pause-and-resume path. A modder or a later slice changes the value without a rebuild. Rung 1 (AskUserQuestion).
+scope: decides the bound and its home; does NOT decide the socket write-buffer bound inside `tungstenite`, which is an implementation detail set to a few keyframes.
+
+**Q11 Protocol version.** An independent `PROTOCOL_VERSION` integer, sent in the hello message, with a fail-closed refusal that names both versions in the wording the tick file already uses. The reference document is `docs/reference/protocol.md`, the target the Documentation Plan of the shape names, and the enumeration test parses its message tables. Rung 1 (AskUserQuestion).
+scope: decides the version constant and the document location; does NOT decide the prose structure of the document beyond a parseable message table.
+
+**Q12 Benchmark.** Re-baseline and add a stream target. The four existing targets are re-measured on the current commit before any code change, and a fifth is added: ticks per second delivered over the socket to an unthrottled client. Verify compares all five; the stream number is the evidence for the 8x-playback criterion and the baseline for `viewer-pitch`. Rung 1 (AskUserQuestion).
+scope: decides the benchmark scope for this slice; does NOT change the tripwires (10 percent processor time, 25 percent memory).
+
+**Pre-filled (not asked; source recorded):** the control channel is JSON text frames through the installed `serde_json` (research: MessagePack and CBOR add a dependency and a second wire format for a low-rate channel); `TCP_NODELAY` on every accepted connection (research: Nagle coalesces small frames); `tungstenite` default features only, no transport-layer security, because the server binds loopback; the bind address is `127.0.0.1`, never `0.0.0.0`, which also avoids a Windows Firewall prompt; the hello message reuses `engine::version()`, `engine::build_hash()`, `owner.id`, and `MatchId` rather than new identifiers.
+
+**Consult record.** Triggers `appetite-medium-or-larger` and `unknowns-present` (U-1) hold. The PO excluded `consult` at intake; not fired.
+
+**Design contract.** `02b-design.md` exists without `02c-craft.md`. Not authored in this plan: the slice ships no user-interface surface; the `viewer-pitch` plan authors it.

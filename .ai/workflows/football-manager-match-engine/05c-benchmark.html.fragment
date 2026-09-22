@@ -1,16 +1,17 @@
-<section class="fragment-benchmark" data-artifact="benchmark" data-slice="data-schemas-generator" data-mode="baseline">
+<section class="fragment-benchmark" data-artifact="benchmark" data-slice="stream-protocol" data-mode="baseline">
   <table class="bm-metrics">
-    <thead><tr><th>Metric</th><th>Baseline (27d21f5)</th><th>Compare</th><th>Unit</th><th>Tripwire</th><th>Direction</th></tr></thead>
+    <thead><tr><th>Metric</th><th>Baseline (d58fce3)</th><th>Compare</th><th>Unit</th><th>Tripwire</th><th>Direction</th></tr></thead>
     <tbody>
-      <tr data-tone="neutral"><td>bench.match_wall_ms</td><td>393</td><td>-</td><td>ms</td><td>budget 2000 ms (NFR-1)</td><td>lower is better</td></tr>
-      <tr data-tone="neutral"><td>engine.ticks_per_s</td><td>687023</td><td>-</td><td>ticks/s</td><td>budget 135000</td><td>higher is better</td></tr>
-      <tr data-tone="neutral"><td>bench.cpu_ms_per_match</td><td>387</td><td>-</td><td>ms</td><td>+10% = 426 ms</td><td>lower is better</td></tr>
-      <tr data-tone="neutral"><td>bench.peak_mem_mb</td><td>5.06</td><td>-</td><td>MB</td><td>+25% = 6.33 MB</td><td>lower is better</td></tr>
-      <tr data-tone="neutral"><td>criterion.tick_step_us</td><td>1.4611</td><td>-</td><td>us</td><td>budget 7.4 us</td><td>lower is better</td></tr>
-      <tr data-tone="neutral"><td>criterion.steering_pass_22_ns</td><td>880.97</td><td>-</td><td>ns</td><td>informational</td><td>lower is better</td></tr>
+      <tr data-tone="neutral"><td>bench.match_wall_ms</td><td>389</td><td>-</td><td>ms</td><td>budget 2000 ms (NFR-1)</td><td>lower is better</td></tr>
+      <tr data-tone="neutral"><td>engine.ticks_per_s</td><td>694087</td><td>-</td><td>ticks/s</td><td>budget 135000</td><td>higher is better</td></tr>
+      <tr data-tone="neutral"><td>bench.cpu_ms_per_match</td><td>384</td><td>-</td><td>ms</td><td>+10% = 422 ms</td><td>lower is better</td></tr>
+      <tr data-tone="neutral"><td>bench.peak_mem_mb</td><td>5.62</td><td>-</td><td>MB</td><td>+25% = 7.03 MB</td><td>lower is better</td></tr>
+      <tr data-tone="neutral"><td>criterion.tick_step_us</td><td>1.4342</td><td>-</td><td>us</td><td>budget 7.4 us</td><td>lower is better</td></tr>
+      <tr data-tone="neutral"><td>criterion.steering_pass_22_ns</td><td>887.68</td><td>-</td><td>ns</td><td>informational</td><td>lower is better</td></tr>
+      <tr data-tone="neutral"><td>bench.stream_ticks_per_s</td><td>not measured</td><td>-</td><td>ticks/s</td><td>first value, no tripwire</td><td>higher is better</td></tr>
     </tbody>
   </table>
-  <aside class="callout callout-info"><div class="callout-hd">Baseline for data-schemas-generator</div><div class="callout-body">Measured on commit 27d21f5 before any code change, one thread, Ultimate Performance plan, CPU-to-wall ratio 0.985. Verify runs compare mode after implement with the same two commands. The loaded team files change attribute values, so a small wall-time shift is expected; the 10 percent CPU and 25 percent memory tripwires are the gate. The engine-core record is at history/05c-benchmark-0.md.</div></aside>
+  <aside class="callout callout-info"><div class="callout-hd">Baseline for stream-protocol</div><div class="callout-body">Measured on commit d58fce3 before any code change, one thread, Ultimate Performance plan, three drives of the bench command with the median of medians reported. The first drive reported 6.86 MB peak against 5.62 MB on the two later drives and on the last verify; it is a first-touch working-set artefact and is excluded from the median. A fifth target, ticks delivered per second over the socket, has no baseline because no socket exists yet; verify records the first value and viewer-pitch inherits it. The data-schemas-generator record with its comparison is at history/05c-benchmark-1.md.</div></aside>
   <style>
     .fragment-benchmark .bm-metrics { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     .fragment-benchmark .bm-metrics th, .fragment-benchmark .bm-metrics td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); }

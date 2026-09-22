@@ -1,21 +1,23 @@
-<section class="fragment-instrument" data-artifact="instrument" data-slice="data-schemas-generator">
+<section class="fragment-instrument" data-artifact="instrument" data-slice="stream-protocol">
   <table class="in-signals">
     <thead><tr><th>Signal</th><th>Kind</th><th>Where</th><th>Note</th></tr></thead>
     <tbody>
-      <tr><td>content.loaded</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine/src/data/mod.rs:load_json</td><td>One line per content file: kind, relative path, schema_version, item count, 12-hex file hash.</td></tr>
-      <tr><td>content.refused</td><td><span class="in-kind in-kind-log">log</span></td><td>crates/engine/src/data/mod.rs:load_json</td><td>One error line per refused file: kind, relative path, field path, reason; the same text is the error message.</td></tr>
-      <tr><td>content.hash</td><td><span class="in-kind in-kind-gauge">gauge</span></td><td>crates/engine/src/data/mod.rs:Content::hash</td><td>12 hex characters over attributes, tuning, rules, team A, team B; carried in match-stats and run-report.</td></tr>
-      <tr><td>match-stats.teams</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine-cli/src/simulate.rs:end</td><td>teams: [{team.id, team.name}] for sides A and B; additive to the engine-core keys.</td></tr>
-      <tr><td>generator.league</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine/src/data/generator.rs:generate_league</td><td>seed, clubs, players, attribute mean, min, max, and the content.hash used.</td></tr>
-      <tr><td>identity.owner_created</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine/src/observe/identity.rs:load_or_create</td><td>Marks the first creation of owner.id; the value rides only in records.</td></tr>
-      <tr><td>tickfile.header</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine/src/record.rs:write_header</td><td>Extended: schema.version 2 adds owner.id and the match.id stamp.</td></tr>
+      <tr><td>socket.listening</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/stream/src/server.rs:Server::bind</td><td>The port the operating system chose, the protocol version, and match.id; the same port is written to engine.port.</td></tr>
+      <tr><td>socket.client</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/stream/src/server.rs:Server::accept</td><td>One line per accepted handshake: the Origin header or none, the protocol version asked for, match.id.</td></tr>
+      <tr><td>socket.refused</td><td><span class="in-kind in-kind-log">log</span></td><td>crates/stream/src/server.rs:Server::accept</td><td>One warn line per refused handshake: origin and the rule that fired, before the connection closes.</td></tr>
+      <tr><td>socket.backpressure</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/stream/src/session.rs:Session::push</td><td>One line per pause: the tick, the bound in ticks, the milliseconds paused, the running resume count.</td></tr>
+      <tr><td>match-event.engine</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/protocol/src/event.rs:MatchEvent</td><td>Opens the fourth record kind: tick, minute, event.type (kick-off, goal, full-time), team.id, both scores.</td></tr>
+      <tr><td>match-event.change</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/protocol/src/command.rs:Queue</td><td>One row per queued change and per rejection: change.kind, change.queued_tick, change.queue_id, change.rejected_reason.</td></tr>
+      <tr><td>fixture.recorded</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/stream/src/record.rs:Recorder::finish</td><td>Relative path, frames, ticks, bytes, and the 12-hex hash of the closed fixture.</td></tr>
+      <tr><td>fixture.replayed</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/stream/src/replay.rs:Replayer::run</td><td>Relative path, frames, speed, and the same 12-hex hash, so a replay names the fixture it served.</td></tr>
     </tbody>
   </table>
   <div class="in-dark">
-    <aside class="callout callout-warn"><div class="callout-hd">Dark path · silent refusal</div><div class="callout-body">A refused content file exits 1 with one stderr line and no record. Covered by content.refused with kind, path, field, and reason.</div></aside>
-    <aside class="callout callout-warn"><div class="callout-hd">Dark path · unknown content</div><div class="callout-body">A match on edited content looks identical to one on the shipped defaults. Covered by content.hash in match-stats and run-report.</div></aside>
-    <aside class="callout callout-warn"><div class="callout-hd">Dark path · generator drift</div><div class="callout-body">A generator outside the tuning bounds still produces valid-looking squads. Covered by generator.league mean, min, and max; the calibration slice checks the bands.</div></aside>
-    <aside class="callout callout-warn"><div class="callout-hd">Dark path · owner regenerated</div><div class="callout-body">A deleted owner.id is recreated and later records carry a new owner. Covered by identity.owner_created.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">Dark path · idle client</div><div class="callout-body">A client finishes the handshake and never reads; the engine looks slow with no cause on the record. Covered by socket.client and socket.backpressure.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">Dark path · refused origin</div><div class="callout-body">A page refused by the Origin allowlist sees a closed socket and the operator sees nothing. Covered by socket.refused.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">Dark path · no full-time</div><div class="callout-body">An event stream that stops mid-match looks like a finished match. Covered by the full-time event, whose absence marks an abandoned stream.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">Dark path · change never applied</div><div class="callout-body">A change is queued, acknowledged, and never applied; the contract names this dark path. Covered by change.queued_tick with no change.applied_tick.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">Dark path · divergent replay</div><div class="callout-body">A replay that differs from its fixture would invalidate every viewer test built on it. Covered by the shared 12-hex hash in fixture.recorded and fixture.replayed.</div></aside>
   </div>
   <style>
     .fragment-instrument .in-signals { width: 100%; border-collapse: collapse; font-size: 0.9rem; }

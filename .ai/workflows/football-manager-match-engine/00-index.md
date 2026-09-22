@@ -4,11 +4,11 @@ type: index
 slug: football-manager-match-engine
 title: "Football manager game: match engine and 2D match viewer"
 status: active
-current-stage: verify
-stage-number: 6
+current-stage: plan
+stage-number: 4
 created-at: "2026-09-21T16:46:41Z"
-updated-at: "2026-09-22T10:01:47Z"
-selected-slice: "data-schemas-generator"
+updated-at: "2026-09-22T11:28:51Z"
+selected-slice: "stream-protocol"
 branch-strategy: dedicated
 branch: "feat/football-manager-match-engine"
 base-branch: "main"
@@ -18,7 +18,6 @@ appetite: large
 pr-url: ""
 pr-number: 0
 open-questions:
-  - "U-1 Wire encoding for the tick stream (binary delta versus JSON lines) — plan"
   - "U-2 Observability sink and transport for the event stream — /wf observability init"
   - "U-3 Operating systems and packaging beyond Windows — slice, then the product owner"
 tags: [game, simulation, match-engine, 2d-viewer, rust, greenfield]
@@ -150,8 +149,8 @@ slices:
   - {slug: scripting-runtime, status: defined, complexity: l, depends-on: [data-schemas-generator, tactics-and-ai, calibration], deferred: true}
   - {slug: distribution, status: defined, complexity: m, depends-on: [integration], deferred: true}
 augmentations:
-  - {type: instrument, artifact: 04b-instrument.md, slice: data-schemas-generator, status: ready, created-at: "2026-09-22T06:37:07Z", prior: history/04b-instrument-0.md}
-  - {type: benchmark, artifact: 05c-benchmark.md, slice: data-schemas-generator, mode: complete, status: complete, created-at: "2026-09-22T06:37:07Z", prior: history/05c-benchmark-0.md}
+  - {type: instrument, artifact: 04b-instrument.md, slice: stream-protocol, status: ready, created-at: "2026-09-22T11:28:51Z", prior: history/04b-instrument-1.md}
+  - {type: benchmark, artifact: 05c-benchmark.md, slice: stream-protocol, mode: baseline, status: ready, created-at: "2026-09-22T11:28:51Z", prior: history/05c-benchmark-1.md}
   - {type: experiment, artifact: 04c-experiment.md, status: deferred-to-experiment-flags, created-at: "2026-09-21T21:57:49Z"}
 evidence-quality:
   live: 1
@@ -160,8 +159,8 @@ metric-acceptance-mock-rung: 0
 runtime-evidence-deferrals: []
 compressed-slices:
   - {slug: probe-engine-core, slice-type: probe, created-at: "2026-09-22T06:03:50Z"}
-next-command: wf-review
-next-invocation: "/wf review football-manager-match-engine data-schemas-generator"
+next-command: wf-implement
+next-invocation: "/wf implement football-manager-match-engine stream-protocol"
 workflow-files:
   - 00-index.md
   - 01-intake.md
@@ -216,6 +215,16 @@ workflow-files:
   - 06-verify-engine-core.md
   - 06-verify-engine-core.01-benchmark-drives.html.fragment
   - 06-verify-data-schemas-generator.md
+  - 04-plan-stream-protocol.md
+  - 04-plan-stream-protocol.yaml
+  - 04-plan-stream-protocol.html.fragment
+  - history/04-plan-1.md
+  - history/04b-instrument-1.md
+  - history/04b-instrument-1.yaml
+  - history/04b-instrument-1.html.fragment
+  - history/05c-benchmark-1.md
+  - history/05c-benchmark-1.yaml
+  - history/05c-benchmark-1.html.fragment
   - po-answers.md
   - 03-slice-probe-engine-core.md
   - 03-slice-probe-engine-core.01-dump-path.html.fragment
@@ -223,8 +232,8 @@ progress:
   intake: complete
   shape: complete
   slice: complete
-  plan: complete
-  implement: complete
+  plan: in-progress
+  implement: in-progress
   verify: in-progress
   review: not-started
   handoff: not-started

@@ -1,0 +1,26 @@
+   Compiling engine v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 4.81s
+     Running benches\tick_step.rs (target\release\deps\tick_step-7db208b884d94e5b.exe)
+Gnuplot not found, using plotters backend
+Benchmarking tick_step
+Benchmarking tick_step: Warming up for 3.0000 s
+Benchmarking tick_step: Collecting 100 samples in estimated 5.0017 s (3.5M iterations)
+Benchmarking tick_step: Analyzing
+tick_step               time:   [1.4309 µs 1.4342 µs 1.4377 µs]
+                        change: [−0.9881% −0.3294% +0.4930%] (p = 0.41 > 0.05)
+                        No change in performance detected.
+Found 3 outliers among 100 measurements (3.00%)
+  1 (1.00%) high mild
+  2 (2.00%) high severe
+
+Benchmarking steering_pass_22
+Benchmarking steering_pass_22: Warming up for 3.0000 s
+Benchmarking steering_pass_22: Collecting 100 samples in estimated 5.0032 s (5.7M iterations)
+Benchmarking steering_pass_22: Analyzing
+steering_pass_22        time:   [884.80 ns 887.68 ns 890.89 ns]
+                        change: [+0.0020% +0.9832% +1.9490%] (p = 0.04 < 0.05)
+                        Change within noise threshold.
+Found 4 outliers among 100 measurements (4.00%)
+  1 (1.00%) high mild
+  3 (3.00%) high severe
+
