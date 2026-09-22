@@ -1,0 +1,73 @@
+good fixture: 174676 bytes
+
+### adv-replay-missing
+exit=1
+stdout: 
+stderr: error: cannot replay C:/Users/jayte/AppData/Local/Temp/claude/C--Users-jayte-Documents-dev-SoccerManager/4d79d747-6369-4ba7-9880-488f83313aa0/scratchpad/adv/nope.smfx: cannot read C:/Users/jayte/AppData/Local/Temp/claude/C--Users-jayte-Documents-dev-SoccerManager/4d79d747-6369-4ba7-9880-488f83313aa0/scratchpad/adv/nope.smfx: The system cannot find the file specified. (os error 2)
+
+### adv-replay-random
+exit=1
+stdout: 
+stderr: error: cannot replay C:/Users/jayte/AppData/Local/Temp/claude/C--Users-jayte-Documents-dev-SoccerManager/4d79d747-6369-4ba7-9880-488f83313aa0/scratchpad/adv/random.smfx: fixture format error: bad magic
+
+### adv-replay-truncated
+exit=1
+stdout: 
+stderr: error: cannot replay C:/Users/jayte/AppData/Local/Temp/claude/C--Users-jayte-Documents-dev-SoccerManager/4d79d747-6369-4ba7-9880-488f83313aa0/scratchpad/adv/trunc.smfx: fixture format error: missing trailer: the fixture is incomplete
+
+### adv-replay-flipped-byte
+exit=1
+stdout: 
+stderr: error: cannot replay C:/Users/jayte/AppData/Local/Temp/claude/C--Users-jayte-Documents-dev-SoccerManager/4d79d747-6369-4ba7-9880-488f83313aa0/scratchpad/adv/flipped.smfx: fixture format error: the frame bytes do not match the trailer hash
+
+### adv-replay-bad-version
+exit=1
+stdout: 
+stderr: error: cannot replay C:/Users/jayte/AppData/Local/Temp/claude/C--Users-jayte-Documents-dev-SoccerManager/4d79d747-6369-4ba7-9880-488f83313aa0/scratchpad/adv/badver.smfx: fixture format error: protocol version 99; this build speaks 1
+
+### adv-replay-fixture-is-dir
+exit=1
+stdout: 
+stderr: error: cannot replay C:/Users/jayte/AppData/Local/Temp/claude/C--Users-jayte-Documents-dev-SoccerManager/4d79d747-6369-4ba7-9880-488f83313aa0/scratchpad/adv: cannot read C:/Users/jayte/AppData/Local/Temp/claude/C--Users-jayte-Documents-dev-SoccerManager/4d79d747-6369-4ba7-9880-488f83313aa0/scratchpad/adv: Access is denied. (os error 5)
+
+### adv-record-missing-dir
+exit=0
+stdout: {"bytes":174677,"fixture":"C:/Users/jayte/AppData/Local/Temp/claude/C--Users-jayte-Documents-dev-SoccerManager/4d79d747-6369-4ba7-9880-488f83313aa0/scratchpad/adv/no/such/f.smfx","frames":3003,"hash":"b8634d819c56","ticks":3000}
+stderr: 2026-09-22T13:29:50.491205Z  INFO stream::record: signal="fixture.recorded" path=f.smfx frames=3003 ticks=3000 bytes=174677 hash=b8634d819c56
+
+### adv-record-out-is-dir
+exit=1
+stdout: 
+stderr: error: cannot create C:/Users/jayte/AppData/Local/Temp/claude/C--Users-jayte-Documents-dev-SoccerManager/4d79d747-6369-4ba7-9880-488f83313aa0/scratchpad/adv: Access is denied. (os error 5)
+
+### adv-record-minutes-zero
+exit=1
+stdout: 
+stderr: error: invalid configuration: minutes must be 1 to 200, got 0
+
+### adv-serve-minutes-zero
+exit=1
+stdout: 
+stderr: error: invalid configuration: minutes must be 1 to 200, got 0
+
+### adv-serve-missing-content
+exit=1
+stdout: 
+stderr: error: cannot read content folder (tried C:/Users/jayte/AppData/Local/Temp/claude/C--Users-jayte-Documents-dev-SoccerManager/4d79d747-6369-4ba7-9880-488f83313aa0/scratchpad/adv/no-content): no folder holds attributes.json
+
+### adv-serve-bad-team
+exit=1
+stdout: 
+stderr: error: cannot read nope.json: The system cannot find the file specified. (os error 2)
+
+### adv-record-huge-minutes
+exit=1
+stdout: 
+stderr: error: invalid configuration: minutes must be 1 to 200, got 4294967295
+
+### adv-serve-no-seed
+exit=2
+stdout: 
+stderr: error: the following required arguments were not provided:
+  --seed <SEED>
+

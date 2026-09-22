@@ -1,0 +1,62 @@
+block-buffer: no advisory folder
+bytes: RUSTSEC-2026-0007.md 
+const-oid: no advisory folder
+crypto-common: no advisory folder
+data-encoding: no advisory folder
+digest: no advisory folder
+http: RUSTSEC-2019-0033.md RUSTSEC-2019-0034.md 
+httparse: no advisory folder
+hybrid-array: no advisory folder
+sha1: no advisory folder
+tungstenite: RUSTSEC-2023-0065.md 
+=== bytes/RUSTSEC-2026-0007
+id = "RUSTSEC-2026-0007"
+package = "bytes"
+date = "2026-02-03"
+categories = ["memory-corruption"]
+=== http/RUSTSEC-2019-0033
+id = "RUSTSEC-2019-0033"
+package = "http"
+cvss = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+categories = ["denial-of-service"]
+date = "2019-11-16"
+=== http/RUSTSEC-2019-0034
+id = "RUSTSEC-2019-0034"
+package = "http"
+cvss = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+categories = ["memory-corruption"]
+date = "2019-11-16"
+=== tungstenite/RUSTSEC-2023-0065
+id = "RUSTSEC-2023-0065"
+package = "tungstenite"
+date = "2023-09-25"
+categories = ["denial-of-service"]
+cvss = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+--- bytes/RUSTSEC-2026-0007 versions
+[versions]
+patched = [">= 1.11.1"]
+unaffected = ["< 1.2.1"]
+```
+--- http/RUSTSEC-2019-0033 versions
+[versions]
+patched = [">= 0.1.20"]
+```
+
+--- http/RUSTSEC-2019-0034 versions
+[versions]
+patched = [">= 0.1.20"]
+```
+
+--- tungstenite/RUSTSEC-2023-0065 versions
+[versions]
+patched = [">= 0.20.1"]
+```
+
+
+Conclusion: 11 crates added; 4 advisories across 3 of them; every one patched in the pinned version.
+  bytes 1.12.1 vs RUSTSEC-2026-0007 patched >= 1.11.1 -> not affected
+  http 1.5.0 vs RUSTSEC-2019-0033 patched >= 0.1.20 -> not affected
+  http 1.5.0 vs RUSTSEC-2019-0034 patched >= 0.1.20 -> not affected
+  tungstenite 0.30.0 vs RUSTSEC-2023-0065 patched >= 0.20.1 -> not affected
+  block-buffer, const-oid, crypto-common, data-encoding, digest, httparse, hybrid-array, sha1: no advisory folder.
+Probe: GitHub contents API over rustsec/advisory-db crates/<name>, calibrated against a known hit (tungstenite 200).

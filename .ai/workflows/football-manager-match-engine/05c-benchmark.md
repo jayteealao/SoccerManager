@@ -5,17 +5,17 @@ augmentation-type: benchmark
 slug: football-manager-match-engine
 parent-workflow: football-manager-match-engine
 slice-slug: stream-protocol
-mode: baseline
+mode: complete
 language: rust
 benchmark-framework: "timing-fallback (engine-cli bench) plus criterion 0.8"
-targets-measured: 4
+targets-measured: 5
 targets-failed: 0
 targets-planned: 5
 baseline-branch: feat/football-manager-match-engine
 baseline-commit: "d58fce3"
 measured-at: "2026-09-22T11:28:51Z"
 created-at: "2026-09-22T06:37:07Z"
-updated-at: "2026-09-22T11:28:51Z"
+updated-at: "2026-09-22T13:35:00Z"
 revision-count: 2
 revisions:
   - rev: 1
@@ -90,3 +90,29 @@ Run every command from PowerShell or Git Bash with no other heavy process runnin
 ## Targets That Could Not Be Measured
 
 `stream throughput`: no socket server exists on commit `d58fce3`. The target is declared here so verify measures it once and `viewer-pitch` inherits the number. It is not a regression when verify records it for the first time.
+
+## Comparison Results
+
+Baseline medians are the measured values on commit `d58fce3`. Compare medians are measured on commit `65a3414`, `feat/football-manager-match-engine`, 2026-09-22T13:35:00Z, one thread, Ultimate Performance plan, the shipped default clubs, `SM_DATA_DIR` on a scratch folder. Evidence: `verify-evidence/stream-protocol/bench-drive-{1,2,3}.stdout.txt`, `bench-stream-{1,2,3}.stdout.txt`, `check-criterion.stdout.txt`, `benchmark-compare.txt`.
+
+| Target | Baseline median | Compare median | Delta | Delta% | Alloc delta% | Verdict |
+|--------|----------------|---------------|-------|--------|--------------|---------|
+| `full match wall time` | 389 ms | 389 ms | 0 ms | 0.0% | N/A | ✓ no change |
+| `ticks per second` | 694,087 ticks/s | 694,087 ticks/s | 0 ticks/s | 0.0% | N/A | ✓ no change |
+| `cpu time and peak memory` | 384 ms CPU per match; 5.62 MB peak | 381 ms CPU per match; 5.97 MB peak | -3 ms; +0.35 MB | -0.8% CPU; +6.3% memory | N/A | ✓ no change (both inside the tripwires) |
+| `tick step` | 1.4342 µs | 1.4376 µs | +0.0034 µs | +0.24% | N/A | ✓ no change |
+| `stream throughput` | not measured | 640,213 ticks/s | first value | N/A | N/A | ✓ recorded |
+
+Three drives of command 1 without a reset gave wall times of 389, 390, and 389 milliseconds, processor time of 390.6, 378.0, and 381.2 milliseconds per match (the reported 381 is the median drive), peak memory of 6.04, 5.97, and 5.97 MB, and processor-to-wall ratios of 1.002, 0.968, and 0.978; no drive was contended. Command 2 reported `tick_step` at 1.4339 to 1.4415 µs, which overlaps the baseline interval of 1.4309 to 1.4377 µs, and `steering_pass_22` at 888.96 ns against 887.68 (+0.14 percent).
+
+Three drives of command 3 gave 640,213, 634,857, and 642,476 ticks per second delivered, with 0, 1, and 1 pause. The socket costs 0.8 percent of engine throughput: `engine.ticks_per_s` falls from 694,087 without the socket to 688,775 with it, on the same seed and the same content hash `02d33ad91de5`. Delivered throughput is 4.7 times the 135,000 budget.
+
+Peak memory on command 3 is 7.31 MB. It is not compared to the 7.03 MB tripwire, because that tripwire belongs to command 1. Command 3 is a different workload: it adds a socket, a producer buffer of 500 ticks, a client thread, and the tungstenite write buffer. 7.31 MB is the first value of that workload and `viewer-pitch` inherits it.
+
+**Regression summary:** none.
+
+**Tripwires:** none fired. Processor time per match is 381 ms against the 422 ms tripwire; peak memory is 5.97 MB against the 7.03 MB tripwire.
+
+**The top risk did not land.** The plan warned that a copy on the hot path would absorb 270,000 allocations. The encoder writes into a reused 99-byte array inside `TickFrame`, and a full streamed match costs 1.69 MB of extra peak memory against the same match without a socket, which is the 500-frame buffer, the client, and the write buffer, not a per-tick allocation.
+
+The verify-time fix commit `c7f7357` changes two test assertions and the handling of a client that goes away. Neither runs on the timed path; the compare numbers stand for it.

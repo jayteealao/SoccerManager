@@ -1,0 +1,29 @@
+2026-09-22T12:54:03.843418Z  INFO engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T12:54:03.843616Z  INFO engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3891 hash=0f5d068f7d43
+2026-09-22T12:54:03.843683Z  INFO engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=1 bytes=858 hash=6ebfdf131295
+2026-09-22T12:54:03.843964Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
+2026-09-22T12:54:03.844367Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a
+2026-09-22T12:54:03.845063Z  INFO engine::observe::identity: signal="identity.owner_created" path="owner.id"
+2026-09-22T12:54:03.846858Z  INFO stream::server: signal="socket.listening" port=50174 protocol_version=1 match_id=000000000000002a-1790081643845
+2026-09-22T12:54:03.980364Z  WARN stream::server: signal="socket.refused" origin=https://evil.example reason=origin https://evil.example is not on the loopback allowlist
+2026-09-22T12:54:04.004066Z  WARN stream::server: signal="socket.refused" origin=null reason=protocol version 99; this build speaks 1
+2026-09-22T12:54:04.026966Z  INFO stream::server: signal="socket.client" origin=http://localhost:5173 protocol_version=1 match_id=000000000000002a-1790081643845
+2026-09-22T12:54:04.060153Z  INFO stream::session: signal="socket.backpressure" tick=4518 bound=500 paused_ms=25 resumes=1
+2026-09-22T12:54:04.208582Z  INFO stream::session: signal="socket.backpressure" tick=9160 bound=500 paused_ms=141 resumes=2
+2026-09-22T12:54:04.394659Z  INFO stream::session: signal="socket.backpressure" tick=13012 bound=500 paused_ms=180 resumes=3
+2026-09-22T12:54:04.575885Z  INFO stream::session: signal="socket.backpressure" tick=15577 bound=500 paused_ms=177 resumes=4
+2026-09-22T12:54:04.756708Z  INFO stream::session: signal="socket.backpressure" tick=18139 bound=500 paused_ms=176 resumes=5
+2026-09-22T12:54:04.940699Z  INFO stream::session: signal="socket.backpressure" tick=20678 bound=500 paused_ms=180 resumes=6
+2026-09-22T12:54:04.942438Z  INFO stream::session: signal="socket.backpressure" tick=21352 bound=500 paused_ms=0 resumes=7
+2026-09-22T12:54:04.960527Z  INFO stream::session: signal="socket.backpressure" tick=22965 bound=500 paused_ms=15 resumes=8
+2026-09-22T12:54:05.126453Z  INFO stream::session: signal="socket.backpressure" tick=23253 bound=500 paused_ms=165 resumes=9
+2026-09-22T12:54:05.306386Z  INFO stream::session: signal="socket.backpressure" tick=25790 bound=500 paused_ms=175 resumes=10
+2026-09-22T12:54:05.486141Z  INFO stream::session: signal="socket.backpressure" tick=28361 bound=500 paused_ms=175 resumes=11
+2026-09-22T12:54:05.665968Z  INFO stream::session: signal="socket.backpressure" tick=30925 bound=500 paused_ms=175 resumes=12
+2026-09-22T12:54:05.849961Z  INFO stream::session: signal="socket.backpressure" tick=33487 bound=500 paused_ms=179 resumes=13
+2026-09-22T12:54:06.035130Z  INFO stream::session: signal="socket.backpressure" tick=36050 bound=500 paused_ms=181 resumes=14
+2026-09-22T12:54:06.215610Z  INFO stream::session: signal="socket.backpressure" tick=38617 bound=500 paused_ms=176 resumes=15
+2026-09-22T12:54:06.396152Z  INFO stream::session: signal="socket.backpressure" tick=41180 bound=500 paused_ms=176 resumes=16
+2026-09-22T12:54:06.398691Z  INFO stream::session: signal="socket.backpressure" tick=42749 bound=500 paused_ms=0 resumes=17
+2026-09-22T12:54:06.581530Z  INFO stream::session: signal="socket.backpressure" tick=43744 bound=500 paused_ms=181 resumes=18
+2026-09-22T12:54:06.584271Z  INFO engine_cli::serve: signal="socket.session_closed" ticks=45000 high_water=501 bound=500 pauses=18 paused_ms=2477

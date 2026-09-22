@@ -1,0 +1,258 @@
+   Compiling engine v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine)
+   Compiling stream v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\stream)
+   Compiling engine-cli v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.13s
+     Running unittests src\lib.rs (target\debug\deps\engine-5c27c3eab633a69d.exe)
+
+running 48 tests
+test ball::tests::a_kicked_ball_stops ... ok
+test data::attributes::tests::thirty_names_with_the_required_six_validate ... ok
+test ball::tests::a_lofted_ball_lands ... ok
+test ball::tests::speed_never_exceeds_the_cap ... ok
+test data::attributes::tests::a_missing_required_name_is_refused_by_name ... ok
+test data::attributes::tests::too_few_attributes_are_refused ... ok
+test data::tests::a_missing_file_names_its_path ... ok
+test data::tests::relative_paths_never_leak_the_root ... ok
+test math::tests::clamp_len_limits_long_vectors_only ... ok
+test math::tests::segment_distance_projects_inside_and_clamps_outside ... ok
+test math::tests::toward_is_unit_or_zero ... ok
+test observe::identity::tests::match_id_round_trips_through_text ... ok
+test observe::process::tests::measurements_are_available_on_windows ... ok
+test observe::identity::tests::a_corrupt_owner_file_is_refused ... ok
+test data::tests::an_unknown_key_is_refused_with_its_name ... ok
+test observe::identity::tests::the_owner_id_is_created_once_and_reused ... ok
+test data::tests::a_version_mismatch_names_both_versions ... ok
+test observe::tests::machine_hash_is_twelve_hex_characters ... ok
+test observe::tests::both_records_carry_every_contract_key ... ok
+test data::tests::a_range_violation_names_the_field_path ... ok
+test pitch::tests::contains_and_clamp ... ok
+test pitch::tests::goal_detection_uses_the_posts ... ok
+test record::tests::a_fan_out_feeds_both_sinks_in_order ... ok
+test player::tests::derived_speed_scales_with_pace ... ok
+test record::tests::record_round_trips_through_bytes ... ok
+test record::tests::an_absent_optional_sink_discards_every_record ... ok
+test observe::tests::an_unknown_stats_version_is_refused ... ok
+test record::tests::the_restart_flag_survives_the_file_and_leaves_the_tick_number_alone ... ok
+test decision::tests::an_open_teammate_draws_a_pass_or_a_shot ... ok
+test record::tests::a_version_one_file_is_refused_naming_both_versions ... ok
+test rng::tests::different_seed_different_stream ... ok
+test record::tests::a_truncated_file_is_refused ... ok
+test observe::tests::stats_round_trip_through_the_data_folder ... ok
+test record::tests::file_round_trips_a_thousand_records ... ok
+test steering::tests::arrive_converges_without_overshoot ... ok
+test steering::tests::separation_pushes_overlapping_players_apart ... ok
+test team::tests::anchors_stay_inside_the_pitch_for_every_corner ... ok
+test rng::tests::same_seed_same_stream ... ok
+test team::tests::away_team_mirrors_home ... ok
+test tuning::tests::a_probability_above_one_is_refused ... ok
+test tuning::tests::the_defaults_satisfy_every_bound ... ok
+test validate::tests::a_ball_faster_than_the_cap_is_a_violation ... ok
+test validate::tests::a_hand_built_overlap_is_one_violation ... ok
+test validate::tests::a_restart_tick_exempts_the_jump_and_the_same_jump_without_the_flag_does_not ... ok
+test sim::tests::zero_minutes_is_rejected ... ok
+test sim::tests::the_config_names_both_clubs_and_the_content ... ok
+test rng::tests::attribute_draws_centre_on_the_mean_and_stay_in_range ... ok
+test sim::tests::five_minutes_produce_fifteen_thousand_ticks ... ok
+
+test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests\content.rs (target\debug\deps\content-86ced56909a98b20.exe)
+
+running 5 tests
+test a_missing_content_file_names_its_path ... ok
+test an_unknown_rule_pack_version_is_refused_naming_the_version ... ok
+test the_current_rule_pack_version_loads ... ok
+test the_shipped_tuning_equals_the_documented_default ... ok
+test the_shipped_attribute_schema_has_thirty_to_fifty_grouped_names ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\determinism.rs (target\debug\deps\determinism-891ccc16b67f3d6e.exe)
+
+running 1 test
+test two_runs_are_byte_identical ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.42s
+
+     Running tests\full_match.rs (target\debug\deps\full_match-8dcc8e1c13d61c54.exe)
+
+running 1 test
+test ninety_minutes_write_270_000_records ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.36s
+
+     Running tests\generator.rs (target\debug\deps\generator-a0f2c5da571ced86.exe)
+
+running 3 tests
+test the_same_seed_gives_the_same_league ... ok
+test per_position_means_fall_inside_the_tuning_bounds ... ok
+test twenty_clubs_have_twenty_two_players_with_legal_positions ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests\identity.rs (target\debug\deps\identity-b046fda239d3c85f.exe)
+
+running 2 tests
+test owner_and_match_ids_round_trip_through_stats_json ... ok
+test owner_and_match_ids_round_trip_through_the_tick_header ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests\team_files.rs (target\debug\deps\team_files-ee453a347adbe95b.exe)
+
+running 2 tests
+test an_attribute_of_120_is_refused_naming_file_player_and_attribute ... ok
+test a_valid_team_file_loads ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\validator.rs (target\debug\deps\validator-d6a59eeb6ff08205.exe)
+
+running 2 tests
+test a_corrupted_stream_reports_the_overlap ... ok
+test a_seeded_full_match_has_no_violations ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.66s
+
+     Running unittests src\main.rs (target\debug\deps\engine_cli-62d776d7b869d75d.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\cli_args.rs (target\debug\deps\cli_args-a1f65493b26e1c01.exe)
+
+running 6 tests
+test invalid_seed_exits_non_zero_and_names_the_argument ... ok
+test a_missing_content_folder_exits_one_naming_the_paths_tried ... ok
+test an_explicit_content_dir_without_attributes_is_not_ignored_for_cwd_content ... ok
+test no_help_line_exceeds_eighty_columns ... ok
+test valid_seed_exits_zero ... ok
+test generated_teams_simulate_a_full_match_with_the_engine_core_tick_count ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.48s
+
+     Running tests\stream_cli.rs (target\debug\deps\stream_cli-ff476b753107b8b2.exe)
+
+running 5 tests
+test replay_refuses_a_missing_fixture_naming_the_path ... ok
+test a_viewer_that_closes_in_mid_match_ends_the_run_without_an_error ... ok
+test no_help_line_of_the_streaming_commands_exceeds_eighty_columns ... ok
+test record_writes_a_fixture_and_prints_its_counts ... ok
+test serve_prints_a_port_writes_the_port_file_and_streams_a_match ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running unittests src\lib.rs (target\debug\deps\protocol-a0614cb6619b213e.exe)
+
+running 20 tests
+test command::tests::a_kind_the_rule_pack_forbids_is_refused ... ok
+test command::tests::every_state_carries_its_viewer_word ... ok
+test codec::tests::a_two_metre_jump_forces_a_keyframe ... ok
+test command::tests::a_valid_change_is_queued_with_an_identifier ... ok
+test codec::tests::a_step_at_the_ball_speed_cap_encodes_as_a_delta ... ok
+test codec::tests::a_keyframe_round_trips ... ok
+test command::tests::an_unknown_change_type_is_refused_naming_the_type ... ok
+test codec::tests::a_full_keyframe_cycle_reconstructs_every_position ... ok
+test event::tests::a_goal_carries_both_scores_and_the_minute ... ok
+test event::tests::every_event_type_writes_the_contract_spelling ... ok
+test frame::tests::a_delta_frame_is_forty_eight_bytes_and_needs_its_predecessor ... ok
+test frame::tests::a_restart_keyframe_is_tagged_and_decodes ... ok
+test frame::tests::bytes_round_trip_and_a_bad_length_is_refused ... ok
+test message::tests::an_unknown_command_type_is_refused ... ok
+test message::tests::an_unknown_field_is_refused ... ok
+test message::tests::every_client_command_round_trips_through_json ... ok
+test tests::every_client_command_name_matches_its_specification ... ok
+test message::tests::every_server_message_round_trips_through_json ... ok
+test tests::every_specified_field_is_a_non_empty_key ... ok
+test tests::messages_names_every_variant_and_nothing_else ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\document.rs (target\debug\deps\document-4fbcc6ec51aaeee3.exe)
+
+running 2 tests
+test the_document_names_the_framing_of_every_message ... ok
+test every_message_appears_in_the_document_with_its_fields ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\stream-cf9b003df0d4f885.exe)
+
+running 16 tests
+test events::tests::a_goal_row_carries_the_envelope_and_both_scores ... ok
+test control::tests::set_speed_is_stored_and_echoed ... ok
+test control::tests::an_unreadable_command_is_refused_without_an_event ... ok
+test server::tests::a_refusal_names_both_versions ... ok
+test record::tests::a_fixture_round_trips_every_frame ... ok
+test control::tests::a_queued_change_writes_a_match_event_row ... ok
+test record::tests::a_truncated_fixture_is_refused ... ok
+test server::tests::every_loopback_origin_is_allowed_and_a_remote_page_is_not ... ok
+test events::tests::rows_append_one_per_line ... ok
+test session::tests::a_restart_tick_always_sends_a_tagged_keyframe ... ok
+test session::tests::a_keyframe_opens_every_cycle_and_deltas_fill_it ... ok
+test session::tests::a_step_too_wide_for_a_delta_sends_a_keyframe ... ok
+test session::tests::the_gauge_follows_the_buffer_and_the_score_packs_both_halves ... ok
+test record::tests::a_changed_byte_fails_the_hash ... ok
+test server::tests::the_port_file_is_written_and_removed_with_the_server ... ok
+test control::tests::pause_then_start_releases_a_waiting_producer ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\backpressure.rs (target\debug\deps\backpressure-52882379a931be1b.exe)
+
+running 1 test
+test a_slow_client_pauses_the_producer_and_loses_no_tick ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+     Running tests\commands.rs (target\debug\deps\commands-6c1a32ce3ffafe67.exe)
+
+running 2 tests
+test pause_and_set_speed_are_acknowledged ... ok
+test an_unknown_change_type_is_refused_and_a_valid_one_is_queued ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\fixture.rs (target\debug\deps\fixture-e7fb77298abc93ae.exe)
+
+running 2 tests
+test a_fixture_of_another_protocol_version_is_refused ... ok
+test a_replayed_fixture_is_byte_identical_to_the_recording ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+     Running tests\hello.rs (target\debug\deps\hello-778400c618aead93.exe)
+
+running 3 tests
+test a_page_from_another_origin_is_refused ... ok
+test an_unknown_protocol_version_is_refused_naming_both ... ok
+test the_hello_arrives_before_the_first_tick_frame ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\throughput.rs (target\debug\deps\throughput-2930b61ac5e054ff.exe)
+
+running 1 test
+test a_full_match_arrives_in_order_with_no_gap ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.41s
+
+   Doc-tests engine
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests protocol
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests stream
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

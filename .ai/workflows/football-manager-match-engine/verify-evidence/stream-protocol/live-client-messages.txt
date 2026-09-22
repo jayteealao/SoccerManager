@@ -1,0 +1,10 @@
+message: {"type":"hello","protocol.version":1,"engine.version":"0.1.0","build.hash":"65a3414-dirty","owner.id":"ca090d302c9c357be8f58dad322ded79","match.id":"000000000000002a-1790081643845","seed":42,"dt_ms":20.0,"ticks_expected":45000,"keyframe_interval":50,"teams":[{"team.id":"club-00000001-00","team.name":"Oakmere Rangers"},{"team.id":"club-00000002-00","team.name":"Eldstead City"}]}
+message: {"type":"event","owner.id":"ca090d302c9c357be8f58dad322ded79","match.id":"000000000000002a-1790081643845","tick":33,"minute":0,"event.type":"tactics-change","home.score":0,"away.score":0,"change.kind":"tactics","change.queued_tick":33,"change.queue_id":"q-33-0","change.state":"queued"}
+message: {"type":"ack","command":"queue-change","change.queue_id":"q-33-0","change.queued_tick":33,"state":"queued"}
+message: {"type":"event","owner.id":"ca090d302c9c357be8f58dad322ded79","match.id":"000000000000002a-1790081643845","tick":334,"minute":0,"event.type":"tactics-change","home.score":0,"away.score":0,"change.queued_tick":334,"change.rejected_reason":"unknown change type formation","change.state":"rejected"}
+message: {"type":"reject","command":"queue-change","reason":"unknown change type formation"}
+message: {"type":"ack","command":"set-speed","change.queued_tick":342,"speed":4.0}
+message: {"type":"event","owner.id":"ca090d302c9c357be8f58dad322ded79","match.id":"000000000000002a-1790081643845","tick":1,"minute":0,"event.type":"kick-off","team.id":"club-00000001-00","home.score":0,"away.score":0}
+message: {"type":"event","owner.id":"ca090d302c9c357be8f58dad322ded79","match.id":"000000000000002a-1790081643845","tick":45000,"minute":15,"event.type":"full-time","home.score":0,"away.score":0}
+message: {"type":"stats","tick":45000,"minute":15,"home.score":0,"away.score":0,"possession.changes":135,"ball.max_speed":27.070611037194276,"ball.idle_ticks":330}
+slow: ticks=45000 texts=9 frames=45000

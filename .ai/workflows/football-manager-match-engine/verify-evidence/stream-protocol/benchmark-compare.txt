@@ -1,0 +1,44 @@
+Benchmark compare — 05c-benchmark.md baseline (commit d58fce3) against HEAD (65a3414)
+Machine AMD Ryzen 7 9800X3D, power plan Ultimate Performance, machine.hash 74ca12fc08a4.
+SM_DATA_DIR set to a scratch folder on every drive. No other heavy process ran.
+
+Command 1: target/release/engine-cli.exe bench --seed 42 --matches 5 --json, three drives.
+  drive 1  wall 389 ms  cpu 1953 ms/5  mem 6.043 MB  ticks/s 694087
+  drive 2  wall 390 ms  cpu 1890 ms/5  mem 5.973 MB  ticks/s 692308
+  drive 3  wall 389 ms  cpu 1906 ms/5  mem 5.973 MB  ticks/s 694087
+
+| Target | Baseline | Now | Delta | Tripwire | Verdict |
+|---|---|---|---|---|---|
+| full match wall time | 389 ms | 389 ms | 0.0% | 2000 ms budget | pass |
+| ticks per second | 694,087 | 694,087 | 0.0% | 135,000 budget | pass |
+| cpu time per match | 384 ms | 381 ms | -0.8% | +10% = 422 ms | pass |
+| peak memory | 5.62 MB | 5.97 MB | +6.3% | +25% = 7.03 MB | pass |
+| tick step | 1.4342 us | 1.4376 us | +0.24% | no change band | pass |
+| steering_pass_22 | 887.68 ns | 888.96 ns | +0.14% | no change band | pass |
+
+Criterion intervals: tick_step [1.4339, 1.4415] us against the baseline [1.4309, 1.4377] us; the
+two intervals overlap, so the change is not resolvable. steering_pass_22 [879.28, 902.76] ns.
+Evidence check-criterion.stdout.txt, exit 0.
+
+Command 3 (the fifth target, first measurement):
+target/release/engine-cli.exe bench --seed 42 --matches 1 --stream --json, three drives.
+  drive 1  stream_ticks_per_s 640213  pauses 0  wall 392 ms  cpu 406 ms  mem 7.305 MB
+  drive 2  stream_ticks_per_s 634857  pauses 1  wall 392 ms  cpu 391 ms  mem 7.309 MB
+  drive 3  stream_ticks_per_s 642476  pauses 1  wall 390 ms  cpu 375 ms  mem 7.309 MB
+
+| Target | Baseline | Now | Delta | Verdict |
+|---|---|---|---|---|
+| stream throughput | not measured | 640,213 ticks/s median | first value | recorded |
+
+The socket costs 0.8 percent of engine throughput: engine.ticks_per_s falls from 694,087 without
+the socket to 688,775 with it, on the same seed and the same content hash 02d33ad91de5.
+Delivered throughput is 640,213 ticks per second, 4.7 times the 135,000 budget.
+
+Peak memory on command 3 is 7.31 MB. It is not compared to the 7.03 MB tripwire, because that
+tripwire belongs to command 1. Command 3 is a different workload: it adds a socket, a producer
+buffer of 500 ticks, a client thread, and the tungstenite write buffer. 7.31 MB is the first
+value of that workload and viewer-pitch inherits it.
+
+Encoder allocation risk (05c top risk): not reproduced. The encoder writes into a reused
+[u8; 99] inside TickFrame, and 270,000 ticks cost 1.69 MB of extra peak memory against the
+no-socket run, which is the buffer plus the client, not a per-tick allocation.

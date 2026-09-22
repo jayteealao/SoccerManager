@@ -1,0 +1,7 @@
+Cold start: target/release/engine-cli.exe --version, five runs
+run 1: 38 ms
+run 2: 37 ms
+run 3: 38 ms
+run 4: 37 ms
+run 5: 41 ms
+Prior slices: data-schemas-generator 36 to 37 ms, engine-core 37 to 39 ms.

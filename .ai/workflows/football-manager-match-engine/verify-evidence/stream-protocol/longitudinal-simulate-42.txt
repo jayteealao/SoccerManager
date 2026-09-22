@@ -1,0 +1,18 @@
+simulate exit=0
+build.hash: 4a806c8-dirty -> 65a3414-dirty
+content.hash: c33b2b9b247e -> 02d33ad91de5
+duration_ms: 400 -> 401
+engine.ticks_per_s: 673359.8637119635 -> 671733.360667076
+match.id: 000000000000002a-1790070788685 -> 000000000000002a-1790083887876
+owner.id: 9f79529338fbcce4e2f363a215da1697 -> 95efc7cc9d847b1079ae03e1be796568
+--- help tree ---
+Commands:
+  simulate  Simulate one match and write every tick to a file
+  bench     Time whole matches on one thread and print a run report
+  generate  Generate fictional clubs as team files, one file per club
+  serve     Stream one match live over the local socket to one viewer
+  record    Record one whole match stream to a fixture file
+  replay    Replay a recorded fixture over the same socket protocol
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
