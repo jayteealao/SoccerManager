@@ -1,0 +1,2 @@
+2026-09-22T22:02:04.702813Z ERROR engine::snapshot: signal="snapshot.refused" path=empty.smsn reason=bad magic: not a snapshot file
+error: snapshot refused: C:/Users/jayte/AppData/Local/Temp/claude/C--Users-jayte-Documents-dev-SoccerManager/a7ca6102-5eb6-4026-b025-47fc91bca540/scratchpad/recheck/empty.smsn: bad magic: not a snapshot file

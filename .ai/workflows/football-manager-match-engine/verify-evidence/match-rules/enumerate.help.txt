@@ -1,0 +1,96 @@
+Headless command line for the football match engine: simulate and bench
+
+Usage: engine-cli.exe [OPTIONS] <COMMAND>
+
+Commands:
+  simulate  Simulate one match and write every tick to a file
+  bench     Time whole matches on one thread and print a run report
+  generate  Generate fictional clubs as team files, one file per club
+  serve     Stream one match live over the local socket to one viewer
+  record    Record one whole match stream to a fixture file
+  replay    Replay a recorded fixture over the same socket protocol
+  resume    Continue a match from its latest snapshot to full time
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+      --content-dir <DIR>
+          Folder holding the content files (attributes, tuning, rules, teams).
+          
+          When absent: SM_CONTENT_DIR, then ./content, then the content
+          folder beside the binary.
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
+Continue a match from its latest snapshot to full time
+
+Usage: engine-cli.exe resume [OPTIONS] --snapshot <FILE>
+
+Options:
+      --content-dir <DIR>
+          Folder holding the content files (attributes, tuning, rules, teams).
+          
+          When absent: SM_CONTENT_DIR, then ./content, then the content
+          folder beside the binary.
+
+      --snapshot <FILE>
+          Snapshot file written during a match (snapshot.smsn)
+
+      --ticks-out <FILE>
+          Also write the resumed ticks to this file
+
+      --json
+          Also write a JSON Lines dump beside the tick file
+
+      --team-a <FILE>
+          Home team file the match was started with; default as for simulate
+
+      --team-b <FILE>
+          Away team file the match was started with; default as for simulate
+
+  -h, --help
+          Print help (see a summary with '-h')
+Simulate one match and write every tick to a file
+
+Usage: engine-cli.exe simulate [OPTIONS] --seed <SEED> --ticks-out <FILE>
+
+Options:
+      --content-dir <DIR>
+          Folder holding the content files (attributes, tuning, rules, teams).
+          
+          When absent: SM_CONTENT_DIR, then ./content, then the content
+          folder beside the binary.
+
+      --seed <SEED>
+          Seed for the engine's random-number generator
+
+      --ticks-out <FILE>
+          Path of the tick file to write
+
+      --minutes <MINUTES>
+          Minutes of play to simulate
+          
+          [default: 90]
+
+      --json
+          Also write a JSON Lines dump beside the tick file.
+          
+          The dump path is the tick file path with its extension
+          replaced by .jsonl (match.ticks becomes match.jsonl).
+
+      --team-a <FILE>
+          Home team file; default teams/default-a.json in the content folder
+
+      --team-b <FILE>
+          Away team file; default teams/default-b.json in the content folder
+
+      --no-snapshot
+          Do not write a snapshot at each stoppage.
+          
+                               By default the latest snapshot is written to
+                               SM_DATA_DIR/matches/<match.id>/snapshot.smsn.
+
+  -h, --help
+          Print help (see a summary with '-h')

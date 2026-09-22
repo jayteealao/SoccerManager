@@ -1,0 +1,17 @@
+2026-09-22T22:01:55.801765Z  INFO engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T22:01:55.801931Z  INFO engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=4180 hash=edfccfdada0c
+2026-09-22T22:01:55.802009Z  INFO engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=2 bytes=1185 hash=6099d3438e0c
+2026-09-22T22:01:55.802221Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
+2026-09-22T22:01:55.802933Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a
+2026-09-22T22:01:56.006910Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=42 variance_s=7.0 added_s=60 announced_min=1
+2026-09-22T22:01:56.213404Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=116 variance_s=21.0 added_s=137 announced_min=3
+2026-09-22T22:01:56.427352Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=42 variance_s=7.0 added_s=60 announced_min=1
+2026-09-22T22:01:56.635889Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=116 variance_s=21.0 added_s=137 announced_min=3
+2026-09-22T22:01:56.847684Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=42 variance_s=7.0 added_s=60 announced_min=1
+2026-09-22T22:01:57.056176Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=116 variance_s=21.0 added_s=137 announced_min=3
+2026-09-22T22:01:57.269504Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=42 variance_s=7.0 added_s=60 announced_min=1
+2026-09-22T22:01:57.476672Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=116 variance_s=21.0 added_s=137 announced_min=3
+2026-09-22T22:01:57.690269Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=42 variance_s=7.0 added_s=60 announced_min=1
+2026-09-22T22:01:57.896504Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=116 variance_s=21.0 added_s=137 announced_min=3
+2026-09-22T22:01:58.109799Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=42 variance_s=7.0 added_s=60 announced_min=1
+2026-09-22T22:01:58.319365Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=116 variance_s=21.0 added_s=137 announced_min=3

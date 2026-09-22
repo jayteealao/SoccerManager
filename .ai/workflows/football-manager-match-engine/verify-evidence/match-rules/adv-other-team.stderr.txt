@@ -1,0 +1,7 @@
+2026-09-22T21:27:42.497957Z  INFO resume{seed=42 tick=260767}: engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T21:27:42.498117Z  INFO resume{seed=42 tick=260767}: engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=4180 hash=edfccfdada0c
+2026-09-22T21:27:42.498191Z  INFO resume{seed=42 tick=260767}: engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=2 bytes=1185 hash=6099d3438e0c
+2026-09-22T21:27:42.498402Z  INFO resume{seed=42 tick=260767}: engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a
+2026-09-22T21:27:42.499096Z  INFO resume{seed=42 tick=260767}: engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a
+2026-09-22T21:27:42.499190Z ERROR resume{seed=42 tick=260767}: engine_cli::resume: signal="snapshot.refused" path=C:/Users/jayte/AppData/Local/Temp/tmp.RmUyp0cCSg/data/matches/000000000000002a-1790112372895/snapshot.smsn reason=content mismatch: written with content 30e098265c77; loaded content b0f7171de670
+error: snapshot refused: snapshot.smsn: content mismatch: written with content 30e098265c77; loaded content b0f7171de670

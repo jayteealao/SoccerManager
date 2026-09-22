@@ -1,0 +1,12 @@
+2026-09-22T21:29:05.325586Z  INFO engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T21:29:05.325753Z  INFO engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=4180 hash=edfccfdada0c
+2026-09-22T21:29:05.325828Z  INFO engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=2 bytes=1185 hash=6099d3438e0c
+2026-09-22T21:29:05.326035Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
+2026-09-22T21:29:05.326682Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a
+2026-09-22T21:29:05.327136Z  INFO engine::observe::identity: signal="identity.owner_created" path="owner.id"
+2026-09-22T21:29:05.554257Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=42 variance_s=7.0 added_s=60 announced_min=1
+2026-09-22T21:29:05.614060Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=171104 kind="free_kick" team.id=club-00000001-00 waited_ticks=1200 taker_distance_m=0.0
+2026-09-22T21:29:05.637684Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=185084 kind="free_kick" team.id=club-00000001-00 waited_ticks=1200 taker_distance_m=0.0
+2026-09-22T21:29:05.764828Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=261967 kind="free_kick" team.id=club-00000001-00 waited_ticks=1200 taker_distance_m=0.0
+2026-09-22T21:29:05.783480Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=64 variance_s=-2.0 added_s=62 announced_min=2
+2026-09-22T21:29:05.788665Z  INFO stream::record: signal="fixture.recorded" path=f42.smfx frames=276152 ticks=276100 bytes=16033359 hash=413e80488e0d

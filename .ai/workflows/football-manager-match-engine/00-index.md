@@ -4,10 +4,10 @@ type: index
 slug: football-manager-match-engine
 title: "Football manager game: match engine and 2D match viewer"
 status: active
-current-stage: implement
-stage-number: 5
+current-stage: verify
+stage-number: 6
 created-at: "2026-09-21T16:46:41Z"
-updated-at: "2026-09-22T20:41:00Z"
+updated-at: "2026-09-22T22:02:26Z"
 selected-slice: "match-rules"
 branch-strategy: dedicated
 branch: "feat/football-manager-match-engine"
@@ -153,15 +153,15 @@ augmentations:
   - {type: benchmark, artifact: 05c-benchmark.md, slice: match-rules, mode: baseline, status: ready, created-at: "2026-09-22T19:29:33Z", prior: history/05c-benchmark-3.md}
   - {type: experiment, artifact: 04c-experiment.md, status: deferred-to-experiment-flags, created-at: "2026-09-21T21:57:49Z"}
 evidence-quality:
-  live: 1
+  live: 2
   headless: 5
-  n-a: 20
+  n-a: 27
 metric-acceptance-mock-rung: 0
 runtime-evidence-deferrals: []
 compressed-slices:
   - {slug: probe-engine-core, slice-type: probe, created-at: "2026-09-22T06:03:50Z"}
-next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine match-rules"
+next-command: wf-review
+next-invocation: "/wf review football-manager-match-engine match-rules"
 workflow-files:
   - 00-index.md
   - 01-intake.md
@@ -263,6 +263,8 @@ workflow-files:
   - history/05c-benchmark-3.html.fragment
   - bench-baseline/match-rules/
   - 05-implement-match-rules.md
+  - 06-verify-match-rules.md
+  - verify-evidence/match-rules/
 progress:
   intake: complete
   shape: complete

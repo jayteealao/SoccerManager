@@ -1,0 +1,2 @@
+2026-09-22T21:27:42.204504Z ERROR engine::snapshot: signal="snapshot.refused" path="C:/Users/jayte/AppData/Local/Temp/tmp.RmUyp0cCSg/empty.smsn" reason=bad magic: not a snapshot file
+error: snapshot refused: C:/Users/jayte/AppData/Local/Temp/tmp.RmUyp0cCSg/empty.smsn: bad magic: not a snapshot file

@@ -1,0 +1,5 @@
+   --> crates\engine\src\rules\restart.rs:139:4
+139 | fn outside_on_pitch(p: DVec2, centre: DVec2, radius: f64, away: DVec2, margin: f64) -> DVec2 {
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s

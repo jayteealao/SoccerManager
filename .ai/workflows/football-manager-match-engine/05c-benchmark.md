@@ -5,7 +5,7 @@ augmentation-type: benchmark
 slug: football-manager-match-engine
 parent-workflow: football-manager-match-engine
 slice-slug: match-rules
-mode: baseline
+mode: compare
 language: "rust"
 benchmark-framework: "timing-fallback (engine-cli bench) plus criterion 0.8"
 targets-measured: 6
@@ -14,7 +14,9 @@ baseline-branch: feat/football-manager-match-engine
 baseline-commit: "d86996a"
 measured-at: "2026-09-22T19:11:21Z"
 created-at: "2026-09-22T06:37:07Z"
-updated-at: "2026-09-22T19:29:33Z"
+updated-at: "2026-09-22T22:02:26Z"
+compare-commit: "a4893c8"
+compared-at: "2026-09-22T22:02:26Z"
 revision-count: 4
 revisions:
   - rev: 1
@@ -109,3 +111,24 @@ None of the six engine targets failed. The four page targets from the viewer sli
 - `bench.match_wall_ms`, `bench.cpu_ms` per match, and `bench.ticks_per_match` are reported beside the gate with their deltas and are not judged by the 10 percent tripwire (plan Round 4 Q13). The 2000 ms per-match budget still applies.
 - The stream workload keeps its own memory tripwire of 8.31 MB.
 - **Update the sibling `05c-benchmark.yaml` in the same pass:** set `mode: compare`, fill `compare_commit`, move each baseline value to `before`, and write the new reading to `after`.
+
+## Comparison Results
+
+Run by `/wf verify football-manager-match-engine match-rules` on commit `a4893c8` (the slice at `0611856` plus the verify-owned fix commit), from Git Bash with no other heavy process running and `SM_DATA_DIR` set to a scratch folder. The same three commands ran on `fdd943f` before the fixes, and every reading there was also inside the tripwires (1.4937 µs per tick, 5.45 MB). Evidence: `verify-evidence/match-rules/recheck-ac-h-{1,2,3}.stdout.txt`, `recheck-criterion.stdout.txt`, `recheck-bench-stream-{1,2,3}.stdout.txt`; the pre-fix readings are `ac-h-{1,2,3}.stdout.txt`, `criterion.stdout.txt`, and `bench-stream-{1,2,3}.stdout.txt`.
+
+| Target | Baseline median | Compare median | Delta | Delta% | Alloc delta% | Verdict |
+|--------|----------------|---------------|-------|--------|--------------|---------|
+| `processor time per tick` (the gate) | 1.4237 µs | 1.5080 µs | +0.0843 µs | +5.9% | N/A | ✓ inside the 1.566 µs tripwire (margin 3.7%) |
+| `peak memory` | 5.36 MB | 5.45 MB | +0.09 MB | +1.7% | N/A | ✓ inside the 6.69 MB tripwire |
+| `full match wall time` | 388 ms | 420 ms | +32 ms | +8.2% | N/A | reported, not gated; budget 2000 ms met |
+| `ticks per match` | 270,000 | 279,850 | +9,850 | +3.6% | N/A | reported; added time 60 s and 137 s on seed 42 |
+| `cpu time per match` | 384.4 ms | 422.0 ms | +37.6 ms | +9.8% | N/A | reported, not gated (plan Round 4 Q13) |
+| `ticks per second` | 695,876 | 666,310 | −29,566 | −4.2% | N/A | reported; the referee's per-tick cost |
+| `tick step` | 1.4336 µs | 1.5018 µs | +0.0682 µs | +4.8% | N/A | ✓ inside +10% |
+| `steering_pass_22` | 872.40 ns | 875.22 ns | +2.8 ns | +0.3% | N/A | ✓ no change |
+| `stream throughput` | 639,935 ticks/s | 611,041 ticks/s | −28,894 | −4.5% | N/A | ✓ reported; 0 pauses |
+| `stream peak memory` | 6.65 MB | 6.86 MB | +0.21 MB | +3.2% | N/A | ✓ inside the 8.31 MB tripwire |
+
+Three drives of command 1 on `a4893c8`: 1.5080, 1.5080, and 1.4858 µs per tick; peak 5.469, 5.453, and 5.453 MB; wall 422, 420, and 418 ms; processor-to-wall ratios 1.001, 1.002, and 0.993. The verify fix for stalled restarts made the seed-42 match 3,750 ticks longer, because the match now plays on instead of waiting at dead balls, and it did not change the per-tick cost beyond noise (1.4937 µs before, 1.5080 µs after).
+
+**Tripwires:** none fired. The per-tick margin is 3.7 percent, and the next engine slice adds decisions on top of this cost.

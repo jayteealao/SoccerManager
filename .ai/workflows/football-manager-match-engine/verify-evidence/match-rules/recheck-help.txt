@@ -1,0 +1,6 @@
+Headless command line for the football match engine.
+      --no-snapshot
+          Do not write a snapshot at each stoppage.
+          
+          By default the latest snapshot is written to
+          SM_DATA_DIR/matches/<match.id>/snapshot.smsn.

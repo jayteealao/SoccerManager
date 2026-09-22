@@ -1,0 +1,1 @@
+{"bytes":16033359,"fixture":"C:/Users/jayte/AppData/Local/Temp/tmp.RmUyp0cCSg/f42.smfx","frames":276152,"hash":"413e80488e0d","ticks":276100}

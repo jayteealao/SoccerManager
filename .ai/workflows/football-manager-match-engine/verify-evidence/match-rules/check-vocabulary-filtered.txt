@@ -1,0 +1,20 @@
+crates/engine-cli/tests/cli_args.rs:1://! AC-f (engine-core): an invalid seed exits non-zero with a message naming the argument; a
+crates/engine-cli/tests/cli_args.rs:2://! valid seed exits zero. AC-f (data-schemas-generator): `generate` writes team files and
+crates/engine-cli/tests/cli_args.rs:3://! `simulate --team-a --team-b` on them completes with the engine-core tick count. Plus: a
+crates/engine-cli/tests/stream_cli.rs:1://! AC-f (stream-protocol) on the command line: `record` writes a fixture and prints its
+web/components/match-control.css:3: * Four sizes, five states, two themes, all defined here. This slice uses the `sm` and `md`
+web/components/match-control.css:4: * sizes in the light theme; the rest ship defined and unused so a later viewer slice adds
+web/components/match-control.css:121: * here because the primitive owns it; `viewer-pitch` ships a worded play control and
+web/components/match-control.css:122: * `viewer-match-day` is the first slice to draw the glyph. */
+web/index.html:15:           bug and the goal banner belong to viewer-match-day; the frame is here so the
+web/index.html:98:            <p class="region__note">Built by viewer-match-day.</p>
+web/index.html:104:          <p class="region__note">Built by viewer-match-day.</p>
+web/layout.css:5: * built here and left empty; `viewer-match-day` fills the header and the right column,
+web/layout.css:92:/* A region a later slice fills. It is a labelled empty panel, not a blank space, so the
+web/layout.css:240: * viewer-reports-recovery. It is a different colour AND a different word. */
+web/main.mjs:263:    // The canvas error state, stubbed here and completed by viewer-reports-recovery: the
+web/signal.mjs:7:// That is enough to verify a slice and not enough for a dashboard.
+web/tokens.css:75: * token still holds. `viewer-match-day` is the first slice to use it. */
+docs/reference/protocol.md:166:| `detail` | object | opaque in this build; the match-rules slice reads it when it applies the change |
+docs/reference/protocol.md:168:This build queues the change and answers. Nothing is applied to play: the match-rules slice
+docs/reference/protocol.md:202:same-origin, including both fonts, so nothing is lost today; a later slice that wants an

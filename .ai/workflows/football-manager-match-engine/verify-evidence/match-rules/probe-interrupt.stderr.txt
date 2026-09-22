@@ -1,0 +1,9 @@
+2026-09-22T21:27:58.952859Z  INFO simulate{seed=9 minutes=90}: engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T21:27:58.953022Z  INFO simulate{seed=9 minutes=90}: engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=4180 hash=edfccfdada0c
+2026-09-22T21:27:58.953097Z  INFO simulate{seed=9 minutes=90}: engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=2 bytes=1185 hash=6099d3438e0c
+2026-09-22T21:27:58.953302Z  INFO simulate{seed=9 minutes=90}: engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
+2026-09-22T21:27:58.954015Z  INFO simulate{seed=9 minutes=90}: engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a
+2026-09-22T21:27:58.954465Z  INFO simulate{seed=9 minutes=90}: engine::observe::identity: signal="identity.owner_created" path="owner.id"
+2026-09-22T21:27:58.954623Z  INFO simulate{seed=9 minutes=90}: engine::record: signal="tickfile.header" schema_version=4 seed=9 dt_ms=20.0 ticks_expected=360000 float_width=4 owner_id=e1677b4718e906b39781d9ea166b9ec5 match_id=0000000000000009-1790112478954
+2026-09-22T21:27:59.039909Z  WARN simulate{seed=9 minutes=90}: engine::rules: signal="rules.dead_ball_stalled" tick=53197 kind="free_kick" team.id=club-00000002-00 waited_ticks=1200 taker_distance_m=0.0
+2026-09-22T21:27:59.175212Z  INFO simulate{seed=9 minutes=90}: engine::rules: signal="rules.added_time" half=0 tally_s=49 variance_s=-10.0 added_s=60 announced_min=1

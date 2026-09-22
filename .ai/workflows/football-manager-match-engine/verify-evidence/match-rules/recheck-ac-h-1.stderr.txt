@@ -1,0 +1,18 @@
+2026-09-22T22:01:51.618226Z  INFO engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T22:01:51.618396Z  INFO engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=4180 hash=edfccfdada0c
+2026-09-22T22:01:51.618470Z  INFO engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=2 bytes=1185 hash=6099d3438e0c
+2026-09-22T22:01:51.618675Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
+2026-09-22T22:01:51.618949Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a
+2026-09-22T22:01:51.619479Z  INFO engine::observe::identity: signal="identity.owner_created" path="owner.id"
+2026-09-22T22:01:51.820899Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=42 variance_s=7.0 added_s=60 announced_min=1
+2026-09-22T22:01:52.027319Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=116 variance_s=21.0 added_s=137 announced_min=3
+2026-09-22T22:01:52.241761Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=42 variance_s=7.0 added_s=60 announced_min=1
+2026-09-22T22:01:52.450849Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=116 variance_s=21.0 added_s=137 announced_min=3
+2026-09-22T22:01:52.663264Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=42 variance_s=7.0 added_s=60 announced_min=1
+2026-09-22T22:01:52.871130Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=116 variance_s=21.0 added_s=137 announced_min=3
+2026-09-22T22:01:53.085789Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=42 variance_s=7.0 added_s=60 announced_min=1
+2026-09-22T22:01:53.293108Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=116 variance_s=21.0 added_s=137 announced_min=3
+2026-09-22T22:01:53.506559Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=42 variance_s=7.0 added_s=60 announced_min=1
+2026-09-22T22:01:53.713101Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=116 variance_s=21.0 added_s=137 announced_min=3
+2026-09-22T22:01:53.926023Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=42 variance_s=7.0 added_s=60 announced_min=1
+2026-09-22T22:01:54.137031Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=116 variance_s=21.0 added_s=137 announced_min=3

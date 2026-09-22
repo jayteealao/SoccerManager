@@ -1,0 +1,1 @@
+{"type":"event","owner.id":"739e9b2a96be1149f01bc220c88b01ae","match.id":"0000000000000009-1790112561079","tick":146081,"minute":47,"event.type":"card","team.id":"club-00000001-00","home.score":0,"away.score":0,"player.id":"p-club-00000001-00-04","card.kind":"yellow"}

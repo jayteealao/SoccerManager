@@ -2,21 +2,23 @@ artifact: benchmark
 target: "engine-cli bench --seed 42 --matches 5 --json (five 90-minute matches, one thread, reference machine), cargo bench -p engine --bench tick_step, and engine-cli bench --stream; the gate is processor time per tick (plan Round 4 Q13)"
 language: "rust"
 framework: "timing-fallback (engine-cli bench with std::time::Instant, GetProcessTimes, GetProcessMemoryInfo) plus criterion 0.8 for the tick step"
-mode: baseline
+mode: compare
 measured_at: "2026-09-22T19:11:21Z"
 baseline_commit: "d86996a"
-compare_commit: ""
+compare_commit: "a4893c8"
 metrics:
-  - { name: "bench.cpu_us_per_tick", after: 1.4237, unit: "us", direction: lower-is-better, note: "Derived for the baseline: 384.4 ms of processor time per match over 270,000 ticks. The match-rules bench reports it directly. Tripwire 1.566 us (+10 percent). This is the gate." }
-  - { name: "bench.match_wall_ms", after: 388, unit: "ms", direction: lower-is-better, note: "Reported beside the gate. A match-rules match is about 9 percent longer, so this number rises without any referee cost. Budget 2000 ms per match (NFR-1)." }
-  - { name: "bench.ticks_per_match", after: 270000, unit: "ticks", direction: lower-is-better, note: "Regulation only at baseline. After match-rules: 270,000 plus added time, at most 360,000." }
-  - { name: "engine.ticks_per_s", after: 695876, unit: "ticks/s", direction: higher-is-better }
-  - { name: "bench.cpu_ms_per_match", after: 384.4, unit: "ms", direction: lower-is-better, note: "Median of 387.6, 384.4, 384.4. Reported, not gated." }
-  - { name: "bench.peak_mem_mb", after: 5.36, unit: "MB", direction: lower-is-better, note: "Median of 5.355, 5.328, 5.363. Tripwire 6.69 MB (+25 percent)." }
-  - { name: "criterion.tick_step_us", after: 1.4336, unit: "us", direction: lower-is-better }
-  - { name: "criterion.steering_pass_22_ns", after: 872.40, unit: "ns", direction: lower-is-better }
-  - { name: "bench.stream_ticks_per_s", after: 639935, unit: "ticks/s", direction: higher-is-better, note: "0 pauses." }
-  - { name: "bench.stream_peak_mem_mb", after: 6.65, unit: "MB", direction: lower-is-better, note: "Tripwire 8.31 MB (+25 percent)." }
-regressions: []
+  - { name: "bench.cpu_us_per_tick", before: 1.4237, after: 1.508, unit: "us", direction: lower-is-better, note: "Derived for the baseline: 384.4 ms of processor time per match over 270,000 ticks. The match-rules bench reports it directly. Tripwire 1.566 us (+10 percent). This is the gate." }
+  - { name: "bench.match_wall_ms", before: 388, after: 420, unit: "ms", direction: lower-is-better, note: "Reported beside the gate. A match-rules match is about 9 percent longer, so this number rises without any referee cost. Budget 2000 ms per match (NFR-1)." }
+  - { name: "bench.ticks_per_match", before: 270000, after: 279850, unit: "ticks", direction: lower-is-better, note: "Regulation only at baseline. After match-rules: 270,000 plus added time, at most 360,000." }
+  - { name: "engine.ticks_per_s", before: 695876, after: 666310, unit: "ticks/s", direction: higher-is-better }
+  - { name: "bench.cpu_ms_per_match", before: 384.4, after: 422.0, unit: "ms", direction: lower-is-better, note: "Median of 387.6, 384.4, 384.4. Reported, not gated." }
+  - { name: "bench.peak_mem_mb", before: 5.36, after: 5.45, unit: "MB", direction: lower-is-better, note: "Median of 5.355, 5.328, 5.363. Tripwire 6.69 MB (+25 percent)." }
+  - { name: "criterion.tick_step_us", before: 1.4336, after: 1.5018, unit: "us", direction: lower-is-better }
+  - { name: "criterion.steering_pass_22_ns", before: 872.40, after: 875.22, unit: "ns", direction: lower-is-better }
+  - { name: "bench.stream_ticks_per_s", before: 639935, after: 611041, unit: "ticks/s", direction: higher-is-better, note: "0 pauses." }
+  - { name: "bench.stream_peak_mem_mb", before: 6.65, after: 6.86, unit: "MB", direction: lower-is-better, note: "Tripwire 8.31 MB (+25 percent)." }
+regressions: []  # no tripwire fired; processor time per tick +5.9% against a +10% tripwire
 improvements: []
 notes: "Baseline for match-rules on d86996a, before the slice changes code. The four page targets from viewer-pitch are not re-measured: this slice changes no drawing, decoding, or history code, and viewer-match-day takes their first readings as its baseline. The viewer-pitch record with its comparison is kept at history/05c-benchmark-3.md."
+compared_at: "2026-09-22T22:02:26Z"
+compare_notes: "Compared by verify on a4893c8. Gate: 1.508 us per tick against 1.566 us; peak memory 5.45 MB against 6.69 MB. No tripwire fired."

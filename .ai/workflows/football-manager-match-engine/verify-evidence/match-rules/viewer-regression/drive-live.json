@@ -1,0 +1,159 @@
+{
+  "scenario": "live",
+  "started": "2026-09-22T21:43:57.547Z",
+  "steps": [
+    {
+      "name": "ac-h-step1",
+      "at": "2026-09-22T21:43:58.629Z",
+      "teams": "Oakmere Rangers v Eldstead City",
+      "engine": "engine 0.1.0",
+      "connected": null
+    },
+    {
+      "name": "ac-h-step4",
+      "at": "2026-09-22T21:44:09.252Z",
+      "first": {
+        "tick": 30,
+        "clock": "00:00"
+      },
+      "last": {
+        "tick": 539,
+        "clock": "00:10"
+      },
+      "playersMoved": 22,
+      "ballMoved": true,
+      "outOfBounds": 0,
+      "maxAbsX_cm": 4998,
+      "maxAbsY_cm": 2645
+    },
+    {
+      "name": "ac-h-step5",
+      "at": "2026-09-22T21:44:41.408Z",
+      "windows": [
+        {
+          "a": {
+            "tick": 957,
+            "clock": "00:19",
+            "now": 13373.509999999776
+          },
+          "b": {
+            "tick": 3961,
+            "clock": "01:19",
+            "now": 28386.294999999925
+          },
+          "wall_s": 15.012785000000148,
+          "match_s": 60.08,
+          "ratio": 4.001922361507169,
+          "speed": "speed-4",
+          "effective": "4x"
+        },
+        {
+          "a": {
+            "tick": 3961,
+            "clock": "01:19",
+            "now": 28386.93499999866
+          },
+          "b": {
+            "tick": 6964,
+            "clock": "02:19",
+            "now": 43402.93499999866
+          },
+          "wall_s": 15.016,
+          "match_s": 60.06,
+          "ratio": 3.999733617474694,
+          "speed": "speed-4",
+          "effective": "4x"
+        }
+      ],
+      "notice": "Stream ended The match is no longer live. Start the engine again to watch another.",
+      "history": {
+        "ticks_stored": 276100,
+        "history_bytes": 33840000,
+        "page_bytes": 40530010,
+        "page_bytes_reason": null,
+        "newest_tick": 276100
+      }
+    },
+    {
+      "name": "play-toggle",
+      "at": "2026-09-22T21:44:42.938Z",
+      "playBefore": {
+        "label": "Pause",
+        "ariaPressed": null,
+        "dataPlaying": "true",
+        "bg": "oklch(0.43 0.17 250)"
+      },
+      "playAfter": {
+        "label": "Play",
+        "ariaPressed": null,
+        "dataPlaying": "false",
+        "bg": "oklch(0.49 0.17 250)",
+        "live": "Paused.",
+        "t1": 6987
+      },
+      "t2": 6987
+    },
+    {
+      "name": "ac-f-live",
+      "at": "2026-09-22T21:44:44.487Z",
+      "rewinds": [
+        {
+          "fx": 0.2,
+          "lastRewind": {
+            "tick": 42371,
+            "exact": true,
+            "components": 47
+          },
+          "renderedTick": 42371,
+          "clock": "14:07",
+          "hookEqual": true,
+          "playing": "Play"
+        },
+        {
+          "fx": 0.5,
+          "lastRewind": {
+            "tick": 138029,
+            "exact": true,
+            "components": 47
+          },
+          "renderedTick": 138029,
+          "clock": "46:00",
+          "hookEqual": true,
+          "playing": "Play"
+        },
+        {
+          "fx": 0.8,
+          "lastRewind": {
+            "tick": 233729,
+            "exact": true,
+            "components": 47
+          },
+          "renderedTick": 233729,
+          "clock": "77:54",
+          "hookEqual": true,
+          "playing": "Play"
+        }
+      ],
+      "rewindSignals": [
+        "{\"record.kind\":\"viewer-event\",\"schema.version\":\"1\",\"service\":\"touchline-viewer\",\"operation\":\"view\",\"signal\":\"viewer.rewind\",\"ts\":\"2026-09-22T21:44:42.953Z\",\"from_tick\":6987,\"to_tick\":42371,\"stored\":true,\"exact\":true}",
+        "{\"record.kind\":\"viewer-event\",\"schema.version\":\"1\",\"service\":\"touchline-viewer\",\"operation\":\"view\",\"signal\":\"viewer.rewind\",\"ts\":\"2026-09-22T21:44:43.469Z\",\"from_tick\":42371,\"to_tick\":138029,\"stored\":true,\"exact\":true}",
+        "{\"record.kind\":\"viewer-event\",\"schema.version\":\"1\",\"service\":\"touchline-viewer\",\"operation\":\"view\",\"signal\":\"viewer.rewind\",\"ts\":\"2026-09-22T21:44:43.986Z\",\"from_tick\":138029,\"to_tick\":233729,\"stored\":true,\"exact\":true}"
+      ]
+    },
+    {
+      "name": "ac-g-live",
+      "at": "2026-09-22T21:44:48.848Z",
+      "history": {
+        "ticks_stored": 276100,
+        "history_bytes": 33840000,
+        "page_bytes": 40530010,
+        "page_bytes_reason": null,
+        "newest_tick": 276100
+      },
+      "mem": 40286810,
+      "gauge": "60 fps · 60 Hz · 34 MB",
+      "scrubMax": "276100"
+    }
+  ],
+  "finished": "2026-09-22T21:44:48.849Z"
+}

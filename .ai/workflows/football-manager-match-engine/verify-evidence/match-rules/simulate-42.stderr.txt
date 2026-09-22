@@ -1,0 +1,47 @@
+2026-09-22T21:26:12.893869Z  INFO simulate{seed=42 minutes=90}: engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T21:26:12.894041Z  INFO simulate{seed=42 minutes=90}: engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=4180 hash=edfccfdada0c
+2026-09-22T21:26:12.894119Z  INFO simulate{seed=42 minutes=90}: engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=2 bytes=1185 hash=6099d3438e0c
+2026-09-22T21:26:12.894347Z  INFO simulate{seed=42 minutes=90}: engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
+2026-09-22T21:26:12.895086Z  INFO simulate{seed=42 minutes=90}: engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a
+2026-09-22T21:26:12.895571Z  INFO simulate{seed=42 minutes=90}: engine::observe::identity: signal="identity.owner_created" path="owner.id"
+2026-09-22T21:26:12.895732Z  INFO simulate{seed=42 minutes=90}: engine::record: signal="tickfile.header" schema_version=4 seed=42 dt_ms=20.0 ticks_expected=360000 float_width=4 owner_id=592ed3d4efe403bc63c9b66c6c4b3e02 match_id=000000000000002a-1790112372895
+2026-09-22T21:26:12.897211Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=311 kind="goal_kick" bytes=2346
+2026-09-22T21:26:12.912811Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=9719 kind="goal_kick" bytes=2346
+2026-09-22T21:26:12.937287Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=24344 kind="free_kick" bytes=2346
+2026-09-22T21:26:12.956023Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=35291 kind="goal_kick" bytes=2346
+2026-09-22T21:26:12.969060Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=42753 kind="goal_kick" bytes=2346
+2026-09-22T21:26:12.998078Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=60480 kind="goal_kick" bytes=2346
+2026-09-22T21:26:13.003711Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=63755 kind="free_kick" bytes=2346
+2026-09-22T21:26:13.016847Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=71045 kind="goal_kick" bytes=2346
+2026-09-22T21:26:13.036070Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=82819 kind="goal_kick" bytes=2346
+2026-09-22T21:26:13.054156Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=93860 kind="goal_kick" bytes=2346
+2026-09-22T21:26:13.073856Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=106156 kind="free_kick" bytes=2346
+2026-09-22T21:26:13.099431Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=122581 kind="goal_kick" bytes=2346
+2026-09-22T21:26:13.108540Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=127936 kind="goal_kick" bytes=2346
+2026-09-22T21:26:13.119107Z  INFO simulate{seed=42 minutes=90}: engine::rules: signal="rules.added_time" half=0 tally_s=42 variance_s=7.0 added_s=60 announced_min=1
+2026-09-22T21:26:13.121531Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=136135 kind="goal_kick" bytes=2346
+2026-09-22T21:26:13.125252Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=138000 kind="half_time" bytes=2318
+2026-09-22T21:26:13.127727Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=139172 kind="goal_kick" bytes=2346
+2026-09-22T21:26:13.150028Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=153315 kind="free_kick" bytes=2346
+2026-09-22T21:26:13.151415Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=153836 kind="goal_kick" bytes=2346
+2026-09-22T21:26:13.156954Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=156560 kind="throw_in" bytes=2346
+2026-09-22T21:26:13.158742Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=157311 kind="free_kick" bytes=2346
+2026-09-22T21:26:13.175086Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=166205 kind="goal_kick" bytes=2346
+2026-09-22T21:26:13.181365Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=169904 kind="free_kick" bytes=2346
+2026-09-22T21:26:13.182978Z  WARN simulate{seed=42 minutes=90}: engine::rules: signal="rules.dead_ball_stalled" tick=171104 kind="free_kick" team.id=club-00000001-00 waited_ticks=1200 taker_distance_m=0.0
+2026-09-22T21:26:13.204153Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=183884 kind="free_kick" bytes=2346
+2026-09-22T21:26:13.205751Z  WARN simulate{seed=42 minutes=90}: engine::rules: signal="rules.dead_ball_stalled" tick=185084 kind="free_kick" team.id=club-00000001-00 waited_ticks=1200 taker_distance_m=0.0
+2026-09-22T21:26:13.237085Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=204355 kind="free_kick" bytes=2346
+2026-09-22T21:26:13.238941Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=205094 kind="goal_kick" bytes=2346
+2026-09-22T21:26:13.249143Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=211291 kind="free_kick" bytes=2346
+2026-09-22T21:26:13.251054Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=212037 kind="goal_kick" bytes=2346
+2026-09-22T21:26:13.261143Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=217806 kind="goal_kick" bytes=2346
+2026-09-22T21:26:13.269038Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=222547 kind="goal_kick" bytes=2346
+2026-09-22T21:26:13.275464Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=226312 kind="goal_kick" bytes=2346
+2026-09-22T21:26:13.300251Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=241965 kind="goal_kick" bytes=2346
+2026-09-22T21:26:13.316054Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=251757 kind="free_kick" bytes=2346
+2026-09-22T21:26:13.321407Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=254799 kind="free_kick" bytes=2346
+2026-09-22T21:26:13.332080Z DEBUG simulate{seed=42 minutes=90}: engine::snapshot: signal="snapshot.written" match.id=000000000000002a-1790112372895 snapshot.tick=260767 kind="free_kick" bytes=2346
+2026-09-22T21:26:13.333748Z  WARN simulate{seed=42 minutes=90}: engine::rules: signal="rules.dead_ball_stalled" tick=261967 kind="free_kick" team.id=club-00000001-00 waited_ticks=1200 taker_distance_m=0.0
+2026-09-22T21:26:13.350592Z  INFO simulate{seed=42 minutes=90}: engine::rules: signal="rules.added_time" half=1 tally_s=64 variance_s=-2.0 added_s=62 announced_min=2
+2026-09-22T21:26:13.355546Z  INFO simulate{seed=42 minutes=90}: engine::record: signal="tickfile.trailer" ticks_written=276100 bytes=53011280

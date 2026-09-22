@@ -1,0 +1,10 @@
+2026-09-22T21:26:13.917657Z  INFO resume{seed=42 tick=260767}: engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T21:26:13.917812Z  INFO resume{seed=42 tick=260767}: engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=4180 hash=edfccfdada0c
+2026-09-22T21:26:13.917886Z  INFO resume{seed=42 tick=260767}: engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=2 bytes=1185 hash=6099d3438e0c
+2026-09-22T21:26:13.918094Z  INFO resume{seed=42 tick=260767}: engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
+2026-09-22T21:26:13.918373Z  INFO resume{seed=42 tick=260767}: engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a
+2026-09-22T21:26:13.918478Z  INFO resume{seed=42 tick=260767}: engine_cli::resume: signal="match.resumed" match.id=000000000000002a-1790112372895 snapshot.tick=260767 half=1 home.score=0 away.score=0 home.on_pitch=11 away.on_pitch=11 home.yellow=0 away.yellow=0 home.red=0 away.red=0 build.hash="fdd943f-dirty"
+2026-09-22T21:26:13.918703Z  INFO resume{seed=42 tick=260767}: engine::record: signal="tickfile.header" schema_version=4 seed=42 dt_ms=20.0 ticks_expected=360000 float_width=4 owner_id=592ed3d4efe403bc63c9b66c6c4b3e02 match_id=000000000000002a-1790112372895
+2026-09-22T21:26:13.920347Z  WARN resume{seed=42 tick=260767}: engine::rules: signal="rules.dead_ball_stalled" tick=261967 kind="free_kick" team.id=club-00000001-00 waited_ticks=1200 taker_distance_m=0.0
+2026-09-22T21:26:13.937277Z  INFO resume{seed=42 tick=260767}: engine::rules: signal="rules.added_time" half=1 tally_s=64 variance_s=-2.0 added_s=62 announced_min=2
+2026-09-22T21:26:13.942011Z  INFO resume{seed=42 tick=260767}: engine::record: signal="tickfile.trailer" ticks_written=15333 bytes=2944016
