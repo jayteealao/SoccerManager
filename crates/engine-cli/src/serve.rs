@@ -119,6 +119,7 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
             club_ids: [&club_ids[0], &club_ids[1]],
             state: &state,
             gate: Some(&gate),
+            commentary: &loaded.commentary,
         },
         &mut |message: ServerMessage| {
             if let ServerMessage::Event(event) = &message {

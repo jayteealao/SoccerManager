@@ -4,7 +4,9 @@
 //! fixture, or both).
 
 use engine::record::TickSink;
-use engine::{Card, EngineEvent, EngineEventKind, EventDetail, Simulation};
+use engine::{
+    Card, Commentary, Commentator, EngineEvent, EngineEventKind, EventDetail, Simulation,
+};
 use protocol::{
     CardKind, ChangeKind, ChangeOutcome, ChangeState, EventType, MatchEvent, ServerMessage, Stats,
 };
@@ -25,6 +27,8 @@ pub struct Drive<'a> {
     pub state: &'a MatchState,
     /// The start and pause gate, when a client can pause this run.
     pub gate: Option<&'a Gate>,
+    /// The lines the commentator chooses from; every play event carries one.
+    pub commentary: &'a Commentary,
 }
 
 /// What a driven match did.
@@ -47,6 +51,7 @@ pub fn drive<S: TickSink>(
         roster: sim.player_ids(),
         squads: sim.teams().map(|t| t.player_ids),
     };
+    let mut commentator = Commentator::for_match(opts.commentary, sim);
     let mut written = 0u32;
     while !sim.is_over() && written < opts.ticks {
         if let Some(gate) = opts.gate
@@ -68,13 +73,18 @@ pub fn drive<S: TickSink>(
         }
         for event in sim.take_events() {
             opts.state.set_scores(event.scores);
-            route(ServerMessage::Event(match_event(&event, opts, &mut ids)))?;
+            let line = commentator.line(&event);
+            route(ServerMessage::Event(
+                match_event(&event, opts, &mut ids).commentary(line),
+            ))?;
         }
     }
     let full_time = sim.is_over();
     sim.finish();
     for event in sim.take_events() {
-        if let Err(err) = route(ServerMessage::Event(match_event(&event, opts, &mut ids))) {
+        let line = commentator.line(&event);
+        let message = match_event(&event, opts, &mut ids).commentary(line);
+        if let Err(err) = route(ServerMessage::Event(message)) {
             return closing_or_fail(err, written).map(|written| Driven { written, full_time });
         }
     }
@@ -229,5 +239,59 @@ pub fn card_kind(card: Card) -> CardKind {
         Card::Yellow => CardKind::Yellow,
         Card::SecondYellow => CardKind::SecondYellow,
         Card::Red => CardKind::Red,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use engine::MatchConfig;
+    use engine::record::VecSink;
+    use std::path::Path;
+
+    #[test]
+    fn every_play_event_carries_a_commentary_line() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content");
+        let loaded = crate::content::load(Some(&dir), None, None).unwrap();
+        let [a, b] = &loaded.teams;
+        let config = MatchConfig::new(42, 3, &loaded.content, [a, b]).unwrap();
+        let ticks = config.max_ticks();
+        let mut sim = Simulation::new(config).unwrap();
+        let state = MatchState::default();
+        let mut messages = Vec::new();
+        drive(
+            &mut sim,
+            &mut VecSink::default(),
+            &Drive {
+                ticks,
+                owner_id: "0123456789abcdef0123456789abcdef",
+                match_id: "000000000000002a-1",
+                club_ids: ["club-a", "club-b"],
+                state: &state,
+                gate: None,
+                commentary: &loaded.commentary,
+            },
+            &mut |m: ServerMessage| {
+                messages.push(m);
+                Ok(())
+            },
+        )
+        .unwrap();
+        let events: Vec<&MatchEvent> = messages
+            .iter()
+            .filter_map(|m| match m {
+                ServerMessage::Event(e) => Some(e),
+                _ => None,
+            })
+            .collect();
+        assert!(events.len() > 3, "{} events", events.len());
+        for e in events {
+            if e.event_type == EventType::TacticsChange {
+                assert_eq!(e.commentary, None);
+            } else {
+                let line = e.commentary.as_deref().unwrap_or_default();
+                assert!(!line.trim().is_empty(), "{e:?}");
+            }
+        }
     }
 }

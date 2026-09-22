@@ -56,7 +56,12 @@ pub fn run(content_dir: Option<&Path>, opts: &BenchOpts) -> anyhow::Result<i32> 
     let cpu_wall_ratio = cpu_ms.map(|c| c as f64 / wall_total_ms.max(1) as f64);
     let cpu_us_per_tick = cpu_ms.map(|c| round4(c as f64 * 1000.0 / total_ticks.max(1) as f64));
     let stream = if opts.stream {
-        Some(measure_stream(&config, ticks, opts.seed)?)
+        Some(measure_stream(
+            &config,
+            &loaded.commentary,
+            ticks,
+            opts.seed,
+        )?)
     } else {
         None
     };
@@ -104,7 +109,12 @@ fn round4(x: f64) -> f64 {
 
 /// One match streamed over the socket to a client that reads as fast as it can. Returns the
 /// ticks delivered per second and how many times the producer paused at the buffer bound.
-fn measure_stream(config: &MatchConfig, ticks: u32, seed: u64) -> anyhow::Result<(f64, u32)> {
+fn measure_stream(
+    config: &MatchConfig,
+    commentary: &engine::Commentary,
+    ticks: u32,
+    seed: u64,
+) -> anyhow::Result<(f64, u32)> {
     let data = data_dir();
     let owner_id = load_or_create_owner_id(&data)?;
     let match_id = MatchId::now(seed).to_string();
@@ -182,6 +192,7 @@ fn measure_stream(config: &MatchConfig, ticks: u32, seed: u64) -> anyhow::Result
             club_ids: [&club_ids[0], &club_ids[1]],
             state: &state,
             gate: Some(&gate),
+            commentary,
         },
         &mut |message: ServerMessage| session.send(&message),
     )?;

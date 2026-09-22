@@ -105,12 +105,13 @@ One `match-event` row. The same object is written to
 | `change.state` | enumeration | `queued`, `applies-now`, `applied`, or `rejected` |
 | `change.applied_tick` | integer | on an applied change: the tick it took effect on, which is the tick of the stoppage that admitted it |
 | `ai.decision` | string | on `ai-decision`: `mentality-up-trailing`, `mentality-down-leading`, `sub-injury`, or `sub-fatigue` |
-| `player.id` | string | the player the event names: the offender on `offside` and `foul`, the booked player on `card`, the injured player on `injury`, the player leaving on `substitution` |
+| `player.id` | string | the player the event names: the offender on `offside` and `foul`, the booked player on `card`, the injured player on `injury`, the player leaving on `substitution`, the taker on `kick-off` and on every restart, and on `goal` the player who kicked the ball last (a player of the other club on an own goal) |
 | `player.secondary_id` | string | the fouled player, on `foul`; the player coming on, on `substitution` |
 | `card.kind` | enumeration | `yellow`, `second-yellow`, or `red`, on `card`; a second yellow sends the player off |
 | `foul.advantage` | boolean | on `foul`: `true` when play continued because the fouled team kept the ball; a card for that foul follows at the next stoppage |
 | `minute.added` | integer | in added time only: the added minute, 2 at 45+2 |
 | `added_time.s` | integer | on `half-time` and `full-time`: the seconds added to the half that ended |
+| `commentary` | string | one English commentary line, on every event except `tactics-change`; the lines come from `content/commentary/en.json` and name the player and the club |
 
 A restart event (`kick-off`, `throw-in`, `corner`, `goal-kick`, `free-kick`, `penalty`)
 arrives on the same tick as the restart keyframe that places the ball. Play resumes when the

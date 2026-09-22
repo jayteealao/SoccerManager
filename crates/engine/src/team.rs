@@ -64,6 +64,8 @@ pub struct Team {
     pub kit: Kit,
     /// Every player id in the team file, in file order (the squad index).
     pub player_ids: Vec<String>,
+    /// Every player's display name in the team file, in file order (the squad index).
+    pub player_names: Vec<String>,
     /// The squad, in file order.
     pub squad: Vec<SquadPlayer>,
     /// The squad index of the player in each formation slot.
@@ -90,6 +92,7 @@ impl Team {
             name,
             kit,
             player_ids: Vec::new(),
+            player_names: Vec::new(),
             squad: Vec::new(),
             lineup: std::array::from_fn(|slot| slot),
             bench: Vec::new(),
@@ -127,6 +130,7 @@ impl Team {
             file.club.kit.clone(),
         );
         team.player_ids = file.players.iter().map(|p| p.id.clone()).collect();
+        team.player_names = file.players.iter().map(|p| p.name.clone()).collect();
         team.squad = file
             .players
             .iter()

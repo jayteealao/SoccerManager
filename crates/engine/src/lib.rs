@@ -6,6 +6,7 @@
 
 pub mod ai;
 pub mod ball;
+pub mod commentary;
 pub mod data;
 pub mod decision;
 pub mod error;
@@ -28,6 +29,7 @@ pub mod tuning;
 pub mod validate;
 
 pub use ai::{AiCode, Manager};
+pub use commentary::{Commentary, Commentator};
 pub use data::{Content, ContentDir, StoppageKind};
 pub use error::EngineError;
 pub use fatigue::InjurySource;

@@ -89,9 +89,7 @@ impl Simulation {
     /// gives the centre-forward the ball.
     pub(crate) fn place_kick_off(&mut self, team: usize) {
         self.restart = true;
-        let mut event = self.event(EngineEventKind::KickOff, Some(team));
-        event.spot = Some(DVec2::ZERO);
-        self.events.push(event);
+        self.last_kicker = None;
         for i in 0..self.players.len() {
             let p = self.players[i];
             if !p.active() {
@@ -107,6 +105,10 @@ impl Simulation {
             p.facing = facing;
         }
         let kicker = restart::taker(StoppageKind::KickOff, team, DVec2::ZERO, &self.players);
+        let mut event = self.event(EngineEventKind::KickOff, Some(team));
+        event.spot = Some(DVec2::ZERO);
+        event.player = Some(kicker);
+        self.events.push(event);
         let attack_x = self.teams[team].attack_x;
         self.players[kicker].pos = DVec2::new(-0.5 * attack_x, 0.0);
         self.players[kicker].target = self.players[kicker].pos;
@@ -118,11 +120,14 @@ impl Simulation {
         self.referee.phase = crate::rules::Phase::Live;
     }
 
-    /// `team` scored. The other team kicks off once everyone is back in place.
+    /// `team` scored. The event names the player who kicked the ball last; a player of the
+    /// other club makes it an own goal. The other team kicks off once everyone is back in
+    /// place.
     pub(crate) fn goal(&mut self, team: usize) {
         self.summary.goals[team] += 1;
         tracing::debug!(signal = "match.goal", tick = self.tick, team, score = ?self.summary.goals);
-        let event = self.event(EngineEventKind::Goal, Some(team));
+        let mut event = self.event(EngineEventKind::Goal, Some(team));
+        event.player = self.last_kicker;
         self.events.push(event);
         self.open_dead_ball(
             StoppageKind::KickOff,
@@ -375,6 +380,7 @@ impl Simulation {
         self.carrier = None;
         self.keeper_beaten = false;
         self.restart = true;
+        self.last_kicker = None;
         let since = self.tick + 1;
         let taker = restart::taker(kind, team, spot, &self.players);
         let mut delay = restart::delay_ticks(kind, &self.config.tuning);
@@ -409,6 +415,7 @@ impl Simulation {
         }
         let mut event = self.event(EngineEventKind::restart(kind), Some(team));
         event.spot = Some(spot);
+        event.player = Some(taker);
         self.events.push(event);
         self.stoppage = Some(Stoppage {
             tick: since,

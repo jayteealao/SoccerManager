@@ -158,6 +158,9 @@ pub struct MatchEvent {
     /// Additive extra, on `half-time` and `full-time`: the seconds added to the half.
     #[serde(rename = "added_time.s", skip_serializing_if = "Option::is_none")]
     pub added_time_s: Option<u32>,
+    /// One English commentary line, on every play event; absent on `tactics-change`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commentary: Option<String>,
 }
 
 impl MatchEvent {
@@ -193,6 +196,7 @@ impl MatchEvent {
             foul_advantage: None,
             minute_added: None,
             added_time_s: None,
+            commentary: None,
         }
     }
 
@@ -251,6 +255,12 @@ impl MatchEvent {
     /// The AI manager's choice.
     pub fn ai_decision(mut self, code: Option<String>) -> Self {
         self.ai_decision = code;
+        self
+    }
+
+    /// The commentary line.
+    pub fn commentary(mut self, line: Option<String>) -> Self {
+        self.commentary = line;
         self
     }
 
@@ -328,7 +338,8 @@ mod tests {
         )
         .at_minute(45, Some(2))
         .player(Some("p-club-b-04".into()))
-        .card(Some(CardKind::SecondYellow));
+        .card(Some(CardKind::SecondYellow))
+        .commentary(Some("Second yellow card! Sent off.".into()));
         let json = serde_json::to_string(&e).unwrap();
         for key in [
             "\"event.type\":\"card\"",
@@ -336,6 +347,7 @@ mod tests {
             "\"minute.added\":2",
             "\"player.id\":\"p-club-b-04\"",
             "\"card.kind\":\"second-yellow\"",
+            "\"commentary\":\"Second yellow card! Sent off.\"",
         ] {
             assert!(json.contains(key), "missing {key} in {json}");
         }

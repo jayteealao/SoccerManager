@@ -36,6 +36,11 @@ pub use message::{ClientCommand, Hello, QueueChange, ServerMessage, SetSpeed, St
 /// optional fields (`change.applied_tick`, `ai.decision`) that the observability contract
 /// already lists, and `team.id` on change events. No field changed meaning, and a client
 /// ignores what it does not know.
+///
+/// Version 2 also survived the optional `commentary` line on play events, under the same
+/// judgement: no field was removed, none changed meaning (`player.id` now also names the
+/// scorer and the restart taker, values the field already allowed), and both producers in
+/// existence changed in the same commit.
 pub const PROTOCOL_VERSION: u16 = 2;
 
 /// Errors this crate returns.
@@ -152,6 +157,7 @@ pub const MESSAGES: &[MessageSpec] = &[
             "foul.advantage",
             "minute.added",
             "added_time.s",
+            "commentary",
         ],
     },
     MessageSpec {

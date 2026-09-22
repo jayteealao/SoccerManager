@@ -17,6 +17,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `rules/default.json` | 3 | The rule pack |
 | `tactics.json` | 1 | Formations, mentalities, team instructions, roles, duties, and the AI manager's settings |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
+| `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
 
 Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 3`.
 
@@ -239,6 +240,73 @@ The instructions are `pressing` (levels `{ "name", "press_count", "press_distanc
 | bench_size | substitutes named before kick-off, one a goalkeeper when the squad has one | 7 |
 
 A bad value is refused by field, and a role attribute the attribute schema does not hold is refused by name.
+
+## commentary/en.json
+
+Every event except a `tactics-change` verdict carries one English line in its `commentary`
+field. The lines live here, so you can rewrite or add lines without rebuilding. The file is
+not part of the content hash: editing a line never stops a saved match from resuming.
+
+```json
+{
+  "schema_version": 1,
+  "language": "en",
+  "templates": [
+    { "event": "corner", "lines": ["Corner to {team}. {player} goes over to take it."] },
+    { "event": "corner", "when": { "repeat": "again" },
+      "lines": ["Another corner for {team}! {player} takes it again."] }
+  ]
+}
+```
+
+Each entry is a template set: an `event` kind, an optional `when` with conditions, and its
+`lines`. `event` is spelled as the event contract spells it: `kick-off`, `goal`, `half-time`,
+`full-time`, `offside`, `foul`, `card`, `throw-in`, `corner`, `goal-kick`, `free-kick`,
+`penalty`, `injury`, `substitution`, or `ai-decision`.
+
+| Condition | Values | Holds when |
+|---|---|---|
+| `minute` | `early` | before one sixth of the match (minute 15 of 90) |
+| | `late` | from eight ninths of the match (minute 80 of 90), or in added time of the last half |
+| | `added-time`, `first-half`, `second-half` | the event falls there |
+| `score` | `level`, `leading`, `trailing` | the score from the event club's side; at half-time and full time, from the home club's side |
+| | `rout` | that side leads by 3 or more |
+| | `opener`, `equaliser`, `go-ahead`, `extends-lead`, `consolation` | on a goal only: the first goal, a goal that levels, a goal that turns level into a lead, a goal for a club already ahead, a goal for a club still behind |
+| `form` | `hot`, `cold` | the club scored (`hot`) or conceded (`cold`) 2 or more goals in the last sixth of the match |
+| | `booked` | the player the event names already holds a yellow card |
+| `repeat` | `first`, `again`, `streak` | no, at least one, or at least two events of the same kind in the last ten minutes of play |
+| `card` | `yellow`, `second-yellow`, `red` | on a card: the card shown |
+| `advantage` | `true`, `false` | on a foul: play continued with advantage |
+| `own_goal` | `true`, `false` | on a goal: the player who kicked the ball last plays for the other club |
+| `decision` | `mentality-up-trailing`, `mentality-down-leading`, `sub-injury`, `sub-fatigue` | on `ai-decision`: the AI manager's choice |
+
+| Placeholder | Value | Filled on |
+|---|---|---|
+| `{player}` | the player's name | every kind except `half-time`, `full-time`, and `ai-decision`: the offender, the booked or injured player, the player leaving on a substitution, the taker on a restart or kick-off, the scorer on a goal |
+| `{other_player}` | the second player's name | `foul` (the fouled player) and `substitution` (the player coming on) |
+| `{team}`, `{opponent}` | the event's club and the other club | every kind except `half-time` and `full-time` |
+| `{home}`, `{away}` | the two club names | every kind |
+| `{home_score}`, `{away_score}`, `{score}` | the score after the event, `{score}` as `2-1` | every kind |
+| `{minute}` | the clock minute, `90` in added time | every kind |
+| `{added_minutes}` | the added minute, `2` at 90+2 | events in added time only; use it in a set with `"minute": "added-time"` |
+
+The loader refuses a file in which:
+
+- an event kind has fewer than 3 lines in sets with no `when` that use only the
+  placeholders every event of that kind fills;
+- a line uses an unknown placeholder, a placeholder its event kind cannot fill, or a stray
+  `{` or `}`;
+- a set names an unknown event kind or holds no lines.
+
+The feed shows its own minute stamp, so the shipped lines leave `{minute}` out.
+
+**How a line is chosen.** Every set of the event's kind whose conditions all hold is a
+candidate. The most specific set (the most conditions) is tried first; sets with the same
+number of conditions are tried in file order. Inside a set, the search starts at a point
+that depends on the seed and on how many events of that kind came before, and takes the
+first line not used for that kind in the last ten minutes of play. When every candidate line
+was used in that window, the least recently used line is taken. The same seed gives the same
+lines.
 
 ## Generating clubs
 

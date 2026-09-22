@@ -35,6 +35,9 @@ pub const RULES_FILE: &str = "rules/default.json";
 pub const TACTICS_FILE: &str = "tactics.json";
 pub const TEAM_A_FILE: &str = "teams/default-a.json";
 pub const TEAM_B_FILE: &str = "teams/default-b.json";
+/// The English commentary lines. The file stays out of `Content` and its digest: editing a
+/// line changes no content hash and never makes a snapshot refuse to resume.
+pub const COMMENTARY_FILE: &str = "commentary/en.json";
 /// Environment variable that names the content folder.
 pub const CONTENT_DIR_ENV: &str = "SM_CONTENT_DIR";
 

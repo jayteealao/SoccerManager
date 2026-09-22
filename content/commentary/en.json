@@ -1,0 +1,569 @@
+{
+  "schema_version": 1,
+  "language": "en",
+  "templates": [
+    {
+      "event": "kick-off",
+      "lines": [
+        "{player} gets us under way for {team}.",
+        "{team} kick off through {player}.",
+        "{player} rolls it back and {team} are moving.",
+        "And we're off: {player} starts it for {team} against {opponent}."
+      ]
+    },
+    {
+      "event": "kick-off",
+      "when": {
+        "minute": "second-half",
+        "repeat": "first"
+      },
+      "lines": [
+        "{player} sets the second half going for {team}.",
+        "The second half begins, {player} kicking off for {team}.",
+        "Back under way after the break: {player} starts it for {team}."
+      ]
+    },
+    {
+      "event": "kick-off",
+      "when": {
+        "score": "trailing"
+      },
+      "lines": [
+        "{player} restarts for {team}, who have work to do at {score}.",
+        "{team} kick off behind, {player} setting it going.",
+        "{player} gets {team} restarted. They need a response."
+      ]
+    },
+    {
+      "event": "goal",
+      "lines": [
+        "GOAL! {player} scores for {team}! It's {score}.",
+        "{player} finds the net, and {team} celebrate. {home} {home_score}, {away} {away_score}.",
+        "It's in! {player} for {team}.",
+        "{player} puts it away for {team}. {score}."
+      ]
+    },
+    {
+      "event": "goal",
+      "when": {
+        "own_goal": true
+      },
+      "lines": [
+        "An own goal! {player} turns it past their own keeper, and {team} are credited. {score}.",
+        "Disaster for {opponent}: {player} deflects it into their own net. {team} score.",
+        "{player} can only put it into their own goal. A gift for {team}."
+      ]
+    },
+    {
+      "event": "goal",
+      "when": {
+        "minute": "late",
+        "score": "equaliser",
+        "own_goal": false
+      },
+      "lines": [
+        "A late equaliser! {player} levels it for {team} at {score}!",
+        "{player} rescues a point for {team} with time almost gone! {score}!",
+        "Drama! {player} makes it {score} for {team} at the death."
+      ]
+    },
+    {
+      "event": "goal",
+      "when": {
+        "minute": "late",
+        "score": "go-ahead",
+        "own_goal": false
+      },
+      "lines": [
+        "{player} puts {team} in front late on! {score}!",
+        "Surely that's the winner: {player} for {team}! {score}.",
+        "{team} lead with the clock running down, and it's {player} who scores!"
+      ]
+    },
+    {
+      "event": "goal",
+      "when": {
+        "score": "rout"
+      },
+      "lines": [
+        "{player} makes it a rout for {team}. {score}.",
+        "{team} are running riot now: {player} scores again for them. {score}.",
+        "Another one for {team}! {player} adds to the misery for {opponent}. {score}."
+      ]
+    },
+    {
+      "event": "goal",
+      "when": {
+        "score": "opener"
+      },
+      "lines": [
+        "{player} breaks the deadlock for {team}!",
+        "The first goal goes to {team}, and {player} is the scorer!",
+        "{player} opens the scoring for {team}. {score}."
+      ]
+    },
+    {
+      "event": "goal",
+      "when": {
+        "score": "equaliser"
+      },
+      "lines": [
+        "{player} levels it for {team}! {score}.",
+        "{team} are back on terms thanks to {player}. {score}.",
+        "Equaliser! {player} pulls {team} level at {score}."
+      ]
+    },
+    {
+      "event": "goal",
+      "when": {
+        "score": "go-ahead"
+      },
+      "lines": [
+        "{player} puts {team} ahead! {score}.",
+        "{team} take the lead through {player}. {score}.",
+        "{player} edges {team} in front. {score}."
+      ]
+    },
+    {
+      "event": "goal",
+      "when": {
+        "score": "extends-lead"
+      },
+      "lines": [
+        "{player} extends the lead for {team}. {score}.",
+        "{team} go further ahead, {player} with the goal. {score}.",
+        "{player} makes it more comfortable for {team}. {score}."
+      ]
+    },
+    {
+      "event": "goal",
+      "when": {
+        "score": "consolation"
+      },
+      "lines": [
+        "{player} pulls one back for {team}, but it's still {score}.",
+        "A consolation from {player}? {team} trail {score}.",
+        "{player} scores for {team}. There is still work to do at {score}."
+      ]
+    },
+    {
+      "event": "goal",
+      "when": {
+        "form": "hot"
+      },
+      "lines": [
+        "{team} are on fire! {player} scores again for them. {score}.",
+        "{player} keeps the momentum with {team}. Goals are flowing: {score}."
+      ]
+    },
+    {
+      "event": "half-time",
+      "lines": [
+        "The referee blows for half-time. {home} {home_score}, {away} {away_score}.",
+        "Half-time: {home} {home_score}-{away_score} {away}.",
+        "That's the end of the first half, {home} against {away}, {score}."
+      ]
+    },
+    {
+      "event": "half-time",
+      "when": {
+        "score": "level"
+      },
+      "lines": [
+        "Half-time, and nothing to separate {home} and {away} at {score}.",
+        "All square at the break between {home} and {away}: {score}.",
+        "{home} and {away} go in level at half-time, {score}."
+      ]
+    },
+    {
+      "event": "half-time",
+      "when": {
+        "score": "leading"
+      },
+      "lines": [
+        "{home} lead {away} {score} at half-time.",
+        "Half-time: {home} ahead of {away}, {score}.",
+        "{home} take a lead into the break against {away}. {score}."
+      ]
+    },
+    {
+      "event": "half-time",
+      "when": {
+        "score": "trailing"
+      },
+      "lines": [
+        "{away} lead at {home} at half-time. {score}.",
+        "Half-time: {away} are in front against {home}, {score}.",
+        "{home} trail {away} at the break. {score}."
+      ]
+    },
+    {
+      "event": "full-time",
+      "lines": [
+        "Full time: {home} {home_score}, {away} {away_score}.",
+        "The final whistle goes. {home} {score} {away}.",
+        "It's all over between {home} and {away}: {score}."
+      ]
+    },
+    {
+      "event": "full-time",
+      "when": {
+        "score": "rout"
+      },
+      "lines": [
+        "A thrashing: {home} demolish {away} {score}.",
+        "Full time, and {home} have run riot against {away}. {score}."
+      ]
+    },
+    {
+      "event": "full-time",
+      "when": {
+        "score": "level"
+      },
+      "lines": [
+        "Full time, and {home} and {away} share the points at {score}.",
+        "It finishes level: {home} {score} {away}.",
+        "The final whistle, and neither {home} nor {away} could find a winner. {score}."
+      ]
+    },
+    {
+      "event": "full-time",
+      "when": {
+        "score": "leading"
+      },
+      "lines": [
+        "Full time: {home} beat {away} {score}.",
+        "{home} hold on to win against {away}. {score}.",
+        "The whistle goes, and it's victory for {home} over {away}, {score}."
+      ]
+    },
+    {
+      "event": "full-time",
+      "when": {
+        "score": "trailing"
+      },
+      "lines": [
+        "Full time: {away} win at {home}, {score}.",
+        "{away} take the points from {home}. {score}.",
+        "It's over, and {away} have beaten {home} {score}."
+      ]
+    },
+    {
+      "event": "offside",
+      "lines": [
+        "The flag goes up: {player} of {team} is offside.",
+        "{player} strays offside, and {team} lose the ball.",
+        "Offside against {player} of {team}. Free kick to {opponent}."
+      ]
+    },
+    {
+      "event": "offside",
+      "when": {
+        "repeat": "streak"
+      },
+      "lines": [
+        "{opponent}'s offside trap is working: {player} of {team} is flagged once more.",
+        "{team} are offside yet again, {player} the culprit."
+      ]
+    },
+    {
+      "event": "offside",
+      "when": {
+        "repeat": "again"
+      },
+      "lines": [
+        "{player} is caught offside again. {team} keep getting the timing wrong.",
+        "Another offside against {team}, and it's {player} this time.",
+        "The flag is up once more; {player} of {team} went too early."
+      ]
+    },
+    {
+      "event": "foul",
+      "lines": [
+        "{player} of {team} brings down {other_player}. Free kick.",
+        "Foul by {player} on {other_player}; {team} concede a free kick.",
+        "The referee whistles: {player} of {team} catches {other_player}.",
+        "{player} goes through the back of {other_player}. Foul given against {team}."
+      ]
+    },
+    {
+      "event": "foul",
+      "when": {
+        "advantage": true
+      },
+      "lines": [
+        "{player} of {team} fouls {other_player}, but the referee plays advantage to {opponent}.",
+        "Advantage played after {player} of {team} clips {other_player}.",
+        "{player} of {team} catches {other_player}; play on, as {opponent} keep the ball."
+      ]
+    },
+    {
+      "event": "foul",
+      "when": {
+        "form": "booked"
+      },
+      "lines": [
+        "{player} of {team} is already booked and fouls {other_player}. {team} will worry.",
+        "Careful, {player}: on a yellow card and that's a foul on {other_player}. {team} need calm heads.",
+        "{player} of {team} is walking a tightrope, a booked player fouling {other_player}."
+      ]
+    },
+    {
+      "event": "card",
+      "lines": [
+        "{player} of {team} is shown a card by the referee.",
+        "The referee reaches for the pocket: {player} of {team} is carded.",
+        "{player} goes into the referee's notebook for {team} with a card."
+      ]
+    },
+    {
+      "event": "card",
+      "when": {
+        "card": "yellow"
+      },
+      "lines": [
+        "Yellow card: {player} of {team} is booked.",
+        "{player} is booked, a yellow card for {team}.",
+        "The referee shows the yellow card to {player} of {team}.",
+        "A booking for {player}. {team} have a player on a yellow card.",
+        "{player} of {team} sees yellow and is booked.",
+        "Into the book goes {player}: yellow card, {team}."
+      ]
+    },
+    {
+      "event": "card",
+      "when": {
+        "card": "second-yellow"
+      },
+      "lines": [
+        "Second yellow card! {player} of {team} is sent off.",
+        "{player} is booked again, and that's a second yellow. {team} are down a player.",
+        "A second yellow card and then red for {player}. {team} lose a player.",
+        "{player} of {team} walks: a second booking means a sending-off."
+      ]
+    },
+    {
+      "event": "card",
+      "when": {
+        "card": "red"
+      },
+      "lines": [
+        "Straight red card! {player} of {team} is sent off.",
+        "The referee shows the red card to {player}. {team} will play on with fewer.",
+        "{player} is sent off with a straight red. A huge blow for {team}.",
+        "Red card for {player} of {team}. Off they go."
+      ]
+    },
+    {
+      "event": "throw-in",
+      "lines": [
+        "{player} takes the throw-in for {team}.",
+        "Throw-in to {team}; {player} will take it.",
+        "{player} gathers the ball for a {team} throw.",
+        "{team} have a throw, and {player} steps up."
+      ]
+    },
+    {
+      "event": "throw-in",
+      "when": {
+        "repeat": "streak"
+      },
+      "lines": [
+        "Another throw-in for {team}, {player} taking it.",
+        "{player} with yet another throw for {team}.",
+        "{team} win the throw again. {player} takes it."
+      ]
+    },
+    {
+      "event": "corner",
+      "lines": [
+        "Corner to {team}. {player} goes over to take it.",
+        "{player} will swing in the corner for {team}.",
+        "{team} win a corner, and {player} is over the ball."
+      ]
+    },
+    {
+      "event": "corner",
+      "when": {
+        "minute": "late",
+        "score": "trailing"
+      },
+      "lines": [
+        "A late corner for {team}, who need something. {player} takes it.",
+        "Everyone forward for {team}: {player} with a corner in the closing minutes.",
+        "{player} over the corner for {team}, and time is short."
+      ]
+    },
+    {
+      "event": "corner",
+      "when": {
+        "repeat": "again"
+      },
+      "lines": [
+        "Another corner for {team}! {player} takes it again.",
+        "{team} are piling on the pressure: {player} with another corner.",
+        "Corner after corner for {team}. {player} whips this one in."
+      ]
+    },
+    {
+      "event": "goal-kick",
+      "lines": [
+        "Goal kick to {team}. {player} will take it.",
+        "{player} places the ball for a {team} goal kick.",
+        "{team} restart with a goal kick from {player}."
+      ]
+    },
+    {
+      "event": "goal-kick",
+      "when": {
+        "minute": "late",
+        "score": "leading"
+      },
+      "lines": [
+        "{player} takes the goal kick, and {team} are taking their time.",
+        "{team} are in no hurry. {player} slowly sets up the goal kick.",
+        "{player} with the goal kick for {team}, who are happy to run the clock."
+      ]
+    },
+    {
+      "event": "free-kick",
+      "lines": [
+        "Free kick to {team}; {player} stands over it.",
+        "{player} takes the free kick for {team}.",
+        "{team} have a free kick, and {player} will take it."
+      ]
+    },
+    {
+      "event": "free-kick",
+      "when": {
+        "minute": "late"
+      },
+      "lines": [
+        "{player} with a free kick for {team} in the closing stages.",
+        "A late free kick for {team}; {player} is over the ball.",
+        "{team} have a free kick with time running out. {player} to take."
+      ]
+    },
+    {
+      "event": "penalty",
+      "lines": [
+        "Penalty to {team}! {player} will take it.",
+        "The referee points to the spot for {team}. {player} steps up.",
+        "It's a penalty for {team}, and {player} has the ball."
+      ]
+    },
+    {
+      "event": "penalty",
+      "when": {
+        "minute": "late"
+      },
+      "lines": [
+        "A late penalty for {team}! {player} has the chance to change everything.",
+        "Penalty for {team} in the closing minutes! {player} places the ball.",
+        "Huge moment: a late spot kick for {team}, with {player} taking it."
+      ]
+    },
+    {
+      "event": "penalty",
+      "when": {
+        "score": "trailing"
+      },
+      "lines": [
+        "Penalty to {team}, and they need it. {player} can pull them back into it.",
+        "{team} are behind but have a penalty. {player} steps up."
+      ]
+    },
+    {
+      "event": "injury",
+      "lines": [
+        "{player} of {team} is down injured and has to go off.",
+        "Bad news for {team}: {player} is hurt and cannot continue.",
+        "{player} pulls up injured. {team} will need to reorganise.",
+        "An injury to {player}. The {team} bench is on its feet."
+      ]
+    },
+    {
+      "event": "injury",
+      "when": {
+        "minute": "early"
+      },
+      "lines": [
+        "{player} of {team} goes off injured early on. That is a blow.",
+        "An early injury to {player} disrupts the plans of {team}."
+      ]
+    },
+    {
+      "event": "substitution",
+      "lines": [
+        "Substitution for {team}: {other_player} replaces {player}.",
+        "{team} make a change. {player} off, {other_player} on.",
+        "{other_player} comes on for {team} in place of {player}.",
+        "Change for {team}: {player} makes way for {other_player}."
+      ]
+    },
+    {
+      "event": "substitution",
+      "when": {
+        "minute": "second-half",
+        "repeat": "first"
+      },
+      "lines": [
+        "{team} use the break to make a change: {other_player} on for {player}.",
+        "A half-time change for {team}: {player} stays off, {other_player} comes on."
+      ]
+    },
+    {
+      "event": "ai-decision",
+      "lines": [
+        "The {team} manager is making changes from the touchline.",
+        "Instructions from the {team} bench. Something is about to change.",
+        "The {team} manager has seen enough and makes a decision.",
+        "{team} are rethinking their approach against {opponent}."
+      ]
+    },
+    {
+      "event": "ai-decision",
+      "when": {
+        "decision": "mentality-up-trailing"
+      },
+      "lines": [
+        "{team} are chasing the game now and push more players forward.",
+        "Trailing, the {team} manager orders everyone to attack.",
+        "{team} go for broke against {opponent}."
+      ]
+    },
+    {
+      "event": "ai-decision",
+      "when": {
+        "decision": "mentality-down-leading"
+      },
+      "lines": [
+        "{team} want to protect their lead and drop deeper.",
+        "The {team} manager asks for caution now: keep what we have.",
+        "{team} settle for what they have and sit back against {opponent}."
+      ]
+    },
+    {
+      "event": "ai-decision",
+      "when": {
+        "decision": "sub-injury"
+      },
+      "lines": [
+        "The {team} bench gets ready to replace an injured player.",
+        "{team} prepare a substitute after the injury.",
+        "A replacement is warming up for {team} after that injury."
+      ]
+    },
+    {
+      "event": "ai-decision",
+      "when": {
+        "decision": "sub-fatigue"
+      },
+      "lines": [
+        "{team} have tired legs, and a substitute is getting ready.",
+        "Fresh legs coming for {team}: the manager readies a change.",
+        "The {team} manager spots a tired player and prepares a substitution."
+      ]
+    }
+  ]
+}

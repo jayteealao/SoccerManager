@@ -192,6 +192,50 @@ pub enum EngineEventKind {
 }
 
 impl EngineEventKind {
+    /// Every event kind, in declaration order.
+    pub const ALL: [EngineEventKind; 17] = [
+        EngineEventKind::KickOff,
+        EngineEventKind::Goal,
+        EngineEventKind::HalfTime,
+        EngineEventKind::FullTime,
+        EngineEventKind::Offside,
+        EngineEventKind::Foul,
+        EngineEventKind::Card,
+        EngineEventKind::ThrowIn,
+        EngineEventKind::Corner,
+        EngineEventKind::GoalKick,
+        EngineEventKind::FreeKick,
+        EngineEventKind::Penalty,
+        EngineEventKind::Injury,
+        EngineEventKind::Substitution,
+        EngineEventKind::AiDecision,
+        EngineEventKind::ChangeApplied,
+        EngineEventKind::ChangeRejected,
+    ];
+
+    /// The kind as the event contract spells it. Both change verdicts travel as
+    /// `tactics-change`.
+    pub fn code(&self) -> &'static str {
+        match self {
+            EngineEventKind::KickOff => "kick-off",
+            EngineEventKind::Goal => "goal",
+            EngineEventKind::HalfTime => "half-time",
+            EngineEventKind::FullTime => "full-time",
+            EngineEventKind::Offside => "offside",
+            EngineEventKind::Foul => "foul",
+            EngineEventKind::Card => "card",
+            EngineEventKind::ThrowIn => "throw-in",
+            EngineEventKind::Corner => "corner",
+            EngineEventKind::GoalKick => "goal-kick",
+            EngineEventKind::FreeKick => "free-kick",
+            EngineEventKind::Penalty => "penalty",
+            EngineEventKind::Injury => "injury",
+            EngineEventKind::Substitution => "substitution",
+            EngineEventKind::AiDecision => "ai-decision",
+            EngineEventKind::ChangeApplied | EngineEventKind::ChangeRejected => "tactics-change",
+        }
+    }
+
     /// The event that announces a restart of `kind`.
     pub fn restart(kind: StoppageKind) -> Self {
         match kind {
@@ -221,8 +265,10 @@ pub struct EngineEvent {
     /// The minute of play, counted from 0, and the added minute in added time.
     pub minute: u32,
     pub minute_added: Option<u32>,
-    /// The roster index of the player the event names: the offender, the booked player, or
-    /// the scorer's team-mate who last kicked the ball.
+    /// The roster index of the player the event names: the offender, the booked player, the
+    /// injured player, the player leaving on a substitution, the taker on a restart and a
+    /// kick-off, and on a goal the player who kicked the ball last (a player of the other
+    /// club on an own goal).
     pub player: Option<usize>,
     /// The fouled player.
     pub secondary: Option<usize>,
@@ -284,6 +330,10 @@ pub struct Simulation {
     pub(crate) carrier: Option<usize>,
     pub(crate) control_since: u32,
     pub(crate) last_touch: Option<usize>,
+    /// The roster index of the player who kicked the ball last in this spell of play. Every
+    /// dead ball clears it, and a snapshot is written only when play stops, so the snapshot
+    /// never needs it.
+    pub(crate) last_kicker: Option<usize>,
     pub(crate) summary: Summary,
     pub(crate) referee: Referee,
     pub(crate) restart: bool,
@@ -334,6 +384,7 @@ impl Simulation {
             carrier: None,
             control_since: 0,
             last_touch: None,
+            last_kicker: None,
             summary: Summary::default(),
             referee,
             restart: false,
@@ -378,6 +429,25 @@ impl Simulation {
             .iter()
             .map(|p| self.teams[p.team].player_ids[p.squad].clone())
             .collect()
+    }
+
+    /// Each player's display name from the team file, in roster order. A substitution
+    /// changes the name in the substitute's roster slot.
+    pub fn player_names(&self) -> Vec<String> {
+        self.players
+            .iter()
+            .map(|p| self.teams[p.team].player_names[p.squad].clone())
+            .collect()
+    }
+
+    /// The seed the match was built from.
+    pub fn seed(&self) -> u64 {
+        self.config.seed
+    }
+
+    /// The regulation length of the match in minutes.
+    pub fn minutes(&self) -> u32 {
+        self.config.minutes
     }
 
     /// Who manages each team, home first.
@@ -564,6 +634,7 @@ impl Simulation {
                 self.summary.shots[team] += 1;
             }
             self.last_touch = Some(team);
+            self.last_kicker = Some(c);
             self.referee.offside = if offside_counts {
                 self.summary.offside_checks += 1;
                 offside::offside_set(c, self.ball.pos.x, &self.players, self.teams[team].attack_x)
@@ -737,5 +808,52 @@ mod tests {
         assert_eq!(config.players.len(), 22);
         assert_ne!(config.team_digests[0], config.team_digests[1]);
         assert_eq!(config.max_ticks(), 3_000);
+    }
+
+    /// Steps the seed-42 90-minute match, calling `each` after every tick.
+    fn full_match(mut each: impl FnMut(&Simulation)) -> Simulation {
+        let mut sim = Simulation::new(shipped_config(42, 90).unwrap()).unwrap();
+        while !sim.is_over() {
+            sim.step();
+            each(&sim);
+        }
+        sim.finish();
+        sim
+    }
+
+    #[test]
+    fn the_last_kicker_is_clear_whenever_play_stops() {
+        let mut stoppages = 0;
+        full_match(|sim| {
+            if sim.stoppage().is_some() {
+                stoppages += 1;
+                assert_eq!(sim.last_kicker, None, "tick {}", sim.tick());
+            }
+        });
+        assert!(stoppages > 50, "only {stoppages} stoppages");
+    }
+
+    #[test]
+    fn every_play_event_names_a_player() {
+        let events = full_match(|_| {}).take_events();
+        let goals = events
+            .iter()
+            .filter(|e| e.kind == EngineEventKind::Goal)
+            .count();
+        assert!(goals > 0, "the match scored no goal");
+        for e in &events {
+            // The manager's own events and the whistles at the end of a half name nobody.
+            let named = !matches!(
+                e.kind,
+                EngineEventKind::HalfTime
+                    | EngineEventKind::FullTime
+                    | EngineEventKind::AiDecision
+                    | EngineEventKind::ChangeApplied
+                    | EngineEventKind::ChangeRejected
+            );
+            if named {
+                assert!(e.player.is_some(), "{e:?}");
+            }
+        }
     }
 }

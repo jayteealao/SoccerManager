@@ -74,6 +74,7 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
             club_ids: [&club_ids[0], &club_ids[1]],
             state: &state,
             gate: None,
+            commentary: &loaded.commentary,
         },
         &mut |message: ServerMessage| {
             let text = serde_json::to_string(&message)
