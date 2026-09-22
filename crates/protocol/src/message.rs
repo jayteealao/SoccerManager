@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use crate::command::{Ack, Reject};
 use crate::event::MatchEvent;
 
-/// One club, as the hello names it.
+/// One club, as the hello names it. The two kit colours let a viewer draw the markers in the
+/// club's own colours; both are lower-case `#rrggbb`, exactly as a team file writes them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TeamRef {
@@ -15,6 +16,10 @@ pub struct TeamRef {
     pub id: String,
     #[serde(rename = "team.name")]
     pub name: String,
+    #[serde(rename = "team.kit.primary")]
+    pub kit_primary: String,
+    #[serde(rename = "team.kit.secondary")]
+    pub kit_secondary: String,
 }
 
 /// The first message on every connection, before any tick frame.
@@ -130,10 +135,14 @@ mod tests {
                 TeamRef {
                     id: "club-a".into(),
                     name: "A".into(),
+                    kit_primary: "#c8102e".into(),
+                    kit_secondary: "#000000".into(),
                 },
                 TeamRef {
                     id: "club-b".into(),
                     name: "B".into(),
+                    kit_primary: "#6a0dad".into(),
+                    kit_secondary: "#ff6a13".into(),
                 },
             ],
         }
@@ -211,6 +220,32 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.to_string().contains("extra"), "{err}");
+    }
+
+    #[test]
+    fn a_hello_names_both_kit_colours_under_dotted_keys() {
+        let json = serde_json::to_string(&ServerMessage::Hello(hello())).unwrap();
+        assert!(json.contains("\"team.kit.primary\":\"#c8102e\""), "{json}");
+        assert!(
+            json.contains("\"team.kit.secondary\":\"#000000\""),
+            "{json}"
+        );
+        assert!(json.contains("\"team.kit.primary\":\"#6a0dad\""), "{json}");
+        assert!(
+            json.contains("\"team.kit.secondary\":\"#ff6a13\""),
+            "{json}"
+        );
+        let back = serde_json::from_str::<ServerMessage>(&json).unwrap();
+        assert_eq!(back, ServerMessage::Hello(hello()));
+    }
+
+    #[test]
+    fn a_hello_without_kit_colours_is_refused() {
+        let json = serde_json::to_string(&ServerMessage::Hello(hello()))
+            .unwrap()
+            .replace(",\"team.kit.primary\":\"#c8102e\"", "");
+        let err = serde_json::from_str::<ServerMessage>(&json).unwrap_err();
+        assert!(err.to_string().contains("team.kit.primary"), "{err}");
     }
 
     #[test]

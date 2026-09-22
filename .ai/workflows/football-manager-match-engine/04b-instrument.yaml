@@ -1,47 +1,51 @@
 artifact: instrument
-framework: "serde_json JSON Lines per .ai/observability.md plan-version 1; tracing to stderr for diagnostics"
+framework: "engine side: serde_json JSON Lines per .ai/observability.md plan-version 1, tracing to stderr. Page side: console JSON Lines with the same envelope, plus a 256-row ring buffer on window.__touchline.signals. No browser transport exists yet."
 signals:
-  - name: "socket.listening"
+  - name: "viewer.connected"
     kind: event
-    path: "crates/stream/src/server.rs:Server::bind"
-    note: "One tracing info line when the server binds 127.0.0.1:0 and the operating system returns a port: port, protocol_version, match.id. The same port is written to SM_DATA_DIR/engine.port so the page can find it."
-  - name: "socket.client"
+    path: "web/socket.mjs:open"
+    note: "One row when the hello decodes: protocol.version, engine.version, match.id, owner.id, origin, ticks_expected. The page states which engine and which match it is showing, so a screenshot is attributable."
+  - name: "viewer.socket_drops"
     kind: event
-    path: "crates/stream/src/server.rs:Server::accept"
-    note: "One tracing info line per accepted handshake: the Origin header value or the literal none, the protocol version the client asked for, and match.id."
-  - name: "socket.refused"
+    path: "web/socket.mjs:close/error"
+    note: "One row when the socket closes unexpectedly: match.id, tick, code, wasClean, reason. The observability contract reserves this key at line 65; a dropped socket stops looking like a frozen match."
+  - name: "viewer.tick_skipped"
+    kind: event
+    path: "web/schedule.mjs:frame scheduler"
+    note: "One row per second, and only when the count is above zero: tick, skipped, speed, window_s. Closes the dark path the shape names directly, a viewer that drops ticks silently."
+  - name: "viewer.lag"
+    kind: event
+    path: "web/playback.mjs:sustained-rate estimator"
+    note: "One row per speed drop: requested_speed, sustained_speed, tick, notice_shown. The page states why it slowed down; this is the evidence for AC-5, which no server message can supply."
+  - name: "viewer.frame_budget"
+    kind: gauge
+    path: "web/schedule.mjs:rolling window"
+    note: "One row per five seconds: frames, fps_median, frame_ms_p95, dropped_frames, refresh_hz, window_s. refresh_hz rides along because requestAnimationFrame fires at the panel rate, so a 144 Hz display would make a raw callback count pass for the wrong reason."
+  - name: "viewer.history"
+    kind: gauge
+    path: "web/history.mjs:after each keyframe"
+    note: "One row carrying both numbers plan Round 3 Q9 kept: ticks_stored, history_bytes (exact, synchronous), page_bytes (the browser gauge, asynchronous, null until resolved), budget_bytes 314572800."
+  - name: "viewer.rewind"
+    kind: event
+    path: "web/playback.mjs:scrubber commit"
+    note: "One row per scrub: from_tick, to_tick, exact. The exact flag states whether the drawn frame equalled the stored tick, which is the AC-6 assertion in signal form."
+  - name: "viewer.decode_refused"
     kind: log
-    path: "crates/stream/src/server.rs:Server::accept"
-    note: "One tracing warn line per refused handshake before the connection closes: origin and reason (origin not allowed, or protocol version N against this build M)."
-  - name: "socket.backpressure"
+    path: "web/decode.mjs:refusal path"
+    note: "One warn row per frame the decoder cannot read: reason, tick, bytes, kind. A bad frame is named rather than swallowed as a stutter."
+  - name: "web.serving"
     kind: event
-    path: "crates/stream/src/session.rs:Session::push"
-    note: "One tracing info line per pause, not per blocked tick: the tick the producer stopped at, the bound in ticks, the milliseconds it stayed paused, and the running resume count."
-  - name: "match-event.engine"
-    kind: event
-    path: "crates/protocol/src/event.rs:MatchEvent"
-    note: "Opens the fourth record kind. One JSON Lines row per event into matches/<match.id>/events.jsonl and one frame over the socket: record.kind, schema.version, match.id, owner.id, tick, minute, event.type (kick-off, goal, full-time in this slice), team.id, home.score, away.score."
-  - name: "match-event.change"
-    kind: event
-    path: "crates/protocol/src/command.rs:Queue"
-    note: "One row per queued change and per rejection: event.type tactics-change, change.kind, change.queued_tick, change.queue_id (additive extra), change.rejected_reason when refused."
-  - name: "fixture.recorded"
-    kind: event
-    path: "crates/stream/src/record.rs:Recorder::finish"
-    note: "One tracing info line when engine-cli record closes a fixture: relative path, frame count, tick count, byte count, and the 12-hex hash of the file."
-  - name: "fixture.replayed"
-    kind: event
-    path: "crates/stream/src/replay.rs:Replayer::run"
-    note: "One tracing info line when the mock server finishes a replay: relative path, frame count, speed, and the 12-hex hash, so a replay states which fixture it served."
+    path: "crates/engine-cli/src/web.rs:bind"
+    note: "One tracing info line when the static server binds: dir (relative), files, isolated, port. The isolated flag reports whether the two cross-origin-isolation headers are on, which the memory gauge requires; a run with them off is visible rather than silently ungauged."
 dark_paths:
-  - path: "crates/stream/src/server.rs:idle-client"
-    reason: "A client completes the handshake and never reads; the engine looks slow with no cause on the record. socket.client plus socket.backpressure name the connection and the pause."
-  - path: "crates/stream/src/server.rs:refused-origin"
-    reason: "A page refused by the Origin allowlist sees a closed socket and the operator sees nothing. socket.refused carries the origin and the rule that fired."
-  - path: "crates/protocol/src/event.rs:no-full-time"
-    reason: "A match-event stream that stops mid-match is indistinguishable from a finished match. The full-time event closes every complete stream; its absence marks an abandoned one."
-  - path: "crates/protocol/src/command.rs:never-applied"
-    reason: "A change is queued, acknowledged, and never applied; the contract names this dark path (darkpath.change_never_applied). change.queued_tick with no change.applied_tick makes it countable from this slice onward."
-  - path: "crates/stream/src/replay.rs:divergent-replay"
-    reason: "A replay that differs from its fixture would silently invalidate every viewer test built on it. fixture.recorded and fixture.replayed carry the same 12-hex hash, so a mismatch is visible in two lines."
+  - path: "web/socket.mjs:silent-drop"
+    reason: "The socket closes mid-match and the page keeps drawing the last frame, so a dead stream looks like a frozen match. viewer.socket_drops names the tick, the close code, and whether the close was clean."
+  - path: "web/schedule.mjs:silent-skip"
+    reason: "The scheduler skips ticks at high speed and nothing counts them. The shape's Augmentation Plan names this dark path in exactly these words. viewer.tick_skipped makes the count visible per second."
+  - path: "web/playback.mjs:unannounced-slowdown"
+    reason: "Playback runs slower than the selected speed and the manager is never told, which is AC-5 failing silently. viewer.lag records the requested and the sustained speed and whether the notice appeared."
+  - path: "web/history.mjs:budget-overrun"
+    reason: "The history grows past the 300 MB budget and the page keeps allocating until the tab dies. viewer.history reports both the exact byte count and the browser gauge against the budget on every keyframe."
+  - path: "web/decode.mjs:swallowed-frame"
+    reason: "A frame the decoder cannot read is discarded and the match simply stutters, which would read as a rendering fault rather than a protocol fault. viewer.decode_refused names the reason, the tick, and the byte count."
 pii_warnings: 0

@@ -42,6 +42,21 @@ The command binds a port on `127.0.0.1`, prints it, writes it to `engine.port`, 
 one viewer. A page connects to `ws://127.0.0.1:<port>/?v=1` and receives a hello, then one
 binary frame per tick. See `docs/reference/protocol.md` for every message and every field.
 
+## Watch a match
+
+```bash
+target/release/engine-cli serve --seed 42 --web web
+```
+
+The command prints two lines: the WebSocket port, then the page address. Open the page
+address in a browser. The engine serves the page itself, so there is one program to start,
+the page's origin is already on the socket's loopback allowlist, and every response carries
+the two cross-origin-isolation headers the page's memory gauge needs.
+
+Open `/handshake.html` on the same address to check the connection alone: it reads the
+hello, prints it, and renders nothing, so a fault there is a fault in the handshake rather
+than in the renderer.
+
 ## Record and replay a fixture
 
 ```bash
@@ -49,9 +64,23 @@ target/release/engine-cli record --seed 7 --out match.smfx
 target/release/engine-cli replay --fixture match.smfx --speed 8
 ```
 
-`record` writes every frame of one match exactly as it would travel on the wire. `replay`
-serves those bytes back over the same protocol, so a viewer can be verified before the
-engine is complete.
+`record` writes every frame of one match exactly as it would travel on the wire, starting
+with the hello, so a replay forwards the recorded match rather than describing the build
+that replays it. `replay` serves those bytes back over the same protocol, so a viewer can
+be verified before the engine is complete. Add `--web web` to serve the page beside it.
+
+`replay --sustain <speed>` caps the delivered rate below `--speed`, which is how the
+viewer's lag notice is tested. It exists on `replay` alone and never on `serve`.
+
+## Test the page
+
+```bash
+node --test "web/tests/*.test.mjs"
+```
+
+Node 22 ships the test runner, so there is no `package.json`, no install, and no third
+dependency. The decoder test also reads `fixture.smfx` at the repository root when one has
+been recorded; without it that one test reports a skip naming the command to record it.
 
 ## Benchmark
 

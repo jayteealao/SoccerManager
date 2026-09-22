@@ -24,7 +24,7 @@ slices:
     complexity: m
     depends-on: [engine-core]
   - slug: viewer-pitch
-    status: defined
+    status: in-progress
     complexity: m
     depends-on: [stream-protocol]
   - slug: match-rules

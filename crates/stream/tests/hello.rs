@@ -29,6 +29,11 @@ fn the_hello_arrives_before_the_first_tick_frame() {
     assert_eq!(hello.dt_ms, 20.0);
     assert_ne!(hello.teams[0].id, hello.teams[1].id);
     assert!(!hello.teams[0].name.is_empty());
+    // The kit colours the viewer draws its markers from, straight from the team files.
+    assert_eq!(hello.teams[0].kit_primary, "#c8102e");
+    assert_eq!(hello.teams[0].kit_secondary, "#000000");
+    assert_eq!(hello.teams[1].kit_primary, "#6a0dad");
+    assert_eq!(hello.teams[1].kit_secondary, "#ff6a13");
 
     // The next frame is the opening tick, and it is a keyframe.
     let Incoming::Tick(frame, quantised) = client.read().unwrap() else {

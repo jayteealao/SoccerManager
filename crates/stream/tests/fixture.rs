@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use engine::record::TickSink;
 use engine::{Simulation, ticks_for_minutes};
-use protocol::Frame;
+use protocol::{Frame, Hello, PROTOCOL_VERSION, ServerMessage, TeamRef};
 use stream::session::{FrameOut, FrameSink};
 use stream::{Client, Recorder, Replayer, Server, SharedRecorder, read_fixture};
 
@@ -19,6 +19,38 @@ fn record(path: &Path, minutes: u32) -> u32 {
         SharedRecorder::new(Recorder::create(path, 1_700_000_000_000, common::SEED).unwrap());
     let mut sink = FrameSink::new(recorder.clone(), 50);
     let mut messages = recorder.clone();
+    // The hello is the fixture's first entry, exactly as `engine-cli record` writes it.
+    let hello = Hello {
+        protocol_version: PROTOCOL_VERSION,
+        engine_version: engine::version().to_string(),
+        build_hash: engine::build_hash().to_string(),
+        owner_id: "0123456789abcdef0123456789abcdef".into(),
+        match_id: format!("{:016x}-1700000000000", common::SEED),
+        seed: common::SEED,
+        dt_ms: config.tuning.dt * 1000.0,
+        ticks_expected: ticks_for_minutes(minutes),
+        keyframe_interval: 50,
+        teams: [
+            TeamRef {
+                id: config.teams[0].club_id.clone(),
+                name: config.teams[0].name.clone(),
+                kit_primary: config.teams[0].kit.primary.clone(),
+                kit_secondary: config.teams[0].kit.secondary.clone(),
+            },
+            TeamRef {
+                id: config.teams[1].club_id.clone(),
+                name: config.teams[1].name.clone(),
+                kit_primary: config.teams[1].kit.primary.clone(),
+                kit_secondary: config.teams[1].kit.secondary.clone(),
+            },
+        ],
+    };
+    messages
+        .send(Frame::Text(
+            serde_json::to_string(&ServerMessage::Hello(hello)).unwrap(),
+        ))
+        .unwrap();
+
     let mut sim = Simulation::new(config).unwrap();
     let ticks = ticks_for_minutes(minutes);
     for _ in 0..ticks {
@@ -44,17 +76,14 @@ fn a_replayed_fixture_is_byte_identical_to_the_recording() {
     let fixture = read_fixture(&path).unwrap();
     assert_eq!(fixture.ticks, ticks);
     assert_eq!(fixture.seed, common::SEED);
-    assert_eq!(fixture.frames.len() as u32, ticks + 1);
+    // The hello, every tick frame, and the closing statistics.
+    assert_eq!(fixture.frames.len() as u32, ticks + 2);
 
     let server = Server::bind(&dir, "replay-match").unwrap();
     let port = server.port();
-    let replayer = Arc::new(Replayer::new(fixture.clone(), "match.smfx"));
+    let replayer = Arc::new(Replayer::new(fixture.clone(), "match.smfx").unwrap());
     let serving = Arc::clone(&replayer);
-    let handle = std::thread::spawn(move || {
-        serving
-            .serve(&server, "0123456789abcdef0123456789abcdef", 1000.0)
-            .unwrap()
-    });
+    let handle = std::thread::spawn(move || serving.serve(&server, 1000.0, None).unwrap());
 
     let mut client = Client::connect_local(port).unwrap();
     let mut received: Vec<Frame> = Vec::new();
@@ -63,9 +92,10 @@ fn a_replayed_fixture_is_byte_identical_to_the_recording() {
     }
     handle.join().unwrap();
 
-    // The first frame is the hello, which is per connection and not part of the recording.
+    // Every frame is replayed, the hello included: a replay forwards the recorded hello
+    // rather than describing the replaying build.
     let stored: Vec<&Frame> = fixture.frames.iter().map(|f| &f.frame).collect();
-    let replayed: Vec<&Frame> = received.iter().skip(1).collect();
+    let replayed: Vec<&Frame> = received.iter().collect();
     assert_eq!(
         replayed.len(),
         stored.len(),
@@ -74,6 +104,89 @@ fn a_replayed_fixture_is_byte_identical_to_the_recording() {
     for (i, (a, b)) in replayed.iter().zip(stored.iter()).enumerate() {
         assert_eq!(a.payload(), b.payload(), "frame {i} differs on the wire");
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_sustain_cap_delivers_below_the_requested_speed() {
+    let dir = common::temp_dir("fixture-sustain");
+    let path = dir.join("match.smfx");
+    record(&path, 1);
+    let fixture = read_fixture(&path).unwrap();
+    let server = Server::bind(&dir, "sustain-match").unwrap();
+    let port = server.port();
+    let replayer = Replayer::new(fixture, "match.smfx").unwrap();
+    // Eight times real time is asked for and three times real time is delivered, which is
+    // the only way to drive the viewer's lag notice: nothing else in the workspace can
+    // sustain less than it is asked for on demand.
+    let handle = std::thread::spawn(move || replayer.serve(&server, 8.0, Some(3.0)));
+
+    let mut client = Client::connect_local(port).unwrap();
+    let mut ticks = 0u32;
+    let mut started = None;
+    let mut elapsed = None;
+    while let Some(frame) = client.read_raw().unwrap() {
+        if matches!(frame, Frame::Tick(_)) {
+            ticks += 1;
+            if ticks == 100 {
+                started = Some(std::time::Instant::now());
+            }
+            if ticks == 700 {
+                elapsed = started.map(|t: std::time::Instant| t.elapsed());
+                break;
+            }
+        }
+    }
+    drop(client);
+    let _ = handle.join().unwrap();
+
+    // 600 ticks are 12 seconds of play. At three times real time they take 4 seconds.
+    let measured = elapsed.expect("the window is measured").as_secs_f64();
+    let rate = 600.0 * 0.02 / measured;
+    assert!(
+        (rate - 3.0).abs() / 3.0 < 0.05,
+        "delivered at {rate:.3}x over {measured:.3}s; the cap is 3x"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_replayed_hello_carries_the_recorded_kit_colours() {
+    let dir = common::temp_dir("fixture-hello");
+    let path = dir.join("match.smfx");
+    record(&path, 1);
+    let fixture = read_fixture(&path).unwrap();
+    let replayer = Replayer::new(fixture, "match.smfx").unwrap();
+    let hello = replayer.hello();
+    assert_eq!(hello.seed, common::SEED);
+    assert_eq!(hello.teams[0].kit_primary, "#c8102e");
+    assert_eq!(hello.teams[0].kit_secondary, "#000000");
+    assert_eq!(hello.teams[1].kit_primary, "#6a0dad");
+    assert_ne!(hello.teams[0].name, hello.teams[1].name);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_fixture_that_does_not_open_with_a_hello_is_refused_naming_the_path() {
+    let dir = common::temp_dir("fixture-no-hello");
+    let path = dir.join("stale.smfx");
+    // A fixture recorded before the recorder stored a hello: tick frames and nothing else.
+    let config = common::match_config(1);
+    let recorder =
+        SharedRecorder::new(Recorder::create(&path, 1_700_000_000_000, common::SEED).unwrap());
+    let mut sink = FrameSink::new(recorder.clone(), 50);
+    let mut sim = Simulation::new(config).unwrap();
+    for _ in 0..10 {
+        sim.step();
+        sink.on_tick(&sim.record()).unwrap();
+    }
+    drop(sink);
+    recorder.finish().unwrap();
+
+    let fixture = read_fixture(&path).unwrap();
+    let err = Replayer::new(fixture, "stale.smfx").unwrap_err();
+    assert!(err.to_string().contains("stale.smfx"), "{err}");
+    assert!(err.to_string().contains("record it again"), "{err}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

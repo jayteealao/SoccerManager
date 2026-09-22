@@ -1,7 +1,7 @@
 # Product
 
 ## Name
-[TODO] — the working name is not decided. The repository folder is named SoccerManager.
+Touchline — chosen by the product owner on 2026-09-22. The repository folder stays named SoccerManager.
 
 ## Register
 product

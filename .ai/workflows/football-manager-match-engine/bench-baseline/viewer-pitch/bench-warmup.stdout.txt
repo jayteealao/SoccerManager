@@ -1,0 +1,7 @@
+2026-09-22T14:47:33.052482Z  INFO engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T14:47:33.052675Z  INFO engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3891 hash=0f5d068f7d43
+2026-09-22T14:47:33.052745Z  INFO engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=1 bytes=858 hash=6ebfdf131295
+2026-09-22T14:47:33.052966Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
+2026-09-22T14:47:33.053309Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a
+2026-09-22T14:47:33.053953Z  INFO engine::observe::identity: signal="identity.owner_created" path="owner.id"
+{"bench.cpu_ms":1921,"bench.cpu_wall_ratio":0.9856336582863007,"bench.match_wall_ms":391,"bench.matches":5,"bench.peak_mem_mb":6.04296875,"budget.pass":true,"build.hash":"3570eb9-dirty","content.hash":"02d33ad91de5","engine.ticks_per_s":690537.084398977,"env":"dev","machine.cpu_model":"AMD Ryzen 7 9800X3D 8-Core Processor","machine.hash":"74ca12fc08a4","machine.power_plan":"Ultimate Performance","operation":"benchmark","outcome":"success","owner.id":"f5bb9b03d3b62870343377be4b3e43f2","record.kind":"run-report","run.id":"bench-1790088455393","schema.version":"1","seed":42,"service":"engine-cli","version":"0.1.0"}

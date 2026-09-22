@@ -82,6 +82,9 @@ pub struct ServeOpts {
     /// Away team file; default teams/default-b.json in the content folder.
     #[arg(long, value_name = "FILE")]
     pub team_b: Option<PathBuf>,
+    /// Also serve this folder as the viewer page.
+    #[arg(long, value_name = "DIR")]
+    pub web: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -111,6 +114,12 @@ pub struct ReplayOpts {
     /// Playback speed; 1.0 is real time and 8.0 is eight times faster.
     #[arg(long, default_value_t = 1.0)]
     pub speed: f32,
+    /// Cap the delivered rate; tests the lag notice.
+    #[arg(long, value_name = "SPEED")]
+    pub sustain: Option<f32>,
+    /// Also serve this folder as the viewer page.
+    #[arg(long, value_name = "DIR")]
+    pub web: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]

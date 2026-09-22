@@ -1,19 +1,26 @@
 artifact: benchmark
-target: "engine-cli bench --seed 42 --matches 5 --json (one 90-minute match, one thread, reference machine), cargo bench -p engine --bench tick_step, and engine-cli bench --stream (new)"
-language: rust
-framework: "timing-fallback (engine-cli bench with std::time::Instant, GetProcessTimes, GetProcessMemoryInfo) plus criterion 0.8 for the tick step"
+target: "engine-cli bench --seed 42 --matches 5 --json (five 90-minute matches, one thread, reference machine), cargo bench -p engine --bench tick_step, engine-cli bench --stream, and four new browser targets read from the page's own viewer.frame_budget and viewer.history signals"
+language: "rust, javascript"
+framework: "timing-fallback (engine-cli bench with std::time::Instant, GetProcessTimes, GetProcessMemoryInfo) plus criterion 0.8 for the tick step; driven-browser signal reads plus node --test for the page"
 mode: baseline
-measured_at: "2026-09-22T11:28:51Z"
-baseline_commit: "d58fce3"
+measured_at: "2026-09-22T14:47:49Z"
+baseline_commit: "3570eb9"
 compare_commit: ""
 metrics:
-  - { name: "bench.match_wall_ms", before: 389, unit: "ms", direction: lower-is-better }
-  - { name: "engine.ticks_per_s", before: 694087, unit: "ticks/s", direction: higher-is-better }
-  - { name: "bench.cpu_ms_per_match", before: 384, unit: "ms", direction: lower-is-better }
-  - { name: "bench.peak_mem_mb", before: 5.62, unit: "MB", direction: lower-is-better }
-  - { name: "criterion.tick_step_us", before: 1.4342, unit: "us", direction: lower-is-better }
-  - { name: "criterion.steering_pass_22_ns", before: 887.68, unit: "ns", direction: lower-is-better }
-  - { name: "bench.stream_ticks_per_s", unit: "ticks/s", direction: higher-is-better, note: "No baseline: no socket exists on d58fce3. Verify records the first value and viewer-pitch inherits it." }
+  - { name: "bench.match_wall_ms", before: 389, after: 389, delta_pct: 0.0, unit: "ms", direction: lower-is-better }
+  - { name: "engine.ticks_per_s", before: 694087, after: 694087, delta_pct: 0.0, unit: "ticks/s", direction: higher-is-better }
+  - { name: "bench.cpu_ms_per_match", before: 381, after: 388, delta_pct: 1.8, unit: "ms", direction: lower-is-better }
+  - { name: "bench.peak_mem_mb", before: 5.97, after: 5.97, delta_pct: 0.0, unit: "MB", direction: lower-is-better }
+  - { name: "criterion.tick_step_us", before: 1.4376, after: 1.4378, delta_pct: 0.01, unit: "us", direction: lower-is-better }
+  - { name: "criterion.steering_pass_22_ns", before: 888.96, after: 898.22, delta_pct: 1.04, unit: "ns", direction: lower-is-better }
+  - { name: "bench.stream_ticks_per_s", before: 640213, after: 634859, delta_pct: -0.84, unit: "ticks/s", direction: higher-is-better }
+  - { name: "bench.stream_peak_mem_mb", before: 7.31, after: 7.30, delta_pct: -0.14, unit: "MB", direction: lower-is-better, note: "The streamed workload carries its own memory tripwire of 9.13 MB, because command 1 has no socket, no 500-tick producer buffer, no client thread, and no tungstenite write buffer." }
 regressions: []
 improvements: []
-notes: "Baseline for the stream-protocol slice, measured on commit d58fce3 (data-schemas-generator verified) before any code change, three drives of command 1 with the median of medians reported. The tripwires bind against bench.cpu_ms_per_match 384 ms (10 percent, 422 ms) and bench.peak_mem_mb 5.62 MB (25 percent, 7.03 MB). The first drive reported 6.86 MB peak against 5.62 MB on the two later drives and on the last verify; it is treated as a first-touch working-set artefact and excluded from the median. A fifth target, stream throughput over the socket, is declared without a value because no socket exists yet. The data-schemas-generator baseline and its comparison are byte-copied at history/05c-benchmark-1.md."
+unmeasured_targets:
+  - { name: "viewer.fps_median", unit: "fps", budget: 60, direction: higher-is-better, note: "No page exists on 3570eb9, so this is a budget and not a measurement. Pass needs fps_median of at least 60 with dropped_frames 0 over a 5-minute window at 1x (AC-1, NFR-2). Record refresh_hz beside it, because requestAnimationFrame fires at the panel rate and a 144 Hz display makes a raw callback count meaningless." }
+  - { name: "viewer.frame_ms_p95", unit: "ms", budget: 16.6, direction: lower-is-better, note: "Budget only. 16.6 ms is the frame budget at 60 frames per second." }
+  - { name: "viewer.decode_us_per_frame", unit: "us", budget: 25, direction: lower-is-better, note: "Budget only. A mean under 25 us per frame keeps 400 frames per second at 8x playback under 10 ms of wall time per second. Measured by node --test over 10,000 recorded frames." }
+  - { name: "viewer.page_bytes", unit: "bytes", budget: 314572800, direction: lower-is-better, note: "Budget only, 300 MB per NFR-3, read from performance.measureUserAgentSpecificMemory in a driven browser. A null value means the browser never resolved its measurement, which is a failed drive and not a pass." }
+  - { name: "viewer.history_bytes", unit: "bytes", budget: 25380000, direction: lower-is-better, note: "Budget only. 270,000 ticks at 47 int16 components is exactly 25,380,000 bytes. Exact and synchronous, measured by node --test, and kept beside viewer.page_bytes per plan Round 3 Q9." }
+notes: "Encoding note: the schema requires an after value on every metric, so before holds the stream-protocol slice's compare reading and after holds this baseline's measurement on 3570eb9. The five page targets have no measurement at all and sit under unmeasured_targets with their budgets instead, because writing a budget into after would present it as a reading. Baseline for the viewer-pitch slice, measured on commit 3570eb9 before any code change. Three drives of command 1 with the median of medians reported: wall 387, 389, 390 ms; per-match processor time 387.4, 387.6, 390.6 ms; peak memory 5.973, 5.965, 5.969 MB. No reading is discarded this time, because all three agree within 8 kilobytes of peak memory and within 3 milliseconds of wall time. The tripwires bind against bench.cpu_ms_per_match 388 ms (10 percent, 427 ms) and bench.peak_mem_mb 5.97 MB (25 percent, 7.46 MB). Processor time rose 1.8 percent against the last compare run and nothing in the two intervening commits touched the tick loop. steering_pass_22 rose 1.49 percent with p = 0.00, which is statistically significant and operationally irrelevant at a tenth of the tripwire. Four browser targets are declared without values because the repository holds no HTML, CSS, or JavaScript file on this commit; verify measures each against its budget and those first readings become the baseline for viewer-match-day. The stream-protocol baseline and its comparison are byte-copied at history/05c-benchmark-2.md."

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Touchline — handshake</title>
+    <link rel="stylesheet" href="fonts/fonts.css" />
+    <link rel="stylesheet" href="tokens.css" />
+    <style>
+      /* The diagnostic page carries no colours and no typeface of its own. It reads the
+         same tokens the viewer reads, so a token that is wrong here is wrong there. */
+      body {
+        margin: 0;
+        padding: 24px;
+        background: var(--tl-bg);
+        color: var(--tl-fg);
+        font: var(--tl-font-num);
+      }
+      h1 {
+        margin: 0 0 8px;
+        font: var(--tl-font-display);
+      }
+      p {
+        max-width: 60ch;
+        color: var(--tl-fg-muted);
+      }
+      pre {
+        margin: 0;
+        padding: var(--tl-gap);
+        border: 1px solid var(--tl-line);
+        border-radius: var(--tl-radius-md);
+        background: var(--tl-panel);
+        font: var(--tl-font-num);
+        font-variant-numeric: tabular-nums;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .ok {
+        color: var(--tl-success);
+      }
+      .bad {
+        color: var(--tl-danger);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Handshake</h1>
+    <p>
+      The smallest page that opens the socket: it reads the hello, prints it, and stops.
+      Nothing is rendered, so a fault here is a fault in the handshake, the origin, the
+      version query, or the isolation headers, and never in the renderer.
+    </p>
+    <pre id="out">connecting…</pre>
+    <script type="module">
+      const out = document.getElementById('out');
+      out.textContent = '';
+
+      // Every line is a text node inside its own element. The socket's own words reach
+      // this page from the wire, so they are never parsed as markup here.
+      const say = (text, cls = '') => {
+        const line = document.createElement('span');
+        if (cls) {
+          line.className = cls;
+        }
+        line.textContent = `${text}\n`;
+        out.appendChild(line);
+      };
+
+      const isolated = globalThis.crossOriginIsolated === true;
+      const gauge = typeof performance.measureUserAgentSpecificMemory === 'function';
+      say(`origin ${location.origin}`);
+      say(`crossOriginIsolated ${isolated}`, isolated ? 'ok' : 'bad');
+      say(`memory gauge ${gauge}`, gauge ? 'ok' : 'bad');
+
+      const engine = await fetch('engine.json').then((r) => r.json());
+      const address = `ws://127.0.0.1:${engine['socket.port']}/?v=${engine['protocol.version']}`;
+      say(`opening ${address}`);
+
+      const socket = new WebSocket(address);
+      socket.binaryType = 'arraybuffer';
+      let ticks = 0;
+      socket.addEventListener('message', (event) => {
+        if (typeof event.data === 'string') {
+          const message = JSON.parse(event.data);
+          say(`${message.type}: ${event.data}`, message.type === 'hello' ? 'ok' : '');
+          return;
+        }
+        ticks += 1;
+        if (ticks <= 3 || ticks % 500 === 0) {
+          const bytes = new Uint8Array(event.data);
+          say(`tick frame ${ticks}: ${bytes.length} bytes, kind 0x0${bytes[0]}`);
+        }
+      });
+      socket.addEventListener('close', (event) =>
+        say(`closed code=${event.code} clean=${event.wasClean} after ${ticks} tick frames`)
+      );
+      socket.addEventListener('error', () => say('socket error', 'bad'));
+    </script>
+  </body>
+</html>

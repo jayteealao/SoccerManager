@@ -140,10 +140,14 @@ fn serve(
             TeamRef {
                 id: club_ids[0].clone(),
                 name: config.teams[0].name.clone(),
+                kit_primary: config.teams[0].kit.primary.clone(),
+                kit_secondary: config.teams[0].kit.secondary.clone(),
             },
             TeamRef {
                 id: club_ids[1].clone(),
                 name: config.teams[1].name.clone(),
+                kit_primary: config.teams[1].kit.primary.clone(),
+                kit_secondary: config.teams[1].kit.secondary.clone(),
             },
         ],
     };

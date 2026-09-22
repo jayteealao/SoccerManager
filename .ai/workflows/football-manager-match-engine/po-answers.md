@@ -393,3 +393,57 @@ scope: decides the benchmark scope for this slice; does NOT change the tripwires
 **Consult record.** Triggers `appetite-medium-or-larger` and `unknowns-present` (U-1) hold. The PO excluded `consult` at intake; not fired.
 
 **Design contract.** `02b-design.md` exists without `02c-craft.md`. Not authored in this plan: the slice ships no user-interface surface; the `viewer-pitch` plan authors it.
+
+## 2026-09-22T14:41:32Z · plan (viewer-pitch) · Round 1 (the page-to-engine boundary)
+
+**Q1 Page delivery.** The engine serves it. Add a `--web <dir>` option to `engine-cli serve` and `engine-cli replay` so the Rust binary serves the page files beside the socket it already opens. Research fact that forced the question: a browser blocks JavaScript module scripts outright over `file://` (CORS, opaque origin `null`), so the page cannot be a double-clicked file. One program, one address, and `http://127.0.0.1:<port>` is already on the server's Origin allowlist (`crates/stream/src/server.rs:181`). Rung 1 (AskUserQuestion).
+scope: decides how the page reaches the browser and which program serves it; does NOT decide the page folder name, the MIME table, or the installer (U-3 keeps packaging parked).
+
+**Q2 Lag notice.** The page measures, and `engine-cli replay` gains a `--sustain <f32>` cap option for testing. The page times tick arrival against the speed it asked for, drops its own playback speed to the rate it is really receiving, and names that rate in the notice. No wire-format change. Research fact that forced the question: `ReplayOpts` has only `--fixture` and `--speed` (`crates/engine-cli/src/cli.rs:106-114`); `Replayer::serve` never reads the socket (`crates/stream/src/replay.rs:64-105`); no `ServerMessage` announces lag (`crates/protocol/src/lib.rs:85-185`); and the browser exposes no inbound-queue depth, because `WebSocket.bufferedAmount` counts outgoing bytes only. Rung 1 (AskUserQuestion).
+scope: decides who detects lag and how the notice gets its number, and closes the AC-5 force-scope wall; does NOT decide the threshold at which the notice appears, nor the notice wording.
+
+**Q3 Kit colours.** Add them to the opening message. `TeamRef` gains the club's primary and secondary kit colour beside `team.id` and `team.name`. Research fact that forced the question: `TeamRef` carries identifier and name only (`crates/protocol/src/message.rs:11-18`), so no kit colour reaches the page today, while `steer.md` requires the marker ring to use the kit secondary. Rung 1 (AskUserQuestion).
+scope: decides where the page learns kit colours; does NOT decide how a colour is mapped to a safe on-pitch value (Round 3 Q11), and does NOT bump `PROTOCOL_VERSION`, which stays a separate judgement in the plan steps.
+
+**Q4 Skip target.** Both, merged. Build one stoppage index from restart-flagged tick frames (`KIND_RESTART = 0x03`, `crates/protocol/src/frame.rs:16`) and from event-message ticks, and jump to whichever comes first, with a rule that collapses a goal and its restart into one entry. Rung 1 (AskUserQuestion).
+scope: decides what "next stoppage" means to the skip control; does NOT decide the collapse window in ticks, which the plan fixes as an implementation detail.
+
+## 2026-09-22T14:41:32Z · plan (viewer-pitch) · Round 2 (inside the page)
+
+**Q5 Where drawing runs.** Main thread now, with the renderer in its own module so a later move to a worker is contained. Research fact: 22 circles, 22 shirt numbers, a ball and a trail at 616 by 411 pixels is sub-millisecond drawing against a 16.6-millisecond frame budget, and decoding 400 frames per second is also sub-millisecond; `transferControlToOffscreen()` is one-way, after which the main thread can never draw to that canvas, which would push the three test-hook criteria across a message boundary. Rung 1 (AskUserQuestion).
+scope: decides where rendering runs in this slice; does NOT forbid a later worker move, which the module split keeps contained, and does NOT decide the canvas pixel-ratio handling.
+
+**Q6 Rewind history.** Decoded positions. Every tick is decoded into absolute `Int16Array` arrays: 270,000 ticks x 47 components x 2 bytes = 24.2 MB, twelvefold under the 300 MB budget (NFR-3), and rewind to any tick is a direct index. The wire form would be 12.6 MB but would need a keyframe walk of up to 49 steps on every scrub. Rung 1 (AskUserQuestion).
+scope: decides the in-memory history shape and the rewind mechanism; does NOT decide the saved replay file format, which `viewer-reports-recovery` owns.
+
+**Q7 JavaScript tests.** No `package.json`; shared logic files carry the `.mjs` extension and run under `node --test`. The same files load unchanged in the browser, because the browser resolves a module by the served MIME type, not the extension, and the Rust server from Q1 controls its own MIME table. The repository stays a pure Cargo workspace. Rung 1 (AskUserQuestion).
+scope: decides the JavaScript module and test shape and keeps npm out of the repository; does NOT decide the test folder layout or which modules are extracted.
+
+**Q8 Memory gauge.** Serve the cross-origin-isolation headers and ask the browser. The page reports `performance.measureUserAgentSpecificMemory()` as its gauge, which requires `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` on every response, headers the Q1 Rust server sends and a `file://` page never could. Rung 1 (AskUserQuestion).
+scope: decides what the gauge reports; does NOT by itself decide how AC-7 is evidenced, which Round 3 Q9 settles, and does NOT authorise dropping the exact byte count.
+
+## 2026-09-22T14:41:32Z · plan (viewer-pitch) · Round 3 (evidence, scope, and the visual contract)
+
+**Q9 Memory evidence (follow-up to Q8).** Both numbers, browser is the gauge. The page shows the browser's whole-page figure as the gauge and keeps an exact history-byte count beside it. The browser figure is evidenced by a driven full match; the byte count is evidenced headlessly under `node --test`. Asked because the Q8 answer foreclosed the headless path the slice's AC-7 names, and the requirement, a testable 300 MB assertion, is a second decision the product owner had not made. Rung 1 (AskUserQuestion).
+scope: decides how AC-7 is evidenced and keeps both numbers; does NOT change the 300 MB threshold, and does NOT re-open Q8.
+
+**Q10 Page shell.** Full frame, empty regions. This slice lays down the whole 1280 by 800 grid from `steer.md`, that is a 56-pixel header and columns 336 / 616 / 296 with an 8-pixel gutter, with the header and both side columns present and empty, so the pitch lands at its final 616 by 411 size and the frame-rate and clock evidence is measured at the shipping layout. Rung 1 (AskUserQuestion).
+scope: decides the layout scope of this slice; does NOT move any panel content into this slice, because the header, feed, lineups, statistics, and tactics panel stay with `viewer-match-day` and `viewer-lineup-tactics`.
+
+**Q11 Kit colour rule.** Pull extreme colours back into range. Each kit hex is converted to OKLCH and its lightness clamped into a safe band before the 3:1 turf test decides between the kit secondary and pitch-line white. Research fact that forced the question: `content/teams/default-a.json` sets `club.kit.secondary` to `#000000`, and DESIGN.md bans pure black; pure black would pass the 3:1 test, so the rule as written would put a banned value on the pitch. Rung 1 (AskUserQuestion).
+scope: decides how any kit colour becomes a safe on-pitch value, for shipped, generated, and modder teams alike; does NOT change the shipped team files, and does NOT decide the club-crest treatment, which reuses the same function later.
+
+**Q12 Measurement scope.** Options 2 and 3 together, not the recommended option 1. Author a browser benchmark artifact with browser targets and thresholds, AND extend the instrumentation plan with page-side signals. The product owner accepted the stated cost of option 3: the observability pipeline has no browser transport, so the page-side signals have nowhere to go until one is built. Rung 1 (AskUserQuestion, free-text answer "2 and 3").
+scope: decides that this slice re-authors both augmentation artifacts with browser content; does NOT build a browser transport for the signals, and does NOT retire the engine benchmark targets, which stay as the cross-slice regression check.
+
+**Pre-filled (not asked; source recorded):**
+- Image gate: `pass`, source `steer.md`. The standing steering file names the Design canvas "Match Viewer Design" as the north-star mock, says to treat the direction as confirmed, and forbids generating a competing mock. No `imagery` run was made.
+- Brief-confirm gate (`shape=pass`): satisfied by a user-confirmed PRODUCT.md, because design setup Round 1 Q5 confirmed PRODUCT.md and DESIGN.md as the design context.
+- Product name: `Touchline` (PRODUCT.md), which removes the `[TODO]` marker that design setup Q4 left blocking this stage.
+- Token prefix `--tl-`, superseding the `--mv-` prefix in `02b-design.md` and `02b-design.yaml`. `steer.md` fixes this directly.
+- Typefaces: Barlow Condensed 700 and IBM Plex Sans 400/500/600, shipped as local `woff2` from the repository, never from a font service (`steer.md`). Both carry the SIL Open Font License, and IBM Plex Sans carries real OpenType tabular figures, so `font-variant-numeric: tabular-nums` works as intended. The two faces land in this slice because the canvas draws shirt numbers and the frame-time counter needs tabular figures.
+- Binary receive shape: `WebSocket.binaryType = 'arraybuffer'` with a `DataView` over each frame. The `'blob'` default would force an asynchronous step per frame at 400 frames per second.
+- Reduced motion: `@media (prefers-reduced-motion: reduce)` disables the control-strip and notice transitions. It never disables the simulation redraw, which is content, not decoration.
+- Canvas accessibility: `role="img"` with a label, plus a visually hidden `aria-live="polite"` region mirroring clock, speed, and lag state in text.
+
+**Consult record.** Triggers `appetite-medium-or-larger` and `unknowns-present` hold. The product owner excluded `consult` at intake (`00-index.md` `stack.excluded-by-po`). Not fired.

@@ -9,6 +9,7 @@ mod replay;
 mod serve;
 mod simulate;
 mod stream_run;
+mod web;
 
 use std::io::IsTerminal;
 

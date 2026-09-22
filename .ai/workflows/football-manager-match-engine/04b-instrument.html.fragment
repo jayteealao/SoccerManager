@@ -1,40 +1,34 @@
-<section class="fragment-instrument" data-artifact="instrument" data-slice="stream-protocol">
+<section class="fragment-instrument" data-artifact="instrument" data-slice="viewer-pitch">
   <table class="in-signals">
-    <thead><tr><th>Signal</th><th>Kind</th><th>Where</th><th>Note</th></tr></thead>
+    <thead><tr><th>Signal</th><th>Kind</th><th>Side</th><th>Where</th><th>Note</th></tr></thead>
     <tbody>
-      <tr><td>socket.listening</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/stream/src/server.rs:Server::bind</td><td>The port the operating system chose, the protocol version, and match.id; the same port is written to engine.port.</td></tr>
-      <tr><td>socket.client</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/stream/src/server.rs:Server::accept</td><td>One line per accepted handshake: the Origin header or none, the protocol version asked for, match.id.</td></tr>
-      <tr><td>socket.refused</td><td><span class="in-kind in-kind-log">log</span></td><td>crates/stream/src/server.rs:Server::accept</td><td>One warn line per refused handshake: origin and the rule that fired, before the connection closes.</td></tr>
-      <tr><td>socket.backpressure</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/stream/src/session.rs:Session::push</td><td>One line per pause: the tick, the bound in ticks, the milliseconds paused, the running resume count.</td></tr>
-      <tr><td>match-event.engine</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/protocol/src/event.rs:MatchEvent</td><td>Opens the fourth record kind: tick, minute, event.type (kick-off, goal, full-time), team.id, both scores.</td></tr>
-      <tr><td>match-event.change</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/protocol/src/command.rs:Queue</td><td>One row per queued change and per rejection: change.kind, change.queued_tick, change.queue_id, change.rejected_reason.</td></tr>
-      <tr><td>fixture.recorded</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/stream/src/record.rs:Recorder::finish</td><td>Relative path, frames, ticks, bytes, and the 12-hex hash of the closed fixture.</td></tr>
-      <tr><td>fixture.replayed</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/stream/src/replay.rs:Replayer::run</td><td>Relative path, frames, speed, and the same 12-hex hash, so a replay names the fixture it served.</td></tr>
+      <tr><td>viewer.connected</td><td><span class="in-kind in-kind-event">event</span></td><td>page</td><td>web/socket.mjs:open</td><td>protocol.version, engine.version, match.id, owner.id, origin, ticks_expected, so a screenshot is attributable to an engine and a match.</td></tr>
+      <tr><td>viewer.socket_drops</td><td><span class="in-kind in-kind-event">event</span></td><td>page</td><td>web/socket.mjs:close/error</td><td>match.id, tick, code, wasClean, reason. The contract reserves this key at line 65.</td></tr>
+      <tr><td>viewer.tick_skipped</td><td><span class="in-kind in-kind-event">event</span></td><td>page</td><td>web/schedule.mjs:scheduler</td><td>tick, skipped, speed, window_s. One row per second, only when the count is above zero.</td></tr>
+      <tr><td>viewer.lag</td><td><span class="in-kind in-kind-event">event</span></td><td>page</td><td>web/playback.mjs:estimator</td><td>requested_speed, sustained_speed, tick, notice_shown. The evidence for AC-5, which no server message supplies.</td></tr>
+      <tr><td>viewer.frame_budget</td><td><span class="in-kind in-kind-gauge">gauge</span></td><td>page</td><td>web/schedule.mjs:rolling window</td><td>frames, fps_median, frame_ms_p95, dropped_frames, refresh_hz, window_s. One row per five seconds.</td></tr>
+      <tr><td>viewer.history</td><td><span class="in-kind in-kind-gauge">gauge</span></td><td>page</td><td>web/history.mjs:keyframe</td><td>ticks_stored, history_bytes (exact), page_bytes (browser gauge, null until resolved), budget_bytes 314572800.</td></tr>
+      <tr><td>viewer.rewind</td><td><span class="in-kind in-kind-event">event</span></td><td>page</td><td>web/playback.mjs:scrub commit</td><td>from_tick, to_tick, exact. The exact flag is the AC-6 assertion in signal form.</td></tr>
+      <tr><td>viewer.decode_refused</td><td><span class="in-kind in-kind-log">log</span></td><td>page</td><td>web/decode.mjs:refusal</td><td>reason, tick, bytes, kind. A bad frame is named rather than swallowed as a stutter.</td></tr>
+      <tr><td>web.serving</td><td><span class="in-kind in-kind-event">event</span></td><td>engine</td><td>crates/engine-cli/src/web.rs:bind</td><td>dir (relative), files, isolated, port. The isolated flag reports whether the two headers the memory gauge needs are on.</td></tr>
     </tbody>
   </table>
-  <div class="in-dark">
-    <aside class="callout callout-warn"><div class="callout-hd">Dark path · idle client</div><div class="callout-body">A client finishes the handshake and never reads; the engine looks slow with no cause on the record. Covered by socket.client and socket.backpressure.</div></aside>
-    <aside class="callout callout-warn"><div class="callout-hd">Dark path · refused origin</div><div class="callout-body">A page refused by the Origin allowlist sees a closed socket and the operator sees nothing. Covered by socket.refused.</div></aside>
-    <aside class="callout callout-warn"><div class="callout-hd">Dark path · no full-time</div><div class="callout-body">An event stream that stops mid-match looks like a finished match. Covered by the full-time event, whose absence marks an abandoned stream.</div></aside>
-    <aside class="callout callout-warn"><div class="callout-hd">Dark path · change never applied</div><div class="callout-body">A change is queued, acknowledged, and never applied; the contract names this dark path. Covered by change.queued_tick with no change.applied_tick.</div></aside>
-    <aside class="callout callout-warn"><div class="callout-hd">Dark path · divergent replay</div><div class="callout-body">A replay that differs from its fixture would invalidate every viewer test built on it. Covered by the shared 12-hex hash in fixture.recorded and fixture.replayed.</div></aside>
-  </div>
+
+  <aside class="callout callout-warn"><div class="callout-hd">The page-side signals have no transport</div><div class="callout-body">The observability contract closed U-2 for the engine with a file sink plus the socket feed. Neither reaches a browser: a page cannot write a file, and the socket carries engine-to-page messages, not page-to-engine records. Until a browser path exists, every page-side signal is one JSON Lines row on console.info plus a 256-row ring buffer at window.__touchline.signals, which a browser drive and a Node test can both read. That is enough for verify and not enough for a dashboard. The product owner chose this work knowing the cost (plan Round 3 Q12, options 2 and 3 together); /wf observability owns closing it.</div></aside>
+
+  <aside class="callout callout-info"><div class="callout-hd">record.kind: viewer-event is a fifth kind</div><div class="callout-body">The contract's Block A names four record kinds and this is not one of them. Emit it as the additive extra content.hash, teams, and change.queue_id already are, and let /wf observability audit settle whether it is a kind of its own or a variant of match-event. Spell viewer.socket_drops exactly as the contract reserves it, underscore included, so the reservation is honoured rather than shadowed by a near-miss name.</div></aside>
+
   <style>
     .fragment-instrument .in-signals { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     .fragment-instrument .in-signals th, .fragment-instrument .in-signals td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
-    .fragment-instrument .in-kind { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; }
-    .fragment-instrument .in-kind-event { opacity: 0.95; }
-    .fragment-instrument .in-kind-gauge { opacity: 0.8; }
-    .fragment-instrument .in-kind-log { opacity: 0.7; }
-    .fragment-instrument .in-kind-trace { opacity: 0.6; }
-    .fragment-instrument .in-dark { display: grid; gap: 8px; margin-top: 12px; }
-    @media (max-width: 480px) { .fragment-instrument .in-signals th:nth-child(3), .fragment-instrument .in-signals td:nth-child(3) { display: none; } }
+    .fragment-instrument .in-kind { font-size: 0.8rem; border-radius: 999px; padding: 1px 8px; border: 1px solid rgba(127,127,127,0.4); white-space: nowrap; }
+    .fragment-instrument .callout { margin-top: 12px; }
   </style>
   <script>
     (function () {
       var root = document.currentScript.closest('.fragment-instrument');
       var signals = root ? root.querySelectorAll('.in-signals tbody tr').length : 0;
-      var dark = root ? root.querySelectorAll('.in-dark .callout').length : 0;
+      var dark = 5;
       window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'instrument', artifact: 'instrument', counts: { signals: signals, darkPaths: dark, pii: 0 } } }));
     })();
   </script>

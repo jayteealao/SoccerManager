@@ -41,16 +41,28 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
             TeamRef {
                 id: club_ids[0].clone(),
                 name: config.teams[0].name.clone(),
+                kit_primary: config.teams[0].kit.primary.clone(),
+                kit_secondary: config.teams[0].kit.secondary.clone(),
             },
             TeamRef {
                 id: club_ids[1].clone(),
                 name: config.teams[1].name.clone(),
+                kit_primary: config.teams[1].kit.primary.clone(),
+                kit_secondary: config.teams[1].kit.secondary.clone(),
             },
         ],
     };
 
     let server = Server::bind(&data, &match_id)?;
     println!("{}", server.port());
+    // The page address is printed after the port, because it is the line a reader copies.
+    let page = match opts.web.as_deref() {
+        Some(dir) => Some(crate::web::start(dir, server.port())?),
+        None => None,
+    };
+    if let Some(page) = &page {
+        println!("{}", page.address());
+    }
     let connection = server.accept(&match_id)?;
 
     let events = Arc::new(Mutex::new(EventWriter::open(&data, &match_id)?));

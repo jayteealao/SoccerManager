@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=1280" />
+    <title>Touchline — match</title>
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="fonts/fonts.css" />
+    <link rel="stylesheet" href="layout.css" />
+    <link rel="stylesheet" href="components/match-control.css" />
+  </head>
+  <body>
+    <div class="page">
+      <!-- The header band is built at its full 56 pixels and left almost empty. The score
+           bug and the goal banner belong to viewer-match-day; the frame is here so the
+           pitch is measured in its shipping position. -->
+      <header class="header">
+        <canvas class="header__mark" id="mark" width="28" height="28" role="img"
+                aria-label="Touchline"></canvas>
+        <h1 class="header__title">Touchline</h1>
+        <span class="header__teams tl-num" id="teams">Waiting for the engine</span>
+        <span class="header__teams tl-num" id="engine-version"></span>
+      </header>
+
+      <div class="body">
+        <section class="panel region--empty" aria-labelledby="left-label">
+          <h2 class="panel__label" id="left-label">Lineups</h2>
+          <p class="region__note">Built by viewer-lineup-tactics.</p>
+        </section>
+
+        <div class="stage">
+          <section class="panel pitch-panel">
+            <canvas
+              class="pitch"
+              id="pitch"
+              width="616"
+              height="411"
+              role="img"
+              aria-label="The pitch, with twenty-two player markers and the ball. The clock, the speed and any notice are read out in text beside it."
+            ></canvas>
+            <!-- A content area never shows a spinner. The skeleton says what is coming. -->
+            <div class="skeleton" id="skeleton">
+              <strong>Waiting for the first tick</strong>
+              <span>The engine is connecting and the pitch draws as soon as play starts.</span>
+            </div>
+          </section>
+
+          <div class="controls" role="group" aria-label="Playback">
+            <button class="match-control match-control--sm" id="play" aria-pressed="true">
+              Pause
+            </button>
+            <button class="match-control match-control--sm match-control--quiet" id="skip">
+              Next stop
+            </button>
+            <span class="controls__clock tl-num" id="clock">00:00</span>
+            <button class="match-control match-control--sm" id="speed-1" aria-pressed="true">
+              1x
+            </button>
+            <button class="match-control match-control--sm" id="speed-2" aria-pressed="false">
+              2x
+            </button>
+            <button class="match-control match-control--sm" id="speed-4" aria-pressed="false">
+              4x
+            </button>
+            <button class="match-control match-control--sm" id="speed-8" aria-pressed="false">
+              8x
+            </button>
+            <span class="controls__speed tl-num" id="speed-effective">1x</span>
+            <input
+              class="controls__scrub"
+              id="scrub"
+              type="range"
+              min="0"
+              max="270000"
+              value="0"
+              step="1"
+              aria-label="Rewind to a tick"
+            />
+            <span class="controls__gauge tl-num" id="gauge">0 fps · 0 Hz · 0 MB</span>
+          </div>
+
+          <!-- One notice, two kinds. The state word is written with the text, never left
+               standing, so a dead stream is never labelled "Lag". -->
+          <div
+            class="notice"
+            id="notice"
+            data-shown="false"
+            data-kind="lag"
+            role="status"
+            aria-hidden="true"
+          >
+            <span class="notice__word" id="notice-word"></span>
+            <span id="notice-text"></span>
+          </div>
+
+          <section class="panel region--empty" aria-labelledby="stats-label">
+            <h2 class="panel__label" id="stats-label">Statistics</h2>
+            <p class="region__note">Built by viewer-match-day.</p>
+          </section>
+        </div>
+
+        <section class="panel region--empty" aria-labelledby="right-label">
+          <h2 class="panel__label" id="right-label">Match feed</h2>
+          <p class="region__note">Built by viewer-match-day.</p>
+        </section>
+      </div>
+    </div>
+
+    <!-- The canvas is a picture to a screen reader, so the clock, the speed and the lag
+         notice are mirrored here as text. -->
+    <p class="visually-hidden" id="live" aria-live="polite"></p>
+
+    <script type="module" src="main.mjs"></script>
+  </body>
+</html>

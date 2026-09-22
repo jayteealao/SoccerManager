@@ -1,0 +1,47 @@
+artifact: instrument
+framework: "serde_json JSON Lines per .ai/observability.md plan-version 1; tracing to stderr for diagnostics"
+signals:
+  - name: "socket.listening"
+    kind: event
+    path: "crates/stream/src/server.rs:Server::bind"
+    note: "One tracing info line when the server binds 127.0.0.1:0 and the operating system returns a port: port, protocol_version, match.id. The same port is written to SM_DATA_DIR/engine.port so the page can find it."
+  - name: "socket.client"
+    kind: event
+    path: "crates/stream/src/server.rs:Server::accept"
+    note: "One tracing info line per accepted handshake: the Origin header value or the literal none, the protocol version the client asked for, and match.id."
+  - name: "socket.refused"
+    kind: log
+    path: "crates/stream/src/server.rs:Server::accept"
+    note: "One tracing warn line per refused handshake before the connection closes: origin and reason (origin not allowed, or protocol version N against this build M)."
+  - name: "socket.backpressure"
+    kind: event
+    path: "crates/stream/src/session.rs:Session::push"
+    note: "One tracing info line per pause, not per blocked tick: the tick the producer stopped at, the bound in ticks, the milliseconds it stayed paused, and the running resume count."
+  - name: "match-event.engine"
+    kind: event
+    path: "crates/protocol/src/event.rs:MatchEvent"
+    note: "Opens the fourth record kind. One JSON Lines row per event into matches/<match.id>/events.jsonl and one frame over the socket: record.kind, schema.version, match.id, owner.id, tick, minute, event.type (kick-off, goal, full-time in this slice), team.id, home.score, away.score."
+  - name: "match-event.change"
+    kind: event
+    path: "crates/protocol/src/command.rs:Queue"
+    note: "One row per queued change and per rejection: event.type tactics-change, change.kind, change.queued_tick, change.queue_id (additive extra), change.rejected_reason when refused."
+  - name: "fixture.recorded"
+    kind: event
+    path: "crates/stream/src/record.rs:Recorder::finish"
+    note: "One tracing info line when engine-cli record closes a fixture: relative path, frame count, tick count, byte count, and the 12-hex hash of the file."
+  - name: "fixture.replayed"
+    kind: event
+    path: "crates/stream/src/replay.rs:Replayer::run"
+    note: "One tracing info line when the mock server finishes a replay: relative path, frame count, speed, and the 12-hex hash, so a replay states which fixture it served."
+dark_paths:
+  - path: "crates/stream/src/server.rs:idle-client"
+    reason: "A client completes the handshake and never reads; the engine looks slow with no cause on the record. socket.client plus socket.backpressure name the connection and the pause."
+  - path: "crates/stream/src/server.rs:refused-origin"
+    reason: "A page refused by the Origin allowlist sees a closed socket and the operator sees nothing. socket.refused carries the origin and the rule that fired."
+  - path: "crates/protocol/src/event.rs:no-full-time"
+    reason: "A match-event stream that stops mid-match is indistinguishable from a finished match. The full-time event closes every complete stream; its absence marks an abandoned one."
+  - path: "crates/protocol/src/command.rs:never-applied"
+    reason: "A change is queued, acknowledged, and never applied; the contract names this dark path (darkpath.change_never_applied). change.queued_tick with no change.applied_tick makes it countable from this slice onward."
+  - path: "crates/stream/src/replay.rs:divergent-replay"
+    reason: "A replay that differs from its fixture would silently invalidate every viewer test built on it. fixture.recorded and fixture.replayed carry the same 12-hex hash, so a mismatch is visible in two lines."
+pii_warnings: 0

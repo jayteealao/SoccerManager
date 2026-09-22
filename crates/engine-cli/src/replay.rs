@@ -2,7 +2,7 @@
 
 use anyhow::Context;
 
-use engine::observe::identity::{data_dir, load_or_create_owner_id};
+use engine::observe::identity::data_dir;
 use stream::{Replayer, Server, read_fixture};
 
 use crate::cli::ReplayOpts;
@@ -16,11 +16,18 @@ pub fn run(opts: &ReplayOpts) -> anyhow::Result<i32> {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| opts.fixture.display().to_string());
     let data = data_dir();
-    let owner_id = load_or_create_owner_id(&data)?;
-    let replayer = Replayer::new(fixture, shown);
-    let server = Server::bind(&data, &replayer.hello(&owner_id).match_id)?;
+    let replayer = Replayer::new(fixture, shown)?;
+    let server = Server::bind(&data, &replayer.hello().match_id)?;
     println!("{}", server.port());
-    let sent = replayer.serve(&server, &owner_id, opts.speed)?;
+    // The page address is printed after the port, because it is the line a reader copies.
+    let page = match opts.web.as_deref() {
+        Some(dir) => Some(crate::web::start(dir, server.port())?),
+        None => None,
+    };
+    if let Some(page) = &page {
+        println!("{}", page.address());
+    }
+    let sent = replayer.serve(&server, opts.speed, opts.sustain)?;
     Ok(if sent as usize == replayer.fixture().frames.len() {
         0
     } else {

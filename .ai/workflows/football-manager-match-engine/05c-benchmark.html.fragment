@@ -1,21 +1,32 @@
-<section class="fragment-benchmark" data-artifact="benchmark" data-slice="stream-protocol" data-mode="baseline">
+<section class="fragment-benchmark" data-artifact="benchmark" data-slice="viewer-pitch" data-mode="baseline">
   <table class="bm-metrics">
-    <thead><tr><th>Metric</th><th>Baseline (d58fce3)</th><th>Compare</th><th>Unit</th><th>Tripwire</th><th>Direction</th></tr></thead>
+    <thead><tr><th>Metric</th><th>Previous reading</th><th>This baseline (3570eb9)</th><th>Unit</th><th>Tripwire</th><th>Direction</th></tr></thead>
     <tbody>
-      <tr data-tone="neutral"><td>bench.match_wall_ms</td><td>389</td><td>-</td><td>ms</td><td>budget 2000 ms (NFR-1)</td><td>lower is better</td></tr>
-      <tr data-tone="neutral"><td>engine.ticks_per_s</td><td>694087</td><td>-</td><td>ticks/s</td><td>budget 135000</td><td>higher is better</td></tr>
-      <tr data-tone="neutral"><td>bench.cpu_ms_per_match</td><td>384</td><td>-</td><td>ms</td><td>+10% = 422 ms</td><td>lower is better</td></tr>
-      <tr data-tone="neutral"><td>bench.peak_mem_mb</td><td>5.62</td><td>-</td><td>MB</td><td>+25% = 7.03 MB</td><td>lower is better</td></tr>
-      <tr data-tone="neutral"><td>criterion.tick_step_us</td><td>1.4342</td><td>-</td><td>us</td><td>budget 7.4 us</td><td>lower is better</td></tr>
-      <tr data-tone="neutral"><td>criterion.steering_pass_22_ns</td><td>887.68</td><td>-</td><td>ns</td><td>informational</td><td>lower is better</td></tr>
-      <tr data-tone="neutral"><td>bench.stream_ticks_per_s</td><td>not measured</td><td>-</td><td>ticks/s</td><td>first value, no tripwire</td><td>higher is better</td></tr>
+      <tr data-tone="neutral" data-side="engine"><td>bench.match_wall_ms</td><td>389</td><td>389</td><td>ms</td><td>budget 2000 ms (NFR-1)</td><td>lower is better</td></tr>
+      <tr data-tone="neutral" data-side="engine"><td>engine.ticks_per_s</td><td>694087</td><td>694087</td><td>ticks/s</td><td>budget 135000</td><td>higher is better</td></tr>
+      <tr data-tone="neutral" data-side="engine"><td>bench.cpu_ms_per_match</td><td>381</td><td>388</td><td>ms</td><td>+10% = 427 ms</td><td>lower is better</td></tr>
+      <tr data-tone="neutral" data-side="engine"><td>bench.peak_mem_mb</td><td>5.97</td><td>5.97</td><td>MB</td><td>+25% = 7.46 MB</td><td>lower is better</td></tr>
+      <tr data-tone="neutral" data-side="engine"><td>criterion.tick_step_us</td><td>1.4376</td><td>1.4378</td><td>us</td><td>budget 7.4 us</td><td>lower is better</td></tr>
+      <tr data-tone="neutral" data-side="engine"><td>criterion.steering_pass_22_ns</td><td>888.96</td><td>898.22</td><td>ns</td><td>informational</td><td>lower is better</td></tr>
+      <tr data-tone="neutral" data-side="engine"><td>bench.stream_ticks_per_s</td><td>640213</td><td>634859</td><td>ticks/s</td><td>budget 135000</td><td>higher is better</td></tr>
+      <tr data-tone="neutral" data-side="engine"><td>bench.stream_peak_mem_mb</td><td>7.31</td><td>7.30</td><td>MB</td><td>+25% = 9.13 MB</td><td>lower is better</td></tr>
+      <tr data-tone="neutral" data-side="page"><td>viewer.fps_median</td><td>no page existed</td><td>not measured</td><td>fps</td><td>budget 60, dropped_frames 0</td><td>higher is better</td></tr>
+      <tr data-tone="neutral" data-side="page"><td>viewer.frame_ms_p95</td><td>no page existed</td><td>not measured</td><td>ms</td><td>budget 16.6 ms</td><td>lower is better</td></tr>
+      <tr data-tone="neutral" data-side="page"><td>viewer.decode_us_per_frame</td><td>no page existed</td><td>not measured</td><td>us</td><td>budget 25 us</td><td>lower is better</td></tr>
+      <tr data-tone="neutral" data-side="page"><td>viewer.page_bytes</td><td>no page existed</td><td>not measured</td><td>bytes</td><td>budget 314572800 (300 MB)</td><td>lower is better</td></tr>
+      <tr data-tone="neutral" data-side="page"><td>viewer.history_bytes</td><td>no page existed</td><td>not measured</td><td>bytes</td><td>expected 25380000</td><td>lower is better</td></tr>
     </tbody>
   </table>
-  <aside class="callout callout-info"><div class="callout-hd">Baseline for stream-protocol</div><div class="callout-body">Measured on commit d58fce3 before any code change, one thread, Ultimate Performance plan, three drives of the bench command with the median of medians reported. The first drive reported 6.86 MB peak against 5.62 MB on the two later drives and on the last verify; it is a first-touch working-set artefact and is excluded from the median. A fifth target, ticks delivered per second over the socket, has no baseline because no socket exists yet; verify records the first value and viewer-pitch inherits it. The data-schemas-generator record with its comparison is at history/05c-benchmark-1.md.</div></aside>
+
+  <aside class="callout callout-info"><div class="callout-hd">Baseline for viewer-pitch</div><div class="callout-body">Measured on commit 3570eb9 before any code change, one thread, Ultimate Performance plan, three drives of the bench command with the median of medians reported. All three drives agree within 3 milliseconds of wall time and 8 kilobytes of peak memory, so no reading is discarded. Processor time rose 1.8 percent against the last compare run and nothing in the two intervening commits touched the tick loop. The re-baseline matters this time because viewer-pitch does change Rust: a static file server, a replay speed cap, and two new fields in the opening message. The stream-protocol record with its comparison is at history/05c-benchmark-2.md.</div></aside>
+
+  <aside class="callout callout-warn"><div class="callout-hd">Five page metrics have no baseline, by construction</div><div class="callout-body">The repository holds no HTML, CSS, or JavaScript file on commit 3570eb9, so every page metric is a budget rather than a prior reading. Verify measures each once against its budget; a budget miss is a blocker, not a regression, and recording a first value is never a regression. Those first readings become the baseline for viewer-match-day, which is the slice that will actually press the frame budget by adding panels beside the pitch. Record refresh_hz beside fps_median: requestAnimationFrame fires at the panel refresh rate, so on a 144 Hz display a raw callback count reports 144 and a naive 60-frames-per-second assertion passes for the wrong reason.</div></aside>
+
   <style>
     .fragment-benchmark .bm-metrics { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     .fragment-benchmark .bm-metrics th, .fragment-benchmark .bm-metrics td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); }
     .fragment-benchmark .bm-metrics tr[data-tone="improved"] td:nth-child(5) { color: #1a7f37; font-weight: 600; }
+    .fragment-benchmark .bm-metrics tr[data-side="page"] td:first-child { font-style: italic; }
     .fragment-benchmark .callout { margin-top: 12px; }
   </style>
   <script>

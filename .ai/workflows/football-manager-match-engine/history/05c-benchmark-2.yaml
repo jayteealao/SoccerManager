@@ -1,0 +1,19 @@
+artifact: benchmark
+target: "engine-cli bench --seed 42 --matches 5 --json (one 90-minute match, one thread, reference machine), cargo bench -p engine --bench tick_step, and engine-cli bench --stream (new)"
+language: rust
+framework: "timing-fallback (engine-cli bench with std::time::Instant, GetProcessTimes, GetProcessMemoryInfo) plus criterion 0.8 for the tick step"
+mode: baseline
+measured_at: "2026-09-22T11:28:51Z"
+baseline_commit: "d58fce3"
+compare_commit: ""
+metrics:
+  - { name: "bench.match_wall_ms", before: 389, unit: "ms", direction: lower-is-better }
+  - { name: "engine.ticks_per_s", before: 694087, unit: "ticks/s", direction: higher-is-better }
+  - { name: "bench.cpu_ms_per_match", before: 384, unit: "ms", direction: lower-is-better }
+  - { name: "bench.peak_mem_mb", before: 5.62, unit: "MB", direction: lower-is-better }
+  - { name: "criterion.tick_step_us", before: 1.4342, unit: "us", direction: lower-is-better }
+  - { name: "criterion.steering_pass_22_ns", before: 887.68, unit: "ns", direction: lower-is-better }
+  - { name: "bench.stream_ticks_per_s", unit: "ticks/s", direction: higher-is-better, note: "No baseline: no socket exists on d58fce3. Verify records the first value and viewer-pitch inherits it." }
+regressions: []
+improvements: []
+notes: "Baseline for the stream-protocol slice, measured on commit d58fce3 (data-schemas-generator verified) before any code change, three drives of command 1 with the median of medians reported. The tripwires bind against bench.cpu_ms_per_match 384 ms (10 percent, 422 ms) and bench.peak_mem_mb 5.62 MB (25 percent, 7.03 MB). The first drive reported 6.86 MB peak against 5.62 MB on the two later drives and on the last verify; it is treated as a first-touch working-set artefact and excluded from the median. A fifth target, stream throughput over the socket, is declared without a value because no socket exists yet. The data-schemas-generator baseline and its comparison are byte-copied at history/05c-benchmark-1.md."

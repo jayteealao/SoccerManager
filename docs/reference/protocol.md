@@ -50,7 +50,20 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 | `dt_ms` | float | milliseconds per tick, 20.0 |
 | `ticks_expected` | integer | ticks the match will send |
 | `keyframe_interval` | integer | ticks between keyframes |
-| `teams` | array of two | `team.id` and `team.name`, home first |
+| `teams` | array of two | one entry per club, home first; see the table below |
+
+Each entry of `teams`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `team.id` | string | the club identifier from the team file |
+| `team.name` | string | the club name |
+| `team.kit.primary` | string | lower-case `#rrggbb`, the shirt colour |
+| `team.kit.secondary` | string | lower-case `#rrggbb`, the trim colour |
+
+A viewer draws its markers from the two kit colours. It must not use either colour as it
+arrives: a team file may hold pure black or pure white, so a viewer pulls the lightness of
+every kit colour into a safe range and tests the result for contrast against the pitch.
 
 ### tick
 
@@ -140,6 +153,44 @@ Pauses production at the current tick. No fields.
 
 This build queues the change and answers. Nothing is applied to play: the match-rules slice
 takes the queue and applies each change at a qualifying stoppage.
+
+## The page server
+
+`serve --web <DIR>` and `replay --web <DIR>` start a second listener on `127.0.0.1`, on its
+own port, serving the named folder over plain HTTP. It is a separate listener from the
+WebSocket server on purpose: the socket's origin allowlist and version guard have nothing
+to do with serving a stylesheet.
+
+It answers `GET` and `HEAD` only; anything else is `405`. A request path that contains `..`,
+a drive letter, a backslash, or a leading `//` is `403`, and the resolved path is compared
+against the resolved folder, so a symbolic link cannot lead out of it either.
+
+| Extension | Content type |
+|---|---|
+| `.html` | `text/html; charset=utf-8` |
+| `.css` | `text/css; charset=utf-8` |
+| `.mjs`, `.js` | `text/javascript; charset=utf-8` |
+| `.woff2` | `font/woff2` |
+| `.json` | `application/json; charset=utf-8` |
+| `.png` | `image/png` |
+| `.svg` | `image/svg+xml` |
+| anything else | `application/octet-stream` |
+
+Every response carries three headers:
+
+| Header | Value | Why |
+|---|---|---|
+| `Cross-Origin-Opener-Policy` | `same-origin` | with the next one, makes the page cross-origin isolated |
+| `Cross-Origin-Embedder-Policy` | `require-corp` | `performance.measureUserAgentSpecificMemory()` is unavailable without it |
+| `Cache-Control` | `no-store` | a reload always shows the current file |
+
+`require-corp` refuses every cross-origin subresource. Everything the page loads is
+same-origin, including both fonts, so nothing is lost today; a later slice that wants an
+external resource will meet this rule.
+
+One path is generated rather than read from the folder. `GET /engine.json` answers
+`{"socket.port": <port>, "protocol.version": 1}`, because a page served on one port cannot
+guess the WebSocket port on another and the operating system chooses both at every run.
 
 ## Backpressure
 

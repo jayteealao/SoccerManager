@@ -59,6 +59,10 @@ pub enum StreamError {
     /// A fixture file is malformed, truncated, or of an unknown protocol version.
     #[error("fixture format error: {0}")]
     Fixture(String),
+    /// A fixture does not open with a hello, so it was recorded before the recorder
+    /// stored one and a replay cannot name the match it holds.
+    #[error("{path} does not open with a hello; record it again")]
+    FixtureNoHello { path: String },
     /// The client closed the connection before the match ended.
     #[error("the viewer disconnected")]
     ClientGone,

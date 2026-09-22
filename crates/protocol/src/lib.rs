@@ -20,6 +20,12 @@ pub use message::{ClientCommand, Hello, QueueChange, ServerMessage, SetSpeed, St
 
 /// The protocol version a client must ask for. A client that asks for another version is
 /// refused at the handshake, with both versions named.
+///
+/// Version 1 survived the two kit-colour fields the `viewer-pitch` slice added to
+/// `TeamRef`. The judgement was made, not missed: no message was removed, no field changed
+/// meaning, and both producers in existence were updated in the same commit. A JavaScript
+/// client ignores a field it does not know, and `deny_unknown_fields` reaches only a Rust
+/// client built from this same commit.
 pub const PROTOCOL_VERSION: u16 = 1;
 
 /// Errors this crate returns.
@@ -98,6 +104,10 @@ pub const MESSAGES: &[MessageSpec] = &[
             "ticks_expected",
             "keyframe_interval",
             "teams",
+            "team.id",
+            "team.name",
+            "team.kit.primary",
+            "team.kit.secondary",
         ],
     },
     MessageSpec {
@@ -219,6 +229,8 @@ mod tests {
         TeamRef {
             id: String::new(),
             name: String::new(),
+            kit_primary: String::new(),
+            kit_secondary: String::new(),
         }
     }
 
