@@ -1,0 +1,7 @@
+2026-09-22T09:54:18.073494Z  INFO simulate{seed=42 minutes=90}: engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T09:54:18.073651Z  INFO simulate{seed=42 minutes=90}: engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3703 hash=be104d740f46
+2026-09-22T09:54:18.073716Z  INFO simulate{seed=42 minutes=90}: engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=1 bytes=858 hash=6ebfdf131295
+2026-09-22T09:54:18.073934Z  INFO simulate{seed=42 minutes=90}: engine::data: signal="content.loaded" kind="team" path="club-00000009-00.json" schema_version=1 bytes=23719 hash=2ddf2e555a32
+2026-09-22T09:54:18.074224Z  INFO simulate{seed=42 minutes=90}: engine::data: signal="content.loaded" kind="team" path="club-00000009-01.json" schema_version=1 bytes=23741 hash=9eb9d6e6c57f
+2026-09-22T09:54:18.074814Z  INFO simulate{seed=42 minutes=90}: engine::record: signal="tickfile.header" schema_version=2 seed=42 dt_ms=20.0 ticks_expected=270000 float_width=4 owner_id=9f79529338fbcce4e2f363a215da1697 match_id=000000000000002a-1790070858074
+2026-09-22T09:54:18.472304Z  INFO simulate{seed=42 minutes=90}: engine::record: signal="tickfile.trailer" ticks_written=270000 bytes=51840080

@@ -1,0 +1,5 @@
+2026-09-22T09:55:16.448967Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T09:55:16.449117Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3703 hash=be104d740f46
+2026-09-22T09:55:16.449185Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=1 bytes=858 hash=6ebfdf131295
+2026-09-22T09:55:16.452792Z ERROR simulate{seed=1 minutes=1}: engine::data: signal="content.refused" kind="team" path="adv-unknown-position.json" field=line 1 column 258 reason=unknown variant `XX`, expected one of `GK`, `CB`, `LB`, `RB`, `DM`, `CM`, `AM`, `LW`, `RW`, `ST` at line 1 column 258
+error: content refused: team adv-unknown-position.json: line 1 column 258: unknown variant `XX`, expected one of `GK`, `CB`, `LB`, `RB`, `DM`, `CM`, `AM`, `LW`, `RW`, `ST` at line 1 column 258

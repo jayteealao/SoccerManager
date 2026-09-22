@@ -1,0 +1,4 @@
+2026-09-22T09:54:03.681227Z  INFO simulate{seed=42 minutes=1}: engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T09:54:03.681385Z  INFO simulate{seed=42 minutes=1}: engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3703 hash=be104d740f46
+2026-09-22T09:54:03.681444Z ERROR simulate{seed=42 minutes=1}: engine::data: signal="content.refused" kind="rules" path="rules/default.json" field="schema_version" reason=found 99; this build reads 1
+error: content refused: rules rules/default.json: schema_version 99; this build reads 1

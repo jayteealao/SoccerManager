@@ -1,0 +1,82 @@
+   Compiling engine v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\.claude\worktrees\agent-ae61c1b8aece13970\crates\engine)
+   Compiling engine-cli v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\.claude\worktrees\agent-ae61c1b8aece13970\crates\engine-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.91s
+     Running unittests src\main.rs (target\debug\deps\engine_cli-6164ce28226e6d01.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\cli_args.rs (target\debug\deps\cli_args-9a6445868af60574.exe)
+
+running 6 tests
+test a_missing_content_folder_exits_one_naming_the_paths_tried ... ok
+test invalid_seed_exits_non_zero_and_names_the_argument ... ok
+test an_explicit_content_dir_without_attributes_is_not_ignored_for_cwd_content ... ok
+test no_help_line_exceeds_eighty_columns ... ok
+test valid_seed_exits_zero ... ok
+test generated_teams_simulate_a_full_match_with_the_engine_core_tick_count ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.49s
+
+   Compiling crossbeam-utils v0.8.23
+   Compiling serde_core v1.0.229
+   Compiling syn v3.0.6
+   Compiling zerocopy v0.8.57
+   Compiling windows-sys v0.61.2
+   Compiling either v1.18.0
+   Compiling plotters-backend v0.3.7
+   Compiling ciborium-io v0.2.2
+   Compiling clap_builder v4.6.7
+   Compiling plotters-svg v0.3.7
+   Compiling crossbeam-epoch v0.9.21
+   Compiling itertools v0.13.0
+   Compiling regex-automata v0.4.18
+   Compiling crossbeam-deque v0.8.8
+   Compiling winapi-util v0.1.11
+   Compiling same-file v1.0.6
+   Compiling rayon-core v1.13.0
+   Compiling num-traits v0.2.19
+   Compiling serde_json v1.0.151
+   Compiling winapi v0.3.9
+   Compiling cast v0.3.0
+   Compiling tracing-core v0.1.36
+   Compiling serde_derive v1.0.229
+   Compiling criterion-plot v0.8.2
+   Compiling page_size v0.6.0
+   Compiling thiserror-impl v2.0.20
+   Compiling plotters v0.3.7
+   Compiling rayon v1.12.0
+   Compiling half v2.7.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling ciborium-ll v0.2.2
+   Compiling regex v1.13.1
+   Compiling clap v4.6.7
+   Compiling alloca v0.4.0
+   Compiling walkdir v2.5.0
+   Compiling oorandom v11.1.5
+   Compiling anes v0.1.6
+   Compiling tracing v0.1.44
+   Compiling engine v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\.claude\worktrees\agent-ae61c1b8aece13970\crates\engine)
+   Compiling thiserror v2.0.20
+   Compiling rand_chacha v0.10.0
+   Compiling serde v1.0.229
+   Compiling tinytemplate v1.2.1
+   Compiling ciborium v0.2.2
+   Compiling criterion v0.8.2
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.17s
+     Running unittests src\lib.rs (target\debug\deps\engine-9e93353ef5770a7f.exe)
+
+running 9 tests
+test data::tests::relative_paths_never_leak_the_root ... ok
+test data::tests::a_missing_file_names_its_path ... ok
+test data::attributes::tests::thirty_names_with_the_required_six_validate ... ok
+test data::attributes::tests::a_missing_required_name_is_refused_by_name ... ok
+test data::attributes::tests::too_few_attributes_are_refused ... ok
+test data::tests::a_range_violation_names_the_field_path ... ok
+test data::tests::an_unknown_key_is_refused_with_its_name ... ok
+test data::tests::a_version_mismatch_names_both_versions ... ok
+test observe::tests::stats_round_trip_through_the_data_folder ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 35 filtered out; finished in 0.01s
+

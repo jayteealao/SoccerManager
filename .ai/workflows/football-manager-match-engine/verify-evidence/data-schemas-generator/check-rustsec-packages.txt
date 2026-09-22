@@ -1,0 +1,11 @@
+garde 404
+garde_derive 404
+compact_str 404
+castaway 404
+ryu 404
+static_assertions 404
+rand 200
+['rand']
+advisory-db crates tree (933 entries, not truncated): none of garde, garde_derive, compact_str, castaway, ryu, static_assertions has an advisory folder.
+smallvec 1.16.1 was already in the lockfile at 27d21f5 (not added by this slice); its five advisories are patched at >= 1.6.1.
+rand 0.10.3: RUSTSEC-2026-0097 patched at >= 0.10.1 (unchanged from engine-core).

@@ -1,0 +1,1 @@
+error: --clubs must be at least 1

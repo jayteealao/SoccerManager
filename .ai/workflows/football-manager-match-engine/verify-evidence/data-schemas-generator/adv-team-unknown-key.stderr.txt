@@ -1,0 +1,5 @@
+2026-09-22T09:55:16.525075Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T09:55:16.525227Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3703 hash=be104d740f46
+2026-09-22T09:55:16.525296Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=1 bytes=858 hash=6ebfdf131295
+2026-09-22T09:55:16.530053Z ERROR simulate{seed=1 minutes=1}: engine::data: signal="content.refused" kind="team" path="adv-unknown-key.json" field=line 1 column 16300 reason=unknown field `extra`, expected one of `schema_version`, `club`, `players` at line 1 column 16300
+error: content refused: team adv-unknown-key.json: line 1 column 16300: unknown field `extra`, expected one of `schema_version`, `club`, `players` at line 1 column 16300

@@ -1,0 +1,11 @@
+ball.idle_ticks: 854 -> 1435
+ball.max_speed: 27.070704764547376 -> 27.070611037194276
+build.hash: 27d21f5-dirty -> 4a806c8-dirty
+content.hash: (absent) -> c33b2b9b247e
+duration_ms: 410 -> 400
+engine.ticks_per_s: 657635.3042013884 -> 673359.8637119635
+goals: [0, 0] -> [0, 1]
+match.id: 000000000000002a-1790030678380 -> 000000000000002a-1790070788685
+owner.id: local-cli -> 9f79529338fbcce4e2f363a215da1697
+possession.changes: 773 -> 785
+teams: (absent) -> [{'team.id': 'club-00000001-00', 'team.name': 'Oakmere Rangers'}, {'team.id': 'club-00000002-00', 'team.name': 'Eldstead City'}]

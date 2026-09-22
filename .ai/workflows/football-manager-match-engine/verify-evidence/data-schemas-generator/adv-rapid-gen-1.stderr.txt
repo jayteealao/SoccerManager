@@ -1,0 +1,4 @@
+2026-09-22T09:55:17.510282Z  INFO engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T09:55:17.510448Z  INFO engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3703 hash=be104d740f46
+2026-09-22T09:55:17.510519Z  INFO engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=1 bytes=858 hash=6ebfdf131295
+2026-09-22T09:55:17.510773Z  INFO engine::data::generator: signal="generator.league" seed=3 clubs=2 players=44 attr.mean=46.91 attr.min=2 attr.max=84 hash=790f36d4379a

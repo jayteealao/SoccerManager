@@ -1,0 +1,7 @@
+2026-09-22T09:55:16.105689Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-22T09:55:16.105842Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3703 hash=be104d740f46
+2026-09-22T09:55:16.105929Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=1 bytes=858 hash=6ebfdf131295
+2026-09-22T09:55:16.106135Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
+2026-09-22T09:55:16.107034Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
+2026-09-22T09:55:16.107331Z  INFO simulate{seed=1 minutes=1}: engine::record: signal="tickfile.header" schema_version=2 seed=1 dt_ms=20.0 ticks_expected=3000 float_width=4 owner_id=9f79529338fbcce4e2f363a215da1697 match_id=0000000000000001-1790070916107
+2026-09-22T09:55:16.112103Z  INFO simulate{seed=1 minutes=1}: engine::record: signal="tickfile.trailer" ticks_written=3000 bytes=576080

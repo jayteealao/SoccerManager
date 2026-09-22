@@ -4,10 +4,10 @@ type: index
 slug: football-manager-match-engine
 title: "Football manager game: match engine and 2D match viewer"
 status: active
-current-stage: implement
-stage-number: 5
+current-stage: verify
+stage-number: 6
 created-at: "2026-09-21T16:46:41Z"
-updated-at: "2026-09-22T07:18:04Z"
+updated-at: "2026-09-22T10:01:47Z"
 selected-slice: "data-schemas-generator"
 branch-strategy: dedicated
 branch: "feat/football-manager-match-engine"
@@ -134,7 +134,7 @@ charter:
     po-ratified: true
 slices:
   - {slug: engine-core, status: complete, complexity: l, depends-on: []}
-  - {slug: data-schemas-generator, status: in-progress, complexity: m, depends-on: [engine-core]}
+  - {slug: data-schemas-generator, status: complete, complexity: m, depends-on: [engine-core]}
   - {slug: stream-protocol, status: defined, complexity: m, depends-on: [engine-core]}
   - {slug: viewer-pitch, status: defined, complexity: m, depends-on: [stream-protocol]}
   - {slug: match-rules, status: defined, complexity: l, depends-on: [engine-core, data-schemas-generator]}
@@ -151,17 +151,17 @@ slices:
   - {slug: distribution, status: defined, complexity: m, depends-on: [integration], deferred: true}
 augmentations:
   - {type: instrument, artifact: 04b-instrument.md, slice: data-schemas-generator, status: ready, created-at: "2026-09-22T06:37:07Z", prior: history/04b-instrument-0.md}
-  - {type: benchmark, artifact: 05c-benchmark.md, slice: data-schemas-generator, mode: baseline, status: ready, created-at: "2026-09-22T06:37:07Z", prior: history/05c-benchmark-0.md}
+  - {type: benchmark, artifact: 05c-benchmark.md, slice: data-schemas-generator, mode: complete, status: complete, created-at: "2026-09-22T06:37:07Z", prior: history/05c-benchmark-0.md}
   - {type: experiment, artifact: 04c-experiment.md, status: deferred-to-experiment-flags, created-at: "2026-09-21T21:57:49Z"}
 evidence-quality:
   live: 1
-  n-a: 5
+  n-a: 11
 metric-acceptance-mock-rung: 0
 runtime-evidence-deferrals: []
 compressed-slices:
   - {slug: probe-engine-core, slice-type: probe, created-at: "2026-09-22T06:03:50Z"}
-next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine data-schemas-generator"
+next-command: wf-review
+next-invocation: "/wf review football-manager-match-engine data-schemas-generator"
 workflow-files:
   - 00-index.md
   - 01-intake.md
@@ -215,6 +215,7 @@ workflow-files:
   - 06-verify.md
   - 06-verify-engine-core.md
   - 06-verify-engine-core.01-benchmark-drives.html.fragment
+  - 06-verify-data-schemas-generator.md
   - po-answers.md
   - 03-slice-probe-engine-core.md
   - 03-slice-probe-engine-core.01-dump-path.html.fragment
@@ -223,7 +224,7 @@ progress:
   shape: complete
   slice: complete
   plan: complete
-  implement: in-progress
+  implement: complete
   verify: in-progress
   review: not-started
   handoff: not-started

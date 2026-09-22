@@ -1,0 +1,14 @@
+   Compiling engine v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine)
+   Compiling engine-cli v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.22s
+     Running unittests src\lib.rs (target\debug\deps\engine-058dbd153c86363f.exe)
+     Running tests\content.rs (target\debug\deps\content-3b463058e69a3957.exe)
+     Running tests\determinism.rs (target\debug\deps\determinism-07da3d04f4a2901a.exe)
+     Running tests\full_match.rs (target\debug\deps\full_match-0cce1180e41e4b98.exe)
+     Running tests\generator.rs (target\debug\deps\generator-a60a9ff8aea918d5.exe)
+     Running tests\identity.rs (target\debug\deps\identity-6f8a5a2ab254e183.exe)
+     Running tests\team_files.rs (target\debug\deps\team_files-40f0cb303b72c7a9.exe)
+     Running tests\validator.rs (target\debug\deps\validator-a0d7b2bdf6ef1204.exe)
+     Running unittests src\main.rs (target\debug\deps\engine_cli-9a36e30b7167f9df.exe)
+     Running tests\cli_args.rs (target\debug\deps\cli_args-cf6398636e4cccac.exe)
+   Doc-tests engine

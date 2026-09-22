@@ -1,0 +1,104 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling windows-link v0.2.1
+   Compiling cfg-if v1.0.5
+   Compiling version_check v0.9.5
+   Compiling rustversion v1.0.23
+   Compiling typenum v1.20.1
+   Compiling windows-sys v0.61.2
+   Compiling once_cell v1.21.4
+   Compiling rand_core v0.10.1
+   Compiling generic-array v0.14.7
+   Compiling zerocopy v0.8.57
+   Compiling serde_core v1.0.229
+   Compiling tracing-core v0.1.36
+   Compiling once_cell_polyfill v1.70.2
+   Compiling zmij v1.0.23
+   Compiling utf8parse v0.2.2
+   Compiling anstyle v1.0.14
+   Compiling getrandom v0.4.3
+   Compiling itoa v1.0.18
+   Compiling crypto-common v0.1.7
+   Compiling anstyle-parse v1.0.0
+   Compiling block-buffer v0.10.4
+   Compiling syn v3.0.6
+   Compiling syn v2.0.119
+   Compiling anstyle-wincon v3.0.11
+   Compiling anstyle-query v1.1.5
+   Compiling castaway v0.2.4
+   Compiling regex-syntax v0.8.11
+   Compiling smallvec v1.16.1
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling static_assertions v1.1.0
+   Compiling cpufeatures v0.3.1
+   Compiling pin-project-lite v0.2.17
+   Compiling ryu v1.0.23
+   Compiling colorchoice v1.0.5
+   Compiling thiserror v2.0.20
+   Compiling anstream v1.0.0
+   Compiling compact_str v0.9.1
+   Compiling regex-automata v0.4.18
+   Compiling chacha20 v0.10.2
+   Compiling digest v0.10.7
+   Compiling heck v0.5.0
+   Compiling anyhow v1.0.104
+   Compiling engine v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\.claude\worktrees\agent-ae61c1b8aece13970\crates\engine)
+   Compiling ppv-lite86 v0.2.21
+   Compiling cpufeatures v0.2.17
+   Compiling clap_lex v1.1.1
+   Compiling lazy_static v1.5.0
+   Compiling log v0.4.34
+   Compiling memchr v2.8.3
+   Compiling strsim v0.11.1
+   Compiling tracing-log v0.2.0
+   Compiling rand_chacha v0.10.0
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.20
+   Compiling clap_derive v4.6.7
+   Compiling clap_builder v4.6.7
+   Compiling sharded-slab v0.1.7
+   Compiling tracing-attributes v0.1.31
+   Compiling garde_derive v0.23.0
+   Compiling matchers v0.2.0
+   Compiling sha2 v0.10.9
+   Compiling rand v0.10.3
+   Compiling nu-ansi-term v0.50.3
+   Compiling garde v0.23.0
+   Compiling tracing v0.1.44
+   Compiling thread_local v1.1.10
+   Compiling glam v0.33.8
+   Compiling clap v4.6.7
+   Compiling tracing-subscriber v0.3.23
+   Compiling engine-cli v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\.claude\worktrees\agent-ae61c1b8aece13970\crates\engine-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.39s
+     Running unittests src\main.rs (target\debug\deps\engine_cli-6164ce28226e6d01.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\cli_args.rs (target\debug\deps\cli_args-9a6445868af60574.exe)
+
+running 1 test
+test an_explicit_content_dir_without_attributes_is_not_ignored_for_cwd_content ... FAILED
+
+failures:
+
+---- an_explicit_content_dir_without_attributes_is_not_ignored_for_cwd_content stdout ----
+
+thread 'an_explicit_content_dir_without_attributes_is_not_ignored_for_cwd_content' (47708) panicked at crates\engine-cli\tests\cli_args.rs:164:5:
+assertion `left == right` failed
+  left: Some(0)
+ right: Some(1)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    an_explicit_content_dir_without_attributes_is_not_ignored_for_cwd_content
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.40s
+
+error: test failed, to rerun pass `-p engine-cli --test cli_args`

@@ -2,17 +2,17 @@ artifact: benchmark
 target: "engine-cli bench --seed 42 --matches 5 --json (one 90-minute match, one thread, reference machine) and cargo bench -p engine --bench tick_step"
 language: rust
 framework: "timing-fallback (engine-cli bench with std::time::Instant, GetProcessTimes, GetProcessMemoryInfo) plus criterion 0.8 for the tick step"
-mode: baseline
-measured_at: "2026-09-22T06:37:07Z"
+mode: compare
+measured_at: "2026-09-22T10:01:47Z"
 baseline_commit: "27d21f5"
-compare_commit: ""
+compare_commit: "4a806c8"
 metrics:
-  - { name: "bench.match_wall_ms", before: 393, unit: "ms", direction: lower-is-better }
-  - { name: "engine.ticks_per_s", before: 687023, unit: "ticks/s", direction: higher-is-better }
-  - { name: "bench.cpu_ms_per_match", before: 387, unit: "ms", direction: lower-is-better }
-  - { name: "bench.peak_mem_mb", before: 5.06, unit: "MB", direction: lower-is-better }
-  - { name: "criterion.tick_step_us", before: 1.4611, unit: "us", direction: lower-is-better }
-  - { name: "criterion.steering_pass_22_ns", before: 880.97, unit: "ns", direction: lower-is-better }
+  - { name: "bench.match_wall_ms", before: 393, after: 389, unit: "ms", delta_pct: -1.0, direction: lower-is-better }
+  - { name: "engine.ticks_per_s", before: 687023, after: 694087, unit: "ticks/s", delta_pct: 1.0, direction: higher-is-better }
+  - { name: "bench.cpu_ms_per_match", before: 387, after: 387, unit: "ms", delta_pct: 0.0, direction: lower-is-better }
+  - { name: "bench.peak_mem_mb", before: 5.06, after: 5.62, unit: "MB", delta_pct: 11.1, direction: lower-is-better }
+  - { name: "criterion.tick_step_us", before: 1.4611, after: 1.4418, unit: "us", delta_pct: -1.3, direction: lower-is-better }
+  - { name: "criterion.steering_pass_22_ns", before: 880.97, after: 883.43, unit: "ns", delta_pct: 0.3, direction: lower-is-better }
 regressions: []
 improvements: []
-notes: "Baseline for the data-schemas-generator slice, measured on commit 27d21f5 (engine-core complete) before any code change. The tripwires bind against bench.cpu_ms_per_match 387 ms (10 percent) and bench.peak_mem_mb 5.06 MB (25 percent). The slice replaces the uniform-60 built-in teams with loaded team files, so a small wall-time shift is expected from different attribute values; the tripwires, not equality, are the gate. The engine-core baseline and compare record is byte-copied at history/05c-benchmark-0.md."
+notes: "Compare for the data-schemas-generator slice, measured by verify on commit 4a806c8 with the shipped default clubs, three drives without a reset (medians 389, 389, 389 ms). Every target is inside the no-change band; peak memory rose 11.1 percent from the parsed content and the two team files held for the run, inside the 25 percent tripwire. The verify-time fix commit ae31329 changes only the content folder resolver, which runs once before the warm-up match. The next engine slice binds its tripwires against 387 ms CPU per match and 5.62 MB."

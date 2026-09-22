@@ -1,0 +1,11 @@
+Diff in \\?\C:\Users\jayte\Documents\dev\SoccerManager\.claude\worktrees\agent-ae61c1b8aece13970\crates\engine\src\data\mod.rs:78:
+     /// no fall-through to other candidates.
+     fn resolve_exact(p: &Path) -> Result<Self, EngineError> {
+         if p.join(ATTRIBUTES_FILE).is_file() {
+[31m-            return Ok(Self { root: p.to_path_buf() });
+[0m[32m+            return Ok(Self {
+[0m[32m+                root: p.to_path_buf(),
+[0m[32m+            });
+[0m         }
+         Err(EngineError::Read {
+             path: format!("content folder (tried {})", p.display()),

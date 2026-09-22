@@ -1,0 +1,2 @@
+2026-09-22T09:55:17.436124Z ERROR simulate{seed=1 minutes=1}: engine::data: signal="content.refused" kind="attributes" path="attributes.json" field=attributes reason=length is lower than 30
+error: content refused: attributes attributes.json: attributes: length is lower than 30
