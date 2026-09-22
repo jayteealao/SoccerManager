@@ -1,6 +1,7 @@
-//! The change queue. A client queues a tactical change or a substitution; this slice holds
-//! it and answers. Nothing is applied to play here: the match-rules slice takes the queue
-//! and applies each change at a qualifying stoppage.
+//! The change queue. A client queues a tactical change or a substitution; the server holds
+//! it in order and answers. Nothing is applied to play yet: the engine announces every
+//! stoppage through its stoppage hook, and a change will apply at a stoppage the rule pack
+//! admits it at.
 
 use serde::{Deserialize, Serialize};
 
@@ -52,7 +53,7 @@ impl ChangeState {
     }
 }
 
-/// One change the queue holds until a later slice applies it.
+/// One change the queue holds until it applies at a stoppage.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pending {
     pub queue_id: String,

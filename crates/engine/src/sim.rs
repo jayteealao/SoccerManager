@@ -1,9 +1,12 @@
 //! The fixed-timestep simulation loop (named mechanism: tick count is a function of match
-//! time alone). Order per tick: decisions, steering, ball, possession, overlap resolution.
+//! time alone). Order per tick: decisions, steering, ball, possession, referee, overlap
+//! resolution. The referee (`rules`) owns the phase of play: live, a dead ball waiting for
+//! its restart, or full time.
 
 use sha2::{Digest, Sha256};
 
 use crate::ball::Ball;
+use crate::data::rules::{RulePack, StoppageKind};
 use crate::data::team::TeamFile;
 use crate::data::{Content, hex12};
 use crate::decision::Kick;
@@ -13,21 +16,28 @@ use crate::pitch;
 use crate::player::Player;
 use crate::record::{TickRecord, TickSink};
 use crate::rng::EngineRng;
+use crate::rules::fouls::{self, Card, Tackle};
+use crate::rules::offside;
+use crate::rules::{Phase, Referee, Stoppage};
 use crate::steering;
 use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::Tuning;
 
-/// Everything a match needs to start: the seed, the length, the tuning from the content,
-/// the two teams with their starters, and a hash of the content they came from.
+/// Everything a match needs to start: the seed, the length, the tuning and the rule pack
+/// from the content, the two teams with their starters, and hashes of the files they came
+/// from.
 #[derive(Debug, Clone)]
 pub struct MatchConfig {
     pub seed: u64,
     pub minutes: u32,
     pub tuning: Tuning,
+    pub rules: RulePack,
     pub teams: [Team; 2],
     pub players: Vec<Player>,
     /// Twelve hex characters over the content files and the two team files.
     pub content_hash: String,
+    /// SHA-256 of each team file as the engine read it, home first.
+    pub team_digests: [[u8; 32]; 2],
 }
 
 impl MatchConfig {
@@ -50,17 +60,21 @@ impl MatchConfig {
         players.extend(away_players);
         let mut hasher = Sha256::new();
         hasher.update(content.digest);
-        for file in files {
+        let mut team_digests = [[0u8; 32]; 2];
+        for (digest, file) in team_digests.iter_mut().zip(files) {
             let json = serde_json::to_vec(file).map_err(|e| EngineError::Format(e.to_string()))?;
+            *digest = Sha256::digest(&json).into();
             hasher.update(json);
         }
         Ok(Self {
             seed,
             minutes,
             tuning,
+            rules: content.rules.clone(),
             teams: [home, away],
             players,
             content_hash: hex12(&hasher.finalize()),
+            team_digests,
         })
     }
 
@@ -68,38 +82,108 @@ impl MatchConfig {
     pub fn club_ids(&self) -> [&str; 2] {
         [&self.teams[0].club_id, &self.teams[1].club_id]
     }
+
+    /// The most ticks this match can last: regulation plus the cap on added time.
+    pub fn max_ticks(&self) -> u32 {
+        crate::rules::clock::max_ticks(self.minutes, &self.rules)
+    }
 }
 
 /// What happened during a tick that a consumer outside the engine must know about. The
 /// engine names the fact; the protocol crate decides how it travels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EngineEventKind {
-    /// Play restarts from the centre spot: the opening kick-off or the one after a goal.
+    /// Play restarts from the centre spot: at the start of a half or after a goal.
     KickOff,
     /// `team` scored; `scores` is the score after the goal.
     Goal,
+    /// The end of the first half.
+    HalfTime,
     /// The last tick of the match.
     FullTime,
+    /// `player` of `team` was offside.
+    Offside,
+    /// `player` of `team` fouled `secondary`.
+    Foul,
+    /// `player` of `team` was shown `card`.
+    Card,
+    ThrowIn,
+    Corner,
+    GoalKick,
+    FreeKick,
+    Penalty,
 }
 
-/// One engine event, stamped with the tick it happened on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+impl EngineEventKind {
+    /// The event that announces a restart of `kind`.
+    pub fn restart(kind: StoppageKind) -> Self {
+        match kind {
+            StoppageKind::ThrowIn => EngineEventKind::ThrowIn,
+            StoppageKind::Corner => EngineEventKind::Corner,
+            StoppageKind::GoalKick => EngineEventKind::GoalKick,
+            StoppageKind::Penalty => EngineEventKind::Penalty,
+            StoppageKind::FreeKick => EngineEventKind::FreeKick,
+            _ => EngineEventKind::KickOff,
+        }
+    }
+}
+
+/// One engine event, stamped with the tick it happened on and the minute the match clock
+/// showed.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EngineEvent {
     pub tick: u32,
     pub kind: EngineEventKind,
-    /// The team the event belongs to, as a roster index, or `None` at full time.
+    /// The team the event belongs to, as a roster index, or `None` at half-time and full
+    /// time. A foul, an offside, and a card belong to the offender's team; a restart belongs
+    /// to the team that takes it.
     pub team: Option<usize>,
     /// The score after the event, home first.
     pub scores: [u32; 2],
+    /// The minute of play, counted from 0, and the added minute in added time.
+    pub minute: u32,
+    pub minute_added: Option<u32>,
+    /// The roster index of the player the event names: the offender, the booked player, or
+    /// the scorer's team-mate who last kicked the ball.
+    pub player: Option<usize>,
+    /// The fouled player.
+    pub secondary: Option<usize>,
+    pub card: Option<Card>,
+    /// On a foul: `true` when play continued with advantage.
+    pub advantage: Option<bool>,
+    /// On half-time and full time: the seconds added to the half.
+    pub added_time_s: Option<u32>,
+    /// On a restart: where the ball was placed.
+    pub spot: Option<DVec2>,
 }
 
-/// Aggregate counters kept during a match.
-#[derive(Debug, Clone, Copy, Default)]
+/// Aggregate counters kept during a match. Per-team arrays are home first; a foul, an
+/// offside, and a card count against the offender's team, and a restart counts for the team
+/// that takes it.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Summary {
     pub possession_changes: u32,
     pub ball_max_speed: f64,
+    /// Ticks of open play with the ball at rest and nobody controlling it.
     pub ball_idle_ticks: u32,
     pub goals: [u32; 2],
+    pub fouls: [u32; 2],
+    pub offsides: [u32; 2],
+    pub corners: [u32; 2],
+    pub throw_ins: [u32; 2],
+    pub goal_kicks: [u32; 2],
+    pub free_kicks: [u32; 2],
+    pub penalties: [u32; 2],
+    /// Yellow cards, a second yellow included, and players sent off.
+    pub yellow: [u32; 2],
+    pub red: [u32; 2],
+    /// Seconds added to each half.
+    pub added_s: [u32; 2],
+    /// Stoppages announced through the stoppage hook.
+    pub stoppages: u32,
+    pub dead_ball_ticks: u32,
+    /// Times the offside positions were computed (once per kick in open play).
+    pub offside_checks: u32,
 }
 
 /// One running match.
@@ -112,16 +196,29 @@ pub struct Simulation {
     pub(crate) tick: u32,
     pub(crate) carrier: Option<usize>,
     pub(crate) control_since: u32,
-    last_touch: Option<usize>,
-    summary: Summary,
+    pub(crate) last_touch: Option<usize>,
+    pub(crate) summary: Summary,
+    pub(crate) referee: Referee,
+    pub(crate) restart: bool,
+    pub(crate) events: Vec<EngineEvent>,
+    pub(crate) stoppage: Option<Stoppage>,
+    /// The team shapes in force from each tick on: the start, each half-time, and each
+    /// sending-off. The validator reads it.
+    pub(crate) timeline: Vec<(u32, [Team; 2])>,
+    finished: bool,
     scratch: Vec<DVec2>,
-    restart: bool,
-    events: Vec<EngineEvent>,
 }
 
 impl Simulation {
     /// Places both teams for kick-off.
     pub fn new(config: MatchConfig) -> Result<Self, EngineError> {
+        let mut sim = Self::blank(config)?;
+        sim.place_kick_off(0);
+        Ok(sim)
+    }
+
+    /// A match with its state as the configuration gives it and nobody placed.
+    pub(crate) fn blank(config: MatchConfig) -> Result<Self, EngineError> {
         if config.players.len() != 2 * PLAYERS_PER_TEAM {
             return Err(EngineError::InvalidConfig(format!(
                 "a match needs {} players, got {}",
@@ -132,8 +229,9 @@ impl Simulation {
         let teams = config.teams.clone();
         let players = config.players.clone();
         let rng = EngineRng::from_seed(config.seed);
-        let mut sim = Self {
-            config,
+        let referee = Referee::new(config.minutes, &config.rules);
+        Ok(Self {
+            timeline: vec![(0, teams.clone())],
             teams,
             players,
             ball: Ball::at(DVec2::ZERO),
@@ -143,20 +241,43 @@ impl Simulation {
             control_since: 0,
             last_touch: None,
             summary: Summary::default(),
-            scratch: Vec::with_capacity(2 * PLAYERS_PER_TEAM),
+            referee,
             restart: false,
             events: Vec::new(),
-        };
-        sim.kick_off(0);
-        Ok(sim)
+            stoppage: None,
+            finished: false,
+            scratch: Vec::with_capacity(2 * PLAYERS_PER_TEAM),
+            config,
+        })
     }
 
     pub fn tuning(&self) -> &Tuning {
         &self.config.tuning
     }
 
+    pub fn config(&self) -> &MatchConfig {
+        &self.config
+    }
+
     pub fn teams(&self) -> [Team; 2] {
         self.teams.clone()
+    }
+
+    /// The team shapes in force from each tick on, for the validator.
+    pub fn team_timeline(&self) -> &[(u32, [Team; 2])] {
+        &self.timeline
+    }
+
+    pub fn players(&self) -> &[Player] {
+        &self.players
+    }
+
+    /// Each player's identifier from the team file, in roster order.
+    pub fn player_ids(&self) -> Vec<String> {
+        self.players
+            .iter()
+            .map(|p| self.teams[p.team].player_ids[p.slot].clone())
+            .collect()
     }
 
     pub fn tick(&self) -> u32 {
@@ -167,24 +288,75 @@ impl Simulation {
         self.summary
     }
 
-    /// Runs `ticks` ticks, emitting one record per tick, then closes the match.
-    pub fn run<S: TickSink>(&mut self, ticks: u32, sink: &mut S) -> Result<(), EngineError> {
-        for _ in 0..ticks {
+    /// The current half, from 0.
+    pub fn half(&self) -> u32 {
+        self.referee.clock.half
+    }
+
+    /// The minute of play the match clock shows now, and the added minute in added time.
+    pub fn minute(&self) -> (u32, Option<u32>) {
+        self.referee.clock.minute(self.tick)
+    }
+
+    /// `true` once the match has ended at full time or been abandoned.
+    pub fn is_over(&self) -> bool {
+        self.referee.phase == Phase::FullTime
+    }
+
+    /// `true` when the match ended because a team fell below the rule pack's minimum.
+    pub fn abandoned(&self) -> bool {
+        self.referee.abandoned
+    }
+
+    /// The player controlling the ball, if any.
+    pub fn carrier(&self) -> Option<usize> {
+        self.carrier
+    }
+
+    /// The dead ball waiting for its restart, if play is stopped.
+    pub fn dead_ball(&self) -> Option<crate::rules::DeadBall> {
+        match self.referee.phase {
+            Phase::DeadBall(dead) => Some(dead),
+            _ => None,
+        }
+    }
+
+    /// The stoppage the last tick announced, if it announced one.
+    pub fn stoppage(&self) -> Option<Stoppage> {
+        self.stoppage
+    }
+
+    /// Plays to full time, emitting one record per tick and announcing every stoppage
+    /// through the sink's stoppage hook, then closes the match.
+    pub fn run<S: TickSink>(&mut self, sink: &mut S) -> Result<(), EngineError> {
+        while !self.is_over() {
             self.step();
             sink.on_tick(&self.record())?;
+            if let Some(stoppage) = self.stoppage {
+                sink.on_stoppage(&stoppage, self)?;
+            }
         }
         self.finish();
         Ok(())
     }
 
-    /// Records full time. A caller that drives `step` itself calls this after the last tick.
+    /// Records full time. A caller that drives `step` itself calls this after the last tick;
+    /// a second call records nothing.
     pub fn finish(&mut self) {
-        self.events.push(EngineEvent {
-            tick: self.tick,
-            kind: EngineEventKind::FullTime,
-            team: None,
-            scores: self.summary.goals,
-        });
+        if self.finished {
+            return;
+        }
+        self.finished = true;
+        self.referee.phase = Phase::FullTime;
+        let half = self.referee.clock.half as usize;
+        let added = self
+            .referee
+            .clock
+            .plays_added
+            .then(|| self.summary.added_s[half.min(1)]);
+        let mut event = self.event_at(self.tick, EngineEventKind::FullTime, None);
+        event.added_time_s = added;
+        self.events.push(event);
     }
 
     /// Takes every event recorded since the last call, in tick order.
@@ -192,21 +364,36 @@ impl Simulation {
         std::mem::take(&mut self.events)
     }
 
-    /// Advances the match by one tick.
+    /// Advances the match by one tick. Does nothing once the match is over.
     pub fn step(&mut self) {
+        if self.is_over() {
+            return;
+        }
         self.restart = false;
+        self.stoppage = None;
         let t = self.config.tuning.clone();
-        let kick = if self.tick.is_multiple_of(t.decision_interval_ticks) {
-            self.decide()
-        } else {
-            None
-        };
-        if let Some(kick) = kick {
-            self.apply_kick(kick, &t);
+        match self.referee.phase {
+            Phase::Live => {
+                if self.tick.is_multiple_of(t.decision_interval_ticks)
+                    && let Some(kick) = self.decide()
+                {
+                    self.apply_kick(kick, &t, true);
+                }
+            }
+            Phase::DeadBall(dead) => {
+                self.summary.dead_ball_ticks += 1;
+                self.dead_ball_tick(&dead, &t);
+            }
+            Phase::FullTime => {}
         }
         steering::step_all(&mut self.players, &mut self.scratch, &t);
-        self.move_ball(&t);
-        self.resolve_possession(&t);
+        if self.referee.phase == Phase::Live {
+            self.move_ball(&t);
+        }
+        if self.referee.phase == Phase::Live {
+            self.resolve_possession(&t);
+        }
+        self.check_clock();
         steering::resolve_overlaps(&mut self.players, &t);
         self.tick += 1;
     }
@@ -229,12 +416,44 @@ impl Simulation {
         }
     }
 
-    fn apply_kick(&mut self, kick: Kick, t: &Tuning) {
+    /// An event of `kind` on the tick this step produces.
+    pub(crate) fn event(&self, kind: EngineEventKind, team: Option<usize>) -> EngineEvent {
+        self.event_at(self.tick + 1, kind, team)
+    }
+
+    fn event_at(&self, tick: u32, kind: EngineEventKind, team: Option<usize>) -> EngineEvent {
+        let (minute, minute_added) = self.referee.clock.minute(tick);
+        EngineEvent {
+            tick,
+            kind,
+            team,
+            scores: self.summary.goals,
+            minute,
+            minute_added,
+            player: None,
+            secondary: None,
+            card: None,
+            advantage: None,
+            added_time_s: None,
+            spot: None,
+        }
+    }
+
+    /// Kicks the ball for the carrier. In open play the kick fixes who is in an offside
+    /// position; a throw-in, a goal kick, and a corner fix nobody.
+    pub(crate) fn apply_kick(&mut self, kick: Kick, t: &Tuning, offside_counts: bool) {
         let (dir, speed, loft) = match kick {
             Kick::Pass { dir, speed, loft } | Kick::Shot { dir, speed, loft } => (dir, speed, loft),
         };
         if let Some(c) = self.carrier {
-            self.last_touch = Some(self.players[c].team);
+            let team = self.players[c].team;
+            self.last_touch = Some(team);
+            self.referee.offside = if offside_counts {
+                self.summary.offside_checks += 1;
+                offside::offside_set(c, self.ball.pos.x, &self.players, self.teams[team].attack_x)
+            } else {
+                0
+            };
         }
         self.ball.kick(dir, speed, loft, t);
         self.carrier = None;
@@ -251,33 +470,20 @@ impl Simulation {
                 self.ball.vel = DVec3::new(p.vel.x, p.vel.y, 0.0);
             }
             None => {
+                let prev = self.ball.xy();
                 self.ball.integrate(t);
                 let xy = self.ball.xy();
                 for team in 0..2 {
                     if pitch::in_goal(xy, self.teams[team].attack_x)
                         && self.ball.pos.z < t.crossbar_height
                     {
-                        self.summary.goals[team] += 1;
-                        tracing::debug!(signal = "match.goal", tick = self.tick, team, score = ?self.summary.goals);
-                        self.events.push(EngineEvent {
-                            tick: self.tick + 1,
-                            kind: EngineEventKind::Goal,
-                            team: Some(team),
-                            scores: self.summary.goals,
-                        });
-                        self.kick_off(1 - team);
+                        self.goal(team);
                         return;
                     }
                 }
-                // sdlc-debt: touchlines and goal lines bounce the ball like walls until the
-                // match-rules slice adds throw-ins, corners, and goal kicks.
-                if xy.x.abs() > pitch::HALF_LENGTH {
-                    self.ball.pos.x = xy.x.clamp(-pitch::HALF_LENGTH, pitch::HALF_LENGTH);
-                    self.ball.vel.x = -self.ball.vel.x * t.restitution;
-                }
-                if xy.y.abs() > pitch::HALF_WIDTH {
-                    self.ball.pos.y = xy.y.clamp(-pitch::HALF_WIDTH, pitch::HALF_WIDTH);
-                    self.ball.vel.y = -self.ball.vel.y * t.restitution;
+                if let Some(exit) = pitch::exit(prev, xy) {
+                    self.ball_out(exit);
+                    return;
                 }
             }
         }
@@ -288,34 +494,6 @@ impl Simulation {
         if speed == 0.0 && self.carrier.is_none() {
             self.summary.ball_idle_ticks += 1;
         }
-    }
-
-    /// Places every player at its base and gives `team`'s centre-forward the ball. Every
-    /// call marks the tick as a restart and records a kick-off event.
-    fn kick_off(&mut self, team: usize) {
-        self.restart = true;
-        self.events.push(EngineEvent {
-            tick: self.tick + 1,
-            kind: EngineEventKind::KickOff,
-            team: Some(team),
-            scores: self.summary.goals,
-        });
-        for i in 0..self.players.len() {
-            let p = self.players[i];
-            let pos = self.teams[p.team].slot_base(p.slot);
-            self.players[i].pos = pos;
-            self.players[i].vel = DVec2::ZERO;
-            self.players[i].target = pos;
-            self.players[i].facing = DVec2::new(self.teams[p.team].attack_x, 0.0);
-        }
-        let kicker = team * PLAYERS_PER_TEAM + PLAYERS_PER_TEAM - 1;
-        let attack_x = self.teams[team].attack_x;
-        self.players[kicker].pos = DVec2::new(-0.5 * attack_x, 0.0);
-        self.players[kicker].target = self.players[kicker].pos;
-        self.ball = Ball::at(DVec2::ZERO);
-        self.carrier = Some(kicker);
-        self.control_since = self.tick;
-        self.last_touch = Some(team);
     }
 
     fn resolve_possession(&mut self, t: &Tuning) {
@@ -329,7 +507,7 @@ impl Simulation {
                 let mut best: Option<(f64, usize)> = None;
                 for (i, p) in self.players.iter().enumerate() {
                     let keeper = p.slot == 0;
-                    if fast && !keeper {
+                    if !p.active() || (fast && !keeper) {
                         continue;
                     }
                     let reach = if keeper {
@@ -356,22 +534,41 @@ impl Simulation {
                 let carrier = self.players[c];
                 for i in 0..self.players.len() {
                     let p = self.players[i];
-                    if p.team == carrier.team || (p.pos - ball_xy).length() > t.reach_radius {
+                    if !p.active()
+                        || p.team == carrier.team
+                        || (p.pos - ball_xy).length() > t.reach_radius
+                    {
                         continue;
                     }
                     let tackle = p.derived.tackling;
                     let dribble = carrier.derived.dribbling;
                     let p_win = 0.05 * tackle / (tackle + dribble);
-                    if self.rng.chance(p_win) {
-                        self.gain(i, t);
-                        return;
+                    let p_foul = fouls::foul_chance(&p.derived, t);
+                    let draw = self.rng.referee_draw();
+                    match fouls::tackle_outcome(p_win, p_foul, t.foul_ball_loss, draw) {
+                        Tackle::Win => {
+                            self.gain(i, t);
+                            return;
+                        }
+                        Tackle::Foul { ball_lost } => {
+                            self.foul(i, c, ball_lost, t);
+                            return;
+                        }
+                        Tackle::Miss => {}
                     }
                 }
             }
         }
     }
 
+    /// Player `i` touches the ball first. A player in an offside position is penalised
+    /// instead of gaining the ball.
     fn gain(&mut self, i: usize, _t: &Tuning) {
+        if offside::is_offence(self.referee.offside, i) {
+            self.offside_offence(i);
+            return;
+        }
+        self.referee.offside = 0;
         let team = self.players[i].team;
         if self.last_touch != Some(team) {
             self.summary.possession_changes += 1;
@@ -392,7 +589,7 @@ mod tests {
     fn five_minutes_produce_fifteen_thousand_ticks() {
         let mut sim = Simulation::new(shipped_config(42, 5).unwrap()).unwrap();
         let mut sink = VecSink::default();
-        sim.run(crate::ticks_for_minutes(5), &mut sink).unwrap();
+        sim.run(&mut sink).unwrap();
         assert_eq!(sink.records.len(), 15_000);
         assert_eq!(sink.records[0].tick, 1);
         assert!(
@@ -412,5 +609,7 @@ mod tests {
         assert_ne!(config.club_ids()[0], config.club_ids()[1]);
         assert_eq!(config.content_hash.len(), 12);
         assert_eq!(config.players.len(), 22);
+        assert_ne!(config.team_digests[0], config.team_digests[1]);
+        assert_eq!(config.max_ticks(), 3_000);
     }
 }

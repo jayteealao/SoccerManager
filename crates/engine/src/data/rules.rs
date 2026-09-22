@@ -1,14 +1,17 @@
-//! The rule pack: stoppage kinds and what each admits, substitution limits, and half lengths.
-//! The match-rules slice enforces it; this slice loads and validates it.
+//! The rule pack: stoppage kinds and what each admits, substitution limits, half lengths,
+//! the added-time allowance, and the fewest players a team may field. The engine reads the
+//! half structure, the added-time allowance, and the minimum team size during a match.
+
+use std::collections::BTreeMap;
 
 use garde::Validate;
 use serde::{Deserialize, Serialize};
 
-/// Schema version this build reads.
-pub const RULES_VERSION: u32 = 1;
+/// Schema version this build reads. Version 2 adds `added_time` and `min_players`.
+pub const RULES_VERSION: u32 = 2;
 
 /// Every kind of stoppage the rules name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StoppageKind {
     KickOff,
@@ -50,6 +53,16 @@ impl StoppageKind {
             StoppageKind::Injury => "injury",
         }
     }
+
+    /// The position of the kind in `ALL`.
+    pub fn index(&self) -> usize {
+        *self as usize
+    }
+
+    /// The kind at position `index` of `ALL`, or `None`.
+    pub fn from_index(index: usize) -> Option<Self> {
+        Self::ALL.get(index).copied()
+    }
 }
 
 /// One stoppage kind and what the manager may do during it.
@@ -74,6 +87,66 @@ pub struct Substitutions {
     pub windows: u8,
 }
 
+/// The time a referee adds at the end of each half: seconds per stoppage of each kind and
+/// per card, plus a seeded variance of up to `variance_s` either way, clamped between
+/// `min_s` and `max_s`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct AddedTime {
+    /// Seconds added for each stoppage of a kind. Every kind is named once.
+    #[garde(custom(every_kind_priced))]
+    pub per_kind: BTreeMap<StoppageKind, u32>,
+    /// Seconds added for each card shown.
+    #[garde(range(min = 0, max = 120))]
+    pub card_s: u32,
+    /// The largest variance either way, in seconds.
+    #[garde(range(min = 0, max = 300))]
+    pub variance_s: u32,
+    /// The least time added to a half, in seconds.
+    #[garde(range(min = 0, max = 900))]
+    pub min_s: u32,
+    /// The most time added to a half, in seconds. It sets the announced maximum match length.
+    #[garde(range(min = 0, max = 1800), custom(at_least(self.min_s)))]
+    pub max_s: u32,
+}
+
+impl AddedTime {
+    /// Seconds for one stoppage of `kind`.
+    pub fn seconds(&self, kind: StoppageKind) -> u32 {
+        self.per_kind.get(&kind).copied().unwrap_or(0)
+    }
+}
+
+fn every_kind_priced(per_kind: &BTreeMap<StoppageKind, u32>, _ctx: &()) -> garde::Result {
+    for kind in StoppageKind::ALL {
+        match per_kind.get(&kind) {
+            None => {
+                return Err(garde::Error::new(format!(
+                    "stoppage {} has no seconds",
+                    kind.code()
+                )));
+            }
+            Some(&s) if s > 600 => {
+                return Err(garde::Error::new(format!(
+                    "stoppage {} adds {s} seconds; at most 600",
+                    kind.code()
+                )));
+            }
+            Some(_) => {}
+        }
+    }
+    Ok(())
+}
+
+fn at_least(min: u32) -> impl FnOnce(&u32, &()) -> garde::Result {
+    move |value, _| {
+        if *value < min {
+            return Err(garde::Error::new(format!("lower than min_s ({min})")));
+        }
+        Ok(())
+    }
+}
+
 /// The rule pack file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
@@ -88,6 +161,18 @@ pub struct RulePack {
     pub substitutions: Substitutions,
     #[garde(dive, custom(every_kind_once))]
     pub stoppages: Vec<Stoppage>,
+    #[garde(dive)]
+    pub added_time: AddedTime,
+    /// A team with fewer players on the pitch cannot continue, and the match is abandoned.
+    #[garde(range(min = 1, max = 11))]
+    pub min_players: u8,
+}
+
+impl RulePack {
+    /// Minutes of regulation play: halves times half length.
+    pub fn regulation_minutes(&self) -> u32 {
+        u32::from(self.halves) * u32::from(self.half_minutes)
+    }
 }
 
 fn every_kind_once(stoppages: &[Stoppage], _ctx: &()) -> garde::Result {

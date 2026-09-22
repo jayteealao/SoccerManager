@@ -447,3 +447,61 @@ scope: decides that this slice re-authors both augmentation artifacts with brows
 - Canvas accessibility: `role="img"` with a label, plus a visually hidden `aria-live="polite"` region mirroring clock, speed, and lag state in text.
 
 **Consult record.** Triggers `appetite-medium-or-larger` and `unknowns-present` hold. The product owner excluded `consult` at intake (`00-index.md` `stack.excluded-by-po`). Not fired.
+
+## 2026-09-22T19:29:33Z · plan (match-rules) · Round 1 (how a match flows)
+
+**Q1 Change queue.** Stoppage hook only. This slice announces every stoppage with its kind through one engine hook (`TickSink::on_stoppage`); nothing applies a queued change yet, and the next slice drains the queue through that hook. Research fact that forced the question: `crates/protocol/src/command.rs:1-3` says this slice applies queued changes, while `03-slice-match-rules.md` gives substitution windows to `tactics-and-ai`. Rung 1 (AskUserQuestion).
+scope: decides that this slice applies no queued change and corrects the stale code comment; does NOT decide how or when the next slice applies tactics changes or substitutions.
+
+**Q2 Match length.** Announce a maximum. The rule pack caps added time per half; the file header and the opening message announce regulation ticks plus both caps as the maximum; the file trailer and the final statistics carry the real count. The page reserves its rewind memory once. Research fact: `web/main.mjs:66` sizes the history from `hello.ticks_expected`, and `crates/engine/tests/full_match.rs:22` pins 270,000. Rung 1.
+scope: decides that `ticks_expected` and `expected_ticks` mean "at most" from this slice on; does NOT decide the cap value (the plan sets 900 seconds per half as the shipped default) and does NOT change the 300 MB memory budget.
+
+**Q3 Dead ball.** Players walk into place. The ball sits at the restart spot; players steer to restart positions over a delay per restart kind from the tuning file; then the restart is taken. Rung 1.
+scope: decides that players move by steering during a dead ball and that the dead-ball delay is tuning data; does NOT decide the delay values, which the plan sets as tuning defaults, and does NOT apply to the opening kick-off and the second-half kick-off, which place players at once as the break allows.
+
+**Q4 Advantage.** Advantage when possession kept, not the recommended "no advantage". If the fouled team keeps the ball after the foul, play continues, a `foul` event records the advantage, and any card is shown at the next stoppage. Rung 1.
+scope: decides that the engine plays advantage outside the penalty area; does NOT remove the free kick when the fouled team loses the ball, which the slice criterion requires, and does NOT decide advantage inside the penalty area (the plan awards the penalty there).
+
+## 2026-09-22T19:29:33Z · plan (match-rules) · Round 2 (fouls, cards, and added time)
+
+**Q5 Foul model.** Every tackle rolls three ways: a clean win, a foul, or a miss, from one draw. Foul chance rises with the tackler's aggression and falls with tackling skill; the tuning file holds the base rate, set for about 10 fouls per team per match. Research fact: the only tackle today is the possession roll at `crates/engine/src/sim.rs:362-365`. Rung 1.
+scope: decides where fouls come from and which attributes drive them; does NOT decide the calibrated rate, which the `calibration` slice owns.
+
+**Q6 Discipline.** Require aggression. `aggression` joins the required attributes; a schema or team file without it is refused at load naming the file and field. Research fact: `aggression` exists in the shipped schema (`content/README.md:29`) and nothing reads it. Rung 1.
+scope: decides that aggression is required and drives foul and card chances; does NOT add a new attribute or change the shipped content files.
+
+**Q7 Added time.** Free-text answer: "second per stoppage kind within expected limits and with variance". Read as: the rule pack gives seconds per stoppage kind; the engine sums them per half, adds a bounded variance drawn from the engine's seeded generator, and clamps the result between the rule pack's minimum and cap. The engine plays the exact seconds and reports the rounded-up minute. Rung 1 (free text mapped to option 1 plus variance).
+scope: decides the formula shape and that variance comes from the seeded generator, so a seed reproduces the added time; does NOT decide the per-kind seconds, the variance bound, or the minimum, which the plan sets as rule-pack defaults near the real 3 to 4 and 5 to 6 minutes.
+
+**Q8 Card events.** One event type `card` plus a field `card.kind` (`yellow`, `second-yellow`, `red`) and the player's id. Research fact: the observability contract reserves `card` and no colour key. Rung 1.
+scope: decides the card event shape; does NOT amend the observability contract, where `card.kind` rides as an additive extra until the audit settles it.
+
+## 2026-09-22T19:29:33Z · plan (match-rules) · Round 3 (snapshot, tests, and the page)
+
+**Q9 Resume.** Exact continuation. A resumed match produces tick for tick the same match as one that never stopped, on the same machine and build; the test compares both tick files byte for byte from the stoppage onward. Research fact: `rand_chacha` 0.10 exposes `get_seed`, `get_stream`, `get_word_pos`, and `set_word_pos` (read in the installed source, `rand_chacha-0.10.0/src/chacha.rs:134-198`). Rung 1.
+scope: decides the resume guarantee; does NOT promise cross-machine or cross-build resume (NFR-4), and a snapshot from another build is refused with a named reason.
+
+**Q10 Snapshot file.** Binary like the tick file, not the recommended JSON. A fixed binary layout with magic bytes, a version, and a trailer; the plan adds a SHA-256 digest in the trailer, following the `.smfx` fixture's pattern, so corruption has a named reason. Rung 1.
+scope: decides the snapshot encoding; does NOT decide the file location or how many snapshots are kept (the plan keeps the latest per match, replaced atomically).
+
+**Q11 Test seam.** Scenario builder behind a Cargo feature that only tests enable; it places players and the ball, sets the carrier, and scripts the next random draws. Release builds never contain it. Rung 1.
+scope: decides how criterion tests build a scene; does NOT make the builder a public or modder-facing API.
+
+**Q12 Viewer skip.** Filter in this slice. The page's stoppage index takes restart frames plus only the event types that stop play. Research fact: `web/main.mjs:122-126` adds every event message, including `tactics-change`, to the index. Rung 1.
+scope: decides that this slice changes one page module and its test; does NOT reopen the viewer-pitch Q4 decision ("both, merged"), which the filter keeps.
+
+## 2026-09-22T19:29:33Z · plan (match-rules) · Round 4 (the benchmark gate)
+
+**Q13 Benchmark gate.** Judge per tick, report both. Verify compares processor time per tick against the 10 percent tripwire and reports per-match time beside it with the tick counts. Asked because Q2 and Q7 add about 9 percent more ticks per match, so the per-match gate could fire from match length alone. Rung 1.
+scope: decides how the slice's benchmark criterion is judged; does NOT change the 10 percent processor and 25 percent memory tripwires, and does NOT change the 2-second per-match budget (NFR-1), which stays per match.
+
+**Pre-filled (not asked; source recorded):**
+- Offside is judged only when a team-mate plays the ball (`03-slice-match-rules.md` Risks: "check only on forward passes"); involvement is the first touch by a player in the cached offside set. No offside from a goal kick, a throw-in, or a corner (IFAB Law 11).
+- Restart spots follow IFAB Laws 1 and 13 to 17 on the 105 m by 68 m pitch: penalty mark 11 m, goal area 5.5 m, penalty area 16.5 m, corner arc 1 m, 9.15 m distance; the ball is out when its whole body crosses the line (radius 0.11 m).
+- A team below seven players ends the match as abandoned (IFAB Law 3); the rule pack holds `min_players: 7`.
+- A sent-off player's record slot parks at a fixed point beside the pitch, because the 192-byte tick record and the wire frame hold 22 positions and no status bit; the validator exempts that point.
+- A shortened match (`--minutes` below the rule pack's regulation length) plays no added time, so short test matches keep a fixed tick count.
+- `PROTOCOL_VERSION` rises to 2 and the tick-file schema to 4, because `ticks_expected` and `expected_ticks` change meaning from "exactly" to "at most" (the rule at `crates/protocol/src/lib.rs:21-28`). The page reads the version from the engine, so no page logic changes for the bump.
+- Seven code comments name workflow slices (`sim.rs:273`, `data/rules.rs:2`, `command.rs:1-2`, `command.rs:55`, `event.rs:3`, `event.rs:12`, `message.rs:90`); the plan rewrites them in product language per the output boundary.
+
+**Consult record.** Triggers `appetite-medium-or-larger` and `touches-migration` (snapshot and tick-file schema) hold. The product owner excluded `consult` at intake (`00-index.md` `stack.excluded-by-po`). Not fired.

@@ -6,6 +6,7 @@ mod content;
 mod generate;
 mod record;
 mod replay;
+mod resume;
 mod serve;
 mod simulate;
 mod stream_run;
@@ -33,6 +34,7 @@ fn main() {
         cli::Command::Serve(opts) => serve::run(content_dir, &opts),
         cli::Command::Record(opts) => record::run(content_dir, &opts),
         cli::Command::Replay(opts) => replay::run(&opts),
+        cli::Command::Resume(opts) => resume::run(content_dir, &opts),
     };
     match result {
         Ok(code) => std::process::exit(code),

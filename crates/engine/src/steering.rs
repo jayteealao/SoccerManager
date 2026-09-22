@@ -1,5 +1,6 @@
 //! Steering behaviors per Reynolds (1999): seek, arrive, separation.
 //! Source: https://www.red3d.com/cwr/papers/1999/gdc99steer.pdf
+//! A sent-off player stands still at its parking spot and pushes nobody.
 
 use crate::math::{DVec2, clamp_len, toward};
 use crate::pitch;
@@ -33,7 +34,7 @@ pub fn separation(players: &[Player], i: usize, t: &Tuning) -> DVec2 {
     let me = players[i].pos;
     let mut push = DVec2::ZERO;
     for (j, other) in players.iter().enumerate() {
-        if j == i {
+        if j == i || !other.active() {
             continue;
         }
         let d = me - other.pos;
@@ -65,9 +66,16 @@ pub fn next_velocity(players: &[Player], i: usize, t: &Tuning) -> DVec2 {
 pub fn step_all(players: &mut [Player], scratch: &mut Vec<DVec2>, t: &Tuning) {
     scratch.clear();
     for i in 0..players.len() {
-        scratch.push(next_velocity(players, i, t));
+        scratch.push(if players[i].active() {
+            next_velocity(players, i, t)
+        } else {
+            DVec2::ZERO
+        });
     }
     for (p, &v) in players.iter_mut().zip(scratch.iter()) {
+        if !p.active() {
+            continue;
+        }
         p.vel = v;
         p.pos = pitch::clamp(p.pos + v * t.dt, 0.2);
         if v.length_squared() > 1e-6 {
@@ -80,7 +88,13 @@ pub fn step_all(players: &mut [Player], scratch: &mut Vec<DVec2>, t: &Tuning) {
 pub fn resolve_overlaps(players: &mut [Player], t: &Tuning) {
     let n = players.len();
     for i in 0..n {
+        if !players[i].active() {
+            continue;
+        }
         for j in (i + 1)..n {
+            if !players[j].active() {
+                continue;
+            }
             let d = players[j].pos - players[i].pos;
             let dist = d.length();
             if dist < t.min_player_distance {

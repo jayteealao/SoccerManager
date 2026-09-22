@@ -22,12 +22,21 @@ fn config() -> MatchConfig {
 }
 
 fn tick_step(c: &mut Criterion) {
-    let mut sim = Simulation::new(config()).unwrap();
-    for _ in 0..500 {
-        sim.step();
-    }
+    let config = config();
+    let warmed = || {
+        let mut sim = Simulation::new(config.clone()).unwrap();
+        for _ in 0..500 {
+            sim.step();
+        }
+        sim
+    };
+    let mut sim = warmed();
     c.bench_function("tick_step", |b| {
         b.iter(|| {
+            // A match ends at full time; a new one starts so every sample times a real tick.
+            if sim.is_over() {
+                sim = warmed();
+            }
             sim.step();
             black_box(sim.tick())
         })

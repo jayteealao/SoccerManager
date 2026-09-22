@@ -21,8 +21,14 @@ garde = { workspace = true }
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true }
 
+[features]
+# The test scene builder and scripted referee draws. Only this crate's own tests enable it,
+# so a release build never contains either.
+scenario = []
+
 [dev-dependencies]
 criterion = { workspace = true }
+engine = { path = ".", features = ["scenario"] }
 
 [[bench]]
 name = "tick_step"

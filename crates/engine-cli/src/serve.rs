@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Context;
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id, owner_bytes};
-use engine::{FanoutSink, FileSink, MatchConfig, Simulation, TickHeader, ticks_for_minutes};
+use engine::{FanoutSink, FileSink, MatchConfig, Simulation, SnapshotSink, TickHeader};
 use protocol::{ChangeKind, Hello, PROTOCOL_VERSION, Queue, ServerMessage, TeamRef};
 use stream::events::EventWriter;
 use stream::session::{MatchState, SessionConfig};
@@ -21,8 +21,10 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
     let stream_tuning = loaded.content.tuning.stream.clone();
     let data = data_dir();
     let owner_id = load_or_create_owner_id(&data)?;
-    let match_id = MatchId::now(opts.seed).to_string();
-    let ticks = ticks_for_minutes(opts.minutes);
+    let started = MatchId::now(opts.seed);
+    let match_millis = started.millis;
+    let match_id = started.to_string();
+    let ticks = config.max_ticks();
     let club_ids = [
         config.teams[0].club_id.clone(),
         config.teams[1].club_id.clone(),
@@ -94,16 +96,17 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
                     dt: config.tuning.dt,
                     expected_ticks: ticks,
                     owner_id: owner_bytes(&owner_id)?,
-                    match_millis: match_id.parse::<MatchId>()?.millis,
+                    match_millis,
                 },
             )
             .with_context(|| format!("cannot create {}", path.display()))?,
         ),
         None => None,
     };
-    let mut sink = FanoutSink::new(session.sink(), ticks_file);
+    let snapshots = SnapshotSink::new(&data, &match_id, owner_bytes(&owner_id)?, match_millis);
+    let mut sink = FanoutSink::new(FanoutSink::new(session.sink(), ticks_file), snapshots);
     let mut sim = Simulation::new(config)?;
-    let written = drive(
+    let driven = drive(
         &mut sim,
         &mut sink,
         &Drive {
@@ -125,7 +128,8 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
         },
     )?;
 
-    let (_, ticks_file) = sink.into_parts();
+    let (streams, _) = sink.into_parts();
+    let (_, ticks_file) = streams.into_parts();
     if let Some(file) = ticks_file {
         file.finish()?;
     }
@@ -133,13 +137,13 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
     session.finish()?;
     tracing::info!(
         signal = "socket.session_closed",
-        ticks = written,
+        ticks = driven.written,
         high_water = gauge.high_water(),
         bound = gauge.bound(),
         pauses = gauge.pauses(),
         paused_ms = gauge.paused_ms()
     );
-    Ok(if written == ticks { 0 } else { 2 })
+    Ok(if driven.full_time { 0 } else { 2 })
 }
 
 /// The change kinds the rule pack admits at some stoppage.

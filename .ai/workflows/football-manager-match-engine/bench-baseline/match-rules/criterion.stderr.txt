@@ -1,0 +1,12 @@
+   Compiling engine v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 3.73s
+     Running benches\tick_step.rs (target\release\deps\tick_step-7db208b884d94e5b.exe)
+Gnuplot not found, using plotters backend
+Benchmarking tick_step
+Benchmarking tick_step: Warming up for 3.0000 s
+Benchmarking tick_step: Collecting 100 samples in estimated 5.0014 s (3.5M iterations)
+Benchmarking tick_step: Analyzing
+Benchmarking steering_pass_22
+Benchmarking steering_pass_22: Warming up for 3.0000 s
+Benchmarking steering_pass_22: Collecting 100 samples in estimated 5.0013 s (5.7M iterations)
+Benchmarking steering_pass_22: Analyzing

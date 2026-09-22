@@ -33,6 +33,10 @@ pub enum EngineError {
         field: String,
         reason: String,
     },
+    /// A snapshot file was refused. `path` is relative to the data folder or the file name;
+    /// `reason` names the check that failed and never quotes the file's bytes.
+    #[error("snapshot refused: {path}: {reason}")]
+    Snapshot { path: String, reason: String },
     /// A content file carries a schema version this build does not read.
     #[error("content refused: {kind} {path}: schema_version {found}; this build reads {expected}")]
     Version {

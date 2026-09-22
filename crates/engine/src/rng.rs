@@ -7,17 +7,68 @@
 use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
+/// The exact position of a generator: enough to continue its stream draw for draw.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RngState {
+    pub seed: [u8; 32],
+    pub stream: u64,
+    pub word_pos: u128,
+}
+
 /// A seeded generator with a fixed algorithm.
 pub struct EngineRng {
     inner: ChaCha8Rng,
+    /// Draws a test scripted for the referee, consumed before the stream.
+    #[cfg(feature = "scenario")]
+    scripted: std::collections::VecDeque<f64>,
 }
 
 impl EngineRng {
     /// Creates a generator from a 64-bit seed.
     pub fn from_seed(seed: u64) -> Self {
+        Self::wrap(ChaCha8Rng::seed_from_u64(seed))
+    }
+
+    fn wrap(inner: ChaCha8Rng) -> Self {
         Self {
-            inner: ChaCha8Rng::seed_from_u64(seed),
+            inner,
+            #[cfg(feature = "scenario")]
+            scripted: std::collections::VecDeque::new(),
         }
+    }
+
+    /// The generator's position (source: `rand_chacha-0.10.0/src/chacha.rs:145-198` in the
+    /// local cargo registry, `get_seed`, `get_stream`, and `get_word_pos`).
+    pub fn state(&self) -> RngState {
+        RngState {
+            seed: self.inner.get_seed(),
+            stream: self.inner.get_stream(),
+            word_pos: self.inner.get_word_pos(),
+        }
+    }
+
+    /// A generator that continues from `state`.
+    pub fn from_state(state: RngState) -> Self {
+        let mut inner = ChaCha8Rng::from_seed(state.seed);
+        inner.set_stream(state.stream);
+        inner.set_word_pos(state.word_pos);
+        Self::wrap(inner)
+    }
+
+    /// A draw in `[0, 1)` for a law decision: a tackle, a card, or the added-time variance.
+    /// A test scene may script these draws.
+    pub fn referee_draw(&mut self) -> f64 {
+        #[cfg(feature = "scenario")]
+        if let Some(draw) = self.scripted.pop_front() {
+            return draw;
+        }
+        self.next_f64()
+    }
+
+    /// Queues draws that `referee_draw` returns before it reads the stream.
+    #[cfg(feature = "scenario")]
+    pub fn script(&mut self, draws: &[f64]) {
+        self.scripted.extend(draws.iter().copied());
     }
 
     /// A value in `[0, 1)`.
@@ -65,6 +116,19 @@ mod tests {
         for _ in 0..1000 {
             assert_eq!(a.next_f64().to_bits(), b.next_f64().to_bits());
         }
+    }
+
+    #[test]
+    fn a_restored_state_continues_the_stream() {
+        let mut a = EngineRng::from_seed(42);
+        for _ in 0..500 {
+            a.next_f64();
+        }
+        let mut b = EngineRng::from_state(a.state());
+        for _ in 0..500 {
+            assert_eq!(a.next_f64().to_bits(), b.next_f64().to_bits());
+        }
+        assert_eq!(a.state(), b.state());
     }
 
     #[test]

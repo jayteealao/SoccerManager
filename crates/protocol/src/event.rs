@@ -1,6 +1,6 @@
-//! Match events: the `match-event` record kind the observability contract reserves. This
-//! slice produces kick-off, goal, full-time, and the verdict on a queued change; the
-//! match-rules and commentary slices add the rest.
+//! Match events: the `match-event` record kind the observability contract reserves. The
+//! engine produces kick-off, goal, half-time, full-time, the law events (offside, foul, card,
+//! and every restart), and the verdict on a queued change.
 
 use serde::{Deserialize, Serialize};
 
@@ -9,27 +9,70 @@ use crate::command::{ChangeKind, ChangeState};
 /// Simulated ticks in one minute of play (50 ticks per second).
 pub const TICKS_PER_MINUTE: u32 = 50 * 60;
 
-/// The event types this build emits. The contract's enumeration is wider; a later slice
-/// fills it.
+/// The event types this build emits. The contract's enumeration is wider.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum EventType {
     KickOff,
     Goal,
+    HalfTime,
     FullTime,
     TacticsChange,
+    Offside,
+    Foul,
+    Card,
+    ThrowIn,
+    Corner,
+    GoalKick,
+    FreeKick,
+    Penalty,
 }
 
 impl EventType {
+    /// Every event type, in declaration order.
+    pub const ALL: [EventType; 13] = [
+        EventType::KickOff,
+        EventType::Goal,
+        EventType::HalfTime,
+        EventType::FullTime,
+        EventType::TacticsChange,
+        EventType::Offside,
+        EventType::Foul,
+        EventType::Card,
+        EventType::ThrowIn,
+        EventType::Corner,
+        EventType::GoalKick,
+        EventType::FreeKick,
+        EventType::Penalty,
+    ];
+
     /// The value as the contract writes it.
     pub fn code(&self) -> &'static str {
         match self {
             EventType::KickOff => "kick-off",
             EventType::Goal => "goal",
+            EventType::HalfTime => "half-time",
             EventType::FullTime => "full-time",
             EventType::TacticsChange => "tactics-change",
+            EventType::Offside => "offside",
+            EventType::Foul => "foul",
+            EventType::Card => "card",
+            EventType::ThrowIn => "throw-in",
+            EventType::Corner => "corner",
+            EventType::GoalKick => "goal-kick",
+            EventType::FreeKick => "free-kick",
+            EventType::Penalty => "penalty",
         }
     }
+}
+
+/// The card a `card` event shows. A second yellow is a yellow card followed by a red one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CardKind {
+    Yellow,
+    SecondYellow,
+    Red,
 }
 
 /// What the server decided about one queued change.
@@ -75,10 +118,32 @@ pub struct MatchEvent {
     pub change_rejected_reason: Option<String>,
     #[serde(rename = "change.state", skip_serializing_if = "Option::is_none")]
     pub change_state: Option<ChangeState>,
+    /// The player the event names: the offender, the booked player.
+    #[serde(rename = "player.id", skip_serializing_if = "Option::is_none")]
+    pub player_id: Option<String>,
+    /// The second player: the fouled player.
+    #[serde(
+        rename = "player.secondary_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub player_secondary_id: Option<String>,
+    /// Additive extra, on a `card` event.
+    #[serde(rename = "card.kind", skip_serializing_if = "Option::is_none")]
+    pub card_kind: Option<CardKind>,
+    /// Additive extra, on a `foul` event: `true` when play continued with advantage.
+    #[serde(rename = "foul.advantage", skip_serializing_if = "Option::is_none")]
+    pub foul_advantage: Option<bool>,
+    /// Additive extra: the added minute in added time (2 at 45+2), absent otherwise.
+    #[serde(rename = "minute.added", skip_serializing_if = "Option::is_none")]
+    pub minute_added: Option<u32>,
+    /// Additive extra, on `half-time` and `full-time`: the seconds added to the half.
+    #[serde(rename = "added_time.s", skip_serializing_if = "Option::is_none")]
+    pub added_time_s: Option<u32>,
 }
 
 impl MatchEvent {
-    /// A play event: kick-off, goal, or full-time.
+    /// A play event. The minute is counted from the tick; an event from the engine carries
+    /// the engine clock's minute instead, through `at_minute`.
     pub fn play(
         owner_id: &str,
         match_id: &str,
@@ -101,7 +166,47 @@ impl MatchEvent {
             change_queue_id: None,
             change_rejected_reason: None,
             change_state: None,
+            player_id: None,
+            player_secondary_id: None,
+            card_kind: None,
+            foul_advantage: None,
+            minute_added: None,
+            added_time_s: None,
         }
+    }
+
+    /// The minute of play and the added minute, as the engine clock shows them.
+    pub fn at_minute(mut self, minute: u32, added: Option<u32>) -> Self {
+        self.minute = minute;
+        self.minute_added = added;
+        self
+    }
+
+    /// The player the event names.
+    pub fn player(mut self, id: Option<String>) -> Self {
+        self.player_id = id;
+        self
+    }
+
+    /// The second player the event names.
+    pub fn secondary(mut self, id: Option<String>) -> Self {
+        self.player_secondary_id = id;
+        self
+    }
+
+    pub fn card(mut self, kind: Option<CardKind>) -> Self {
+        self.card_kind = kind;
+        self
+    }
+
+    pub fn advantage(mut self, advantage: Option<bool>) -> Self {
+        self.foul_advantage = advantage;
+        self
+    }
+
+    pub fn added_time(mut self, seconds: Option<u32>) -> Self {
+        self.added_time_s = seconds;
+        self
     }
 
     /// The verdict on a queued change, as a `tactics-change` event.
@@ -160,14 +265,37 @@ mod tests {
 
     #[test]
     fn every_event_type_writes_the_contract_spelling() {
-        for t in [
-            EventType::KickOff,
-            EventType::Goal,
-            EventType::FullTime,
-            EventType::TacticsChange,
-        ] {
+        for t in EventType::ALL {
             let json = serde_json::to_string(&t).unwrap();
             assert_eq!(json, format!("\"{}\"", t.code()));
         }
+    }
+
+    #[test]
+    fn a_second_yellow_names_the_player_the_card_and_the_added_minute() {
+        let e = MatchEvent::play(
+            "0123456789abcdef0123456789abcdef",
+            "000000000000002a-1",
+            139_000,
+            EventType::Card,
+            Some("club-b".into()),
+            [0, 1],
+        )
+        .at_minute(45, Some(2))
+        .player(Some("p-club-b-04".into()))
+        .card(Some(CardKind::SecondYellow));
+        let json = serde_json::to_string(&e).unwrap();
+        for key in [
+            "\"event.type\":\"card\"",
+            "\"minute\":45",
+            "\"minute.added\":2",
+            "\"player.id\":\"p-club-b-04\"",
+            "\"card.kind\":\"second-yellow\"",
+        ] {
+            assert!(json.contains(key), "missing {key} in {json}");
+        }
+        assert!(!json.contains("foul.advantage"), "{json}");
+        let back: MatchEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, e);
     }
 }

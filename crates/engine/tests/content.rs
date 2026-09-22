@@ -1,12 +1,15 @@
 //! AC-a: the shipped attribute schema loads with 30 to 50 named, grouped attributes on the
 //! 1 to 100 scale. AC-c: a rule pack with an unknown schema version is refused naming the
 //! version, and the current version loads. Plus: the tuning file equals `Tuning::default()`
-//! and a missing file names its path.
+//! and a missing file names its path. The rule pack pins the added-time allowance and the
+//! minimum team size, and a schema without `aggression` is refused naming it.
 
 mod common;
 
 use engine::EngineError;
-use engine::data::{RULES_VERSION, RulePack, load_json};
+use engine::data::{
+    ATTRIBUTES_VERSION, AttributeSchema, RULES_VERSION, RulePack, StoppageKind, load_json,
+};
 use engine::{ContentDir, Tuning};
 
 #[test]
@@ -46,7 +49,7 @@ fn an_unknown_rule_pack_version_is_refused_naming_the_version() {
             err,
             EngineError::Version {
                 found: 99,
-                expected: 1,
+                expected: 2,
                 ..
             }
         ),
@@ -54,7 +57,7 @@ fn an_unknown_rule_pack_version_is_refused_naming_the_version() {
     );
     assert_eq!(
         err.to_string(),
-        "content refused: rules rules-unknown-version.json: schema_version 99; this build reads 1"
+        "content refused: rules rules-unknown-version.json: schema_version 99; this build reads 2"
     );
 }
 
@@ -64,6 +67,42 @@ fn the_current_rule_pack_version_loads() {
     assert_eq!(content.rules.schema_version, RULES_VERSION);
     assert_eq!(content.rules.halves, 2);
     assert_eq!(content.rules.stoppages.len(), 9);
+    let added = &content.rules.added_time;
+    assert_eq!(added.per_kind.len(), StoppageKind::ALL.len());
+    assert_eq!(added.seconds(StoppageKind::Goal), 40);
+    assert_eq!(added.seconds(StoppageKind::ThrowIn), 1);
+    assert_eq!(
+        (added.card_s, added.variance_s, added.min_s, added.max_s),
+        (15, 30, 60, 900)
+    );
+    assert_eq!(content.rules.min_players, 7);
+}
+
+#[test]
+fn a_schema_without_aggression_is_refused_naming_it() {
+    let shipped = common::content_dir().path("attributes.json");
+    let text = std::fs::read_to_string(&shipped).unwrap();
+    let mut value: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let list = value["attributes"].as_array_mut().unwrap();
+    list.retain(|a| a["name"] != "aggression");
+    let path = std::env::temp_dir().join(format!(
+        "engine-test-{}-no-aggression.json",
+        std::process::id()
+    ));
+    std::fs::write(&path, serde_json::to_string(&value).unwrap()).unwrap();
+    let err = load_json::<AttributeSchema>(
+        "attributes",
+        &path,
+        "attributes.json",
+        ATTRIBUTES_VERSION,
+        &(),
+    )
+    .unwrap_err();
+    std::fs::remove_file(&path).unwrap();
+    assert_eq!(
+        err.to_string(),
+        "content refused: attributes attributes.json: attributes: required attribute aggression is missing"
+    );
 }
 
 #[test]

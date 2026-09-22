@@ -2,15 +2,14 @@
 
 mod common;
 
-use engine::{FileSink, Simulation, ticks_for_minutes};
+use engine::{FileSink, Simulation};
 
 fn write(name: &str) -> Vec<u8> {
     let path = common::temp_path(name);
     let config = common::full_match();
-    let ticks = ticks_for_minutes(90);
     let mut sim = Simulation::new(config.clone()).unwrap();
-    let mut sink = FileSink::create(&path, &common::header(&config, ticks)).unwrap();
-    sim.run(ticks, &mut sink).unwrap();
+    let mut sink = FileSink::create(&path, &common::header(&config, config.max_ticks())).unwrap();
+    sim.run(&mut sink).unwrap();
     sink.finish().unwrap();
     let bytes = std::fs::read(&path).unwrap();
     std::fs::remove_file(&path).unwrap();

@@ -36,7 +36,23 @@
     "compactness_y": 0.3,
     "anchor_tolerance": 15.0,
     "anchor_ball_distance": 30.0,
-    "anchor_grace_ticks": 100
+    "anchor_grace_ticks": 100,
+    "foul_base": 0.1,
+    "foul_aggression_weight": 1.0,
+    "foul_tackling_weight": 0.5,
+    "foul_ball_loss": 0.6,
+    "yellow_base": 0.05,
+    "yellow_aggression_weight": 0.15,
+    "red_base": 0.005,
+    "restart_delay_s": {
+      "kick_off": 5.0,
+      "throw_in": 3.0,
+      "corner": 8.0,
+      "goal_kick": 6.0,
+      "free_kick": 8.0,
+      "penalty": 15.0
+    },
+    "restart_ready_radius": 1.0
   },
   "generator": {
     "squad_size": 22,

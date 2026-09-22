@@ -4,11 +4,11 @@ type: index
 slug: football-manager-match-engine
 title: "Football manager game: match engine and 2D match viewer"
 status: active
-current-stage: verify
-stage-number: 6
+current-stage: implement
+stage-number: 5
 created-at: "2026-09-21T16:46:41Z"
-updated-at: "2026-09-22T18:49:11Z"
-selected-slice: "viewer-pitch"
+updated-at: "2026-09-22T20:41:00Z"
+selected-slice: "match-rules"
 branch-strategy: dedicated
 branch: "feat/football-manager-match-engine"
 base-branch: "main"
@@ -136,7 +136,7 @@ slices:
   - {slug: data-schemas-generator, status: complete, complexity: m, depends-on: [engine-core]}
   - {slug: stream-protocol, status: complete, complexity: m, depends-on: [engine-core]}
   - {slug: viewer-pitch, status: complete, complexity: m, depends-on: [stream-protocol]}
-  - {slug: match-rules, status: defined, complexity: l, depends-on: [engine-core, data-schemas-generator]}
+  - {slug: match-rules, status: complete, complexity: l, depends-on: [engine-core, data-schemas-generator]}
   - {slug: tactics-and-ai, status: defined, complexity: l, depends-on: [match-rules, data-schemas-generator]}
   - {slug: commentary, status: defined, complexity: s, depends-on: [match-rules]}
   - {slug: calibration, status: defined, complexity: m, depends-on: [tactics-and-ai, data-schemas-generator]}
@@ -149,8 +149,8 @@ slices:
   - {slug: scripting-runtime, status: defined, complexity: l, depends-on: [data-schemas-generator, tactics-and-ai, calibration], deferred: true}
   - {slug: distribution, status: defined, complexity: m, depends-on: [integration], deferred: true}
 augmentations:
-  - {type: instrument, artifact: 04b-instrument.md, slice: viewer-pitch, status: ready, created-at: "2026-09-22T14:41:32Z", prior: history/04b-instrument-2.md}
-  - {type: benchmark, artifact: 05c-benchmark.md, slice: viewer-pitch, mode: baseline, status: ready, created-at: "2026-09-22T14:41:32Z", prior: history/05c-benchmark-2.md}
+  - {type: instrument, artifact: 04b-instrument.md, slice: match-rules, status: ready, created-at: "2026-09-22T19:29:33Z", prior: history/04b-instrument-3.md}
+  - {type: benchmark, artifact: 05c-benchmark.md, slice: match-rules, mode: baseline, status: ready, created-at: "2026-09-22T19:29:33Z", prior: history/05c-benchmark-3.md}
   - {type: experiment, artifact: 04c-experiment.md, status: deferred-to-experiment-flags, created-at: "2026-09-21T21:57:49Z"}
 evidence-quality:
   live: 1
@@ -160,8 +160,8 @@ metric-acceptance-mock-rung: 0
 runtime-evidence-deferrals: []
 compressed-slices:
   - {slug: probe-engine-core, slice-type: probe, created-at: "2026-09-22T06:03:50Z"}
-next-command: wf-review
-next-invocation: "/wf review football-manager-match-engine viewer-pitch"
+next-command: wf-verify
+next-invocation: "/wf verify football-manager-match-engine match-rules"
 workflow-files:
   - 00-index.md
   - 01-intake.md
@@ -251,6 +251,18 @@ workflow-files:
   - verify-evidence/viewer-pitch/
   - verify-evidence/viewer-pitch-run-2/
   - history/06-verify-viewer-pitch-0.md
+  - 04-plan-match-rules.md
+  - 04-plan-match-rules.yaml
+  - 04-plan-match-rules.html.fragment
+  - history/04-plan-3.md
+  - history/04b-instrument-3.md
+  - history/04b-instrument-3.yaml
+  - history/04b-instrument-3.html.fragment
+  - history/05c-benchmark-3.md
+  - history/05c-benchmark-3.yaml
+  - history/05c-benchmark-3.html.fragment
+  - bench-baseline/match-rules/
+  - 05-implement-match-rules.md
 progress:
   intake: complete
   shape: complete

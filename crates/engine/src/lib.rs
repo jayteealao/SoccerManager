@@ -14,18 +14,26 @@ pub mod pitch;
 pub mod player;
 pub mod record;
 pub mod rng;
+pub mod rules;
+#[cfg(feature = "scenario")]
+pub mod scenario;
 pub mod sim;
+pub mod snapshot;
 pub mod steering;
 pub mod team;
 pub mod tuning;
 pub mod validate;
 
-pub use data::{Content, ContentDir};
+pub use data::{Content, ContentDir, StoppageKind};
 pub use error::EngineError;
 pub use record::{
     FanoutSink, FileSink, NullSink, TickHeader, TickRecord, TickSink, VecSink, read_ticks,
 };
-pub use sim::{EngineEvent, EngineEventKind, MatchConfig, Simulation};
+pub use rules::clock::max_ticks;
+pub use rules::fouls::Card;
+pub use rules::{DeadBall, Stoppage};
+pub use sim::{EngineEvent, EngineEventKind, MatchConfig, Simulation, Summary};
+pub use snapshot::{Snapshot, SnapshotSink};
 pub use tuning::Tuning;
 pub use validate::{Validator, Violation};
 

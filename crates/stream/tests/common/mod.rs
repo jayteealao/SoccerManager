@@ -11,7 +11,7 @@ use std::thread::JoinHandle;
 
 use engine::data::{TEAM_A_FILE, TEAM_B_FILE, TeamFile};
 use engine::record::TickSink;
-use engine::{Content, ContentDir, MatchConfig, Simulation, ticks_for_minutes};
+use engine::{Content, ContentDir, MatchConfig, Simulation};
 use protocol::{
     ChangeKind, EventType, Hello, MatchEvent, PROTOCOL_VERSION, Queue, ServerMessage, Stats,
     TeamRef,
@@ -67,7 +67,7 @@ impl Served {
     /// known, so the test can connect.
     pub fn start(name: &str, minutes: u32, buffer_ticks: usize) -> Self {
         let data_dir = temp_dir(name);
-        let ticks = ticks_for_minutes(minutes);
+        let ticks = match_config(minutes).max_ticks();
         let (port_tx, port_rx) = channel();
         let (gauge_tx, gauge_rx) = channel();
         let thread_dir = data_dir.clone();
@@ -119,7 +119,7 @@ fn serve(
     gauge_tx: std::sync::mpsc::Sender<Arc<Gauge>>,
 ) -> Result<u32, StreamError> {
     let config = match_config(minutes);
-    let ticks = ticks_for_minutes(minutes);
+    let ticks = config.max_ticks();
     let owner_id = "0123456789abcdef0123456789abcdef".to_string();
     let match_id = format!("{SEED:016x}-1700000000000");
     let club_ids = [
@@ -179,7 +179,7 @@ fn serve(
     let mut sink = session.sink();
     let mut sim = Simulation::new(config)?;
     let mut written = 0u32;
-    'play: for _ in 0..ticks {
+    'play: while !sim.is_over() && written < ticks {
         if !gate.wait_until_running() {
             break;
         }
@@ -212,7 +212,7 @@ fn serve(
     let summary = sim.summary();
     let _ = session.send(&ServerMessage::Stats(Stats {
         tick: sim.tick(),
-        minute: sim.tick() / TICKS_PER_MINUTE,
+        minute: sim.minute().0,
         home_score: summary.goals[0],
         away_score: summary.goals[1],
         possession_changes: summary.possession_changes,
@@ -230,10 +230,20 @@ fn play_event(
     match_id: &str,
     club_ids: &[String; 2],
 ) -> MatchEvent {
+    use engine::EngineEventKind as K;
     let event_type = match event.kind {
-        engine::EngineEventKind::KickOff => EventType::KickOff,
-        engine::EngineEventKind::Goal => EventType::Goal,
-        engine::EngineEventKind::FullTime => EventType::FullTime,
+        K::KickOff => EventType::KickOff,
+        K::Goal => EventType::Goal,
+        K::HalfTime => EventType::HalfTime,
+        K::FullTime => EventType::FullTime,
+        K::Offside => EventType::Offside,
+        K::Foul => EventType::Foul,
+        K::Card => EventType::Card,
+        K::ThrowIn => EventType::ThrowIn,
+        K::Corner => EventType::Corner,
+        K::GoalKick => EventType::GoalKick,
+        K::FreeKick => EventType::FreeKick,
+        K::Penalty => EventType::Penalty,
     };
     MatchEvent::play(
         owner_id,
@@ -243,4 +253,5 @@ fn play_event(
         event.team.map(|t| club_ids[t].clone()),
         event.scores,
     )
+    .at_minute(event.minute, event.minute_added)
 }

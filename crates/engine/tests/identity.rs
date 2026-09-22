@@ -43,6 +43,7 @@ fn owner_and_match_ids_round_trip_through_stats_json() {
         ball_max_speed: 0.0,
         ball_idle_ticks: 0,
         goals: [0, 0],
+        laws: Default::default(),
     };
     let path = write_stats(&data, &stats).unwrap();
     let read = read_stats(&path).unwrap();
@@ -59,7 +60,7 @@ fn owner_and_match_ids_round_trip_through_the_tick_header() {
     let owner_id = load_or_create_owner_id(&data).unwrap();
     std::fs::remove_dir_all(&data).unwrap();
     let match_id = MatchId::now(common::SEED);
-    let config = common::full_match();
+    let config = common::short_match(1);
     let ticks = ticks_for_minutes(1);
     let header = TickHeader {
         seed: config.seed,
@@ -71,7 +72,7 @@ fn owner_and_match_ids_round_trip_through_the_tick_header() {
     let path = common::temp_path("identity");
     let mut sim = Simulation::new(config).unwrap();
     let mut sink = FileSink::create(&path, &header).unwrap();
-    sim.run(ticks, &mut sink).unwrap();
+    sim.run(&mut sink).unwrap();
     sink.finish().unwrap();
     let file = read_ticks(&path).unwrap();
     std::fs::remove_file(&path).unwrap();

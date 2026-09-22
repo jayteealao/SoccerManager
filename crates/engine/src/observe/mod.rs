@@ -1,6 +1,7 @@
 //! Observability records: `match-stats` and `run-report` with the canonical dotted keys,
 //! the owner identity, the content hash, the hashed machine identity, the build hash, and
-//! process measurements. `match-stats` is also saved under the runtime data folder.
+//! process measurements. `match-stats` is also saved under the runtime data folder, and it
+//! carries the law counts of the match.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -10,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::error::EngineError;
+use crate::sim::Summary;
 
 pub mod identity;
 pub mod process;
@@ -86,6 +88,62 @@ pub struct MatchStats {
     #[serde(rename = "ball.idle_ticks")]
     pub ball_idle_ticks: u32,
     pub goals: [u32; 2],
+    #[serde(flatten, default)]
+    pub laws: LawStats,
+}
+
+/// The law counts of one match. Per-team arrays are home first. `stats.fouls`,
+/// `stats.offsides`, `stats.corners`, and `rules.pack_version` are contract keys; the rest are
+/// additive extras.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LawStats {
+    #[serde(rename = "stats.fouls")]
+    pub fouls: [u32; 2],
+    #[serde(rename = "stats.offsides")]
+    pub offsides: [u32; 2],
+    #[serde(rename = "stats.corners")]
+    pub corners: [u32; 2],
+    #[serde(rename = "rules.pack_version")]
+    pub pack_version: u32,
+    #[serde(rename = "cards.yellow")]
+    pub yellow: [u32; 2],
+    #[serde(rename = "cards.red")]
+    pub red: [u32; 2],
+    /// Seconds added to each half.
+    #[serde(rename = "added_time.s")]
+    pub added_s: [u32; 2],
+    #[serde(rename = "ticks.played")]
+    pub ticks_played: u32,
+    /// Stoppages announced through the stoppage hook.
+    #[serde(rename = "rules.stoppages")]
+    pub stoppages: u32,
+    #[serde(rename = "rules.dead_ball_ticks")]
+    pub dead_ball_ticks: u32,
+    #[serde(rename = "rules.offside_checks")]
+    pub offside_checks: u32,
+    #[serde(rename = "snapshot.writes")]
+    pub snapshot_writes: u32,
+}
+
+impl LawStats {
+    /// The law counts of a match that played `ticks_played` ticks under rule pack version
+    /// `pack_version` and wrote `snapshot_writes` snapshots.
+    pub fn new(s: &Summary, pack_version: u32, ticks_played: u32, snapshot_writes: u32) -> Self {
+        Self {
+            fouls: s.fouls,
+            offsides: s.offsides,
+            corners: s.corners,
+            pack_version,
+            yellow: s.yellow,
+            red: s.red,
+            added_s: s.added_s,
+            ticks_played,
+            stoppages: s.stoppages,
+            dead_ball_ticks: s.dead_ball_ticks,
+            offside_checks: s.offside_checks,
+            snapshot_writes,
+        }
+    }
 }
 
 impl Record for MatchStats {
@@ -115,6 +173,12 @@ pub struct RunReport {
     pub matches: u32,
     #[serde(rename = "bench.match_wall_ms")]
     pub match_wall_ms: u64,
+    /// Ticks in the median match: added time makes the length vary.
+    #[serde(rename = "bench.ticks_per_match")]
+    pub ticks_per_match: u32,
+    /// Processor time per simulated tick over the timed matches, in microseconds.
+    #[serde(rename = "bench.cpu_us_per_tick")]
+    pub cpu_us_per_tick: Option<f64>,
     #[serde(rename = "bench.cpu_ms")]
     pub cpu_ms: Option<u64>,
     #[serde(rename = "bench.peak_mem_mb")]
@@ -256,6 +320,12 @@ mod tests {
             ball_max_speed: 0.0,
             ball_idle_ticks: 0,
             goals: [0, 0],
+            laws: LawStats {
+                fouls: [3, 4],
+                pack_version: 2,
+                ticks_played: 280_000,
+                ..LawStats::default()
+            },
         }
     }
 
@@ -274,6 +344,18 @@ mod tests {
             "\"validate.ran\":true",
             "\"content.hash\":\"abcdef012345\"",
             "\"team.id\":\"club-a\"",
+            "\"stats.fouls\":[3,4]",
+            "\"stats.offsides\"",
+            "\"stats.corners\"",
+            "\"rules.pack_version\":2",
+            "\"cards.yellow\"",
+            "\"cards.red\"",
+            "\"added_time.s\"",
+            "\"ticks.played\":280000",
+            "\"rules.stoppages\"",
+            "\"rules.dead_ball_ticks\"",
+            "\"rules.offside_checks\"",
+            "\"snapshot.writes\"",
         ] {
             assert!(json.contains(key), "missing {key} in {json}");
         }
@@ -285,6 +367,8 @@ mod tests {
             outcome: "success",
             matches: 1,
             match_wall_ms: 1,
+            ticks_per_match: 276_000,
+            cpu_us_per_tick: Some(1.4336),
             cpu_ms: None,
             peak_mem_mb: None,
             ticks_per_s: 1.0,
@@ -303,6 +387,8 @@ mod tests {
             "\"machine.hash\"",
             "\"budget.pass\":true",
             "\"content.hash\"",
+            "\"bench.ticks_per_match\":276000",
+            "\"bench.cpu_us_per_tick\":1.4336",
         ] {
             assert!(json.contains(key), "missing {key} in {json}");
         }

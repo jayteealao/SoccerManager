@@ -1,8 +1,7 @@
 //! Player state, the attribute array, and the derived values the hot path reads.
 //!
 //! `Attributes` is a fixed array in schema order so `Player` stays `Copy` and no name lookup
-//! happens during a tick. `Derived` is computed once at load from the six required
-//! attributes.
+//! happens during a tick. `Derived` is computed once at load from the required attributes.
 
 use std::collections::BTreeMap;
 
@@ -53,10 +52,12 @@ pub struct Derived {
     pub dribbling: f64,
     pub tackling: f64,
     pub positioning: f64,
+    /// Aggression on a 0 to 1 scale; it raises the chance of a foul and of a card.
+    pub aggression: f64,
 }
 
 impl Derived {
-    /// Derives from the six required attributes of a validated schema.
+    /// Derives from the required attributes of a validated schema.
     pub fn from_attributes(a: &Attributes, schema: &AttributeSchema, t: &Tuning) -> Self {
         let [
             pace,
@@ -65,6 +66,7 @@ impl Derived {
             dribbling,
             tackling,
             positioning,
+            aggression,
         ] = schema.required_indices().map(|i| f64::from(a.get(i)));
         Self {
             max_speed: t.base_speed + t.pace_speed * pace / 100.0,
@@ -73,8 +75,17 @@ impl Derived {
             dribbling,
             tackling,
             positioning,
+            aggression: aggression / 100.0,
         }
     }
+}
+
+/// Whether a player takes part in play.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Status {
+    OnPitch,
+    /// Sent off: the player stands at a fixed point beside the pitch until full time.
+    SentOff,
 }
 
 /// One player on the pitch.
@@ -95,9 +106,17 @@ pub struct Player {
     pub target: DVec2,
     /// Unit vector of the last non-zero velocity.
     pub facing: DVec2,
+    pub status: Status,
+    /// Yellow cards shown to the player in this match.
+    pub yellow: u8,
 }
 
 impl Player {
+    /// `true` while the player takes part in play.
+    pub fn active(&self) -> bool {
+        self.status == Status::OnPitch
+    }
+
     /// Maximum speed in metres per second.
     pub fn max_speed(&self) -> f64 {
         self.derived.max_speed
@@ -133,11 +152,14 @@ pub(crate) mod test_support {
                 dribbling: value,
                 tackling: value,
                 positioning: value,
+                aggression: value / 100.0,
             },
             pos: DVec2::ZERO,
             vel: DVec2::ZERO,
             target: DVec2::ZERO,
             facing: DVec2::X,
+            status: Status::OnPitch,
+            yellow: 0,
         }
     }
 }
@@ -149,7 +171,7 @@ mod tests {
 
     fn schema() -> AttributeSchema {
         let mut names: Vec<String> = REQUIRED.iter().map(|s| s.to_string()).collect();
-        for i in 0..24 {
+        for i in 0..23 {
             names.push(format!("attr_{i}"));
         }
         AttributeSchema {

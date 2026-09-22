@@ -180,7 +180,7 @@ fn the_page_is_served_with_its_address_printed_and_both_isolation_headers() {
         .split("\r\n\r\n")
         .nth(1)
         .expect("the response has a body");
-    assert!(body.contains("\"protocol.version\":1"), "{body}");
+    assert!(body.contains("\"protocol.version\":2"), "{body}");
     assert!(
         body.contains(&format!("\"socket.port\":{}", socket_port.trim())),
         "{body} names the socket port {socket_port}"

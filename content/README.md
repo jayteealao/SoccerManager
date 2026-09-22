@@ -6,7 +6,7 @@ The engine reads every data file from this folder. Nothing is embedded in the bi
 
 The `--content-dir` flag, if given, names the folder exactly: it must hold `attributes.json` or the run fails. Otherwise the `SM_CONTENT_DIR` environment variable, if set, names the folder exactly, with the same rule. Only when neither is set does the engine probe `./content` in the working directory, then the `content` folder beside the binary, taking the first that holds `attributes.json`.
 
-Runtime output (`owner.id`, `matches/<match.id>/stats.json`) goes to `SM_DATA_DIR`, which defaults to `%LOCALAPPDATA%\SoccerManager` on Windows.
+Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>/snapshot.smsn`) goes to `SM_DATA_DIR`, which defaults to `%LOCALAPPDATA%\SoccerManager` on Windows.
 
 ## Files
 
@@ -14,14 +14,14 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`) goes to `SM_DATA_DI
 |---|---|---|
 | `attributes.json` | 1 | The attribute schema: 30 to 50 names in four groups |
 | `tuning.json` | 1 | Engine constants, generator distributions, fatigue parameters, stream buffer |
-| `rules/default.json` | 1 | The rule pack |
+| `rules/default.json` | 2 | The rule pack |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 
-Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 1`.
+Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 2`.
 
 ## attributes.json
 
-`attributes` is a list of `{ "name", "group" }`. Names are 2 to 32 characters and unique. Groups are `technical`, `mental`, `physical`, `goalkeeping`. The count is 30 to 50. Six names are required because the engine reads them: `pace`, `acceleration`, `passing`, `dribbling`, `tackling`, `positioning`.
+`attributes` is a list of `{ "name", "group" }`. Names are 2 to 32 characters and unique. Groups are `technical`, `mental`, `physical`, `goalkeeping`. The count is 30 to 50. Seven names are required because the engine reads them: `pace`, `acceleration`, `passing`, `dribbling`, `tackling`, `positioning`, `aggression`. A schema without one of them is refused.
 
 The shipped schema (36):
 
@@ -74,6 +74,22 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 | anchor_tolerance | m | 15.0 | 0 to 150 |
 | anchor_ball_distance | m | 30.0 | 0 to 300 |
 | anchor_grace_ticks | ticks | 100 | 0 to 1000 |
+| foul_base | probability per tackle | 0.1 | 0 to 1 |
+| foul_aggression_weight | ratio | 1.0 | 0 to 4 |
+| foul_tackling_weight | ratio | 0.5 | 0 to 1 |
+| foul_ball_loss | ratio | 0.6 | 0 to 1 |
+| yellow_base | probability per foul | 0.05 | 0 to 1 |
+| yellow_aggression_weight | probability per foul | 0.15 | 0 to 1 |
+| red_base | probability per foul | 0.005 | 0 to 1 |
+| restart_delay_s.kick_off | s | 5 | 0 to 60 |
+| restart_delay_s.throw_in | s | 3 | 0 to 60 |
+| restart_delay_s.corner | s | 8 | 0 to 60 |
+| restart_delay_s.goal_kick | s | 6 | 0 to 60 |
+| restart_delay_s.free_kick | s | 8 | 0 to 60 |
+| restart_delay_s.penalty | s | 15 | 0 to 60 |
+| restart_ready_radius | m | 1.0 | 0.1 to 10 |
+
+The foul chance of one tackle is `foul_base`, multiplied by `1 + foul_aggression_weight × (aggression − 0.5)` and by `1 − foul_tackling_weight × (tackling − 0.5)`, with both attributes on a 0 to 1 scale. `foul_ball_loss` is the share of fouls after which the fouled team loses the ball. After any other foul, the referee plays advantage outside the penalty area. The yellow-card chance of a foul is `yellow_base + yellow_aggression_weight × aggression`, and the red-card chance is `red_base`. A restart is taken no earlier than its `restart_delay_s`, when the taker is within `restart_ready_radius` of the spot and every opponent stands back. At three times the delay, the restart is taken whatever the players are doing.
 
 ### generator
 
@@ -93,7 +109,7 @@ Each `per_position` entry holds `technical`, `mental`, `physical`, and `goalkeep
 | minutes_to_half_stamina | minutes | 70.0 | 1 to 600 |
 | recovery_per_day | points | 20.0 | 0 to 100 |
 
-The engine does not read these yet; the tactics slice consumes them.
+The engine does not read these yet.
 
 ### stream
 
@@ -121,8 +137,16 @@ carries a 47-byte delta.
 | substitutions.limit | players a team may replace | 5 | 0 to 11 |
 | substitutions.windows | stoppages a team may use for substitutions | 3 | 0 to 5 |
 | stoppages | one entry per kind | see file | every kind exactly once |
+| added_time.per_kind | seconds each stoppage of a kind adds | see file | 0 to 600; every kind present |
+| added_time.card_s | seconds each card adds | 15 | 0 to 120 |
+| added_time.variance_s | the most seconds the seeded variance adds or removes | 30 | 0 to 300 |
+| added_time.min_s | the least added time of a half | 60 | 0 to 900 |
+| added_time.max_s | the most added time of a half | 900 | `min_s` to 1800 |
+| min_players | the fewest players a team may have on the pitch; fewer ends the match | 7 | 1 to 11 |
 
-Each stoppage is `{ "kind", "admits_tactics", "admits_substitution" }`. Kinds: `kick_off`, `throw_in`, `corner`, `goal_kick`, `free_kick`, `penalty`, `goal`, `half_time`, `injury`. The engine does not enforce the pack yet; the match-rules slice consumes it.
+Each stoppage is `{ "kind", "admits_tactics", "admits_substitution" }`. Kinds: `kick_off`, `throw_in`, `corner`, `goal_kick`, `free_kick`, `penalty`, `goal`, `half_time`, `injury`. The engine announces every stoppage by its kind. The engine does not apply queued tactical changes or substitutions yet, so `admits_tactics`, `admits_substitution`, and `substitutions` are read and validated only.
+
+The added time of a half is the sum of `per_kind` over the half's stoppages, plus `card_s` for each card, plus a seeded variance from `-variance_s` to `+variance_s`. The sum is rounded to the second and clamped to `min_s` to `max_s`. A match shorter than `halves × half_minutes` plays no added time.
 
 ## teams/*.json
 

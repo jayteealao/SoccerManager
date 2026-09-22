@@ -99,7 +99,7 @@ test('the recorded fixture decodes from its first keyframe forward', (t) => {
     return;
   }
   const { header, entries } = readFixture(400);
-  assert.equal(header.protocolVersion, 1);
+  assert.equal(header.protocolVersion, 2);
   assert.equal(header.seed, 7n);
 
   let prev = newFrame();

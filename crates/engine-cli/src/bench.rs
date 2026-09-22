@@ -7,7 +7,7 @@ use std::time::Instant;
 
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id};
 use engine::observe::{RunReport, emit_line, machine_hash, process};
-use engine::{MatchConfig, NullSink, Simulation, ticks_for_minutes};
+use engine::{MatchConfig, NullSink, Simulation};
 use protocol::{Hello, PROTOCOL_VERSION, Queue, ServerMessage, TeamRef};
 use stream::session::{MatchState, SessionConfig};
 use stream::{Client, CommandContext, Gate, Incoming, Server, Session};
@@ -22,38 +22,45 @@ pub fn run(content_dir: Option<&Path>, opts: &BenchOpts) -> anyhow::Result<i32> 
     if opts.matches == 0 {
         anyhow::bail!("--matches must be at least 1");
     }
-    let ticks = ticks_for_minutes(opts.minutes);
     // Content, teams, and identity load once here, before the warm-up, so nothing on the
     // timed path reads a file or hashes bytes.
     let loaded = crate::content::load(content_dir, None, None)?;
     let [team_a, team_b] = &loaded.teams;
     let config = MatchConfig::new(opts.seed, opts.minutes, &loaded.content, [team_a, team_b])?;
     let owner_id = load_or_create_owner_id(&data_dir())?;
+    let ticks = config.max_ticks();
 
-    // Warm-up run, discarded.
-    run_one(&config, ticks)?;
+    // Warm-up run, discarded. No snapshot sink is attached: the benchmark times the engine.
+    run_one(&config)?;
 
     let cpu_before = process::cpu_time_ms();
     let started = Instant::now();
     let mut samples_ms: Vec<u64> = Vec::with_capacity(opts.matches as usize);
+    let mut samples_ticks: Vec<u32> = Vec::with_capacity(opts.matches as usize);
     for _ in 0..opts.matches {
-        samples_ms.push(run_one(&config, ticks)?);
+        let (ms, played) = run_one(&config)?;
+        samples_ms.push(ms);
+        samples_ticks.push(played);
     }
     let wall_total_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
     let cpu_after = process::cpu_time_ms();
+    let total_ticks: u64 = samples_ticks.iter().map(|&t| u64::from(t)).sum();
     samples_ms.sort_unstable();
+    samples_ticks.sort_unstable();
     let median_ms = samples_ms[samples_ms.len() / 2];
+    let ticks_per_match = samples_ticks[samples_ticks.len() / 2];
     let cpu_ms = match (cpu_before, cpu_after) {
         (Some(a), Some(b)) => Some(b.saturating_sub(a)),
         _ => None,
     };
     let cpu_wall_ratio = cpu_ms.map(|c| c as f64 / wall_total_ms.max(1) as f64);
+    let cpu_us_per_tick = cpu_ms.map(|c| round4(c as f64 * 1000.0 / total_ticks.max(1) as f64));
     let stream = if opts.stream {
         Some(measure_stream(&config, ticks, opts.seed)?)
     } else {
         None
     };
-    let ticks_per_s = f64::from(ticks) / (median_ms.max(1) as f64 / 1000.0);
+    let ticks_per_s = f64::from(ticks_per_match) / (median_ms.max(1) as f64 / 1000.0);
     let budget_pass = median_ms <= BUDGET_MATCH_WALL_MS;
 
     let report = RunReport {
@@ -64,6 +71,8 @@ pub fn run(content_dir: Option<&Path>, opts: &BenchOpts) -> anyhow::Result<i32> 
         outcome: "success",
         matches: opts.matches,
         match_wall_ms: median_ms,
+        ticks_per_match,
+        cpu_us_per_tick,
         cpu_ms,
         peak_mem_mb: process::peak_memory_mb(),
         ticks_per_s,
@@ -79,12 +88,18 @@ pub fn run(content_dir: Option<&Path>, opts: &BenchOpts) -> anyhow::Result<i32> 
     Ok(if budget_pass { 0 } else { 2 })
 }
 
-fn run_one(config: &MatchConfig, ticks: u32) -> anyhow::Result<u64> {
+/// One whole match. Returns its wall time in milliseconds and the ticks it played.
+fn run_one(config: &MatchConfig) -> anyhow::Result<(u64, u32)> {
     let mut sim = Simulation::new(config.clone())?;
     let mut sink = NullSink;
     let started = Instant::now();
-    sim.run(ticks, &mut sink)?;
-    Ok(u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX))
+    sim.run(&mut sink)?;
+    let ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    Ok((ms, sim.tick()))
+}
+
+fn round4(x: f64) -> f64 {
+    (x * 10_000.0).round() / 10_000.0
 }
 
 /// One match streamed over the socket to a client that reads as fast as it can. Returns the

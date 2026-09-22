@@ -102,6 +102,50 @@ pub struct Tuning {
     pub anchor_ball_distance: f64,
     #[garde(range(min = 0, max = 1000))]
     pub anchor_grace_ticks: u32,
+    /// Fouls: the chance that a tackle attempt is a foul for an average tackler, how much
+    /// aggression raises it, how much tackling skill lowers it, and the share of fouls after
+    /// which the fouled team loses the ball (the rest play on with advantage).
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub foul_base: f64,
+    #[garde(range(min = 0.0, max = 4.0))]
+    pub foul_aggression_weight: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub foul_tackling_weight: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub foul_ball_loss: f64,
+    /// Cards per foul: the yellow chance at aggression 0, the extra at aggression 100, and the
+    /// straight red chance.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub yellow_base: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub yellow_aggression_weight: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub red_base: f64,
+    /// Seconds a dead ball lasts before the taker may restart play, per restart kind.
+    #[garde(dive)]
+    pub restart_delay_s: RestartDelays,
+    /// Metres from the restart spot within which the taker is ready.
+    #[garde(range(min = 0.1, max = 10.0))]
+    pub restart_ready_radius: f64,
+}
+
+/// Seconds between the ball going dead and the restart, per restart kind. Play restarts
+/// at three times the delay at the latest.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct RestartDelays {
+    #[garde(range(min = 0.0, max = 60.0))]
+    pub kick_off: f64,
+    #[garde(range(min = 0.0, max = 60.0))]
+    pub throw_in: f64,
+    #[garde(range(min = 0.0, max = 60.0))]
+    pub corner: f64,
+    #[garde(range(min = 0.0, max = 60.0))]
+    pub goal_kick: f64,
+    #[garde(range(min = 0.0, max = 60.0))]
+    pub free_kick: f64,
+    #[garde(range(min = 0.0, max = 60.0))]
+    pub penalty: f64,
 }
 
 impl Default for Tuning {
@@ -143,9 +187,29 @@ impl Default for Tuning {
             anchor_tolerance: 15.0,
             anchor_ball_distance: 30.0,
             anchor_grace_ticks: 100,
+            foul_base: FOUL_BASE,
+            foul_aggression_weight: 1.0,
+            foul_tackling_weight: 0.5,
+            foul_ball_loss: 0.6,
+            yellow_base: 0.05,
+            yellow_aggression_weight: 0.15,
+            red_base: 0.005,
+            restart_delay_s: RestartDelays {
+                kick_off: 5.0,
+                throw_in: 3.0,
+                corner: 8.0,
+                goal_kick: 6.0,
+                free_kick: 8.0,
+                penalty: 15.0,
+            },
+            restart_ready_radius: 1.0,
         }
     }
 }
+
+/// The shipped foul chance per tackle attempt, set for about ten fouls per team in a
+/// 90-minute match with the default teams.
+const FOUL_BASE: f64 = 0.1;
 
 #[cfg(test)]
 mod tests {

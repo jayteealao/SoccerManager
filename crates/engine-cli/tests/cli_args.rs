@@ -98,8 +98,17 @@ fn generated_teams_simulate_a_full_match_with_the_engine_core_tick_count() {
         String::from_utf8_lossy(&out.stderr)
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.contains("\"ticks.written\":270000"),
+    // Ninety minutes of regulation play, then the time added to each half.
+    let stats: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    let added: u64 = stats["added_time.s"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s.as_u64().unwrap())
+        .sum();
+    assert_eq!(
+        stats["ticks.written"].as_u64(),
+        Some(270_000 + added * 50),
         "stdout: {stdout}"
     );
     assert!(

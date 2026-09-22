@@ -14,19 +14,24 @@ use thiserror::Error;
 
 pub use codec::{DEFAULT_KEYFRAME_INTERVAL, DELTA_BYTES, KEYFRAME_BYTES, Quantised};
 pub use command::{Ack, ChangeKind, ChangeState, Pending, Queue, Reject, Verdict};
-pub use event::{ChangeOutcome, EventType, MatchEvent};
+pub use event::{CardKind, ChangeOutcome, EventType, MatchEvent};
 pub use frame::{Frame, TickFrame};
 pub use message::{ClientCommand, Hello, QueueChange, ServerMessage, SetSpeed, Stats, TeamRef};
 
 /// The protocol version a client must ask for. A client that asks for another version is
 /// refused at the handshake, with both versions named.
 ///
-/// Version 1 survived the two kit-colour fields the `viewer-pitch` slice added to
-/// `TeamRef`. The judgement was made, not missed: no message was removed, no field changed
-/// meaning, and both producers in existence were updated in the same commit. A JavaScript
-/// client ignores a field it does not know, and `deny_unknown_fields` reaches only a Rust
-/// client built from this same commit.
-pub const PROTOCOL_VERSION: u16 = 1;
+/// Version 1 survived the two kit-colour fields added to `TeamRef`. The judgement was made,
+/// not missed: no message was removed, no field changed meaning, and both producers in
+/// existence were updated in the same commit. A JavaScript client ignores a field it does
+/// not know, and `deny_unknown_fields` reaches only a Rust client built from this same
+/// commit.
+///
+/// Version 2: `ticks_expected` changed meaning from the exact tick count to the most ticks
+/// the match can last, because added time makes the real length known only at full time.
+/// A field that changes meaning takes a new version. The event message also gained the law
+/// event types and six optional fields.
+pub const PROTOCOL_VERSION: u16 = 2;
 
 /// Errors this crate returns.
 #[derive(Debug, Error)]
@@ -134,6 +139,12 @@ pub const MESSAGES: &[MessageSpec] = &[
             "change.queue_id",
             "change.rejected_reason",
             "change.state",
+            "player.id",
+            "player.secondary_id",
+            "card.kind",
+            "foul.advantage",
+            "minute.added",
+            "added_time.s",
         ],
     },
     MessageSpec {

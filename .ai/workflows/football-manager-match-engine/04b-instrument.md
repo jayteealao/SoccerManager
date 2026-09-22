@@ -4,15 +4,15 @@ type: augmentation
 augmentation-type: instrument
 slug: football-manager-match-engine
 parent-workflow: football-manager-match-engine
-slice-slug: viewer-pitch
-instrumentation-framework: "engine side: serde_json JSON Lines per .ai/observability.md plan-version 1, tracing to stderr. Page side: console JSON Lines with the same envelope, plus a ring buffer on the page test hook. No browser transport exists yet."
+slice-slug: match-rules
+instrumentation-framework: "serde_json JSON Lines per .ai/observability.md plan-version 1 (match-event, match-stats, run-report) plus tracing to stderr. The page side from viewer-pitch is unchanged."
 dark-paths-found: 5
-signals-designed: 9
+signals-designed: 10
 pii-warnings: false
 status: ready
 created-at: "2026-09-22T06:37:07Z"
-updated-at: "2026-09-22T14:41:32Z"
-revision-count: 3
+updated-at: "2026-09-22T19:29:33Z"
+revision-count: 4
 revisions:
   - rev: 1
     at: "2026-09-22T06:37:07Z"
@@ -29,120 +29,116 @@ revisions:
     trigger: new-slice
     because: "viewer-pitch plan designs page-side signals; the product owner chose option 3 alongside option 2 at plan Round 3 Q12"
     changed: "slice-slug, framework now names two sides, eight browser signals plus one new engine signal, five browser dark paths, a new transport-gap note; the stream-protocol record is kept at history/04b-instrument-2.md"
+  - rev: 4
+    at: "2026-09-22T19:29:33Z"
+    trigger: new-slice
+    because: "match-rules plan designs the law, snapshot, and per-tick benchmark signals; the contract already reserves most of the keys"
+    changed: "slice-slug, framework back to the engine side, ten signals, five dark paths; the viewer-pitch record is kept at history/04b-instrument-3.md"
 refs:
   index: 00-index.md
   shape: 02-shape.md
-  plan: 04-plan-viewer-pitch.md
+  plan: 04-plan-match-rules.md
   contract: ../../observability.md
-  prior: history/04b-instrument-2.md
+  prior: history/04b-instrument-3.md
 ---
 
-# Instrumentation: Viewer Pitch and Playback
+# Instrumentation: Match Rules and Stoppage Snapshots
 
 ## The Instrumentation
 
-Three slices have filled four record kinds and eighteen signals, every one of them written by the Rust process to stderr or to a JSON Lines file. The contract has been half-waiting for this slice since its first version: it reserves `viewer.socket_drops` at line 65 and puts the viewer in scope over the socket, and the shape's Augmentation Plan names "a viewer that drops ticks silently" as a dark path. Nothing in a browser has ever written a signal, because nothing in a browser has ever existed.
+The viewer slice left the engine with four record kinds and the page with nine signals on the console. The observability contract has waited for this slice longer than for any other: its `event.type` list already names offside, foul, card, corner, throw-in, goal-kick, free-kick, penalty, half-time, and snapshot, and it reserves `player.id`, `player.secondary_id`, `snapshot.tick`, `stats.fouls`, `stats.corners`, `stats.offsides`, and `rules.pack_version`. The engine emits none of them yet.
 
-Nine signals are designed. Eight of them run in the page: one for the connection, one for a socket that drops mid-match, one for skipped ticks, one for a playback speed the engine cannot sustain, one rolling frame-budget summary, one history and memory reading, one rewind, and one refused frame. The ninth runs in Rust, because this slice makes the engine binary serve the page: `web.serving` names the directory, the file count, and whether the two cross-origin-isolation headers are on, which is the precondition for the memory gauge the product owner chose. One existing signal gains a field: `fixture.replayed` carries the new `sustain` cap beside its `speed`.
+Ten signals are designed, and seven of them fill keys the contract already holds. Law events ride the existing `match-event` record kind with the two player keys and four additive extras: `card.kind`, `foul.advantage`, `minute.added`, and `added_time.s`. Four tracing lines cover the snapshot's life: written, failed, refused, and resumed. Two warnings cover the referee's failure modes: a dead ball forced after a stall and a match abandoned below seven players. The statistics record gains the law counts, and the benchmark report gains processor time per tick, because the product owner chose to judge the gate per tick (plan Round 4 Q13).
 
-The product owner chose this work knowing its cost (plan Round 3 Q12, options 2 and 3 together). The cost is real and is recorded here rather than hidden: **the page-side signals have no transport.** The observability contract closed U-2 for the engine with a file sink plus the socket feed, and neither reaches a browser. Until a browser path exists, every page-side signal is one JSON Lines row on `console.info` plus a ring buffer on the page test hook, which a browser drive and a Node test can both read. That is enough for verify and not enough for a dashboard, and `/wf observability` owns closing it.
+Five dark paths are closed, and one of them is inherited from the shape: a queued change that never applies. This slice opens stoppages and applies no change, so `rules.stoppages` counts every hook call and the next slice can prove that each queued change met a stoppage. The top risk is volume: about 100 snapshots per match would flood an info-level log, so `snapshot.written` is debug level and `snapshot.writes` is the statistic to watch.
 
 ## 1. Current state
 
 | File | Quality | Existing signals | Dark paths |
 |------|---------|-----------------|------------|
-| `web/socket.mjs` (planned) | dark | none | the socket closes mid-match and the page keeps drawing the last frame with no statement that the stream ended |
-| `web/schedule.mjs` (planned) | dark | none | the scheduler skips ticks at high speed and nothing counts them; the shape names this dark path directly |
-| `web/playback.mjs` (planned) | dark | none | playback runs slower than the selected speed and the manager is never told |
-| `web/history.mjs` (planned) | dark | none | the history grows past the 300 MB budget and the page keeps allocating |
-| `web/decode.mjs` (planned) | dark | none | a frame the decoder cannot read is discarded and the match simply stutters |
-| `crates/engine-cli/src/web.rs` (planned) | dark | none | the static server serves a directory with no statement of which one, or with the isolation headers off, which silently disables the memory gauge |
-| `crates/stream/src/replay.rs` | good | `fixture.replayed` | none new; the signal gains the `sustain` field |
-| `crates/stream/src/server.rs`, `session.rs`, `record.rs` | good | `socket.listening`, `socket.client`, `socket.refused`, `socket.backpressure`, `fixture.recorded` | none new |
-| `crates/protocol/src/event.rs`, `command.rs` | good | `match-event.engine`, `match-event.change` | none new |
-| `crates/engine/src/observe/mod.rs`, `record.rs`, `data/mod.rs` | good | `match-stats`, `run-report`, `tickfile.*`, `content.*` | none new |
+| `crates/engine/src/sim.rs` | partial | kick-off, goal, and full-time engine events; the summary counters | a stoppage with no consumer (new with this slice) |
+| `crates/engine/src/rules/*.rs` (planned) | dark | none | a dead-ball stall; a silent abandonment; the unseen offside cost |
+| `crates/engine/src/snapshot.rs` (planned) | dark | none | none of its own; the write path is in the command line |
+| `crates/engine-cli/src/simulate.rs`, `serve.rs` | good | `match-stats` on stdout and in `stats.json`, `tickfile.*` | a lost snapshot |
+| `crates/engine-cli/src/resume.rs` (planned) | dark | none | a refused snapshot with no named reason (closed by design in the plan) |
+| `crates/engine-cli/src/stream_run.rs` | good | `match-event` for kick-off, goal, full-time | none; the law events extend the mapping |
+| `crates/engine-cli/src/bench.rs` | good | `run-report` | none; the report lacks the per-tick unit the gate now reads |
+| `crates/engine/src/observe/mod.rs` | good | `MatchStats`, `RunReport` | none; the contract's law keys are absent |
+| `crates/protocol/src/event.rs` | good | `match-event.engine`, `match-event.change` | none |
+| `web/*.mjs` | good | nine `viewer.*` signals | none new |
 
-Summary: 5 dark paths found, all of them in the page, across 10 files (6 planned). Framework: two sides now. The Rust side is unchanged. The page side writes the same envelope to `console.info` and to a ring buffer, with no transport.
+Summary: 5 dark paths found across 10 files (4 planned). Framework: the engine side's JSON Lines records and tracing; the page side is unchanged.
 
 ## 2. Instrumentation plan
 
 | File | Function/path | Signal type | Signal name | Key fields | Rationale |
 |------|--------------|-------------|-------------|------------|-----------|
-| `web/socket.mjs` | `open()` after the hello decodes | event (console JSON) | `viewer.connected` | `protocol.version`, `engine.version`, `match.id`, `owner.id`, `origin`, `ticks_expected` | The page states which engine and which match it is showing, so a screenshot is attributable |
-| `web/socket.mjs` | the `close` and `error` handlers | event (console JSON) | `viewer.socket_drops` | `match.id`, `tick`, `code`, `wasClean`, `reason` | The contract reserves this key at line 65; a dropped socket stops looking like a frozen match |
-| `web/schedule.mjs` | the frame scheduler, once per second | event (console JSON) | `viewer.tick_skipped` | `tick`, `skipped`, `speed`, `window_s` | Closes the shape's named dark path: a viewer that drops ticks silently |
-| `web/playback.mjs` | the sustained-rate estimator | event (console JSON) | `viewer.lag` | `requested_speed`, `sustained_speed`, `tick`, `notice_shown` | The page states why it slowed down; this is the evidence for AC-5 |
-| `web/schedule.mjs` | rolling window, once per five seconds | metric (console JSON) | `viewer.frame_budget` | `frames`, `fps_median`, `frame_ms_p95`, `dropped_frames`, `refresh_hz`, `window_s` | The frame-time counter is a signal, not only a number on screen; `refresh_hz` stops a 144 Hz panel reading as a pass |
-| `web/history.mjs` | after each keyframe, and on demand | metric (console JSON) | `viewer.history` | `ticks_stored`, `history_bytes`, `page_bytes`, `budget_bytes` | Both numbers the product owner chose at Round 3 Q9: the exact byte count and the browser's whole-page figure |
-| `web/playback.mjs` | the scrubber commit | event (console JSON) | `viewer.rewind` | `from_tick`, `to_tick`, `exact` | A rewind states where it landed and whether the drawn frame equalled the stored tick |
-| `web/decode.mjs` | the frame decoder's refusal path | log (console JSON, warn) | `viewer.decode_refused` | `reason`, `tick`, `bytes`, `kind` | A frame the page cannot read is named, not swallowed |
-| `crates/engine-cli/src/web.rs` | the static server's bind | event (tracing info) | `web.serving` | `dir` (relative), `files`, `isolated`, `port` | States the directory, the file count, and whether the two isolation headers are on, which the memory gauge requires |
-
-One existing signal changes: `fixture.replayed` in `crates/stream/src/replay.rs` gains `sustain`, the new cap value, beside its `speed`. A replay run without `--sustain` reports `sustain = null`.
+| `crates/engine-cli/src/stream_run.rs` | event mapping | event (JSON record) | `match-event` law types | `event.type`, `tick`, `minute`, `team.id`, `player.id`, `player.secondary_id`, `card.kind`, `foul.advantage`, `minute.added`, `added_time.s` | Fills the contract's reserved event types and player keys; commentary and the viewer read them |
+| `crates/engine/src/rules/clock.rs` | end of regulation per half | event (tracing info) | `rules.added_time` | `half`, `tally_s`, `variance_s`, `added_s`, `announced_min` | The added-time formula is visible in a real match |
+| `crates/engine/src/rules/mod.rs` | dead-ball hard limit | log (tracing warn) | `rules.dead_ball_stalled` | `tick`, `kind`, `team.id`, `waited_ticks`, `taker_distance_m` | A forced restart is counted, not hidden |
+| `crates/engine/src/rules/discipline.rs` | `abandoned` | log (tracing warn) | `rules.abandoned` | `tick`, `team.id`, `on_pitch` | A match below seven players states why it ended |
+| `crates/engine/src/snapshot.rs` | `write_atomic` | event (tracing debug) | `snapshot.written` | `match.id`, `snapshot.tick`, `kind`, `bytes` | Each snapshot is traceable at debug level |
+| `crates/engine-cli/src/simulate.rs`, `serve.rs` | snapshot sink | log (tracing error) | `snapshot.write_failed` | `match.id`, `snapshot.tick`, `path`, `reason` | A lost snapshot is named at the stoppage |
+| `crates/engine-cli/src/resume.rs` | read | log (tracing error) | `snapshot.refused` | `path`, `reason` | The refusal reason reaches the log as well as stderr |
+| `crates/engine-cli/src/resume.rs` | after `from_snapshot` | event (tracing info) | `match.resumed` | `match.id`, `snapshot.tick`, `half`, `home.score`, `away.score`, `build.hash` | A resumed match states where it picked up |
+| `crates/engine/src/observe/mod.rs` | `MatchStats` | metric (JSON record) | `match-stats` law fields | `stats.fouls`, `stats.offsides`, `stats.corners`, `rules.pack_version`, `cards.yellow`, `cards.red`, `added_time.s`, `ticks.played`, `rules.stoppages`, `rules.dead_ball_ticks`, `rules.offside_checks`, `snapshot.writes` | The law counts per match, for calibration and for the dark paths |
+| `crates/engine-cli/src/bench.rs` | report | metric (JSON record) | `run-report` per-tick fields | `bench.ticks_per_match`, `bench.cpu_us_per_tick` | The benchmark gate reads processor time per tick |
 
 ## 3. Signal designs
 
-```js
-// web/signal.mjs — one writer, the same envelope the Rust records use.
-export function signal(name, fields) {
-  const row = {
-    "record.kind": "viewer-event",
-    "schema.version": "1",
-    service: "touchline-viewer",
-    operation: "view",
-    signal: name,
-    ts: new Date().toISOString(),
-    ...fields,
-  };
-  console.info(JSON.stringify(row));   // the only transport that exists today
-  ring.push(row);                      // last 256 rows, readable at window.__touchline.signals
-  return row;
-}
-
-// web/socket.mjs
-signal("viewer.connected", { "protocol.version": hello["protocol.version"], "engine.version": hello["engine.version"],
-                             "match.id": hello["match.id"], "owner.id": hello["owner.id"],
-                             origin: location.origin, ticks_expected: hello.ticks_expected });
-signal("viewer.socket_drops", { "match.id": matchId, tick: lastTick, code: ev.code, wasClean: ev.wasClean, reason: ev.reason });
-
-// web/schedule.mjs — once per second, and only when skipped > 0
-signal("viewer.tick_skipped", { tick, skipped, speed, window_s: 1 });
-// rolling five-second window, always
-signal("viewer.frame_budget", { frames, fps_median, frame_ms_p95, dropped_frames, refresh_hz, window_s: 5 });
-
-// web/playback.mjs
-signal("viewer.lag", { requested_speed, sustained_speed, tick, notice_shown });
-signal("viewer.rewind", { from_tick, to_tick, exact });
-
-// web/history.mjs — page_bytes is null until the browser resolves its measurement
-signal("viewer.history", { ticks_stored, history_bytes, page_bytes, budget_bytes: 314572800 });
-
-// web/decode.mjs
-signal("viewer.decode_refused", { reason, tick, bytes, kind });
-```
-
 ```rust
-// crates/engine-cli/src/web.rs — the static server this slice adds
-tracing::info!(signal = "web.serving", dir = %relative, files, isolated, port);
+// crates/engine-cli/src/stream_run.rs — the law events extend the existing mapping.
+// Optional fields are skipped when None, as team.id and change.* already are.
+MatchEvent::play(match_id, owner_id, EventType::Card, tick, minute, score)
+    .team(team_id)
+    .player(player_id)              // player.id — the booked player
+    .card(CardKind::SecondYellow)   // card.kind — "yellow" | "second-yellow" | "red"
+    .minute_added(minute_added);    // minute.added — Some(2) at 45+2, None otherwise
 
-// crates/stream/src/replay.rs — the existing signal gains one field
-tracing::info!(signal = "fixture.replayed", path = %relative, frames, speed, sustain = ?sustain, hash = %hash12);
+MatchEvent::play(match_id, owner_id, EventType::Foul, tick, minute, score)
+    .team(offending_team_id)
+    .player(tackler_id)             // player.id — the offender
+    .secondary(fouled_id)           // player.secondary_id — the fouled player
+    .advantage(true);               // foul.advantage — play continued
+
+// crates/engine/src/rules/clock.rs — once per half, when regulation time ends
+tracing::info!(signal = "rules.added_time", half, tally_s, variance_s, added_s, announced_min);
+
+// crates/engine/src/rules/mod.rs — the forced restart
+tracing::warn!(signal = "rules.dead_ball_stalled", tick, kind = kind.code(), team.id = %team_id,
+               waited_ticks, taker_distance_m);
+
+// crates/engine/src/rules/discipline.rs
+tracing::warn!(signal = "rules.abandoned", tick, team.id = %team_id, on_pitch);
+
+// crates/engine/src/snapshot.rs — debug level: about 100 rows per match
+tracing::debug!(signal = "snapshot.written", match.id = %match_id, snapshot.tick = tick,
+                kind = kind.code(), bytes);
+
+// crates/engine-cli/src/simulate.rs and serve.rs — the match continues after this line
+tracing::error!(signal = "snapshot.write_failed", match.id = %match_id, snapshot.tick = tick,
+                path = %relative, reason = %err);
+
+// crates/engine-cli/src/resume.rs
+tracing::error!(signal = "snapshot.refused", path = %relative, reason = %reason);
+tracing::info!(signal = "match.resumed", match.id = %match_id, snapshot.tick = tick, half,
+               home.score, away.score, build.hash = %build);
 ```
 
-Types: every tick is an integer; `speed`, `requested_speed`, and `sustained_speed` are floats with one decimal; `fps_median` and `refresh_hz` are integers; `frame_ms_p95` is a float with two decimals; `history_bytes`, `page_bytes`, and `budget_bytes` are integers in bytes, and `page_bytes` is `null` until the browser resolves its asynchronous measurement; `isolated` is a boolean; `exact` is a boolean that states whether the drawn frame equalled the stored tick exactly. `record.kind` is `viewer-event`, a fifth kind that the observability audit must accept or rename.
+Types: every tick is a `u32`; `minute` and `minute.added` are integers, and `minute.added` is absent outside added time; `added_time.s` is an integer number of seconds and appears on `half-time` and `full-time`; `card.kind` is one of three strings; `foul.advantage` is a boolean and appears on `foul` only; `waited_ticks` is an integer; `taker_distance_m` is a float with two decimals; `bytes` is an integer; `bench.cpu_us_per_tick` is a float with four decimals; `bench.ticks_per_match` is an integer.
 
 ## 4. PII & security notes
 
-No PII concerns identified. `owner.id` is opaque per the contract and is echoed from the hello, never minted in the page. `origin` is `http://127.0.0.1:<port>`, a loopback value. No file path from the user's machine enters a page-side signal, because the page has no file access. `web.serving` reports the served directory relative to the working directory, never an absolute path.
+No PII concerns identified in the planned signals. `player.id` and `player.secondary_id` identify fictional generated players (`p-<club>-<nn>`), never a person. `owner.id` stays opaque per the contract. Every path in a signal is relative to `SM_DATA_DIR` or the working directory, never absolute, so a user name in a home folder does not reach a log.
 
-One security note that is not a PII note: this slice sets `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` on every response from the static server, because the memory gauge the product owner chose requires them. That is a tightening, not a loosening: it isolates the page from every other browsing context and refuses any cross-origin subresource. Every asset this page loads is same-origin, so nothing is lost today, and `web.serving` reports `isolated` so a run with the headers off is visible rather than silently ungauged.
+One integrity note that is not a PII note: `snapshot.refused` must name the reason and never print the file's bytes. A corrupt file is untrusted input, and the reason string is built from the reader's own checks, not from the file's content.
 
 ## 5. Implementation notes
 
-- **The transport gap is the headline.** `.ai/observability.md` closed U-2 with a file sink plus the socket feed. Neither reaches a browser: the page cannot write a file, and the socket carries engine-to-page messages, not page-to-engine records. Until a browser path exists, `console.info` plus the ring buffer is the whole transport. Do not invent a sink in this slice; record the gap and let `/wf observability` decide between a page-to-engine record message, a beacon to a new endpoint on the static server, or nothing.
-- **`record.kind: viewer-event` is a fifth kind** and is outside the four the contract's Block A names. Emit it as the additive extra `content.hash`, `teams`, and `change.queue_id` already are, and let `/wf observability audit` settle whether it is a kind of its own or a variant of `match-event`.
-- **`viewer.socket_drops` is the one reserved key.** Spell it exactly as the contract does, including the underscore, so the reservation is honoured rather than shadowed by a near-miss name.
-- **Sampling.** `viewer.frame_budget` is a five-second rolling summary, and `viewer.tick_skipped` is a one-second summary emitted only when the count is above zero. Neither writes per frame, because 60 rows per second over 90 minutes would be 324,000 rows for one match. `viewer.connected`, `viewer.socket_drops`, `viewer.lag`, and `viewer.rewind` are per-occurrence.
-- **`page_bytes` is asynchronous.** `performance.measureUserAgentSpecificMemory()` returns a promise the browser resolves on its own schedule and may coalesce. Write `null` when no measurement has resolved yet and never block a frame on it. `history_bytes` is exact and synchronous, which is why Round 3 Q9 kept both.
-- **`refresh_hz` exists to stop a false pass.** `requestAnimationFrame` fires at the display's refresh rate, so counting callbacks on a 144 Hz panel would report 144 and a naive 60-frames-per-second assertion would pass for the wrong reason. Derive the frame rate from consecutive timestamp deltas and report the panel rate beside it.
-- **The page never logs a tick payload.** Positions are the product, not a signal; a signal carries counts and identifiers only.
+- **Touch order.** `observe/mod.rs` first (step 17 of the plan), so the statistics fields exist before the referee fills them; then `rules/*.rs` with their tracing lines as each module lands (steps 5 to 10); then `snapshot.rs` (step 15); then the command line (step 19). No file is touched twice for signals alone.
+- **No new dependency.** `tracing`, `serde`, and `serde_json` are already in the workspace.
+- **No new environment variable.** `SM_LOG` already controls the tracing level; `SM_DATA_DIR` already locates the snapshot folder.
+- **Additive extras.** `card.kind`, `foul.advantage`, `minute.added`, `added_time.s`, and the non-contract statistics fields are additive extras, like `content.hash`, `teams`, and `change.queue_id` before them. `/wf observability audit` settles whether they join Block A.
+- **The contract's `snapshot` event type is not emitted as a `match-event`.** About 100 rows per match on the socket would crowd the event stream the page and commentary read. The snapshot is a tracing line plus `snapshot.writes`; the audit can promote it if a consumer needs it.
+- **`minute` moves to the engine.** `MatchEvent::play` computes the minute from the tick today (`crates/protocol/src/event.rs:94`), which is wrong after first-half added time. The engine's clock supplies `minute` and `minute.added` from this slice on.
+- **The benchmark path writes nothing.** `bench` attaches no snapshot sink, so `snapshot.written` never appears in a benchmark run and the per-tick figure measures the referee alone.

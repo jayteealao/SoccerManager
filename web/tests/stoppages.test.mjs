@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { COLLAPSE_TICKS, Stoppages } from '../stoppages.mjs';
+import { COLLAPSE_TICKS, STOPS_PLAY, Stoppages, stopsPlay } from '../stoppages.mjs';
 
 test('a goal and its restart collapse to one entry at the earlier tick', () => {
   const stoppages = new Stoppages();
@@ -39,4 +39,25 @@ test('the previous stoppage walks backwards and runs out at the first', () => {
   assert.equal(stoppages.prev(2001), 2000);
   assert.equal(stoppages.prev(2000), 500);
   assert.equal(stoppages.prev(1), null);
+});
+
+const event = (type, extra = {}) => ({ type: 'event', tick: 10, 'event.type': type, ...extra });
+
+test('every event that stops play is a mark', () => {
+  for (const type of STOPS_PLAY) {
+    assert.equal(stopsPlay(event(type)), true, type);
+  }
+  assert.equal(stopsPlay(event('foul')), true);
+  assert.equal(stopsPlay(event('foul', { 'foul.advantage': false })), true);
+});
+
+test('advantage, a card, and a tactical change are not marks', () => {
+  assert.equal(stopsPlay(event('foul', { 'foul.advantage': true })), false);
+  assert.equal(stopsPlay(event('card', { 'card.kind': 'yellow' })), false);
+  assert.equal(stopsPlay(event('tactics-change')), false);
+});
+
+test('a message that is not an event is not a mark', () => {
+  assert.equal(stopsPlay({ type: 'stats', tick: 10 }), false);
+  assert.equal(stopsPlay({ type: 'command-ack', tick: 10, 'event.type': 'goal' }), false);
 });

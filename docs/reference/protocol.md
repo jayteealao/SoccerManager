@@ -1,8 +1,12 @@
-# Match stream protocol, version 1
+# Match stream protocol, version 2
 
 The engine serves one viewer over a WebSocket on `127.0.0.1`. The port is chosen by the
 operating system at every run and written to `engine.port` inside the runtime data folder.
-A page connects to `ws://127.0.0.1:<port>/?v=1`.
+A page connects to `ws://127.0.0.1:<port>/?v=2`.
+
+Version 2 changed the meaning of `ticks_expected` from the exact tick count to the most ticks
+the match can last, because the time added at the end of each half is known only when the
+half ends. The event message gained the law event types and six optional fields.
 
 A test in `crates/protocol/tests/document.rs` holds this document to the code: every message
 the implementation names must appear below with every one of its fields.
@@ -14,7 +18,7 @@ the implementation names must appear below with every one of its fields.
 | Address | `ws://127.0.0.1:<port>/?v=<protocol version>` |
 | Version | `v` must equal `1`. Any other value, or no value, is refused with both versions named. |
 | Origin | `null`, a `file://` page, any port of `http://localhost` or `http://127.0.0.1`, or no `Origin` header at all. Any other origin is refused. |
-| Clients | One viewer per match in version 1. |
+| Clients | One viewer per match. |
 | First message | `hello`, always before the first tick frame. |
 
 A refused handshake answers `403` for an origin and `400` for a version, with the reason as
@@ -28,7 +32,7 @@ Control messages are JSON text frames tagged by `type`. Tick positions are binar
 |---|---|---|
 | `0x01` keyframe | 99 | the kind tag, then 98 payload bytes: tick (4), ball (6), 22 players (88) |
 | `0x02` delta | 48 | the kind tag, then 47 payload bytes: ball (3), 22 players (44) |
-| `0x03` restart keyframe | 99 | the same payload as `0x01`, on a tick that restarts play |
+| `0x03` restart keyframe | 99 | the same payload as `0x01`, on the tick the ball is placed for a kick-off, a throw-in, a corner, a goal kick, a free kick, or a penalty |
 
 Every position is a signed 16-bit count of centimetres, little-endian. A delta carries one
 signed byte per component, which covers 1.27 m of movement in one tick against a ball cap of
@@ -41,14 +45,14 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 
 | Field | Type | Meaning |
 |---|---|---|
-| `protocol.version` | integer | always 1 in this build |
+| `protocol.version` | integer | always 2 in this build |
 | `engine.version` | string | the engine crate version |
 | `build.hash` | string | the git hash the engine was built from |
 | `owner.id` | string | 32 hex characters, created once per machine |
 | `match.id` | string | `<seed as 16 hex>-<start time in milliseconds>` |
 | `seed` | integer | the seed the match runs from |
 | `dt_ms` | float | milliseconds per tick, 20.0 |
-| `ticks_expected` | integer | ticks the match will send |
+| `ticks_expected` | integer | the most ticks the match can send: regulation time plus the cap on added time in every half; the match ends earlier when it earns less added time, and the `full-time` event marks the last tick |
 | `keyframe_interval` | integer | ticks between keyframes |
 | `teams` | array of two | one entry per club, home first; see the table below |
 
@@ -86,9 +90,9 @@ One `match-event` row. The same object is written to
 | `owner.id` | string | the owner of the match |
 | `match.id` | string | the match |
 | `tick` | integer | the tick the event happened on |
-| `minute` | integer | the simulated minute |
-| `event.type` | enumeration | `kick-off`, `goal`, `full-time`, or `tactics-change` |
-| `team.id` | string | the club the event belongs to; absent at full time |
+| `minute` | integer | the minute of play the match clock shows, counted from 0; it stays at the end of the half during added time |
+| `event.type` | enumeration | `kick-off`, `goal`, `half-time`, `full-time`, `tactics-change`, `offside`, `foul`, `card`, `throw-in`, `corner`, `goal-kick`, `free-kick`, or `penalty` |
+| `team.id` | string | the club the event belongs to: the offender's club on `offside`, `foul`, and `card`, the club that restarts play on a restart; absent at half-time and full time |
 | `home.score` | integer | the score after the event |
 | `away.score` | integer | the score after the event |
 | `change.kind` | enumeration | `tactics` or `substitution`; change events only |
@@ -96,6 +100,16 @@ One `match-event` row. The same object is written to
 | `change.queue_id` | string | the identifier the acknowledgement returned |
 | `change.rejected_reason` | string | present only on a refused change |
 | `change.state` | enumeration | `queued`, `applies-now`, `applied`, or `rejected` |
+| `player.id` | string | the player the event names: the offender on `offside` and `foul`, the booked player on `card` |
+| `player.secondary_id` | string | the fouled player, on `foul` |
+| `card.kind` | enumeration | `yellow`, `second-yellow`, or `red`, on `card`; a second yellow sends the player off |
+| `foul.advantage` | boolean | on `foul`: `true` when play continued because the fouled team kept the ball; a card for that foul follows at the next stoppage |
+| `minute.added` | integer | in added time only: the added minute, 2 at 45+2 |
+| `added_time.s` | integer | on `half-time` and `full-time`: the seconds added to the half that ended |
+
+A restart event (`kick-off`, `throw-in`, `corner`, `goal-kick`, `free-kick`, `penalty`)
+arrives on the same tick as the restart keyframe that places the ball. Play resumes when the
+taker plays the ball, a few seconds later.
 
 ### stats
 

@@ -9,7 +9,7 @@ import { Playback, SPEEDS } from './playback.mjs';
 import { Scheduler, TICKS_PER_SECOND } from './schedule.mjs';
 import { signal, signals } from './signal.mjs';
 import { MatchSocket, socketAddress } from './socket.mjs';
-import { Stoppages } from './stoppages.mjs';
+import { Stoppages, stopsPlay } from './stoppages.mjs';
 
 const el = (id) => document.getElementById(id);
 
@@ -120,8 +120,13 @@ function revealPitch() {
 }
 
 function onMessage(message) {
-  if (message.type === 'event') {
+  if (stopsPlay(message)) {
     stoppages.add(message.tick);
+  }
+  // `ticks_expected` is the most ticks the match can last. Full time marks the real end,
+  // so the scrubber stops at the last tick that arrived.
+  if (message.type === 'event' && message['event.type'] === 'full-time' && history) {
+    el('scrub').max = String(history.newestTick);
   }
 }
 

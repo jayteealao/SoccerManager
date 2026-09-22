@@ -1,7 +1,6 @@
 //! The fixture file (`.smfx`): the wire bytes of one whole match, exactly as they were
 //! sent. A replay writes them back with no re-encoding, so the replayed stream is
-//! byte-identical by construction and the viewer slices can verify before the engine is
-//! complete.
+//! byte-identical by construction and a viewer can be verified against a fixed recording.
 
 use std::fs::File;
 use std::io::{BufWriter, Read, Seek, SeekFrom, Write};

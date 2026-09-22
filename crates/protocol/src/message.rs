@@ -38,6 +38,9 @@ pub struct Hello {
     pub match_id: String,
     pub seed: u64,
     pub dt_ms: f64,
+    /// The most ticks the match can last: regulation time plus the cap on added time in every
+    /// half. The match ends earlier when it earns less added time; the full-time event marks
+    /// the real last tick.
     pub ticks_expected: u32,
     pub keyframe_interval: u32,
     /// The two clubs, home first.
@@ -87,7 +90,7 @@ pub struct QueueChange {
     /// `tactics` or `substitution`. Any other value is refused by name.
     #[serde(rename = "change.kind")]
     pub kind: String,
-    /// Opaque here; the match-rules slice reads it when it applies the change.
+    /// Opaque here; the server reads it when it applies the change.
     #[serde(default)]
     pub detail: serde_json::Value,
 }

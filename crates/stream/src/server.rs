@@ -245,11 +245,11 @@ mod tests {
     #[test]
     fn a_refusal_names_both_versions() {
         let reason = refusal(&request("null", "?v=9"), "null").unwrap();
-        assert_eq!(reason, "protocol version 9; this build speaks 1");
-        assert!(refusal(&request("null", "?v=1"), "null").is_none());
+        assert_eq!(reason, "protocol version 9; this build speaks 2");
+        assert!(refusal(&request("null", "?v=2"), "null").is_none());
         let reason = refusal(&request("null", ""), "null").unwrap();
-        assert!(reason.contains("?v=1"), "{reason}");
-        let reason = refusal(&request("http://example.com", "?v=1"), "http://example.com").unwrap();
+        assert!(reason.contains("?v=2"), "{reason}");
+        let reason = refusal(&request("http://example.com", "?v=2"), "http://example.com").unwrap();
         assert!(reason.starts_with("origin http://example.com"), "{reason}");
     }
 

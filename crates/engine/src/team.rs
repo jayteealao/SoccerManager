@@ -3,14 +3,15 @@
 //! A formation anchor is a slot position plus a fraction of the ball offset, so the whole
 //! team shifts toward the ball while keeping its shape. It replaces free-roaming agents.
 //! A team is built from a validated team file; the first eleven entries in file order fill
-//! the formation slots.
+//! the formation slots. When a player is sent off, the rest of that player's line spreads
+//! evenly across the line's width, so the shape stays balanced with ten.
 
 use crate::data::attributes::AttributeSchema;
 use crate::data::team::{Kit, TeamFile};
 use crate::error::EngineError;
 use crate::math::DVec2;
 use crate::pitch;
-use crate::player::{Attributes, Derived, Player};
+use crate::player::{Attributes, Derived, Player, Status};
 use crate::tuning::Tuning;
 
 /// Number of players per team.
@@ -43,6 +44,8 @@ pub struct Team {
     pub kit: Kit,
     /// Every player id in the team file, in file order; the first eleven start.
     pub player_ids: Vec<String>,
+    /// `false` for a slot whose player was sent off.
+    pub active: [bool; PLAYERS_PER_TEAM],
 }
 
 impl Team {
@@ -56,6 +59,7 @@ impl Team {
             name,
             kit,
             player_ids: Vec::new(),
+            active: [true; PLAYERS_PER_TEAM],
         }
     }
 
@@ -102,6 +106,8 @@ impl Team {
                     vel: DVec2::ZERO,
                     target: pos,
                     facing: DVec2::new(team.attack_x, 0.0),
+                    status: Status::OnPitch,
+                    yellow: 0,
                 }
             })
             .collect();
@@ -122,6 +128,37 @@ impl Team {
     pub fn slot_base(&self, slot: usize) -> DVec2 {
         let (fx, fy) = self.formation[slot];
         DVec2::new((fx - pitch::HALF_LENGTH) * self.attack_x, fy)
+    }
+
+    /// Removes `slot` from the formation. The other active slots of its line (the slots with
+    /// the same depth) spread evenly across the line's width, in their order across it.
+    pub fn reshape(&mut self, slot: usize) {
+        self.active[slot] = false;
+        let depth = self.formation[slot].0;
+        let line: Vec<usize> = (0..PLAYERS_PER_TEAM)
+            .filter(|&s| self.formation[s].0 == depth)
+            .collect();
+        let (lo, hi) = line
+            .iter()
+            .map(|&s| self.formation[s].1)
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), y| {
+                (lo.min(y), hi.max(y))
+            });
+        let mut left: Vec<usize> = line.into_iter().filter(|&s| self.active[s]).collect();
+        left.sort_by(|a, b| self.formation[*a].1.total_cmp(&self.formation[*b].1));
+        let n = left.len();
+        for (k, s) in left.into_iter().enumerate() {
+            self.formation[s].1 = if n == 1 {
+                (lo + hi) / 2.0
+            } else {
+                lo + (hi - lo) * k as f64 / (n - 1) as f64
+            };
+        }
+    }
+
+    /// Turns the team round to attack the other goal, as at half-time.
+    pub fn switch_ends(&mut self) {
+        self.attack_x = -self.attack_x;
     }
 
     /// The formation anchor for `slot` given the ball position.
@@ -178,6 +215,30 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_back_four_with_one_sent_off_spreads_three_across_the_width() {
+        let mut team = bare(0);
+        team.reshape(2);
+        let ys: Vec<f64> = [1, 3, 4].iter().map(|&s| team.formation[s].1).collect();
+        assert_eq!(ys, vec![-22.0, 0.0, 22.0]);
+        assert!(!team.active[2]);
+        let t = Tuning::default();
+        for slot in [1, 3, 4] {
+            assert!(pitch::contains(team.anchor(slot, DVec2::ZERO, &t)));
+        }
+        team.reshape(9);
+        assert_eq!(team.formation[10].1, 0.0);
+    }
+
+    #[test]
+    fn switching_ends_flips_the_attack() {
+        let mut team = bare(0);
+        let before = team.slot_base(9);
+        team.switch_ends();
+        assert_eq!(team.attack_x, -1.0);
+        assert_eq!(team.slot_base(9).x, -before.x);
     }
 
     #[test]

@@ -28,7 +28,7 @@ slices:
     complexity: m
     depends-on: [stream-protocol]
   - slug: match-rules
-    status: defined
+    status: complete
     complexity: l
     depends-on: [engine-core, data-schemas-generator]
   - slug: tactics-and-ai

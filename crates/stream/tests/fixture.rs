@@ -6,8 +6,8 @@ mod common;
 use std::path::Path;
 use std::sync::Arc;
 
+use engine::Simulation;
 use engine::record::TickSink;
-use engine::{Simulation, ticks_for_minutes};
 use protocol::{Frame, Hello, PROTOCOL_VERSION, ServerMessage, TeamRef};
 use stream::session::{FrameOut, FrameSink};
 use stream::{Client, Recorder, Replayer, Server, SharedRecorder, read_fixture};
@@ -28,7 +28,7 @@ fn record(path: &Path, minutes: u32) -> u32 {
         match_id: format!("{:016x}-1700000000000", common::SEED),
         seed: common::SEED,
         dt_ms: config.tuning.dt * 1000.0,
-        ticks_expected: ticks_for_minutes(minutes),
+        ticks_expected: config.max_ticks(),
         keyframe_interval: 50,
         teams: [
             TeamRef {
@@ -52,10 +52,11 @@ fn record(path: &Path, minutes: u32) -> u32 {
         .unwrap();
 
     let mut sim = Simulation::new(config).unwrap();
-    let ticks = ticks_for_minutes(minutes);
-    for _ in 0..ticks {
+    let mut ticks = 0;
+    while !sim.is_over() {
         sim.step();
         sink.on_tick(&sim.record()).unwrap();
+        ticks += 1;
     }
     sim.finish();
     messages
@@ -200,8 +201,9 @@ fn a_fixture_of_another_protocol_version_is_refused() {
     std::fs::write(&path, &bytes).unwrap();
     let err = read_fixture(&path).unwrap_err();
     assert!(
-        err.to_string()
-            .contains("protocol version 9; this build speaks 1"),
+        err.to_string().contains(&format!(
+            "protocol version 9; this build speaks {PROTOCOL_VERSION}"
+        )),
         "{err}"
     );
     let _ = std::fs::remove_dir_all(&dir);

@@ -6,9 +6,9 @@ use std::time::Instant;
 
 use anyhow::Context;
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id, owner_bytes};
-use engine::observe::{MatchStats, TeamRef, emit_line, write_stats};
+use engine::observe::{LawStats, MatchStats, TeamRef, emit_line, write_stats};
 use engine::{
-    FileSink, MatchConfig, Simulation, TickHeader, Validator, read_ticks, ticks_for_minutes,
+    FanoutSink, FileSink, MatchConfig, Simulation, SnapshotSink, TickHeader, Validator, read_ticks,
 };
 use tracing::info_span;
 
@@ -23,12 +23,13 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
     let data = data_dir();
     let owner_id = load_or_create_owner_id(&data)?;
     let match_id = MatchId::now(opts.seed);
-    let ticks = ticks_for_minutes(opts.minutes);
+    let owner = owner_bytes(&owner_id)?;
+    let pack_version = config.rules.schema_version;
     let header = TickHeader {
         seed: opts.seed,
         dt: config.tuning.dt,
-        expected_ticks: ticks,
-        owner_id: owner_bytes(&owner_id)?,
+        expected_ticks: config.max_ticks(),
+        owner_id: owner,
         match_millis: match_id.millis,
     };
     let teams = [
@@ -44,10 +45,15 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
     let content_hash = config.content_hash.clone();
     let started = Instant::now();
     let mut sim = Simulation::new(config)?;
-    let mut sink = FileSink::create(&opts.ticks_out, &header)
+    let file = FileSink::create(&opts.ticks_out, &header)
         .with_context(|| format!("cannot create {}", opts.ticks_out.display()))?;
-    sim.run(ticks, &mut sink)?;
-    let written = sink.finish()?;
+    let snapshots = (!opts.no_snapshot)
+        .then(|| SnapshotSink::new(&data, &match_id.to_string(), owner, match_id.millis));
+    let mut sink = FanoutSink::new(file, snapshots);
+    sim.run(&mut sink)?;
+    let (file, snapshots) = sink.into_parts();
+    let written = file.finish()?;
+    let snapshot_writes = snapshots.map_or(0, |s| s.writes);
     let elapsed = started.elapsed();
 
     if opts.json {
@@ -57,7 +63,8 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
     }
 
     let file = read_ticks(&opts.ticks_out)?;
-    let validator = Validator::new(sim.tuning().clone(), sim.teams());
+    let events = sim.take_events();
+    let validator = Validator::for_match(sim.tuning().clone(), sim.team_timeline(), &events);
     let violations = validator.check(&file.records);
     let summary = sim.summary();
     let stats = MatchStats {
@@ -76,6 +83,7 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
         ball_max_speed: summary.ball_max_speed,
         ball_idle_ticks: summary.ball_idle_ticks,
         goals: summary.goals,
+        laws: LawStats::new(&summary, pack_version, written, snapshot_writes),
     };
     write_stats(&data, &stats)?;
     emit_line(&stats)?;

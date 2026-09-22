@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id};
-use engine::{MatchConfig, Simulation, ticks_for_minutes};
+use engine::{MatchConfig, Simulation};
 use protocol::{Hello, PROTOCOL_VERSION, ServerMessage, TeamRef};
 use stream::session::{FrameOut, FrameSink, MatchState};
 use stream::{Recorder, SharedRecorder};
@@ -18,7 +18,7 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
     let keyframe_interval = loaded.content.tuning.stream.keyframe_interval;
     let owner_id = load_or_create_owner_id(&data_dir())?;
     let match_id = MatchId::now(opts.seed);
-    let ticks = ticks_for_minutes(opts.minutes);
+    let ticks = config.max_ticks();
     let club_ids = [
         config.teams[0].club_id.clone(),
         config.teams[1].club_id.clone(),
@@ -64,7 +64,7 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
     let mut sim = Simulation::new(config)?;
     let state = MatchState::default();
     let match_id = match_id.to_string();
-    let written = drive(
+    let driven = drive(
         &mut sim,
         &mut sink,
         &Drive {
@@ -95,5 +95,5 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
             "hash": summary.hash,
         })
     );
-    Ok(if written == ticks { 0 } else { 2 })
+    Ok(if driven.full_time { 0 } else { 2 })
 }

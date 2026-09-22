@@ -3,7 +3,9 @@
 //! trailer or with a count mismatch. Header schema 2 carries `owner.id` and the match
 //! stamp in the bytes schema 1 reserved (product-owner choice, plan Q3). Header schema 3
 //! carries the restart flag in the top bit of the stored tick number, so a reader of the
-//! file sees the kick-offs the validator needs.
+//! file sees the kick-offs the validator needs. Header schema 4 changes the meaning of
+//! `expected_ticks` from the exact count to the most a match can last: added time makes the
+//! real length known only at full time, and the trailer carries it.
 
 use std::fs::File;
 use std::io::{BufWriter, Read, Write};
@@ -12,6 +14,8 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::error::EngineError;
+use crate::rules::Stoppage;
+use crate::sim::Simulation;
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Players per record.
@@ -23,7 +27,7 @@ pub const HEADER_BYTES: usize = 64;
 /// Trailer bytes.
 pub const TRAILER_BYTES: usize = 16;
 /// Schema version of the file layout.
-pub const SCHEMA_VERSION: u16 = 3;
+pub const SCHEMA_VERSION: u16 = 4;
 /// Bit 31 of the stored tick number carries the restart flag. A tick number never reaches
 /// 2^31: the longest match the engine accepts is 200 minutes, which is 600,000 ticks.
 const RESTART_BIT: u32 = 1 << 31;
@@ -41,8 +45,9 @@ pub struct TickRecord {
     pub tick: u32,
     pub ball: [f32; 3],
     pub players: [[f32; 2]; PLAYER_COUNT],
-    /// True on a tick that restarts play (kick-off). The ball teleports to the centre
-    /// spot, so the validator must not read the jump as a kick.
+    /// True on a tick that places the ball for a restart (a kick-off, a throw-in, a corner, a
+    /// goal kick, a free kick, or a penalty). The ball jumps to the restart spot, so the
+    /// validator must not read the jump as a kick.
     #[serde(default)]
     pub restart: bool,
 }
@@ -97,6 +102,7 @@ impl TickRecord {
 pub struct TickHeader {
     pub seed: u64,
     pub dt: f64,
+    /// The most ticks the match can last. The trailer holds the count actually written.
     pub expected_ticks: u32,
     /// The owner identifier as 16 bytes; see `observe::identity`.
     pub owner_id: [u8; 16],
@@ -147,6 +153,13 @@ impl TickHeader {
 /// A consumer of tick records.
 pub trait TickSink {
     fn on_tick(&mut self, record: &TickRecord) -> Result<(), EngineError>;
+
+    /// The stoppage hook (named mechanism): called once for every stoppage, after the record
+    /// of the tick the ball went dead on, with the match as it stands. The default does
+    /// nothing.
+    fn on_stoppage(&mut self, _stoppage: &Stoppage, _sim: &Simulation) -> Result<(), EngineError> {
+        Ok(())
+    }
 }
 
 /// Discards every record (benchmarks).
@@ -194,6 +207,11 @@ impl<A: TickSink, B: TickSink> TickSink for FanoutSink<A, B> {
         self.a.on_tick(record)?;
         self.b.on_tick(record)
     }
+
+    fn on_stoppage(&mut self, stoppage: &Stoppage, sim: &Simulation) -> Result<(), EngineError> {
+        self.a.on_stoppage(stoppage, sim)?;
+        self.b.on_stoppage(stoppage, sim)
+    }
 }
 
 /// An absent sink discards every record, so a caller can hold an optional second sink
@@ -202,6 +220,13 @@ impl<S: TickSink> TickSink for Option<S> {
     fn on_tick(&mut self, record: &TickRecord) -> Result<(), EngineError> {
         match self {
             Some(sink) => sink.on_tick(record),
+            None => Ok(()),
+        }
+    }
+
+    fn on_stoppage(&mut self, stoppage: &Stoppage, sim: &Simulation) -> Result<(), EngineError> {
+        match self {
+            Some(sink) => sink.on_stoppage(stoppage, sim),
             None => Ok(()),
         }
     }
@@ -276,7 +301,8 @@ pub struct TickFile {
     pub records: Vec<TickRecord>,
 }
 
-/// Reads and validates a `.ticks` file. Fails closed on any layout problem.
+/// Reads and validates a `.ticks` file. Fails closed on any layout problem, and on a written
+/// count above the most the header announced.
 pub fn read_ticks(path: &Path) -> Result<TickFile, EngineError> {
     let mut bytes = Vec::new();
     File::open(path)?.read_to_end(&mut bytes)?;
@@ -298,6 +324,12 @@ pub fn read_ticks(path: &Path) -> Result<TickFile, EngineError> {
         return Err(EngineError::Format(format!(
             "record count mismatch: trailer says {written}, body holds {} bytes",
             body.len()
+        )));
+    }
+    if written > header.expected_ticks {
+        return Err(EngineError::Format(format!(
+            "record count {written} exceeds the {} the header announced",
+            header.expected_ticks
         )));
     }
     let records = body
@@ -387,6 +419,25 @@ mod tests {
     }
 
     #[test]
+    fn a_file_shorter_than_the_announced_maximum_reads_and_a_longer_one_is_refused() {
+        let path = temp("maximum");
+        let mut sink = FileSink::create(&path, &header(5, 10)).unwrap();
+        for i in 1..=4 {
+            sink.on_tick(&sample(i)).unwrap();
+        }
+        sink.finish().unwrap();
+        assert_eq!(read_ticks(&path).unwrap().records.len(), 4);
+        let mut sink = FileSink::create(&path, &header(5, 2)).unwrap();
+        for i in 1..=3 {
+            sink.on_tick(&sample(i)).unwrap();
+        }
+        sink.finish().unwrap();
+        let err = read_ticks(&path).unwrap_err();
+        std::fs::remove_file(&path).unwrap();
+        assert!(err.to_string().contains("exceeds the 2"), "{err}");
+    }
+
+    #[test]
     fn a_fan_out_feeds_both_sinks_in_order() {
         let mut sink = FanoutSink::new(VecSink::default(), VecSink::default());
         sink.on_tick(&sample(1)).unwrap();
@@ -421,18 +472,18 @@ mod tests {
     }
 
     #[test]
-    fn a_version_one_file_is_refused_naming_both_versions() {
+    fn a_version_three_file_is_refused_naming_both_versions() {
         let path = temp("v1");
         let sink = FileSink::create(&path, &header(1, 0)).unwrap();
         sink.finish().unwrap();
         let mut bytes = std::fs::read(&path).unwrap();
-        bytes[4..6].copy_from_slice(&1u16.to_le_bytes());
+        bytes[4..6].copy_from_slice(&3u16.to_le_bytes());
         std::fs::write(&path, &bytes).unwrap();
         let err = read_ticks(&path).unwrap_err();
         std::fs::remove_file(&path).unwrap();
         assert_eq!(
             err.to_string(),
-            "tick file format error: unknown schema version 1; this build reads 3"
+            "tick file format error: unknown schema version 3; this build reads 4"
         );
     }
 }

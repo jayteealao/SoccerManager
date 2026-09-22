@@ -1,0 +1,25 @@
+artifact: benchmark
+target: "engine-cli bench --seed 42 --matches 5 --json (five 90-minute matches, one thread, reference machine), cargo bench -p engine --bench tick_step, engine-cli bench --stream, and four browser targets read from the page's own viewer.frame_budget and viewer.history signals"
+language: "rust, javascript"
+framework: "timing-fallback (engine-cli bench with std::time::Instant, GetProcessTimes, GetProcessMemoryInfo) plus criterion 0.8 for the tick step; headless Microsoft Edge 153 over the DevTools protocol plus timed Node loops for the page"
+mode: compare
+measured_at: "2026-09-22T18:24:00Z"
+baseline_commit: "3570eb9"
+compare_commit: "36139b4"
+metrics:
+  - { name: "bench.match_wall_ms", before: 389, after: 386, delta_pct: -0.8, unit: "ms", direction: lower-is-better }
+  - { name: "engine.ticks_per_s", before: 694087, after: 699482, delta_pct: 0.8, unit: "ticks/s", direction: higher-is-better }
+  - { name: "bench.cpu_ms_per_match", before: 388, after: 384.4, delta_pct: -0.9, unit: "ms", direction: lower-is-better }
+  - { name: "bench.peak_mem_mb", before: 5.97, after: 5.33, delta_pct: -10.7, unit: "MB", direction: lower-is-better }
+  - { name: "criterion.tick_step_us", before: 1.4378, after: 1.4434, delta_pct: 0.4, unit: "us", direction: lower-is-better }
+  - { name: "criterion.steering_pass_22_ns", before: 898.22, after: 873.52, delta_pct: -2.7, unit: "ns", direction: lower-is-better }
+  - { name: "bench.stream_ticks_per_s", before: 634859, after: 640584, delta_pct: 0.9, unit: "ticks/s", direction: higher-is-better }
+  - { name: "bench.stream_peak_mem_mb", before: 7.30, after: 6.66, delta_pct: -8.8, unit: "MB", direction: lower-is-better }
+  - { name: "viewer.fps_median", before: 60, after: 60, delta_pct: 0.0, unit: "fps", direction: higher-is-better, note: "First value. before holds the budget, because no page existed at baseline. refresh_hz 60 beside every reading; after the verify-owned scheduler fix c7c54bd, 0 dropped frames and 0 skipped ticks over 5 minutes at 1x." }
+  - { name: "viewer.frame_ms_p95", before: 16.6, after: 16.85, delta_pct: 1.5, unit: "ms", direction: lower-is-better, note: "First value against a budget that cannot be met at 60 Hz: the p95 of frame intervals is at least 16.67 ms. Recorded as a budget-definition defect, not a regression." }
+  - { name: "viewer.decode_us_per_frame", before: 25, after: 0.083, delta_pct: -99.7, unit: "us", direction: lower-is-better, note: "First value against the 25 us budget; ArrayBuffer input as a WebSocket delivers it. Uint8Array input measures 0.232 us." }
+  - { name: "viewer.page_bytes", before: 314572800, after: 31924655, delta_pct: -89.9, unit: "bytes", direction: lower-is-better, note: "First value against the 300 MB budget, at 270,000 stored ticks, from performance.measureUserAgentSpecificMemory in headless Edge." }
+  - { name: "viewer.history_bytes", before: 25380000, after: 25380000, delta_pct: 0.0, unit: "bytes", direction: lower-is-better, note: "Exact; matches the expected 270,000 ticks at 47 int16 components." }
+regressions: []
+improvements: ["bench.peak_mem_mb"]
+notes: "Compare run for viewer-pitch on 36139b4. before holds the 3570eb9 baseline for the eight engine metrics and the budget for the five page metrics, which had no baseline value. No performance or memory tripwire fired. The peak-memory drop is recorded and not credited to code, because the slice changed no engine code. One budget-definition defect: viewer.frame_ms_p95 16.6 ms is below one 60 Hz frame interval."

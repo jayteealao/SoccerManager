@@ -36,6 +36,8 @@ pub enum Command {
     Record(RecordOpts),
     /// Replay a recorded fixture over the same socket protocol.
     Replay(ReplayOpts),
+    /// Continue a match from its latest snapshot to full time.
+    Resume(ResumeOpts),
 }
 
 #[derive(Debug, Args)]
@@ -61,6 +63,34 @@ pub struct SimulateOpts {
     #[arg(long, value_name = "FILE")]
     pub team_a: Option<PathBuf>,
     /// Away team file; default teams/default-b.json in the content folder.
+    #[arg(long, value_name = "FILE")]
+    pub team_b: Option<PathBuf>,
+    /// Do not write a snapshot at each stoppage.
+    #[arg(
+        long,
+        long_help = "Do not write a snapshot at each stoppage.
+
+                     By default the latest snapshot is written to
+                     SM_DATA_DIR/matches/<match.id>/snapshot.smsn."
+    )]
+    pub no_snapshot: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ResumeOpts {
+    /// Snapshot file written during a match (snapshot.smsn).
+    #[arg(long, value_name = "FILE")]
+    pub snapshot: PathBuf,
+    /// Also write the resumed ticks to this file.
+    #[arg(long, value_name = "FILE")]
+    pub ticks_out: Option<PathBuf>,
+    /// Also write a JSON Lines dump beside the tick file.
+    #[arg(long, requires = "ticks_out")]
+    pub json: bool,
+    /// Home team file the match was started with; default as for simulate.
+    #[arg(long, value_name = "FILE")]
+    pub team_a: Option<PathBuf>,
+    /// Away team file the match was started with; default as for simulate.
     #[arg(long, value_name = "FILE")]
     pub team_b: Option<PathBuf>,
 }

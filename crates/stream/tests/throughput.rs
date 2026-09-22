@@ -1,5 +1,6 @@
-//! AC-b: a client that reads as fast as it can receives every one of the 270,000 ticks of a
-//! full match, in order and with no gap, and the producer buffer never exceeds its bound.
+//! AC-b: a client that reads as fast as it can receives every tick of a full match (270,000
+//! ticks of regulation time plus the added time), in order and with no gap, and the producer
+//! buffer never exceeds its bound.
 
 mod common;
 
@@ -43,9 +44,16 @@ fn a_full_match_arrives_in_order_with_no_gap() {
     }
     client.close().unwrap();
 
-    assert_eq!(expected_tick, 270_000, "the match is 270,000 ticks");
-    assert_eq!(keyframes + deltas, 270_000);
-    assert!(keyframes >= 5_400, "a keyframe opens every 50-tick cycle");
+    let most = served.ticks_expected;
+    assert!(
+        expected_tick > 270_000 && expected_tick <= most,
+        "{expected_tick} ticks: regulation time plus added time, at most {most}"
+    );
+    assert_eq!(keyframes + deltas, u64::from(expected_tick));
+    assert!(
+        keyframes >= u64::from(expected_tick / 50),
+        "a keyframe opens every 50-tick cycle"
+    );
     assert!(full_time, "the stream names full time before it closes");
     // `sync_channel(bound)` holds at most `bound` frames, and that channel is the bound the
     // acceptance criterion names. The gauge counts `entered - left`, so it reads up to two
@@ -56,5 +64,5 @@ fn a_full_match_arrives_in_order_with_no_gap() {
         "the buffer reached {} against a bound of {bound}",
         gauge.high_water()
     );
-    assert_eq!(served.join(), 270_000);
+    assert_eq!(served.join(), expected_tick);
 }

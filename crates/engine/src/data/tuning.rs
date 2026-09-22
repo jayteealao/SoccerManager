@@ -1,5 +1,5 @@
 //! The tuning file: the engine constants, the generator distributions, and the fatigue
-//! parameters later slices consume. Bounds live in code; values live in the file.
+//! parameters the engine does not read yet. Bounds live in code; values live in the file.
 
 use std::collections::BTreeMap;
 
@@ -97,7 +97,7 @@ pub struct Dist {
     pub spread: f64,
 }
 
-/// Fatigue parameters; the tactics slice consumes them.
+/// Fatigue parameters. The engine does not read them yet.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct FatigueTuning {
