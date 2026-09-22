@@ -13,7 +13,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`) goes to `SM_DATA_DI
 | File | Schema version | Holds |
 |---|---|---|
 | `attributes.json` | 1 | The attribute schema: 30 to 50 names in four groups |
-| `tuning.json` | 1 | Engine constants, generator distributions, fatigue parameters |
+| `tuning.json` | 1 | Engine constants, generator distributions, fatigue parameters, stream buffer |
 | `rules/default.json` | 1 | The rule pack |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 
@@ -94,6 +94,19 @@ Each `per_position` entry holds `technical`, `mental`, `physical`, and `goalkeep
 | recovery_per_day | points | 20.0 | 0 to 100 |
 
 The engine does not read these yet; the tactics slice consumes them.
+
+### stream
+
+| Field | Unit | Default | Bound |
+|---|---|---|---|
+| buffer_ticks | ticks | 500 | 10 to 5000 |
+| keyframe_interval | ticks | 50 | 1 to 500 |
+
+`buffer_ticks` is how far the engine may run ahead of a connected viewer. When the buffer
+fills, the simulation thread pauses until the viewer drains it, so memory stays flat and no
+tick is dropped. `keyframe_interval` is the number of ticks between keyframes on the live
+stream: a keyframe carries every absolute position in 98 bytes, and each tick between
+carries a 47-byte delta.
 
 ## Position codes
 

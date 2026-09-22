@@ -22,7 +22,9 @@ pub use attributes::{ATTRIBUTES_VERSION, AttributeSchema, Group, MAX_ATTRIBUTES}
 pub use generator::generate_league;
 pub use rules::{RULES_VERSION, RulePack, StoppageKind};
 pub use team::{Club, Kit, PlayerEntry, Position, TEAM_VERSION, TeamFile};
-pub use tuning::{Dist, FatigueTuning, GeneratorTuning, GroupDist, TUNING_VERSION, TuningFile};
+pub use tuning::{
+    Dist, FatigueTuning, GeneratorTuning, GroupDist, StreamTuning, TUNING_VERSION, TuningFile,
+};
 
 /// Relative path of each shipped file inside the content folder.
 pub const ATTRIBUTES_FILE: &str = "attributes.json";

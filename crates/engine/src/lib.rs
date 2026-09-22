@@ -22,8 +22,10 @@ pub mod validate;
 
 pub use data::{Content, ContentDir};
 pub use error::EngineError;
-pub use record::{FileSink, NullSink, TickHeader, TickRecord, TickSink, VecSink, read_ticks};
-pub use sim::{MatchConfig, Simulation};
+pub use record::{
+    FanoutSink, FileSink, NullSink, TickHeader, TickRecord, TickSink, VecSink, read_ticks,
+};
+pub use sim::{EngineEvent, EngineEventKind, MatchConfig, Simulation};
 pub use tuning::Tuning;
 pub use validate::{Validator, Violation};
 

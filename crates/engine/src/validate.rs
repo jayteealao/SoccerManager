@@ -12,8 +12,6 @@ use crate::tuning::Tuning;
 pub const MIN_SEPARATION: f64 = 0.1;
 /// Maximum ball speed in metres per second.
 pub const MAX_BALL_SPEED: f64 = 40.0;
-/// A ball displacement per tick above this is a restart (kick-off), not a kick.
-const RESTART_JUMP: f64 = 2.0;
 
 /// One rule violation.
 #[derive(Debug, Clone, PartialEq)]
@@ -72,20 +70,17 @@ impl Validator {
                     }
                 }
             }
-            if let Some(prev) = prev_ball {
-                let jump = (ball - prev).length();
-                // sdlc-debt: the record carries no restart flag, so a jump above RESTART_JUMP is
-                // read as a kick-off; the stream-protocol slice adds an explicit event.
-                if jump <= RESTART_JUMP {
-                    let speed = jump / self.tuning.dt;
-                    if speed > MAX_BALL_SPEED + 0.5 {
-                        out.push(Violation {
-                            tick: r.tick,
-                            rule: "ball_speed",
-                            player: None,
-                            value: speed,
-                        });
-                    }
+            if let Some(prev) = prev_ball
+                && !r.restart
+            {
+                let speed = (ball - prev).length() / self.tuning.dt;
+                if speed > MAX_BALL_SPEED + 0.5 {
+                    out.push(Violation {
+                        tick: r.tick,
+                        rule: "ball_speed",
+                        player: None,
+                        value: speed,
+                    });
                 }
             }
             prev_ball = Some(ball);
@@ -135,6 +130,7 @@ mod tests {
             tick,
             ball: [0.0, 0.0, 0.0],
             players,
+            restart: false,
         }
     }
 
@@ -156,6 +152,21 @@ mod tests {
         r.ball = [0.9, 0.0, 0.0];
         let out = v.check(&[record(1), r]);
         assert_eq!(out.len(), 1);
+        assert_eq!(out[0].rule, "ball_speed");
+    }
+
+    #[test]
+    fn a_restart_tick_exempts_the_jump_and_the_same_jump_without_the_flag_does_not() {
+        let v = Validator::new(Tuning::default(), [bare(0), bare(1)]);
+        let mut jump = record(2);
+        jump.ball = [20.0, 0.0, 0.0];
+
+        let mut restart = jump;
+        restart.restart = true;
+        assert!(v.check(&[record(1), restart]).is_empty());
+
+        let out = v.check(&[record(1), jump]);
+        assert_eq!(out.len(), 1, "{out:?}");
         assert_eq!(out[0].rule, "ball_speed");
     }
 }

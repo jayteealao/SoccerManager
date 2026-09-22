@@ -21,6 +21,9 @@ pub enum EngineError {
     /// A tick file is malformed, truncated, or of an unknown schema version.
     #[error("tick file format error: {0}")]
     Format(String),
+    /// A tick consumer outside the engine refused a record or went away.
+    #[error("the tick consumer stopped: {0}")]
+    Sink(String),
     /// A content file failed deserialization or validation (named mechanism: fail-closed
     /// loader). `field` is the path inside the file; `reason` is the rule that failed.
     #[error("content refused: {kind} {path}: {field}: {reason}")]

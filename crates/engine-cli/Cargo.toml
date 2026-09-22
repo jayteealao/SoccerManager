@@ -12,6 +12,8 @@ path = "src/main.rs"
 
 [dependencies]
 engine = { path = "../engine" }
+protocol = { path = "../protocol" }
+stream = { path = "../stream" }
 clap = { workspace = true }
 anyhow = { workspace = true }
 serde_json = { workspace = true }

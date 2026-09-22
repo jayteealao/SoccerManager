@@ -123,6 +123,18 @@ pub struct RunReport {
     pub ticks_per_s: f64,
     #[serde(rename = "bench.cpu_wall_ratio")]
     pub cpu_wall_ratio: Option<f64>,
+    /// Ticks delivered per second over the socket to an unthrottled client.
+    #[serde(
+        rename = "bench.stream_ticks_per_s",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub stream_ticks_per_s: Option<f64>,
+    /// Times the producer paused at the buffer bound during the streamed match.
+    #[serde(
+        rename = "bench.stream_pauses",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub stream_pauses: Option<u32>,
     #[serde(rename = "machine.hash")]
     pub machine_hash: String,
     #[serde(rename = "machine.cpu_model")]
@@ -277,6 +289,8 @@ mod tests {
             peak_mem_mb: None,
             ticks_per_s: 1.0,
             cpu_wall_ratio: None,
+            stream_ticks_per_s: None,
+            stream_pauses: None,
             machine_hash: machine_hash(),
             cpu_model: "x".into(),
             power_plan: "y".into(),

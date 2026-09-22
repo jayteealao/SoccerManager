@@ -4,7 +4,11 @@ mod bench;
 mod cli;
 mod content;
 mod generate;
+mod record;
+mod replay;
+mod serve;
 mod simulate;
+mod stream_run;
 
 use std::io::IsTerminal;
 
@@ -25,6 +29,9 @@ fn main() {
         cli::Command::Simulate(opts) => simulate::run(content_dir, &opts),
         cli::Command::Bench(opts) => bench::run(content_dir, &opts),
         cli::Command::Generate(opts) => generate::run(content_dir, &opts),
+        cli::Command::Serve(opts) => serve::run(content_dir, &opts),
+        cli::Command::Record(opts) => record::run(content_dir, &opts),
+        cli::Command::Replay(opts) => replay::run(&opts),
     };
     match result {
         Ok(code) => std::process::exit(code),

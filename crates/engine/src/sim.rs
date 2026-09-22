@@ -70,6 +70,29 @@ impl MatchConfig {
     }
 }
 
+/// What happened during a tick that a consumer outside the engine must know about. The
+/// engine names the fact; the protocol crate decides how it travels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EngineEventKind {
+    /// Play restarts from the centre spot: the opening kick-off or the one after a goal.
+    KickOff,
+    /// `team` scored; `scores` is the score after the goal.
+    Goal,
+    /// The last tick of the match.
+    FullTime,
+}
+
+/// One engine event, stamped with the tick it happened on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EngineEvent {
+    pub tick: u32,
+    pub kind: EngineEventKind,
+    /// The team the event belongs to, as a roster index, or `None` at full time.
+    pub team: Option<usize>,
+    /// The score after the event, home first.
+    pub scores: [u32; 2],
+}
+
 /// Aggregate counters kept during a match.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Summary {
@@ -92,6 +115,8 @@ pub struct Simulation {
     last_touch: Option<usize>,
     summary: Summary,
     scratch: Vec<DVec2>,
+    restart: bool,
+    events: Vec<EngineEvent>,
 }
 
 impl Simulation {
@@ -119,6 +144,8 @@ impl Simulation {
             last_touch: None,
             summary: Summary::default(),
             scratch: Vec::with_capacity(2 * PLAYERS_PER_TEAM),
+            restart: false,
+            events: Vec::new(),
         };
         sim.kick_off(0);
         Ok(sim)
@@ -140,17 +167,34 @@ impl Simulation {
         self.summary
     }
 
-    /// Runs `ticks` ticks, emitting one record per tick.
+    /// Runs `ticks` ticks, emitting one record per tick, then closes the match.
     pub fn run<S: TickSink>(&mut self, ticks: u32, sink: &mut S) -> Result<(), EngineError> {
         for _ in 0..ticks {
             self.step();
             sink.on_tick(&self.record())?;
         }
+        self.finish();
         Ok(())
+    }
+
+    /// Records full time. A caller that drives `step` itself calls this after the last tick.
+    pub fn finish(&mut self) {
+        self.events.push(EngineEvent {
+            tick: self.tick,
+            kind: EngineEventKind::FullTime,
+            team: None,
+            scores: self.summary.goals,
+        });
+    }
+
+    /// Takes every event recorded since the last call, in tick order.
+    pub fn take_events(&mut self) -> Vec<EngineEvent> {
+        std::mem::take(&mut self.events)
     }
 
     /// Advances the match by one tick.
     pub fn step(&mut self) {
+        self.restart = false;
         let t = self.config.tuning.clone();
         let kick = if self.tick.is_multiple_of(t.decision_interval_ticks) {
             self.decide()
@@ -181,6 +225,7 @@ impl Simulation {
                 self.ball.pos.z as f32,
             ],
             players,
+            restart: self.restart,
         }
     }
 
@@ -214,6 +259,12 @@ impl Simulation {
                     {
                         self.summary.goals[team] += 1;
                         tracing::debug!(signal = "match.goal", tick = self.tick, team, score = ?self.summary.goals);
+                        self.events.push(EngineEvent {
+                            tick: self.tick + 1,
+                            kind: EngineEventKind::Goal,
+                            team: Some(team),
+                            scores: self.summary.goals,
+                        });
                         self.kick_off(1 - team);
                         return;
                     }
@@ -239,8 +290,16 @@ impl Simulation {
         }
     }
 
-    /// Places every player at its base and gives `team`'s centre-forward the ball.
+    /// Places every player at its base and gives `team`'s centre-forward the ball. Every
+    /// call marks the tick as a restart and records a kick-off event.
     fn kick_off(&mut self, team: usize) {
+        self.restart = true;
+        self.events.push(EngineEvent {
+            tick: self.tick + 1,
+            kind: EngineEventKind::KickOff,
+            team: Some(team),
+            scores: self.summary.goals,
+        });
         for i in 0..self.players.len() {
             let p = self.players[i];
             let pos = self.teams[p.team].slot_base(p.slot);

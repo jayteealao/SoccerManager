@@ -26,6 +26,21 @@ pub struct TuningFile {
     pub generator: GeneratorTuning,
     #[garde(dive)]
     pub fatigue: FatigueTuning,
+    #[garde(dive)]
+    pub stream: StreamTuning,
+}
+
+/// What the live tick stream holds and how often it sends a keyframe.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct StreamTuning {
+    /// Ticks the server may run ahead of the client. A full buffer pauses the simulation
+    /// thread, which is the backpressure.
+    #[garde(range(min = 10, max = 5000))]
+    pub buffer_ticks: usize,
+    /// Ticks between keyframes. Every other tick is a delta against the one before it.
+    #[garde(range(min = 1, max = 500))]
+    pub keyframe_interval: u32,
 }
 
 /// What the team generator draws from.

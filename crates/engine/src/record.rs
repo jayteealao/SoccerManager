@@ -1,7 +1,9 @@
 //! The tick record and the `.ticks` file: a 64-byte header, one 192-byte record per tick,
 //! and a 16-byte trailer with the written count. A reader refuses a file without the
 //! trailer or with a count mismatch. Header schema 2 carries `owner.id` and the match
-//! stamp in the bytes schema 1 reserved (product-owner choice, plan Q3).
+//! stamp in the bytes schema 1 reserved (product-owner choice, plan Q3). Header schema 3
+//! carries the restart flag in the top bit of the stored tick number, so a reader of the
+//! file sees the kick-offs the validator needs.
 
 use std::fs::File;
 use std::io::{BufWriter, Read, Write};
@@ -21,7 +23,10 @@ pub const HEADER_BYTES: usize = 64;
 /// Trailer bytes.
 pub const TRAILER_BYTES: usize = 16;
 /// Schema version of the file layout.
-pub const SCHEMA_VERSION: u16 = 2;
+pub const SCHEMA_VERSION: u16 = 3;
+/// Bit 31 of the stored tick number carries the restart flag. A tick number never reaches
+/// 2^31: the longest match the engine accepts is 200 minutes, which is 600,000 ticks.
+const RESTART_BIT: u32 = 1 << 31;
 /// Header offset of the 16-byte owner identifier.
 const OWNER_AT: usize = 28;
 /// Header offset of the 8-byte match stamp (milliseconds since the Unix epoch).
@@ -36,12 +41,21 @@ pub struct TickRecord {
     pub tick: u32,
     pub ball: [f32; 3],
     pub players: [[f32; 2]; PLAYER_COUNT],
+    /// True on a tick that restarts play (kick-off). The ball teleports to the centre
+    /// spot, so the validator must not read the jump as a kick.
+    #[serde(default)]
+    pub restart: bool,
 }
 
 impl TickRecord {
     /// Serializes into a fixed little-endian layout.
     pub fn write_to(&self, buf: &mut [u8; RECORD_BYTES]) {
-        buf[0..4].copy_from_slice(&self.tick.to_le_bytes());
+        let stamped = if self.restart {
+            self.tick | RESTART_BIT
+        } else {
+            self.tick
+        };
+        buf[0..4].copy_from_slice(&stamped.to_le_bytes());
         let mut at = 4;
         for v in self.ball {
             buf[at..at + 4].copy_from_slice(&v.to_le_bytes());
@@ -59,7 +73,9 @@ impl TickRecord {
     pub fn read_from(buf: &[u8]) -> Self {
         let f32_at =
             |at: usize| f32::from_le_bytes([buf[at], buf[at + 1], buf[at + 2], buf[at + 3]]);
-        let tick = u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]);
+        let stamped = u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]);
+        let tick = stamped & !RESTART_BIT;
+        let restart = stamped & RESTART_BIT != 0;
         let ball = [f32_at(4), f32_at(8), f32_at(12)];
         let mut players = [[0.0f32; 2]; PLAYER_COUNT];
         for (i, p) in players.iter_mut().enumerate() {
@@ -70,6 +86,7 @@ impl TickRecord {
             tick,
             ball,
             players,
+            restart,
         }
     }
 }
@@ -151,6 +168,42 @@ impl TickSink for VecSink {
     fn on_tick(&mut self, record: &TickRecord) -> Result<(), EngineError> {
         self.records.push(*record);
         Ok(())
+    }
+}
+
+/// Feeds every record to two sinks, `a` then `b`, and returns the first error.
+pub struct FanoutSink<A: TickSink, B: TickSink> {
+    pub a: A,
+    pub b: B,
+}
+
+impl<A: TickSink, B: TickSink> FanoutSink<A, B> {
+    /// Joins two sinks. `a` receives each record first.
+    pub fn new(a: A, b: B) -> Self {
+        Self { a, b }
+    }
+
+    /// Returns both sinks, so each one can be finished on its own.
+    pub fn into_parts(self) -> (A, B) {
+        (self.a, self.b)
+    }
+}
+
+impl<A: TickSink, B: TickSink> TickSink for FanoutSink<A, B> {
+    fn on_tick(&mut self, record: &TickRecord) -> Result<(), EngineError> {
+        self.a.on_tick(record)?;
+        self.b.on_tick(record)
+    }
+}
+
+/// An absent sink discards every record, so a caller can hold an optional second sink
+/// without branching on the hot path.
+impl<S: TickSink> TickSink for Option<S> {
+    fn on_tick(&mut self, record: &TickRecord) -> Result<(), EngineError> {
+        match self {
+            Some(sink) => sink.on_tick(record),
+            None => Ok(()),
+        }
     }
 }
 
@@ -292,6 +345,7 @@ mod tests {
             tick,
             ball: [1.5, -2.5, 0.25],
             players,
+            restart: tick.is_multiple_of(3),
         }
     }
 
@@ -316,6 +370,39 @@ mod tests {
         assert_eq!(file.header, header(42, 1000));
         assert_eq!(file.records.len(), 1000);
         assert_eq!(file.records[999], sample(999));
+    }
+
+    #[test]
+    fn the_restart_flag_survives_the_file_and_leaves_the_tick_number_alone() {
+        let path = temp("restart");
+        let mut sink = FileSink::create(&path, &header(3, 4)).unwrap();
+        for i in 1..=4 {
+            sink.on_tick(&sample(i)).unwrap();
+        }
+        sink.finish().unwrap();
+        let file = read_ticks(&path).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        let flags: Vec<(u32, bool)> = file.records.iter().map(|r| (r.tick, r.restart)).collect();
+        assert_eq!(flags, vec![(1, false), (2, false), (3, true), (4, false)]);
+    }
+
+    #[test]
+    fn a_fan_out_feeds_both_sinks_in_order() {
+        let mut sink = FanoutSink::new(VecSink::default(), VecSink::default());
+        sink.on_tick(&sample(1)).unwrap();
+        sink.on_tick(&sample(2)).unwrap();
+        let (a, b) = sink.into_parts();
+        assert_eq!(a.records, b.records);
+        assert_eq!(a.records.len(), 2);
+    }
+
+    #[test]
+    fn an_absent_optional_sink_discards_every_record() {
+        let mut none: Option<VecSink> = None;
+        none.on_tick(&sample(1)).unwrap();
+        let mut some = Some(VecSink::default());
+        some.on_tick(&sample(1)).unwrap();
+        assert_eq!(some.unwrap().records.len(), 1);
     }
 
     #[test]
@@ -345,7 +432,7 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
         assert_eq!(
             err.to_string(),
-            "tick file format error: unknown schema version 1; this build reads 2"
+            "tick file format error: unknown schema version 1; this build reads 3"
         );
     }
 }

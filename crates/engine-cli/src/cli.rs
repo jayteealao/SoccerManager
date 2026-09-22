@@ -30,6 +30,12 @@ pub enum Command {
     Bench(BenchOpts),
     /// Generate fictional clubs as team files, one file per club.
     Generate(GenerateOpts),
+    /// Stream one match live over the local socket to one viewer.
+    Serve(ServeOpts),
+    /// Record one whole match stream to a fixture file.
+    Record(RecordOpts),
+    /// Replay a recorded fixture over the same socket protocol.
+    Replay(ReplayOpts),
 }
 
 #[derive(Debug, Args)]
@@ -60,6 +66,54 @@ pub struct SimulateOpts {
 }
 
 #[derive(Debug, Args)]
+pub struct ServeOpts {
+    /// Seed for the engine's random-number generator.
+    #[arg(long)]
+    pub seed: u64,
+    /// Minutes of play to simulate.
+    #[arg(long, default_value_t = 90)]
+    pub minutes: u32,
+    /// Also write every tick to this file while streaming.
+    #[arg(long, value_name = "FILE")]
+    pub ticks_out: Option<PathBuf>,
+    /// Home team file; default teams/default-a.json in the content folder.
+    #[arg(long, value_name = "FILE")]
+    pub team_a: Option<PathBuf>,
+    /// Away team file; default teams/default-b.json in the content folder.
+    #[arg(long, value_name = "FILE")]
+    pub team_b: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct RecordOpts {
+    /// Seed for the engine's random-number generator.
+    #[arg(long)]
+    pub seed: u64,
+    /// Path of the fixture file to write.
+    #[arg(long, value_name = "FILE")]
+    pub out: PathBuf,
+    /// Minutes of play to record.
+    #[arg(long, default_value_t = 90)]
+    pub minutes: u32,
+    /// Home team file; default teams/default-a.json in the content folder.
+    #[arg(long, value_name = "FILE")]
+    pub team_a: Option<PathBuf>,
+    /// Away team file; default teams/default-b.json in the content folder.
+    #[arg(long, value_name = "FILE")]
+    pub team_b: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct ReplayOpts {
+    /// Fixture file written by the record command.
+    #[arg(long, value_name = "FILE")]
+    pub fixture: PathBuf,
+    /// Playback speed; 1.0 is real time and 8.0 is eight times faster.
+    #[arg(long, default_value_t = 1.0)]
+    pub speed: f32,
+}
+
+#[derive(Debug, Args)]
 pub struct BenchOpts {
     /// Seed for the engine's random-number generator.
     #[arg(long)]
@@ -73,6 +127,9 @@ pub struct BenchOpts {
     /// Print the run report as one JSON line (the default output is the same).
     #[arg(long)]
     pub json: bool,
+    /// Also stream one match to a client that reads as fast as it can.
+    #[arg(long)]
+    pub stream: bool,
 }
 
 #[derive(Debug, Args)]

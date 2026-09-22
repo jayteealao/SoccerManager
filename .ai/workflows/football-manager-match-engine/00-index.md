@@ -4,10 +4,10 @@ type: index
 slug: football-manager-match-engine
 title: "Football manager game: match engine and 2D match viewer"
 status: active
-current-stage: plan
-stage-number: 4
+current-stage: implement
+stage-number: 5
 created-at: "2026-09-21T16:46:41Z"
-updated-at: "2026-09-22T11:28:51Z"
+updated-at: "2026-09-22T12:35:00Z"
 selected-slice: "stream-protocol"
 branch-strategy: dedicated
 branch: "feat/football-manager-match-engine"
@@ -134,7 +134,7 @@ charter:
 slices:
   - {slug: engine-core, status: complete, complexity: l, depends-on: []}
   - {slug: data-schemas-generator, status: complete, complexity: m, depends-on: [engine-core]}
-  - {slug: stream-protocol, status: defined, complexity: m, depends-on: [engine-core]}
+  - {slug: stream-protocol, status: in-progress, complexity: m, depends-on: [engine-core]}
   - {slug: viewer-pitch, status: defined, complexity: m, depends-on: [stream-protocol]}
   - {slug: match-rules, status: defined, complexity: l, depends-on: [engine-core, data-schemas-generator]}
   - {slug: tactics-and-ai, status: defined, complexity: l, depends-on: [match-rules, data-schemas-generator]}
@@ -159,8 +159,8 @@ metric-acceptance-mock-rung: 0
 runtime-evidence-deferrals: []
 compressed-slices:
   - {slug: probe-engine-core, slice-type: probe, created-at: "2026-09-22T06:03:50Z"}
-next-command: wf-implement
-next-invocation: "/wf implement football-manager-match-engine stream-protocol"
+next-command: wf-verify
+next-invocation: "/wf verify football-manager-match-engine stream-protocol"
 workflow-files:
   - 00-index.md
   - 01-intake.md
@@ -228,6 +228,8 @@ workflow-files:
   - po-answers.md
   - 03-slice-probe-engine-core.md
   - 03-slice-probe-engine-core.01-dump-path.html.fragment
+  - 05-implement-stream-protocol.md
+  - steer.md
 progress:
   intake: complete
   shape: complete

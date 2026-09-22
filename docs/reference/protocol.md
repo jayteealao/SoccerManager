@@ -1,0 +1,165 @@
+# Match stream protocol, version 1
+
+The engine serves one viewer over a WebSocket on `127.0.0.1`. The port is chosen by the
+operating system at every run and written to `engine.port` inside the runtime data folder.
+A page connects to `ws://127.0.0.1:<port>/?v=1`.
+
+A test in `crates/protocol/tests/document.rs` holds this document to the code: every message
+the implementation names must appear below with every one of its fields.
+
+## Connecting
+
+| Step | Rule |
+|---|---|
+| Address | `ws://127.0.0.1:<port>/?v=<protocol version>` |
+| Version | `v` must equal `1`. Any other value, or no value, is refused with both versions named. |
+| Origin | `null`, a `file://` page, any port of `http://localhost` or `http://127.0.0.1`, or no `Origin` header at all. Any other origin is refused. |
+| Clients | One viewer per match in version 1. |
+| First message | `hello`, always before the first tick frame. |
+
+A refused handshake answers `403` for an origin and `400` for a version, with the reason as
+the body, and writes one `socket.refused` line naming the origin and the rule.
+
+## Framing
+
+Control messages are JSON text frames tagged by `type`. Tick positions are binary frames.
+
+| Frame | Bytes | Meaning |
+|---|---|---|
+| `0x01` keyframe | 99 | the kind tag, then 98 payload bytes: tick (4), ball (6), 22 players (88) |
+| `0x02` delta | 48 | the kind tag, then 47 payload bytes: ball (3), 22 players (44) |
+| `0x03` restart keyframe | 99 | the same payload as `0x01`, on a tick that restarts play |
+
+Every position is a signed 16-bit count of centimetres, little-endian. A delta carries one
+signed byte per component, which covers 1.27 m of movement in one tick against a ball cap of
+0.80 m. A step wider than that, a restart, and every `keyframe_interval` ticks each force a
+keyframe. A delta carries no tick number: it is the tick after the frame before it.
+
+## Messages the server sends
+
+### hello
+
+| Field | Type | Meaning |
+|---|---|---|
+| `protocol.version` | integer | always 1 in this build |
+| `engine.version` | string | the engine crate version |
+| `build.hash` | string | the git hash the engine was built from |
+| `owner.id` | string | 32 hex characters, created once per machine |
+| `match.id` | string | `<seed as 16 hex>-<start time in milliseconds>` |
+| `seed` | integer | the seed the match runs from |
+| `dt_ms` | float | milliseconds per tick, 20.0 |
+| `ticks_expected` | integer | ticks the match will send |
+| `keyframe_interval` | integer | ticks between keyframes |
+| `teams` | array of two | `team.id` and `team.name`, home first |
+
+### tick
+
+Binary, not JSON. See **Framing**.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `kind` | byte | `0x01`, `0x02`, or `0x03` |
+| `tick` | integer | keyframes only; a delta is the tick after the one before it |
+| `ball` | 3 values | x, y, and height in centimetres |
+| `players` | 22 pairs | x and y in centimetres, in roster order, home team first |
+
+### event
+
+One `match-event` row. The same object is written to
+`matches/<match.id>/events.jsonl` with the observability envelope added.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `owner.id` | string | the owner of the match |
+| `match.id` | string | the match |
+| `tick` | integer | the tick the event happened on |
+| `minute` | integer | the simulated minute |
+| `event.type` | enumeration | `kick-off`, `goal`, `full-time`, or `tactics-change` |
+| `team.id` | string | the club the event belongs to; absent at full time |
+| `home.score` | integer | the score after the event |
+| `away.score` | integer | the score after the event |
+| `change.kind` | enumeration | `tactics` or `substitution`; change events only |
+| `change.queued_tick` | integer | the tick the change was queued on |
+| `change.queue_id` | string | the identifier the acknowledgement returned |
+| `change.rejected_reason` | string | present only on a refused change |
+| `change.state` | enumeration | `queued`, `applies-now`, `applied`, or `rejected` |
+
+### stats
+
+Sent once, at full time.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `tick` | integer | the last tick |
+| `minute` | integer | the last simulated minute |
+| `home.score` | integer | final score |
+| `away.score` | integer | final score |
+| `possession.changes` | integer | times possession changed hands |
+| `ball.max_speed` | float | metres per second |
+| `ball.idle_ticks` | integer | ticks the ball stood still |
+
+### ack
+
+| Field | Type | Meaning |
+|---|---|---|
+| `command` | string | `start`, `pause`, `set-speed`, or `queue-change` |
+| `change.queue_id` | string | queued changes only |
+| `change.queued_tick` | integer | the tick the command was read on |
+| `state` | enumeration | queued changes only; `queued` in this build |
+| `speed` | float | `set-speed` only, after clamping to 0.25 to 8.0 |
+
+### reject
+
+| Field | Type | Meaning |
+|---|---|---|
+| `command` | string | the command that was refused |
+| `reason` | string | words a viewer can show, for example `unknown change type formation` |
+
+## Messages a client sends
+
+### start
+
+Resumes production. No fields. A client that never sends it still receives the whole match.
+
+### pause
+
+Pauses production at the current tick. No fields.
+
+### set-speed
+
+| Field | Type | Meaning |
+|---|---|---|
+| `speed` | float | 0.25 to 8.0; a value outside the range is clamped and the clamped value is acknowledged |
+
+### queue-change
+
+| Field | Type | Meaning |
+|---|---|---|
+| `change.kind` | string | `tactics` or `substitution`; any other value is refused by name |
+| `detail` | object | opaque in this build; the match-rules slice reads it when it applies the change |
+
+This build queues the change and answers. Nothing is applied to play: the match-rules slice
+takes the queue and applies each change at a qualifying stoppage.
+
+## Backpressure
+
+The engine runs ahead of the viewer by at most `buffer_ticks` ticks, which
+`content/tuning.json` names and which defaults to 500. When the buffer fills, the
+simulation thread stops until the viewer drains it. No tick is dropped, memory stays flat,
+and one `socket.backpressure` line records each pause with how long it lasted.
+
+## Fixtures
+
+`engine-cli record --seed <n> --out <file>.smfx` writes every frame of one match exactly as
+it would travel on the wire. `engine-cli replay --fixture <file>.smfx --speed <x>` serves
+those bytes back over the same protocol with no re-encoding, so a viewer can be verified
+before the engine is complete.
+
+| Part | Bytes | Contents |
+|---|---|---|
+| header | 32 | magic `SMFX`, protocol version, match start in milliseconds, frame count, tick count, seed |
+| entry | 9 + payload | entry kind (binary or text), tick index, payload length, then the payload |
+| trailer | 16 | magic `SMFE`, frame count, and the first six bytes of a SHA-256 over every payload |
+
+A reader refuses a fixture with the wrong magic, an unknown protocol version, a count
+mismatch, a truncated entry, or a hash that does not match the bytes.

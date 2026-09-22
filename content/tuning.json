@@ -108,5 +108,9 @@
   "fatigue": {
     "minutes_to_half_stamina": 70.0,
     "recovery_per_day": 20.0
+  },
+  "stream": {
+    "buffer_ticks": 500,
+    "keyframe_interval": 50
   }
 }
