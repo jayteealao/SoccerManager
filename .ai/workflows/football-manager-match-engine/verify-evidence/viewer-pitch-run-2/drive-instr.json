@@ -1,0 +1,25 @@
+{
+  "scenario": "instr",
+  "started": "2026-09-22T18:10:14.947Z",
+  "steps": [
+    {
+      "name": "instr",
+      "at": "2026-09-22T18:10:27.813Z",
+      "rows": [
+        "{\"record.kind\":\"viewer-event\",\"schema.version\":\"1\",\"service\":\"touchline-viewer\",\"operation\":\"view\",\"signal\":\"viewer.connected\",\"ts\":\"2026-09-22T18:10:15.401Z\",\"protocol.version\":1,\"engine.version\":\"0.1.0\",\"match.id\":\"000000000000002a-1790100615272\",\"owner.id\":\"6d205cb81895c6b48037e8d64da3d65d\",\"origin\":\"http://127.0.0.1:59837\",\"ticks_expected\":30000}",
+        "{\"record.kind\":\"viewer-event\",\"schema.version\":\"1\",\"service\":\"touchline-viewer\",\"operation\":\"view\",\"signal\":\"viewer.socket_drops\",\"ts\":\"2026-09-22T18:10:15.654Z\",\"match.id\":\"000000000000002a-1790100615272\",\"tick\":30000,\"code\":1005,\"wasClean\":false,\"reason\":null}",
+        "{\"record.kind\":\"viewer-event\",\"schema.version\":\"1\",\"service\":\"touchline-viewer\",\"operation\":\"view\",\"signal\":\"viewer.tick_skipped\",\"ts\":\"2026-09-22T18:10:16.281Z\",\"tick\":44,\"skipped\":2,\"speed\":1,\"window_s\":1.00002}",
+        "{\"record.kind\":\"viewer-event\",\"schema.version\":\"1\",\"service\":\"touchline-viewer\",\"operation\":\"view\",\"signal\":\"viewer.tick_skipped\",\"ts\":\"2026-09-22T18:10:17.280Z\",\"tick\":94,\"skipped\":3,\"speed\":1,\"window_s\":1.00001}"
+      ],
+      "history": {
+        "ticks_stored": 30000,
+        "history_bytes": 2820000,
+        "page_bytes": null,
+        "page_bytes_reason": "not measured yet",
+        "newest_tick": 30000
+      },
+      "notice": "Stream ended The match is no longer live. Start the engine again to watch another."
+    }
+  ],
+  "finished": "2026-09-22T18:10:27.930Z"
+}

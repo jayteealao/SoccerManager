@@ -5,7 +5,7 @@ augmentation-type: benchmark
 slug: football-manager-match-engine
 parent-workflow: football-manager-match-engine
 slice-slug: viewer-pitch
-mode: baseline
+mode: complete
 language: "rust, javascript"
 benchmark-framework: "timing-fallback (engine-cli bench) plus criterion 0.8 for the engine; driven-browser signal reads plus node --test for the page"
 targets-measured: 5
@@ -14,8 +14,14 @@ targets-planned: 9
 baseline-branch: feat/football-manager-match-engine
 baseline-commit: "3570eb9"
 measured-at: "2026-09-22T14:47:49Z"
+compare-branch: feat/football-manager-match-engine
+compare-commit: "36139b4"
+compared-at: "2026-09-22T18:24:00Z"
+regressions-found: 0
+improvements-found: 1
+budget-misses: 1
 created-at: "2026-09-22T06:37:07Z"
-updated-at: "2026-09-22T14:41:32Z"
+updated-at: "2026-09-22T18:24:00Z"
 revision-count: 3
 revisions:
   - rev: 1
@@ -115,7 +121,30 @@ All four browser targets — `viewer frame rate`, `viewer frame time p95`, `view
 
 ## Comparison Results
 
-Not yet run. `/wf verify football-manager-match-engine viewer-pitch` loads `augment/benchmark.md` in compare mode and fills this section.
+Run by `/wf verify football-manager-match-engine viewer-pitch` on commit `36139b4` (the slice at `62a5dab` plus a docs commit), with no other heavy process running. The engine commands ran exactly as recorded; the page targets ran in headless Microsoft Edge 153 at 1280 by 800 and 60 Hz, driven over the DevTools protocol, and in `node --test`-style timed loops. Evidence: `verify-evidence/viewer-pitch/bench-1.stdout.txt` to `bench-3.stdout.txt`, `bench-stream-1.stdout.txt`, `criterion.stdout.txt`, `decode-timing.txt`, `drive-main.json`, `drive-live.json`.
+
+| Target | Baseline median | Compare median | Delta | Delta% | Alloc delta% | Verdict |
+|--------|----------------|---------------|-------|--------|--------------|---------|
+| `full match wall time` | 389 ms | 386 ms | −3 ms | −0.8% | N/A | ✓ no change |
+| `ticks per second` | 694,087 | 699,482 | +5,395 | +0.8% | N/A | ✓ no change |
+| `cpu time` | 388 ms per match | 384.4 ms per match | −3.6 ms | −0.9% | N/A | ✓ no change |
+| `peak memory` | 5.97 MB | 5.33 MB | −0.64 MB | −10.7% | N/A | ✓ improvement |
+| `tick step` | 1.4378 µs | 1.4434 µs | +0.0056 µs | +0.4% | N/A | ✓ no change (criterion p = 0.37) |
+| `steering_pass_22` | 898.22 ns | 873.52 ns | −24.7 ns | −2.7% | N/A | ✓ no change (informational) |
+| `stream throughput` | 634,859 ticks/s | 640,584 ticks/s | +5,725 | +0.9% | N/A | ✓ no change; 2 pauses |
+| `stream peak memory` | 7.30 MB | 6.66 MB | −0.64 MB | −8.8% | N/A | ✓ no change (inside −10%) |
+| `viewer frame rate` | budget ≥ 60 fps, 0 dropped | 60 fps at `refresh_hz` 60 over 60 five-second windows | first value | N/A | N/A | ✓ budget met: after the verify-owned scheduler fix `c7c54bd`, 0 dropped frames and 0 skipped ticks over 5 minutes at 1x (the first round saw 0 to 2 dropped frames per window and a startup tick skip) |
+| `viewer frame time p95` | budget < 16.6 ms | 16.69 to 16.85 ms (second round 16.70 to 16.84 ms) | first value | N/A | N/A | ⚠ budget miss by construction: the p95 of 60 Hz frame intervals cannot fall under 16.67 ms |
+| `viewer decode time` | budget < 25 µs | 0.083 µs per frame (ArrayBuffer input), 0.232 µs (Uint8Array input) | first value | N/A | N/A | ✓ budget met, 300 times under |
+| `viewer history bytes` | budget 25,380,000 exact; `page_bytes` < 314,572,800 | `history_bytes` 25,380,000; `page_bytes` 31,924,655 at 270,000 ticks | first value | N/A | N/A | ✓ budget met; `page_bytes` resolved in headless Edge (the in-app pane refuses the measurement) |
+
+Median of three drives of command 1: wall 386, 386, 385 ms; per-match processor time 384.4, 384.4, 381.2 ms; peak memory 5.348, 5.332, 5.332 MB. The peak-memory drop is the second consecutive improvement reading and no engine code changed in this slice; the likely cause is allocator placement, not a code effect, so it is recorded and not credited.
+
+**Tripwires:**
+
+- `[budget-definition]: viewer frame time p95 16.6 ms is below one 60 Hz frame interval (16.67 ms)` — the reading shows vsync, not work time. Verify triaged it Skip; `viewer-match-day` re-states the budget relative to `refresh_hz`.
+
+No performance or memory tripwire fired.
 
 Compare rules for this baseline:
 

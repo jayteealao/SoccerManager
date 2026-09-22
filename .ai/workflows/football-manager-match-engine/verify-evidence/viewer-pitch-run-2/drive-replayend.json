@@ -1,0 +1,13 @@
+{
+  "scenario": "replayend",
+  "started": "2026-09-22T18:10:28.529Z",
+  "steps": [
+    {
+      "name": "replayend",
+      "at": "2026-09-22T18:10:34.972Z",
+      "serverExit": 1,
+      "tail": "127.0.0.1:62892/\n2026-09-22T18:10:29.015689Z  INFO stream::server: signal=\"socket.client\" origin=http://127.0.0.1:62892 protocol_version=1 match_id=0000000000000007-1790091490622\nerror: websocket error: IO error: An established connection was aborted by the software in your host machine. (os error 10053): An established connection was aborted by the software in your host machine. (os error 10053)\n"
+    }
+  ],
+  "finished": "2026-09-22T18:10:34.973Z"
+}

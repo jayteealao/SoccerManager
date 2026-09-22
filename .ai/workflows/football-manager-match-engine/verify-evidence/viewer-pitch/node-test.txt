@@ -1,0 +1,51 @@
+✔ pure black is pulled into the safe band and never returned (0.6514ms)
+✔ pure white is pulled into the safe band and never returned (0.092ms)
+✔ a kit colour already inside the band survives the round trip (0.0873ms)
+✔ a hex colour survives a round trip through OKLCH (0.1087ms)
+✔ the two shipped kits take different rings, and both are legible on turf (0.3271ms)
+✔ the shirt number takes whichever of paper and ink contrasts more (0.2545ms)
+✔ the canvas token values match web/tokens.css (0.3907ms)
+✔ the wire constants match the Rust codec (0.3987ms)
+✔ a keyframe round trips (0.4815ms)
+✔ a fifty-frame cycle reconstructs every absolute position exactly (1.1297ms)
+✔ a restart frame is reported as a restart (0.1442ms)
+✔ a truncated frame is refused and named (1.3696ms)
+✔ the recorded fixture decodes from its first keyframe forward (5.9373ms)
+✔ a whole match holds exactly 25,380,000 bytes (0.5552ms)
+✔ a read at a tick returns exactly what was written at that tick (3.3444ms)
+✔ growth past the expected ticks keeps every earlier tick (0.3947ms)
+✔ the history reports both numbers, with the browser figure null until it resolves (1.0358ms)
+✔ a browser with no gauge is named, not silently null (0.5054ms)
+✔ a browser that refuses the gauge is named with the refusal (0.1628ms)
+✔ a fraction of zero returns the earlier tick exactly (0.9886ms)
+✔ a fraction of one returns the later tick exactly (0.0917ms)
+✔ every fraction inside the range lies on the segment (2.0649ms)
+✔ a fraction beyond the range is clamped and never extrapolates (0.1198ms)
+✔ the geometry is deterministic for a given size (0.8279ms)
+✔ the line sits at 58 percent and the radius at 21 percent of the tile (0.115ms)
+✔ the marker, the ball and the marking all sit on the field, above the line (0.8537ms)
+✔ the four variants are distinct and none is pure black or pure white (0.367ms)
+✔ the mark renders as an SVG document and never as an image file (0.2232ms)
+✔ without a document the mark falls back to the primary variant (0.0752ms)
+✔ a selected speed applies with no arrivals (0.7084ms)
+✔ selecting at or below the sustained rate clears the lag notice (0.8735ms)
+✔ at eight times speed the scheduler consumes four hundred ticks a second (1.3719ms)
+✔ at eight times speed ticks are skipped and counted (0.1983ms)
+✔ at one times speed no tick is skipped (0.1166ms)
+✔ a sixteen millisecond stall does not cause an extrapolation (0.4688ms)
+✔ a cursor asked to run past the newest tick stops at it (0.1418ms)
+✔ the frame rate is derived from timestamp deltas and carries the refresh rate (0.2578ms)
+✔ a dropped frame shows as a lower rate against an unchanged refresh rate (0.3208ms)
+✔ a goal and its restart collapse to one entry at the earlier tick (0.389ms)
+✔ a restart with no event of its own stands alone (0.0904ms)
+✔ the next stoppage past the last one is null (0.0535ms)
+✔ the previous stoppage walks backwards and runs out at the first (0.0725ms)
+ℹ tests 42
+ℹ suites 0
+ℹ pass 42
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 102.7217
+exit 0

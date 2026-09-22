@@ -1,0 +1,83 @@
+{
+  "scenario": "lag",
+  "started": "2026-09-22T18:07:19.955Z",
+  "steps": [
+    {
+      "name": "ac-e-lag",
+      "at": "2026-09-22T18:07:57.143Z",
+      "reads": [
+        {
+          "notice": "Lag Playing at 3x — the engine sustains three times real time",
+          "live": "Speed 8 times asked for. Playing at 3 times.",
+          "speed": "speed-8",
+          "effective": "3x",
+          "tick": 1337,
+          "newest": 1583
+        },
+        {
+          "notice": "Lag Playing at 3x — the engine sustains three times real time",
+          "live": "Speed 8 times asked for. Playing at 3 times.",
+          "speed": "speed-8",
+          "effective": "3x",
+          "tick": 2537,
+          "newest": 2784
+        },
+        {
+          "notice": "Lag Playing at 3x — the engine sustains three times real time",
+          "live": "Speed 8 times asked for. Playing at 3 times.",
+          "speed": "speed-8",
+          "effective": "3x",
+          "tick": 3737,
+          "newest": 3984
+        }
+      ],
+      "windows": [
+        {
+          "a": {
+            "tick": 3737,
+            "clock": "01:14",
+            "now": 26656.600000000093
+          },
+          "b": {
+            "tick": 5240,
+            "clock": "01:44",
+            "now": 36669.88499999978
+          },
+          "wall_s": 10.013284999999684,
+          "match_s": 30.06,
+          "ratio": 3.0020118272875433,
+          "speed": "speed-8",
+          "effective": "3x"
+        }
+      ],
+      "lagRows": [
+        "{\"record.kind\":\"viewer-event\",\"schema.version\":\"1\",\"service\":\"touchline-viewer\",\"operation\":\"view\",\"signal\":\"viewer.lag\",\"ts\":\"2026-09-22T18:07:22.895Z\",\"requested_speed\":8,\"sustained_speed\":3,\"measured_speed\":2.99,\"tick\":366,\"notice_shown\":true}"
+      ],
+      "skippedRows": 36,
+      "clicks": [
+        {
+          "t": "click",
+          "target": "speed-8",
+          "trusted": true,
+          "at": 2526
+        }
+      ]
+    },
+    {
+      "name": "vitals-lag",
+      "at": "2026-09-22T18:07:58.645Z",
+      "lcp": 123.61500000022352,
+      "cls": 0.00035513991117477417,
+      "inp": null,
+      "events": 0
+    },
+    {
+      "name": "focus-lag",
+      "at": "2026-09-22T18:07:58.646Z",
+      "outline": "solid 2px oklch(0.55 0.17 250)",
+      "boxShadow": "oklch(0.55 0.17 250 / 0.35) 0px 0px 0px 4px",
+      "active": "speed-2"
+    }
+  ],
+  "finished": "2026-09-22T18:07:58.646Z"
+}

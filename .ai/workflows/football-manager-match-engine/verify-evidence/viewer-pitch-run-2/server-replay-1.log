@@ -1,0 +1,6 @@
+2026-09-22T17:49:16.265119Z  INFO stream::server: signal="socket.listening" port=60990 protocol_version=1 match_id=0000000000000007-1790091490622
+60990
+2026-09-22T17:49:16.266302Z  INFO engine_cli::web: signal="web.serving" dir=web files=30 isolated=true port=60991
+http://127.0.0.1:60991/
+2026-09-22T17:49:29.557516Z  INFO stream::server: signal="socket.client" origin=http://127.0.0.1:60991 protocol_version=1 match_id=0000000000000007-1790091490622
+error: websocket error: IO error: An established connection was aborted by the software in your host machine. (os error 10053): An established connection was aborted by the software in your host machine. (os error 10053)

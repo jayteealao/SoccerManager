@@ -1,0 +1,88 @@
+commit c7c54bd303aa7dda3e459eec7a2897cbe9cb5c6a
+Author: jayteealao <jayteealao@gmail.com>
+Date:   Tue Sep 22 19:49:11 2026 +0100
+
+    fix(football-manager-match-engine): verify-time fixes for viewer-pitch
+    
+    A speed the panel can show at one tick per frame never skips a tick. A
+    stalled frame lands on the next tick instead, so playback runs slightly
+    late. At 1x a slow first frame no longer passes over ticks while the
+    stream burst decodes.
+    
+    Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+diff --git a/web/schedule.mjs b/web/schedule.mjs
+index a313a0f..dd85067 100644
+--- a/web/schedule.mjs
++++ b/web/schedule.mjs
+@@ -6,6 +6,9 @@
+ // reports is derived from consecutive timestamp deltas, and `refresh_hz` is reported
+ // beside it, so a reader can always see whether a number is a rendering fact or a panel
+ // fact.
++//
++// Ticks are skipped only at a speed that needs more than one tick per frame at the measured
++// panel rate; below that, a stalled frame delays playback by landing on the next tick.
+ 
+ import { signal } from './signal.mjs';
+ 
+@@ -68,6 +71,11 @@ export class Scheduler {
+     const before = Math.floor(this.position);
+     if (this.playing) {
+       this.position += (elapsed / 1000) * this.ticksPerSecond * this.speed;
++      // A speed the panel can show one tick a frame never skips: a stalled frame that
++      // would pass over a tick lands on the next tick instead, and playback runs late.
++      if (this.speed * this.ticksPerSecond <= this.refreshHz() && this.position >= before + 2) {
++        this.position = before + 1;
++      }
+     }
+     if (this.position < oldestTick) {
+       this.position = oldestTick;
+@@ -111,6 +119,16 @@ export class Scheduler {
+     };
+   }
+ 
++  /// The panel rate, derived as `budget()` derives `refresh_hz`, or a nominal 60 until
++  /// enough frames have been measured.
++  refreshHz() {
++    if (this.durations.length < 10) {
++      return 60;
++    }
++    const fastest = percentile([...this.durations].sort((a, b) => a - b), 0.1);
++    return fastest > 0 ? 1000 / fastest : 60;
++  }
++
+   /// One `viewer.tick_skipped` row a second while ticks are being skipped, and one
+   /// `viewer.frame_budget` row every five seconds.
+   reportWindows(timestampMs) {
+diff --git a/web/tests/schedule.test.mjs b/web/tests/schedule.test.mjs
+index 7b24fd7..cb37822 100644
+--- a/web/tests/schedule.test.mjs
++++ b/web/tests/schedule.test.mjs
+@@ -68,6 +68,27 @@ test('at one times speed no tick is skipped', () => {
+   assert.ok(Math.abs(perSecond - TICKS_PER_SECOND) < 2, `consumed ${perSecond}`);
+ });
+ 
++test('at one times speed a stalled frame delays playback instead of skipping', () => {
++  const scheduler = new Scheduler();
++  scheduler.setSpeed(1);
++  const rows = captured(() => {
++    let timestamp = 0;
++    let lastFrom = 0;
++    for (let frame = 0; frame < 120; frame += 1) {
++      // Frame 3 stalls for 100 milliseconds, as the first stream burst decodes.
++      timestamp += frame === 3 ? 100 : 1000 / 60;
++      const step = scheduler.advance(timestamp, 100000);
++      if (frame === 3) {
++        assert.equal(step.skipped, 0, 'the stalled frame skips no tick');
++        assert.ok(step.from - lastFrom <= 1, `stepped from ${lastFrom} to ${step.from}`);
++      }
++      assert.ok(step.fraction >= 0 && step.fraction <= 1);
++      lastFrom = step.from;
++    }
++  });
++  assert.equal(rows.filter((r) => r.signal === 'viewer.tick_skipped').length, 0);
++});
++
+ test('a sixteen millisecond stall does not cause an extrapolation', () => {
+   const { passedNewest, extrapolated } = quiet(() =>
+     run({ speed: 4, fps: 60, seconds: 2, stallAt: 40 })

@@ -1,0 +1,5 @@
+   Compiling engine v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine)
+   Compiling stream v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\stream)
+   Compiling engine-cli v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine-cli)
+    Finished `release` profile [optimized + debuginfo] target(s) in 5.56s
+exit 0

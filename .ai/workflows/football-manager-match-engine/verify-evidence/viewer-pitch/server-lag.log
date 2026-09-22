@@ -1,0 +1,7 @@
+2026-09-22T18:45:54.872833Z  INFO stream::server: signal="socket.listening" port=64730 protocol_version=1 match_id=0000000000000007-1790091490622
+64730
+2026-09-22T18:45:54.873946Z  INFO engine_cli::web: signal="web.serving" dir=web files=31 isolated=true port=64731
+http://127.0.0.1:64731/
+2026-09-22T18:45:54.962049Z  INFO stream::server: signal="socket.client" origin=http://127.0.0.1:64731 protocol_version=1 match_id=0000000000000007-1790091490622
+
+exit killed by driver

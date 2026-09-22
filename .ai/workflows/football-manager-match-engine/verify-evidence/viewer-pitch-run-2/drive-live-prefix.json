@@ -1,0 +1,139 @@
+{
+  "scenario": "live",
+  "started": "2026-09-22T18:08:38.554Z",
+  "steps": [
+    {
+      "name": "ac-h-step1",
+      "at": "2026-09-22T18:08:39.672Z",
+      "teams": "Oakmere Rangers v Eldstead City",
+      "engine": "engine 0.1.0",
+      "connected": null
+    },
+    {
+      "name": "ac-h-step4",
+      "at": "2026-09-22T18:08:50.358Z",
+      "first": {
+        "tick": 29,
+        "clock": "00:00"
+      },
+      "last": {
+        "tick": 546,
+        "clock": "00:10"
+      },
+      "playersMoved": 22,
+      "ballMoved": true,
+      "outOfBounds": 0,
+      "maxAbsX_cm": 4965,
+      "maxAbsY_cm": 2699
+    },
+    {
+      "name": "ac-h-step5",
+      "at": "2026-09-22T18:09:22.490Z",
+      "windows": [
+        {
+          "a": {
+            "tick": 665,
+            "clock": "00:13",
+            "now": 13468.009999999776
+          },
+          "b": {
+            "tick": 1415,
+            "clock": "00:28",
+            "now": 28472.724999999627
+          },
+          "wall_s": 15.004714999999852,
+          "match_s": 15,
+          "ratio": 0.9996857654410729,
+          "speed": "speed-4",
+          "effective": "1x"
+        },
+        {
+          "a": {
+            "tick": 1415,
+            "clock": "00:28",
+            "now": 28473.32499999972
+          },
+          "b": {
+            "tick": 2166,
+            "clock": "00:43",
+            "now": 43479.389999999665
+          },
+          "wall_s": 15.006064999999944,
+          "match_s": 15.02,
+          "ratio": 1.0009286245261535,
+          "speed": "speed-4",
+          "effective": "1x"
+        }
+      ],
+      "notice": "Stream ended The match is no longer live. Start the engine again to watch another.",
+      "history": {
+        "ticks_stored": 270000,
+        "history_bytes": 25380000,
+        "page_bytes": 31922332,
+        "page_bytes_reason": null,
+        "newest_tick": 270000
+      }
+    },
+    {
+      "name": "ac-f-live",
+      "at": "2026-09-22T18:09:24.525Z",
+      "rewinds": [
+        {
+          "fx": 0.2,
+          "lastRewind": {
+            "tick": 41435,
+            "exact": true,
+            "components": 47
+          },
+          "renderedTick": 41435,
+          "clock": "13:48",
+          "hookEqual": true,
+          "playing": "Play"
+        },
+        {
+          "fx": 0.5,
+          "lastRewind": {
+            "tick": 134980,
+            "exact": true,
+            "components": 47
+          },
+          "renderedTick": 134980,
+          "clock": "44:59",
+          "hookEqual": true,
+          "playing": "Play"
+        },
+        {
+          "fx": 0.8,
+          "lastRewind": {
+            "tick": 228565,
+            "exact": true,
+            "components": 47
+          },
+          "renderedTick": 228565,
+          "clock": "76:11",
+          "hookEqual": true,
+          "playing": "Play"
+        }
+      ],
+      "rewindSignals": [
+        "{\"record.kind\":\"viewer-event\",\"schema.version\":\"1\",\"service\":\"touchline-viewer\",\"operation\":\"view\",\"signal\":\"viewer.rewind\",\"ts\":\"2026-09-22T18:09:23.014Z\",\"from_tick\":2171,\"to_tick\":41435,\"stored\":true,\"exact\":true}",
+        "{\"record.kind\":\"viewer-event\",\"schema.version\":\"1\",\"service\":\"touchline-viewer\",\"operation\":\"view\",\"signal\":\"viewer.rewind\",\"ts\":\"2026-09-22T18:09:23.514Z\",\"from_tick\":41435,\"to_tick\":134980,\"stored\":true,\"exact\":true}",
+        "{\"record.kind\":\"viewer-event\",\"schema.version\":\"1\",\"service\":\"touchline-viewer\",\"operation\":\"view\",\"signal\":\"viewer.rewind\",\"ts\":\"2026-09-22T18:09:24.014Z\",\"from_tick\":134980,\"to_tick\":228565,\"stored\":true,\"exact\":true}"
+      ]
+    },
+    {
+      "name": "ac-g-live",
+      "at": "2026-09-22T18:09:27.514Z",
+      "history": {
+        "ticks_stored": 270000,
+        "history_bytes": 25380000,
+        "page_bytes": 31922332,
+        "page_bytes_reason": null,
+        "newest_tick": 270000
+      },
+      "mem": 31813111,
+      "gauge": "60 fps · 60 Hz · 25 MB"
+    }
+  ],
+  "finished": "2026-09-22T18:09:27.515Z"
+}

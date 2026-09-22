@@ -1,0 +1,81 @@
+{
+  "scenario": "nolag",
+  "started": "2026-09-22T18:46:33.724Z",
+  "steps": [
+    {
+      "name": "ac-e-nolag",
+      "at": "2026-09-22T18:47:10.778Z",
+      "reads": [
+        {
+          "notice": "",
+          "live": "Speed 8 times real time.",
+          "speed": "speed-8",
+          "effective": "8x",
+          "tick": 3363,
+          "newest": 4227
+        },
+        {
+          "notice": "",
+          "live": "Speed 8 times real time.",
+          "speed": "speed-8",
+          "effective": "8x",
+          "tick": 6563,
+          "newest": 7431
+        },
+        {
+          "notice": "",
+          "live": "Speed 8 times real time.",
+          "speed": "speed-8",
+          "effective": "8x",
+          "tick": 9770,
+          "newest": 10636
+        }
+      ],
+      "windows": [
+        {
+          "a": {
+            "tick": 9770,
+            "clock": "03:15",
+            "now": 26653.474999999627
+          },
+          "b": {
+            "tick": 13777,
+            "clock": "04:35",
+            "now": 36663.14999999944
+          },
+          "wall_s": 10.009674999999813,
+          "match_s": 80.14,
+          "ratio": 8.006253949304197,
+          "speed": "speed-8",
+          "effective": "8x"
+        }
+      ],
+      "lagRows": [],
+      "skippedRows": 34,
+      "clicks": [
+        {
+          "t": "click",
+          "target": "speed-8",
+          "trusted": true,
+          "at": 2531
+        }
+      ]
+    },
+    {
+      "name": "vitals-nolag",
+      "at": "2026-09-22T18:47:12.281Z",
+      "lcp": 78.375,
+      "cls": 0.00035513991117477417,
+      "inp": null,
+      "events": 0
+    },
+    {
+      "name": "focus-nolag",
+      "at": "2026-09-22T18:47:12.282Z",
+      "outline": "solid 2px oklch(0.55 0.17 250)",
+      "boxShadow": "oklch(0.55 0.17 250 / 0.35) 0px 0px 0px 4px",
+      "active": "speed-2"
+    }
+  ],
+  "finished": "2026-09-22T18:47:12.282Z"
+}

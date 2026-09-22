@@ -4,10 +4,10 @@ type: index
 slug: football-manager-match-engine
 title: "Football manager game: match engine and 2D match viewer"
 status: active
-current-stage: implement
-stage-number: 5
+current-stage: verify
+stage-number: 6
 created-at: "2026-09-21T16:46:41Z"
-updated-at: "2026-09-22T16:35:00Z"
+updated-at: "2026-09-22T18:49:11Z"
 selected-slice: "viewer-pitch"
 branch-strategy: dedicated
 branch: "feat/football-manager-match-engine"
@@ -135,7 +135,7 @@ slices:
   - {slug: engine-core, status: complete, complexity: l, depends-on: []}
   - {slug: data-schemas-generator, status: complete, complexity: m, depends-on: [engine-core]}
   - {slug: stream-protocol, status: complete, complexity: m, depends-on: [engine-core]}
-  - {slug: viewer-pitch, status: in-progress, complexity: m, depends-on: [stream-protocol]}
+  - {slug: viewer-pitch, status: complete, complexity: m, depends-on: [stream-protocol]}
   - {slug: match-rules, status: defined, complexity: l, depends-on: [engine-core, data-schemas-generator]}
   - {slug: tactics-and-ai, status: defined, complexity: l, depends-on: [match-rules, data-schemas-generator]}
   - {slug: commentary, status: defined, complexity: s, depends-on: [match-rules]}
@@ -154,13 +154,14 @@ augmentations:
   - {type: experiment, artifact: 04c-experiment.md, status: deferred-to-experiment-flags, created-at: "2026-09-21T21:57:49Z"}
 evidence-quality:
   live: 1
-  n-a: 17
+  headless: 5
+  n-a: 20
 metric-acceptance-mock-rung: 0
 runtime-evidence-deferrals: []
 compressed-slices:
   - {slug: probe-engine-core, slice-type: probe, created-at: "2026-09-22T06:03:50Z"}
-next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine viewer-pitch"
+next-command: wf-review
+next-invocation: "/wf review football-manager-match-engine viewer-pitch"
 workflow-files:
   - 00-index.md
   - 01-intake.md
@@ -246,6 +247,10 @@ workflow-files:
   - history/05c-benchmark-2.html.fragment
   - 05-implement-viewer-pitch.md
   - implement-evidence/viewer-pitch/drive.md
+  - 06-verify-viewer-pitch.md
+  - verify-evidence/viewer-pitch/
+  - verify-evidence/viewer-pitch-run-2/
+  - history/06-verify-viewer-pitch-0.md
 progress:
   intake: complete
   shape: complete
