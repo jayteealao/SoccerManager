@@ -4,7 +4,8 @@
 //! regulation plus the added time it earned. The law counts sit in a sanity band only; the
 //! calibrated rates come later. Offsides and corners need forward runs and deflections that
 //! open play does not make yet, so this match only counts them; the scripted criterion tests
-//! prove each law.
+//! prove each law. Both sides are managed by the AI manager: shots are counted, no side
+//! makes more substitutions than the rule pack allows, and no change is left waiting.
 
 mod common;
 
@@ -77,6 +78,27 @@ fn ninety_minutes_play_to_full_time_under_the_laws() {
         .flatten()
         .sum();
     assert!(out_of_play > 0, "the ball never left the pitch");
+    for team in 0..2 {
+        assert!(summary.shots[team] > 0, "team {team} took no shot");
+        assert!(
+            summary.substitutions[team] <= 5,
+            "team {team} made {} substitutions",
+            summary.substitutions[team]
+        );
+        assert_eq!(
+            u32::from(sim.ledgers()[team].used),
+            summary.substitutions[team]
+        );
+    }
+    assert!(
+        sim.pending_changes().is_empty(),
+        "a change waited to full time: {:?}",
+        sim.pending_changes()
+    );
+    assert_eq!(
+        summary.changes_queued,
+        summary.changes_applied + summary.changes_rejected
+    );
     assert_eq!(
         summary.stoppages as usize,
         events.iter().filter(|e| e.spot.is_some()).count() - 2 + 1,

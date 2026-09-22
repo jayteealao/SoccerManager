@@ -7,8 +7,10 @@
 //!   (16 bytes, zero-padded), the content hash (12 bytes), `owner.id` (16 bytes), and the
 //!   match stamp (u64 milliseconds). Four bytes are reserved.
 //! - Body: the seed, the length in minutes, the team-file digests, and every field of the
-//!   running match except the scratch buffer and the events already handed out. Every float
-//!   is stored as its exact bits.
+//!   running match except the scratch buffer and the events already handed out: the lineups,
+//!   benches, tactics, substitutions used, and managers of both teams, each player's squad
+//!   identity, energy, and effective values, the change queue in order, and the AI manager's
+//!   memory. Every float is stored as its exact bits. Version 2 added the tactics fields.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -20,20 +22,23 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
+use crate::ai::{AiState, Manager};
 use crate::data::rules::StoppageKind;
 use crate::error::EngineError;
 use crate::math::{DVec2, DVec3};
-use crate::player::Status;
+use crate::player::{Derived, Status};
 use crate::record::TickSink;
 use crate::rng::{EngineRng, RngState};
 use crate::rules::clock::Tally;
 use crate::rules::fouls::Card;
 use crate::rules::{DeadBall, PendingCard, Phase, Stoppage};
 use crate::sim::{MatchConfig, Simulation, Summary};
+use crate::tactics::change::{Change, ChangeId, QueuedChange, SubLedger};
+use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 1;
+pub const VERSION: u16 = 2;
 /// The file name of a match's latest snapshot inside its match folder.
 pub const FILE_NAME: &str = "snapshot.smsn";
 
@@ -387,6 +392,45 @@ impl Writer {
         self.u32(v[0]);
         self.u32(v[1]);
     }
+    fn opt_pair(&mut self, v: Option<[u32; 2]>) {
+        self.u8(u8::from(v.is_some()));
+        self.pair(v.unwrap_or([0, 0]));
+    }
+    fn opt_u8(&mut self, v: Option<u8>) {
+        self.u8(u8::from(v.is_some()));
+        self.u8(v.unwrap_or(0));
+    }
+    fn tactics(&mut self, t: &Tactics) {
+        self.u8(t.formation);
+        self.u8(t.mentality);
+        for level in t.instructions {
+            self.u8(level);
+        }
+        for rd in &t.roles {
+            self.u8(rd.role);
+            self.u8(rd.duty);
+        }
+    }
+    fn derived(&mut self, d: &Derived) {
+        for v in [
+            d.max_speed,
+            d.max_accel,
+            d.passing,
+            d.dribbling,
+            d.tackling,
+            d.positioning,
+            d.aggression,
+            d.finishing,
+            d.vision,
+            d.decisions,
+            d.composure,
+            d.stamina,
+            d.natural_fitness,
+            d.injury_resistance,
+        ] {
+            self.f64(v);
+        }
+    }
 }
 
 struct Reader<'a> {
@@ -452,6 +496,70 @@ impl<'a> Reader<'a> {
     fn pair(&mut self) -> Decoded<[u32; 2]> {
         Ok([self.u32()?, self.u32()?])
     }
+    fn opt_pair(&mut self) -> Decoded<Option<[u32; 2]>> {
+        let known = self.bool()?;
+        let pair = self.pair()?;
+        Ok(known.then_some(pair))
+    }
+    fn opt_u8(&mut self) -> Decoded<Option<u8>> {
+        let known = self.bool()?;
+        let v = self.u8()?;
+        Ok(known.then_some(v))
+    }
+    fn tactics(&mut self) -> Decoded<Tactics> {
+        let formation = self.u8()?;
+        let mentality = self.u8()?;
+        let mut instructions = [0u8; 6];
+        for level in &mut instructions {
+            *level = self.u8()?;
+        }
+        let mut roles = [RoleDuty::default(); PLAYERS_PER_TEAM];
+        for rd in &mut roles {
+            *rd = RoleDuty {
+                role: self.u8()?,
+                duty: self.u8()?,
+            };
+        }
+        Ok(Tactics {
+            formation,
+            mentality,
+            instructions,
+            roles,
+        })
+    }
+    fn derived(&mut self) -> Decoded<Derived> {
+        Ok(Derived {
+            max_speed: self.f64()?,
+            max_accel: self.f64()?,
+            passing: self.f64()?,
+            dribbling: self.f64()?,
+            tackling: self.f64()?,
+            positioning: self.f64()?,
+            aggression: self.f64()?,
+            finishing: self.f64()?,
+            vision: self.f64()?,
+            decisions: self.f64()?,
+            composure: self.f64()?,
+            stamina: self.f64()?,
+            natural_fitness: self.f64()?,
+            injury_resistance: self.f64()?,
+        })
+    }
+}
+
+fn status_code(s: Status) -> u8 {
+    match s {
+        Status::OnPitch => 0,
+        Status::SentOff => 1,
+        Status::Injured => 2,
+    }
+}
+
+fn manager_code(m: Manager) -> u8 {
+    match m {
+        Manager::Ai => 0,
+        Manager::Human => 1,
+    }
 }
 
 const PLAYERS: usize = 2 * PLAYERS_PER_TEAM;
@@ -473,22 +581,74 @@ fn encode(sim: &Simulation, w: &mut Writer) {
     w.index(sim.carrier);
     w.u32(sim.control_since);
     w.index(sim.last_touch);
+    w.u8(u8::from(sim.keeper_beaten));
     encode_summary(&sim.summary, w);
-    for team in &sim.teams {
+    for (t, team) in sim.teams.iter().enumerate() {
         w.f64(team.attack_x);
         for (active, (x, y)) in team.active.iter().zip(team.formation.iter()) {
             w.u8(u8::from(*active));
             w.f64(*x);
             w.f64(*y);
         }
+        w.tactics(&team.tactics);
+        // Squad indices are below 40, the team file's limit.
+        for s in team.lineup {
+            w.u8(s as u8);
+        }
+        w.u8(team.bench.len() as u8);
+        for s in &team.bench {
+            w.u8(*s as u8);
+        }
+        let ledger = &sim.ledgers[t];
+        w.u8(ledger.used);
+        w.u8(ledger.windows);
+        w.u8(u8::from(ledger.window_at.is_some()));
+        w.u32(ledger.window_at.unwrap_or(0));
+        w.u8(manager_code(sim.managers[t]));
+        let ai = &sim.ai[t];
+        w.opt_pair(ai.trailing_acted);
+        w.opt_pair(ai.leading_acted);
+        w.u8(u8::from(ai.due));
     }
     for p in &sim.players {
         w.v2(p.pos);
         w.v2(p.vel);
         w.v2(p.target);
         w.v2(p.facing);
-        w.u8(u8::from(p.status == Status::SentOff));
+        w.u8(status_code(p.status));
         w.u8(p.yellow);
+        w.u8(p.squad as u8);
+        w.f64(p.energy);
+        w.derived(&p.derived);
+    }
+    w.u32(sim.queue.next);
+    // A queue holds far fewer than 4 billion changes.
+    w.u32(sim.queue.pending.len() as u32);
+    for q in &sim.queue.pending {
+        w.u8(q.team as u8);
+        w.u32(q.id.tick);
+        w.u32(q.id.n);
+        match &q.change {
+            Change::Substitution { off, on } => {
+                w.u8(0);
+                w.u8(*off as u8);
+                w.u8(*on as u8);
+            }
+            Change::Tactics(patch) => {
+                w.u8(1);
+                w.opt_u8(patch.formation);
+                w.opt_u8(patch.mentality);
+                for level in patch.instructions {
+                    w.opt_u8(level);
+                }
+                w.u8(patch.roles.len() as u8);
+                for (squad, rd) in &patch.roles {
+                    w.u8(*squad as u8);
+                    w.u8(rd.role);
+                    w.u8(rd.duty);
+                }
+            }
+        }
     }
     let referee = &sim.referee;
     match referee.phase {
@@ -551,6 +711,13 @@ fn encode_summary(s: &Summary, w: &mut Writer) {
     w.u32(s.stoppages);
     w.u32(s.dead_ball_ticks);
     w.u32(s.offside_checks);
+    w.pair(s.shots);
+    w.pair(s.substitutions);
+    w.pair(s.injuries);
+    w.u32(s.changes_queued);
+    w.u32(s.changes_applied);
+    w.u32(s.changes_rejected);
+    w.u32(s.ai_decisions);
 }
 
 fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
@@ -577,25 +744,114 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
     sim.carrier = r.index(PLAYERS)?;
     sim.control_since = r.u32()?;
     sim.last_touch = r.index(2)?;
+    sim.keeper_beaten = r.bool()?;
     sim.summary = decode_summary(r)?;
-    for team in &mut sim.teams {
+    let schema = sim.config.tactics.clone();
+    let tuning = sim.config.tuning.clone();
+    for t in 0..2 {
+        let team = &mut sim.teams[t];
         team.attack_x = r.f64()?;
-        for slot in 0..PLAYERS_PER_TEAM {
+        let mut formation = team.formation;
+        for (slot, place) in formation.iter_mut().enumerate() {
             team.active[slot] = r.bool()?;
-            team.formation[slot] = (r.f64()?, r.f64()?);
+            *place = (r.f64()?, r.f64()?);
         }
+        let tactics = r.tactics()?;
+        if !tactics_in_range(&tactics, &schema) {
+            return Err("malformed body: the tactics name an index the tactics file lacks");
+        }
+        team.set_tactics(tactics, &schema, &tuning);
+        team.formation = formation;
+        let squad = team.squad.len();
+        for place in &mut team.lineup {
+            *place = r.some_index(squad)?;
+        }
+        let bench = r.u8()?;
+        team.bench = (0..bench)
+            .map(|_| r.some_index(squad))
+            .collect::<Decoded<Vec<_>>>()?;
+        sim.ledgers[t] = SubLedger {
+            used: r.u8()?,
+            windows: r.u8()?,
+            window_at: {
+                let known = r.bool()?;
+                let at = r.u32()?;
+                known.then_some(at)
+            },
+        };
+        sim.managers[t] = match r.u8()? {
+            0 => Manager::Ai,
+            1 => Manager::Human,
+            _ => return Err("malformed body: an unknown manager"),
+        };
+        sim.ai[t] = AiState {
+            trailing_acted: r.opt_pair()?,
+            leading_acted: r.opt_pair()?,
+            due: r.bool()?,
+        };
     }
     for p in &mut sim.players {
         p.pos = r.v2()?;
         p.vel = r.v2()?;
         p.target = r.v2()?;
         p.facing = r.v2()?;
-        p.status = if r.bool()? {
-            Status::SentOff
-        } else {
-            Status::OnPitch
+        p.status = match r.u8()? {
+            0 => Status::OnPitch,
+            1 => Status::SentOff,
+            2 => Status::Injured,
+            _ => return Err("malformed body: an unknown player status"),
         };
         p.yellow = r.u8()?;
+        let team = &sim.teams[p.team];
+        let squad = r.some_index(team.squad.len())?;
+        let entry = &team.squad[squad];
+        p.squad = squad;
+        p.shirt = entry.shirt;
+        p.attributes = entry.attributes;
+        p.base = entry.derived;
+        p.energy = r.f64()?;
+        p.derived = r.derived()?;
+    }
+    sim.queue.next = r.u32()?;
+    let pending = r.u32()?;
+    sim.queue.pending = Vec::new();
+    for _ in 0..pending {
+        let team = r.some_index(2)?;
+        let id = ChangeId {
+            tick: r.u32()?,
+            n: r.u32()?,
+        };
+        let squad = sim.teams[team].squad.len();
+        let change = match r.u8()? {
+            0 => Change::Substitution {
+                off: r.some_index(squad)?,
+                on: r.some_index(squad)?,
+            },
+            1 => {
+                let mut patch = TacticsPatch {
+                    formation: r.opt_u8()?,
+                    mentality: r.opt_u8()?,
+                    ..TacticsPatch::default()
+                };
+                for level in &mut patch.instructions {
+                    *level = r.opt_u8()?;
+                }
+                let roles = r.u8()?;
+                for _ in 0..roles {
+                    let s = r.some_index(squad)?;
+                    patch.roles.push((
+                        s,
+                        RoleDuty {
+                            role: r.u8()?,
+                            duty: r.u8()?,
+                        },
+                    ));
+                }
+                Change::Tactics(patch)
+            }
+            _ => return Err("malformed body: an unknown change kind"),
+        };
+        sim.queue.pending.push(QueuedChange { id, team, change });
     }
     let referee = &mut sim.referee;
     referee.phase = match r.u8()? {
@@ -667,7 +923,27 @@ fn decode_summary(r: &mut Reader<'_>) -> Decoded<Summary> {
         stoppages: r.u32()?,
         dead_ball_ticks: r.u32()?,
         offside_checks: r.u32()?,
+        shots: r.pair()?,
+        substitutions: r.pair()?,
+        injuries: r.pair()?,
+        changes_queued: r.u32()?,
+        changes_applied: r.u32()?,
+        changes_rejected: r.u32()?,
+        ai_decisions: r.u32()?,
     })
+}
+
+/// `true` when every index of `t` lies inside the tactics file.
+fn tactics_in_range(t: &Tactics, schema: &crate::data::tactics::TacticsSchema) -> bool {
+    usize::from(t.formation) < schema.formations.len()
+        && usize::from(t.mentality) < schema.mentalities.len()
+        && t.instructions
+            .iter()
+            .enumerate()
+            .all(|(i, l)| usize::from(*l) < schema.instructions.level_count(i))
+        && t.roles.iter().all(|rd| {
+            usize::from(rd.role) < schema.roles.len() && usize::from(rd.duty) < schema.duties.len()
+        })
 }
 
 #[cfg(test)]
@@ -696,6 +972,18 @@ mod tests {
         assert_eq!(read.seed(), 42);
         assert_eq!(read.minutes(), 90);
         assert_eq!(read.tick(), 20_000);
+    }
+
+    #[test]
+    fn a_version_one_file_is_refused_naming_both_versions() {
+        let mut bytes = Snapshot::capture(&played(10), [0; 16], 1).to_bytes();
+        bytes[4..6].copy_from_slice(&1u16.to_le_bytes());
+        let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("unknown version 1; this build reads 2"),
+            "{err}"
+        );
     }
 
     #[test]

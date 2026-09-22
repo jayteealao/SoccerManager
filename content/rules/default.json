@@ -1,8 +1,8 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "halves": 2,
   "half_minutes": 45,
-  "substitutions": { "limit": 5, "windows": 3 },
+  "substitutions": { "limit": 5, "windows": 3, "windows_exempt": ["half_time"] },
   "stoppages": [
     { "kind": "kick_off", "admits_tactics": true, "admits_substitution": true },
     { "kind": "throw_in", "admits_tactics": true, "admits_substitution": true },

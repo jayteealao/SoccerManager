@@ -31,6 +31,11 @@ pub use message::{ClientCommand, Hello, QueueChange, ServerMessage, SetSpeed, St
 /// the match can last, because added time makes the real length known only at full time.
 /// A field that changes meaning takes a new version. The event message also gained the law
 /// event types and six optional fields.
+///
+/// Version 2 also survived three event types (`injury`, `substitution`, `ai-decision`) and two
+/// optional fields (`change.applied_tick`, `ai.decision`) that the observability contract
+/// already lists, and `team.id` on change events. No field changed meaning, and a client
+/// ignores what it does not know.
 pub const PROTOCOL_VERSION: u16 = 2;
 
 /// Errors this crate returns.
@@ -139,6 +144,8 @@ pub const MESSAGES: &[MessageSpec] = &[
             "change.queue_id",
             "change.rejected_reason",
             "change.state",
+            "change.applied_tick",
+            "ai.decision",
             "player.id",
             "player.secondary_id",
             "card.kind",

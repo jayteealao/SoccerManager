@@ -244,6 +244,10 @@ fn play_event(
         K::GoalKick => EventType::GoalKick,
         K::FreeKick => EventType::FreeKick,
         K::Penalty => EventType::Penalty,
+        K::Injury => EventType::Injury,
+        K::Substitution => EventType::Substitution,
+        K::AiDecision => EventType::AiDecision,
+        K::ChangeApplied | K::ChangeRejected => EventType::TacticsChange,
     };
     MatchEvent::play(
         owner_id,

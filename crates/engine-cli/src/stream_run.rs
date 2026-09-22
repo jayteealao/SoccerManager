@@ -4,8 +4,10 @@
 //! fixture, or both).
 
 use engine::record::TickSink;
-use engine::{Card, EngineEvent, EngineEventKind, Simulation};
-use protocol::{CardKind, EventType, MatchEvent, ServerMessage, Stats};
+use engine::{Card, EngineEvent, EngineEventKind, EventDetail, Simulation};
+use protocol::{
+    CardKind, ChangeKind, ChangeOutcome, ChangeState, EventType, MatchEvent, ServerMessage, Stats,
+};
 use stream::session::MatchState;
 use stream::{Gate, StreamError};
 
@@ -41,7 +43,10 @@ pub fn drive<S: TickSink>(
     opts: &Drive<'_>,
     route: MessageRoute<'_>,
 ) -> Result<Driven, StreamError> {
-    let player_ids = sim.player_ids();
+    let mut ids = Ids {
+        roster: sim.player_ids(),
+        squads: sim.teams().map(|t| t.player_ids),
+    };
     let mut written = 0u32;
     while !sim.is_over() && written < opts.ticks {
         if let Some(gate) = opts.gate
@@ -63,13 +68,13 @@ pub fn drive<S: TickSink>(
         }
         for event in sim.take_events() {
             opts.state.set_scores(event.scores);
-            route(ServerMessage::Event(match_event(&event, opts, &player_ids)))?;
+            route(ServerMessage::Event(match_event(&event, opts, &mut ids)))?;
         }
     }
     let full_time = sim.is_over();
     sim.finish();
     for event in sim.take_events() {
-        if let Err(err) = route(ServerMessage::Event(match_event(&event, opts, &player_ids))) {
+        if let Err(err) = route(ServerMessage::Event(match_event(&event, opts, &mut ids))) {
             return closing_or_fail(err, written).map(|written| Driven { written, full_time });
         }
     }
@@ -123,8 +128,46 @@ fn closing_or_fail(err: StreamError, written: u32) -> Result<u32, StreamError> {
     }
 }
 
+/// The player identifiers events name: each roster slot's current player, and each team's
+/// squad in file order. A substitution event updates its roster slot, so an earlier event on
+/// the same tick still names the player who left.
+struct Ids {
+    roster: Vec<String>,
+    squads: [Vec<String>; 2],
+}
+
 /// One engine event as the `match-event` record kind names it.
-fn match_event(event: &EngineEvent, opts: &Drive<'_>, player_ids: &[String]) -> MatchEvent {
+fn match_event(event: &EngineEvent, opts: &Drive<'_>, ids: &mut Ids) -> MatchEvent {
+    let team_id = event.team.map(|t| opts.club_ids[t].to_string());
+    let squad_id = |team: Option<usize>, s: usize| team.and_then(|t| ids.squads[t].get(s).cloned());
+    if let Some(EventDetail::Change { id, kind, reason }) = event.detail {
+        let kind = match kind {
+            engine::ChangeKind::Tactics => ChangeKind::Tactics,
+            engine::ChangeKind::Substitution => ChangeKind::Substitution,
+        };
+        let squads = event.team.map_or(&[][..], |t| &ids.squads[t][..]);
+        let outcome = ChangeOutcome {
+            kind: Some(kind),
+            queue_id: Some(id.to_string()),
+            state: if reason.is_some() {
+                ChangeState::Rejected
+            } else {
+                ChangeState::Applied
+            },
+            rejected_reason: reason.map(|r| r.text(squads)),
+        };
+        return MatchEvent::change(
+            opts.owner_id,
+            opts.match_id,
+            event.tick,
+            event.scores,
+            outcome,
+        )
+        .at_minute(event.minute, event.minute_added)
+        .team(team_id)
+        .queued_at(id.tick)
+        .applied_tick(reason.is_none().then_some(event.tick));
+    }
     let event_type = match event.kind {
         EngineEventKind::KickOff => EventType::KickOff,
         EngineEventKind::Goal => EventType::Goal,
@@ -138,22 +181,46 @@ fn match_event(event: &EngineEvent, opts: &Drive<'_>, player_ids: &[String]) -> 
         EngineEventKind::GoalKick => EventType::GoalKick,
         EngineEventKind::FreeKick => EventType::FreeKick,
         EngineEventKind::Penalty => EventType::Penalty,
+        EngineEventKind::Injury => EventType::Injury,
+        EngineEventKind::Substitution => EventType::Substitution,
+        EngineEventKind::AiDecision => EventType::AiDecision,
+        // A verdict always carries its change detail and returned above.
+        EngineEventKind::ChangeApplied | EngineEventKind::ChangeRejected => {
+            EventType::TacticsChange
+        }
     };
-    let id = |i: Option<usize>| i.and_then(|i| player_ids.get(i).cloned());
+    let (player, secondary) = match event.detail {
+        Some(EventDetail::Substitution { off, on }) => {
+            let (off_id, on_id) = (squad_id(event.team, off), squad_id(event.team, on));
+            if let (Some(i), Some(on_id)) = (event.player, on_id.clone()) {
+                ids.roster[i] = on_id;
+            }
+            (off_id, on_id)
+        }
+        _ => {
+            let id = |i: Option<usize>| i.and_then(|i| ids.roster.get(i).cloned());
+            (id(event.player), id(event.secondary))
+        }
+    };
+    let ai_decision = match event.detail {
+        Some(EventDetail::Ai { code }) => Some(code.code().to_string()),
+        _ => None,
+    };
     MatchEvent::play(
         opts.owner_id,
         opts.match_id,
         event.tick,
         event_type,
-        event.team.map(|t| opts.club_ids[t].to_string()),
+        team_id,
         event.scores,
     )
     .at_minute(event.minute, event.minute_added)
-    .player(id(event.player))
-    .secondary(id(event.secondary))
+    .player(player)
+    .secondary(secondary)
     .card(event.card.map(card_kind))
     .advantage(event.advantage)
     .added_time(event.added_time_s)
+    .ai_decision(ai_decision)
 }
 
 /// The engine card as the protocol names it.

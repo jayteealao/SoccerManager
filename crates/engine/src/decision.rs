@@ -1,6 +1,8 @@
-//! The minimal possession decision: the ball carrier passes to the best-placed teammate,
-//! shoots, or dribbles; two opponents press; every other player holds its formation anchor.
-//! Every agent decides every tick (product-owner choice; `Tuning::decision_interval_ticks`).
+//! The possession decision. The ball carrier scores its options (shoot, pass to each open
+//! team-mate, dribble, clear, hold) and takes the highest; the team's pressing instruction
+//! sets how many opponents press and from how far; every other player holds its formation
+//! anchor, which the team's plan moves. Every agent decides every tick (product-owner choice;
+//! `Tuning::decision_interval_ticks`).
 //! A sent-off player takes no part in any decision. While the ball is dead, the referee sets
 //! every target instead, and a restart kick comes from `restart_pass`.
 
@@ -25,9 +27,12 @@ impl Simulation {
         match self.carrier {
             Some(c) => {
                 let team = self.players[c].team;
-                // Teammates hold their anchors; the two nearest opponents press.
-                let mut pressers = [usize::MAX; 2];
-                let mut press_dist = [f64::INFINITY; 2];
+                // Teammates hold their anchors; the nearest opponents press, as many and from
+                // as far as the defending team's pressing instruction says.
+                let defending = &self.teams[1 - team].plan;
+                let count = defending.press_count.min(MAX_PRESSERS);
+                let reach = defending.press_distance;
+                let mut pressers = [(f64::INFINITY, usize::MAX); MAX_PRESSERS];
                 for i in 0..n {
                     let p = self.players[i];
                     if !p.active() {
@@ -35,22 +40,20 @@ impl Simulation {
                     }
                     let anchor = self.teams[p.team].anchor(p.slot, ball_xy, &self.config.tuning);
                     self.players[i].target = anchor;
-                    if p.team != team && p.slot != 0 {
+                    if p.team != team && p.slot != 0 && count > 0 {
                         let d = (p.pos - ball_xy).length();
-                        if d < self.config.tuning.press_distance {
-                            if d < press_dist[0] {
-                                pressers[1] = pressers[0];
-                                press_dist[1] = press_dist[0];
-                                pressers[0] = i;
-                                press_dist[0] = d;
-                            } else if d < press_dist[1] {
-                                pressers[1] = i;
-                                press_dist[1] = d;
+                        if d < reach && d < pressers[count - 1].0 {
+                            // Insert in distance order among the first `count` places.
+                            let mut k = count - 1;
+                            while k > 0 && pressers[k - 1].0 > d {
+                                pressers[k] = pressers[k - 1];
+                                k -= 1;
                             }
+                            pressers[k] = (d, i);
                         }
                     }
                 }
-                for &i in &pressers {
+                for &(_, i) in &pressers[..count] {
                     if i != usize::MAX {
                         self.players[i].target = ball_xy;
                     }
@@ -93,14 +96,25 @@ impl Simulation {
         }
     }
 
-    pub(crate) fn decide_carrier(&mut self, c: usize) -> Option<Kick> {
+    /// Scores every option the carrier has (named mechanism: scored-options decision layer).
+    /// Each score is a weighted sum of the option's features with weights from the tuning
+    /// file, plus the offsets of the team's plan (mentality, instructions, the carrier's role
+    /// and duty), plus noise that shrinks as the carrier's decisions and composure rise.
+    pub(crate) fn options(&mut self, c: usize) -> Options {
         let t = &self.config.tuning;
+        let w = &t.decision;
         let carrier = self.players[c];
         let team = carrier.team;
-        let goal = self.teams[team].target_goal();
-        let attack = DVec2::new(self.teams[team].attack_x, 0.0);
-        let to_goal = goal - carrier.pos;
-        let goal_dist = to_goal.length();
+        let side = &self.teams[team];
+        let plan = side.plan;
+        let role = plan.slots[carrier.slot];
+        let goal = side.target_goal();
+        let attack = DVec2::new(side.attack_x, 0.0);
+        let goal_dist = (goal - carrier.pos).length();
+        let keeper = carrier.slot == 0;
+        let skill = |v: f64| (v - 50.0) / 50.0 * w.skill;
+        let noise =
+            w.noise * (1.5 - (carrier.derived.decisions + carrier.derived.composure) / 200.0);
 
         // Pressure and space around the carrier.
         let mut nearest_opp = f64::INFINITY;
@@ -120,32 +134,36 @@ impl Simulation {
                 space_ahead = space_ahead.min(dist);
             }
         }
+        let pressed = nearest_opp < 2.5;
 
         // Shot.
-        if goal_dist < t.shot_range {
+        let shot = if !keeper && goal_dist < t.shot_range {
             let lane = self
                 .players
                 .iter()
                 .filter(|p| p.team != team && p.slot != 0 && p.active())
                 .map(|p| segment_distance(p.pos, carrier.pos, goal))
                 .fold(f64::INFINITY, f64::min);
-            let want = lane > 2.5 || (nearest_opp < 2.0 && lane > 1.0) || self.rng.chance(0.02);
-            if want {
-                let aim = DVec2::new(goal.x, self.rng.range_f64(-3.3, 3.3));
-                let dir = rotate(
-                    toward(carrier.pos, aim),
-                    self.rng.range_f64(-t.shot_noise, t.shot_noise),
-                );
-                return Some(Kick::Shot {
-                    dir,
-                    speed: t.shot_speed,
-                    loft: self.rng.range_f64(0.0, 2.5),
-                });
-            }
-        }
+            let under_pressure = if nearest_opp < 2.0 && lane > 1.0 {
+                w.pressure
+            } else {
+                0.0
+            };
+            Some(
+                w.shot_base + w.shot_lane * ((lane.min(5.0) - 2.5) / 2.5)
+                    - w.shot_distance * goal_dist / t.shot_range
+                    + under_pressure
+                    + skill(carrier.derived.finishing)
+                    + plan.shoot
+                    + role.shoot
+                    + self.rng.range_f64(-noise, noise),
+            )
+        } else {
+            None
+        };
 
-        // Pass options.
-        let mut best: Option<(f64, usize)> = None;
+        // Passes.
+        let mut pass: Option<(f64, usize)> = None;
         for j in 0..self.players.len() {
             let mate = &self.players[j];
             if mate.team != team || j == c || !mate.active() {
@@ -164,29 +182,109 @@ impl Simulation {
                 lane = lane.min(segment_distance(opp.pos, carrier.pos, mate.pos));
                 receiver_space = receiver_space.min((opp.pos - mate.pos).length());
             }
-            if lane < 1.5 {
+            if lane < w.min_lane {
                 continue;
             }
             let progress = ((mate.pos - carrier.pos).dot(attack) / 40.0).clamp(-1.0, 1.0);
-            let score = 1.2 * progress + 0.5 * (lane / 6.0) + 0.4 * (receiver_space / 8.0)
-                - 0.3 * (d / 45.0)
-                + self.rng.range_f64(-0.1, 0.1);
-            if best.is_none_or(|(s, _)| score > s) {
-                best = Some((score, j));
+            let forward = progress.max(0.0);
+            let score = (w.progress + plan.progress + role.progress) * progress
+                + skill(carrier.derived.vision) * forward
+                + w.lane * (lane / 6.0)
+                + w.space * (receiver_space / 8.0)
+                - w.distance * (d / 45.0)
+                + plan.directness * (d / 45.0)
+                + plan.tempo
+                + self.rng.range_f64(-noise, noise);
+            if pass.is_none_or(|(s, _)| score > s) {
+                pass = Some((score, j));
             }
         }
-        let mut dribble = 0.8 * (space_ahead / 10.0) + 0.3 + self.rng.range_f64(-0.1, 0.1);
-        if nearest_opp < 2.5 {
-            dribble -= 0.5;
-        }
-        let held = self.tick.saturating_sub(self.control_since);
-        if held < 10 {
-            dribble += 0.6;
-        }
 
-        let keeper = carrier.slot == 0;
-        if let Some((score, j)) = best {
-            if keeper || score > dribble {
+        let held = self.tick.saturating_sub(self.control_since);
+        let held_s = f64::from(held) * t.dt;
+        let (dribble, hold) = if keeper {
+            (None, None)
+        } else {
+            let dribble = w.dribble_base + w.dribble_space * (space_ahead / 10.0)
+                - if pressed { w.pressure } else { 0.0 }
+                + if held < 10 { w.first_touch } else { 0.0 }
+                + skill(carrier.derived.dribbling)
+                + role.dribble
+                - plan.tempo
+                + self.rng.range_f64(-noise, noise);
+            let hold = w.hold + plan.hold - plan.tempo - w.hold_per_s * held_s
+                + self.rng.range_f64(-noise, noise);
+            (Some(dribble), Some(hold))
+        };
+        let own_third = carrier.pos.x * attack.x < -pitch::HALF_LENGTH / 3.0;
+        let clear = if keeper {
+            w.keeper_clear
+        } else {
+            w.clear
+                + if pressed && own_third {
+                    w.clear_pressure
+                } else {
+                    0.0
+                }
+        } + self.rng.range_f64(-noise, noise);
+        Options {
+            shot,
+            pass,
+            dribble,
+            clear,
+            hold,
+            nearest_opp_pos,
+        }
+    }
+
+    pub(crate) fn decide_carrier(&mut self, c: usize) -> Option<Kick> {
+        let o = self.options(c);
+        let t = &self.config.tuning;
+        let carrier = self.players[c];
+        let team = carrier.team;
+        let goal = self.teams[team].target_goal();
+        let attack = DVec2::new(self.teams[team].attack_x, 0.0);
+        let mut choice = (o.clear, Choice::Clear);
+        for (score, option) in [
+            (o.shot, Choice::Shot),
+            (o.pass.map(|(s, _)| s), Choice::Pass),
+            (o.dribble, Choice::Dribble),
+            (o.hold, Choice::Hold),
+        ] {
+            if let Some(score) = score
+                && score > choice.0
+            {
+                choice = (score, option);
+            }
+        }
+        match choice.1 {
+            Choice::Shot => {
+                // Aim for the side of the goal away from the goalkeeper; a better finisher
+                // places the shot nearer the post and strikes it truer.
+                let finishing = (carrier.derived.finishing / 100.0).clamp(0.0, 1.0);
+                let keeper = &self.players[(1 - team) * crate::team::PLAYERS_PER_TEAM];
+                let side = if !keeper.active() {
+                    if self.rng.chance(0.5) { 1.0 } else { -1.0 }
+                } else if keeper.pos.y > goal.y {
+                    -1.0
+                } else {
+                    1.0
+                };
+                let reach = pitch::GOAL_WIDTH / 2.0 * (0.4 + 0.5 * finishing);
+                let aim = DVec2::new(goal.x, side * self.rng.range_f64(0.5 * reach, reach));
+                let spread = t.shot_noise * (1.5 - finishing);
+                let dir = rotate(
+                    toward(carrier.pos, aim),
+                    self.rng.range_f64(-spread, spread),
+                );
+                Some(Kick::Shot {
+                    dir,
+                    speed: t.shot_speed,
+                    loft: self.rng.range_f64(0.0, 2.5),
+                })
+            }
+            Choice::Pass => {
+                let j = o.pass.map_or(c, |(_, j)| j);
                 let mate_pos = self.players[j].pos;
                 let d = (mate_pos - carrier.pos).length();
                 let skill = carrier.derived.passing / 100.0;
@@ -197,36 +295,65 @@ impl Simulation {
                 );
                 let loft = if d > 25.0 { 3.0 + d * 0.08 } else { 0.0 };
                 let speed = kick_speed(d, loft, t);
-                return Some(Kick::Pass { dir, speed, loft });
+                Some(Kick::Pass { dir, speed, loft })
+            }
+            Choice::Clear => {
+                // Clear long toward the far half.
+                let dir = rotate(attack, self.rng.range_f64(-0.6, 0.6));
+                Some(Kick::Pass {
+                    dir,
+                    speed: kick_speed(CLEARANCE_DISTANCE, CLEARANCE_LOFT, t),
+                    loft: CLEARANCE_LOFT,
+                })
+            }
+            Choice::Hold => {
+                self.players[c].target = carrier.pos;
+                None
+            }
+            Choice::Dribble => {
+                // Dribble toward goal, drifting away from the nearest opponent.
+                let to_goal = goal - carrier.pos;
+                let goal_dist = to_goal.length();
+                let dir_goal = if goal_dist > 1e-6 {
+                    to_goal / goal_dist
+                } else {
+                    attack
+                };
+                let perp = DVec2::new(-dir_goal.y, dir_goal.x);
+                let side = if (o.nearest_opp_pos - carrier.pos).dot(perp) > 0.0 {
+                    -1.0
+                } else {
+                    1.0
+                };
+                let target = carrier.pos + dir_goal * 8.0 + perp * (4.0 * side);
+                self.players[c].target = pitch::clamp(target, 1.0);
+                None
             }
         }
-
-        if keeper {
-            // Clear long toward the far half.
-            let dir = rotate(attack, self.rng.range_f64(-0.6, 0.6));
-            return Some(Kick::Pass {
-                dir,
-                speed: kick_speed(CLEARANCE_DISTANCE, CLEARANCE_LOFT, t),
-                loft: CLEARANCE_LOFT,
-            });
-        }
-
-        // Dribble toward goal, drifting away from the nearest opponent.
-        let dir_goal = if goal_dist > 1e-6 {
-            to_goal / goal_dist
-        } else {
-            attack
-        };
-        let perp = DVec2::new(-dir_goal.y, dir_goal.x);
-        let side = if (nearest_opp_pos - carrier.pos).dot(perp) > 0.0 {
-            -1.0
-        } else {
-            1.0
-        };
-        let target = carrier.pos + dir_goal * 8.0 + perp * (4.0 * side);
-        self.players[c].target = pitch::clamp(target, 1.0);
-        None
     }
+}
+
+/// The carrier's scored options on one tick. `None` is an option the carrier does not have:
+/// no shot beyond the shooting range, no pass without an open team-mate, and no dribble or
+/// hold for a goalkeeper.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Options {
+    pub shot: Option<f64>,
+    /// The best pass and the team-mate's roster index.
+    pub pass: Option<(f64, usize)>,
+    pub dribble: Option<f64>,
+    pub clear: f64,
+    pub hold: Option<f64>,
+    pub nearest_opp_pos: DVec2,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Choice {
+    Shot,
+    Pass,
+    Dribble,
+    Clear,
+    Hold,
 }
 
 impl Simulation {
@@ -279,6 +406,9 @@ impl Simulation {
         }
     }
 }
+
+/// The most opponents a pressing instruction can send at the carrier.
+const MAX_PRESSERS: usize = 4;
 
 /// The farthest team-mate a throw-in looks for, in metres, and the throw's vertical speed.
 const THROW_RANGE: f64 = 15.0;
@@ -366,5 +496,38 @@ mod tests {
             }
         }
         assert!(kicked, "the carrier never passed or shot");
+    }
+
+    #[test]
+    fn an_attacking_mentality_raises_the_shoot_score_for_the_same_scene() {
+        let content = crate::data::test_support::shipped_content();
+        let mut config = shipped_config(7, 1).unwrap();
+        config.tuning.decision.noise = 0.0;
+        let shot_score = |mentality: &str| {
+            let mut tactics = crate::tactics::Tactics::defaults(&content.tactics);
+            tactics.mentality = content.tactics.mentality_index(mentality).unwrap() as u8;
+            let mut sim = Simulation::new(config.clone().with_tactics(0, tactics)).unwrap();
+            let striker = 9;
+            sim.players[striker].pos = DVec2::new(40.0, 2.0);
+            for p in sim
+                .players
+                .iter_mut()
+                .filter(|p| p.team == 1 && p.slot != 0)
+            {
+                p.pos = DVec2::new(-40.0, p.pos.y);
+            }
+            sim.carrier = Some(striker);
+            sim.tick = 100;
+            sim.options(striker)
+                .shot
+                .expect("inside the shooting range")
+        };
+        let defensive = shot_score("defensive");
+        let balanced = shot_score("balanced");
+        let attacking = shot_score("attacking");
+        assert!(
+            defensive < balanced && balanced < attacking,
+            "{defensive} {balanced} {attacking}"
+        );
     }
 }

@@ -44,6 +44,7 @@ fn owner_and_match_ids_round_trip_through_stats_json() {
         ball_idle_ticks: 0,
         goals: [0, 0],
         laws: Default::default(),
+        tactics: Default::default(),
     };
     let path = write_stats(&data, &stats).unwrap();
     let read = read_stats(&path).unwrap();

@@ -1,7 +1,8 @@
 //! Player state, the attribute array, and the derived values the hot path reads.
 //!
 //! `Attributes` is a fixed array in schema order so `Player` stays `Copy` and no name lookup
-//! happens during a tick. `Derived` is computed once at load from the required attributes.
+//! happens during a tick. `Derived` is computed once at load from the required attributes;
+//! fatigue lowers a player's effective values from that base as energy falls.
 
 use std::collections::BTreeMap;
 
@@ -42,7 +43,7 @@ impl Attributes {
 }
 
 /// Values the simulation reads every tick, computed once from the attributes.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Derived {
     /// Maximum speed in metres per second.
     pub max_speed: f64,
@@ -54,6 +55,15 @@ pub struct Derived {
     pub positioning: f64,
     /// Aggression on a 0 to 1 scale; it raises the chance of a foul and of a card.
     pub aggression: f64,
+    /// Skill values on the 1 to 100 scale the decision layer reads.
+    pub finishing: f64,
+    pub vision: f64,
+    pub decisions: f64,
+    pub composure: f64,
+    /// Stamina, natural fitness, and injury resistance on a 0 to 1 scale.
+    pub stamina: f64,
+    pub natural_fitness: f64,
+    pub injury_resistance: f64,
 }
 
 impl Derived {
@@ -67,6 +77,13 @@ impl Derived {
             tackling,
             positioning,
             aggression,
+            finishing,
+            vision,
+            decisions,
+            composure,
+            stamina,
+            natural_fitness,
+            injury_resistance,
         ] = schema.required_indices().map(|i| f64::from(a.get(i)));
         Self {
             max_speed: t.base_speed + t.pace_speed * pace / 100.0,
@@ -76,6 +93,13 @@ impl Derived {
             tackling,
             positioning,
             aggression: aggression / 100.0,
+            finishing,
+            vision,
+            decisions,
+            composure,
+            stamina: stamina / 100.0,
+            natural_fitness: natural_fitness / 100.0,
+            injury_resistance: injury_resistance / 100.0,
         }
     }
 }
@@ -86,6 +110,9 @@ pub enum Status {
     OnPitch,
     /// Sent off: the player stands at a fixed point beside the pitch until full time.
     SentOff,
+    /// Injured: the player left play and stands beside the pitch until a substitute takes
+    /// the place, or until full time.
+    Injured,
 }
 
 /// One player on the pitch.
@@ -97,9 +124,17 @@ pub struct Player {
     pub team: usize,
     /// Slot index inside the formation, 0 to 10.
     pub slot: usize,
+    /// The player's place in the team file; a substitute takes the roster slot of the player
+    /// it replaces and brings its own squad index.
+    pub squad: usize,
     pub shirt: u8,
     pub attributes: Attributes,
+    /// The effective values play reads: `base` lowered by fatigue.
     pub derived: Derived,
+    /// The values the attributes give a fresh player.
+    pub base: Derived,
+    /// Energy from 1.0 (fresh) down to 0.0.
+    pub energy: f64,
     pub pos: DVec2,
     pub vel: DVec2,
     /// Where steering drives the player this tick.
@@ -139,21 +174,32 @@ pub(crate) mod test_support {
             len: 6,
         };
         let value = f64::from(v);
+        let derived = Derived {
+            max_speed: t.base_speed + t.pace_speed * value / 100.0,
+            max_accel: t.base_accel + t.accel_bonus * value / 100.0,
+            passing: value,
+            dribbling: value,
+            tackling: value,
+            positioning: value,
+            aggression: value / 100.0,
+            finishing: value,
+            vision: value,
+            decisions: value,
+            composure: value,
+            stamina: value / 100.0,
+            natural_fitness: value / 100.0,
+            injury_resistance: value / 100.0,
+        };
         Player {
             id,
             team: 0,
             slot: 0,
+            squad: 0,
             shirt: 1,
             attributes,
-            derived: Derived {
-                max_speed: t.base_speed + t.pace_speed * value / 100.0,
-                max_accel: t.base_accel + t.accel_bonus * value / 100.0,
-                passing: value,
-                dribbling: value,
-                tackling: value,
-                positioning: value,
-                aggression: value / 100.0,
-            },
+            derived,
+            base: derived,
+            energy: 1.0,
             pos: DVec2::ZERO,
             vel: DVec2::ZERO,
             target: DVec2::ZERO,
@@ -171,7 +217,7 @@ mod tests {
 
     fn schema() -> AttributeSchema {
         let mut names: Vec<String> = REQUIRED.iter().map(|s| s.to_string()).collect();
-        for i in 0..23 {
+        for i in 0..16 {
             names.push(format!("attr_{i}"));
         }
         AttributeSchema {

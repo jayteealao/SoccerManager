@@ -32,7 +32,7 @@ slices:
     complexity: l
     depends-on: [engine-core, data-schemas-generator]
   - slug: tactics-and-ai
-    status: defined
+    status: in-progress
     complexity: l
     depends-on: [match-rules, data-schemas-generator]
   - slug: commentary

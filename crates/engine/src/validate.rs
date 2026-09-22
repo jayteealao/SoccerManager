@@ -1,9 +1,12 @@
 //! The tick-stream validator: pitch bounds, player separation, ball speed, formation anchor
 //! tolerance in open play, and the ball's place at a restart. The anchor rule flags a player
 //! that is far from the ball, far from its anchor, and closing on neither for the grace
-//! period (idle drift). A sent-off player at its parking spot beside the pitch is exempt
-//! from every player rule. The anchors follow the team shapes in force at each tick: the
-//! teams change ends at half-time, and a line closes up after a sending-off.
+//! period (idle drift). A sent-off or injured player at its parking spot beside the pitch is
+//! exempt from every player rule. A substitute enters at the halfway line on the touchline,
+//! inside the pitch, on a restart tick; no rule limits a player's jump, so the entry breaks
+//! none. The anchors follow the team shapes in force at each tick: the teams change ends at
+//! half-time, a line closes up after a sending-off or an injury and reopens when a
+//! substitute replaces the injured player, and a tactics change moves every anchor.
 
 use crate::math::DVec2;
 use crate::pitch;

@@ -1,0 +1,36 @@
+<section class="fragment-instrument" data-artifact="instrument" data-slice="match-rules">
+  <table class="in-signals">
+    <thead><tr><th>Signal</th><th>Kind</th><th>Where</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td>match-event (law types)</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine-cli/src/stream_run.rs:event mapping</td><td>offside, foul, card, throw-in, corner, goal-kick, free-kick, penalty, half-time with player.id and player.secondary_id; extras card.kind, foul.advantage, minute.added, added_time.s.</td></tr>
+      <tr><td>rules.added_time</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine/src/rules/clock.rs:end of regulation</td><td>half, tally_s, variance_s, added_s, announced_min. One line per half.</td></tr>
+      <tr><td>rules.dead_ball_stalled</td><td><span class="in-kind in-kind-log">log</span></td><td>crates/engine/src/rules/mod.rs:hard limit</td><td>tick, kind, team.id, waited_ticks, taker_distance_m. A forced restart is counted.</td></tr>
+      <tr><td>rules.abandoned</td><td><span class="in-kind in-kind-log">log</span></td><td>crates/engine/src/rules/discipline.rs:abandoned</td><td>tick, team.id, on_pitch. The match outcome becomes abandoned.</td></tr>
+      <tr><td>snapshot.written</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine/src/snapshot.rs:write_atomic</td><td>match.id, snapshot.tick, kind, bytes. Debug level: about 100 rows per match.</td></tr>
+      <tr><td>snapshot.write_failed</td><td><span class="in-kind in-kind-log">log</span></td><td>crates/engine-cli/src/simulate.rs, serve.rs:snapshot sink</td><td>match.id, snapshot.tick, path, reason. The match continues.</td></tr>
+      <tr><td>snapshot.refused</td><td><span class="in-kind in-kind-log">log</span></td><td>crates/engine-cli/src/resume.rs:read</td><td>path, reason. The reason comes from the reader's checks, never from the file's bytes.</td></tr>
+      <tr><td>match.resumed</td><td><span class="in-kind in-kind-event">event</span></td><td>crates/engine-cli/src/resume.rs:after from_snapshot</td><td>match.id, snapshot.tick, half, home.score, away.score, build.hash.</td></tr>
+      <tr><td>match-stats law fields</td><td><span class="in-kind in-kind-gauge">gauge</span></td><td>crates/engine/src/observe/mod.rs:MatchStats</td><td>stats.fouls, stats.offsides, stats.corners, rules.pack_version; extras for cards, added time, ticks played, stoppages, dead-ball ticks, offside checks, snapshot writes.</td></tr>
+      <tr><td>run-report per-tick fields</td><td><span class="in-kind in-kind-gauge">gauge</span></td><td>crates/engine-cli/src/bench.rs:report</td><td>bench.ticks_per_match and bench.cpu_us_per_tick, the unit the benchmark gate reads (plan Round 4 Q13).</td></tr>
+    </tbody>
+  </table>
+
+  <aside class="callout callout-warn"><div class="callout-hd">A stoppage with no consumer</div><div class="callout-body">The shape names a queued change that never applies as a dark path. This slice opens stoppages and applies no change, so rules.stoppages counts every hook call; the next slice proves each queued change met a stoppage against that count.</div></aside>
+
+  <aside class="callout callout-info"><div class="callout-hd">The snapshot is not a match-event</div><div class="callout-body">The contract lists snapshot as an event type, but about 100 rows per match on the socket would crowd the stream the page and commentary read. The snapshot is a debug tracing line plus the snapshot.writes statistic; the observability audit can promote it if a consumer needs it.</div></aside>
+
+  <style>
+    .fragment-instrument .in-signals { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-instrument .in-signals th, .fragment-instrument .in-signals td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
+    .fragment-instrument .in-kind { font-size: 0.8rem; border-radius: 999px; padding: 1px 8px; border: 1px solid rgba(127,127,127,0.4); white-space: nowrap; }
+    .fragment-instrument .callout { margin-top: 12px; }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-instrument');
+      var signals = root ? root.querySelectorAll('.in-signals tbody tr').length : 0;
+      var dark = 5;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'instrument', artifact: 'instrument', counts: { signals: signals, darkPaths: dark, pii: 0 } } }));
+    })();
+  </script>
+</section>

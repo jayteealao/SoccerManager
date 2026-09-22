@@ -13,15 +13,16 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | File | Schema version | Holds |
 |---|---|---|
 | `attributes.json` | 1 | The attribute schema: 30 to 50 names in four groups |
-| `tuning.json` | 1 | Engine constants, generator distributions, fatigue parameters, stream buffer |
-| `rules/default.json` | 2 | The rule pack |
+| `tuning.json` | 2 | Engine constants, decision weights, injury rates, generator distributions, fatigue curve, stream buffer |
+| `rules/default.json` | 3 | The rule pack |
+| `tactics.json` | 1 | Formations, mentalities, team instructions, roles, duties, and the AI manager's settings |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 
-Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 2`.
+Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 3`.
 
 ## attributes.json
 
-`attributes` is a list of `{ "name", "group" }`. Names are 2 to 32 characters and unique. Groups are `technical`, `mental`, `physical`, `goalkeeping`. The count is 30 to 50. Seven names are required because the engine reads them: `pace`, `acceleration`, `passing`, `dribbling`, `tackling`, `positioning`, `aggression`. A schema without one of them is refused.
+`attributes` is a list of `{ "name", "group" }`. Names are 2 to 32 characters and unique. Groups are `technical`, `mental`, `physical`, `goalkeeping`. The count is 30 to 50. Fourteen names are required because the engine reads them: `pace`, `acceleration`, `passing`, `dribbling`, `tackling`, `positioning`, `aggression`, `finishing`, `vision`, `decisions`, `composure`, `stamina`, `natural_fitness`, `injury_resistance`. A schema without one of them is refused by name.
 
 The shipped schema (36):
 
@@ -87,9 +88,41 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 | restart_delay_s.goal_kick | s | 6 | 0 to 60 |
 | restart_delay_s.free_kick | s | 8 | 0 to 60 |
 | restart_delay_s.penalty | s | 15 | 0 to 60 |
+| restart_delay_s.drop_ball | s | 20 | 0 to 60 |
 | restart_ready_radius | m | 1.0 | 0.1 to 10 |
+| injury_per_tackle | probability per tackle | 0.004 | 0 to 0.2 |
+| injury_per_minute | probability per player per minute | 0.0002 | 0 to 0.01 |
+| decision.* | weight | see below | see below |
 
-The foul chance of one tackle is `foul_base`, multiplied by `1 + foul_aggression_weight × (aggression − 0.5)` and by `1 − foul_tackling_weight × (tackling − 0.5)`, with both attributes on a 0 to 1 scale. `foul_ball_loss` is the share of fouls after which the fouled team loses the ball. After any other foul, the referee plays advantage outside the penalty area. The yellow-card chance of a foul is `yellow_base + yellow_aggression_weight × aggression`, and the red-card chance is `red_base`. A restart is taken no earlier than its `restart_delay_s`, when the taker is within `restart_ready_radius` of the spot and every opponent stands back. At three times the delay, the restart is taken whatever the players are doing.
+The foul chance of one tackle is `foul_base`, multiplied by `1 + foul_aggression_weight × (aggression − 0.5)` and by `1 − foul_tackling_weight × (tackling − 0.5)`, with both attributes on a 0 to 1 scale. `foul_ball_loss` is the share of fouls after which the fouled team loses the ball. After any other foul, the referee plays advantage outside the penalty area. The yellow-card chance of a foul is `yellow_base + yellow_aggression_weight × aggression`, and the red-card chance is `red_base`. A restart is taken no earlier than its `restart_delay_s`, when the taker is within `restart_ready_radius` of the spot and every opponent stands back. At three times the delay, the restart is taken whatever the players are doing. While the restarting team leads, its delay is multiplied by its time-wasting level.
+
+An injury is rolled for the tackled player on every tackle that wins the ball or is a foul (`injury_per_tackle`), and for every player on the pitch once per simulated minute (`injury_per_minute`). Both are the chances for an average player; injury resistance 100 halves them and 0 makes them half again as likely. An injured player leaves play at once. In open play the referee stops play for a dropped ball at the ball (the goalkeeper's, inside its own penalty area), with every other player 4 m away, after `restart_delay_s.drop_ball`.
+
+#### decision
+
+The ball carrier scores every option and takes the highest: a pass to each team-mate with an open lane, a dribble, a shot, a clearance, or holding the ball. Each score is a weighted sum of features, plus the team's mentality, instructions, and each player's role and duty from `tactics.json`, plus noise. Every weight is -5 to 5 unless noted.
+
+| Field | Default | Meaning |
+|---|---|---|
+| progress | 0.7 | a pass's forward progress, -1 to 1 over 40 m |
+| lane | 0.5 | the pass lane's width, up to 6 m |
+| space | 0.4 | free space around the receiver, up to 8 m |
+| distance | 0.3 | a pass's length, up to 45 m, as a cost |
+| min_lane | 1.5 | a pass lane narrower than this, in metres, is no option (0 to 10) |
+| skill | 0.6 | what a skill 50 points above average adds: vision to forward passes, finishing to shots, dribbling to a dribble (0 to 5) |
+| shot_base | 1.0 | a shot's base |
+| shot_lane | 0.8 | the open shooting lane, 0 at 2.5 m and 1 at 5 m |
+| shot_distance | 1.0 | the distance to goal over the shooting range, as a cost |
+| dribble_base | -0.4 | a dribble's base |
+| dribble_space | 0.55 | free space ahead, up to 10 m |
+| pressure | -0.8 | the cost of an opponent within 2.5 m; negative makes the carrier take the defender on |
+| first_touch | 0.6 | a dribble's bonus in the first 10 ticks after gaining the ball |
+| clear | -1.0 | a clearance's base |
+| clear_pressure | 1.2 | a clearance's bonus under pressure in the own third |
+| keeper_clear | 0.2 | a goalkeeper's clearance base |
+| hold | -0.4 | holding the ball's base |
+| hold_per_s | 0.5 | the cost of each second already held (0 to 5) |
+| noise | 0.1 | noise on every option, each side, for decisions and composure 50; it shrinks as they rise (0 to 2) |
 
 ### generator
 
@@ -106,10 +139,14 @@ Each `per_position` entry holds `technical`, `mental`, `physical`, and `goalkeep
 
 | Field | Unit | Default | Bound |
 |---|---|---|---|
-| minutes_to_half_stamina | minutes | 70.0 | 1 to 600 |
+| threshold | energy | 0.7 | 0 to 1 |
+| curve | `[energy, multiplier]` points | `[[1,1],[0.7,1],[0.5,0.92],[0.3,0.82],[0,0.65]]` | 2 to 8 points, energy strictly falling from 1.0 to 0.0, multipliers 0.3 to 1 |
+| drain_base_per_s | energy per s | 0.00008 | 0 to 0.01 |
+| drain_effort_per_s | energy per s at full speed | 0.0004 | 0 to 0.05 |
+| half_time_recovery | energy | 0.1 | 0 to 1 |
 | recovery_per_day | points | 20.0 | 0 to 100 |
 
-The engine does not read these yet.
+Every player starts a match at energy 1.0. Each tick drains `drain_base_per_s` plus `drain_effort_per_s` times the square of the player's speed as a share of their top speed; stamina 100 halves the drain and 0 makes it half again as fast. At and above `threshold` a player plays at full strength. Below it, top speed, acceleration, passing, finishing, decisions, and composure are the unfatigued values times the curve's multiplier, read on the straight line between the two points around the energy; they are refreshed once a second. Half-time gives back `half_time_recovery`, scaled by natural fitness. `recovery_per_day` is for the season between matches; a match does not read it.
 
 ### stream
 
@@ -136,6 +173,7 @@ carries a 47-byte delta.
 | half_minutes | minutes per half | 45 | 1 to 60 |
 | substitutions.limit | players a team may replace | 5 | 0 to 11 |
 | substitutions.windows | stoppages a team may use for substitutions | 3 | 0 to 5 |
+| substitutions.windows_exempt | stoppage kinds at which a substitution uses no window | `["half_time"]` | each kind at most once |
 | stoppages | one entry per kind | see file | every kind exactly once |
 | added_time.per_kind | seconds each stoppage of a kind adds | see file | 0 to 600; every kind present |
 | added_time.card_s | seconds each card adds | 15 | 0 to 120 |
@@ -144,7 +182,7 @@ carries a 47-byte delta.
 | added_time.max_s | the most added time of a half | 900 | `min_s` to 1800 |
 | min_players | the fewest players a team may have on the pitch; fewer ends the match | 7 | 1 to 11 |
 
-Each stoppage is `{ "kind", "admits_tactics", "admits_substitution" }`. Kinds: `kick_off`, `throw_in`, `corner`, `goal_kick`, `free_kick`, `penalty`, `goal`, `half_time`, `injury`. The engine announces every stoppage by its kind. The engine does not apply queued tactical changes or substitutions yet, so `admits_tactics`, `admits_substitution`, and `substitutions` are read and validated only.
+Each stoppage is `{ "kind", "admits_tactics", "admits_substitution" }`. Kinds: `kick_off`, `throw_in`, `corner`, `goal_kick`, `free_kick`, `penalty`, `goal`, `half_time`, `injury`. The engine announces every stoppage by its kind. A queued tactical change or substitution waits for the next stoppage whose kind admits it and applies on the tick that stoppage opens, substitutions first. A substitution beyond `substitutions.limit`, or at a new stoppage once `substitutions.windows` are used, is rejected with the reason. All substitutions at one stoppage share one window, and a kind listed in `windows_exempt` uses none.
 
 The added time of a half is the sum of `per_kind` over the half's stoppages, plus `card_s` for each card, plus a seeded variance from `-variance_s` to `+variance_s`. The sum is rounded to the second and clamped to `min_s` to `max_s`. A match shorter than `halves × half_minutes` plays no added time.
 
@@ -175,7 +213,32 @@ The added time of a half is the sum of `per_kind` over the half's stoppages, plu
 | players[].position | one of the ten codes |
 | players[].attributes | every schema attribute present, no other key, each 1 to 100 |
 
-The first eleven players in file order start the match, in formation slot order. A bad value is refused by player and attribute: `content refused: team teams/x.json: players: player p-club-00000001-00-03: attribute pace is 120; allowed 1 to 100`.
+Before kick-off the AI manager picks the best-fitting player for each formation slot in slot order, by the slot role's attribute weights in `tactics.json`, and names a bench of up to `ai.bench_size` from the rest, the best remaining goalkeeper first. File order breaks ties. A bad value is refused by player and attribute: `content refused: team teams/x.json: players: player p-club-00000001-00-03: attribute pace is 120; allowed 1 to 100`.
+
+## tactics.json
+
+| Field | Holds | Bound |
+|---|---|---|
+| formations | `{ "name", "slots" }`; eleven slots `{ "x", "y", "position" }` in metres from the own goal line (1 to 100) and from the centre line (-33 to 33) | 1 to 16; slot 0 is the only `GK` |
+| mentalities | `{ "name", "block_depth", "shoot", "progress", "hold" }`: metres the block moves up (-20 to 20), and offsets on shots, forward passes, and holding the ball (-2 to 2) | 1 to 9 |
+| instructions | the six team instructions, each `{ "default", "levels" }` with 2 to 5 levels | see below |
+| roles | `{ "name", "positions", "attributes", "shoot", "dribble", "progress" }`: the positions it suits, attribute weights (0 to 10, each a name in `attributes.json`) the AI manager uses to pick players, and option offsets (-2 to 2) | 1 to 64; a role for every position a formation uses |
+| duties | `{ "name", "depth", "risk" }`: metres the anchor moves up (-15 to 15), and an offset on forward passes and dribbles (-2 to 2) | 1 to 5 |
+| ai | the AI manager's formation, mentality, and duty by name, and its thresholds | see below |
+
+The instructions are `pressing` (levels `{ "name", "press_count", "press_distance_scale" }`: how many players press the carrier, 0 to 4, and a scale on `press_distance`, 0.1 to 3), `width` (a scale on each slot's distance from the centre line), `tempo` (added to passes and taken from dribbles and holding), `line_height` (metres the block moves up), `passing_directness` (a bonus for longer passes), and `time_wasting` (a factor on the restart delay while the team leads). Every level other than a pressing level is `{ "name", "value" }`, with the value -20 to 20.
+
+| ai field | Meaning | Default |
+|---|---|---|
+| formation, mentality, duty | the setup before kick-off | `4-4-2`, `balanced`, `support` |
+| trailing_minute | from this minute a trailing team raises its mentality one step and presses high, once per score | 70 |
+| leading_minute | from this minute a leading team lowers its mentality one step and wastes time, once per score | 80 |
+| check_interval_s | simulated seconds between checks; an injury triggers one at once | 30 |
+| fatigue_energy, fatigue_from_minute | from this minute a player below this energy is replaced | 0.55, 55 |
+| keep_for_injury_until_minute | until this minute one substitution is kept back for an injury | 80 |
+| bench_size | substitutes named before kick-off, one a goalkeeper when the squad has one | 7 |
+
+A bad value is refused by field, and a role attribute the attribute schema does not hold is refused by name.
 
 ## Generating clubs
 

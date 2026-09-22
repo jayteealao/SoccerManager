@@ -21,6 +21,10 @@ pub struct EngineRng {
     /// Draws a test scripted for the referee, consumed before the stream.
     #[cfg(feature = "scenario")]
     scripted: std::collections::VecDeque<f64>,
+    /// Draws a test scripted for injury rolls, consumed before the stream. They are kept
+    /// apart from the referee's so a law test's scripted draws never feed an injury roll.
+    #[cfg(feature = "scenario")]
+    injuries: std::collections::VecDeque<f64>,
 }
 
 impl EngineRng {
@@ -34,6 +38,8 @@ impl EngineRng {
             inner,
             #[cfg(feature = "scenario")]
             scripted: std::collections::VecDeque::new(),
+            #[cfg(feature = "scenario")]
+            injuries: std::collections::VecDeque::new(),
         }
     }
 
@@ -69,6 +75,21 @@ impl EngineRng {
     #[cfg(feature = "scenario")]
     pub fn script(&mut self, draws: &[f64]) {
         self.scripted.extend(draws.iter().copied());
+    }
+
+    /// A draw in `[0, 1)` for an injury roll. A test scene may script these draws.
+    pub fn injury_draw(&mut self) -> f64 {
+        #[cfg(feature = "scenario")]
+        if let Some(draw) = self.injuries.pop_front() {
+            return draw;
+        }
+        self.next_f64()
+    }
+
+    /// Queues draws that `injury_draw` returns before it reads the stream.
+    #[cfg(feature = "scenario")]
+    pub fn script_injuries(&mut self, draws: &[f64]) {
+        self.injuries.extend(draws.iter().copied());
     }
 
     /// A value in `[0, 1)`.

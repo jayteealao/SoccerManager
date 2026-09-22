@@ -1,13 +1,18 @@
 //! Test scenes. A scene starts from a placed kick-off and moves players, the ball, the
-//! carrier, the clock, the cards, and the referee's next draws to where a law test needs
-//! them. Only this crate's tests build it (the `scenario` feature), so a release build never
+//! carrier, the clock, the score, the cards, energy, substitutions used, the managers, the
+//! change queue, and the referee's and injury rolls' next draws to where a test needs them.
+//! Only this crate's tests build it (the `scenario` feature), so a release build never
 //! contains it.
 
+use crate::ai::Manager;
 use crate::data::rules::StoppageKind;
 use crate::decision::Kick;
+use crate::fatigue::InjurySource;
 use crate::math::{DVec2, DVec3};
+use crate::rules::clock::TICKS_PER_MINUTE;
 use crate::rules::discipline;
 use crate::sim::{MatchConfig, Simulation};
+use crate::tactics::change::Change;
 
 /// A match being arranged for a test.
 pub struct Scene {
@@ -109,6 +114,72 @@ impl Scene {
             &t,
             true,
         );
+        self
+    }
+
+    /// The injury rolls' next draws, before the seeded stream.
+    pub fn injury_rolls(mut self, draws: &[f64]) -> Self {
+        self.sim.rng.script_injuries(draws);
+        self
+    }
+
+    /// Sets player `i`'s energy and the effective values that follow from it.
+    pub fn energy(mut self, i: usize, energy: f64) -> Self {
+        self.sim.players[i].energy = energy;
+        self.sim.refresh_effective();
+        self
+    }
+
+    /// Sets the score, home first.
+    pub fn score(mut self, goals: [u32; 2]) -> Self {
+        self.sim.summary.goals = goals;
+        self
+    }
+
+    /// Moves the clock to minute `minute` of a match that plays two halves: in the second
+    /// half the first half is over with no time added, the teams have changed ends, and the
+    /// away team's kick-off is placed. The kick-off event is cleared.
+    pub fn at_minute(mut self, minute: u32) -> Self {
+        let clock = self.sim.referee.clock;
+        let half_minutes = clock.half_ticks / TICKS_PER_MINUTE;
+        if minute >= half_minutes && clock.halves > 1 {
+            let clock = &mut self.sim.referee.clock;
+            clock.added_ticks[0] = Some(0);
+            clock.next_half(clock.half_ticks);
+            for team in &mut self.sim.teams {
+                team.switch_ends();
+            }
+            self.sim.place_kick_off(1);
+            self.sim.events.clear();
+        }
+        self.sim.tick = minute * TICKS_PER_MINUTE;
+        self.sim.control_since = self.sim.tick;
+        self
+    }
+
+    /// `team` has made `used` substitutions in `windows` windows.
+    pub fn subs_used(mut self, team: usize, used: u8, windows: u8) -> Self {
+        let ledger = &mut self.sim.ledgers[team];
+        ledger.used = used;
+        ledger.windows = windows;
+        self
+    }
+
+    /// Injures player `i` through the engine's own path, as a background roll would.
+    pub fn injure(mut self, i: usize) -> Self {
+        self.sim.injure(i, InjurySource::Background);
+        self
+    }
+
+    /// `team` is managed by `manager`.
+    pub fn manager(mut self, team: usize, manager: Manager) -> Self {
+        self.sim.managers[team] = manager;
+        self
+    }
+
+    /// Queues `change` for `team`.
+    pub fn queue(mut self, team: usize, change: Change) -> Self {
+        self.sim.queue_change(team, change);
         self
     }
 

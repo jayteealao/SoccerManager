@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Context;
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id, owner_bytes};
-use engine::{FanoutSink, FileSink, MatchConfig, Simulation, SnapshotSink, TickHeader};
+use engine::{FanoutSink, FileSink, Manager, MatchConfig, Simulation, SnapshotSink, TickHeader};
 use protocol::{ChangeKind, Hello, PROTOCOL_VERSION, Queue, ServerMessage, TeamRef};
 use stream::events::EventWriter;
 use stream::session::{MatchState, SessionConfig};
@@ -17,7 +17,10 @@ use crate::stream_run::{Drive, drive};
 pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> {
     let loaded = crate::content::load(content_dir, opts.team_a.as_deref(), opts.team_b.as_deref())?;
     let [team_a, team_b] = &loaded.teams;
-    let config = MatchConfig::new(opts.seed, opts.minutes, &loaded.content, [team_a, team_b])?;
+    // The home team is the page's: it starts with the AI manager's pre-match setup and makes
+    // no in-match AI decisions. The AI manager runs the away team.
+    let config = MatchConfig::new(opts.seed, opts.minutes, &loaded.content, [team_a, team_b])?
+        .with_manager(0, Manager::Human);
     let stream_tuning = loaded.content.tuning.stream.clone();
     let data = data_dir();
     let owner_id = load_or_create_owner_id(&data)?;

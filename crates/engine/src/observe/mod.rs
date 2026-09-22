@@ -1,7 +1,8 @@
 //! Observability records: `match-stats` and `run-report` with the canonical dotted keys,
 //! the owner identity, the content hash, the hashed machine identity, the build hash, and
 //! process measurements. `match-stats` is also saved under the runtime data folder, and it
-//! carries the law counts of the match.
+//! carries the law counts of the match and its tactics counts: shots, injuries, fatigue,
+//! substitutions, AI choices, and the verdicts on queued changes.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -90,6 +91,54 @@ pub struct MatchStats {
     pub goals: [u32; 2],
     #[serde(flatten, default)]
     pub laws: LawStats,
+    #[serde(flatten, default)]
+    pub tactics: TacticsStats,
+}
+
+/// The tactics counts of one match. Per-team arrays are home first. `stats.shots`,
+/// `injury.count`, `fatigue.mean_pct`, and `darkpath.change_never_applied` are contract keys;
+/// the rest are additive extras.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct TacticsStats {
+    #[serde(rename = "stats.shots")]
+    pub shots: [u32; 2],
+    /// Injuries in the match, both teams.
+    #[serde(rename = "injury.count")]
+    pub injury_count: u32,
+    /// The mean energy of the players on the pitch at the end, 0 to 100.
+    #[serde(rename = "fatigue.mean_pct")]
+    pub fatigue_mean_pct: f64,
+    /// Changes in the engine's queue still waiting at the end; 0 in a healthy match.
+    #[serde(rename = "darkpath.change_never_applied")]
+    pub change_never_applied: u32,
+    #[serde(rename = "changes.queued")]
+    pub changes_queued: u32,
+    #[serde(rename = "changes.applied")]
+    pub changes_applied: u32,
+    #[serde(rename = "changes.rejected")]
+    pub changes_rejected: u32,
+    pub substitutions: [u32; 2],
+    #[serde(rename = "ai.decisions")]
+    pub ai_decisions: u32,
+}
+
+impl TacticsStats {
+    /// The tactics counts of a finished match.
+    pub fn new(sim: &crate::Simulation) -> Self {
+        let s = sim.summary();
+        Self {
+            shots: s.shots,
+            injury_count: s.injuries[0] + s.injuries[1],
+            fatigue_mean_pct: sim.fatigue_mean_pct(),
+            // A queue holds far fewer than 4 billion changes.
+            change_never_applied: sim.pending_changes().len() as u32,
+            changes_queued: s.changes_queued,
+            changes_applied: s.changes_applied,
+            changes_rejected: s.changes_rejected,
+            substitutions: s.substitutions,
+            ai_decisions: s.ai_decisions,
+        }
+    }
 }
 
 /// The law counts of one match. Per-team arrays are home first. `stats.fouls`,
@@ -326,6 +375,12 @@ mod tests {
                 ticks_played: 280_000,
                 ..LawStats::default()
             },
+            tactics: TacticsStats {
+                shots: [11, 7],
+                injury_count: 1,
+                fatigue_mean_pct: 61.25,
+                ..TacticsStats::default()
+            },
         }
     }
 
@@ -356,6 +411,15 @@ mod tests {
             "\"rules.dead_ball_ticks\"",
             "\"rules.offside_checks\"",
             "\"snapshot.writes\"",
+            "\"stats.shots\":[11,7]",
+            "\"injury.count\":1",
+            "\"fatigue.mean_pct\":61.25",
+            "\"darkpath.change_never_applied\":0",
+            "\"changes.queued\"",
+            "\"changes.applied\"",
+            "\"changes.rejected\"",
+            "\"substitutions\"",
+            "\"ai.decisions\"",
         ] {
             assert!(json.contains(key), "missing {key} in {json}");
         }

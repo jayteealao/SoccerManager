@@ -1,5 +1,5 @@
 //! The attribute schema file: 30 to 50 named attributes in four groups, each on the 1 to 100
-//! scale. Seven names are required because the engine reads them by index after load.
+//! scale. Fourteen names are required because the engine reads them by index after load.
 
 use garde::Validate;
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,7 @@ pub const MAX_ATTRIBUTES: usize = 50;
 /// Lower bound on the attribute count.
 pub const MIN_ATTRIBUTES: usize = 30;
 /// Attributes the engine reads by name at load time, in the order `Derived` consumes them.
-pub const REQUIRED: [&str; 7] = [
+pub const REQUIRED: [&str; 14] = [
     "pace",
     "acceleration",
     "passing",
@@ -19,6 +19,13 @@ pub const REQUIRED: [&str; 7] = [
     "tackling",
     "positioning",
     "aggression",
+    "finishing",
+    "vision",
+    "decisions",
+    "composure",
+    "stamina",
+    "natural_fitness",
+    "injury_resistance",
 ];
 
 /// The four attribute groups.
@@ -116,27 +123,48 @@ mod tests {
     }
 
     #[test]
-    fn thirty_names_with_the_required_seven_validate() {
+    fn thirty_names_with_the_required_fourteen_validate() {
         let mut names: Vec<String> = REQUIRED.iter().map(|s| s.to_string()).collect();
-        for i in 0..23 {
+        for i in 0..16 {
             names.push(format!("attr_{i}"));
         }
         let refs: Vec<&str> = names.iter().map(String::as_str).collect();
         let s = schema(&refs);
         assert!(s.validate().is_ok());
-        assert_eq!(s.required_indices(), [0, 1, 2, 3, 4, 5, 6]);
+        assert_eq!(
+            s.required_indices(),
+            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+        );
     }
 
     #[test]
     fn a_schema_without_aggression_is_refused_by_name() {
-        let mut names: Vec<String> = REQUIRED[..6].iter().map(|s| s.to_string()).collect();
-        for i in 0..24 {
+        let mut names: Vec<String> = REQUIRED
+            .iter()
+            .filter(|n| **n != "aggression")
+            .map(|s| s.to_string())
+            .collect();
+        for i in 0..17 {
             names.push(format!("attr_{i}"));
         }
         let refs: Vec<&str> = names.iter().map(String::as_str).collect();
         let text = schema(&refs).validate().unwrap_err().to_string();
         assert!(
             text.contains("attributes: required attribute aggression is missing"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_schema_without_injury_resistance_is_refused_by_name() {
+        let mut names: Vec<String> = REQUIRED[..13].iter().map(|s| s.to_string()).collect();
+        for i in 0..17 {
+            names.push(format!("attr_{i}"));
+        }
+        let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+        let text = schema(&refs).validate().unwrap_err().to_string();
+        assert!(
+            text.contains("attributes: required attribute injury_resistance is missing"),
             "{text}"
         );
     }

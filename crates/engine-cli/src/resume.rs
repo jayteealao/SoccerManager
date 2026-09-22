@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use anyhow::Context;
 use engine::observe::identity::{MatchId, data_dir, owner_hex};
-use engine::observe::{LawStats, MatchStats, TeamRef, emit_line, write_stats};
+use engine::observe::{LawStats, MatchStats, TacticsStats, TeamRef, emit_line, write_stats};
 use engine::{
     EngineError, FanoutSink, FileSink, MatchConfig, Simulation, Snapshot, SnapshotSink, TickHeader,
     Validator, read_ticks,
@@ -58,6 +58,8 @@ pub fn run(content_dir: Option<&Path>, opts: &ResumeOpts) -> anyhow::Result<i32>
         },
     ];
     let content_hash = config.content_hash.clone();
+    // The managers, lineups, benches, tactics, and substitutions used come from the snapshot,
+    // not from a fresh pre-match setup.
     let mut sim = match Simulation::from_snapshot(config, &snapshot) {
         Ok(sim) => sim,
         Err(err) => {
@@ -146,6 +148,7 @@ pub fn run(content_dir: Option<&Path>, opts: &ResumeOpts) -> anyhow::Result<i32>
         ball_idle_ticks: summary.ball_idle_ticks,
         goals: summary.goals,
         laws: LawStats::new(&summary, pack_version, sim.tick(), snapshots.writes),
+        tactics: TacticsStats::new(&sim),
     };
     write_stats(&data, &stats)?;
     emit_line(&stats)?;

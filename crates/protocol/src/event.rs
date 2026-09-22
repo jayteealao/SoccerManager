@@ -1,6 +1,7 @@
 //! Match events: the `match-event` record kind the observability contract reserves. The
 //! engine produces kick-off, goal, half-time, full-time, the law events (offside, foul, card,
-//! and every restart), and the verdict on a queued change.
+//! and every restart), injuries, substitutions, the AI manager's choices, and the verdict on
+//! a queued change.
 
 use serde::{Deserialize, Serialize};
 
@@ -26,11 +27,14 @@ pub enum EventType {
     GoalKick,
     FreeKick,
     Penalty,
+    Injury,
+    Substitution,
+    AiDecision,
 }
 
 impl EventType {
     /// Every event type, in declaration order.
-    pub const ALL: [EventType; 13] = [
+    pub const ALL: [EventType; 16] = [
         EventType::KickOff,
         EventType::Goal,
         EventType::HalfTime,
@@ -44,6 +48,9 @@ impl EventType {
         EventType::GoalKick,
         EventType::FreeKick,
         EventType::Penalty,
+        EventType::Injury,
+        EventType::Substitution,
+        EventType::AiDecision,
     ];
 
     /// The value as the contract writes it.
@@ -62,6 +69,9 @@ impl EventType {
             EventType::GoalKick => "goal-kick",
             EventType::FreeKick => "free-kick",
             EventType::Penalty => "penalty",
+            EventType::Injury => "injury",
+            EventType::Substitution => "substitution",
+            EventType::AiDecision => "ai-decision",
         }
     }
 }
@@ -118,6 +128,15 @@ pub struct MatchEvent {
     pub change_rejected_reason: Option<String>,
     #[serde(rename = "change.state", skip_serializing_if = "Option::is_none")]
     pub change_state: Option<ChangeState>,
+    /// The tick an applied change took effect on.
+    #[serde(
+        rename = "change.applied_tick",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub change_applied_tick: Option<u32>,
+    /// On `ai-decision`: the AI manager's choice, as a short code.
+    #[serde(rename = "ai.decision", skip_serializing_if = "Option::is_none")]
+    pub ai_decision: Option<String>,
     /// The player the event names: the offender, the booked player.
     #[serde(rename = "player.id", skip_serializing_if = "Option::is_none")]
     pub player_id: Option<String>,
@@ -166,6 +185,8 @@ impl MatchEvent {
             change_queue_id: None,
             change_rejected_reason: None,
             change_state: None,
+            change_applied_tick: None,
+            ai_decision: None,
             player_id: None,
             player_secondary_id: None,
             card_kind: None,
@@ -206,6 +227,30 @@ impl MatchEvent {
 
     pub fn added_time(mut self, seconds: Option<u32>) -> Self {
         self.added_time_s = seconds;
+        self
+    }
+
+    /// The club the event belongs to.
+    pub fn team(mut self, id: Option<String>) -> Self {
+        self.team_id = id;
+        self
+    }
+
+    /// The tick a queued change was queued on, when it differs from the event's tick.
+    pub fn queued_at(mut self, tick: u32) -> Self {
+        self.change_queued_tick = Some(tick);
+        self
+    }
+
+    /// The tick an applied change took effect on.
+    pub fn applied_tick(mut self, tick: Option<u32>) -> Self {
+        self.change_applied_tick = tick;
+        self
+    }
+
+    /// The AI manager's choice.
+    pub fn ai_decision(mut self, code: Option<String>) -> Self {
+        self.ai_decision = code;
         self
     }
 
@@ -297,5 +342,55 @@ mod tests {
         assert!(!json.contains("foul.advantage"), "{json}");
         let back: MatchEvent = serde_json::from_str(&json).unwrap();
         assert_eq!(back, e);
+    }
+
+    #[test]
+    fn an_applied_change_names_its_club_and_both_ticks() {
+        let e = MatchEvent::change(
+            "0123456789abcdef0123456789abcdef",
+            "000000000000002a-1",
+            9_100,
+            [0, 1],
+            ChangeOutcome {
+                kind: Some(ChangeKind::Tactics),
+                queue_id: Some("q-9000-0".into()),
+                state: ChangeState::Applied,
+                rejected_reason: None,
+            },
+        )
+        .team(Some("club-a".into()))
+        .queued_at(9_000)
+        .applied_tick(Some(9_100));
+        let json = serde_json::to_string(&e).unwrap();
+        for key in [
+            "\"event.type\":\"tactics-change\"",
+            "\"team.id\":\"club-a\"",
+            "\"change.queued_tick\":9000",
+            "\"change.applied_tick\":9100",
+            "\"change.state\":\"applied\"",
+        ] {
+            assert!(json.contains(key), "missing {key} in {json}");
+        }
+        let back: MatchEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, e);
+    }
+
+    #[test]
+    fn an_ai_decision_carries_its_code() {
+        let e = MatchEvent::play(
+            "0123456789abcdef0123456789abcdef",
+            "000000000000002a-1",
+            216_000,
+            EventType::AiDecision,
+            Some("club-b".into()),
+            [1, 0],
+        )
+        .ai_decision(Some("mentality-up-trailing".into()));
+        let json = serde_json::to_string(&e).unwrap();
+        assert!(json.contains("\"event.type\":\"ai-decision\""), "{json}");
+        assert!(
+            json.contains("\"ai.decision\":\"mentality-up-trailing\""),
+            "{json}"
+        );
     }
 }

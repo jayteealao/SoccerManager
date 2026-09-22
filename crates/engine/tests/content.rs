@@ -49,7 +49,7 @@ fn an_unknown_rule_pack_version_is_refused_naming_the_version() {
             err,
             EngineError::Version {
                 found: 99,
-                expected: 2,
+                expected: 3,
                 ..
             }
         ),
@@ -57,7 +57,7 @@ fn an_unknown_rule_pack_version_is_refused_naming_the_version() {
     );
     assert_eq!(
         err.to_string(),
-        "content refused: rules rules-unknown-version.json: schema_version 99; this build reads 2"
+        "content refused: rules rules-unknown-version.json: schema_version 99; this build reads 3"
     );
 }
 

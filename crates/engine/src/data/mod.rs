@@ -6,6 +6,7 @@ pub mod attributes;
 pub mod generator;
 pub mod names;
 pub mod rules;
+pub mod tactics;
 pub mod team;
 pub mod tuning;
 
@@ -21,6 +22,7 @@ use crate::error::EngineError;
 pub use attributes::{ATTRIBUTES_VERSION, AttributeSchema, Group, MAX_ATTRIBUTES};
 pub use generator::generate_league;
 pub use rules::{AddedTime, RULES_VERSION, RulePack, StoppageKind};
+pub use tactics::{TACTICS_VERSION, TacticsSchema};
 pub use team::{Club, Kit, PlayerEntry, Position, TEAM_VERSION, TeamFile};
 pub use tuning::{
     Dist, FatigueTuning, GeneratorTuning, GroupDist, StreamTuning, TUNING_VERSION, TuningFile,
@@ -30,6 +32,7 @@ pub use tuning::{
 pub const ATTRIBUTES_FILE: &str = "attributes.json";
 pub const TUNING_FILE: &str = "tuning.json";
 pub const RULES_FILE: &str = "rules/default.json";
+pub const TACTICS_FILE: &str = "tactics.json";
 pub const TEAM_A_FILE: &str = "teams/default-a.json";
 pub const TEAM_B_FILE: &str = "teams/default-b.json";
 /// Environment variable that names the content folder.
@@ -204,18 +207,20 @@ pub fn hex12(digest: &[u8]) -> String {
     digest.iter().take(6).map(|b| format!("{b:02x}")).collect()
 }
 
-/// The three files every match needs, plus a digest over their bytes.
+/// The four files every match needs, plus a digest over their bytes.
 #[derive(Debug, Clone)]
 pub struct Content {
     pub attributes: AttributeSchema,
     pub tuning: TuningFile,
     pub rules: RulePack,
-    /// SHA-256 over the three file digests in order: attributes, tuning, rules.
+    pub tactics: TacticsSchema,
+    /// SHA-256 over the four file digests in order: attributes, tuning, rules, tactics.
     pub digest: [u8; 32],
 }
 
 impl Content {
-    /// Loads the three shipped files from `dir`.
+    /// Loads the four shipped files from `dir`. The tactics file is checked against the
+    /// attribute schema, so a role naming an unknown attribute is refused by name.
     pub fn load(dir: &ContentDir) -> Result<Self, EngineError> {
         let attributes = load_json::<AttributeSchema>(
             "attributes",
@@ -238,14 +243,32 @@ impl Content {
             RULES_VERSION,
             &(),
         )?;
+        let tactics = load_json::<TacticsSchema>(
+            "tactics",
+            &dir.path(TACTICS_FILE),
+            TACTICS_FILE,
+            TACTICS_VERSION,
+            &(),
+        )?;
+        if let Err((field, reason)) = tactics.value.check(&attributes.value) {
+            tracing::error!(signal = "content.refused", kind = "tactics", path = TACTICS_FILE, field = %field, reason = %reason);
+            return Err(EngineError::Data {
+                kind: "tactics",
+                path: TACTICS_FILE.to_string(),
+                field,
+                reason,
+            });
+        }
         let mut hasher = Sha256::new();
         hasher.update(attributes.digest);
         hasher.update(tuning.digest);
         hasher.update(rules.digest);
+        hasher.update(tactics.digest);
         Ok(Self {
             attributes: attributes.value,
             tuning: tuning.value,
             rules: rules.value,
+            tactics: tactics.value,
             digest: hasher.finalize().into(),
         })
     }
@@ -260,7 +283,7 @@ impl Content {
         load_json::<TeamFile>("team", path, &shown, TEAM_VERSION, &self.attributes)
     }
 
-    /// Twelve hex characters identifying the three content files.
+    /// Twelve hex characters identifying the four content files.
     pub fn hash(&self) -> String {
         hex12(&self.digest)
     }
@@ -317,7 +340,7 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
         assert_eq!(
             err.to_string(),
-            "content refused: rules rules/x.json: schema_version 7; this build reads 2"
+            "content refused: rules rules/x.json: schema_version 7; this build reads 3"
         );
     }
 
@@ -325,8 +348,9 @@ mod tests {
     fn an_unknown_key_is_refused_with_its_name() {
         let path = temp(
             "unknown",
-            r#"{"schema_version": 2, "halves": 2, "half_minutes": 45, "extra": 1,
-                "substitutions": {"limit": 5, "windows": 3}, "stoppages": []}"#,
+            r#"{"schema_version": 3, "halves": 2, "half_minutes": 45, "extra": 1,
+                "substitutions": {"limit": 5, "windows": 3, "windows_exempt": []},
+                "stoppages": []}"#,
         );
         let err =
             load_json::<RulePack>("rules", &path, "rules/x.json", RULES_VERSION, &()).unwrap_err();
@@ -343,8 +367,9 @@ mod tests {
     fn a_range_violation_names_the_field_path() {
         let path = temp(
             "range",
-            r#"{"schema_version": 2, "halves": 3, "half_minutes": 45,
-                "substitutions": {"limit": 5, "windows": 3}, "stoppages": [],
+            r#"{"schema_version": 3, "halves": 3, "half_minutes": 45,
+                "substitutions": {"limit": 5, "windows": 3, "windows_exempt": []},
+                "stoppages": [],
                 "added_time": {"per_kind": {"kick_off": 0, "throw_in": 0, "corner": 0,
                     "goal_kick": 0, "free_kick": 0, "penalty": 0, "goal": 0,
                     "half_time": 0, "injury": 0},

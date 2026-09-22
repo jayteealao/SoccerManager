@@ -5,7 +5,9 @@
 // adding a third. A goal and the restart that follows it are one stoppage to a manager,
 // not two, so entries within half a second of each other collapse to the earlier. Only an
 // event that stops play is a mark: a foul played on with advantage, a card shown at a later
-// stoppage, and a queued tactical change are not.
+// stoppage, a queued tactical change, a substitution, and the AI manager's choice are not
+// (they happen at a stoppage another event already marks). An injury stops play for a
+// dropped ball.
 
 /// Two marks closer than this are the same stoppage. 25 ticks is half a second.
 export const COLLAPSE_TICKS = 25;
@@ -22,6 +24,7 @@ export const STOPS_PLAY = new Set([
   'penalty',
   'half-time',
   'full-time',
+  'injury',
 ]);
 
 /// `true` when an event message stops play. A foul stops play unless the referee played

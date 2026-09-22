@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use anyhow::Context;
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id, owner_bytes};
-use engine::observe::{LawStats, MatchStats, TeamRef, emit_line, write_stats};
+use engine::observe::{LawStats, MatchStats, TacticsStats, TeamRef, emit_line, write_stats};
 use engine::{
     FanoutSink, FileSink, MatchConfig, Simulation, SnapshotSink, TickHeader, Validator, read_ticks,
 };
@@ -19,6 +19,7 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
     let _guard = span.enter();
     let loaded = crate::content::load(content_dir, opts.team_a.as_deref(), opts.team_b.as_deref())?;
     let [team_a, team_b] = &loaded.teams;
+    // Both teams are managed by the AI manager (the configuration's default).
     let config = MatchConfig::new(opts.seed, opts.minutes, &loaded.content, [team_a, team_b])?;
     let data = data_dir();
     let owner_id = load_or_create_owner_id(&data)?;
@@ -84,6 +85,7 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
         ball_idle_ticks: summary.ball_idle_ticks,
         goals: summary.goals,
         laws: LawStats::new(&summary, pack_version, written, snapshot_writes),
+        tactics: TacticsStats::new(&sim),
     };
     write_stats(&data, &stats)?;
     emit_line(&stats)?;

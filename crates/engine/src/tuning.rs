@@ -127,6 +127,79 @@ pub struct Tuning {
     /// Metres from the restart spot within which the taker is ready.
     #[garde(range(min = 0.1, max = 10.0))]
     pub restart_ready_radius: f64,
+    /// The weights of the scored-options decision layer.
+    #[garde(dive)]
+    pub decision: DecisionWeights,
+    /// Injury chance for the tackled player on each tackle that wins the ball or is a foul,
+    /// and per simulated minute for each player on the pitch, for an average player; injury
+    /// resistance scales both.
+    #[garde(range(min = 0.0, max = 0.2))]
+    pub injury_per_tackle: f64,
+    #[garde(range(min = 0.0, max = 0.01))]
+    pub injury_per_minute: f64,
+}
+
+/// The weights of the scored-options decision layer (named mechanism). The ball carrier
+/// scores every option as a weighted sum of its features, plus the team plan's offsets
+/// (mentality, instructions, role, and duty), plus noise, and takes the highest. Every
+/// weight is a tuning value, so calibration moves behaviour without code.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct DecisionWeights {
+    /// A pass: forward progress (-1 to 1 over 40 m), the open lane (up to 6 m), the space
+    /// around the receiver (up to 8 m), and the distance (up to 45 m, a cost).
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub progress: f64,
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub lane: f64,
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub space: f64,
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub distance: f64,
+    /// A pass lane narrower than this many metres is not an option.
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub min_lane: f64,
+    /// How much a skill attribute 50 points above average adds to its option: vision to
+    /// forward passes, finishing to shots, dribbling to a dribble.
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub skill: f64,
+    /// A shot: the base, the open shooting lane (0 at 2.5 m, 1 at 5 m), and the distance
+    /// (a cost, over the shooting range).
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub shot_base: f64,
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub shot_lane: f64,
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub shot_distance: f64,
+    /// A dribble: the base, the free space ahead (up to 10 m), the cost of an opponent
+    /// within 2.5 m (a negative cost makes the carrier take the defender on), and the bonus
+    /// in the first 10 ticks after gaining the ball. The pressure weight is also added to a
+    /// shot with an open lane taken with an opponent within 2 m.
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub dribble_base: f64,
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub dribble_space: f64,
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub pressure: f64,
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub first_touch: f64,
+    /// A clearance: the base, the bonus under pressure in the own third, and the base for
+    /// a goalkeeper.
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub clear: f64,
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub clear_pressure: f64,
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub keeper_clear: f64,
+    /// Holding the ball: the base, and the cost per second already held.
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub hold: f64,
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub hold_per_s: f64,
+    /// Noise on every option, each side, for a player with decisions and composure 50; it
+    /// shrinks as the two rise.
+    #[garde(range(min = 0.0, max = 2.0))]
+    pub noise: f64,
 }
 
 /// Seconds between the ball going dead and the restart, per restart kind. Play restarts
@@ -146,6 +219,9 @@ pub struct RestartDelays {
     pub free_kick: f64,
     #[garde(range(min = 0.0, max = 60.0))]
     pub penalty: f64,
+    /// A dropped ball after play stopped for an injury.
+    #[garde(range(min = 0.0, max = 60.0))]
+    pub drop_ball: f64,
 }
 
 impl Default for Tuning {
@@ -201,8 +277,32 @@ impl Default for Tuning {
                 goal_kick: 6.0,
                 free_kick: 8.0,
                 penalty: 15.0,
+                drop_ball: 20.0,
             },
             restart_ready_radius: 1.0,
+            decision: DecisionWeights {
+                progress: 0.7,
+                lane: 0.5,
+                space: 0.4,
+                distance: 0.3,
+                min_lane: 1.5,
+                skill: 0.6,
+                shot_base: 1.0,
+                shot_lane: 0.8,
+                shot_distance: 1.0,
+                dribble_base: -0.4,
+                dribble_space: 0.55,
+                pressure: -0.8,
+                first_touch: 0.6,
+                clear: -1.0,
+                clear_pressure: 1.2,
+                keeper_clear: 0.2,
+                hold: -0.4,
+                hold_per_s: 0.5,
+                noise: 0.1,
+            },
+            injury_per_tackle: INJURY_PER_TACKLE,
+            injury_per_minute: INJURY_PER_MINUTE,
         }
     }
 }
@@ -210,6 +310,11 @@ impl Default for Tuning {
 /// The shipped foul chance per tackle attempt, set for about ten fouls per team in a
 /// 90-minute match with the default teams.
 const FOUL_BASE: f64 = 0.1;
+
+/// The shipped injury rates: a planning estimate of about 0.6 injuries per match with the
+/// default teams, which calibration replaces with a sourced rate.
+const INJURY_PER_TACKLE: f64 = 0.004;
+const INJURY_PER_MINUTE: f64 = 0.0002;
 
 #[cfg(test)]
 mod tests {

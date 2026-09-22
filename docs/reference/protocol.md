@@ -6,7 +6,10 @@ A page connects to `ws://127.0.0.1:<port>/?v=2`.
 
 Version 2 changed the meaning of `ticks_expected` from the exact tick count to the most ticks
 the match can last, because the time added at the end of each half is known only when the
-half ends. The event message gained the law event types and six optional fields.
+half ends. The event message gained the law event types and six optional fields. Version 2
+later gained the `injury`, `substitution`, and `ai-decision` event types and the optional
+fields `change.applied_tick` and `ai.decision`, and change events now carry `team.id`. No
+field changed meaning.
 
 A test in `crates/protocol/tests/document.rs` holds this document to the code: every message
 the implementation names must appear below with every one of its fields.
@@ -91,8 +94,8 @@ One `match-event` row. The same object is written to
 | `match.id` | string | the match |
 | `tick` | integer | the tick the event happened on |
 | `minute` | integer | the minute of play the match clock shows, counted from 0; it stays at the end of the half during added time |
-| `event.type` | enumeration | `kick-off`, `goal`, `half-time`, `full-time`, `tactics-change`, `offside`, `foul`, `card`, `throw-in`, `corner`, `goal-kick`, `free-kick`, or `penalty` |
-| `team.id` | string | the club the event belongs to: the offender's club on `offside`, `foul`, and `card`, the club that restarts play on a restart; absent at half-time and full time |
+| `event.type` | enumeration | `kick-off`, `goal`, `half-time`, `full-time`, `tactics-change`, `offside`, `foul`, `card`, `throw-in`, `corner`, `goal-kick`, `free-kick`, `penalty`, `injury`, `substitution`, or `ai-decision` |
+| `team.id` | string | the club the event belongs to: the offender's club on `offside`, `foul`, and `card`, the club that restarts play on a restart, the injured player's club on `injury`, the club that changes on `substitution`, `ai-decision`, and `tactics-change`; absent at half-time and full time |
 | `home.score` | integer | the score after the event |
 | `away.score` | integer | the score after the event |
 | `change.kind` | enumeration | `tactics` or `substitution`; change events only |
@@ -100,8 +103,10 @@ One `match-event` row. The same object is written to
 | `change.queue_id` | string | the identifier the acknowledgement returned |
 | `change.rejected_reason` | string | present only on a refused change |
 | `change.state` | enumeration | `queued`, `applies-now`, `applied`, or `rejected` |
-| `player.id` | string | the player the event names: the offender on `offside` and `foul`, the booked player on `card` |
-| `player.secondary_id` | string | the fouled player, on `foul` |
+| `change.applied_tick` | integer | on an applied change: the tick it took effect on, which is the tick of the stoppage that admitted it |
+| `ai.decision` | string | on `ai-decision`: `mentality-up-trailing`, `mentality-down-leading`, `sub-injury`, or `sub-fatigue` |
+| `player.id` | string | the player the event names: the offender on `offside` and `foul`, the booked player on `card`, the injured player on `injury`, the player leaving on `substitution` |
+| `player.secondary_id` | string | the fouled player, on `foul`; the player coming on, on `substitution` |
 | `card.kind` | enumeration | `yellow`, `second-yellow`, or `red`, on `card`; a second yellow sends the player off |
 | `foul.advantage` | boolean | on `foul`: `true` when play continued because the fouled team kept the ball; a card for that foul follows at the next stoppage |
 | `minute.added` | integer | in added time only: the added minute, 2 at 45+2 |
@@ -109,7 +114,22 @@ One `match-event` row. The same object is written to
 
 A restart event (`kick-off`, `throw-in`, `corner`, `goal-kick`, `free-kick`, `penalty`)
 arrives on the same tick as the restart keyframe that places the ball. Play resumes when the
-taker plays the ball, a few seconds later.
+taker plays the ball, a few seconds later. An `injury` in open play stops play for a dropped
+ball at the ball; an injury on a tick that already stopped play rides that stoppage.
+
+The engine applies its own queued changes (the AI manager's) on the tick that opens a
+stoppage the rule pack admits them at, substitutions first. Each verdict is a
+`tactics-change` event with `change.state` `applied` or `rejected`. A rejection names its
+reason in `change.rejected_reason`:
+
+- `substitution limit reached (5 of 5)`
+- `no substitution window left (3 of 3)`; a half-time substitution uses no window
+- `player <id> is not on the pitch`
+- `player <id> was sent off and cannot be replaced`
+- `player <id> is not on the bench`
+- `player <id> left the pitch at this stoppage; the substitution applies first`: a tactics
+  change that names a player substituted off at the same stoppage
+- `the change names a formation, mentality, level, role, or duty the tactics file does not hold`
 
 ### stats
 
@@ -165,8 +185,9 @@ Pauses production at the current tick. No fields.
 | `change.kind` | string | `tactics` or `substitution`; any other value is refused by name |
 | `detail` | object | opaque in this build; not yet read by the engine |
 
-This build queues the change and answers. Nothing is applied to play: the engine announces
-each stoppage, and a later version applies each queued change at a qualifying stoppage.
+This build queues the change and answers. A change sent over the socket is not applied to
+play yet, because its `detail` is not read: the engine applies its own queue, which the AI
+manager fills, and a later version routes a client's change into that queue.
 
 ## The page server
 

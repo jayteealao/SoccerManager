@@ -1,16 +1,22 @@
 //! The fixed-timestep simulation loop (named mechanism: tick count is a function of match
-//! time alone). Order per tick: decisions, steering, ball, possession, referee, overlap
-//! resolution. The referee (`rules`) owns the phase of play: live, a dead ball waiting for
-//! its restart, or full time.
+//! time alone). Order per tick: decisions, steering, ball, possession, referee and clock,
+//! fatigue, the AI manager's check, the change queue when this tick opened a stoppage, and
+//! overlap resolution. The referee (`rules`) owns the phase of play: live, a dead ball
+//! waiting for its restart, or full time.
 
 use sha2::{Digest, Sha256};
 
+use crate::ai::{self, AiCode, AiState, Manager};
 use crate::ball::Ball;
+use crate::data::attributes::AttributeSchema;
 use crate::data::rules::{RulePack, StoppageKind};
+use crate::data::tactics::TacticsSchema;
 use crate::data::team::TeamFile;
+use crate::data::tuning::FatigueTuning;
 use crate::data::{Content, hex12};
 use crate::decision::Kick;
 use crate::error::EngineError;
+use crate::fatigue::InjurySource;
 use crate::math::{DVec2, DVec3};
 use crate::pitch;
 use crate::player::Player;
@@ -20,18 +26,26 @@ use crate::rules::fouls::{self, Card, Tackle};
 use crate::rules::offside;
 use crate::rules::{Phase, Referee, Stoppage};
 use crate::steering;
+use crate::tactics::Tactics;
+use crate::tactics::change::{ChangeId, ChangeKind, ChangeQueue, RejectReason, SubLedger};
 use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::Tuning;
 
-/// Everything a match needs to start: the seed, the length, the tuning and the rule pack
-/// from the content, the two teams with their starters, and hashes of the files they came
-/// from.
+/// Everything a match needs to start: the seed, the length, the tuning, the rule pack, the
+/// tactics file, and the attribute schema from the content, the two teams with their
+/// starters, who manages each team, and hashes of the files they came from.
 #[derive(Debug, Clone)]
 pub struct MatchConfig {
     pub seed: u64,
     pub minutes: u32,
     pub tuning: Tuning,
     pub rules: RulePack,
+    pub tactics: TacticsSchema,
+    pub attributes: AttributeSchema,
+    pub fatigue: FatigueTuning,
+    /// Who manages each team, home first. Both are AI-managed unless a caller says
+    /// otherwise.
+    pub managers: [Manager; 2],
     pub teams: [Team; 2],
     pub players: Vec<Player>,
     /// Twelve hex characters over the content files and the two team files.
@@ -42,7 +56,8 @@ pub struct MatchConfig {
 
 impl MatchConfig {
     /// Builds a match from loaded content and two validated team files. `minutes` must be
-    /// 1 to 200; the home team is `files[0]`.
+    /// 1 to 200; the home team is `files[0]`. The AI manager's pre-match setup picks each
+    /// team's lineup, bench, and tactics.
     pub fn new(
         seed: u64,
         minutes: u32,
@@ -55,9 +70,16 @@ impl MatchConfig {
             )));
         }
         let tuning = content.tuning.engine.clone();
-        let (home, mut players) = Team::from_file(0, files[0], &content.attributes, &tuning)?;
-        let (away, away_players) = Team::from_file(1, files[1], &content.attributes, &tuning)?;
-        players.extend(away_players);
+        let (mut home, _) = Team::from_file(0, files[0], &content.attributes, &tuning)?;
+        let (mut away, _) = Team::from_file(1, files[1], &content.attributes, &tuning)?;
+        for team in [&mut home, &mut away] {
+            let setup = ai::pre_match(team, &content.tactics, &content.attributes);
+            team.lineup = setup.lineup;
+            team.bench = setup.bench;
+            team.set_tactics(setup.tactics, &content.tactics, &tuning);
+        }
+        let mut players = home.starters();
+        players.extend(away.starters());
         let mut hasher = Sha256::new();
         hasher.update(content.digest);
         let mut team_digests = [[0u8; 32]; 2];
@@ -71,6 +93,10 @@ impl MatchConfig {
             minutes,
             tuning,
             rules: content.rules.clone(),
+            tactics: content.tactics.clone(),
+            attributes: content.attributes.clone(),
+            fatigue: content.tuning.fatigue.clone(),
+            managers: [Manager::Ai; 2],
             teams: [home, away],
             players,
             content_hash: hex12(&hasher.finalize()),
@@ -87,6 +113,46 @@ impl MatchConfig {
     pub fn max_ticks(&self) -> u32 {
         crate::rules::clock::max_ticks(self.minutes, &self.rules)
     }
+
+    /// `team` is managed by `manager`.
+    pub fn with_manager(mut self, team: usize, manager: Manager) -> Self {
+        self.managers[team] = manager;
+        self
+    }
+
+    /// `team` starts with `tactics` instead of the AI manager's; its players take the new
+    /// formation's places.
+    pub fn with_tactics(mut self, team: usize, tactics: Tactics) -> Self {
+        let schema = self.tactics.clone();
+        self.teams[team].set_tactics(tactics, &schema, &self.tuning);
+        let starters = self.teams[team].starters();
+        let first = team * PLAYERS_PER_TEAM;
+        self.players[first..first + PLAYERS_PER_TEAM].clone_from_slice(&starters);
+        self
+    }
+}
+
+/// What an engine event carries beyond the common fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EventDetail {
+    /// The verdict on a queued change: applied on the event's tick, or rejected with the
+    /// reason.
+    Change {
+        id: ChangeId,
+        kind: ChangeKind,
+        reason: Option<RejectReason>,
+    },
+    /// Squad player `on` replaced squad player `off` in the event's roster slot.
+    Substitution {
+        off: usize,
+        on: usize,
+    },
+    Injury {
+        source: InjurySource,
+    },
+    Ai {
+        code: AiCode,
+    },
 }
 
 /// What happened during a tick that a consumer outside the engine must know about. The
@@ -112,6 +178,17 @@ pub enum EngineEventKind {
     GoalKick,
     FreeKick,
     Penalty,
+    /// `player` of `team` was injured and left play. When the injury stopped play, the
+    /// event names the dropped-ball spot.
+    Injury,
+    /// A substitute replaced `player` of `team`; the detail names both squad players.
+    Substitution,
+    /// The AI manager of `team` queued a change; the detail names the choice.
+    AiDecision,
+    /// A queued change of `team` applied on this tick.
+    ChangeApplied,
+    /// A queued change of `team` was rejected on this tick; the detail names the reason.
+    ChangeRejected,
 }
 
 impl EngineEventKind {
@@ -123,6 +200,7 @@ impl EngineEventKind {
             StoppageKind::GoalKick => EngineEventKind::GoalKick,
             StoppageKind::Penalty => EngineEventKind::Penalty,
             StoppageKind::FreeKick => EngineEventKind::FreeKick,
+            StoppageKind::Injury => EngineEventKind::Injury,
             _ => EngineEventKind::KickOff,
         }
     }
@@ -155,6 +233,7 @@ pub struct EngineEvent {
     pub added_time_s: Option<u32>,
     /// On a restart: where the ball was placed.
     pub spot: Option<DVec2>,
+    pub detail: Option<EventDetail>,
 }
 
 /// Aggregate counters kept during a match. Per-team arrays are home first; a foul, an
@@ -184,6 +263,14 @@ pub struct Summary {
     pub dead_ball_ticks: u32,
     /// Times the offside positions were computed (once per kick in open play).
     pub offside_checks: u32,
+    pub shots: [u32; 2],
+    pub substitutions: [u32; 2],
+    pub injuries: [u32; 2],
+    /// Changes queued in the engine's queue, and their verdicts.
+    pub changes_queued: u32,
+    pub changes_applied: u32,
+    pub changes_rejected: u32,
+    pub ai_decisions: u32,
 }
 
 /// One running match.
@@ -205,6 +292,13 @@ pub struct Simulation {
     /// The team shapes in force from each tick on: the start, each half-time, and each
     /// sending-off. The validator reads it.
     pub(crate) timeline: Vec<(u32, [Team; 2])>,
+    pub(crate) managers: [Manager; 2],
+    pub(crate) queue: ChangeQueue,
+    pub(crate) ledgers: [SubLedger; 2],
+    pub(crate) ai: [AiState; 2],
+    /// `true` once a goalkeeper failed to hold the ball in flight: the tuned catch chance is
+    /// one roll per flight, not one per tick the ball spends within reach.
+    pub(crate) keeper_beaten: bool,
     finished: bool,
     scratch: Vec<DVec2>,
 }
@@ -245,6 +339,11 @@ impl Simulation {
             restart: false,
             events: Vec::new(),
             stoppage: None,
+            managers: config.managers,
+            queue: ChangeQueue::default(),
+            ledgers: [SubLedger::default(); 2],
+            ai: [AiState::default(); 2],
+            keeper_beaten: false,
             finished: false,
             scratch: Vec::with_capacity(2 * PLAYERS_PER_TEAM),
             config,
@@ -272,12 +371,18 @@ impl Simulation {
         &self.players
     }
 
-    /// Each player's identifier from the team file, in roster order.
+    /// Each player's identifier from the team file, in roster order. A substitution changes
+    /// the identifier in the substitute's roster slot.
     pub fn player_ids(&self) -> Vec<String> {
         self.players
             .iter()
-            .map(|p| self.teams[p.team].player_ids[p.slot].clone())
+            .map(|p| self.teams[p.team].player_ids[p.squad].clone())
             .collect()
+    }
+
+    /// Who manages each team, home first.
+    pub fn managers(&self) -> [Manager; 2] {
+        self.managers
     }
 
     pub fn tick(&self) -> u32 {
@@ -394,6 +499,13 @@ impl Simulation {
             self.resolve_possession(&t);
         }
         self.check_clock();
+        if !self.is_over() {
+            self.fatigue_tick();
+            self.ai_tick();
+        }
+        if let Some(stoppage) = self.stoppage {
+            self.apply_changes(stoppage);
+        }
         steering::resolve_overlaps(&mut self.players, &t);
         self.tick += 1;
     }
@@ -436,6 +548,7 @@ impl Simulation {
             advantage: None,
             added_time_s: None,
             spot: None,
+            detail: None,
         }
     }
 
@@ -447,6 +560,9 @@ impl Simulation {
         };
         if let Some(c) = self.carrier {
             let team = self.players[c].team;
+            if matches!(kick, Kick::Shot { .. }) {
+                self.summary.shots[team] += 1;
+            }
             self.last_touch = Some(team);
             self.referee.offside = if offside_counts {
                 self.summary.offside_checks += 1;
@@ -457,6 +573,7 @@ impl Simulation {
         }
         self.ball.kick(dir, speed, loft, t);
         self.carrier = None;
+        self.keeper_beaten = false;
     }
 
     fn move_ball(&mut self, t: &Tuning) {
@@ -521,8 +638,14 @@ impl Simulation {
                     }
                 }
                 if let Some((_, i)) = best {
-                    if fast && !self.rng.chance(t.keeper_catch_chance) {
-                        return;
+                    if fast {
+                        if self.keeper_beaten {
+                            return;
+                        }
+                        if !self.rng.chance(t.keeper_catch_chance) {
+                            self.keeper_beaten = true;
+                            return;
+                        }
                     }
                     self.gain(i, t);
                 }
@@ -548,10 +671,12 @@ impl Simulation {
                     match fouls::tackle_outcome(p_win, p_foul, t.foul_ball_loss, draw) {
                         Tackle::Win => {
                             self.gain(i, t);
+                            self.tackle_injury_roll(c);
                             return;
                         }
                         Tackle::Foul { ball_lost } => {
                             self.foul(i, c, ball_lost, t);
+                            self.tackle_injury_roll(c);
                             return;
                         }
                         Tackle::Miss => {}
@@ -569,6 +694,7 @@ impl Simulation {
             return;
         }
         self.referee.offside = 0;
+        self.keeper_beaten = false;
         let team = self.players[i].team;
         if self.last_touch != Some(team) {
             self.summary.possession_changes += 1;

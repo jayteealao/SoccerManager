@@ -1,5 +1,6 @@
 //! AC-c and AC-d: the validator finds no violation over a seeded full match played under the
-//! laws, with every restart spot checked, and reports a hand-corrupted stream.
+//! laws, with every restart spot checked, and reports a hand-corrupted stream. Fatigue,
+//! injuries, and the AI manager's substitutions and tactics changes are on in that match.
 
 mod common;
 
@@ -13,6 +14,13 @@ fn a_seeded_full_match_has_no_violations() {
     sim.run(&mut sink).unwrap();
     let events = sim.take_events();
     assert!(events.iter().any(|e| e.spot.is_some() && e.tick > 1));
+    assert!(
+        events
+            .iter()
+            .any(|e| e.kind == engine::EngineEventKind::Substitution),
+        "the match made a substitution"
+    );
+    assert!(sim.fatigue_mean_pct() < 100.0, "fatigue is on");
     let validator = Validator::for_match(config.tuning.clone(), sim.team_timeline(), &events);
     let violations = validator.check(&sink.records);
     let sample: Vec<_> = violations.iter().take(5).collect();

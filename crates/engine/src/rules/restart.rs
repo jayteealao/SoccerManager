@@ -1,5 +1,7 @@
 //! Restarts (IFAB Laws 8 and 13 to 17): who takes each restart, where every other player
-//! stands while the ball is dead, and when the restart may be taken.
+//! stands while the ball is dead, and when the restart may be taken. A dropped ball after an
+//! injury goes to one player of the team that last touched the ball, and every other player
+//! keeps 4 m away (IFAB Law 8).
 //!
 //! While the ball is dead, every player steers to a restart target: the formation anchor
 //! around the restart spot, moved where a law requires it. Opponents keep 9.15 m from the ball
@@ -17,6 +19,8 @@ use crate::tuning::Tuning;
 
 /// Distance opponents keep from a throw-in (IFAB Law 15).
 const THROW_IN_DISTANCE: f64 = 2.0;
+/// Distance every other player keeps from a dropped ball (IFAB Law 8).
+const DROP_BALL_DISTANCE: f64 = 4.0;
 /// Slack between where a player is sent and where the law is judged, in metres.
 const TARGET_MARGIN: f64 = 0.5;
 const JUDGE_MARGIN: f64 = 0.25;
@@ -24,7 +28,8 @@ const JUDGE_MARGIN: f64 = 0.25;
 /// A dead ball waiting for its restart.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DeadBall {
-    /// The restart: kick-off, throw-in, corner, goal kick, free kick, or penalty.
+    /// The restart: kick-off, throw-in, corner, goal kick, free kick, penalty, or a dropped
+    /// ball after an injury.
     pub kind: StoppageKind,
     /// The team that restarts play.
     pub team: usize,
@@ -56,6 +61,7 @@ pub fn delay_ticks(kind: StoppageKind, t: &Tuning) -> u32 {
         StoppageKind::Corner => d.corner,
         StoppageKind::GoalKick => d.goal_kick,
         StoppageKind::Penalty => d.penalty,
+        StoppageKind::Injury => d.drop_ball,
         _ => d.free_kick,
     };
     // The tuning bounds keep the delay under 60 s, so the cast cannot truncate.
@@ -63,13 +69,20 @@ pub fn delay_ticks(kind: StoppageKind, t: &Tuning) -> u32 {
 }
 
 /// The player of `team` who takes a restart of `kind` at `spot`: the goalkeeper at a goal
-/// kick, the centre-forward at a kick-off, otherwise the nearest outfield player on the
-/// pitch. A team with only its goalkeeper left uses the goalkeeper.
+/// kick and at a dropped ball inside its own penalty area, the centre-forward at a
+/// kick-off, otherwise the nearest outfield player on the pitch. A team with only its
+/// goalkeeper left uses the goalkeeper.
 pub fn taker(kind: StoppageKind, team: usize, spot: DVec2, players: &[Player]) -> usize {
     let first = team * PLAYERS_PER_TEAM;
+    let own_end = if players[first].pos.x < 0.0 {
+        -1.0
+    } else {
+        1.0
+    };
     let preferred = match kind {
         StoppageKind::GoalKick => Some(first),
         StoppageKind::KickOff => Some(first + PLAYERS_PER_TEAM - 1),
+        StoppageKind::Injury if pitch::in_penalty_area(spot, own_end) => Some(first),
         _ => None,
     };
     if let Some(i) = preferred
@@ -79,7 +92,10 @@ pub fn taker(kind: StoppageKind, team: usize, spot: DVec2, players: &[Player]) -
     }
     let mut best: Option<(f64, usize)> = None;
     for (i, p) in players.iter().enumerate() {
-        if p.team != team || !p.active() || (p.slot == 0 && kind != StoppageKind::GoalKick) {
+        if p.team != team
+            || !p.active()
+            || (p.slot == 0 && !matches!(kind, StoppageKind::GoalKick | StoppageKind::Injury))
+        {
             continue;
         }
         let d = (p.pos - spot).length();
@@ -209,6 +225,13 @@ pub fn target(
             0.5,
         ),
         StoppageKind::GoalKick if opponent => out_of_area(base, end_of(dead.spot)),
+        StoppageKind::Injury => outside_on_pitch(
+            base,
+            dead.spot,
+            DROP_BALL_DISTANCE + TARGET_MARGIN,
+            away,
+            0.5,
+        ),
         StoppageKind::Penalty => {
             let side = end_of(dead.spot);
             if opponent && p.slot == 0 {
@@ -251,6 +274,7 @@ pub fn is_ready(
                 !opponent || distance >= KICK_DISTANCE - JUDGE_MARGIN
             }
             StoppageKind::ThrowIn => !opponent || distance >= THROW_IN_DISTANCE - JUDGE_MARGIN,
+            StoppageKind::Injury => distance >= DROP_BALL_DISTANCE - JUDGE_MARGIN,
             StoppageKind::GoalKick => !opponent || !pitch::in_penalty_area(p.pos, side),
             StoppageKind::KickOff => {
                 let own_half = p.pos.x * teams[p.team].attack_x <= JUDGE_MARGIN;
@@ -336,6 +360,40 @@ mod tests {
                 assert!(kick_off_position(team, slot).x * team.attack_x < 0.0);
             }
         }
+    }
+
+    #[test]
+    fn everyone_keeps_four_metres_from_a_dropped_ball() {
+        let config = shipped_config(1, 90).unwrap();
+        let spot = DVec2::new(5.0, -3.0);
+        let taker = taker(StoppageKind::Injury, 1, spot, &config.players);
+        assert_eq!(config.players[taker].team, 1);
+        assert_ne!(
+            config.players[taker].slot, 0,
+            "an outfield player takes it in midfield"
+        );
+        let d = dead(StoppageKind::Injury, 1, spot, taker);
+        for i in 0..22 {
+            let at = target(&d, i, &config.players, &config.teams, &config.tuning);
+            if i == taker {
+                assert!((at - spot).length() < 1e-9);
+            } else {
+                assert!(
+                    (at - spot).length() >= DROP_BALL_DISTANCE,
+                    "player {i} at {at}"
+                );
+            }
+        }
+        assert_eq!(delay_ticks(StoppageKind::Injury, &config.tuning), 1000);
+    }
+
+    #[test]
+    fn a_dropped_ball_in_the_own_penalty_area_goes_to_the_goalkeeper() {
+        let config = shipped_config(1, 90).unwrap();
+        // The home team defends the negative end at kick-off.
+        let spot = DVec2::new(-45.0, 4.0);
+        assert_eq!(taker(StoppageKind::Injury, 0, spot, &config.players), 0);
+        assert_ne!(taker(StoppageKind::Injury, 1, spot, &config.players), 11);
     }
 
     #[test]

@@ -57,6 +57,12 @@ test('advantage, a card, and a tactical change are not marks', () => {
   assert.equal(stopsPlay(event('tactics-change')), false);
 });
 
+test('an injury is a mark; a substitution and an AI choice are not', () => {
+  assert.equal(stopsPlay(event('injury')), true);
+  assert.equal(stopsPlay(event('substitution')), false);
+  assert.equal(stopsPlay(event('ai-decision', { 'ai.decision': 'sub-injury' })), false);
+});
+
 test('a message that is not an event is not a mark', () => {
   assert.equal(stopsPlay({ type: 'stats', tick: 10 }), false);
   assert.equal(stopsPlay({ type: 'command-ack', tick: 10, 'event.type': 'goal' }), false);

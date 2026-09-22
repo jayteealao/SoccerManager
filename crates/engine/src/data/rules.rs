@@ -1,14 +1,16 @@
 //! The rule pack: stoppage kinds and what each admits, substitution limits, half lengths,
 //! the added-time allowance, and the fewest players a team may field. The engine reads the
-//! half structure, the added-time allowance, and the minimum team size during a match.
+//! half structure, the added-time allowance, the minimum team size, what each stoppage
+//! admits, and the substitution limits during a match.
 
 use std::collections::BTreeMap;
 
 use garde::Validate;
 use serde::{Deserialize, Serialize};
 
-/// Schema version this build reads. Version 2 adds `added_time` and `min_players`.
-pub const RULES_VERSION: u32 = 2;
+/// Schema version this build reads. Version 2 adds `added_time` and `min_players`; version 3
+/// adds `substitutions.windows_exempt`.
+pub const RULES_VERSION: u32 = 3;
 
 /// Every kind of stoppage the rules name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -85,6 +87,29 @@ pub struct Substitutions {
     /// Stoppages during which a team may make substitutions.
     #[garde(range(min = 0, max = 5))]
     pub windows: u8,
+    /// Stoppage kinds whose substitutions use no window (half-time in the shipped pack). A
+    /// substitution there still counts toward `limit`. Each kind appears at most once.
+    #[garde(custom(each_kind_once))]
+    pub windows_exempt: Vec<StoppageKind>,
+}
+
+impl Substitutions {
+    /// `true` when a substitution at a stoppage of `kind` uses no window.
+    pub fn exempt(&self, kind: StoppageKind) -> bool {
+        self.windows_exempt.contains(&kind)
+    }
+}
+
+fn each_kind_once(kinds: &[StoppageKind], _ctx: &()) -> garde::Result {
+    for (i, kind) in kinds.iter().enumerate() {
+        if kinds[..i].contains(kind) {
+            return Err(garde::Error::new(format!(
+                "stoppage {} appears twice",
+                kind.code()
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// The time a referee adds at the end of each half: seconds per stoppage of each kind and
@@ -172,6 +197,17 @@ impl RulePack {
     /// Minutes of regulation play: halves times half length.
     pub fn regulation_minutes(&self) -> u32 {
         u32::from(self.halves) * u32::from(self.half_minutes)
+    }
+
+    /// What a stoppage of `kind` admits: `(tactics, substitution)`. A kind the pack does not
+    /// list admits nothing; a validated pack lists every kind.
+    pub fn admits(&self, kind: StoppageKind) -> (bool, bool) {
+        self.stoppages
+            .iter()
+            .find(|s| s.kind == kind)
+            .map_or((false, false), |s| {
+                (s.admits_tactics, s.admits_substitution)
+            })
     }
 }
 

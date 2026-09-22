@@ -102,3 +102,52 @@ pub fn spread(
     }
     scene
 }
+
+/// A quiet match with no background or tackle injuries, so a scene stops only where the
+/// test arranges it.
+pub fn calm_match(minutes: u32) -> MatchConfig {
+    let mut config = quiet_match(minutes);
+    config.tuning.injury_per_minute = 0.0;
+    config.tuning.injury_per_tackle = 0.0;
+    config
+}
+
+/// Every event kind in `events`, in order.
+pub fn kinds(events: &[engine::EngineEvent]) -> Vec<engine::EngineEventKind> {
+    events.iter().map(|e| e.kind).collect()
+}
+
+/// A copy of `file` with every attribute times 1.15, rounded and clamped to 100, under a new
+/// club id.
+pub fn stronger(file: &engine::data::TeamFile) -> engine::data::TeamFile {
+    let mut out = file.clone();
+    out.club.id = format!("{}-strong", file.club.id);
+    out.club.name = format!("{} Strong", file.club.name);
+    for p in &mut out.players {
+        for v in p.attributes.values_mut() {
+            *v = (f64::from(*v) * 1.15).round().min(100.0) as u8;
+        }
+    }
+    out
+}
+
+/// Runs `job` for every seed in `seeds` on all cores and returns the results in seed order.
+pub fn run_many<T: Send>(
+    seeds: std::ops::RangeInclusive<u64>,
+    job: impl Fn(u64) -> T + Sync,
+) -> Vec<T> {
+    let seeds: Vec<u64> = seeds.collect();
+    let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
+    let chunk = seeds.len().div_ceil(threads).max(1);
+    let job = &job;
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = seeds
+            .chunks(chunk)
+            .map(|part| scope.spawn(move || part.iter().map(|&s| job(s)).collect::<Vec<T>>()))
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|h| h.join().expect("a match thread panicked"))
+            .collect()
+    })
+}

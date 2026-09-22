@@ -4,10 +4,12 @@
 //! emits one [`TickRecord`] per tick to a [`TickSink`], and reproduces a match byte for byte
 //! for the same seed, the same build, and the same machine.
 
+pub mod ai;
 pub mod ball;
 pub mod data;
 pub mod decision;
 pub mod error;
+pub mod fatigue;
 pub mod math;
 pub mod observe;
 pub mod pitch;
@@ -20,20 +22,25 @@ pub mod scenario;
 pub mod sim;
 pub mod snapshot;
 pub mod steering;
+pub mod tactics;
 pub mod team;
 pub mod tuning;
 pub mod validate;
 
+pub use ai::{AiCode, Manager};
 pub use data::{Content, ContentDir, StoppageKind};
 pub use error::EngineError;
+pub use fatigue::InjurySource;
 pub use record::{
     FanoutSink, FileSink, NullSink, TickHeader, TickRecord, TickSink, VecSink, read_ticks,
 };
 pub use rules::clock::max_ticks;
 pub use rules::fouls::Card;
 pub use rules::{DeadBall, Stoppage};
-pub use sim::{EngineEvent, EngineEventKind, MatchConfig, Simulation, Summary};
+pub use sim::{EngineEvent, EngineEventKind, EventDetail, MatchConfig, Simulation, Summary};
 pub use snapshot::{Snapshot, SnapshotSink};
+pub use tactics::change::{Change, ChangeId, ChangeKind, RejectReason, SubLedger};
+pub use tactics::{RoleDuty, Tactics, TacticsPatch};
 pub use tuning::Tuning;
 pub use validate::{Validator, Violation};
 

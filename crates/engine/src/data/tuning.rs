@@ -1,5 +1,5 @@
 //! The tuning file: the engine constants, the generator distributions, and the fatigue
-//! parameters the engine does not read yet. Bounds live in code; values live in the file.
+//! curve. Bounds live in code; values live in the file.
 
 use std::collections::BTreeMap;
 
@@ -11,8 +11,9 @@ use crate::data::team::Position;
 use crate::team::PLAYERS_PER_TEAM;
 use crate::tuning::Tuning;
 
-/// Schema version this build reads.
-pub const TUNING_VERSION: u32 = 1;
+/// Schema version this build reads. Version 2 rewrites the fatigue block, which the engine
+/// now reads, and adds the decision weights and injury rates to the engine block.
+pub const TUNING_VERSION: u32 = 2;
 
 /// The tuning file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
@@ -97,16 +98,58 @@ pub struct Dist {
     pub spread: f64,
 }
 
-/// Fatigue parameters. The engine does not read them yet.
+/// Fatigue: how fast energy drains, and how far low energy lowers pace and decisions.
+/// Energy runs from 1.0 (fresh) down to 0.0.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct FatigueTuning {
-    /// Minutes of play until stamina halves at full effort.
-    #[garde(range(min = 1.0, max = 600.0))]
-    pub minutes_to_half_stamina: f64,
-    /// Stamina points recovered per rest day.
+    /// Energy at and above which a player plays at full strength.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub threshold: f64,
+    /// The curve, as `[energy, multiplier]` points from high energy to low: 2 to 8 points,
+    /// energy strictly decreasing from 1.0 to 0.0, multipliers 0.3 to 1.0.
+    #[garde(custom(check_curve))]
+    pub curve: Vec<[f64; 2]>,
+    /// Energy lost per second standing still, and the extra at full speed (scaled by the
+    /// square of the speed fraction). A player with stamina 100 drains half as fast as the
+    /// average, one with stamina 0 half again as fast.
+    #[garde(range(min = 0.0, max = 0.01))]
+    pub drain_base_per_s: f64,
+    #[garde(range(min = 0.0, max = 0.05))]
+    pub drain_effort_per_s: f64,
+    /// Energy recovered at half-time by an average player; natural fitness scales it.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub half_time_recovery: f64,
+    /// Stamina points recovered per rest day. The season layer reads it.
     #[garde(range(min = 0.0, max = 100.0))]
     pub recovery_per_day: f64,
+}
+
+fn check_curve(curve: &[[f64; 2]], _ctx: &()) -> garde::Result {
+    if !(2..=8).contains(&curve.len()) {
+        return Err(garde::Error::new(format!(
+            "holds {} points; allowed 2 to 8",
+            curve.len()
+        )));
+    }
+    if curve[0][0] != 1.0 || curve[curve.len() - 1][0] != 0.0 {
+        return Err(garde::Error::new(
+            "the first point must be at energy 1.0 and the last at 0.0",
+        ));
+    }
+    for (i, [energy, multiplier]) in curve.iter().enumerate() {
+        if !(0.3..=1.0).contains(multiplier) {
+            return Err(garde::Error::new(format!(
+                "point {i}: multiplier {multiplier}; allowed 0.3 to 1.0"
+            )));
+        }
+        if i > 0 && *energy >= curve[i - 1][0] {
+            return Err(garde::Error::new(format!(
+                "point {i}: energy {energy} does not decrease"
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn bench_matches_squad(squad_size: usize) -> impl FnOnce(&Vec<Position>, &()) -> garde::Result {

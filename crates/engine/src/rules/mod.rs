@@ -1,6 +1,7 @@
 //! The referee (named mechanism): one state machine inside the loop that owns the phase of
 //! play. After the ball moves and possession resolves, the referee decides out of play,
-//! offside, fouls with advantage, cards, restarts, half-time, full time, and abandonment.
+//! offside, fouls with advantage, cards, injuries, restarts, half-time, full time, and
+//! abandonment.
 //!
 //! Every time the ball goes dead, the referee places the ball at the restart spot, marks the
 //! tick as a restart, and announces the stoppage through the stoppage hook
@@ -16,9 +17,11 @@ use crate::TICKS_PER_SECOND;
 use crate::ball::Ball;
 use crate::data::rules::{RulePack, StoppageKind};
 use crate::decision::Kick;
+use crate::fatigue::InjurySource;
 use crate::math::DVec2;
 use crate::pitch::{self, Exit, Line};
-use crate::sim::{EngineEventKind, Simulation};
+use crate::player::Status;
+use crate::sim::{EngineEventKind, EventDetail, Simulation};
 use crate::tuning::Tuning;
 use clock::{MatchClock, Tally};
 use fouls::Card;
@@ -267,6 +270,84 @@ impl Simulation {
         }
     }
 
+    /// Player `i` is injured and leaves play at once: the player stands beside the pitch like
+    /// a sent-off player and the line closes up. In open play the referee stops play for a
+    /// dropped ball (IFAB Law 8) to the team that last touched the ball, at the ball, or to
+    /// that team's goalkeeper when the ball is inside its penalty area. When play already
+    /// stopped on this tick (a foul), the injury rides that stoppage. The team's AI manager
+    /// checks at once.
+    pub(crate) fn injure(&mut self, i: usize, source: InjurySource) {
+        if !self.players[i].active() {
+            return;
+        }
+        let p = self.players[i];
+        let team = p.team;
+        tracing::info!(
+            signal = "injury.occurred",
+            tick = self.tick + 1,
+            team,
+            player = %self.teams[team].player_ids[p.squad],
+            source = source.code(),
+            energy = (p.energy * 100.0).round() / 100.0
+        );
+        self.summary.injuries[team] += 1;
+        self.ai[team].due = true;
+        if self.carrier == Some(i) {
+            self.carrier = None;
+        }
+        {
+            let p = &mut self.players[i];
+            p.status = Status::Injured;
+            p.pos = pitch::parking_spot(p.team, p.slot);
+            p.vel = DVec2::ZERO;
+            p.target = p.pos;
+        }
+        self.teams[team].reshape(p.slot);
+        self.timeline.push((self.tick + 1, self.teams.clone()));
+        let detail = Some(EventDetail::Injury { source });
+        match self.referee.phase {
+            Phase::Live => {
+                let with = self.last_touch.unwrap_or(team);
+                let spot = pitch::clamp(self.ball.xy(), 0.5);
+                self.open_dead_ball(
+                    StoppageKind::Injury,
+                    StoppageKind::Injury,
+                    with,
+                    spot,
+                    false,
+                );
+                if let Some(event) = self.events.last_mut()
+                    && event.kind == EngineEventKind::Injury
+                {
+                    event.player = Some(i);
+                    event.team = Some(team);
+                    event.detail = detail;
+                }
+            }
+            Phase::DeadBall(mut dead) => {
+                let mut event = self.event(EngineEventKind::Injury, Some(team));
+                event.player = Some(i);
+                event.detail = detail;
+                self.events.push(event);
+                if dead.taker == i {
+                    dead.taker = restart::taker(dead.kind, dead.team, dead.spot, &self.players);
+                    self.referee.phase = Phase::DeadBall(dead);
+                }
+            }
+            Phase::FullTime => {}
+        }
+        if let Some(short) = discipline::abandoned(&self.players, self.config.rules.min_players) {
+            tracing::warn!(
+                signal = "rules.abandoned",
+                tick = self.tick + 1,
+                team.id = %self.teams[short].club_id,
+                on_pitch = discipline::on_pitch_count(&self.players, short)
+            );
+            self.referee.abandoned = true;
+            self.referee.phase = Phase::FullTime;
+        }
+    }
+
     /// Shows every card held back for advantage.
     fn show_pending_cards(&mut self) {
         for pending in std::mem::take(&mut self.referee.pending) {
@@ -292,10 +373,18 @@ impl Simulation {
         self.referee.offside = 0;
         self.ball = Ball::at(spot);
         self.carrier = None;
+        self.keeper_beaten = false;
         self.restart = true;
         let since = self.tick + 1;
         let taker = restart::taker(kind, team, spot, &self.players);
-        let ready_at = since + restart::delay_ticks(kind, &self.config.tuning);
+        let mut delay = restart::delay_ticks(kind, &self.config.tuning);
+        if self.summary.goals[team] > self.summary.goals[1 - team] {
+            // A leading team with time wasting on takes longer over its restarts.
+            let factor = self.teams[team].plan.time_wasting;
+            // The factor is at most 20 and the delay under 3000 ticks, so the cast fits.
+            delay = (f64::from(delay) * factor).round() as u32;
+        }
+        let ready_at = since + delay;
         self.referee.phase = Phase::DeadBall(DeadBall {
             kind,
             team,
@@ -444,6 +533,7 @@ impl Simulation {
         if self.referee.abandoned {
             return;
         }
+        self.half_time_recovery();
         self.summary.stoppages += 1;
         self.stoppage = Some(Stoppage {
             tick: now,

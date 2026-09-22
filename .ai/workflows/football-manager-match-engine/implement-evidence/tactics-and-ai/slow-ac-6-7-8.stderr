@@ -1,0 +1,27 @@
+   Compiling engine v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine)
+    Finished `release` profile [optimized + debuginfo] target(s) in 6.02s
+     Running unittests src\lib.rs (target\release\deps\engine-baf8aa68429aa946.exe)
+     Running tests\ai_trailing.rs (target\release\deps\ai_trailing-672614215debff02.exe)
+an applied tactics change in 100 of 100 scenes
+     Running tests\content.rs (target\release\deps\content-f35661c30c835f1b.exe)
+     Running tests\determinism.rs (target\release\deps\determinism-8dd05ff849eaf399.exe)
+     Running tests\fatigue.rs (target\release\deps\fatigue-fddd95e829b0ab79.exe)
+     Running tests\full_match.rs (target\release\deps\full_match-fc3f96ebc397eee7.exe)
+     Running tests\generator.rs (target\release\deps\generator-1be1f6eef7869938.exe)
+     Running tests\identity.rs (target\release\deps\identity-4fa007746a8795b4.exe)
+     Running tests\injury.rs (target\release\deps\injury-531694a3a237b0dc.exe)
+     Running tests\mentality.rs (target\release\deps\mentality-f3303cf55302a9c4.exe)
+mean shots per match: defensive 2.15, attacking 33.69
+     Running tests\rules_cards.rs (target\release\deps\rules_cards-0e07fd85d0bae7b2.exe)
+     Running tests\rules_clock.rs (target\release\deps\rules_clock-a2e36cac4b05f0db.exe)
+     Running tests\rules_fouls.rs (target\release\deps\rules_fouls-9cb74cf2be89655b.exe)
+     Running tests\rules_offside.rs (target\release\deps\rules_offside-081612ee08320906.exe)
+     Running tests\rules_restarts.rs (target\release\deps\rules_restarts-69d790a1dfd8b82b.exe)
+     Running tests\snapshot.rs (target\release\deps\snapshot-f82cefe534643fa1.exe)
+     Running tests\strength.rs (target\release\deps\strength-e14eb8788d2995b6.exe)
+stronger team: won 139, drew 34, lost 27 of 200
+     Running tests\substitutions.rs (target\release\deps\substitutions-e3aa1b86234619d2.exe)
+     Running tests\tactics_queue.rs (target\release\deps\tactics_queue-3a2b1f12526c1707.exe)
+     Running tests\team_files.rs (target\release\deps\team_files-eb496017a867391c.exe)
+     Running tests\validator.rs (target\release\deps\validator-a508ea6f73737dc7.exe)
+   Doc-tests engine

@@ -4,11 +4,11 @@ type: index
 slug: football-manager-match-engine
 title: "Football manager game: match engine and 2D match viewer"
 status: active
-current-stage: verify
-stage-number: 6
+current-stage: implement
+stage-number: 5
 created-at: "2026-09-21T16:46:41Z"
-updated-at: "2026-09-22T22:02:26Z"
-selected-slice: "match-rules"
+updated-at: "2026-09-22T23:27:52Z"
+selected-slice: "tactics-and-ai"
 branch-strategy: dedicated
 branch: "feat/football-manager-match-engine"
 base-branch: "main"
@@ -137,7 +137,7 @@ slices:
   - {slug: stream-protocol, status: complete, complexity: m, depends-on: [engine-core]}
   - {slug: viewer-pitch, status: complete, complexity: m, depends-on: [stream-protocol]}
   - {slug: match-rules, status: complete, complexity: l, depends-on: [engine-core, data-schemas-generator]}
-  - {slug: tactics-and-ai, status: defined, complexity: l, depends-on: [match-rules, data-schemas-generator]}
+  - {slug: tactics-and-ai, status: in-progress, complexity: l, depends-on: [match-rules, data-schemas-generator]}
   - {slug: commentary, status: defined, complexity: s, depends-on: [match-rules]}
   - {slug: calibration, status: defined, complexity: m, depends-on: [tactics-and-ai, data-schemas-generator]}
   - {slug: viewer-match-day, status: defined, complexity: m, depends-on: [viewer-pitch, stream-protocol, commentary]}
@@ -160,8 +160,8 @@ metric-acceptance-mock-rung: 0
 runtime-evidence-deferrals: []
 compressed-slices:
   - {slug: probe-engine-core, slice-type: probe, created-at: "2026-09-22T06:03:50Z"}
-next-command: wf-review
-next-invocation: "/wf review football-manager-match-engine match-rules"
+next-command: wf-verify
+next-invocation: "/wf verify football-manager-match-engine tactics-and-ai"
 workflow-files:
   - 00-index.md
   - 01-intake.md
@@ -265,6 +265,24 @@ workflow-files:
   - 05-implement-match-rules.md
   - 06-verify-match-rules.md
   - verify-evidence/match-rules/
+  - 04-plan-tactics-and-ai.md
+  - 04-plan-commentary.md
+  - 04-plan-calibration.md
+  - 04-plan-viewer-reports-recovery.md
+  - 04-plan-integration.md
+  - 04-plan-experiment-flags.md
+  - 04-plan-scripting-runtime.md
+  - 04-plan-tactics-and-ai.yaml
+  - 04-plan-tactics-and-ai.html.fragment
+  - history/04b-instrument-4.md
+  - history/04b-instrument-4.yaml
+  - history/04b-instrument-4.html.fragment
+  - history/05c-benchmark-4.md
+  - history/05c-benchmark-4.yaml
+  - history/05c-benchmark-4.html.fragment
+  - bench-baseline/tactics-and-ai/
+  - 05-implement-tactics-and-ai.md
+  - implement-evidence/tactics-and-ai/
 progress:
   intake: complete
   shape: complete
