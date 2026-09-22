@@ -12,7 +12,7 @@ metric-lines-added: 4098
 metric-lines-removed: 68
 metric-deviations-from-plan: 7
 metric-review-fixes-applied: 0
-commit-sha: "452f6836fc0ac61cead828abe956176930ff4742"
+commit-sha: "62a5dab8acd9a83ce2cff6010c4263d7e3fb8763"
 tags: [viewer, canvas, playback, milestone]
 refs:
   index: 00-index.md
