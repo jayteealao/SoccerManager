@@ -4,7 +4,7 @@ The engine reads every data file from this folder. Nothing is embedded in the bi
 
 ## Where the engine looks
 
-In order: the `--content-dir` flag, the `SM_CONTENT_DIR` environment variable, `./content` in the working directory, then the `content` folder beside the binary. The first folder that holds `attributes.json` wins.
+The `--content-dir` flag, if given, names the folder exactly: it must hold `attributes.json` or the run fails. Otherwise the `SM_CONTENT_DIR` environment variable, if set, names the folder exactly, with the same rule. Only when neither is set does the engine probe `./content` in the working directory, then the `content` folder beside the binary, taking the first that holds `attributes.json`.
 
 Runtime output (`owner.id`, `matches/<match.id>/stats.json`) goes to `SM_DATA_DIR`, which defaults to `%LOCALAPPDATA%\SoccerManager` on Windows.
 

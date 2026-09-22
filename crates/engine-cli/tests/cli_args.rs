@@ -138,6 +138,40 @@ fn a_missing_content_folder_exits_one_naming_the_paths_tried() {
 }
 
 #[test]
+fn an_explicit_content_dir_without_attributes_is_not_ignored_for_cwd_content() {
+    let missing = temp("no-attributes-flag");
+    let _ = std::fs::remove_dir_all(&missing);
+    std::fs::create_dir_all(&missing).unwrap();
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let out = Command::new(env!("CARGO_BIN_EXE_engine-cli"))
+        .env("SM_DATA_DIR", temp("data"))
+        .env_remove("SM_CONTENT_DIR")
+        .current_dir(&repo_root)
+        .args(["--content-dir"])
+        .arg(&missing)
+        .args([
+            "simulate",
+            "--seed",
+            "1",
+            "--minutes",
+            "1",
+            "--ticks-out",
+            "unused.ticks",
+        ])
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(&missing);
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("cannot read content folder")
+            && stderr.contains(&missing.display().to_string()),
+        "stderr: {stderr}"
+    );
+    assert!(!stderr.contains("content.loaded"), "stderr: {stderr}");
+}
+
+#[test]
 fn no_help_line_exceeds_eighty_columns() {
     for args in [
         vec!["--help"],

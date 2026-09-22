@@ -40,16 +40,18 @@ pub struct ContentDir {
 }
 
 impl ContentDir {
-    /// Resolves the folder: the flag, then `SM_CONTENT_DIR`, then `./content`, then the
-    /// `content` folder beside the running binary. The error lists every path tried.
+    /// Resolves the folder. When the `--content-dir` flag is given, only that folder is used.
+    /// Otherwise, when `SM_CONTENT_DIR` is set, only that folder is used. Only when neither is
+    /// set does resolution fall through to `./content`, then the `content` folder beside the
+    /// running binary. The error lists every path tried.
     pub fn resolve(flag: Option<&Path>) -> Result<Self, EngineError> {
-        let mut tried: Vec<PathBuf> = Vec::new();
         if let Some(p) = flag {
-            tried.push(p.to_path_buf());
+            return Self::resolve_exact(p);
         }
         if let Some(p) = std::env::var_os(CONTENT_DIR_ENV) {
-            tried.push(PathBuf::from(p));
+            return Self::resolve_exact(&PathBuf::from(p));
         }
+        let mut tried: Vec<PathBuf> = Vec::new();
         tried.push(PathBuf::from("content"));
         if let Some(dir) = std::env::current_exe()
             .ok()
@@ -65,6 +67,23 @@ impl ContentDir {
         let list: Vec<String> = tried.iter().map(|p| p.display().to_string()).collect();
         Err(EngineError::Read {
             path: format!("content folder (tried {})", list.join(", ")),
+            source: std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("no folder holds {ATTRIBUTES_FILE}"),
+            ),
+        })
+    }
+
+    /// Resolves a single, explicitly-named candidate folder (the flag or the env var), with
+    /// no fall-through to other candidates.
+    fn resolve_exact(p: &Path) -> Result<Self, EngineError> {
+        if p.join(ATTRIBUTES_FILE).is_file() {
+            return Ok(Self {
+                root: p.to_path_buf(),
+            });
+        }
+        Err(EngineError::Read {
+            path: format!("content folder (tried {})", p.display()),
             source: std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 format!("no folder holds {ATTRIBUTES_FILE}"),
