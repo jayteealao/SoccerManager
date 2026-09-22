@@ -12,7 +12,7 @@ metric-lines-added: 5167
 metric-lines-removed: 35
 metric-deviations-from-plan: 10
 metric-review-fixes-applied: 0
-commit-sha: "f361e22"
+commit-sha: "7d36b5a"
 steering-honored:
   - "used the four change-state words Queued, Applies now, Applied, Rejected"
   - "left every layout, typography, palette, and mark rule to the viewer slices"
