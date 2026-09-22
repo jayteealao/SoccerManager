@@ -6,6 +6,9 @@
 // reports is derived from consecutive timestamp deltas, and `refresh_hz` is reported
 // beside it, so a reader can always see whether a number is a rendering fact or a panel
 // fact.
+//
+// Ticks are skipped only at a speed that needs more than one tick per frame at the measured
+// panel rate; below that, a stalled frame delays playback by landing on the next tick.
 
 import { signal } from './signal.mjs';
 
@@ -68,6 +71,11 @@ export class Scheduler {
     const before = Math.floor(this.position);
     if (this.playing) {
       this.position += (elapsed / 1000) * this.ticksPerSecond * this.speed;
+      // A speed the panel can show one tick a frame never skips: a stalled frame that
+      // would pass over a tick lands on the next tick instead, and playback runs late.
+      if (this.speed * this.ticksPerSecond <= this.refreshHz() && this.position >= before + 2) {
+        this.position = before + 1;
+      }
     }
     if (this.position < oldestTick) {
       this.position = oldestTick;
@@ -109,6 +117,16 @@ export class Scheduler {
       dropped_frames: dropped,
       refresh_hz: fastest > 0 ? Math.round(1000 / fastest) : 0,
     };
+  }
+
+  /// The panel rate, derived as `budget()` derives `refresh_hz`, or a nominal 60 until
+  /// enough frames have been measured.
+  refreshHz() {
+    if (this.durations.length < 10) {
+      return 60;
+    }
+    const fastest = percentile([...this.durations].sort((a, b) => a - b), 0.1);
+    return fastest > 0 ? 1000 / fastest : 60;
   }
 
   /// One `viewer.tick_skipped` row a second while ticks are being skipped, and one

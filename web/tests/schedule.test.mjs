@@ -68,6 +68,27 @@ test('at one times speed no tick is skipped', () => {
   assert.ok(Math.abs(perSecond - TICKS_PER_SECOND) < 2, `consumed ${perSecond}`);
 });
 
+test('at one times speed a stalled frame delays playback instead of skipping', () => {
+  const scheduler = new Scheduler();
+  scheduler.setSpeed(1);
+  const rows = captured(() => {
+    let timestamp = 0;
+    let lastFrom = 0;
+    for (let frame = 0; frame < 120; frame += 1) {
+      // Frame 3 stalls for 100 milliseconds, as the first stream burst decodes.
+      timestamp += frame === 3 ? 100 : 1000 / 60;
+      const step = scheduler.advance(timestamp, 100000);
+      if (frame === 3) {
+        assert.equal(step.skipped, 0, 'the stalled frame skips no tick');
+        assert.ok(step.from - lastFrom <= 1, `stepped from ${lastFrom} to ${step.from}`);
+      }
+      assert.ok(step.fraction >= 0 && step.fraction <= 1);
+      lastFrom = step.from;
+    }
+  });
+  assert.equal(rows.filter((r) => r.signal === 'viewer.tick_skipped').length, 0);
+});
+
 test('a sixteen millisecond stall does not cause an extrapolation', () => {
   const { passedNewest, extrapolated } = quiet(() =>
     run({ speed: 4, fps: 60, seconds: 2, stallAt: 40 })
