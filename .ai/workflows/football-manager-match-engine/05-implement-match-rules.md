@@ -12,7 +12,7 @@ metric-lines-added: 5048
 metric-lines-removed: 319
 metric-deviations-from-plan: 10
 metric-review-fixes-applied: 0
-commit-sha: ""
+commit-sha: "0611856b858dd9c975ae4d897423b2a1d521f2a7"
 steering-honored:
   - "No visual change: the page gains only an event filter and a scrubber bound, so the --tl- tokens, the no-spinner rule, and the colour rule are untouched."
   - "Colour never carries a state alone: a card travels as the word in card.kind (yellow, second-yellow, red), never as a colour."
