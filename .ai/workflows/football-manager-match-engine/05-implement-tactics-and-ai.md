@@ -12,7 +12,7 @@ metric-lines-added: 4723
 metric-lines-removed: 255
 metric-deviations-from-plan: 13
 metric-review-fixes-applied: 0
-commit-sha: ""
+commit-sha: "0e9cf6aeda3ca351a0d4405ea7882158aed338d4"
 steering-honored:
   - "No visual change: the page gains one entry in its stoppage list (`injury`), so the --tl- tokens, the no-spinner rule, and the colour rule are untouched."
   - "Output boundary: code comments, docs, and the commit message use product language; a scan of the diff for workflow vocabulary found none beyond the repository's existing test-criterion labels and 'named mechanism' comments."
