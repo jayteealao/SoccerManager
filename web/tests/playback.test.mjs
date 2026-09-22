@@ -1,0 +1,46 @@
+// AC-H5: a speed the manager selects takes effect at once, even after the stream has
+// ended and no further arrival will recompute it.
+
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { Playback } from '../playback.mjs';
+import { TICKS_PER_SECOND } from '../schedule.mjs';
+import { quiet } from './helpers.mjs';
+
+function stubbed() {
+  const calls = { speed: [], onSpeed: [], onNotice: [] };
+  const playback = new Playback({
+    scheduler: { setSpeed: (speed) => calls.speed.push(speed) },
+    onSpeed: (requested, effective) => calls.onSpeed.push([requested, effective]),
+    onNotice: (text) => calls.onNotice.push(text),
+  });
+  return { playback, calls };
+}
+
+test('a selected speed applies with no arrivals', () => {
+  const { playback, calls } = stubbed();
+  playback.select(4);
+  assert.equal(calls.speed.at(-1), 4);
+  assert.deepEqual(calls.onSpeed.at(-1), [4, 4]);
+});
+
+test('selecting at or below the sustained rate clears the lag notice', () => {
+  const { playback, calls } = stubbed();
+  quiet(() => {
+    playback.select(8);
+    const perTick = 1000 / (TICKS_PER_SECOND * 3);
+    for (let i = 0; i < TICKS_PER_SECOND * 3 * 3; i += 1) {
+      playback.noteArrival(i * perTick, i);
+    }
+  });
+  assert.equal(playback.noticeShown, true);
+  assert.equal(typeof calls.onNotice.at(-1), 'string');
+
+  quiet(() => playback.select(2));
+  assert.equal(playback.effective, 2);
+  assert.equal(calls.speed.at(-1), 2);
+  assert.deepEqual(calls.onSpeed.at(-1), [2, 2]);
+  assert.equal(playback.noticeShown, false);
+  assert.equal(calls.onNotice.at(-1), null);
+});

@@ -72,11 +72,25 @@ export class Playback {
     this.effective = 1;
     this.rate = new SustainedRate();
     this.noticeShown = false;
+    this.sustained = null;
   }
 
   /// The speed the manager asked for. Playback may settle lower; the notice says so.
+  /// It applies at once: after the stream ends no arrival will recompute it.
   select(speed) {
     this.requested = speed;
+    this.effective = this.noticeShown ? Math.min(speed, this.sustained) : speed;
+    if (this.noticeShown && speed <= this.sustained) {
+      this.noticeShown = false;
+      signal('viewer.lag', {
+        requested_speed: speed,
+        sustained_speed: speed,
+        measured_speed: this.sustained,
+        tick: null,
+        notice_shown: false,
+      });
+      this.onNotice(null);
+    }
     this.apply();
   }
 
@@ -92,6 +106,9 @@ export class Playback {
     const wasEffective = this.effective;
     this.effective = behind ? nameRate(sustained) : this.requested;
     this.noticeShown = behind;
+    if (behind) {
+      this.sustained = nameRate(sustained);
+    }
     // Only speak when something changed. This runs fifty times a second at 1x and four
     // hundred at 8x; announcing every arrival would rewrite the page's live region that
     // often and make it unreadable to the one reader it exists for.

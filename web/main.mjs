@@ -177,9 +177,9 @@ function rewind(tick) {
 
 function wire() {
   el('play').addEventListener('click', () => {
-    const playing = el('play').getAttribute('aria-pressed') !== 'true';
+    const playing = el('play').dataset.playing !== 'true';
     scheduler.setPlaying(playing);
-    el('play').setAttribute('aria-pressed', String(playing));
+    el('play').dataset.playing = String(playing);
     el('play').textContent = playing ? 'Pause' : 'Play';
     announce(playing ? 'Playing.' : 'Paused.');
   });

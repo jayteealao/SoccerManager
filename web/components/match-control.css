@@ -70,7 +70,8 @@
 /* Selected is a sixth state the speed selector needs. The pressed fill alone would make
  * a selected control and a momentarily held one identical, so selected also carries an
  * inset underline and `aria-pressed`. It is never carried by colour alone. */
-.match-control[aria-pressed="true"] {
+.match-control[aria-pressed="true"],
+#play[data-playing="true"] {
   background: var(--tl-brand-pressed);
   box-shadow: inset 0 -3px 0 var(--tl-on-brand);
 }
