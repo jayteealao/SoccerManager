@@ -6,7 +6,9 @@ use std::time::Instant;
 
 use anyhow::Context;
 use engine::observe::identity::{MatchId, data_dir, owner_hex};
-use engine::observe::{LawStats, MatchStats, TacticsStats, TeamRef, emit_line, write_stats};
+use engine::observe::{
+    LawStats, MatchFigures, MatchStats, TacticsStats, TeamRef, emit_line, write_stats,
+};
 use engine::{
     EngineError, FanoutSink, FileSink, MatchConfig, Simulation, Snapshot, SnapshotSink, TickHeader,
     Validator, read_ticks,
@@ -149,6 +151,7 @@ pub fn run(content_dir: Option<&Path>, opts: &ResumeOpts) -> anyhow::Result<i32>
         goals: summary.goals,
         laws: LawStats::new(&summary, pack_version, sim.tick(), snapshots.writes),
         tactics: TacticsStats::new(&sim),
+        figures: MatchFigures::new(&summary, sim.managers()),
     };
     write_stats(&data, &stats)?;
     emit_line(&stats)?;

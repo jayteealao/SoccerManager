@@ -18,6 +18,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `tactics.json` | 1 | Formations, mentalities, team instructions, roles, duties, and the AI manager's settings |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
+| `realism-bands.json` | 1 | The accepted realism bands the calibration run checks. They are acceptance criteria, never tuning values |
 
 Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 3`.
 
@@ -58,8 +59,8 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 | reach_radius | m | 1.0 | 0 to 10 |
 | keeper_reach | m | 2.6 | 0 to 26 |
 | keeper_depth | m | 3.0 | 0 to 30 |
-| shot_noise | rad | 0.12 | 0 to 1.2 |
-| keeper_catch_chance | probability | 0.7 | 0 to 1 |
+| shot_noise | rad | 0.25 | 0 to 1.2 |
+| keeper_catch_chance | probability | 0.84 | 0 to 1 |
 | carry_step | m per tick | 0.4 | 0 to 4 |
 | crossbar_height | m | 2.44 | 0 to 24.4 |
 | reach_height | m | 2.0 | 0 to 20 |
@@ -94,10 +95,15 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 | injury_per_tackle | probability per tackle | 0.004 | 0 to 0.2 |
 | injury_per_minute | probability per player per minute | 0.0002 | 0 to 0.01 |
 | decision.* | weight | see below | see below |
+| xg.intercept | log-odds | -1.0 | -10 to 10 |
+| xg.distance_coef | log-odds per m | -0.1 | -2 to 0 |
+| xg.angle_coef | log-odds per rad | 1.0 | 0 to 10 |
 
 The foul chance of one tackle is `foul_base`, multiplied by `1 + foul_aggression_weight × (aggression − 0.5)` and by `1 − foul_tackling_weight × (tackling − 0.5)`, with both attributes on a 0 to 1 scale. `foul_ball_loss` is the share of fouls after which the fouled team loses the ball. After any other foul, the referee plays advantage outside the penalty area. The yellow-card chance of a foul is `yellow_base + yellow_aggression_weight × aggression`, and the red-card chance is `red_base`. A restart is taken no earlier than its `restart_delay_s`, when the taker is within `restart_ready_radius` of the spot and every opponent stands back. At three times the delay, the restart is taken whatever the players are doing. While the restarting team leads, its delay is multiplied by its time-wasting level.
 
 An injury is rolled for the tackled player on every tackle that wins the ball or is a foul (`injury_per_tackle`), and for every player on the pitch once per simulated minute (`injury_per_minute`). Both are the chances for an average player; injury resistance 100 halves them and 0 makes them half again as likely. An injured player leaves play at once. In open play the referee stops play for a dropped ball at the ball (the goalkeeper's, inside its own penalty area), with every other player 4 m away, after `restart_delay_s.drop_ball`.
+
+The expected goals (xG) of a shot is `1 / (1 + exp(-(xg.intercept + xg.distance_coef × d + xg.angle_coef × a)))`, where `d` is the distance from the ball to the goal centre in metres and `a` is the angle in radians that the goal mouth subtends from the ball. The match statistics sum it per team.
 
 #### decision
 
@@ -110,7 +116,7 @@ The ball carrier scores every option and takes the highest: a pass to each team-
 | space | 0.4 | free space around the receiver, up to 8 m |
 | distance | 0.3 | a pass's length, up to 45 m, as a cost |
 | min_lane | 1.5 | a pass lane narrower than this, in metres, is no option (0 to 10) |
-| skill | 0.6 | what a skill 50 points above average adds: vision to forward passes, finishing to shots, dribbling to a dribble (0 to 5) |
+| skill | 0.8 | what a skill 50 points above average adds: vision to forward passes, finishing to shots, dribbling to a dribble (0 to 5) |
 | shot_base | 1.0 | a shot's base |
 | shot_lane | 0.8 | the open shooting lane, 0 at 2.5 m and 1 at 5 m |
 | shot_distance | 1.0 | the distance to goal over the shooting range, as a cost |

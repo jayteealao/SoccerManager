@@ -19,3 +19,9 @@ anyhow = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+garde = { workspace = true }
+
+[dev-dependencies]
+# JSON Schema validation of the records in tests only; the release binary does not link it.
+boon = { workspace = true }

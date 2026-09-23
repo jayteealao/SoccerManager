@@ -2,7 +2,7 @@
 
 A football management game: a native match engine written in Rust and a browser-based 2D match viewer.
 
-This repository currently holds the engine core, its data layer, the laws of the game, and the live match stream: a headless simulation at 50 ticks per second, a referee, a tick-stream file format, match snapshots, a validator, a benchmark command, validated content files, a team generator, and a versioned WebSocket protocol that streams a match to a viewer page.
+This repository currently holds the engine core, its data layer, the laws of the game, and the live match stream: a headless simulation at 50 ticks per second, a referee, a tick-stream file format, match snapshots, a validator, a benchmark command, a calibration harness, validated content files, a team generator, and a versioned WebSocket protocol that streams a match to a viewer page.
 
 ## Build
 
@@ -22,7 +22,7 @@ Runtime output goes to `SM_DATA_DIR` (default `%LOCALAPPDATA%\SoccerManager`): `
 target/release/engine-cli simulate --seed 42 --ticks-out match.ticks
 ```
 
-The command loads the two default clubs, writes one record per tick to the `.ticks` file, saves `stats.json`, and prints one JSON line with the match statistics, the law counts and the tactics counts (shots, injuries, substitutions, mean energy, and the verdicts on queued changes) included. Pass `--team-a <FILE>` and `--team-b <FILE>` to play other clubs.
+The command loads the two default clubs, writes one record per tick to the `.ticks` file, saves `stats.json` and `events.jsonl` (one row per match event), and prints one JSON line with the match statistics, the law counts and the tactics counts (shots, injuries, substitutions, mean energy, and the verdicts on queued changes) included. The figures cover goals, shots, shots on target, expected goals, passes, pass accuracy, and possession, per team and home first. Pass `--team-a <FILE>` and `--team-b <FILE>` to play other clubs.
 
 A 90-minute match lasts 90 minutes plus the time added to each half, so the tick count varies from match to match. The tick-file header states the most ticks the match can last. A match shorter than the rule pack's two halves plays no added time.
 
@@ -43,7 +43,7 @@ The rule pack (`content/rules/default.json`) and the tuning file set every numbe
 
 Each team plays a formation, a mentality, six team instructions (pressing, width, tempo, line height, passing directness, time wasting), and a role and duty for every player, all named in `content/tactics.json`. The ball carrier scores its options (pass, dribble, shot, clearance, or holding the ball) and takes the best, so tactics and attributes change what players do.
 
-In `simulate`, `resume`, and `serve` the AI manager runs both teams (in `serve`, only the away team; the home team keeps the AI's pre-match setup). Before kick-off it picks the eleven who fit its formation's roles and names a bench. During the match it replaces injured and tired players, attacks when it trails late, and protects a late lead. Its changes wait for a stoppage the rule pack admits them at, within the rule pack's substitution limit and windows; a change the rules refuse is rejected with the reason.
+In `simulate`, `resume`, and `serve` the AI manager runs both teams (in `serve`, only the away team; the home team keeps the AI's pre-match setup). Before kick-off it picks the eleven who fit its formation's roles and names a bench. During the match it replaces injured and tired players, attacks when it trails late, and protects a late lead; it reviews the score on the stoppage of every goal, so a change it makes then applies at once. Its other changes wait for a stoppage the rule pack admits them at, within the rule pack's substitution limit and windows; a change the rules refuse is rejected with the reason.
 
 Players tire over the match: below an energy threshold, pace, passing, finishing, and decisions fall along the fatigue curve in `content/tuning.json`. A tackle or plain bad luck can injure a player, who leaves play at once; the referee stops play for a dropped ball, and the AI manager sends on a substitute.
 
@@ -123,10 +123,34 @@ target/release/engine-cli bench --seed 42 --matches 5 --json
 
 The command prints one JSON line with the median wall time, CPU time, CPU time per simulated tick, the ticks in the median match, peak memory, ticks per second, a hashed machine identifier, the CPU model, the content hash, and the build hash. The exit code is 2 when the median wall time for a 90-minute match exceeds 2000 ms. Add `--stream` to also measure the socket: one match delivered to a client that reads as fast as it can.
 
+## Calibrate the engine
+
+```bash
+target/release/engine-cli calibrate --seed 2026 --matches 1000
+```
+
+The command plays two suites of `--matches` full matches each, with the AI manager on both sides. The equal suite pairs clubs of the same generated strength; the strength suite raises every attribute of one club by the boost in `content/realism-bands.json`, at home in even fixtures and away in odd ones. Clubs come from generated leagues of 20 (league `k` from seed `seed + k`), each playing a double round-robin. The matches run in `--jobs` worker processes of the same binary (default: one per logical core).
+
+The run folder (`--out`, default `SM_DATA_DIR/runs/<run.id>`) holds:
+
+- `report.json`: the run report, also printed as one JSON line. It carries each suite's aggregate figures, every band check (`calib.bands`), each suite's wall time, the dark-path counters (changes still queued at full time, matches without a statistics record), and the single-thread figures of the benchmark (`bench.match_wall_ms`, `bench.cpu_us_per_tick`), measured on the default clubs after the workers finish.
+- `stats/<match.id>.json`: the statistics record of every match.
+- `events/<match.id>.jsonl`: the event rows of the matches kept. By default only outliers keep theirs: failed, slow, and out-of-band matches and dark-path hits. `--keep-events all` keeps every file.
+
+The bands in `content/realism-bands.json` are accepted criteria and are never tuned: goals per match 2.4 to 3.2, shots per team 8 to 16, and possession 35 to 65 percent over the equal suite; the stronger club wins more than half its matches; each suite of 1000 matches runs in under 30 minutes. The exit code is 0 when every band passes and both dark paths read zero, and 2 otherwise.
+
+The record schemas live in `schemas/observability/` (JSON Schema 2020-12): `match-event`, `match-stats`, and `run-report`. The tests validate the binary's real output against them.
+
 ## Test
 
 ```bash
 cargo test --workspace
+```
+
+The slow criteria (the tactics effects and the two 1000-match calibration suites) are ignored by default. Run them in release:
+
+```bash
+cargo test --release --workspace -- --ignored
 ```
 
 ## License

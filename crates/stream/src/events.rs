@@ -55,10 +55,16 @@ pub struct EventWriter {
 impl EventWriter {
     /// Creates `matches/<match_id>/events.jsonl` under `data_dir`.
     pub fn open(data_dir: &Path, match_id: &str) -> Result<Self, StreamError> {
-        let dir = data_dir.join("matches").join(match_id);
-        std::fs::create_dir_all(&dir)
-            .map_err(|e| StreamError::io("cannot create the match folder", e))?;
-        let path = dir.join(EVENTS_FILE);
+        Self::create_at(&data_dir.join("matches").join(match_id).join(EVENTS_FILE))
+    }
+
+    /// Creates the events file at `path`, and its folder when absent.
+    pub fn create_at(path: &Path) -> Result<Self, StreamError> {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)
+                .map_err(|e| StreamError::io("cannot create the match folder", e))?;
+        }
+        let path = path.to_path_buf();
         let file = File::create(&path)
             .map_err(|e| StreamError::io(format!("cannot create {EVENTS_FILE}"), e))?;
         Ok(Self {

@@ -93,6 +93,75 @@ pub struct MatchStats {
     pub laws: LawStats,
     #[serde(flatten, default)]
     pub tactics: TacticsStats,
+    #[serde(flatten, default)]
+    pub figures: MatchFigures,
+}
+
+/// The match figures the realism bands read. Per-team arrays are home first. Every key is
+/// a contract key; `passes.completed` is an additive extra, and `error.type` appears only
+/// on a failed match.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MatchFigures {
+    #[serde(rename = "stats.goals")]
+    pub goals: [u32; 2],
+    #[serde(rename = "stats.shots_on_target")]
+    pub shots_on_target: [u32; 2],
+    /// Expected goals, two decimals.
+    #[serde(rename = "stats.xg")]
+    pub xg: [f64; 2],
+    #[serde(rename = "stats.passes")]
+    pub passes: [u32; 2],
+    #[serde(rename = "passes.completed")]
+    pub passes_completed: [u32; 2],
+    /// Completed passes over passes played, one decimal; 0 for a team that played none.
+    #[serde(rename = "stats.pass_accuracy_pct")]
+    pub pass_accuracy_pct: [f64; 2],
+    /// Each team's share of the open-play ticks, one decimal.
+    #[serde(rename = "stats.possession_pct")]
+    pub possession_pct: [f64; 2],
+    /// `human` or `ai` for each team.
+    #[serde(rename = "manager.kind")]
+    pub manager_kind: [String; 2],
+    #[serde(rename = "error.type", skip_serializing_if = "Option::is_none")]
+    pub error_type: Option<String>,
+}
+
+impl MatchFigures {
+    /// The figures of a match from its summary and its managers.
+    pub fn new(s: &Summary, managers: [crate::Manager; 2]) -> Self {
+        let possession: u32 = s.possession_ticks[0] + s.possession_ticks[1];
+        let share = |part: u32, whole: u32| {
+            if whole == 0 {
+                0.0
+            } else {
+                round_to(100.0 * f64::from(part) / f64::from(whole), 1)
+            }
+        };
+        Self {
+            goals: s.goals,
+            shots_on_target: s.shots_on_target,
+            xg: s.xg.map(|x| round_to(x, 2)),
+            passes: s.passes,
+            passes_completed: s.passes_completed,
+            pass_accuracy_pct: [0, 1].map(|t| share(s.passes_completed[t], s.passes[t])),
+            possession_pct: [0, 1].map(|t| share(s.possession_ticks[t], possession)),
+            manager_kind: managers.map(|m| {
+                match m {
+                    crate::Manager::Ai => "ai",
+                    crate::Manager::Human => "human",
+                }
+                .to_string()
+            }),
+            error_type: None,
+        }
+    }
+}
+
+/// `x` rounded to `places` decimals.
+pub fn round_to(x: f64, places: i32) -> f64 {
+    let scale = 10f64.powi(places);
+    (x * scale).round() / scale
 }
 
 /// The tactics counts of one match. Per-team arrays are home first. `stats.shots`,
@@ -301,15 +370,33 @@ pub fn emit_line<R: Record>(record: &R) -> Result<(), EngineError> {
 
 /// Saves the record as `matches/<match.id>/stats.json` under `data_dir` and returns the path.
 pub fn write_stats(data_dir: &Path, stats: &MatchStats) -> Result<PathBuf, EngineError> {
-    let dir = data_dir.join("matches").join(&stats.match_id);
-    std::fs::create_dir_all(&dir)?;
-    let path = dir.join("stats.json");
-    let line = to_json(stats)?;
-    std::fs::write(&path, format!("{line}\n")).map_err(|source| EngineError::Read {
-        path: format!("matches/{}/stats.json", stats.match_id),
+    let rel = format!("matches/{}/stats.json", stats.match_id);
+    write_record_at(&data_dir.join(&rel), &rel, stats)
+}
+
+/// Saves the record as `<dir>/<match.id>.json`, the layout of a run folder's `stats/`, and
+/// returns the path.
+pub fn write_stats_at(dir: &Path, stats: &MatchStats) -> Result<PathBuf, EngineError> {
+    let name = format!("{}.json", stats.match_id);
+    write_record_at(&dir.join(&name), &format!("stats/{name}"), stats)
+}
+
+/// Writes one record as a JSON line at `path`, creating its folder. `shown` is the path an
+/// error names, relative to the data folder.
+pub fn write_record_at<R: Record>(
+    path: &Path,
+    shown: &str,
+    record: &R,
+) -> Result<PathBuf, EngineError> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let line = to_json(record)?;
+    std::fs::write(path, format!("{line}\n")).map_err(|source| EngineError::Read {
+        path: shown.to_string(),
         source,
     })?;
-    Ok(path)
+    Ok(path.to_path_buf())
 }
 
 /// Reads a saved `stats.json`. Refuses any record kind or schema version this build does
@@ -381,6 +468,13 @@ mod tests {
                 fatigue_mean_pct: 61.25,
                 ..TacticsStats::default()
             },
+            figures: MatchFigures {
+                goals: [2, 1],
+                xg: [1.37, 0.52],
+                possession_pct: [54.2, 45.8],
+                manager_kind: ["ai".into(), "ai".into()],
+                ..MatchFigures::default()
+            },
         }
     }
 
@@ -420,6 +514,13 @@ mod tests {
             "\"changes.rejected\"",
             "\"substitutions\"",
             "\"ai.decisions\"",
+            "\"stats.goals\":[2,1]",
+            "\"stats.shots_on_target\"",
+            "\"stats.xg\":[1.37,0.52]",
+            "\"stats.passes\"",
+            "\"stats.pass_accuracy_pct\"",
+            "\"stats.possession_pct\":[54.2,45.8]",
+            "\"manager.kind\":[\"ai\",\"ai\"]",
         ] {
             assert!(json.contains(key), "missing {key} in {json}");
         }

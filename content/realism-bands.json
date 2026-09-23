@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "sample_size": 1000,
+  "goals_per_match": { "lo": 2.4, "hi": 3.2 },
+  "shots_per_team": { "lo": 8.0, "hi": 16.0 },
+  "possession_pct": { "lo": 35.0, "hi": 65.0 },
+  "stronger_team": { "attribute_boost": 1.15, "min_win_rate": 0.5 },
+  "wall_minutes_per_sample": 30.0
+}

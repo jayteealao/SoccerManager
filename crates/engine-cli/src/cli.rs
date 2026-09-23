@@ -42,6 +42,8 @@ pub enum Command {
     Replay(ReplayOpts),
     /// Continue a match from its latest snapshot to full time.
     Resume(ResumeOpts),
+    /// Play many AI-managed matches and check the realism bands.
+    Calibrate(CalibrateOpts),
 }
 
 #[derive(Debug, Args)]
@@ -172,6 +174,64 @@ pub struct BenchOpts {
     /// Also stream one match to a client that reads as fast as it can.
     #[arg(long)]
     pub stream: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CalibrateOpts {
+    /// Seed of the run: the leagues, the fixtures, and every match seed.
+    #[arg(long)]
+    pub seed: u64,
+    /// Matches in each suite.
+    #[arg(long, default_value_t = 1000)]
+    pub matches: u32,
+    /// Minutes of play per match.
+    #[arg(long, default_value_t = 90)]
+    pub minutes: u32,
+    /// Worker processes; default the number of logical cores.
+    #[arg(long)]
+    pub jobs: Option<u32>,
+    /// Suites to run: equal strength, a stronger club, or both.
+    #[arg(long, value_enum, default_value = "all")]
+    pub suite: SuiteArg,
+    /// Run folder; default SM_DATA_DIR/runs/<run.id>.
+    #[arg(long, value_name = "DIR")]
+    pub out: Option<PathBuf>,
+    /// Event files to keep at the end of the run.
+    #[arg(
+        long,
+        value_enum,
+        default_value = "outliers",
+        long_help = "Event files to keep at the end of the run.\n\n\
+                     outliers keeps the files of failed, slow, and out-of-band\n\
+                     matches and of dark-path hits; all keeps every file."
+    )]
+    pub keep_events: KeepEvents,
+    /// Run as a worker of a calibration run (set by the parent process).
+    #[arg(long, hide = true)]
+    pub worker: bool,
+    #[arg(long, hide = true, default_value_t = 0)]
+    pub shard: u32,
+    #[arg(long, hide = true, default_value_t = 1)]
+    pub shards: u32,
+    #[arg(long, hide = true, value_name = "DIR")]
+    pub run_dir: Option<PathBuf>,
+    #[arg(long, hide = true, default_value_t = 0)]
+    pub run_millis: u64,
+}
+
+/// The suites a calibration run plays.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum SuiteArg {
+    All,
+    Equal,
+    Strength,
+}
+
+/// Which event files a calibration run keeps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum KeepEvents {
+    Outliers,
+    All,
 }
 
 #[derive(Debug, Args)]

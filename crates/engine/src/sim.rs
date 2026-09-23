@@ -29,7 +29,7 @@ use crate::steering;
 use crate::tactics::Tactics;
 use crate::tactics::change::{ChangeId, ChangeKind, ChangeQueue, RejectReason, SubLedger};
 use crate::team::{PLAYERS_PER_TEAM, Team};
-use crate::tuning::Tuning;
+use crate::tuning::{Tuning, XgTuning};
 
 /// Everything a match needs to start: the seed, the length, the tuning, the rule pack, the
 /// tactics file, and the attribute schema from the content, the two teams with their
@@ -317,6 +317,29 @@ pub struct Summary {
     pub changes_applied: u32,
     pub changes_rejected: u32,
     pub ai_decisions: u32,
+    /// Shots that scored or that the opposing goalkeeper held.
+    pub shots_on_target: [u32; 2],
+    /// The expected goals of every shot taken, summed per team.
+    pub xg: [f64; 2],
+    /// Passes played, and passes whose next controlling touch was a team-mate's.
+    pub passes: [u32; 2],
+    pub passes_completed: [u32; 2],
+    /// Ticks of open play credited to the team that touched the ball last.
+    pub possession_ticks: [u32; 2],
+}
+
+/// The expected goals of a shot from `from` at the goal a team attacking `attack_x` aims
+/// at: a logistic function of the distance to the goal centre and of the angle the goal
+/// mouth subtends, with the coefficients from the tuning file.
+pub fn shot_xg(from: DVec2, attack_x: f64, t: &XgTuning) -> f64 {
+    let x = pitch::HALF_LENGTH * attack_x;
+    let half = pitch::GOAL_WIDTH / 2.0;
+    let a = DVec2::new(x, half) - from;
+    let b = DVec2::new(x, -half) - from;
+    let angle = a.perp_dot(b).atan2(a.dot(b)).abs();
+    let distance = (pitch::goal_centre(attack_x) - from).length();
+    let z = t.intercept + t.distance_coef * distance + t.angle_coef * angle;
+    1.0 / (1.0 + (-z).exp())
 }
 
 /// One running match.
@@ -349,6 +372,10 @@ pub struct Simulation {
     /// `true` once a goalkeeper failed to hold the ball in flight: the tuned catch chance is
     /// one roll per flight, not one per tick the ball spends within reach.
     pub(crate) keeper_beaten: bool,
+    /// The team whose pass or shot is in flight and not yet resolved. Every dead ball clears
+    /// both, like `last_kicker`, so the snapshot never needs them.
+    pub(crate) pass_in_flight: Option<usize>,
+    pub(crate) shot_in_flight: Option<usize>,
     finished: bool,
     scratch: Vec<DVec2>,
 }
@@ -395,6 +422,8 @@ impl Simulation {
             ledgers: [SubLedger::default(); 2],
             ai: [AiState::default(); 2],
             keeper_beaten: false,
+            pass_in_flight: None,
+            shot_in_flight: None,
             finished: false,
             scratch: Vec::with_capacity(2 * PLAYERS_PER_TEAM),
             config,
@@ -549,6 +578,9 @@ impl Simulation {
         let t = self.config.tuning.clone();
         match self.referee.phase {
             Phase::Live => {
+                if let Some(team) = self.last_touch {
+                    self.summary.possession_ticks[team] += 1;
+                }
                 if self.tick.is_multiple_of(t.decision_interval_ticks)
                     && let Some(kick) = self.decide()
                 {
@@ -630,8 +662,16 @@ impl Simulation {
         };
         if let Some(c) = self.carrier {
             let team = self.players[c].team;
+            self.pass_in_flight = None;
+            self.shot_in_flight = None;
             if matches!(kick, Kick::Shot { .. }) {
                 self.summary.shots[team] += 1;
+                let xg = shot_xg(self.ball.xy(), self.teams[team].attack_x, &t.xg);
+                self.summary.xg[team] += xg;
+                self.shot_in_flight = Some(team);
+            } else {
+                self.summary.passes[team] += 1;
+                self.pass_in_flight = Some(team);
             }
             self.last_touch = Some(team);
             self.last_kicker = Some(c);
@@ -767,6 +807,15 @@ impl Simulation {
         self.referee.offside = 0;
         self.keeper_beaten = false;
         let team = self.players[i].team;
+        if self.pass_in_flight.take() == Some(team) {
+            self.summary.passes_completed[team] += 1;
+        }
+        if let Some(shooter) = self.shot_in_flight.take()
+            && shooter != team
+            && self.players[i].slot == 0
+        {
+            self.summary.shots_on_target[shooter] += 1;
+        }
         if self.last_touch != Some(team) {
             self.summary.possession_changes += 1;
         }

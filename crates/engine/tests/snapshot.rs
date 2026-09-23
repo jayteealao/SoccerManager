@@ -165,7 +165,7 @@ fn a_damaged_or_foreign_snapshot_is_refused_by_name() {
     first_format[4] = 1;
     let reason = refusal(Snapshot::from_bytes(&first_format, "s"));
     assert!(
-        reason.starts_with("unknown version 1; this build reads 2"),
+        reason.starts_with("unknown version 1; this build reads 3"),
         "{reason}"
     );
 

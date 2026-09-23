@@ -38,7 +38,7 @@ use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 2;
+pub const VERSION: u16 = 3;
 /// The file name of a match's latest snapshot inside its match folder.
 pub const FILE_NAME: &str = "snapshot.smsn";
 
@@ -718,6 +718,12 @@ fn encode_summary(s: &Summary, w: &mut Writer) {
     w.u32(s.changes_applied);
     w.u32(s.changes_rejected);
     w.u32(s.ai_decisions);
+    w.pair(s.shots_on_target);
+    w.f64(s.xg[0]);
+    w.f64(s.xg[1]);
+    w.pair(s.passes);
+    w.pair(s.passes_completed);
+    w.pair(s.possession_ticks);
 }
 
 fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
@@ -930,6 +936,11 @@ fn decode_summary(r: &mut Reader<'_>) -> Decoded<Summary> {
         changes_applied: r.u32()?,
         changes_rejected: r.u32()?,
         ai_decisions: r.u32()?,
+        shots_on_target: r.pair()?,
+        xg: [r.f64()?, r.f64()?],
+        passes: r.pair()?,
+        passes_completed: r.pair()?,
+        possession_ticks: r.pair()?,
     })
 }
 
@@ -981,7 +992,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 2"),
+                .contains("unknown version 1; this build reads 3"),
             "{err}"
         );
     }

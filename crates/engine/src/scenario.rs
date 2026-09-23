@@ -117,6 +117,21 @@ impl Scene {
         self
     }
 
+    /// The carrier shoots toward `dir` at `speed` with vertical speed `loft`.
+    pub fn shoot(mut self, dir: DVec2, speed: f64, loft: f64) -> Self {
+        let t = self.sim.config.tuning.clone();
+        self.sim.apply_kick(
+            Kick::Shot {
+                dir: dir.normalize(),
+                speed,
+                loft,
+            },
+            &t,
+            true,
+        );
+        self
+    }
+
     /// The injury rolls' next draws, before the seeded stream.
     pub fn injury_rolls(mut self, draws: &[f64]) -> Self {
         self.sim.rng.script_injuries(draws);

@@ -1,18 +1,23 @@
-//! `engine-cli simulate`: run one match to a tick file, save `stats.json` under the runtime
-//! data folder, and print one match-stats record.
+//! `engine-cli simulate`: run one match to a tick file, save `stats.json` and `events.jsonl`
+//! under the runtime data folder, and print one match-stats record.
 
 use std::path::Path;
 use std::time::Instant;
 
 use anyhow::Context;
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id, owner_bytes};
-use engine::observe::{LawStats, MatchStats, TacticsStats, TeamRef, emit_line, write_stats};
+use engine::observe::{
+    LawStats, MatchFigures, MatchStats, TacticsStats, TeamRef, emit_line, write_stats,
+};
 use engine::{
     FanoutSink, FileSink, MatchConfig, Simulation, SnapshotSink, TickHeader, Validator, read_ticks,
 };
 use tracing::info_span;
 
+use stream::EventWriter;
+
 use crate::cli::SimulateOpts;
+use crate::stream_run::{Ids, match_event};
 
 pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i32> {
     let span = info_span!("simulate", seed = opts.seed, minutes = opts.minutes);
@@ -45,7 +50,9 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
     ];
     let content_hash = config.content_hash.clone();
     let started = Instant::now();
+    let club_ids = [teams[0].id.clone(), teams[1].id.clone()];
     let mut sim = Simulation::new(config)?;
+    let mut ids = Ids::new(&sim);
     let file = FileSink::create(&opts.ticks_out, &header)
         .with_context(|| format!("cannot create {}", opts.ticks_out.display()))?;
     let snapshots = (!opts.no_snapshot)
@@ -65,6 +72,17 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
 
     let file = read_ticks(&opts.ticks_out)?;
     let events = sim.take_events();
+    let match_id_text = match_id.to_string();
+    let mut writer = EventWriter::open(&data, &match_id_text)?;
+    for event in &events {
+        writer.write(&match_event(
+            event,
+            &owner_id,
+            &match_id_text,
+            [&club_ids[0], &club_ids[1]],
+            &mut ids,
+        ))?;
+    }
     let validator = Validator::for_match(sim.tuning().clone(), sim.team_timeline(), &events);
     let violations = validator.check(&file.records);
     let summary = sim.summary();
@@ -86,6 +104,7 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
         goals: summary.goals,
         laws: LawStats::new(&summary, pack_version, written, snapshot_writes),
         tactics: TacticsStats::new(&sim),
+        figures: MatchFigures::new(&summary, sim.managers()),
     };
     write_stats(&data, &stats)?;
     emit_line(&stats)?;

@@ -90,6 +90,8 @@ impl Simulation {
     pub(crate) fn place_kick_off(&mut self, team: usize) {
         self.restart = true;
         self.last_kicker = None;
+        self.pass_in_flight = None;
+        self.shot_in_flight = None;
         for i in 0..self.players.len() {
             let p = self.players[i];
             if !p.active() {
@@ -125,6 +127,14 @@ impl Simulation {
     /// place.
     pub(crate) fn goal(&mut self, team: usize) {
         self.summary.goals[team] += 1;
+        if self.shot_in_flight == Some(team) {
+            self.summary.shots_on_target[team] += 1;
+        }
+        // Both managers react to the new score on the goal's own stoppage, so a change they
+        // queue applies at once instead of waiting for the next stoppage.
+        for ai in &mut self.ai {
+            ai.due = true;
+        }
         tracing::debug!(signal = "match.goal", tick = self.tick, team, score = ?self.summary.goals);
         let mut event = self.event(EngineEventKind::Goal, Some(team));
         event.player = self.last_kicker;
@@ -381,6 +391,8 @@ impl Simulation {
         self.keeper_beaten = false;
         self.restart = true;
         self.last_kicker = None;
+        self.pass_in_flight = None;
+        self.shot_in_flight = None;
         let since = self.tick + 1;
         let taker = restart::taker(kind, team, spot, &self.players);
         let mut delay = restart::delay_ticks(kind, &self.config.tuning);

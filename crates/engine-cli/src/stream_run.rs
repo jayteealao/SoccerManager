@@ -47,10 +47,7 @@ pub fn drive<S: TickSink>(
     opts: &Drive<'_>,
     route: MessageRoute<'_>,
 ) -> Result<Driven, StreamError> {
-    let mut ids = Ids {
-        roster: sim.player_ids(),
-        squads: sim.teams().map(|t| t.player_ids),
-    };
+    let mut ids = Ids::new(sim);
     let mut commentator = Commentator::for_match(opts.commentary, sim);
     let mut written = 0u32;
     while !sim.is_over() && written < opts.ticks {
@@ -75,7 +72,14 @@ pub fn drive<S: TickSink>(
             opts.state.set_scores(event.scores);
             let line = commentator.line(&event);
             route(ServerMessage::Event(
-                match_event(&event, opts, &mut ids).commentary(line),
+                match_event(
+                    &event,
+                    opts.owner_id,
+                    opts.match_id,
+                    opts.club_ids,
+                    &mut ids,
+                )
+                .commentary(line),
             ))?;
         }
     }
@@ -83,7 +87,14 @@ pub fn drive<S: TickSink>(
     sim.finish();
     for event in sim.take_events() {
         let line = commentator.line(&event);
-        let message = match_event(&event, opts, &mut ids).commentary(line);
+        let message = match_event(
+            &event,
+            opts.owner_id,
+            opts.match_id,
+            opts.club_ids,
+            &mut ids,
+        )
+        .commentary(line);
         if let Err(err) = route(ServerMessage::Event(message)) {
             return closing_or_fail(err, written).map(|written| Driven { written, full_time });
         }
@@ -141,14 +152,31 @@ fn closing_or_fail(err: StreamError, written: u32) -> Result<u32, StreamError> {
 /// The player identifiers events name: each roster slot's current player, and each team's
 /// squad in file order. A substitution event updates its roster slot, so an earlier event on
 /// the same tick still names the player who left.
-struct Ids {
+pub(crate) struct Ids {
     roster: Vec<String>,
     squads: [Vec<String>; 2],
 }
 
-/// One engine event as the `match-event` record kind names it.
-fn match_event(event: &EngineEvent, opts: &Drive<'_>, ids: &mut Ids) -> MatchEvent {
-    let team_id = event.team.map(|t| opts.club_ids[t].to_string());
+impl Ids {
+    /// The identifiers at the start of `sim`.
+    pub(crate) fn new(sim: &Simulation) -> Self {
+        Self {
+            roster: sim.player_ids(),
+            squads: sim.teams().map(|t| t.player_ids),
+        }
+    }
+}
+
+/// One engine event as the `match-event` record kind names it. `club_ids` are the two
+/// `team.id` values, home first.
+pub(crate) fn match_event(
+    event: &EngineEvent,
+    owner_id: &str,
+    match_id: &str,
+    club_ids: [&str; 2],
+    ids: &mut Ids,
+) -> MatchEvent {
+    let team_id = event.team.map(|t| club_ids[t].to_string());
     let squad_id = |team: Option<usize>, s: usize| team.and_then(|t| ids.squads[t].get(s).cloned());
     if let Some(EventDetail::Change { id, kind, reason }) = event.detail {
         let kind = match kind {
@@ -166,17 +194,11 @@ fn match_event(event: &EngineEvent, opts: &Drive<'_>, ids: &mut Ids) -> MatchEve
             },
             rejected_reason: reason.map(|r| r.text(squads)),
         };
-        return MatchEvent::change(
-            opts.owner_id,
-            opts.match_id,
-            event.tick,
-            event.scores,
-            outcome,
-        )
-        .at_minute(event.minute, event.minute_added)
-        .team(team_id)
-        .queued_at(id.tick)
-        .applied_tick(reason.is_none().then_some(event.tick));
+        return MatchEvent::change(owner_id, match_id, event.tick, event.scores, outcome)
+            .at_minute(event.minute, event.minute_added)
+            .team(team_id)
+            .queued_at(id.tick)
+            .applied_tick(reason.is_none().then_some(event.tick));
     }
     let event_type = match event.kind {
         EngineEventKind::KickOff => EventType::KickOff,
@@ -217,8 +239,8 @@ fn match_event(event: &EngineEvent, opts: &Drive<'_>, ids: &mut Ids) -> MatchEve
         _ => None,
     };
     MatchEvent::play(
-        opts.owner_id,
-        opts.match_id,
+        owner_id,
+        match_id,
         event.tick,
         event_type,
         team_id,

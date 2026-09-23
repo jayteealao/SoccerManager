@@ -137,6 +137,23 @@ pub struct Tuning {
     pub injury_per_tackle: f64,
     #[garde(range(min = 0.0, max = 0.01))]
     pub injury_per_minute: f64,
+    /// The expected-goals model of a shot.
+    #[garde(dive)]
+    pub xg: XgTuning,
+}
+
+/// Expected goals of a shot: `1 / (1 + exp(-(intercept + distance_coef * d + angle_coef *
+/// a)))`, where `d` is the distance to the goal centre in metres and `a` the angle in
+/// radians that the goal mouth subtends from the shot.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct XgTuning {
+    #[garde(range(min = -10.0, max = 10.0))]
+    pub intercept: f64,
+    #[garde(range(min = -2.0, max = 0.0))]
+    pub distance_coef: f64,
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub angle_coef: f64,
 }
 
 /// The weights of the scored-options decision layer (named mechanism). The ball carrier
@@ -245,8 +262,8 @@ impl Default for Tuning {
             reach_radius: 1.0,
             keeper_reach: 2.6,
             keeper_depth: 3.0,
-            shot_noise: 0.12,
-            keeper_catch_chance: 0.7,
+            shot_noise: 0.25,
+            keeper_catch_chance: 0.84,
             carry_step: 0.4,
             crossbar_height: 2.44,
             reach_height: 2.0,
@@ -286,7 +303,7 @@ impl Default for Tuning {
                 space: 0.4,
                 distance: 0.3,
                 min_lane: 1.5,
-                skill: 0.6,
+                skill: 0.8,
                 shot_base: 1.0,
                 shot_lane: 0.8,
                 shot_distance: 1.0,
@@ -303,6 +320,11 @@ impl Default for Tuning {
             },
             injury_per_tackle: INJURY_PER_TACKLE,
             injury_per_minute: INJURY_PER_MINUTE,
+            xg: XgTuning {
+                intercept: -1.0,
+                distance_coef: -0.1,
+                angle_coef: 1.0,
+            },
         }
     }
 }

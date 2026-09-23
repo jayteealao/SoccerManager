@@ -19,8 +19,8 @@
     "reach_radius": 1.0,
     "keeper_reach": 2.6,
     "keeper_depth": 3.0,
-    "shot_noise": 0.12,
-    "keeper_catch_chance": 0.7,
+    "shot_noise": 0.25,
+    "keeper_catch_chance": 0.84,
     "carry_step": 0.4,
     "crossbar_height": 2.44,
     "reach_height": 2.0,
@@ -60,7 +60,7 @@
       "space": 0.4,
       "distance": 0.3,
       "min_lane": 1.5,
-      "skill": 0.6,
+      "skill": 0.8,
       "shot_base": 1.0,
       "shot_lane": 0.8,
       "shot_distance": 1.0,
@@ -76,7 +76,12 @@
       "noise": 0.1
     },
     "injury_per_tackle": 0.004,
-    "injury_per_minute": 0.0002
+    "injury_per_minute": 0.0002,
+    "xg": {
+      "intercept": -1.0,
+      "distance_coef": -0.1,
+      "angle_coef": 1.0
+    }
   },
   "generator": {
     "squad_size": 22,

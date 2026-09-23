@@ -30,31 +30,7 @@ pub fn run(content_dir: Option<&Path>, opts: &BenchOpts) -> anyhow::Result<i32> 
     let owner_id = load_or_create_owner_id(&data_dir())?;
     let ticks = config.max_ticks();
 
-    // Warm-up run, discarded. No snapshot sink is attached: the benchmark times the engine.
-    run_one(&config)?;
-
-    let cpu_before = process::cpu_time_ms();
-    let started = Instant::now();
-    let mut samples_ms: Vec<u64> = Vec::with_capacity(opts.matches as usize);
-    let mut samples_ticks: Vec<u32> = Vec::with_capacity(opts.matches as usize);
-    for _ in 0..opts.matches {
-        let (ms, played) = run_one(&config)?;
-        samples_ms.push(ms);
-        samples_ticks.push(played);
-    }
-    let wall_total_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
-    let cpu_after = process::cpu_time_ms();
-    let total_ticks: u64 = samples_ticks.iter().map(|&t| u64::from(t)).sum();
-    samples_ms.sort_unstable();
-    samples_ticks.sort_unstable();
-    let median_ms = samples_ms[samples_ms.len() / 2];
-    let ticks_per_match = samples_ticks[samples_ticks.len() / 2];
-    let cpu_ms = match (cpu_before, cpu_after) {
-        (Some(a), Some(b)) => Some(b.saturating_sub(a)),
-        _ => None,
-    };
-    let cpu_wall_ratio = cpu_ms.map(|c| c as f64 / wall_total_ms.max(1) as f64);
-    let cpu_us_per_tick = cpu_ms.map(|c| round4(c as f64 * 1000.0 / total_ticks.max(1) as f64));
+    let figures = measure(&config, opts.matches)?;
     let stream = if opts.stream {
         Some(measure_stream(
             &config,
@@ -65,7 +41,8 @@ pub fn run(content_dir: Option<&Path>, opts: &BenchOpts) -> anyhow::Result<i32> 
     } else {
         None
     };
-    let ticks_per_s = f64::from(ticks_per_match) / (median_ms.max(1) as f64 / 1000.0);
+    let median_ms = figures.match_wall_ms;
+    let ticks_per_s = f64::from(figures.ticks_per_match) / (median_ms.max(1) as f64 / 1000.0);
     let budget_pass = median_ms <= BUDGET_MATCH_WALL_MS;
 
     let report = RunReport {
@@ -76,12 +53,13 @@ pub fn run(content_dir: Option<&Path>, opts: &BenchOpts) -> anyhow::Result<i32> 
         outcome: "success",
         matches: opts.matches,
         match_wall_ms: median_ms,
-        ticks_per_match,
-        cpu_us_per_tick,
-        cpu_ms,
+        ticks_per_match: figures.ticks_per_match,
+        cpu_us_per_tick: figures.cpu_us_per_tick,
+        cpu_ms: figures.cpu_ms,
+        // Read after the streamed match, as the process peak of the whole run.
         peak_mem_mb: process::peak_memory_mb(),
         ticks_per_s,
-        cpu_wall_ratio,
+        cpu_wall_ratio: figures.cpu_wall_ratio,
         stream_ticks_per_s: stream.map(|(rate, _)| rate),
         stream_pauses: stream.map(|(_, pauses)| pauses),
         machine_hash: machine_hash(),
@@ -91,6 +69,52 @@ pub fn run(content_dir: Option<&Path>, opts: &BenchOpts) -> anyhow::Result<i32> 
     };
     emit_line(&report)?;
     Ok(if budget_pass { 0 } else { 2 })
+}
+
+/// What `measure` timed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct BenchFigures {
+    /// The median wall time of one match, in milliseconds.
+    pub match_wall_ms: u64,
+    /// Ticks in the median match: added time makes the length vary.
+    pub ticks_per_match: u32,
+    pub cpu_ms: Option<u64>,
+    /// Processor time per simulated tick over the timed matches, in microseconds.
+    pub cpu_us_per_tick: Option<f64>,
+    pub cpu_wall_ratio: Option<f64>,
+    pub peak_mem_mb: Option<f64>,
+}
+
+/// Plays one discarded warm-up match, then times `matches` whole matches on this thread.
+/// No snapshot sink is attached: the benchmark times the engine.
+pub(crate) fn measure(config: &MatchConfig, matches: u32) -> anyhow::Result<BenchFigures> {
+    run_one(config)?;
+    let cpu_before = process::cpu_time_ms();
+    let started = Instant::now();
+    let mut samples_ms: Vec<u64> = Vec::with_capacity(matches as usize);
+    let mut samples_ticks: Vec<u32> = Vec::with_capacity(matches as usize);
+    for _ in 0..matches.max(1) {
+        let (ms, played) = run_one(config)?;
+        samples_ms.push(ms);
+        samples_ticks.push(played);
+    }
+    let wall_total_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    let cpu_after = process::cpu_time_ms();
+    let total_ticks: u64 = samples_ticks.iter().map(|&t| u64::from(t)).sum();
+    samples_ms.sort_unstable();
+    samples_ticks.sort_unstable();
+    let cpu_ms = match (cpu_before, cpu_after) {
+        (Some(a), Some(b)) => Some(b.saturating_sub(a)),
+        _ => None,
+    };
+    Ok(BenchFigures {
+        match_wall_ms: samples_ms[samples_ms.len() / 2],
+        ticks_per_match: samples_ticks[samples_ticks.len() / 2],
+        cpu_ms,
+        cpu_us_per_tick: cpu_ms.map(|c| round4(c as f64 * 1000.0 / total_ticks.max(1) as f64)),
+        cpu_wall_ratio: cpu_ms.map(|c| c as f64 / wall_total_ms.max(1) as f64),
+        peak_mem_mb: process::peak_memory_mb(),
+    })
 }
 
 /// One whole match. Returns its wall time in milliseconds and the ticks it played.
@@ -217,7 +241,7 @@ fn powershell(script: &str) -> Option<String> {
     if text.is_empty() { None } else { Some(text) }
 }
 
-fn cpu_model() -> String {
+pub(crate) fn cpu_model() -> String {
     powershell("(Get-CimInstance Win32_Processor).Name")
         .or_else(|| std::env::var("PROCESSOR_IDENTIFIER").ok())
         .unwrap_or_else(|| "unknown".to_string())

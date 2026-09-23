@@ -187,6 +187,7 @@ fn no_help_line_exceeds_eighty_columns() {
         vec!["simulate", "--help"],
         vec!["bench", "--help"],
         vec!["generate", "--help"],
+        vec!["calibrate", "--help"],
     ] {
         let out = bin().args(&args).output().unwrap();
         let stdout = String::from_utf8_lossy(&out.stdout);
