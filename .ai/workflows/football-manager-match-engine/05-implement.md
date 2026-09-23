@@ -5,13 +5,13 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-23T17:10:17Z"
-slices-implemented: 14
+updated-at: "2026-09-23T17:51:42Z"
+slices-implemented: 15
 slices-total: 16
-metric-total-files-changed: 559
-metric-total-lines-added: 52395
-metric-total-lines-removed: 2224
-tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment]
+metric-total-files-changed: 617
+metric-total-lines-added: 55560
+metric-total-lines-removed: 2300
+tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment, scripting, sandbox, plugin-interface]
 refs:
   index: 00-index.md
   plan-index: 04-plan.md
@@ -30,8 +30,9 @@ refs:
     - 05-implement-integration.md
     - 05-implement-extra-time-penalties.md
     - 05-implement-experiment-flags.md
+    - 05-implement-scripting-runtime.md
 next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine experiment-flags"
+next-invocation: "/wf verify football-manager-match-engine scripting-runtime"
 ---
 
 # Implement Index
@@ -130,7 +131,16 @@ next-invocation: "/wf verify football-manager-match-engine experiment-flags"
   - `calibrate` is restructured into per-arm runs (`RunCtx::play_arm`); `--flag` and `--pair` exist, and a paired report adds `calib.flags`, `calib.pair`, `calib.arms`, `calib.compare`, and `calib.verdict`. The scripting runtime can gate scripted models with the same flags block.
 - Checks at implement: 364 Rust tests (4 ignored) and 127 page tests pass, and clippy runs with `-D warnings`. Benchmark: 418.8 / 422.0 / 418.8 ms of processor time per match (gate 460.7), and 6.555 to 6.746 MB peak memory (median 6.582, gate 6.82).
 
+- `scripting-runtime` is implemented (commit `7fd5197`) and awaits verify. Every later slice inherits these changes:
+  - The engine has a plugin interface (`engine::plugin`, `PLUGIN_API_VERSION` 1) with decision, rule, and commentary hooks, and a `script` crate runs Rhai 1.26.1 packs behind it. `--script-pack <DIR>` works on `simulate`, `bench`, `serve`, `record`, and `resume`. Without a pack, the seed-42 tick records are byte-identical.
+  - `EngineEventKind::Script` (18 kinds) and `EventDetail::Script`; the protocol adds the `script` event type and `script.pack`, `script.hook`, `script.outcome`, and `script.detail`, with version 3 kept. `ServerMessage::Event` is boxed, so a constructor writes `Box::new`.
+  - Every `MatchStats` literal needs `script` (`ScriptFigures`); `RunReport` has `script_pack`. `content::load` takes a fourth argument, and `bench::measure` takes the pack.
+  - The pack hash is folded into the content hash, so a scripted snapshot resumes only with the same pack.
+- Checks at implement: 398 Rust tests (4 ignored) and 127 page tests pass, and clippy runs with `-D warnings`. Benchmark on `3066066`: baseline 422.0 ms per match. With the sample pack the median is 431.4 ms (1.022 times, limit 1.10) and peak memory is 8.29 MB (1.22 times, limit 1.25). Without a pack the median is 425.0 ms.
+
 ## Recommended Next Stage
+
+- `/wf verify football-manager-match-engine scripting-runtime` (new: `cargo test -p script` and `cargo test -p engine-cli --test script_cli`, the six-drive benchmark compare against 422.0 ms, and the seed-42 byte-identity check)
 
 - `/wf verify football-manager-match-engine experiment-flags` (new: automated `cargo test -p engine --test flags` and `cargo test -p engine-cli --test calibrate_pair`, the benchmark compare, and the seed-42 byte-identity check)
 
