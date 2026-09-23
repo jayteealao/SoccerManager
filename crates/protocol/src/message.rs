@@ -197,7 +197,8 @@ pub struct Condition {
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ServerMessage {
     Hello(Box<Hello>),
-    Event(MatchEvent),
+    /// Boxed, like the hello, because the event is by far the largest message.
+    Event(Box<MatchEvent>),
     Stats(Stats),
     Condition(Condition),
     Ack(Ack),
@@ -507,14 +508,14 @@ mod tests {
     fn every_server_message_round_trips_through_json() {
         let messages = [
             ServerMessage::Hello(Box::new(hello())),
-            ServerMessage::Event(MatchEvent::play(
+            ServerMessage::Event(Box::new(MatchEvent::play(
                 "owner",
                 "match",
                 1,
                 EventType::KickOff,
                 None,
                 [0, 0],
-            )),
+            ))),
             ServerMessage::Stats(Stats {
                 tick: 270_000,
                 minute: 90,

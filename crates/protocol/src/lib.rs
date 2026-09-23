@@ -65,6 +65,11 @@ pub use message::{
 /// pack's allowance of shoot-out rounds, and a sudden death past the allowance runs longer;
 /// clients already grow their history past `ticks_expected` for added time. A match that is
 /// not a knockout match sends exactly what it sent before, so no field changed meaning for it.
+///
+/// Version 3 also survived script packs: one event type (`script`) and four optional event
+/// fields (`script.pack`, `script.hook`, `script.outcome`, `script.detail`). A match without
+/// a pack sends exactly what it sent before, no field changed meaning, the page ignores an
+/// event type it does not list, and both producers changed in the same commit.
 pub const PROTOCOL_VERSION: u16 = 3;
 
 /// Errors this crate returns.
@@ -209,6 +214,10 @@ pub const MESSAGES: &[MessageSpec] = &[
             "shootout.scored",
             "shootout.scores",
             "result.decided_by",
+            "script.pack",
+            "script.hook",
+            "script.outcome",
+            "script.detail",
         ],
     },
     MessageSpec {
@@ -371,14 +380,14 @@ mod tests {
                 tactics: serde_json::Value::Null,
                 substitutions: SubstitutionRules::default(),
             })),
-            ServerMessage::Event(MatchEvent::play(
+            ServerMessage::Event(Box::new(MatchEvent::play(
                 "",
                 "",
                 0,
                 EventType::KickOff,
                 None,
                 [0, 0],
-            )),
+            ))),
             ServerMessage::Stats(Stats {
                 tick: 0,
                 minute: 0,

@@ -1,7 +1,8 @@
 //! Test scenes. A scene starts from a placed kick-off and moves players, the ball, the
 //! carrier, the clock and its period, the score, the cards, energy, substitutions used, the
 //! managers, the change queue, the knockout switch, the outcomes of the next shoot-out kicks,
-//! and the referee's and injury rolls' next draws to where a test needs them.
+//! the referee's and injury rolls' next draws, and the plugin hooks to where a test needs
+//! them.
 //! Only this crate's tests build it (the `scenario` feature), so a release build never
 //! contains it.
 
@@ -247,6 +248,12 @@ impl Scene {
     /// Queues `change` for `team`.
     pub fn queue(mut self, team: usize, change: Change) -> Self {
         self.sim.queue_change(team, change);
+        self
+    }
+
+    /// Attaches plugin hooks to the match.
+    pub fn plugins(mut self, plugins: crate::plugin::Plugins) -> Self {
+        self.sim.set_plugins(plugins);
         self
     }
 

@@ -24,23 +24,19 @@ pub fn run(content_dir: Option<&Path>, opts: &BenchOpts) -> anyhow::Result<i32> 
     }
     // Content, teams, and identity load once here, before the warm-up, so nothing on the
     // timed path reads a file or hashes bytes.
-    let loaded = crate::content::load(content_dir, None, None)?;
+    let loaded = crate::content::load(content_dir, None, None, opts.script_pack.as_deref())?;
     let [team_a, team_b] = &loaded.teams;
     let mut config = MatchConfig::new(opts.seed, opts.minutes, &loaded.content, [team_a, team_b])?;
     if opts.knockout {
         config = config.with_knockout();
     }
+    loaded.fold(&mut config);
     let owner_id = load_or_create_owner_id(&data_dir())?;
     let ticks = config.max_ticks();
 
-    let figures = measure(&config, opts.matches)?;
+    let figures = measure(&config, loaded.script.as_ref(), opts.matches)?;
     let stream = if opts.stream {
-        Some(measure_stream(
-            &config,
-            &loaded.commentary,
-            ticks,
-            opts.seed,
-        )?)
+        Some(measure_stream(&config, &loaded, ticks, opts.seed)?)
     } else {
         None
     };
@@ -69,6 +65,7 @@ pub fn run(content_dir: Option<&Path>, opts: &BenchOpts) -> anyhow::Result<i32> 
         cpu_model: cpu_model(),
         power_plan: power_plan(),
         budget_pass,
+        script_pack: loaded.script.as_ref().map(script::LoadedPack::identity),
     };
     emit_line(&report)?;
     Ok(if budget_pass { 0 } else { 2 })
@@ -89,15 +86,20 @@ pub(crate) struct BenchFigures {
 }
 
 /// Plays one discarded warm-up match, then times `matches` whole matches on this thread.
-/// No snapshot sink is attached: the benchmark times the engine.
-pub(crate) fn measure(config: &MatchConfig, matches: u32) -> anyhow::Result<BenchFigures> {
-    run_one(config)?;
+/// No snapshot sink is attached: the benchmark times the engine. With a script pack, every
+/// match runs with fresh hooks from it.
+pub(crate) fn measure(
+    config: &MatchConfig,
+    script: Option<&script::LoadedPack>,
+    matches: u32,
+) -> anyhow::Result<BenchFigures> {
+    run_one(config, script)?;
     let cpu_before = process::cpu_time_ms();
     let started = Instant::now();
     let mut samples_ms: Vec<u64> = Vec::with_capacity(matches as usize);
     let mut samples_ticks: Vec<u32> = Vec::with_capacity(matches as usize);
     for _ in 0..matches.max(1) {
-        let (ms, played) = run_one(config)?;
+        let (ms, played) = run_one(config, script)?;
         samples_ms.push(ms);
         samples_ticks.push(played);
     }
@@ -121,8 +123,14 @@ pub(crate) fn measure(config: &MatchConfig, matches: u32) -> anyhow::Result<Benc
 }
 
 /// One whole match. Returns its wall time in milliseconds and the ticks it played.
-fn run_one(config: &MatchConfig) -> anyhow::Result<(u64, u32)> {
+fn run_one(
+    config: &MatchConfig,
+    script: Option<&script::LoadedPack>,
+) -> anyhow::Result<(u64, u32)> {
     let mut sim = Simulation::new(config.clone())?;
+    if let Some(pack) = script {
+        sim.set_plugins(pack.plugins());
+    }
     let mut sink = NullSink;
     let started = Instant::now();
     sim.run(&mut sink)?;
@@ -138,7 +146,7 @@ fn round4(x: f64) -> f64 {
 /// ticks delivered per second and how many times the producer paused at the buffer bound.
 fn measure_stream(
     config: &MatchConfig,
-    commentary: &engine::Commentary,
+    loaded: &crate::content::Loaded,
     ticks: u32,
     seed: u64,
 ) -> anyhow::Result<(f64, u32)> {
@@ -150,6 +158,7 @@ fn measure_stream(
         config.teams[1].club_id.clone(),
     ];
     let mut sim = Simulation::new(config.clone())?;
+    loaded.attach(&mut sim);
     let hello = Hello {
         protocol_version: PROTOCOL_VERSION,
         engine_version: engine::version().to_string(),
@@ -211,7 +220,7 @@ fn measure_stream(
             club_ids: [&club_ids[0], &club_ids[1]],
             state: &state,
             gate: Some(&gate),
-            commentary,
+            commentary: &loaded.commentary,
             inbox: None,
         },
         &mut |message: ServerMessage| session.send(&message),

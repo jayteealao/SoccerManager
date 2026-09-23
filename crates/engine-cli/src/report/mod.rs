@@ -558,6 +558,7 @@ mod tests {
                 possession_pct: possession,
                 ..MatchFigures::default()
             },
+            script: Default::default(),
         }
     }
 

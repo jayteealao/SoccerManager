@@ -85,6 +85,17 @@ pub struct SimulateOpts {
                      SM_DATA_DIR/matches/<match.id>/snapshot.smsn."
     )]
     pub no_snapshot: bool,
+    /// Script pack folder (pack.json and a .rhai script) to run.
+    #[arg(
+        long,
+        value_name = "DIR",
+        long_help = "Script pack folder (pack.json and a .rhai script) to run.
+
+                     The script can change decisions, cards,
+                     and commentary in a sandbox. See
+                     content/scripts/README.md."
+    )]
+    pub script_pack: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -104,6 +115,17 @@ pub struct ResumeOpts {
     /// Away team file the match was started with; default as for simulate.
     #[arg(long, value_name = "FILE")]
     pub team_b: Option<PathBuf>,
+    /// Script pack folder (pack.json and a .rhai script) to run.
+    #[arg(
+        long,
+        value_name = "DIR",
+        long_help = "Script pack folder (pack.json and a .rhai script) to run.
+
+                     The script can change decisions, cards,
+                     and commentary in a sandbox. See
+                     content/scripts/README.md."
+    )]
+    pub script_pack: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -126,6 +148,17 @@ pub struct ServeOpts {
     /// Away team file; default teams/default-b.json in the content folder.
     #[arg(long, value_name = "FILE")]
     pub team_b: Option<PathBuf>,
+    /// Script pack folder (pack.json and a .rhai script) to run.
+    #[arg(
+        long,
+        value_name = "DIR",
+        long_help = "Script pack folder (pack.json and a .rhai script) to run.
+
+                     The script can change decisions, cards,
+                     and commentary in a sandbox. See
+                     content/scripts/README.md."
+    )]
+    pub script_pack: Option<PathBuf>,
     /// Also serve this folder as the viewer page.
     #[arg(long, value_name = "DIR")]
     pub web: Option<PathBuf>,
@@ -202,6 +235,17 @@ pub struct RecordOpts {
     /// Away team file; default teams/default-b.json in the content folder.
     #[arg(long, value_name = "FILE")]
     pub team_b: Option<PathBuf>,
+    /// Script pack folder (pack.json and a .rhai script) to run.
+    #[arg(
+        long,
+        value_name = "DIR",
+        long_help = "Script pack folder (pack.json and a .rhai script) to run.
+
+                     The script can change decisions, cards,
+                     and commentary in a sandbox. See
+                     content/scripts/README.md."
+    )]
+    pub script_pack: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -240,6 +284,17 @@ pub struct BenchOpts {
     /// Also stream one match to a client that reads as fast as it can.
     #[arg(long)]
     pub stream: bool,
+    /// Script pack folder (pack.json and a .rhai script) to run.
+    #[arg(
+        long,
+        value_name = "DIR",
+        long_help = "Script pack folder (pack.json and a .rhai script) to run.
+
+                     The script can change decisions, cards,
+                     and commentary in a sandbox. See
+                     content/scripts/README.md."
+    )]
+    pub script_pack: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]

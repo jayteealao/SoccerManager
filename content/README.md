@@ -4,6 +4,8 @@ This folder holds the content files the engine reads: the attribute schema, the 
 
 Every field of every file, with its unit, its default, and its bound, is in [the data-file reference](../docs/reference/data-files.md). To change a value, follow [the modding how-to](../docs/how-to/modding.md).
 
+To change behaviour with code rather than values, write a script pack: see [script packs](scripts/README.md) and the sample in `scripts/sample/`.
+
 ## Feature flags
 
 The `flags` block of `tuning.json` declares switches between the current model and a candidate. It ships empty. Each flag has five fields:

@@ -269,6 +269,29 @@
         "extra-time",
         "shoot-out"
       ]
+    },
+    "script.pack": {
+      "description": "The script pack the match ran with: id@version+hash. Absent without a pack.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*@[^+]+[+][0-9a-f]{12}$"
+    },
+    "script.calls": {
+      "description": "Script hook calls made, every hook; counted from the resume tick on a resumed match.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "script.aborts": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "script.denials": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "script.disabled": {
+      "description": "Hooks switched off after three failures in a row.",
+      "type": "integer",
+      "minimum": 0
     }
   },
   "additionalProperties": true

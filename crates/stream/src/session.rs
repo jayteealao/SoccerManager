@@ -412,7 +412,10 @@ fn pump(
                     idle = false;
                     let (answer, event) = commands.handle(text.as_str())?;
                     if let Some(event) = event {
-                        outbox.push_back((None, text_message(&ServerMessage::Event(event))?));
+                        outbox.push_back((
+                            None,
+                            text_message(&ServerMessage::Event(Box::new(event)))?,
+                        ));
                     }
                     outbox.push_back((None, text_message(&answer)?));
                 }

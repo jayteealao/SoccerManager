@@ -7,7 +7,8 @@ use std::time::Instant;
 use anyhow::Context;
 use engine::observe::identity::{MatchId, data_dir, owner_hex};
 use engine::observe::{
-    LawStats, MatchFigures, MatchStats, TacticsStats, TeamRef, emit_line, write_stats,
+    LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef, emit_line,
+    write_stats,
 };
 use engine::{
     EngineError, FanoutSink, FileSink, MatchConfig, Simulation, Snapshot, SnapshotSink, TickHeader,
@@ -28,7 +29,12 @@ pub fn run(content_dir: Option<&Path>, opts: &ResumeOpts) -> anyhow::Result<i32>
     };
     let span = info_span!("resume", seed = snapshot.seed(), tick = snapshot.tick());
     let _guard = span.enter();
-    let loaded = crate::content::load(content_dir, opts.team_a.as_deref(), opts.team_b.as_deref())?;
+    let loaded = crate::content::load(
+        content_dir,
+        opts.team_a.as_deref(),
+        opts.team_b.as_deref(),
+        opts.script_pack.as_deref(),
+    )?;
     let [team_a, team_b] = &loaded.teams;
     let mut config = MatchConfig::new(
         snapshot.seed(),
@@ -40,6 +46,8 @@ pub fn run(content_dir: Option<&Path>, opts: &ResumeOpts) -> anyhow::Result<i32>
     if snapshot.knockout() {
         config = config.with_knockout();
     }
+    // A scripted match resumes only with the same pack: the pack is part of the content hash.
+    loaded.fold(&mut config);
     let match_id = MatchId {
         seed: snapshot.seed(),
         millis: snapshot.match_millis,
@@ -82,6 +90,7 @@ pub fn run(content_dir: Option<&Path>, opts: &ResumeOpts) -> anyhow::Result<i32>
             return Ok(1);
         }
     };
+    loaded.attach(&mut sim);
     let summary = sim.summary();
     let on_pitch = |team: usize| {
         sim.players()
@@ -157,6 +166,7 @@ pub fn run(content_dir: Option<&Path>, opts: &ResumeOpts) -> anyhow::Result<i32>
         laws: LawStats::new(&summary, pack_version, sim.tick(), snapshots.writes),
         tactics: TacticsStats::new(&sim),
         figures: MatchFigures::new(&summary, sim.managers()),
+        script: ScriptFigures::new(sim.plugins()),
     };
     write_stats(&data, &stats)?;
     emit_line(&stats)?;

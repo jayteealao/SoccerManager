@@ -50,6 +50,7 @@ Simulate one match and write every tick to a file.
 | `--team-a` | file | `teams/default-a.json` in the content folder | The home team file. |
 | `--team-b` | file | `teams/default-b.json` in the content folder | The away team file. |
 | `--no-snapshot` | none | off | Do not write a snapshot at each stoppage. |
+| `--script-pack` | folder | none | A script pack (`pack.json` and a `.rhai` script) to run. See [script packs](../../content/scripts/README.md). The first `kick-off` event and the `match-stats` record name the pack. |
 
 Output: one JSON line on standard output with the match statistics. Files: the tick file, and `matches/<match.id>/stats.json`, `events.jsonl`, and `snapshot.smsn` in the data folder.
 
@@ -67,6 +68,7 @@ Time whole matches on one thread and print a run report.
 | `--knockout` | none | off | Play extra time and a penalty shoot-out when the match is level after regulation time. |
 | `--json` | none | off | Print the run report as one JSON line. The default output is the same. |
 | `--stream` | none | off | Also stream one match to a client that reads as fast as it can. |
+| `--script-pack` | folder | none | Run every timed match with this script pack; the run report names it as `script.pack`. |
 
 Output: one `run-report` record on standard output: the median wall time, the processor time, the processor time for each tick, the peak memory, and the machine and build identifiers.
 
@@ -99,6 +101,7 @@ Stream one match live over the local socket to one viewer.
 | `--ticks-out` | file | not set | Also write every tick to this file. |
 | `--team-a` | file | `teams/default-a.json` in the content folder | The home team file. The manager on the page picks this team's lineup. |
 | `--team-b` | file | `teams/default-b.json` in the content folder | The away team file. The AI manager runs this team. |
+| `--script-pack` | folder | none | A script pack to run, as for `simulate`. |
 | `--web` | folder | not set | Also serve this folder as the viewer page. |
 | `--resume` | file | not set | Continue the match in this snapshot file. Do not use it with `--seed`. |
 | `--reconnect-wait` | seconds | 0 | Seconds to wait for a viewer that lost its connection. 0 ends the run. |
@@ -136,6 +139,7 @@ Record one whole match stream to a replay file.
 | `--knockout` | none | off | Play extra time and a penalty shoot-out when the match is level after regulation time. |
 | `--team-a` | file | `teams/default-a.json` in the content folder | The home team file. |
 | `--team-b` | file | `teams/default-b.json` in the content folder | The away team file. |
+| `--script-pack` | folder | none | A script pack to run, as for `simulate`. |
 
 Exit codes: 0 when the match reaches full time; 1; 2 when it does not.
 
@@ -165,6 +169,7 @@ Continue a match from its newest snapshot to full time. A knockout match resumes
 | `--json` | none | off | Also write the ticks as JSON Lines. Requires `--ticks-out`. |
 | `--team-a` | file | as for `simulate` | The home team file the match started with. |
 | `--team-b` | file | as for `simulate` | The away team file the match started with. |
+| `--script-pack` | folder | none | The script pack the match started with. A snapshot of a scripted match resumes only with the same pack, byte for byte, because the pack is part of the content hash. |
 
 Output: one JSON line with the match statistics.
 

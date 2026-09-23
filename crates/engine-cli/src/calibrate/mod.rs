@@ -63,7 +63,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     }
 
     // Every flag name and state is checked before a worker starts.
-    let loaded = crate::content::load(Some(dir.root()), None, None)?;
+    let loaded = crate::content::load(Some(dir.root()), None, None, None)?;
     let arms: Vec<(&str, FlagStates)> = match &opts.pair {
         None => vec![("", states.clone())],
         Some(flag) => {
@@ -359,7 +359,7 @@ impl RunCtx<'_> {
         let content = self.loaded.content.with_flags(states)?;
         let [team_a, team_b] = &self.loaded.teams;
         let config = MatchConfig::new(opts.seed, opts.minutes, &content, [team_a, team_b])?;
-        let bench = crate::bench::measure(&config, BENCH_MATCHES)?;
+        let bench = crate::bench::measure(&config, None, BENCH_MATCHES)?;
 
         let events_dir = arm_dir.join("events");
         let events_written = count_files(&events_dir);

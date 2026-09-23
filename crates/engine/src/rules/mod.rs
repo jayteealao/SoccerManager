@@ -232,12 +232,30 @@ impl Simulation {
         let penalty = pitch::in_penalty_area(at, own_end);
         let advantage = !ball_lost && !penalty;
         let draw = self.rng.referee_draw();
-        let card = fouls::card_outcome(offender.derived.aggression, offender.yellow, t, draw);
+        let mut card = fouls::card_outcome(offender.derived.aggression, offender.yellow, t, draw);
         let mut event = self.event(EngineEventKind::Foul, Some(offender.team));
         event.player = Some(i);
         event.secondary = Some(c);
         event.advantage = Some(advantage);
         self.events.push(event);
+        if let Some(hook) = self.plugins.rule.as_mut() {
+            let ctx = crate::plugin::FoulContext {
+                tick: self.tick,
+                minute: self.referee.clock.minute(self.tick).0,
+                team: offender.team,
+                slot: offender.slot,
+                yellows: offender.yellow,
+                aggression: offender.derived.aggression,
+                advantage,
+                penalty,
+            };
+            let outcome = hook.card(&ctx, card);
+            let (value, notes) = self.plugins.settle(crate::plugin::HookPoint::Rule, outcome);
+            self.push_script_notes(notes);
+            if let Some(scripted) = value {
+                card = scripted;
+            }
+        }
         if advantage {
             if let Some(card) = card {
                 self.referee.pending.push(PendingCard { player: i, card });

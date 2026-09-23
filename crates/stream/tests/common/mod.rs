@@ -203,7 +203,9 @@ fn serve(
         written += 1;
         for event in sim.take_events() {
             state.set_scores(event.scores);
-            let message = ServerMessage::Event(play_event(&event, &owner_id, &match_id, &club_ids));
+            let message = ServerMessage::Event(Box::new(play_event(
+                &event, &owner_id, &match_id, &club_ids,
+            )));
             if let ServerMessage::Event(e) = &message {
                 events
                     .lock()
@@ -217,7 +219,9 @@ fn serve(
     }
     sim.finish();
     for event in sim.take_events() {
-        let message = ServerMessage::Event(play_event(&event, &owner_id, &match_id, &club_ids));
+        let message = ServerMessage::Event(Box::new(play_event(
+            &event, &owner_id, &match_id, &club_ids,
+        )));
         let _ = session.send(&message);
     }
     let summary = sim.summary();
@@ -268,6 +272,7 @@ fn play_event(
         K::Substitution => EventType::Substitution,
         K::AiDecision => EventType::AiDecision,
         K::ChangeApplied | K::ChangeRejected => EventType::TacticsChange,
+        K::Script => EventType::Script,
     };
     MatchEvent::play(
         owner_id,

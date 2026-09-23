@@ -21,6 +21,7 @@ use crate::flags::ActiveFlags;
 use crate::math::{DVec2, DVec3};
 use crate::pitch;
 use crate::player::Player;
+use crate::plugin::{Plugins, ScriptNote};
 use crate::record::{TickRecord, TickSink};
 use crate::rng::EngineRng;
 use crate::rules::fouls::{self, Card, Tackle};
@@ -110,6 +111,15 @@ impl MatchConfig {
             knockout: false,
             flags: content.flags.clone(),
         })
+    }
+
+    /// Folds a script pack's SHA-256 into the content hash, so a snapshot written with one
+    /// pack resumes only with the same pack.
+    pub fn fold_pack_hash(&mut self, pack_sha: &[u8; 32]) {
+        let mut hasher = Sha256::new();
+        hasher.update(self.content_hash.as_bytes());
+        hasher.update(pack_sha);
+        self.content_hash = hex12(&hasher.finalize());
     }
 
     /// The two club identifiers, home first.
@@ -220,6 +230,8 @@ pub enum EventDetail {
     Ai {
         code: AiCode,
     },
+    /// A plugin hook failed or was switched off.
+    Script(ScriptNote),
 }
 
 /// What happened during a tick that a consumer outside the engine must know about. The
@@ -256,11 +268,14 @@ pub enum EngineEventKind {
     ChangeApplied,
     /// A queued change of `team` was rejected on this tick; the detail names the reason.
     ChangeRejected,
+    /// A plugin hook failed or was switched off; the detail names the hook and the outcome.
+    /// Play goes on with the engine's own choice.
+    Script,
 }
 
 impl EngineEventKind {
     /// Every event kind, in declaration order.
-    pub const ALL: [EngineEventKind; 17] = [
+    pub const ALL: [EngineEventKind; 18] = [
         EngineEventKind::KickOff,
         EngineEventKind::Goal,
         EngineEventKind::HalfTime,
@@ -278,6 +293,7 @@ impl EngineEventKind {
         EngineEventKind::AiDecision,
         EngineEventKind::ChangeApplied,
         EngineEventKind::ChangeRejected,
+        EngineEventKind::Script,
     ];
 
     /// The kind as the event contract spells it. Both change verdicts travel as
@@ -300,6 +316,7 @@ impl EngineEventKind {
             EngineEventKind::Substitution => "substitution",
             EngineEventKind::AiDecision => "ai-decision",
             EngineEventKind::ChangeApplied | EngineEventKind::ChangeRejected => "tactics-change",
+            EngineEventKind::Script => "script",
         }
     }
 
@@ -431,6 +448,14 @@ pub fn shot_xg(from: DVec2, attack_x: f64, t: &XgTuning) -> f64 {
     1.0 / (1.0 + (-z).exp())
 }
 
+/// The decision hook's offsets for one carrier, in force until `until`.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ScriptCache {
+    pub carrier: usize,
+    pub until: u32,
+    pub offsets: crate::plugin::OptionOffsets,
+}
+
 /// One running match.
 pub struct Simulation {
     pub(crate) config: MatchConfig,
@@ -468,6 +493,11 @@ pub struct Simulation {
     /// Test seam: the outcomes the next shoot-out kicks are given, whatever the ball does.
     #[cfg(feature = "scenario")]
     pub(crate) forced_kicks: std::collections::VecDeque<bool>,
+    /// The plugin hooks, none unless a caller attaches them.
+    pub(crate) plugins: Plugins,
+    /// The decision hook's offsets for the current carrier. A stoppage and a new carrier
+    /// clear it, so it never needs to be in the snapshot.
+    pub(crate) script_cache: Option<ScriptCache>,
     finished: bool,
     scratch: Vec<DVec2>,
 }
@@ -518,6 +548,8 @@ impl Simulation {
             shot_in_flight: None,
             #[cfg(feature = "scenario")]
             forced_kicks: std::collections::VecDeque::new(),
+            plugins: Plugins::default(),
+            script_cache: None,
             finished: false,
             scratch: Vec::with_capacity(2 * PLAYERS_PER_TEAM),
             config,
@@ -526,6 +558,62 @@ impl Simulation {
 
     pub fn tuning(&self) -> &Tuning {
         &self.config.tuning
+    }
+
+    /// Attaches plugin hooks. Call it before the first step, or right after a resume.
+    pub fn set_plugins(&mut self, plugins: Plugins) {
+        self.plugins = plugins;
+        self.script_cache = None;
+    }
+
+    /// The attached plugin hooks, their pack, and their counters.
+    pub fn plugins(&self) -> &Plugins {
+        &self.plugins
+    }
+
+    /// Offers `native`, the line the commentator chose for `event`, to the commentary hook.
+    /// Returns the line to use and, when the hook failed, the `script` events to record on
+    /// the event's tick. Without a commentary hook the line comes back as it went in.
+    pub fn offer_line(
+        &mut self,
+        event: &EngineEvent,
+        native: Option<String>,
+    ) -> (Option<String>, Vec<EngineEvent>) {
+        let (Some(native), Some(hook)) = (native.as_deref(), self.plugins.commentary.as_mut())
+        else {
+            return (native, Vec::new());
+        };
+        let ctx = crate::plugin::LineContext {
+            tick: event.tick,
+            minute: event.minute,
+            kind: event.kind.code(),
+            team: event.team,
+            scores: event.scores,
+        };
+        let outcome = hook.line(&ctx, native);
+        let (line, notes) = self
+            .plugins
+            .settle(crate::plugin::HookPoint::Commentary, outcome);
+        let events = notes
+            .into_iter()
+            .map(|note| self.script_event_at(event.tick, note))
+            .collect();
+        (Some(line.unwrap_or_else(|| native.to_string())), events)
+    }
+
+    /// Records the notes a hook call produced as `script` events on the tick this step
+    /// produces.
+    pub(crate) fn push_script_notes(&mut self, notes: Vec<ScriptNote>) {
+        for note in notes {
+            let event = self.script_event_at(self.tick + 1, note);
+            self.events.push(event);
+        }
+    }
+
+    fn script_event_at(&self, tick: u32, note: ScriptNote) -> EngineEvent {
+        let mut event = self.event_at(tick, EngineEventKind::Script, None);
+        event.detail = Some(EventDetail::Script(note));
+        event
     }
 
     pub fn config(&self) -> &MatchConfig {
@@ -716,6 +804,7 @@ impl Simulation {
         }
         if let Some(stoppage) = self.stoppage {
             self.apply_changes(stoppage);
+            self.script_cache = None;
         }
         steering::resolve_overlaps(&mut self.players, &t);
         self.tick += 1;
@@ -949,6 +1038,7 @@ impl Simulation {
         self.last_touch = Some(team);
         self.carrier = Some(i);
         self.control_since = self.tick;
+        self.script_cache = None;
     }
 }
 

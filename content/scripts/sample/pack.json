@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "sample",
+  "version": "1.0.0",
+  "name": "Sample: late pressure, early leniency, goal-time commentary",
+  "plugin_api": 1,
+  "entry": "main.rhai",
+  "hooks": ["decision", "rule", "commentary"],
+  "decision": {
+    "refresh_ticks": 25
+  },
+  "limits": {
+    "max_operations": 10000
+  }
+}

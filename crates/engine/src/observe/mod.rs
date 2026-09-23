@@ -98,6 +98,42 @@ pub struct MatchStats {
     pub tactics: TacticsStats,
     #[serde(flatten, default)]
     pub figures: MatchFigures,
+    #[serde(flatten, default)]
+    pub script: ScriptFigures,
+}
+
+/// The script pack a match ran with and its hook counters. Every key is absent from a match
+/// without a pack. The counters start at the resume tick on a resumed match.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ScriptFigures {
+    #[serde(rename = "script.pack", skip_serializing_if = "Option::is_none")]
+    pub pack: Option<String>,
+    #[serde(rename = "script.calls", skip_serializing_if = "Option::is_none")]
+    pub calls: Option<u32>,
+    #[serde(rename = "script.aborts", skip_serializing_if = "Option::is_none")]
+    pub aborts: Option<u32>,
+    #[serde(rename = "script.denials", skip_serializing_if = "Option::is_none")]
+    pub denials: Option<u32>,
+    #[serde(rename = "script.disabled", skip_serializing_if = "Option::is_none")]
+    pub disabled: Option<u32>,
+}
+
+impl ScriptFigures {
+    /// The pack and counters of `plugins`; empty when no pack is attached.
+    pub fn new(plugins: &crate::plugin::Plugins) -> Self {
+        let Some(pack) = plugins.pack.clone() else {
+            return Self::default();
+        };
+        let s = plugins.stats;
+        Self {
+            pack: Some(pack),
+            calls: Some(s.calls),
+            aborts: Some(s.aborts),
+            denials: Some(s.denials),
+            disabled: Some(s.disabled),
+        }
+    }
 }
 
 /// The match figures the realism bands read. Per-team arrays are home first. Every key is
@@ -374,6 +410,10 @@ pub struct RunReport {
     pub power_plan: String,
     #[serde(rename = "budget.pass")]
     pub budget_pass: bool,
+    /// The script pack every timed match ran with, so a compare can tell a scripted run from
+    /// a plain one. Absent without a pack.
+    #[serde(rename = "script.pack", skip_serializing_if = "Option::is_none")]
+    pub script_pack: Option<String>,
 }
 
 impl Record for RunReport {
@@ -525,6 +565,7 @@ mod tests {
                 manager_kind: ["ai".into(), "ai".into()],
                 ..MatchFigures::default()
             },
+            script: ScriptFigures::default(),
         }
     }
 
@@ -595,6 +636,7 @@ mod tests {
             cpu_model: "x".into(),
             power_plan: "y".into(),
             budget_pass: true,
+            script_pack: None,
         };
         let json = to_json(&report).unwrap();
         for key in [

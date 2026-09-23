@@ -93,17 +93,17 @@ pub fn drive<S: TickSink>(
         }
         for event in sim.take_events() {
             opts.state.set_scores(event.scores);
-            let line = commentator.line(&event);
-            route(ServerMessage::Event(
-                match_event(
-                    &event,
-                    opts.owner_id,
-                    opts.match_id,
-                    opts.club_ids,
-                    &mut ids,
-                )
-                .commentary(line),
-            ))?;
+            for row in rows(
+                sim,
+                &mut commentator,
+                &event,
+                opts.owner_id,
+                opts.match_id,
+                opts.club_ids,
+                &mut ids,
+            ) {
+                route(ServerMessage::Event(Box::new(row)))?;
+            }
         }
         if record.tick.is_multiple_of(ticks_per_second) {
             route(ServerMessage::Stats(stats_message(sim)))?;
@@ -113,17 +113,18 @@ pub fn drive<S: TickSink>(
     let full_time = sim.is_over();
     sim.finish();
     for event in sim.take_events() {
-        let line = commentator.line(&event);
-        let message = match_event(
+        for message in rows(
+            sim,
+            &mut commentator,
             &event,
             opts.owner_id,
             opts.match_id,
             opts.club_ids,
             &mut ids,
-        )
-        .commentary(line);
-        if let Err(err) = route(ServerMessage::Event(message)) {
-            return closing_or_fail(err, written).map(|written| Driven { written, full_time });
+        ) {
+            if let Err(err) = route(ServerMessage::Event(Box::new(message))) {
+                return closing_or_fail(err, written).map(|written| Driven { written, full_time });
+            }
         }
     }
     if let Err(err) = route(ServerMessage::Stats(stats_message(sim))) {
@@ -320,6 +321,8 @@ pub(crate) struct Ids {
     squads: [Vec<String>; 2],
     /// Each change the page queued: the engine's identifier and the one the page was given.
     page: Vec<(ChangeId, String)>,
+    /// `true` once the first kick-off named the script pack.
+    pack_named: bool,
 }
 
 impl Ids {
@@ -329,6 +332,7 @@ impl Ids {
             roster: sim.player_ids(),
             squads: sim.teams().map(|t| t.player_ids),
             page: Vec::new(),
+            pack_named: false,
         }
     }
 
@@ -390,6 +394,7 @@ pub(crate) fn match_event(
         EngineEventKind::Injury => EventType::Injury,
         EngineEventKind::Substitution => EventType::Substitution,
         EngineEventKind::AiDecision => EventType::AiDecision,
+        EngineEventKind::Script => EventType::Script,
         // A verdict always carries its change detail and returned above.
         EngineEventKind::ChangeApplied | EngineEventKind::ChangeRejected => {
             EventType::TacticsChange
@@ -436,6 +441,36 @@ pub(crate) fn match_event(
     .decided_by(event.decided_by.map(|d| d.code().to_string()))
 }
 
+/// One engine event as the rows it becomes: the event with its commentary line, which the
+/// script pack's commentary hook may rewrite, then a `script` row for each hook failure that
+/// rewrite caused. The first kick-off names the script pack, and a `script` row names the
+/// hook, the outcome, and why.
+pub(crate) fn rows(
+    sim: &mut Simulation,
+    commentator: &mut Commentator,
+    event: &EngineEvent,
+    owner_id: &str,
+    match_id: &str,
+    club_ids: [&str; 2],
+    ids: &mut Ids,
+) -> Vec<MatchEvent> {
+    let (line, failures) = sim.offer_line(event, commentator.line(event));
+    let mut out = Vec::with_capacity(1 + failures.len());
+    for (e, line) in std::iter::once((event, line)).chain(failures.iter().map(|f| (f, None))) {
+        let mut row = match_event(e, owner_id, match_id, club_ids, ids).commentary(line);
+        if e.kind == EngineEventKind::KickOff && !ids.pack_named {
+            ids.pack_named = true;
+            row = row.script_pack(sim.plugins().pack.clone());
+        }
+        if let Some(EventDetail::Script(note)) = e.detail {
+            let detail = sim.plugins().detail(&note);
+            row = row.script(note.hook.code(), note.outcome.code(), detail);
+        }
+        out.push(row);
+    }
+    out
+}
+
 /// The engine card as the protocol names it.
 pub fn card_kind(card: Card) -> CardKind {
     match card {
@@ -454,7 +489,7 @@ mod tests {
 
     fn loaded() -> crate::content::Loaded {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content");
-        crate::content::load(Some(&dir), None, None).unwrap()
+        crate::content::load(Some(&dir), None, None, None).unwrap()
     }
 
     /// Every message of a seeded match of `minutes`, and the simulation after full time.
@@ -527,7 +562,7 @@ mod tests {
         let events: Vec<MatchEvent> = messages
             .into_iter()
             .filter_map(|m| match m {
-                ServerMessage::Event(e) => Some(e),
+                ServerMessage::Event(e) => Some(*e),
                 _ => None,
             })
             .collect();
@@ -627,7 +662,7 @@ mod tests {
         let events: Vec<&MatchEvent> = messages
             .iter()
             .filter_map(|m| match m {
-                ServerMessage::Event(e) => Some(e),
+                ServerMessage::Event(e) => Some(&**e),
                 _ => None,
             })
             .collect();
@@ -720,7 +755,7 @@ mod tests {
         messages
             .iter()
             .filter_map(|m| match m {
-                ServerMessage::Event(e) if e.event_type == EventType::TacticsChange => Some(e),
+                ServerMessage::Event(e) if e.event_type == EventType::TacticsChange => Some(&**e),
                 _ => None,
             })
             .filter(|e| e.team_id.as_deref() == Some("club-a"))

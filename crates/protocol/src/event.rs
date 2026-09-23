@@ -1,7 +1,7 @@
 //! Match events: the `match-event` record kind the observability contract reserves. The
 //! engine produces kick-off, goal, half-time, full-time, the law events (offside, foul, card,
-//! and every restart), injuries, substitutions, the AI manager's choices, and the verdict on
-//! a queued change.
+//! and every restart), injuries, substitutions, the AI manager's choices, the verdict on a
+//! queued change, and a script hook that failed.
 
 use serde::{Deserialize, Serialize};
 
@@ -30,11 +30,14 @@ pub enum EventType {
     Injury,
     Substitution,
     AiDecision,
+    /// A script pack's hook failed or was switched off; play went on with the engine's own
+    /// choice.
+    Script,
 }
 
 impl EventType {
     /// Every event type, in declaration order.
-    pub const ALL: [EventType; 16] = [
+    pub const ALL: [EventType; 17] = [
         EventType::KickOff,
         EventType::Goal,
         EventType::HalfTime,
@@ -51,6 +54,7 @@ impl EventType {
         EventType::Injury,
         EventType::Substitution,
         EventType::AiDecision,
+        EventType::Script,
     ];
 
     /// The value as the contract writes it.
@@ -72,6 +76,7 @@ impl EventType {
             EventType::Injury => "injury",
             EventType::Substitution => "substitution",
             EventType::AiDecision => "ai-decision",
+            EventType::Script => "script",
         }
     }
 }
@@ -195,6 +200,37 @@ pub struct MatchEvent {
         default
     )]
     pub decided_by: Option<String>,
+    /// Additive extra, on the first `kick-off` of a match that runs a script pack: the pack
+    /// identity, `id@version+hash`.
+    #[serde(
+        rename = "script.pack",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub script_pack: Option<String>,
+    /// Additive extra, on a `script` event: the hook that failed, `decision`, `rule`, or
+    /// `commentary`.
+    #[serde(
+        rename = "script.hook",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub script_hook: Option<String>,
+    /// Additive extra, on a `script` event: `aborted`, `denied`, or `disabled`.
+    #[serde(
+        rename = "script.outcome",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub script_outcome: Option<String>,
+    /// Additive extra, on a `script` event: why the call failed, such as the budget it ran
+    /// out of or the import or function the sandbox denied.
+    #[serde(
+        rename = "script.detail",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub script_detail: Option<String>,
 }
 
 impl MatchEvent {
@@ -236,6 +272,10 @@ impl MatchEvent {
             shootout_scored: None,
             shootout_scores: None,
             decided_by: None,
+            script_pack: None,
+            script_hook: None,
+            script_outcome: None,
+            script_detail: None,
         }
     }
 
@@ -326,6 +366,20 @@ impl MatchEvent {
     /// How a knockout match was decided, at full time.
     pub fn decided_by(mut self, decided_by: Option<String>) -> Self {
         self.decided_by = decided_by;
+        self
+    }
+
+    /// The script pack the match runs, on its first kick-off.
+    pub fn script_pack(mut self, pack: Option<String>) -> Self {
+        self.script_pack = pack;
+        self
+    }
+
+    /// A failed script hook: the hook, the outcome, and why.
+    pub fn script(mut self, hook: &str, outcome: &str, detail: &str) -> Self {
+        self.script_hook = Some(hook.to_string());
+        self.script_outcome = Some(outcome.to_string());
+        self.script_detail = Some(detail.to_string());
         self
     }
 

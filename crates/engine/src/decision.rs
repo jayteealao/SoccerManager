@@ -9,7 +9,8 @@
 use crate::data::rules::StoppageKind;
 use crate::math::{DVec2, segment_distance, toward};
 use crate::pitch;
-use crate::sim::Simulation;
+use crate::plugin::{DecisionContext, HookPoint, OptionOffsets};
+use crate::sim::{ScriptCache, Simulation};
 use crate::tuning::Tuning;
 
 /// A kick the carrier decided on this tick.
@@ -238,7 +239,14 @@ impl Simulation {
     }
 
     pub(crate) fn decide_carrier(&mut self, c: usize) -> Option<Kick> {
-        let o = self.options(c);
+        let mut o = self.options(c);
+        if let Some(off) = self.script_offsets(c) {
+            o.shot = o.shot.map(|s| s + off.shoot);
+            o.pass = o.pass.map(|(s, j)| (s + off.pass, j));
+            o.dribble = o.dribble.map(|s| s + off.dribble);
+            o.clear += off.clear;
+            o.hold = o.hold.map(|s| s + off.hold);
+        }
         let t = &self.config.tuning;
         let carrier = self.players[c];
         let team = carrier.team;
@@ -312,6 +320,59 @@ impl Simulation {
 }
 
 impl Simulation {
+    /// The decision hook's offsets for carrier `c`, or `None` without a decision hook. The
+    /// hook is asked again for a new carrier, after a stoppage, and when the pack's refresh
+    /// interval has passed; in between, the cached offsets apply. A failed call gives zero
+    /// offsets until the next refresh. Nothing here draws from the random stream.
+    fn script_offsets(&mut self, c: usize) -> Option<OptionOffsets> {
+        self.plugins.decision.as_ref()?;
+        if let Some(cache) = self.script_cache
+            && cache.carrier == c
+            && self.tick < cache.until
+        {
+            return Some(cache.offsets);
+        }
+        let ctx = self.decision_context(c);
+        let outcome = self.plugins.decision.as_mut()?.adjust(&ctx);
+        let (value, notes) = self.plugins.settle(HookPoint::Decision, outcome);
+        self.push_script_notes(notes);
+        let offsets = value.unwrap_or_default();
+        self.script_cache = Some(ScriptCache {
+            carrier: c,
+            until: self.tick.saturating_add(self.plugins.refresh_ticks.max(1)),
+            offsets,
+        });
+        Some(offsets)
+    }
+
+    /// What the decision hook sees about carrier `c`.
+    pub(crate) fn decision_context(&self, c: usize) -> DecisionContext {
+        let carrier = self.players[c];
+        let team = carrier.team;
+        let side = &self.teams[team];
+        let nearest_opponent = self
+            .players
+            .iter()
+            .filter(|p| p.team != team && p.active())
+            .map(|p| (p.pos - carrier.pos).length())
+            .fold(f64::INFINITY, f64::min);
+        DecisionContext {
+            tick: self.tick,
+            minute: self.referee.clock.minute(self.tick).0,
+            team,
+            slot: carrier.slot,
+            goals_for: self.summary.goals[team],
+            goals_against: self.summary.goals[1 - team],
+            goal_distance: (side.target_goal() - carrier.pos).length(),
+            nearest_opponent: if nearest_opponent.is_finite() {
+                nearest_opponent
+            } else {
+                pitch::HALF_LENGTH * 2.0
+            },
+            progress: (carrier.pos.x * side.attack_x / pitch::HALF_LENGTH).clamp(-1.0, 1.0),
+        }
+    }
+
     /// Player `c` shoots at the goal centred on `goal`, which `keeper` defends. The shot aims
     /// for the side of the goal away from the goalkeeper; a better finisher places it nearer
     /// the post and strikes it truer. `spread_scale` scales the aim noise: 1 in open play, and

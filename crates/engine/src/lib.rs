@@ -16,6 +16,7 @@ pub mod math;
 pub mod observe;
 pub mod pitch;
 pub mod player;
+pub mod plugin;
 pub mod record;
 pub mod rng;
 pub mod rules;
@@ -35,6 +36,7 @@ pub use data::{Content, ContentDir, StoppageKind};
 pub use error::EngineError;
 pub use fatigue::InjurySource;
 pub use flags::{ActiveFlags, CODE_FLAGS, FlagSetting, FlagState, FlagStates};
+pub use plugin::{PLUGIN_API_VERSION, Plugins};
 pub use record::{
     FanoutSink, FileSink, NullSink, TickHeader, TickRecord, TickSink, VecSink, read_ticks,
 };

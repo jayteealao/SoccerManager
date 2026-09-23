@@ -6,7 +6,9 @@ use std::path::Path;
 use std::time::Instant;
 
 use engine::observe::identity::{data_dir, load_or_create_owner_id};
-use engine::observe::{LawStats, MatchFigures, MatchStats, TacticsStats, TeamRef, write_stats_at};
+use engine::observe::{
+    LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef, write_stats_at,
+};
 use engine::{
     Commentary, Commentator, Content, ContentDir, EngineError, MatchConfig, Simulation, Validator,
     VecSink,
@@ -146,6 +148,7 @@ fn play(
         laws: LawStats::new(&summary, pack_version, sim.tick(), 0),
         tactics: TacticsStats::new(&sim),
         figures: MatchFigures::new(&summary, sim.managers()),
+        script: ScriptFigures::new(sim.plugins()),
     })
 }
 
@@ -188,6 +191,7 @@ fn failure(
             error_type: Some(error_type(err).to_string()),
             ..MatchFigures::default()
         },
+        script: ScriptFigures::default(),
     }
 }
 

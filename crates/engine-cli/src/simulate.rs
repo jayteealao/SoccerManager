@@ -7,7 +7,8 @@ use std::time::Instant;
 use anyhow::Context;
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id, owner_bytes};
 use engine::observe::{
-    LawStats, MatchFigures, MatchStats, TacticsStats, TeamRef, emit_line, write_stats,
+    LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef, emit_line,
+    write_stats,
 };
 use engine::{
     Commentator, FanoutSink, FileSink, MatchConfig, Simulation, SnapshotSink, TickHeader,
@@ -18,18 +19,24 @@ use tracing::info_span;
 use stream::EventWriter;
 
 use crate::cli::SimulateOpts;
-use crate::stream_run::{Ids, match_event};
+use crate::stream_run::{Ids, rows};
 
 pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i32> {
     let span = info_span!("simulate", seed = opts.seed, minutes = opts.minutes);
     let _guard = span.enter();
-    let loaded = crate::content::load(content_dir, opts.team_a.as_deref(), opts.team_b.as_deref())?;
+    let loaded = crate::content::load(
+        content_dir,
+        opts.team_a.as_deref(),
+        opts.team_b.as_deref(),
+        opts.script_pack.as_deref(),
+    )?;
     let [team_a, team_b] = &loaded.teams;
     // Both teams are managed by the AI manager (the configuration's default).
     let mut config = MatchConfig::new(opts.seed, opts.minutes, &loaded.content, [team_a, team_b])?;
     if opts.knockout {
         config = config.with_knockout();
     }
+    loaded.fold(&mut config);
     let data = data_dir();
     let owner_id = load_or_create_owner_id(&data)?;
     let match_id = MatchId::now(opts.seed);
@@ -56,6 +63,7 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
     let started = Instant::now();
     let club_ids = [teams[0].id.clone(), teams[1].id.clone()];
     let mut sim = Simulation::new(config)?;
+    loaded.attach(&mut sim);
     let mut ids = Ids::new(&sim);
     let mut commentator = Commentator::for_match(&loaded.commentary, &sim);
     let file = FileSink::create(&opts.ticks_out, &header)
@@ -80,14 +88,17 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
     let match_id_text = match_id.to_string();
     let mut writer = EventWriter::open(&data, &match_id_text)?;
     for event in &events {
-        let row = match_event(
+        for row in rows(
+            &mut sim,
+            &mut commentator,
             event,
             &owner_id,
             &match_id_text,
             [&club_ids[0], &club_ids[1]],
             &mut ids,
-        );
-        writer.write(&row.commentary(commentator.line(event)))?;
+        ) {
+            writer.write(&row)?;
+        }
     }
     let validator = Validator::for_match(sim.tuning().clone(), sim.team_timeline(), &events);
     let violations = validator.check(&file.records);
@@ -112,6 +123,7 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
         laws: LawStats::new(&summary, pack_version, written, snapshot_writes),
         tactics: TacticsStats::new(&sim),
         figures: MatchFigures::new(&summary, sim.managers()),
+        script: ScriptFigures::new(sim.plugins()),
     };
     write_stats(&data, &stats)?;
     emit_line(&stats)?;

@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "id": "network-call",
+  "version": "1.0.0",
+  "name": "Test: a decision hook that calls the network",
+  "plugin_api": 1,
+  "entry": "main.rhai",
+  "hooks": ["decision"]
+}

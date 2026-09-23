@@ -30,6 +30,11 @@ meaning for a match that is not a knockout match. For a knockout match, `ticks_e
 covers extra time and the rule pack's allowance of shoot-out rounds; a sudden death longer
 than the allowance plays on past it, and a client grows its history to hold it.
 
+Version 3 also carries script packs (`--script-pack`) without a new version. The event message
+gained one event type (`script`) and four optional fields (`script.pack`, `script.hook`,
+`script.outcome`, and `script.detail`). A match without a pack sends exactly what it sent
+before, and no field changed meaning. The page ignores the `script` event type.
+
 A test in `crates/protocol/tests/document.rs` holds this document to the code: every message
 the implementation names must appear below with every one of its fields.
 
@@ -163,7 +168,7 @@ One `match-event` row. The same object is written to
 | `match.id` | string | the match |
 | `tick` | integer | the tick the event happened on |
 | `minute` | integer | the minute of play the match clock shows, counted from 0; it stays at the end of the half during added time |
-| `event.type` | enumeration | `kick-off`, `goal`, `half-time`, `full-time`, `tactics-change`, `offside`, `foul`, `card`, `throw-in`, `corner`, `goal-kick`, `free-kick`, `penalty`, `injury`, `substitution`, or `ai-decision` |
+| `event.type` | enumeration | `kick-off`, `goal`, `half-time`, `full-time`, `tactics-change`, `offside`, `foul`, `card`, `throw-in`, `corner`, `goal-kick`, `free-kick`, `penalty`, `injury`, `substitution`, `ai-decision`, or `script` |
 | `team.id` | string | the club the event belongs to: the offender's club on `offside`, `foul`, and `card`, the club that restarts play on a restart, the injured player's club on `injury`, the club that changes on `substitution`, `ai-decision`, and `tactics-change`; absent at half-time and full time |
 | `home.score` | integer | the score after the event |
 | `away.score` | integer | the score after the event |
@@ -185,7 +190,18 @@ One `match-event` row. The same object is written to
 | `shootout.scored` | boolean | on the second `penalty` event of a shoot-out kick, its outcome: `true` when the kick scored |
 | `shootout.scores` | array of two | on the outcome event of a shoot-out kick and on `full-time` after a shoot-out: the shoot-out score, home first; `home.score` and `away.score` keep the score of play |
 | `result.decided_by` | enumeration | knockout matches only, on `full-time`: `regulation`, `extra-time`, or `shoot-out` |
-| `commentary` | string | one English commentary line, on every event except `tactics-change`; the lines come from `content/commentary/en.json` and name the player and the club |
+| `commentary` | string | one English commentary line, on every event except `tactics-change` and `script`; the lines come from `content/commentary/en.json` and name the player and the club, and a script pack's commentary hook can rewrite them |
+| `script.pack` | string | on the first `kick-off` of a match that runs a script pack: the pack identity, `id@version+hash`, where the hash is the first 12 hex characters of the SHA-256 of `pack.json` followed by the script file |
+| `script.hook` | enumeration | on `script`: the hook that failed, `decision`, `rule`, or `commentary` |
+| `script.outcome` | enumeration | on `script`: `aborted` (the call ran out of its operation or time budget, or failed), `denied` (the call tried an import or a function the sandbox does not allow), or `disabled` (the hook failed three times in a row and is off for the rest of the match) |
+| `script.detail` | string | on `script`: why, such as `operation budget of 10000 exhausted` or `function http_get is not available` |
+
+A `script` event names no team or player and carries no `commentary`. Play goes on with the
+engine's own choice: zero option offsets, the referee's card, or the commentator's line. For
+example, a looping decision hook gives
+`{"event.type":"script","script.hook":"decision","script.outcome":"aborted","script.detail":"operation budget of 10000 exhausted",...}`,
+an import gives `"script.outcome":"denied","script.detail":"import ../../../Cargo is not allowed"`,
+and the third failure in a row adds a second event with `"script.outcome":"disabled"`.
 
 A knockout match that is level after regulation time plays two periods of extra time, each
 opened by a `half-time` event and a `kick-off` that carry `period`. Still level, it goes to a

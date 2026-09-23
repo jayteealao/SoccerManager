@@ -19,7 +19,9 @@ use engine::data::team::Position;
 use engine::observe::identity::{
     DATA_DIR_ENV, MatchId, data_dir, load_or_create_owner_id, owner_bytes, owner_hex,
 };
-use engine::observe::{LawStats, MatchFigures, MatchStats, TacticsStats, TeamRef, write_stats};
+use engine::observe::{
+    LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef, write_stats,
+};
 use engine::{EngineError, FanoutSink, FileSink, Manager, MatchConfig, Simulation, Snapshot};
 use engine::{TickHeader, snapshot::shorten_for_log};
 use protocol::{ChangeKind, Hello, PROTOCOL_VERSION, Queue, ServerMessage};
@@ -86,6 +88,7 @@ fn match_stats(
         ),
         tactics: TacticsStats::new(sim),
         figures: MatchFigures::new(&summary, sim.managers()),
+        script: ScriptFigures::new(sim.plugins()),
     }
 }
 
@@ -102,7 +105,12 @@ struct Opened {
 }
 
 pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> {
-    let loaded = crate::content::load(content_dir, opts.team_a.as_deref(), opts.team_b.as_deref())?;
+    let loaded = crate::content::load(
+        content_dir,
+        opts.team_a.as_deref(),
+        opts.team_b.as_deref(),
+        opts.script_pack.as_deref(),
+    )?;
     let data = data_dir();
     let stream_tuning = loaded.content.tuning.stream.clone();
     let opened = match opts.resume.as_deref() {
@@ -247,7 +255,8 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
             if let Some(setup) = pre_match.take() {
                 config = with_page_setup(config, setup);
             }
-            let kicked_off = Simulation::new(config.clone())?;
+            let mut kicked_off = Simulation::new(config.clone())?;
+            loaded.attach(&mut kicked_off);
             // The kick-off state, with the page's lineup: the restart point until the first
             // stoppage.
             gated.capture(&kicked_off);
@@ -334,12 +343,13 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
         tracing::info!(signal = "socket.dropped", tick = state.tick(), sent_tick);
         drop(events);
         let resume_at = if started {
-            let resumed = match gated.newest_before(sent_tick) {
+            let mut resumed = match gated.newest_before(sent_tick) {
                 Some(snapshot) => Simulation::from_snapshot(config.clone(), snapshot)?,
                 // No stoppage reached the viewer yet: the match starts again from kick-off,
                 // with the same seed, lineup, and identity.
                 None => Simulation::new(config.clone())?,
             };
+            loaded.attach(&mut resumed);
             let tick = resumed.tick();
             sim = Some(resumed);
             tick
@@ -385,6 +395,7 @@ fn open_fresh(
     if opts.knockout {
         config = config.with_knockout();
     }
+    loaded.fold(&mut config);
     let owner_id = load_or_create_owner_id(data)?;
     let started = match opts.match_millis {
         // The launcher chooses the stamp, so it knows where this match's snapshot is.
@@ -431,6 +442,7 @@ fn open_resumed(loaded: &crate::content::Loaded, path: &Path) -> Result<Opened, 
     if snapshot.knockout() {
         config = config.with_knockout();
     }
+    loaded.fold(&mut config);
     let started = MatchId {
         seed: snapshot.seed(),
         millis: snapshot.match_millis,
@@ -443,7 +455,8 @@ fn open_resumed(loaded: &crate::content::Loaded, path: &Path) -> Result<Opened, 
         seed: snapshot.seed(),
     };
     // The managers, lineups, benches, tactics, and substitutions come from the snapshot.
-    let sim = Simulation::from_snapshot(config.clone(), &snapshot)?;
+    let mut sim = Simulation::from_snapshot(config.clone(), &snapshot)?;
+    loaded.attach(&mut sim);
     let hello = hello_for(
         &sim,
         &identity,

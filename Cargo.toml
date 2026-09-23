@@ -1,6 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["crates/engine", "crates/engine-cli", "crates/protocol", "crates/stream"]
+members = [
+    "crates/engine",
+    "crates/engine-cli",
+    "crates/protocol",
+    "crates/script",
+    "crates/stream",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -26,6 +32,7 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_
 criterion = "0.8"
 tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
 boon = "0.6.1"
+rhai = { version = "1.26", features = ["sync"] }
 
 [profile.release]
 debug = 1

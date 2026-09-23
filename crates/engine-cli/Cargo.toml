@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 engine = { path = "../engine" }
 protocol = { path = "../protocol" }
+script = { path = "../script" }
 stream = { path = "../stream" }
 clap = { workspace = true }
 anyhow = { workspace = true }

@@ -89,7 +89,8 @@
         "lag",
         "half-time",
         "full-time",
-        "error"
+        "error",
+        "script"
       ]
     },
     "team.id": {
@@ -184,6 +185,29 @@
         "extra-time",
         "shoot-out"
       ]
+    },
+    "script.pack": {
+      "description": "On the first kick-off of a match that runs a script pack: id@version+hash.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*@[^+]+[+][0-9a-f]{12}$"
+    },
+    "script.hook": {
+      "enum": [
+        "decision",
+        "rule",
+        "commentary"
+      ]
+    },
+    "script.outcome": {
+      "enum": [
+        "aborted",
+        "denied",
+        "disabled"
+      ]
+    },
+    "script.detail": {
+      "type": "string",
+      "minLength": 1
     }
   },
   "additionalProperties": true
