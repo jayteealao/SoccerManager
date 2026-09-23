@@ -56,6 +56,14 @@
   --tl-font-num: 500 14px/1.2 "IBM Plex Sans", sans-serif;
 
   --tl-ease: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* The goal moment. The banner enters, holds, and leaves inside 1.5 seconds of wall
+   * time; `web/goal-moment.mjs` times the same three values and a test holds them equal.
+   * The reduced-motion block in components/panels.css sets every one to 0.01ms. */
+  --tl-goal-in: 250ms;
+  --tl-goal-hold: 1050ms;
+  --tl-goal-out: 200ms;
+  --tl-pulse: 600ms;
   --tl-shadow-1: 0 1px 2px oklch(0.24 0.02 250 / 0.12);
 
   /* The 1280 by 800 screen, as fixed tracks. There are no breakpoints: the target is one

@@ -20,6 +20,28 @@ pub struct TeamRef {
     pub kit_primary: String,
     #[serde(rename = "team.kit.secondary")]
     pub kit_secondary: String,
+    /// The 11 starters in wire-slot order, then the named bench in bench order. A hello from
+    /// an earlier build carries no roster and reads as an empty one.
+    #[serde(default)]
+    pub roster: Vec<RosterEntry>,
+}
+
+/// One player a hello names. `player.squad_index` is the player's place in the team file's
+/// squad, the handle a lineup change uses.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RosterEntry {
+    #[serde(rename = "player.id")]
+    pub id: String,
+    #[serde(rename = "player.name")]
+    pub name: String,
+    #[serde(rename = "player.shirt")]
+    pub shirt: u8,
+    /// The position code, such as `GK` or `CB`.
+    #[serde(rename = "player.position")]
+    pub position: String,
+    #[serde(rename = "player.squad_index")]
+    pub squad_index: u32,
 }
 
 /// The first message on every connection, before any tick frame.
@@ -47,7 +69,9 @@ pub struct Hello {
     pub teams: [TeamRef; 2],
 }
 
-/// The running totals of a match, sent at full time.
+/// The running totals of a match, sent once every simulated second and again at full time.
+/// Every pair is home first; the shares and expected goals are rounded exactly as the
+/// `match-stats` record rounds them.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Stats {
@@ -63,6 +87,36 @@ pub struct Stats {
     pub ball_max_speed: f64,
     #[serde(rename = "ball.idle_ticks")]
     pub ball_idle_ticks: u32,
+    /// Each team's share of the open-play ticks, one decimal.
+    #[serde(rename = "stats.possession_pct")]
+    pub possession_pct: [f64; 2],
+    #[serde(rename = "stats.shots")]
+    pub shots: [u32; 2],
+    #[serde(rename = "stats.shots_on_target")]
+    pub shots_on_target: [u32; 2],
+    /// Expected goals, two decimals.
+    #[serde(rename = "stats.xg")]
+    pub xg: [f64; 2],
+    #[serde(rename = "stats.passes")]
+    pub passes: [u32; 2],
+    /// Completed passes over passes played, one decimal; 0 for a team that played none.
+    #[serde(rename = "stats.pass_accuracy_pct")]
+    pub pass_accuracy_pct: [f64; 2],
+    #[serde(rename = "stats.fouls")]
+    pub fouls: [u32; 2],
+    #[serde(rename = "stats.corners")]
+    pub corners: [u32; 2],
+    #[serde(rename = "stats.offsides")]
+    pub offsides: [u32; 2],
+}
+
+/// Every player's energy, sent once every simulated second beside the statistics.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Condition {
+    pub tick: u32,
+    /// One value per wire slot, home first, from 0.0 (spent) to 1.0 (fresh), three decimals.
+    pub energy: Vec<f64>,
 }
 
 /// Everything the server sends as a JSON text frame.
@@ -72,6 +126,7 @@ pub enum ServerMessage {
     Hello(Hello),
     Event(MatchEvent),
     Stats(Stats),
+    Condition(Condition),
     Ack(Ack),
     Reject(Reject),
 }
@@ -140,12 +195,20 @@ mod tests {
                     name: "A".into(),
                     kit_primary: "#c8102e".into(),
                     kit_secondary: "#000000".into(),
+                    roster: vec![RosterEntry {
+                        id: "a-1".into(),
+                        name: "Keeper One".into(),
+                        shirt: 1,
+                        position: "GK".into(),
+                        squad_index: 0,
+                    }],
                 },
                 TeamRef {
                     id: "club-b".into(),
                     name: "B".into(),
                     kit_primary: "#6a0dad".into(),
                     kit_secondary: "#ff6a13".into(),
+                    roster: Vec::new(),
                 },
             ],
         }
@@ -171,6 +234,19 @@ mod tests {
                 possession_changes: 40,
                 ball_max_speed: 27.5,
                 ball_idle_ticks: 100,
+                possession_pct: [52.4, 47.6],
+                shots: [12, 9],
+                shots_on_target: [5, 3],
+                xg: [1.42, 0.87],
+                passes: [480, 410],
+                pass_accuracy_pct: [84.2, 79.5],
+                fouls: [11, 13],
+                corners: [6, 4],
+                offsides: [2, 3],
+            }),
+            ServerMessage::Condition(Condition {
+                tick: 50,
+                energy: vec![0.998; 22],
             }),
             ServerMessage::Ack(Ack {
                 command: "queue-change".into(),
@@ -240,6 +316,32 @@ mod tests {
         );
         let back = serde_json::from_str::<ServerMessage>(&json).unwrap();
         assert_eq!(back, ServerMessage::Hello(hello()));
+    }
+
+    #[test]
+    fn a_hello_without_a_roster_reads_as_an_empty_one() {
+        let json = serde_json::to_string(&ServerMessage::Hello(hello())).unwrap();
+        assert!(json.contains("\"player.squad_index\":0"), "{json}");
+        let bare = json.replace(",\"roster\":[]", "");
+        assert_ne!(bare, json);
+        let ServerMessage::Hello(back) = serde_json::from_str::<ServerMessage>(&bare).unwrap()
+        else {
+            panic!("not a hello");
+        };
+        assert!(back.teams[1].roster.is_empty());
+    }
+
+    #[test]
+    fn a_condition_message_is_tagged_condition() {
+        let json = serde_json::to_string(&ServerMessage::Condition(Condition {
+            tick: 50,
+            energy: vec![1.0, 0.5],
+        }))
+        .unwrap();
+        assert_eq!(
+            json,
+            "{\"type\":\"condition\",\"tick\":50,\"energy\":[1.0,0.5]}"
+        );
     }
 
     #[test]

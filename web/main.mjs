@@ -1,14 +1,20 @@
 // The page: socket in, pitch out, controls between them.
 
 import { COMPONENT_COUNT, decodeInto, newFrame } from './decode.mjs';
+import { Feed, minuteStamp } from './feed.mjs';
+import { GoalMoment, bannerText, watchMotion } from './goal-moment.mjs';
 import { History } from './history.mjs';
 import { between } from './interpolate.mjs';
+import { Lineups } from './lineups.mjs';
 import { colours as markColours, drawMark, setFavicon } from './mark.mjs';
+import { MatchState } from './match-state.mjs';
 import { Pitch } from './pitch.mjs';
 import { Playback, SPEEDS } from './playback.mjs';
 import { Scheduler, TICKS_PER_SECOND } from './schedule.mjs';
+import { Scoreboard } from './scoreboard.mjs';
 import { signal, signals } from './signal.mjs';
 import { MatchSocket, socketAddress } from './socket.mjs';
+import { StatsPanel } from './stats.mjs';
 import { Stoppages, stopsPlay } from './stoppages.mjs';
 
 const el = (id) => document.getElementById(id);
@@ -28,6 +34,10 @@ let scrubbing = false;
 let resumeAfterScrub = true;
 let lastRewind = null;
 
+/// The match-day panels. Every one reads the match at the rendered tick, once per frame.
+const match = new MatchState();
+let panels = null;
+
 /// The clock, as a manager reads it: minutes and seconds of match time.
 function clockText(tick) {
   const seconds = Math.floor(tick / TICKS_PER_SECOND);
@@ -46,7 +56,8 @@ function showNotice(text, kind = 'lag') {
   notice.dataset.shown = shown ? 'true' : 'false';
   notice.dataset.kind = kind;
   notice.setAttribute('aria-hidden', shown ? 'false' : 'true');
-  el('notice-word').textContent = shown ? (kind === 'error' ? 'Stream ended' : 'Lag') : '';
+  const words = { error: 'Stream ended', end: 'Full time', lag: 'Lag' };
+  el('notice-word').textContent = shown ? (words[kind] ?? 'Lag') : '';
   el('notice-text').textContent = text ?? '';
 }
 
@@ -55,6 +66,7 @@ function setSpeedButtons(requested, effective) {
     el(`speed-${speed}`).setAttribute('aria-pressed', String(speed === requested));
   }
   el('speed-effective').textContent = `${effective}x`;
+  panels?.scoreboard.setSpeed(effective);
   announce(
     requested === effective
       ? `Speed ${requested} times real time.`
@@ -68,7 +80,7 @@ function start(hello) {
     { primary: hello.teams[0]['team.kit.primary'], secondary: hello.teams[0]['team.kit.secondary'] },
     { primary: hello.teams[1]['team.kit.primary'], secondary: hello.teams[1]['team.kit.secondary'] },
   ]);
-  el('teams').textContent = `${hello.teams[0]['team.name']} v ${hello.teams[1]['team.name']}`;
+  panels.start(hello);
   el('engine-version').textContent = `engine ${hello['engine.version']}`;
   el('scrub').max = String(hello.ticks_expected);
   playback = new Playback({
@@ -120,6 +132,7 @@ function revealPitch() {
 }
 
 function onMessage(message) {
+  match.add(message);
   if (stopsPlay(message)) {
     stoppages.add(message.tick);
   }
@@ -145,8 +158,116 @@ function frame(timestamp) {
   between(earlier, later, step.fraction, rendered);
   pitch.draw(rendered);
   renderedTick = step.from;
-  el('clock').textContent = clockText(step.from);
+  panels.flush(renderedTick, { seek: false });
   el('gauge').textContent = gaugeText();
+}
+
+/// Every panel around the pitch. One `flush` per frame writes only what changed, and never
+/// shows a message the pitch has not reached: the match is read at the rendered tick.
+class Panels {
+  constructor() {
+    this.scoreboard = new Scoreboard({
+      names: [el('team-home'), el('team-away')],
+      crests: [el('crest-home'), el('crest-away')],
+      bug: el('score-bug'),
+      home: el('score-home'),
+      away: el('score-away'),
+      clock: el('clock'),
+      speed: el('header-speed'),
+    });
+    this.feed = new Feed({ list: el('feed'), empty: el('feed-empty'), live: el('feed-live') });
+    this.lineups = new Lineups(el('lineups'));
+    this.stats = new StatsPanel(el('stats'));
+    this.goal = new GoalMoment({
+      banner: el('goal-banner'),
+      bannerText: el('goal-banner-text'),
+      bug: el('score-bug'),
+    });
+    this.teamNames = new Map();
+    this.goalsShown = 0;
+    this.lastTick = -1;
+    this.goalShownAtTick = null;
+    this.lineupView = null;
+    this.lineupKey = '';
+    this.state = match.at(0);
+  }
+
+  start(hello) {
+    const teams = hello.teams;
+    this.teamNames = new Map(teams.map((t) => [t['team.id'], t['team.name']]));
+    this.scoreboard.setTeams(teams, markColours(document).band);
+    this.feed.setTeams(this.teamNames);
+    this.lineups.setTeams(teams);
+    this.lineupView = null;
+    this.stats.setTeams(teams.map((t) => t['team.name']));
+    this.flush(0, { seek: true });
+  }
+
+  /// Brings every panel to `tick`. A seek never replays a goal moment: the banner belongs to
+  /// the frame in which play crosses the goal, not to a rewind that lands after it.
+  flush(tick, { seek }) {
+    const previous = this.lastTick;
+    const state = match.at(tick);
+    this.state = state;
+    this.lastTick = tick;
+    this.scoreboard.setScore(state.home, state.away);
+    this.scoreboard.setClock(clockText(tick));
+    this.feed.flush(state.entries);
+    // The lineups change only when a released event or condition message changes them, so
+    // they are rebuilt on that, never per tick.
+    const lineupKey = `${state.entries.length}|${state.energyTick}`;
+    if (state !== this.lineupView || lineupKey !== this.lineupKey) {
+      this.lineupView = state;
+      this.lineupKey = lineupKey;
+      this.lineups.update(state);
+    }
+    this.stats.update(state.stats);
+    const goals = state.goals.length;
+    if (seek || tick < previous) {
+      if (goals < this.goalsShown) {
+        this.goal.clear();
+      }
+      this.goalsShown = goals;
+      return;
+    }
+    if (goals > this.goalsShown) {
+      const goal = state.goals[goals - 1];
+      this.goalsShown = goals;
+      this.goal.play(goal, bannerText(goal, this.teamNames, minuteStamp(goal)));
+      this.feed.highlightGoal(goal.tick);
+      this.goalShownAtTick = tick;
+      signal('viewer.goal_moment', {
+        goal_tick: goal.tick,
+        rendered_tick: tick,
+        prev_rendered_tick: previous,
+        // 0 when this frame is the first whose rendered tick reached the goal, which is the
+        // normal case: the score, banner, and feed line are applied in that same frame. 1
+        // means the goal event arrived after the pitch had already passed its tick.
+        frame_delta: previous < goal.tick ? 0 : 1,
+        'home.score': state.home,
+        'away.score': state.away,
+      });
+    }
+  }
+
+  /// The read-only view the test hook returns.
+  snapshot() {
+    const state = this.state;
+    return {
+      renderedTick,
+      score: [state.home, state.away],
+      feedCount: this.feed.count,
+      lastFeed: this.feed.last,
+      goalShownAtTick: this.goalShownAtTick,
+      bannerVisible: this.goal.visible,
+      bannerText: el('goal-banner-text').textContent,
+      stats: state.stats,
+      energyTick: state.energyTick,
+      lineupLabels: this.lineups.labels(),
+      emptyStateShown: !el('feed-empty').hidden,
+      motion: document.documentElement.dataset.motion,
+    };
+  }
 }
 
 function gaugeText() {
@@ -172,7 +293,7 @@ function rewind(tick) {
     between(earlier, earlier, 0, rendered);
     pitch.draw(rendered);
     renderedTick = tick;
-    el('clock').textContent = clockText(tick);
+    panels.flush(tick, { seek: true });
     exact = rendered.every((value, i) => value === earlier[i]);
     lastRewind = { tick, drawn: Array.from(rendered), stored: Array.from(earlier), exact };
   }
@@ -234,6 +355,7 @@ function hook() {
       newest_tick: history ? history.newestTick : 0,
     }),
     frame: () => scheduler.budget(),
+    matchDay: () => (panels ? panels.snapshot() : null),
     lastRewind: () => lastRewind,
     stoppageAt: (tick) => stoppages.next(tick),
     tickAt: (tick) => {
@@ -248,6 +370,8 @@ async function main() {
   const mark = markColours(document);
   setFavicon(document, 32, mark);
   drawMark(el('mark').getContext('2d'), 0, 0, 28, mark);
+  watchMotion(document, globalThis);
+  panels = new Panels();
 
   wire();
   hook();
@@ -260,6 +384,13 @@ async function main() {
     onMessage,
   });
   socket.onClose = () => {
+    // The engine closes the socket after full time on purpose, and that close is not a
+    // fault: every tick is stored and the match plays back. Any other close is.
+    if (match.fullTimeTick !== null) {
+      showNotice('Full time. The whole match is stored and plays back.', 'end');
+      announce('Full time. The whole match is stored and plays back.');
+      return;
+    }
     // The canvas error state, stubbed here and completed in a later version: the panel and
     // the text, with no recovery action yet.
     showNotice('The match is no longer live. Start the engine again to watch another.', 'error');

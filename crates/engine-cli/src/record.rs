@@ -4,12 +4,12 @@ use std::path::Path;
 
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id};
 use engine::{MatchConfig, Simulation};
-use protocol::{Hello, PROTOCOL_VERSION, ServerMessage, TeamRef};
+use protocol::{Hello, PROTOCOL_VERSION, ServerMessage};
 use stream::session::{FrameOut, FrameSink, MatchState};
 use stream::{Recorder, SharedRecorder};
 
 use crate::cli::RecordOpts;
-use crate::stream_run::{Drive, drive};
+use crate::stream_run::{Drive, drive, hello_teams};
 
 pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32> {
     let loaded = crate::content::load(content_dir, opts.team_a.as_deref(), opts.team_b.as_deref())?;
@@ -30,7 +30,10 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
 
     // The hello is the fixture's first entry, so a replay forwards the recorded match rather
     // than describing itself. Without it a fixture carries no team name, no kit colour, and
-    // no recorded keyframe interval, and a replayer can only invent all three.
+    // no recorded keyframe interval, and a replayer can only invent all three. The simulation
+    // comes first, because its pre-match setup settles the lineup the roster names.
+    let dt = config.tuning.dt;
+    let mut sim = Simulation::new(config)?;
     let hello = Hello {
         protocol_version: PROTOCOL_VERSION,
         engine_version: engine::version().to_string(),
@@ -38,30 +41,16 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
         owner_id: owner_id.clone(),
         match_id: match_id.to_string(),
         seed: opts.seed,
-        dt_ms: config.tuning.dt * 1000.0,
+        dt_ms: dt * 1000.0,
         ticks_expected: ticks,
         keyframe_interval,
-        teams: [
-            TeamRef {
-                id: club_ids[0].clone(),
-                name: config.teams[0].name.clone(),
-                kit_primary: config.teams[0].kit.primary.clone(),
-                kit_secondary: config.teams[0].kit.secondary.clone(),
-            },
-            TeamRef {
-                id: club_ids[1].clone(),
-                name: config.teams[1].name.clone(),
-                kit_primary: config.teams[1].kit.primary.clone(),
-                kit_secondary: config.teams[1].kit.secondary.clone(),
-            },
-        ],
+        teams: hello_teams(&sim),
     };
     messages.send(protocol::Frame::Text(
         serde_json::to_string(&ServerMessage::Hello(hello))
             .map_err(|source| protocol::ProtocolError::Json { source })?,
     ))?;
 
-    let mut sim = Simulation::new(config)?;
     let state = MatchState::default();
     let match_id = match_id.to_string();
     let driven = drive(

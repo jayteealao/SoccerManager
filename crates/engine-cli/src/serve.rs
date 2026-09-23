@@ -6,13 +6,13 @@ use std::sync::{Arc, Mutex};
 use anyhow::Context;
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id, owner_bytes};
 use engine::{FanoutSink, FileSink, Manager, MatchConfig, Simulation, SnapshotSink, TickHeader};
-use protocol::{ChangeKind, Hello, PROTOCOL_VERSION, Queue, ServerMessage, TeamRef};
+use protocol::{ChangeKind, Hello, PROTOCOL_VERSION, Queue, ServerMessage};
 use stream::events::EventWriter;
 use stream::session::{MatchState, SessionConfig};
 use stream::{CommandContext, Gate, Server, Session};
 
 use crate::cli::ServeOpts;
-use crate::stream_run::{Drive, drive};
+use crate::stream_run::{Drive, drive, hello_teams};
 
 pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> {
     let loaded = crate::content::load(content_dir, opts.team_a.as_deref(), opts.team_b.as_deref())?;
@@ -32,6 +32,10 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
         config.teams[0].club_id.clone(),
         config.teams[1].club_id.clone(),
     ];
+    let dt = config.tuning.dt;
+    // The simulation comes before the hello, because its pre-match setup settles the lineup
+    // the hello's roster names.
+    let mut sim = Simulation::new(config)?;
     let hello = Hello {
         protocol_version: PROTOCOL_VERSION,
         engine_version: engine::version().to_string(),
@@ -39,23 +43,10 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
         owner_id: owner_id.clone(),
         match_id: match_id.clone(),
         seed: opts.seed,
-        dt_ms: config.tuning.dt * 1000.0,
+        dt_ms: dt * 1000.0,
         ticks_expected: ticks,
         keyframe_interval: stream_tuning.keyframe_interval,
-        teams: [
-            TeamRef {
-                id: club_ids[0].clone(),
-                name: config.teams[0].name.clone(),
-                kit_primary: config.teams[0].kit.primary.clone(),
-                kit_secondary: config.teams[0].kit.secondary.clone(),
-            },
-            TeamRef {
-                id: club_ids[1].clone(),
-                name: config.teams[1].name.clone(),
-                kit_primary: config.teams[1].kit.primary.clone(),
-                kit_secondary: config.teams[1].kit.secondary.clone(),
-            },
-        ],
+        teams: hello_teams(&sim),
     };
 
     let server = Server::bind(&data, &match_id)?;
@@ -96,7 +87,7 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
                 path,
                 &TickHeader {
                     seed: opts.seed,
-                    dt: config.tuning.dt,
+                    dt,
                     expected_ticks: ticks,
                     owner_id: owner_bytes(&owner_id)?,
                     match_millis,
@@ -108,7 +99,6 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
     };
     let snapshots = SnapshotSink::new(&data, &match_id, owner_bytes(&owner_id)?, match_millis);
     let mut sink = FanoutSink::new(FanoutSink::new(session.sink(), ticks_file), snapshots);
-    let mut sim = Simulation::new(config)?;
     let driven = drive(
         &mut sim,
         &mut sink,

@@ -142,12 +142,14 @@ fn serve(
                 name: config.teams[0].name.clone(),
                 kit_primary: config.teams[0].kit.primary.clone(),
                 kit_secondary: config.teams[0].kit.secondary.clone(),
+                roster: Vec::new(),
             },
             TeamRef {
                 id: club_ids[1].clone(),
                 name: config.teams[1].name.clone(),
                 kit_primary: config.teams[1].kit.primary.clone(),
                 kit_secondary: config.teams[1].kit.secondary.clone(),
+                roster: Vec::new(),
             },
         ],
     };
@@ -218,6 +220,15 @@ fn serve(
         possession_changes: summary.possession_changes,
         ball_max_speed: summary.ball_max_speed,
         ball_idle_ticks: summary.ball_idle_ticks,
+        possession_pct: [0.0; 2],
+        shots: summary.shots,
+        shots_on_target: summary.shots_on_target,
+        xg: summary.xg,
+        passes: summary.passes,
+        pass_accuracy_pct: [0.0; 2],
+        fouls: summary.fouls,
+        corners: summary.corners,
+        offsides: summary.offsides,
     }));
     drop(sink);
     session.finish()?;

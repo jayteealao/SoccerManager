@@ -43,10 +43,11 @@ fn record_writes_a_fixture_and_prints_its_counts() {
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("\"ticks\":3000"), "stdout: {stdout}");
-    // The hello, 3,000 tick frames, the two kick-offs, one throw-in, half-time, full time, and
-    // the closing statistics. The hello is stored so a replay forwards the recorded match
+    // The hello, 3,000 tick frames, the two kick-offs, one throw-in, half-time, full time,
+    // 60 running statistics and 60 condition messages (one of each every simulated second),
+    // and the closing statistics. The hello is stored so a replay forwards the recorded match
     // rather than describing the replaying build.
-    assert!(stdout.contains("\"frames\":3007"), "stdout: {stdout}");
+    assert!(stdout.contains("\"frames\":3127"), "stdout: {stdout}");
     assert!(stdout.contains("\"hash\":\""), "stdout: {stdout}");
 
     let read = stream::read_fixture(&fixture).unwrap();

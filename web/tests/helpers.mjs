@@ -102,3 +102,65 @@ export function readFixture(limit = Infinity) {
   }
   return { header, entries };
 }
+
+/// One `stats` line captured from a recorded match (`engine-cli record --seed 7 --minutes
+/// 90`, tick 150000), byte for byte as the engine wrote it.
+export const CAPTURED_STATS = JSON.parse(
+  '{"type":"stats","tick":150000,"minute":45,"home.score":2,"away.score":0,' +
+    '"possession.changes":189,"ball.max_speed":27.04740101706518,"ball.idle_ticks":625,' +
+    '"stats.possession_pct":[59.5,40.5],"stats.shots":[3,2],"stats.shots_on_target":[3,1],' +
+    '"stats.xg":[0.2,0.11],"stats.passes":[848,666],"stats.pass_accuracy_pct":[87.6,84.5],' +
+    '"stats.fouls":[5,2],"stats.corners":[0,0],"stats.offsides":[0,7]}'
+);
+
+/// A `stats` message with every panel field set, values chosen so no two are equal.
+export function statsMessage(tick = 50, overrides = {}) {
+  return {
+    type: 'stats',
+    tick,
+    minute: Math.floor(tick / 3000),
+    'home.score': 0,
+    'away.score': 0,
+    'possession.changes': 3,
+    'ball.max_speed': 20.5,
+    'ball.idle_ticks': 4,
+    'stats.possession_pct': [52.4, 47.6],
+    'stats.shots': [12, 9],
+    'stats.shots_on_target': [5, 3],
+    'stats.xg': [1.42, 0.87],
+    'stats.passes': [480, 410],
+    'stats.pass_accuracy_pct': [84.2, 79.5],
+    'stats.fouls': [11, 13],
+    'stats.corners': [6, 4],
+    'stats.offsides': [2, 1],
+    ...overrides,
+  };
+}
+
+/// An `event` message with the envelope every event carries.
+export function eventMessage(tick, type, fields = {}) {
+  return {
+    type: 'event',
+    'owner.id': 'owner',
+    'match.id': 'match',
+    tick,
+    minute: Math.floor(tick / 3000),
+    'event.type': type,
+    'home.score': 0,
+    'away.score': 0,
+    commentary: type === 'tactics-change' ? undefined : `${type} at ${tick}`,
+    ...fields,
+  };
+}
+
+/// A hello roster of 11 starters then 7 bench players for `team` (0 or 1).
+export function roster(team) {
+  const positions = ['GK', 'RB', 'CB', 'CB', 'LB', 'DM', 'CM', 'CM', 'RW', 'LW', 'ST'];
+  return Array.from({ length: 18 }, (_, i) => ({
+    'player.id': `p-${team}-${i + 1}`,
+    'player.name': `Player ${team}-${i + 1}`,
+    'player.shirt': i + 1,
+    'player.position': positions[i] ?? 'CM',
+    'player.squad_index': i,
+  }));
+}

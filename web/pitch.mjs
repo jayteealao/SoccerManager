@@ -16,6 +16,18 @@ export const GOAL_WIDTH = 7.32;
 const HALF_LENGTH = LENGTH / 2;
 const HALF_WIDTH = WIDTH / 2;
 
+/// A sent-off player stands beside the pitch, past the touchline, at `parking_spot()` in
+/// `crates/engine/src/pitch.rs`. These two constants and the test below are ported from there.
+const PARKING_OFFSET = 3;
+
+/// `true` when a position in metres is a parking spot, to the precision of the wire's
+/// centimetres. A port of `is_parking_spot()` in `crates/engine/src/pitch.rs`: a sent-off
+/// player is not on the pitch and is not drawn.
+export function isParkingSpot(x, y) {
+  const ax = Math.abs(x);
+  return Math.abs(y + HALF_WIDTH + PARKING_OFFSET) < 0.01 && ax >= 9.99 && ax <= 20.01;
+}
+
 /// Markings, in metres, from the laws of the game.
 const CENTRE_CIRCLE = 9.15;
 const PENALTY_DEPTH = 16.5;
@@ -197,12 +209,17 @@ export class Pitch {
 
     // One `fillStyle` change per team rather than one per marker, and one path for the
     // whole team's discs. The shirt numbers follow in a second pass for the same reason.
+    // A sent-off player parked beside the pitch is skipped in both passes.
+    const onPitch = (i) => !isParkingSpot(components[3 + i * 2] / 100, components[4 + i * 2] / 100);
     for (const team of [0, 1]) {
       const kit = this.kits[team];
       const first = team * 11;
       ctx.fillStyle = kit.fill;
       ctx.beginPath();
       for (let i = first; i < first + 11; i += 1) {
+        if (!onPitch(i)) {
+          continue;
+        }
         const px = this.x(components[3 + i * 2] / 100);
         const py = this.y(components[4 + i * 2] / 100);
         ctx.moveTo(px + MARKER_RADIUS, py);
@@ -219,6 +236,9 @@ export class Pitch {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       for (let i = first; i < first + 11; i += 1) {
+        if (!onPitch(i)) {
+          continue;
+        }
         const px = this.x(components[3 + i * 2] / 100);
         const py = this.y(components[4 + i * 2] / 100);
         ctx.fillText(String(i - first + 1), px, py + 0.5);

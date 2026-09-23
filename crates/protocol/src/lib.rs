@@ -16,7 +16,10 @@ pub use codec::{DEFAULT_KEYFRAME_INTERVAL, DELTA_BYTES, KEYFRAME_BYTES, Quantise
 pub use command::{Ack, ChangeKind, ChangeState, Pending, Queue, Reject, Verdict};
 pub use event::{CardKind, ChangeOutcome, EventType, MatchEvent};
 pub use frame::{Frame, TickFrame};
-pub use message::{ClientCommand, Hello, QueueChange, ServerMessage, SetSpeed, Stats, TeamRef};
+pub use message::{
+    ClientCommand, Condition, Hello, QueueChange, RosterEntry, ServerMessage, SetSpeed, Stats,
+    TeamRef,
+};
 
 /// The protocol version a client must ask for. A client that asks for another version is
 /// refused at the handshake, with both versions named.
@@ -41,7 +44,13 @@ pub use message::{ClientCommand, Hello, QueueChange, ServerMessage, SetSpeed, St
 /// judgement: no field was removed, none changed meaning (`player.id` now also names the
 /// scorer and the restart taker, values the field already allowed), and both producers in
 /// existence changed in the same commit.
-pub const PROTOCOL_VERSION: u16 = 2;
+///
+/// Version 3: `stats` changed meaning from one closing total to a running total sent every
+/// simulated second (and again at full time), and gained nine panel fields. A new message,
+/// `condition`, carries every player's energy on the same cadence, and each hello team gained
+/// a `roster`. A viewer built for version 2 would read the first `stats` message as the final
+/// score sheet, so the change takes a new version.
+pub const PROTOCOL_VERSION: u16 = 3;
 
 /// Errors this crate returns.
 #[derive(Debug, Error)]
@@ -123,6 +132,12 @@ pub const MESSAGES: &[MessageSpec] = &[
             "team.name",
             "team.kit.primary",
             "team.kit.secondary",
+            "roster",
+            "player.id",
+            "player.name",
+            "player.shirt",
+            "player.position",
+            "player.squad_index",
         ],
     },
     MessageSpec {
@@ -172,7 +187,22 @@ pub const MESSAGES: &[MessageSpec] = &[
             "possession.changes",
             "ball.max_speed",
             "ball.idle_ticks",
+            "stats.possession_pct",
+            "stats.shots",
+            "stats.shots_on_target",
+            "stats.xg",
+            "stats.passes",
+            "stats.pass_accuracy_pct",
+            "stats.fouls",
+            "stats.corners",
+            "stats.offsides",
         ],
+    },
+    MessageSpec {
+        name: "condition",
+        direction: Direction::ServerToClient,
+        encoding: Encoding::JsonText,
+        fields: &["tick", "energy"],
     },
     MessageSpec {
         name: "ack",
@@ -235,6 +265,7 @@ mod tests {
             ServerMessage::Hello(_) => "hello",
             ServerMessage::Event(_) => "event",
             ServerMessage::Stats(_) => "stats",
+            ServerMessage::Condition(_) => "condition",
             ServerMessage::Ack(_) => "ack",
             ServerMessage::Reject(_) => "reject",
         }
@@ -255,6 +286,7 @@ mod tests {
             name: String::new(),
             kit_primary: String::new(),
             kit_secondary: String::new(),
+            roster: Vec::new(),
         }
     }
 
@@ -288,6 +320,19 @@ mod tests {
                 possession_changes: 0,
                 ball_max_speed: 0.0,
                 ball_idle_ticks: 0,
+                possession_pct: [0.0; 2],
+                shots: [0; 2],
+                shots_on_target: [0; 2],
+                xg: [0.0; 2],
+                passes: [0; 2],
+                pass_accuracy_pct: [0.0; 2],
+                fouls: [0; 2],
+                corners: [0; 2],
+                offsides: [0; 2],
+            }),
+            ServerMessage::Condition(Condition {
+                tick: 0,
+                energy: Vec::new(),
             }),
             ServerMessage::Ack(Ack {
                 command: String::new(),

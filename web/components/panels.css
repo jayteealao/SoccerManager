@@ -1,0 +1,405 @@
+/* The match-day panels: the header score bug, the goal banner, the feed, the lineups, and
+ * the statistics. Every value comes from tokens.css. Every state colour sits beside its
+ * state word. Motion animates opacity and transform only, with no bounce, and the one
+ * reduced-motion block at the end of this file drops all of it.
+ */
+
+/* ---- Header ----------------------------------------------------------------------- */
+
+.scoreboard {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--tl-gap);
+  min-width: 0;
+}
+
+.scoreboard__crest {
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+
+.scoreboard__name {
+  font: var(--tl-font-md);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.scoreboard__name--home {
+  text-align: right;
+}
+
+/* The score bug. Paper on brand-pressed measures well above 4.5:1, and the display face at
+ * 30 px is large text on top of that. */
+.score-bug {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 12px;
+  border-radius: var(--tl-radius-md);
+  background: var(--tl-brand-pressed);
+  color: var(--tl-on-brand);
+  font: var(--tl-font-display);
+  font-variant-numeric: tabular-nums;
+  transform: scale(1);
+  transition: transform calc(var(--tl-pulse) / 2) var(--tl-ease);
+}
+
+.score-bug[data-pulse="on"] {
+  transform: scale(1.12);
+}
+
+.header__clock,
+.header__speed {
+  min-width: 46px;
+  text-align: center;
+  flex: none;
+}
+
+.header__speed {
+  min-width: 28px;
+}
+
+/* ---- Goal banner, over the top of the pitch ---------------------------------------- */
+
+/* It is drawn in the pitchside theme: a light panel would disappear into the markings. */
+.goal-banner {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  max-width: calc(100% - 28px);
+  padding: 6px 16px;
+  border-radius: var(--tl-radius-lg);
+  background: var(--tl-panel);
+  color: var(--tl-fg);
+  box-shadow: var(--tl-shadow-1);
+  font: var(--tl-font-display);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  transition:
+    opacity var(--tl-goal-out) ease-in,
+    transform var(--tl-goal-out) ease-in;
+}
+
+.goal-banner[data-shown="true"] {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  transition:
+    opacity var(--tl-goal-in) var(--tl-ease),
+    transform var(--tl-goal-in) var(--tl-ease);
+}
+
+/* ---- Match feed, right column ------------------------------------------------------ */
+
+.feed-panel {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 6px;
+  height: calc(800px - var(--tl-header-h) - 2 * var(--tl-gap));
+  min-height: 0;
+}
+
+.feed__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.feed__body .feed__list {
+  flex: 1;
+}
+
+.feed__empty[hidden] {
+  display: none;
+}
+
+.feed__empty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--tl-fg-muted);
+}
+
+.feed__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  border-radius: var(--tl-radius-md);
+}
+
+.feed__list:focus-visible {
+  outline: 2px solid var(--tl-brand);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--tl-ring);
+}
+
+.feed__row {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  column-gap: 6px;
+  padding: 4px 6px;
+  border-radius: var(--tl-radius-sm);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.feed__minute {
+  color: var(--tl-fg-muted);
+  grid-row: span 2;
+}
+
+.feed__word {
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.feed__text {
+  grid-column: 2;
+}
+
+/* A highlight is a tint AND a word, never a tint alone. */
+.feed__row--highlight {
+  background: color-mix(in oklch, var(--tl-brand) 7%, var(--tl-panel));
+}
+
+.feed__row--highlight[data-kind="goal"] {
+  background: color-mix(in oklch, var(--tl-success) 12%, var(--tl-panel));
+}
+
+.feed__row--goal-now {
+  background: color-mix(in oklch, var(--tl-success) 22%, var(--tl-panel));
+}
+
+/* ---- Lineups, left column ---------------------------------------------------------- */
+
+.lineups {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--tl-gap);
+  margin-top: 6px;
+}
+
+.lineup {
+  min-width: 0;
+}
+
+.lineup__team {
+  margin: 0 0 4px;
+  font: var(--tl-font-md);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lineup__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+/* Two lines per player: who, then how they are. */
+.lineup__row {
+  display: grid;
+  grid-template-columns: 24px 20px 1fr auto;
+  grid-template-areas:
+    "pos shirt name card"
+    "status status status status";
+  column-gap: 4px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 3px 4px;
+  border-radius: var(--tl-radius-sm);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.lineup__pos {
+  grid-area: pos;
+  font-size: 12px;
+  color: var(--tl-fg-muted);
+}
+
+.lineup__shirt {
+  grid-area: shirt;
+  text-align: right;
+}
+
+.lineup__name {
+  grid-area: name;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lineup__card {
+  grid-area: card;
+  padding: 0 4px;
+  border-radius: var(--tl-radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.lineup__card[data-card="yellow"] {
+  background: var(--tl-card-yellow);
+  color: var(--tl-fg);
+}
+
+.lineup__card[data-card="red"] {
+  background: var(--tl-danger);
+  color: var(--tl-on-brand);
+}
+
+.lineup__card[hidden] {
+  display: none;
+}
+
+/* The second line: the fatigue bar, then the condition word beside it. */
+.lineup__status {
+  grid-area: status;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.lineup__bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--tl-skeleton);
+  overflow: hidden;
+}
+
+.lineup__fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: 3px;
+}
+
+.lineup__condition {
+  flex: none;
+  font-size: 12px;
+  color: var(--tl-fg-muted);
+  min-width: 58px;
+  text-align: right;
+}
+
+.lineup__row[data-condition="Injured"] .lineup__condition,
+.lineup__row[data-condition="Sent off"] .lineup__condition {
+  color: var(--tl-danger);
+  font-weight: 600;
+}
+
+.lineup__row[data-condition="Sent off"] .lineup__name {
+  text-decoration: line-through;
+  color: var(--tl-fg-muted);
+}
+
+/* ---- Statistics, under the control strip ------------------------------------------- */
+
+.stats-panel {
+  display: grid;
+  gap: 4px;
+}
+
+.stats__tables {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 16px;
+  align-items: start;
+}
+
+.stats__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.stats__table th,
+.stats__table td {
+  padding: 2px 4px;
+  line-height: 1.25;
+}
+
+.stats__table thead th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tl-fg-muted);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 96px;
+}
+
+.stats__table tbody th {
+  font-weight: 400;
+  text-align: left;
+  color: var(--tl-fg);
+  white-space: nowrap;
+}
+
+.stats__table tbody tr + tr {
+  border-top: 1px solid var(--tl-line);
+}
+
+.stats__value {
+  text-align: right;
+  color: var(--tl-fg);
+  width: 64px;
+}
+
+.visually-hidden-cell {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- Reduced motion ---------------------------------------------------------------- */
+
+/* One block serves both paths. `web/goal-moment.mjs` mirrors the operating system's
+ * `prefers-reduced-motion: reduce` onto `<html data-motion="reduce">`, and `?motion=reduce`
+ * sets the same attribute for a browser tool that cannot emulate the query, so the two
+ * cannot drift apart. The banner still appears and leaves; it only stops moving. */
+:root[data-motion="reduce"] {
+  --tl-goal-in: 0.01ms;
+  --tl-goal-out: 0.01ms;
+  --tl-pulse: 0.01ms;
+}
+
+:root[data-motion="reduce"] .goal-banner,
+:root[data-motion="reduce"] .goal-banner[data-shown="true"],
+:root[data-motion="reduce"] .score-bug,
+:root[data-motion="reduce"] .notice,
+:root[data-motion="reduce"] .notice[data-shown="true"],
+:root[data-motion="reduce"] .skeleton {
+  transition-duration: 0.01ms;
+}
+
+:root[data-motion="reduce"] .goal-banner,
+:root[data-motion="reduce"] .goal-banner[data-shown="true"] {
+  transform: translate(-50%, 0);
+}
+
+:root[data-motion="reduce"] .score-bug[data-pulse="on"] {
+  transform: none;
+}

@@ -8,24 +8,36 @@
     <link rel="stylesheet" href="fonts/fonts.css" />
     <link rel="stylesheet" href="layout.css" />
     <link rel="stylesheet" href="components/match-control.css" />
+    <link rel="stylesheet" href="components/panels.css" />
   </head>
   <body>
     <div class="page">
-      <!-- The header band is built at its full 56 pixels and left almost empty. The score
-           bug and the goal banner are coming in a later version; the frame is here so the
-           pitch is measured in its shipping position. -->
+      <!-- The header band: the mark, both clubs around the score bug, the clock, and the
+           speed. The score is written in the frame the pitch draws the goal, never earlier. -->
       <header class="header">
         <canvas class="header__mark" id="mark" width="28" height="28" role="img"
                 aria-label="Touchline"></canvas>
         <h1 class="header__title">Touchline</h1>
-        <span class="header__teams tl-num" id="teams">Waiting for the engine</span>
+        <div class="scoreboard" id="scoreboard">
+          <span class="scoreboard__name scoreboard__name--home" id="team-home">Waiting for the engine</span>
+          <canvas class="scoreboard__crest" id="crest-home" width="28" height="28" role="img"
+                  aria-label="Home crest"></canvas>
+          <span class="score-bug" id="score-bug" data-pulse="off" aria-label="Score 0 – 0">
+            <span id="score-home">0</span><span aria-hidden="true">–</span><span id="score-away">0</span>
+          </span>
+          <canvas class="scoreboard__crest" id="crest-away" width="28" height="28" role="img"
+                  aria-label="Away crest"></canvas>
+          <span class="scoreboard__name" id="team-away"></span>
+        </div>
+        <span class="header__clock tl-num" id="clock" aria-label="Match clock">00:00</span>
+        <span class="header__speed tl-num" id="header-speed" aria-label="Playback speed">1x</span>
         <span class="header__teams tl-num" id="engine-version"></span>
       </header>
 
       <div class="body">
-        <section class="panel region--empty" aria-labelledby="left-label">
+        <section class="panel" aria-labelledby="left-label">
           <h2 class="panel__label" id="left-label">Lineups</h2>
-          <p class="region__note">Coming in a later version.</p>
+          <div class="lineups" id="lineups"></div>
         </section>
 
         <div class="stage">
@@ -39,6 +51,12 @@
               aria-label="The pitch, with twenty-two player markers and the ball. The clock, the speed and any notice are read out in text beside it."
             ></canvas>
             <!-- A content area never shows a spinner. The skeleton says what is coming. -->
+            <!-- The goal banner is the one overlay on the pitch besides the markers. The feed
+                 announces the goal to a screen reader, so the banner itself stays quiet. -->
+            <div class="goal-banner" id="goal-banner" data-theme="pitchside" data-shown="false"
+                 aria-hidden="true">
+              <span id="goal-banner-text"></span>
+            </div>
             <div class="skeleton" id="skeleton">
               <strong>Waiting for the first tick</strong>
               <span>The engine is connecting and the pitch draws as soon as play starts.</span>
@@ -52,7 +70,6 @@
             <button class="match-control match-control--sm match-control--quiet" id="skip">
               Next stop
             </button>
-            <span class="controls__clock tl-num" id="clock">00:00</span>
             <button class="match-control match-control--sm" id="speed-1" aria-pressed="true">
               1x
             </button>
@@ -93,15 +110,18 @@
             <span id="notice-text"></span>
           </div>
 
-          <section class="panel region--empty" aria-labelledby="stats-label">
+          <section class="panel stats-panel" aria-labelledby="stats-label">
             <h2 class="panel__label" id="stats-label">Statistics</h2>
-            <p class="region__note">Coming in a later version.</p>
+            <div class="stats__tables" id="stats"></div>
           </section>
         </div>
 
-        <section class="panel region--empty" aria-labelledby="right-label">
+        <section class="panel feed-panel" aria-labelledby="right-label">
           <h2 class="panel__label" id="right-label">Match feed</h2>
-          <p class="region__note">Coming in a later version.</p>
+          <div class="feed__body">
+            <p class="feed__empty" id="feed-empty">No events yet. The feed fills as the match plays.</p>
+            <ol class="feed__list" id="feed" tabindex="0" aria-label="Match events, oldest first"></ol>
+          </div>
         </section>
       </div>
     </div>
@@ -109,6 +129,8 @@
     <!-- The canvas is a picture to a screen reader, so the clock, the speed and the lag
          notice are mirrored here as text. -->
     <p class="visually-hidden" id="live" aria-live="polite"></p>
+    <!-- Goals and cards only, so a screen reader is not flooded at eight times speed. -->
+    <p class="visually-hidden" id="feed-live" aria-live="polite"></p>
 
     <script type="module" src="main.mjs"></script>
   </body>

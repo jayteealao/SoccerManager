@@ -8,12 +8,12 @@ use std::time::Instant;
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id};
 use engine::observe::{RunReport, emit_line, machine_hash, process};
 use engine::{MatchConfig, NullSink, Simulation};
-use protocol::{Hello, PROTOCOL_VERSION, Queue, ServerMessage, TeamRef};
+use protocol::{Hello, PROTOCOL_VERSION, Queue, ServerMessage};
 use stream::session::{MatchState, SessionConfig};
 use stream::{Client, CommandContext, Gate, Incoming, Server, Session};
 
 use crate::cli::BenchOpts;
-use crate::stream_run::{Drive, drive};
+use crate::stream_run::{Drive, drive, hello_teams};
 
 /// Wall-time budget for one 90-minute match on one thread, in milliseconds (NFR-1).
 pub const BUDGET_MATCH_WALL_MS: u64 = 2000;
@@ -146,6 +146,7 @@ fn measure_stream(
         config.teams[0].club_id.clone(),
         config.teams[1].club_id.clone(),
     ];
+    let mut sim = Simulation::new(config.clone())?;
     let hello = Hello {
         protocol_version: PROTOCOL_VERSION,
         engine_version: engine::version().to_string(),
@@ -156,20 +157,7 @@ fn measure_stream(
         dt_ms: config.tuning.dt * 1000.0,
         ticks_expected: ticks,
         keyframe_interval: 50,
-        teams: [
-            TeamRef {
-                id: club_ids[0].clone(),
-                name: config.teams[0].name.clone(),
-                kit_primary: config.teams[0].kit.primary.clone(),
-                kit_secondary: config.teams[0].kit.secondary.clone(),
-            },
-            TeamRef {
-                id: club_ids[1].clone(),
-                name: config.teams[1].name.clone(),
-                kit_primary: config.teams[1].kit.primary.clone(),
-                kit_secondary: config.teams[1].kit.secondary.clone(),
-            },
-        ],
+        teams: hello_teams(&sim),
     };
 
     let server = Server::bind(&data, &match_id)?;
@@ -204,7 +192,6 @@ fn measure_stream(
         },
     )?;
     let mut sink = session.sink();
-    let mut sim = Simulation::new(config.clone())?;
     let started = Instant::now();
     drive(
         &mut sim,

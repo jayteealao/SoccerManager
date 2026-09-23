@@ -1,8 +1,8 @@
-# Match stream protocol, version 2
+# Match stream protocol, version 3
 
 The engine serves one viewer over a WebSocket on `127.0.0.1`. The port is chosen by the
 operating system at every run and written to `engine.port` inside the runtime data folder.
-A page connects to `ws://127.0.0.1:<port>/?v=2`.
+A page connects to `ws://127.0.0.1:<port>/?v=3`.
 
 Version 2 changed the meaning of `ticks_expected` from the exact tick count to the most ticks
 the match can last, because the time added at the end of each half is known only when the
@@ -10,6 +10,11 @@ half ends. The event message gained the law event types and six optional fields.
 later gained the `injury`, `substitution`, and `ai-decision` event types and the optional
 fields `change.applied_tick` and `ai.decision`, and change events now carry `team.id`. No
 field changed meaning.
+
+Version 3 changed the meaning of `stats` from one closing total to a running total sent once
+every simulated second and again at full time, and gave it the nine figures the match screen
+shows. A new message, `condition`, carries every player's energy on the same cadence. Each
+`hello` team gained a `roster`. A fixture recorded by an earlier build is refused by version.
 
 A test in `crates/protocol/tests/document.rs` holds this document to the code: every message
 the implementation names must appear below with every one of its fields.
@@ -19,7 +24,7 @@ the implementation names must appear below with every one of its fields.
 | Step | Rule |
 |---|---|
 | Address | `ws://127.0.0.1:<port>/?v=<protocol version>` |
-| Version | `v` must equal `1`. Any other value, or no value, is refused with both versions named. |
+| Version | `v` must equal `3`. Any other value, or no value, is refused with both versions named. |
 | Origin | `null`, a `file://` page, any port of `http://localhost` or `http://127.0.0.1`, or no `Origin` header at all. Any other origin is refused. |
 | Clients | One viewer per match. |
 | First message | `hello`, always before the first tick frame. |
@@ -48,7 +53,7 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 
 | Field | Type | Meaning |
 |---|---|---|
-| `protocol.version` | integer | always 2 in this build |
+| `protocol.version` | integer | always 3 in this build |
 | `engine.version` | string | the engine crate version |
 | `build.hash` | string | the git hash the engine was built from |
 | `owner.id` | string | 32 hex characters, created once per machine |
@@ -67,6 +72,17 @@ Each entry of `teams`:
 | `team.name` | string | the club name |
 | `team.kit.primary` | string | lower-case `#rrggbb`, the shirt colour |
 | `team.kit.secondary` | string | lower-case `#rrggbb`, the trim colour |
+| `roster` | array | the 11 starters in wire-slot order (home slots 0 to 10, away 11 to 21), then the named bench in bench order; see the table below. A hello without it reads as an empty list |
+
+Each entry of `roster`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `player.id` | string | the player identifier from the team file, as events name it |
+| `player.name` | string | the display name |
+| `player.shirt` | integer | the shirt number |
+| `player.position` | string | the position code, for example `GK`, `CB`, or `ST` |
+| `player.squad_index` | integer | the player's place in the team file's squad, counted from 0 |
 
 A viewer draws its markers from the two kit colours. It must not use either colour as it
 arrives: a team file may hold pure black or pure white, so a viewer pulls the lightness of
@@ -134,17 +150,39 @@ reason in `change.rejected_reason`:
 
 ### stats
 
-Sent once, at full time.
+Sent once every simulated second (every 50 ticks at 20 ms per tick), after that tick's
+events, and once more at full time. Every value is the running total up to `tick`. Every pair
+is home first. The rounding equals the `match-stats` record's, so the last message and the
+record agree. A viewer shows each message when playback reaches its `tick`, not when it
+arrives.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `tick` | integer | the last tick |
-| `minute` | integer | the last simulated minute |
-| `home.score` | integer | final score |
-| `away.score` | integer | final score |
+| `tick` | integer | the tick the totals were taken on |
+| `minute` | integer | the simulated minute |
+| `home.score` | integer | the score |
+| `away.score` | integer | the score |
 | `possession.changes` | integer | times possession changed hands |
 | `ball.max_speed` | float | metres per second |
 | `ball.idle_ticks` | integer | ticks the ball stood still |
+| `stats.possession_pct` | two floats | each team's share of open-play ticks, one decimal |
+| `stats.shots` | two integers | shots taken |
+| `stats.shots_on_target` | two integers | shots that scored or that the goalkeeper held |
+| `stats.xg` | two floats | expected goals, two decimals |
+| `stats.passes` | two integers | passes played |
+| `stats.pass_accuracy_pct` | two floats | completed passes over passes played, one decimal; 0 for none |
+| `stats.fouls` | two integers | fouls committed |
+| `stats.corners` | two integers | corners taken |
+| `stats.offsides` | two integers | offsides given against the team |
+
+### condition
+
+Sent right after each periodic `stats` message, not at full time.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `tick` | integer | the tick the values were taken on |
+| `energy` | array of 22 floats | each wire slot's energy, home slots first, from 0.0 (spent) to 1.0 (fresh), three decimals. A substitute takes the slot of the player who left |
 
 ### ack
 
@@ -225,7 +263,7 @@ same-origin, including both fonts, so nothing is lost today; a later version tha
 external resource will meet this rule.
 
 One path is generated rather than read from the folder. `GET /engine.json` answers
-`{"socket.port": <port>, "protocol.version": 1}`, because a page served on one port cannot
+`{"socket.port": <port>, "protocol.version": 3}`, because a page served on one port cannot
 guess the WebSocket port on another and the operating system chooses both at every run.
 
 ## Backpressure

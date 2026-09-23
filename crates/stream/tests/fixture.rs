@@ -36,12 +36,14 @@ fn record(path: &Path, minutes: u32) -> u32 {
                 name: config.teams[0].name.clone(),
                 kit_primary: config.teams[0].kit.primary.clone(),
                 kit_secondary: config.teams[0].kit.secondary.clone(),
+                roster: Vec::new(),
             },
             TeamRef {
                 id: config.teams[1].club_id.clone(),
                 name: config.teams[1].name.clone(),
                 kit_primary: config.teams[1].kit.primary.clone(),
                 kit_secondary: config.teams[1].kit.secondary.clone(),
+                roster: Vec::new(),
             },
         ],
     };
