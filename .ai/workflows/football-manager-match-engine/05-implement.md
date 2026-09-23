@@ -5,13 +5,13 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-23T00:51:38Z"
-slices-implemented: 8
+updated-at: "2026-09-23T09:18:45Z"
+slices-implemented: 9
 slices-total: 16
-metric-total-files-changed: 357
-metric-total-lines-added: 34816
-metric-total-lines-removed: 998
-tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas]
+metric-total-files-changed: 389
+metric-total-lines-added: 37337
+metric-total-lines-removed: 1116
+tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3]
 refs:
   index: 00-index.md
   plan-index: 04-plan.md
@@ -24,8 +24,9 @@ refs:
     - 05-implement-tactics-and-ai.md
     - 05-implement-commentary.md
     - 05-implement-calibration.md
+    - 05-implement-viewer-match-day.md
 next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine calibration"
+next-invocation: "/wf verify football-manager-match-engine viewer-match-day"
 ---
 
 # Implement Index
@@ -82,6 +83,13 @@ next-invocation: "/wf verify football-manager-match-engine calibration"
 - `calibration` leaves AC-d failing: `darkpath.change_never_applied` = 288 over 2000 matches, all queued after the last stoppage of the match. 183 of them come from the AI re-queueing refused injury substitutions, which is handed off to a follow-up task. The product owner has an open question on whether a change that expires at full time counts. The goals tail (sd 3.36) and the untuned mentality offsets are open tuning items.
 - Benchmark: `calibration` measured 412.4 to 418.8 ms of processor time per match (median 415.8, gate 460.7), 1.4593 to 1.482 µs per tick, 282,600 ticks per match, and 6.320 to 6.352 MB peak memory (gate 6.82). A 1000-match suite takes 78 seconds on 8 workers.
 
+- `viewer-match-day` is implemented (commits `9e684e9` and `4d21041`) and awaits verify. Every later slice inherits these changes:
+  - `PROTOCOL_VERSION` is 3. Each hello team carries `roster` (11 starters in wire-slot order, then the named bench; `player.id`, `player.name`, `player.shirt`, `player.position`, `player.squad_index`). `stats` is sent every 50 ticks and at full time with nine `stats.*` pairs from `MatchFigures` and `Summary`. `condition` carries 22 energy values on the same cadence. Every earlier recording is refused by version.
+  - `serve`, `record`, and the streaming `bench` build the simulation before the hello and share `stream_run::hello_teams`. `viewer-lineup-tactics` adds its squad, lineup hold, `set-lineup`, and tactics schema under version 3 and tells the page about a changed lineup.
+  - The page reads the match at the rendered tick through `web/match-state.mjs`; every event-kind string the panels read sits in its `KIND` table. `web/components/panels.css` holds the panel styles and the one reduced-motion block (`<html data-motion="reduce">`, set from the media query or `?motion=reduce`). `__touchline.matchDay()` is the read-only hook for the panels.
+  - Parked (sent-off) markers are no longer drawn. The close after full time reads "Full time".
+- Benchmark: `viewer-match-day` measured the stream at 609,885 to 611,588 delivered ticks per second (baseline 609,220) with 7.61 MB median peak memory (tripwire 8.55), and 416.7 ms of processor time per match (gate 460.7). A 90-minute recording grew from 16.3 MB to 20.5 MB. The p95 restatement and the four page targets are left to verify, because the browser pane was hidden at implement time.
+
 ## Recommended Next Stage
 
-- `/wf verify football-manager-match-engine calibration`
+- `/wf verify football-manager-match-engine viewer-match-day`
