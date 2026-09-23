@@ -66,6 +66,8 @@ refs:
   slice-index: 03-slice.md
   adapters: "runtime-adapters.md"
   verify: 06-verify-engine-core.md
+  plan: 04-plan-probe-engine-core.md
+  implement: 05-implement-probe-engine-core.md
 ---
 
 # Compressed Slice: probe

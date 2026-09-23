@@ -5,13 +5,13 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-23T18:22:08Z"
-slices-implemented: 16
-slices-total: 16
-metric-total-files-changed: 635
-metric-total-lines-added: 56853
-metric-total-lines-removed: 2310
-tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment, scripting, sandbox, plugin-interface, distribution, installer, packaging, release-version]
+updated-at: "2026-09-23T19:09:40Z"
+slices-implemented: 17
+slices-total: 17
+metric-total-files-changed: 649
+metric-total-lines-added: 57862
+metric-total-lines-removed: 2456
+tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment, scripting, sandbox, plugin-interface, distribution, installer, packaging, release-version, error-record, help-text]
 refs:
   index: 00-index.md
   plan-index: 04-plan.md
@@ -32,8 +32,9 @@ refs:
     - 05-implement-experiment-flags.md
     - 05-implement-scripting-runtime.md
     - 05-implement-distribution.md
+    - 05-implement-probe-engine-core.md
 next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine distribution"
+next-invocation: "/wf verify football-manager-match-engine probe-engine-core"
 ---
 
 # Implement Index
@@ -146,7 +147,17 @@ next-invocation: "/wf verify football-manager-match-engine distribution"
   - `packaging/windows/run-sandbox.ps1` and `packaging/unix/smoke.sh` are the clean-machine checks.
 - Checks at implement: 403 Rust tests and 127 page tests pass, and clippy runs with `-D warnings`. Windows Sandbox passed 11 of 11 checks on an image without `vcruntime140.dll`, and the WSL archive check passed 7 of 7. In the sandbox, the Start-menu entry opened no browser, because the sandbox image cannot open `http` links.
 
+- `probe-engine-core` is implemented (commit `733839c`) and awaits verify. Every later slice inherits these changes:
+  - A failed `simulate` or `bench` run prints one record on stdout (`FailureRecord`): the success `record.kind`, `outcome` `error`, `error.type`, `error.code`, `error.retriable`, and no statistic key. Exit code 1 and the prose line are kept. Other commands keep prose-only failures.
+  - `EngineError` classifies itself (`error_type`, `error_code`, `retriable`). Code that writes an error record uses these, not a private classifier.
+  - `outcome` is `success` or `error` in both record schemas; `failure` is refused. Statistic and benchmark keys are required only when the outcome is not `error`, and an error record requires the three `error.*` keys. A failed calibration match writes `error`; a failed worker makes the run report `error` with `error.type` `worker`. Run folders from before this commit do not validate.
+  - Short help (`-h`) must fit 80 columns on all 10 help surfaces, and `no_help_line_exceeds_eighty_columns` checks `-h` and `--help` on each. A new option puts its detail in `long_help`.
+  - Hidden seam `calibrate --inject-failure <match|worker>` (shard 0 only).
+- Checks at implement: 414 Rust tests pass (4 ignored), clippy runs with `-D warnings`, and `bench --seed 42 --matches 5` measured 423 ms per match.
+
 ## Recommended Next Stage
+
+- `/wf verify football-manager-match-engine probe-engine-core` (new: `cargo test -p engine-cli --test cli_args --test schemas`, the three failure drives and both `calibrate --inject-failure` drives on the release binary, and the 20 help-width checks)
 
 - `/wf verify football-manager-match-engine distribution` (new: `run-sandbox.ps1` and the WSL `smoke.sh`, `cargo test --test release_version --test install_layout` on both platforms, the benchmark compare after the static runtime, and the pre-registered macOS deferral)
 

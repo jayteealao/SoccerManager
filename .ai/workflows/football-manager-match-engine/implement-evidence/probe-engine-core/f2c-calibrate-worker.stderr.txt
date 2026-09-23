@@ -1,0 +1,3 @@
+2026-09-23T19:08:35.815762Z ERROR engine_cli::calibrate::worker: signal="calibrate.injected_failure" shard=0
+2026-09-23T19:08:35.816485Z  WARN engine_cli::calibrate: signal="calibrate.worker_failed" run.id=calib-0000000000000001-1790190515809 suite="equal" code=Some(1)
+2026-09-23T19:08:35.845232Z  WARN engine_cli::calibrate: signal="calibrate.darkpath" run.id=calib-0000000000000001-1790190515809 counter="darkpath.match_without_stats" value=2

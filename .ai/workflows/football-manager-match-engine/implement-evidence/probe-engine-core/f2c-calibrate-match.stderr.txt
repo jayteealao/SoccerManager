@@ -1,0 +1,1 @@
+2026-09-23T19:08:34.290342Z ERROR engine_cli::calibrate::worker: signal="calibrate.match_failed" match.id=910a2dec89025cc1-1790190514280 error=invalid configuration: injected failure

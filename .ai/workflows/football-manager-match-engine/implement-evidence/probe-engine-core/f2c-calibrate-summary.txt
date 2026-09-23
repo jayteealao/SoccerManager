@@ -1,0 +1,8 @@
+== match exit 2
+files saying failure: 0
+stats files with outcome error: 1
+== worker exit 2
+files saying failure: 0
+stats files with outcome error: 0
+match report: {"outcome": "success", "error.type": null, "error.code": null, "error.retriable": null, "darkpath.match_without_stats": 0, "calib.pass": false}
+worker report: {"outcome": "error", "error.type": "worker", "error.code": "worker-failed", "error.retriable": false, "darkpath.match_without_stats": 2, "calib.pass": false}
