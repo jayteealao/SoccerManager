@@ -1,0 +1,41 @@
+
+Running 1 test using 1 worker
+
+[1/1] [scenario] › e2e\tests\charter-scenario.spec.mjs:64:1 › a manager plays a whole match, lineup to full-time report
+  1) [scenario] › e2e\tests\charter-scenario.spec.mjs:64:1 › a manager plays a whole match, lineup to full-time report › 11. the full-time report shows, the replay saves, and the records are written 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      306 |       expect(statSync(saved).size).toBeGreaterThan(0);
+      307 |       const records = readRecords(engine.dataDir, seen.hello['match.id']);
+    > 308 |       expect(existsSync(path.join(records.folder, 'stats.json'))).toBe(true);
+          |                                                                   ^
+      309 |       expect(existsSync(path.join(records.folder, 'events.jsonl'))).toBe(true);
+      310 |       await shot(page, testInfo, 11);
+      311 |     });
+        at C:\Users\jayte\Documents\dev\SoccerManager\e2e\tests\charter-scenario.spec.mjs:308:67
+        at C:\Users\jayte\Documents\dev\SoccerManager\e2e\tests\charter-scenario.spec.mjs:294:5
+
+    attachment #11: screenshot (image/png) ─────────────────────────────────────────────────────────
+    e2e\test-results\charter-scenario-a-manager-a1cf4--lineup-to-full-time-report-scenario\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e\test-results\charter-scenario-a-manager-a1cf4--lineup-to-full-time-report-scenario\error-context.md
+
+    attachment #13: trace (application/zip) ────────────────────────────────────────────────────────
+    e2e\test-results\charter-scenario-a-manager-a1cf4--lineup-to-full-time-report-scenario\trace.zip
+    Usage:
+
+        npx playwright show-trace e2e\test-results\charter-scenario-a-manager-a1cf4--lineup-to-full-time-report-scenario\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  Slow test file: [scenario] › e2e\tests\charter-scenario.spec.mjs (14.3m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  1 failed
+    [scenario] › e2e\tests\charter-scenario.spec.mjs:64:1 › a manager plays a whole match, lineup to full-time report 
+exit 1

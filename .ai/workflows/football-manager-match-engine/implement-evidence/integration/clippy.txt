@@ -1,0 +1,2 @@
+    Checking engine-cli v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.67s

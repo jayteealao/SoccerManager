@@ -1,0 +1,39 @@
+
+Running 1 test using 1 worker
+
+[1/1] [scenario] › e2e\tests\charter-scenario.spec.mjs:65:1 › a manager plays a whole match, lineup to full-time report
+  1) [scenario] › e2e\tests\charter-scenario.spec.mjs:65:1 › a manager plays a whole match, lineup to full-time report › 8. a goal updates the score, shows the banner, and the feed names scorer, minute, and score 
+
+    Error: expect(received).toContain(expected) // indexOf
+
+    Expected substring: "1-0"
+    Received string:    "22' GOAL The first goal goes to Belfield Athletic, and Raton Garberg is the scorer!"
+
+      244 |       expect(row.text).toContain(scorerSurname);
+      245 |       expect(row.text).toMatch(new RegExp(`\\b${goal.minute}'?`));
+    > 246 |       expect(row.text).toContain(`${goal['home.score']}-${goal['away.score']}`);
+          |                        ^
+      247 |       expect(goal.commentary).toContain(scorerSurname);
+      248 |       await shot(page, testInfo, 8);
+      249 |     });
+        at C:\Users\jayte\Documents\dev\SoccerManager\e2e\tests\charter-scenario.spec.mjs:246:24
+        at C:\Users\jayte\Documents\dev\SoccerManager\e2e\tests\charter-scenario.spec.mjs:213:5
+
+    attachment #8: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e\test-results\charter-scenario-a-manager-a1cf4--lineup-to-full-time-report-scenario\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e\test-results\charter-scenario-a-manager-a1cf4--lineup-to-full-time-report-scenario\error-context.md
+
+    attachment #10: trace (application/zip) ────────────────────────────────────────────────────────
+    e2e\test-results\charter-scenario-a-manager-a1cf4--lineup-to-full-time-report-scenario\trace.zip
+    Usage:
+
+        npx playwright show-trace e2e\test-results\charter-scenario-a-manager-a1cf4--lineup-to-full-time-report-scenario\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  1 failed
+    [scenario] › e2e\tests\charter-scenario.spec.mjs:65:1 › a manager plays a whole match, lineup to full-time report 
+exit 1

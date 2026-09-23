@@ -5,13 +5,13 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-23T12:10:26Z"
-slices-implemented: 11
+updated-at: "2026-09-23T14:42:29Z"
+slices-implemented: 12
 slices-total: 16
-metric-total-files-changed: 465
-metric-total-lines-added: 45059
-metric-total-lines-removed: 1500
-tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files]
+metric-total-files-changed: 490
+metric-total-lines-added: 48063
+metric-total-lines-removed: 1945
+tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit]
 refs:
   index: 00-index.md
   plan-index: 04-plan.md
@@ -27,6 +27,7 @@ refs:
     - 05-implement-viewer-match-day.md
     - 05-implement-viewer-lineup-tactics.md
     - 05-implement-viewer-reports-recovery.md
+    - 05-implement-integration.md
 next-command: wf-verify
 next-invocation: "/wf verify football-manager-match-engine viewer-reports-recovery"
 ---
@@ -106,8 +107,16 @@ next-invocation: "/wf verify football-manager-match-engine viewer-reports-recove
   - New hook readers: `recovery()`, `report()`, `replay()`, `lastSavedBytes()`, `events()`.
 - Checks at implement: 305 Rust tests and 126 page tests pass, clippy runs with `-D warnings`, and the stream benchmark median is 608,360 ticks per second with 7.83 MB peak (tripwire 8.55 MB).
 
+- `integration` is implemented (commit `e71ebfd`) and awaits verify. It adds these changes:
+  - `e2e/` is a Playwright 1.63.0 suite of 21 tests. Each test starts its own engine with a temporary `SM_DATA_DIR`. The whole first match passes all twelve steps against the live engine. `e2e/README.md` maps every viewer behaviour to a test or to one of three human checks.
+  - `serve` (and so `launch`) now writes `stats.json` at full time. Before this change, a match played in the browser left no statistics record. A served match that the viewer abandons still writes none (deferred).
+  - The header names the engine state in words ("Engine connected · v0.1.0", reconnecting, stopped, finished, replay).
+  - `docs/` holds the tutorial, the modding how-to, the command-line and data-file references, and the engine explanation. `content/README.md` is now a pointer. `docs.rs` and `licenses.rs` keep the references and the dependency licenses honest.
+- Checks at implement: 310 Rust tests (4 ignored) and 126 page tests pass, clippy runs with `-D warnings`, and the browser suite passes 21 of 21 in 24.4 minutes. Benchmark: the median is 420 ms (before 418 ms), processor time rises by at most 1.5 percent, and peak memory is 6.54 MB or less. 1000 matches take 423.5 s.
+
 ## Recommended Next Stage
 
+- `/wf verify football-manager-match-engine integration`
 - `/wf verify football-manager-match-engine viewer-reports-recovery`
 - `/wf verify football-manager-match-engine viewer-lineup-tactics`
 - `/wf verify football-manager-match-engine viewer-match-day` (still open)
