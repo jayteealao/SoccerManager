@@ -326,6 +326,13 @@ impl RunBuilder {
         self.records().map(|r| r.tactics.change_never_applied).sum()
     }
 
+    /// The sum of `change.expired_at_full_time` over every record.
+    pub fn change_expired_at_full_time(&self) -> u32 {
+        self.records()
+            .map(|r| r.tactics.change_expired_at_full_time)
+            .sum()
+    }
+
     /// The sum of validator violations over every record.
     pub fn violations(&self) -> usize {
         self.records().map(|r| r.validate_violations).sum()
@@ -397,6 +404,10 @@ pub struct CalibrationReport {
     pub peak_mem_mb: Option<f64>,
     #[serde(rename = "darkpath.change_never_applied")]
     pub change_never_applied: u32,
+    /// Changes still waiting at full time with no admitting stoppage after them. Reported,
+    /// with no zero rule.
+    #[serde(rename = "change.expired_at_full_time")]
+    pub change_expired_at_full_time: u32,
     #[serde(rename = "darkpath.match_without_stats")]
     pub match_without_stats: u32,
     #[serde(rename = "validate.violations")]

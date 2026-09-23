@@ -79,6 +79,7 @@ fn a_small_run_writes_a_record_per_match_and_a_report_that_validate() {
     let stats = files(&run.join("stats"));
     assert_eq!(stats.len(), 8);
     let mut change_never_applied = 0;
+    let mut change_expired = 0;
     for path in &stats {
         let s = record(&std::fs::read_to_string(path).unwrap());
         schemas
@@ -88,8 +89,10 @@ fn a_small_run_writes_a_record_per_match_and_a_report_that_validate() {
         assert_eq!(s["validate.ran"], true);
         assert_eq!(s["manager.kind"], serde_json::json!(["ai", "ai"]));
         change_never_applied += s["darkpath.change_never_applied"].as_u64().unwrap();
+        change_expired += s["change.expired_at_full_time"].as_u64().unwrap();
     }
     assert_eq!(saved["darkpath.change_never_applied"], change_never_applied);
+    assert_eq!(saved["change.expired_at_full_time"], change_expired);
     let events = files(&run.join("events"));
     assert_eq!(events.len(), 8);
     for path in &events {

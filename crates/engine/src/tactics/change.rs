@@ -55,6 +55,13 @@ impl ChangeKind {
             ChangeKind::Substitution => "substitution",
         }
     }
+    /// The kind's place in per-kind arrays: tactics 0, substitution 1.
+    pub fn index(&self) -> usize {
+        match self {
+            ChangeKind::Tactics => 0,
+            ChangeKind::Substitution => 1,
+        }
+    }
 }
 
 /// A queue identifier, written `q-{tick}-{n}` like the socket queue's, so a later bridge
@@ -86,9 +93,36 @@ pub struct QueuedChange {
 pub struct ChangeQueue {
     pub pending: Vec<QueuedChange>,
     pub next: u32,
+    /// The tick of the latest stoppage that admitted each kind, tactics first, then
+    /// substitutions. A change still waiting at full time is expired when no stoppage that
+    /// admits its kind opened after it was queued, and never applied when one did.
+    pub admitted: [Option<u32>; 2],
+}
+
+/// How the changes still waiting at full time split.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Unapplied {
+    /// Changes an admitting stoppage opened after, yet did not apply or reject.
+    pub never_applied: u32,
+    /// Changes queued after the last stoppage that admits their kind.
+    pub expired: u32,
 }
 
 impl ChangeQueue {
+    /// Splits the changes still waiting into never applied and expired.
+    pub fn unapplied(&self) -> Unapplied {
+        let mut out = Unapplied::default();
+        for q in &self.pending {
+            let admitted = self.admitted[q.change.kind().index()];
+            if admitted.is_some_and(|at| at > q.id.tick) {
+                out.never_applied += 1;
+            } else {
+                out.expired += 1;
+            }
+        }
+        out
+    }
+
     /// `true` when a substitution for `team` taking `off` off is waiting.
     pub fn has_substitution(&self, team: usize, off: usize) -> bool {
         self.pending.iter().any(|q| {
@@ -208,6 +242,11 @@ impl Simulation {
         &self.queue.pending
     }
 
+    /// The changes still waiting, split into never applied and expired.
+    pub fn unapplied_changes(&self) -> Unapplied {
+        self.queue.unapplied()
+    }
+
     /// Each team's substitutions so far, home first.
     pub fn ledgers(&self) -> [SubLedger; 2] {
         self.ledgers
@@ -215,14 +254,19 @@ impl Simulation {
 
     /// Applies the queue at the stoppage this tick opened.
     pub(crate) fn apply_changes(&mut self, stoppage: Stoppage) {
-        if self.queue.pending.is_empty() {
-            return;
-        }
         let (tactics_ok, subs_ok) = self.config.rules.admits(stoppage.kind);
-        if !tactics_ok && !subs_ok {
+        let now = self.tick + 1;
+        for (admits, at) in [tactics_ok, subs_ok]
+            .into_iter()
+            .zip(&mut self.queue.admitted)
+        {
+            if admits {
+                *at = Some(now);
+            }
+        }
+        if self.queue.pending.is_empty() || (!tactics_ok && !subs_ok) {
             return;
         }
-        let now = self.tick + 1;
         let mut off_now: Vec<(usize, usize)> = Vec::new();
         let mut entered = [0usize; 2];
         let mut changed = false;
@@ -455,3 +499,41 @@ impl Simulation {
 
 /// How far inside the touchline a substitute enters, in metres.
 const ENTRY_MARGIN: f64 = 0.5;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn queued(tick: u32, change: Change) -> QueuedChange {
+        QueuedChange {
+            id: ChangeId { tick, n: 0 },
+            team: 0,
+            change,
+        }
+    }
+
+    #[test]
+    fn a_change_an_admitting_stoppage_passed_is_never_applied_and_a_later_one_expired() {
+        let sub = Change::Substitution { off: 3, on: 12 };
+        let tactics = Change::Tactics(TacticsPatch::mentality(1));
+        let queue = ChangeQueue {
+            pending: vec![
+                // A substitution stoppage opened on tick 501, after this was queued on 500.
+                queued(500, sub.clone()),
+                // Queued on 501, after that stoppage opened.
+                queued(501, sub),
+                // No stoppage ever admitted tactics.
+                queued(100, tactics),
+            ],
+            next: 3,
+            admitted: [None, Some(501)],
+        };
+        assert_eq!(
+            queue.unapplied(),
+            Unapplied {
+                never_applied: 1,
+                expired: 2
+            }
+        );
+    }
+}

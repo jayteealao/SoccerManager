@@ -9,8 +9,8 @@
 //! - Body: the seed, the length in minutes, the team-file digests, and every field of the
 //!   running match except the scratch buffer and the events already handed out: the lineups,
 //!   benches, tactics, substitutions used, and managers of both teams, each player's squad
-//!   identity, energy, and effective values, the change queue in order, and the AI manager's
-//!   memory. Every float is stored as its exact bits. Version 2 added the tactics fields.
+//!   identity, energy, and effective values, the change queue in order with the tick of the
+//!   latest stoppage that admitted each change kind, and the AI manager's memory. Every float is stored as its exact bits. Version 2 added the tactics fields.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -650,6 +650,10 @@ fn encode(sim: &Simulation, w: &mut Writer) {
             }
         }
     }
+    for at in sim.queue.admitted {
+        w.u8(u8::from(at.is_some()));
+        w.u32(at.unwrap_or(0));
+    }
     let referee = &sim.referee;
     match referee.phase {
         Phase::Live => w.u8(0),
@@ -858,6 +862,11 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
             _ => return Err("malformed body: an unknown change kind"),
         };
         sim.queue.pending.push(QueuedChange { id, team, change });
+    }
+    for at in &mut sim.queue.admitted {
+        let known = r.bool()?;
+        let tick = r.u32()?;
+        *at = known.then_some(tick);
     }
     let referee = &mut sim.referee;
     referee.phase = match r.u8()? {

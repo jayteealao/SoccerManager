@@ -41,7 +41,7 @@ pub use rules::fouls::Card;
 pub use rules::{DeadBall, Stoppage};
 pub use sim::{EngineEvent, EngineEventKind, EventDetail, MatchConfig, Simulation, Summary};
 pub use snapshot::{Snapshot, SnapshotSink};
-pub use tactics::change::{Change, ChangeId, ChangeKind, RejectReason, SubLedger};
+pub use tactics::change::{Change, ChangeId, ChangeKind, RejectReason, SubLedger, Unapplied};
 pub use tactics::{RoleDuty, Tactics, TacticsPatch};
 pub use tuning::Tuning;
 pub use validate::{Validator, Violation};

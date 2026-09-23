@@ -152,6 +152,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     let figures = builder.figures();
     let mut checks = builder.checks(&figures, &wall);
     let change_never_applied = builder.change_never_applied();
+    let change_expired_at_full_time = builder.change_expired_at_full_time();
     let match_without_stats = builder.missing;
     for (counter, value) in [
         ("darkpath.change_never_applied", change_never_applied),
@@ -199,6 +200,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         cpu_ms: bench.cpu_ms,
         peak_mem_mb: bench.peak_mem_mb,
         change_never_applied,
+        change_expired_at_full_time,
         match_without_stats,
         violations: builder.violations(),
         events_written,

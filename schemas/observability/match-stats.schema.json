@@ -35,6 +35,7 @@
     "fatigue.mean_pct",
     "injury.count",
     "darkpath.change_never_applied",
+    "change.expired_at_full_time",
     "manager.kind"
   ],
   "properties": {
@@ -210,6 +211,11 @@
       "minimum": 0
     },
     "darkpath.change_never_applied": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "change.expired_at_full_time": {
+      "description": "Changes still waiting at full time because no stoppage that admits their kind opened after they were queued. No zero rule.",
       "type": "integer",
       "minimum": 0
     },

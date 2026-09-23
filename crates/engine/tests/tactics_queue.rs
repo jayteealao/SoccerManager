@@ -143,3 +143,41 @@ fn a_penalty_admits_no_change_so_the_change_waits_through_it() {
         (true, true)
     );
 }
+
+/// A 2-minute match managed by hand on both sides. With no decisions nobody kicks the ball,
+/// so half-time is the only stoppage that admits a change.
+fn still_match() -> Simulation {
+    Scene::new(calm_match(2))
+        .manager(0, Manager::Human)
+        .manager(1, Manager::Human)
+        .build()
+}
+
+#[test]
+fn a_change_queued_after_the_last_admitting_stoppage_expires_at_full_time() {
+    let mut sim = still_match();
+    sim.queue_change(0, Change::Tactics(TacticsPatch::mentality(ATTACKING)));
+    let mut half_time = false;
+    while !half_time {
+        sim.step();
+        half_time = sim
+            .stoppage()
+            .is_some_and(|s| s.kind == StoppageKind::HalfTime);
+    }
+    assert!(
+        sim.pending_changes().is_empty(),
+        "half-time applied the change queued before it"
+    );
+    sim.queue_change(1, Change::Tactics(TacticsPatch::mentality(ATTACKING)));
+    while !sim.is_over() {
+        sim.step();
+    }
+    sim.finish();
+    assert_eq!(sim.pending_changes().len(), 1);
+    let stats = engine::observe::TacticsStats::new(&sim);
+    assert_eq!(
+        stats.change_never_applied, 0,
+        "no admitting stoppage came after it"
+    );
+    assert_eq!(stats.change_expired_at_full_time, 1);
+}

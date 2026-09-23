@@ -165,8 +165,8 @@ pub fn round_to(x: f64, places: i32) -> f64 {
 }
 
 /// The tactics counts of one match. Per-team arrays are home first. `stats.shots`,
-/// `injury.count`, `fatigue.mean_pct`, and `darkpath.change_never_applied` are contract keys;
-/// the rest are additive extras.
+/// `injury.count`, `fatigue.mean_pct`, `darkpath.change_never_applied`, and
+/// `change.expired_at_full_time` are contract keys; the rest are additive extras.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct TacticsStats {
     #[serde(rename = "stats.shots")]
@@ -177,9 +177,14 @@ pub struct TacticsStats {
     /// The mean energy of the players on the pitch at the end, 0 to 100.
     #[serde(rename = "fatigue.mean_pct")]
     pub fatigue_mean_pct: f64,
-    /// Changes in the engine's queue still waiting at the end; 0 in a healthy match.
+    /// Changes still waiting at the end although a stoppage that admits their kind opened
+    /// after they were queued; 0 in a healthy match.
     #[serde(rename = "darkpath.change_never_applied")]
     pub change_never_applied: u32,
+    /// Changes still waiting at the end because no stoppage that admits their kind opened
+    /// after they were queued. Expected late in a match; no zero rule.
+    #[serde(rename = "change.expired_at_full_time")]
+    pub change_expired_at_full_time: u32,
     #[serde(rename = "changes.queued")]
     pub changes_queued: u32,
     #[serde(rename = "changes.applied")]
@@ -195,12 +200,13 @@ impl TacticsStats {
     /// The tactics counts of a finished match.
     pub fn new(sim: &crate::Simulation) -> Self {
         let s = sim.summary();
+        let unapplied = sim.unapplied_changes();
         Self {
             shots: s.shots,
             injury_count: s.injuries[0] + s.injuries[1],
             fatigue_mean_pct: sim.fatigue_mean_pct(),
-            // A queue holds far fewer than 4 billion changes.
-            change_never_applied: sim.pending_changes().len() as u32,
+            change_never_applied: unapplied.never_applied,
+            change_expired_at_full_time: unapplied.expired,
             changes_queued: s.changes_queued,
             changes_applied: s.changes_applied,
             changes_rejected: s.changes_rejected,
@@ -509,6 +515,7 @@ mod tests {
             "\"injury.count\":1",
             "\"fatigue.mean_pct\":61.25",
             "\"darkpath.change_never_applied\":0",
+            "\"change.expired_at_full_time\"",
             "\"changes.queued\"",
             "\"changes.applied\"",
             "\"changes.rejected\"",

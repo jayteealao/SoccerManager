@@ -148,6 +148,7 @@
           "calib.bands",
           "calib.pass",
           "darkpath.change_never_applied",
+          "change.expired_at_full_time",
           "darkpath.match_without_stats",
           "validate.violations",
           "events.files_written",
@@ -240,6 +241,11 @@
             "type": "boolean"
           },
           "darkpath.change_never_applied": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "change.expired_at_full_time": {
+            "description": "Changes still waiting at full time because no stoppage that admits their kind opened after they were queued. No zero rule.",
             "type": "integer",
             "minimum": 0
           },
