@@ -64,7 +64,7 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 | keeper_reach | m | 2.6 | 0 to 26 |
 | keeper_depth | m | 3.0 | 0 to 30 |
 | shot_noise | rad | 0.25 | 0 to 1.2 |
-| keeper_catch_chance | probability | 0.84 | 0 to 1 |
+| keeper_catch_chance | probability | 0.86 | 0 to 1 |
 | carry_step | m per tick | 0.4 | 0 to 4 |
 | crossbar_height | m | 2.44 | 0 to 24.4 |
 | reach_height | m | 2.0 | 0 to 20 |

@@ -279,7 +279,7 @@ impl Default for Tuning {
             keeper_reach: 2.6,
             keeper_depth: 3.0,
             shot_noise: 0.25,
-            keeper_catch_chance: 0.84,
+            keeper_catch_chance: 0.86,
             carry_step: 0.4,
             crossbar_height: 2.44,
             reach_height: 2.0,
