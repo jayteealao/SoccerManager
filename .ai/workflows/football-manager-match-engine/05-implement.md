@@ -5,13 +5,13 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-23T10:43:56Z"
-slices-implemented: 10
+updated-at: "2026-09-23T12:10:26Z"
+slices-implemented: 11
 slices-total: 16
-metric-total-files-changed: 426
-metric-total-lines-added: 41180
-metric-total-lines-removed: 1278
-tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control]
+metric-total-files-changed: 465
+metric-total-lines-added: 45059
+metric-total-lines-removed: 1500
+tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files]
 refs:
   index: 00-index.md
   plan-index: 04-plan.md
@@ -26,8 +26,9 @@ refs:
     - 05-implement-calibration.md
     - 05-implement-viewer-match-day.md
     - 05-implement-viewer-lineup-tactics.md
+    - 05-implement-viewer-reports-recovery.md
 next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine viewer-lineup-tactics"
+next-invocation: "/wf verify football-manager-match-engine viewer-reports-recovery"
 ---
 
 # Implement Index
@@ -97,7 +98,16 @@ next-invocation: "/wf verify football-manager-match-engine viewer-lineup-tactics
   - The page paces the engine with `pause` and `start` (`web/lead.mjs`) on every tick arrival and every drawn frame. Without that pacing, `serve` finishes the match in seconds. `viewer-reports-recovery` inherits the `Dugout` phases in `web/main.mjs` and the `pending()`, `lineup()`, and `dugout()` test readers.
 - Checks at implement: 290 Rust tests and 103 page tests pass, and clippy runs with `-D warnings`. One live drive on seed 11 took a mentality change from Queued to Applied at tick 1992, with the feed row "Tactical change applied". Page height is 800 at 1280 × 800.
 
+- `viewer-reports-recovery` is implemented (commits `b03163d` and `aa10882`) and awaits verify. Later slices inherit these changes:
+  - `engine-cli launch` is the way a match starts when it must survive an engine crash: it serves the page, runs `serve` as a worker with `--reconnect-wait 120` and a launcher-chosen `--match-millis`, and answers `/engine.json` with `engine.state`, `engine.pid`, `snapshot.tick`, `match.id`, and `launcher`. `POST /engine/restart` and `POST /engine/abandon` require the page's own origin. `integration` starts the charter scenario through it.
+  - `Session::finish` returns `SessionEnd` (`Done`, `Closed`, `Dropped`); `SessionConfig` has a `drop_at` test seam; `MatchState::sent_tick` is the newest flushed tick frame. Every caller that builds a `SessionConfig` passes `drop_at`.
+  - The serving path writes snapshots through `GatedSnapshots` (captured at every stoppage and at kick-off, persisted once the socket passed them). `simulate` and `resume` keep `SnapshotSink`. File name, layout, and location are unchanged.
+  - The page cuts its history, stoppages, events, and frame store back at a reconnect's first keyframe; `PROTOCOL_VERSION` stays 3. The page keeps every frame's wire bytes (`web/replay-file.mjs`), so a saved replay is the engine's `.smfx` layout byte for byte.
+  - New hook readers: `recovery()`, `report()`, `replay()`, `lastSavedBytes()`, `events()`.
+- Checks at implement: 305 Rust tests and 126 page tests pass, clippy runs with `-D warnings`, and the stream benchmark median is 608,360 ticks per second with 7.83 MB peak (tripwire 8.55 MB).
+
 ## Recommended Next Stage
 
+- `/wf verify football-manager-match-engine viewer-reports-recovery`
 - `/wf verify football-manager-match-engine viewer-lineup-tactics`
 - `/wf verify football-manager-match-engine viewer-match-day` (still open)
