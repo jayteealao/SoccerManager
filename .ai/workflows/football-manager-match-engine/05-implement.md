@@ -5,12 +5,12 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-23T14:42:29Z"
-slices-implemented: 12
+updated-at: "2026-09-23T16:44:00Z"
+slices-implemented: 13
 slices-total: 16
-metric-total-files-changed: 490
-metric-total-lines-added: 48063
-metric-total-lines-removed: 1945
+metric-total-files-changed: 533
+metric-total-lines-added: 50427
+metric-total-lines-removed: 2085
 tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit]
 refs:
   index: 00-index.md
@@ -28,6 +28,7 @@ refs:
     - 05-implement-viewer-lineup-tactics.md
     - 05-implement-viewer-reports-recovery.md
     - 05-implement-integration.md
+    - 05-implement-extra-time-penalties.md
 next-command: wf-verify
 next-invocation: "/wf verify football-manager-match-engine viewer-reports-recovery"
 ---
@@ -114,8 +115,16 @@ next-invocation: "/wf verify football-manager-match-engine viewer-reports-recove
   - `docs/` holds the tutorial, the modding how-to, the command-line and data-file references, and the engine explanation. `content/README.md` is now a pointer. `docs.rs` and `licenses.rs` keep the references and the dependency licenses honest.
 - Checks at implement: 310 Rust tests (4 ignored) and 126 page tests pass, clippy runs with `-D warnings`, and the browser suite passes 21 of 21 in 24.4 minutes. Benchmark: the median is 420 ms (before 418 ms), processor time rises by at most 1.5 percent, and peak memory is 6.54 MB or less. 1000 matches take 423.5 s.
 
+- `extra-time-penalties` is implemented (commit `90d4ee1`) and awaits verify. Every later slice inherits these changes:
+  - The rule pack is schema 4 (`extra_time`, `shootout`); a schema 3 pack is refused by version. The snapshot is format 4; a format 3 file is refused by name.
+  - `MatchConfig::knockout` (off by default, `--knockout` on `simulate`, `bench`, `serve`, `record`) turns on extra time and an on-pitch shoot-out. A regular match is unchanged: the seed-42 records are byte-identical.
+  - `MatchClock::half` counts every period; `MatchClock::new` takes the knockout switch. Events gain optional `period`, `shootout_round`, `shootout_scored`, `shootout_scores`, and `decided_by`; protocol version 3 is kept.
+  - The validator exempts the anchor rule during a shoot-out, and a tick file past its announced length gets its header raised at finish.
+- Benchmark: `extra-time-penalties` measured 421.8 to 422.0 ms of processor time per match (gate 460.7), 1.4926 to 1.4933 µs per tick, and 6.54 to 6.58 MB peak memory (gate 6.82).
+
 ## Recommended Next Stage
 
+- `/wf verify football-manager-match-engine extra-time-penalties` (new: automated cargo tests, and re-read IFAB Laws 3, 7, and 10)
 - `/wf verify football-manager-match-engine integration`
 - `/wf verify football-manager-match-engine viewer-reports-recovery`
 - `/wf verify football-manager-match-engine viewer-lineup-tactics`
