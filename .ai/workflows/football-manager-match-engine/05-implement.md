@@ -5,13 +5,13 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-23T09:18:45Z"
-slices-implemented: 9
+updated-at: "2026-09-23T10:43:56Z"
+slices-implemented: 10
 slices-total: 16
-metric-total-files-changed: 389
-metric-total-lines-added: 37337
-metric-total-lines-removed: 1116
-tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3]
+metric-total-files-changed: 426
+metric-total-lines-added: 41180
+metric-total-lines-removed: 1278
+tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control]
 refs:
   index: 00-index.md
   plan-index: 04-plan.md
@@ -25,8 +25,9 @@ refs:
     - 05-implement-commentary.md
     - 05-implement-calibration.md
     - 05-implement-viewer-match-day.md
+    - 05-implement-viewer-lineup-tactics.md
 next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine viewer-match-day"
+next-invocation: "/wf verify football-manager-match-engine viewer-lineup-tactics"
 ---
 
 # Implement Index
@@ -90,6 +91,13 @@ next-invocation: "/wf verify football-manager-match-engine viewer-match-day"
   - Parked (sent-off) markers are no longer drawn. The close after full time reads "Full time".
 - Benchmark: `viewer-match-day` measured the stream at 609,885 to 611,588 delivered ticks per second (baseline 609,220) with 7.61 MB median peak memory (tripwire 8.55), and 416.7 ms of processor time per match (gate 460.7). A 90-minute recording grew from 16.3 MB to 20.5 MB. The p95 restatement and the four page targets are left to verify, because the browser pane was hidden at implement time.
 
+- `viewer-lineup-tactics` is implemented (commit `b46f083`) and awaits verify. Every later slice inherits these changes:
+  - `serve` holds before kick-off (`Gate::held`) until the page sends `start`. A client must send `start` after the hello; `record` and `bench` keep an open gate. `set-lineup` is accepted only before the first `start`. `queue-change` is refused before it, and after it an admitted change reaches the engine through an inbox with the page's change identifier.
+  - The hello for `serve` carries the home `squad` and `setup`, and every hello carries `tactics` (with `instruction_order`, because JSON keys carry no order) and `substitutions`. `ServerMessage::Hello` is boxed. A hello longer than the 8 KB write bound is sent whole through `stream::send_whole`.
+  - The page paces the engine with `pause` and `start` (`web/lead.mjs`) on every tick arrival and every drawn frame. Without that pacing, `serve` finishes the match in seconds. `viewer-reports-recovery` inherits the `Dugout` phases in `web/main.mjs` and the `pending()`, `lineup()`, and `dugout()` test readers.
+- Checks at implement: 290 Rust tests and 103 page tests pass, and clippy runs with `-D warnings`. One live drive on seed 11 took a mentality change from Queued to Applied at tick 1992, with the feed row "Tactical change applied". Page height is 800 at 1280 × 800.
+
 ## Recommended Next Stage
 
-- `/wf verify football-manager-match-engine viewer-match-day`
+- `/wf verify football-manager-match-engine viewer-lineup-tactics`
+- `/wf verify football-manager-match-engine viewer-match-day` (still open)
