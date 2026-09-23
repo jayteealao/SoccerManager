@@ -79,6 +79,18 @@ impl GatedSnapshots {
         self.ring.len()
     }
 
+    /// Captures `sim` as it stands. Every stoppage does; the match does once more at
+    /// kick-off, so a crash before the first stoppage still has a point to restart from.
+    pub fn capture(&mut self, sim: &Simulation) {
+        if self.ring.len() == RING {
+            self.ring.pop_front();
+        }
+        self.ring.push_back(Held {
+            snapshot: Snapshot::capture(sim, self.owner_id, self.match_millis),
+            written: false,
+        });
+    }
+
     /// Forgets every capture after `tick`, where a match resumes. Those captures describe
     /// play the resumed match is about to produce again.
     pub fn rewind(&mut self, tick: u32) {
@@ -135,13 +147,7 @@ impl TickSink for GatedSnapshots {
     }
 
     fn on_stoppage(&mut self, _stoppage: &Stoppage, sim: &Simulation) -> Result<(), EngineError> {
-        if self.ring.len() == RING {
-            self.ring.pop_front();
-        }
-        self.ring.push_back(Held {
-            snapshot: Snapshot::capture(sim, self.owner_id, self.match_millis),
-            written: false,
-        });
+        self.capture(sim);
         Ok(())
     }
 }

@@ -196,9 +196,11 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
         }
     }
     let first_tick = first_tick.expect("the match goes on after the reconnect");
+    // Seed 42 stops play at ticks 2,895 and 3,000 (half-time of a two-minute match), so the
+    // match goes back to a stoppage the viewer held, never to kick-off and never past it.
     assert!(
-        first_tick <= last_tick + 1,
-        "resumed at {first_tick}, past the {last_tick} the viewer held"
+        first_tick > 2_000 && first_tick <= last_tick + 1,
+        "resumed at {first_tick}; the viewer held up to {last_tick}"
     );
     assert!(ticks > 0);
     client.close().unwrap();
@@ -207,6 +209,53 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
     let text = logs.join().expect("the log reader does not panic");
     assert!(status.success(), "serve exited with {status}: {text}");
     assert!(text.contains("signal=\"socket.reconnected\""), "{text}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_drop_before_the_first_stoppage_goes_back_to_kick_off() {
+    let dir = temp("serve-reconnect-early");
+    let mut child = bin(&dir)
+        .args([
+            "serve",
+            "--seed",
+            "42",
+            "--minutes",
+            "2",
+            "--reconnect-wait",
+            "30",
+            "--drop-client-at",
+            "1000",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().expect("serve prints its port"));
+    let mut line = String::new();
+    stdout.read_line(&mut line).unwrap();
+    let port: u16 = line.trim().parse().unwrap();
+
+    let mut client = Client::connect_local(port).unwrap();
+    client.send(&ClientCommand::Start).unwrap();
+    while let Ok(incoming) = client.read() {
+        if matches!(incoming, Incoming::Closed) {
+            break;
+        }
+    }
+    let mut client = Client::connect_local(port).unwrap();
+    let first = loop {
+        match client.read().unwrap() {
+            Incoming::Tick(_, q) => break q.tick,
+            Incoming::Message(_) => continue,
+            Incoming::Closed => panic!("the match closed before it resumed"),
+        }
+    };
+    // The capture taken at kick-off, with the same seed and lineup, is the restart point.
+    assert_eq!(first, 1);
+    drop(client);
+    let _ = child.kill();
+    let _ = child.wait();
     let _ = std::fs::remove_dir_all(&dir);
 }
 

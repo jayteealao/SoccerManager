@@ -136,12 +136,17 @@ fn a_snapshot_is_written_only_once_the_socket_has_passed_it() {
     let state = Arc::new(MatchState::default());
     let mut gated = GatedSnapshots::new(&data, "m", [7; 16], 1, Arc::clone(&state));
     let mut sim = Simulation::new(common::match_config(3)).unwrap();
-    let mut stoppages = Vec::new();
+    // The kick-off capture is written once the first tick frame is flushed.
+    gated.capture(&sim);
+    state.set_sent_tick(1);
+    gated.on_tick(&sim.record()).unwrap();
+    assert_eq!(Snapshot::read(gated.path(), "snapshot").unwrap().tick(), 0);
+    let mut stoppages = vec![0];
     while !sim.is_over() {
         sim.step();
         let record = sim.record();
         // The socket lags 400 ticks behind the simulation.
-        state.set_sent_tick(record.tick.saturating_sub(400));
+        state.set_sent_tick(record.tick.saturating_sub(400).max(1));
         gated.on_tick(&record).unwrap();
         if let Some(stoppage) = sim.stoppage() {
             stoppages.push(stoppage.tick);
@@ -164,8 +169,10 @@ fn a_snapshot_is_written_only_once_the_socket_has_passed_it() {
     let newest = gated.newest_before(sent).map(Snapshot::tick);
     let expected = stoppages.iter().copied().filter(|&t| t < sent).max();
     assert_eq!(newest, expected);
+    // A rewind to kick-off keeps only a kick-off capture, if the ring still holds it.
     gated.rewind(0);
-    assert_eq!(gated.held(), 0);
+    assert!(gated.held() <= 1);
+    assert!(gated.newest_before(u32::MAX).is_none_or(|s| s.tick() == 0));
     let _ = std::fs::remove_dir_all(&data);
 }
 

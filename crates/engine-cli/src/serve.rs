@@ -202,7 +202,11 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
             if let Some(setup) = pre_match.take() {
                 config = with_page_setup(config, setup);
             }
-            sim = Some(Simulation::new(config.clone())?);
+            let kicked_off = Simulation::new(config.clone())?;
+            // The kick-off state, with the page's lineup: the restart point until the first
+            // stoppage.
+            gated.capture(&kicked_off);
+            sim = Some(kicked_off);
         }
         if let Some(sim) = sim.as_mut().filter(|_| started) {
             let mut sink = FanoutSink::new(
