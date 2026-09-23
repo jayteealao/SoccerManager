@@ -8,7 +8,7 @@
 //! real length known only at full time, and the trailer carries it.
 
 use std::fs::File;
-use std::io::{BufWriter, Read, Write};
+use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -31,6 +31,8 @@ pub const SCHEMA_VERSION: u16 = 4;
 /// Bit 31 of the stored tick number carries the restart flag. A tick number never reaches
 /// 2^31: the longest match the engine accepts is 200 minutes, which is 600,000 ticks.
 const RESTART_BIT: u32 = 1 << 31;
+/// Header offset of the 4-byte announced maximum tick count.
+const EXPECTED_AT: u64 = 24;
 /// Header offset of the 16-byte owner identifier.
 const OWNER_AT: usize = 28;
 /// Header offset of the 8-byte match stamp (milliseconds since the Unix epoch).
@@ -236,6 +238,7 @@ impl<S: TickSink> TickSink for Option<S> {
 pub struct FileSink {
     writer: BufWriter<File>,
     written: u32,
+    expected: u32,
     buf: [u8; RECORD_BYTES],
 }
 
@@ -259,17 +262,26 @@ impl FileSink {
         Ok(Self {
             writer,
             written: 0,
+            expected: header.expected_ticks,
             buf: [0u8; RECORD_BYTES],
         })
     }
 
-    /// Writes the trailer and flushes. Returns the number of records written.
+    /// Writes the trailer and flushes. Returns the number of records written. A knockout
+    /// match whose sudden death ran past the announced maximum raises the header's maximum
+    /// to the count written, so the file still reads.
     pub fn finish(mut self) -> Result<u32, EngineError> {
         let mut trailer = [0u8; TRAILER_BYTES];
         trailer[0..4].copy_from_slice(TRAILER_MAGIC);
         trailer[4..8].copy_from_slice(&self.written.to_le_bytes());
         self.writer.write_all(&trailer)?;
         self.writer.flush()?;
+        if self.written > self.expected {
+            let file = self.writer.get_mut();
+            file.seek(SeekFrom::Start(EXPECTED_AT))?;
+            file.write_all(&self.written.to_le_bytes())?;
+            file.flush()?;
+        }
         let bytes = HEADER_BYTES + self.written as usize * RECORD_BYTES + TRAILER_BYTES;
         tracing::info!(
             signal = "tickfile.trailer",
@@ -419,7 +431,7 @@ mod tests {
     }
 
     #[test]
-    fn a_file_shorter_than_the_announced_maximum_reads_and_a_longer_one_is_refused() {
+    fn a_file_past_its_announced_maximum_reads_once_the_writer_raises_it() {
         let path = temp("maximum");
         let mut sink = FileSink::create(&path, &header(5, 10)).unwrap();
         for i in 1..=4 {
@@ -427,11 +439,20 @@ mod tests {
         }
         sink.finish().unwrap();
         assert_eq!(read_ticks(&path).unwrap().records.len(), 4);
+        // A writer that runs past its announcement (a long sudden death) raises the header's
+        // figure, so the file reads.
         let mut sink = FileSink::create(&path, &header(5, 2)).unwrap();
         for i in 1..=3 {
             sink.on_tick(&sample(i)).unwrap();
         }
         sink.finish().unwrap();
+        let file = read_ticks(&path).unwrap();
+        assert_eq!(file.header.expected_ticks, 3);
+        assert_eq!(file.records.len(), 3);
+        // A file whose header still announces fewer ticks than it holds is refused.
+        let mut bytes = std::fs::read(&path).unwrap();
+        bytes[EXPECTED_AT as usize..EXPECTED_AT as usize + 4].copy_from_slice(&2u32.to_le_bytes());
+        std::fs::write(&path, bytes).unwrap();
         let err = read_ticks(&path).unwrap_err();
         std::fs::remove_file(&path).unwrap();
         assert!(err.to_string().contains("exceeds the 2"), "{err}");

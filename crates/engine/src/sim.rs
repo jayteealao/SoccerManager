@@ -52,6 +52,9 @@ pub struct MatchConfig {
     pub content_hash: String,
     /// SHA-256 of each team file as the engine read it, home first.
     pub team_digests: [[u8; 32]; 2],
+    /// A knockout match that is level at the end of regulation time plays the rule pack's
+    /// extra time and, still level, a penalty shoot-out. Off unless a caller says otherwise.
+    pub knockout: bool,
 }
 
 impl MatchConfig {
@@ -101,6 +104,7 @@ impl MatchConfig {
             players,
             content_hash: hex12(&hasher.finalize()),
             team_digests,
+            knockout: false,
         })
     }
 
@@ -109,9 +113,25 @@ impl MatchConfig {
         [&self.teams[0].club_id, &self.teams[1].club_id]
     }
 
-    /// The most ticks this match can last: regulation plus the cap on added time.
+    /// The most ticks this match can last: regulation plus the cap on added time. A knockout
+    /// match adds extra time at its caps and the rule pack's shoot-out allowance; a sudden
+    /// death longer than the allowance plays on past it.
     pub fn max_ticks(&self) -> u32 {
-        crate::rules::clock::max_ticks(self.minutes, &self.rules)
+        let regulation = crate::rules::clock::max_ticks(self.minutes, &self.rules);
+        if !self.knockout {
+            return regulation;
+        }
+        let delay = crate::rules::restart::delay_ticks(StoppageKind::Penalty, &self.tuning);
+        regulation
+            + crate::rules::clock::knockout_extra_ticks(self.minutes, &self.rules)
+            + crate::rules::clock::shootout_allowance_ticks(&self.rules, delay)
+    }
+
+    /// The match is a knockout match: level at the end of regulation time, it plays extra
+    /// time and then a penalty shoot-out.
+    pub fn with_knockout(mut self) -> Self {
+        self.knockout = true;
+        self
     }
 
     /// `team` is managed by `manager`.
@@ -146,6 +166,32 @@ impl MatchConfig {
         let first = team * PLAYERS_PER_TEAM;
         self.players[first..first + PLAYERS_PER_TEAM].clone_from_slice(&starters);
         self
+    }
+}
+
+/// How a knockout match was decided.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DecidedBy {
+    Regulation,
+    ExtraTime,
+    Shootout,
+}
+
+impl DecidedBy {
+    /// Every value, in declaration order.
+    pub const ALL: [DecidedBy; 3] = [
+        DecidedBy::Regulation,
+        DecidedBy::ExtraTime,
+        DecidedBy::Shootout,
+    ];
+
+    /// The value as the event contract spells it.
+    pub fn code(&self) -> &'static str {
+        match self {
+            DecidedBy::Regulation => "regulation",
+            DecidedBy::ExtraTime => "extra-time",
+            DecidedBy::Shootout => "shoot-out",
+        }
     }
 }
 
@@ -297,6 +343,18 @@ pub struct EngineEvent {
     /// On a restart: where the ball was placed.
     pub spot: Option<DVec2>,
     pub detail: Option<EventDetail>,
+    /// On the half-time break before an extra-time period and on its kick-off: the period
+    /// that starts, counted from 0 (2 and 3 for the two periods of extra time).
+    pub period: Option<u32>,
+    /// On a shoot-out `penalty` event: the kicking team's round, from 1.
+    pub shootout_round: Option<u32>,
+    /// On the outcome event of a shoot-out kick: `true` when the kick scored.
+    pub shootout_scored: Option<bool>,
+    /// On the outcome event of a shoot-out kick and at full time after a shoot-out: the
+    /// shoot-out score, home first.
+    pub shootout_scores: Option<[u32; 2]>,
+    /// At full time of a knockout match: how it was decided.
+    pub decided_by: Option<DecidedBy>,
 }
 
 /// Aggregate counters kept during a match. Per-team arrays are home first; a foul, an
@@ -343,6 +401,16 @@ pub struct Summary {
     pub passes_completed: [u32; 2],
     /// Ticks of open play credited to the team that touched the ball last.
     pub possession_ticks: [u32; 2],
+    /// Seconds added to each period of extra time.
+    pub extra_added_s: [u32; 2],
+    /// `true` once extra time started.
+    pub extra_time: bool,
+    /// The shoot-out score, home first, once a shoot-out started.
+    pub shootout: Option<[u32; 2]>,
+    /// Shoot-out kicks taken, both teams.
+    pub shootout_kicks: u32,
+    /// How a knockout match was decided, set at full time.
+    pub decided_by: Option<DecidedBy>,
 }
 
 /// The expected goals of a shot from `from` at the goal a team attacking `attack_x` aims
@@ -393,6 +461,9 @@ pub struct Simulation {
     /// both, like `last_kicker`, so the snapshot never needs them.
     pub(crate) pass_in_flight: Option<usize>,
     pub(crate) shot_in_flight: Option<usize>,
+    /// Test seam: the outcomes the next shoot-out kicks are given, whatever the ball does.
+    #[cfg(feature = "scenario")]
+    pub(crate) forced_kicks: std::collections::VecDeque<bool>,
     finished: bool,
     scratch: Vec<DVec2>,
 }
@@ -417,7 +488,7 @@ impl Simulation {
         let teams = config.teams.clone();
         let players = config.players.clone();
         let rng = EngineRng::from_seed(config.seed);
-        let referee = Referee::new(config.minutes, &config.rules);
+        let referee = Referee::new(config.minutes, &config.rules, config.knockout);
         Ok(Self {
             timeline: vec![(0, teams.clone())],
             teams,
@@ -441,6 +512,8 @@ impl Simulation {
             keeper_beaten: false,
             pass_in_flight: None,
             shot_in_flight: None,
+            #[cfg(feature = "scenario")]
+            forced_kicks: std::collections::VecDeque::new(),
             finished: false,
             scratch: Vec::with_capacity(2 * PLAYERS_PER_TEAM),
             config,
@@ -519,6 +592,11 @@ impl Simulation {
         self.referee.clock.minute(self.tick)
     }
 
+    /// `true` while the penalty shoot-out is being played.
+    pub fn in_shootout(&self) -> bool {
+        self.referee.shootout.is_some() && !self.is_over()
+    }
+
     /// `true` once the match has ended at full time or been abandoned.
     pub fn is_over(&self) -> bool {
         self.referee.phase == Phase::FullTime
@@ -569,14 +647,15 @@ impl Simulation {
         }
         self.finished = true;
         self.referee.phase = Phase::FullTime;
-        let half = self.referee.clock.half as usize;
         let added = self
             .referee
             .clock
             .plays_added
-            .then(|| self.summary.added_s[half.min(1)]);
+            .then(|| self.period_added_s(self.referee.clock.half));
         let mut event = self.event_at(self.tick, EngineEventKind::FullTime, None);
         event.added_time_s = added;
+        event.shootout_scores = self.summary.shootout;
+        event.decided_by = self.summary.decided_by;
         self.events.push(event);
     }
 
@@ -594,6 +673,9 @@ impl Simulation {
         self.stoppage = None;
         let t = self.config.tuning.clone();
         match self.referee.phase {
+            // During a shoot-out kick nobody decides: every player keeps the target the kick
+            // was set up with, and the keeper the dive it committed to.
+            Phase::Live if self.referee.shootout.is_some() => {}
             Phase::Live => {
                 if let Some(team) = self.last_touch {
                     self.summary.possession_ticks[team] += 1;
@@ -617,10 +699,16 @@ impl Simulation {
         if self.referee.phase == Phase::Live {
             self.resolve_possession(&t);
         }
+        if self.referee.phase == Phase::Live && self.referee.shootout.is_some() {
+            self.shootout_kick_expiry();
+        }
         self.check_clock();
         if !self.is_over() {
             self.fatigue_tick();
-            self.ai_tick();
+            // Nobody manages a team during the shoot-out.
+            if self.referee.shootout.is_none() {
+                self.ai_tick();
+            }
         }
         if let Some(stoppage) = self.stoppage {
             self.apply_changes(stoppage);
@@ -653,7 +741,12 @@ impl Simulation {
     }
 
     fn event_at(&self, tick: u32, kind: EngineEventKind, team: Option<usize>) -> EngineEvent {
-        let (minute, minute_added) = self.referee.clock.minute(tick);
+        // The clock stops when the shoot-out starts: its events show the last minute of play.
+        let (minute, minute_added) = if self.referee.shootout.is_some() {
+            (self.referee.clock.end_minute(), None)
+        } else {
+            self.referee.clock.minute(tick)
+        };
         EngineEvent {
             tick,
             kind,
@@ -668,6 +761,11 @@ impl Simulation {
             added_time_s: None,
             spot: None,
             detail: None,
+            period: None,
+            shootout_round: None,
+            shootout_scored: None,
+            shootout_scores: None,
+            decided_by: None,
         }
     }
 
@@ -718,6 +816,10 @@ impl Simulation {
                 let prev = self.ball.xy();
                 self.ball.integrate(t);
                 let xy = self.ball.xy();
+                if self.referee.shootout.is_some() {
+                    self.shootout_ball(prev, xy, t);
+                    return;
+                }
                 for team in 0..2 {
                     if pitch::in_goal(xy, self.teams[team].attack_x)
                         && self.ball.pos.z < t.crossbar_height
@@ -742,6 +844,10 @@ impl Simulation {
     }
 
     fn resolve_possession(&mut self, t: &Tuning) {
+        if self.referee.shootout.is_some() {
+            self.shootout_save(t);
+            return;
+        }
         let ball_xy = self.ball.xy();
         match self.carrier {
             None => {
@@ -895,6 +1001,17 @@ mod tests {
         assert_eq!(config.players.len(), 22);
         assert_ne!(config.team_digests[0], config.team_digests[1]);
         assert_eq!(config.max_ticks(), 3_000);
+    }
+
+    #[test]
+    fn a_knockout_match_announces_extra_time_and_ten_rounds_of_kicks() {
+        let config = shipped_config(1, 90).unwrap();
+        assert_eq!(config.max_ticks(), 360_000);
+        let knockout = config.with_knockout();
+        assert_eq!(knockout.max_ticks(), 360_000 + 120_000 + 50_000);
+        // A shortened knockout match plays no extra time, only the shoot-out.
+        let short = shipped_config(1, 5).unwrap().with_knockout();
+        assert_eq!(short.max_ticks(), 15_000 + 50_000);
     }
 
     /// Steps the seed-42 90-minute match, calling `each` after every tick.

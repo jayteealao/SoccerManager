@@ -194,7 +194,7 @@ impl Simulation {
         let now = self.tick + 1;
         let minute = self.referee.clock.minute(now).0;
         let ai = self.config.tactics.ai.clone();
-        let limit = usize::from(self.config.rules.substitutions.limit);
+        let limit = usize::from(self.substitution_limits().0);
         let used = usize::from(self.ledgers[team].used);
         // Injuries: every injured player on the lineup without a substitute queued. The check
         // on the injury's own stoppage always asks, so a refusal names its reason there; a
@@ -219,7 +219,7 @@ impl Simulation {
             }
         }
         // Fatigue.
-        let windows_left = self.ledgers[team].windows < self.config.rules.substitutions.windows;
+        let windows_left = self.ledgers[team].windows < self.substitution_limits().1;
         if minute >= ai.fatigue_from_minute && windows_left {
             let reserve = usize::from(minute < ai.keep_for_injury_until_minute);
             let mut tired: Vec<(f64, usize)> = (1..PLAYERS_PER_TEAM)
@@ -306,16 +306,17 @@ impl Simulation {
     /// window-exempt stoppage (half-time in the shipped pack) is still to come.
     fn substitution_possible(&self, team: usize) -> bool {
         let rules = &self.config.rules.substitutions;
+        let (limit, windows) = self.substitution_limits();
         let ledger = self.ledgers[team];
         let taken = usize::from(ledger.used) + self.queue.substitutions(team);
-        if taken >= usize::from(rules.limit) {
+        if taken >= usize::from(limit) {
             return false;
         }
         let exempt_ahead = rules
             .windows_exempt
             .iter()
             .any(|&kind| kind != StoppageKind::HalfTime || !self.referee.clock.last_half());
-        ledger.windows < rules.windows || exempt_ahead
+        ledger.windows < windows || exempt_ahead
     }
 
     /// `team`'s tactics once every waiting tactics change has applied.

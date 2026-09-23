@@ -246,6 +246,58 @@ pub fn target(
     pitch::clamp(at, 0.5)
 }
 
+/// Where player `i` stands for a kick of the penalty shoot-out (IFAB Law 10): the kicker at
+/// the mark, the defending keeper `keepers[1 - dead.team]` on the goal line, the kicking
+/// team's keeper on the goal line where it meets the penalty-area line, and every other
+/// player inside the centre circle.
+pub fn shootout_target(dead: &DeadBall, i: usize, keepers: [usize; 2]) -> DVec2 {
+    let end = end_of(dead.spot);
+    if i == dead.taker {
+        pitch::clamp(dead.spot, 0.2)
+    } else if i == keepers[1 - dead.team] {
+        DVec2::new(end * (HALF_LENGTH - 0.3), 0.0)
+    } else if i == keepers[dead.team] {
+        DVec2::new(
+            end * (HALF_LENGTH - 0.5),
+            pitch::PENALTY_AREA_WIDTH / 2.0 + 1.0,
+        )
+    } else {
+        // Spread round the centre spot so nobody stands on anybody else.
+        let angle = std::f64::consts::TAU * i as f64 / (2 * PLAYERS_PER_TEAM) as f64;
+        DVec2::new(CIRCLE_SPREAD * angle.cos(), CIRCLE_SPREAD * angle.sin())
+    }
+}
+
+/// Radius, in metres, of the ring the players waiting in the centre circle stand on.
+const CIRCLE_SPREAD: f64 = 5.0;
+
+/// `true` when a shoot-out kick may be taken at `tick`: the delay has passed, the kicker is at
+/// the mark, the defending keeper is on the goal line, and every other player is outside the
+/// penalty area and 9.15 m from the mark.
+pub fn shootout_ready(
+    dead: &DeadBall,
+    tick: u32,
+    players: &[Player],
+    keepers: [usize; 2],
+    t: &Tuning,
+) -> bool {
+    if tick < dead.ready_at {
+        return false;
+    }
+    let side = end_of(dead.spot);
+    players.iter().enumerate().all(|(i, p)| {
+        if !p.active() {
+            return true;
+        }
+        if i == dead.taker || i == keepers[1 - dead.team] {
+            let at = shootout_target(dead, i, keepers);
+            return (p.pos - at).length() <= t.restart_ready_radius;
+        }
+        !pitch::in_penalty_area(p.pos, side)
+            && (p.pos - dead.spot).length() >= KICK_DISTANCE - JUDGE_MARGIN
+    })
+}
+
 /// `true` when the restart may be taken at `tick`: the delay has passed, the taker is at the
 /// ball, and every player the law moves has moved.
 pub fn is_ready(

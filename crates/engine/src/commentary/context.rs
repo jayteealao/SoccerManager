@@ -250,6 +250,11 @@ mod tests {
             added_time_s: None,
             spot: None,
             detail: None,
+            period: None,
+            shootout_round: None,
+            shootout_scored: None,
+            shootout_scores: None,
+            decided_by: None,
         }
     }
 

@@ -45,6 +45,7 @@ Simulate one match and write every tick to a file.
 | `--seed` | integer | required | The seed of the random-number generator. |
 | `--ticks-out` | file | required | The tick file to write. |
 | `--minutes` | integer | 90 | Minutes of play. |
+| `--knockout` | none | off | Play extra time and a penalty shoot-out when the match is level after regulation time. |
 | `--json` | none | off | Also write the ticks as JSON Lines beside the tick file, with the extension `.jsonl`. |
 | `--team-a` | file | `teams/default-a.json` in the content folder | The home team file. |
 | `--team-b` | file | `teams/default-b.json` in the content folder | The away team file. |
@@ -63,6 +64,7 @@ Time whole matches on one thread and print a run report.
 | `--seed` | integer | required | The seed of the random-number generator. |
 | `--matches` | integer | 5 | Timed matches, after one warm-up match. |
 | `--minutes` | integer | 90 | Minutes of play in each match. |
+| `--knockout` | none | off | Play extra time and a penalty shoot-out when the match is level after regulation time. |
 | `--json` | none | off | Print the run report as one JSON line. The default output is the same. |
 | `--stream` | none | off | Also stream one match to a client that reads as fast as it can. |
 
@@ -93,6 +95,7 @@ Stream one match live over the local socket to one viewer.
 |---|---|---|---|
 | `--seed` | integer | required unless `--resume` | The seed of the random-number generator. |
 | `--minutes` | integer | 90 | Minutes of play. |
+| `--knockout` | none | off | Play extra time and a penalty shoot-out when the match is level after regulation time. |
 | `--ticks-out` | file | not set | Also write every tick to this file. |
 | `--team-a` | file | `teams/default-a.json` in the content folder | The home team file. The manager on the page picks this team's lineup. |
 | `--team-b` | file | `teams/default-b.json` in the content folder | The away team file. The AI manager runs this team. |
@@ -130,6 +133,7 @@ Record one whole match stream to a replay file.
 | `--seed` | integer | required | The seed of the random-number generator. |
 | `--out` | file | required | The replay file to write (`.smfx`). |
 | `--minutes` | integer | 90 | Minutes of play. |
+| `--knockout` | none | off | Play extra time and a penalty shoot-out when the match is level after regulation time. |
 | `--team-a` | file | `teams/default-a.json` in the content folder | The home team file. |
 | `--team-b` | file | `teams/default-b.json` in the content folder | The away team file. |
 
@@ -152,7 +156,7 @@ Exit codes: 0 when every frame was sent; 1; 2 when the viewer left early.
 
 ## resume
 
-Continue a match from its newest snapshot to full time.
+Continue a match from its newest snapshot to full time. A knockout match resumes as a knockout match: the snapshot records it.
 
 | Flag | Value | Default | Meaning |
 |---|---|---|---|

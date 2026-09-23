@@ -6,7 +6,9 @@
 //! inside the pitch, on a restart tick; no rule limits a player's jump, so the entry breaks
 //! none. The anchors follow the team shapes in force at each tick: the teams change ends at
 //! half-time, a line closes up after a sending-off or an injury and reopens when a
-//! substitute replaces the injured player, and a tactics change moves every anchor.
+//! substitute replaces the injured player, and a tactics change moves every anchor. From the
+//! first kick of a penalty shoot-out on, the players wait in the centre circle and the anchor
+//! rule no longer applies.
 
 use crate::math::DVec2;
 use crate::pitch;
@@ -38,6 +40,8 @@ pub struct Validator {
     timeline: Vec<(u32, [Team; 2])>,
     /// The restart spots the events name, in tick order.
     spots: Vec<(u32, DVec2)>,
+    /// The tick of the first shoot-out kick, if the match went to a shoot-out.
+    shootout_from: Option<u32>,
 }
 
 impl Validator {
@@ -47,6 +51,7 @@ impl Validator {
             tuning,
             timeline: vec![(0, teams)],
             spots: Vec::new(),
+            shootout_from: None,
         }
     }
 
@@ -62,10 +67,16 @@ impl Validator {
             .filter_map(|e| e.spot.map(|s| (e.tick, s)))
             .collect();
         spots.sort_by_key(|(tick, _)| *tick);
+        let shootout_from = events
+            .iter()
+            .filter(|e| e.shootout_round.is_some())
+            .map(|e| e.tick)
+            .min();
         Self {
             tuning,
             timeline: timeline.to_vec(),
             spots,
+            shootout_from,
         }
     }
 
@@ -143,8 +154,9 @@ impl Validator {
                 }
             }
 
+            let shootout = self.shootout_from.is_some_and(|from| r.tick >= from);
             for (i, p) in pos.iter().enumerate() {
-                if parked[i] {
+                if parked[i] || shootout {
                     far_ticks[i] = 0;
                     continue;
                 }

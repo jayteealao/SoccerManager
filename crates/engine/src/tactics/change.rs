@@ -252,8 +252,25 @@ impl Simulation {
         self.ledgers
     }
 
-    /// Applies the queue at the stoppage this tick opened.
+    /// The substitution limit and window count in force: the rule pack's, plus its
+    /// extra-time allowance once extra time has started (IFAB Law 3). The allowance follows
+    /// from the clock, so a resumed match needs no stored limit.
+    pub(crate) fn substitution_limits(&self) -> (u8, u8) {
+        let rules = &self.config.rules;
+        let (mut limit, mut windows) = (rules.substitutions.limit, rules.substitutions.windows);
+        if self.referee.clock.in_extra_time() {
+            limit += rules.extra_time.extra_substitutions;
+            windows += rules.extra_time.extra_windows;
+        }
+        (limit, windows)
+    }
+
+    /// Applies the queue at the stoppage this tick opened. Nothing applies during the
+    /// penalty shoot-out: a change queued then stays queued.
     pub(crate) fn apply_changes(&mut self, stoppage: Stoppage) {
+        if self.referee.shootout.is_some() {
+            return;
+        }
         let (tactics_ok, subs_ok) = self.config.rules.admits(stoppage.kind);
         let now = self.tick + 1;
         for (admits, at) in [tactics_ok, subs_ok]
@@ -378,16 +395,15 @@ impl Simulation {
         now: u32,
         entered: &mut [usize; 2],
     ) -> Result<(), RejectReason> {
+        let (limit, windows) = self.substitution_limits();
         let rules = &self.config.rules.substitutions;
         let ledger = self.ledgers[team];
-        if ledger.used >= rules.limit {
-            return Err(RejectReason::LimitReached { limit: rules.limit });
+        if ledger.used >= limit {
+            return Err(RejectReason::LimitReached { limit });
         }
         let needs_window = !rules.exempt(kind) && ledger.window_at != Some(now);
-        if needs_window && ledger.windows >= rules.windows {
-            return Err(RejectReason::NoWindowLeft {
-                windows: rules.windows,
-            });
+        if needs_window && ledger.windows >= windows {
+            return Err(RejectReason::NoWindowLeft { windows });
         }
         let side = &self.teams[team];
         let slot = side

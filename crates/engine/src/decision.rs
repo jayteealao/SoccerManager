@@ -259,29 +259,7 @@ impl Simulation {
         }
         match choice.1 {
             Choice::Shot => {
-                // Aim for the side of the goal away from the goalkeeper; a better finisher
-                // places the shot nearer the post and strikes it truer.
-                let finishing = (carrier.derived.finishing / 100.0).clamp(0.0, 1.0);
-                let keeper = &self.players[(1 - team) * crate::team::PLAYERS_PER_TEAM];
-                let side = if !keeper.active() {
-                    if self.rng.chance(0.5) { 1.0 } else { -1.0 }
-                } else if keeper.pos.y > goal.y {
-                    -1.0
-                } else {
-                    1.0
-                };
-                let reach = pitch::GOAL_WIDTH / 2.0 * (0.4 + 0.5 * finishing);
-                let aim = DVec2::new(goal.x, side * self.rng.range_f64(0.5 * reach, reach));
-                let spread = t.shot_noise * (1.5 - finishing);
-                let dir = rotate(
-                    toward(carrier.pos, aim),
-                    self.rng.range_f64(-spread, spread),
-                );
-                Some(Kick::Shot {
-                    dir,
-                    speed: t.shot_speed,
-                    loft: self.rng.range_f64(0.0, 2.5),
-                })
+                Some(self.shot_kick(c, goal, (1 - team) * crate::team::PLAYERS_PER_TEAM, 1.0))
             }
             Choice::Pass => {
                 let j = o.pass.map_or(c, |(_, j)| j);
@@ -329,6 +307,45 @@ impl Simulation {
                 self.players[c].target = pitch::clamp(target, 1.0);
                 None
             }
+        }
+    }
+}
+
+impl Simulation {
+    /// Player `c` shoots at the goal centred on `goal`, which `keeper` defends. The shot aims
+    /// for the side of the goal away from the goalkeeper; a better finisher places it nearer
+    /// the post and strikes it truer. `spread_scale` scales the aim noise: 1 in open play, and
+    /// less for a placed kick from the penalty mark. An open-play shot and a shoot-out kick
+    /// both come from here, and the draws are taken in the same order either way.
+    pub(crate) fn shot_kick(
+        &mut self,
+        c: usize,
+        goal: DVec2,
+        keeper: usize,
+        spread_scale: f64,
+    ) -> Kick {
+        let t = &self.config.tuning;
+        let carrier = self.players[c];
+        let finishing = (carrier.derived.finishing / 100.0).clamp(0.0, 1.0);
+        let keeper = &self.players[keeper];
+        let side = if !keeper.active() {
+            if self.rng.chance(0.5) { 1.0 } else { -1.0 }
+        } else if keeper.pos.y > goal.y {
+            -1.0
+        } else {
+            1.0
+        };
+        let reach = pitch::GOAL_WIDTH / 2.0 * (0.4 + 0.5 * finishing);
+        let aim = DVec2::new(goal.x, side * self.rng.range_f64(0.5 * reach, reach));
+        let spread = t.shot_noise * (1.5 - finishing) * spread_scale;
+        let dir = rotate(
+            toward(carrier.pos, aim),
+            self.rng.range_f64(-spread, spread),
+        );
+        Kick::Shot {
+            dir,
+            speed: t.shot_speed,
+            loft: self.rng.range_f64(0.0, 2.5),
         }
     }
 }

@@ -30,12 +30,16 @@ pub fn run(content_dir: Option<&Path>, opts: &ResumeOpts) -> anyhow::Result<i32>
     let _guard = span.enter();
     let loaded = crate::content::load(content_dir, opts.team_a.as_deref(), opts.team_b.as_deref())?;
     let [team_a, team_b] = &loaded.teams;
-    let config = MatchConfig::new(
+    let mut config = MatchConfig::new(
         snapshot.seed(),
         snapshot.minutes(),
         &loaded.content,
         [team_a, team_b],
     )?;
+    // A knockout match resumes as a knockout match.
+    if snapshot.knockout() {
+        config = config.with_knockout();
+    }
     let match_id = MatchId {
         seed: snapshot.seed(),
         millis: snapshot.match_millis,

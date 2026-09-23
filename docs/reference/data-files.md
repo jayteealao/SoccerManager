@@ -18,13 +18,13 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 |---|---|---|
 | `attributes.json` | 1 | The attribute schema: 30 to 50 names in four groups |
 | `tuning.json` | 2 | Engine constants, decision weights, injury rates, generator distributions, fatigue curve, stream buffer |
-| `rules/default.json` | 3 | The rule pack |
+| `rules/default.json` | 4 | The rule pack |
 | `tactics.json` | 1 | Formations, mentalities, team instructions, roles, duties, and the AI manager's settings |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
 | `realism-bands.json` | 1 | The accepted realism bands the calibration run checks. They are acceptance criteria, never tuning values |
 
-Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 3`.
+Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`.
 
 ## attributes.json
 
@@ -192,10 +192,19 @@ carries a 47-byte delta.
 | added_time.min_s | the least added time of a half | 60 | 0 to 900 |
 | added_time.max_s | the most added time of a half | 900 | `min_s` to 1800 |
 | min_players | the fewest players a team may have on the pitch; fewer ends the match | 7 | 1 to 11 |
+| extra_time.periods | periods of extra time a level knockout match plays; 0 goes straight to the shoot-out | 2 | 0 to 2 |
+| extra_time.period_minutes | minutes in each period of extra time | 15 | 1 to 30 |
+| extra_time.added_max_s | the most added time of an extra-time period | 300 | 0 to 900 |
+| extra_time.extra_substitutions | substitutions each team gains once extra time starts | 1 | 0 to 3 |
+| extra_time.extra_windows | substitution windows each team gains once extra time starts | 1 | 0 to 3 |
+| shootout.kicks | kicks each team takes before sudden death | 5 | 1 to 10 |
+| shootout.allowance_rounds | rounds of kicks the announced match length allows for; a longer sudden death still plays to its end | 10 | 1 to 30 |
 
 Each stoppage is `{ "kind", "admits_tactics", "admits_substitution" }`. Kinds: `kick_off`, `throw_in`, `corner`, `goal_kick`, `free_kick`, `penalty`, `goal`, `half_time`, `injury`. The engine announces every stoppage by its kind. A queued tactical change or substitution waits for the next stoppage whose kind admits it and applies on the tick that stoppage opens, substitutions first. A substitution beyond `substitutions.limit`, or at a new stoppage once `substitutions.windows` are used, is rejected with the reason. All substitutions at one stoppage share one window, and a kind listed in `windows_exempt` uses none.
 
 The added time of a half is the sum of `per_kind` over the half's stoppages, plus `card_s` for each card, plus a seeded variance from `-variance_s` to `+variance_s`. The sum is rounded to the second and clamped to `min_s` to `max_s`. A match shorter than `halves × half_minutes` plays no added time.
+
+`extra_time` and `shootout` apply only to a knockout match (`--knockout` on `simulate`, `bench`, `serve`, and `record`). A knockout match that is level after regulation time plays `extra_time.periods` periods of `period_minutes`, with the teams changing ends at each break and no energy given back. Each period's added time is priced like a half's and capped at `added_max_s`. Once extra time starts, each team may make `extra_substitutions` more substitutions in `extra_windows` more windows; the breaks are `half_time` stoppages, so the `windows_exempt` rule covers them. Still level, the match goes to a penalty shoot-out: `kicks` kicks each, then sudden death. A knockout match shorter than `halves × half_minutes` plays no extra time and goes straight to the shoot-out when level. The announced maximum length adds both extra-time periods at their cap and `allowance_rounds` rounds of kicks.
 
 ## teams/*.json
 
@@ -357,11 +366,11 @@ The engine writes a record at each stoppage snapshot and at the end of the match
 
 ### The snapshot file
 
-`snapshot.smsn` holds the full state of a match at one stoppage: the clock, the score, every player's position, energy, and cards, the queue of changes, and the state of the random-number generator. The engine replaces the file at each stoppage. A snapshot resumes only on the build that wrote it, with the same content files and team files. The engine refuses any other snapshot and names the reason.
+`snapshot.smsn` holds the full state of a match at one stoppage: the clock, the score, every player's position, energy, and cards, the queue of changes, the state of the random-number generator, and for a knockout match the extra-time periods and the shoot-out. The engine replaces the file at each stoppage. A snapshot resumes only on the build that wrote it, with the same content files and team files. The engine refuses any other snapshot and names the reason.
 
 ### The tick file
 
-`simulate --ticks-out <FILE>` writes one record per tick: the ball position and height, then the position of each of the 22 players. The header states the seed, the tick length, and the most ticks the match can last. The trailer states the ticks written. `--json` also writes the same ticks as JSON Lines beside the tick file.
+`simulate --ticks-out <FILE>` writes one record per tick: the ball position and height, then the position of each of the 22 players. The header states the seed, the tick length, and the most ticks the match can last. The trailer states the ticks written. When a knockout match's sudden death runs past the announced length, the engine raises the header's figure to the ticks written, so the file still reads. `--json` also writes the same ticks as JSON Lines beside the tick file.
 
 ### The replay file
 

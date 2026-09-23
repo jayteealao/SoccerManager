@@ -1,7 +1,7 @@
 //! The rule pack: stoppage kinds and what each admits, substitution limits, half lengths,
-//! the added-time allowance, and the fewest players a team may field. The engine reads the
-//! half structure, the added-time allowance, the minimum team size, what each stoppage
-//! admits, and the substitution limits during a match.
+//! the added-time allowance, the fewest players a team may field, and the extra time and
+//! penalty shoot-out a knockout match plays when it is level. The engine reads all of it
+//! during a match.
 
 use std::collections::BTreeMap;
 
@@ -9,8 +9,8 @@ use garde::Validate;
 use serde::{Deserialize, Serialize};
 
 /// Schema version this build reads. Version 2 adds `added_time` and `min_players`; version 3
-/// adds `substitutions.windows_exempt`.
-pub const RULES_VERSION: u32 = 3;
+/// adds `substitutions.windows_exempt`; version 4 adds `extra_time` and `shootout`.
+pub const RULES_VERSION: u32 = 4;
 
 /// Every kind of stoppage the rules name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -172,6 +172,43 @@ fn at_least(min: u32) -> impl FnOnce(&u32, &()) -> garde::Result {
     }
 }
 
+/// Extra time in a knockout match that is level at the end of regulation time (IFAB Law 7):
+/// periods of equal length with their own added time, and the extra substitution and window
+/// each team gains (IFAB Law 3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct ExtraTime {
+    /// Periods of extra time; 0 goes straight to the shoot-out.
+    #[garde(range(min = 0, max = 2))]
+    pub periods: u8,
+    /// Minutes in each period.
+    #[garde(range(min = 1, max = 30))]
+    pub period_minutes: u8,
+    /// The most time added to one extra-time period, in seconds.
+    #[garde(range(min = 0, max = 900))]
+    pub added_max_s: u32,
+    /// Substitutions each team gains in extra time, on top of `substitutions.limit`.
+    #[garde(range(min = 0, max = 3))]
+    pub extra_substitutions: u8,
+    /// Windows each team gains in extra time, on top of `substitutions.windows`.
+    #[garde(range(min = 0, max = 3))]
+    pub extra_windows: u8,
+}
+
+/// The penalty shoot-out that decides a knockout match still level after extra time (IFAB
+/// Law 10).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct Shootout {
+    /// Kicks each team takes before sudden death.
+    #[garde(range(min = 1, max = 10))]
+    pub kicks: u8,
+    /// Rounds of kicks the announced maximum match length allows for. A shoot-out that runs
+    /// longer still plays to its end.
+    #[garde(range(min = 1, max = 30))]
+    pub allowance_rounds: u8,
+}
+
 /// The rule pack file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
@@ -191,6 +228,10 @@ pub struct RulePack {
     /// A team with fewer players on the pitch cannot continue, and the match is abandoned.
     #[garde(range(min = 1, max = 11))]
     pub min_players: u8,
+    #[garde(dive)]
+    pub extra_time: ExtraTime,
+    #[garde(dive)]
+    pub shootout: Shootout,
 }
 
 impl RulePack {

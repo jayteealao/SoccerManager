@@ -19,6 +19,7 @@ export class History {
   /// grow rather than refuse.
   constructor(ticksExpected) {
     const capacity = Math.max(1, ticksExpected);
+    this.ticksExpected = ticksExpected;
     this.capacity = capacity;
     this.count = 0;
     this.firstTick = 0;
@@ -72,6 +73,12 @@ export class History {
   /// The newest tick stored, or 0 when the history is empty.
   get newestTick() {
     return this.count === 0 ? 0 : this.firstTick + this.count - 1;
+  }
+
+  /// The scrubber's end: the announced ticks, or the newest tick once a match runs past
+  /// them (a knockout shoot-out's sudden death can).
+  get scrubLimit() {
+    return Math.max(this.ticksExpected, this.newestTick);
   }
 
   /// Stores one decoded tick. Ticks arrive in order.

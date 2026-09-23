@@ -10,7 +10,11 @@
 //!   running match except the scratch buffer and the events already handed out: the lineups,
 //!   benches, tactics, substitutions used, and managers of both teams, each player's squad
 //!   identity, energy, and effective values, the change queue in order with the tick of the
-//!   latest stoppage that admitted each change kind, and the AI manager's memory. Every float is stored as its exact bits. Version 2 added the tactics fields.
+//!   latest stoppage that admitted each change kind, and the AI manager's memory. Every float is stored as its exact bits. Version 2 added the tactics fields. Version 4 added the
+//!   knockout switch (the byte after the tick), the extra-time periods and their added
+//!   time, the team that kicked off extra time, and the shoot-out: the kickers in order,
+//!   the keepers, both order cursors, the team that kicks first, the end, the scores, the
+//!   kicks taken, and the kick in progress.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -31,14 +35,14 @@ use crate::record::TickSink;
 use crate::rng::{EngineRng, RngState};
 use crate::rules::clock::Tally;
 use crate::rules::fouls::Card;
-use crate::rules::{DeadBall, PendingCard, Phase, Stoppage};
-use crate::sim::{MatchConfig, Simulation, Summary};
+use crate::rules::{DeadBall, PendingCard, Phase, Shootout, Stoppage};
+use crate::sim::{DecidedBy, MatchConfig, Simulation, Summary};
 use crate::tactics::change::{Change, ChangeId, QueuedChange, SubLedger};
 use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 3;
+pub const VERSION: u16 = 4;
 /// The file name of a match's latest snapshot inside its match folder.
 pub const FILE_NAME: &str = "snapshot.smsn";
 
@@ -93,6 +97,12 @@ impl Snapshot {
     pub fn tick(&self) -> u32 {
         let at = 12 + 64;
         u32::from_le_bytes(self.body[at..at + 4].try_into().expect("4 bytes"))
+    }
+
+    /// `true` when the captured match is a knockout match. A match resumed from the snapshot
+    /// must be configured the same way.
+    pub fn knockout(&self) -> bool {
+        self.body.get(12 + 64 + 4).is_some_and(|&b| b == 1)
     }
 
     /// The whole file.
@@ -571,6 +581,7 @@ fn encode(sim: &Simulation, w: &mut Writer) {
         w.0.extend_from_slice(digest);
     }
     w.u32(sim.tick);
+    w.u8(u8::from(sim.config.knockout));
     w.u8(u8::from(sim.restart));
     let rng = sim.rng.state();
     w.0.extend_from_slice(&rng.seed);
@@ -691,6 +702,34 @@ fn encode(sim: &Simulation, w: &mut Writer) {
         w.u32(added.unwrap_or(0));
     }
     w.u8(u8::from(referee.abandoned));
+    w.index(referee.extra_kick_off);
+    match &referee.shootout {
+        None => w.u8(0),
+        Some(s) => {
+            w.u8(1);
+            for order in &s.order {
+                // At most 11 kickers a team.
+                w.u8(order.len() as u8);
+                for &i in order {
+                    w.index(Some(i));
+                }
+            }
+            for keeper in s.keepers {
+                w.index(Some(keeper));
+            }
+            for cursor in s.cursor {
+                // A cursor grows by one a kick, far below 4 billion.
+                w.u32(cursor as u32);
+            }
+            w.index(Some(s.first));
+            w.u8(u8::from(s.end > 0.0));
+            w.pair(s.scores);
+            w.pair(s.taken);
+            w.index(s.kicker);
+            w.u8(u8::from(s.live_since.is_some()));
+            w.u32(s.live_since.unwrap_or(0));
+        }
+    }
 }
 
 fn encode_summary(s: &Summary, w: &mut Writer) {
@@ -728,6 +767,14 @@ fn encode_summary(s: &Summary, w: &mut Writer) {
     w.pair(s.passes);
     w.pair(s.passes_completed);
     w.pair(s.possession_ticks);
+    w.pair(s.extra_added_s);
+    w.u8(u8::from(s.extra_time));
+    w.opt_pair(s.shootout);
+    w.u32(s.shootout_kicks);
+    w.u8(s
+        .decided_by
+        .and_then(|d| DecidedBy::ALL.iter().position(|x| *x == d))
+        .map_or(0, |k| k as u8 + 1));
 }
 
 fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
@@ -742,6 +789,9 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
         }
     }
     sim.tick = r.u32()?;
+    if r.bool()? != sim.config.knockout {
+        return Err("configuration mismatch: a knockout match and a regular match");
+    }
     sim.restart = r.bool()?;
     let rng_seed: [u8; 32] = r.take(32)?.try_into().expect("32 bytes");
     sim.rng = EngineRng::from_state(RngState {
@@ -913,6 +963,40 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
         *added = known.then_some(ticks);
     }
     referee.abandoned = r.bool()?;
+    referee.extra_kick_off = r.index(2)?;
+    referee.shootout = match r.u8()? {
+        0 => None,
+        1 => {
+            let mut order: [Vec<usize>; 2] = [Vec::new(), Vec::new()];
+            for side in &mut order {
+                let len = r.u8()?;
+                for _ in 0..len {
+                    side.push(r.some_index(PLAYERS)?);
+                }
+            }
+            let keepers = [r.some_index(PLAYERS)?, r.some_index(PLAYERS)?];
+            let cursor = [r.u32()? as usize, r.u32()? as usize];
+            let first = r.some_index(2)?;
+            let end = if r.bool()? { 1.0 } else { -1.0 };
+            let scores = r.pair()?;
+            let taken = r.pair()?;
+            let kicker = r.index(PLAYERS)?;
+            let live = r.bool()?;
+            let live_at = r.u32()?;
+            Some(Shootout {
+                order,
+                keepers,
+                cursor,
+                first,
+                end,
+                scores,
+                taken,
+                kicker,
+                live_since: live.then_some(live_at),
+            })
+        }
+        _ => return Err("malformed body: an unknown shoot-out state"),
+    };
     if r.at != r.buf.len() {
         return Err("malformed body: bytes left over");
     }
@@ -950,6 +1034,18 @@ fn decode_summary(r: &mut Reader<'_>) -> Decoded<Summary> {
         passes: r.pair()?,
         passes_completed: r.pair()?,
         possession_ticks: r.pair()?,
+        extra_added_s: r.pair()?,
+        extra_time: r.bool()?,
+        shootout: r.opt_pair()?,
+        shootout_kicks: r.u32()?,
+        decided_by: match r.u8()? {
+            0 => None,
+            k => Some(
+                *DecidedBy::ALL
+                    .get(usize::from(k) - 1)
+                    .ok_or("malformed body: an unknown decision")?,
+            ),
+        },
     })
 }
 
@@ -1001,7 +1097,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 3"),
+                .contains("unknown version 1; this build reads 4"),
             "{err}"
         );
     }

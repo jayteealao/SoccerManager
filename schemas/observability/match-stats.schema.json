@@ -229,6 +229,38 @@
       },
       "minItems": 2,
       "maxItems": 2
+    },
+    "extra_time.played": {
+      "type": "boolean"
+    },
+    "extra_time.added_s": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "shootout.scores": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "shootout.kicks": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "result.decided_by": {
+      "enum": [
+        "regulation",
+        "extra-time",
+        "shoot-out"
+      ]
     }
   },
   "additionalProperties": true

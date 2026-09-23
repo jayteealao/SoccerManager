@@ -64,7 +64,8 @@ pub fn drive<S: TickSink>(
     // One simulated second of ticks: the cadence of the running statistics and energy.
     let ticks_per_second = ((1.0 / sim.tuning().dt).round() as u32).max(1);
     let mut written = 0u32;
-    while !sim.is_over() && written < opts.ticks {
+    // A sudden death can run past the announced maximum; it is played to its end.
+    while !sim.is_over() && (written < opts.ticks || sim.in_shootout()) {
         if let Some(gate) = opts.gate
             && !gate.wait_for_room(sim.tick())
         {
@@ -426,6 +427,13 @@ pub(crate) fn match_event(
     .advantage(event.advantage)
     .added_time(event.added_time_s)
     .ai_decision(ai_decision)
+    .period(event.period)
+    .shootout(
+        event.shootout_round,
+        event.shootout_scored,
+        event.shootout_scores,
+    )
+    .decided_by(event.decided_by.map(|d| d.code().to_string()))
 }
 
 /// The engine card as the protocol names it.
@@ -478,6 +486,70 @@ mod tests {
         )
         .unwrap();
         (messages, sim)
+    }
+
+    /// A level knockout match streams its shoot-out to full time even past the tick cap, and
+    /// the kicks and the decision reach the wire as event fields.
+    #[test]
+    fn a_shootout_streams_to_full_time_past_the_tick_cap() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let mut config = MatchConfig::new(42, 1, &loaded.content, [a, b])
+            .unwrap()
+            .with_knockout();
+        // Nobody decides, so the minute ends level.
+        config.tuning.decision_interval_ticks = u32::MAX;
+        let mut sim = Simulation::new(config).unwrap();
+        let state = MatchState::default();
+        let mut messages = Vec::new();
+        let driven = drive(
+            &mut sim,
+            &mut VecSink::default(),
+            &Drive {
+                // Regulation only: the shoot-out runs past the cap.
+                ticks: 3_000,
+                owner_id: "0123456789abcdef0123456789abcdef",
+                match_id: "000000000000002a-1",
+                club_ids: ["club-a", "club-b"],
+                state: &state,
+                gate: None,
+                commentary: &loaded.commentary,
+                inbox: None,
+            },
+            &mut |m: ServerMessage| {
+                messages.push(m);
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert!(driven.full_time);
+        assert!(driven.written > 3_000);
+        let events: Vec<MatchEvent> = messages
+            .into_iter()
+            .filter_map(|m| match m {
+                ServerMessage::Event(e) => Some(e),
+                _ => None,
+            })
+            .collect();
+        let outcomes: Vec<&MatchEvent> = events
+            .iter()
+            .filter(|e| e.shootout_scored.is_some())
+            .collect();
+        assert!(!outcomes.is_empty());
+        for e in &outcomes {
+            assert_eq!(e.event_type, EventType::Penalty);
+            assert!(e.commentary.is_none(), "a shoot-out kick gets no line");
+            assert!(e.shootout_round.is_some() && e.shootout_scores.is_some());
+        }
+        let full_time = events.last().unwrap();
+        assert_eq!(full_time.event_type, EventType::FullTime);
+        assert_eq!(full_time.decided_by.as_deref(), Some("shoot-out"));
+        let json = serde_json::to_string(full_time).unwrap();
+        assert!(
+            json.contains("\"result.decided_by\":\"shoot-out\""),
+            "{json}"
+        );
+        assert!(json.contains("\"shootout.scores\":["), "{json}");
     }
 
     #[test]

@@ -161,6 +161,40 @@ pub struct MatchEvent {
     /// One English commentary line, on every play event; absent on `tactics-change`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub commentary: Option<String>,
+    /// Additive extra, on the `half-time` break before an extra-time period and on its
+    /// `kick-off`: the period that starts, counted from 0 (2 and 3 are extra time).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub period: Option<u32>,
+    /// Additive extra, on a shoot-out `penalty` event: the kicking team's round, from 1.
+    #[serde(
+        rename = "shootout.round",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub shootout_round: Option<u32>,
+    /// Additive extra, on the outcome event of a shoot-out kick: `true` when it scored.
+    #[serde(
+        rename = "shootout.scored",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub shootout_scored: Option<bool>,
+    /// Additive extra, on the outcome event of a shoot-out kick and on `full-time` after a
+    /// shoot-out: the shoot-out score, home first.
+    #[serde(
+        rename = "shootout.scores",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub shootout_scores: Option<[u32; 2]>,
+    /// Additive extra, on `full-time` of a knockout match: `regulation`, `extra-time`, or
+    /// `shoot-out`.
+    #[serde(
+        rename = "result.decided_by",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub decided_by: Option<String>,
 }
 
 impl MatchEvent {
@@ -197,6 +231,11 @@ impl MatchEvent {
             minute_added: None,
             added_time_s: None,
             commentary: None,
+            period: None,
+            shootout_round: None,
+            shootout_scored: None,
+            shootout_scores: None,
+            decided_by: None,
         }
     }
 
@@ -261,6 +300,32 @@ impl MatchEvent {
     /// The commentary line.
     pub fn commentary(mut self, line: Option<String>) -> Self {
         self.commentary = line;
+        self
+    }
+
+    /// The period an extra-time break or kick-off starts.
+    pub fn period(mut self, period: Option<u32>) -> Self {
+        self.period = period;
+        self
+    }
+
+    /// A shoot-out kick: the round, and on its outcome whether it scored and the shoot-out
+    /// score; the score alone at full time after a shoot-out.
+    pub fn shootout(
+        mut self,
+        round: Option<u32>,
+        scored: Option<bool>,
+        scores: Option<[u32; 2]>,
+    ) -> Self {
+        self.shootout_round = round;
+        self.shootout_scored = scored;
+        self.shootout_scores = scores;
+        self
+    }
+
+    /// How a knockout match was decided, at full time.
+    pub fn decided_by(mut self, decided_by: Option<String>) -> Self {
+        self.decided_by = decided_by;
         self
     }
 

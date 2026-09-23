@@ -59,6 +59,9 @@ pub struct SimulateOpts {
     /// Minutes of play to simulate.
     #[arg(long, default_value_t = 90)]
     pub minutes: u32,
+    /// Play extra time and a shoot-out when level after regulation time.
+    #[arg(long)]
+    pub knockout: bool,
     /// Also write a JSON Lines dump beside the tick file.
     #[arg(
         long,
@@ -110,6 +113,9 @@ pub struct ServeOpts {
     /// Minutes of play to simulate.
     #[arg(long, default_value_t = 90)]
     pub minutes: u32,
+    /// Play extra time and a shoot-out when level after regulation time.
+    #[arg(long)]
+    pub knockout: bool,
     /// Also write every tick to this file while streaming.
     #[arg(long, value_name = "FILE")]
     pub ticks_out: Option<PathBuf>,
@@ -186,6 +192,9 @@ pub struct RecordOpts {
     /// Minutes of play to record.
     #[arg(long, default_value_t = 90)]
     pub minutes: u32,
+    /// Play extra time and a shoot-out when level after regulation time.
+    #[arg(long)]
+    pub knockout: bool,
     /// Home team file; default teams/default-a.json in the content folder.
     #[arg(long, value_name = "FILE")]
     pub team_a: Option<PathBuf>,
@@ -221,6 +230,9 @@ pub struct BenchOpts {
     /// Minutes of play per match.
     #[arg(long, default_value_t = 90)]
     pub minutes: u32,
+    /// Play extra time and a shoot-out when level after regulation time.
+    #[arg(long)]
+    pub knockout: bool,
     /// Print the run report as one JSON line (the default output is the same).
     #[arg(long)]
     pub json: bool,

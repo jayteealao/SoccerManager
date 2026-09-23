@@ -26,7 +26,10 @@ pub fn run(content_dir: Option<&Path>, opts: &BenchOpts) -> anyhow::Result<i32> 
     // timed path reads a file or hashes bytes.
     let loaded = crate::content::load(content_dir, None, None)?;
     let [team_a, team_b] = &loaded.teams;
-    let config = MatchConfig::new(opts.seed, opts.minutes, &loaded.content, [team_a, team_b])?;
+    let mut config = MatchConfig::new(opts.seed, opts.minutes, &loaded.content, [team_a, team_b])?;
+    if opts.knockout {
+        config = config.with_knockout();
+    }
     let owner_id = load_or_create_owner_id(&data_dir())?;
     let ticks = config.max_ticks();
 

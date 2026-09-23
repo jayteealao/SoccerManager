@@ -39,7 +39,9 @@ pub use record::{
 pub use rules::clock::max_ticks;
 pub use rules::fouls::Card;
 pub use rules::{DeadBall, Stoppage};
-pub use sim::{EngineEvent, EngineEventKind, EventDetail, MatchConfig, Simulation, Summary};
+pub use sim::{
+    DecidedBy, EngineEvent, EngineEventKind, EventDetail, MatchConfig, Simulation, Summary,
+};
 pub use snapshot::{Snapshot, SnapshotSink};
 pub use tactics::change::{Change, ChangeId, ChangeKind, RejectReason, SubLedger, Unapplied};
 pub use tactics::{RoleDuty, Tactics, TacticsPatch};

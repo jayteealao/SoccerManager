@@ -49,7 +49,7 @@ fn an_unknown_rule_pack_version_is_refused_naming_the_version() {
             err,
             EngineError::Version {
                 found: 99,
-                expected: 3,
+                expected: 4,
                 ..
             }
         ),
@@ -57,7 +57,7 @@ fn an_unknown_rule_pack_version_is_refused_naming_the_version() {
     );
     assert_eq!(
         err.to_string(),
-        "content refused: rules rules-unknown-version.json: schema_version 99; this build reads 3"
+        "content refused: rules rules-unknown-version.json: schema_version 99; this build reads 4"
     );
 }
 
@@ -76,6 +76,38 @@ fn the_current_rule_pack_version_loads() {
         (15, 30, 60, 900)
     );
     assert_eq!(content.rules.min_players, 7);
+    let extra = &content.rules.extra_time;
+    assert_eq!(
+        (
+            extra.periods,
+            extra.period_minutes,
+            extra.added_max_s,
+            extra.extra_substitutions,
+            extra.extra_windows
+        ),
+        (2, 15, 300, 1, 1)
+    );
+    let shootout = &content.rules.shootout;
+    assert_eq!((shootout.kicks, shootout.allowance_rounds), (5, 10));
+}
+
+/// A version 3 rule pack has no extra-time or shoot-out block, so this build refuses it by
+/// its version before it reads any field.
+#[test]
+fn a_version_three_rule_pack_is_refused_by_its_version() {
+    let shipped = std::fs::read_to_string(common::content_dir().path("rules/default.json"))
+        .expect("the shipped rule pack reads");
+    let old = shipped.replacen("\"schema_version\": 4", "\"schema_version\": 3", 1);
+    assert_ne!(old, shipped, "the shipped pack names version 4");
+    let path = std::env::temp_dir().join(format!("engine-rules-v3-{}.json", std::process::id()));
+    std::fs::write(&path, old).unwrap();
+    let err =
+        load_json::<RulePack>("rules", &path, "rules/v3.json", RULES_VERSION, &()).unwrap_err();
+    std::fs::remove_file(&path).unwrap();
+    assert_eq!(
+        err.to_string(),
+        "content refused: rules rules/v3.json: schema_version 3; this build reads 4"
+    );
 }
 
 #[test]

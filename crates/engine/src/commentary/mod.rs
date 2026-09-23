@@ -88,10 +88,11 @@ impl<'a> Commentator<'a> {
         self.fallbacks
     }
 
-    /// The line for `event`, or `None` for a verdict on a queued change, which gets no line.
-    /// Call it once per event, in event order.
+    /// The line for `event`, or `None` for a verdict on a queued change and for a shoot-out
+    /// kick, which get no line (the penalty templates announce an award, which a shoot-out
+    /// kick is not). Call it once per event, in event order.
     pub fn line(&mut self, event: &EngineEvent) -> Option<String> {
-        if !commented(event.kind) {
+        if !commented(event.kind) || event.shootout_round.is_some() {
             return None;
         }
         let values = self.values(event);
@@ -285,6 +286,11 @@ mod tests {
             added_time_s: None,
             spot: None,
             detail: None,
+            period: None,
+            shootout_round: None,
+            shootout_scored: None,
+            shootout_scores: None,
+            decided_by: None,
         }
     }
 

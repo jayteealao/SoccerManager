@@ -23,6 +23,13 @@ kick-off and sends nothing but the `hello` until the page sends `start`. A new c
 `substitutions` limits. `queue-change` changed meaning: its `detail` is now read, and the
 change reaches the engine and applies at the next stoppage that admits it.
 
+Version 3 also carries knockout matches (`--knockout`) without a new version. The event
+message gained five optional fields (`period`, `shootout.round`, `shootout.scored`,
+`shootout.scores`, and `result.decided_by`), no event type was added, and no field changed
+meaning for a match that is not a knockout match. For a knockout match, `ticks_expected` also
+covers extra time and the rule pack's allowance of shoot-out rounds; a sudden death longer
+than the allowance plays on past it, and a client grows its history to hold it.
+
 A test in `crates/protocol/tests/document.rs` holds this document to the code: every message
 the implementation names must appear below with every one of its fields.
 
@@ -68,7 +75,7 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 | `match.id` | string | `<seed as 16 hex>-<start time in milliseconds>` |
 | `seed` | integer | the seed the match runs from |
 | `dt_ms` | float | milliseconds per tick, 20.0 |
-| `ticks_expected` | integer | the most ticks the match can send: regulation time plus the cap on added time in every half; the match ends earlier when it earns less added time, and the `full-time` event marks the last tick |
+| `ticks_expected` | integer | the most ticks the match can send: regulation time plus the cap on added time in every half; the match ends earlier when it earns less added time, and the `full-time` event marks the last tick. A knockout match adds both extra-time periods at their cap on added time and the rule pack's allowance of shoot-out rounds (530,000 ticks for 90 minutes with the shipped rule pack); a sudden death longer than the allowance runs past it |
 | `keyframe_interval` | integer | ticks between keyframes |
 | `teams` | array of two | one entry per club, home first; see the table below |
 | `tactics` | object | the tactics file the engine loaded (`content/tactics.json`): `formations`, `mentalities`, `instructions` with their levels, `roles`, `duties`, and the computer manager's settings. Every tactics index on the wire is a place in one of its lists. Because a JSON object carries no key order, the engine adds `instruction_order`, the six instruction names in the order an instruction list indexes them |
@@ -172,8 +179,22 @@ One `match-event` row. The same object is written to
 | `card.kind` | enumeration | `yellow`, `second-yellow`, or `red`, on `card`; a second yellow sends the player off |
 | `foul.advantage` | boolean | on `foul`: `true` when play continued because the fouled team kept the ball; a card for that foul follows at the next stoppage |
 | `minute.added` | integer | in added time only: the added minute, 2 at 45+2 |
-| `added_time.s` | integer | on `half-time` and `full-time`: the seconds added to the half that ended |
+| `added_time.s` | integer | on `half-time` and `full-time`: the seconds added to the half, or the extra-time period, that ended |
+| `period` | integer | knockout matches only, on the `half-time` break before an extra-time period and on that period's `kick-off`: the period that starts, counted from 0 (2 and 3 are the two periods of extra time) |
+| `shootout.round` | integer | on a shoot-out `penalty` event: the kicking club's round, from 1 |
+| `shootout.scored` | boolean | on the second `penalty` event of a shoot-out kick, its outcome: `true` when the kick scored |
+| `shootout.scores` | array of two | on the outcome event of a shoot-out kick and on `full-time` after a shoot-out: the shoot-out score, home first; `home.score` and `away.score` keep the score of play |
+| `result.decided_by` | enumeration | knockout matches only, on `full-time`: `regulation`, `extra-time`, or `shoot-out` |
 | `commentary` | string | one English commentary line, on every event except `tactics-change`; the lines come from `content/commentary/en.json` and name the player and the club |
+
+A knockout match that is level after regulation time plays two periods of extra time, each
+opened by a `half-time` event and a `kick-off` that carry `period`. Still level, it goes to a
+penalty shoot-out played on the pitch. Every kick is two `penalty` events: the set-up, with
+`shootout.round`, on the restart keyframe that places the ball on the mark, and the outcome,
+with `shootout.scored` and `shootout.scores`, when the ball goes in, is saved, leaves play,
+stops, or has been live for 5 seconds. A shoot-out event carries no `commentary`. The minute
+stays at the last minute of play (120 after extra time) for the whole shoot-out, and
+`full-time` carries `result.decided_by`.
 
 A restart event (`kick-off`, `throw-in`, `corner`, `goal-kick`, `free-kick`, `penalty`)
 arrives on the same tick as the restart keyframe that places the ball. Play resumes when the
@@ -185,8 +206,10 @@ stoppage the rule pack admits them at, substitutions first. Each verdict is a
 `tactics-change` event with `change.state` `applied` or `rejected`. A rejection names its
 reason in `change.rejected_reason`:
 
-- `substitution limit reached (5 of 5)`
-- `no substitution window left (3 of 3)`; a half-time substitution uses no window
+- `substitution limit reached (5 of 5)`; in extra time the limit rises by the rule pack's
+  extra-time allowance (6 of 6 with the shipped pack)
+- `no substitution window left (3 of 3)`; a half-time substitution uses no window, and neither
+  does one at the breaks before and inside extra time, which are `half-time` stoppages
 - `player <id> is not on the pitch`
 - `player <id> was sent off and cannot be replaced`
 - `player <id> is not on the bench`

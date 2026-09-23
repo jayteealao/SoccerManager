@@ -1,6 +1,7 @@
 //! Test scenes. A scene starts from a placed kick-off and moves players, the ball, the
-//! carrier, the clock, the score, the cards, energy, substitutions used, the managers, the
-//! change queue, and the referee's and injury rolls' next draws to where a test needs them.
+//! carrier, the clock and its period, the score, the cards, energy, substitutions used, the
+//! managers, the change queue, the knockout switch, the outcomes of the next shoot-out kicks,
+//! and the referee's and injury rolls' next draws to where a test needs them.
 //! Only this crate's tests build it (the `scenario` feature), so a release build never
 //! contains it.
 
@@ -9,7 +10,7 @@ use crate::data::rules::StoppageKind;
 use crate::decision::Kick;
 use crate::fatigue::InjurySource;
 use crate::math::{DVec2, DVec3};
-use crate::rules::clock::TICKS_PER_MINUTE;
+use crate::rules::clock::{MatchClock, TICKS_PER_MINUTE};
 use crate::rules::discipline;
 use crate::sim::{MatchConfig, Simulation};
 use crate::tactics::change::Change;
@@ -169,6 +170,57 @@ impl Scene {
         }
         self.sim.tick = minute * TICKS_PER_MINUTE;
         self.sim.control_since = self.sim.tick;
+        self
+    }
+
+    /// The match is a knockout match: level after regulation time, it plays extra time and
+    /// then a shoot-out. The clock keeps its place.
+    pub fn knockout(mut self) -> Self {
+        let config = &mut self.sim.config;
+        config.knockout = true;
+        let clock = MatchClock::new(config.minutes, &config.rules, true);
+        self.sim.referee.clock.extra_periods = clock.extra_periods;
+        self
+    }
+
+    /// Moves the clock to the start of period `period` (2 and 3 are the extra-time periods
+    /// of a knockout match) with no time added before it. The teams have changed ends once a
+    /// break, and the kick-off is placed: the away team's in the second half, the home team's
+    /// in the first extra-time period, and the away team's in the second. The kick-off event
+    /// is cleared.
+    pub fn period(mut self, period: u32) -> Self {
+        let mut clock = self.sim.referee.clock;
+        let mut start = 0;
+        for p in 0..period {
+            start += clock.period_ticks(p);
+            clock.added_ticks[p as usize] = Some(0);
+        }
+        clock.half = period;
+        clock.half_start = start;
+        self.sim.referee.clock = clock;
+        for _ in 0..period {
+            for team in &mut self.sim.teams {
+                team.switch_ends();
+            }
+        }
+        let kick_off = if period >= clock.halves {
+            self.sim.summary.extra_time = true;
+            self.sim.referee.extra_kick_off = Some(0);
+            usize::from(period > clock.halves)
+        } else {
+            usize::from(period % 2 == 1)
+        };
+        self.sim.tick = start;
+        self.sim.place_kick_off(kick_off);
+        self.sim.events.clear();
+        self.sim.control_since = self.sim.tick;
+        self
+    }
+
+    /// The next shoot-out kicks score or miss as `outcomes` says, in order, whatever the ball
+    /// does; each kick is still played on the pitch.
+    pub fn shootout_kicks(mut self, outcomes: &[bool]) -> Self {
+        self.sim.forced_kicks.extend(outcomes.iter().copied());
         self
     }
 

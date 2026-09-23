@@ -21,7 +21,7 @@ use crate::error::EngineError;
 
 pub use attributes::{ATTRIBUTES_VERSION, AttributeSchema, Group, MAX_ATTRIBUTES};
 pub use generator::generate_league;
-pub use rules::{AddedTime, RULES_VERSION, RulePack, StoppageKind};
+pub use rules::{AddedTime, ExtraTime, RULES_VERSION, RulePack, Shootout, StoppageKind};
 pub use tactics::{TACTICS_VERSION, TacticsSchema};
 pub use team::{Club, Kit, PlayerEntry, Position, TEAM_VERSION, TeamFile};
 pub use tuning::{
@@ -343,7 +343,7 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
         assert_eq!(
             err.to_string(),
-            "content refused: rules rules/x.json: schema_version 7; this build reads 3"
+            "content refused: rules rules/x.json: schema_version 7; this build reads 4"
         );
     }
 
@@ -351,7 +351,7 @@ mod tests {
     fn an_unknown_key_is_refused_with_its_name() {
         let path = temp(
             "unknown",
-            r#"{"schema_version": 3, "halves": 2, "half_minutes": 45, "extra": 1,
+            r#"{"schema_version": 4, "halves": 2, "half_minutes": 45, "extra": 1,
                 "substitutions": {"limit": 5, "windows": 3, "windows_exempt": []},
                 "stoppages": []}"#,
         );
@@ -370,14 +370,17 @@ mod tests {
     fn a_range_violation_names_the_field_path() {
         let path = temp(
             "range",
-            r#"{"schema_version": 3, "halves": 3, "half_minutes": 45,
+            r#"{"schema_version": 4, "halves": 3, "half_minutes": 45,
                 "substitutions": {"limit": 5, "windows": 3, "windows_exempt": []},
                 "stoppages": [],
                 "added_time": {"per_kind": {"kick_off": 0, "throw_in": 0, "corner": 0,
                     "goal_kick": 0, "free_kick": 0, "penalty": 0, "goal": 0,
                     "half_time": 0, "injury": 0},
                     "card_s": 0, "variance_s": 0, "min_s": 0, "max_s": 0},
-                "min_players": 7}"#,
+                "min_players": 7,
+                "extra_time": {"periods": 2, "period_minutes": 15, "added_max_s": 300,
+                    "extra_substitutions": 1, "extra_windows": 1},
+                "shootout": {"kicks": 5, "allowance_rounds": 10}}"#,
         );
         let err =
             load_json::<RulePack>("rules", &path, "rules/x.json", RULES_VERSION, &()).unwrap_err();

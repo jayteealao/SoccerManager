@@ -165,7 +165,7 @@ fn a_damaged_or_foreign_snapshot_is_refused_by_name() {
     first_format[4] = 1;
     let reason = refusal(Snapshot::from_bytes(&first_format, "s"));
     assert!(
-        reason.starts_with("unknown version 1; this build reads 3"),
+        reason.starts_with("unknown version 1; this build reads 4"),
         "{reason}"
     );
 
@@ -184,4 +184,113 @@ fn a_damaged_or_foreign_snapshot_is_refused_by_name() {
         Err(other) => panic!("refused for another reason: {other}"),
         Ok(_) => panic!("a snapshot of other content was accepted"),
     }
+}
+
+/// Keeps every record and captures the first snapshot `pick` accepts.
+struct CaptureWhen<F: Fn(&Stoppage, &Simulation) -> bool> {
+    records: Vec<TickRecord>,
+    pick: F,
+    snapshot: Option<Snapshot>,
+}
+
+impl<F: Fn(&Stoppage, &Simulation) -> bool> TickSink for CaptureWhen<F> {
+    fn on_tick(&mut self, record: &TickRecord) -> Result<(), EngineError> {
+        self.records.push(*record);
+        Ok(())
+    }
+
+    fn on_stoppage(&mut self, stoppage: &Stoppage, sim: &Simulation) -> Result<(), EngineError> {
+        if self.snapshot.is_none() && (self.pick)(stoppage, sim) {
+            self.snapshot = Some(Snapshot::capture(sim, OWNER, 1_700_000_000_000));
+        }
+        Ok(())
+    }
+}
+
+/// A level knockout match from minute 89, hand-managed so nothing but the laws moves it.
+fn knockout_config() -> engine::MatchConfig {
+    let mut config = common::calm_match(90).with_knockout();
+    config.managers = [engine::Manager::Human; 2];
+    config
+}
+
+/// Plays the knockout match whole, snapshots it where `pick` says, resumes the snapshot
+/// through the file format, and checks the resumed ticks and result equal the whole match's.
+fn resumes_tick_for_tick(pick: impl Fn(&Stoppage, &Simulation) -> bool) -> Snapshot {
+    let mut sink = CaptureWhen {
+        records: Vec::new(),
+        pick,
+        snapshot: None,
+    };
+    let mut whole = engine::scenario::Scene::new(knockout_config())
+        .at_minute(89)
+        .build();
+    whole.run(&mut sink).unwrap();
+    let snapshot = sink.snapshot.expect("a snapshot at the chosen stoppage");
+    assert!(snapshot.knockout());
+    let from = snapshot.tick();
+    let read = Snapshot::from_bytes(&snapshot.to_bytes(), "snapshot.smsn").unwrap();
+    let mut resumed = Simulation::from_snapshot(knockout_config(), &read).unwrap();
+    let mut tail = VecSink::default();
+    resumed.run(&mut tail).unwrap();
+    let expected: Vec<TickRecord> = sink
+        .records
+        .iter()
+        .copied()
+        .filter(|r| r.tick > from)
+        .collect();
+    assert!(!expected.is_empty());
+    assert!(
+        bytes(&tail.records) == bytes(&expected),
+        "the resumed records differ from the whole match"
+    );
+    assert_eq!(resumed.summary(), whole.summary());
+    assert_eq!(
+        resumed.summary().decided_by,
+        Some(engine::DecidedBy::Shootout)
+    );
+    // The same match configured as a regular match refuses the snapshot.
+    let mut regular = knockout_config();
+    regular.knockout = false;
+    match Simulation::from_snapshot(regular, &read) {
+        Err(EngineError::Snapshot { reason, .. }) => {
+            assert!(reason.starts_with("configuration mismatch"), "{reason}")
+        }
+        Err(other) => panic!("refused for another reason: {other}"),
+        Ok(_) => panic!("a knockout snapshot resumed as a regular match"),
+    }
+    snapshot
+}
+
+#[test]
+fn a_snapshot_at_the_break_before_extra_time_resumes_tick_for_tick() {
+    let snapshot = resumes_tick_for_tick(|stoppage, sim| {
+        stoppage.kind == engine::StoppageKind::HalfTime && sim.half() == 2
+    });
+    assert!(snapshot.tick() > 90 * TICKS_PER_MINUTE);
+}
+
+#[test]
+fn a_snapshot_at_a_shootout_kick_resumes_tick_for_tick() {
+    // The third kick: the shoot-out state is part way through.
+    resumes_tick_for_tick(|stoppage, sim| {
+        stoppage.kind == engine::StoppageKind::Penalty
+            && sim.in_shootout()
+            && sim.summary().shootout_kicks == 2
+    });
+}
+
+#[test]
+fn a_version_three_snapshot_is_refused_by_name() {
+    let mut sim = Simulation::new(full_match()).unwrap();
+    for _ in 0..10 {
+        sim.step();
+    }
+    let mut bytes = Snapshot::capture(&sim, OWNER, 1).to_bytes();
+    bytes[4..6].copy_from_slice(&3u16.to_le_bytes());
+    let reason = refusal(Snapshot::from_bytes(&bytes, "s"));
+    assert!(
+        reason.starts_with("unknown version 3; this build reads 4"),
+        "{reason}"
+    );
 }

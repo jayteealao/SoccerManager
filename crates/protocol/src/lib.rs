@@ -58,6 +58,13 @@ pub use message::{
 /// gained the home team's `squad` and `setup`, the loaded `tactics` file, and the
 /// `substitutions` limits; and `queue-change` changed meaning, because its `detail` is now
 /// read and the change reaches the engine.
+///
+/// Version 3 also survived knockout matches: five optional event fields (`period`,
+/// `shootout.round`, `shootout.scored`, `shootout.scores`, `result.decided_by`) and no new
+/// event type. For a knockout match `ticks_expected` also covers extra time and the rule
+/// pack's allowance of shoot-out rounds, and a sudden death past the allowance runs longer;
+/// clients already grow their history past `ticks_expected` for added time. A match that is
+/// not a knockout match sends exactly what it sent before, so no field changed meaning for it.
 pub const PROTOCOL_VERSION: u16 = 3;
 
 /// Errors this crate returns.
@@ -197,6 +204,11 @@ pub const MESSAGES: &[MessageSpec] = &[
             "minute.added",
             "added_time.s",
             "commentary",
+            "period",
+            "shootout.round",
+            "shootout.scored",
+            "shootout.scores",
+            "result.decided_by",
         ],
     },
     MessageSpec {

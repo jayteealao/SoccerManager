@@ -47,6 +47,11 @@ fn scripted(kind: EngineEventKind, minute: u32) -> EngineEvent {
             }),
             _ => None,
         },
+        period: None,
+        shootout_round: None,
+        shootout_scored: None,
+        shootout_scores: None,
+        decided_by: None,
     }
 }
 
@@ -327,4 +332,21 @@ fn another_schema_version_is_refused() {
         err.contains("schema_version 2; this build reads 1"),
         "{err}"
     );
+}
+
+/// A shoot-out kick is a `penalty` event, but no penalty was awarded: neither the set-up nor
+/// the outcome gets a line, while an awarded penalty still does.
+#[test]
+fn a_shootout_kick_gets_no_line() {
+    let commentary = shipped();
+    let mut c = Commentator::new(&commentary, names(), NINETY, common::SEED);
+    let awarded = scripted(EngineEventKind::Penalty, 120);
+    assert!(c.line(&awarded).is_some());
+    let mut set_up = awarded;
+    set_up.shootout_round = Some(1);
+    assert_eq!(c.line(&set_up), None);
+    let mut outcome = set_up;
+    outcome.shootout_scored = Some(true);
+    outcome.shootout_scores = Some([1, 0]);
+    assert_eq!(c.line(&outcome), None);
 }

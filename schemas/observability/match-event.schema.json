@@ -157,6 +157,33 @@
     },
     "commentary": {
       "type": "string"
+    },
+    "period": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "shootout.round": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "shootout.scored": {
+      "type": "boolean"
+    },
+    "shootout.scores": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "result.decided_by": {
+      "enum": [
+        "regulation",
+        "extra-time",
+        "shoot-out"
+      ]
     }
   },
   "additionalProperties": true

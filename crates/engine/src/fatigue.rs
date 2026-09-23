@@ -101,7 +101,11 @@ impl Simulation {
         if now.is_multiple_of(REFRESH_TICKS) {
             self.refresh_effective();
         }
-        if now.is_multiple_of(TICKS_PER_MINUTE) && self.referee.phase == Phase::Live {
+        // No injury roll during the shoot-out: an injury would stop a kick for a dropped ball.
+        if now.is_multiple_of(TICKS_PER_MINUTE)
+            && self.referee.phase == Phase::Live
+            && self.referee.shootout.is_none()
+        {
             let rate = self.config.tuning.injury_per_minute;
             for i in 0..self.players.len() {
                 if !self.players[i].active() {

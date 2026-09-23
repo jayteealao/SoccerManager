@@ -247,6 +247,41 @@ pub struct LawStats {
     pub offside_checks: u32,
     #[serde(rename = "snapshot.writes")]
     pub snapshot_writes: u32,
+    /// Knockout matches only: `true` when the match went to extra time.
+    #[serde(
+        rename = "extra_time.played",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub extra_time_played: Option<bool>,
+    /// Knockout matches that went to extra time: seconds added to each extra-time period.
+    #[serde(
+        rename = "extra_time.added_s",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub extra_time_added_s: Option<[u32; 2]>,
+    /// Matches decided by a shoot-out: the shoot-out score, home first.
+    #[serde(
+        rename = "shootout.scores",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub shootout_scores: Option<[u32; 2]>,
+    /// Matches decided by a shoot-out: kicks taken, both teams.
+    #[serde(
+        rename = "shootout.kicks",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub shootout_kicks: Option<u32>,
+    /// Knockout matches only: `regulation`, `extra-time`, or `shoot-out`.
+    #[serde(
+        rename = "result.decided_by",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub decided_by: Option<String>,
 }
 
 impl LawStats {
@@ -266,6 +301,11 @@ impl LawStats {
             dead_ball_ticks: s.dead_ball_ticks,
             offside_checks: s.offside_checks,
             snapshot_writes,
+            extra_time_played: s.decided_by.map(|_| s.extra_time),
+            extra_time_added_s: s.extra_time.then_some(s.extra_added_s),
+            shootout_scores: s.shootout,
+            shootout_kicks: s.shootout.map(|_| s.shootout_kicks),
+            decided_by: s.decided_by.map(|d| d.code().to_string()),
         }
     }
 }

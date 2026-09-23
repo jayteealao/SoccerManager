@@ -160,6 +160,10 @@ function onTick(buffer, live = true) {
       stoppages.add(incoming.tick);
     }
   }
+  // A match can run past the announced ticks; the scrubber's end follows the newest tick.
+  if (history.newestTick > history.ticksExpected) {
+    el('scrub').max = String(history.scrubLimit);
+  }
   if (live && !scrubbing) {
     el('scrub').value = String(incoming.tick);
   }

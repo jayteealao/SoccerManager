@@ -1,7 +1,7 @@
 //! The referee (named mechanism): one state machine inside the loop that owns the phase of
 //! play. After the ball moves and possession resolves, the referee decides out of play,
-//! offside, fouls with advantage, cards, injuries, restarts, half-time, full time, and
-//! abandonment.
+//! offside, fouls with advantage, cards, injuries, restarts, half-time, extra time and the
+//! penalty shoot-out of a knockout match, full time, and abandonment.
 //!
 //! Every time the ball goes dead, the referee places the ball at the restart spot, marks the
 //! tick as a restart, and announces the stoppage through the stoppage hook
@@ -12,6 +12,7 @@ pub mod discipline;
 pub mod fouls;
 pub mod offside;
 pub mod restart;
+pub mod shootout;
 
 use crate::TICKS_PER_SECOND;
 use crate::ball::Ball;
@@ -21,9 +22,10 @@ use crate::fatigue::InjurySource;
 use crate::math::DVec2;
 use crate::pitch::{self, Exit, Line};
 use crate::player::Status;
-use crate::sim::{EngineEventKind, EventDetail, Simulation};
+use crate::sim::{DecidedBy, EngineEventKind, EventDetail, Simulation};
+use crate::team::PLAYERS_PER_TEAM;
 use crate::tuning::Tuning;
-use clock::{MatchClock, Tally};
+use clock::{KICK_LIVE_TICKS, MatchClock, Tally};
 use fouls::Card;
 use offside::OffsideSet;
 pub use restart::DeadBall;
@@ -58,6 +60,35 @@ pub struct PendingCard {
     pub card: Card,
 }
 
+/// A penalty shoot-out in progress (IFAB Law 10). Every kick is played on the pitch.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Shootout {
+    /// Each team's kickers in order, as roster indices.
+    pub order: [Vec<usize>; 2],
+    /// The roster index of each team's keeper.
+    pub keepers: [usize; 2],
+    /// Each team's place in its order: the next kicker is `order[team][cursor[team] % len]`.
+    pub cursor: [usize; 2],
+    /// The team that won the toss and kicks first.
+    pub first: usize,
+    /// The end every kick is taken at: the sign of the goal line's `x`.
+    pub end: f64,
+    pub scores: [u32; 2],
+    /// Kicks each team has taken.
+    pub taken: [u32; 2],
+    /// The kicker of the kick being taken, from the moment its dead ball opens.
+    pub kicker: Option<usize>,
+    /// The tick the kick in progress went live.
+    pub live_since: Option<u32>,
+}
+
+impl Shootout {
+    /// The team of the kick being taken.
+    fn kicking_team(&self) -> usize {
+        shootout::next_team(self.first, self.taken)
+    }
+}
+
 /// The referee's state.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Referee {
@@ -65,21 +96,27 @@ pub struct Referee {
     /// Players in an offside position since the last kick in open play.
     pub offside: OffsideSet,
     pub pending: Vec<PendingCard>,
-    /// Stoppages and cards in the current half, for added time.
+    /// Stoppages and cards in the current period, for added time.
     pub tally: Tally,
     pub clock: MatchClock,
     pub abandoned: bool,
+    /// The team that kicked off the first period of extra time, once it has started.
+    pub extra_kick_off: Option<usize>,
+    /// The shoot-out, once it has started.
+    pub shootout: Option<Shootout>,
 }
 
 impl Referee {
-    pub fn new(minutes: u32, rules: &RulePack) -> Self {
+    pub fn new(minutes: u32, rules: &RulePack, knockout: bool) -> Self {
         Self {
             phase: Phase::Live,
             offside: 0,
             pending: Vec::new(),
             tally: Tally::default(),
-            clock: MatchClock::new(minutes, rules),
+            clock: MatchClock::new(minutes, rules, knockout),
             abandoned: false,
+            extra_kick_off: None,
+            shootout: None,
         }
     }
 }
@@ -447,15 +484,23 @@ impl Simulation {
     /// One tick of a dead ball: every player steers to a restart target, and the taker
     /// restarts play when ready, or at the hard limit whatever the players are doing.
     pub(crate) fn dead_ball_tick(&mut self, dead: &DeadBall, t: &Tuning) {
+        let keepers = self.referee.shootout.as_ref().map(|s| s.keepers);
         for i in 0..self.players.len() {
             if self.players[i].active() {
-                let target = restart::target(dead, i, &self.players, &self.teams, t);
+                let target = match keepers {
+                    Some(keepers) => restart::shootout_target(dead, i, keepers),
+                    None => restart::target(dead, i, &self.players, &self.teams, t),
+                };
                 self.players[i].target = target;
             }
         }
         let now = self.tick + 1;
         let forced = now >= dead.hard_limit();
-        if !forced && !restart::is_ready(dead, now, &self.players, &self.teams, t) {
+        let ready = match keepers {
+            Some(keepers) => restart::shootout_ready(dead, now, &self.players, keepers, t),
+            None => restart::is_ready(dead, now, &self.players, &self.teams, t),
+        };
+        if !forced && !ready {
             return;
         }
         if forced {
@@ -476,6 +521,10 @@ impl Simulation {
     /// are kicked at once, and only the free kick can put a player offside; after any other
     /// restart the taker holds the ball and decides on the next tick.
     fn take_restart(&mut self, dead: &DeadBall, t: &Tuning) {
+        if self.referee.shootout.is_some() {
+            self.take_shootout_kick(dead, t);
+            return;
+        }
         self.referee.phase = Phase::Live;
         self.carrier = Some(dead.taker);
         self.control_since = self.tick;
@@ -501,10 +550,22 @@ impl Simulation {
         }
     }
 
-    /// Ends the half when its regulation time plus added time has passed. Added time is fixed
-    /// on the first tick after regulation time.
+    /// The seconds added to period `period`: a regulation half or an extra-time period.
+    pub(crate) fn period_added_s(&self, period: u32) -> u32 {
+        let halves = self.referee.clock.halves;
+        if period < halves {
+            self.summary.added_s[(period as usize).min(1)]
+        } else {
+            self.summary.extra_added_s[((period - halves) as usize).min(1)]
+        }
+    }
+
+    /// Ends the period when its own time plus added time has passed. Added time is fixed on
+    /// the first tick after the period's own time. After the last regulation half a level
+    /// knockout match goes on to extra time and, still level after it, to the shoot-out;
+    /// every other match ends.
     pub(crate) fn check_clock(&mut self) {
-        if self.is_over() {
+        if self.is_over() || self.referee.shootout.is_some() {
             return;
         }
         let now = self.tick + 1;
@@ -514,7 +575,21 @@ impl Simulation {
         }
         let half = clock.half as usize;
         if clock.added_ticks[half].is_none() {
-            let added_s = if clock.plays_added {
+            let added_s = if !clock.plays_added {
+                0
+            } else if clock.in_extra_time() {
+                let added = clock::extra_time_allowance(&self.config.rules);
+                let draw = self.rng.referee_draw();
+                let seconds = clock::added_seconds(&self.referee.tally, &added, draw);
+                tracing::info!(
+                    signal = "rules.extra_time",
+                    period = half,
+                    tally_s = self.referee.tally.seconds(&added),
+                    added_s = seconds,
+                    announced_min = clock::announced_minutes(seconds)
+                );
+                seconds
+            } else {
                 let added = &self.config.rules.added_time;
                 let draw = self.rng.referee_draw();
                 let seconds = clock::added_seconds(&self.referee.tally, added, draw);
@@ -527,39 +602,65 @@ impl Simulation {
                     announced_min = clock::announced_minutes(seconds)
                 );
                 seconds
-            } else {
-                0
             };
             clock.added_ticks[half] = Some(added_s * TICKS_PER_SECOND);
-            self.summary.added_s[half.min(1)] = added_s;
+            if clock.in_extra_time() {
+                let period = half - clock.halves as usize;
+                self.summary.extra_added_s[period.min(1)] = added_s;
+            } else {
+                self.summary.added_s[half.min(1)] = added_s;
+            }
             self.referee.clock = clock;
         }
         if clock.half_end().is_some_and(|end| now >= end) {
-            if clock.last_half() {
-                self.referee.phase = Phase::FullTime;
+            let level = self.summary.goals[0] == self.summary.goals[1];
+            if !clock.last_half() {
+                self.half_time(true);
+            } else if !clock.last_period() && (clock.in_extra_time() || level) {
+                // Extra-time periods exist only in a knockout match. Its breaks give no
+                // energy back, so fatigue runs on past 90 minutes without a step.
+                self.half_time(false);
+            } else if self.config.knockout && level {
+                self.start_shootout();
             } else {
-                self.half_time();
+                if self.config.knockout {
+                    self.summary.decided_by = Some(if clock.in_extra_time() {
+                        DecidedBy::ExtraTime
+                    } else {
+                        DecidedBy::Regulation
+                    });
+                }
+                self.referee.phase = Phase::FullTime;
             }
         }
     }
 
-    /// Half-time: the teams change ends and the team that did not kick off the first half
-    /// kicks off the second, placed at once.
-    fn half_time(&mut self) {
+    /// Half-time, and the breaks before and inside extra time: the teams change ends and the
+    /// next period's kick-off is placed at once. The team that did not kick off the first half
+    /// kicks off the second; a toss decides who kicks off extra time, and the other team kicks
+    /// off its second period. Only the regulation half-time gives energy back (`recover`).
+    fn half_time(&mut self, recover: bool) {
         let now = self.tick + 1;
-        let half = self.referee.clock.half as usize;
+        let half = self.referee.clock.half;
+        let next = half + 1;
+        let extra = next >= self.referee.clock.halves;
         let mut event = self.event(EngineEventKind::HalfTime, None);
         event.added_time_s = self
             .referee
             .clock
             .plays_added
-            .then(|| self.summary.added_s[half.min(1)]);
+            .then(|| self.period_added_s(half));
+        if extra {
+            event.period = Some(next);
+        }
         self.events.push(event);
         self.show_pending_cards();
         if self.referee.abandoned {
             return;
         }
-        self.half_time_recovery();
+        if recover {
+            self.half_time_recovery();
+        }
         self.summary.stoppages += 1;
         self.stoppage = Some(Stoppage {
             tick: now,
@@ -573,9 +674,299 @@ impl Simulation {
             team.switch_ends();
         }
         self.timeline.push((now, self.teams.clone()));
-        self.place_kick_off(1);
+        let kick_off = if !extra {
+            1
+        } else if let Some(first) = self.referee.extra_kick_off {
+            1 - first
+        } else {
+            self.summary.extra_time = true;
+            let team = usize::from(self.rng.referee_draw() >= 0.5);
+            self.referee.extra_kick_off = Some(team);
+            team
+        };
+        self.place_kick_off(kick_off);
+        if extra
+            && let Some(event) = self.events.last_mut()
+            && event.kind == EngineEventKind::KickOff
+        {
+            event.period = Some(next);
+        }
+    }
+
+    /// Starts the penalty shoot-out after extra time: the players on the pitch take part, the
+    /// larger side drops players until the numbers are equal, one toss decides who kicks
+    /// first and a second toss the end every kick is taken at. The first kick is set up at
+    /// once.
+    fn start_shootout(&mut self) {
+        let keeping = [
+            self.config.attributes.index("reflexes"),
+            self.config.attributes.index("one_on_ones"),
+        ];
+        let candidates = [0, 1].map(|team| {
+            self.players
+                .iter()
+                .enumerate()
+                .filter(|(_, p)| p.team == team && p.active())
+                .map(|(i, p)| shootout::Candidate {
+                    index: i,
+                    goalkeeper: p.slot == 0,
+                    kicking: p.derived.finishing + p.derived.composure,
+                    keeping: keeping
+                        .iter()
+                        .flatten()
+                        .map(|&k| f64::from(p.attributes.get(k)))
+                        .sum(),
+                })
+                .collect::<Vec<_>>()
+        });
+        let eligible = shootout::equalise(candidates);
+        let keepers =
+            [0, 1].map(|team| shootout::keeper(&eligible[team]).unwrap_or(team * PLAYERS_PER_TEAM));
+        let order = [0, 1].map(|team| shootout::order(&eligible[team], Some(keepers[team])));
+        let first = usize::from(self.rng.referee_draw() >= 0.5);
+        let end = if self.rng.referee_draw() < 0.5 {
+            -1.0
+        } else {
+            1.0
+        };
+        tracing::info!(
+            signal = "rules.shootout_start",
+            tick = self.tick + 1,
+            first_team = first,
+            kickers = order[0].len()
+        );
+        self.summary.shootout = Some([0, 0]);
+        self.referee.shootout = Some(Shootout {
+            order,
+            keepers,
+            cursor: [0, 0],
+            first,
+            end,
+            scores: [0, 0],
+            taken: [0, 0],
+            kicker: None,
+            live_since: None,
+        });
+        self.shootout_next_kick();
+    }
+
+    /// Sets up the next shoot-out kick: the kicking team's next player on the pitch in its
+    /// order, at the penalty mark of the shoot-out end, after the unscaled penalty delay.
+    fn shootout_next_kick(&mut self) {
+        let Some(state) = self.referee.shootout.as_mut() else {
+            return;
+        };
+        let team = state.kicking_team();
+        let order = &state.order[team];
+        let mut kicker = state.keepers[team];
+        for step in 0..order.len() {
+            let k = order[(state.cursor[team] + step) % order.len()];
+            if self.players[k].active() {
+                kicker = k;
+                state.cursor[team] += step + 1;
+                break;
+            }
+        }
+        state.kicker = Some(kicker);
+        state.live_since = None;
+        let round = state.taken[team] + 1;
+        let spot = pitch::penalty_spot(state.end);
+        self.show_pending_cards();
+        if self.referee.abandoned {
+            return;
+        }
+        self.referee.offside = 0;
+        self.ball = Ball::at(spot);
+        self.carrier = None;
+        self.keeper_beaten = false;
+        self.restart = true;
+        self.last_kicker = None;
+        self.pass_in_flight = None;
+        self.shot_in_flight = None;
+        let since = self.tick + 1;
+        let delay = restart::delay_ticks(StoppageKind::Penalty, &self.config.tuning);
+        self.referee.phase = Phase::DeadBall(DeadBall {
+            kind: StoppageKind::Penalty,
+            team,
+            spot,
+            direct: true,
+            since,
+            ready_at: since + delay,
+            taker: kicker,
+        });
+        self.summary.stoppages += 1;
+        let mut event = self.event(EngineEventKind::Penalty, Some(team));
+        event.spot = Some(spot);
+        event.player = Some(kicker);
+        event.shootout_round = Some(round);
+        self.events.push(event);
+        self.stoppage = Some(Stoppage {
+            tick: since,
+            kind: StoppageKind::Penalty,
+            team: Some(team),
+            spot,
+        });
+    }
+
+    /// The kicker shoots from the mark at once: a shoot-out kick is always a shot at goal.
+    /// The defending keeper commits to a dive as the ball is struck: to one side of the goal,
+    /// or rarely staying in the middle, from a seeded draw. Everyone else holds the place the
+    /// kick was set up with.
+    fn take_shootout_kick(&mut self, dead: &DeadBall, t: &Tuning) {
+        let Some(state) = self.referee.shootout.as_mut() else {
+            return;
+        };
+        state.live_since = Some(self.tick + 1);
+        let keeper = state.keepers[1 - dead.team];
+        let end = state.end;
+        let goal = pitch::goal_centre(end);
+        self.referee.phase = Phase::Live;
+        let kick = self.shot_kick(dead.taker, goal, keeper, SHOOTOUT_SPREAD);
+        let dive = self.rng.range_f64(-1.0, 1.0);
+        let side = if dive.abs() < KEEPER_STAYS {
+            0.0
+        } else {
+            dive.signum()
+        };
+        self.players[keeper].target =
+            DVec2::new(end * (pitch::HALF_LENGTH - 0.3), side * KEEPER_DIVE_M);
+        let (Kick::Shot { dir, speed, loft } | Kick::Pass { dir, speed, loft }) = kick;
+        self.ball.kick(dir, speed, loft, t);
+        self.carrier = None;
+        self.keeper_beaten = false;
+        self.last_touch = Some(dead.team);
+        self.last_kicker = Some(dead.taker);
+        self.control_since = self.tick;
+    }
+
+    /// The ball of a shoot-out kick moved from `prev` to `xy`: a ball wholly inside the goal
+    /// scores, and a ball that leaves play anywhere else misses.
+    pub(crate) fn shootout_ball(&mut self, prev: DVec2, xy: DVec2, t: &Tuning) {
+        let Some(end) = self.referee.shootout.as_ref().map(|s| s.end) else {
+            return;
+        };
+        if pitch::in_goal(xy, end) && self.ball.pos.z < t.crossbar_height {
+            self.shootout_outcome(true);
+        } else if pitch::exit(prev, xy).is_some() {
+            self.shootout_outcome(false);
+        }
+    }
+
+    /// The defending keeper gains the ball of a shoot-out kick: a save. Nobody else may touch
+    /// it. A fast ball is held with the tuned catch chance, one roll per kick; a ball the
+    /// keeper fails to hold plays on and may still go in.
+    pub(crate) fn shootout_save(&mut self, t: &Tuning) {
+        let Some(state) = self.referee.shootout.as_ref() else {
+            return;
+        };
+        let keeper = state.keepers[1 - state.kicking_team()];
+        if self.ball.pos.z > t.reach_height || !self.players[keeper].active() {
+            return;
+        }
+        if (self.players[keeper].pos - self.ball.xy()).length() >= t.keeper_reach {
+            return;
+        }
+        if self.ball.speed() > t.control_speed {
+            if self.keeper_beaten {
+                return;
+            }
+            if !self.rng.chance(t.keeper_catch_chance * SHOOTOUT_HOLD) {
+                self.keeper_beaten = true;
+                return;
+            }
+        }
+        self.shootout_outcome(false);
+    }
+
+    /// Ends a live shoot-out kick as a miss once the ball has stopped or the live cap of
+    /// `KICK_LIVE_TICKS` has passed.
+    pub(crate) fn shootout_kick_expiry(&mut self) {
+        let Some(since) = self.referee.shootout.as_ref().and_then(|s| s.live_since) else {
+            return;
+        };
+        let now = self.tick + 1;
+        let stopped = self.ball.speed() < STOPPED_BALL_SPEED && now > since + 1;
+        if stopped || now >= since + KICK_LIVE_TICKS {
+            self.shootout_outcome(false);
+        }
+    }
+
+    /// Records the outcome of the kick in progress, then ends the match when the shoot-out is
+    /// decided, abandons it after `SAFETY_ROUNDS` rounds, or sets up the next kick.
+    fn shootout_outcome(&mut self, scored: bool) {
+        #[cfg(feature = "scenario")]
+        let scored = self.forced_kicks.pop_front().unwrap_or(scored);
+        let Some(state) = self.referee.shootout.as_mut() else {
+            return;
+        };
+        let team = state.kicking_team();
+        let kicker = state.kicker.take();
+        state.live_since = None;
+        state.taken[team] += 1;
+        if scored {
+            state.scores[team] += 1;
+        }
+        let (scores, taken) = (state.scores, state.taken);
+        let round = taken[team];
+        let kicks = u32::from(self.config.rules.shootout.kicks);
+        self.summary.shootout = Some(scores);
+        self.summary.shootout_kicks += 1;
+        self.carrier = None;
+        tracing::info!(
+            signal = "rules.shootout_kick",
+            tick = self.tick + 1,
+            team.id = %self.teams[team].club_id,
+            round,
+            scored,
+            home.score = scores[0],
+            away.score = scores[1]
+        );
+        let mut event = self.event(EngineEventKind::Penalty, Some(team));
+        event.player = kicker;
+        event.shootout_round = Some(round);
+        event.shootout_scored = Some(scored);
+        event.shootout_scores = Some(scores);
+        self.events.push(event);
+        if shootout::decided(scores, taken, kicks) {
+            tracing::info!(
+                signal = "rules.shootout_result",
+                tick = self.tick + 1,
+                home.score = scores[0],
+                away.score = scores[1],
+                kicks = taken[0] + taken[1]
+            );
+            self.summary.decided_by = Some(DecidedBy::Shootout);
+            self.referee.phase = Phase::FullTime;
+        } else if taken[0].min(taken[1]) >= shootout::SAFETY_ROUNDS {
+            tracing::error!(
+                signal = "rules.shootout_round_limit",
+                tick = self.tick + 1,
+                rounds = shootout::SAFETY_ROUNDS,
+                home.score = scores[0],
+                away.score = scores[1]
+            );
+            self.referee.abandoned = true;
+            self.referee.phase = Phase::FullTime;
+        } else {
+            self.shootout_next_kick();
+        }
     }
 }
+
+/// Ball speed, in metres per second, below which a shoot-out kick has stopped.
+const STOPPED_BALL_SPEED: f64 = 0.3;
+// Known limit: the three shoot-out constants below are hand-set so that about seven kicks in
+// ten score (the real-world rate); they belong in the tuning file with a calibration band.
+/// The aim noise of a shoot-out kick against an open-play shot: a placed kick from the mark.
+const SHOOTOUT_SPREAD: f64 = 0.5;
+/// The keeper's catch chance at a shoot-out kick against a shot in open play: a diving save
+/// from 11 m is held less often.
+const SHOOTOUT_HOLD: f64 = 0.5;
+/// How far along the goal line, in metres, a shoot-out keeper dives.
+const KEEPER_DIVE_M: f64 = 2.0;
+/// The share of the dive draw's range, either side of 0, for which the keeper stays in the
+/// middle of the goal (10 percent of kicks).
+const KEEPER_STAYS: f64 = 0.1;
 
 #[cfg(test)]
 mod tests {

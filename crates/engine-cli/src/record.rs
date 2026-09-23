@@ -14,7 +14,10 @@ use crate::stream_run::{Drive, drive, hello_substitutions, hello_tactics, hello_
 pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32> {
     let loaded = crate::content::load(content_dir, opts.team_a.as_deref(), opts.team_b.as_deref())?;
     let [team_a, team_b] = &loaded.teams;
-    let config = MatchConfig::new(opts.seed, opts.minutes, &loaded.content, [team_a, team_b])?;
+    let mut config = MatchConfig::new(opts.seed, opts.minutes, &loaded.content, [team_a, team_b])?;
+    if opts.knockout {
+        config = config.with_knockout();
+    }
     let keyframe_interval = loaded.content.tuning.stream.keyframe_interval;
     let owner_id = load_or_create_owner_id(&data_dir())?;
     let match_id = MatchId::now(opts.seed);

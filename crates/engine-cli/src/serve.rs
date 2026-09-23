@@ -379,8 +379,11 @@ fn open_fresh(
     // The home team is the page's: it starts with the AI manager's pre-match setup, unless
     // the page sends its own, and makes no in-match AI decisions. The AI manager runs the
     // away team.
-    let config = MatchConfig::new(seed, opts.minutes, &loaded.content, [team_a, team_b])?
+    let mut config = MatchConfig::new(seed, opts.minutes, &loaded.content, [team_a, team_b])?
         .with_manager(HOME, Manager::Human);
+    if opts.knockout {
+        config = config.with_knockout();
+    }
     let owner_id = load_or_create_owner_id(data)?;
     let started = match opts.match_millis {
         // The launcher chooses the stamp, so it knows where this match's snapshot is.
@@ -417,13 +420,16 @@ fn open_resumed(loaded: &crate::content::Loaded, path: &Path) -> Result<Opened, 
     let shown = path.display().to_string();
     let snapshot = Snapshot::read(path, &shown)?;
     let [team_a, team_b] = &loaded.teams;
-    let config = MatchConfig::new(
+    let mut config = MatchConfig::new(
         snapshot.seed(),
         snapshot.minutes(),
         &loaded.content,
         [team_a, team_b],
     )?
     .with_manager(HOME, Manager::Human);
+    if snapshot.knockout() {
+        config = config.with_knockout();
+    }
     let started = MatchId {
         seed: snapshot.seed(),
         millis: snapshot.match_millis,

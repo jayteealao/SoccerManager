@@ -26,7 +26,10 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
     let loaded = crate::content::load(content_dir, opts.team_a.as_deref(), opts.team_b.as_deref())?;
     let [team_a, team_b] = &loaded.teams;
     // Both teams are managed by the AI manager (the configuration's default).
-    let config = MatchConfig::new(opts.seed, opts.minutes, &loaded.content, [team_a, team_b])?;
+    let mut config = MatchConfig::new(opts.seed, opts.minutes, &loaded.content, [team_a, team_b])?;
+    if opts.knockout {
+        config = config.with_knockout();
+    }
     let data = data_dir();
     let owner_id = load_or_create_owner_id(&data)?;
     let match_id = MatchId::now(opts.seed);

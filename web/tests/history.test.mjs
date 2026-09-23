@@ -61,6 +61,20 @@ test('growth past the expected ticks keeps every earlier tick', () => {
   }
 });
 
+test('the scrubber limit follows the newest tick past the expected ticks', () => {
+  // A knockout shoot-out's sudden death can run past the announced maximum.
+  const history = new History(100);
+  assert.equal(history.scrubLimit, 100, 'an empty history ends at the announced ticks');
+  for (let tick = 1; tick <= 100; tick += 1) {
+    history.append(tick, componentsFor(tick));
+  }
+  assert.equal(history.scrubLimit, 100);
+  for (let tick = 101; tick <= 130; tick += 1) {
+    history.append(tick, componentsFor(tick));
+  }
+  assert.equal(history.scrubLimit, 130, 'the limit follows the newest tick');
+});
+
 test('the history reports both numbers, with the browser figure null until it resolves', () => {
   const history = new History(100);
   history.append(1, componentsFor(1));
