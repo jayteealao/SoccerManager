@@ -143,3 +143,33 @@ fn with_the_limit_used_the_team_plays_on_with_ten() {
     assert_eq!(on_pitch, 10, "the team plays on with ten");
     assert!(!sim.abandoned());
 }
+
+#[test]
+fn a_refused_injury_substitution_is_not_asked_for_again() {
+    let (mut sim, mut events) = tackle(5, 3);
+    // Play on past two of the AI manager's regular checks.
+    for _ in 0..3_200 {
+        sim.step();
+        events.extend(sim.take_events());
+    }
+    let asked = events
+        .iter()
+        .filter(|e| {
+            e.detail
+                == Some(EventDetail::Ai {
+                    code: AiCode::SubInjury,
+                })
+        })
+        .count();
+    assert_eq!(asked, 1, "asked once, on the injury's stoppage");
+    let refused = events
+        .iter()
+        .filter(|e| e.kind == EngineEventKind::ChangeRejected)
+        .count();
+    assert_eq!(refused, 1, "{:?}", kinds(&events));
+    assert!(
+        sim.pending_changes().is_empty(),
+        "nothing waits at the end: {:?}",
+        sim.pending_changes()
+    );
+}

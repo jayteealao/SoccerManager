@@ -17,6 +17,7 @@
 
 use crate::TICKS_PER_SECOND;
 use crate::data::attributes::AttributeSchema;
+use crate::data::rules::StoppageKind;
 use crate::data::tactics::{PRESSING, TIME_WASTING, TacticsSchema};
 use crate::data::team::Position;
 use crate::player::Status;
@@ -180,24 +181,32 @@ impl Simulation {
                 continue;
             }
             if self.ai[team].due || now.is_multiple_of(interval) {
+                let at_stoppage = self.ai[team].due;
                 self.ai[team].due = false;
-                self.ai_check(team);
+                self.ai_check(team, at_stoppage);
             }
         }
     }
 
-    /// One check of the AI manager for `team`.
-    fn ai_check(&mut self, team: usize) {
+    /// One check of the AI manager for `team`. `at_stoppage` is `true` for the check an
+    /// injury or a goal asks for on its own stoppage.
+    fn ai_check(&mut self, team: usize, at_stoppage: bool) {
         let now = self.tick + 1;
         let minute = self.referee.clock.minute(now).0;
         let ai = self.config.tactics.ai.clone();
         let limit = usize::from(self.config.rules.substitutions.limit);
         let used = usize::from(self.ledgers[team].used);
-        // Injuries: every injured player on the lineup without a substitute queued.
+        // Injuries: every injured player on the lineup without a substitute queued. The check
+        // on the injury's own stoppage always asks, so a refusal names its reason there; a
+        // later check asks again only while the team could still make a substitution.
+        let may_substitute = at_stoppage || self.substitution_possible(team);
         for slot in 0..PLAYERS_PER_TEAM {
             let i = team * PLAYERS_PER_TEAM + slot;
             let off = self.teams[team].lineup[slot];
-            if self.players[i].status != Status::Injured || self.queue.has_substitution(team, off) {
+            if !may_substitute
+                || self.players[i].status != Status::Injured
+                || self.queue.has_substitution(team, off)
+            {
                 continue;
             }
             if let Some(on) = self.substitute_for(team, slot) {
@@ -290,6 +299,23 @@ impl Simulation {
                 );
             }
         }
+    }
+
+    /// `true` while a substitution for `team` could still apply at some later stoppage: the
+    /// limit is not used up by substitutions made and waiting, and a window is left or a
+    /// window-exempt stoppage (half-time in the shipped pack) is still to come.
+    fn substitution_possible(&self, team: usize) -> bool {
+        let rules = &self.config.rules.substitutions;
+        let ledger = self.ledgers[team];
+        let taken = usize::from(ledger.used) + self.queue.substitutions(team);
+        if taken >= usize::from(rules.limit) {
+            return false;
+        }
+        let exempt_ahead = rules
+            .windows_exempt
+            .iter()
+            .any(|&kind| kind != StoppageKind::HalfTime || !self.referee.clock.last_half());
+        ledger.windows < rules.windows || exempt_ahead
     }
 
     /// `team`'s tactics once every waiting tactics change has applied.
