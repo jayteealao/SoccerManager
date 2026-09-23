@@ -1,90 +1,25 @@
 # SoccerManager
 
-A football management game: a native match engine written in Rust and a browser-based 2D match viewer.
+A football management game: a native match engine written in Rust, and Touchline, a 2D match viewer that runs in the browser.
 
-This repository currently holds the engine core, its data layer, the laws of the game, and the live match stream: a headless simulation at 50 ticks per second, a referee, a tick-stream file format, match snapshots, a validator, a benchmark command, a calibration harness, validated content files, a team generator, and a versioned WebSocket protocol that streams a match to a viewer page.
+You pick a lineup and tactics, kick off against a club the computer manages, and watch the match on a 2D pitch. The engine computes the ball and all 22 players at 50 ticks per second, applies the laws of the game, and writes commentary. During the match you change tactics and make substitutions; each change applies at the next stoppage. At half-time and at full time a report counts the match, and at full time you can save a replay.
 
 ## Build
+
+You need Rust 1.87 or later.
 
 ```bash
 cargo build --release
 ```
 
-## Content
-
-The engine reads its attribute schema, tuning constants, rule pack, tactics file, and team files from the `content/` folder. Run the binary from the repository root, pass `--content-dir <DIR>`, or set `SM_CONTENT_DIR`. Every file is validated on load; a bad value stops the run with a message naming the file and the field. See `content/README.md` for every field, its unit, its default, and its bound.
-
-Runtime output goes to `SM_DATA_DIR` (default `%LOCALAPPDATA%\SoccerManager`): `owner.id`, created once, `matches/<match.id>/stats.json`, `events.jsonl`, and `snapshot.smsn` per match, and `engine.port` while a match is being served.
-
-## Simulate a match
+## Play a match
 
 ```bash
-target/release/engine-cli simulate --seed 42 --ticks-out match.ticks
+target/release/engine-cli generate --seed 2026 --clubs 2 --out my-league
+target/release/engine-cli serve --seed 42 --web web --team-a my-league/club-000007ea-00.json --team-b my-league/club-000007ea-01.json
 ```
 
-The command loads the two default clubs, writes one record per tick to the `.ticks` file, saves `stats.json` and `events.jsonl` (one row per match event), and prints one JSON line with the match statistics, the law counts and the tactics counts (shots, injuries, substitutions, mean energy, and the verdicts on queued changes) included. The figures cover goals, shots, shots on target, expected goals, passes, pass accuracy, and possession, per team and home first. Pass `--team-a <FILE>` and `--team-b <FILE>` to play other clubs.
-
-A 90-minute match lasts 90 minutes plus the time added to each half, so the tick count varies from match to match. The tick-file header states the most ticks the match can last. A match shorter than the rule pack's two halves plays no added time.
-
-## The laws
-
-The referee runs inside the simulation loop. The engine enforces these laws:
-
-- The ball out of play: a throw-in where the ball crossed the touchline, and a goal kick or a corner at the goal line, for the team that did not touch the ball last.
-- Offside: a player beyond the second-last opponent and the ball, in the opponents' half, when a team-mate plays the ball, is penalised at the first touch with an indirect free kick. A throw-in, a goal kick, and a corner put nobody offside.
-- Fouls: one draw decides a tackle as a clean win, a foul, or a miss. The chance of a foul rises with the tackler's `aggression` and falls with tackling skill. A foul gives a free kick where it happened, or a penalty inside the penalty area. When the fouled team keeps the ball outside the area, play continues with advantage.
-- Cards: a yellow card, a second yellow, or a red card. A player who is sent off leaves the pitch, and the rest of the player's line spreads across the gap. A team with fewer players than the rule pack's minimum ends the match.
-- Restarts: the players walk to their restart positions, and opponents stand 9.15 m from the ball at a free kick, a corner, and a kick-off.
-- The clock: the teams change ends at half-time, and each half gets added time from its stoppages and cards plus a seeded variance.
-
-The rule pack (`content/rules/default.json`) and the tuning file set every number. See `content/README.md`.
-
-## Tactics and the AI manager
-
-Each team plays a formation, a mentality, six team instructions (pressing, width, tempo, line height, passing directness, time wasting), and a role and duty for every player, all named in `content/tactics.json`. The ball carrier scores its options (pass, dribble, shot, clearance, or holding the ball) and takes the best, so tactics and attributes change what players do.
-
-In `simulate`, `resume`, and `serve` the AI manager runs both teams (in `serve`, only the away team; the home team keeps the AI's pre-match setup). Before kick-off it picks the eleven who fit its formation's roles and names a bench. During the match it replaces injured and tired players, attacks when it trails late, and protects a late lead; it reviews the score on the stoppage of every goal, so a change it makes then applies at once. Its other changes wait for a stoppage the rule pack admits them at, within the rule pack's substitution limit and windows; a change the rules refuse is rejected with the reason.
-
-Players tire over the match: below an energy threshold, pace, passing, finishing, and decisions fall along the fatigue curve in `content/tuning.json`. A tackle or plain bad luck can injure a player, who leaves play at once; the referee stops play for a dropped ball, and the AI manager sends on a substitute.
-
-## Resume a match
-
-```bash
-target/release/engine-cli resume --snapshot <SM_DATA_DIR>/matches/<match.id>/snapshot.smsn
-```
-
-`simulate` and `serve` write the latest snapshot of the match at every stoppage, replacing the one before it. `resume` continues the match from that snapshot to full time and prints one JSON line with the match statistics. The resumed match is the same match: tick for tick, it plays exactly as the uninterrupted match would. Add `--ticks-out <FILE>` to write the resumed ticks. Pass `--no-snapshot` to `simulate` to write no snapshot.
-
-A snapshot resumes only on the build that wrote it, with the same content and team files. A damaged file, a file from another build, or a file from other content is refused with the reason named, and the exit code is 1.
-
-## Generate clubs
-
-```bash
-target/release/engine-cli generate --seed 7 --clubs 20 --out my-league
-```
-
-The command writes one team file per club with fictional names and per-position attribute distributions. The same seed gives the same clubs.
-
-## Stream a match to a viewer
-
-```bash
-target/release/engine-cli serve --seed 42
-```
-
-The command binds a port on `127.0.0.1`, prints it, writes it to `engine.port`, and waits for
-one viewer. A page connects to `ws://127.0.0.1:<port>/?v=3` and receives a hello, then one
-binary frame per tick. See `docs/reference/protocol.md` for every message and every field.
-
-## Watch a match
-
-```bash
-target/release/engine-cli serve --seed 42 --web web
-```
-
-The command prints two lines: the WebSocket port, then the page address. Open the page
-address in a browser. The engine serves the page itself, so there is one program to start,
-the page's origin is already on the socket's loopback allowlist, and every response carries
-the two cross-origin-isolation headers the page's memory gauge needs.
+The second command prints a port and a page address. Open the page address in a browser. For a step-by-step first match, follow [the tutorial](docs/tutorials/first-match.md).
 
 To have the page survive a crash of the engine, start the launcher instead:
 
@@ -92,86 +27,69 @@ To have the page survive a crash of the engine, start the launcher instead:
 target/release/engine-cli launch --seed 42 --web web
 ```
 
-It prints the page address and nothing else. The launcher serves the page and runs the
-engine as a separate process. When the engine stops in mid-match, the page names the failure
-and offers to restart from the last stoppage, with the same score and clock, or to abandon
-the match. When the connection drops and the engine is still running, the page reconnects
-by itself and play resumes from the last stoppage it received in full. The engine program
-is `--engine <FILE>`, then `SM_ENGINE_PATH`, then the launcher's own program; when none is
-found, the page shows the path it looked for and how to build the engine.
+When the engine stops in mid-match, the page offers to restart from the last stoppage.
 
-The page opens a report at half-time and at full time. At full time it can save the match
-as a replay file (`touchline-<match.id>.smfx`, the same layout `record` writes) and open a
-saved replay, which plays and rewinds with no engine running. `engine-cli replay --fixture`
-also plays a saved file.
-
-Open `/handshake.html` on the same address to check the connection alone: it reads the
-hello, prints it, and renders nothing, so a fault there is a fault in the handshake rather
-than in the renderer.
-
-## Record and replay a fixture
+## Other commands
 
 ```bash
-target/release/engine-cli record --seed 7 --out match.smfx
-target/release/engine-cli replay --fixture match.smfx --speed 8
+target/release/engine-cli simulate --seed 42 --ticks-out match.ticks   # one match, no viewer
+target/release/engine-cli bench --seed 42 --matches 5 --json           # time the engine
+target/release/engine-cli calibrate --seed 2026 --matches 1000         # check the realism bands
+target/release/engine-cli record --seed 7 --out match.smfx             # record a replay file
+target/release/engine-cli replay --fixture match.smfx --web web        # play a replay file
 ```
 
-`record` writes every frame of one match exactly as it would travel on the wire, starting
-with the hello, so a replay forwards the recorded match rather than describing the build
-that replays it. `replay` serves those bytes back over the same protocol, so a viewer can
-be verified before the engine is complete. Add `--web web` to serve the page beside it.
+The engine reads its data from the `content/` folder and writes each match to `SM_DATA_DIR` (default `%LOCALAPPDATA%\SoccerManager` on Windows).
 
-`replay --sustain <speed>` caps the delivered rate below `--speed`, which is how the
-viewer's lag notice is tested. It exists on `replay` alone and never on `serve`.
+## Documentation
 
-## Test the page
-
-```bash
-node --test "web/tests/*.test.mjs"
-```
-
-Node 22 ships the test runner, so there is no `package.json`, no install, and no third
-dependency. The decoder test also reads `fixture.smfx` at the repository root when one has
-been recorded; without it that one test reports a skip naming the command to record it.
-
-## Benchmark
-
-```bash
-target/release/engine-cli bench --seed 42 --matches 5 --json
-```
-
-The command prints one JSON line with the median wall time, CPU time, CPU time per simulated tick, the ticks in the median match, peak memory, ticks per second, a hashed machine identifier, the CPU model, the content hash, and the build hash. The exit code is 2 when the median wall time for a 90-minute match exceeds 2000 ms. Add `--stream` to also measure the socket: one match delivered to a client that reads as fast as it can.
-
-## Calibrate the engine
-
-```bash
-target/release/engine-cli calibrate --seed 2026 --matches 1000
-```
-
-The command plays two suites of `--matches` full matches each, with the AI manager on both sides. The equal suite pairs clubs of the same generated strength; the strength suite raises every attribute of one club by the boost in `content/realism-bands.json`, at home in even fixtures and away in odd ones. Clubs come from generated leagues of 20 (league `k` from seed `seed + k`), each playing a double round-robin. The matches run in `--jobs` worker processes of the same binary (default: one per logical core).
-
-The run folder (`--out`, default `SM_DATA_DIR/runs/<run.id>`) holds:
-
-- `report.json`: the run report, also printed as one JSON line. It carries each suite's aggregate figures, every band check (`calib.bands`), each suite's wall time, the dark-path counters (changes still queued at full time, matches without a statistics record), and the single-thread figures of the benchmark (`bench.match_wall_ms`, `bench.cpu_us_per_tick`), measured on the default clubs after the workers finish.
-- `stats/<match.id>.json`: the statistics record of every match.
-- `events/<match.id>.jsonl`: the event rows of the matches kept. By default only outliers keep theirs: failed, slow, and out-of-band matches and dark-path hits. `--keep-events all` keeps every file.
-
-The bands in `content/realism-bands.json` are accepted criteria and are never tuned: goals per match 2.4 to 3.2, shots per team 8 to 16, and possession 35 to 65 percent over the equal suite; the stronger club wins more than half its matches; each suite of 1000 matches runs in under 30 minutes. The exit code is 0 when every band passes and both dark paths read zero, and 2 otherwise.
-
-The record schemas live in `schemas/observability/` (JSON Schema 2020-12): `match-event`, `match-stats`, and `run-report`. The tests validate the binary's real output against them.
+- Tutorial: [Play your first match](docs/tutorials/first-match.md)
+- How-to: [Tune the engine and add a rule pack](docs/how-to/modding.md)
+- Reference: [Command line](docs/reference/cli.md), [Data files](docs/reference/data-files.md), [Socket protocol](docs/reference/protocol.md)
+- Explanation: [How the engine works](docs/explanation/engine.md)
 
 ## Test
+
+The engine tests:
 
 ```bash
 cargo test --workspace
 ```
 
-The slow criteria (the tactics effects and the two 1000-match calibration suites) are ignored by default. Run them in release:
+The slow tests (the tactics effects and the two 1000-match calibration suites) are ignored by default. Run them in release:
 
 ```bash
 cargo test --release --workspace -- --ignored
 ```
 
+The page tests use the test runner that ships with Node 22, with no install:
+
+```bash
+node --test "web/tests/*.test.mjs"
+```
+
+### The browser suite
+
+The browser suite in `e2e/` drives the page against the live engine with Playwright. Each test starts its own engine with a new data folder. Build the engine first, then install and run the suite:
+
+```bash
+cargo build --release
+cd e2e
+npm install
+npx playwright install chromium
+npm test
+```
+
+`npm test` runs every test headless. `npm run test:viewer` runs the viewer tests (about 13 minutes). `npm run test:scenario` runs the whole first match (about 15 minutes). To run the tests in the installed Microsoft Edge, set `PW_CHANNEL=msedge`. `e2e/README.md` lists which test covers each behaviour of the page.
+
+### The benchmark
+
+```bash
+target/release/engine-cli bench --seed 42 --matches 5 --json
+```
+
+The exit code is 2 when the median wall time of a 90-minute match is more than 2000 ms. To time 1000 matches, run `bench --seed 42 --matches 1000 --json` and measure the total wall time; the budget is 30 minutes.
+
 ## License
 
-Licensed under either of the MIT license (LICENSE-MIT) or the Apache License, Version 2.0 (LICENSE-APACHE), at your option.
+Licensed under either of the MIT license (LICENSE-MIT) or the Apache License, Version 2.0 (LICENSE-APACHE), at your option. A test (`crates/engine-cli/tests/licenses.rs`) checks that no dependency is licensed only under the GPL or the AGPL.

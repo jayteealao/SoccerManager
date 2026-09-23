@@ -107,6 +107,13 @@ function setSpeedButtons(requested, effective) {
   );
 }
 
+/// The header says in words whether the engine is connected, beside the version its hello
+/// named. The word follows the socket: it never claims a connection that has dropped.
+let engineVersion = null;
+function setEngineWord(word) {
+  el('engine-version').textContent = engineVersion ? `${word} · v${engineVersion}` : '';
+}
+
 function start(hello, { stored = false } = {}) {
   history = new History(hello.ticks_expected);
   pitch = new Pitch(el('pitch'), [
@@ -115,7 +122,8 @@ function start(hello, { stored = false } = {}) {
   ]);
   panels.start(hello);
   dugout.begin(hello, { stored });
-  el('engine-version').textContent = `engine ${hello['engine.version']}`;
+  engineVersion = hello['engine.version'];
+  setEngineWord(stored ? 'Replay' : 'Engine connected');
   el('scrub').max = String(hello.ticks_expected);
   playback = new Playback({
     scheduler,
@@ -184,6 +192,7 @@ function onHello(hello) {
     // The same match, after a reconnect or a restart. The stores are kept, and the first
     // tick frame, a keyframe one tick past the stoppage it resumes from, says where to cut.
     resuming = true;
+    setEngineWord('Engine connected');
     hideSurface();
     showNotice('Connected again. Play resumes at the last stoppage.', 'reconnect');
     return;
@@ -946,6 +955,7 @@ function onClose({ clean }) {
   // The engine closes the socket after full time on purpose, and that close is not a
   // fault: every tick is stored and the match plays back. Any other close is.
   if (match.fullTimeTick !== null) {
+    setEngineWord('Engine finished');
     showNotice('Full time. The whole match is stored and plays back.', 'end');
     announce('Full time. The whole match is stored and plays back.');
     return;
@@ -957,6 +967,7 @@ function onClose({ clean }) {
 /// what happened and what can still be done. A dropped connection never asks the manager.
 async function recover(dropped) {
   reconnecting = true;
+  setEngineWord('Engine reconnecting');
   showNotice('The connection to the engine dropped. Reconnecting.', 'reconnect');
   for (;;) {
     const status = await fetchStatus();
@@ -975,6 +986,7 @@ async function recover(dropped) {
       continue;
     }
     reconnecting = false;
+    setEngineWord('Engine stopped');
     const model = panelModel(status);
     if (model) {
       showNotice(null);

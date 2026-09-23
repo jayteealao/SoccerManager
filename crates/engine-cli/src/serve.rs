@@ -12,13 +12,14 @@
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use engine::data::team::Position;
 use engine::observe::identity::{
     DATA_DIR_ENV, MatchId, data_dir, load_or_create_owner_id, owner_bytes, owner_hex,
 };
+use engine::observe::{LawStats, MatchFigures, MatchStats, TacticsStats, TeamRef, write_stats};
 use engine::{EngineError, FanoutSink, FileSink, Manager, MatchConfig, Simulation, Snapshot};
 use engine::{TickHeader, snapshot::shorten_for_log};
 use protocol::{ChangeKind, Hello, PROTOCOL_VERSION, Queue, ServerMessage};
@@ -42,6 +43,49 @@ struct Identity {
     match_id: String,
     match_millis: u64,
     seed: u64,
+}
+
+/// The statistics record of a served match at full time, as `simulate` writes it. The ticks
+/// were streamed rather than written to a tick file, so no validator ran over them.
+fn match_stats(
+    identity: &Identity,
+    config: &MatchConfig,
+    sim: &Simulation,
+    written: u32,
+    played_from: Instant,
+    snapshot_writes: u32,
+) -> MatchStats {
+    let elapsed = played_from.elapsed();
+    let summary = sim.summary();
+    let team = |i: usize| TeamRef {
+        id: config.teams[i].club_id.clone(),
+        name: config.teams[i].name.clone(),
+    };
+    MatchStats {
+        owner_id: identity.owner_id.clone(),
+        match_id: identity.match_id.clone(),
+        seed: identity.seed,
+        content_hash: config.content_hash.clone(),
+        teams: [team(0), team(1)],
+        duration_ms: u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
+        outcome: "success".into(),
+        ticks_per_s: f64::from(written) / elapsed.as_secs_f64().max(1e-9),
+        ticks_written: sim.tick(),
+        validate_ran: false,
+        validate_violations: 0,
+        possession_changes: summary.possession_changes,
+        ball_max_speed: summary.ball_max_speed,
+        ball_idle_ticks: summary.ball_idle_ticks,
+        goals: summary.goals,
+        laws: LawStats::new(
+            &summary,
+            config.rules.schema_version,
+            sim.tick(),
+            snapshot_writes,
+        ),
+        tactics: TacticsStats::new(sim),
+        figures: MatchFigures::new(&summary, sim.managers()),
+    }
 }
 
 /// A match ready to serve: fresh and held before kick-off, or resumed and ready to play.
@@ -209,6 +253,7 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
             sim = Some(kicked_off);
         }
         if let Some(sim) = sim.as_mut().filter(|_| started) {
+            let played_from = Instant::now();
             let mut sink = FanoutSink::new(
                 FanoutSink::new(session.sink(), ticks_file.take()),
                 &mut gated,
@@ -249,6 +294,13 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
             let (_, file) = streams.into_parts();
             if let Some(file) = file {
                 file.finish()?;
+            }
+            if full_time {
+                let path = write_stats(
+                    &data,
+                    &match_stats(&identity, &config, sim, written, played_from, gated.writes),
+                )?;
+                tracing::info!(signal = "stats.written", path = %path.display());
             }
         }
 

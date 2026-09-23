@@ -117,6 +117,23 @@ fn serve_prints_a_port_writes_the_port_file_and_streams_a_match() {
     assert!(status.success(), "serve exited with {status}");
     // The port file is removed on a clean exit, so no page reaches an engine that is gone.
     assert!(!dir.join("engine.port").exists());
+    // A served match leaves the same records as a simulated one: the event rows and, at full
+    // time, the statistics record.
+    let folder = dir.join("matches").join(&hello.match_id);
+    assert!(
+        folder.join("events.jsonl").exists(),
+        "no events.jsonl in {}",
+        folder.display()
+    );
+    let stats: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(folder.join("stats.json"))
+            .expect("serve writes stats.json at full time"),
+    )
+    .unwrap();
+    assert_eq!(stats["record.kind"], "match-stats");
+    assert_eq!(stats["match.id"], hello.match_id.as_str());
+    assert_eq!(stats["outcome"], "success");
+    assert_eq!(stats["ticks.written"], 3_000);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
