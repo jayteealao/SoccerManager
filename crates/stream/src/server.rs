@@ -5,6 +5,7 @@
 use std::cell::RefCell;
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use protocol::PROTOCOL_VERSION;
 use tungstenite::WebSocket;
@@ -92,12 +93,54 @@ impl Server {
         }
     }
 
+    /// Waits up to `wait` for a client this build will talk to, and `None` when none came.
+    /// A page that lost its connection reconnects here, on the same port.
+    pub fn accept_within(
+        &self,
+        match_id: &str,
+        wait: Duration,
+    ) -> Result<Option<Connection>, StreamError> {
+        let deadline = Instant::now() + wait;
+        self.listener
+            .set_nonblocking(true)
+            .map_err(|e| StreamError::io("cannot poll the listener", e))?;
+        let accepted = loop {
+            match self.listener.accept() {
+                Ok((stream, _)) => {
+                    // An accepted socket inherits the listener's mode on Windows.
+                    if let Err(e) = stream.set_nonblocking(false) {
+                        break Err(StreamError::io("cannot make the client socket blocking", e));
+                    }
+                    match self.handshake(stream, match_id) {
+                        Ok(connection) => break Ok(Some(connection)),
+                        Err(StreamError::Refused { .. }) => continue,
+                        Err(other) => break Err(other),
+                    }
+                }
+                Err(e) if crate::would_block(&e) => {
+                    if Instant::now() >= deadline {
+                        break Ok(None);
+                    }
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                Err(e) => break Err(StreamError::io("cannot accept a client", e)),
+            }
+        };
+        let _ = self.listener.set_nonblocking(false);
+        accepted
+    }
+
     /// Waits for exactly one client, admitted or refused.
     fn accept_once(&self, match_id: &str) -> Result<Connection, StreamError> {
         let (stream, _) = self
             .listener
             .accept()
             .map_err(|e| StreamError::io("cannot accept a client", e))?;
+        self.handshake(stream, match_id)
+    }
+
+    /// Runs the WebSocket handshake on one accepted stream.
+    fn handshake(&self, stream: TcpStream, match_id: &str) -> Result<Connection, StreamError> {
         stream
             .set_nodelay(true)
             .map_err(|e| StreamError::io("cannot disable Nagle buffering", e))?;

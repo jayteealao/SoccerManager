@@ -27,6 +27,41 @@ export class History {
     this.pageBytes = null;
     this.pageBytesReason = 'not measured yet';
     this.measuring = false;
+    /// Ticks the page never received, as `[from, to]` pairs. A resume past the newest
+    /// stored tick leaves one; the pitch never draws a tick in it.
+    this.gaps = [];
+  }
+
+  /// Ends the history at `tick`, where a resumed match continues: the next tick appended is
+  /// the one after it. A resume past the newest stored tick records the ticks between as a
+  /// gap, reported absent by `tickAt`. Returns the gap's length, 0 when there is none.
+  truncate(tick) {
+    this.gaps = this.gaps
+      .filter(([from]) => from <= tick)
+      .map(([from, to]) => [from, Math.min(to, tick)]);
+    if (this.count === 0) {
+      this.firstTick = tick + 1;
+      return 0;
+    }
+    const newest = this.newestTick;
+    if (tick <= newest) {
+      this.count = Math.max(0, tick - this.firstTick + 1);
+      return 0;
+    }
+    // Hold the last stored frame in the missing slots, so the arrays stay indexed by tick;
+    // `tickAt` refuses them, so none is ever drawn.
+    const last = new Int16Array(COMPONENT_COUNT);
+    this.tickAt(newest, last);
+    for (let t = newest + 1; t <= tick; t += 1) {
+      this.append(t, last);
+    }
+    this.gaps.push([newest + 1, tick]);
+    return tick - newest;
+  }
+
+  /// `true` when the page never received `tick`.
+  inGap(tick) {
+    return this.gaps.some(([from, to]) => tick >= from && tick <= to);
   }
 
   /// The exact bytes the history holds. Synchronous and never an estimate.
@@ -59,7 +94,7 @@ export class History {
   /// tick was never stored.
   tickAt(tick, out) {
     const i = tick - this.firstTick;
-    if (i < 0 || i >= this.count) {
+    if (i < 0 || i >= this.count || (this.gaps.length > 0 && this.inGap(tick))) {
       return false;
     }
     out[0] = this.ball[i * BALL_COMPONENTS];

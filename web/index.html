@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="components/panels.css" />
     <link rel="stylesheet" href="components/chip.css" />
     <link rel="stylesheet" href="components/editor.css" />
+    <link rel="stylesheet" href="components/surfaces.css" />
   </head>
   <body>
     <div class="page">
@@ -64,8 +65,28 @@
             </div>
             <div class="board" id="board" role="group" aria-label="Formation slots" hidden></div>
             <div class="skeleton" id="skeleton">
-              <strong>Waiting for the first tick</strong>
-              <span>The engine is connecting and the pitch draws as soon as play starts.</span>
+              <strong>Getting the match ready</strong>
+              <span>The pitch draws as soon as play starts.</span>
+              <ol class="steps" id="steps" aria-label="Loading steps">
+                <li data-step="engine" data-state="active"><span class="steps__word">In progress</span><span>Starting the engine</span></li>
+                <li data-step="connect" data-state="waiting"><span class="steps__word">Waiting</span><span>Connecting to the match</span></li>
+                <li data-step="kickoff" data-state="waiting"><span class="steps__word">Waiting</span><span>Waiting for kick-off</span></li>
+              </ol>
+            </div>
+            <!-- The first-run and error panel. It names the failure in words and offers only
+                 what can still be done. -->
+            <div class="surface" id="surface" role="alert" data-kind="" hidden>
+              <p class="surface__word" id="surface-word"></p>
+              <h2 class="surface__title" id="surface-title"></h2>
+              <p class="surface__body" id="surface-body"></p>
+              <code class="surface__path" id="surface-path" hidden></code>
+              <p class="surface__hint" id="surface-hint" hidden></p>
+              <div class="surface__actions">
+                <button class="match-control" id="surface-restart" type="button" hidden>Restart</button>
+                <button class="match-control match-control--quiet" id="surface-abandon" type="button" hidden>Abandon</button>
+                <button class="match-control" id="surface-save" type="button" hidden>Save replay</button>
+                <button class="match-control match-control--quiet" id="surface-open" type="button" hidden>Open a replay</button>
+              </div>
             </div>
           </section>
 
@@ -149,6 +170,22 @@
     <p class="visually-hidden" id="live" aria-live="polite"></p>
     <!-- Goals and cards only, so a screen reader is not flooded at eight times speed. -->
     <p class="visually-hidden" id="feed-live" aria-live="polite"></p>
+
+    <!-- The half-time and full-time report. Counted from the same events the feed shows. -->
+    <dialog class="report" id="report" aria-labelledby="report-title">
+      <h2 class="report__title" id="report-title"></h2>
+      <p class="report__score tl-num" id="report-score"></p>
+      <table class="report__table" id="report-table"></table>
+      <h3 class="report__label">Goals and cards</h3>
+      <ol class="report__moments" id="report-moments"></ol>
+      <div class="report__actions" id="report-actions">
+        <button class="match-control" id="report-continue" type="button" data-for="half-time">Continue</button>
+        <button class="match-control" id="report-save" type="button" data-for="full-time">Save replay</button>
+        <button class="match-control match-control--quiet" id="report-open" type="button" data-for="full-time">Open a replay</button>
+        <button class="match-control match-control--quiet" id="report-close" type="button" data-for="full-time">Close</button>
+      </div>
+    </dialog>
+    <input id="replay-input" type="file" accept=".smfx" hidden />
 
     <script type="module" src="main.mjs"></script>
   </body>

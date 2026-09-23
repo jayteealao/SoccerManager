@@ -182,6 +182,7 @@ fn serve(
                 pre_match: Arc::new(stream::PreMatch::none()),
                 inbox: Arc::new(stream::Inbox::default()),
             },
+            drop_at: None,
         },
     )?;
     let _ = gauge_tx.send(Arc::clone(session.gauge()));

@@ -12,6 +12,7 @@ pub mod record;
 pub mod replay;
 pub mod server;
 pub mod session;
+pub mod snapshots;
 
 use thiserror::Error;
 
@@ -26,7 +27,10 @@ pub use record::{
 };
 pub use replay::Replayer;
 pub use server::{Connection, Server};
-pub use session::{ChannelOut, FrameOut, FrameSink, Gauge, MatchState, Session, SessionConfig};
+pub use session::{
+    ChannelOut, FrameOut, FrameSink, Gauge, MatchState, Session, SessionConfig, SessionEnd,
+};
+pub use snapshots::GatedSnapshots;
 
 /// Errors this crate returns.
 #[derive(Debug, Error)]

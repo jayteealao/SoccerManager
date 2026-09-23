@@ -36,6 +36,8 @@ pub enum Command {
     Generate(GenerateOpts),
     /// Stream one match live over the local socket to one viewer.
     Serve(ServeOpts),
+    /// Serve the viewer page and run the engine; restart it after a crash.
+    Launch(LaunchOpts),
     /// Record one whole match stream to a fixture file.
     Record(RecordOpts),
     /// Replay a recorded fixture over the same socket protocol.
@@ -103,8 +105,8 @@ pub struct ResumeOpts {
 #[derive(Debug, Args)]
 pub struct ServeOpts {
     /// Seed for the engine's random-number generator.
-    #[arg(long)]
-    pub seed: u64,
+    #[arg(long, required_unless_present = "resume")]
+    pub seed: Option<u64>,
     /// Minutes of play to simulate.
     #[arg(long, default_value_t = 90)]
     pub minutes: u32,
@@ -120,6 +122,57 @@ pub struct ServeOpts {
     /// Also serve this folder as the viewer page.
     #[arg(long, value_name = "DIR")]
     pub web: Option<PathBuf>,
+    /// Continue the match in this snapshot file instead of starting one.
+    #[arg(long, value_name = "FILE", conflicts_with = "seed")]
+    pub resume: Option<PathBuf>,
+    /// Seconds to wait for a viewer that lost its connection; 0 ends the run.
+    #[arg(
+        long,
+        value_name = "SECONDS",
+        default_value_t = 0,
+        long_help = "Seconds to wait for a viewer that lost its connection; 0 ends the run.\n\n\
+                     A viewer that closes the page on purpose always ends the run.\n\
+                     A connection lost without a close resumes from the newest\n\
+                     stoppage the viewer received."
+    )]
+    pub reconnect_wait: u64,
+    /// The match stamp in milliseconds; set by the launcher.
+    #[arg(long, hide = true)]
+    pub match_millis: Option<u64>,
+    /// Drop the viewer's connection once this tick is sent; a test seam.
+    #[arg(long, hide = true, value_name = "TICK")]
+    pub drop_client_at: Option<u32>,
+}
+
+#[derive(Debug, Args)]
+pub struct LaunchOpts {
+    /// Seed for the engine's random-number generator.
+    #[arg(long)]
+    pub seed: u64,
+    /// Minutes of play to simulate.
+    #[arg(long, default_value_t = 90)]
+    pub minutes: u32,
+    /// Home team file; default teams/default-a.json in the content folder.
+    #[arg(long, value_name = "FILE")]
+    pub team_a: Option<PathBuf>,
+    /// Away team file; default teams/default-b.json in the content folder.
+    #[arg(long, value_name = "FILE")]
+    pub team_b: Option<PathBuf>,
+    /// Folder holding the viewer page.
+    #[arg(long, value_name = "DIR")]
+    pub web: PathBuf,
+    /// Engine program to run; default SM_ENGINE_PATH, then this program.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Engine program to run; default SM_ENGINE_PATH, then this program.\n\n\
+                     When the file is missing, the page shows the path it looked\n\
+                     for and how to build the engine."
+    )]
+    pub engine: Option<PathBuf>,
+    /// Drop the viewer's connection once this tick is sent; a test seam.
+    #[arg(long, hide = true, value_name = "TICK")]
+    pub drop_client_at: Option<u32>,
 }
 
 #[derive(Debug, Args)]

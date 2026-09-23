@@ -9,7 +9,7 @@ import test from 'node:test';
 
 import { COMPONENT_COUNT } from '../decode.mjs';
 import { BUDGET_BYTES, History } from '../history.mjs';
-import { captured } from './helpers.mjs';
+import { captured, quiet } from './helpers.mjs';
 
 const TICKS_PER_MATCH = 270_000;
 
@@ -104,4 +104,41 @@ test('a browser that refuses the gauge is named with the refusal', () => {
   assert.equal(history.pageBytes, null);
   assert.match(history.pageBytesReason, /^SecurityError: /);
   assert.equal(history.measuring, false, 'a refusal does not leave a request outstanding');
+});
+
+test('a resumed match truncates the history at its stoppage', () => {
+  quiet(() => {
+    const history = new History(10);
+    const frame = new Int16Array(COMPONENT_COUNT);
+    for (let tick = 1; tick <= 8; tick += 1) {
+      frame[0] = tick;
+      history.append(tick, frame);
+    }
+    assert.equal(history.truncate(5), 0);
+    assert.equal(history.newestTick, 5);
+    frame[0] = 60;
+    history.append(6, frame);
+    const out = new Int16Array(COMPONENT_COUNT);
+    assert.ok(history.tickAt(6, out));
+    assert.equal(out[0], 60);
+    assert.equal(history.tickAt(7, out), false);
+  });
+});
+
+test('a resume past the newest tick leaves a gap that is never drawn', () => {
+  quiet(() => {
+    const history = new History(10);
+    const frame = new Int16Array(COMPONENT_COUNT);
+    for (let tick = 1; tick <= 3; tick += 1) {
+      history.append(tick, frame);
+    }
+    assert.equal(history.truncate(6), 3);
+    assert.deepEqual(history.gaps, [[4, 6]]);
+    history.append(7, frame);
+    const out = new Int16Array(COMPONENT_COUNT);
+    assert.equal(history.tickAt(5, out), false);
+    assert.ok(history.tickAt(3, out));
+    assert.ok(history.tickAt(7, out));
+    assert.equal(history.newestTick, 7);
+  });
 });

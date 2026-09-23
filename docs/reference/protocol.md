@@ -337,12 +337,13 @@ A client that never sends it is not held by it, and `record`, `replay`, and `ben
 
 ## The page server
 
-`serve --web <DIR>` and `replay --web <DIR>` start a second listener on `127.0.0.1`, on its
-own port, serving the named folder over plain HTTP. It is a separate listener from the
+`serve --web <DIR>`, `replay --web <DIR>`, and `launch --web <DIR>` start a second listener
+on `127.0.0.1`, on its own port, serving the named folder over plain HTTP. It is a separate listener from the
 WebSocket server on purpose: the socket's origin allowlist and version guard have nothing
 to do with serving a stylesheet.
 
-It answers `GET` and `HEAD` only; anything else is `405`. A request path that contains `..`,
+It answers `GET` and `HEAD`, and `POST` on the two action paths below; anything else is
+`405`. A request path that contains `..`,
 a drive letter, a backslash, or a leading `//` is `403`, and the resolved path is compared
 against the resolved folder, so a symbolic link cannot lead out of it either.
 
@@ -369,9 +370,56 @@ Every response carries three headers:
 same-origin, including both fonts, so nothing is lost today; a later version that wants an
 external resource will meet this rule.
 
-One path is generated rather than read from the folder. `GET /engine.json` answers
-`{"socket.port": <port>, "protocol.version": 3}`, because a page served on one port cannot
+One path is generated rather than read from the folder. `GET /engine.json` answers with the
+state of the engine and the port of its socket, because a page served on one port cannot
 guess the WebSocket port on another and the operating system chooses both at every run.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `engine.state` | string | `starting`, `running`, `finished`, `crashed`, `refused`, `abandoned`, or `not-found` |
+| `socket.port` | int or null | the WebSocket port; present only while `running` |
+| `protocol.version` | int | the protocol version the engine speaks, `3` |
+| `engine.pid` | int or null | the process identifier of the engine serving the match |
+| `engine.path` | string or null | the engine program the launcher runs; null when the engine serves the page itself |
+| `engine.reason` | string or null | the engine's own words when `refused`, for example `snapshot refused: <path>: checksum mismatch: the file is corrupt` |
+| `engine.code` | int or null | the exit code when `crashed` (launcher only) |
+| `snapshot.tick` | int or null | the tick of the latest snapshot on disk (launcher only) |
+| `match.id` | string | the match being served |
+| `launcher` | bool | `true` when `engine-cli launch` serves the page and can restart the engine |
+
+`serve --web` and `replay --web` always answer `running`, because the page's server is the
+engine process itself. Under `launch` the page's server is a separate process that runs the
+engine as a worker, so it can report `crashed` and act on it:
+
+| Request | Effect | Answer |
+|---|---|---|
+| `POST /engine/restart` | after a crash, starts the engine again from the match's latest snapshot; a snapshot that does not read is `refused` with the reason | `202` with the new `/engine.json` body |
+| `POST /engine/abandon` | stops the engine and gives the match up | `202` with the new `/engine.json` body |
+
+Both ignore any body. Both require an `Origin` header equal to the page's own origin,
+`http://127.0.0.1:<page port>`; any other origin, or none, is `403`, so a page on another
+site cannot restart or stop the engine. Served by `serve --web` or `replay --web`, where
+nothing would survive to carry them out, both are `405`.
+
+## Reconnection
+
+A connection that is lost without a close frame (the browser reports code `1006`) is a
+drop. `serve --reconnect-wait <seconds>` keeps the socket listening on the same port for
+that long; the launcher passes 120. Without it, or after a close frame, the run ends as
+before.
+
+After a drop the engine goes back to the newest stoppage the page received in full: the
+socket records the newest tick frame it flushed, and a snapshot is kept only once a later
+tick frame has been flushed, so every event of the stoppage tick went before it. The page
+that connects again receives the same `hello` as before, with the same `match.id`. The
+first tick frame after it is a keyframe one tick past that stoppage, so the page cuts every
+store back to the stoppage and appends from there. A drop before the first stoppage starts
+the match again from kick-off with the same seed and lineup.
+
+A restart after a crash works the same way on the page's side: the launcher starts
+`serve --resume <snapshot>`, which sends the same `hello` and continues at the snapshot's
+tick plus one. No message and no field changed for either path, so `PROTOCOL_VERSION`
+stays 3.
 
 ## Backpressure
 

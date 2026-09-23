@@ -7,7 +7,7 @@
 //! `WriteBufferFull`, and the session treats that as the same pause.
 
 use std::collections::VecDeque;
-use std::net::TcpStream;
+use std::net::{Shutdown, TcpStream};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
 use std::sync::{Arc, Mutex};
@@ -35,9 +35,23 @@ pub struct MatchState {
     tick: AtomicU32,
     /// The home score in the high 32 bits, the away score in the low 32.
     scores: AtomicU64,
+    /// The newest tick frame the socket thread has flushed to the stream.
+    sent_tick: AtomicU32,
 }
 
 impl MatchState {
+    /// The newest tick whose frame the socket has flushed to the stream, or 0 before the
+    /// first. Every message queued before that frame was flushed with it or earlier, because
+    /// the producer buffer keeps order.
+    pub fn sent_tick(&self) -> u32 {
+        self.sent_tick.load(Ordering::Acquire)
+    }
+
+    /// Records a flushed tick frame. The socket thread is the only writer.
+    pub fn set_sent_tick(&self, tick: u32) {
+        self.sent_tick.store(tick, Ordering::Release);
+    }
+
     pub fn tick(&self) -> u32 {
         self.tick.load(Ordering::Relaxed)
     }
@@ -231,6 +245,20 @@ pub struct SessionConfig {
     pub keyframe_interval: u32,
     pub hello: Hello,
     pub commands: CommandContext,
+    /// A test seam: once a tick at or past this one is flushed, the socket thread shuts the
+    /// connection down without a close frame, as a dropped network link would.
+    pub drop_at: Option<u32>,
+}
+
+/// How a session ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionEnd {
+    /// The producer finished and every frame was written.
+    Done,
+    /// The client sent a close frame: it left on purpose.
+    Closed,
+    /// The connection went away without a close frame.
+    Dropped,
 }
 
 /// A running client session. `finish` closes it: a sink that still holds a sending half
@@ -241,7 +269,7 @@ pub struct Session {
     state: Arc<MatchState>,
     keyframe_interval: u32,
     closing: Arc<AtomicBool>,
-    handle: Option<JoinHandle<Result<(), StreamError>>>,
+    handle: Option<JoinHandle<Result<SessionEnd, StreamError>>>,
 }
 
 impl Session {
@@ -252,6 +280,7 @@ impl Session {
             keyframe_interval,
             hello,
             commands,
+            drop_at,
         } = config;
         let gauge = Arc::new(Gauge::new(buffer_ticks));
         let state = Arc::clone(&commands.state);
@@ -267,9 +296,12 @@ impl Session {
                     connection.socket,
                     rx,
                     commands,
-                    thread_gauge,
-                    thread_closing,
-                    hello,
+                    Pumped {
+                        gauge: thread_gauge,
+                        closing: thread_closing,
+                        hello,
+                        drop_at,
+                    },
                 );
                 // However the socket ends, a producer still waiting at the gate (a match held
                 // before kick-off, or paused) must wake and stop rather than wait for ever.
@@ -313,18 +345,27 @@ impl Session {
         self.out().send(Frame::Text(text))
     }
 
-    /// Closes the buffer and waits for the socket thread. The socket thread stops once the
-    /// buffer is drained, whether or not a sink still holds a sending half.
-    pub fn finish(mut self) -> Result<(), StreamError> {
+    /// Closes the buffer and waits for the socket thread, and says how the session ended.
+    /// The socket thread stops once the buffer is drained, whether or not a sink still holds
+    /// a sending half.
+    pub fn finish(mut self) -> Result<SessionEnd, StreamError> {
         self.closing.store(true, Ordering::Release);
         self.tx = None;
         match self.handle.take() {
             Some(handle) => handle
                 .join()
                 .map_err(|_| StreamError::Fixture("the socket thread panicked".into()))?,
-            None => Ok(()),
+            None => Ok(SessionEnd::Done),
         }
     }
+}
+
+/// What the socket thread owns besides the socket, the buffer, and the command context.
+struct Pumped {
+    gauge: Arc<Gauge>,
+    closing: Arc<AtomicBool>,
+    hello: Hello,
+    drop_at: Option<u32>,
 }
 
 /// The socket thread: read commands, write frames, and stop when either side is done.
@@ -332,10 +373,14 @@ fn pump(
     mut socket: WebSocket<TcpStream>,
     rx: Receiver<Frame>,
     mut commands: CommandContext,
-    gauge: Arc<Gauge>,
-    closing: Arc<AtomicBool>,
-    hello: Hello,
-) -> Result<(), StreamError> {
+    pumped: Pumped,
+) -> Result<SessionEnd, StreamError> {
+    let Pumped {
+        gauge,
+        closing,
+        hello,
+        drop_at,
+    } = pumped;
     // The hello goes out on the blocking socket, so it is on the wire before any tick.
     crate::send_whole(
         &mut socket,
@@ -349,8 +394,14 @@ fn pump(
         .set_nonblocking(true)
         .map_err(|e| StreamError::io("cannot make the socket non-blocking", e))?;
 
-    let mut outbox: VecDeque<Message> = VecDeque::new();
+    let state = Arc::clone(&commands.state);
+    // Each message, with its tick when it is a tick frame.
+    let mut outbox: VecDeque<(Option<u32>, Message)> = VecDeque::new();
     let mut producer_done = false;
+    // The tick of the newest frame taken from the buffer; a delta is the tick after it.
+    let mut taken_tick = 0u32;
+    // The newest tick frame the socket accepted and has not yet flushed.
+    let mut written_tick: Option<u32> = None;
     loop {
         let mut idle = true;
 
@@ -361,20 +412,18 @@ fn pump(
                     idle = false;
                     let (answer, event) = commands.handle(text.as_str())?;
                     if let Some(event) = event {
-                        outbox.push_back(text_message(&ServerMessage::Event(event))?);
+                        outbox.push_back((None, text_message(&ServerMessage::Event(event))?));
                     }
-                    outbox.push_back(text_message(&answer)?);
+                    outbox.push_back((None, text_message(&answer)?));
                 }
                 Ok(Message::Close(_)) => {
                     commands.gate.stop();
-                    return finish_socket(&mut socket);
+                    finish_socket(&mut socket)?;
+                    return Ok(SessionEnd::Closed);
                 }
                 Ok(_) => idle = false,
                 Err(tungstenite::Error::Io(e)) if would_block(&e) => break,
-                Err(e) if peer_gone(&e) => {
-                    commands.gate.stop();
-                    return Ok(());
-                }
+                Err(e) if peer_gone(&e) => return Ok(dropped(&commands)),
                 Err(e) => {
                     commands.gate.stop();
                     return Err(e.into());
@@ -388,7 +437,14 @@ fn pump(
                 Ok(frame) => {
                     idle = false;
                     gauge.left();
-                    outbox.push_back(wire_message(frame));
+                    let tick = match &frame {
+                        Frame::Tick(tick) => {
+                            taken_tick = crate::record::tick_of(tick).unwrap_or(taken_tick + 1);
+                            Some(taken_tick)
+                        }
+                        Frame::Text(_) => None,
+                    };
+                    outbox.push_back((tick, wire_message(frame)));
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {
                     // The producer said it is done and the buffer is drained.
@@ -403,20 +459,20 @@ fn pump(
         }
 
         // Writes. A full socket buffer stops the drain; the frames stay in the outbox.
-        while let Some(message) = outbox.pop_front() {
+        while let Some((tick, message)) = outbox.pop_front() {
             idle = false;
             match socket.write(message) {
-                Ok(()) => {}
+                Ok(()) => written_tick = tick.or(written_tick),
                 // The socket buffered the frame and the stream was not ready.
-                Err(tungstenite::Error::Io(e)) if would_block(&e) => break,
-                Err(tungstenite::Error::WriteBufferFull(message)) => {
-                    outbox.push_front(*message);
+                Err(tungstenite::Error::Io(e)) if would_block(&e) => {
+                    written_tick = tick.or(written_tick);
                     break;
                 }
-                Err(e) if peer_gone(&e) => {
-                    commands.gate.stop();
-                    return Ok(());
+                Err(tungstenite::Error::WriteBufferFull(message)) => {
+                    outbox.push_front((tick, *message));
+                    break;
                 }
+                Err(e) if peer_gone(&e) => return Ok(dropped(&commands)),
                 Err(e) => {
                     commands.gate.stop();
                     return Err(e.into());
@@ -424,12 +480,19 @@ fn pump(
             }
         }
         match socket.flush() {
-            Ok(()) => {}
-            Err(tungstenite::Error::Io(e)) if would_block(&e) => {}
-            Err(e) if peer_gone(&e) => {
-                commands.gate.stop();
-                return Ok(());
+            Ok(()) => {
+                if let Some(tick) = written_tick.take() {
+                    state.set_sent_tick(tick);
+                    if drop_at.is_some_and(|at| tick >= at) {
+                        // The test seam: the connection goes away with no close frame.
+                        let _ = socket.get_ref().shutdown(Shutdown::Both);
+                        tracing::info!(signal = "socket.drop_injected", tick);
+                        return Ok(dropped(&commands));
+                    }
+                }
             }
+            Err(tungstenite::Error::Io(e)) if would_block(&e) => {}
+            Err(e) if peer_gone(&e) => return Ok(dropped(&commands)),
             Err(e) => {
                 commands.gate.stop();
                 return Err(e.into());
@@ -437,12 +500,19 @@ fn pump(
         }
 
         if producer_done && outbox.is_empty() {
-            return finish_socket(&mut socket);
+            finish_socket(&mut socket)?;
+            return Ok(SessionEnd::Done);
         }
         if idle {
             std::thread::sleep(IDLE_SLEEP);
         }
     }
+}
+
+/// The connection went away without a close frame: stop the producer and say so.
+fn dropped(commands: &CommandContext) -> SessionEnd {
+    commands.gate.stop();
+    SessionEnd::Dropped
 }
 
 /// Sends the close frame and drives the close handshake to its end.

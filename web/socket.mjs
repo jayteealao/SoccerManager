@@ -14,8 +14,10 @@ export function socketAddress(port, version = 1) {
 
 export class MatchSocket {
   /// `onHello`, `onTick` and `onMessage` are called as frames arrive. `onTick` receives
-  /// the raw `ArrayBuffer`, because the decoder writes straight out of it.
-  constructor(address, { onHello, onTick, onMessage }) {
+  /// the raw `ArrayBuffer`, because the decoder writes straight out of it. `onRaw`, when
+  /// given, sees every frame first, exactly as it arrived, with the parsed message for a
+  /// text frame: the replay file keeps the wire bytes, never a re-encoding.
+  constructor(address, { onHello, onTick, onMessage, onRaw = null }) {
     this.address = address;
     this.matchId = null;
     this.tick = 0;
@@ -25,6 +27,7 @@ export class MatchSocket {
     this.socket.addEventListener('message', (event) => {
       if (typeof event.data === 'string') {
         const message = JSON.parse(event.data);
+        onRaw?.(event.data, message);
         if (message.type === 'hello') {
           this.matchId = message['match.id'];
           signal('viewer.connected', {
@@ -41,6 +44,7 @@ export class MatchSocket {
         onMessage(message);
         return;
       }
+      onRaw?.(event.data, null);
       onTick(event.data);
     });
 
@@ -54,8 +58,10 @@ export class MatchSocket {
         wasClean: event.wasClean,
         reason: event.reason || null,
       });
+      // A drop is a close with no close frame (1006) or an unclean one; a close the engine
+      // or the page asked for is clean. Only a drop is worth reconnecting after.
       if (this.onClose) {
-        this.onClose(event);
+        this.onClose({ clean: event.wasClean && event.code !== 1006, code: event.code });
       }
     });
 

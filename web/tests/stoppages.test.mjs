@@ -67,3 +67,15 @@ test('a message that is not an event is not a mark', () => {
   assert.equal(stopsPlay({ type: 'stats', tick: 10 }), false);
   assert.equal(stopsPlay({ type: 'command-ack', tick: 10, 'event.type': 'goal' }), false);
 });
+
+test('a resumed match drops the marks after its stoppage', () => {
+  const stoppages = new Stoppages();
+  for (const tick of [100, 500, 900]) {
+    stoppages.add(tick);
+  }
+  stoppages.truncate(500);
+  assert.equal(stoppages.length, 2);
+  assert.equal(stoppages.next(500), null);
+  stoppages.add(700);
+  assert.equal(stoppages.next(500), 700);
+});

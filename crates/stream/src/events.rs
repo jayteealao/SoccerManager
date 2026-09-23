@@ -74,6 +74,57 @@ impl EventWriter {
         })
     }
 
+    /// Opens the events file of a match resumed at `tick`. Every row at or before that tick
+    /// is kept and every later row is dropped, because the resumed match plays those ticks
+    /// again. The kept rows go to a temporary file that then replaces the old one, so a crash
+    /// part-way never leaves a half-written file. A missing file starts empty.
+    pub fn resume(data_dir: &Path, match_id: &str, tick: u32) -> Result<Self, StreamError> {
+        let path = data_dir.join("matches").join(match_id).join(EVENTS_FILE);
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(e) => return Err(StreamError::io(format!("cannot read {EVENTS_FILE}"), e)),
+        };
+        let mut kept = String::with_capacity(text.len());
+        let (mut rows, mut dropped) = (0u32, 0u32);
+        for line in text.lines().filter(|l| !l.trim().is_empty()) {
+            let row_tick = serde_json::from_str::<serde_json::Value>(line)
+                .ok()
+                .and_then(|row| row.get("tick").and_then(serde_json::Value::as_u64));
+            if row_tick.is_some_and(|t| t <= u64::from(tick)) {
+                kept.push_str(line);
+                kept.push('\n');
+                rows += 1;
+            } else {
+                dropped += 1;
+            }
+        }
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)
+                .map_err(|e| StreamError::io("cannot create the match folder", e))?;
+        }
+        let temporary = path.with_extension("jsonl.tmp");
+        std::fs::write(&temporary, kept.as_bytes())
+            .and_then(|()| std::fs::rename(&temporary, &path))
+            .map_err(|e| StreamError::io(format!("cannot rewrite {EVENTS_FILE}"), e))?;
+        let file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .map_err(|e| StreamError::io(format!("cannot open {EVENTS_FILE}"), e))?;
+        tracing::info!(
+            signal = "events.resumed",
+            match.id = %match_id,
+            tick,
+            kept = rows,
+            dropped
+        );
+        Ok(Self {
+            writer: BufWriter::new(file),
+            path,
+            written: rows,
+        })
+    }
+
     /// Appends one row and flushes it, so a crash keeps every event already written.
     pub fn write(&mut self, event: &MatchEvent) -> Result<(), StreamError> {
         let row = to_row(event)?;

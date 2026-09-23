@@ -6,6 +6,7 @@ mod calibrate;
 mod cli;
 mod content;
 mod generate;
+mod launch;
 mod record;
 mod replay;
 mod report;
@@ -35,6 +36,7 @@ fn main() {
         cli::Command::Bench(opts) => bench::run(content_dir, &opts),
         cli::Command::Generate(opts) => generate::run(content_dir, &opts),
         cli::Command::Serve(opts) => serve::run(content_dir, &opts),
+        cli::Command::Launch(opts) => launch::run(content_dir, &opts),
         cli::Command::Record(opts) => record::run(content_dir, &opts),
         cli::Command::Replay(opts) => replay::run(&opts),
         cli::Command::Resume(opts) => resume::run(content_dir, &opts),

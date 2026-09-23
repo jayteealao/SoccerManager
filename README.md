@@ -72,7 +72,7 @@ target/release/engine-cli serve --seed 42
 ```
 
 The command binds a port on `127.0.0.1`, prints it, writes it to `engine.port`, and waits for
-one viewer. A page connects to `ws://127.0.0.1:<port>/?v=2` and receives a hello, then one
+one viewer. A page connects to `ws://127.0.0.1:<port>/?v=3` and receives a hello, then one
 binary frame per tick. See `docs/reference/protocol.md` for every message and every field.
 
 ## Watch a match
@@ -85,6 +85,25 @@ The command prints two lines: the WebSocket port, then the page address. Open th
 address in a browser. The engine serves the page itself, so there is one program to start,
 the page's origin is already on the socket's loopback allowlist, and every response carries
 the two cross-origin-isolation headers the page's memory gauge needs.
+
+To have the page survive a crash of the engine, start the launcher instead:
+
+```bash
+target/release/engine-cli launch --seed 42 --web web
+```
+
+It prints the page address and nothing else. The launcher serves the page and runs the
+engine as a separate process. When the engine stops in mid-match, the page names the failure
+and offers to restart from the last stoppage, with the same score and clock, or to abandon
+the match. When the connection drops and the engine is still running, the page reconnects
+by itself and play resumes from the last stoppage it received in full. The engine program
+is `--engine <FILE>`, then `SM_ENGINE_PATH`, then the launcher's own program; when none is
+found, the page shows the path it looked for and how to build the engine.
+
+The page opens a report at half-time and at full time. At full time it can save the match
+as a replay file (`touchline-<match.id>.smfx`, the same layout `record` writes) and open a
+saved replay, which plays and rewinds with no engine running. `engine-cli replay --fixture`
+also plays a saved file.
 
 Open `/handshake.html` on the same address to check the connection alone: it reads the
 hello, prints it, and renders nothing, so a fault there is a fault in the handshake rather

@@ -188,11 +188,29 @@ fn no_help_line_exceeds_eighty_columns() {
         vec!["bench", "--help"],
         vec!["generate", "--help"],
         vec!["calibrate", "--help"],
+        vec!["launch", "--help"],
+        vec!["serve", "--help"],
     ] {
         let out = bin().args(&args).output().unwrap();
         let stdout = String::from_utf8_lossy(&out.stdout);
         for line in stdout.lines() {
             assert!(line.len() <= 80, "{args:?}: {} columns: {line}", line.len());
         }
+    }
+}
+
+#[test]
+fn the_test_seams_stay_out_of_the_help() {
+    for command in ["launch", "serve"] {
+        let out = bin().args([command, "--help"]).output().unwrap();
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        for hidden in ["--drop-client-at", "--match-millis"] {
+            assert!(!stdout.contains(hidden), "{command} --help shows {hidden}");
+        }
+    }
+    let out = bin().args(["launch", "--help"]).output().unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    for shown in ["--engine", "--web", "--seed"] {
+        assert!(stdout.contains(shown), "launch --help must show {shown}");
     }
 }

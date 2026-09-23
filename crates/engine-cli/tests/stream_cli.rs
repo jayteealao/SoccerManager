@@ -121,6 +121,96 @@ fn serve_prints_a_port_writes_the_port_file_and_streams_a_match() {
 }
 
 #[test]
+fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
+    let dir = temp("serve-reconnect");
+    let mut child = bin(&dir)
+        .args([
+            "serve",
+            "--seed",
+            "42",
+            "--minutes",
+            "2",
+            "--reconnect-wait",
+            "30",
+            "--drop-client-at",
+            "3000",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stderr = child.stderr.take().expect("serve logs to stderr");
+    let logs = std::thread::spawn(move || {
+        let mut text = String::new();
+        let _ = stderr.read_to_string(&mut text);
+        text
+    });
+    let mut stdout = BufReader::new(child.stdout.take().expect("serve prints its port"));
+    let mut line = String::new();
+    stdout.read_line(&mut line).unwrap();
+    let port: u16 = line.trim().parse().unwrap();
+
+    let mut client = Client::connect_local(port).unwrap();
+    let Incoming::Message(message) = client.read().unwrap() else {
+        panic!("the first frame is the hello");
+    };
+    let ServerMessage::Hello(first) = *message else {
+        panic!("the first message is the hello");
+    };
+    client.send(&ClientCommand::Start).unwrap();
+    let mut last_tick = 0u32;
+    loop {
+        match client.read() {
+            Ok(Incoming::Tick(_, q)) => last_tick = q.tick,
+            Ok(Incoming::Message(_)) => continue,
+            Ok(Incoming::Closed) | Err(_) => break,
+        }
+    }
+    assert!(
+        last_tick >= 3_000,
+        "the drop comes at tick 3,000; read {last_tick}"
+    );
+
+    // The same port, the same hello, and play from a stoppage the viewer already holds.
+    let mut client = Client::connect_local(port).unwrap();
+    let Incoming::Message(message) = client.read().unwrap() else {
+        panic!("the first frame after a reconnect is the hello");
+    };
+    let ServerMessage::Hello(again) = *message else {
+        panic!("the first message after a reconnect is the hello");
+    };
+    assert_eq!(again.match_id, first.match_id);
+    let mut first_tick = None;
+    let mut ticks = 0u32;
+    loop {
+        match client.read().unwrap() {
+            Incoming::Tick(frame, q) => {
+                if first_tick.is_none() {
+                    assert_ne!(frame.kind(), protocol::frame::KIND_DELTA);
+                    first_tick = Some(q.tick);
+                }
+                ticks += 1;
+            }
+            Incoming::Message(_) => continue,
+            Incoming::Closed => break,
+        }
+    }
+    let first_tick = first_tick.expect("the match goes on after the reconnect");
+    assert!(
+        first_tick <= last_tick + 1,
+        "resumed at {first_tick}, past the {last_tick} the viewer held"
+    );
+    assert!(ticks > 0);
+    client.close().unwrap();
+
+    let status = child.wait().unwrap();
+    let text = logs.join().expect("the log reader does not panic");
+    assert!(status.success(), "serve exited with {status}: {text}");
+    assert!(text.contains("signal=\"socket.reconnected\""), "{text}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn no_help_line_of_the_streaming_commands_exceeds_eighty_columns() {
     let dir = temp("help");
     for args in [

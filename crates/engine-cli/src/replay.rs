@@ -21,7 +21,13 @@ pub fn run(opts: &ReplayOpts) -> anyhow::Result<i32> {
     println!("{}", server.port());
     // The page address is printed after the port, because it is the line a reader copies.
     let page = match opts.web.as_deref() {
-        Some(dir) => Some(crate::web::start(dir, server.port())?),
+        Some(dir) => Some(crate::web::start(
+            dir,
+            std::sync::Arc::new(crate::web::Fixed {
+                socket_port: server.port(),
+                match_id: replayer.hello().match_id.clone(),
+            }),
+        )?),
         None => None,
     };
     if let Some(page) = &page {

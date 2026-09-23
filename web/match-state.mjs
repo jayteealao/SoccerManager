@@ -116,6 +116,24 @@ export class MatchState {
     this.consumed = 0;
   }
 
+  /// Forgets every message after `tick`, where a resumed match continues: the engine sends
+  /// those ticks again, and keeping both copies would count an event twice.
+  truncate(tick) {
+    const keep = (m) => m.tick <= tick;
+    this.events = this.events.filter(keep);
+    this.stats = this.stats.filter(keep);
+    this.conditions = this.conditions.filter(keep);
+    this.reset();
+  }
+
+  /// Forgets the whole match, for a replay file loaded in its place.
+  clear() {
+    this.events = [];
+    this.stats = [];
+    this.conditions = [];
+    this.reset();
+  }
+
   /// The match at `tick`: every message with a tick at or before it, and nothing later.
   /// Forward steps are incremental; a step backwards recomputes from kick-off.
   at(tick) {

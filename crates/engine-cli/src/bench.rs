@@ -193,6 +193,7 @@ fn measure_stream(
                 pre_match: Arc::new(stream::PreMatch::none()),
                 inbox: Arc::new(stream::Inbox::default()),
             },
+            drop_at: None,
         },
     )?;
     let mut sink = session.sink();

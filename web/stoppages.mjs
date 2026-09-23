@@ -55,6 +55,11 @@ export class Stoppages {
     this.ticks.push(tick);
   }
 
+  /// Drops every mark after `tick`, where a resumed match continues.
+  truncate(tick) {
+    this.ticks = this.ticks.filter((t) => t <= tick);
+  }
+
   /// The first stoppage after `fromTick`, or null when there is none.
   next(fromTick) {
     for (const tick of this.ticks) {

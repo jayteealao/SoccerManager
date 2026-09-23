@@ -296,7 +296,7 @@ pub fn read_fixture(path: &Path) -> Result<Fixture, StreamError> {
 }
 
 /// The tick a keyframe carries, or `None` for a delta.
-fn tick_of(frame: &TickFrame) -> Option<u32> {
+pub(crate) fn tick_of(frame: &TickFrame) -> Option<u32> {
     let bytes = frame.as_bytes();
     if frame.kind() == protocol::frame::KIND_DELTA {
         return None;

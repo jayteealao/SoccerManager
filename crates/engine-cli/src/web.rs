@@ -13,6 +13,7 @@
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::Context;
 
@@ -37,10 +38,59 @@ impl WebServer {
 /// on another, and the operating system chooses both at every run, so the server answers
 /// for itself rather than making a person paste a number into a query string.
 const ENGINE_JSON: &str = "/engine.json";
+/// The two actions a page may ask of the launcher. Both change state, so both are POST.
+const RESTART: &str = "/engine/restart";
+const ABANDON: &str = "/engine/abandon";
 
-/// Serves `dir` on a loopback port the operating system chooses. `socket_port` is the
-/// WebSocket port the page connects to, which it reads back from `/engine.json`.
-pub fn start(dir: &Path, socket_port: u16) -> anyhow::Result<WebServer> {
+/// What a page asks the process that serves it to do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Action {
+    /// Start the engine again from the match's latest snapshot.
+    Restart,
+    /// Stop the engine and give the match up.
+    Abandon,
+}
+
+/// Where `/engine.json` comes from, and who answers the two actions.
+pub trait Status: Send + Sync {
+    /// The `/engine.json` body.
+    fn json(&self) -> String;
+    /// Carries out one action and returns the new `/engine.json` body, or `None` when this
+    /// server takes no actions.
+    fn act(&self, action: Action) -> Option<String>;
+}
+
+/// The status of a page served by the engine itself: always running on one socket port, and
+/// no actions, because nothing survives this process to carry them out.
+pub struct Fixed {
+    pub socket_port: u16,
+    pub match_id: String,
+}
+
+impl Status for Fixed {
+    fn json(&self) -> String {
+        serde_json::json!({
+            "engine.state": "running",
+            "socket.port": self.socket_port,
+            "protocol.version": protocol::PROTOCOL_VERSION,
+            "engine.pid": std::process::id(),
+            "engine.path": null,
+            "engine.reason": null,
+            "snapshot.tick": null,
+            "match.id": self.match_id,
+            "launcher": false,
+        })
+        .to_string()
+    }
+
+    fn act(&self, _action: Action) -> Option<String> {
+        None
+    }
+}
+
+/// Serves `dir` on a loopback port the operating system chooses. `status` answers
+/// `/engine.json`, which tells the page the WebSocket port and the state of the engine.
+pub fn start(dir: &Path, status: Arc<dyn Status>) -> anyhow::Result<WebServer> {
     let root = std::fs::canonicalize(dir)
         .with_context(|| format!("cannot serve the page folder {}", dir.display()))?;
     anyhow::ensure!(
@@ -69,12 +119,13 @@ pub fn start(dir: &Path, socket_port: u16) -> anyhow::Result<WebServer> {
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
                 let root = served.clone();
+                let status = Arc::clone(&status);
                 // One thread per request. A page load asks for about twenty files, and a
                 // serial server would answer them one after another.
                 let _ = std::thread::Builder::new()
                     .name("web-conn".into())
                     .spawn(move || {
-                        let _ = answer(stream, &root, socket_port);
+                        let _ = answer(stream, &root, port, status.as_ref());
                     });
             }
         })
@@ -84,13 +135,53 @@ pub fn start(dir: &Path, socket_port: u16) -> anyhow::Result<WebServer> {
 }
 
 /// Reads one request and writes one response.
-fn answer(mut stream: TcpStream, root: &Path, socket_port: u16) -> std::io::Result<()> {
-    let Some(line) = read_request_line(&stream) else {
+fn answer(
+    mut stream: TcpStream,
+    root: &Path,
+    page_port: u16,
+    status: &dyn Status,
+) -> std::io::Result<()> {
+    let Some(request) = read_request(&stream) else {
         return write_response(&mut stream, 400, "text/plain", b"bad request", false);
     };
-    let mut parts = line.split_whitespace();
+    let mut parts = request.line.split_whitespace();
     let method = parts.next().unwrap_or_default().to_string();
     let target = parts.next().unwrap_or_default().to_string();
+    let path = target.split(['?', '#']).next().unwrap_or_default();
+    if method == "POST" && (path == RESTART || path == ABANDON) {
+        // Only the page this server serves may ask. A page on any other site sends its own
+        // origin, or none, and is refused before anything happens.
+        let own = format!("http://127.0.0.1:{page_port}");
+        if request.origin.as_deref() != Some(own.as_str()) {
+            tracing::warn!(
+                signal = "web.action_refused",
+                origin = %request.origin.as_deref().unwrap_or("none"),
+                path
+            );
+            return write_response(&mut stream, 403, "text/plain", b"refused origin", false);
+        }
+        let action = if path == RESTART {
+            Action::Restart
+        } else {
+            Action::Abandon
+        };
+        return match status.act(action) {
+            Some(body) => write_response(
+                &mut stream,
+                202,
+                "application/json; charset=utf-8",
+                body.as_bytes(),
+                false,
+            ),
+            None => write_response(
+                &mut stream,
+                405,
+                "text/plain",
+                b"this engine takes no actions; start it with engine-cli launch",
+                false,
+            ),
+        };
+    }
     if method != "GET" && method != "HEAD" {
         return write_response(
             &mut stream,
@@ -102,11 +193,8 @@ fn answer(mut stream: TcpStream, root: &Path, socket_port: u16) -> std::io::Resu
     }
     let head_only = method == "HEAD";
 
-    if target.split(['?', '#']).next() == Some(ENGINE_JSON) {
-        let body = format!(
-            "{{\"socket.port\":{socket_port},\"protocol.version\":{}}}",
-            protocol::PROTOCOL_VERSION
-        );
+    if path == ENGINE_JSON {
+        let body = status.json();
         return write_response(
             &mut stream,
             200,
@@ -133,8 +221,14 @@ fn answer(mut stream: TcpStream, root: &Path, socket_port: u16) -> std::io::Resu
     write_response(&mut stream, 200, mime_for(&resolved), &body, head_only)
 }
 
-/// Reads the request line, then drains the header block.
-fn read_request_line(stream: &TcpStream) -> Option<String> {
+/// The request line and the one header this server reads.
+struct Request {
+    line: String,
+    origin: Option<String>,
+}
+
+/// Reads the request line, then drains the header block, keeping `Origin`.
+fn read_request(stream: &TcpStream) -> Option<Request> {
     let mut reader = BufReader::new(stream.try_clone().ok()?.take(MAX_REQUEST_BYTES));
     let mut line = String::new();
     reader.read_line(&mut line).ok()?;
@@ -142,14 +236,21 @@ fn read_request_line(stream: &TcpStream) -> Option<String> {
     if line.is_empty() {
         return None;
     }
+    let mut origin = None;
     let mut header = String::new();
     while reader.read_line(&mut header).ok()? > 0 {
-        if header.trim_end().is_empty() {
+        let text = header.trim_end();
+        if text.is_empty() {
             break;
+        }
+        if let Some((name, value)) = text.split_once(':')
+            && name.trim().eq_ignore_ascii_case("origin")
+        {
+            origin = Some(value.trim().to_string());
         }
         header.clear();
     }
-    Some(line)
+    Some(Request { line, origin })
 }
 
 /// Turns a request target into a relative path inside the served folder, or refuses it.
@@ -229,6 +330,7 @@ fn write_response(
 ) -> std::io::Result<()> {
     let reason = match status {
         200 => "OK",
+        202 => "Accepted",
         400 => "Bad Request",
         403 => "Forbidden",
         404 => "Not Found",

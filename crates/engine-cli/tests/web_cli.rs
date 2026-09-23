@@ -191,6 +191,33 @@ fn the_page_is_served_with_its_address_printed_and_both_isolation_headers() {
         body.contains(&format!("\"socket.port\":{}", socket_port.trim())),
         "{body} names the socket port {socket_port}"
     );
+    // A page served by the engine itself reads the same keys a launcher answers with.
+    let status: serde_json::Value = serde_json::from_str(body).unwrap();
+    assert_eq!(status["engine.state"], "running", "{body}");
+    assert_eq!(status["launcher"], false, "{body}");
+    assert!(status["engine.pid"].as_u64().is_some(), "{body}");
+    assert!(status["match.id"].as_str().is_some(), "{body}");
+    for key in ["engine.path", "engine.reason", "snapshot.tick"] {
+        assert!(status.get(key).is_some(), "{key} missing from {body}");
+    }
+
+    // Nothing survives this process to restart it, so it takes no actions.
+    let own = format!("http://127.0.0.1:{port}");
+    let mut socket = TcpStream::connect(("127.0.0.1", port)).unwrap();
+    socket
+        .write_all(
+            format!(
+                "POST /engine/restart HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: {own}\r\nConnection: close\r\n\r\n"
+            )
+            .as_bytes(),
+        )
+        .unwrap();
+    let mut response = String::new();
+    socket.read_to_string(&mut response).unwrap();
+    assert!(
+        response.starts_with("HTTP/1.1 405 Method Not Allowed"),
+        "{response}"
+    );
 
     let mut socket = TcpStream::connect(("127.0.0.1", port)).unwrap();
     socket

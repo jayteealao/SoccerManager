@@ -2,3 +2,6 @@ target/
 .scratch/
 *.ticks
 *.smfx
+
+# The one-minute replay file the page tests read, written by `engine-cli record`.
+!web/tests/data/*.smfx

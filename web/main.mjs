@@ -9,10 +9,14 @@ import { LeadControl, SeenReport } from './lead.mjs';
 import { LineupEditor } from './lineup-editor.mjs';
 import { Lineups, benchModel } from './lineups.mjs';
 import { colours as markColours, drawMark, setFavicon } from './mark.mjs';
+import { abandon as abandonMatch, fetchStatus, poll, restart as restartMatch } from './launcher.mjs';
 import { KIND, MatchState } from './match-state.mjs';
 import { createPendingList } from './pending.mjs';
 import { Pitch } from './pitch.mjs';
 import { Playback, SPEEDS } from './playback.mjs';
+import { backoff, clockAt, loadingSteps, panelModel } from './recovery.mjs';
+import { FrameStore, frameText, readReplay, writeReplay } from './replay-file.mjs';
+import { ReportClock, ReportDialog, reportModel } from './report.mjs';
 import { Scheduler, TICKS_PER_SECOND } from './schedule.mjs';
 import { Scoreboard } from './scoreboard.mjs';
 import { signal, signals } from './signal.mjs';
@@ -49,6 +53,24 @@ let lastRewind = null;
 const match = new MatchState();
 let panels = null;
 
+/// Every frame of the match as it arrived, for the replay file.
+let frames = new FrameStore();
+/// The match being shown, and the protocol version its hello named.
+let matchId = null;
+let helloVersion = null;
+/// A reconnect to the same match: the stores are cut back at the first tick that arrives.
+let resuming = false;
+/// `true` while a replay file plays: there is no socket and nothing to recover.
+let storedReplay = false;
+/// The newest engine status read, and the surface on show.
+let engineStatus = null;
+let surface = null;
+let reconnectAttempt = 0;
+let reconnecting = false;
+let lastSaved = null;
+const reportClock = new ReportClock();
+let reports = null;
+
 /// The clock, as a manager reads it: minutes and seconds of match time.
 function clockText(tick) {
   const seconds = Math.floor(tick / TICKS_PER_SECOND);
@@ -67,7 +89,7 @@ function showNotice(text, kind = 'lag') {
   notice.dataset.shown = shown ? 'true' : 'false';
   notice.dataset.kind = kind;
   notice.setAttribute('aria-hidden', shown ? 'false' : 'true');
-  const words = { error: 'Stream ended', end: 'Full time', lag: 'Lag' };
+  const words = { error: 'Stream ended', end: 'Full time', lag: 'Lag', reconnect: 'Reconnecting' };
   el('notice-word').textContent = shown ? (words[kind] ?? 'Lag') : '';
   el('notice-text').textContent = text ?? '';
 }
@@ -85,14 +107,14 @@ function setSpeedButtons(requested, effective) {
   );
 }
 
-function start(hello) {
+function start(hello, { stored = false } = {}) {
   history = new History(hello.ticks_expected);
   pitch = new Pitch(el('pitch'), [
     { primary: hello.teams[0]['team.kit.primary'], secondary: hello.teams[0]['team.kit.secondary'] },
     { primary: hello.teams[1]['team.kit.primary'], secondary: hello.teams[1]['team.kit.secondary'] },
   ]);
   panels.start(hello);
-  dugout.begin(hello);
+  dugout.begin(hello, { stored });
   el('engine-version').textContent = `engine ${hello['engine.version']}`;
   el('scrub').max = String(hello.ticks_expected);
   playback = new Playback({
@@ -106,29 +128,110 @@ function start(hello) {
 let previous = newFrame();
 let incoming = newFrame();
 
-function onTick(buffer) {
+/// One tick frame. `live` is false for a frame read from a replay file, which has no socket
+/// to pace and no arrival rate to measure.
+function onTick(buffer, live = true) {
   const result = decodeInto(buffer, previous, incoming);
   if (!result) {
     return;
   }
   history.append(incoming.tick, incoming.components);
-  socket.noteTick(incoming.tick);
-  playback.noteArrival(performance.now(), incoming.tick, incoming.tick - renderedTick);
-  // Paced on arrival as well as on each drawn frame: a hidden or throttled tab draws few
-  // frames, and the engine must still stop a few seconds ahead of the drawn tick.
-  dugout.pace(history.newestTick - renderedTick);
+  if (live) {
+    socket.noteTick(incoming.tick);
+    playback.noteArrival(performance.now(), incoming.tick, incoming.tick - renderedTick);
+    // Paced on arrival as well as on each drawn frame: a hidden or throttled tab draws few
+    // frames, and the engine must still stop a few seconds ahead of the drawn tick.
+    dugout.pace(history.newestTick - renderedTick);
+  }
   if (result.kind !== 'delta') {
-    history.report();
-    history.measurePage();
+    if (live) {
+      history.report();
+      history.measurePage();
+    }
     if (result.kind === 'restart') {
       stoppages.add(incoming.tick);
     }
   }
-  if (!scrubbing) {
+  if (live && !scrubbing) {
     el('scrub').value = String(incoming.tick);
   }
   [previous, incoming] = [incoming, previous];
+  setStep(3);
   revealPitch();
+}
+
+/// Every frame, exactly as the socket handed it over, before it is decoded. The first hello
+/// of a match opens a new store; a reconnect's first tick cuts every store back first.
+function onRaw(data, message) {
+  if (typeof data === 'string') {
+    if (message?.type === 'hello' && message['match.id'] !== matchId) {
+      frames = new FrameStore();
+    }
+    frames.addText(data, message?.type);
+    return;
+  }
+  if (resuming) {
+    const first = new DataView(data).getUint32(1, true);
+    resumeAt(first - 1);
+  }
+  frames.addBinary(data);
+}
+
+function onHello(hello) {
+  reconnectAttempt = 0;
+  reconnecting = false;
+  if (history && hello['match.id'] === matchId) {
+    // The same match, after a reconnect or a restart. The stores are kept, and the first
+    // tick frame, a keyframe one tick past the stoppage it resumes from, says where to cut.
+    resuming = true;
+    hideSurface();
+    showNotice('Connected again. Play resumes at the last stoppage.', 'reconnect');
+    return;
+  }
+  matchId = hello['match.id'];
+  helloVersion = hello['protocol.version'];
+  setStep(2);
+  start(hello);
+}
+
+/// Cuts every store back to `tick`, where the resumed match continues. The engine plays the
+/// later ticks again; keeping both copies would draw and count them twice.
+function resumeAt(tick) {
+  resuming = false;
+  const from = history.newestTick;
+  const gap = history.truncate(tick);
+  stoppages.truncate(tick);
+  match.truncate(tick);
+  frames.truncate(tick);
+  previous.tick = tick;
+  if (renderedTick > tick) {
+    rewind(tick);
+  } else {
+    panels.flush(renderedTick, { seek: true });
+  }
+  showNotice(null);
+  announce(`Play resumes at ${clockText(tick)}.`);
+  signal('viewer.resumed', { 'match.id': matchId, from_tick: from, to_tick: tick, gap });
+  if (gap > 0) {
+    signal('viewer.resume_gap', { ticks: gap });
+  }
+  if (dugout.phase === 'live' && socket) {
+    socket.send({ type: 'seen', tick: Math.min(renderedTick, tick) });
+  }
+}
+
+/// The loading steps. `current` is the step in progress, 0 to 2, or 3 once all are done.
+let stepShown = -1;
+function setStep(current) {
+  if (current === stepShown) {
+    return;
+  }
+  stepShown = current;
+  const items = el('steps').children;
+  loadingSteps(current).forEach((step, i) => {
+    items[i].dataset.state = step.state;
+    items[i].querySelector('.steps__word').textContent = step.word;
+  });
 }
 
 /// Cross-fades the skeleton away on the first tick. `hidden` alone would snap, because
@@ -148,6 +251,9 @@ function revealPitch() {
 
 function onMessage(message) {
   if (message.type === 'ack' || message.type === 'reject') {
+    if (storedReplay) {
+      return;
+    }
     dugout.answer(message);
     return;
   }
@@ -181,6 +287,11 @@ function frame(timestamp) {
   pitch.draw(rendered);
   renderedTick = step.from;
   panels.flush(renderedTick, { seek: false });
+  // A report opens when the pitch reaches the break, never when its event arrives.
+  const due = scrubbing ? null : reportClock.due(match.events, renderedTick);
+  if (due) {
+    showReport(due.kind, due.tick);
+  }
   el('gauge').textContent = gaugeText();
   dugout.pace(history.newestTick - renderedTick);
   dugout.report(renderedTick, timestamp);
@@ -348,7 +459,7 @@ class Dugout {
     this.over = false;
   }
 
-  begin(hello) {
+  begin(hello, { stored = false } = {}) {
     const home = hello.teams[0];
     this.homeId = home['team.id'];
     this.pending = createPendingList({ homeTeamId: this.homeId });
@@ -361,8 +472,14 @@ class Dugout {
       limit: hello.substitutions?.limit ?? 0,
       onQueue: (detail, label) => this.queue('substitution', detail, label),
     });
-    if (!this.setup || !this.schema || !Array.isArray(this.schema.formations)) {
+    if (stored || !this.setup || !this.schema || !Array.isArray(this.schema.formations)) {
       // A recording, or an engine that takes no lineup: nothing reaches a live match.
+      if (this.editor) {
+        this.showPreMatch(false);
+      }
+      this.editor = null;
+      this.panel = null;
+      this.over = true;
       this.phase = 'stored';
       el('tactics').textContent =
         'Changes need a live match. This one is played back from a recording.';
@@ -672,13 +789,53 @@ function rewind(tick) {
   announce(`Rewound to ${clockText(tick)}.`);
 }
 
+/// Plays or pauses the page's own playback, and keeps the button's word in step.
+function setPlaying(playing) {
+  scheduler.setPlaying(playing);
+  el('play').dataset.playing = String(playing);
+  el('play').textContent = playing ? 'Pause' : 'Play';
+}
+
 function wire() {
   el('play').addEventListener('click', () => {
     const playing = el('play').dataset.playing !== 'true';
-    scheduler.setPlaying(playing);
-    el('play').dataset.playing = String(playing);
-    el('play').textContent = playing ? 'Pause' : 'Play';
+    setPlaying(playing);
     announce(playing ? 'Playing.' : 'Paused.');
+  });
+
+  reports = new ReportDialog({
+    dialog: el('report'),
+    title: el('report-title'),
+    score: el('report-score'),
+    table: el('report-table'),
+    moments: el('report-moments'),
+    actions: el('report-actions'),
+  });
+  // Closing the half-time report, by Continue or by Escape, resumes playback.
+  el('report').addEventListener('close', () => {
+    if (reports.kind === 'half-time') {
+      setPlaying(true);
+      announce('Second half.');
+    }
+  });
+  el('report-continue').addEventListener('click', () => reports.close());
+  el('report-close').addEventListener('click', () => reports.close());
+  el('report-save').addEventListener('click', () => saveReplay());
+  el('report-open').addEventListener('click', () => el('replay-input').click());
+
+  el('surface-restart').addEventListener('click', () => restartEngine());
+  el('surface-abandon').addEventListener('click', () => abandonEngine());
+  el('surface-save').addEventListener('click', () => saveReplay());
+  el('surface-open').addEventListener('click', () => el('replay-input').click());
+  el('replay-input').addEventListener('change', async () => {
+    const input = el('replay-input');
+    const file = input.files && input.files[0];
+    if (!file) {
+      return;
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    input.value = '';
+    await openReplay(bytes, file.name);
   });
 
   for (const speed of SPEEDS) {
@@ -709,6 +866,239 @@ function wire() {
     scrubbing = false;
     scheduler.setPlaying(resumeAfterScrub);
   });
+}
+
+/// Opens the half-time or full-time report at `tick`. The half-time report pauses the page's
+/// playback until Continue; the engine stays within its bounded lead meanwhile.
+function showReport(kind, tick) {
+  const model = reportModel(match.events, tick, panels.teams ?? []);
+  if (kind === KIND.halfTime) {
+    setPlaying(false);
+  }
+  reports.show(kind, model);
+  signal('viewer.report_shown', { kind, tick });
+  announce(kind === KIND.halfTime ? 'Half-time. The report is open.' : 'Full time. The report is open.');
+}
+
+/// Shows the first-run or error panel for `model`, or hides it for null.
+function showSurface(model) {
+  surface = model;
+  const root = el('surface');
+  if (!model) {
+    root.hidden = true;
+    root.dataset.kind = '';
+    return;
+  }
+  root.dataset.kind = model.kind;
+  el('surface-word').textContent = model.word;
+  el('surface-title').textContent = model.title;
+  el('surface-body').textContent = model.body ?? '';
+  const path = el('surface-path');
+  path.hidden = model.path === undefined;
+  path.textContent = model.path ?? '';
+  const hint = el('surface-hint');
+  const hintText = model.instruction ?? model.hint ?? null;
+  hint.hidden = !hintText;
+  hint.textContent = hintText ?? '';
+  const actions = {
+    restart: el('surface-restart'),
+    abandon: el('surface-abandon'),
+    'save-replay': el('surface-save'),
+    'open-replay': el('surface-open'),
+  };
+  for (const [action, button] of Object.entries(actions)) {
+    button.hidden = !model.actions.includes(action);
+    button.disabled = false;
+  }
+  if (model.restartLabel) {
+    actions.restart.textContent = model.restartLabel;
+  }
+  el('skeleton').hidden = true;
+  root.hidden = false;
+  signal('viewer.recovery_panel', {
+    kind: model.kind,
+    reason: engineStatus?.['engine.reason'] ?? null,
+  });
+  announce(`${model.word}. ${model.title}`);
+}
+
+function hideSurface() {
+  if (surface) {
+    showSurface(null);
+  }
+}
+
+/// Connects to the engine the status names.
+function connect(status) {
+  socket = new MatchSocket(socketAddress(status['socket.port'], status['protocol.version']), {
+    onHello,
+    onTick,
+    onMessage,
+    onRaw,
+  });
+  socket.onClose = onClose;
+}
+
+function onClose({ clean }) {
+  if (storedReplay) {
+    return;
+  }
+  // The engine closes the socket after full time on purpose, and that close is not a
+  // fault: every tick is stored and the match plays back. Any other close is.
+  if (match.fullTimeTick !== null) {
+    showNotice('Full time. The whole match is stored and plays back.', 'end');
+    announce('Full time. The whole match is stored and plays back.');
+    return;
+  }
+  recover(!clean);
+}
+
+/// After a close before full time: reconnect while the engine is still running, or show
+/// what happened and what can still be done. A dropped connection never asks the manager.
+async function recover(dropped) {
+  reconnecting = true;
+  showNotice('The connection to the engine dropped. Reconnecting.', 'reconnect');
+  for (;;) {
+    const status = await fetchStatus();
+    engineStatus = status;
+    const state = status?.['engine.state'];
+    if (state === 'running' && status['socket.port']) {
+      const delay = backoff(reconnectAttempt);
+      reconnectAttempt += 1;
+      signal('viewer.reconnecting', { attempt: reconnectAttempt, delay_ms: delay, dropped });
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      connect(status);
+      return;
+    }
+    if (state === 'starting') {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      continue;
+    }
+    reconnecting = false;
+    const model = panelModel(status);
+    if (model) {
+      showNotice(null);
+      showSurface(model);
+    } else {
+      showNotice('The match is no longer live. Start the engine again to watch another.', 'error');
+      announce('The stream ended. The match is no longer live.');
+    }
+    return;
+  }
+}
+
+async function restartEngine() {
+  el('surface-restart').disabled = true;
+  el('surface-abandon').disabled = true;
+  announce('Restarting the engine from the last stoppage.');
+  await restartMatch();
+  const status = await poll((s) => !s || s['engine.state'] !== 'starting', {
+    timeoutMs: 60_000,
+  });
+  engineStatus = status;
+  if (status?.['engine.state'] === 'running') {
+    showNotice('Restarting from the last stoppage.', 'reconnect');
+    hideSurface();
+    connect(status);
+    return;
+  }
+  showSurface(panelModel(status) ?? panelModel(null));
+}
+
+async function abandonEngine() {
+  el('surface-restart').disabled = true;
+  el('surface-abandon').disabled = true;
+  const after = await abandonMatch();
+  engineStatus = after ?? { 'engine.state': 'abandoned' };
+  if (socket) {
+    socket.onClose = null;
+    socket.close();
+  }
+  showSurface(panelModel({ 'engine.state': 'abandoned' }));
+}
+
+/// Writes every stored frame as a replay file and hands it to the browser as a download.
+async function saveReplay() {
+  if (frames.count === 0 || !matchId) {
+    return;
+  }
+  const { bytes, hash } = await writeReplay(frames, {
+    matchId,
+    version: helloVersion ?? undefined,
+  });
+  const name = `touchline-${matchId}.smfx`;
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  lastSaved = { name, bytes, hash, frames: frames.count, ticks: frames.tickFrames };
+  signal('viewer.replay_saved', {
+    bytes: bytes.length,
+    frames: frames.count,
+    ticks: frames.tickFrames,
+    hash,
+  });
+  announce(`Replay saved as ${name}.`);
+}
+
+/// Plays a replay file with no engine: every stored frame goes through the same path live
+/// frames take, so playback and rewind are the same code as a live match.
+async function openReplay(bytes, name = 'replay') {
+  let read;
+  try {
+    read = await readReplay(bytes);
+  } catch (error) {
+    const reason = error.reason ?? error.message;
+    signal('viewer.replay_refused', { reason });
+    showSurface({
+      kind: 'replay-refused',
+      word: 'Error',
+      title: `The replay could not be read: ${reason}`,
+      body: 'Choose another replay file.',
+      actions: ['open-replay'],
+    });
+    return;
+  }
+  storedReplay = true;
+  if (socket) {
+    socket.onClose = null;
+    socket.close();
+    socket = null;
+  }
+  reports.close();
+  reportClock.reset();
+  match.clear();
+  stoppages.truncate(-1);
+  frames = read.store;
+  matchId = read.hello['match.id'];
+  helloVersion = read.version;
+  previous = newFrame();
+  incoming = newFrame();
+  renderedTick = 0;
+  start(read.hello, { stored: true });
+  for (let i = 1; i < frames.count; i += 1) {
+    const { text, payload } = frames.frame(i);
+    if (text) {
+      const message = JSON.parse(frameText(payload));
+      if (message.type !== 'hello') {
+        onMessage(message);
+      }
+    } else {
+      onTick(payload.slice().buffer, false);
+    }
+  }
+  if (match.fullTimeTick !== null) {
+    el('scrub').max = String(history.newestTick);
+  }
+  hideSurface();
+  showNotice(null);
+  el('skeleton').hidden = true;
+  rewind(history.firstTick);
+  setPlaying(true);
+  signal('viewer.replay_loaded', { frames: read.frames, ticks: read.ticks, name });
+  announce('Replay loaded. Playing from kick-off.');
 }
 
 /// The read-only test hook. Three acceptance criteria read it, and it exposes no setter:
@@ -742,6 +1132,36 @@ function hook() {
       const out = new Int16Array(COMPONENT_COUNT);
       return history && history.tickAt(tick, out) ? Array.from(out) : null;
     },
+    recovery: () => ({
+      kind: surface ? surface.kind : null,
+      title: surface ? surface.title : null,
+      actions: surface ? [...surface.actions] : [],
+      path: surface?.path ?? null,
+      engine_state: engineStatus ? engineStatus['engine.state'] : null,
+      engine_pid: engineStatus ? engineStatus['engine.pid'] ?? null : null,
+      snapshot_tick: engineStatus ? engineStatus['snapshot.tick'] ?? null : null,
+      reconnecting,
+      step: stepShown,
+    }),
+    report: () => ({
+      kind: reports ? reports.kind : null,
+      open: reports ? reports.open : false,
+      tick: reports?.model ? reports.model.tick : null,
+      score: reports?.model ? [...reports.model.score] : null,
+      counts: reports?.model
+        ? Object.fromEntries(reports.model.rows.map((r) => [r.id, [...r.counts]]))
+        : null,
+    }),
+    replay: () => ({
+      stored: storedReplay,
+      frames: frames.count,
+      ticks: frames.tickFrames,
+      last_saved_name: lastSaved ? lastSaved.name : null,
+      last_saved_size: lastSaved ? lastSaved.bytes.length : null,
+      last_saved_hash: lastSaved ? lastSaved.hash : null,
+    }),
+    lastSavedBytes: () => (lastSaved ? Array.from(lastSaved.bytes) : null),
+    events: () => match.events.map((e) => ({ ...e })),
   };
 }
 
@@ -757,25 +1177,18 @@ async function main() {
   hook();
   requestAnimationFrame(frame);
 
-  const engine = await fetch('engine.json').then((r) => r.json());
-  socket = new MatchSocket(socketAddress(engine['socket.port'], engine['protocol.version']), {
-    onHello: start,
-    onTick,
-    onMessage,
+  // The launcher reports `starting` until the engine has opened its socket.
+  setStep(0);
+  const engine = await poll((s) => !s || s['engine.state'] !== 'starting', {
+    timeoutMs: 60_000,
   });
-  socket.onClose = () => {
-    // The engine closes the socket after full time on purpose, and that close is not a
-    // fault: every tick is stored and the match plays back. Any other close is.
-    if (match.fullTimeTick !== null) {
-      showNotice('Full time. The whole match is stored and plays back.', 'end');
-      announce('Full time. The whole match is stored and plays back.');
-      return;
-    }
-    // The canvas error state, stubbed here and completed in a later version: the panel and
-    // the text, with no recovery action yet.
-    showNotice('The match is no longer live. Start the engine again to watch another.', 'error');
-    announce('The stream ended. The match is no longer live.');
-  };
+  engineStatus = engine;
+  if (engine?.['engine.state'] === 'running' && engine['socket.port']) {
+    setStep(1);
+    connect(engine);
+    return;
+  }
+  showSurface(panelModel(engine) ?? panelModel(null));
 }
 
 main();
