@@ -255,6 +255,13 @@ impl Simulation {
             return;
         }
         let team = self.players[i].team;
+        // A caution held back for advantage was judged before any card shown since; a player
+        // already booked receives it as a second yellow.
+        let card = if card == Card::Yellow && self.players[i].yellow >= 1 {
+            Card::SecondYellow
+        } else {
+            card
+        };
         let sent_off = discipline::book(&mut self.players[i], card);
         if card != Card::Red {
             self.summary.yellow[team] += 1;
@@ -567,5 +574,33 @@ impl Simulation {
         }
         self.timeline.push((now, self.teams.clone()));
         self.place_kick_off(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::test_support::shipped_config;
+
+    /// A card held back for advantage is judged when the foul happens. When the player is
+    /// booked in between, the held-back caution is the player's second and sends the player
+    /// off (IFAB Law 12).
+    #[test]
+    fn a_held_back_caution_for_a_booked_player_is_a_second_yellow() {
+        let mut sim = Simulation::new(shipped_config(1, 90).unwrap()).unwrap();
+        let player = 16;
+        let team = sim.players[player].team;
+        sim.show_card(player, Card::Yellow);
+        sim.show_card(player, Card::Yellow);
+        let cards: Vec<_> = sim
+            .events
+            .iter()
+            .filter(|e| e.kind == EngineEventKind::Card)
+            .map(|e| e.card)
+            .collect();
+        assert_eq!(cards, vec![Some(Card::Yellow), Some(Card::SecondYellow)]);
+        assert_eq!(sim.players[player].status, Status::SentOff);
+        assert_eq!(sim.summary.red[team], 1);
+        assert_eq!(sim.summary.yellow[team], 2);
     }
 }
