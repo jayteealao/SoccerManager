@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { BANDS, cardWord, energyBand, lineupModel } from '../lineups.mjs';
+import { BANDS, benchModel, cardWord, energyBand, lineupModel } from '../lineups.mjs';
 import { KIND, MatchState } from '../match-state.mjs';
 import { eventMessage, roster } from './helpers.mjs';
 
@@ -68,6 +68,23 @@ test('a substitution swaps the row to the bench entry the event names', () => {
   assert.equal(row.name, 'Player 1-14');
   assert.equal(row.wire, 17, 'the substitute takes the wire slot of the player who left');
   assert.ok(!model[1].some((r) => r.id === 'p-1-7'));
+});
+
+test('the bench lists the named substitutes and drops each one brought on', () => {
+  const state = new MatchState();
+  state.add(
+    eventMessage(60, KIND.substitution, {
+      'team.id': 'club-a',
+      'player.id': 'p-0-2',
+      'player.secondary_id': 'p-0-12',
+    })
+  );
+  const before = benchModel([roster(0), roster(1)], state.at(59));
+  const after = benchModel([roster(0), roster(1)], state.at(60));
+  assert.equal(before[0].length, 7);
+  assert.equal(after[0].length, 6);
+  assert.ok(!after[0].some((p) => p['player.id'] === 'p-0-12'));
+  assert.equal(after[1].length, 7);
 });
 
 test('an injured player reads Injured, a sent-off player Sent off with a Red card', () => {

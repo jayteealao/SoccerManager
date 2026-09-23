@@ -80,6 +80,15 @@ export function lineupModel(rosters, teamIds, state) {
   );
 }
 
+/// Each team's named bench at the view `state`: the roster entries after the 11 starters,
+/// less every player a substitution has brought on.
+export function benchModel(rosters, state) {
+  const on = new Set(state.substitutions.map((s) => s.on));
+  return rosters.map((roster) =>
+    roster.slice(PLAYERS_PER_TEAM).filter((p) => !on.has(p['player.id']))
+  );
+}
+
 /// A cheap fingerprint of what a row shows, so a flush writes only the rows that changed.
 function rowKey(row) {
   return `${row.id}|${Math.round(row.energy * 100)}|${row.condition}|${row.card}`;
@@ -94,6 +103,8 @@ export class Lineups {
     this.rows = [[], []];
     this.keys = [[], []];
     this.model = [[], []];
+    this.benches = [null, null];
+    this.benchKey = '';
   }
 
   setTeams(teams) {
@@ -125,9 +136,16 @@ export class Lineups {
         this.rows[t].push(li);
         this.keys[t].push('');
       }
-      column.append(title, list);
+      const benchTitle = doc.createElement('h4');
+      benchTitle.className = 'lineup__bench-title';
+      benchTitle.textContent = 'Bench';
+      const bench = doc.createElement('ul');
+      bench.className = 'lineup__bench';
+      this.benches[t] = bench;
+      column.append(title, list, benchTitle, bench);
       this.root.append(column);
     });
+    this.benchKey = '';
   }
 
   /// Writes the rows whose content changed. Returns the model.
@@ -165,6 +183,26 @@ export class Lineups {
         );
       });
     });
+    const benches = benchModel(this.rosters, state);
+    const benchKey = benches.map((b) => b.map((p) => p['player.id']).join(',')).join('|');
+    if (benchKey !== this.benchKey) {
+      this.benchKey = benchKey;
+      benches.forEach((players, t) => {
+        const list = this.benches[t];
+        if (!list) {
+          return;
+        }
+        const doc = list.ownerDocument;
+        list.replaceChildren(
+          ...players.map((p) => {
+            const li = doc.createElement('li');
+            li.className = 'lineup__bench-row';
+            li.textContent = `${p['player.shirt']} ${p['player.name']}`;
+            return li;
+          })
+        );
+      });
+    }
     return this.model;
   }
 
