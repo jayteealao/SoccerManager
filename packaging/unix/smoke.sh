@@ -9,6 +9,12 @@
 # launcher's output. Exits 0 when every check passes and 1 otherwise.
 set -u
 
+# A non-login shell (such as `wsl -- sh ...`) may not have rustup's folder on PATH.
+if ! command -v cargo >/dev/null 2>&1 && [ -x "$HOME/.cargo/bin/cargo" ]; then
+    PATH="$HOME/.cargo/bin:$PATH"
+    export PATH
+fi
+
 if [ $# -ne 2 ]; then
     echo "usage: sh packaging/unix/smoke.sh <archive> <evidence-dir>" >&2
     exit 2

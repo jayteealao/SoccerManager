@@ -10,6 +10,12 @@
 # and the engine's hello message always name the same version.
 set -eu
 
+# A non-login shell (such as `wsl -- sh ...`) may not have rustup's folder on PATH.
+if ! command -v cargo >/dev/null 2>&1 && [ -x "$HOME/.cargo/bin/cargo" ]; then
+    PATH="$HOME/.cargo/bin:$PATH"
+    export PATH
+fi
+
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 dist="$repo/dist"
 # Linux objects stay out of the Windows target folder, and off a mounted Windows drive.
