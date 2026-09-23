@@ -5,13 +5,13 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-22T23:27:52Z"
-slices-implemented: 6
+updated-at: "2026-09-22T23:59:19Z"
+slices-implemented: 7
 slices-total: 16
-metric-total-files-changed: 301
-metric-total-lines-added: 28953
-metric-total-lines-removed: 887
-tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue]
+metric-total-files-changed: 321
+metric-total-lines-added: 31456
+metric-total-lines-removed: 904
+tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary]
 refs:
   index: 00-index.md
   plan-index: 04-plan.md
@@ -22,8 +22,9 @@ refs:
     - 05-implement-viewer-pitch.md
     - 05-implement-match-rules.md
     - 05-implement-tactics-and-ai.md
+    - 05-implement-commentary.md
 next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine tactics-and-ai"
+next-invocation: "/wf verify football-manager-match-engine commentary"
 ---
 
 # Implement Index
@@ -63,6 +64,13 @@ next-invocation: "/wf verify football-manager-match-engine tactics-and-ai"
 - `commentary` reads `injury`, `substitution`, `ai-decision`, and the `tactics-change` verdicts. `viewer-lineup-tactics` renders `tactics.json`. `calibration` tunes the `decision` block, the mentality offsets (attacking 33.69 shots per match against defensive 2.15 is far too wide), the fatigue curve, and the injury rates.
 - Benchmark: `tactics-and-ai` measured 431.2 to 434.4 ms of processor time per match (limit 460.7), 1.445 to 1.456 µs per tick, 298,350 ticks per match, and 6.14 to 6.21 MB peak memory (limit 6.82).
 
+- `commentary` is implemented (commit `a414df5`) and awaits verify. Every later slice inherits these changes:
+  - Every event except a `tactics-change` verdict carries an optional `commentary` line. Protocol version 2 is kept. The lines come from `content/commentary/en.json` (schema 1), which stays outside the content hash, and every `engine-cli` command now loads that file with the content.
+  - `player.id` now also names the taker on `kick-off` and every restart, and on `goal` the player who kicked the ball last (a player of the other club on an own goal). The engine's `last_kicker` is cleared at every dead ball, so the snapshot layout is unchanged, and the seed-42 tick records are byte-identical.
+  - `stream_run::Drive` takes `commentary: &Commentary`. `simulate` and `resume` still route no events; when `calibration` makes `match_event` a shared function, the slice that lands second threads the commentator through it.
+- `viewer-match-day` renders `commentary` in the feed. `integration` checks the lines end to end.
+- Benchmark: `commentary` measured a median of 1.4352 µs per tick (baseline 1.4453 at `e79ad61`, limit 1.10 times) and 6.30 MB peak memory (baseline 6.14, limit 1.25 times). `bench --json` times the bare simulation, so these numbers show that the engine change adds no cost to the simulation. They do not time the commentator.
+
 ## Recommended Next Stage
 
-- `/wf verify football-manager-match-engine tactics-and-ai`
+- `/wf verify football-manager-match-engine commentary`
