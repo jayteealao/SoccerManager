@@ -5,13 +5,13 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-22T23:59:19Z"
-slices-implemented: 7
+updated-at: "2026-09-23T00:51:38Z"
+slices-implemented: 8
 slices-total: 16
-metric-total-files-changed: 321
-metric-total-lines-added: 31456
-metric-total-lines-removed: 904
-tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary]
+metric-total-files-changed: 357
+metric-total-lines-added: 34816
+metric-total-lines-removed: 998
+tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas]
 refs:
   index: 00-index.md
   plan-index: 04-plan.md
@@ -23,8 +23,9 @@ refs:
     - 05-implement-match-rules.md
     - 05-implement-tactics-and-ai.md
     - 05-implement-commentary.md
+    - 05-implement-calibration.md
 next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine commentary"
+next-invocation: "/wf verify football-manager-match-engine calibration"
 ---
 
 # Implement Index
@@ -71,6 +72,16 @@ next-invocation: "/wf verify football-manager-match-engine commentary"
 - `viewer-match-day` renders `commentary` in the feed. `integration` checks the lines end to end.
 - Benchmark: `commentary` measured a median of 1.4352 µs per tick (baseline 1.4453 at `e79ad61`, limit 1.10 times) and 6.30 MB peak memory (baseline 6.14, limit 1.25 times). `bench --json` times the bare simulation, so these numbers show that the engine change adds no cost to the simulation. They do not time the commentator.
 
+- `calibration` is implemented (commits `80f976d` and `c00eaac`) and awaits verify. Every later slice inherits these changes:
+  - `Summary` counts shots on target, expected goals, passes, completed passes, and open-play possession ticks. The snapshot is version 3, and a version-2 file is refused by name.
+  - `match-stats` carries a third flattened block (`MatchFigures`): `stats.goals`, `stats.shots_on_target`, `stats.xg`, `stats.passes`, `stats.pass_accuracy_pct`, `stats.possession_pct`, `manager.kind`, `passes.completed`, and `error.type` on a failure. It stays at `schema.version` "1", and every new field defaults.
+  - `schemas/observability/{match-event,match-stats,run-report}.schema.json` are the record contract. `crates/engine-cli/tests/schemas.rs` validates the binary's output against them with `boon`, which only the tests use, so a new record key must be added to the schema or it passes as an additive extra.
+  - `simulate` writes `events.jsonl` with commentary lines. `stream_run::match_event` and `Ids` are shared crate-wide, and the commentator is threaded through every saved event file.
+  - `engine-cli calibrate` and `content/realism-bands.json` exist. The feature-flags work adds `--flag` to `calibrate`, and the scripting runtime reuses the harness.
+  - Tuning moved `shot_noise` to 0.25, `keeper_catch_chance` to 0.84, and `decision.skill` to 0.8. The AI manager checks the score on every goal's stoppage.
+- `calibration` leaves AC-d failing: `darkpath.change_never_applied` = 288 over 2000 matches, all queued after the last stoppage of the match. 183 of them come from the AI re-queueing refused injury substitutions, which is handed off to a follow-up task. The product owner has an open question on whether a change that expires at full time counts. The goals tail (sd 3.36) and the untuned mentality offsets are open tuning items.
+- Benchmark: `calibration` measured 412.4 to 418.8 ms of processor time per match (median 415.8, gate 460.7), 1.4593 to 1.482 µs per tick, 282,600 ticks per match, and 6.320 to 6.352 MB peak memory (gate 6.82). A 1000-match suite takes 78 seconds on 8 workers.
+
 ## Recommended Next Stage
 
-- `/wf verify football-manager-match-engine commentary`
+- `/wf verify football-manager-match-engine calibration`

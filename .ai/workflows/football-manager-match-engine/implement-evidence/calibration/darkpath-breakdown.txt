@@ -1,0 +1,5 @@
+matches with a change still queued at full time: 218 of 2000 ; changes: 288
+AI choices queued after the last stoppage of their match, by kind: {'sub-injury': 183, 'sub-fatigue': 76, 'mentality-down-leading': 26, 'mentality-up-trailing': 3}
+matches where the late choices do not cover the count: 0
+seconds from the last stoppage to full time in these matches: median 116, max 1809
+late injury substitutions: 183 ; of these, the same team had a substitution rejected earlier: 183 {'no substitution window left': 142, 'substitution limit reached': 41}

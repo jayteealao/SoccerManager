@@ -1,0 +1,158 @@
+
+running 1 test
+test a_thousand_matches_hold_the_realism_bands has been running for over 60 seconds
+test a_thousand_matches_hold_the_realism_bands ... FAILED
+
+failures:
+
+---- a_thousand_matches_hold_the_realism_bands stdout ----
+{
+  "bench.cpu_ms": 2141,
+  "bench.cpu_us_per_tick": 1.5356,
+  "bench.match_wall_ms": 427,
+  "bench.matches": 5,
+  "bench.peak_mem_mb": 6.703125,
+  "bench.ticks_per_match": 278850,
+  "build.hash": "846c48f-dirty",
+  "calib.bands": [
+    {
+      "band": "goals_per_match",
+      "hi": 3.2,
+      "lo": 2.4,
+      "pass": true,
+      "suite": "equal",
+      "value": 2.831
+    },
+    {
+      "band": "possession_away_pct",
+      "hi": 65.0,
+      "lo": 35.0,
+      "pass": true,
+      "suite": "equal",
+      "value": 50.003
+    },
+    {
+      "band": "possession_home_pct",
+      "hi": 65.0,
+      "lo": 35.0,
+      "pass": true,
+      "suite": "equal",
+      "value": 49.997
+    },
+    {
+      "band": "shots_per_team",
+      "hi": 16.0,
+      "lo": 8.0,
+      "pass": true,
+      "suite": "equal",
+      "value": 12.675
+    },
+    {
+      "band": "wall_ms",
+      "hi": 1800000.0,
+      "lo": 0.0,
+      "pass": true,
+      "suite": "equal",
+      "value": 77414.0
+    },
+    {
+      "band": "stronger_team_win_rate",
+      "hi": 1.0,
+      "lo": 0.5,
+      "pass": true,
+      "suite": "strength",
+      "value": 0.65
+    },
+    {
+      "band": "wall_ms",
+      "hi": 1800000.0,
+      "lo": 0.0,
+      "pass": true,
+      "suite": "strength",
+      "value": 78438.0
+    }
+  ],
+  "calib.jobs": 8,
+  "calib.matches": 1000,
+  "calib.minutes": 90,
+  "calib.pass": false,
+  "calib.suites": {
+    "equal": {
+      "failures": 0,
+      "fouls_per_team_mean": 11.987,
+      "goals_per_match_mean": 2.831,
+      "goals_per_match_sd": 3.364,
+      "matches": 1000,
+      "outliers": 885,
+      "pass_accuracy_pct_mean": 84.753,
+      "passes_per_team_mean": 1312.228,
+      "possession_away_mean": 50.003,
+      "possession_home_mean": 49.997,
+      "possession_in_band_share": 0.964,
+      "recorded": 1000,
+      "shots_on_target_per_team_mean": 9.453,
+      "shots_per_team_mean": 12.675,
+      "xg_per_match_mean": 1.696
+    },
+    "strength": {
+      "failures": 0,
+      "fouls_per_team_mean": 13.494,
+      "goals_per_match_mean": 5.102,
+      "goals_per_match_sd": 4.309,
+      "matches": 1000,
+      "outliers": 914,
+      "pass_accuracy_pct_mean": 84.616,
+      "passes_per_team_mean": 1311.658,
+      "possession_away_mean": 49.804,
+      "possession_home_mean": 50.196,
+      "possession_in_band_share": 0.965,
+      "recorded": 1000,
+      "shots_on_target_per_team_mean": 17.054,
+      "shots_per_team_mean": 22.448,
+      "stronger": {
+        "draws": 205,
+        "losses": 145,
+        "win_rate": 0.65,
+        "wins": 650
+      },
+      "xg_per_match_mean": 2.949
+    }
+  },
+  "calib.wall_ms": {
+    "equal": 77414,
+    "strength": 78438,
+    "total": 155852
+  },
+  "content.hash": "8b609cddec4d",
+  "darkpath.change_never_applied": 288,
+  "darkpath.match_without_stats": 0,
+  "duration_ms": 158613,
+  "env": "dev",
+  "events.files_kept": 1799,
+  "events.files_written": 2000,
+  "machine.cpu_model": "AMD Ryzen 7 9800X3D 8-Core Processor",
+  "machine.hash": "74ca12fc08a4",
+  "operation": "calibrate",
+  "outcome": "success",
+  "owner.id": "17a516cf1345dd7bfd6a3b1ffd778d5f",
+  "record.kind": "run-report",
+  "run.id": "calib-00000000000007ea-1790124061637",
+  "schema.version": "1",
+  "seed": 2026,
+  "service": "engine-cli",
+  "validate.violations": 0,
+  "version": "0.1.0"
+}
+
+thread 'a_thousand_matches_hold_the_realism_bands' (15516) panicked at crates\engine-cli\tests\calibrate.rs:171:5:
+assertion `left == right` failed
+  left: Number(288)
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_thousand_matches_hold_the_realism_bands
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 160.03s
+

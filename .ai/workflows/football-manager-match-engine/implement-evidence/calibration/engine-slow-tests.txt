@@ -1,0 +1,150 @@
+   Compiling engine v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine)
+    Finished `release` profile [optimized + debuginfo] target(s) in 12.87s
+     Running unittests src\lib.rs (target\release\deps\engine-baf8aa68429aa946.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 117 filtered out; finished in 0.00s
+
+     Running tests\ai_trailing.rs (target\release\deps\ai_trailing-672614215debff02.exe)
+
+running 1 test
+test a_trailing_ai_team_changes_its_tactics ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.31s
+
+     Running tests\commentary.rs (target\release\deps\commentary-5c775c08fe14baf3.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+     Running tests\content.rs (target\release\deps\content-f35661c30c835f1b.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests\determinism.rs (target\release\deps\determinism-8dd05ff849eaf399.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests\fatigue.rs (target\release\deps\fatigue-fddd95e829b0ab79.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests\full_match.rs (target\release\deps\full_match-fc3f96ebc397eee7.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests\generator.rs (target\release\deps\generator-1be1f6eef7869938.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests\identity.rs (target\release\deps\identity-4fa007746a8795b4.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests\injury.rs (target\release\deps\injury-531694a3a237b0dc.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests\match_stats.rs (target\release\deps\match_stats-33d1689bf7ca3d53.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests\mentality.rs (target\release\deps\mentality-f3303cf55302a9c4.exe)
+
+running 1 test
+test an_attacking_team_shoots_more_than_a_defensive_one ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.82s
+
+     Running tests\rules_cards.rs (target\release\deps\rules_cards-0e07fd85d0bae7b2.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests\rules_clock.rs (target\release\deps\rules_clock-a2e36cac4b05f0db.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests\rules_fouls.rs (target\release\deps\rules_fouls-9cb74cf2be89655b.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests\rules_offside.rs (target\release\deps\rules_offside-081612ee08320906.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests\rules_restarts.rs (target\release\deps\rules_restarts-69d790a1dfd8b82b.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests\snapshot.rs (target\release\deps\snapshot-f82cefe534643fa1.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests\strength.rs (target\release\deps\strength-e14eb8788d2995b6.exe)
+
+running 1 test
+test a_stronger_team_wins_more_than_half_its_matches ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.58s
+
+     Running tests\substitutions.rs (target\release\deps\substitutions-e3aa1b86234619d2.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests\tactics_queue.rs (target\release\deps\tactics_queue-3a2b1f12526c1707.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests\team_files.rs (target\release\deps\team_files-eb496017a867391c.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests\validator.rs (target\release\deps\validator-a508ea6f73737dc7.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+   Doc-tests engine
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+exit 0

@@ -1,0 +1,40 @@
+Tuning log - calibration
+========================
+
+Each row is one `engine-cli calibrate --seed 2026 --matches 200 --jobs 8` release run (200
+matches per suite, equal and strength). Band values: goals per match (equal suite mean,
+band 2.4 to 3.2), shots per team (equal suite mean, band 8 to 16), possession home/away
+(equal suite means, band 35 to 65), stronger-team win rate (strength suite, must exceed
+0.50). cna is darkpath.change_never_applied summed over both suites (400 matches).
+Every run: darkpath.match_without_stats 0, validate.violations 0.
+
+Iter | Knob group                | Change (old -> new)                                   | Goals          | Shots | Poss H/A    | Win rate (W-D-L)  | cna | Other
+t0   | none (baseline, counters) | -                                                     | 6.705 (sd 7.29)| 12.653| 50.2 / 49.8| 0.595 (119-38-43) | 141 | xG 1.73; on target 11.79 of 12.65
+i00  | AI reaction (code)        | AI manager checks on each goal's stoppage tick        | 6.800 (sd 7.08)| 12.57 | 50.2 / 49.8| 0.535 (107-39-54) | 52  | max 55 goals in one match
+i01  | 2 conversion              | shot_noise 0.12 -> 0.25                               | 4.510 (sd 5.12)| 10.89 | 50.2 / 49.8| 0.535 (107-54-39) | 45  | on target 7.92
+i02  | 2 conversion              | keeper_catch_chance 0.70 -> 0.85                      | 2.580 (sd 2.95)| 11.61 | 49.2 / 50.8| 0.460 (92-78-30)  | 51  | win rate misses
+i03  | 4 strength effect         | decision.skill 0.6 -> 1.2                             | 6.900 (sd 4.99)| 31.71 | 49.9 / 50.1| 0.820 (164-16-20) | 31  | shots far above band; reverted in i04
+i04  | 4 strength effect         | decision.skill 1.2 -> 0.8                             | 2.560 (sd 3.21)| 12.63 | 50.0 / 50.0| 0.585 (117-45-38) | 45  | all four bands in; goals near low edge
+i05  | 2 conversion              | keeper_catch_chance 0.85 -> 0.82                      | 3.400 (sd 3.98)| 13.48 | 50.0 / 50.0| 0.620 (124-42-34) | 41  | goals above band
+i06  | 2 conversion              | keeper_catch_chance 0.82 -> 0.84                      | 2.710 (sd 3.36)| 12.76 | 49.9 / 50.1| 0.600 (120-48-32) | 58  | final: all four bands in
+
+Iterations used: 6 knob iterations of the 12 allowed, plus one code change (i00).
+Groups 1 (shot volume), 3 (possession balance), and 5 (generator means) were not moved:
+shots per team and possession were inside their bands from the baseline.
+
+Final values (content/tuning.json, mirrored in Tuning::default()):
+- shot_noise 0.25 (was 0.12)
+- keeper_catch_chance 0.84 (was 0.70)
+- decision.skill 0.8 (was 0.6)
+- xg block added: intercept -1.0, distance_coef -0.1, angle_coef 1.0 (plan start values; not a
+  band input, not tuned)
+
+Observations:
+- Heavy goals tail: sd 3.36 against mean 2.71 at i06; single matches up to 28 goals. The
+  blow-outs are repeated goals by one striker straight after the kick-off (i00 worst match:
+  48-7, nine goals in the added time of the first half). Bands judge means only.
+- darkpath.change_never_applied stays above zero after every knob change. The i00 hits are
+  changes the AI manager queued after the last admitting stoppage of the match: injury
+  substitutions in added time (23), fatigue substitutions (16), earlier injury substitutions
+  (9), a leading team's mentality drop (4). The queue applies a change only on the tick that
+  opens an admitting stoppage, so these wait until full time.
