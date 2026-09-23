@@ -1,0 +1,100 @@
+ Downloading crates ...
+  Downloaded appendlist v1.4.0
+  Downloaded writeable v0.6.4
+  Downloaded utf8_iter v1.0.4
+  Downloaded idna_adapter v1.2.2
+  Downloaded borrow-or-share v0.2.4
+  Downloaded zerofrom v0.1.8
+  Downloaded stable_deref_trait v1.2.1
+  Downloaded ref-cast v1.0.27
+  Downloaded ref-cast-impl v1.0.27
+  Downloaded yoke-derive v0.8.3
+  Downloaded form_urlencoded v1.2.2
+  Downloaded potential_utf v0.1.6
+  Downloaded percent-encoding v2.3.2
+  Downloaded icu_normalizer_data v2.2.0
+  Downloaded zerofrom-derive v0.1.8
+  Downloaded synstructure v0.14.0
+  Downloaded tinystr v0.8.4
+  Downloaded zerovec-derive v0.11.6
+  Downloaded litemap v0.8.3
+  Downloaded yoke v0.8.3
+  Downloaded displaydoc v0.2.7
+  Downloaded fluent-uri v0.3.2
+  Downloaded boon v0.6.1
+  Downloaded icu_provider v2.2.0
+  Downloaded icu_properties v2.2.0
+  Downloaded icu_locale_core v2.2.0
+  Downloaded icu_normalizer v2.2.0
+  Downloaded icu_collections v2.2.0
+  Downloaded base64 v0.22.1
+  Downloaded zerotrie v0.2.5
+  Downloaded url v2.5.8
+  Downloaded zerovec v0.11.8
+  Downloaded idna v1.1.0
+  Downloaded regex v1.13.1
+  Downloaded icu_properties_data v2.2.0
+   Compiling stable_deref_trait v1.2.1
+   Compiling syn v3.0.6
+   Compiling writeable v0.6.4
+   Compiling litemap v0.8.3
+   Compiling utf8_iter v1.0.4
+   Compiling icu_normalizer_data v2.2.0
+   Compiling icu_properties_data v2.2.0
+   Compiling aho-corasick v1.1.5
+   Compiling ahash v0.8.12
+   Compiling regex-syntax v0.8.11
+   Compiling engine v0.1.0 (/mnt/c/Users/jayte/Documents/dev/SoccerManager/crates/engine)
+   Compiling ref-cast v1.0.27
+   Compiling percent-encoding v2.3.2
+   Compiling borrow-or-share v0.2.4
+   Compiling form_urlencoded v1.2.2
+   Compiling rhai v1.26.1
+   Compiling base64 v0.22.1
+   Compiling appendlist v1.4.0
+   Compiling regex-automata v0.4.18
+   Compiling synstructure v0.14.0
+   Compiling zerofrom-derive v0.1.8
+   Compiling yoke-derive v0.8.3
+   Compiling zerovec-derive v0.11.6
+   Compiling displaydoc v0.2.7
+   Compiling serde_derive v1.0.229
+   Compiling zerofrom v0.1.8
+   Compiling thiserror-impl v2.0.20
+   Compiling yoke v0.8.3
+   Compiling ref-cast-impl v1.0.27
+   Compiling zerotrie v0.2.5
+   Compiling zerovec v0.11.8
+   Compiling matchers v0.2.0
+   Compiling clap_derive v4.6.7
+   Compiling tinystr v0.8.4
+   Compiling icu_locale_core v2.2.0
+   Compiling potential_utf v0.1.6
+   Compiling thiserror v2.0.20
+   Compiling icu_collections v2.2.0
+   Compiling tungstenite v0.30.0
+   Compiling icu_provider v2.2.0
+   Compiling serde v1.0.229
+   Compiling icu_properties v2.2.0
+   Compiling icu_normalizer v2.2.0
+   Compiling protocol v0.1.0 (/mnt/c/Users/jayte/Documents/dev/SoccerManager/crates/protocol)
+   Compiling idna_adapter v1.2.2
+   Compiling idna v1.1.0
+   Compiling clap v4.6.7
+   Compiling fluent-uri v0.3.2
+   Compiling url v2.5.8
+   Compiling tracing-subscriber v0.3.23
+   Compiling regex v1.13.1
+   Compiling boon v0.6.1
+   Compiling stream v0.1.0 (/mnt/c/Users/jayte/Documents/dev/SoccerManager/crates/stream)
+   Compiling script v0.1.0 (/mnt/c/Users/jayte/Documents/dev/SoccerManager/crates/script)
+   Compiling engine-cli v0.1.0 (/mnt/c/Users/jayte/Documents/dev/SoccerManager/crates/engine-cli)
+    Finished `release` profile [optimized + debuginfo] target(s) in 21.57s
+     Running tests/install_layout.rs (/home/jayteealao/.cache/soccermanager-target/release/deps/install_layout-7d8c7b8f0468aa01)
+
+running 2 tests
+test a_layout_without_the_page_folder_is_refused_naming_both_folders_tried ... ok
+test the_installed_program_serves_the_page_and_the_engine_without_configuration ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+

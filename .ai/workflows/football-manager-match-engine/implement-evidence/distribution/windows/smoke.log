@@ -1,0 +1,39 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260923191802
+Username: 1432341A-D001-4\WDAGUtilityAccount
+RunAs User: 1432341A-D001-4\WDAGUtilityAccount
+Configuration Name: 
+Machine: 1432341A-D001-4 (Microsoft Windows NT 10.0.26100.0)
+Host Application: powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\smoke\in\smoke.ps1 -Setup C:\smoke\in\SoccerManager-0.1.0-windows-x64-setup.exe -Evidence C:\smoke\out
+Process ID: 5840
+PSVersion: 5.1.26100.6584
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.6584
+BuildVersion: 10.0.26100.6584
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+[FACT] vcruntime140-present - vcruntime140.dll in System32: False
+[FACT] data-folder-before - data folder existed before install: False
+[PASS] install-exit-code - setup /S exited 0
+[PASS] installed-files - program, content, page, uninstaller, and shortcut present
+[FACT] installed-version - engine-cli --version: 0.1.0
+[PASS] shortcut-engine-port - engine.port written after the shortcut started: True
+[PASS] shortcut-engine-running - launcher page on port 49670 reports engine running on socket 49671
+[FACT] shortcut-browser - browser processes after the shortcut started: 0
+[PASS] launch-address - address printed: http://127.0.0.1:49673/
+[PASS] launch-engine-running - engine.state: running
+[PASS] page-screenshot - headless page screenshot written: True
+System.Threading.Tasks.VoidTaskResult
+[PASS] match-kick-off - match 18d8060e1fb467c4-1790187509613; kick-off record in events.jsonl: True
+[PASS] hello-version - hello engine.version '0.1.0', installed --version '0.1.0'
+[PASS] uninstall-removes-program - install folder gone: True
+[PASS] uninstall-keeps-matches - matches folder kept: True
+overall: PASS
+**********************
+Windows PowerShell transcript end
+End time: 20260923191831
+**********************

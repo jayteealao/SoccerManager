@@ -5,13 +5,13 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-23T17:51:42Z"
-slices-implemented: 15
+updated-at: "2026-09-23T18:22:08Z"
+slices-implemented: 16
 slices-total: 16
-metric-total-files-changed: 617
-metric-total-lines-added: 55560
-metric-total-lines-removed: 2300
-tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment, scripting, sandbox, plugin-interface]
+metric-total-files-changed: 635
+metric-total-lines-added: 56853
+metric-total-lines-removed: 2310
+tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment, scripting, sandbox, plugin-interface, distribution, installer, packaging, release-version]
 refs:
   index: 00-index.md
   plan-index: 04-plan.md
@@ -31,8 +31,9 @@ refs:
     - 05-implement-extra-time-penalties.md
     - 05-implement-experiment-flags.md
     - 05-implement-scripting-runtime.md
+    - 05-implement-distribution.md
 next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine scripting-runtime"
+next-invocation: "/wf verify football-manager-match-engine distribution"
 ---
 
 # Implement Index
@@ -138,7 +139,16 @@ next-invocation: "/wf verify football-manager-match-engine scripting-runtime"
   - The pack hash is folded into the content hash, so a scripted snapshot resumes only with the same pack.
 - Checks at implement: 398 Rust tests (4 ignored) and 127 page tests pass, and clippy runs with `-D warnings`. Benchmark on `3066066`: baseline 422.0 ms per match. With the sample pack the median is 431.4 ms (1.022 times, limit 1.10) and peak memory is 8.29 MB (1.22 times, limit 1.25). Without a pack the median is 425.0 ms.
 
+- `distribution` is implemented (commit `6a5d347`) and awaits verify. It adds these changes:
+  - `engine-cli launch` needs no flag: `--seed` defaults to a clock seed (printed as `seed <n>` on stderr), and `--web` falls through `SM_WEB_DIR`, `./web`, then `web/` beside the program (`web::resolve_web_dir`). `--open` opens the page in the default browser and logs `launch.open_failed` when it cannot.
+  - The Windows build links the C runtime statically (`.cargo/config.toml`), for every MSVC build in the workspace, tests and benches included.
+  - `packaging/` builds `SoccerManager-<version>-windows-x64-setup.exe` (per-user NSIS, Start-menu entry `launch --open`) and `SoccerManager-<version>-linux-x86_64.tar.gz` (glibc 2.39 floor) into the git-ignored `dist/`, each with a `.sha256` file. The version comes only from `engine-cli --version`, and `tests/release_version.rs` holds it equal to `hello` and the workspace.
+  - `packaging/windows/run-sandbox.ps1` and `packaging/unix/smoke.sh` are the clean-machine checks.
+- Checks at implement: 403 Rust tests and 127 page tests pass, and clippy runs with `-D warnings`. Windows Sandbox passed 11 of 11 checks on an image without `vcruntime140.dll`, and the WSL archive check passed 7 of 7. In the sandbox, the Start-menu entry opened no browser, because the sandbox image cannot open `http` links.
+
 ## Recommended Next Stage
+
+- `/wf verify football-manager-match-engine distribution` (new: `run-sandbox.ps1` and the WSL `smoke.sh`, `cargo test --test release_version --test install_layout` on both platforms, the benchmark compare after the static runtime, and the pre-registered macOS deferral)
 
 - `/wf verify football-manager-match-engine scripting-runtime` (new: `cargo test -p script` and `cargo test -p engine-cli --test script_cli`, the six-drive benchmark compare against 422.0 ms, and the seed-42 byte-identity check)
 

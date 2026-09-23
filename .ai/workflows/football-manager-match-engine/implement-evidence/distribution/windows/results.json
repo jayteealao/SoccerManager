@@ -1,0 +1,87 @@
+﻿{
+    "platform":  "windows-x64",
+    "setup":  "SoccerManager-0.1.0-windows-x64-setup.exe",
+    "at":  "2026-09-23T18:18:31Z",
+    "pass":  true,
+    "checks":  [
+                   {
+                       "name":  "vcruntime140-present",
+                       "pass":  true,
+                       "fact":  true,
+                       "detail":  "vcruntime140.dll in System32: False"
+                   },
+                   {
+                       "name":  "data-folder-before",
+                       "pass":  true,
+                       "fact":  true,
+                       "detail":  "data folder existed before install: False"
+                   },
+                   {
+                       "name":  "install-exit-code",
+                       "pass":  true,
+                       "detail":  "setup /S exited 0"
+                   },
+                   {
+                       "name":  "installed-files",
+                       "pass":  true,
+                       "detail":  "program, content, page, uninstaller, and shortcut present"
+                   },
+                   {
+                       "name":  "installed-version",
+                       "pass":  true,
+                       "fact":  true,
+                       "detail":  "engine-cli --version: 0.1.0"
+                   },
+                   {
+                       "name":  "shortcut-engine-port",
+                       "pass":  true,
+                       "detail":  "engine.port written after the shortcut started: True"
+                   },
+                   {
+                       "name":  "shortcut-engine-running",
+                       "pass":  true,
+                       "detail":  "launcher page on port 49670 reports engine running on socket 49671"
+                   },
+                   {
+                       "name":  "shortcut-browser",
+                       "pass":  true,
+                       "fact":  true,
+                       "detail":  "browser processes after the shortcut started: 0"
+                   },
+                   {
+                       "name":  "launch-address",
+                       "pass":  true,
+                       "detail":  "address printed: http://127.0.0.1:49673/"
+                   },
+                   {
+                       "name":  "launch-engine-running",
+                       "pass":  true,
+                       "detail":  "engine.state: running"
+                   },
+                   {
+                       "name":  "page-screenshot",
+                       "pass":  true,
+                       "detail":  "headless page screenshot written: True"
+                   },
+                   {
+                       "name":  "match-kick-off",
+                       "pass":  true,
+                       "detail":  "match 18d8060e1fb467c4-1790187509613; kick-off record in events.jsonl: True"
+                   },
+                   {
+                       "name":  "hello-version",
+                       "pass":  true,
+                       "detail":  "hello engine.version \u00270.1.0\u0027, installed --version \u00270.1.0\u0027"
+                   },
+                   {
+                       "name":  "uninstall-removes-program",
+                       "pass":  true,
+                       "detail":  "install folder gone: True"
+                   },
+                   {
+                       "name":  "uninstall-keeps-matches",
+                       "pass":  true,
+                       "detail":  "matches folder kept: True"
+                   }
+               ]
+}
