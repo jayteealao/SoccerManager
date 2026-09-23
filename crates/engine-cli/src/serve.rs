@@ -85,6 +85,9 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
 
     let events = Arc::new(Mutex::new(EventWriter::open(&data, &match_id)?));
     let gate = Arc::new(Gate::held());
+    // A page that reports the tick it draws keeps the engine within the buffer bound of it,
+    // so a change the manager queues reaches the engine before the stoppage on screen.
+    gate.set_lead_bound(u32::try_from(stream_tuning.buffer_ticks).unwrap_or(u32::MAX));
     let state = Arc::new(MatchState::default());
     let inbox = Arc::new(Inbox::default());
     let session = Session::start(

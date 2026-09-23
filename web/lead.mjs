@@ -40,3 +40,27 @@ export class LeadControl {
     return null;
   }
 }
+
+/// The fewest milliseconds between two `seen` reports.
+export const SEEN_EVERY_MS = 100;
+
+/// Decides when the page tells the engine which tick it has drawn. A `serve` engine that
+/// hears it stays within its buffer bound of that tick, which `pause` and `start` alone
+/// cannot promise: the engine simulates thousands of ticks in the time a pause takes to
+/// arrive. Pure: the caller sends the tick this returns.
+export class SeenReport {
+  constructor() {
+    this.sentTick = null;
+    this.sentAt = -Infinity;
+  }
+
+  /// The tick to report for drawn tick `tick` at time `now` in milliseconds, or `null`.
+  next(tick, now) {
+    if (tick === this.sentTick || now - this.sentAt < SEEN_EVERY_MS) {
+      return null;
+    }
+    this.sentTick = tick;
+    this.sentAt = now;
+    return tick;
+  }
+}

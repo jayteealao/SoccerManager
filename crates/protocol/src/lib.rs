@@ -18,8 +18,8 @@ pub use event::{CardKind, ChangeOutcome, EventType, MatchEvent};
 pub use frame::{Frame, TickFrame};
 pub use message::{
     ChangeDetail, ClientCommand, Condition, Hello, PatchWire, QueueChange, RoleWire, RosterEntry,
-    ServerMessage, SetLineup, SetSpeed, SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef,
-    TeamSetup,
+    Seen, ServerMessage, SetLineup, SetSpeed, SlotRole, SquadEntry, Stats, SubstitutionRules,
+    TeamRef, TeamSetup,
 };
 
 /// The protocol version a client must ask for. A client that asks for another version is
@@ -289,6 +289,12 @@ pub const MESSAGES: &[MessageSpec] = &[
         encoding: Encoding::JsonText,
         fields: &["lineup", "bench", "patch"],
     },
+    MessageSpec {
+        name: "seen",
+        direction: Direction::ClientToServer,
+        encoding: Encoding::JsonText,
+        fields: &["tick"],
+    },
 ];
 
 /// The specification of `name`, or `None`.
@@ -321,6 +327,7 @@ mod tests {
             ClientCommand::SetSpeed(_) => "set-speed",
             ClientCommand::QueueChange(_) => "queue-change",
             ClientCommand::SetLineup(_) => "set-lineup",
+            ClientCommand::Seen(_) => "seen",
         }
     }
 
@@ -410,6 +417,7 @@ mod tests {
                 bench: Vec::new(),
                 patch: None,
             }),
+            ClientCommand::Seen(Seen { tick: 0 }),
         ]
     }
 

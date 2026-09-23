@@ -6,6 +6,10 @@
 //! the first `start`, and `set-lineup` is accepted only before it. An admitted change is read
 //! into the engine's own change type here, on the socket thread, and left in the [`Inbox`]
 //! for the simulation thread, which queues it in the engine while the match runs.
+//!
+//! A viewer that reports the tick it has drawn (`seen`) bounds the engine's lead: once a lead
+//! bound is set and a first report arrives, the producer waits while it is that many ticks
+//! ahead of the drawn tick. A client that never reports is never held by it.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -38,6 +42,20 @@ struct GateState {
     stopped: bool,
     /// `true` once the first `start` arrived, or from the outset for a gate that never holds.
     started: bool,
+    /// The newest tick the client reported drawing, once it has reported one.
+    seen: Option<u32>,
+    /// The most ticks the producer may run ahead of `seen`; `None` leaves the lead unbounded.
+    lead_bound: Option<u32>,
+}
+
+impl GateState {
+    /// `true` while producing the tick after `tick` would pass the lead bound.
+    fn beyond_lead(&self, tick: u32) -> bool {
+        match (self.seen, self.lead_bound) {
+            (Some(seen), Some(bound)) => tick >= seen.saturating_add(bound),
+            _ => false,
+        }
+    }
 }
 
 impl Gate {
@@ -58,6 +76,8 @@ impl Gate {
                 running,
                 stopped: false,
                 started: running,
+                seen: None,
+                lead_bound: None,
             }),
             changed: Condvar::new(),
             speed_centis: AtomicU32::new(100),
@@ -75,6 +95,34 @@ impl Gate {
                 .expect("the gate lock is never poisoned");
         }
         !state.stopped
+    }
+
+    /// Waits until the gate runs and, once the client has reported a drawn tick, until the
+    /// tick after `tick` lies within the lead bound of it. `false` when the session ended.
+    pub fn wait_for_room(&self, tick: u32) -> bool {
+        let mut state = self.state.lock().expect("the gate lock is never poisoned");
+        while !state.stopped && (!state.running || state.beyond_lead(tick)) {
+            state = self
+                .changed
+                .wait(state)
+                .expect("the gate lock is never poisoned");
+        }
+        !state.stopped
+    }
+
+    /// Bounds the producer to `ticks` ahead of the newest tick the client reports drawing.
+    pub fn set_lead_bound(&self, ticks: u32) {
+        let mut state = self.state.lock().expect("the gate lock is never poisoned");
+        state.lead_bound = Some(ticks);
+        self.changed.notify_all();
+    }
+
+    /// The newest tick the client has drawn. A rewind reports a lower tick, and the bound
+    /// follows it.
+    pub fn set_seen(&self, tick: u32) {
+        let mut state = self.state.lock().expect("the gate lock is never poisoned");
+        state.seen = Some(tick);
+        self.changed.notify_all();
     }
 
     /// Starts or pauses production.
@@ -340,6 +388,10 @@ impl CommandContext {
                 let speed = self.gate.set_speed(set.speed);
                 (ack(&command, Some(speed)), None)
             }
+            ClientCommand::Seen(seen) => {
+                self.gate.set_seen(seen.tick);
+                (ack(&command, None), None)
+            }
             ClientCommand::SetLineup(set) => (
                 match self.set_lineup(set) {
                     Ok(()) => ack(&command, None),
@@ -511,6 +563,32 @@ mod tests {
         assert!(handle.join().unwrap());
         gate.stop();
         assert!(!gate.wait_until_running());
+    }
+
+    #[test]
+    fn a_reported_drawn_tick_bounds_the_lead_and_a_silent_client_is_not_held() {
+        let gate = Arc::new(Gate::new());
+        gate.set_lead_bound(500);
+        assert!(
+            gate.wait_for_room(10_000),
+            "no report yet: the lead is unbounded"
+        );
+        gate.set_seen(1_000);
+        assert!(gate.wait_for_room(1_499), "tick 1500 is within the bound");
+        let waiter = Arc::clone(&gate);
+        let handle = std::thread::spawn(move || waiter.wait_for_room(1_500));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        assert!(!handle.is_finished(), "tick 1501 would pass the bound");
+        gate.set_seen(1_001);
+        assert!(handle.join().unwrap());
+        let waiter = Arc::clone(&gate);
+        let handle = std::thread::spawn(move || waiter.wait_for_room(9_000));
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        gate.stop();
+        assert!(
+            !handle.join().unwrap(),
+            "a stopped session releases the producer"
+        );
     }
 
     #[test]

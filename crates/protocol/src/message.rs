@@ -211,6 +211,15 @@ pub struct SetSpeed {
     pub speed: f32,
 }
 
+/// The newest tick a viewer has drawn. Once a client reports it, a live engine produces no
+/// more than the stream's buffer bound of ticks beyond it, so a change the manager queues
+/// reaches the engine close to the tick on screen.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Seen {
+    pub tick: u32,
+}
+
 /// A change a client queues for a later stoppage.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -315,6 +324,7 @@ pub enum ClientCommand {
     SetSpeed(SetSpeed),
     QueueChange(QueueChange),
     SetLineup(SetLineup),
+    Seen(Seen),
 }
 
 impl ClientCommand {
@@ -326,6 +336,7 @@ impl ClientCommand {
             ClientCommand::SetSpeed(_) => "set-speed",
             ClientCommand::QueueChange(_) => "queue-change",
             ClientCommand::SetLineup(_) => "set-lineup",
+            ClientCommand::Seen(_) => "seen",
         }
     }
 }
@@ -559,6 +570,7 @@ mod tests {
                 bench: Vec::new(),
                 patch: None,
             }),
+            ClientCommand::Seen(Seen { tick: 1_200 }),
         ];
         for c in commands {
             let json = serde_json::to_string(&c).unwrap();
@@ -567,6 +579,10 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&ClientCommand::Start).unwrap(),
             "{\"type\":\"start\"}"
+        );
+        assert_eq!(
+            serde_json::to_string(&ClientCommand::Seen(Seen { tick: 7 })).unwrap(),
+            "{\"type\":\"seen\",\"tick\":7}"
         );
     }
 

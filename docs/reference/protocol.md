@@ -234,7 +234,7 @@ Sent right after each periodic `stats` message, not at full time.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `command` | string | `start`, `pause`, `set-speed`, `queue-change`, or `set-lineup` |
+| `command` | string | `start`, `pause`, `set-speed`, `queue-change`, `set-lineup`, or `seen` |
 | `change.queue_id` | string | queued changes only |
 | `change.queued_tick` | integer | the tick the command was read on |
 | `state` | enumeration | queued changes only; `queued` in this build |
@@ -322,6 +322,19 @@ tactics file does not hold, or `squad index <i> has a pre-match role and is not 
 lineup`. After kick-off it is refused with `the match has started; a lineup can be set only
 before kick-off`.
 
+### seen
+
+The newest tick the viewer has drawn. It is acknowledged like `start`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `tick` | integer | the tick on screen; a rewind reports a lower tick |
+
+On `serve`, once a client has sent one, the engine produces no tick more than `buffer_ticks`
+past the newest reported tick and waits until the next report moves it on. A change the
+manager queues therefore reaches the engine at most `buffer_ticks` after the tick on screen.
+A client that never sends it is not held by it, and `record`, `replay`, and `bench` ignore it.
+
 ## The page server
 
 `serve --web <DIR>` and `replay --web <DIR>` start a second listener on `127.0.0.1`, on its
@@ -368,8 +381,10 @@ simulation thread stops until the viewer drains it. No tick is dropped, memory s
 and one `socket.backpressure` line records each pause with how long it lasted.
 
 A page reads the socket as fast as it can and stores every tick, so the buffer alone does not
-keep a live match close to what the manager is watching. The viewer therefore sends `pause`
-when it holds more than a few seconds of unplayed ticks and `start` when playback catches up.
+keep a live match close to what the manager is watching. The viewer therefore reports the
+tick it draws with `seen`, which holds a `serve` engine within `buffer_ticks` of it. It also
+sends `pause` when it holds more than a few seconds of unplayed ticks and `start` when
+playback catches up.
 
 ## Fixtures
 

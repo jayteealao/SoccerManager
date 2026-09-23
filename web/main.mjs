@@ -5,7 +5,7 @@ import { Feed, minuteStamp } from './feed.mjs';
 import { GoalMoment, bannerText, watchMotion } from './goal-moment.mjs';
 import { History } from './history.mjs';
 import { between } from './interpolate.mjs';
-import { LeadControl } from './lead.mjs';
+import { LeadControl, SeenReport } from './lead.mjs';
 import { LineupEditor } from './lineup-editor.mjs';
 import { Lineups, benchModel } from './lineups.mjs';
 import { colours as markColours, drawMark, setFavicon } from './mark.mjs';
@@ -183,6 +183,7 @@ function frame(timestamp) {
   panels.flush(renderedTick, { seek: false });
   el('gauge').textContent = gaugeText();
   dugout.pace(history.newestTick - renderedTick);
+  dugout.report(renderedTick, timestamp);
 }
 
 /// Every panel around the pitch. One `flush` per frame writes only what changed, and never
@@ -337,6 +338,7 @@ class Dugout {
     this.pending = createPendingList();
     this.requests = [];
     this.lead = new LeadControl();
+    this.seen = new SeenReport();
     this.editor = null;
     this.panel = null;
     this.picker = null;
@@ -455,6 +457,8 @@ class Dugout {
   }
 
   startMatch(message, patch) {
+    // Reported before the start, so the engine is held near the pitch from its first tick.
+    socket.send({ type: 'seen', tick: 0 });
     socket.send({ type: 'start' });
     this.phase = 'live';
     this.lineup = message.lineup;
@@ -610,6 +614,17 @@ class Dugout {
     const command = this.lead.next(lead, scheduler.speed, match.fullTimeTick !== null);
     if (command) {
       socket.send({ type: command });
+    }
+  }
+
+  /// Tells a live engine which tick the pitch shows, so it stays within its buffer bound.
+  report(tick, now) {
+    if (this.phase !== 'live' || !socket) {
+      return;
+    }
+    const seen = this.seen.next(tick, now);
+    if (seen !== null) {
+      socket.send({ type: 'seen', tick: seen });
     }
   }
 

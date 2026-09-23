@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { LeadControl, PAUSE_AFTER_S, RESUME_BELOW_S } from '../lead.mjs';
+import { LeadControl, PAUSE_AFTER_S, RESUME_BELOW_S, SEEN_EVERY_MS, SeenReport } from '../lead.mjs';
 
 test('a lead past the bound pauses once, and a caught-up lead restarts once', () => {
   const lead = new LeadControl();
@@ -29,4 +29,13 @@ test('after full time nothing is sent', () => {
   lead.next(10_000);
   assert.equal(lead.next(10_000, 1, true), null);
   assert.equal(lead.holding, false);
+});
+
+test('the drawn tick is reported at most once per interval, and only when it moved', () => {
+  const seen = new SeenReport();
+  assert.equal(seen.next(0, 0), 0, 'the first drawn tick is reported at once');
+  assert.equal(seen.next(40, SEEN_EVERY_MS - 1), null, 'too soon after the last report');
+  assert.equal(seen.next(40, SEEN_EVERY_MS), 40);
+  assert.equal(seen.next(40, SEEN_EVERY_MS * 5), null, 'a paused pitch is not reported again');
+  assert.equal(seen.next(12, SEEN_EVERY_MS * 6), 12, 'a rewind reports the lower tick');
 });

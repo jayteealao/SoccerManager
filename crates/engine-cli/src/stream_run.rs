@@ -66,7 +66,7 @@ pub fn drive<S: TickSink>(
     let mut written = 0u32;
     while !sim.is_over() && written < opts.ticks {
         if let Some(gate) = opts.gate
-            && !gate.wait_until_running()
+            && !gate.wait_for_room(sim.tick())
         {
             break;
         }
@@ -707,6 +707,72 @@ mod tests {
             .teams[HOME]
             .lineup;
         assert_ne!(home.lineup[10], starters[10], "the substitute took slot 10");
+    }
+
+    /// Waits until the producer stops moving and returns the tick it stopped on.
+    fn settled(state: &MatchState) -> u32 {
+        let mut at = state.tick();
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            let now = state.tick();
+            if now == at {
+                return at;
+            }
+            at = now;
+        }
+    }
+
+    #[test]
+    fn a_reported_drawn_tick_holds_the_engine_within_the_lead_bound() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let config = MatchConfig::new(42, 3, &loaded.content, [a, b])
+            .unwrap()
+            .with_manager(HOME, engine::Manager::Human);
+        let ticks = config.max_ticks();
+        let mut sim = Simulation::new(config).unwrap();
+        let gate = Gate::new();
+        gate.set_lead_bound(500);
+        gate.set_seen(1_000);
+        let state = MatchState::default();
+        std::thread::scope(|scope| {
+            let run = scope.spawn(|| {
+                drive(
+                    &mut sim,
+                    &mut VecSink::default(),
+                    &Drive {
+                        ticks,
+                        owner_id: "0123456789abcdef0123456789abcdef",
+                        match_id: "000000000000002a-1",
+                        club_ids: ["club-a", "club-b"],
+                        state: &state,
+                        gate: Some(&gate),
+                        commentary: &loaded.commentary,
+                        inbox: None,
+                    },
+                    &mut |_: ServerMessage| Ok(()),
+                )
+            });
+            while state.tick() < 1_400 {
+                std::thread::yield_now();
+            }
+            assert_eq!(
+                settled(&state),
+                1_500,
+                "the engine stops 500 ticks past the drawn tick"
+            );
+            gate.set_seen(2_000);
+            while state.tick() < 2_400 {
+                std::thread::yield_now();
+            }
+            assert_eq!(
+                settled(&state),
+                2_500,
+                "a newer drawn tick releases it by as much"
+            );
+            gate.stop();
+            run.join().unwrap().unwrap();
+        });
     }
 
     #[test]
