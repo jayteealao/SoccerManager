@@ -21,6 +21,9 @@ const MAX_FRAME_MS = 250;
 
 /// Frame durations kept for the rate figures.
 const WINDOW = 300;
+/// Frames between two measurements of the panel rate. The rate is a percentile of the whole
+/// window, so sorting it on every frame would buy nothing but work.
+const REMEASURE_FRAMES = 30;
 
 const percentile = (sorted, p) =>
   sorted.length === 0 ? 0 : sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
@@ -37,6 +40,9 @@ export class Scheduler {
     this.skippedWindowAt = 0;
     this.budgetWindowAt = 0;
     this.lastTick = 0;
+    /// The measured panel rate, and the frames recorded since it was measured.
+    this.measuredHz = null;
+    this.sinceMeasured = 0;
   }
 
   setSpeed(speed) {
@@ -65,6 +71,7 @@ export class Scheduler {
       if (this.durations.length > WINDOW) {
         this.durations.shift();
       }
+      this.sinceMeasured += 1;
     }
     const elapsed = previous === null ? 0 : Math.min(MAX_FRAME_MS, timestampMs - previous);
 
@@ -121,12 +128,17 @@ export class Scheduler {
 
   /// The panel rate, derived as `budget()` derives `refresh_hz`, or a nominal 60 until
   /// enough frames have been measured.
+  /// Measured again every `REMEASURE_FRAMES` frames, not on every frame.
   refreshHz() {
     if (this.durations.length < 10) {
       return 60;
     }
-    const fastest = percentile([...this.durations].sort((a, b) => a - b), 0.1);
-    return fastest > 0 ? 1000 / fastest : 60;
+    if (this.measuredHz === null || this.sinceMeasured >= REMEASURE_FRAMES) {
+      const fastest = percentile([...this.durations].sort((a, b) => a - b), 0.1);
+      this.measuredHz = fastest > 0 ? 1000 / fastest : 60;
+      this.sinceMeasured = 0;
+    }
+    return this.measuredHz;
   }
 
   /// One `viewer.tick_skipped` row a second while ticks are being skipped, and one

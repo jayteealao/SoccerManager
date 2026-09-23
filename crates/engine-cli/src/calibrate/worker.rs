@@ -115,10 +115,15 @@ fn play(
     let pack_version = config.rules.schema_version;
     let refs = team_refs(teams);
     let content_hash = config.content_hash.clone();
+    let max_ticks = config.max_ticks() as usize;
     let mut sim = Simulation::new(config)?;
     let mut ids = Ids::new(&sim);
     let mut commentator = Commentator::for_match(commentary, &sim);
-    let mut sink = VecSink::default();
+    // The validator reads the whole match once it is over, so the records are kept; sized
+    // up front, the buffer never doubles, and the timed run pays for no copies.
+    let mut sink = VecSink {
+        records: Vec::with_capacity(max_ticks),
+    };
     let started = Instant::now();
     sim.run(&mut sink)?;
     let elapsed = started.elapsed();

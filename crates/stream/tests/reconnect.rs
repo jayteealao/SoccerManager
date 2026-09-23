@@ -125,6 +125,9 @@ fn the_drop_seam_cuts_the_connection_at_its_tick() {
     assert_eq!(handle.join().unwrap(), SessionEnd::Dropped);
     let sent = state.sent_tick();
     assert!(sent >= 1_000, "sent {sent}");
+    // The cut comes on the first flush that reaches the seam: one flush carries at most one
+    // outbox of frames (32), so the connection ends within that many ticks of tick 1 000.
+    assert!(sent < 1_000 + 32, "the cut came late: sent {sent}");
     // The viewer never reads past what the socket flushed.
     assert!(last <= sent, "read {last}, flushed {sent}");
     assert!(last < 3_000, "the match ran on past the drop: read {last}");

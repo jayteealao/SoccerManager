@@ -5,12 +5,28 @@
 use garde::Validate;
 use serde::{Deserialize, Serialize};
 
+use crate::TICKS_PER_SECOND;
+
+/// Refuses a physics step that is not one tick of the match clock: the clock, the minute, and
+/// the viewer all count `TICKS_PER_SECOND` ticks to the second, and a different step would
+/// run the physics and the clock at different rates without a word.
+fn one_clock_tick(dt: &f64, _ctx: &()) -> garde::Result {
+    let expected = 1.0 / f64::from(TICKS_PER_SECOND);
+    if (dt - expected).abs() > 1e-9 {
+        return Err(garde::Error::new(format!(
+            "must be {expected} (one tick at {TICKS_PER_SECOND} ticks per second)"
+        )));
+    }
+    Ok(())
+}
+
 /// Every constant the simulation reads. Units are metres, seconds, and metres per second.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct Tuning {
-    /// Simulated seconds per tick.
-    #[garde(range(min = 0.005, max = 0.1))]
+    /// Simulated seconds per tick. The match clock counts `TICKS_PER_SECOND` ticks to the
+    /// second, so the only step it accepts is one tick of that clock.
+    #[garde(custom(one_clock_tick))]
     pub dt: f64,
     /// Ticks between two decisions of the same agent. 1 means every tick.
     #[garde(range(min = 1, max = 50))]
@@ -345,6 +361,16 @@ mod tests {
     #[test]
     fn the_defaults_satisfy_every_bound() {
         assert!(Tuning::default().validate().is_ok());
+    }
+
+    #[test]
+    fn a_step_that_is_not_one_clock_tick_is_refused() {
+        let t = Tuning {
+            dt: 0.01,
+            ..Tuning::default()
+        };
+        let report = t.validate().unwrap_err();
+        assert!(report.to_string().contains("dt: must be 0.02"), "{report}");
     }
 
     #[test]

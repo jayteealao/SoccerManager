@@ -2,12 +2,11 @@
 //! commentator remembers of earlier events, and the match length.
 
 use super::templates::{Form, MinuteBand, Repeat, ScoreState, When};
+use crate::rules::clock::TICKS_PER_MINUTE;
 use crate::rules::fouls::Card;
 use crate::sim::{EngineEvent, EngineEventKind, EventDetail};
 use crate::team::PLAYERS_PER_TEAM;
 
-/// Ticks in one minute of play.
-const TICKS_PER_MINUTE: u32 = crate::TICKS_PER_SECOND * 60;
 /// The repeat window: ten minutes of play.
 pub const REPEAT_WINDOW_TICKS: u32 = 10 * TICKS_PER_MINUTE;
 /// A lead of this many goals is a rout.

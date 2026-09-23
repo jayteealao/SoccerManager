@@ -44,7 +44,7 @@ the implementation names must appear below with every one of its fields.
 |---|---|
 | Address | `ws://127.0.0.1:<port>/?v=<protocol version>` |
 | Version | `v` must equal `3`. Any other value, or no value, is refused with both versions named. |
-| Origin | `null`, a `file://` page, any port of `http://localhost` or `http://127.0.0.1`, or no `Origin` header at all. Any other origin is refused. |
+| Origin | Any port of `http://localhost` or `http://127.0.0.1`, or no `Origin` header at all. Any other origin is refused, including `null` (a sandboxed frame or a `data:` document) and a `file://` page. |
 | Clients | One viewer per match. |
 | First message | `hello`, always before the first tick frame. |
 | Kick-off | `serve` holds after the `hello`: no tick, event, or statistics message is sent until the client sends `start`. `record`, `replay`, and `bench` do not hold. |

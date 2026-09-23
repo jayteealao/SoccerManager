@@ -211,6 +211,10 @@ export class Pitch {
     // whole team's discs. The shirt numbers follow in a second pass for the same reason.
     // A sent-off player parked beside the pitch is skipped in both passes.
     const onPitch = (i) => !isParkingSpot(components[3 + i * 2] / 100, components[4 + i * 2] / 100);
+    // The shirt-number face is the same for both teams: set once, parsed once a frame.
+    ctx.font = `600 ${SHIRT_PX}px ${this.tokens.face}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     for (const team of [0, 1]) {
       const kit = this.kits[team];
       const first = team * 11;
@@ -232,9 +236,6 @@ export class Pitch {
       ctx.stroke();
 
       ctx.fillStyle = kit.number;
-      ctx.font = `600 ${SHIRT_PX}px ${this.tokens.face}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
       for (let i = first; i < first + 11; i += 1) {
         if (!onPitch(i)) {
           continue;
@@ -245,8 +246,9 @@ export class Pitch {
       }
     }
 
-    // The ball's trail is one path at falling alpha, never N separate strokes. It belongs
-    // to the ball alone: a trail on a player is arcade styling, not a broadcast view.
+    // The ball's trail is a few short segments, each stroked at its own falling alpha (a
+    // canvas path has one alpha, so the fade needs one stroke a segment). It belongs to the
+    // ball alone: a trail on a player is arcade styling, not a broadcast view.
     const { line, ink } = this.tokens;
     ctx.strokeStyle = line;
     ctx.lineWidth = 2;

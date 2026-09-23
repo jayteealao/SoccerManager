@@ -2,8 +2,7 @@
 // starts, the first-run panel when there is no engine, and the error panel when the engine
 // or the connection stops. Pure: no DOM, so every state is tested without a browser.
 
-/// Engine ticks per second of match time.
-const TICKS_PER_SECOND = 50;
+import { TICKS_PER_SECOND } from './schedule.mjs';
 
 /// The loading steps, in order. Each shows a state word, never a spinner.
 export const STEPS = Object.freeze([

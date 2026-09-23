@@ -267,6 +267,21 @@ impl FileSink {
         })
     }
 
+    /// Keeps the first `ticks` records and drops the rest, so a match rewound to an earlier
+    /// tick writes on from there. A served match rewinds this way after a lost connection.
+    pub fn rewind(&mut self, ticks: u32) -> Result<(), EngineError> {
+        if ticks >= self.written {
+            return Ok(());
+        }
+        self.writer.flush()?;
+        let end = (HEADER_BYTES + ticks as usize * RECORD_BYTES) as u64;
+        let file = self.writer.get_mut();
+        file.set_len(end)?;
+        file.seek(SeekFrom::Start(end))?;
+        self.written = ticks;
+        Ok(())
+    }
+
     /// Writes the trailer and flushes. Returns the number of records written. A knockout
     /// match whose sudden death ran past the announced maximum raises the header's maximum
     /// to the count written, so the file still reads.
@@ -414,6 +429,24 @@ mod tests {
         assert_eq!(file.header, header(42, 1000));
         assert_eq!(file.records.len(), 1000);
         assert_eq!(file.records[999], sample(999));
+    }
+
+    #[test]
+    fn a_rewound_file_keeps_its_first_records_and_writes_on_from_there() {
+        let path = temp("rewind");
+        let mut sink = FileSink::create(&path, &header(9, 10)).unwrap();
+        for i in 1..=8 {
+            sink.on_tick(&sample(i)).unwrap();
+        }
+        sink.rewind(5).unwrap();
+        for i in 6..=10 {
+            sink.on_tick(&sample(i)).unwrap();
+        }
+        assert_eq!(sink.finish().unwrap(), 10);
+        let file = read_ticks(&path).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        let ticks: Vec<u32> = file.records.iter().map(|r| r.tick).collect();
+        assert_eq!(ticks, (1..=10).collect::<Vec<u32>>());
     }
 
     #[test]

@@ -45,7 +45,7 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 
 | Field | Unit | Default | Bound |
 |---|---|---|---|
-| dt | s per tick | 0.02 | 0.005 to 0.1 |
+| dt | s per tick | 0.02 | exactly 0.02: the match clock runs at 50 ticks per second |
 | decision_interval_ticks | ticks | 1 | 1 to 50 |
 | base_speed | m/s | 5.0 | 0 to 50 |
 | pace_speed | m/s | 4.0 | 0 to 40 |

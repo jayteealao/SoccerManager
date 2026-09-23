@@ -914,7 +914,7 @@ impl Simulation {
                     return;
                 }
                 for team in 0..2 {
-                    if pitch::in_goal(xy, self.teams[team].attack_x)
+                    if pitch::in_goal(prev, xy, self.teams[team].attack_x)
                         && self.ball.pos.z < t.crossbar_height
                     {
                         self.goal(team);

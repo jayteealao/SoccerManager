@@ -17,7 +17,7 @@ import { Playback, SPEEDS } from './playback.mjs';
 import { backoff, clockAt, loadingSteps, panelModel } from './recovery.mjs';
 import { FrameStore, frameText, readReplay, writeReplay } from './replay-file.mjs';
 import { ReportClock, ReportDialog, reportModel } from './report.mjs';
-import { Scheduler, TICKS_PER_SECOND } from './schedule.mjs';
+import { Scheduler } from './schedule.mjs';
 import { Scoreboard } from './scoreboard.mjs';
 import { signal, signals } from './signal.mjs';
 import { MatchSocket, socketAddress } from './socket.mjs';
@@ -70,12 +70,6 @@ let reconnecting = false;
 let lastSaved = null;
 const reportClock = new ReportClock();
 let reports = null;
-
-/// The clock, as a manager reads it: minutes and seconds of match time.
-function clockText(tick) {
-  const seconds = Math.floor(tick / TICKS_PER_SECOND);
-  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
-}
 
 function announce(text) {
   el('live').textContent = text;
@@ -223,7 +217,7 @@ function resumeAt(tick) {
     panels.flush(renderedTick, { seek: true });
   }
   showNotice(null);
-  announce(`Play resumes at ${clockText(tick)}.`);
+  announce(`Play resumes at ${clockAt(tick)}.`);
   signal('viewer.resumed', { 'match.id': matchId, from_tick: from, to_tick: tick, gap });
   if (gap > 0) {
     signal('viewer.resume_gap', { ticks: gap });
@@ -305,7 +299,7 @@ function frame(timestamp) {
   if (due) {
     showReport(due.kind, due.tick);
   }
-  el('gauge').textContent = gaugeText();
+  showGauge();
   dugout.pace(history.newestTick - renderedTick);
   dugout.report(renderedTick, timestamp);
 }
@@ -369,7 +363,7 @@ class Panels {
     this.state = state;
     this.lastTick = tick;
     this.scoreboard.setScore(state.home, state.away);
-    this.scoreboard.setClock(clockText(tick));
+    this.scoreboard.setClock(clockAt(tick));
     this.feed.flush(state.entries);
     // The lineups change only when a released event or condition message changes them, so
     // they are rebuilt on that, never per tick.
@@ -771,6 +765,25 @@ class Dugout {
 
 const dugout = new Dugout();
 
+/// Frames between two refreshes of the gauge: its figures are percentiles of a window of
+/// hundreds of frames, and a person reads it a few times a second at most.
+const GAUGE_EVERY_FRAMES = 15;
+let gaugeFrames = 0;
+let gaugeShown = '';
+
+/// Refreshes the gauge every `GAUGE_EVERY_FRAMES` frames, and writes it only on a change.
+function showGauge() {
+  gaugeFrames = (gaugeFrames + 1) % GAUGE_EVERY_FRAMES;
+  if (gaugeFrames !== 1 && gaugeShown !== '') {
+    return;
+  }
+  const text = gaugeText();
+  if (text !== gaugeShown) {
+    gaugeShown = text;
+    el('gauge').textContent = text;
+  }
+}
+
 function gaugeText() {
   const budget = scheduler.budget();
   const megabytes = Math.round(history.bytes() / 1_000_000);
@@ -799,7 +812,7 @@ function rewind(tick) {
     lastRewind = { tick, drawn: Array.from(rendered), stored: Array.from(earlier), exact };
   }
   signal('viewer.rewind', { from_tick: from, to_tick: tick, stored, exact });
-  announce(`Rewound to ${clockText(tick)}.`);
+  announce(`Rewound to ${clockAt(tick)}.`);
 }
 
 /// Plays or pauses the page's own playback, and keeps the button's word in step.

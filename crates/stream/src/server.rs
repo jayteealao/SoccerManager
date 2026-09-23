@@ -17,6 +17,9 @@ use crate::StreamError;
 
 /// File inside the runtime data folder that holds the port the server chose.
 pub const PORT_FILE: &str = "engine.port";
+/// The least time a reconnecting client gets to finish its upgrade request, even at the
+/// very end of the reconnect wait.
+const MIN_HANDSHAKE_WAIT: Duration = Duration::from_millis(500);
 /// Bytes the socket may buffer before it writes to the stream.
 pub const WRITE_BUFFER_BYTES: usize = 4 * 1024;
 /// Bytes the socket may hold in total. Past this, a write answers `WriteBufferFull`, which
@@ -111,9 +114,15 @@ impl Server {
                     if let Err(e) = stream.set_nonblocking(false) {
                         break Err(StreamError::io("cannot make the client socket blocking", e));
                     }
-                    match self.handshake(stream, match_id) {
+                    // A client that connects and never finishes the upgrade must not hold
+                    // the wait open past its deadline: the handshake gets what is left of it.
+                    let left = deadline
+                        .saturating_duration_since(Instant::now())
+                        .max(MIN_HANDSHAKE_WAIT);
+                    match self.handshake_within(stream, match_id, left) {
                         Ok(connection) => break Ok(Some(connection)),
-                        Err(StreamError::Refused { .. }) => continue,
+                        Err(StreamError::Refused { .. }) if Instant::now() < deadline => continue,
+                        Err(StreamError::Refused { .. }) => break Ok(None),
                         Err(other) => break Err(other),
                     }
                 }
@@ -137,6 +146,26 @@ impl Server {
             .accept()
             .map_err(|e| StreamError::io("cannot accept a client", e))?;
         self.handshake(stream, match_id)
+    }
+
+    /// Runs the WebSocket handshake on one accepted stream, giving the client at most `wait`
+    /// to send its upgrade request. A client that stays silent is refused like any other, and
+    /// the admitted socket goes back to no timeout, because the session sets its own mode.
+    fn handshake_within(
+        &self,
+        stream: TcpStream,
+        match_id: &str,
+        wait: Duration,
+    ) -> Result<Connection, StreamError> {
+        let limit = |s: &TcpStream, t: Option<Duration>| {
+            s.set_read_timeout(t)
+                .and_then(|()| s.set_write_timeout(t))
+                .map_err(|e| StreamError::io("cannot set the handshake timeout", e))
+        };
+        limit(&stream, Some(wait))?;
+        let connection = self.handshake(stream, match_id)?;
+        limit(connection.socket.get_ref(), None)?;
+        Ok(connection)
     }
 
     /// Runs the WebSocket handshake on one accepted stream.
@@ -217,14 +246,14 @@ fn refusal(request: &Request, origin: &str) -> Option<String> {
     }
 }
 
-/// A page served from the local machine, or a page with no origin at all (a native client).
-/// Any port of `localhost` or `127.0.0.1` is allowed, because the viewer's development
-/// server chooses its own.
+/// A page served from the local machine, or a request with no origin at all (a native
+/// client). Any port of `localhost` or `127.0.0.1` is allowed, because the viewer's
+/// development server chooses its own. The opaque origin `null` is refused: a browser sends
+/// it from a sandboxed frame or a `data:` document of any remote site. A `file://` page is
+/// refused too; the viewer cannot run from one, because it loads module scripts.
 fn origin_allowed(origin: &str) -> bool {
     const LOCAL: [&str; 2] = ["http://localhost", "http://127.0.0.1"];
     origin == "none"
-        || origin == "null"
-        || origin.starts_with("file://")
         || LOCAL
             .iter()
             .any(|p| origin == *p || origin.starts_with(&format!("{p}:")))
@@ -268,8 +297,6 @@ mod tests {
     fn every_loopback_origin_is_allowed_and_a_remote_page_is_not() {
         for origin in [
             "none",
-            "null",
-            "file://",
             "http://localhost",
             "http://localhost:5173",
             "http://127.0.0.1:8080",
@@ -277,6 +304,8 @@ mod tests {
             assert!(origin_allowed(origin), "{origin} must be allowed");
         }
         for origin in [
+            "null",
+            "file://",
             "http://example.com",
             "https://localhost",
             "http://localhost.evil.com",
@@ -287,14 +316,14 @@ mod tests {
 
     #[test]
     fn a_refusal_names_both_versions() {
-        let reason = refusal(&request("null", "?v=9"), "null").unwrap();
+        let reason = refusal(&request("none", "?v=9"), "none").unwrap();
         assert_eq!(
             reason,
             format!("protocol version 9; this build speaks {PROTOCOL_VERSION}")
         );
         let current = format!("?v={PROTOCOL_VERSION}");
-        assert!(refusal(&request("null", &current), "null").is_none());
-        let reason = refusal(&request("null", ""), "null").unwrap();
+        assert!(refusal(&request("none", &current), "none").is_none());
+        let reason = refusal(&request("none", ""), "none").unwrap();
         assert!(reason.contains(&current), "{reason}");
         let reason = refusal(
             &request("http://example.com", &current),

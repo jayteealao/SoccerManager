@@ -14,12 +14,19 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 
 use anyhow::Context;
 
 /// The longest request line and header block this server reads. A browser's request for a
 /// local file is far below it; anything larger is cut off rather than buffered.
 const MAX_REQUEST_BYTES: u64 = 8 * 1024;
+/// The most connections served at once. A page load asks for about twenty files; a client
+/// that opens many more and sends nothing must not pile up threads in the process.
+const MAX_CONNECTIONS: usize = 64;
+/// How long a connection may take to send its request or read the response.
+const IO_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// A running static file server. Dropping the handle leaves the thread serving; the
 /// process ends it.
@@ -146,20 +153,40 @@ pub fn start(dir: &Path, status: Arc<dyn Status>) -> anyhow::Result<WebServer> {
     );
 
     let served = root.clone();
+    let open = Arc::new(AtomicUsize::new(0));
     std::thread::Builder::new()
         .name("web".into())
         .spawn(move || {
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
+                // Past the cap the connection is closed unanswered; a browser retries.
+                if open.fetch_add(1, Ordering::AcqRel) >= MAX_CONNECTIONS {
+                    open.fetch_sub(1, Ordering::AcqRel);
+                    tracing::warn!(signal = "web.connection_refused", open = MAX_CONNECTIONS);
+                    continue;
+                }
+                // A silent or stalled client times out instead of holding its thread.
+                if stream.set_read_timeout(Some(IO_TIMEOUT)).is_err()
+                    || stream.set_write_timeout(Some(IO_TIMEOUT)).is_err()
+                {
+                    open.fetch_sub(1, Ordering::AcqRel);
+                    continue;
+                }
                 let root = served.clone();
                 let status = Arc::clone(&status);
+                let done = Arc::clone(&open);
                 // One thread per request. A page load asks for about twenty files, and a
                 // serial server would answer them one after another.
-                let _ = std::thread::Builder::new()
-                    .name("web-conn".into())
-                    .spawn(move || {
-                        let _ = answer(stream, &root, port, status.as_ref());
-                    });
+                let spawned =
+                    std::thread::Builder::new()
+                        .name("web-conn".into())
+                        .spawn(move || {
+                            let _ = answer(stream, &root, port, status.as_ref());
+                            done.fetch_sub(1, Ordering::AcqRel);
+                        });
+                if spawned.is_err() {
+                    open.fetch_sub(1, Ordering::AcqRel);
+                }
             }
         })
         .context("cannot start the page server thread")?;
@@ -177,6 +204,15 @@ fn answer(
     let Some(request) = read_request(&stream) else {
         return write_response(&mut stream, 400, "text/plain", b"bad request", false);
     };
+    // A page on another site that rebinds its own name to this machine sends that name as
+    // the host. Only the loopback names this server listens on are answered.
+    if !host_allowed(request.host.as_deref(), page_port) {
+        tracing::warn!(
+            signal = "web.host_refused",
+            host = %request.host.as_deref().unwrap_or("none")
+        );
+        return write_response(&mut stream, 421, "text/plain", b"refused host", false);
+    }
     let mut parts = request.line.split_whitespace();
     let method = parts.next().unwrap_or_default().to_string();
     let target = parts.next().unwrap_or_default().to_string();
@@ -254,10 +290,24 @@ fn answer(
     write_response(&mut stream, 200, mime_for(&resolved), &body, head_only)
 }
 
-/// The request line and the one header this server reads.
+/// The request line and the two headers this server reads.
 struct Request {
     line: String,
     origin: Option<String>,
+    host: Option<String>,
+}
+
+/// `true` for a `Host` of `127.0.0.1` or `localhost`, with no port or this server's own.
+fn host_allowed(host: Option<&str>, page_port: u16) -> bool {
+    let Some(host) = host else {
+        return false;
+    };
+    let (name, port) = match host.rsplit_once(':') {
+        Some((name, port)) => (name, Some(port)),
+        None => (host, None),
+    };
+    let local = name == "127.0.0.1" || name.eq_ignore_ascii_case("localhost");
+    local && port.is_none_or(|p| p.parse::<u16>().ok() == Some(page_port))
 }
 
 /// Reads the request line, then drains the header block, keeping `Origin`.
@@ -270,20 +320,23 @@ fn read_request(stream: &TcpStream) -> Option<Request> {
         return None;
     }
     let mut origin = None;
+    let mut host = None;
     let mut header = String::new();
     while reader.read_line(&mut header).ok()? > 0 {
         let text = header.trim_end();
         if text.is_empty() {
             break;
         }
-        if let Some((name, value)) = text.split_once(':')
-            && name.trim().eq_ignore_ascii_case("origin")
-        {
-            origin = Some(value.trim().to_string());
+        if let Some((name, value)) = text.split_once(':') {
+            if name.trim().eq_ignore_ascii_case("origin") {
+                origin = Some(value.trim().to_string());
+            } else if name.trim().eq_ignore_ascii_case("host") {
+                host = Some(value.trim().to_string());
+            }
         }
         header.clear();
     }
-    Some(Request { line, origin })
+    Some(Request { line, origin, host })
 }
 
 /// Turns a request target into a relative path inside the served folder, or refuses it.
@@ -414,6 +467,22 @@ fn shown_dir(dir: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_loopback_host_on_this_port_is_answered() {
+        for host in ["127.0.0.1", "127.0.0.1:8123", "localhost:8123", "LOCALHOST"] {
+            assert!(host_allowed(Some(host), 8123), "{host} must be answered");
+        }
+        for host in [
+            "evil.example:8123",
+            "127.0.0.1:9999",
+            "127.0.0.1.evil.example",
+            "",
+        ] {
+            assert!(!host_allowed(Some(host), 8123), "{host} must be refused");
+        }
+        assert!(!host_allowed(None, 8123));
+    }
 
     #[test]
     fn a_traversal_or_an_absolute_path_is_refused() {

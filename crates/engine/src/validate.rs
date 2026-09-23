@@ -93,12 +93,12 @@ impl Validator {
             }
             let teams = &self.timeline[shape].1;
             let ball = DVec2::new(f64::from(r.ball[0]), f64::from(r.ball[1]));
-            let pos: Vec<DVec2> = r
-                .players
-                .iter()
-                .map(|p| DVec2::new(f64::from(p[0]), f64::from(p[1])))
-                .collect();
-            let parked: Vec<bool> = pos.iter().map(|p| pitch::is_parking_spot(*p)).collect();
+            // Fixed-size, so a whole match of records allocates nothing per tick.
+            let pos: [DVec2; PLAYER_COUNT] = std::array::from_fn(|i| {
+                DVec2::new(f64::from(r.players[i][0]), f64::from(r.players[i][1]))
+            });
+            let parked: [bool; PLAYER_COUNT] =
+                std::array::from_fn(|i| pitch::is_parking_spot(pos[i]));
 
             for (i, p) in pos.iter().enumerate() {
                 if !parked[i] && !pitch::contains(*p) {

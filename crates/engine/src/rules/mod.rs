@@ -535,8 +535,8 @@ impl Simulation {
         self.take_restart(dead, t);
     }
 
-    /// The taker restarts play. A throw-in, a corner, a goal kick, and an indirect free kick
-    /// are kicked at once, and only the free kick can put a player offside; after any other
+    /// The taker restarts play. A throw-in, a corner, a goal kick, an indirect free kick, and a
+    /// penalty are kicked at once, and only the free kick can put a player offside; after any other
     /// restart the taker holds the ball and decides on the next tick.
     fn take_restart(&mut self, dead: &DeadBall, t: &Tuning) {
         if self.referee.shootout.is_some() {
@@ -559,6 +559,16 @@ impl Simulation {
             }
             StoppageKind::FreeKick if !dead.direct => {
                 Some((self.restart_pass(dead.taker, dead.kind), true))
+            }
+            // IFAB Law 14: a penalty is a direct kick at goal from the mark, never a pass, a
+            // dribble, or a held ball, and nobody may close the taker down before it is taken.
+            StoppageKind::Penalty => {
+                let goal = self.teams[dead.team].target_goal();
+                let keeper = (1 - dead.team) * PLAYERS_PER_TEAM;
+                Some((
+                    self.shot_kick(dead.taker, goal, keeper, SHOOTOUT_SPREAD),
+                    false,
+                ))
             }
             _ => None,
         };
@@ -863,7 +873,7 @@ impl Simulation {
         let Some(end) = self.referee.shootout.as_ref().map(|s| s.end) else {
             return;
         };
-        if pitch::in_goal(xy, end) && self.ball.pos.z < t.crossbar_height {
+        if pitch::in_goal(prev, xy, end) && self.ball.pos.z < t.crossbar_height {
             self.shootout_outcome(true);
         } else if pitch::exit(prev, xy).is_some() {
             self.shootout_outcome(false);
@@ -975,7 +985,8 @@ impl Simulation {
 const STOPPED_BALL_SPEED: f64 = 0.3;
 // Known limit: the three shoot-out constants below are hand-set so that about seven kicks in
 // ten score (the real-world rate); they belong in the tuning file with a calibration band.
-/// The aim noise of a shoot-out kick against an open-play shot: a placed kick from the mark.
+/// The aim noise of a kick from the penalty mark (a shoot-out kick or a penalty in play)
+/// against an open-play shot: a placed kick.
 const SHOOTOUT_SPREAD: f64 = 0.5;
 /// The keeper's catch chance at a shoot-out kick against a shot in open play: a diving save
 /// from 11 m is held less often.
@@ -1011,5 +1022,40 @@ mod tests {
         assert_eq!(sim.players[player].status, Status::SentOff);
         assert_eq!(sim.summary.red[team], 1);
         assert_eq!(sim.summary.yellow[team], 2);
+    }
+
+    /// A penalty in play is a direct kick at goal from the mark (IFAB Law 14): the taker
+    /// shoots at once and never keeps the ball to pass, dribble, or hold.
+    #[test]
+    fn a_penalty_in_play_is_shot_at_goal_at_once() {
+        let mut sim = Simulation::new(shipped_config(1, 90).unwrap()).unwrap();
+        let team = 0;
+        let taker = 9;
+        let attack_x = sim.teams[team].attack_x;
+        let spot = pitch::penalty_spot(attack_x);
+        sim.players[taker].pos = spot;
+        sim.ball = Ball::at(spot);
+        let dead = DeadBall {
+            kind: StoppageKind::Penalty,
+            team,
+            spot,
+            direct: true,
+            since: sim.tick,
+            ready_at: sim.tick,
+            taker,
+        };
+        let shots = sim.summary.shots[team];
+        let t = sim.config.tuning.clone();
+        sim.take_restart(&dead, &t);
+        assert_eq!(sim.carrier, None, "the taker kicked the ball");
+        assert_eq!(
+            sim.summary.shots[team],
+            shots + 1,
+            "the kick counts as a shot"
+        );
+        assert!(
+            sim.ball.vel.x * attack_x > 0.0,
+            "the ball goes toward the goal the team attacks"
+        );
     }
 }

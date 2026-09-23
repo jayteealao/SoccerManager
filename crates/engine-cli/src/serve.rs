@@ -10,6 +10,7 @@
 //! close frame does not end the run: the match goes back to the newest stoppage the viewer
 //! received in full and waits for the viewer on the same port.
 
+use std::cell::RefCell;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -26,6 +27,7 @@ use engine::{EngineError, FanoutSink, FileSink, Manager, MatchConfig, Simulation
 use engine::{TickHeader, snapshot::shorten_for_log};
 use protocol::{ChangeKind, Hello, PROTOCOL_VERSION, Queue, ServerMessage};
 use stream::events::EventWriter;
+use stream::server::Connection;
 use stream::session::{MatchState, SessionConfig};
 use stream::{
     CommandContext, Gate, GatedSnapshots, Inbox, LineupRules, PageSetup, PreMatch, Server, Session,
@@ -33,7 +35,9 @@ use stream::{
 };
 
 use crate::cli::ServeOpts;
-use crate::stream_run::{Drive, drive, hello_substitutions, hello_tactics, hello_teams};
+use crate::stream_run::{
+    Drive, PageChange, carry_page_changes, drive, hello_substitutions, hello_tactics, hello_teams,
+};
 
 /// The team the page manages.
 const HOME: usize = 0;
@@ -104,6 +108,15 @@ struct Opened {
     hello: Hello,
 }
 
+/// The match reached full time.
+pub const EXIT_FULL_TIME: i32 = 0;
+/// The snapshot named by `--resume` was refused before the port line.
+pub const EXIT_REFUSED: i32 = 1;
+/// The viewer left, or did not come back in time, before full time. The value is the one a
+/// usage error also exits with; a launcher tells the two apart by the port line, which a
+/// usage error never prints.
+pub const EXIT_VIEWER_GONE: i32 = 2;
+
 pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> {
     let loaded = crate::content::load(
         content_dir,
@@ -112,7 +125,6 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
         opts.script_pack.as_deref(),
     )?;
     let data = data_dir();
-    let stream_tuning = loaded.content.tuning.stream.clone();
     let opened = match opts.resume.as_deref() {
         Some(path) => match open_resumed(&loaded, path) {
             Ok(opened) => opened,
@@ -127,34 +139,12 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
                     reason = %err
                 );
                 eprintln!("error: {err}");
-                return Ok(1);
+                return Ok(EXIT_REFUSED);
             }
         },
         None => open_fresh(&loaded, opts, &data)?,
     };
-    let Opened {
-        identity,
-        mut config,
-        mut sim,
-        resume_tick,
-        hello,
-    } = opened;
-    let ticks = config.max_ticks();
-    let club_ids = [
-        config.teams[0].club_id.clone(),
-        config.teams[1].club_id.clone(),
-    ];
-    let match_id = identity.match_id.clone();
-    let pre_match = Arc::new(PreMatch::new(LineupRules {
-        keepers: config.teams[HOME]
-            .squad
-            .iter()
-            .map(|p| p.position == Position::GK)
-            .collect(),
-        bench_size: usize::from(config.tactics.ai.bench_size),
-        tactics: config.tactics.clone(),
-    }));
-
+    let match_id = opened.identity.match_id.clone();
     let server = Server::bind(&data, &match_id)?;
     println!("{}", server.port());
     // The page address is printed after the port, because it is the line a reader copies.
@@ -172,114 +162,241 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
         println!("{}", page.address());
     }
 
-    let state = Arc::new(MatchState::default());
-    let mut gated = GatedSnapshots::new(
-        &data,
-        &match_id,
-        identity.owner,
-        identity.match_millis,
-        Arc::clone(&state),
-    );
-    // The events file: a resumed match keeps the rows up to its snapshot.
-    let mut writer = Some(match resume_tick {
-        Some(tick) => EventWriter::resume(&data, &match_id, tick)?,
-        None => EventWriter::open(&data, &match_id)?,
-    });
-    if let Some(tick) = resume_tick {
-        state.set_tick(tick);
-        state.set_sent_tick(tick);
-    }
-    let mut ticks_file = match opts.ticks_out.as_deref() {
-        Some(path) => Some(
-            FileSink::create(
-                path,
-                &TickHeader {
-                    seed: identity.seed,
-                    dt: config.tuning.dt,
-                    expected_ticks: ticks,
-                    owner_id: identity.owner,
-                    match_millis: identity.match_millis,
-                },
-            )
-            .with_context(|| format!("cannot create {}", path.display()))?,
-        ),
-        None => None,
-    };
+    let mut serving = Serving::new(&loaded, opened, opts, data)?;
     let wait = Duration::from_secs(opts.reconnect_wait);
-    let mut drop_at = opts.drop_client_at;
     let mut connection = server.accept(&match_id)?;
     loop {
+        let played = serving.play(connection)?;
+        if played.full_time {
+            serving.finish_ticks()?;
+            return Ok(EXIT_FULL_TIME);
+        }
+        if played.end != SessionEnd::Dropped || wait.is_zero() {
+            if !played.started {
+                tracing::info!(
+                    signal = "socket.client_gone",
+                    written = 0,
+                    reason = "the viewer left before kick-off"
+                );
+            }
+            serving.finish_ticks()?;
+            return Ok(EXIT_VIEWER_GONE);
+        }
+        let resume_at = serving.rewind(played.started)?;
+        match server.accept_within(&match_id, wait)? {
+            Some(next) => {
+                tracing::info!(signal = "socket.reconnected", resume_tick = resume_at);
+                connection = next;
+            }
+            None => {
+                tracing::info!(
+                    signal = "socket.client_gone",
+                    written = 0,
+                    reason = "the viewer did not reconnect in time"
+                );
+                serving.finish_ticks()?;
+                return Ok(EXIT_VIEWER_GONE);
+            }
+        }
+    }
+}
+
+/// What one connection's session did.
+struct Played {
+    /// `true` once the match has kicked off.
+    started: bool,
+    /// `true` when the referee ended the match.
+    full_time: bool,
+    end: SessionEnd,
+}
+
+/// A served match across every connection a viewer makes to it: the state that outlives a
+/// lost connection and is rewound when the viewer comes back.
+struct Serving<'a> {
+    loaded: &'a crate::content::Loaded,
+    identity: Identity,
+    /// The match as configured. A fresh match gains the page's lineup at kick-off.
+    config: MatchConfig,
+    /// The match; `None` until a fresh match kicks off.
+    sim: Option<Simulation>,
+    hello: Hello,
+    pre_match: Arc<PreMatch>,
+    state: Arc<MatchState>,
+    gated: GatedSnapshots,
+    /// The events file, handed to each connection in turn.
+    writer: Option<EventWriter>,
+    /// The `--ticks-out` file, kept across connections and cut back on a rewind.
+    ticks_file: Option<FileSink>,
+    /// The tick the ticks file's first record follows: 0, or the tick a resumed match
+    /// continues from.
+    ticks_base: u32,
+    /// Every change the page queued, so a verdict after a reconnect carries its identifier.
+    page_changes: RefCell<Vec<PageChange>>,
+    data: std::path::PathBuf,
+    club_ids: [String; 2],
+    ticks: u32,
+    stream_tuning: engine::data::StreamTuning,
+    drop_at: Option<u32>,
+}
+
+impl<'a> Serving<'a> {
+    fn new(
+        loaded: &'a crate::content::Loaded,
+        opened: Opened,
+        opts: &ServeOpts,
+        data: std::path::PathBuf,
+    ) -> anyhow::Result<Self> {
+        let Opened {
+            identity,
+            config,
+            sim,
+            resume_tick,
+            hello,
+        } = opened;
+        let ticks = config.max_ticks();
+        let club_ids = [
+            config.teams[0].club_id.clone(),
+            config.teams[1].club_id.clone(),
+        ];
+        let pre_match = Arc::new(PreMatch::new(LineupRules {
+            keepers: config.teams[HOME]
+                .squad
+                .iter()
+                .map(|p| p.position == Position::GK)
+                .collect(),
+            bench_size: usize::from(config.tactics.ai.bench_size),
+            tactics: config.tactics.clone(),
+        }));
+        let state = Arc::new(MatchState::default());
+        let gated = GatedSnapshots::new(
+            &data,
+            &identity.match_id,
+            identity.owner,
+            identity.match_millis,
+            Arc::clone(&state),
+        );
+        // The events file: a resumed match keeps the rows up to its snapshot.
+        let writer = Some(match resume_tick {
+            Some(tick) => EventWriter::resume(&data, &identity.match_id, tick)?,
+            None => EventWriter::open(&data, &identity.match_id)?,
+        });
+        if let Some(tick) = resume_tick {
+            state.set_tick(tick);
+            state.set_sent_tick(tick);
+        }
+        let ticks_file = match opts.ticks_out.as_deref() {
+            Some(path) => Some(
+                FileSink::create(
+                    path,
+                    &TickHeader {
+                        seed: identity.seed,
+                        dt: config.tuning.dt,
+                        expected_ticks: ticks,
+                        owner_id: identity.owner,
+                        match_millis: identity.match_millis,
+                    },
+                )
+                .with_context(|| format!("cannot create {}", path.display()))?,
+            ),
+            None => None,
+        };
+        Ok(Self {
+            loaded,
+            identity,
+            config,
+            sim,
+            hello,
+            pre_match,
+            state,
+            gated,
+            writer,
+            ticks_file,
+            ticks_base: resume_tick.unwrap_or(0),
+            page_changes: RefCell::new(Vec::new()),
+            data,
+            club_ids,
+            ticks,
+            stream_tuning: loaded.content.tuning.stream.clone(),
+            drop_at: opts.drop_client_at,
+        })
+    }
+
+    /// Serves one connection: holds for kick-off when the match has not started, plays until
+    /// full time or until the viewer leaves, and writes the statistics at full time.
+    fn play(&mut self, connection: Connection) -> anyhow::Result<Played> {
+        let match_id = self.identity.match_id.clone();
         let events = Arc::new(Mutex::new(
-            writer
+            self.writer
                 .take()
                 .expect("each connection opens the events file"),
         ));
         // A match that has kicked off runs at once; a fresh one holds for the page's lineup.
-        let gate = Arc::new(if sim.is_some() {
+        let gate = Arc::new(if self.sim.is_some() {
             Gate::new()
         } else {
             Gate::held()
         });
         // A page that reports the tick it draws keeps the engine within the buffer bound of
         // it, so a change the manager queues reaches the engine before the stoppage on screen.
-        gate.set_lead_bound(u32::try_from(stream_tuning.buffer_ticks).unwrap_or(u32::MAX));
+        gate.set_lead_bound(u32::try_from(self.stream_tuning.buffer_ticks).unwrap_or(u32::MAX));
         let inbox = Arc::new(Inbox::default());
         let session = Session::start(
             connection,
             SessionConfig {
-                buffer_ticks: stream_tuning.buffer_ticks,
-                keyframe_interval: stream_tuning.keyframe_interval,
-                hello: hello.clone(),
+                buffer_ticks: self.stream_tuning.buffer_ticks,
+                keyframe_interval: self.stream_tuning.keyframe_interval,
+                hello: self.hello.clone(),
                 commands: CommandContext {
-                    owner_id: identity.owner_id.clone(),
+                    owner_id: self.identity.owner_id.clone(),
                     match_id: match_id.clone(),
                     gate: Arc::clone(&gate),
-                    state: Arc::clone(&state),
+                    state: Arc::clone(&self.state),
                     events: Arc::clone(&events),
-                    queue: Queue::new(admitted_kinds(&loaded.content.rules)),
-                    pre_match: if sim.is_some() {
+                    queue: Queue::new(admitted_kinds(&self.loaded.content.rules)),
+                    pre_match: if self.sim.is_some() {
                         Arc::new(PreMatch::none())
                     } else {
-                        Arc::clone(&pre_match)
+                        Arc::clone(&self.pre_match)
                     },
                     inbox: Arc::clone(&inbox),
                 },
-                drop_at: drop_at.take(),
+                drop_at: self.drop_at.take(),
             },
         )?;
 
         let mut full_time = false;
         let mut written = 0;
-        let started = sim.is_some() || gate.wait_until_running();
-        if started && sim.is_none() {
-            if let Some(setup) = pre_match.take() {
-                config = with_page_setup(config, setup);
+        let started = self.sim.is_some() || gate.wait_until_running();
+        if started && self.sim.is_none() {
+            if let Some(setup) = self.pre_match.take() {
+                self.config = with_page_setup(self.config.clone(), setup);
             }
-            let mut kicked_off = Simulation::new(config.clone())?;
-            loaded.attach(&mut kicked_off);
+            let mut kicked_off = Simulation::new(self.config.clone())?;
+            self.loaded.attach(&mut kicked_off);
             // The kick-off state, with the page's lineup: the restart point until the first
             // stoppage.
-            gated.capture(&kicked_off);
-            sim = Some(kicked_off);
+            self.gated.capture(&kicked_off);
+            self.sim = Some(kicked_off);
         }
-        if let Some(sim) = sim.as_mut().filter(|_| started) {
+        if let Some(sim) = self.sim.as_mut().filter(|_| started) {
             let played_from = Instant::now();
             let mut sink = FanoutSink::new(
-                FanoutSink::new(session.sink(), ticks_file.take()),
-                &mut gated,
+                FanoutSink::new(session.sink(), self.ticks_file.take()),
+                &mut self.gated,
             );
             let driven = drive(
                 sim,
                 &mut sink,
                 &Drive {
-                    ticks,
-                    owner_id: &identity.owner_id,
+                    ticks: self.ticks,
+                    owner_id: &self.identity.owner_id,
                     match_id: &match_id,
-                    club_ids: [&club_ids[0], &club_ids[1]],
-                    state: &state,
+                    club_ids: [&self.club_ids[0], &self.club_ids[1]],
+                    state: &self.state,
                     gate: Some(&gate),
-                    commentary: &loaded.commentary,
+                    commentary: &self.loaded.commentary,
                     inbox: Some(&inbox),
+                    page_changes: Some(&self.page_changes),
                 },
                 &mut |message: ServerMessage| {
                     if let ServerMessage::Event(event) = &message {
@@ -291,24 +408,30 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
                     session.send(&message)
                 },
             );
-            match driven {
-                Ok(driven) => {
-                    full_time = driven.full_time;
-                    written = driven.written;
-                }
+            let driven = match driven {
+                Ok(driven) => Some(driven),
                 // A message the socket could not take: the viewer is gone.
-                Err(StreamError::ClientGone) => {}
+                Err(StreamError::ClientGone) => None,
                 Err(other) => return Err(other.into()),
-            }
+            };
             let (streams, _) = sink.into_parts();
             let (_, file) = streams.into_parts();
-            if let Some(file) = file {
-                file.finish()?;
+            self.ticks_file = file;
+            if let Some(driven) = driven {
+                full_time = driven.full_time;
+                written = driven.written;
             }
             if full_time {
                 let path = write_stats(
-                    &data,
-                    &match_stats(&identity, &config, sim, written, played_from, gated.writes),
+                    &self.data,
+                    &match_stats(
+                        &self.identity,
+                        &self.config,
+                        sim,
+                        written,
+                        played_from,
+                        self.gated.writes,
+                    ),
                 )?;
                 tracing::info!(signal = "stats.written", path = %path.display());
             }
@@ -324,56 +447,73 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
             pauses = gauge.pauses(),
             paused_ms = gauge.paused_ms()
         );
-        if full_time {
-            return Ok(0);
-        }
-        if end != SessionEnd::Dropped || wait.is_zero() {
-            if !started {
-                tracing::info!(
-                    signal = "socket.client_gone",
-                    written = 0,
-                    reason = "the viewer left before kick-off"
-                );
-            }
-            return Ok(2);
-        }
+        // A change the socket admitted that the engine never took is still the page's.
+        self.page_changes.borrow_mut().extend(
+            inbox
+                .drain()
+                .into_iter()
+                .map(|admitted| PageChange { id: None, admitted }),
+        );
+        Ok(Played {
+            started,
+            full_time,
+            end,
+        })
+    }
 
-        // The connection dropped. Go back to the newest stoppage the viewer holds in full.
-        let sent_tick = state.sent_tick();
-        tracing::info!(signal = "socket.dropped", tick = state.tick(), sent_tick);
-        drop(events);
+    /// The connection dropped. Goes back to the newest stoppage the viewer holds in full and
+    /// returns the tick the match continues from. The match, its page changes, the hello, the
+    /// events file, and the ticks file all go back to that tick.
+    fn rewind(&mut self, started: bool) -> anyhow::Result<u32> {
+        let sent_tick = self.state.sent_tick();
+        tracing::info!(
+            signal = "socket.dropped",
+            tick = self.state.tick(),
+            sent_tick
+        );
         let resume_at = if started {
-            let mut resumed = match gated.newest_before(sent_tick) {
-                Some(snapshot) => Simulation::from_snapshot(config.clone(), snapshot)?,
+            let mut resumed = match self.gated.newest_before(sent_tick) {
+                Some(snapshot) => Simulation::from_snapshot(self.config.clone(), snapshot)?,
                 // No stoppage reached the viewer yet: the match starts again from kick-off,
                 // with the same seed, lineup, and identity.
-                None => Simulation::new(config.clone())?,
+                None => Simulation::new(self.config.clone())?,
             };
-            loaded.attach(&mut resumed);
+            self.loaded.attach(&mut resumed);
             let tick = resumed.tick();
-            sim = Some(resumed);
+            carry_page_changes(&mut resumed, &mut self.page_changes.borrow_mut(), tick);
+            // A page that loads afresh learns the match as it now stands: the lineup the page
+            // chose and every change made up to this point.
+            self.hello = hello_for(
+                &resumed,
+                &self.identity,
+                &self.config,
+                self.stream_tuning.keyframe_interval,
+            );
+            self.sim = Some(resumed);
             tick
         } else {
             0
         };
-        gated.rewind(resume_at);
-        state.set_tick(resume_at);
-        state.set_sent_tick(resume_at);
-        writer = Some(EventWriter::resume(&data, &match_id, resume_at)?);
-        match server.accept_within(&match_id, wait)? {
-            Some(next) => {
-                tracing::info!(signal = "socket.reconnected", resume_tick = resume_at);
-                connection = next;
-            }
-            None => {
-                tracing::info!(
-                    signal = "socket.client_gone",
-                    written = 0,
-                    reason = "the viewer did not reconnect in time"
-                );
-                return Ok(2);
-            }
+        self.gated.rewind(resume_at);
+        self.state.set_tick(resume_at);
+        self.state.set_sent_tick(resume_at);
+        self.writer = Some(EventWriter::resume(
+            &self.data,
+            &self.identity.match_id,
+            resume_at,
+        )?);
+        if let Some(file) = self.ticks_file.as_mut() {
+            file.rewind(resume_at.saturating_sub(self.ticks_base))?;
         }
+        Ok(resume_at)
+    }
+
+    /// Writes the ticks file's trailer, when the run keeps one.
+    fn finish_ticks(&mut self) -> anyhow::Result<()> {
+        if let Some(file) = self.ticks_file.take() {
+            file.finish()?;
+        }
+        Ok(())
     }
 }
 

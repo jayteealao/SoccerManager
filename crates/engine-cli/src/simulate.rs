@@ -77,13 +77,13 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
     let snapshot_writes = snapshots.map_or(0, |s| s.writes);
     let elapsed = started.elapsed();
 
+    // Read once: the JSON copy and the validator both use these records.
+    let file = read_ticks(&opts.ticks_out)?;
     if opts.json {
         let json_path = opts.ticks_out.with_extension("jsonl");
-        let records = read_ticks(&opts.ticks_out)?;
-        engine::record::write_jsonl(&json_path, &records.records)?;
+        engine::record::write_jsonl(&json_path, &file.records)?;
     }
 
-    let file = read_ticks(&opts.ticks_out)?;
     let events = sim.take_events();
     let match_id_text = match_id.to_string();
     let mut writer = EventWriter::open(&data, &match_id_text)?;

@@ -48,7 +48,7 @@ fn the_hello_arrives_before_the_first_tick_frame() {
 #[test]
 fn an_unknown_protocol_version_is_refused_naming_both() {
     let served = common::Served::start("hello-version", 1, 500);
-    let err = Client::connect(served.port, 9, "null").unwrap_err();
+    let err = Client::connect(served.port, 9, "http://127.0.0.1").unwrap_err();
     let StreamError::WebSocket { source } = &err else {
         panic!("a refused handshake is a websocket error: {err}");
     };

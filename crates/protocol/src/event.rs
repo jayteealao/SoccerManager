@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::command::{ChangeKind, ChangeState};
 
-/// Simulated ticks in one minute of play (50 ticks per second).
+/// Simulated ticks in one minute of play (50 ticks per second). This crate does not depend on
+/// the engine; a test in the command-line crate pins this to the engine's clock.
 pub const TICKS_PER_MINUTE: u32 = 50 * 60;
 
 /// The event types this build emits. The contract's enumeration is wider.

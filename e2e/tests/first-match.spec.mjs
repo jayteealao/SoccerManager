@@ -159,12 +159,22 @@ test('a manager plays a whole match, lineup to full-time report', async ({ page 
       const seconds = (Date.now() - w0) / 1000;
       const rate = (t1 - t0) / seconds / 50;
       const notice = (await page.locator('#notice').textContent()).trim();
+      const noticeShown = (await page.locator('#notice').getAttribute('data-shown')) === 'true';
       await shot(page, testInfo, 5);
+      // Never faster than asked, whichever way the step goes.
+      expect(rate).toBeLessThan(4 * 1.05);
       if (Math.abs(rate - 4) / 4 > 0.05) {
-        // The engine could not keep up: the notice says what it sustained.
-        expect(notice).toMatch(/\dx|\d times/);
+        // The engine could not keep up: a shown notice names the speed it sustained, below
+        // the one asked for, and the clock ran at about that speed.
+        expect(noticeShown, `notice: ${notice}`).toBe(true);
+        const named = notice.match(/Playing at (\d+)x/);
+        expect(named, `notice: ${notice}`).not.toBeNull();
+        const sustained = Number(named[1]);
+        expect(sustained).toBeLessThan(4);
+        expect(Math.abs(rate - sustained), `measured ${rate}x, notice ${notice}`).toBeLessThanOrEqual(1);
       } else {
-        expect(rate).toBeGreaterThan(3.8);
+        // Playing at the speed asked for: no lag notice names a lower one.
+        expect(noticeShown && /Playing at/.test(notice), `notice: ${notice}`).toBe(false);
       }
       await expect(page.getByLabel('Playback speed')).toHaveText('4x');
     });

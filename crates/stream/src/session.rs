@@ -26,8 +26,12 @@ use crate::{StreamError, peer_gone, would_block};
 
 /// Messages the socket thread holds before it writes them.
 const OUTBOX_LIMIT: usize = 32;
-/// How long the socket thread sleeps when neither direction has work.
+/// How long the socket thread first sleeps when neither direction has work.
 const IDLE_SLEEP: Duration = Duration::from_micros(100);
+/// The longest idle sleep. Each pass in a row with no work doubles the sleep up to this, so a
+/// held, paused, or lead-bound match does not wake the thread ten thousand times a second,
+/// and the first frame after a quiet spell waits at most this long.
+const IDLE_SLEEP_MAX: Duration = Duration::from_millis(1);
 
 /// The tick and the score, shared between the simulation thread and the socket thread.
 #[derive(Debug, Default)]
@@ -402,6 +406,8 @@ fn pump(
     let mut taken_tick = 0u32;
     // The newest tick frame the socket accepted and has not yet flushed.
     let mut written_tick: Option<u32> = None;
+    // The current idle sleep: `IDLE_SLEEP` after any pass with work, doubling while idle.
+    let mut idle_sleep = IDLE_SLEEP;
     loop {
         let mut idle = true;
 
@@ -461,13 +467,18 @@ fn pump(
             }
         }
 
-        // Writes. A full socket buffer stops the drain; the frames stay in the outbox.
+        // Writes. A full socket buffer stops the drain; the frames stay in the outbox. Only a
+        // frame the socket took counts as work: a refused write leaves the pass idle, so a
+        // slow reader does not spin this thread at a full core.
         while let Some((tick, message)) = outbox.pop_front() {
-            idle = false;
             match socket.write(message) {
-                Ok(()) => written_tick = tick.or(written_tick),
+                Ok(()) => {
+                    idle = false;
+                    written_tick = tick.or(written_tick);
+                }
                 // The socket buffered the frame and the stream was not ready.
                 Err(tungstenite::Error::Io(e)) if would_block(&e) => {
+                    idle = false;
                     written_tick = tick.or(written_tick);
                     break;
                 }
@@ -507,7 +518,10 @@ fn pump(
             return Ok(SessionEnd::Done);
         }
         if idle {
-            std::thread::sleep(IDLE_SLEEP);
+            std::thread::sleep(idle_sleep);
+            idle_sleep = (idle_sleep * 2).min(IDLE_SLEEP_MAX);
+        } else {
+            idle_sleep = IDLE_SLEEP;
         }
     }
 }

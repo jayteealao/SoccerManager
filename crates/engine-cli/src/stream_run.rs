@@ -17,8 +17,10 @@ use protocol::{
     CardKind, ChangeKind, ChangeOutcome, ChangeState, Condition, EventType, MatchEvent,
     RosterEntry, ServerMessage, SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
 };
+use std::cell::RefCell;
+
 use stream::session::MatchState;
-use stream::{Gate, Inbox, StreamError};
+use stream::{Admitted, Gate, Inbox, StreamError};
 
 /// The team a page manages.
 const HOME: usize = 0;
@@ -41,6 +43,30 @@ pub struct Drive<'a> {
     pub commentary: &'a Commentary,
     /// The changes the page queued, when a page can queue them.
     pub inbox: Option<&'a Inbox>,
+    /// Every change the page queued in this run, kept across connections so a verdict after
+    /// a reconnect still carries the page's identifier. `None` when nothing reconnects.
+    pub page_changes: Option<&'a RefCell<Vec<PageChange>>>,
+}
+
+/// A change the page queued, as a run carries it across a lost connection.
+#[derive(Debug, Clone)]
+pub struct PageChange {
+    /// The engine's identifier; `None` while the change still waits in the inbox.
+    pub id: Option<ChangeId>,
+    pub admitted: Admitted,
+}
+
+/// Carries the page's changes onto a match rewound to `resume_at`. A change the engine queued
+/// before that tick is in the resumed match and keeps its identifier. A change queued later,
+/// or still in the inbox, is queued again when the events file kept its `queued` row (the
+/// page was told it is queued); any other goes with its row.
+pub fn carry_page_changes(sim: &mut Simulation, changes: &mut Vec<PageChange>, resume_at: u32) {
+    changes.retain(|c| c.id.is_some_and(|id| id.tick < resume_at) || c.admitted.tick <= resume_at);
+    for change in changes.iter_mut() {
+        if change.id.is_none_or(|id| id.tick >= resume_at) {
+            change.id = Some(sim.queue_change(HOME, change.admitted.change.clone()));
+        }
+    }
 }
 
 /// What a driven match did.
@@ -60,23 +86,47 @@ pub fn drive<S: TickSink>(
     route: MessageRoute<'_>,
 ) -> Result<Driven, StreamError> {
     let mut ids = Ids::new(sim);
+    if let Some(carried) = opts.page_changes {
+        ids.page.extend(
+            carried
+                .borrow()
+                .iter()
+                .filter_map(|c| c.id.map(|id| (id, c.admitted.queue_id.clone()))),
+        );
+    }
     let mut commentator = Commentator::for_match(opts.commentary, sim);
     // One simulated second of ticks: the cadence of the running statistics and energy.
     let ticks_per_second = ((1.0 / sim.tuning().dt).round() as u32).max(1);
     let mut written = 0u32;
     // A sudden death can run past the announced maximum; it is played to its end.
     while !sim.is_over() && (written < opts.ticks || sim.in_shootout()) {
+        // A stopped gate means the viewer left: the match did not end, so no full-time
+        // event or closing statistics are written for it.
         if let Some(gate) = opts.gate
             && !gate.wait_for_room(sim.tick())
         {
-            break;
+            tracing::info!(
+                signal = "socket.client_gone",
+                written,
+                reason = "the viewer left while the match waited"
+            );
+            return Ok(Driven {
+                written,
+                full_time: false,
+            });
         }
         // A change queued while the match was paused is queued here, on the first running
         // tick, so it waits for the next stoppage and never applies on the resume tick.
         if let Some(inbox) = opts.inbox {
             for admitted in inbox.drain() {
-                let id = sim.queue_change(HOME, admitted.change);
-                ids.page.push((id, admitted.queue_id));
+                let id = sim.queue_change(HOME, admitted.change.clone());
+                ids.page.push((id, admitted.queue_id.clone()));
+                if let Some(carried) = opts.page_changes {
+                    carried.borrow_mut().push(PageChange {
+                        id: Some(id),
+                        admitted,
+                    });
+                }
             }
         }
         sim.step();
@@ -345,6 +395,32 @@ impl Ids {
     }
 }
 
+/// The event type the wire names an engine event kind by. Both change verdicts travel as
+/// `tactics-change`.
+pub(crate) fn event_type(kind: EngineEventKind) -> EventType {
+    match kind {
+        EngineEventKind::KickOff => EventType::KickOff,
+        EngineEventKind::Goal => EventType::Goal,
+        EngineEventKind::HalfTime => EventType::HalfTime,
+        EngineEventKind::FullTime => EventType::FullTime,
+        EngineEventKind::Offside => EventType::Offside,
+        EngineEventKind::Foul => EventType::Foul,
+        EngineEventKind::Card => EventType::Card,
+        EngineEventKind::ThrowIn => EventType::ThrowIn,
+        EngineEventKind::Corner => EventType::Corner,
+        EngineEventKind::GoalKick => EventType::GoalKick,
+        EngineEventKind::FreeKick => EventType::FreeKick,
+        EngineEventKind::Penalty => EventType::Penalty,
+        EngineEventKind::Injury => EventType::Injury,
+        EngineEventKind::Substitution => EventType::Substitution,
+        EngineEventKind::AiDecision => EventType::AiDecision,
+        EngineEventKind::Script => EventType::Script,
+        EngineEventKind::ChangeApplied | EngineEventKind::ChangeRejected => {
+            EventType::TacticsChange
+        }
+    }
+}
+
 /// One engine event as the `match-event` record kind names it. `club_ids` are the two
 /// `team.id` values, home first.
 pub(crate) fn match_event(
@@ -378,28 +454,7 @@ pub(crate) fn match_event(
             .queued_at(id.tick)
             .applied_tick(reason.is_none().then_some(event.tick));
     }
-    let event_type = match event.kind {
-        EngineEventKind::KickOff => EventType::KickOff,
-        EngineEventKind::Goal => EventType::Goal,
-        EngineEventKind::HalfTime => EventType::HalfTime,
-        EngineEventKind::FullTime => EventType::FullTime,
-        EngineEventKind::Offside => EventType::Offside,
-        EngineEventKind::Foul => EventType::Foul,
-        EngineEventKind::Card => EventType::Card,
-        EngineEventKind::ThrowIn => EventType::ThrowIn,
-        EngineEventKind::Corner => EventType::Corner,
-        EngineEventKind::GoalKick => EventType::GoalKick,
-        EngineEventKind::FreeKick => EventType::FreeKick,
-        EngineEventKind::Penalty => EventType::Penalty,
-        EngineEventKind::Injury => EventType::Injury,
-        EngineEventKind::Substitution => EventType::Substitution,
-        EngineEventKind::AiDecision => EventType::AiDecision,
-        EngineEventKind::Script => EventType::Script,
-        // A verdict always carries its change detail and returned above.
-        EngineEventKind::ChangeApplied | EngineEventKind::ChangeRejected => {
-            EventType::TacticsChange
-        }
-    };
+    let event_type = event_type(event.kind);
     let (player, secondary) = match event.detail {
         Some(EventDetail::Substitution { off, on }) => {
             let (off_id, on_id) = (squad_id(event.team, off), squad_id(event.team, on));
@@ -513,6 +568,7 @@ mod tests {
                 gate: None,
                 commentary: &loaded.commentary,
                 inbox: None,
+                page_changes: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -550,6 +606,7 @@ mod tests {
                 gate: None,
                 commentary: &loaded.commentary,
                 inbox: None,
+                page_changes: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -740,6 +797,7 @@ mod tests {
             stream::Admitted {
                 queue_id: "q-7-0".into(),
                 change: engine::Change::Tactics(engine::TacticsPatch::mentality(4)),
+                tick: 7,
             },
             stream::Admitted {
                 queue_id: "q-7-1".into(),
@@ -747,6 +805,7 @@ mod tests {
                     off: home.lineup[10],
                     on: home.bench[0],
                 },
+                tick: 7,
             },
         ]
     }
@@ -760,6 +819,102 @@ mod tests {
             })
             .filter(|e| e.team_id.as_deref() == Some("club-a"))
             .collect()
+    }
+
+    #[test]
+    fn every_engine_event_kind_spells_the_wire_type_it_travels_as() {
+        for kind in EngineEventKind::ALL {
+            assert_eq!(kind.code(), event_type(kind).code(), "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn the_wire_minute_counts_the_ticks_the_engine_clock_counts() {
+        assert_eq!(
+            protocol::event::TICKS_PER_MINUTE,
+            engine::rules::clock::TICKS_PER_MINUTE
+        );
+    }
+
+    #[test]
+    fn a_viewer_that_leaves_while_the_match_waits_gets_no_full_time() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let config = MatchConfig::new(42, 2, &loaded.content, [a, b]).unwrap();
+        let ticks = config.max_ticks();
+        let mut sim = Simulation::new(config).unwrap();
+        let gate = Gate::new();
+        gate.stop();
+        let state = MatchState::default();
+        let mut messages = Vec::new();
+        let driven = drive(
+            &mut sim,
+            &mut VecSink::default(),
+            &Drive {
+                ticks,
+                owner_id: "0123456789abcdef0123456789abcdef",
+                match_id: "000000000000002a-1",
+                club_ids: ["club-a", "club-b"],
+                state: &state,
+                gate: Some(&gate),
+                commentary: &loaded.commentary,
+                inbox: None,
+                page_changes: None,
+            },
+            &mut |m: ServerMessage| {
+                messages.push(m);
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert!(!driven.full_time);
+        assert!(
+            !messages.iter().any(|m| matches!(
+                m,
+                ServerMessage::Event(e) if e.event_type == EventType::FullTime
+            )),
+            "a match the viewer left must not record a full time"
+        );
+    }
+
+    #[test]
+    fn a_rewind_keeps_page_changes_the_page_was_told_about_and_drops_the_rest() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let config = MatchConfig::new(42, 3, &loaded.content, [a, b])
+            .unwrap()
+            .with_manager(HOME, engine::Manager::Human);
+        let mut sim = Simulation::new(config).unwrap();
+        let admitted = page_changes(&sim);
+        let change = |queue_id: &str, tick: u32, id: Option<ChangeId>| PageChange {
+            id,
+            admitted: Admitted {
+                queue_id: queue_id.into(),
+                tick,
+                ..admitted[0].clone()
+            },
+        };
+        let resume_at = 100;
+        let mut changes = vec![
+            // Queued into the engine before the snapshot: the resumed match holds it.
+            change("q-50-0", 50, Some(ChangeId { tick: 60, n: 0 })),
+            // Admitted at the snapshot tick, queued into the engine after it: queued again.
+            change("q-100-1", 100, Some(ChangeId { tick: 100, n: 1 })),
+            // Still in the inbox when the connection dropped: queued now.
+            change("q-90-2", 90, None),
+            // Admitted after the snapshot: its row is gone, and so is it.
+            change("q-120-3", 120, Some(ChangeId { tick: 120, n: 2 })),
+        ];
+        let before = sim.pending_changes().len();
+        carry_page_changes(&mut sim, &mut changes, resume_at);
+        let kept: Vec<&str> = changes
+            .iter()
+            .map(|c| c.admitted.queue_id.as_str())
+            .collect();
+        assert_eq!(kept, ["q-50-0", "q-100-1", "q-90-2"]);
+        assert_eq!(changes[0].id, Some(ChangeId { tick: 60, n: 0 }));
+        assert!(changes.iter().all(|c| c.id.is_some()));
+        assert_eq!(sim.pending_changes().len(), before + 2);
     }
 
     #[test]
@@ -789,6 +944,7 @@ mod tests {
                 gate: None,
                 commentary: &loaded.commentary,
                 inbox: Some(&inbox),
+                page_changes: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -856,6 +1012,7 @@ mod tests {
                         gate: Some(&gate),
                         commentary: &loaded.commentary,
                         inbox: None,
+                        page_changes: None,
                     },
                     &mut |_: ServerMessage| Ok(()),
                 )
@@ -911,6 +1068,7 @@ mod tests {
                         gate: Some(&gate),
                         commentary: &loaded.commentary,
                         inbox: Some(&inbox),
+                        page_changes: None,
                     },
                     &mut |m: ServerMessage| {
                         messages.push(m);

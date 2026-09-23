@@ -110,3 +110,16 @@ test('full time is known once its event is stored, before playback reaches it', 
   assert.equal(state.fullTimeTick, 292900);
   assert.equal(state.at(100).fullTime, false);
 });
+
+test('the full-time tick follows a rewind past it and a cleared match', () => {
+  const state = new MatchState();
+  state.add(eventMessage(1, KIND.kickOff));
+  state.add(eventMessage(4500, KIND.fullTime));
+  assert.equal(state.fullTimeTick, 4500);
+  state.truncate(4000);
+  assert.equal(state.fullTimeTick, null);
+  state.add(eventMessage(4600, KIND.fullTime));
+  assert.equal(state.fullTimeTick, 4600);
+  state.clear();
+  assert.equal(state.fullTimeTick, null);
+});

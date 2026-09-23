@@ -67,9 +67,23 @@ pub fn goal_centre(attack_x: f64) -> DVec2 {
     DVec2::new(HALF_LENGTH * attack_x, 0.0)
 }
 
-/// `true` when a ball at `p` has crossed the goal line between the posts on the `attack_x` side.
-pub fn in_goal(p: DVec2, attack_x: f64) -> bool {
-    p.x * attack_x > HALF_LENGTH && p.y.abs() < GOAL_WIDTH / 2.0
+/// `true` when a ball moving from `prev` to `p` is wholly over the goal line on the `attack_x`
+/// side and crossed it between the posts (IFAB Law 10). The crossing point is read from the
+/// step's path, not its end, so a fast diagonal ball that crosses inside a post and ends the
+/// step wide of it still scores.
+pub fn in_goal(prev: DVec2, p: DVec2, attack_x: f64) -> bool {
+    if p.x * attack_x <= HALF_LENGTH + BALL_RADIUS {
+        return false;
+    }
+    let line = HALF_LENGTH * attack_x;
+    let dx = p.x - prev.x;
+    let t = if dx.abs() < 1e-12 {
+        0.0
+    } else {
+        ((line - prev.x) / dx).clamp(0.0, 1.0)
+    };
+    let y = prev.y + (p.y - prev.y) * t;
+    y.abs() < GOAL_WIDTH / 2.0
 }
 
 /// The line a ball moving from `prev` to `ball` left the pitch over, or `None` while any part
@@ -181,11 +195,47 @@ mod tests {
         );
     }
 
+    /// The viewer hides a sent-off player by these spots; its tests read them from a shared
+    /// file, and this test keeps that file equal to `parking_spot`.
+    #[test]
+    fn the_viewer_parking_spot_file_matches_the_engine() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../web/tests/data/parking-spots.json");
+        let text = std::fs::read_to_string(&path).expect("the shared parking-spot file");
+        let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let spots = doc["spots"].as_array().unwrap();
+        assert_eq!(spots.len(), 22);
+        for spot in spots {
+            let team = spot["team"].as_u64().unwrap() as usize;
+            let slot = spot["slot"].as_u64().unwrap() as usize;
+            let at = parking_spot(team, slot);
+            let cm = |v: f64| (v * 100.0).round() as i64;
+            assert_eq!(
+                spot["x_cm"].as_i64(),
+                Some(cm(at.x)),
+                "team {team} slot {slot}"
+            );
+            assert_eq!(
+                spot["y_cm"].as_i64(),
+                Some(cm(at.y)),
+                "team {team} slot {slot}"
+            );
+        }
+    }
+
     #[test]
     fn goal_detection_uses_the_posts() {
-        assert!(in_goal(DVec2::new(52.6, 3.0), 1.0));
-        assert!(!in_goal(DVec2::new(52.6, 4.0), 1.0));
-        assert!(!in_goal(DVec2::new(-52.6, 0.0), 1.0));
+        assert!(in_goal(DVec2::new(52.0, 3.0), DVec2::new(52.7, 3.0), 1.0));
+        assert!(!in_goal(DVec2::new(52.0, 4.0), DVec2::new(52.7, 4.0), 1.0));
+        assert!(!in_goal(
+            DVec2::new(-52.0, 0.0),
+            DVec2::new(-52.7, 0.0),
+            1.0
+        ));
+        // Only part of the ball is over the line: not yet a goal.
+        assert!(!in_goal(DVec2::new(52.0, 0.0), DVec2::new(52.6, 0.0), 1.0));
+        // Crosses inside the post and ends the step wide of it: a goal.
+        assert!(in_goal(DVec2::new(52.0, 3.0), DVec2::new(53.0, 4.0), 1.0));
     }
 
     #[test]

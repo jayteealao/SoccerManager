@@ -222,6 +222,7 @@ fn measure_stream(
             gate: Some(&gate),
             commentary: &loaded.commentary,
             inbox: None,
+            page_changes: None,
         },
         &mut |message: ServerMessage| session.send(&message),
     )?;

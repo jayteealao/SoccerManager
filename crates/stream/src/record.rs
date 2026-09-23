@@ -241,7 +241,9 @@ pub fn read_fixture(path: &Path) -> Result<Fixture, StreamError> {
 
     let body = &bytes[FIXTURE_HEADER_BYTES..bytes.len() - FIXTURE_TRAILER_BYTES];
     let mut hasher = Sha256::new();
-    let mut frames = Vec::with_capacity(declared_frames as usize);
+    // The header's count is not trusted for the allocation: every entry takes at least its
+    // 9-byte head, so the body cannot hold more frames than that.
+    let mut frames = Vec::with_capacity((declared_frames as usize).min(body.len() / 9));
     let mut at = 0usize;
     while at < body.len() {
         if at + 9 > body.len() {
@@ -365,6 +367,22 @@ mod tests {
         recorder.finish().unwrap();
         let bytes = std::fs::read(&path).unwrap();
         std::fs::write(&path, &bytes[..bytes.len() - FIXTURE_TRAILER_BYTES - 1]).unwrap();
+        let err = read_fixture(&path).unwrap_err();
+        std::fs::remove_file(&path).unwrap();
+        assert!(matches!(err, StreamError::Fixture(_)), "{err}");
+    }
+
+    #[test]
+    fn a_huge_declared_frame_count_is_refused_without_allocating_it() {
+        let path = temp("huge-count");
+        let mut recorder = Recorder::create(&path, 1, 1).unwrap();
+        recorder.send(Frame::Text("{}".into())).unwrap();
+        recorder.finish().unwrap();
+        let mut bytes = std::fs::read(&path).unwrap();
+        let trailer = bytes.len() - FIXTURE_TRAILER_BYTES;
+        bytes[16..20].copy_from_slice(&u32::MAX.to_le_bytes());
+        bytes[trailer + 4..trailer + 8].copy_from_slice(&u32::MAX.to_le_bytes());
+        std::fs::write(&path, &bytes).unwrap();
         let err = read_fixture(&path).unwrap_err();
         std::fs::remove_file(&path).unwrap();
         assert!(matches!(err, StreamError::Fixture(_)), "{err}");

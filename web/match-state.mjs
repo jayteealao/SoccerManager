@@ -87,6 +87,9 @@ export class MatchState {
     this.view = emptyView();
     /// How many stored events the view has consumed.
     this.consumed = 0;
+    /// The tick of the newest stored full-time event, kept as events arrive so a reader
+    /// asking on every frame never scans the whole list.
+    this.fullTime = null;
   }
 
   /// Stores one server message. Anything other than an event, statistics, or condition
@@ -95,6 +98,10 @@ export class MatchState {
     switch (message.type) {
       case 'event':
         insertByTick(this.events, message);
+        const newer = this.fullTime === null || message.tick > this.fullTime;
+        if (message['event.type'] === KIND.fullTime && newer) {
+          this.fullTime = message.tick;
+        }
         // An event stored at or before the tick already shown changes that past view.
         if (message.tick <= this.view.tick) {
           this.reset();
@@ -123,6 +130,7 @@ export class MatchState {
     this.events = this.events.filter(keep);
     this.stats = this.stats.filter(keep);
     this.conditions = this.conditions.filter(keep);
+    this.fullTime = newestFullTime(this.events);
     this.reset();
   }
 
@@ -131,6 +139,7 @@ export class MatchState {
     this.events = [];
     this.stats = [];
     this.conditions = [];
+    this.fullTime = null;
     this.reset();
   }
 
@@ -156,13 +165,18 @@ export class MatchState {
 
   /// The tick of the newest stored full-time event, or null.
   get fullTimeTick() {
-    for (let i = this.events.length - 1; i >= 0; i -= 1) {
-      if (this.events[i]['event.type'] === KIND.fullTime) {
-        return this.events[i].tick;
-      }
-    }
-    return null;
+    return this.fullTime;
   }
+}
+
+/// The tick of the newest full-time event in `events`, or null.
+function newestFullTime(events) {
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    if (events[i]['event.type'] === KIND.fullTime) {
+      return events[i].tick;
+    }
+  }
+  return null;
 }
 
 /// The socket's own record of a change it queued or refused. It names no club and carries

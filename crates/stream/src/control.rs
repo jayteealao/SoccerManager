@@ -226,6 +226,8 @@ pub struct Admitted {
     /// The identifier the client was given.
     pub queue_id: String,
     pub change: Change,
+    /// The tick the socket admitted the change on: the tick its `queued` row carries.
+    pub tick: u32,
 }
 
 /// The changes the socket admitted and the engine has not queued yet, oldest first.
@@ -474,6 +476,7 @@ impl CommandContext {
                     self.inbox.push(Admitted {
                         queue_id: queue_id.clone(),
                         change: engine_change(detail),
+                        tick,
                     });
                 }
                 let event = MatchEvent::change(

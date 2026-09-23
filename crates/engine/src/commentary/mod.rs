@@ -233,13 +233,16 @@ impl<'a> Commentator<'a> {
 }
 
 /// The rotation start for `kind` in a match with `seed`: a SplitMix64 mix, so two seeds open
-/// on different lines.
+/// on different lines. Each kind is salted by a hash of its own name, never by its place in a
+/// list, so adding or reordering kinds leaves every other kind's lines where they were.
 fn rotation(seed: u64, kind: EngineEventKind) -> u64 {
-    let index = EngineEventKind::ALL
-        .iter()
-        .position(|k| *k == kind)
-        .unwrap_or(0) as u64;
-    let mut z = seed ^ index.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    // FNV-1a over the variant name: stable across builds and platforms.
+    let salt = format!("{kind:?}")
+        .bytes()
+        .fold(0xCBF2_9CE4_8422_2325u64, |h, b| {
+            (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01B3)
+        });
+    let mut z = seed ^ salt.wrapping_mul(0x9E37_79B9_7F4A_7C15);
     z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
     z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
     z ^ (z >> 31)
