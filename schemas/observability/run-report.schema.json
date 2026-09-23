@@ -264,7 +264,164 @@
           "events.files_kept": {
             "type": "integer",
             "minimum": 0
+          },
+          "calib.flags": {
+            "description": "Every feature flag the tuning file declares, with its state for this run.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "owner",
+                "state",
+                "source"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "owner": {
+                  "type": "string"
+                },
+                "state": {
+                  "enum": [
+                    "on",
+                    "off",
+                    "paired"
+                  ]
+                },
+                "source": {
+                  "enum": [
+                    "file",
+                    "cli"
+                  ]
+                }
+              }
+            }
+          },
+          "calib.pair": {
+            "description": "A paired run: the flag compared. The top-level figures describe the off arm.",
+            "type": "object",
+            "required": [
+              "flag",
+              "owner",
+              "hypothesis",
+              "removal_condition",
+              "pinned"
+            ],
+            "properties": {
+              "flag": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "string",
+                "minLength": 1
+              },
+              "hypothesis": {
+                "type": "string",
+                "minLength": 1
+              },
+              "removal_condition": {
+                "type": "string",
+                "minLength": 1
+              },
+              "pinned": {
+                "type": "object",
+                "additionalProperties": {
+                  "enum": [
+                    "on",
+                    "off"
+                  ]
+                }
+              }
+            }
+          },
+          "calib.arms": {
+            "type": "object",
+            "required": [
+              "off",
+              "on"
+            ],
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "content.hash",
+                "tuning.flags_on",
+                "calib.suites",
+                "calib.wall_ms",
+                "calib.bands",
+                "calib.pass",
+                "darkpath.change_never_applied",
+                "darkpath.match_without_stats",
+                "validate.violations",
+                "bench.match_wall_ms"
+              ]
+            }
+          },
+          "calib.compare": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "suite",
+                "band",
+                "lo",
+                "hi",
+                "off",
+                "on",
+                "delta",
+                "off_pass",
+                "on_pass"
+              ],
+              "properties": {
+                "suite": {
+                  "enum": [
+                    "equal",
+                    "strength"
+                  ]
+                },
+                "band": {
+                  "type": "string"
+                },
+                "lo": {
+                  "type": "number"
+                },
+                "hi": {
+                  "type": "number"
+                },
+                "off": {
+                  "type": "number"
+                },
+                "on": {
+                  "type": "number"
+                },
+                "delta": {
+                  "type": "number"
+                },
+                "off_pass": {
+                  "type": "boolean"
+                },
+                "on_pass": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "calib.verdict": {
+            "enum": [
+              "on-rejected",
+              "on-better",
+              "off-better",
+              "no-difference"
+            ]
           }
+        },
+        "dependentRequired": {
+          "calib.pair": [
+            "calib.arms",
+            "calib.compare",
+            "calib.verdict"
+          ]
         }
       }
     }

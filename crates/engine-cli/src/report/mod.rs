@@ -3,6 +3,7 @@
 //! the dark paths, and names the outlier matches whose event files are kept.
 
 pub mod bands;
+pub mod compare;
 
 use std::collections::BTreeMap;
 
@@ -420,6 +421,80 @@ pub struct CalibrationReport {
     pub machine_hash: String,
     #[serde(rename = "machine.cpu_model")]
     pub cpu_model: String,
+    /// Every declared feature flag with its state for this run. Absent when the tuning file
+    /// declares none.
+    #[serde(rename = "calib.flags", skip_serializing_if = "Vec::is_empty")]
+    pub flags: Vec<FlagEntry>,
+    /// A paired run: the flag compared. The top-level figures above describe the off arm.
+    #[serde(rename = "calib.pair", skip_serializing_if = "Option::is_none")]
+    pub pair: Option<PairInfo>,
+    /// A paired run: the figures of each arm, under `off` and `on`.
+    #[serde(rename = "calib.arms", skip_serializing_if = "Option::is_none")]
+    pub arms: Option<BTreeMap<String, ArmReport>>,
+    /// A paired run: one row per suite and realism band, both arms side by side.
+    #[serde(rename = "calib.compare", skip_serializing_if = "Option::is_none")]
+    pub compare: Option<Vec<compare::CompareRow>>,
+    #[serde(rename = "calib.verdict", skip_serializing_if = "Option::is_none")]
+    pub verdict: Option<compare::Verdict>,
+}
+
+/// One declared feature flag in a run report.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct FlagEntry {
+    pub name: String,
+    pub owner: String,
+    /// `on`, `off`, or `paired` for the flag a paired run compares.
+    pub state: &'static str,
+    /// `file` when the tuning file set the state, `cli` when the command line did.
+    pub source: &'static str,
+}
+
+/// The flag a paired run compares, with the reasons it exists.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PairInfo {
+    pub flag: String,
+    pub owner: String,
+    pub hypothesis: String,
+    pub removal_condition: String,
+    /// The other flags the command line set, with their states; both arms use them.
+    pub pinned: BTreeMap<String, &'static str>,
+}
+
+/// The figures of one arm of a paired run.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ArmReport {
+    #[serde(rename = "content.hash")]
+    pub content_hash: String,
+    #[serde(rename = "tuning.flags_on")]
+    pub flags_on: Vec<String>,
+    #[serde(rename = "calib.suites")]
+    pub suites: BTreeMap<String, SuiteFigures>,
+    #[serde(rename = "calib.wall_ms")]
+    pub wall_ms: BTreeMap<String, u64>,
+    #[serde(rename = "calib.bands")]
+    pub bands: Vec<BandCheck>,
+    #[serde(rename = "calib.pass")]
+    pub pass: bool,
+    #[serde(rename = "darkpath.change_never_applied")]
+    pub change_never_applied: u32,
+    #[serde(rename = "change.expired_at_full_time")]
+    pub change_expired_at_full_time: u32,
+    #[serde(rename = "darkpath.match_without_stats")]
+    pub match_without_stats: u32,
+    #[serde(rename = "validate.violations")]
+    pub violations: usize,
+    #[serde(rename = "calib.workers_failed")]
+    pub workers_failed: u32,
+    #[serde(rename = "bench.match_wall_ms")]
+    pub match_wall_ms: u64,
+    #[serde(rename = "bench.ticks_per_match")]
+    pub ticks_per_match: u32,
+    #[serde(rename = "bench.cpu_us_per_tick")]
+    pub cpu_us_per_tick: Option<f64>,
+    #[serde(rename = "events.files_written")]
+    pub events_written: u32,
+    #[serde(rename = "events.files_kept")]
+    pub events_kept: u32,
 }
 
 impl Record for CalibrationReport {
@@ -472,6 +547,7 @@ mod tests {
             ball_max_speed: 0.0,
             ball_idle_ticks: 0,
             goals,
+            flags_on: Vec::new(),
             laws: LawStats::default(),
             tactics: TacticsStats {
                 shots,

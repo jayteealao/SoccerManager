@@ -41,6 +41,8 @@ target/release/engine-cli replay --fixture match.smfx --web web        # play a 
 
 The engine reads its data from the `content/` folder and writes each match to `SM_DATA_DIR` (default `%LOCALAPPDATA%\SoccerManager` on Windows).
 
+To compare a candidate model with the current one, declare a flag in the `flags` block of `content/tuning.json` and run `calibrate --pair <flag>`. Both arms play the same fixtures on the same seeds, and the report shows every realism band of both arms side by side with a verdict. The steps and the removal checklist are in [the modding how-to](docs/how-to/modding.md#compare-two-models-with-a-flag).
+
 ## Documentation
 
 - Tutorial: [Play your first match](docs/tutorials/first-match.md)

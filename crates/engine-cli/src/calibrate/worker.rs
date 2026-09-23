@@ -29,13 +29,15 @@ pub struct Share<'a> {
     pub shard: u32,
     pub shards: u32,
     pub run_millis: u64,
+    /// The flag states the parent resolved for this arm.
+    pub states: &'a engine::FlagStates,
 }
 
 /// Plays every fixture of the share. A failed match still writes its statistics record, with
 /// `outcome` `failure` and `error.type`, and the worker goes on with the next fixture.
 pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
     let dir = ContentDir::at(share.content_dir);
-    let content = Content::load(&dir)?;
+    let content = Content::load(&dir)?.with_flags(share.states)?;
     let commentary = Commentary::load(&dir)?;
     let bands = Bands::load(&dir)?;
     let owner_id = load_or_create_owner_id(&data_dir())?;
@@ -70,7 +72,13 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
                     match.id = %match_id,
                     error = %err
                 );
-                failure(&owner_id, &match_id, seed, &teams, &fixture, &err)
+                failure(
+                    (&owner_id, &match_id, seed),
+                    &teams,
+                    &fixture,
+                    &err,
+                    content.flags.names(),
+                )
             }
         };
         write_stats_at(&stats_dir, &stats)?;
@@ -134,6 +142,7 @@ fn play(
         ball_max_speed: summary.ball_max_speed,
         ball_idle_ticks: summary.ball_idle_ticks,
         goals: summary.goals,
+        flags_on: sim.config().flags.names().to_vec(),
         laws: LawStats::new(&summary, pack_version, sim.tick(), 0),
         tactics: TacticsStats::new(&sim),
         figures: MatchFigures::new(&summary, sim.managers()),
@@ -149,12 +158,11 @@ fn team_refs(teams: &[engine::data::TeamFile; 2]) -> [TeamRef; 2] {
 
 /// The statistics record of a match the engine could not play.
 fn failure(
-    owner_id: &str,
-    match_id: &str,
-    seed: u64,
+    (owner_id, match_id, seed): (&str, &str, u64),
     teams: &[engine::data::TeamFile; 2],
     fixture: &Fixture,
     err: &EngineError,
+    flags_on: &[String],
 ) -> MatchStats {
     tracing::debug!(fixture = fixture.index, "recording a failed match");
     MatchStats {
@@ -173,6 +181,7 @@ fn failure(
         ball_max_speed: 0.0,
         ball_idle_ticks: 0,
         goals: [0, 0],
+        flags_on: flags_on.to_vec(),
         laws: LawStats::default(),
         tactics: TacticsStats::default(),
         figures: MatchFigures {

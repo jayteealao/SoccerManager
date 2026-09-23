@@ -108,6 +108,7 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
         ball_max_speed: summary.ball_max_speed,
         ball_idle_ticks: summary.ball_idle_ticks,
         goals: summary.goals,
+        flags_on: sim.config().flags.names().to_vec(),
         laws: LawStats::new(&summary, pack_version, written, snapshot_writes),
         tactics: TacticsStats::new(&sim),
         figures: MatchFigures::new(&summary, sim.managers()),

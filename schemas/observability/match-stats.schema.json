@@ -255,6 +255,14 @@
       "type": "integer",
       "minimum": 0
     },
+    "tuning.flags_on": {
+      "description": "The feature flags of the tuning file that were on, sorted by name.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
     "result.decided_by": {
       "enum": [
         "regulation",

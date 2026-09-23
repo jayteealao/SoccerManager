@@ -172,6 +172,42 @@ tick is dropped. `keyframe_interval` is the number of ticks between keyframes on
 stream: a keyframe carries every absolute position in 98 bytes, and each tick between
 carries a 47-byte delta.
 
+### flags
+
+Feature flags switch between the current model and a candidate, so that a paired calibration run can compare the two. The block is optional; the shipped file declares no flag.
+
+```json
+"flags": {
+  "short_shot_range": {
+    "owner": "engine team",
+    "hypothesis": "a shorter shot range lowers goals per match toward 2.8",
+    "removal_condition": "removed after one paired run of 1000 matches per suite",
+    "state": "off",
+    "overrides": { "engine.shot_range": 12.0 }
+  }
+}
+```
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| (key) | text | yes | The flag name: lower snake case, at most 40 characters. |
+| owner | text | yes | Who decides what happens to the flag. |
+| hypothesis | text | yes | What the candidate is expected to change. |
+| removal_condition | text | yes | When the flag is removed, whatever the result. |
+| state | `on` or `off` | no, default `off` | The state when the command line sets none. |
+| overrides | object | no | Tuning values to use while the flag is on, by dotted path, for example `engine.shot_range` or `fatigue.curve.1.1`. |
+
+Rules:
+
+- A flag without an owner, a hypothesis, or a removal condition is refused, for example `content refused: tuning tuning.json: flags.short_shot_range.owner: is required`.
+- A flag must switch something: it has overrides, or engine code reads it. Otherwise it is refused with `flag <name> switches nothing: add overrides or register it in code`.
+- An override path must name a value that exists, with a value of the same type. It cannot point at `schema_version` or `flags`.
+- An override value must stay inside the bound of the field it sets. Each flag is checked when the file loads, whether it is on or off.
+- Two flags that are on cannot set the same path.
+- When a flag state differs from the file's, the list of flags that are on enters the content hash. A snapshot of a flagged match does not resume on content without the flag.
+
+Every statistics record carries `tuning.flags_on`, the flags that were on. To compare a candidate and remove the loser, follow [the modding how-to](../how-to/modding.md#compare-two-models-with-a-flag).
+
 ## Position codes
 
 `GK`, `CB`, `LB`, `RB`, `DM`, `CM`, `AM`, `LW`, `RW`, `ST`.

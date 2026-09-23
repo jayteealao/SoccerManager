@@ -17,6 +17,7 @@ use crate::data::{Content, hex12};
 use crate::decision::Kick;
 use crate::error::EngineError;
 use crate::fatigue::InjurySource;
+use crate::flags::ActiveFlags;
 use crate::math::{DVec2, DVec3};
 use crate::pitch;
 use crate::player::Player;
@@ -55,6 +56,8 @@ pub struct MatchConfig {
     /// A knockout match that is level at the end of regulation time plays the rule pack's
     /// extra time and, still level, a penalty shoot-out. Off unless a caller says otherwise.
     pub knockout: bool,
+    /// The flags that are on, resolved when the content loaded. Never changes in a match.
+    pub flags: ActiveFlags,
 }
 
 impl MatchConfig {
@@ -105,6 +108,7 @@ impl MatchConfig {
             content_hash: hex12(&hasher.finalize()),
             team_digests,
             knockout: false,
+            flags: content.flags.clone(),
         })
     }
 

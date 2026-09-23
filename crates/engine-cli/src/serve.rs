@@ -77,6 +77,7 @@ fn match_stats(
         ball_max_speed: summary.ball_max_speed,
         ball_idle_ticks: summary.ball_idle_ticks,
         goals: summary.goals,
+        flags_on: config.flags.names().to_vec(),
         laws: LawStats::new(
             &summary,
             config.rules.schema_version,

@@ -43,6 +43,7 @@ fn owner_and_match_ids_round_trip_through_stats_json() {
         ball_max_speed: 0.0,
         ball_idle_ticks: 0,
         goals: [0, 0],
+        flags_on: Vec::new(),
         laws: Default::default(),
         tactics: Default::default(),
         figures: Default::default(),

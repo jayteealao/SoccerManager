@@ -161,5 +161,6 @@
   "stream": {
     "buffer_ticks": 500,
     "keyframe_interval": 50
-  }
+  },
+  "flags": {}
 }

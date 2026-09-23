@@ -183,10 +183,16 @@ Play many AI-managed matches and check the realism bands.
 | `--suite` | `all`, `equal`, `strength` | `all` | The suites to play. |
 | `--out` | folder | `runs/<run.id>` in the data folder | The run folder. |
 | `--keep-events` | `outliers`, `all` | `outliers` | The event files to keep at the end of the run. |
+| `--flag` | `NAME=on` or `NAME=off` | the state in `tuning.json` | Set a feature flag for the whole run. Repeat it for more than one flag. The flag must be declared in `tuning.json`. |
+| `--pair` | flag name | none | Play every fixture with the flag off, then on, on the same match seeds, and compare the two arms band by band. |
 
 Output: the run report as one JSON line. Files: `report.json`, `stats/<match.id>.json`, and `events/<match.id>.jsonl` in the run folder.
 
-Exit codes: 0 when every band passes and both dark-path counters are zero; 1; 2 otherwise.
+A paired run writes each arm to its own folder: `arms/off/stats/`, `arms/off/events/`, `arms/on/stats/`, and `arms/on/events/`. The one `report.json` stays at the top of the run folder. Its top-level figures are the off arm's. `calib.arms` holds both arms, `calib.compare` holds one row per suite and band with the off value and the on value side by side, and `calib.verdict` is `on-better`, `off-better`, `no-difference`, or `on-rejected`. The same table is printed on standard error.
+
+A flag name that `tuning.json` does not declare, a state other than `on` or `off`, and a `--pair` flag also given with `--flag` are refused with exit code 1 before any match is played.
+
+Exit codes: 0 when every band passes and both dark-path counters are zero; 1; 2 otherwise. For a paired run: 0 when both arms have no missing statistics record, no change left unapplied, no validator violation, and no failed worker; 1; 2 otherwise. The verdict does not change the exit code.
 
 ## Files
 

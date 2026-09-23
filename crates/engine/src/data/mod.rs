@@ -18,6 +18,7 @@ use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 
 use crate::error::EngineError;
+use crate::flags::{ActiveFlags, FlagState, FlagStates};
 
 pub use attributes::{ATTRIBUTES_VERSION, AttributeSchema, Group, MAX_ATTRIBUTES};
 pub use generator::generate_league;
@@ -218,7 +219,14 @@ pub struct Content {
     pub rules: RulePack,
     pub tactics: TacticsSchema,
     /// SHA-256 over the four file digests in order: attributes, tuning, rules, tactics.
+    /// When a flag state differs from the file's, the list of flags that are on is hashed
+    /// in as well.
     pub digest: [u8; 32],
+    /// The flags that are on; `tuning` already holds their overrides.
+    pub flags: ActiveFlags,
+    /// The tuning file as written, and the digest over the files as written.
+    written_tuning: TuningFile,
+    written_digest: [u8; 32],
 }
 
 impl Content {
@@ -267,12 +275,55 @@ impl Content {
         hasher.update(tuning.digest);
         hasher.update(rules.digest);
         hasher.update(tactics.digest);
-        Ok(Self {
+        let digest: [u8; 32] = hasher.finalize().into();
+        let written = Self {
             attributes: attributes.value,
-            tuning: tuning.value,
+            tuning: tuning.value.clone(),
             rules: rules.value,
             tactics: tactics.value,
-            digest: hasher.finalize().into(),
+            digest,
+            flags: ActiveFlags::default(),
+            written_tuning: tuning.value,
+            written_digest: digest,
+        };
+        written.with_flags(&FlagStates::default())
+    }
+
+    /// This content with the flag states in `states` applied over the file's own states.
+    /// A flag that is on has its overrides written into `tuning`, and each one is logged as
+    /// `flag.active`. When a state differs from the file's, the list of flags that are on
+    /// enters the digest, so a match played with it is never taken for one played without.
+    pub fn with_flags(&self, states: &FlagStates) -> Result<Self, EngineError> {
+        let file = &self.written_tuning;
+        let resolved = crate::flags::effective(file, states)?;
+        let (tuning, flags) = crate::flags::apply(file, states)?;
+        for (name, (state, source)) in &resolved {
+            if *state == FlagState::On {
+                tracing::info!(
+                    signal = "flag.active",
+                    flag = %name,
+                    owner = %file.flags[name].owner,
+                    source = source.code()
+                );
+            }
+        }
+        let differs = resolved
+            .iter()
+            .any(|(name, (state, _))| *state != file.flags[name].state);
+        let digest = if differs {
+            let mut hasher = Sha256::new();
+            hasher.update(self.written_digest);
+            hasher.update(b"flags:");
+            hasher.update(flags.names().join(",").as_bytes());
+            hasher.finalize().into()
+        } else {
+            self.written_digest
+        };
+        Ok(Self {
+            tuning,
+            digest,
+            flags,
+            ..self.clone()
         })
     }
 
@@ -284,6 +335,11 @@ impl Content {
     ) -> Result<Loaded<TeamFile>, EngineError> {
         let shown = dir.relative(path);
         load_json::<TeamFile>("team", path, &shown, TEAM_VERSION, &self.attributes)
+    }
+
+    /// The tuning file as written, before any flag state is applied.
+    pub fn written_tuning(&self) -> &TuningFile {
+        &self.written_tuning
     }
 
     /// Twelve hex characters identifying the four content files.

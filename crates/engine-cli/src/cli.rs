@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
+use engine::FlagSetting;
 
 /// Headless command line for the football match engine.
 #[derive(Debug, Parser)]
@@ -271,6 +272,25 @@ pub struct CalibrateOpts {
                      matches and of dark-path hits; all keeps every file."
     )]
     pub keep_events: KeepEvents,
+    /// Set a feature flag of the tuning file for this run; repeatable.
+    #[arg(
+        long = "flag",
+        value_name = "NAME=on|off",
+        long_help = "Set a feature flag of the tuning file for this run; repeatable.\n\n\
+                     The flag must be declared in the flags block of tuning.json.\n\
+                     A flag not set here keeps the state the file gives it."
+    )]
+    pub flags: Vec<FlagSetting>,
+    /// Play every fixture with the flag off, then on; compare the bands.
+    #[arg(
+        long,
+        value_name = "NAME",
+        long_help = "Play every fixture with the flag off, then on; compare the bands.\n\n\
+                     Both arms play the same fixtures on the same match seeds,\n\
+                     into arms/off and arms/on in the run folder. The report\n\
+                     holds both arms, a row per band, and a verdict."
+    )]
+    pub pair: Option<String>,
     /// Run as a worker of a calibration run (set by the parent process).
     #[arg(long, hide = true)]
     pub worker: bool,

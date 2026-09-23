@@ -151,3 +151,20 @@ fn a_missing_content_file_names_its_path() {
     assert_eq!(err.to_string(), "cannot read attributes.json");
     assert!(matches!(err, EngineError::Read { .. }));
 }
+
+/// Every flag engine code reads is declared in the shipped tuning file, and the shipped file
+/// declares no flag of its own: a candidate model lands with its flag, and the flag leaves
+/// with the losing model.
+#[test]
+fn the_shipped_flags_block_matches_the_code_flags() {
+    let content = common::content();
+    let declared = &content.written_tuning().flags;
+    for name in engine::CODE_FLAGS {
+        assert!(declared.contains_key(*name), "{name} is not declared");
+    }
+    assert!(
+        declared.is_empty(),
+        "the shipped file declares {declared:?}"
+    );
+    assert!(content.flags.is_empty());
+}

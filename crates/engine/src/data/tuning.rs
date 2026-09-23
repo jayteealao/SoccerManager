@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::data::attributes::Group;
 use crate::data::team::Position;
+use crate::flags::{FlagDef, each_flag_switches_something};
 use crate::team::PLAYERS_PER_TEAM;
 use crate::tuning::Tuning;
 
@@ -29,6 +30,11 @@ pub struct TuningFile {
     pub fatigue: FatigueTuning,
     #[garde(dive)]
     pub stream: StreamTuning,
+    /// Feature flags that switch between a current model and a candidate. Optional: a file
+    /// without the block has no flags.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[garde(dive, custom(each_flag_switches_something))]
+    pub flags: BTreeMap<String, FlagDef>,
 }
 
 /// What the live tick stream holds and how often it sends a keyframe.

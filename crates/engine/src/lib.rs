@@ -11,6 +11,7 @@ pub mod data;
 pub mod decision;
 pub mod error;
 pub mod fatigue;
+pub mod flags;
 pub mod math;
 pub mod observe;
 pub mod pitch;
@@ -33,6 +34,7 @@ pub use commentary::{Commentary, Commentator};
 pub use data::{Content, ContentDir, StoppageKind};
 pub use error::EngineError;
 pub use fatigue::InjurySource;
+pub use flags::{ActiveFlags, CODE_FLAGS, FlagSetting, FlagState, FlagStates};
 pub use record::{
     FanoutSink, FileSink, NullSink, TickHeader, TickRecord, TickSink, VecSink, read_ticks,
 };

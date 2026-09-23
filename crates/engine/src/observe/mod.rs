@@ -89,6 +89,9 @@ pub struct MatchStats {
     #[serde(rename = "ball.idle_ticks")]
     pub ball_idle_ticks: u32,
     pub goals: [u32; 2],
+    /// The feature flags that were on, sorted; empty when none was. An additive extra.
+    #[serde(rename = "tuning.flags_on", default)]
+    pub flags_on: Vec<String>,
     #[serde(flatten, default)]
     pub laws: LawStats,
     #[serde(flatten, default)]
@@ -502,6 +505,7 @@ mod tests {
             ball_max_speed: 0.0,
             ball_idle_ticks: 0,
             goals: [0, 0],
+            flags_on: Vec::new(),
             laws: LawStats {
                 fouls: [3, 4],
                 pack_version: 2,
