@@ -130,6 +130,23 @@ impl MatchConfig {
         self.players[first..first + PLAYERS_PER_TEAM].clone_from_slice(&starters);
         self
     }
+
+    /// `team` starts with `lineup` (squad indices in slot order) and `bench` instead of the
+    /// AI manager's, keeping its pre-match tactics; the starters are rebuilt in slot order.
+    /// The content hash is unchanged, because a lineup is not a content file.
+    pub fn with_setup(
+        mut self,
+        team: usize,
+        lineup: [usize; PLAYERS_PER_TEAM],
+        bench: Vec<usize>,
+    ) -> Self {
+        self.teams[team].lineup = lineup;
+        self.teams[team].bench = bench;
+        let starters = self.teams[team].starters();
+        let first = team * PLAYERS_PER_TEAM;
+        self.players[first..first + PLAYERS_PER_TEAM].clone_from_slice(&starters);
+        self
+    }
 }
 
 /// What an engine event carries beyond the common fields.
@@ -842,6 +859,27 @@ mod tests {
             sim.summary().possession_changes > 0,
             "nobody ever gained possession"
         );
+    }
+
+    #[test]
+    fn a_chosen_setup_puts_the_chosen_players_in_slot_order() {
+        let config = shipped_config(42, 1).unwrap();
+        let hash = config.content_hash.clone();
+        let lineup = [11, 1, 2, 3, 4, 5, 6, 7, 8, 9, 20];
+        let tactics = config.teams[0].tactics;
+        let config = config.with_setup(0, lineup, vec![0, 10, 12]);
+        for (slot, &squad) in lineup.iter().enumerate() {
+            assert_eq!(config.players[slot].squad, squad, "slot {slot}");
+            assert_eq!(config.players[slot].slot, slot);
+        }
+        assert_eq!(config.teams[0].bench, vec![0, 10, 12]);
+        assert_eq!(
+            config.teams[0].tactics, tactics,
+            "the pre-match tactics are kept"
+        );
+        assert_eq!(config.content_hash, hash);
+        let sim = Simulation::new(config).unwrap();
+        assert_eq!(sim.teams()[0].lineup, lineup);
     }
 
     #[test]

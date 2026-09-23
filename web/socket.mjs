@@ -75,6 +75,16 @@ export class MatchSocket {
     this.tick = tick;
   }
 
+  /// Sends one command as a JSON text frame. Returns `false` when the socket is not open, so
+  /// a caller never waits for an answer that cannot come.
+  send(command) {
+    if (this.socket.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+    this.socket.send(JSON.stringify(command));
+    return true;
+  }
+
   close() {
     this.socket.close();
   }

@@ -147,11 +147,18 @@ export class MatchState {
   }
 }
 
+/// The socket's own record of a change it queued or refused. It names no club and carries
+/// no match minute; the pending-change chip shows it, and the engine's verdict row, which
+/// names the club, is the one the feed shows.
+function socketRecord(event) {
+  return event['event.type'] === KIND.tacticsChange && !event['team.id'];
+}
+
 function apply(view, event) {
   const kind = event['event.type'];
   view.home = event['home.score'];
   view.away = event['away.score'];
-  if (!HIDDEN_KINDS.has(kind)) {
+  if (!HIDDEN_KINDS.has(kind) && !socketRecord(event)) {
     view.entries.push(event);
   }
   const player = event['player.id'];

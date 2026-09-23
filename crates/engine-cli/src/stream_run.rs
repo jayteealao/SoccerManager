@@ -2,18 +2,26 @@
 //! tick sink, announces every stoppage through the sink's stoppage hook, and routes every
 //! engine event, the running statistics and energy every simulated second, and the closing
 //! statistics to a caller-chosen destination (a socket, a fixture, or both).
+//!
+//! When a page can queue changes, the driver also carries them into the engine: after every
+//! wait at the gate it moves each change the socket admitted into the engine's own queue for
+//! the home team, and it names the change on its verdict event by the identifier the page
+//! was given, because the two queues number their changes independently.
 
 use engine::observe::{MatchFigures, round_to};
 use engine::record::TickSink;
 use engine::{
-    Card, Commentary, Commentator, EngineEvent, EngineEventKind, EventDetail, Simulation,
+    Card, ChangeId, Commentary, Commentator, EngineEvent, EngineEventKind, EventDetail, Simulation,
 };
 use protocol::{
     CardKind, ChangeKind, ChangeOutcome, ChangeState, Condition, EventType, MatchEvent,
-    RosterEntry, ServerMessage, Stats, TeamRef,
+    RosterEntry, ServerMessage, SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
 };
 use stream::session::MatchState;
-use stream::{Gate, StreamError};
+use stream::{Gate, Inbox, StreamError};
+
+/// The team a page manages.
+const HOME: usize = 0;
 
 /// Where a driven match sends its messages.
 pub type MessageRoute<'a> = &'a mut dyn FnMut(ServerMessage) -> Result<(), StreamError>;
@@ -31,6 +39,8 @@ pub struct Drive<'a> {
     pub gate: Option<&'a Gate>,
     /// The lines the commentator chooses from; every play event carries one.
     pub commentary: &'a Commentary,
+    /// The changes the page queued, when a page can queue them.
+    pub inbox: Option<&'a Inbox>,
 }
 
 /// What a driven match did.
@@ -59,6 +69,14 @@ pub fn drive<S: TickSink>(
             && !gate.wait_until_running()
         {
             break;
+        }
+        // A change queued while the match was paused is queued here, on the first running
+        // tick, so it waits for the next stoppage and never applies on the resume tick.
+        if let Some(inbox) = opts.inbox {
+            for admitted in inbox.drain() {
+                let id = sim.queue_change(HOME, admitted.change);
+                ids.page.push((id, admitted.queue_id));
+            }
         }
         sim.step();
         let record = sim.record();
@@ -152,9 +170,58 @@ pub(crate) fn condition_message(sim: &Simulation) -> Condition {
 
 /// The two clubs as the hello names them, home first, each with its roster: the 11 starters
 /// in wire-slot order, then the named bench in bench order. Call it after `Simulation::new`,
-/// because the computer manager's pre-match setup there settles the lineup.
-pub(crate) fn hello_teams(sim: &Simulation) -> [TeamRef; 2] {
+/// because the computer manager's pre-match setup there settles the lineup. When the page
+/// picks the home lineup (`page_lineup`), the home team also carries its squad, with each
+/// player's fit to every role, and the computer manager's setup to start the editor from.
+pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
+    let config = sim.config();
+    let fitness = config.attributes.index("natural_fitness");
+    let mut index = 0usize;
     sim.teams().map(|team| {
+        let editable = page_lineup && index == HOME;
+        index += 1;
+        let squad = if editable {
+            team.squad
+                .iter()
+                .enumerate()
+                .map(|(s, player)| SquadEntry {
+                    id: team.player_ids[s].clone(),
+                    name: team.player_names[s].clone(),
+                    shirt: player.shirt,
+                    position: player.position.code().to_string(),
+                    natural_fitness: fitness.map_or(0, |i| player.attributes.get(i)),
+                    role_fit: (0..config.tactics.roles.len())
+                        .map(|role| {
+                            let fit = engine::ai::role_fit(
+                                player,
+                                role,
+                                &config.tactics,
+                                &config.attributes,
+                            );
+                            fit.round().clamp(0.0, 100.0) as u8
+                        })
+                        .collect(),
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let setup = editable.then(|| TeamSetup {
+            lineup: team.lineup.iter().map(|&s| wire_index(s)).collect(),
+            bench: team.bench.iter().map(|&s| wire_index(s)).collect(),
+            formation: team.tactics.formation,
+            mentality: team.tactics.mentality,
+            instructions: team.tactics.instructions.to_vec(),
+            roles: team
+                .tactics
+                .roles
+                .iter()
+                .map(|rd| SlotRole {
+                    role: rd.role,
+                    duty: rd.duty,
+                })
+                .collect(),
+        });
         let entry = |squad: usize| RosterEntry {
             id: team.player_ids[squad].clone(),
             name: team.player_names[squad].clone(),
@@ -174,8 +241,39 @@ pub(crate) fn hello_teams(sim: &Simulation) -> [TeamRef; 2] {
             kit_primary: team.kit.primary.clone(),
             kit_secondary: team.kit.secondary.clone(),
             roster,
+            squad,
+            setup,
         }
     })
+}
+
+/// A squad index as the wire writes it. A validated team file holds far fewer players.
+fn wire_index(squad: usize) -> u16 {
+    u16::try_from(squad).unwrap_or(u16::MAX)
+}
+
+/// The loaded tactics file as the hello carries it, so the page renders its tactics panel
+/// from the same file the engine reads. A JSON object's keys carry no order on the wire, so
+/// `instruction_order` names the instructions in the order a level list indexes them.
+pub(crate) fn hello_tactics(sim: &Simulation) -> serde_json::Value {
+    let mut tactics =
+        serde_json::to_value(&sim.config().tactics).unwrap_or(serde_json::Value::Null);
+    if let Some(object) = tactics.as_object_mut() {
+        object.insert(
+            "instruction_order".into(),
+            serde_json::json!(engine::data::tactics::INSTRUCTIONS),
+        );
+    }
+    tactics
+}
+
+/// The rule pack's substitution limits.
+pub(crate) fn hello_substitutions(sim: &Simulation) -> SubstitutionRules {
+    let rules = &sim.config().rules.substitutions;
+    SubstitutionRules {
+        limit: rules.limit,
+        windows: rules.windows,
+    }
 }
 
 /// A sink failure mid-match: a departed client ends the run short of full time.
@@ -219,6 +317,8 @@ fn closing_or_fail(err: StreamError, written: u32) -> Result<u32, StreamError> {
 pub(crate) struct Ids {
     roster: Vec<String>,
     squads: [Vec<String>; 2],
+    /// Each change the page queued: the engine's identifier and the one the page was given.
+    page: Vec<(ChangeId, String)>,
 }
 
 impl Ids {
@@ -227,7 +327,16 @@ impl Ids {
         Self {
             roster: sim.player_ids(),
             squads: sim.teams().map(|t| t.player_ids),
+            page: Vec::new(),
         }
+    }
+
+    /// The identifier a change's verdict carries: the page's, for a change the page queued.
+    fn queue_id(&self, id: ChangeId) -> String {
+        self.page
+            .iter()
+            .find(|(engine, _)| *engine == id)
+            .map_or_else(|| id.to_string(), |(_, page)| page.clone())
     }
 }
 
@@ -250,7 +359,7 @@ pub(crate) fn match_event(
         let squads = event.team.map_or(&[][..], |t| &ids.squads[t][..]);
         let outcome = ChangeOutcome {
             kind: Some(kind),
-            queue_id: Some(id.to_string()),
+            queue_id: Some(ids.queue_id(id)),
             state: if reason.is_some() {
                 ChangeState::Rejected
             } else {
@@ -360,6 +469,7 @@ mod tests {
                 state: &state,
                 gate: None,
                 commentary: &loaded.commentary,
+                inbox: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -376,7 +486,7 @@ mod tests {
         let [a, b] = &loaded.teams;
         let config = MatchConfig::new(42, 2, &loaded.content, [a, b]).unwrap();
         let sim = Simulation::new(config).unwrap();
-        let teams = hello_teams(&sim);
+        let teams = hello_teams(&sim, false);
         let wire_ids = sim.player_ids();
         for (t, team) in sim.teams().iter().enumerate() {
             let roster = &teams[t].roster;
@@ -457,6 +567,221 @@ mod tests {
                 let line = e.commentary.as_deref().unwrap_or_default();
                 assert!(!line.trim().is_empty(), "{e:?}");
             }
+        }
+    }
+
+    #[test]
+    fn a_page_lineup_hello_carries_the_home_squad_setup_and_instruction_order() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let config = MatchConfig::new(42, 2, &loaded.content, [a, b]).unwrap();
+        let sim = Simulation::new(config).unwrap();
+        let teams = hello_teams(&sim, true);
+        let home = &sim.teams()[HOME];
+        assert_eq!(teams[HOME].squad.len(), home.squad.len());
+        assert!(teams[1].squad.is_empty() && teams[1].setup.is_none());
+        let roles = sim.config().tactics.roles.len();
+        for entry in &teams[HOME].squad {
+            assert_eq!(entry.role_fit.len(), roles);
+            assert!(entry.role_fit.iter().all(|&f| f <= 100), "{entry:?}");
+            assert!(entry.natural_fitness > 0, "{entry:?}");
+        }
+        let setup = teams[HOME]
+            .setup
+            .as_ref()
+            .expect("the editor starts from the setup");
+        let lineup: Vec<usize> = setup.lineup.iter().map(|&s| usize::from(s)).collect();
+        assert_eq!(lineup, home.lineup.to_vec());
+        assert_eq!(setup.roles.len(), 11);
+        assert_eq!(setup.instructions, home.tactics.instructions.to_vec());
+        assert!(hello_teams(&sim, false)[HOME].setup.is_none());
+        let tactics = hello_tactics(&sim);
+        assert_eq!(
+            tactics["instruction_order"],
+            serde_json::json!(engine::data::tactics::INSTRUCTIONS)
+        );
+        assert_eq!(
+            hello_substitutions(&sim).limit,
+            sim.config().rules.substitutions.limit
+        );
+    }
+
+    /// Keeps the tick and kind of every stoppage the match opened.
+    #[derive(Default)]
+    struct Stoppages(Vec<(u32, engine::StoppageKind)>);
+
+    impl TickSink for Stoppages {
+        fn on_tick(&mut self, _: &engine::record::TickRecord) -> Result<(), engine::EngineError> {
+            Ok(())
+        }
+
+        fn on_stoppage(
+            &mut self,
+            stoppage: &engine::Stoppage,
+            sim: &Simulation,
+        ) -> Result<(), engine::EngineError> {
+            self.0.push((sim.tick(), stoppage.kind));
+            Ok(())
+        }
+    }
+
+    /// The page's two changes: an attacking mentality and the first substitute for the
+    /// home striker in slot 10.
+    fn page_changes(sim: &Simulation) -> Vec<stream::Admitted> {
+        let home = &sim.teams()[HOME];
+        vec![
+            stream::Admitted {
+                queue_id: "q-7-0".into(),
+                change: engine::Change::Tactics(engine::TacticsPatch::mentality(4)),
+            },
+            stream::Admitted {
+                queue_id: "q-7-1".into(),
+                change: engine::Change::Substitution {
+                    off: home.lineup[10],
+                    on: home.bench[0],
+                },
+            },
+        ]
+    }
+
+    fn verdicts(messages: &[ServerMessage]) -> Vec<&MatchEvent> {
+        messages
+            .iter()
+            .filter_map(|m| match m {
+                ServerMessage::Event(e) if e.event_type == EventType::TacticsChange => Some(e),
+                _ => None,
+            })
+            .filter(|e| e.team_id.as_deref() == Some("club-a"))
+            .collect()
+    }
+
+    #[test]
+    fn a_page_change_reaches_the_engine_and_its_verdict_carries_the_page_identifier() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let config = MatchConfig::new(42, 3, &loaded.content, [a, b])
+            .unwrap()
+            .with_manager(HOME, engine::Manager::Human);
+        let ticks = config.max_ticks();
+        let mut sim = Simulation::new(config).unwrap();
+        let inbox = Inbox::default();
+        for change in page_changes(&sim) {
+            inbox.push(change);
+        }
+        let state = MatchState::default();
+        let mut messages = Vec::new();
+        drive(
+            &mut sim,
+            &mut VecSink::default(),
+            &Drive {
+                ticks,
+                owner_id: "0123456789abcdef0123456789abcdef",
+                match_id: "000000000000002a-1",
+                club_ids: ["club-a", "club-b"],
+                state: &state,
+                gate: None,
+                commentary: &loaded.commentary,
+                inbox: Some(&inbox),
+            },
+            &mut |m: ServerMessage| {
+                messages.push(m);
+                Ok(())
+            },
+        )
+        .unwrap();
+        let verdicts = verdicts(&messages);
+        let mut ids: Vec<&str> = verdicts
+            .iter()
+            .filter_map(|e| e.change_queue_id.as_deref())
+            .collect();
+        ids.sort_unstable();
+        assert_eq!(ids, ["q-7-0", "q-7-1"], "{verdicts:?}");
+        for e in &verdicts {
+            assert_eq!(e.change_state, Some(ChangeState::Applied), "{e:?}");
+            assert_eq!(e.change_applied_tick, Some(e.tick));
+        }
+        let home = &sim.teams()[HOME];
+        assert_eq!(home.tactics.mentality, 4);
+        let starters = MatchConfig::new(42, 3, &loaded.content, [a, b])
+            .unwrap()
+            .teams[HOME]
+            .lineup;
+        assert_ne!(home.lineup[10], starters[10], "the substitute took slot 10");
+    }
+
+    #[test]
+    fn a_change_made_while_paused_applies_at_the_next_stoppage_not_on_resume() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let config = MatchConfig::new(42, 3, &loaded.content, [a, b])
+            .unwrap()
+            .with_manager(HOME, engine::Manager::Human);
+        let ticks = config.max_ticks();
+        let mut sim = Simulation::new(config).unwrap();
+        let changes = page_changes(&sim);
+        let gate = Gate::new();
+        let inbox = Inbox::default();
+        let state = MatchState::default();
+        let mut messages = Vec::new();
+        let mut stoppages = Stoppages::default();
+        let paused_at = std::thread::scope(|scope| {
+            let run = scope.spawn(|| {
+                drive(
+                    &mut sim,
+                    &mut stoppages,
+                    &Drive {
+                        ticks,
+                        owner_id: "0123456789abcdef0123456789abcdef",
+                        match_id: "000000000000002a-1",
+                        club_ids: ["club-a", "club-b"],
+                        state: &state,
+                        gate: Some(&gate),
+                        commentary: &loaded.commentary,
+                        inbox: Some(&inbox),
+                    },
+                    &mut |m: ServerMessage| {
+                        messages.push(m);
+                        Ok(())
+                    },
+                )
+            });
+            while state.tick() < 2_000 {
+                std::thread::yield_now();
+            }
+            gate.set_running(false);
+            // The producer finishes the tick it is on, then waits at the gate.
+            let mut paused_at = state.tick();
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                let now = state.tick();
+                if now == paused_at {
+                    break;
+                }
+                paused_at = now;
+            }
+            for change in changes {
+                inbox.push(change);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            assert_eq!(state.tick(), paused_at, "a paused match does not move");
+            gate.set_running(true);
+            run.join().unwrap().unwrap();
+            paused_at
+        });
+        let verdicts = verdicts(&messages);
+        assert_eq!(verdicts.len(), 2, "{verdicts:?}");
+        // The first stoppage after the pause that admits a change.
+        let next = stoppages
+            .0
+            .iter()
+            .find(|(tick, kind)| *tick > paused_at && *kind != engine::StoppageKind::Penalty)
+            .map(|(tick, _)| *tick)
+            .expect("a three-minute match has a stoppage after the pause");
+        for e in verdicts {
+            assert_eq!(e.change_queued_tick, Some(paused_at), "{e:?}");
+            assert_eq!(e.change_state, Some(ChangeState::Applied), "{e:?}");
+            assert!(e.tick > paused_at, "applied on resume: {e:?}");
+            assert_eq!(e.tick, next, "not at the next stoppage: {e:?}");
         }
     }
 }

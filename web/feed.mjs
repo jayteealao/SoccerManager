@@ -47,7 +47,7 @@ export function feedRow(event, teamNames = new Map()) {
   let text = event.commentary;
   if (!text) {
     const team = teamNames.get(event['team.id']);
-    const words = kind === KIND.tacticsChange ? 'Tactics change' : kindWords(kind);
+    const words = kind === KIND.tacticsChange ? changeWords(event) : kindWords(kind);
     text = team ? `${words} — ${team}` : words;
   }
   return {
@@ -58,6 +58,23 @@ export function feedRow(event, teamNames = new Map()) {
     word: HIGHLIGHT_WORDS[kind] ?? null,
     announce: ANNOUNCED.has(kind),
   };
+}
+
+/// A change row names its verdict: applied, refused with the engine's reason, or queued.
+function changeWords(event) {
+  const substitution = event['change.kind'] === 'substitution';
+  switch (event['change.state']) {
+    case 'applied':
+      return substitution ? 'Substitution applied' : 'Tactical change applied';
+    case 'rejected': {
+      const reason = event['change.rejected_reason'];
+      return reason ? `Change rejected: ${reason}` : 'Change rejected';
+    }
+    case 'queued':
+      return substitution ? 'Substitution queued' : 'Tactical change queued';
+    default:
+      return 'Tactics change';
+  }
 }
 
 /// `free-kick` → `Free kick`.

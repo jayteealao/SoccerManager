@@ -16,6 +16,13 @@ every simulated second and again at full time, and gave it the nine figures the 
 shows. A new message, `condition`, carries every player's energy on the same cadence. Each
 `hello` team gained a `roster`. A fixture recorded by an earlier build is refused by version.
 
+Version 3 also carries the pre-match lineup and live changes. A `serve` session holds before
+kick-off and sends nothing but the `hello` until the page sends `start`. A new command,
+`set-lineup`, picks the home lineup, bench, and pre-match tactics during that hold. The
+`hello` gained the home team's `squad` and `setup`, the loaded `tactics` file, and the
+`substitutions` limits. `queue-change` changed meaning: its `detail` is now read, and the
+change reaches the engine and applies at the next stoppage that admits it.
+
 A test in `crates/protocol/tests/document.rs` holds this document to the code: every message
 the implementation names must appear below with every one of its fields.
 
@@ -28,6 +35,7 @@ the implementation names must appear below with every one of its fields.
 | Origin | `null`, a `file://` page, any port of `http://localhost` or `http://127.0.0.1`, or no `Origin` header at all. Any other origin is refused. |
 | Clients | One viewer per match. |
 | First message | `hello`, always before the first tick frame. |
+| Kick-off | `serve` holds after the `hello`: no tick, event, or statistics message is sent until the client sends `start`. `record`, `replay`, and `bench` do not hold. |
 
 A refused handshake answers `403` for an origin and `400` for a version, with the reason as
 the body, and writes one `socket.refused` line naming the origin and the rule.
@@ -63,6 +71,15 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 | `ticks_expected` | integer | the most ticks the match can send: regulation time plus the cap on added time in every half; the match ends earlier when it earns less added time, and the `full-time` event marks the last tick |
 | `keyframe_interval` | integer | ticks between keyframes |
 | `teams` | array of two | one entry per club, home first; see the table below |
+| `tactics` | object | the tactics file the engine loaded (`content/tactics.json`): `formations`, `mentalities`, `instructions` with their levels, `roles`, `duties`, and the computer manager's settings. Every tactics index on the wire is a place in one of its lists. Because a JSON object carries no key order, the engine adds `instruction_order`, the six instruction names in the order an instruction list indexes them |
+| `substitutions` | object | the rule pack's limits: `limit` and `windows` |
+
+`substitutions`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `limit` | integer | substitutions each team may make, 5 in the shipped rule pack |
+| `windows` | integer | stoppages at which each team may make them, 3 in the shipped rule pack; half-time uses none |
 
 Each entry of `teams`:
 
@@ -83,6 +100,35 @@ Each entry of `roster`:
 | `player.shirt` | integer | the shirt number |
 | `player.position` | string | the position code, for example `GK`, `CB`, or `ST` |
 | `player.squad_index` | integer | the player's place in the team file's squad, counted from 0 |
+
+The home team also carries two fields when the session takes its lineup from the page
+(`serve` only). Both are absent otherwise.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `squad` | array | every player in the team file, in file order, so an entry's place in the list is its squad index; see the table below |
+| `setup` | object | the computer manager's pre-match choice, which the lineup editor starts from; see the table below |
+
+Each entry of `squad` carries `player.id`, `player.name`, `player.shirt`, and
+`player.position` as a roster entry does, and:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `player.natural_fitness` | integer | the natural-fitness attribute, 0 to 100; every player is fresh before kick-off, so this is the fitness figure the editor shows |
+| `role_fit` | array of integers | how well the player fits each role, 0 to 100, one value per entry of `tactics.roles`, in that order |
+
+`setup`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `lineup` | array of 11 integers | squad indices in slot order; slot 0 is the goalkeeper |
+| `bench` | array of integers | squad indices of the named substitutes, at most `tactics.ai.bench_size` |
+| `formation` | integer | an index into `tactics.formations` |
+| `mentality` | integer | an index into `tactics.mentalities` |
+| `instructions` | array of 6 integers | one level index per instruction: pressing, width, tempo, line height, passing directness, time wasting |
+| `roles` | array of 11 objects | one `{ role, duty }` per slot, in slot order |
+| `role` | integer | an index into `tactics.roles` |
+| `duty` | integer | an index into `tactics.duties` |
 
 A viewer draws its markers from the two kit colours. It must not use either colour as it
 arrives: a team file may hold pure black or pure white, so a viewer pulls the lightness of
@@ -134,7 +180,7 @@ arrives on the same tick as the restart keyframe that places the ball. Play resu
 taker plays the ball, a few seconds later. An `injury` in open play stops play for a dropped
 ball at the ball; an injury on a tick that already stopped play rides that stoppage.
 
-The engine applies its own queued changes (the AI manager's) on the tick that opens a
+The engine applies queued changes (the page's and the AI manager's) on the tick that opens a
 stoppage the rule pack admits them at, substitutions first. Each verdict is a
 `tactics-change` event with `change.state` `applied` or `rejected`. A rejection names its
 reason in `change.rejected_reason`:
@@ -188,7 +234,7 @@ Sent right after each periodic `stats` message, not at full time.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `command` | string | `start`, `pause`, `set-speed`, or `queue-change` |
+| `command` | string | `start`, `pause`, `set-speed`, `queue-change`, or `set-lineup` |
 | `change.queue_id` | string | queued changes only |
 | `change.queued_tick` | integer | the tick the command was read on |
 | `state` | enumeration | queued changes only; `queued` in this build |
@@ -205,11 +251,16 @@ Sent right after each periodic `stats` message, not at full time.
 
 ### start
 
-Resumes production. No fields. A client that never sends it still receives the whole match.
+Starts or resumes production. No fields. The first `start` of a `serve` session is the
+kick-off: the engine builds the match from the lineup `set-lineup` stored, or from the
+computer manager's setup when the page sent none. On `record`, `replay`, and `bench` a client
+that never sends it still receives the whole match.
 
 ### pause
 
-Pauses production at the current tick. No fields.
+Pauses production at the current tick. No fields. A viewer may pause and start the engine to
+keep it close to the tick it is showing, so that a change it queues applies at a stoppage
+the manager has not yet watched.
 
 ### set-speed
 
@@ -222,11 +273,54 @@ Pauses production at the current tick. No fields.
 | Field | Type | Meaning |
 |---|---|---|
 | `change.kind` | string | `tactics` or `substitution`; any other value is refused by name |
-| `detail` | object | opaque in this build; not yet read by the engine |
+| `detail` | object | `{ "patch": … }` for `tactics`, `{ "off": …, "on": … }` for `substitution`; see below |
 
-This build queues the change and answers. A change sent over the socket is not applied to
-play yet, because its `detail` is not read: the engine applies its own queue, which the AI
-manager fills, and a later version routes a client's change into that queue.
+`detail` for a substitution:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `off` | integer | the squad index of the player leaving |
+| `on` | integer | the squad index of the substitute coming on |
+
+`detail` for a tactics change is `{ "patch": { … } }`. Every field of the patch is optional
+and every value is an index into the hello's `tactics`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `patch` | object | the tactics change |
+| `formation` | integer | an index into `tactics.formations` |
+| `mentality` | integer | an index into `tactics.mentalities` |
+| `instructions` | array of 6 | one level index or `null` per instruction, in the order of `setup.instructions`; `null` leaves that instruction as it is |
+| `roles` | array | `{ "squad": …, "role": …, "duty": … }` entries; `squad` names the player by squad index |
+
+The change is queued for the home team, the one the page manages. A `queue-change` sent
+before the first `start` is refused with `the match has not started; set the pre-match
+tactics with the lineup`. A `detail` that does not match its kind, misses a field, or names
+an unknown field is refused at once, with a reason that starts `cannot read the tactics
+change` or `cannot read the substitution change`. A readable change is acknowledged and
+waits for the next stoppage that admits it; its verdict is a `tactics-change` event whose
+`change.queue_id` is the identifier the acknowledgement returned. A change the page queues
+while the engine is paused is queued on the first tick after `start`, so it never applies on
+the resume tick. The football rules (the limit, the windows, a player not on the pitch)
+are the engine's and arrive as a `rejected` verdict with the reasons listed under **event**.
+
+### set-lineup
+
+Sent before the first `start`, once or more; the last lineup accepted before kick-off
+stands. The same object shape as the hello's `setup`, as indices:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `lineup` | array of 11 integers | squad indices in slot order; slot 0 is the goalkeeper |
+| `bench` | array of integers | squad indices of the named substitutes, at most `tactics.ai.bench_size` |
+| `patch` | object | optional pre-match tactics, the same shape as a tactics change's patch; applied before kick-off |
+
+It is acknowledged, or refused with the first fault in this order: `<n> starters; a match
+needs 11`, `squad index <i> is not in the squad of <n>`, `squad index <i> is placed twice`,
+`<n> substitutes; the bench holds <size>`, `slot 0 needs a goalkeeper`, a patch index the
+tactics file does not hold, or `squad index <i> has a pre-match role and is not in the
+lineup`. After kick-off it is refused with `the match has started; a lineup can be set only
+before kick-off`.
 
 ## The page server
 
@@ -272,6 +366,10 @@ The engine runs ahead of the viewer by at most `buffer_ticks` ticks, which
 `content/tuning.json` names and which defaults to 500. When the buffer fills, the
 simulation thread stops until the viewer drains it. No tick is dropped, memory stays flat,
 and one `socket.backpressure` line records each pause with how long it lasted.
+
+A page reads the socket as fast as it can and stores every tick, so the buffer alone does not
+keep a live match close to what the manager is watching. The viewer therefore sends `pause`
+when it holds more than a few seconds of unplayed ticks and `start` when playback catches up.
 
 ## Fixtures
 

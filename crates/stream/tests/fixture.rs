@@ -37,6 +37,8 @@ fn record(path: &Path, minutes: u32) -> u32 {
                 kit_primary: config.teams[0].kit.primary.clone(),
                 kit_secondary: config.teams[0].kit.secondary.clone(),
                 roster: Vec::new(),
+                squad: Vec::new(),
+                setup: None,
             },
             TeamRef {
                 id: config.teams[1].club_id.clone(),
@@ -44,12 +46,16 @@ fn record(path: &Path, minutes: u32) -> u32 {
                 kit_primary: config.teams[1].kit.primary.clone(),
                 kit_secondary: config.teams[1].kit.secondary.clone(),
                 roster: Vec::new(),
+                squad: Vec::new(),
+                setup: None,
             },
         ],
+        tactics: serde_json::Value::Null,
+        substitutions: protocol::SubstitutionRules::default(),
     };
     messages
         .send(Frame::Text(
-            serde_json::to_string(&ServerMessage::Hello(hello)).unwrap(),
+            serde_json::to_string(&ServerMessage::Hello(Box::new(hello))).unwrap(),
         ))
         .unwrap();
 

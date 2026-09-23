@@ -13,7 +13,7 @@ use stream::session::{MatchState, SessionConfig};
 use stream::{Client, CommandContext, Gate, Incoming, Server, Session};
 
 use crate::cli::BenchOpts;
-use crate::stream_run::{Drive, drive, hello_teams};
+use crate::stream_run::{Drive, drive, hello_substitutions, hello_tactics, hello_teams};
 
 /// Wall-time budget for one 90-minute match on one thread, in milliseconds (NFR-1).
 pub const BUDGET_MATCH_WALL_MS: u64 = 2000;
@@ -157,7 +157,9 @@ fn measure_stream(
         dt_ms: config.tuning.dt * 1000.0,
         ticks_expected: ticks,
         keyframe_interval: 50,
-        teams: hello_teams(&sim),
+        teams: hello_teams(&sim, false),
+        tactics: hello_tactics(&sim),
+        substitutions: hello_substitutions(&sim),
     };
 
     let server = Server::bind(&data, &match_id)?;
@@ -188,6 +190,8 @@ fn measure_stream(
                 state: Arc::clone(&state),
                 events,
                 queue: Queue::new(Vec::new()),
+                pre_match: Arc::new(stream::PreMatch::none()),
+                inbox: Arc::new(stream::Inbox::default()),
             },
         },
     )?;
@@ -204,6 +208,7 @@ fn measure_stream(
             state: &state,
             gate: Some(&gate),
             commentary,
+            inbox: None,
         },
         &mut |message: ServerMessage| session.send(&message),
     )?;

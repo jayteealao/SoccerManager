@@ -9,6 +9,8 @@
     <link rel="stylesheet" href="layout.css" />
     <link rel="stylesheet" href="components/match-control.css" />
     <link rel="stylesheet" href="components/panels.css" />
+    <link rel="stylesheet" href="components/chip.css" />
+    <link rel="stylesheet" href="components/editor.css" />
   </head>
   <body>
     <div class="page">
@@ -37,6 +39,9 @@
       <div class="body">
         <section class="panel" aria-labelledby="left-label">
           <h2 class="panel__label" id="left-label">Lineups</h2>
+          <!-- Before kick-off: the formation, the bench, the lineup's reason, and kick-off.
+               The formation slots sit on the pitch tile and the squad under the controls. -->
+          <div class="editor" id="lineup-editor" hidden></div>
           <div class="lineups" id="lineups"></div>
         </section>
 
@@ -57,6 +62,7 @@
                  aria-hidden="true">
               <span id="goal-banner-text"></span>
             </div>
+            <div class="board" id="board" role="group" aria-label="Formation slots" hidden></div>
             <div class="skeleton" id="skeleton">
               <strong>Waiting for the first tick</strong>
               <span>The engine is connecting and the pitch draws as soon as play starts.</span>
@@ -113,16 +119,28 @@
           <section class="panel stats-panel" aria-labelledby="stats-label">
             <h2 class="panel__label" id="stats-label">Statistics</h2>
             <div class="stats__tables" id="stats"></div>
+            <div class="squad" id="squad" hidden></div>
           </section>
         </div>
 
-        <section class="panel feed-panel" aria-labelledby="right-label">
-          <h2 class="panel__label" id="right-label">Match feed</h2>
-          <div class="feed__body">
-            <p class="feed__empty" id="feed-empty">No events yet. The feed fills as the match plays.</p>
-            <ol class="feed__list" id="feed" tabindex="0" aria-label="Match events, oldest first"></ol>
-          </div>
-        </section>
+        <div class="side-column">
+          <section class="panel feed-panel" aria-labelledby="right-label">
+            <h2 class="panel__label" id="right-label">Match feed</h2>
+            <div class="feed__body">
+              <p class="feed__empty" id="feed-empty">No events yet. The feed fills as the match plays.</p>
+              <ol class="feed__list" id="feed" tabindex="0" aria-label="Match events, oldest first"></ol>
+            </div>
+          </section>
+
+          <!-- Open at any time. A change made during play is queued and applies at the next
+               stoppage that admits it; its chip says where it stands. -->
+          <section class="panel tactics-panel" aria-labelledby="tactics-label">
+            <h2 class="panel__label" id="tactics-label">Tactics</h2>
+            <ul class="chips" id="chips" aria-label="Pending changes" aria-live="polite"></ul>
+            <div class="tactics" id="tactics"></div>
+            <div class="picker" id="picker"></div>
+          </section>
+        </div>
       </div>
     </div>
 

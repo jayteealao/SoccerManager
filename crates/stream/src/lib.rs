@@ -16,7 +16,10 @@ pub mod session;
 use thiserror::Error;
 
 pub use client::{Client, Incoming};
-pub use control::{CommandContext, Gate};
+pub use control::{
+    Admitted, CommandContext, Gate, Inbox, LineupRules, PageSetup, PreMatch, check_lineup,
+    engine_change, tactics_patch,
+};
 pub use events::EventWriter;
 pub use record::{
     FIXTURE_MAGIC, Fixture, FixtureSummary, Recorder, SharedRecorder, StoredFrame, read_fixture,
@@ -121,6 +124,26 @@ pub(crate) fn peer_gone(err: &tungstenite::Error) -> bool {
         ),
         _ => false,
     }
+}
+
+/// Sends one message on a blocking socket, whole, even when it is longer than the write
+/// bound that paces the tick frames. The bound refuses any single frame longer than itself
+/// (source: tungstenite-0.30.0/src/protocol/frame/mod.rs:254, `buffer_frame`), and the hello,
+/// which carries the squad and the tactics file, is longer. The bound is lifted for this one
+/// message and restored at once, so the pacing of every later frame is unchanged.
+pub(crate) fn send_whole(
+    socket: &mut tungstenite::WebSocket<std::net::TcpStream>,
+    message: tungstenite::Message,
+) -> Result<(), tungstenite::Error> {
+    let config = *socket.get_config();
+    let needed = config.write_buffer_size + message.len() + 16;
+    if needed <= config.max_write_buffer_size {
+        return socket.send(message);
+    }
+    socket.set_config(|c| c.max_write_buffer_size = needed);
+    let sent = socket.send(message);
+    socket.set_config(|c| c.max_write_buffer_size = config.max_write_buffer_size);
+    sent
 }
 
 /// True when an error only says the non-blocking socket has nothing to do yet.

@@ -95,6 +95,35 @@ impl TacticsPatch {
         p
     }
 
+    /// `tactics` with this patch applied for a team whose slots hold `lineup` (squad indices
+    /// in slot order): the formation first, then the mentality, the instructions, and each
+    /// named player's role. A role for a player not in `lineup` is skipped; the caller checks
+    /// that first.
+    pub fn applied_to(
+        &self,
+        mut tactics: Tactics,
+        lineup: &[usize; PLAYERS_PER_TEAM],
+        schema: &TacticsSchema,
+    ) -> Tactics {
+        if let Some(f) = self.formation {
+            tactics.set_formation(f, schema);
+        }
+        if let Some(m) = self.mentality {
+            tactics.mentality = m;
+        }
+        for (level, set) in tactics.instructions.iter_mut().zip(self.instructions) {
+            if let Some(l) = set {
+                *level = l;
+            }
+        }
+        for (squad, rd) in &self.roles {
+            if let Some(slot) = lineup.iter().position(|s| s == squad) {
+                tactics.roles[slot] = *rd;
+            }
+        }
+        tactics
+    }
+
     /// `true` when every index lies inside the tactics file.
     pub fn in_range(&self, schema: &TacticsSchema) -> bool {
         let formation = self

@@ -9,7 +9,7 @@ use stream::session::{FrameOut, FrameSink, MatchState};
 use stream::{Recorder, SharedRecorder};
 
 use crate::cli::RecordOpts;
-use crate::stream_run::{Drive, drive, hello_teams};
+use crate::stream_run::{Drive, drive, hello_substitutions, hello_tactics, hello_teams};
 
 pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32> {
     let loaded = crate::content::load(content_dir, opts.team_a.as_deref(), opts.team_b.as_deref())?;
@@ -44,10 +44,12 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
         dt_ms: dt * 1000.0,
         ticks_expected: ticks,
         keyframe_interval,
-        teams: hello_teams(&sim),
+        teams: hello_teams(&sim, false),
+        tactics: hello_tactics(&sim),
+        substitutions: hello_substitutions(&sim),
     };
     messages.send(protocol::Frame::Text(
-        serde_json::to_string(&ServerMessage::Hello(hello))
+        serde_json::to_string(&ServerMessage::Hello(Box::new(hello)))
             .map_err(|source| protocol::ProtocolError::Json { source })?,
     ))?;
 
@@ -64,6 +66,7 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
             state: &state,
             gate: None,
             commentary: &loaded.commentary,
+            inbox: None,
         },
         &mut |message: ServerMessage| {
             let text = serde_json::to_string(&message)

@@ -450,7 +450,6 @@ impl Simulation {
             return Err(RejectReason::OutOfRange);
         }
         let side = &self.teams[team];
-        let mut tactics = side.tactics;
         for (squad, _) in &patch.roles {
             if off_now.contains(&(team, *squad)) {
                 return Err(RejectReason::LeftThePitch { squad: *squad });
@@ -464,22 +463,7 @@ impl Simulation {
                 return Err(RejectReason::NotOnPitch { squad: *squad });
             }
         }
-        if let Some(f) = patch.formation {
-            tactics.set_formation(f, schema);
-        }
-        if let Some(m) = patch.mentality {
-            tactics.mentality = m;
-        }
-        for (level, set) in tactics.instructions.iter_mut().zip(patch.instructions) {
-            if let Some(l) = set {
-                *level = l;
-            }
-        }
-        for (squad, rd) in &patch.roles {
-            if let Some(slot) = side.lineup.iter().position(|s| s == squad) {
-                tactics.roles[slot] = *rd;
-            }
-        }
+        let tactics = patch.applied_to(side.tactics, &side.lineup, schema);
         let tuning = self.config.tuning.clone();
         let schema = self.config.tactics.clone();
         let side = &mut self.teams[team];

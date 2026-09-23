@@ -32,7 +32,7 @@ impl Replayer {
         let shown = shown.into();
         let hello = match fixture.frames.first().map(|stored| &stored.frame) {
             Some(Frame::Text(text)) => match serde_json::from_str::<ServerMessage>(text) {
-                Ok(ServerMessage::Hello(hello)) => hello,
+                Ok(ServerMessage::Hello(hello)) => *hello,
                 _ => return Err(StreamError::FixtureNoHello { path: shown }),
             },
             _ => return Err(StreamError::FixtureNoHello { path: shown }),
@@ -85,7 +85,7 @@ impl Replayer {
                 Frame::Tick(tick) => Message::binary(tick.as_bytes().to_vec()),
                 Frame::Text(text) => Message::text(text.clone()),
             };
-            match socket.send(message) {
+            match crate::send_whole(&mut socket, message) {
                 Ok(()) => sent += 1,
                 Err(tungstenite::Error::Io(e)) if would_block(&e) => sent += 1,
                 Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed) => {

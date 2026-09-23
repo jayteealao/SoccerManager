@@ -74,6 +74,32 @@ test('a tactics change, which has no commentary, is named in words with the club
   assert.equal(row.announce, false);
 });
 
+test('a change row names its verdict, and a refusal carries the engine reason', () => {
+  const clubs = new Map([['club-a', 'Oakmere Rangers']]);
+  const row = (fields) =>
+    feedRow(eventMessage(10, KIND.tacticsChange, { 'team.id': 'club-a', ...fields }), clubs).text;
+  assert.equal(
+    row({ 'change.kind': 'tactics', 'change.state': 'applied' }),
+    'Tactical change applied — Oakmere Rangers'
+  );
+  assert.equal(
+    row({ 'change.kind': 'substitution', 'change.state': 'applied' }),
+    'Substitution applied — Oakmere Rangers'
+  );
+  assert.equal(
+    row({
+      'change.kind': 'substitution',
+      'change.state': 'rejected',
+      'change.rejected_reason': 'substitution limit reached (5 of 5)',
+    }),
+    'Change rejected: substitution limit reached (5 of 5) — Oakmere Rangers'
+  );
+  assert.equal(
+    row({ 'change.kind': 'tactics', 'change.state': 'queued', 'team.id': undefined }),
+    'Tactical change queued'
+  );
+});
+
 test('goals, cards, substitutions, and injuries carry a word; only goals and cards are announced', () => {
   for (const kind of [KIND.goal, KIND.card, KIND.substitution, KIND.injury]) {
     assert.ok(feedRow(eventMessage(1, kind)).word, kind);

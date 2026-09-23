@@ -262,14 +262,19 @@ impl Session {
         let handle = std::thread::Builder::new()
             .name("stream-socket".into())
             .spawn(move || {
-                pump(
+                let gate = Arc::clone(&commands.gate);
+                let pumped = pump(
                     connection.socket,
                     rx,
                     commands,
                     thread_gauge,
                     thread_closing,
                     hello,
-                )
+                );
+                // However the socket ends, a producer still waiting at the gate (a match held
+                // before kick-off, or paused) must wake and stop rather than wait for ever.
+                gate.stop();
+                pumped
             })
             .map_err(|e| StreamError::io("cannot start the socket thread", e))?;
         Ok(Self {
@@ -332,10 +337,13 @@ fn pump(
     hello: Hello,
 ) -> Result<(), StreamError> {
     // The hello goes out on the blocking socket, so it is on the wire before any tick.
-    socket.send(Message::text(
-        serde_json::to_string(&ServerMessage::Hello(hello))
-            .map_err(|source| protocol::ProtocolError::Json { source })?,
-    ))?;
+    crate::send_whole(
+        &mut socket,
+        Message::text(
+            serde_json::to_string(&ServerMessage::Hello(Box::new(hello)))
+                .map_err(|source| protocol::ProtocolError::Json { source })?,
+        ),
+    )?;
     socket
         .get_ref()
         .set_nonblocking(true)

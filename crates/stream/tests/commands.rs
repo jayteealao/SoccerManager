@@ -40,7 +40,7 @@ fn an_unknown_change_type_is_refused_and_a_valid_one_is_queued() {
     client
         .send(&ClientCommand::QueueChange(QueueChange {
             kind: "substitution".into(),
-            detail: serde_json::json!({"out": 9, "in": 14}),
+            detail: serde_json::json!({"off": 9, "on": 14}),
         }))
         .unwrap();
     let ServerMessage::Ack(ack) = next_answer(&mut client) else {

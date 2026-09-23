@@ -24,6 +24,73 @@ pub struct TeamRef {
     /// an earlier build carries no roster and reads as an empty one.
     #[serde(default)]
     pub roster: Vec<RosterEntry>,
+    /// The whole squad in file order, so an entry's place in the list is its squad index.
+    /// Sent only by a session that waits for the page's lineup before kick-off; empty
+    /// otherwise.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub squad: Vec<SquadEntry>,
+    /// The lineup, bench, and tactics the computer manager picked before kick-off. Present
+    /// exactly when `squad` is: the page starts its lineup editor from it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub setup: Option<TeamSetup>,
+}
+
+/// One squad player, as the lineup editor shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SquadEntry {
+    #[serde(rename = "player.id")]
+    pub id: String,
+    #[serde(rename = "player.name")]
+    pub name: String,
+    #[serde(rename = "player.shirt")]
+    pub shirt: u8,
+    /// The position code, such as `GK` or `CB`.
+    #[serde(rename = "player.position")]
+    pub position: String,
+    /// The natural-fitness attribute, 0 to 100. Before kick-off every player is fresh, so
+    /// this is the one fitness figure the engine holds.
+    #[serde(rename = "player.natural_fitness")]
+    pub natural_fitness: u8,
+    /// How well the player fits each role, 0 to 100, one value per role in the order of the
+    /// hello's `tactics.roles`.
+    pub role_fit: Vec<u8>,
+}
+
+/// One slot's role and duty, as indices into the hello's `tactics.roles` and
+/// `tactics.duties`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SlotRole {
+    pub role: u8,
+    pub duty: u8,
+}
+
+/// A team's pre-match setup. Every number is an index: squad indices for players, and
+/// indices into the hello's `tactics` for the rest.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TeamSetup {
+    /// Eleven squad indices in slot order; slot 0 is the goalkeeper.
+    pub lineup: Vec<u16>,
+    pub bench: Vec<u16>,
+    pub formation: u8,
+    pub mentality: u8,
+    /// One level per team instruction, in the order `tactics.instructions` names them:
+    /// pressing, width, tempo, line height, passing directness, time wasting.
+    pub instructions: Vec<u8>,
+    /// One role and duty per slot, in slot order.
+    pub roles: Vec<SlotRole>,
+}
+
+/// The substitution limits of the loaded rule pack.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SubstitutionRules {
+    /// Substitutions each team may make.
+    pub limit: u8,
+    /// Stoppages at which each team may make them; half-time uses none.
+    pub windows: u8,
 }
 
 /// One player a hello names. `player.squad_index` is the player's place in the team file's
@@ -67,6 +134,12 @@ pub struct Hello {
     pub keyframe_interval: u32,
     /// The two clubs, home first.
     pub teams: [TeamRef; 2],
+    /// The tactics file the engine loaded, as JSON: formations, mentalities, instructions
+    /// and their levels, roles, and duties. Every tactics index on the wire points into it.
+    #[serde(default)]
+    pub tactics: serde_json::Value,
+    #[serde(default)]
+    pub substitutions: SubstitutionRules,
 }
 
 /// The running totals of a match, sent once every simulated second and again at full time.
@@ -123,7 +196,7 @@ pub struct Condition {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ServerMessage {
-    Hello(Hello),
+    Hello(Box<Hello>),
     Event(MatchEvent),
     Stats(Stats),
     Condition(Condition),
@@ -145,9 +218,92 @@ pub struct QueueChange {
     /// `tactics` or `substitution`. Any other value is refused by name.
     #[serde(rename = "change.kind")]
     pub kind: String,
-    /// Opaque here; the server reads it when it applies the change.
+    /// `{ "patch": … }` for a tactics change, `{ "off": …, "on": … }` for a substitution.
+    /// [`QueueChange::detail_typed`] reads it.
     #[serde(default)]
     pub detail: serde_json::Value,
+}
+
+/// A tactics change on the wire. Every field is optional; every number is an index into the
+/// hello's `tactics`, and a role names its player by squad index.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PatchWire {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub formation: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mentality: Option<u8>,
+    /// Six levels in the order of `tactics.instructions`; `null` leaves one unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<[Option<u8>; 6]>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub roles: Vec<RoleWire>,
+}
+
+/// One player's new role and duty.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RoleWire {
+    /// The player's squad index.
+    pub squad: u16,
+    pub role: u8,
+    pub duty: u8,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PatchDetail {
+    patch: PatchWire,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SwapDetail {
+    off: u16,
+    on: u16,
+}
+
+/// A queued change's detail, read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChangeDetail {
+    Patch(PatchWire),
+    /// Squad index `on` replaces squad index `off`.
+    Swap {
+        off: u16,
+        on: u16,
+    },
+}
+
+impl QueueChange {
+    /// The detail read for the change's kind, or the fault in words a viewer can show. A kind
+    /// this protocol does not name answers `None`, and the queue refuses it by name.
+    pub fn detail_typed(&self) -> Option<Result<ChangeDetail, String>> {
+        let read = match self.kind.as_str() {
+            "tactics" => serde_json::from_value::<PatchDetail>(self.detail.clone())
+                .map(|d| ChangeDetail::Patch(d.patch)),
+            "substitution" => serde_json::from_value::<SwapDetail>(self.detail.clone()).map(|d| {
+                ChangeDetail::Swap {
+                    off: d.off,
+                    on: d.on,
+                }
+            }),
+            _ => return None,
+        };
+        Some(read.map_err(|e| format!("cannot read the {} change: {e}", self.kind)))
+    }
+}
+
+/// The lineup the page picked, sent before `start`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SetLineup {
+    /// Eleven squad indices in slot order; slot 0 is the goalkeeper.
+    pub lineup: Vec<u16>,
+    pub bench: Vec<u16>,
+    /// Pre-match tactics (formation, mentality, instructions, and roles), applied before
+    /// kick-off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub patch: Option<PatchWire>,
 }
 
 /// Everything a client sends.
@@ -158,6 +314,7 @@ pub enum ClientCommand {
     Pause,
     SetSpeed(SetSpeed),
     QueueChange(QueueChange),
+    SetLineup(SetLineup),
 }
 
 impl ClientCommand {
@@ -168,6 +325,7 @@ impl ClientCommand {
             ClientCommand::Pause => "pause",
             ClientCommand::SetSpeed(_) => "set-speed",
             ClientCommand::QueueChange(_) => "queue-change",
+            ClientCommand::SetLineup(_) => "set-lineup",
         }
     }
 }
@@ -202,6 +360,22 @@ mod tests {
                         position: "GK".into(),
                         squad_index: 0,
                     }],
+                    squad: vec![SquadEntry {
+                        id: "a-1".into(),
+                        name: "Keeper One".into(),
+                        shirt: 1,
+                        position: "GK".into(),
+                        natural_fitness: 71,
+                        role_fit: vec![80, 12],
+                    }],
+                    setup: Some(TeamSetup {
+                        lineup: (0..11).collect(),
+                        bench: vec![11, 12],
+                        formation: 0,
+                        mentality: 2,
+                        instructions: vec![1, 1, 1, 1, 1, 0],
+                        roles: vec![SlotRole { role: 0, duty: 1 }; 11],
+                    }),
                 },
                 TeamRef {
                     id: "club-b".into(),
@@ -209,15 +383,119 @@ mod tests {
                     kit_primary: "#6a0dad".into(),
                     kit_secondary: "#ff6a13".into(),
                     roster: Vec::new(),
+                    squad: Vec::new(),
+                    setup: None,
                 },
             ],
+            tactics: serde_json::json!({"roles": [{"name": "goalkeeper"}]}),
+            substitutions: SubstitutionRules {
+                limit: 5,
+                windows: 3,
+            },
         }
+    }
+
+    fn queue_change(kind: &str, detail: serde_json::Value) -> QueueChange {
+        QueueChange {
+            kind: kind.into(),
+            detail,
+        }
+    }
+
+    #[test]
+    fn each_detail_shape_is_read_for_its_kind() {
+        let patch = queue_change(
+            "tactics",
+            serde_json::json!({"patch": {"mentality": 4, "instructions": [null, 2, null, null, null, null],
+                "roles": [{"squad": 7, "role": 3, "duty": 2}]}}),
+        );
+        let Some(Ok(ChangeDetail::Patch(p))) = patch.detail_typed() else {
+            panic!("a patch detail must be read");
+        };
+        assert_eq!(p.mentality, Some(4));
+        assert_eq!(
+            p.instructions,
+            Some([None, Some(2), None, None, None, None])
+        );
+        assert_eq!(
+            p.roles,
+            vec![RoleWire {
+                squad: 7,
+                role: 3,
+                duty: 2
+            }]
+        );
+
+        let swap = queue_change("substitution", serde_json::json!({"off": 9, "on": 14}));
+        assert_eq!(
+            swap.detail_typed(),
+            Some(Ok(ChangeDetail::Swap { off: 9, on: 14 }))
+        );
+        assert_eq!(
+            queue_change("formation", serde_json::Value::Null).detail_typed(),
+            None
+        );
+    }
+
+    #[test]
+    fn a_detail_that_does_not_match_its_kind_is_refused_naming_the_fault() {
+        let swapped = queue_change("tactics", serde_json::json!({"off": 9, "on": 14}));
+        let Some(Err(reason)) = swapped.detail_typed() else {
+            panic!("a swap under tactics must be refused");
+        };
+        assert!(
+            reason.starts_with("cannot read the tactics change"),
+            "{reason}"
+        );
+        let patched = queue_change("substitution", serde_json::json!({"patch": {}}));
+        assert!(matches!(patched.detail_typed(), Some(Err(_))));
+        let missing = queue_change("substitution", serde_json::Value::Null);
+        assert!(matches!(missing.detail_typed(), Some(Err(_))));
+    }
+
+    #[test]
+    fn an_unknown_field_in_a_detail_is_refused() {
+        let extra = queue_change(
+            "substitution",
+            serde_json::json!({"off": 9, "on": 14, "captain": true}),
+        );
+        let Some(Err(reason)) = extra.detail_typed() else {
+            panic!("an unknown field must be refused");
+        };
+        assert!(reason.contains("captain"), "{reason}");
+        let short = queue_change(
+            "tactics",
+            serde_json::json!({"patch": {"instructions": [1, 2]}}),
+        );
+        assert!(matches!(short.detail_typed(), Some(Err(_))));
+    }
+
+    #[test]
+    fn set_lineup_round_trips_and_a_hello_without_a_squad_omits_it() {
+        let command = ClientCommand::SetLineup(SetLineup {
+            lineup: (0..11).collect(),
+            bench: vec![11, 12],
+            patch: Some(PatchWire {
+                mentality: Some(3),
+                ..PatchWire::default()
+            }),
+        });
+        let json = serde_json::to_string(&command).unwrap();
+        assert!(json.starts_with("{\"type\":\"set-lineup\""), "{json}");
+        assert_eq!(
+            serde_json::from_str::<ClientCommand>(&json).unwrap(),
+            command
+        );
+        let hello = serde_json::to_string(&ServerMessage::Hello(Box::new(hello()))).unwrap();
+        assert_eq!(hello.matches("\"squad\":").count(), 1, "{hello}");
+        assert_eq!(hello.matches("\"setup\":").count(), 1, "{hello}");
+        assert!(hello.contains("\"player.natural_fitness\":71"), "{hello}");
     }
 
     #[test]
     fn every_server_message_round_trips_through_json() {
         let messages = [
-            ServerMessage::Hello(hello()),
+            ServerMessage::Hello(Box::new(hello())),
             ServerMessage::Event(MatchEvent::play(
                 "owner",
                 "match",
@@ -276,6 +554,11 @@ mod tests {
                 kind: "tactics".into(),
                 detail: serde_json::Value::Null,
             }),
+            ClientCommand::SetLineup(SetLineup {
+                lineup: vec![0; 11],
+                bench: Vec::new(),
+                patch: None,
+            }),
         ];
         for c in commands {
             let json = serde_json::to_string(&c).unwrap();
@@ -303,7 +586,7 @@ mod tests {
 
     #[test]
     fn a_hello_names_both_kit_colours_under_dotted_keys() {
-        let json = serde_json::to_string(&ServerMessage::Hello(hello())).unwrap();
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello()))).unwrap();
         assert!(json.contains("\"team.kit.primary\":\"#c8102e\""), "{json}");
         assert!(
             json.contains("\"team.kit.secondary\":\"#000000\""),
@@ -315,12 +598,12 @@ mod tests {
             "{json}"
         );
         let back = serde_json::from_str::<ServerMessage>(&json).unwrap();
-        assert_eq!(back, ServerMessage::Hello(hello()));
+        assert_eq!(back, ServerMessage::Hello(Box::new(hello())));
     }
 
     #[test]
     fn a_hello_without_a_roster_reads_as_an_empty_one() {
-        let json = serde_json::to_string(&ServerMessage::Hello(hello())).unwrap();
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello()))).unwrap();
         assert!(json.contains("\"player.squad_index\":0"), "{json}");
         let bare = json.replace(",\"roster\":[]", "");
         assert_ne!(bare, json);
@@ -346,7 +629,7 @@ mod tests {
 
     #[test]
     fn a_hello_without_kit_colours_is_refused() {
-        let json = serde_json::to_string(&ServerMessage::Hello(hello()))
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello())))
             .unwrap()
             .replace(",\"team.kit.primary\":\"#c8102e\"", "");
         let err = serde_json::from_str::<ServerMessage>(&json).unwrap_err();

@@ -7,7 +7,7 @@ use std::io::{BufRead, BufReader, Read};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use protocol::ServerMessage;
+use protocol::{ClientCommand, ServerMessage};
 use stream::{Client, Incoming};
 
 fn temp(name: &str) -> PathBuf {
@@ -100,6 +100,8 @@ fn serve_prints_a_port_writes_the_port_file_and_streams_a_match() {
         panic!("the first message is the hello");
     };
     assert_eq!(hello.ticks_expected, 3_000);
+    // A served match holds before kick-off until the page starts it.
+    client.send(&ClientCommand::Start).unwrap();
     let mut ticks = 0u32;
     loop {
         match client.read().unwrap() {
@@ -157,6 +159,7 @@ fn a_viewer_that_closes_in_mid_match_ends_the_run_without_an_error() {
     let port: u16 = line.trim().parse().unwrap();
 
     let mut client = Client::connect_local(port).unwrap();
+    client.send(&ClientCommand::Start).unwrap();
     let mut ticks = 0u32;
     while ticks < 200 {
         match client.read().unwrap() {

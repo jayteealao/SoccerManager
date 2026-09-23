@@ -143,6 +143,8 @@ fn serve(
                 kit_primary: config.teams[0].kit.primary.clone(),
                 kit_secondary: config.teams[0].kit.secondary.clone(),
                 roster: Vec::new(),
+                squad: Vec::new(),
+                setup: None,
             },
             TeamRef {
                 id: club_ids[1].clone(),
@@ -150,8 +152,12 @@ fn serve(
                 kit_primary: config.teams[1].kit.primary.clone(),
                 kit_secondary: config.teams[1].kit.secondary.clone(),
                 roster: Vec::new(),
+                squad: Vec::new(),
+                setup: None,
             },
         ],
+        tactics: serde_json::Value::Null,
+        substitutions: protocol::SubstitutionRules::default(),
     };
 
     let server = Server::bind(&data_dir, &match_id)?;
@@ -173,6 +179,8 @@ fn serve(
                 state: Arc::clone(&state),
                 events: Arc::clone(&events),
                 queue: Queue::new(ChangeKind::ALL.to_vec()),
+                pre_match: Arc::new(stream::PreMatch::none()),
+                inbox: Arc::new(stream::Inbox::default()),
             },
         },
     )?;

@@ -17,8 +17,9 @@ pub use command::{Ack, ChangeKind, ChangeState, Pending, Queue, Reject, Verdict}
 pub use event::{CardKind, ChangeOutcome, EventType, MatchEvent};
 pub use frame::{Frame, TickFrame};
 pub use message::{
-    ClientCommand, Condition, Hello, QueueChange, RosterEntry, ServerMessage, SetSpeed, Stats,
-    TeamRef,
+    ChangeDetail, ClientCommand, Condition, Hello, PatchWire, QueueChange, RoleWire, RosterEntry,
+    ServerMessage, SetLineup, SetSpeed, SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef,
+    TeamSetup,
 };
 
 /// The protocol version a client must ask for. A client that asks for another version is
@@ -50,6 +51,13 @@ pub use message::{
 /// `condition`, carries every player's energy on the same cadence, and each hello team gained
 /// a `roster`. A viewer built for version 2 would read the first `stats` message as the final
 /// score sheet, so the change takes a new version.
+///
+/// Version 3 also carries the pre-match lineup and live changes, under the same single raise:
+/// a `serve` session now sends only the hello until the page sends `start`; a new command,
+/// `set-lineup`, picks the home lineup, bench, and pre-match tactics in that hold; the hello
+/// gained the home team's `squad` and `setup`, the loaded `tactics` file, and the
+/// `substitutions` limits; and `queue-change` changed meaning, because its `detail` is now
+/// read and the change reaches the engine.
 pub const PROTOCOL_VERSION: u16 = 3;
 
 /// Errors this crate returns.
@@ -138,6 +146,22 @@ pub const MESSAGES: &[MessageSpec] = &[
             "player.shirt",
             "player.position",
             "player.squad_index",
+            "squad",
+            "player.natural_fitness",
+            "role_fit",
+            "setup",
+            "lineup",
+            "bench",
+            "formation",
+            "mentality",
+            "instructions",
+            "roles",
+            "role",
+            "duty",
+            "tactics",
+            "substitutions",
+            "limit",
+            "windows",
         ],
     },
     MessageSpec {
@@ -244,7 +268,26 @@ pub const MESSAGES: &[MessageSpec] = &[
         name: "queue-change",
         direction: Direction::ClientToServer,
         encoding: Encoding::JsonText,
-        fields: &["change.kind", "detail"],
+        fields: &[
+            "change.kind",
+            "detail",
+            "patch",
+            "off",
+            "on",
+            "formation",
+            "mentality",
+            "instructions",
+            "roles",
+            "squad",
+            "role",
+            "duty",
+        ],
+    },
+    MessageSpec {
+        name: "set-lineup",
+        direction: Direction::ClientToServer,
+        encoding: Encoding::JsonText,
+        fields: &["lineup", "bench", "patch"],
     },
 ];
 
@@ -277,6 +320,7 @@ mod tests {
             ClientCommand::Pause => "pause",
             ClientCommand::SetSpeed(_) => "set-speed",
             ClientCommand::QueueChange(_) => "queue-change",
+            ClientCommand::SetLineup(_) => "set-lineup",
         }
     }
 
@@ -287,12 +331,14 @@ mod tests {
             kit_primary: String::new(),
             kit_secondary: String::new(),
             roster: Vec::new(),
+            squad: Vec::new(),
+            setup: None,
         }
     }
 
     fn every_server_message() -> Vec<ServerMessage> {
         vec![
-            ServerMessage::Hello(Hello {
+            ServerMessage::Hello(Box::new(Hello {
                 protocol_version: PROTOCOL_VERSION,
                 engine_version: String::new(),
                 build_hash: String::new(),
@@ -303,7 +349,9 @@ mod tests {
                 ticks_expected: 0,
                 keyframe_interval: DEFAULT_KEYFRAME_INTERVAL,
                 teams: [blank_team(), blank_team()],
-            }),
+                tactics: serde_json::Value::Null,
+                substitutions: SubstitutionRules::default(),
+            })),
             ServerMessage::Event(MatchEvent::play(
                 "",
                 "",
@@ -356,6 +404,11 @@ mod tests {
             ClientCommand::QueueChange(QueueChange {
                 kind: String::new(),
                 detail: serde_json::Value::Null,
+            }),
+            ClientCommand::SetLineup(SetLineup {
+                lineup: Vec::new(),
+                bench: Vec::new(),
+                patch: None,
             }),
         ]
     }

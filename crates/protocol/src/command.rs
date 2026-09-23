@@ -1,8 +1,9 @@
 //! The socket's change queue. A client queues a tactical change or a substitution; the
 //! server holds it in order and answers. The engine keeps its own queue, which the AI manager
 //! fills, and applies it at every stoppage the rule pack admits a change at, announcing each
-//! verdict as a `tactics-change` event. A change queued over the socket is acknowledged and
-//! recorded, and its `detail` is not read yet, so it does not reach the engine's queue.
+//! verdict as a `tactics-change` event. A change queued over the socket is acknowledged,
+//! recorded, and passed on to the engine's queue, and its verdict event carries the
+//! identifier this queue gave it.
 
 use serde::{Deserialize, Serialize};
 
