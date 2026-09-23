@@ -36,6 +36,10 @@ fn a_simulated_match_writes_records_that_validate_against_the_schemas() {
     for row in &rows {
         schemas.event(row).unwrap_or_else(|e| panic!("{e}\n{row}"));
         assert_eq!(row["match.id"], printed["match.id"]);
+        // Every event but a verdict on a queued change carries its commentary line.
+        if row["event.type"] != "tactics-change" {
+            assert!(row["commentary"].is_string(), "{row}");
+        }
     }
     let kinds: Vec<&str> = rows
         .iter()

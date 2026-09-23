@@ -10,7 +10,8 @@ use engine::observe::{
     LawStats, MatchFigures, MatchStats, TacticsStats, TeamRef, emit_line, write_stats,
 };
 use engine::{
-    FanoutSink, FileSink, MatchConfig, Simulation, SnapshotSink, TickHeader, Validator, read_ticks,
+    Commentator, FanoutSink, FileSink, MatchConfig, Simulation, SnapshotSink, TickHeader,
+    Validator, read_ticks,
 };
 use tracing::info_span;
 
@@ -53,6 +54,7 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
     let club_ids = [teams[0].id.clone(), teams[1].id.clone()];
     let mut sim = Simulation::new(config)?;
     let mut ids = Ids::new(&sim);
+    let mut commentator = Commentator::for_match(&loaded.commentary, &sim);
     let file = FileSink::create(&opts.ticks_out, &header)
         .with_context(|| format!("cannot create {}", opts.ticks_out.display()))?;
     let snapshots = (!opts.no_snapshot)
@@ -75,13 +77,14 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
     let match_id_text = match_id.to_string();
     let mut writer = EventWriter::open(&data, &match_id_text)?;
     for event in &events {
-        writer.write(&match_event(
+        let row = match_event(
             event,
             &owner_id,
             &match_id_text,
             [&club_ids[0], &club_ids[1]],
             &mut ids,
-        ))?;
+        );
+        writer.write(&row.commentary(commentator.line(event)))?;
     }
     let validator = Validator::for_match(sim.tuning().clone(), sim.team_timeline(), &events);
     let violations = validator.check(&file.records);

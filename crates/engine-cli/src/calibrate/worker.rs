@@ -7,7 +7,10 @@ use std::time::Instant;
 
 use engine::observe::identity::{data_dir, load_or_create_owner_id};
 use engine::observe::{LawStats, MatchFigures, MatchStats, TacticsStats, TeamRef, write_stats_at};
-use engine::{Content, ContentDir, EngineError, MatchConfig, Simulation, Validator, VecSink};
+use engine::{
+    Commentary, Commentator, Content, ContentDir, EngineError, MatchConfig, Simulation, Validator,
+    VecSink,
+};
 use stream::EventWriter;
 
 use super::fixtures::{self, Fixture, Leagues};
@@ -33,6 +36,7 @@ pub struct Share<'a> {
 pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
     let dir = ContentDir::at(share.content_dir);
     let content = Content::load(&dir)?;
+    let commentary = Commentary::load(&dir)?;
     let bands = Bands::load(&dir)?;
     let owner_id = load_or_create_owner_id(&data_dir())?;
     let stats_dir = share.run_dir.join("stats");
@@ -52,7 +56,7 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
         let seed = fixtures::match_seed(share.seed, share.suite, fixture.index);
         let stats = match play(
             share,
-            &content,
+            (&content, &commentary),
             &teams,
             seed,
             &owner_id,
@@ -74,10 +78,10 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
     Ok(0)
 }
 
-/// One match to full time, validated, with its events written.
+/// One match to full time, validated, with its events and their commentary lines written.
 fn play(
     share: &Share<'_>,
-    content: &Content,
+    (content, commentary): (&Content, &Commentary),
     teams: &[engine::data::TeamFile; 2],
     seed: u64,
     owner_id: &str,
@@ -90,6 +94,7 @@ fn play(
     let content_hash = config.content_hash.clone();
     let mut sim = Simulation::new(config)?;
     let mut ids = Ids::new(&sim);
+    let mut commentator = Commentator::for_match(commentary, &sim);
     let mut sink = VecSink::default();
     let started = Instant::now();
     sim.run(&mut sink)?;
@@ -106,7 +111,7 @@ fn play(
             &mut ids,
         );
         writer
-            .write(&row)
+            .write(&row.commentary(commentator.line(event)))
             .map_err(|e| EngineError::Sink(e.to_string()))?;
     }
     let validator = Validator::for_match(sim.tuning().clone(), sim.team_timeline(), &events);
