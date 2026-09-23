@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { EMPTY_TEXT, FeedBatcher, feedRow, minuteStamp } from '../feed.mjs';
+import { EMPTY_TEXT, FeedBatcher, FeedFollow, feedRow, minuteStamp } from '../feed.mjs';
 import { KIND, MatchState } from '../match-state.mjs';
 import { eventMessage } from './helpers.mjs';
 
@@ -111,4 +111,24 @@ test('goals, cards, substitutions, and injuries carry a word; only goals and car
 
 test('the empty state names what fills the feed', () => {
   assert.equal(EMPTY_TEXT, 'No events yet. The feed fills as the match plays.');
+});
+
+test('the feed keeps following the newest row when a panel beside it shrinks it', () => {
+  const follow = new FeedFollow();
+  assert.equal(follow.following, true, 'a new feed follows');
+  // The feed scrolled itself to the bottom: 437 high, 112 scrolled, 325 shown.
+  follow.scrolledTo(112);
+  follow.onScroll({ scrollHeight: 437, scrollTop: 112, clientHeight: 325 });
+  assert.equal(follow.following, true);
+  // The scroll event of that same scroll arrives after a chip appeared and the roles list
+  // opened, which shrank the feed to 96 pixels. The list did not move, so it still follows;
+  // the old check read 437 - 112 - 96 = 229 pixels from the bottom as scrolled up.
+  follow.onScroll({ scrollHeight: 437, scrollTop: 112, clientHeight: 96 });
+  assert.equal(follow.following, true, 'a shrink is not the manager scrolling up');
+  // The manager scrolls up to read an older row, then back down to the newest.
+  follow.scrolledTo(748);
+  follow.onScroll({ scrollHeight: 844, scrollTop: 300, clientHeight: 96 });
+  assert.equal(follow.following, false);
+  follow.onScroll({ scrollHeight: 844, scrollTop: 748, clientHeight: 96 });
+  assert.equal(follow.following, true);
 });

@@ -16,6 +16,12 @@ export const SPEEDS = [1, 2, 4, 8];
 /// wide enough that ordinary jitter never trips it.
 export const LAG_TOLERANCE = 0.9;
 
+/// Seconds of unplayed match, at the requested speed, below which a slow arrival rate is lag.
+/// A live engine held near the drawn tick delivers ticks exactly as fast as playback uses
+/// them, so a low rate with a healthy lead is the engine waiting, not falling behind; and
+/// read as lag, it would slow playback, which slows the engine, and never recover.
+export const STARVING_S = 0.5;
+
 /// Seconds of arrivals the estimate is built from.
 const WINDOW_S = 3;
 
@@ -94,14 +100,16 @@ export class Playback {
     this.apply();
   }
 
-  /// One tick arrived. The estimate updates and the notice follows it.
-  noteArrival(nowMs, tick) {
+  /// One tick arrived. The estimate updates and the notice follows it. `lead` is the stored
+  /// ticks not yet played; left out, the rate alone decides.
+  noteArrival(nowMs, tick, lead = 0) {
     const measured = this.rate.note(nowMs);
     if (measured === null) {
       return;
     }
     const sustained = measured;
-    const behind = sustained < this.requested * LAG_TOLERANCE;
+    const starving = lead < STARVING_S * TICKS_PER_SECOND * this.requested;
+    const behind = starving && sustained < this.requested * LAG_TOLERANCE;
     const wasShown = this.noticeShown;
     const wasEffective = this.effective;
     this.effective = behind ? nameRate(sustained) : this.requested;

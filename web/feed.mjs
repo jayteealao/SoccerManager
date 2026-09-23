@@ -83,6 +83,31 @@ function kindWords(kind) {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
+/// Pixels from the bottom within which the feed counts as reading the newest row.
+export const FOLLOW_SLACK_PX = 24;
+
+/// Whether the feed follows the newest row. Only the manager scrolling up stops it: a panel
+/// that shrinks beside the feed (a pending-change chip appearing, the roles list opening)
+/// moves the bottom away without moving the list, and leaves it following. Pure: the caller
+/// reports where it scrolled the list, and the list's geometry on each scroll event.
+export class FeedFollow {
+  constructor() {
+    this.following = true;
+    /// Where the feed last scrolled itself.
+    this.autoTop = 0;
+  }
+
+  scrolledTo(top) {
+    this.autoTop = top;
+    this.following = true;
+  }
+
+  onScroll({ scrollHeight, scrollTop, clientHeight }) {
+    const atBottom = scrollHeight - scrollTop - clientHeight < FOLLOW_SLACK_PX;
+    this.following = atBottom || scrollTop >= this.autoTop;
+  }
+}
+
 /// The DOM side. `list` is the scrolling list, `empty` the empty-state node, and `live` a
 /// visually hidden polite live region for goals and cards.
 export class Feed {
@@ -96,6 +121,8 @@ export class Feed {
     this.last = null;
     this.lastRow = null;
     this.onRow = null;
+    this.follow = new FeedFollow();
+    list.addEventListener?.('scroll', () => this.follow.onScroll(list));
   }
 
   setTeams(teamNames) {
@@ -110,7 +137,7 @@ export class Feed {
     }
     // Follow the newest row unless the manager scrolled up to read an older one.
     const list = this.list;
-    const pinned = list.scrollHeight - list.scrollTop - list.clientHeight < 24;
+    const pinned = this.follow.following;
     if (reset) {
       list.replaceChildren();
       this.count = 0;
@@ -159,6 +186,7 @@ export class Feed {
     this.empty.hidden = this.count > 0;
     if (pinned || reset) {
       list.scrollTop = list.scrollHeight;
+      this.follow.scrolledTo(list.scrollTop);
     }
     if (spoken && this.live) {
       this.live.textContent = spoken;

@@ -113,7 +113,7 @@ function onTick(buffer) {
   }
   history.append(incoming.tick, incoming.components);
   socket.noteTick(incoming.tick);
-  playback.noteArrival(performance.now(), incoming.tick);
+  playback.noteArrival(performance.now(), incoming.tick, incoming.tick - renderedTick);
   // Paced on arrival as well as on each drawn frame: a hidden or throttled tab draws few
   // frames, and the engine must still stop a few seconds ahead of the drawn tick.
   dugout.pace(history.newestTick - renderedTick);

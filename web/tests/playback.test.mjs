@@ -44,3 +44,29 @@ test('selecting at or below the sustained rate clears the lag notice', () => {
   assert.equal(playback.noticeShown, false);
   assert.equal(calls.onNotice.at(-1), null);
 });
+
+test('a slow arrival rate with a healthy lead is an engine held near the pitch, not lag', () => {
+  const { playback } = stubbed();
+  quiet(() => {
+    playback.select(8);
+    // Ticks arrive at 3x, as a held engine delivers them once playback slowed to 3x, while
+    // 480 ticks wait unplayed: the old estimate called this lag and never let go of it.
+    const perTick = 1000 / (TICKS_PER_SECOND * 3);
+    for (let i = 0; i < TICKS_PER_SECOND * 3 * 3; i += 1) {
+      playback.noteArrival(i * perTick, i, 480);
+    }
+  });
+  assert.equal(playback.noticeShown, false);
+  assert.equal(playback.effective, 8);
+
+  // The same rate with the store running dry is lag.
+  quiet(() => {
+    const perTick = 1000 / (TICKS_PER_SECOND * 3);
+    const start = TICKS_PER_SECOND * 3 * 3;
+    for (let i = start; i < start + TICKS_PER_SECOND * 3; i += 1) {
+      playback.noteArrival(i * perTick, i, 20);
+    }
+  });
+  assert.equal(playback.noticeShown, true);
+  assert.equal(playback.effective, 3);
+});
