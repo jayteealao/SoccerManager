@@ -5,13 +5,13 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-23T16:44:00Z"
-slices-implemented: 13
+updated-at: "2026-09-23T17:10:17Z"
+slices-implemented: 14
 slices-total: 16
-metric-total-files-changed: 533
-metric-total-lines-added: 50427
-metric-total-lines-removed: 2085
-tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit]
+metric-total-files-changed: 559
+metric-total-lines-added: 52395
+metric-total-lines-removed: 2224
+tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment]
 refs:
   index: 00-index.md
   plan-index: 04-plan.md
@@ -29,8 +29,9 @@ refs:
     - 05-implement-viewer-reports-recovery.md
     - 05-implement-integration.md
     - 05-implement-extra-time-penalties.md
+    - 05-implement-experiment-flags.md
 next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine viewer-reports-recovery"
+next-invocation: "/wf verify football-manager-match-engine experiment-flags"
 ---
 
 # Implement Index
@@ -122,7 +123,16 @@ next-invocation: "/wf verify football-manager-match-engine viewer-reports-recove
   - The validator exempts the anchor rule during a shoot-out, and a tick file past its announced length gets its header raised at finish.
 - Benchmark: `extra-time-penalties` measured 421.8 to 422.0 ms of processor time per match (gate 460.7), 1.4926 to 1.4933 µs per tick, and 6.54 to 6.58 MB peak memory (gate 6.82).
 
+- `experiment-flags` is implemented (commit `aca285f`) and awaits verify. Every later slice inherits these changes:
+  - `tuning.json` has an optional `flags` block (shipped empty; `TUNING_VERSION` stays 2). A flag needs an owner, a hypothesis, and a removal condition, and it must switch something: tuning overrides by dotted path, or a name in `engine::flags::CODE_FLAGS`. A candidate model registers its name there, declares it in the shipped file, and reads `config.flags.is_on(name)` in the same change.
+  - `Content::with_flags(&FlagStates)` applies states once, at load; `Content::load` applies the file's states. `MatchConfig.flags` carries the on-list. The shipped content hash moved once, because the tuning file's bytes changed. The seed-42 tick records are byte-identical.
+  - Every `MatchStats` literal needs `flags_on`; `tuning.flags_on` rides in every statistics record.
+  - `calibrate` is restructured into per-arm runs (`RunCtx::play_arm`); `--flag` and `--pair` exist, and a paired report adds `calib.flags`, `calib.pair`, `calib.arms`, `calib.compare`, and `calib.verdict`. The scripting runtime can gate scripted models with the same flags block.
+- Checks at implement: 364 Rust tests (4 ignored) and 127 page tests pass, and clippy runs with `-D warnings`. Benchmark: 418.8 / 422.0 / 418.8 ms of processor time per match (gate 460.7), and 6.555 to 6.746 MB peak memory (median 6.582, gate 6.82).
+
 ## Recommended Next Stage
+
+- `/wf verify football-manager-match-engine experiment-flags` (new: automated `cargo test -p engine --test flags` and `cargo test -p engine-cli --test calibrate_pair`, the benchmark compare, and the seed-42 byte-identity check)
 
 - `/wf verify football-manager-match-engine extra-time-penalties` (new: automated cargo tests, and re-read IFAB Laws 3, 7, and 10)
 - `/wf verify football-manager-match-engine integration`
