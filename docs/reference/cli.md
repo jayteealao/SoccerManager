@@ -25,6 +25,7 @@ When `--content-dir` is absent, the engine uses `SM_CONTENT_DIR`. When `SM_CONTE
 | `SM_CONTENT_DIR` | not set | The content folder, when `--content-dir` is absent. |
 | `SM_DATA_DIR` | `%LOCALAPPDATA%\SoccerManager` on Windows, else `$HOME/.local/share/SoccerManager` | The data folder for every file the engine writes. |
 | `SM_ENGINE_PATH` | not set | The engine program `launch` runs, when `--engine` is absent. |
+| `SM_WEB_DIR` | not set | The page folder `launch` serves, when `--web` is absent. |
 | `SM_LOG` | `info` | The log filter for the log lines on standard error, for example `debug` or `engine=warn`. |
 | `SM_ENV` | `dev` | The `env` field of every record. |
 
@@ -116,12 +117,15 @@ Serve the viewer page and run the engine as a separate process. Restart the engi
 
 | Flag | Value | Default | Meaning |
 |---|---|---|---|
-| `--seed` | integer | required | The seed of the random-number generator. |
+| `--seed` | integer | from the clock | The seed of the random-number generator. When absent, `launch` picks one from the clock and prints `seed <n>` on standard error. |
 | `--minutes` | integer | 90 | Minutes of play. |
 | `--team-a` | file | `teams/default-a.json` in the content folder | The home team file. |
 | `--team-b` | file | `teams/default-b.json` in the content folder | The away team file. |
-| `--web` | folder | required | The folder that holds the viewer page. |
+| `--web` | folder | see below | The folder that holds the viewer page. |
+| `--open` | none | off | Open the page in the default browser. When the browser does not open, `launch` logs `launch.open_failed` and keeps running. |
 | `--engine` | file | `SM_ENGINE_PATH`, then this program | The engine program to run. When the file does not exist, the page shows the path and how to build the engine. |
+
+When `--web` is absent, `launch` uses `SM_WEB_DIR`. When `SM_WEB_DIR` is not set, `launch` uses `./web`, then the `web` folder beside the binary. A folder counts only when it holds `index.html`. An installed game keeps `content` and `web` beside the binary, so it starts with no flag.
 
 Output: the page address. The page reads the engine state from `engine.json` at the same address.
 

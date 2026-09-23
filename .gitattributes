@@ -1,0 +1,2 @@
+# The Unix scripts run under sh, which reads a carriage return as part of a command.
+packaging/unix/* text eol=lf

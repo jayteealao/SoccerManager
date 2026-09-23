@@ -10,3 +10,6 @@ target/
 e2e/node_modules/
 e2e/test-results/
 e2e/playwright-report/
+
+# Release builds: staged folders, setup files, archives, and smoke-test evidence.
+dist/

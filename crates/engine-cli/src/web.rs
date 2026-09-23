@@ -88,6 +88,39 @@ impl Status for Fixed {
     }
 }
 
+/// Environment variable that names the page folder.
+pub const WEB_DIR_ENV: &str = "SM_WEB_DIR";
+
+/// Finds the page folder the way the engine finds its content folder. When `flag` is given,
+/// only that folder is used. Otherwise, when `SM_WEB_DIR` is set, only that folder is used.
+/// Only when neither is set does the search fall through to `./web`, then the `web` folder
+/// beside the running binary, which is where an installed game keeps it. A folder counts
+/// only when it holds `index.html`; the refusal lists every folder tried.
+pub fn resolve_web_dir(flag: Option<&Path>) -> anyhow::Result<PathBuf> {
+    let tried: Vec<PathBuf> = if let Some(dir) = flag {
+        vec![dir.to_path_buf()]
+    } else if let Some(dir) = std::env::var_os(WEB_DIR_ENV).filter(|d| !d.is_empty()) {
+        vec![PathBuf::from(dir)]
+    } else {
+        let mut tried = vec![PathBuf::from("web")];
+        if let Some(dir) = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(Path::to_path_buf))
+        {
+            tried.push(dir.join("web"));
+        }
+        tried
+    };
+    if let Some(found) = tried.iter().find(|dir| dir.join("index.html").is_file()) {
+        return Ok(found.clone());
+    }
+    let list: Vec<String> = tried.iter().map(|p| p.display().to_string()).collect();
+    anyhow::bail!(
+        "cannot read page folder (tried {}): no folder holds index.html",
+        list.join(", ")
+    )
+}
+
 /// Serves `dir` on a loopback port the operating system chooses. `status` answers
 /// `/engine.json`, which tells the page the WebSocket port and the state of the engine.
 pub fn start(dir: &Path, status: Arc<dyn Status>) -> anyhow::Result<WebServer> {

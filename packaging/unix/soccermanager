@@ -1,0 +1,4 @@
+#!/bin/sh
+# Starts Soccer Manager: runs the engine and opens the match page in the default browser.
+# Any extra arguments go to `engine-cli launch`, for example `--seed 42`.
+exec "$(dirname "$0")/engine-cli" launch --open "$@"

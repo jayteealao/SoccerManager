@@ -86,7 +86,15 @@ pub struct Launcher {
 
 pub fn run(content_dir: Option<&Path>, opts: &LaunchOpts) -> anyhow::Result<i32> {
     let engine = engine_path(opts.engine.as_deref());
-    let started = MatchId::now(opts.seed);
+    let web = crate::web::resolve_web_dir(opts.web.as_deref())?;
+    let seed = opts.seed.unwrap_or_else(|| {
+        let seed = clock_seed();
+        // Stdout carries the page address alone, so the chosen seed goes to stderr, where a
+        // person can read it back to play the same match again.
+        eprintln!("seed {seed}");
+        seed
+    });
+    let started = MatchId::now(seed);
     let match_id = started.to_string();
     let mut common = Vec::new();
     if let Some(dir) = content_dir {
@@ -115,12 +123,12 @@ pub fn run(content_dir: Option<&Path>, opts: &LaunchOpts) -> anyhow::Result<i32>
         common,
         match_id,
         match_millis: started.millis,
-        seed: opts.seed,
+        seed,
         minutes: opts.minutes,
         drop_client_at: Mutex::new(opts.drop_client_at),
     });
 
-    let page = crate::web::start(&opts.web, Arc::new(Arc::clone(&launcher)))?;
+    let page = crate::web::start(&web, Arc::new(Arc::clone(&launcher)))?;
     if launcher.engine.is_file() {
         launcher.start(None);
     } else {
@@ -133,9 +141,60 @@ pub fn run(content_dir: Option<&Path>, opts: &LaunchOpts) -> anyhow::Result<i32>
     }
     // The page address is the one line on stdout, because it is the line a person copies.
     println!("{}", page.address());
+    if opts.open {
+        open_browser(&page.address());
+    }
     loop {
         std::thread::park();
     }
+}
+
+/// A seed for a player who gave none: the clock's nanoseconds, folded into 64 bits.
+fn clock_seed() -> u64 {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    (nanos as u64) ^ ((nanos >> 64) as u64)
+}
+
+/// Opens `address` in the default browser. The address is already printed, so a browser
+/// that does not open is logged and the launcher keeps running.
+fn open_browser(address: &str) {
+    // The address is `http://127.0.0.1:<port>/`, which holds no character a shell reads.
+    #[cfg(windows)]
+    let mut command = {
+        let mut c = Command::new("cmd");
+        c.args(["/C", "start", "", address]);
+        c
+    };
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut c = Command::new("open");
+        c.arg(address);
+        c
+    };
+    #[cfg(not(any(windows, target_os = "macos")))]
+    let mut command = {
+        let mut c = Command::new("xdg-open");
+        c.arg(address);
+        c
+    };
+    let result = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    let reason = match result {
+        Ok(status) if status.success() => return,
+        Ok(status) => format!(
+            "the browser opener exited with code {}",
+            status
+                .code()
+                .map_or_else(|| "none".to_string(), |c| c.to_string())
+        ),
+        Err(err) => format!("cannot run the browser opener: {err}"),
+    };
+    tracing::warn!(signal = "launch.open_failed", reason = %reason);
 }
 
 /// `--engine`, then `SM_ENGINE_PATH`, then this program.

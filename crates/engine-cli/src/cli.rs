@@ -186,9 +186,9 @@ pub struct ServeOpts {
 
 #[derive(Debug, Args)]
 pub struct LaunchOpts {
-    /// Seed for the engine's random-number generator.
+    /// Seed for the engine's random-number generator; default from the clock.
     #[arg(long)]
-    pub seed: u64,
+    pub seed: Option<u64>,
     /// Minutes of play to simulate.
     #[arg(long, default_value_t = 90)]
     pub minutes: u32,
@@ -198,9 +198,19 @@ pub struct LaunchOpts {
     /// Away team file; default teams/default-b.json in the content folder.
     #[arg(long, value_name = "FILE")]
     pub team_b: Option<PathBuf>,
-    /// Folder holding the viewer page.
-    #[arg(long, value_name = "DIR")]
-    pub web: PathBuf,
+    /// Folder holding the viewer page; default SM_WEB_DIR, ./web, then web/.
+    #[arg(
+        long,
+        value_name = "DIR",
+        long_help = "Folder holding the viewer page; default SM_WEB_DIR, ./web, then web/.\n\n\
+                     Without the flag, SM_WEB_DIR is used alone when it is set.\n\
+                     Otherwise ./web, then the web folder beside this program.\n\
+                     A folder counts only when it holds index.html."
+    )]
+    pub web: Option<PathBuf>,
+    /// Open the page in the default browser.
+    #[arg(long)]
+    pub open: bool,
     /// Engine program to run; default SM_ENGINE_PATH, then this program.
     #[arg(
         long,

@@ -4,6 +4,14 @@ A football management game: a native match engine written in Rust, and Touchline
 
 You pick a lineup and tactics, kick off against a club the computer manages, and watch the match on a 2D pitch. The engine computes the ball and all 22 players at 50 ticks per second, applies the laws of the game, and writes commentary. During the match you change tactics and make substitutions; each change applies at the next stoppage. At half-time and at full time a report counts the match, and at full time you can save a replay.
 
+## Install
+
+On Windows 11, run `SoccerManager-<version>-windows-x64-setup.exe`. It installs for your user only, with no administrator prompt, and adds **Soccer Manager** to the Start menu. The Start-menu entry starts the engine and opens the match page in your browser. The setup file is not signed, so SmartScreen can warn about it: choose **More info**, then **Run anyway**.
+
+On Linux x86_64 (glibc 2.39 or later), unpack `SoccerManager-<version>-linux-x86_64.tar.gz` and run `./soccermanager` in the unpacked folder.
+
+Each start plays one match. Your matches stay in `%LOCALAPPDATA%\SoccerManager` on Windows and `~/.local/share/SoccerManager` on Linux, also after an uninstall. To build the setup file and the archive yourself, see [packaging/README.md](packaging/README.md).
+
 ## Build
 
 You need Rust 1.87 or later.
@@ -26,6 +34,8 @@ To have the page survive a crash of the engine, start the launcher instead:
 ```bash
 target/release/engine-cli launch --seed 42 --web web
 ```
+
+From the repository folder, `target/release/engine-cli launch --open` also works: it finds `./web`, picks a seed, and opens the page in your browser.
 
 When the engine stops in mid-match, the page offers to restart from the last stoppage.
 
