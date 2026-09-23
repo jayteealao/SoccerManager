@@ -17,10 +17,7 @@
     "seed",
     "content.hash",
     "outcome",
-    "machine.hash",
-    "bench.match_wall_ms",
-    "bench.cpu_us_per_tick",
-    "bench.peak_mem_mb"
+    "machine.hash"
   ],
   "properties": {
     "record.kind": {
@@ -67,10 +64,24 @@
       "type": "string"
     },
     "outcome": {
+      "description": "error marks a run or match that failed; it then carries the three error.* keys and need not carry statistics.",
       "enum": [
         "success",
-        "failure"
+        "error"
       ]
+    },
+    "error.type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "error.code": {
+      "description": "One code per engine error variant, finer than error.type.",
+      "type": "string",
+      "minLength": 1
+    },
+    "error.retriable": {
+      "description": "true when the same run may succeed if tried again.",
+      "type": "boolean"
     },
     "machine.hash": {
       "type": "string",
@@ -106,8 +117,39 @@
     {
       "if": {
         "properties": {
+          "outcome": {
+            "const": "error"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "required": [
+          "error.type",
+          "error.code",
+          "error.retriable"
+        ]
+      },
+      "else": {
+        "required": [
+          "bench.match_wall_ms",
+          "bench.cpu_us_per_tick",
+          "bench.peak_mem_mb"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
           "operation": {
             "const": "benchmark"
+          },
+          "outcome": {
+            "not": {
+              "const": "error"
+            }
           }
         },
         "required": [
@@ -137,6 +179,11 @@
         "properties": {
           "operation": {
             "const": "calibrate"
+          },
+          "outcome": {
+            "not": {
+              "const": "error"
+            }
           }
         },
         "required": [

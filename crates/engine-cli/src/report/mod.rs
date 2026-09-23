@@ -372,6 +372,13 @@ pub struct CalibrationReport {
     #[serde(rename = "content.hash")]
     pub content_hash: String,
     pub outcome: &'static str,
+    /// Present only when `outcome` is `error`.
+    #[serde(rename = "error.type", skip_serializing_if = "Option::is_none")]
+    pub error_type: Option<&'static str>,
+    #[serde(rename = "error.code", skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<&'static str>,
+    #[serde(rename = "error.retriable", skip_serializing_if = "Option::is_none")]
+    pub error_retriable: Option<bool>,
     pub duration_ms: u64,
     /// Matches per suite.
     #[serde(rename = "calib.matches")]
@@ -640,7 +647,7 @@ mod tests {
             Some(0),
         );
         let mut failed = record([0, 0], [0, 0], [0.0, 0.0]);
-        failed.outcome = "failure".into();
+        failed.outcome = "error".into();
         assert!(b.add(Suite::Strength, failed, Some(1)));
         let figures = b.figures();
         let rec = figures[&Suite::Strength].stronger.unwrap();

@@ -55,6 +55,8 @@ Simulate one match and write every tick to a file.
 
 Output: one JSON line on standard output with the match statistics. Files: the tick file, and `matches/<match.id>/stats.json`, `events.jsonl`, and `snapshot.smsn` in the data folder.
 
+A failed run, for example `--minutes 0` or a tick file that cannot be written, prints one `match-stats` record on standard output with `outcome` `error` and the keys `error.type`, `error.code`, and `error.retriable`, and no statistics. It saves nothing in the data folder, prints the cause on standard error, and exits 1. A bad flag (exit code 2 from the argument parser) prints no record.
+
 Exit codes: 0 or 1.
 
 ## bench
@@ -72,6 +74,8 @@ Time whole matches on one thread and print a run report.
 | `--script-pack` | folder | none | Run every timed match with this script pack; the run report names it as `script.pack`. |
 
 Output: one `run-report` record on standard output: the median wall time, the processor time, the processor time for each tick, the peak memory, and the machine and build identifiers.
+
+A failed run, for example `--matches 0`, prints one `run-report` record on standard output with `outcome` `error` and the keys `error.type`, `error.code`, and `error.retriable`, and no benchmark figures. It prints the cause on standard error and exits 1.
 
 Exit codes: 0; 1; 2 when the median wall time of a 90-minute match is more than 2000 ms.
 
@@ -196,6 +200,8 @@ Play many AI-managed matches and check the realism bands.
 | `--pair` | flag name | none | Play every fixture with the flag off, then on, on the same match seeds, and compare the two arms band by band. |
 
 Output: the run report as one JSON line. Files: `report.json`, `stats/<match.id>.json`, and `events/<match.id>.jsonl` in the run folder.
+
+A match the engine cannot play still writes its `stats/<match.id>.json`, with `outcome` `error`, the keys `error.type`, `error.code`, and `error.retriable`, and zero figures; the run goes on and leaves that match out of the bands. When a worker process fails, the run report has `outcome` `error`, `error.type` `worker`, `error.code` `worker-failed`, and `error.retriable` `false`.
 
 A paired run writes each arm to its own folder: `arms/off/stats/`, `arms/off/events/`, `arms/on/stats/`, and `arms/on/events/`. The one `report.json` stays at the top of the run folder. Its top-level figures are the off arm's. `calib.arms` holds both arms, `calib.compare` holds one row per suite and band with the off value and the on value side by side, and `calib.verdict` is `on-better`, `off-better`, `no-difference`, or `on-rejected`. The same table is printed on standard error.
 

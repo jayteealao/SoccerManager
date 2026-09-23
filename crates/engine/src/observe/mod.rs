@@ -137,8 +137,8 @@ impl ScriptFigures {
 }
 
 /// The match figures the realism bands read. Per-team arrays are home first. Every key is
-/// a contract key; `passes.completed` is an additive extra, and `error.type` appears only
-/// on a failed match.
+/// a contract key; `passes.completed` is an additive extra, and the `error.*` keys appear
+/// only on a failed match.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MatchFigures {
@@ -164,6 +164,10 @@ pub struct MatchFigures {
     pub manager_kind: [String; 2],
     #[serde(rename = "error.type", skip_serializing_if = "Option::is_none")]
     pub error_type: Option<String>,
+    #[serde(rename = "error.code", skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<String>,
+    #[serde(rename = "error.retriable", skip_serializing_if = "Option::is_none")]
+    pub error_retriable: Option<bool>,
 }
 
 impl MatchFigures {
@@ -193,6 +197,8 @@ impl MatchFigures {
                 .to_string()
             }),
             error_type: None,
+            error_code: None,
+            error_retriable: None,
         }
     }
 }
@@ -428,6 +434,49 @@ impl Record for RunReport {
     }
 }
 
+/// The record a `simulate` or `bench` run prints when it fails: the envelope, the keys that
+/// correlate it, `outcome` `error`, and the three `error.*` keys. It carries no statistic.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct FailureRecord {
+    /// `match-stats` or `run-report`: the kind the command prints on success.
+    #[serde(skip)]
+    pub kind: &'static str,
+    #[serde(skip)]
+    pub operation: &'static str,
+    #[serde(rename = "owner.id")]
+    pub owner_id: String,
+    #[serde(rename = "match.id", skip_serializing_if = "Option::is_none")]
+    pub match_id: Option<String>,
+    #[serde(rename = "run.id", skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
+    #[serde(rename = "machine.hash", skip_serializing_if = "Option::is_none")]
+    pub machine_hash: Option<String>,
+    pub seed: u64,
+    #[serde(rename = "content.hash")]
+    pub content_hash: String,
+    pub duration_ms: u64,
+    /// Always `error`.
+    pub outcome: &'static str,
+    #[serde(rename = "error.type")]
+    pub error_type: &'static str,
+    #[serde(rename = "error.code")]
+    pub error_code: &'static str,
+    #[serde(rename = "error.retriable")]
+    pub error_retriable: bool,
+}
+
+impl Record for FailureRecord {
+    fn kind(&self) -> &'static str {
+        self.kind
+    }
+    fn operation(&self) -> &'static str {
+        self.operation
+    }
+    fn owner_id(&self) -> &str {
+        &self.owner_id
+    }
+}
+
 /// The record as one JSON object with the envelope keys first.
 pub fn to_json<R: Record>(record: &R) -> Result<String, EngineError> {
     let mut map = serde_json::Map::new();
@@ -650,6 +699,85 @@ mod tests {
         ] {
             assert!(json.contains(key), "missing {key} in {json}");
         }
+    }
+
+    fn failure(kind: &'static str, operation: &'static str) -> FailureRecord {
+        let bench = kind == "run-report";
+        FailureRecord {
+            kind,
+            operation,
+            owner_id: "0123456789abcdef0123456789abcdef".into(),
+            match_id: (!bench).then(|| identity::MatchId::now(7).to_string()),
+            run_id: bench.then(|| "bench-1".to_string()),
+            machine_hash: bench.then(machine_hash),
+            seed: 7,
+            content_hash: String::new(),
+            duration_ms: 3,
+            outcome: "error",
+            error_type: "invalid-config",
+            error_code: "invalid-config",
+            error_retriable: false,
+        }
+    }
+
+    fn keys(json: &str) -> Vec<String> {
+        let value: serde_json::Value = serde_json::from_str(json).unwrap();
+        let mut keys: Vec<String> = value.as_object().unwrap().keys().cloned().collect();
+        keys.sort();
+        keys
+    }
+
+    #[test]
+    fn a_failure_record_carries_the_envelope_the_correlation_and_the_error_keys_only() {
+        let envelope = [
+            "build.hash",
+            "env",
+            "operation",
+            "owner.id",
+            "record.kind",
+            "schema.version",
+            "service",
+            "version",
+        ];
+        let common = [
+            "content.hash",
+            "duration_ms",
+            "error.code",
+            "error.retriable",
+            "error.type",
+            "outcome",
+            "seed",
+        ];
+        for (kind, operation, correlation) in [
+            ("match-stats", "simulate", &["match.id"][..]),
+            ("run-report", "benchmark", &["machine.hash", "run.id"][..]),
+        ] {
+            let json = to_json(&failure(kind, operation)).unwrap();
+            let mut want: Vec<String> = envelope
+                .iter()
+                .chain(common.iter())
+                .chain(correlation.iter())
+                .map(|k| (*k).to_string())
+                .collect();
+            want.sort();
+            assert_eq!(keys(&json), want, "{json}");
+            assert!(
+                json.contains(&format!("\"record.kind\":\"{kind}\"")),
+                "{json}"
+            );
+            assert!(
+                json.contains(&format!("\"operation\":\"{operation}\"")),
+                "{json}"
+            );
+            assert!(json.contains("\"outcome\":\"error\""), "{json}");
+            assert!(json.contains("\"error.retriable\":false"), "{json}");
+        }
+    }
+
+    #[test]
+    fn a_successful_match_record_carries_no_error_key() {
+        let json = to_json(&stats()).unwrap();
+        assert!(!json.contains("\"error."), "{json}");
     }
 
     #[test]

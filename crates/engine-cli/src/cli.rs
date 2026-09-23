@@ -13,7 +13,7 @@ use engine::FlagSetting;
     about = "Headless command line for the football match engine."
 )]
 pub struct Cli {
-    /// Folder holding the content files (attributes, tuning, rules, teams).
+    /// Folder holding the content files.
     #[arg(
         long,
         global = true,
@@ -60,8 +60,11 @@ pub struct SimulateOpts {
     /// Minutes of play to simulate.
     #[arg(long, default_value_t = 90)]
     pub minutes: u32,
-    /// Play extra time and a shoot-out when level after regulation time.
-    #[arg(long)]
+    /// Play extra time and a shoot-out if level.
+    #[arg(
+        long,
+        long_help = "Play extra time and a shoot-out when level after regulation time."
+    )]
     pub knockout: bool,
     /// Also write a JSON Lines dump beside the tick file.
     #[arg(
@@ -71,11 +74,19 @@ pub struct SimulateOpts {
                      replaced by .jsonl (match.ticks becomes match.jsonl)."
     )]
     pub json: bool,
-    /// Home team file; default teams/default-a.json in the content folder.
-    #[arg(long, value_name = "FILE")]
+    /// Home team file; default teams/default-a.json.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Home team file; default teams/default-a.json in the content folder."
+    )]
     pub team_a: Option<PathBuf>,
-    /// Away team file; default teams/default-b.json in the content folder.
-    #[arg(long, value_name = "FILE")]
+    /// Away team file; default teams/default-b.json.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Away team file; default teams/default-b.json in the content folder."
+    )]
     pub team_b: Option<PathBuf>,
     /// Do not write a snapshot at each stoppage.
     #[arg(
@@ -85,7 +96,7 @@ pub struct SimulateOpts {
                      SM_DATA_DIR/matches/<match.id>/snapshot.smsn."
     )]
     pub no_snapshot: bool,
-    /// Script pack folder (pack.json and a .rhai script) to run.
+    /// Script pack folder to run.
     #[arg(
         long,
         value_name = "DIR",
@@ -107,15 +118,29 @@ pub struct ResumeOpts {
     #[arg(long, value_name = "FILE")]
     pub ticks_out: Option<PathBuf>,
     /// Also write a JSON Lines dump beside the tick file.
-    #[arg(long, requires = "ticks_out")]
+    #[arg(
+        long,
+        requires = "ticks_out",
+        long_help = "Also write a JSON Lines dump beside the tick file.\n\n\
+                     The dump path is the tick file path with its extension\n\
+                     replaced by .jsonl (match.ticks becomes match.jsonl)."
+    )]
     pub json: bool,
-    /// Home team file the match was started with; default as for simulate.
-    #[arg(long, value_name = "FILE")]
+    /// Home team file the match was started with.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Home team file the match was started with; default as for simulate."
+    )]
     pub team_a: Option<PathBuf>,
-    /// Away team file the match was started with; default as for simulate.
-    #[arg(long, value_name = "FILE")]
+    /// Away team file the match was started with.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Away team file the match was started with; default as for simulate."
+    )]
     pub team_b: Option<PathBuf>,
-    /// Script pack folder (pack.json and a .rhai script) to run.
+    /// Script pack folder to run.
     #[arg(
         long,
         value_name = "DIR",
@@ -136,19 +161,34 @@ pub struct ServeOpts {
     /// Minutes of play to simulate.
     #[arg(long, default_value_t = 90)]
     pub minutes: u32,
-    /// Play extra time and a shoot-out when level after regulation time.
-    #[arg(long)]
+    /// Play extra time and a shoot-out if level.
+    #[arg(
+        long,
+        long_help = "Play extra time and a shoot-out when level after regulation time."
+    )]
     pub knockout: bool,
-    /// Also write every tick to this file while streaming.
-    #[arg(long, value_name = "FILE")]
+    /// Also write every tick to this file.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Also write every tick to this file while streaming."
+    )]
     pub ticks_out: Option<PathBuf>,
-    /// Home team file; default teams/default-a.json in the content folder.
-    #[arg(long, value_name = "FILE")]
+    /// Home team file; default teams/default-a.json.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Home team file; default teams/default-a.json in the content folder."
+    )]
     pub team_a: Option<PathBuf>,
-    /// Away team file; default teams/default-b.json in the content folder.
-    #[arg(long, value_name = "FILE")]
+    /// Away team file; default teams/default-b.json.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Away team file; default teams/default-b.json in the content folder."
+    )]
     pub team_b: Option<PathBuf>,
-    /// Script pack folder (pack.json and a .rhai script) to run.
+    /// Script pack folder to run.
     #[arg(
         long,
         value_name = "DIR",
@@ -162,10 +202,15 @@ pub struct ServeOpts {
     /// Also serve this folder as the viewer page.
     #[arg(long, value_name = "DIR")]
     pub web: Option<PathBuf>,
-    /// Continue the match in this snapshot file instead of starting one.
-    #[arg(long, value_name = "FILE", conflicts_with = "seed")]
+    /// Continue the match in this snapshot file.
+    #[arg(
+        long,
+        value_name = "FILE",
+        conflicts_with = "seed",
+        long_help = "Continue the match in this snapshot file instead of starting one."
+    )]
     pub resume: Option<PathBuf>,
-    /// Seconds to wait for a viewer that lost its connection; 0 ends the run.
+    /// Seconds to wait for a lost viewer.
     #[arg(
         long,
         value_name = "SECONDS",
@@ -186,19 +231,30 @@ pub struct ServeOpts {
 
 #[derive(Debug, Args)]
 pub struct LaunchOpts {
-    /// Seed for the engine's random-number generator; default from the clock.
-    #[arg(long)]
+    /// Random-number seed; default from the clock.
+    #[arg(
+        long,
+        long_help = "Seed for the engine's random-number generator; default from the clock."
+    )]
     pub seed: Option<u64>,
     /// Minutes of play to simulate.
     #[arg(long, default_value_t = 90)]
     pub minutes: u32,
-    /// Home team file; default teams/default-a.json in the content folder.
-    #[arg(long, value_name = "FILE")]
+    /// Home team file; default teams/default-a.json.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Home team file; default teams/default-a.json in the content folder."
+    )]
     pub team_a: Option<PathBuf>,
-    /// Away team file; default teams/default-b.json in the content folder.
-    #[arg(long, value_name = "FILE")]
+    /// Away team file; default teams/default-b.json.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Away team file; default teams/default-b.json in the content folder."
+    )]
     pub team_b: Option<PathBuf>,
-    /// Folder holding the viewer page; default SM_WEB_DIR, ./web, then web/.
+    /// Folder holding the viewer page.
     #[arg(
         long,
         value_name = "DIR",
@@ -211,7 +267,7 @@ pub struct LaunchOpts {
     /// Open the page in the default browser.
     #[arg(long)]
     pub open: bool,
-    /// Engine program to run; default SM_ENGINE_PATH, then this program.
+    /// Engine program to run.
     #[arg(
         long,
         value_name = "FILE",
@@ -236,16 +292,27 @@ pub struct RecordOpts {
     /// Minutes of play to record.
     #[arg(long, default_value_t = 90)]
     pub minutes: u32,
-    /// Play extra time and a shoot-out when level after regulation time.
-    #[arg(long)]
+    /// Play extra time and a shoot-out if level.
+    #[arg(
+        long,
+        long_help = "Play extra time and a shoot-out when level after regulation time."
+    )]
     pub knockout: bool,
-    /// Home team file; default teams/default-a.json in the content folder.
-    #[arg(long, value_name = "FILE")]
+    /// Home team file; default teams/default-a.json.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Home team file; default teams/default-a.json in the content folder."
+    )]
     pub team_a: Option<PathBuf>,
-    /// Away team file; default teams/default-b.json in the content folder.
-    #[arg(long, value_name = "FILE")]
+    /// Away team file; default teams/default-b.json.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Away team file; default teams/default-b.json in the content folder."
+    )]
     pub team_b: Option<PathBuf>,
-    /// Script pack folder (pack.json and a .rhai script) to run.
+    /// Script pack folder to run.
     #[arg(
         long,
         value_name = "DIR",
@@ -263,8 +330,12 @@ pub struct ReplayOpts {
     /// Fixture file written by the record command.
     #[arg(long, value_name = "FILE")]
     pub fixture: PathBuf,
-    /// Playback speed; 1.0 is real time and 8.0 is eight times faster.
-    #[arg(long, default_value_t = 1.0)]
+    /// Playback speed; 1.0 is real time.
+    #[arg(
+        long,
+        default_value_t = 1.0,
+        long_help = "Playback speed; 1.0 is real time and 8.0 is eight times faster."
+    )]
     pub speed: f32,
     /// Cap the delivered rate; tests the lag notice.
     #[arg(long, value_name = "SPEED")]
@@ -279,22 +350,36 @@ pub struct BenchOpts {
     /// Seed for the engine's random-number generator.
     #[arg(long)]
     pub seed: u64,
-    /// Number of timed matches after one warm-up match.
-    #[arg(long, default_value_t = 5)]
+    /// Timed matches after one warm-up match.
+    #[arg(
+        long,
+        default_value_t = 5,
+        long_help = "Number of timed matches after one warm-up match."
+    )]
     pub matches: u32,
     /// Minutes of play per match.
     #[arg(long, default_value_t = 90)]
     pub minutes: u32,
-    /// Play extra time and a shoot-out when level after regulation time.
-    #[arg(long)]
+    /// Play extra time and a shoot-out if level.
+    #[arg(
+        long,
+        long_help = "Play extra time and a shoot-out when level after regulation time."
+    )]
     pub knockout: bool,
-    /// Print the run report as one JSON line (the default output is the same).
-    #[arg(long)]
+    /// Print the run report as one JSON line.
+    #[arg(
+        long,
+        long_help = "Print the run report as one JSON line.\n\n\
+                     The default output is the same record."
+    )]
     pub json: bool,
-    /// Also stream one match to a client that reads as fast as it can.
-    #[arg(long)]
+    /// Also stream one match to a fast client.
+    #[arg(
+        long,
+        long_help = "Also stream one match to a client that reads as fast as it can."
+    )]
     pub stream: bool,
-    /// Script pack folder (pack.json and a .rhai script) to run.
+    /// Script pack folder to run.
     #[arg(
         long,
         value_name = "DIR",
@@ -309,8 +394,11 @@ pub struct BenchOpts {
 
 #[derive(Debug, Args)]
 pub struct CalibrateOpts {
-    /// Seed of the run: the leagues, the fixtures, and every match seed.
-    #[arg(long)]
+    /// Seed of the run and of every match.
+    #[arg(
+        long,
+        long_help = "Seed of the run: the leagues, the fixtures, and every match seed."
+    )]
     pub seed: u64,
     /// Matches in each suite.
     #[arg(long, default_value_t = 1000)]
@@ -318,26 +406,38 @@ pub struct CalibrateOpts {
     /// Minutes of play per match.
     #[arg(long, default_value_t = 90)]
     pub minutes: u32,
-    /// Worker processes; default the number of logical cores.
-    #[arg(long)]
+    /// Worker processes; default one per core.
+    #[arg(
+        long,
+        long_help = "Worker processes; default the number of logical cores."
+    )]
     pub jobs: Option<u32>,
-    /// Suites to run: equal strength, a stronger club, or both.
-    #[arg(long, value_enum, default_value = "all")]
+    /// Suites to run.
+    #[arg(
+        long,
+        value_enum,
+        default_value = "all",
+        hide_possible_values = true,
+        long_help = "Suites to run: equal strength, a stronger club, or both.\n\n\
+                     Values: all, equal, strength."
+    )]
     pub suite: SuiteArg,
     /// Run folder; default SM_DATA_DIR/runs/<run.id>.
     #[arg(long, value_name = "DIR")]
     pub out: Option<PathBuf>,
-    /// Event files to keep at the end of the run.
+    /// Event files to keep.
     #[arg(
         long,
         value_enum,
         default_value = "outliers",
+        hide_possible_values = true,
         long_help = "Event files to keep at the end of the run.\n\n\
-                     outliers keeps the files of failed, slow, and out-of-band\n\
-                     matches and of dark-path hits; all keeps every file."
+                     Values: outliers, all. outliers keeps the files of failed,\n\
+                     slow, and out-of-band matches and of dark-path hits; all\n\
+                     keeps every file."
     )]
     pub keep_events: KeepEvents,
-    /// Set a feature flag of the tuning file for this run; repeatable.
+    /// Set a tuning-file feature flag; repeatable.
     #[arg(
         long = "flag",
         value_name = "NAME=on|off",
@@ -346,7 +446,7 @@ pub struct CalibrateOpts {
                      A flag not set here keeps the state the file gives it."
     )]
     pub flags: Vec<FlagSetting>,
-    /// Play every fixture with the flag off, then on; compare the bands.
+    /// Play each fixture with the flag off, then on.
     #[arg(
         long,
         value_name = "NAME",
@@ -367,6 +467,27 @@ pub struct CalibrateOpts {
     pub run_dir: Option<PathBuf>,
     #[arg(long, hide = true, default_value_t = 0)]
     pub run_millis: u64,
+    /// Make one match or one worker fail, to exercise the error records; a test seam.
+    #[arg(long, hide = true, value_enum, value_name = "WHAT")]
+    pub inject_failure: Option<InjectFailure>,
+}
+
+/// The failure `calibrate --inject-failure` makes: the first match of the first worker, or
+/// the first worker before it plays.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum InjectFailure {
+    Match,
+    Worker,
+}
+
+impl InjectFailure {
+    /// The value as the command line spells it.
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Match => "match",
+            Self::Worker => "worker",
+        }
+    }
 }
 
 /// The suites a calibration run plays.
@@ -386,13 +507,16 @@ pub enum KeepEvents {
 
 #[derive(Debug, Args)]
 pub struct GenerateOpts {
-    /// Seed for the generator; the same seed gives the same clubs.
-    #[arg(long)]
+    /// Seed for the generator.
+    #[arg(
+        long,
+        long_help = "Seed for the generator; the same seed gives the same clubs."
+    )]
     pub seed: u64,
     /// Number of clubs to generate.
     #[arg(long, default_value_t = 20)]
     pub clubs: u32,
-    /// Folder to write the team files into; created when absent.
+    /// Folder for the team files; created when absent.
     #[arg(long, value_name = "DIR")]
     pub out: PathBuf,
     /// Overwrite team files that already exist.

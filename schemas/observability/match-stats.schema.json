@@ -17,26 +17,7 @@
     "seed",
     "content.hash",
     "outcome",
-    "duration_ms",
-    "engine.ticks_per_s",
-    "validate.ran",
-    "validate.violations",
-    "stats.goals",
-    "stats.shots",
-    "stats.shots_on_target",
-    "stats.xg",
-    "stats.passes",
-    "stats.pass_accuracy_pct",
-    "stats.possession_pct",
-    "stats.fouls",
-    "stats.corners",
-    "stats.offsides",
-    "rules.pack_version",
-    "fatigue.mean_pct",
-    "injury.count",
-    "darkpath.change_never_applied",
-    "change.expired_at_full_time",
-    "manager.kind"
+    "duration_ms"
   ],
   "properties": {
     "record.kind": {
@@ -81,14 +62,24 @@
       "type": "string"
     },
     "outcome": {
+      "description": "error marks a run or match that failed; it then carries the three error.* keys and need not carry statistics.",
       "enum": [
         "success",
-        "failure"
+        "error"
       ]
     },
     "error.type": {
       "type": "string",
       "minLength": 1
+    },
+    "error.code": {
+      "description": "One code per engine error variant, finer than error.type.",
+      "type": "string",
+      "minLength": 1
+    },
+    "error.retriable": {
+      "description": "true when the same run may succeed if tried again.",
+      "type": "boolean"
     },
     "duration_ms": {
       "type": "integer",
@@ -294,5 +285,49 @@
       "minimum": 0
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "error"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "required": [
+          "error.type",
+          "error.code",
+          "error.retriable"
+        ]
+      },
+      "else": {
+        "required": [
+          "engine.ticks_per_s",
+          "validate.ran",
+          "validate.violations",
+          "stats.goals",
+          "stats.shots",
+          "stats.shots_on_target",
+          "stats.xg",
+          "stats.passes",
+          "stats.pass_accuracy_pct",
+          "stats.possession_pct",
+          "stats.fouls",
+          "stats.corners",
+          "stats.offsides",
+          "rules.pack_version",
+          "fatigue.mean_pct",
+          "injury.count",
+          "darkpath.change_never_applied",
+          "change.expired_at_full_time",
+          "manager.kind"
+        ]
+      }
+    }
+  ],
   "additionalProperties": true
 }

@@ -16,6 +16,7 @@ use engine::{
 use stream::EventWriter;
 
 use super::fixtures::{self, Fixture, Leagues};
+use crate::cli::InjectFailure;
 use crate::report::Suite;
 use crate::report::bands::Bands;
 use crate::stream_run::{Ids, match_event};
@@ -33,11 +34,17 @@ pub struct Share<'a> {
     pub run_millis: u64,
     /// The flag states the parent resolved for this arm.
     pub states: &'a engine::FlagStates,
+    /// A test seam: make this worker's first match or the worker itself fail.
+    pub inject: Option<InjectFailure>,
 }
 
 /// Plays every fixture of the share. A failed match still writes its statistics record, with
-/// `outcome` `failure` and `error.type`, and the worker goes on with the next fixture.
+/// `outcome` `error` and the `error.*` keys, and the worker goes on with the next fixture.
 pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
+    if share.inject == Some(InjectFailure::Worker) {
+        tracing::error!(signal = "calibrate.injected_failure", shard = share.shard);
+        return Ok(1);
+    }
     let dir = ContentDir::at(share.content_dir);
     let content = Content::load(&dir)?.with_flags(share.states)?;
     let commentary = Commentary::load(&dir)?;
@@ -47,6 +54,7 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
     let events_dir = share.run_dir.join("events");
     let mut leagues = Leagues::new(share.seed, &content);
     let shards = share.shards.max(1);
+    let mut inject_match = share.inject == Some(InjectFailure::Match);
     for fixture in fixtures::fixtures(share.matches)
         .into_iter()
         .filter(|f| f.index % shards == share.shard)
@@ -58,15 +66,20 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
             teams[side] = fixtures::boosted(&teams[side], bands.stronger_team.attribute_boost);
         }
         let seed = fixtures::match_seed(share.seed, share.suite, fixture.index);
-        let stats = match play(
-            share,
-            (&content, &commentary),
-            &teams,
-            seed,
-            &owner_id,
-            &match_id,
-            &events_dir,
-        ) {
+        let played = if std::mem::take(&mut inject_match) {
+            Err(EngineError::InvalidConfig("injected failure".into()))
+        } else {
+            play(
+                share,
+                (&content, &commentary),
+                &teams,
+                seed,
+                &owner_id,
+                &match_id,
+                &events_dir,
+            )
+        };
+        let stats = match played {
             Ok(stats) => stats,
             Err(err) => {
                 tracing::error!(
@@ -79,7 +92,7 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
                     &teams,
                     &fixture,
                     &err,
-                    content.flags.names(),
+                    &content,
                 )
             }
         };
@@ -159,13 +172,14 @@ fn team_refs(teams: &[engine::data::TeamFile; 2]) -> [TeamRef; 2] {
     })
 }
 
-/// The statistics record of a match the engine could not play.
+/// The statistics record of a match the engine could not play. The figures are zero; the
+/// rule pack version and the managers are the ones the match would have used.
 fn failure(
     (owner_id, match_id, seed): (&str, &str, u64),
     teams: &[engine::data::TeamFile; 2],
     fixture: &Fixture,
     err: &EngineError,
-    flags_on: &[String],
+    content: &Content,
 ) -> MatchStats {
     tracing::debug!(fixture = fixture.index, "recording a failed match");
     MatchStats {
@@ -175,7 +189,7 @@ fn failure(
         content_hash: String::new(),
         teams: team_refs(teams),
         duration_ms: 0,
-        outcome: "failure".into(),
+        outcome: "error".into(),
         ticks_per_s: 0.0,
         ticks_written: 0,
         validate_ran: false,
@@ -184,25 +198,20 @@ fn failure(
         ball_max_speed: 0.0,
         ball_idle_ticks: 0,
         goals: [0, 0],
-        flags_on: flags_on.to_vec(),
-        laws: LawStats::default(),
+        flags_on: content.flags.names().to_vec(),
+        laws: LawStats {
+            pack_version: content.rules.schema_version,
+            ..LawStats::default()
+        },
         tactics: TacticsStats::default(),
         figures: MatchFigures {
-            error_type: Some(error_type(err).to_string()),
+            // Calibration plays the AI manager on both sides.
+            manager_kind: ["ai".to_string(), "ai".to_string()],
+            error_type: Some(err.error_type().to_string()),
+            error_code: Some(err.error_code().to_string()),
+            error_retriable: Some(err.retriable()),
             ..MatchFigures::default()
         },
         script: ScriptFigures::default(),
-    }
-}
-
-/// The error's kind as `error.type` names it.
-fn error_type(err: &EngineError) -> &'static str {
-    match err {
-        EngineError::InvalidConfig(_) => "invalid-config",
-        EngineError::Io(_) | EngineError::Read { .. } => "io",
-        EngineError::Format(_) => "format",
-        EngineError::Sink(_) => "sink",
-        EngineError::Data { .. } | EngineError::Version { .. } => "content",
-        EngineError::Snapshot { .. } => "snapshot",
     }
 }

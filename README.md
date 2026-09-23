@@ -100,7 +100,7 @@ npm test
 target/release/engine-cli bench --seed 42 --matches 5 --json
 ```
 
-The exit code is 2 when the median wall time of a 90-minute match is more than 2000 ms. To time 1000 matches, run `bench --seed 42 --matches 1000 --json` and measure the total wall time; the budget is 30 minutes.
+The exit code is 2 when the median wall time of a 90-minute match is more than 2000 ms. A run that fails, for example with `--matches 0`, exits 1 and prints one record with `outcome` `error` and the keys `error.type`, `error.code`, and `error.retriable`; `simulate` does the same. To time 1000 matches, run `bench --seed 42 --matches 1000 --json` and measure the total wall time; the budget is 30 minutes.
 
 ## License
 

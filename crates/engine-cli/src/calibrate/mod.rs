@@ -59,6 +59,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             shards: opts.shards,
             run_millis: opts.run_millis,
             states: &states,
+            inject: opts.inject_failure,
         });
     }
 
@@ -142,16 +143,17 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         })
         .collect();
 
+    // A failed worker is not an engine error in this process; it has its own error keys.
+    let worker_failed = played.iter().any(|a| a.workers_failed > 0);
     let mut report = CalibrationReport {
         owner_id,
         run_id: run_id.clone(),
         seed: opts.seed,
         content_hash: first.content_hash.clone(),
-        outcome: if played.iter().all(|a| a.workers_failed == 0) {
-            "success"
-        } else {
-            "failure"
-        },
+        outcome: if worker_failed { "error" } else { "success" },
+        error_type: worker_failed.then_some("worker"),
+        error_code: worker_failed.then_some("worker-failed"),
+        error_retriable: worker_failed.then_some(false),
         duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
         matches: opts.matches,
         minutes: opts.minutes,
@@ -459,6 +461,10 @@ fn worker_command(
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::inherit());
+    // The test seam reaches the first worker only.
+    if let (Some(inject), 0) = (opts.inject_failure, shard) {
+        cmd.args(["--inject-failure", inject.code()]);
+    }
     for setting in settings {
         cmd.arg("--flag").arg(setting.to_string());
     }

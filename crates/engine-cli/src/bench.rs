@@ -7,7 +7,7 @@ use std::time::Instant;
 
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id};
 use engine::observe::{RunReport, emit_line, machine_hash, process};
-use engine::{MatchConfig, NullSink, Simulation};
+use engine::{EngineError, MatchConfig, NullSink, Simulation};
 use protocol::{Hello, PROTOCOL_VERSION, Queue, ServerMessage};
 use stream::session::{MatchState, SessionConfig};
 use stream::{Client, CommandContext, Gate, Incoming, Server, Session};
@@ -20,7 +20,7 @@ pub const BUDGET_MATCH_WALL_MS: u64 = 2000;
 
 pub fn run(content_dir: Option<&Path>, opts: &BenchOpts) -> anyhow::Result<i32> {
     if opts.matches == 0 {
-        anyhow::bail!("--matches must be at least 1");
+        return Err(EngineError::InvalidConfig("--matches must be at least 1".into()).into());
     }
     // Content, teams, and identity load once here, before the warm-up, so nothing on the
     // timed path reads a file or hashes bytes.
