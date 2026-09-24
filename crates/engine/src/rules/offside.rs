@@ -14,6 +14,25 @@ pub type OffsideSet = u32;
 /// `ball_x`. `attack_x` is the passer's attack direction.
 pub fn offside_set(passer: usize, ball_x: f64, players: &[Player], attack_x: f64) -> OffsideSet {
     let team = players[passer].team;
+    let second = second_last_depth(team, players, attack_x);
+    let ball = ball_x * attack_x;
+    let mut set = 0;
+    for (i, p) in players.iter().enumerate() {
+        if i == passer || p.team != team || !p.active() {
+            continue;
+        }
+        let depth = p.pos.x * attack_x;
+        if depth > 0.0 && depth > ball && depth > second {
+            set |= 1 << i;
+        }
+    }
+    set
+}
+
+/// The depth, along `attack_x`, of the second-last active opponent of `team`: the offside
+/// line for `team`'s attackers. It is negative infinity when fewer than two opponents are
+/// active.
+pub fn second_last_depth(team: usize, players: &[Player], attack_x: f64) -> f64 {
     // The two opponents nearest their own goal line, measured along the attack direction.
     let mut last = f64::NEG_INFINITY;
     let mut second = f64::NEG_INFINITY;
@@ -29,18 +48,7 @@ pub fn offside_set(passer: usize, ball_x: f64, players: &[Player], attack_x: f64
             second = depth;
         }
     }
-    let ball = ball_x * attack_x;
-    let mut set = 0;
-    for (i, p) in players.iter().enumerate() {
-        if i == passer || p.team != team || !p.active() {
-            continue;
-        }
-        let depth = p.pos.x * attack_x;
-        if depth > 0.0 && depth > ball && depth > second {
-            set |= 1 << i;
-        }
-    }
-    set
+    second
 }
 
 /// `true` when `toucher` was in the offside position set when the ball was played.

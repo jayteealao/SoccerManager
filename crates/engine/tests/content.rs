@@ -175,6 +175,42 @@ fn a_tuning_block_without_the_defending_values_loads_with_the_defaults() {
 }
 
 #[test]
+fn the_shipped_lone_forward_and_tackle_values_are_pinned() {
+    let t = common::content().tuning.engine;
+    assert_eq!(t.tackle_win_base, 0.05);
+    assert_eq!(t.lone_line_hold, 0.0);
+    assert_eq!(t.decision.lone_layoff, 0.0);
+    assert_eq!(t.decision.lone_hold, 0.0);
+    assert_eq!(t.decision.lone_dribble, 0.0);
+}
+
+/// A tuning block written before the lone-forward and tackle values existed still loads,
+/// with the values that reproduce the behaviour before them.
+#[test]
+fn a_tuning_block_without_the_lone_forward_values_loads_with_the_defaults() {
+    let mut json = serde_json::to_value(Tuning::default()).unwrap();
+    let block = json.as_object_mut().unwrap();
+    for key in ["tackle_win_base", "lone_line_hold"] {
+        assert!(block.remove(key).is_some(), "{key} is a tuning field");
+    }
+    let decision = block["decision"].as_object_mut().unwrap();
+    for key in ["lone_layoff", "lone_hold", "lone_dribble"] {
+        assert!(decision.remove(key).is_some(), "{key} is a decision weight");
+    }
+    let t: Tuning = serde_json::from_value(json).unwrap();
+    assert_eq!(t.tackle_win_base, 0.05);
+    assert_eq!(t.lone_line_hold, 0.0);
+    assert_eq!(
+        (
+            t.decision.lone_layoff,
+            t.decision.lone_hold,
+            t.decision.lone_dribble
+        ),
+        (0.0, 0.0, 0.0)
+    );
+}
+
+#[test]
 fn a_missing_content_file_names_its_path() {
     let dir = ContentDir::at(std::env::temp_dir().join("engine-no-such-content"));
     let err = engine::Content::load(&dir).unwrap_err();

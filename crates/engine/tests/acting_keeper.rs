@@ -148,7 +148,7 @@ fn a_penalty_faces_the_stand_in_on_his_goal_line() {
     let sim = Simulation::new(config.clone()).unwrap();
     let t = sim.players()[tackler].derived;
     let c = sim.players()[carrier].derived;
-    let p_win = 0.05 * t.tackling / (t.tackling + c.dribbling);
+    let p_win = engine::rules::fouls::win_chance(&t, &c, &config.tuning);
     let p_foul = engine::rules::fouls::foul_chance(&t, 0, &config.tuning);
     let mut sim = common::spread(
         Scene::new(config).subs_used(1, 5, 3).sent_off(AWAY_KEEPER),

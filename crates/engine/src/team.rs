@@ -273,6 +273,27 @@ impl Team {
             .collect()
     }
 
+    /// The team's lone forward: the single active slot, other than the one keeping goal, in
+    /// the front line of the formation as the tactics file gives it. The front line is the
+    /// outfield slots less than `BACK_LINE_BAND` metres behind the most advanced one. `None`
+    /// when the front line has no active player or more than one.
+    pub fn lone_forward(&self) -> Option<usize> {
+        let front = (1..PLAYERS_PER_TEAM)
+            .map(|s| self.base_formation[s].0)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let keeper = self.keeper_slot();
+        let mut lone = None;
+        for s in 1..PLAYERS_PER_TEAM {
+            if self.base_formation[s].0 > front - BACK_LINE_BAND && self.active[s] && s != keeper {
+                if lone.is_some() {
+                    return None;
+                }
+                lone = Some(s);
+            }
+        }
+        lone
+    }
+
     /// The slot of the player who keeps goal: slot 0 while it is active; otherwise the lowest
     /// active slot holding a goalkeeper by position (a keeper who came on); otherwise the most
     /// advanced active outfield slot of the formation, then the one nearest the centre line
@@ -536,6 +557,49 @@ mod tests {
         let k = team.keeper_slot();
         let depth = team.base_formation[k].0;
         assert!((1..PLAYERS_PER_TEAM).all(|s| team.base_formation[s].0 <= depth));
+    }
+
+    /// A home team playing the tactics file's formation `name`.
+    fn playing(name: &str) -> Team {
+        let content = shipped_content();
+        let schema = &content.tactics;
+        let f = schema
+            .formations
+            .iter()
+            .position(|f| f.name == name)
+            .unwrap();
+        let mut team = bare(0);
+        let mut tactics = Tactics::defaults(schema);
+        tactics.set_formation(f as u8, schema);
+        team.set_tactics(tactics, schema, &content.tuning.engine);
+        team
+    }
+
+    #[test]
+    fn a_formation_with_one_striker_has_a_lone_forward() {
+        for name in ["4-4-1-1", "3-4-3"] {
+            let team = playing(name);
+            let s = team.lone_forward().expect(name);
+            assert!(
+                (1..PLAYERS_PER_TEAM).all(|o| team.base_formation[o].0 <= team.base_formation[s].0),
+                "{name}: the lone forward is the most advanced slot"
+            );
+            assert_eq!(team.base_formation[s].1, 0.0, "{name}: he is central");
+        }
+    }
+
+    #[test]
+    fn two_strikers_are_not_a_lone_forward_until_one_leaves() {
+        let mut team = playing("4-4-2");
+        assert_eq!(team.lone_forward(), None);
+        team.reshape(9);
+        assert_eq!(team.lone_forward(), Some(10));
+        team.restore(9);
+        team.reshape(0);
+        assert_eq!(team.keeper_slot(), 9, "a striker stands in goal");
+        assert_eq!(team.lone_forward(), Some(10), "the other striker is alone");
+        team.reshape(10);
+        assert_eq!(team.lone_forward(), None, "no forward is left");
     }
 
     #[test]

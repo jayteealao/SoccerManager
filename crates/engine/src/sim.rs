@@ -1012,9 +1012,7 @@ impl Simulation {
                     {
                         continue;
                     }
-                    let tackle = p.derived.tackling;
-                    let dribble = carrier.derived.dribbling;
-                    let p_win = 0.05 * tackle / (tackle + dribble);
+                    let p_win = fouls::win_chance(&p.derived, &carrier.derived, t);
                     let p_foul = fouls::foul_chance(&p.derived, p.yellow, t);
                     let draw = self.rng.referee_draw();
                     match fouls::tackle_outcome(p_win, p_foul, t.foul_ball_loss, draw) {

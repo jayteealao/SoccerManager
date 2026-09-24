@@ -10,6 +10,7 @@ use crate::data::rules::StoppageKind;
 use crate::math::{DVec2, segment_distance, toward};
 use crate::pitch;
 use crate::plugin::{DecisionContext, HookPoint, OptionOffsets};
+use crate::rules::offside;
 use crate::sim::{ScriptCache, Simulation};
 use crate::team::PLAYERS_PER_TEAM;
 use crate::tuning::Tuning;
@@ -57,6 +58,7 @@ impl Simulation {
                         }
                     }
                 }
+                self.hold_the_line(team, c);
                 // Pressers run at the point where they can meet the carrier's run, and go for the
                 // ball once they are close.
                 let run = self.players[c].vel;
@@ -108,6 +110,33 @@ impl Simulation {
                 None
             }
         }
+    }
+
+    /// The line hold (named mechanism) of team `team`'s lone forward while his team has the
+    /// ball and carrier `c` is someone else: his target moves from his anchor toward the
+    /// onside line, 0.5 m short of the second-last defender, by the share `lone_line_hold`,
+    /// and never past that line. His place across the pitch stays the anchor's.
+    fn hold_the_line(&mut self, team: usize, c: usize) {
+        let share = self.config.tuning.lone_line_hold;
+        if share == 0.0 {
+            return;
+        }
+        let Some(slot) = self.teams[team].lone_forward() else {
+            return;
+        };
+        let i = team * PLAYERS_PER_TEAM + slot;
+        if i == c || !self.players[i].active() {
+            return;
+        }
+        let attack_x = self.teams[team].attack_x;
+        let line = offside::second_last_depth(team, &self.players, attack_x) - ONSIDE_MARGIN;
+        if !line.is_finite() {
+            return;
+        }
+        let anchor = self.players[i].target;
+        let depth = anchor.x * attack_x;
+        let held = (depth + share * (line - depth)).min(line);
+        self.players[i].target = pitch::clamp(DVec2::new(held * attack_x, anchor.y), 0.5);
     }
 
     /// Goal-side cover (named mechanism) while team `def` defends against carrier `c`. The
@@ -230,6 +259,16 @@ impl Simulation {
             }
         }
         let pressed = nearest_opp < 2.5;
+        // A lone carrier: an outfield carrier with no active outfield team-mate ahead of him.
+        let depth = carrier.pos.x * attack.x;
+        let lone = !keeper
+            && !self.players.iter().enumerate().any(|(j, p)| {
+                p.team == team
+                    && j != c
+                    && j != self.keeper(team)
+                    && p.active()
+                    && p.pos.x * attack.x > depth
+            });
 
         // Shot.
         let shot = if !keeper && goal_dist < t.shot_range {
@@ -282,6 +321,11 @@ impl Simulation {
             }
             let progress = ((mate.pos - carrier.pos).dot(attack) / 40.0).clamp(-1.0, 1.0);
             let forward = progress.max(0.0);
+            let layoff = if lone && progress <= 0.0 {
+                w.lone_layoff
+            } else {
+                0.0
+            };
             let score = (w.progress + plan.progress + role.progress) * progress
                 + skill(carrier.derived.vision) * forward
                 + w.lane * (lane / 6.0)
@@ -289,6 +333,7 @@ impl Simulation {
                 - w.distance * (d / 45.0)
                 + plan.directness * (d / 45.0)
                 + plan.tempo
+                + layoff
                 + self.rng.range_f64(-noise, noise);
             if pass.is_none_or(|(s, _)| score > s) {
                 pass = Some((score, j));
@@ -300,14 +345,21 @@ impl Simulation {
         let (dribble, hold) = if keeper {
             (None, None)
         } else {
+            let (lone_dribble, lone_hold) = if lone && pressed {
+                (w.lone_dribble, w.lone_hold)
+            } else {
+                (0.0, 0.0)
+            };
             let dribble = w.dribble_base + w.dribble_space * (space_ahead / 10.0)
                 - if pressed { w.pressure } else { 0.0 }
                 + if held < 10 { w.first_touch } else { 0.0 }
                 + skill(carrier.derived.dribbling)
                 + role.dribble
                 - plan.tempo
+                + lone_dribble
                 + self.rng.range_f64(-noise, noise);
             let hold = w.hold + plan.hold - plan.tempo - w.hold_per_s * held_s
+                + lone_hold
                 + self.rng.range_f64(-noise, noise);
             (Some(dribble), Some(hold))
         };
@@ -581,6 +633,10 @@ impl Simulation {
 }
 
 /// The most opponents a pressing instruction can send at the carrier.
+/// Metres short of the second-last defender at which a lone forward holds the line, so he
+/// stays onside.
+const ONSIDE_MARGIN: f64 = 0.5;
+
 const MAX_PRESSERS: usize = 4;
 /// Metres from the ball within which a presser goes for the ball instead of running at the
 /// intercept point: from there it engages the carrier rather than cutting across his path.

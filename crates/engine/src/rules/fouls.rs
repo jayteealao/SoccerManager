@@ -70,6 +70,12 @@ pub fn tackle_outcome(p_win: f64, p_foul: f64, ball_loss: f64, draw: f64) -> Tac
     }
 }
 
+/// The chance that one tackle attempt by `tackler` wins the ball cleanly from `carrier`: the
+/// tuned base, scaled by the tackler's tackling against the carrier's dribbling.
+pub fn win_chance(tackler: &Derived, carrier: &Derived, t: &Tuning) -> f64 {
+    t.tackle_win_base * tackler.tackling / (tackler.tackling + carrier.dribbling)
+}
+
 /// The chance that one tackle attempt by `tackler` is a foul: the tuned base rate, raised by
 /// aggression and lowered by tackling skill, both measured from the middle of the scale. A
 /// player already shown `yellows` cards tackles more carefully: the chance is multiplied by
@@ -134,6 +140,40 @@ mod tests {
         let mut expert = average;
         expert.tackling = 100.0;
         assert!(foul_chance(&expert, 0, &t) < t.foul_base);
+    }
+
+    #[test]
+    fn the_win_chance_at_the_neutral_base_is_the_earlier_formula() {
+        let t = Tuning {
+            tackle_win_base: 0.05,
+            ..Tuning::default()
+        };
+        for (tackling, dribbling) in [(30, 80), (50, 50), (90, 20)] {
+            let tackler = flat_player(0, tackling, &t).derived;
+            let carrier = flat_player(1, dribbling, &t).derived;
+            let earlier = 0.05 * tackler.tackling / (tackler.tackling + carrier.dribbling);
+            assert_eq!(win_chance(&tackler, &carrier, &t), earlier);
+        }
+    }
+
+    #[test]
+    fn the_win_chance_scales_linearly_with_the_base() {
+        let t = Tuning::default();
+        let tackler = flat_player(0, 60, &t).derived;
+        let carrier = flat_player(1, 40, &t).derived;
+        let at = |base| {
+            win_chance(
+                &tackler,
+                &carrier,
+                &Tuning {
+                    tackle_win_base: base,
+                    ..t.clone()
+                },
+            )
+        };
+        assert_eq!(at(0.0), 0.0);
+        assert!((at(0.2) - 2.0 * at(0.1)).abs() < 1e-15);
+        assert!((at(0.1) - 0.1 * 0.6).abs() < 1e-12, "{}", at(0.1));
     }
 
     #[test]

@@ -155,7 +155,7 @@ fn foul(outcome: HookOutcome<Option<Card>>) -> Vec<engine::EngineEvent> {
     let sim = Simulation::new(config.clone()).unwrap();
     let tackler = sim.players()[TACKLER].derived;
     let carrier = sim.players()[CARRIER].derived;
-    let p_win = 0.05 * tackler.tackling / (tackler.tackling + carrier.dribbling);
+    let p_win = engine::rules::fouls::win_chance(&tackler, &carrier, &config.tuning);
     let p_foul = foul_chance(&tackler, 0, &config.tuning);
     let at = DVec2::new(0.0, 10.0);
     let mut plugins = Plugins::new("test@1.0.0+000000000000");

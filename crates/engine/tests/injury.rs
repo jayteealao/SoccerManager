@@ -23,7 +23,7 @@ fn clean_win(config: &MatchConfig) -> f64 {
     let sim = Simulation::new(config.clone()).unwrap();
     let tackler = sim.players()[TACKLER].derived;
     let carrier = sim.players()[CARRIER].derived;
-    0.5 * 0.05 * tackler.tackling / (tackler.tackling + carrier.dribbling)
+    0.5 * engine::rules::fouls::win_chance(&tackler, &carrier, &config.tuning)
 }
 
 /// The away player wins the ball cleanly from the home carrier in open play, and the first

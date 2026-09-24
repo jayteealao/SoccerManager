@@ -159,6 +159,16 @@ pub struct Tuning {
     #[serde(default = "default_foul_booked_factor")]
     #[garde(range(min = 0.0, max = 1.0))]
     pub foul_booked_factor: f64,
+    /// The chance that a tackle attempt wins the ball cleanly for a tackler whose tackling
+    /// equals the carrier's dribbling; it scales with `tackling / (tackling + dribbling)`.
+    #[serde(default = "default_tackle_win_base")]
+    #[garde(range(min = 0.0, max = 0.5))]
+    pub tackle_win_base: f64,
+    /// Off the ball, the share of the way from his anchor to the onside line (0.5 m short of
+    /// the second-last defender) that a team's lone forward moves while his team has the ball.
+    #[serde(default = "default_lone_line_hold")]
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub lone_line_hold: f64,
     /// Seconds a dead ball lasts before the taker may restart play, per restart kind.
     #[garde(dive)]
     pub restart_delay_s: RestartDelays,
@@ -255,6 +265,18 @@ pub struct DecisionWeights {
     /// shrinks as the two rise.
     #[garde(range(min = 0.0, max = 2.0))]
     pub noise: f64,
+    /// A lone carrier (no active outfield team-mate ahead of him): the bonus on a pass to a
+    /// team-mate at or behind him, and, when he is pressed, the bonus on holding the ball
+    /// and on a dribble (a negative value is a cost).
+    #[serde(default)]
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub lone_layoff: f64,
+    #[serde(default)]
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub lone_hold: f64,
+    #[serde(default)]
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub lone_dribble: f64,
 }
 
 /// Seconds between the ball going dead and the restart, per restart kind. Play restarts
@@ -330,6 +352,8 @@ impl Default for Tuning {
             red_base: 0.005,
             foul_cooldown_ticks: default_foul_cooldown_ticks(),
             foul_booked_factor: default_foul_booked_factor(),
+            tackle_win_base: default_tackle_win_base(),
+            lone_line_hold: default_lone_line_hold(),
             restart_delay_s: RestartDelays {
                 kick_off: 5.0,
                 throw_in: 3.0,
@@ -360,6 +384,9 @@ impl Default for Tuning {
                 hold: -0.4,
                 hold_per_s: 0.5,
                 noise: 0.1,
+                lone_layoff: 0.0,
+                lone_hold: 0.0,
+                lone_dribble: 0.0,
             },
             injury_per_tackle: INJURY_PER_TACKLE,
             injury_per_minute: INJURY_PER_MINUTE,
@@ -388,6 +415,14 @@ fn default_foul_cooldown_ticks() -> u32 {
 }
 fn default_foul_booked_factor() -> f64 {
     0.15
+}
+// The lone-forward and tackle values. An older tuning file without them loads with the
+// values that reproduce the behaviour before they existed.
+fn default_tackle_win_base() -> f64 {
+    0.05
+}
+fn default_lone_line_hold() -> f64 {
+    0.0
 }
 
 /// The shipped foul chance per tackle attempt, set for about ten fouls per team in a

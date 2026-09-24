@@ -22,7 +22,7 @@ fn foul(card_draw: impl Fn(&Simulation) -> f64, arrange: impl Fn(Scene) -> Scene
     let plain = Simulation::new(config.clone()).unwrap();
     let tackler = plain.players()[TACKLER].derived;
     let carrier = plain.players()[CARRIER].derived;
-    let p_win = 0.05 * tackler.tackling / (tackler.tackling + carrier.dribbling);
+    let p_win = engine::rules::fouls::win_chance(&tackler, &carrier, &config.tuning);
     let p_foul = foul_chance(&tackler, 0, &config.tuning);
     let at = DVec2::new(0.0, 10.0);
     let scene = spread(Scene::new(config), -30.0, 30.0)

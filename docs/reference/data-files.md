@@ -93,6 +93,8 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 | red_base | probability per foul | 0.005 | 0 to 1 |
 | foul_cooldown_ticks | ticks | 150 | 0 to 1000 |
 | foul_booked_factor | ratio | 0.15 | 0 to 1 |
+| tackle_win_base | probability per tackle | 0.05 | 0 to 0.5 |
+| lone_line_hold | ratio | 0.0 | 0 to 1 |
 | restart_delay_s.kick_off | s | 5 | 0 to 60 |
 | restart_delay_s.throw_in | s | 3 | 0 to 60 |
 | restart_delay_s.corner | s | 8 | 0 to 60 |
@@ -110,7 +112,7 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 
 While the other team has the ball, one back-line defender covers the ball carrier, or else the most advanced attacker, when that player is in the defending half and within `cover_channel` of the middle of the pitch: a carrier is tracked `cover_distance` goal-side of him, and any other attacker is covered from the defender's place in the line. No two neighbours in the back line stand more than `back_line_gap` apart, so the line narrows as players leave it.
 
-The foul chance of one tackle is `foul_base`, multiplied by `1 + foul_aggression_weight × (aggression − 0.5)` and by `1 − foul_tackling_weight × (tackling − 0.5)`, with both attributes on a 0 to 1 scale. `foul_ball_loss` is the share of fouls after which the fouled team loses the ball. After any other foul, the referee plays advantage outside the penalty area. The yellow-card chance of a foul is `yellow_base + yellow_aggression_weight × aggression`, and the red-card chance is `red_base`. A player already booked fouls less: the foul chance is multiplied by `foul_booked_factor`. A player who commits a foul, advantage or not, makes no tackle attempt for `foul_cooldown_ticks`. While play goes on with advantage, the referee holds at most one card per player, the more severe, and a player is shown at most one card when play stops. A restart is taken no earlier than its `restart_delay_s`, when the taker is within `restart_ready_radius` of the spot and every opponent stands back. At three times the delay, the restart is taken whatever the players are doing. While the restarting team leads, its delay is multiplied by its time-wasting level.
+The foul chance of one tackle is `foul_base`, multiplied by `1 + foul_aggression_weight × (aggression − 0.5)` and by `1 − foul_tackling_weight × (tackling − 0.5)`, with both attributes on a 0 to 1 scale. `foul_ball_loss` is the share of fouls after which the fouled team loses the ball. After any other foul, the referee plays advantage outside the penalty area. The yellow-card chance of a foul is `yellow_base + yellow_aggression_weight × aggression`, and the red-card chance is `red_base`. The chance that a tackle wins the ball cleanly is `tackle_win_base × tackling / (tackling + dribbling)`, with the tackler's tackling and the carrier's dribbling; a tackle that neither wins the ball nor fouls misses. A player already booked fouls less: the foul chance is multiplied by `foul_booked_factor`. A player who commits a foul, advantage or not, makes no tackle attempt for `foul_cooldown_ticks`. While play goes on with advantage, the referee holds at most one card per player, the more severe, and a player is shown at most one card when play stops. A restart is taken no earlier than its `restart_delay_s`, when the taker is within `restart_ready_radius` of the spot and every opponent stands back. At three times the delay, the restart is taken whatever the players are doing. While the restarting team leads, its delay is multiplied by its time-wasting level.
 
 An injury is rolled for the tackled player on every tackle that wins the ball or is a foul (`injury_per_tackle`), and for every player on the pitch once per simulated minute (`injury_per_minute`). Both are the chances for an average player; injury resistance 100 halves them and 0 makes them half again as likely. An injured player leaves play at once. In open play the referee stops play for a dropped ball at the ball (the goalkeeper's, inside its own penalty area), with every other player 4 m away, after `restart_delay_s.drop_ball`.
 
@@ -141,6 +143,11 @@ The ball carrier scores every option and takes the highest: a pass to each team-
 | hold | -0.4 | holding the ball's base |
 | hold_per_s | 0.5 | the cost of each second already held (0 to 5) |
 | noise | 0.1 | noise on every option, each side, for decisions and composure 50; it shrinks as they rise (0 to 2) |
+| lone_layoff | 0.0 | for a lone carrier, the bonus on a pass to a team-mate at or behind him |
+| lone_hold | 0.0 | for a lone carrier who is pressed, the bonus on holding the ball |
+| lone_dribble | 0.0 | for a lone carrier who is pressed, the bonus on a dribble (a negative value is a cost) |
+
+A carrier is lone when no active outfield team-mate stands nearer the opponents' goal than he does; a goalkeeper is never lone. A team's lone forward is its one active player, other than the one keeping goal, in the formation's front line: the outfield slots less than 4 m behind the most advanced one. While his team has the ball and someone else carries it, he moves from his formation place toward the onside line, 0.5 m short of the second-last opponent, by the share `lone_line_hold`, and never past that line. At the default values of these five fields, play is as it was before they existed; a tuning file without them loads with those values.
 
 ### generator
 

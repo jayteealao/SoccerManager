@@ -30,7 +30,7 @@ fn bands(config: &MatchConfig, i: usize) -> (f64, f64) {
     let sim = Simulation::new(config.clone()).unwrap();
     let tackler = sim.players()[i].derived;
     let carrier = sim.players()[CARRIER].derived;
-    let p_win = 0.05 * tackler.tackling / (tackler.tackling + carrier.dribbling);
+    let p_win = engine::rules::fouls::win_chance(&tackler, &carrier, &config.tuning);
     (p_win, foul_chance(&tackler, 0, &config.tuning))
 }
 
