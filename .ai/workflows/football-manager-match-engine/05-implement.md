@@ -5,7 +5,7 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-24T03:50:37Z"
+updated-at: "2026-09-24T06:49:18Z"
 slices-implemented: 19
 slices-total: 22
 metric-total-files-changed: 702
@@ -36,7 +36,7 @@ refs:
     - 05-implement-realism-bands-v2.md
     - 05-implement-defending-and-discipline.md
 next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine realism-bands-v2"
+next-invocation: "/wf verify football-manager-match-engine defending-and-discipline"
 ---
 
 # Implement Index
@@ -166,7 +166,7 @@ next-invocation: "/wf verify football-manager-match-engine realism-bands-v2"
   - Baseline for the next three slices: 9 of 15 equal-suite bands fail on all five seeds; 151 of 165 pairing checks fail on seed 42 (formations run on one seed by Q-I1). A full run takes about 76 minutes on the 8-core reference machine.
 - Checks at implement: 434 Rust tests pass (4 ignored), 128 page tests pass, clippy runs with `-D warnings`, and the benchmark median is 422.0 ms per match and 6.73 MB (tripwires 460.7 ms and 6.82 MB).
 
-- `defending-and-discipline` is implemented (commit `f7fe35b`) and **awaits a product-owner decision**: two of its four criteria fail at every in-bounds tuning (the red-card experiment in all three arms; 4-4-1-1 at 5.18 and 3-4-3 at 4.17 goals per match against 4-4-2). Every later slice inherits these changes:
+- `defending-and-discipline` is implemented (commit `f7fe35b`) and awaits verify. Its kept criteria pass: discipline, the acting keeper and eight of ten formation pairings. The product owner moved the red-card criterion and the 4-4-1-1 (5.18) and 3-4-3 (4.17) pairings to `lone-forward` with their limits unchanged (Q-I2). A re-run on `cd9669c` reproduced every figure. Every later slice inherits these changes:
   - `Simulation::keeper(team)` / `Team::keeper_slot()` name the acting keeper; no code may assume slot 0 keeps goal. `restart::taker` takes `&[Team; 2]` and reads a side's own end from `attack_x`.
   - `Team::reshape` lays the whole team out again; the back line is capped at `back_line_gap` between neighbours at 11 against 11 too, so every formation's back line is narrower than the tactics file says.
   - Pressers go for the ball inside 3 m; the goal-side cover tracks the carrier. Contact near the ball costs about four fouls per won tackle in this engine, so a mechanism that holds a defender in contact floods fouls and penalties.
@@ -176,7 +176,7 @@ next-invocation: "/wf verify football-manager-match-engine realism-bands-v2"
 
 ## Recommended Next Stage
 
-- Blocked: `defending-and-discipline` waits for the product owner's answer in `po-answers.md` (widen the slice, move the two criteria to `realism-tuning`, or revisit the slice).
+- `/wf verify football-manager-match-engine defending-and-discipline` (new: discipline, the acting keeper and the eight kept formation pairings; the red-card criterion and the 4-4-1-1 and 3-4-3 pairings belong to `lone-forward`)
 
 - `/wf verify football-manager-match-engine realism-bands-v2` (new: the four criteria on the release binary, the viewer check of ten formations, and the seed 42 formations evidence)
 

@@ -3,17 +3,10 @@ schema: sdlc/v1
 type: implement
 slug: football-manager-match-engine
 slice-slug: defending-and-discipline
-status: complete
+status: awaiting-input
 stage-number: 5
 created-at: "2026-09-24T03:50:37Z"
-updated-at: "2026-09-24T06:49:18Z"
-revision-count: 1
-revisions:
-  - rev: 1
-    at: "2026-09-24T06:49:18Z"
-    trigger: answers-returned
-    because: "the product owner answered Q-I2 (2026-09-24T06:19:45Z): the red-card criterion and the 4-4-1-1 and 3-4-3 pairings move to the new lone-forward slice, and this slice is verified on the criteria it keeps"
-    changed: "status awaiting-input to complete; no code change; workspace tests and the slow criterion tests re-run on HEAD cd9669c this run (rerun/ evidence) with identical figures; blocker resolved; criterion table split into kept and moved; next stage verify"
+updated-at: "2026-09-24T03:50:37Z"
 metric-files-changed: 31
 metric-lines-added: 1442
 metric-lines-removed: 123
@@ -22,11 +15,8 @@ metric-review-fixes-applied: 0
 commit-sha: "f7fe35b7eec5e18a81ba539578f917ded4b714da"
 commits:
   - "f7fe35b7eec5e18a81ba539578f917ded4b714da"
-moved-criteria:
-  - {criterion: "No advantage from a red card", to: lone-forward, by: "po-answers.md Q-I2"}
-  - {criterion: "Every formation holds: 4-4-1-1 and 3-4-3 against 4-4-2", to: lone-forward, by: "po-answers.md Q-I2"}
+awaiting-input-reason: "Two of four criteria fail at every in-bounds setting of the five tuning values: 'No advantage from a red card' (all three arms) and 'Every formation holds' (4-4-1-1 5.18 and 3-4-3 4.17 goals per match). The plan's step 14 stop rule applies: report and stop, never raise a limit."
 steering-honored:
-  - "Moved criteria and slice order (2026-09-24): this record judges the slice on discipline, the acting keeper and the eight formation pairings that hold; the red-card criterion and the 4-4-1-1 and 3-4-3 pairings belong to lone-forward with their limits unchanged. No limit, test or tolerance was changed."
   - "Output boundary: code comments, commit text, docs and test names use product language; the commit message was leak-checked before commit."
   - "Dark-path counter definition: unchanged. The keeper substitution goes through the change queue; calibrate reports darkpath.change_never_applied 0 and change.expired_at_full_time 51 over 1,000 equal-suite matches."
   - "Design direction: not applicable; no page changed. The sub-keeper decision is an ai-decision event, which the page hides."
@@ -38,23 +28,21 @@ refs:
   plan: 04-plan-defending-and-discipline.md
   benchmark: 05c-benchmark.md
   evidence: implement-evidence/defending-and-discipline/
-  rerun-evidence: implement-evidence/defending-and-discipline/rerun/
-  moved-to: 03-slice-lone-forward.md
   siblings: [05-implement-realism-bands-v2.md, 05-implement-match-rules.md, 05-implement-tactics-and-ai.md, 05-implement-extra-time-penalties.md]
   verify: 06-verify-defending-and-discipline.md
-next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine defending-and-discipline"
+next-command: wf-plan
+next-invocation: "/wf plan football-manager-match-engine defending-and-discipline"
 ---
 
 # Implement: Defending and Discipline
 
 ## The Implementation
 
-The engine at `2089ed7` had no marking, a back line with a 16 m central gap, and a card system that could show one player two cards on one tick. All four mechanisms the plan named are now in the engine and committed at `f7fe35b`: goal-side cover, pressers that run at the intercept point, a back line capped at 12 m between neighbours, and an acting keeper derived from the team's state. The discipline fixes are a 150-tick foul cooldown, one held card per player, and a booked-player factor of 0.15. Every criterion this slice now keeps passes. Discipline is realistic: 0.085 second yellows per match, 16.5% of matches with a sending-off, and no same-tick pair. The acting keeper covers a red card, which six scripted scenes show. Eight of the ten formation pairings hold; at the baseline only 2 of 9 non-mirror pairings held. The red-card criterion and the 4-4-1-1 (5.18) and 3-4-3 (4.17) pairings still fail. The product owner moved them to the new `lone-forward` slice with their limits unchanged (Q-I2).
+The engine at `2089ed7` had no marking, a back line with a 16 m central gap, and a card system that could show one player two cards on one tick. All four mechanisms the plan named are now in the engine and committed at `f7fe35b`: goal-side cover, pressers that run at the intercept point, a back line capped at 12 m between neighbours, and an acting keeper derived from the team's state. The discipline fixes are a 150-tick foul cooldown, one held card per player, and a booked-player factor of 0.15. Two of the four criteria pass. Discipline is realistic: 0.085 second yellows per match, 16.5% of matches with a sending-off, and no same-tick pair. The acting keeper covers a red card, which six scripted scenes show. The formations criterion improved from 7 failing pairings to 2 (4-4-1-1 at 5.18 and 3-4-3 at 4.17 goals per match). The red-card criterion still fails in all three arms: the reduced side outscores the full side.
 
 Two load-bearing choices came out of measurement, not the plan. As written in the plan, the intercept and the cover both made goals worse: 14.2 goals per match and 47 penalties at seed 1 to 24. In this engine, contact near the ball produces a foul about four times as often as a won tackle (per tick, a 10% foul chance against about 2.5% for a win). So a presser now goes for the ball itself inside 3 m, and the cover tracks the ball carrier 3 m goal-side at the carrier's pace. It never steps out of the line to play a non-carrier onside. A sweep of all five tuning values within their bounds could not fix the two failing criteria, with 7 settings measured on 60 seeds. The cause is a lone central forward with no forward team-mate to pass to. He dribbles and shoots twice as often (40.6 shots against 20.8 in the control) and is never offside. The defending mechanisms do not reach that cause, and neither do the five tuning values.
 
-Under the plan's step 14 rule, the first pass stopped and reported the failing arms and pairings without raising a limit. The product owner then moved those criteria to `lone-forward`, which owns the lone forward's decisions and the tackle odds. So the code at `f7fe35b` is this slice's final build, and this pass changed no code. It re-ran the workspace tests (458 passed, 0 failed) and the slow criterion tests on HEAD `cd9669c`. Every figure matched the first pass exactly. The slice is ready for verify on the criteria it keeps. `lone-forward` inherits two slow tests that already measure its criteria, and `keeper-and-shots` can build on `Simulation::keeper(team)`. The top open risk is the equal suite: goals per match rose from 3.035 to 4.092 at seed 42 against the realism-bands-v2 baseline. That rise is recorded, not failed (Q-E4).
+The plan's step 14 rule applies: implement stops and reports the failing arms and pairings, and does not raise a limit. The product owner has to choose the next step. The options are to widen this slice to the carrier's dribble choice and the tackle-against-foul odds (which the slice lists as out of scope), to move the two criteria to `realism-tuning`, or to revisit the slice. `keeper-and-shots` can already build on `Simulation::keeper(team)`. The top open risk is the equal suite: goals per match rose from 3.035 to 4.092 at seed 42 against the realism-bands-v2 baseline. That rise is recorded, not failed (Q-E4).
 
 ## Summary of Changes
 
@@ -118,8 +106,7 @@ Under the plan's step 14 rule, the first pass stopped and reported the failing a
 ## Verification Seams Built
 
 - No advantage from a red card → `a_sending_off_gives_no_advantage` at `crates/engine/tests/defending.rs:167`: seeds 1–120, cards off through the three card chances, and arms for the keeper (11), centre-back (13) and striker (21). It uses `Scene::sent_off` (`crates/engine/src/scenario.rs:91-100`), which now clears the carrier and asks the manager to check (enables `cargo test --release -p engine --all-features -- --ignored`).
-- Every formation holds → `every_formation_holds` at `crates/engine/tests/defending.rs:203`: each of the 10 shipped formations against 4-4-2, home on odd seeds (same command). It prints every pairing's goals before it asserts (`defending.rs:222`), so verify reads the eight kept pairings from its output. The test still asserts all ten pairings, so it fails until `lone-forward` fixes the two moved ones.
-- No advantage from a red card (moved to `lone-forward`) → `a_sending_off_gives_no_advantage` stays in the repository unchanged, as that slice's measuring test.
+- Every formation holds → `every_formation_holds` at `crates/engine/tests/defending.rs:203`: each of the 10 shipped formations against 4-4-2, home on odd seeds (same command).
 - Discipline is realistic → `discipline_is_realistic` at `crates/engine/tests/discipline.rs:140`: 200 matches, card events read per tick, plus `Scene::foul_ready` at `crates/engine/src/scenario.rs:112-116`.
 - The acting keeper covers a red card → `crates/engine/tests/acting_keeper.rs` (six scenes: the bench keeper at `:53`, no substitution left at `:86`, the catch chance at `:130`, the penalty at `:143`, the shoot-out at `:179`, the goal kick after half-time at `:213`), `Simulation::keeper` at `crates/engine/src/sim.rs:565-567`, and `Scene::velocity` at `crates/engine/src/scenario.rs:102-110` for the presser scene.
 
@@ -154,24 +141,16 @@ Every run used a release build. Figures are goals per match unless named.
 
 In no setting does the reduced side score at most what the full side scores in all three arms, and 4-4-1-1 never falls under 4.0. Discipline was tuned on the 200-match test. The results were: cooldown 150 with booked factor 0.5 gave 0.335 second yellows per match and 36.0% of matches with a sending-off; 150 with 0.2 gave 0.125 and 19.5%; 500 with 0.5 gave 0.335 and 37.0%; 500 with 0.2 gave 0.120 and 19.5%; 1000 with 0.0 gave 0.000 and 8.5%; 150 with 0.15 gave 0.085 and 16.5% (chosen); 150 with 0.1 gave 0.065 and 14.5%. The booked factor is the lever, and the cooldown barely moves the rate.
 
-## Criterion Results
+## Criterion Results (this run)
 
-Evidence of the first pass: `implement-evidence/defending-and-discipline/criteria-defending.*` (exit code 101) and `criteria-discipline-and-slow.*` (exit code 0). Evidence of this pass: `implement-evidence/defending-and-discipline/rerun/criteria.*` (`acting_keeper`, `defending` and `discipline` with the slow tests, release; exit code 101 from the two moved checks only). Every figure below appears in both passes.
-
-Criteria this slice keeps (steer.md, "Moved criteria and slice order"):
+Evidence: `implement-evidence/defending-and-discipline/criteria-defending.*` (exit code 101) and `criteria-discipline-and-slow.*` (exit code 0).
 
 | Criterion | Result | Figures |
 |---|---|---|
-| Every formation holds: the eight pairings kept | passes, 8 of 8 | 4-4-2 1.43–1.59, 4-3-3 3.15–0.68, 4-2-3-1 3.09–2.64, 3-5-2 1.33–2.76, 4-1-4-1 2.07–0.87, 4-1-2-1-2 1.10–1.19, 5-3-2 0.72–1.41, 5-4-1 3.12–1.63 (baseline at `2089ed7`: 7 of 9 non-mirror pairings failed) |
+| No advantage from a red card | **fails, all three arms** | control 0.78–2.23; keeper: full 2.06, reduced 5.82 (limit for the full side 1.24); centre-back: full 0.71, reduced 2.39; striker: full 0.95, reduced 3.84 |
+| Every formation holds | **fails, 2 of 10 pairings** | 4-4-1-1 5.18–1.00, 3-4-3 4.17–1.26. Passing: 4-4-2 1.43–1.59, 4-3-3 3.15–0.68, 4-2-3-1 3.09–2.64, 3-5-2 1.33–2.76, 4-1-4-1 2.07–0.87, 4-1-2-1-2 1.10–1.19, 5-3-2 0.72–1.41, 5-4-1 3.12–1.63 (baseline at `2089ed7`: 7 of 9 non-mirror pairings failed) |
 | Discipline is realistic | passes | 0.085 second yellows per match, 16.5% of matches with a sending-off, 0 same-tick pairs |
-| The acting keeper covers a red card | passes (scenes) | 6 of 6 scenes in `acting_keeper.rs` pass |
-
-Criteria moved to `lone-forward` (Q-I2; limits unchanged). They are recorded here as measured, not judged:
-
-| Criterion | Figures |
-|---|---|
-| No advantage from a red card | control 0.78–2.23; keeper: full 2.06, reduced 5.82 (limit for the full side 1.24); centre-back: full 0.71, reduced 2.39; striker: full 0.95, reduced 3.84 |
-| 4-4-1-1 and 3-4-3 against 4-4-2 | 4-4-1-1 5.18–1.00, 3-4-3 4.17–1.26 (limit 4.0) |
+| The acting keeper covers a red card | passes (scenes) | 6 of 6 scenes in `acting_keeper.rs` pass; the keeper arm of the red-card experiment runs through the acting keeper, but that arm fails for the reason above |
 
 Cause found for the two failures. Figures are for the away side, cards off, seeds 1–48. A side that loses its striker plays with one central forward: 40.6 shots against 20.8 in the control, 0.0 offsides against 1.2, and the home side fouls 35.5 times against 17.0. With no forward team-mate to pass to, the carrier's option scores favour a dribble and a shot. The traces show dribbles of 6–20 seconds through the defence. 4-4-1-1 and 3-4-3 have the same single central forward. In the keeper arm, the stand-in comes from the strike pair, which leaves a lone forward. Neither the decision weights nor the tackle odds are among the five values this slice may tune.
 
@@ -191,15 +170,14 @@ Cause found for the two failures. Figures are for the away side, cards off, seed
 
 - `cargo fmt --all -- --check`: exit 0.
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`: exit 0.
-- `cargo test --workspace --all-features --no-fail-fast`: 458 passed, 0 failed, 7 ignored (`implement-evidence/defending-and-discipline/workspace-tests.*`, exit 0). Re-run on HEAD `cd9669c` in this pass: 458 passed, 0 failed, 7 ignored (`rerun/workspace-tests.*`, exit 0).
-- Re-run in this pass, release: `cargo test --release -p engine --all-features --test discipline --test defending --test acting_keeper --no-fail-fast -- --include-ignored --nocapture` (`rerun/criteria.*`, exit 101). `acting_keeper` 6 passed; `discipline` 4 passed; `defending` 5 passed and 2 failed (`a_sending_off_gives_no_advantage`, and `every_formation_holds` on 4-4-1-1 and 3-4-3 only). The first attempt of this command used `--ignored --include-ignored` together, which the test harness refuses (exit 101, no test ran). It was run again with `--include-ignored` alone.
+- `cargo test --workspace --all-features --no-fail-fast`: 458 passed, 0 failed, 7 ignored (`implement-evidence/defending-and-discipline/workspace-tests.*`, exit 0).
 - Slow tests, release: `discipline_is_realistic`, `strength`, `mentality` and `ai_trailing` pass (exit 0); `a_sending_off_gives_no_advantage` and `every_formation_holds` fail (exit 101).
 - Benchmark compare (`engine-cli bench --seed 42 --matches 5 --json`, 3 drives): 1.5099, 1.5422 and 1.5312 µs of processor time per tick (median 1.5312, +3.8% on 1.4753; gate 1.6228). Peak memory was 6.816, 6.797 and 6.797 MB (gate 8.27). Matches run 291,800 ticks, against 286,050 at base. The benchmark gate passes.
 - `engine-cli calibrate --suite equal --seed 42` (exit 2, band misses recorded, not failed, per Q-E4), against the realism-bands-v2 baseline at seed 42: goals per match 3.035 → 4.092; sending-off share 0.421 → 0.326; ten-plus-goals share 0.063 → 0.043; goalless share 0.192 → 0.047 (now in band); shots per team 14.753 → 17.165; throw-ins per match 25.958 → 17.976; goal kicks 7.402 → 7.926; corners per team 0.004 → 0.012; yellow cards per team 1.6 → 1.821 (in band); shots-on-target share 0.750 → 0.769; `validate.violations` 0; `darkpath.change_never_applied` 0.
 
 ## Anything Deferred
 
-- The red-card criterion and the 4-4-1-1 and 3-4-3 pairings are deferred to `lone-forward` by the product owner (Q-I2), with their limits unchanged. Nothing was loosened to pass them.
+- The two failing criteria wait for a product-owner decision (see Blockers). Nothing was loosened to pass them.
 - `sdlc-debt`: none added. Two hard-set constants carry comments at their sites: `PRESS_ENGAGE_M` (3.0 m) and `BACK_LINE_BAND` (4.0 m). `INTERCEPT_HORIZON_S` (1.0 s) is also a code constant, as the plan asked.
 
 ## Known Risks / Caveats
@@ -212,14 +190,7 @@ Cause found for the two failures. Figures are for the away side, cards off, seed
 
 ## Blockers
 
-None. The first pass stopped under the plan's step 14 rule and asked the product owner how to treat the two failing criteria. The product owner answered Q-I2 on 2026-09-24T06:19:45Z (`po-answers.md`): the criteria move to `lone-forward`, and this slice is verified on the criteria it keeps.
-
-## Assumptions
-
-- R1 (class: implementation-detail): no code changes in this pass. The answer to Q-I2 moves criteria out of this slice and does not widen it, so the build at `f7fe35b` is final. The re-run figures match the first pass exactly.
-- R2 (class: implementation-detail): `every_formation_holds` still asserts all ten pairings, and `a_sending_off_gives_no_advantage` is unchanged. Removing the two moved pairings from the test would weaken a check that `lone-forward` owns with its limit unchanged. The test prints every pairing, so verify can judge the eight kept pairings from its output.
-- R3 (class: implementation-detail): the roster entry for this slice is set to `complete` under the implement rule "no further build pass". Verify has not run yet.
-- R4 (class: implementation-detail): this pass commits only its own workflow files (this record, its history snapshot, the implement index and the re-run evidence). The shared control files and the other dirty files in the tree belong to other sessions and are not staged.
+- **The product owner must decide how to treat the two failing criteria.** The plan's step 14 says: "If a criterion still fails with those values at their bounds, stop and report the failing arm or pairing. Do not change the limits, the card chances or the goal tuning." Every option changes what this slice promises, so implement did not choose. The option list is in `po-answers.md` under this stage's entry.
 
 ## Freshness Research
 
@@ -227,6 +198,6 @@ None. The first pass stopped under the plan's step 14 rule and asked the product
 
 ## Recommended Next Stage
 
-- **Option A (default): Verify** → `/wf verify football-manager-match-engine defending-and-discipline`. Judge the slice on discipline, the acting keeper and the eight kept formation pairings (steer.md). The build changes testable behaviour. Compact the session first: workflow state lives in the artifact files on disk, and the SessionStart hook re-reads it after compaction.
-- **Option B: Skip to review** → `/wf review football-manager-match-engine defending-and-discipline`. Not recommended, because the slice has runtime criteria to verify.
-- **Option C: Revisit plan** → `/wf plan football-manager-match-engine defending-and-discipline`. Only if verify finds that the plan missed something in the kept criteria.
+- **Option D: Blocked (current).** The product owner answers the pending question in `po-answers.md`, and then one of the routes below follows.
+- **Option C: Revisit plan or slice** → `/wf plan football-manager-match-engine defending-and-discipline` (or `/wf slice football-manager-match-engine`). Take this if the answer widens the slice to the carrier's dribble choice or the tackle-against-foul odds, or moves the two criteria to `realism-tuning`.
+- **Option A: Verify** → `/wf verify football-manager-match-engine defending-and-discipline`. Take this only after the product owner accepts the current results for the two failing criteria. Compact the session first: workflow state lives in the artifact files on disk, and the SessionStart hook re-reads it after compaction.
