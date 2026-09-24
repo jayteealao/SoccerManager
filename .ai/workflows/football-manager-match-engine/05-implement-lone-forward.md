@@ -3,34 +3,40 @@ schema: sdlc/v1
 type: implement
 slug: football-manager-match-engine
 slice-slug: lone-forward
-status: awaiting-input
+status: complete
 stage-number: 5
 created-at: "2026-09-24T12:41:48Z"
-updated-at: "2026-09-24T13:49:15Z"
-revision-count: 1
+updated-at: "2026-09-24T16:09:33Z"
+revision-count: 2
 revisions:
   - rev: 1
     at: "2026-09-24T13:49:15Z"
     trigger: answers-returned
     because: "the product owner answered Q-LF1 (2026-09-24T13:19:59Z): measure the red-card criterion on balanced fixtures (equal clubs or both home and away orders, pooled), with every limit unchanged and no new lever, and stop again if an arm still fails"
     changed: "the red-card suite and the slow test now play seeds 1-120 in both club orders (commit 7bd5fa5); 11 balanced tuning runs; every realistic setting still fails the keeper and striker arms, so Q-LF1 is resolved and Q-LF2 is open; status stays awaiting-input"
-metric-files-changed: 23
-metric-lines-added: 506
-metric-lines-removed: 53
-metric-deviations-from-plan: 5
+  - rev: 2
+    at: "2026-09-24T16:09:33Z"
+    trigger: answers-returned
+    because: "the product owner answered Q-LF2 (2026-09-24T14:15:39Z): the red-card criterion moves to keeper-and-shots; ship the formations fix with the two levers tuned within their bounds and judge this slice on its other three criteria"
+    changed: "shipped tackle_win_base 0.5, lone_hold 0.5 and lone_dribble -0.5 (commit 07d87c2); four seeded tests re-derived; every criterion run, the slow tests, the benchmark and the full slice gate ran on the shipped values; the three kept criteria pass; status complete"
+metric-files-changed: 27
+metric-lines-added: 558
+metric-lines-removed: 89
+metric-deviations-from-plan: 8
 metric-review-fixes-applied: 0
-commit-sha: "7bd5fa59d67bd1d624d500032a1ae98835b68214"
+commit-sha: "07d87c25b226a618dc59e1279ff407f512d6a36b"
 commits:
   - "c3cc96fabcb9059bb4d79b0be7ba1450f19aabb0"
   - "7bd5fa59d67bd1d624d500032a1ae98835b68214"
-has-blockers: true
-open-questions:
-  - "Q-LF2 On balanced fixtures the red-card criterion still fails the keeper and striker arms at every realistic in-bounds setting of both levers — AWAITING INPUT (po-answers.md)"
+  - "07d87c25b226a618dc59e1279ff407f512d6a36b"
+has-blockers: false
+open-questions: []
 steering-honored:
-  - "Red-card criterion fixtures (Q-LF1, 2026-09-24): the slow test and the calibrate red-card suite both play seeds 1-120 in both home and away orders of the default clubs, pooled. No limit changed and no lever was added. An arm still fails on balanced fixtures, so implement stops and reports the arms and their figures."
-  - "Moved criteria and slice order (2026-09-24): the red-card criterion and the 4-4-1-1 and 3-4-3 pairings are judged here with their limits unchanged. No limit, card chance, keeper value, defending value, band or test tolerance was changed."
-  - "Q-I1: targeted calibrate runs were used only as the inner loop; the slice gate was not run because the slice stopped before a setting was accepted."
-  - "Output boundary: code comments, test names, docs and both commit messages use product language; the added lines were leak-checked before each commit."
+  - "Red-card criterion moves to keeper-and-shots (Q-LF2, 2026-09-24): this slice is judged on three criteria (the lone-forward formations hold, nothing that passes now regresses, a lone forward uses his team-mates). The red-card slow test and suite are unchanged and still fail; keeper-and-shots owns them. No lever was added, no limit changed, no setting below the shot floor was used, and no card chance changed."
+  - "Red-card criterion fixtures (Q-LF1, 2026-09-24): the balanced fixtures built at 7bd5fa5 stay as the red-card experiment for keeper-and-shots."
+  - "Moved criteria and slice order (2026-09-24): the 4-4-1-1 and 3-4-3 pairings are judged here with the 4.0 limit unchanged. No limit, card chance, keeper value, defending value, band or test tolerance was changed."
+  - "Q-I1: targeted calibrate runs were the inner loop; the full slice gate ran on the shipped values (equal and strength on seeds 1, 7, 42, 99 and 2026, formations on seed 42, 1,000 matches each)."
+  - "Output boundary: code comments, test names, docs and all three commit messages use product language; the added lines were leak-checked before each commit."
   - "Design direction: not applicable; no page changed."
 tags: [engine, tactics, rules, realism]
 refs:
@@ -41,73 +47,95 @@ refs:
   benchmark: 05c-benchmark.md
   evidence: implement-evidence/lone-forward/
   balanced-evidence: implement-evidence/lone-forward/balanced/
-  history: history/05-implement-lone-forward-0.md
+  shipped-evidence: implement-evidence/lone-forward/shipped/
+  history: [history/05-implement-lone-forward-0.md, history/05-implement-lone-forward-1.md]
   siblings: [05-implement-defending-and-discipline.md, 05-implement-tuning-loop.md, 05-implement-realism-bands-v2.md, 05-implement-tactics-and-ai.md]
   verify: 06-verify-lone-forward.md
-next-command: wf-implement
-next-invocation: "/wf implement football-manager-match-engine lone-forward"
+next-command: wf-verify
+next-invocation: "/wf verify football-manager-match-engine lone-forward"
 ---
 
 # Implement: Lone forward
 
 ## The Implementation
 
-The slice inherited both levers from `c3cc96f`, shipped at neutral values: the lone-carrier terms, the line hold and the bounded `tackle_win_base`. The red-card criterion failed at every realistic setting. The measured cause was the fixture: the sent-off player was always on the away club, and that club scores about 2.8 times the home club at 11 against 11. The product owner answered Q-LF1 with option 2. The criterion is measured on balanced fixtures, with every limit unchanged, no new lever, and a new stop if an arm still fails.
+The slice inherited both levers from `c3cc96f` at neutral values and the balanced red-card fixtures from `7bd5fa5`. On those fixtures the keeper and striker arms failed at every realistic setting. The product owner answered Q-LF2: the red-card criterion moves to `keeper-and-shots`, and this slice ships the formations fix with the two levers tuned inside their bounds. It is judged on its other three criteria.
 
-Commit `7bd5fa5` (5 files, +49 −27) plays each seed from 1 to 120 twice, once in each home and away order of the default clubs. It does this in the calibrate red-card suite and in the slow test `a_sending_off_gives_no_advantage`. At the shipped neutral values the slow test and `calibrate --suite red-card --seed 1 --matches 240` give the same figures to 4 decimals (control 1.4833–1.5167). The balanced control is even, so club strength no longer decides the result. The tuning loop then ran 11 times on balanced fixtures: the neutral values and 10 settings of the two levers. The keeper and striker arms fail at every setting with realistic play. At `tackle_win_base` 0.5 the reduced side outscores the full side by 0.56 goals per match (sampling error 0.12) in the keeper arm, and by 0.42 (0.10) in the striker arm. In the keeper arm the full side also scores 1.66 times the control, which is above the 1.6 limit. The centre-back arm misses by 0.13 (0.10), which is inside two sampling errors. The only arm that passes at any setting is the centre-back arm at dribble −1 and hold 1, where shots fall to 7.7 per team per match. RIM-12 rules that out.
+Commit `07d87c2` (10 files, +52 −36) ships `tackle_win_base` 0.5 (the bound), `lone_hold` 0.5 and `lone_dribble` −0.5. `lone_layoff` and `lone_line_hold` stay 0, because a positive lay-off collapsed attacking play and the line hold made the pairings worse in the inner loop. The weights are the smallest symmetric pair that passes the pressed-forward scene: ±0.25 fails on seed 5. The scene now reads the shipped weights, not its own. At these values 4-4-1-1 and 3-4-3 score 3.22 and 2.91 against 4-4-2 (limit 4.0), all ten pairings with 4-4-2 hold, and discipline passes (second yellows 0.045 per match, 11.0% of matches with a sending-off, no same-tick pairs). The seed-42 match now ends 0-0, so four seeded tests move to a match that still shows what they check. No tolerance was widened.
 
-This is the stop that the product owner named in the Q-LF1 answer. Q-LF2 is open and the shipped values stay neutral. Verify has no accepted setting to judge. The top risk is that the keeper arm is not a lone-forward effect: a side with an outfield player in goal outscores a full side by more than its forwards can explain.
+Verify can now judge the three kept criteria on shipped play. The top risk is realism outside this slice's criteria: an even tackle now wins the ball ten times as often, so fouls fall from 13.8 to 7.0 per team and yellow cards to 0.91 per team, below the 1.2 band floor. Band misses are recorded, not failed (Q-E4). The red-card slow test still fails. It now belongs to `keeper-and-shots`.
 
 ## Summary of Changes
 
-- Balanced red-card fixtures (`7bd5fa5`): every seed of the red-card suite plays twice, first in the usual club order and then with home and away swapped. The slow test plays seeds 1–120 in both orders (240 matches per arm). `--seed 1 --matches 240` is the same experiment. Each club is the reduced side in half the matches. The limits and the arms are unchanged, and the full side is still the home side.
-- Five bounded tuning values, all at neutral values (`c3cc96f`): `tackle_win_base` (0 to 0.5, 0.05), `lone_line_hold` (0 to 1, 0.0), and `decision.lone_layoff`, `decision.lone_hold`, `decision.lone_dribble` (−5 to 5, 0.0). Serde defaults equal the neutral values, so an older tuning file loads unchanged. `TUNING_VERSION` stays 2.
+- Shipped tuning (`07d87c2`): `tackle_win_base` 0.5, `decision.lone_hold` 0.5, `decision.lone_dribble` −0.5 in `content/tuning.json` and in `Tuning::default()`, which the shipped file must equal. The serde defaults for an older tuning file stay at the values that reproduce play before these fields (0.05 and 0), and the older-file load test still proves them.
+- The pressed-forward scenes read the shipped weights (`tests/lone_forward.rs`), with a guard that the shipped weights favour holding over dribbling.
+- Four seeded tests moved to another match (see Deviations): the event-name check, the commentary check and the snapshot resume use the seed-7 match, and the viewer reconnect test uses seed 5.
+- `docs/reference/data-files.md` lists the shipped values and says what a file without them loads.
+- Balanced red-card fixtures (`7bd5fa5`): every seed of the red-card suite plays twice, the second time with home and away swapped. The slow test plays seeds 1–120 in both orders (240 matches per arm), the same as `--seed 1 --matches 240`. This stays as the experiment for `keeper-and-shots`.
+- Five bounded tuning values (`c3cc96f`): `tackle_win_base` (0 to 0.5), `lone_line_hold` (0 to 1), and `decision.lone_layoff`, `decision.lone_hold`, `decision.lone_dribble` (−5 to 5). `TUNING_VERSION` stays 2.
 - `fouls::win_chance()` holds the clean-tackle formula once. The tackle loop and nine copies in eight test files call it (`injury.rs` keeps its 0.5 factor).
 - `offside::second_last_depth()` is extracted from `offside_set()`, so the referee and the forward read one line.
 - `Team::lone_forward()` gives the single active front-line slot that is not keeping goal.
 - In the scored options, a lone carrier (outfield, with no active outfield team-mate ahead) gets `lone_layoff` on each pass with progress ≤ 0. When he is also pressed, he gets `lone_hold` on holding the ball and `lone_dribble` on a dribble. No random draw is added.
-- Off the ball, `hold_the_line()` moves the team's lone forward from his anchor toward the line minus 0.5 m by `lone_line_hold`. He never goes past that line and keeps his `y`. At share 0 the step returns early.
-- New fast scene tests in `tests/lone_forward.rs`; content pins and an older-file load test; five rows and one paragraph in `docs/reference/data-files.md`.
+- Off the ball, `hold_the_line()` moves the team's lone forward toward the line minus 0.5 m by `lone_line_hold`. At share 0 (shipped) the step returns early.
 
 ## Files Changed
 
-- `crates/engine-cli/src/calibrate/fixtures.rs` (`7bd5fa5`): `RedCardFixture::swapped`; each seed plays twice, the second time swapped; the fixture test checks seeds 1–120 in both orders.
-- `crates/engine-cli/src/calibrate/worker.rs` (`7bd5fa5`): a swapped red-card match loads the default clubs in the other order.
-- `crates/engine/tests/defending.rs` (`7bd5fa5`): `a_sending_off_gives_no_advantage` plays seeds 1–120 in both club orders.
-- `docs/how-to/calibration.md`, `docs/reference/cli.md` (`7bd5fa5`): the red-card experiment plays both orders; `--matches 240` gives the slow test's experiment.
-- `crates/engine/src/tuning.rs`: the five fields with garde ranges, serde defaults and `Default` values.
-- `content/tuning.json`: the five neutral values.
-- `crates/engine/src/rules/fouls.rs`: `win_chance()` plus two unit tests (equal to the earlier formula at 0.05; linear in the base).
-- `crates/engine/src/sim.rs`: the tackle loop calls `win_chance()`.
-- `crates/engine/src/rules/offside.rs`: `second_last_depth()`; `offside_set()` calls it.
-- `crates/engine/src/team.rs`: `lone_forward()` plus two unit tests.
-- `crates/engine/src/decision.rs`: the lone test, the three terms in `options()`, `hold_the_line()` and `ONSIDE_MARGIN`.
-- `crates/engine/tests/lone_forward.rs` (new): four scene tests.
-- `crates/engine/tests/content.rs`: a pin test and an older-file load test.
-- `crates/engine/tests/{acting_keeper,discipline,injury,plugin_hooks,rules_cards,rules_fouls,rules_restarts,tactics_queue}.rs`: the copied 0.05 formula becomes `win_chance()`.
-- `docs/reference/data-files.md`: rows for the five values and a paragraph on the lone carrier, the lone forward and the tackle chance.
+- `content/tuning.json` (`07d87c2`): `tackle_win_base` 0.5, `lone_hold` 0.5, `lone_dribble` −0.5 (`c3cc96f` added the five fields at neutral values).
+- `crates/engine/src/tuning.rs` (`07d87c2`): `Default` uses `TACKLE_WIN_BASE` (0.5), `lone_hold` 0.5 and `lone_dribble` −0.5; the serde defaults stay neutral. (`c3cc96f`: the five fields with garde ranges and serde defaults.)
+- `crates/engine/tests/content.rs` (`07d87c2`): the pin test pins the shipped values. (`c3cc96f`: the pin test and the older-file load test.)
+- `crates/engine/tests/lone_forward.rs` (`07d87c2`): `weighted()` uses the shipped weights. (`c3cc96f`: four scene tests.)
+- `crates/engine/src/sim.rs` (`07d87c2`): the unit-test helper `full_match` takes a seed; `every_play_event_names_a_player` uses seed 7. (`c3cc96f`: the tackle loop calls `win_chance()`.)
+- `crates/engine/tests/common/mod.rs` (`07d87c2`): `scoring_match()`, the seed-7 90-minute match.
+- `crates/engine/tests/snapshot.rs` (`07d87c2`): the continuation and round-trip tests use `scoring_match()`.
+- `crates/engine/tests/commentary.rs` (`07d87c2`): the full-match commentary test uses `scoring_match()`; its comment names the new line count.
+- `crates/engine-cli/tests/stream_cli.rs` (`07d87c2`): the reconnect test serves seed 5.
+- `docs/reference/data-files.md` (`07d87c2`): shipped values in three rows and in the paragraph. (`c3cc96f`: five rows and the paragraph.)
+- `crates/engine-cli/src/calibrate/fixtures.rs`, `worker.rs`, `crates/engine/tests/defending.rs`, `docs/how-to/calibration.md`, `docs/reference/cli.md` (`7bd5fa5`): balanced red-card fixtures.
+- `crates/engine/src/rules/fouls.rs`, `rules/offside.rs`, `team.rs`, `decision.rs` (`c3cc96f`): `win_chance()`, `second_last_depth()`, `lone_forward()`, the lone test, the three terms and `hold_the_line()`, with unit tests.
+- `crates/engine/tests/{acting_keeper,discipline,injury,plugin_hooks,rules_cards,rules_fouls,rules_restarts,tactics_queue}.rs` (`c3cc96f`): the copied 0.05 formula becomes `win_chance()`.
 
 ## Shared Files (also touched by sibling slices)
 
 - `crates/engine/src/decision.rs`, `team.rs`, `sim.rs`, `tuning.rs`, `content/tuning.json`: also changed by `defending-and-discipline` (cover, press, acting keeper). Its mechanisms are not changed here. The defending tests pass unchanged.
 - `docs/reference/data-files.md`: also changed by `defending-and-discipline` and `realism-bands-v2`.
+- `crates/engine/tests/common/mod.rs`, `snapshot.rs`, `commentary.rs`, `crates/engine-cli/tests/stream_cli.rs`: shared test fixtures of earlier slices (`commentary`, `viewer-reports-recovery`, `stream-protocol`). Only the seed of the match each test plays changed; `common::full_match()` stays the seed-42 match for every other test.
 
 ## Notes on Design Choices
 
-- Every new term is added as exact zero at the neutral values and draws nothing. So the neutral check can prove "the seams change nothing" bit for bit (red-card diff: 6 rows, change 0).
-- The line hold returns early at share 0. The plan's "never past the line" cap would otherwise move a forward whose anchor is past the line, even at share 0.
-- The scene tests that need the lone terms switched on set their own weights (lay-off 0.3, hold 1.0, dribble −1.0). The shipped weights are 0 until a setting passes every match-outcome check.
+- The shipped weights are the smallest symmetric pair that passes the pressed-forward scene on all 40 seeds. On the scene, −0.5 dribble alone passes, 0.5 hold alone fails (seed 1), and ±0.25 fails (seed 5). A larger pair would move shipped play more for no measured gain.
+- `lone_layoff` and `lone_line_hold` ship at 0. A positive lay-off gave 3.8 shots per team (0.3, first run), and the line hold at 0.6 raised 4-4-1-1 from 5.14 to 6.04 in the inner loop. The criterion "passes or holds" is met by the hold and dribble terms.
+- `Tuning::default()` mirrors the shipped file, as the existing test `the_shipped_tuning_equals_the_documented_default` requires, but an older file still loads with the neutral values. This follows the plan (step 2: serde default 0.05) and keeps an older file's play unchanged.
+- Every new term is exact zero at the neutral values and draws nothing, so the neutral check proved "the seams change nothing" bit for bit (red-card diff: 6 rows, change 0).
 
 ## Verification Seams Built
 
-- "A lone forward uses his team-mates" → `tests/lone_forward.rs:67` `a_pressed_lone_forward_passes_or_holds_instead_of_dribbling`, 40 seeds on the real engine (enables `cargo test --test lone_forward`), and `:87` `the_lone_terms_need_a_lone_carrier`. The seams are `decision.rs:264` (lone test), `:325` (lay-off) and `:348` (pressed terms). The test sets its own weights, because the shipped weights are neutral (see Deviations).
-- Line hold → `team.rs:280` `lone_forward()`, `offside.rs:35` `second_last_depth()`, `decision.rs:119` `hold_the_line()`, observed by `tests/lone_forward.rs:109`.
-- Tackle odds → `fouls.rs:75` `win_chance()`, called at `sim.rs:1015`, observed by `tests/lone_forward.rs:171` (a draw under the win chance wins the ball; a draw in the foul band is a foul).
-- Tuning seams → `tuning.rs:166`, `:171`, `:273` and the following fields, pinned at `tests/content.rs:178`, with the older-file load at `:190`.
-- "No advantage from a red card" → balanced fixtures at `crates/engine/tests/defending.rs:206` (`a_sending_off_gives_no_advantage`; club order at `:213`, 240 matches per arm at `:224` and `:228`) and `crates/engine-cli/src/calibrate/fixtures.rs:118` (`red_card_fixtures`, swap at `:127`), loaded in order at `worker.rs:90`. This enables `cargo test --release … a_sending_off_gives_no_advantage` and `calibrate --suite red-card --seed 1 --matches 240`, which give the same figures (checked this run at neutral values). The fixture test is at `fixtures.rs:315`.
-- "The lone-forward formations hold", "Nothing that passes now regresses": nothing new was needed. `every_formation_holds` and `discipline_is_realistic` exist unchanged.
+- "A lone forward uses his team-mates" → `tests/lone_forward.rs:67` `a_pressed_lone_forward_passes_or_holds_instead_of_dribbling`, 40 seeds on the real engine with the shipped weights (`weighted()` at `:38`, which checks that they favour holding). The seams are `decision.rs:264` (lone test), `:325` (lay-off) and `:348` (pressed terms). This enables `cargo test -p engine --all-features --test lone_forward`.
+- Line hold → `team.rs:280` `lone_forward()`, `offside.rs:35` `second_last_depth()`, `decision.rs:119` `hold_the_line()`, observed by `tests/lone_forward.rs:109` at the shipped share and at 1.0.
+- Tackle odds → `fouls.rs:75` `win_chance()`, called at `sim.rs:1015`, observed by `tests/lone_forward.rs:171`.
+- Tuning seams → the shipped values at `content/tuning.json:52`, `:85`, `:86` and `tuning.rs:355`, `:388`, `:389`, `:421`, pinned at `tests/content.rs:178`, with the older-file load at `:190`.
+- "The lone-forward formations hold", "Nothing that passes now regresses": nothing new was needed. `every_formation_holds` (`tests/defending.rs:250`) and `discipline_is_realistic` (`tests/discipline.rs:140`) exist unchanged.
+- Seeded fixtures for the moved tests → `common/mod.rs:49` `scoring_match()`, used at `snapshot.rs:57`, `:103`, `:133` and `commentary.rs:231`; `sim.rs:1160` (`full_match(7, …)`); `stream_cli.rs:147` (seed 5).
 
 ## Tuning Loop (step 10)
+
+### Shipped setting (after Q-LF2)
+
+The setting is `tackle_win_base` 0.5, `lone_hold` 0.5, `lone_dribble` −0.5, with the other three tuning values unchanged. Inner loop: `calibrate --suite formations --pairing "4-4-1-1 v 4-4-2" --pairing "3-4-3 v 4-4-2" --seed 42 --matches 1000` on a content copy (`shipped/tuning-log.txt`): 4-4-2 0.872 against 4-4-1-1 3.198, and 4-4-2 0.743 against 3-4-3 2.951. Fouls were 9.8 per team, shots 19.3, yellow cards 1.29 and the sending-off share 0.219. The red-card suite was not run on this setting, because the criterion moved.
+
+Scene check, `a_pressed_lone_forward_passes_or_holds_instead_of_dribbling` over seeds 1–40, with the weights set by a temporary probe that was reverted before the commit:
+
+| lone_layoff / lone_hold / lone_dribble | Result |
+|---|---|
+| 0 / 0 / 0 | fails, seed 1 (the carrier dribbles to (38, 4)) |
+| 0 / 0.25 / −0.25 | fails, seed 5 |
+| 0 / 0.5 / 0 | fails, seed 1 |
+| 0 / 0 / −0.5 | passes |
+| 0 / 0.5 / −0.5 (shipped) | passes |
+| 0 / 0.75 / −0.75 | passes |
+| 0 / 1 / −1 | passes |
+| 0.1 / 0.5 / −0.5 | passes |
+
 
 ### Balanced fixtures (after Q-LF1)
 
@@ -115,7 +143,7 @@ Inner loop: `calibrate --suite red-card --seed 1 --matches 240` (seeds 1–120 i
 
 | Setting | Control (home–away) | Limit | Keeper F/R | Centre-back F/R | Striker F/R | Shots | Verdict |
 |---|---|---|---|---|---|---|---|
-| neutral (shipped) | 1.48–1.52 | 2.37 | 2.35/4.56 | 0.98/1.48 | 1.12/2.63 | 20.0 | all 3 arms fail |
+| neutral | 1.48–1.52 | 2.37 | 2.35/4.56 | 0.98/1.48 | 1.12/2.63 | 20.0 | all 3 arms fail |
 | win 0.25 | 1.15–1.31 | 1.83 | 2.17/3.38 | 1.02/1.32 | 1.25/2.08 | 16.7 | all 3 fail |
 | win 0.5 (bound) | 1.15–1.23 | 1.84 | 1.90/2.46 | 1.09/1.21 | 1.25/1.67 | 15.0 | all 3 fail |
 | win 0.5, foul_base 0.05 | 1.00–1.18 | 1.60 | 1.68/2.22 | 1.07/1.30 | 1.24/1.78 | 14.3 | all 3 fail |
@@ -127,7 +155,7 @@ Inner loop: `calibrate --suite red-card --seed 1 --matches 240` (seeds 1–120 i
 | win 0.5, dribble −0.75, hold 0.75 | 0.99–0.98 | 1.59 | 1.53/2.64 | 0.89/0.98 | 1.22/1.74 | 13.6 | all 3 fail |
 | win 0.5, dribble −1, hold 1 | 0.54–0.44 | 0.86 | 0.94/1.48 | 0.69/0.53 | 0.68/0.78 | 7.7 | centre-back passes; not realistic |
 
-Sampling errors at `tackle_win_base` 0.5 (`balanced/w50-report.json`, band `reduced_minus_full`): keeper +0.558 (se 0.120), centre-back +0.125 (se 0.102), striker +0.421 (se 0.099). The keeper arm's `full_over_control` is 1.656 (se 0.129) against 1.6. The 4-4-1-1 and 3-4-3 pairings were not re-run in this revision, because the fixture change does not touch the formations suite. Their figures below come from the first run.
+Sampling errors at `tackle_win_base` 0.5 (`balanced/w50-report.json`, band `reduced_minus_full`): keeper +0.558 (se 0.120), centre-back +0.125 (se 0.102), striker +0.421 (se 0.099). The keeper arm's `full_over_control` is 1.656 (se 0.129) against 1.6. The 4-4-1-1 and 3-4-3 pairings were not re-run on balanced fixtures, because the fixture change does not touch the formations suite.
 
 ### Unbalanced fixtures (first run, before Q-LF1)
 
@@ -158,74 +186,67 @@ Club check (neutral values, home and away clubs swapped, `tune/swap`): control 2
 
 ## Criterion Results
 
-- **No advantage from a red card: FAILS on balanced fixtures at every realistic in-bounds setting.** The keeper and striker arms fail at every setting with 13.6 or more shots per team per match. The best is `tackle_win_base` 0.5: keeper 1.90 against 2.46, striker 1.25 against 1.67, centre-back 1.09 against 1.21. The only pass on any arm is the centre-back arm at 7.7 shots per team, which RIM-12 rules out. The slow test was run this revision at the shipped neutral values only (it fails, with the figures in Checks Run). It was not run on a tuned candidate, because no candidate passes the suite on the same fixtures.
-- **The lone-forward formations hold: PASSES in the inner loop** at `tackle_win_base` 0.5 (2.71 and 2.92 over 200 matches, first run). It is not confirmed by `every_formation_holds`. No setting is shipped.
-- **Nothing that passes now regresses: HOLDS at the shipped neutral values.** The workspace tests pass this run (489 passed). The fixture change touches only the red-card experiment. It is not measured on a tuned setting.
-- **A lone forward uses his team-mates: PASSES as a mechanism** (`tests/lone_forward.rs:67`, 40 of 40 seeds with the weights switched on). The shipped weights are 0, so shipped play does not yet show it.
+Judged on the shipped values at `07d87c2`, per the Q-LF2 answer:
+
+- **The lone-forward formations hold: PASSES.** `every_formation_holds` (release): 4-4-1-1 against 4-4-2 3.22–0.56, 3-4-3 against 4-4-2 2.91–0.78. Limit 4.0 (`shipped/criterion-formations-discipline.txt`). The gate's formations run (1,000 matches) agrees: 3.198 and 2.951.
+- **Nothing that passes now regresses: PASSES.** The eight kept rows of `every_formation_holds`: 4-4-2 1.03–0.95, 4-3-3 2.31–0.32, 4-2-3-1 2.21–1.83, 3-5-2 0.97–2.17, 4-1-4-1 0.84–0.78, 4-1-2-1-2 0.83–0.72, 5-3-2 0.43–0.83, 5-4-1 1.15–1.09. `discipline_is_realistic` (200 matches): second yellows 0.045 per match (limit 0.10), 11.0% of matches with a sending-off (limit 25%), 0 same-tick pairs.
+- **A lone forward uses his team-mates: PASSES on shipped play.** `tests/lone_forward.rs:67`, 40 of 40 seeds with the shipped weights. `the_lone_terms_need_a_lone_carrier` also passes: with a forward team-mate ahead, the terms change nothing.
+- **No advantage from a red card: MOVED to `keeper-and-shots`** (Q-LF2). It is not judged here. The slow test `a_sending_off_gives_no_advantage` was not re-run on the shipped values. It failed at every realistic setting on balanced fixtures (see the tables above), and it stays unchanged for `keeper-and-shots`.
 
 ## Checks Run
 
-This revision (on the working tree that became `7bd5fa5`):
+This revision (on the working tree that became `07d87c2`):
 
-- `cargo fmt --all -- --check`: clean after one `cargo fmt --all` (it re-wrapped one `if` in `defending.rs`).
-- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean, after one fix (`manual_is_multiple_of`, at two sites).
-- `cargo test --workspace --all-features`: exit 0; 64 binaries, 489 passed, 0 failed, 7 ignored.
-- `cargo test --release -p engine --all-features --test defending -- --include-ignored --nocapture a_sending_off_gives_no_advantage` at the shipped neutral values: FAILED as expected, in 55.62 s (`balanced/slow-test-neutral.txt`). Control home 1.4833 away 1.5167; keeper 2.3500/4.5625; centre-back 0.9792/1.4833; striker 1.1167/2.6333; limit 2.3733. These are the figures of `calibrate --suite red-card --seed 1 --matches 240` at neutral (`balanced/neutral-report.json`).
-
-First run (on `c3cc96f`):
-
-- `cargo test -p engine --all-features` at neutral values, before the scene tests: 31 binaries, 272 passed, 0 failed, 6 ignored (266 at HEAD plus 6 new unit and content tests; no expectation changed).
-- `cargo test --workspace --all-features` at neutral values, before the scene tests: 63 binaries, 485 passed, 0 failed, 7 ignored. After the scene tests: 64 binaries, 489 passed, 0 failed, 7 ignored.
-- `cargo test -p engine --all-features --test lone_forward`: 4 passed. Before the scene tests set their own weights, the pressed scene failed at neutral values (seed 1: the carrier dribbled to (38, 4)), so the test tells the two cases apart.
-- `cargo fmt --all -- --check`: clean. `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean.
-- Neutral check: `calibrate --suite red-card --seed 1 --matches 120 --baseline baseline/red-base/report.json`. Header `content 3b3ddb56d4ec -> e59860b1bee6, content changed` (the five neutral fields); 6 rows, change +0.0000 each (`neutral/red.log`).
-- Benchmark (`engine-cli bench --seed 42 --matches 5 --json`, three drives, `bench/`): 1.5531, 1.5312, 1.5422 µs per tick (median 1.5422 against the 1.6964 gate); peak memory 6.699, 6.852, 6.707 MB (median 6.707 against 8.33); 450.0 ms per match at the median; 291,800 ticks per match. This is the implement-time reading. The formal compare belongs to verify.
-- Not run: the slow criterion tests on a tuned setting, re-derivation of moved expectations (step 12; nothing moved at neutral values), and the full slice gate (step 13.4). All three wait for a setting that could be accepted.
+- `cargo fmt --all -- --check`: clean. `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean (exit 0).
+- `cargo test --workspace --all-features`: exit 0; 64 binaries, 489 passed, 0 failed, 7 ignored (`shipped/workspace-tests.txt`). Two earlier runs on the tuned values failed and led to the re-derived tests: first `sim::tests::every_play_event_names_a_player` ("the match scored no goal"); then `a_full_seeded_match_fills_every_placeholder_and_names_every_player` ("only 75 lines"), `a_resumed_match_continues_tick_for_tick` ("no applied tactics change after tick 152897") and `a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on` ("resumed at 1"). Logs: `shipped/workspace-tests-first-run.txt` and `shipped/workspace-tests-second-run.txt`.
+- `cargo test --release -p engine --all-features --test defending --test discipline -- --include-ignored --nocapture every_formation_holds discipline_is_realistic`: exit 0; both pass (figures in Criterion Results).
+- `cargo test --release -p engine --all-features --test strength --test mentality --test ai_trailing -- --include-ignored --nocapture`: exit 0. The stronger team won 158, drew 30 and lost 12 of 200; shots per match were 6.78 defensive and 12.18 attacking; a trailing AI team changed tactics in 100 of 100 scenes (`shipped/slow-strength-mentality-trailing.txt`).
+- Benchmark (`engine-cli bench --seed 42 --matches 5 --json`, three drives, `shipped/bench-*.json`): 1.6014 µs per tick each time (gate 1.6964), peak memory 6.69 MB each time (gate 8.33), 277,000 ticks per match, 447–449 ms per match. This is the implement-time reading; verify owns the compare.
+- Slice gate (1,000 matches each, `shipped/gate/`):
+  - `--suite strength`, seeds 1, 7, 42, 99, 2026: every run passes; stronger-team win rate 0.688, 0.744, 0.699, 0.728, 0.708.
+  - `--suite equal`, seeds 1, 7, 42, 99, 2026: goals per match 2.579, 2.985, 2.841, 3.003, 2.443; shots per team 11.8, 13.3, 12.9, 13.8, 11.6; fouls per team 6.9, 7.3, 7.0, 7.3, 6.8; sending-off share 0.094, 0.110, 0.113, 0.090, 0.098. Band misses 7, 8, 8, 8, 7 of 16: corners, goal kicks, goals per xG, passes, shots-on-target share, throw-ins and yellow cards on every seed, and ten-plus-goal share on seeds 7, 42 and 99.
+  - Seed 42 against `baseline/equal-base` (the report diff): goals 4.092 → 2.841 (into band), shots 17.165 → 12.924 (into band), sending-off share 0.326 → 0.113 (into band), ten-plus-goal share 0.043 → 0.008, goalless share 0.047 → 0.099, goal kicks 7.926 → 5.875, corners 0.012 → 0.005. Yellow cards per team 1.821 → 0.912 left the band (1.2 to 2.6). Band misses: 10 of 16 → 8 of 16.
+  - `--suite formations --seed 42`: all ten pairings with 4-4-2 are at or below 4.0 per side (highest 3.667, 4-3-3). Eight other pairings exceed 4.0, against 21 in the tuning-loop gate run (`tuning-loop/full-42.report.json`); the highest is 4-2-3-1 against itself, 8.52 (was 13.47). These pairings are not a criterion. Formations band misses are 119 of 166, against 144 of 166.
+- Earlier revisions: the neutral check (6 rows, change 0), the balanced slow test at neutral values (failed, as recorded) and the first-run checks on `c3cc96f` are in `history/05-implement-lone-forward-1.md`.
 
 ## Deviations from Plan
 
-- **Front line of `lone_forward()`** (class: implementation-detail): "within `BACK_LINE_BAND`" is read as strictly less than 4 m behind the most advanced slot. The 3-4-3 wingers stand exactly 4.0 m behind the striker (62 against 66). An inclusive band would give 3-4-3 three front-line players and no lone forward, which contradicts the plan's own unit test ("3-4-3 gives the striker"). The same rule gives 4-3-3 its centre forward.
-- **Line hold at share 0** (class: implementation-detail): the step returns early at `lone_line_hold` 0, so the target is the anchor exactly, as the plan requires. Otherwise the cap would pull back an anchor that is past the line.
-- **Scene tests set their own lone weights** (class: implementation-detail): the plan said "with tuned values read from the content". No tuned setting was accepted, so the shipped weights stay 0. The scenes set lay-off 0.3, hold 1.0 and dribble −1.0 to test the mechanism.
-- **Steps 11 to 13.4 stopped** (plan-defined stop): step 10 found no in-bounds setting that passes the red-card criterion with realistic play. Step 11 says to stop and report. The equal-suite baseline had to be run again on a clean copy of the committed content (`--content-dir`), because the first run started after `content/tuning.json` had gained the new fields and was refused (`equal-base.log`, then rerun).
-- **Balanced red-card fixtures** (class: implementation-detail; within the Q-LF1 answer): the product owner allowed either two equal clubs or both orders of the default clubs, pooled. This run chose both orders: each seed plays twice in a row, the second time swapped. The reasons: the default clubs stay the clubs of the experiment, a paired design cancels club strength seed by seed, and the suite keeps `--matches` as matches per arm with no change to the report code. The slow test's experiment is now `--matches 240`, not 120.
+- **Front line of `lone_forward()`** (class: implementation-detail): "within `BACK_LINE_BAND`" is read as strictly less than 4 m behind the most advanced slot. The 3-4-3 wingers stand exactly 4.0 m behind the striker, and an inclusive band would give 3-4-3 no lone forward, against the plan's own unit test.
+- **Line hold at share 0** (class: implementation-detail): the step returns early at `lone_line_hold` 0, so the target is the anchor exactly, as the plan requires.
+- **Balanced red-card fixtures** (class: implementation-detail; within the Q-LF1 answer): both orders of the default clubs, pooled, rather than two equal clubs.
+- **Red-card criterion not judged; its slow test still fails** (class: implementation-detail; within the Q-LF2 answer): the plan's step 11 required `a_sending_off_gives_no_advantage` to pass. The product owner moved that criterion to `keeper-and-shots`, so the test stays as it is and was not re-run on the shipped values.
+- **Only three of the six tuning values move** (class: implementation-detail): step 10 allowed tuning all six. `lone_layoff`, `lone_line_hold` and `foul_base` keep their values, for the measured reasons in Notes on Design Choices.
+- **`Tuning::default()` differs from the older-file serde defaults** (class: implementation-detail): the existing test requires the shipped file to equal `Default`, and the plan requires an older file to load with 0.05 and 0. Both hold.
+- **Four seeded tests moved to another match** (class: implementation-detail; step 12): the seed-42 90-minute match now ends 0-0 with no tactics change, and the seed-7 two-minute match has no stoppage before tick 3,000. Before and after: `every_play_event_names_a_player` seed 42 (0 goals) → seed 7 (1 goal, tick 50,267); the commentary full-match test seed 42 (75 lines, no goal; floor 80) → seed 7 (84 lines, 1 goal); `a_resumed_match_continues_tick_for_tick` and the round-trip test seed 42 (no tactics change) → seed 7 (tactics changes at ticks 220,946 and 248,667); the reconnect test seed 7 (restart only at tick 3,000) → seed 5 (restarts at 2,460 and 3,000). No floor, tolerance or assertion was weakened; each test still checks what it checked.
+- **Equal gate seeds without a baseline diff** (class: implementation-detail): step 13.4 records misses "against `…/equal-base`", which is a seed-42 report. The CLI refuses a baseline with another seed ("seed 1 differs from the baseline's 42"), so seeds 1, 7, 99 and 2026 ran without `--baseline` and seed 42 ran with it.
 
 ## Anything Deferred
 
-- A tuned setting for the five values, the slow criterion runs on it, the moved expectations, the benchmark compare on it and the slice gate. These wait until the product owner answers Q-LF2.
+- The red-card criterion, on the balanced fixtures, with every limit unchanged: moved to `keeper-and-shots` by the product owner (Q-LF2).
 - No `sdlc-debt:` shortcut was introduced.
 
 ## Known Risks / Caveats
 
-- The shipped values are neutral. The committed code changes no match outcome yet, so 4-4-1-1 and 3-4-3 still exceed 4.0 in shipped play.
-- The literal lone test is broad. Any outfield carrier with no team-mate ahead is lone, which includes a striker who has run past his partner. A positive `lone_layoff` collapses attacking play in every formation (0.3 gives 3.8 shots per team). The lay-off lever needs a narrower definition before it can be used (see Q-LF1, option 3).
-- `lone_hold` up to 0.3 had no measured effect, because holding the ball rarely outscores a pressed dribble.
+- Fewer fouls and cards. At an even tackle the clean-win chance rises from 0.025 to 0.25. In the equal suite, fouls fall from 13.8 to 7.0 per team, and yellow cards from 1.82 to 0.91 per team, below the 1.2 band floor on every seed. The slice risk named this; band misses are recorded, not failed (Q-E4). Band tuning belongs to `realism-tuning`.
+- The default-club match scores less. The seed-42 90-minute match now ends 0-0 (shots 2 against 14), and seeds 1, 7 and 99 end 0-0, 0-1 and 0-1. The equal suite's goals per match (2.44 to 3.00) is inside its band, so this is the default clubs' strength gap, not a league-wide drop.
+- The literal lone test is broad. Any outfield carrier with no team-mate ahead is lone, including a striker who has run past his partner. `lone_layoff` stays 0 for this reason; a positive value collapsed attacking play.
+- The red-card slow test fails. It is an ignored slow test, so the default test run stays green, but a run of `defending` with `--include-ignored` fails until `keeper-and-shots` fixes it.
+- The per-match gate outputs (`shipped/gate/*/events` and `*/stats`) take about 3.4 GB on disk. Only the report files and logs are evidence; the folders are not staged.
 
 ## Blockers
 
-- **Q-LF1 (class: intent-bearing): RESOLVED** by the product owner at 2026-09-24T13:19:59Z (option 2, balanced fixtures). It is built at `7bd5fa5`.
-- **Q-LF2 (class: intent-bearing, AWAITING INPUT; `po-answers.md`).** On balanced fixtures, the keeper and striker arms still fail at every realistic in-bounds setting of both levers. The product owner said to stop and report in this case. Measured on seeds 1–120 in both orders:
-  - Keeper arm: at best (`tackle_win_base` 0.5) the reduced side scores 2.46 against 1.90 (+0.56, se 0.12). The full side's 1.90 is 1.66 times the control (limit 1.6).
-  - Striker arm: 1.67 against 1.25 (+0.42, se 0.10).
-  - Centre-back arm: 1.21 against 1.09 (+0.13, se 0.10, inside two sampling errors).
-  - The only pass is the centre-back arm at dribble −1 and hold 1, with 7.7 shots per team per match.
-
-  Options:
-  1. Allow a third lever that acts on the side with ten men, for example less pressing and running. The Q-LF1 answer said not to add a lever, so only the product owner can change this.
-  2. Move the red-card criterion to `keeper-and-shots`, which owns the save model, because the keeper arm is the worst arm. Ship the formations fix here (`tackle_win_base` 0.5 passed both pairings in the inner loop) and judge this slice on the other three criteria.
-  3. Judge each arm against a relative target (the reduced side scores less than it scores at 11 against 11) instead of against the full side.
-  4. Keep the criterion and the two levers, and allow a setting below the shot floor. RIM-12 rules this out today.
-
-  Each option changes a criterion, a lever set or the slice scope, so this run may not choose one.
+- None open. Q-LF1 (class: intent-bearing) was answered at 2026-09-24T13:19:59Z and built at `7bd5fa5`. Q-LF2 (class: intent-bearing) was answered at 2026-09-24T14:15:39Z and built at `07d87c2`.
 
 ## Assumptions
 
-- A1 (class: implementation-detail): the calibrate red-card suite on seeds 1–120 is the inner loop and the evidence for the stop, because it plays the criterion test's seeds and arms (plan A9).
-- A2 (class: implementation-detail): a setting whose shots fall below about 10 per team per match is not realistic play in the sense of RIM-12, so a pass reached there does not count. The baseline is about 23 shots, and the bands in `realism-bands.json` assume shot totals near real football.
-- A3 (class: implementation-detail): the scratch tuning used copies of the content folder passed by `--content-dir`. The shipped content was changed only by the five neutral fields.
-- A4 (class: implementation-detail): the benchmark was read at implement time on the neutral build (median 1.5422 µs). `05c-benchmark.md` is not changed, because verify owns the compare.
-- A5 (class: implementation-detail): the realism floor of A2 (about 10 shots per team per match) also applies on balanced fixtures. The balanced neutral figure is 20.0 shots per team over the four arms.
-- A6 (class: implementation-detail): the formations pairings were not re-run in this revision. The fixture change touches only the red-card suite and the red-card slow test, and no tuning value changed in the shipped content.
+- A1 (class: implementation-detail): the calibrate suites are the inner loop; the slow tests and the full gate are the evidence (plan A9, Q-I1).
+- A2 (class: implementation-detail): a setting whose shots fall below about 10 per team per match is not realistic play in the sense of RIM-12. The shipped setting gives 11.6 to 13.8 shots per team in the equal suite and 19.3 in the inner loop.
+- A3 (class: implementation-detail): scratch tuning used content copies passed by `--content-dir`. The shipped content changed only in the five fields.
+- A4 (class: implementation-detail): the benchmark was read at implement time (1.6014 µs). `05c-benchmark.md` is not changed, because verify owns the compare.
+- A5 (class: implementation-detail): the realism floor of A2 also applies on balanced fixtures.
+- A6 (class: implementation-detail): pairings not against 4-4-2 are not criteria; they are recorded as band evidence only.
+- A7 (class: implementation-detail): the smallest weights that pass the scene are the right shipped weights, because the criterion is the scene and larger weights move play further.
+- A8 (class: implementation-detail): moving a seeded test to another seed is a re-derived expectation, not a widened tolerance, when the test still asserts the same property at the same floor.
 
 ## Freshness Research
 
@@ -233,6 +254,6 @@ First run (on `c3cc96f`):
 
 ## Recommended Next Stage
 
-- **Option D (default): Blocked.** Q-LF2 needs a product-owner answer. Run `/wf implement football-manager-match-engine lone-forward` again after the answer is in `po-answers.md`.
-- **Option C: Revisit plan.** Run `/wf plan football-manager-match-engine lone-forward` if the answer adds a lever or moves the criterion.
-- **Option A: Verify.** `/wf verify football-manager-match-engine lone-forward` cannot run yet. The shipped values are neutral and two criteria are not met.
+- **Option A (default): Verify.** `/wf verify football-manager-match-engine lone-forward`. The three kept criteria are headless engine runs; the evidence is in `implement-evidence/lone-forward/shipped/`. Consider compacting the session before verify; workflow state lives in the artifact files on disk.
+- **Option B: Skip to review.** Not advised: the change moves match outcomes, and verify owns the benchmark compare.
+- **Option C: Revisit plan.** Not needed: the Q-LF2 answer is built within the plan's levers and bounds.

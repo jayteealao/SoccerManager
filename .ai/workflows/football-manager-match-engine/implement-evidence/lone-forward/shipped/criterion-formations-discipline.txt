@@ -1,0 +1,28 @@
+   Compiling engine v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine)
+    Finished `release` profile [optimized + debuginfo] target(s) in 7.54s
+     Running tests\defending.rs (target\release\deps\defending-916852a5159bf36d.exe)
+
+running 1 test
+4-4-2 v 4-4-2: 1.03 - 0.95
+4-3-3 v 4-4-2: 2.31 - 0.32
+4-2-3-1 v 4-4-2: 2.21 - 1.83
+3-5-2 v 4-4-2: 0.97 - 2.17
+4-1-4-1 v 4-4-2: 0.84 - 0.78
+4-4-1-1 v 4-4-2: 3.22 - 0.56
+4-1-2-1-2 v 4-4-2: 0.83 - 0.72
+3-4-3 v 4-4-2: 2.91 - 0.78
+test every_formation_holds has been running for over 60 seconds
+5-3-2 v 4-4-2: 0.43 - 0.83
+5-4-1 v 4-4-2: 1.15 - 1.09
+test every_formation_holds ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 71.58s
+
+     Running tests\discipline.rs (target\release\deps\discipline-73674a723b768fab.exe)
+
+running 1 test
+second yellows per match 0.045, matches with a sending-off 11.0%, same-tick pairs 0
+test discipline_is_realistic ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 12.65s
+

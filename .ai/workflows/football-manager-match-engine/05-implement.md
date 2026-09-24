@@ -5,12 +5,12 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-24T13:49:15Z"
+updated-at: "2026-09-24T16:09:33Z"
 slices-implemented: 21
 slices-total: 22
-metric-total-files-changed: 745
-metric-total-lines-added: 63172
-metric-total-lines-removed: 2873
+metric-total-files-changed: 755
+metric-total-lines-added: 63224
+metric-total-lines-removed: 2909
 tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment, scripting, sandbox, plugin-interface, distribution, installer, packaging, release-version, error-record, help-text, realism-bands, formations]
 refs:
   index: 00-index.md
@@ -183,11 +183,15 @@ next-invocation: "/wf verify football-manager-match-engine tuning-loop"
   - A targeted run is an inner loop. The full gate (five seeds for equal and strength, one for formations) is unchanged, and `--suite all` does not include red-card.
   - No faster build profile: fat LTO and a native CPU target were identical in figures and inside run-to-run timing noise.
 
-- `lone-forward` (awaiting input, commits `c3cc96f` and `7bd5fa5`): five bounded tuning values at neutral values (`tackle_win_base`, `lone_line_hold`, `decision.lone_layoff`, `decision.lone_hold`, `decision.lone_dribble`), `fouls::win_chance()`, `offside::second_last_depth()`, `Team::lone_forward()` and the lone-carrier terms. Play is unchanged at the shipped values. After Q-LF1, the red-card experiment plays each seed in both club orders: the slow test is seeds 1–120 in both orders, and the suite equivalent is `--suite red-card --seed 1 --matches 240` (about 78 s). A baseline made with `--matches 120` before this change is not comparable. On balanced fixtures the keeper and striker arms still fail at every realistic setting (Q-LF2). `keeper-and-shots` still waits for this slice (Q-X4).
+- `lone-forward` (implemented, commits `c3cc96f`, `7bd5fa5` and `07d87c2`; awaits verify): five bounded tuning values; shipped `tackle_win_base` 0.5, `decision.lone_hold` 0.5, `decision.lone_dribble` −0.5, with `lone_layoff` and `lone_line_hold` at 0. `fouls::win_chance()`, `offside::second_last_depth()`, `Team::lone_forward()` and the lone-carrier terms. Every later slice inherits these changes:
+  - An even tackle wins the ball ten times as often (0.25 against 0.025). In the equal suite, fouls are about 7 per team and yellow cards about 0.9 per team, below the band floor (recorded, Q-E4). Goals, shots and the sending-off share are inside their bands.
+  - All ten pairings with 4-4-2 hold at 4.0 or less; 4-4-1-1 3.22 and 3-4-3 2.91 in `every_formation_holds`.
+  - The seed-42 90-minute match on the default clubs ends 0-0 with no tactics change. A test that needs a goal or a tactics change uses `common::scoring_match()` (seed 7). The two-minute viewer reconnect test serves seed 5.
+  - The red-card experiment plays each seed in both club orders (`--suite red-card --seed 1 --matches 240` equals the slow test). The criterion moved to `keeper-and-shots` (Q-LF2) and its slow test still fails; the measured cause is that a side with ten men attacks as if it had eleven. `keeper-and-shots` may now plan (Q-X4).
 
 ## Recommended Next Stage
 
-- `lone-forward`: blocked on Q-LF2 (`po-answers.md`); re-run `/wf implement football-manager-match-engine lone-forward` after the answer
+- `/wf verify football-manager-match-engine lone-forward` (new: the three kept criteria on the shipped values; the evidence is in `implement-evidence/lone-forward/shipped/`)
 
 - `/wf verify football-manager-match-engine tuning-loop` (new: the seven criteria on the release binary; the evidence and scripts are in `implement-evidence/tuning-loop/`)
 
