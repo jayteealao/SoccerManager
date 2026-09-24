@@ -127,7 +127,7 @@ impl Simulation {
         self.restart = true;
         self.last_kicker = None;
         self.pass_in_flight = None;
-        self.shot_in_flight = None;
+        self.end_shot();
         for i in 0..self.players.len() {
             let p = self.players[i];
             if !p.active() {
@@ -169,8 +169,9 @@ impl Simulation {
     /// place.
     pub(crate) fn goal(&mut self, team: usize) {
         self.summary.goals[team] += 1;
+        #[cfg(feature = "scenario")]
         if self.shot_in_flight == Some(team) {
-            self.summary.shots_on_target[team] += 1;
+            self.census.scored += 1;
         }
         // Both managers react to the new score on the goal's own stoppage, so a change they
         // queue applies at once instead of waiting for the next stoppage.
@@ -204,6 +205,10 @@ impl Simulation {
             ),
             Line::Goal { side } => {
                 let attacking = if self.teams[0].attack_x == side { 0 } else { 1 };
+                #[cfg(feature = "scenario")]
+                if last == attacking && self.shot_in_flight == Some(attacking) {
+                    self.census.wide += 1;
+                }
                 if last == attacking {
                     self.open_dead_ball(
                         StoppageKind::GoalKick,
@@ -488,7 +493,7 @@ impl Simulation {
         self.restart = true;
         self.last_kicker = None;
         self.pass_in_flight = None;
-        self.shot_in_flight = None;
+        self.end_shot();
         let since = self.tick + 1;
         let taker = restart::taker(kind, team, spot, &self.players, &self.teams);
         let mut delay = restart::delay_ticks(kind, &self.config.tuning);
@@ -599,10 +604,9 @@ impl Simulation {
             StoppageKind::Penalty => {
                 let goal = self.teams[dead.team].target_goal();
                 let keeper = self.keeper(1 - dead.team);
-                Some((
-                    self.shot_kick(dead.taker, goal, keeper, SHOOTOUT_SPREAD),
-                    false,
-                ))
+                let kick = self.shot_kick(dead.taker, goal, keeper, t.shots.penalty_spread);
+                self.kick_ball(kick, t, false, true);
+                return;
             }
             _ => None,
         };
@@ -844,7 +848,7 @@ impl Simulation {
         self.restart = true;
         self.last_kicker = None;
         self.pass_in_flight = None;
-        self.shot_in_flight = None;
+        self.end_shot();
         let since = self.tick + 1;
         let delay = restart::delay_ticks(StoppageKind::Penalty, &self.config.tuning);
         self.referee.phase = Phase::DeadBall(DeadBall {
@@ -883,17 +887,21 @@ impl Simulation {
         let end = state.end;
         let goal = pitch::goal_centre(end);
         self.referee.phase = Phase::Live;
-        let kick = self.shot_kick(dead.taker, goal, keeper, SHOOTOUT_SPREAD);
+        let kick = self.shot_kick(dead.taker, goal, keeper, t.shots.penalty_spread);
         let dive = self.rng.range_f64(-1.0, 1.0);
-        let side = if dive.abs() < KEEPER_STAYS {
+        let side = if dive.abs() < t.shots.keeper_stays {
             0.0
         } else {
             dive.signum()
         };
-        self.players[keeper].target =
-            DVec2::new(end * (pitch::HALF_LENGTH - 0.3), side * KEEPER_DIVE_M);
+        self.players[keeper].target = DVec2::new(
+            end * (pitch::HALF_LENGTH - 0.3),
+            side * t.shots.keeper_dive_m,
+        );
         let (Kick::Shot { dir, speed, loft } | Kick::Pass { dir, speed, loft }) = kick;
         self.ball.kick(dir, speed, loft, t);
+        self.end_shot();
+        self.shot_on_target = crate::shot::on_target(self.ball, end, t);
         self.carrier = None;
         self.keeper_beaten = false;
         self.last_touch = Some(dead.team);
@@ -914,28 +922,36 @@ impl Simulation {
         }
     }
 
-    /// The defending keeper gains the ball of a shoot-out kick: a save. Nobody else may touch
-    /// it. A fast ball is held with the tuned catch chance, one roll per kick; a ball the
-    /// keeper fails to hold plays on and may still go in.
+    /// The defending keeper saves a shoot-out kick. Nobody else may touch it. A fast kick is
+    /// saved only when it heads on target, with the save chance of a penalty, one roll per
+    /// kick: a held save is a miss, and a parried ball plays on and may still go in. A kick
+    /// the keeper does not save plays on. A slow ball the keeper reaches is his.
     pub(crate) fn shootout_save(&mut self, t: &Tuning) {
         let Some(state) = self.referee.shootout.as_ref() else {
             return;
         };
         let keeper = state.keepers[1 - state.kicking_team()];
-        if self.ball.pos.z > t.reach_height || !self.players[keeper].active() {
+        if self.ball.pos.z >= t.crossbar_height || !self.players[keeper].active() {
             return;
         }
         if (self.players[keeper].pos - self.ball.xy()).length() >= t.keeper_reach {
             return;
         }
         if self.ball.speed() > t.control_speed {
-            if self.keeper_beaten {
+            if self.keeper_beaten || !self.shot_on_target {
                 return;
             }
-            if !self.rng.chance(t.keeper_catch_chance * SHOOTOUT_HOLD) {
+            let save = crate::shot::save_chance(t.shots.penalty_xg, t);
+            if self.rng.referee_draw() >= save {
                 self.keeper_beaten = true;
                 return;
             }
+            if self.rng.referee_draw() >= t.shots.save_hold {
+                self.parry(keeper, t);
+                return;
+            }
+        } else if self.ball.pos.z > t.reach_height {
+            return;
         }
         self.shootout_outcome(false);
     }
@@ -1017,19 +1033,6 @@ impl Simulation {
 
 /// Ball speed, in metres per second, below which a shoot-out kick has stopped.
 const STOPPED_BALL_SPEED: f64 = 0.3;
-// Known limit: the three shoot-out constants below are hand-set so that about seven kicks in
-// ten score (the real-world rate); they belong in the tuning file with a calibration band.
-/// The aim noise of a kick from the penalty mark (a shoot-out kick or a penalty in play)
-/// against an open-play shot: a placed kick.
-const SHOOTOUT_SPREAD: f64 = 0.5;
-/// The keeper's catch chance at a shoot-out kick against a shot in open play: a diving save
-/// from 11 m is held less often.
-const SHOOTOUT_HOLD: f64 = 0.5;
-/// How far along the goal line, in metres, a shoot-out keeper dives.
-const KEEPER_DIVE_M: f64 = 2.0;
-/// The share of the dive draw's range, either side of 0, for which the keeper stays in the
-/// middle of the goal (10 percent of kicks).
-const KEEPER_STAYS: f64 = 0.1;
 
 #[cfg(test)]
 mod tests {

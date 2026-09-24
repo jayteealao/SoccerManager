@@ -252,7 +252,7 @@ arrives.
 | `ball.idle_ticks` | integer | ticks the ball stood still |
 | `stats.possession_pct` | two floats | each team's share of open-play ticks, one decimal |
 | `stats.shots` | two integers | shots taken |
-| `stats.shots_on_target` | two integers | shots that scored or that the goalkeeper held |
+| `stats.shots_on_target` | two integers | shots whose flight, as struck, crosses the goal line between the posts and under the bar |
 | `stats.xg` | two floats | expected goals, two decimals |
 | `stats.passes` | two integers | passes played |
 | `stats.pass_accuracy_pct` | two floats | completed passes over passes played, one decimal; 0 for none |

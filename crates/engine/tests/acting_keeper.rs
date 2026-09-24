@@ -102,9 +102,9 @@ fn a_keeper_sent_off_with_no_substitution_left_leaves_an_outfield_player_in_goal
 
 /// The away side with its keeper sent off and no substitution left, the stand-in (the away
 /// striker in slot 9) on his line, and the home striker shooting straight at him from 12 m.
-fn shot_at_the_stand_in(catch: f64) -> Simulation {
-    let mut config = calm_match(90);
-    config.tuning.keeper_catch_chance = catch;
+/// `rolls` are the save roll and, after a save, the hold roll.
+fn shot_at_the_stand_in(rolls: &[f64]) -> Simulation {
+    let config = calm_match(90);
     let shooter = index(0, 9);
     let from = DVec2::new(40.0, 0.0);
     let mut sim = common::spread(
@@ -117,6 +117,7 @@ fn shot_at_the_stand_in(catch: f64) -> Simulation {
     .ball(DVec3::new(from.x + 0.3, 0.0, 0.0))
     .carrier(Some(shooter))
     .tick(1_000)
+    .rolls(rolls)
     .shoot(DVec2::new(1.0, 0.0), 25.0, 0.0)
     .build();
     assert_eq!(sim.keeper(1), index(1, 9));
@@ -127,16 +128,17 @@ fn shot_at_the_stand_in(catch: f64) -> Simulation {
 }
 
 #[test]
-fn a_fast_shot_at_the_stand_in_is_held_with_the_catch_chance() {
-    let held = shot_at_the_stand_in(1.0);
+fn a_fast_shot_at_the_stand_in_is_saved_with_the_save_roll() {
+    let held = shot_at_the_stand_in(&[0.0, 0.0]);
     assert_eq!(
         held.carrier(),
         Some(held.keeper(1)),
         "the stand-in holds the ball"
     );
     assert_eq!(held.summary().shots_on_target[0], 1);
-    let beaten = shot_at_the_stand_in(0.0);
+    let beaten = shot_at_the_stand_in(&[0.99]);
     assert_ne!(beaten.carrier(), Some(beaten.keeper(1)));
+    assert_eq!(beaten.summary().goals[0], 1, "the shot beat the stand-in");
 }
 
 #[test]

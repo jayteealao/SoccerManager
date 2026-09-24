@@ -19,7 +19,7 @@
     "reach_radius": 1.0,
     "keeper_reach": 2.6,
     "keeper_depth": 3.0,
-    "shot_noise": 0.25,
+    "shot_noise": 0.5,
     "keeper_catch_chance": 0.86,
     "carry_step": 0.4,
     "crossbar_height": 2.44,
@@ -88,9 +88,31 @@
     "injury_per_tackle": 0.004,
     "injury_per_minute": 0.0002,
     "xg": {
-      "intercept": -1.0,
-      "distance_coef": -0.1,
-      "angle_coef": 1.0
+      "intercept": -4.191,
+      "distance_coef": -0.0441,
+      "angle_coef": 6.3836
+    },
+    "shots": {
+      "loft_max": 7.0,
+      "save_high": 0.891,
+      "save_low": 0.272,
+      "quality": {
+        "intercept": -1.0,
+        "distance_coef": -0.1,
+        "angle_coef": 1.0
+      },
+      "save_hold": 0.333,
+      "parry_speed": 0.8,
+      "parry_spread": 1.2,
+      "parry_loft": 4.0,
+      "block_reach": 3.0,
+      "block_chance": 0.5,
+      "block_speed": 0.8,
+      "block_spread": 3.2,
+      "penalty_xg": 0.76,
+      "penalty_spread": 0.25,
+      "keeper_dive_m": 2.0,
+      "keeper_stays": 0.1
     }
   },
   "generator": {

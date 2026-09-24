@@ -2,7 +2,8 @@
 //! 1 to 100 scale. AC-c: a rule pack with an unknown schema version is refused naming the
 //! version, and the current version loads. Plus: the tuning file equals `Tuning::default()`
 //! and a missing file names its path; an older tuning block without the defending and
-//! discipline values loads with their defaults. The rule pack pins the added-time allowance and the
+//! discipline values loads with their defaults, and one without the shot values loads with
+//! the shipped ones. The rule pack pins the added-time allowance and the
 //! minimum team size, and a schema without `aggression` is refused naming it.
 
 mod common;
@@ -170,6 +171,54 @@ fn a_tuning_block_without_the_defending_values_loads_with_the_defaults() {
     ] {
         assert!(block.remove(key).is_some(), "{key} is a tuning field");
     }
+    let t: Tuning = serde_json::from_value(json).unwrap();
+    assert_eq!(t, Tuning::default());
+}
+
+#[test]
+fn the_shipped_shot_values_are_pinned() {
+    let t = common::content().tuning.engine;
+    assert_eq!(t.shot_noise, 0.5);
+    let s = &t.shots;
+    assert_eq!((s.loft_max, s.save_high, s.save_low), (7.0, 0.891, 0.272));
+    assert_eq!(
+        (
+            s.quality.intercept,
+            s.quality.distance_coef,
+            s.quality.angle_coef
+        ),
+        (-1.0, -0.1, 1.0)
+    );
+    assert_eq!(
+        (s.save_hold, s.parry_speed, s.parry_spread, s.parry_loft),
+        (0.333, 0.8, 1.2, 4.0)
+    );
+    assert_eq!(
+        (s.block_reach, s.block_chance, s.block_speed, s.block_spread),
+        (3.0, 0.5, 0.8, 3.2)
+    );
+    assert_eq!(
+        (
+            s.penalty_xg,
+            s.penalty_spread,
+            s.keeper_dive_m,
+            s.keeper_stays
+        ),
+        (0.76, 0.25, 2.0, 0.1)
+    );
+    assert_eq!(
+        (t.xg.intercept, t.xg.distance_coef, t.xg.angle_coef),
+        (-4.191, -0.0441, 6.3836)
+    );
+}
+
+/// A tuning block written before the shot values existed still loads, with the shipped
+/// shot values.
+#[test]
+fn a_tuning_block_without_the_shot_values_loads_with_the_defaults() {
+    let mut json = serde_json::to_value(Tuning::default()).unwrap();
+    let block = json.as_object_mut().unwrap();
+    assert!(block.remove("shots").is_some(), "shots is a tuning block");
     let t: Tuning = serde_json::from_value(json).unwrap();
     assert_eq!(t, Tuning::default());
 }

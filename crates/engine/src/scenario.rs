@@ -151,6 +151,35 @@ impl Scene {
         self
     }
 
+    /// Opens a penalty for `team` taken by player `taker`: the taker and the ball on the
+    /// penalty mark of the goal `team` attacks, the defending side's acting keeper on his goal
+    /// line, and the kick due on the next step.
+    pub fn penalty(mut self, team: usize, taker: usize) -> Self {
+        let attack_x = self.sim.teams[team].attack_x;
+        let spot = crate::pitch::penalty_spot(attack_x);
+        let keeper = self.sim.keeper(1 - team);
+        self = self
+            .place(taker, spot)
+            .place(
+                keeper,
+                DVec2::new(attack_x * (crate::pitch::HALF_LENGTH - 0.5), 0.0),
+            )
+            .ball(DVec3::new(spot.x, spot.y, 0.0))
+            .carrier(None);
+        let sim = &mut self.sim;
+        sim.last_touch = Some(team);
+        sim.referee.phase = crate::rules::Phase::DeadBall(crate::rules::DeadBall {
+            kind: StoppageKind::Penalty,
+            team,
+            spot,
+            direct: true,
+            since: sim.tick,
+            ready_at: sim.tick,
+            taker,
+        });
+        self
+    }
+
     /// The injury rolls' next draws, before the seeded stream.
     pub fn injury_rolls(mut self, draws: &[f64]) -> Self {
         self.sim.rng.script_injuries(draws);

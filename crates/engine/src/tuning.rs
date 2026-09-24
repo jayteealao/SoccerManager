@@ -188,6 +188,94 @@ pub struct Tuning {
     /// The expected-goals model of a shot.
     #[garde(dive)]
     pub xg: XgTuning,
+    /// Shots, saves, parries and blocks, penalties included.
+    #[serde(default)]
+    #[garde(dive)]
+    pub shots: ShotTuning,
+}
+
+/// How a shot flies and how a keeper or a defender stops it. A keeper tries to save only a
+/// shot heading between the posts under the bar, with a chance that falls linearly from
+/// `save_high` at shot quality 0.05 to `save_low` at 0.40 and is flat outside that range.
+/// The quality is the expected goals of `quality`, a fixed model kept apart from the
+/// reported `xg`, so refitting the reported figure never moves the saves.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct ShotTuning {
+    /// The highest vertical speed of a shot, in metres per second; each shot draws its loft
+    /// from 0 to this.
+    #[garde(range(min = 0.0, max = 15.0))]
+    pub loft_max: f64,
+    /// The save chance for the poorest and for the best chances.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub save_high: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub save_low: f64,
+    /// The shot-quality model the save chance reads.
+    #[garde(dive)]
+    pub quality: XgTuning,
+    /// The share of saves the keeper holds; the rest he parries.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub save_hold: f64,
+    /// A parry: the share of the shot's speed the ball keeps, the widest angle in radians
+    /// either side of the goal line away from the goal centre, and the highest vertical
+    /// speed in metres per second.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub parry_speed: f64,
+    #[garde(range(min = 0.0, max = 3.2))]
+    pub parry_spread: f64,
+    #[garde(range(min = 0.0, max = 15.0))]
+    pub parry_loft: f64,
+    /// A block: the distance in metres within which an outfield defender can block a shot,
+    /// his chance to block it (one roll per defender per shot), the share of the speed the
+    /// ball keeps, and the widest angle in radians either side of the reversed direction.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub block_reach: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub block_chance: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub block_speed: f64,
+    #[garde(range(min = 0.0, max = 3.2))]
+    pub block_spread: f64,
+    /// The expected goals, and the save quality, of a penalty.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub penalty_xg: f64,
+    /// The aim noise of a kick from the penalty mark, against an open-play shot.
+    #[garde(range(min = 0.0, max = 2.0))]
+    pub penalty_spread: f64,
+    /// How far along the goal line, in metres, a shoot-out keeper dives, and the share of
+    /// the dive draw's range, either side of 0, for which he stays in the middle.
+    #[garde(range(min = 0.0, max = 3.66))]
+    pub keeper_dive_m: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub keeper_stays: f64,
+}
+
+impl Default for ShotTuning {
+    fn default() -> Self {
+        Self {
+            loft_max: 7.0,
+            save_high: 0.891,
+            save_low: 0.272,
+            quality: XgTuning {
+                intercept: -1.0,
+                distance_coef: -0.1,
+                angle_coef: 1.0,
+            },
+            save_hold: 0.333,
+            parry_speed: 0.8,
+            parry_spread: 1.2,
+            parry_loft: 4.0,
+            block_reach: 3.0,
+            block_chance: 0.5,
+            block_speed: 0.8,
+            block_spread: 3.2,
+            penalty_xg: 0.76,
+            penalty_spread: 0.25,
+            keeper_dive_m: 2.0,
+            keeper_stays: 0.1,
+        }
+    }
 }
 
 /// Expected goals of a shot: `1 / (1 + exp(-(intercept + distance_coef * d + angle_coef *
@@ -322,7 +410,7 @@ impl Default for Tuning {
             reach_radius: 1.0,
             keeper_reach: 2.6,
             keeper_depth: 3.0,
-            shot_noise: 0.25,
+            shot_noise: 0.5,
             keeper_catch_chance: 0.86,
             carry_step: 0.4,
             crossbar_height: 2.44,
@@ -391,10 +479,11 @@ impl Default for Tuning {
             injury_per_tackle: INJURY_PER_TACKLE,
             injury_per_minute: INJURY_PER_MINUTE,
             xg: XgTuning {
-                intercept: -1.0,
-                distance_coef: -0.1,
-                angle_coef: 1.0,
+                intercept: -4.191,
+                distance_coef: -0.0441,
+                angle_coef: 6.3836,
             },
+            shots: ShotTuning::default(),
         }
     }
 }

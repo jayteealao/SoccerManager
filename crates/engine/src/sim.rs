@@ -27,6 +27,7 @@ use crate::rng::EngineRng;
 use crate::rules::fouls::{self, Card, Tackle};
 use crate::rules::offside;
 use crate::rules::{Phase, Referee, Stoppage};
+use crate::shot;
 use crate::steering;
 use crate::tactics::Tactics;
 use crate::tactics::change::{ChangeId, ChangeKind, ChangeQueue, RejectReason, SubLedger};
@@ -413,7 +414,8 @@ pub struct Summary {
     pub changes_applied: u32,
     pub changes_rejected: u32,
     pub ai_decisions: u32,
-    /// Shots that scored or that the opposing goalkeeper held.
+    /// Shots whose flight, as struck, crosses the goal line between the posts and under the
+    /// bar.
     pub shots_on_target: [u32; 2],
     /// The expected goals of every shot taken, summed per team.
     pub xg: [f64; 2],
@@ -432,6 +434,19 @@ pub struct Summary {
     pub shootout_kicks: u32,
     /// How a knockout match was decided, set at full time.
     pub decided_by: Option<DecidedBy>,
+}
+
+/// How the shots of a match ended: blocked by an outfield defender, held or parried by the
+/// keeper, scored, or off target and out for a goal kick. A shot that ends any other way (a
+/// ball picked up after it slowed, or a stoppage) is in none of them.
+#[cfg(feature = "scenario")]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ShotCensus {
+    pub blocked: u32,
+    pub held: u32,
+    pub parried: u32,
+    pub scored: u32,
+    pub wide: u32,
 }
 
 /// The expected goals of a shot from `from` at the goal a team attacking `attack_x` aims
@@ -490,6 +505,15 @@ pub struct Simulation {
     /// both, like `last_kicker`, so the snapshot never needs them.
     pub(crate) pass_in_flight: Option<usize>,
     pub(crate) shot_in_flight: Option<usize>,
+    /// The shot in flight: whether it heads between the posts under the bar, its quality for
+    /// the save roll, and the outfield defenders (one bit per roster index) who have already
+    /// tried to block it. Cleared with `shot_in_flight`.
+    pub(crate) shot_on_target: bool,
+    pub(crate) shot_quality: f64,
+    pub(crate) blockers_tried: u32,
+    /// Test seam: how each shot ended.
+    #[cfg(feature = "scenario")]
+    pub(crate) census: ShotCensus,
     /// Test seam: the outcomes the next shoot-out kicks are given, whatever the ball does.
     #[cfg(feature = "scenario")]
     pub(crate) forced_kicks: std::collections::VecDeque<bool>,
@@ -546,6 +570,11 @@ impl Simulation {
             keeper_beaten: false,
             pass_in_flight: None,
             shot_in_flight: None,
+            shot_on_target: false,
+            shot_quality: 0.0,
+            blockers_tried: 0,
+            #[cfg(feature = "scenario")]
+            census: ShotCensus::default(),
             #[cfg(feature = "scenario")]
             forced_kicks: std::collections::VecDeque::new(),
             plugins: Plugins::default(),
@@ -724,6 +753,24 @@ impl Simulation {
         self.carrier
     }
 
+    /// The team that touched the ball last.
+    #[cfg(feature = "scenario")]
+    pub fn last_touch(&self) -> Option<usize> {
+        self.last_touch
+    }
+
+    /// How the shots of this match ended so far.
+    #[cfg(feature = "scenario")]
+    pub fn shot_census(&self) -> ShotCensus {
+        self.census
+    }
+
+    /// `Some` while a shot is in flight: `true` when it heads on target.
+    #[cfg(feature = "scenario")]
+    pub fn shot_flight(&self) -> Option<bool> {
+        self.shot_in_flight.map(|_| self.shot_on_target)
+    }
+
     /// The dead ball waiting for its restart, if play is stopped.
     pub fn dead_ball(&self) -> Option<crate::rules::DeadBall> {
         match self.referee.phase {
@@ -885,18 +932,43 @@ impl Simulation {
     /// Kicks the ball for the carrier. In open play the kick fixes who is in an offside
     /// position; a throw-in, a goal kick, and a corner fix nobody.
     pub(crate) fn apply_kick(&mut self, kick: Kick, t: &Tuning, offside_counts: bool) {
+        self.kick_ball(kick, t, offside_counts, false);
+    }
+
+    /// Kicks the ball for the carrier; `penalty` marks a penalty kick in play, whose
+    /// expected goals and save quality are the tuned penalty value. A shot counts on target
+    /// when its flight, as struck, crosses the goal line between the posts under the bar.
+    pub(crate) fn kick_ball(
+        &mut self,
+        kick: Kick,
+        t: &Tuning,
+        offside_counts: bool,
+        penalty: bool,
+    ) {
         let (dir, speed, loft) = match kick {
             Kick::Pass { dir, speed, loft } | Kick::Shot { dir, speed, loft } => (dir, speed, loft),
         };
+        let mut shooter = None;
+        self.end_shot();
         if let Some(c) = self.carrier {
             let team = self.players[c].team;
             self.pass_in_flight = None;
-            self.shot_in_flight = None;
             if matches!(kick, Kick::Shot { .. }) {
                 self.summary.shots[team] += 1;
-                let xg = shot_xg(self.ball.xy(), self.teams[team].attack_x, &t.xg);
+                let attack_x = self.teams[team].attack_x;
+                let from = self.ball.xy();
+                let (xg, quality) = if penalty {
+                    (t.shots.penalty_xg, t.shots.penalty_xg)
+                } else {
+                    (
+                        shot_xg(from, attack_x, &t.xg),
+                        shot::quality(from, attack_x, t),
+                    )
+                };
                 self.summary.xg[team] += xg;
                 self.shot_in_flight = Some(team);
+                self.shot_quality = quality;
+                shooter = Some((team, attack_x));
             } else {
                 self.summary.passes[team] += 1;
                 self.pass_in_flight = Some(team);
@@ -911,8 +983,156 @@ impl Simulation {
             };
         }
         self.ball.kick(dir, speed, loft, t);
+        if let Some((team, attack_x)) = shooter
+            && shot::on_target(self.ball, attack_x, t)
+        {
+            self.shot_on_target = true;
+            self.summary.shots_on_target[team] += 1;
+        }
         self.carrier = None;
         self.keeper_beaten = false;
+    }
+
+    /// Ends the shot in flight, if any.
+    pub(crate) fn end_shot(&mut self) {
+        self.shot_in_flight = None;
+        self.shot_on_target = false;
+        self.shot_quality = 0.0;
+        self.blockers_tried = 0;
+    }
+
+    /// While a shot is in flight and fast, an outfield defender near the ball may block it,
+    /// and the keeper may save a shot heading on target. Nobody else touches it. Returns
+    /// `false` when no shot is in flight or the ball is slow, and the ordinary contest
+    /// applies.
+    fn contest_shot(&mut self, t: &Tuning) -> bool {
+        let Some(shooter) = self.shot_in_flight else {
+            return false;
+        };
+        if self.ball.speed() <= t.control_speed {
+            return false;
+        }
+        if self.try_block(shooter, t) {
+            return true;
+        }
+        if self.shot_on_target {
+            self.try_save(shooter, t);
+        }
+        true
+    }
+
+    /// Each outfield defender within `block_reach` of a shot under `reach_height` rolls once
+    /// per shot to block it. A block deflects the ball back the way it came, with the
+    /// blocker's side as the last touch, and ends the shot.
+    fn try_block(&mut self, shooter: usize, t: &Tuning) -> bool {
+        if self.ball.pos.z > t.reach_height {
+            return false;
+        }
+        let ball_xy = self.ball.xy();
+        let keeper = self.keeper(1 - shooter);
+        for i in 0..self.players.len() {
+            let p = self.players[i];
+            let bit = 1u32 << i;
+            if p.team == shooter
+                || i == keeper
+                || !p.active()
+                || self.blockers_tried & bit != 0
+                || (p.pos - ball_xy).length() >= t.shots.block_reach
+            {
+                continue;
+            }
+            self.blockers_tried |= bit;
+            if self.rng.referee_draw() < t.shots.block_chance {
+                let s = &t.shots;
+                let back = -DVec2::new(self.ball.vel.x, self.ball.vel.y);
+                let angle = self.rng.next_f64();
+                self.ball.vel = shot::deflect(
+                    self.ball.vel,
+                    back,
+                    s.block_speed,
+                    s.block_spread,
+                    0.0,
+                    angle,
+                    0.0,
+                );
+                self.deflected_by(i);
+                self.keeper_beaten = false;
+                #[cfg(feature = "scenario")]
+                {
+                    self.census.blocked += 1;
+                }
+                return true;
+            }
+        }
+        false
+    }
+
+    /// The acting keeper within `keeper_reach` of a shot on target under the bar rolls once
+    /// per shot to save it, with a chance that falls with the shot's quality. A save is held
+    /// with `save_hold`; otherwise it is parried.
+    fn try_save(&mut self, shooter: usize, t: &Tuning) {
+        let k = self.keeper(1 - shooter);
+        if self.keeper_beaten
+            || self.ball.pos.z >= t.crossbar_height
+            || !self.players[k].active()
+            || (self.players[k].pos - self.ball.xy()).length() >= t.keeper_reach
+        {
+            return;
+        }
+        if self.rng.referee_draw() >= shot::save_chance(self.shot_quality, t) {
+            self.keeper_beaten = true;
+            return;
+        }
+        if self.rng.referee_draw() < t.shots.save_hold {
+            #[cfg(feature = "scenario")]
+            {
+                self.census.held += 1;
+            }
+            self.gain(k, t);
+            return;
+        }
+        self.parry(k, t);
+        #[cfg(feature = "scenario")]
+        {
+            self.census.parried += 1;
+        }
+    }
+
+    /// Keeper `k` parries the ball: it keeps `parry_speed` of its speed and goes along the
+    /// goal line away from the goal centre, turned by up to `parry_spread` either way, with
+    /// a loft of up to `parry_loft`. The keeper gets no second touch of this flight.
+    pub(crate) fn parry(&mut self, k: usize, t: &Tuning) {
+        let s = &t.shots;
+        let side = if self.ball.pos.y == 0.0 {
+            if self.rng.next_f64() < 0.5 { 1.0 } else { -1.0 }
+        } else {
+            self.ball.pos.y.signum()
+        };
+        let angle = self.rng.next_f64();
+        let loft = self.rng.next_f64();
+        self.ball.vel = shot::deflect(
+            self.ball.vel,
+            DVec2::new(0.0, side),
+            s.parry_speed,
+            s.parry_spread,
+            s.parry_loft,
+            angle,
+            loft,
+        );
+        self.deflected_by(k);
+        self.keeper_beaten = true;
+    }
+
+    /// Player `i` deflected the shot in flight: his side touched the ball last and the shot
+    /// is over.
+    fn deflected_by(&mut self, i: usize) {
+        if self.ball.vel.z > 0.0 && self.ball.pos.z <= 0.0 {
+            self.ball.pos.z = 0.001;
+        }
+        let team = self.players[i].team;
+        self.last_touch = Some(team);
+        self.last_kicker = Some(i);
+        self.end_shot();
     }
 
     fn move_ball(&mut self, t: &Tuning) {
@@ -964,6 +1184,9 @@ impl Simulation {
         let ball_xy = self.ball.xy();
         match self.carrier {
             None => {
+                if self.contest_shot(t) {
+                    return;
+                }
                 if self.ball.pos.z > t.reach_height {
                     return;
                 }
@@ -1046,12 +1269,7 @@ impl Simulation {
         if self.pass_in_flight.take() == Some(team) {
             self.summary.passes_completed[team] += 1;
         }
-        if let Some(shooter) = self.shot_in_flight.take()
-            && shooter != team
-            && i == self.keeper(team)
-        {
-            self.summary.shots_on_target[shooter] += 1;
-        }
+        self.end_shot();
         if self.last_touch != Some(team) {
             self.summary.possession_changes += 1;
         }

@@ -22,6 +22,7 @@ pub mod rng;
 pub mod rules;
 #[cfg(feature = "scenario")]
 pub mod scenario;
+pub mod shot;
 pub mod sim;
 pub mod snapshot;
 pub mod steering;

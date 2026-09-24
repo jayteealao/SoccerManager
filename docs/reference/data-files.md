@@ -63,7 +63,7 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 | reach_radius | m | 1.0 | 0 to 10 |
 | keeper_reach | m | 2.6 | 0 to 26 |
 | keeper_depth | m | 3.0 | 0 to 30 |
-| shot_noise | rad | 0.25 | 0 to 1.2 |
+| shot_noise | rad | 0.5 | 0 to 1.2 |
 | keeper_catch_chance | probability | 0.86 | 0 to 1 |
 | carry_step | m per tick | 0.4 | 0 to 4 |
 | crossbar_height | m | 2.44 | 0 to 24.4 |
@@ -106,9 +106,27 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 | injury_per_tackle | probability per tackle | 0.004 | 0 to 0.2 |
 | injury_per_minute | probability per player per minute | 0.0002 | 0 to 0.01 |
 | decision.* | weight | see below | see below |
-| xg.intercept | log-odds | -1.0 | -10 to 10 |
-| xg.distance_coef | log-odds per m | -0.1 | -2 to 0 |
-| xg.angle_coef | log-odds per rad | 1.0 | 0 to 10 |
+| xg.intercept | log-odds | -4.191 | -10 to 10 |
+| xg.distance_coef | log-odds per m | -0.0441 | -2 to 0 |
+| xg.angle_coef | log-odds per rad | 6.3836 | 0 to 10 |
+| shots.loft_max | m/s | 7.0 | 0 to 15 |
+| shots.save_high | probability | 0.891 | 0 to 1 |
+| shots.save_low | probability | 0.272 | 0 to 1 |
+| shots.quality.intercept | log-odds | -1.0 | -10 to 10 |
+| shots.quality.distance_coef | log-odds per m | -0.1 | -2 to 0 |
+| shots.quality.angle_coef | log-odds per rad | 1.0 | 0 to 10 |
+| shots.save_hold | probability | 0.333 | 0 to 1 |
+| shots.parry_speed | ratio | 0.8 | 0 to 1 |
+| shots.parry_spread | rad | 1.2 | 0 to 3.2 |
+| shots.parry_loft | m/s | 4.0 | 0 to 15 |
+| shots.block_reach | m | 3.0 | 0 to 3 |
+| shots.block_chance | probability per defender per shot | 0.5 | 0 to 1 |
+| shots.block_speed | ratio | 0.8 | 0 to 1 |
+| shots.block_spread | rad | 3.2 | 0 to 3.2 |
+| shots.penalty_xg | expected goals | 0.76 | 0 to 1 |
+| shots.penalty_spread | ratio | 0.25 | 0 to 2 |
+| shots.keeper_dive_m | m | 2.0 | 0 to 3.66 |
+| shots.keeper_stays | ratio | 0.1 | 0 to 1 |
 
 While the other team has the ball, one back-line defender covers the ball carrier, or else the most advanced attacker, when that player is in the defending half and within `cover_channel` of the middle of the pitch: a carrier is tracked `cover_distance` goal-side of him, and any other attacker is covered from the defender's place in the line. No two neighbours in the back line stand more than `back_line_gap` apart, so the line narrows as players leave it.
 
@@ -116,7 +134,9 @@ The foul chance of one tackle is `foul_base`, multiplied by `1 + foul_aggression
 
 An injury is rolled for the tackled player on every tackle that wins the ball or is a foul (`injury_per_tackle`), and for every player on the pitch once per simulated minute (`injury_per_minute`). Both are the chances for an average player; injury resistance 100 halves them and 0 makes them half again as likely. An injured player leaves play at once. In open play the referee stops play for a dropped ball at the ball (the goalkeeper's, inside its own penalty area), with every other player 4 m away, after `restart_delay_s.drop_ball`.
 
-The expected goals (xG) of a shot is `1 / (1 + exp(-(xg.intercept + xg.distance_coef × d + xg.angle_coef × a)))`, where `d` is the distance from the ball to the goal centre in metres and `a` is the angle in radians that the goal mouth subtends from the ball. The match statistics sum it per team.
+The expected goals (xG) of a shot is `1 / (1 + exp(-(xg.intercept + xg.distance_coef × d + xg.angle_coef × a)))`, where `d` is the distance from the ball to the goal centre in metres and `a` is the angle in radians that the goal mouth subtends from the ball. The match statistics sum it per team. A penalty counts `shots.penalty_xg`.
+
+A shot leaves at `shot_speed` with a vertical speed drawn from 0 to `shots.loft_max`, aimed with a spread of up to `shot_noise × (1.5 − finishing)` radians either side; a kick from the penalty mark multiplies the spread by `shots.penalty_spread`. As the shot is struck, the engine follows a copy of the ball with the match physics: the shot is on target when that flight crosses the goal line between the posts and under the bar, and the match statistics count it then. While a shot is in flight and faster than `control_speed`, each outfield defender within `shots.block_reach` of a ball under `reach_height` has one chance per shot, `shots.block_chance`, to block it. A blocked ball keeps `shots.block_speed` of its speed and goes back the way it came, turned by up to `shots.block_spread` either side. Only a shot on target can be saved: the acting keeper, within `keeper_reach` of a ball under the bar, has one save roll per shot. The save chance is `shots.save_high` for a shot of quality 0.05 or less, `shots.save_low` for quality 0.40 or more, and a straight line between, where the quality is the expected goals of the fixed `shots.quality` model (a penalty uses `shots.penalty_xg`), so refitting `xg` never moves the saves. The keeper holds `shots.save_hold` of his saves and parries the rest: the ball keeps `shots.parry_speed` of its speed and goes along the goal line away from the goal centre, turned by up to `shots.parry_spread` either way, with a vertical speed of up to `shots.parry_loft`. After a block or a parry the defending side touched the ball last, so it gives a corner only if it then crosses the goal line. A shot off target is never saved. `keeper_catch_chance` applies only to a fast ball that is not a shot, such as a pass or a clearance. In a shoot-out the keeper dives `shots.keeper_dive_m` along the goal line to one side, or stays in the middle for `shots.keeper_stays` of the kicks, and saves with the same model at the penalty quality; a held kick is a miss and a parried one plays on.
 
 #### decision
 

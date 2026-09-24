@@ -553,7 +553,7 @@ impl Simulation {
         Kick::Shot {
             dir,
             speed: t.shot_speed,
-            loft: self.rng.range_f64(0.0, 2.5),
+            loft: self.rng.range_f64(0.0, t.shots.loft_max),
         }
     }
 }
