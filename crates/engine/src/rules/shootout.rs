@@ -20,7 +20,7 @@ pub const SAFETY_ROUNDS: u32 = 100;
 pub struct Candidate {
     /// Roster index.
     pub index: usize,
-    /// `true` for the team's goalkeeper (formation slot 0).
+    /// `true` for the player keeping the team's goal when the shoot-out starts.
     pub goalkeeper: bool,
     /// Kicking skill: finishing plus composure.
     pub kicking: f64,

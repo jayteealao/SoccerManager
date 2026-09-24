@@ -110,6 +110,20 @@ pub struct Tuning {
     pub compactness_x: f64,
     #[garde(range(min = 0.0, max = 3.0))]
     pub compactness_y: f64,
+    /// Defending: how far, in metres, the covering defender stands goal-side of the most
+    /// advanced central attacker, and the half-width of the central channel in which an
+    /// attacker is covered.
+    #[serde(default = "default_cover_distance")]
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub cover_distance: f64,
+    #[serde(default = "default_cover_channel")]
+    #[garde(range(min = 0.0, max = 34.0))]
+    pub cover_channel: f64,
+    /// The widest gap, in metres, between two neighbours in the deepest outfield line: the
+    /// line is at most `(n - 1)` gaps wide, so it narrows as players leave it.
+    #[serde(default = "default_back_line_gap")]
+    #[garde(range(min = 4.0, max = 30.0))]
+    pub back_line_gap: f64,
     /// Validator: anchor tolerance, the ball distance beyond which it applies, and the ticks the
     /// ball must have been that far away before the rule applies.
     #[garde(range(min = 0.0, max = 150.0))]
@@ -137,6 +151,14 @@ pub struct Tuning {
     pub yellow_aggression_weight: f64,
     #[garde(range(min = 0.0, max = 1.0))]
     pub red_base: f64,
+    /// Ticks after a foul during which the same player makes no tackle attempt, and the
+    /// factor on the foul chance of a player already booked.
+    #[serde(default = "default_foul_cooldown_ticks")]
+    #[garde(range(min = 0, max = 1000))]
+    pub foul_cooldown_ticks: u32,
+    #[serde(default = "default_foul_booked_factor")]
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub foul_booked_factor: f64,
     /// Seconds a dead ball lasts before the taker may restart play, per restart kind.
     #[garde(dive)]
     pub restart_delay_s: RestartDelays,
@@ -293,6 +315,9 @@ impl Default for Tuning {
             aim_noise: 0.06,
             compactness_x: 0.3,
             compactness_y: 0.3,
+            cover_distance: default_cover_distance(),
+            cover_channel: default_cover_channel(),
+            back_line_gap: default_back_line_gap(),
             anchor_tolerance: 15.0,
             anchor_ball_distance: 30.0,
             anchor_grace_ticks: 100,
@@ -303,6 +328,8 @@ impl Default for Tuning {
             yellow_base: 0.05,
             yellow_aggression_weight: 0.15,
             red_base: 0.005,
+            foul_cooldown_ticks: default_foul_cooldown_ticks(),
+            foul_booked_factor: default_foul_booked_factor(),
             restart_delay_s: RestartDelays {
                 kick_off: 5.0,
                 throw_in: 3.0,
@@ -343,6 +370,24 @@ impl Default for Tuning {
             },
         }
     }
+}
+
+// The shipped defending and discipline values. An older tuning file without these fields
+// loads with them.
+fn default_cover_distance() -> f64 {
+    3.0
+}
+fn default_cover_channel() -> f64 {
+    12.0
+}
+fn default_back_line_gap() -> f64 {
+    12.0
+}
+fn default_foul_cooldown_ticks() -> u32 {
+    150
+}
+fn default_foul_booked_factor() -> f64 {
+    0.15
 }
 
 /// The shipped foul chance per tackle attempt, set for about ten fouls per team in a

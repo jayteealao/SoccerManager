@@ -23,7 +23,6 @@ use crate::math::DVec2;
 use crate::pitch::{self, Exit, Line};
 use crate::player::Status;
 use crate::sim::{DecidedBy, EngineEventKind, EventDetail, Simulation};
-use crate::team::PLAYERS_PER_TEAM;
 use crate::tuning::Tuning;
 use clock::{KICK_LIVE_TICKS, MatchClock, Tally};
 use fouls::Card;
@@ -143,7 +142,13 @@ impl Simulation {
             p.target = pos;
             p.facing = facing;
         }
-        let kicker = restart::taker(StoppageKind::KickOff, team, DVec2::ZERO, &self.players);
+        let kicker = restart::taker(
+            StoppageKind::KickOff,
+            team,
+            DVec2::ZERO,
+            &self.players,
+            &self.teams,
+        );
         let mut event = self.event(EngineEventKind::KickOff, Some(team));
         event.spot = Some(DVec2::ZERO);
         event.player = Some(kicker);
@@ -227,6 +232,8 @@ impl Simulation {
         let offender = self.players[i];
         let fouled_team = self.players[c].team;
         self.summary.fouls[offender.team] += 1;
+        // The offender makes no tackle attempt until the cooldown has passed, advantage or not.
+        self.players[i].foul_ready = self.tick.saturating_add(t.foul_cooldown_ticks);
         let own_end = -self.teams[offender.team].attack_x;
         let at = self.players[c].pos;
         let penalty = pitch::in_penalty_area(at, own_end);
@@ -258,10 +265,22 @@ impl Simulation {
         }
         if advantage {
             if let Some(card) = card {
-                self.referee.pending.push(PendingCard { player: i, card });
+                self.hold_card(i, card);
             }
             return;
         }
+        // One card per player per stoppage: a card held back for this player merges with the
+        // card for this foul, and the more severe of the two is shown.
+        let held = self
+            .referee
+            .pending
+            .iter()
+            .position(|p| p.player == i)
+            .map(|k| self.referee.pending.remove(k).card);
+        let card = match (card, held) {
+            (Some(a), Some(b)) => Some(if b.severity() > a.severity() { b } else { a }),
+            (a, b) => a.or(b),
+        };
         if let Some(card) = card {
             self.show_card(i, card);
         }
@@ -281,6 +300,17 @@ impl Simulation {
                 pitch::clamp(at, 0.5),
                 true,
             );
+        }
+    }
+
+    /// Holds `card` for player `i` until the next stoppage. A player holds at most one card in
+    /// a spell of advantage: a more severe card replaces the one held, and a less severe one
+    /// is dropped.
+    fn hold_card(&mut self, i: usize, card: Card) {
+        match self.referee.pending.iter_mut().find(|p| p.player == i) {
+            Some(held) if card.severity() > held.card.severity() => held.card = card,
+            Some(_) => {}
+            None => self.referee.pending.push(PendingCard { player: i, card }),
         }
     }
 
@@ -334,6 +364,9 @@ impl Simulation {
             self.carrier = None;
         }
         discipline::send_off(&mut self.players, &mut self.teams, i);
+        // The team's manager reacts at once, as after an injury: a keeper sent off asks for
+        // the bench keeper.
+        self.ai[team].due = true;
         self.timeline.push((self.tick + 1, self.teams.clone()));
         if let Some(short) = discipline::abandoned(&self.players, self.config.rules.min_players) {
             tracing::warn!(
@@ -407,7 +440,8 @@ impl Simulation {
                 event.detail = detail;
                 self.events.push(event);
                 if dead.taker == i {
-                    dead.taker = restart::taker(dead.kind, dead.team, dead.spot, &self.players);
+                    dead.taker =
+                        restart::taker(dead.kind, dead.team, dead.spot, &self.players, &self.teams);
                     self.referee.phase = Phase::DeadBall(dead);
                 }
             }
@@ -456,7 +490,7 @@ impl Simulation {
         self.pass_in_flight = None;
         self.shot_in_flight = None;
         let since = self.tick + 1;
-        let taker = restart::taker(kind, team, spot, &self.players);
+        let taker = restart::taker(kind, team, spot, &self.players, &self.teams);
         let mut delay = restart::delay_ticks(kind, &self.config.tuning);
         if self.summary.goals[team] > self.summary.goals[1 - team] {
             // A leading team with time wasting on takes longer over its restarts.
@@ -564,7 +598,7 @@ impl Simulation {
             // dribble, or a held ball, and nobody may close the taker down before it is taken.
             StoppageKind::Penalty => {
                 let goal = self.teams[dead.team].target_goal();
-                let keeper = (1 - dead.team) * PLAYERS_PER_TEAM;
+                let keeper = self.keeper(1 - dead.team);
                 Some((
                     self.shot_kick(dead.taker, goal, keeper, SHOOTOUT_SPREAD),
                     false,
@@ -730,6 +764,7 @@ impl Simulation {
             self.config.attributes.index("reflexes"),
             self.config.attributes.index("one_on_ones"),
         ];
+        let acting = [self.keeper(0), self.keeper(1)];
         let candidates = [0, 1].map(|team| {
             self.players
                 .iter()
@@ -737,7 +772,7 @@ impl Simulation {
                 .filter(|(_, p)| p.team == team && p.active())
                 .map(|(i, p)| shootout::Candidate {
                     index: i,
-                    goalkeeper: p.slot == 0,
+                    goalkeeper: i == acting[team],
                     kicking: p.derived.finishing + p.derived.composure,
                     keeping: keeping
                         .iter()
@@ -748,8 +783,7 @@ impl Simulation {
                 .collect::<Vec<_>>()
         });
         let eligible = shootout::equalise(candidates);
-        let keepers =
-            [0, 1].map(|team| shootout::keeper(&eligible[team]).unwrap_or(team * PLAYERS_PER_TEAM));
+        let keepers = [0, 1].map(|team| shootout::keeper(&eligible[team]).unwrap_or(acting[team]));
         let order = [0, 1].map(|team| shootout::order(&eligible[team], Some(keepers[team])));
         let first = usize::from(self.rng.referee_draw() >= 0.5);
         let end = if self.rng.referee_draw() < 0.5 {

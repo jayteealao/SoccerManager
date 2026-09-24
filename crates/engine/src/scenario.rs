@@ -1,4 +1,5 @@
-//! Test scenes. A scene starts from a placed kick-off and moves players, the ball, the
+//! Test scenes. A scene starts from a placed kick-off and moves players (and sets their
+//! running velocity and foul cooldown), the ball, the
 //! carrier, the clock and its period, the score, the cards, energy, substitutions used, the
 //! managers, the change queue, the knockout switch, the outcomes of the next shoot-out kicks,
 //! the referee's and injury rolls' next draws, and the plugin hooks to where a test needs
@@ -85,9 +86,31 @@ impl Scene {
         self
     }
 
-    /// Sends player `i` off before the scene starts.
+    /// Sends player `i` off before the scene starts, as a card shown would: the player
+    /// loses the ball and the team is laid out again.
     pub fn sent_off(mut self, i: usize) -> Self {
+        if self.sim.carrier == Some(i) {
+            self.sim.carrier = None;
+        }
         discipline::send_off(&mut self.sim.players, &mut self.sim.teams, i);
+        let team = self.sim.players[i].team;
+        self.sim.ai[team].due = true;
+        self
+    }
+
+    /// Sets player `i`'s velocity, as for a player already running.
+    pub fn velocity(mut self, i: usize, v: DVec2) -> Self {
+        let p = &mut self.sim.players[i];
+        p.vel = v;
+        if v != DVec2::ZERO {
+            p.facing = v.normalize();
+        }
+        self
+    }
+
+    /// Player `i` may attempt a tackle again from `tick`, as after a foul.
+    pub fn foul_ready(mut self, i: usize, tick: u32) -> Self {
+        self.sim.players[i].foul_ready = tick;
         self
     }
 

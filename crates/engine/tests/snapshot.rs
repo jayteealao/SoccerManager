@@ -165,7 +165,7 @@ fn a_damaged_or_foreign_snapshot_is_refused_by_name() {
     first_format[4] = 1;
     let reason = refusal(Snapshot::from_bytes(&first_format, "s"));
     assert!(
-        reason.starts_with("unknown version 1; this build reads 4"),
+        reason.starts_with("unknown version 1; this build reads 5"),
         "{reason}"
     );
 
@@ -290,7 +290,44 @@ fn a_version_three_snapshot_is_refused_by_name() {
     bytes[4..6].copy_from_slice(&3u16.to_le_bytes());
     let reason = refusal(Snapshot::from_bytes(&bytes, "s"));
     assert!(
-        reason.starts_with("unknown version 3; this build reads 4"),
+        reason.starts_with("unknown version 3; this build reads 5"),
         "{reason}"
     );
+}
+
+/// A snapshot taken while a player who just fouled still waits out the foul cooldown keeps
+/// that cooldown: the resumed match plays on tick for tick through the cooldown's end.
+#[test]
+fn a_resumed_match_keeps_a_foul_cooldown_running() {
+    let mut sim = Simulation::new(full_match()).unwrap();
+    let mut waiting = None;
+    for _ in 0..(90 * TICKS_PER_MINUTE) {
+        sim.step();
+        let fouled = sim
+            .take_events()
+            .iter()
+            .any(|e| e.kind == EngineEventKind::Foul);
+        if fouled && sim.stoppage().is_some() {
+            let now = sim.tick();
+            waiting = sim.players().iter().position(|p| p.foul_ready > now);
+            break;
+        }
+    }
+    let player = waiting.expect("a foul stopped play with its offender cooling down");
+    let ready = sim.players()[player].foul_ready;
+    let read =
+        Snapshot::from_bytes(&Snapshot::capture(&sim, OWNER, 1).to_bytes(), "s.smsn").unwrap();
+    let mut resumed = Simulation::from_snapshot(full_match(), &read).unwrap();
+    assert_eq!(resumed.players()[player].foul_ready, ready);
+    let span = ready - sim.tick() + 100;
+    for _ in 0..span {
+        sim.step();
+        resumed.step();
+        assert_eq!(
+            bytes(&[resumed.record()]),
+            bytes(&[sim.record()]),
+            "tick {}",
+            sim.tick()
+        );
+    }
 }

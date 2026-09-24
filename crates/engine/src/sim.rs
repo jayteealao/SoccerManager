@@ -560,6 +560,12 @@ impl Simulation {
         &self.config.tuning
     }
 
+    /// The roster index of the player keeping goal for `team`: slot 0, a goalkeeper who came
+    /// on, or an outfield player standing in (`Team::keeper_slot`).
+    pub fn keeper(&self, team: usize) -> usize {
+        team * PLAYERS_PER_TEAM + self.teams[team].keeper_slot()
+    }
+
     /// Attaches plugin hooks. Call it before the first step, or right after a resume.
     pub fn set_plugins(&mut self, plugins: Plugins) {
         self.plugins = plugins;
@@ -948,9 +954,10 @@ impl Simulation {
                     return;
                 }
                 let fast = self.ball.speed() > t.control_speed;
+                let keepers = [self.keeper(0), self.keeper(1)];
                 let mut best: Option<(f64, usize)> = None;
                 for (i, p) in self.players.iter().enumerate() {
-                    let keeper = p.slot == 0;
+                    let keeper = i == keepers[p.team];
                     if !p.active() || (fast && !keeper) {
                         continue;
                     }
@@ -986,6 +993,7 @@ impl Simulation {
                     let p = self.players[i];
                     if !p.active()
                         || p.team == carrier.team
+                        || self.tick < p.foul_ready
                         || (p.pos - ball_xy).length() > t.reach_radius
                     {
                         continue;
@@ -993,7 +1001,7 @@ impl Simulation {
                     let tackle = p.derived.tackling;
                     let dribble = carrier.derived.dribbling;
                     let p_win = 0.05 * tackle / (tackle + dribble);
-                    let p_foul = fouls::foul_chance(&p.derived, t);
+                    let p_foul = fouls::foul_chance(&p.derived, p.yellow, t);
                     let draw = self.rng.referee_draw();
                     match fouls::tackle_outcome(p_win, p_foul, t.foul_ball_loss, draw) {
                         Tackle::Win => {
@@ -1028,7 +1036,7 @@ impl Simulation {
         }
         if let Some(shooter) = self.shot_in_flight.take()
             && shooter != team
-            && self.players[i].slot == 0
+            && i == self.keeper(team)
         {
             self.summary.shots_on_target[shooter] += 1;
         }
@@ -1128,7 +1136,9 @@ mod tests {
                 assert_eq!(sim.last_kicker, None, "tick {}", sim.tick());
             }
         });
-        assert!(stoppages > 50, "only {stoppages} stoppages");
+        // The seed-42 match stops play 39 times (58 before the defending rework, which cut its
+        // fouls, throw-ins and offsides); the floor only guards against an empty check.
+        assert!(stoppages > 30, "only {stoppages} stoppages");
     }
 
     #[test]

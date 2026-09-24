@@ -38,6 +38,17 @@ pub const FORMATION_442: [(f64, f64); PLAYERS_PER_TEAM] = [
     (65.0, 8.0),
 ];
 
+/// Metres beyond the deepest outfield slot within which a slot still belongs to the back line:
+/// a back three or five with its centre-back a little deeper is one line.
+const BACK_LINE_BAND: f64 = 4.0;
+
+/// The lowest and highest of `ys`.
+fn span(ys: impl Iterator<Item = f64>) -> (f64, f64) {
+    ys.fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), y| {
+        (lo.min(y), hi.max(y))
+    })
+}
+
 /// One squad player as the team file gives it.
 #[derive(Debug, Clone)]
 pub struct SquadPlayer {
@@ -83,7 +94,7 @@ impl Team {
     /// plays a 4-4-2 with the neutral plan.
     pub fn new(index: usize, club_id: String, name: String, kit: Kit) -> Self {
         let t = Tuning::default();
-        Self {
+        let mut team = Self {
             index,
             attack_x: if index == 0 { 1.0 } else { -1.0 },
             formation: FORMATION_442,
@@ -104,7 +115,9 @@ impl Team {
             },
             plan: TeamPlan::neutral(&t),
             active: [true; PLAYERS_PER_TEAM],
-        }
+        };
+        team.relayout();
+        team
     }
 
     /// Builds the team and its eleven starters from a validated team file: the first eleven
@@ -178,6 +191,7 @@ impl Team {
             facing: DVec2::new(self.attack_x, 0.0),
             status: Status::OnPitch,
             yellow: 0,
+            foul_ready: 0,
         }
     }
 
@@ -190,13 +204,111 @@ impl Team {
         self.relayout();
     }
 
-    /// The formation's slots, with each line closed up around every inactive slot.
-    fn relayout(&mut self) {
+    /// The formation's slots, with each line closed up around every slot out of the outfield
+    /// shape: the inactive slots and an acting keeper who is not in slot 0. A line with a
+    /// player removed spreads its survivors evenly across its width, and a lone survivor keeps
+    /// its own place across the pitch. The back line is then kept compact: no two neighbours
+    /// in it stand more than `back_line_gap` apart, so it narrows as players leave it. The
+    /// acting keeper takes the keeper's place.
+    pub(crate) fn relayout(&mut self) {
         self.formation = self.base_formation;
-        let inactive: Vec<usize> = (0..PLAYERS_PER_TEAM).filter(|&s| !self.active[s]).collect();
-        for slot in inactive {
-            self.reshape(slot);
+        let keeper = self.keeper_slot();
+        let active = self.active;
+        let out = |s: usize| !active[s] || (s == keeper && s != 0);
+        let removed: Vec<usize> = (1..PLAYERS_PER_TEAM).filter(|&s| out(s)).collect();
+        let mut done: Vec<f64> = Vec::new();
+        for slot in removed {
+            let depth = self.base_formation[slot].0;
+            if done.contains(&depth) {
+                continue;
+            }
+            done.push(depth);
+            let line: Vec<usize> = (1..PLAYERS_PER_TEAM)
+                .filter(|&s| self.base_formation[s].0 == depth)
+                .collect();
+            let (lo, hi) = span(line.iter().map(|&s| self.base_formation[s].1));
+            let mut left: Vec<usize> = line.into_iter().filter(|&s| !out(s)).collect();
+            left.sort_by(|a, b| {
+                self.base_formation[*a]
+                    .1
+                    .total_cmp(&self.base_formation[*b].1)
+            });
+            let n = left.len();
+            if n > 1 {
+                for (k, s) in left.into_iter().enumerate() {
+                    self.formation[s].1 = lo + (hi - lo) * k as f64 / (n - 1) as f64;
+                }
+            }
         }
+        let mut back: Vec<usize> = self.back_line();
+        back.retain(|&s| !out(s));
+        back.sort_by(|a, b| self.formation[*a].1.total_cmp(&self.formation[*b].1));
+        let gap = self.plan.back_line_gap;
+        let too_wide = back
+            .windows(2)
+            .any(|w| self.formation[w[1]].1 - self.formation[w[0]].1 > gap);
+        if too_wide {
+            let n = back.len();
+            let (lo, hi) = span(back.iter().map(|&s| self.formation[s].1));
+            let width = (hi - lo).min((n - 1) as f64 * gap);
+            let from = (lo + hi) / 2.0 - width / 2.0;
+            for (k, s) in back.into_iter().enumerate() {
+                self.formation[s].1 = from + width * k as f64 / (n - 1) as f64;
+            }
+        }
+        if keeper != 0 {
+            self.formation[keeper] = self.base_formation[0];
+        }
+    }
+
+    /// The back line: the outfield slots of the formation within `BACK_LINE_BAND` metres of
+    /// the deepest outfield slot, in slot order. It is read from the formation as the tactics
+    /// file gives it, so it does not change as players leave.
+    pub fn back_line(&self) -> Vec<usize> {
+        let deepest = (1..PLAYERS_PER_TEAM)
+            .map(|s| self.base_formation[s].0)
+            .fold(f64::INFINITY, f64::min);
+        (1..PLAYERS_PER_TEAM)
+            .filter(|&s| self.base_formation[s].0 <= deepest + BACK_LINE_BAND)
+            .collect()
+    }
+
+    /// The slot of the player who keeps goal: slot 0 while it is active; otherwise the lowest
+    /// active slot holding a goalkeeper by position (a keeper who came on); otherwise the most
+    /// advanced active outfield slot of the formation, then the one nearest the centre line
+    /// across the pitch, then the lowest slot. It is derived from the team's state, so a
+    /// resumed match finds the same keeper.
+    pub fn keeper_slot(&self) -> usize {
+        if self.active[0] {
+            return 0;
+        }
+        if let Some(slot) = (1..PLAYERS_PER_TEAM).find(|&s| {
+            self.active[s]
+                && self
+                    .squad
+                    .get(self.lineup[s])
+                    .is_some_and(|p| p.position == Position::GK)
+        }) {
+            return slot;
+        }
+        (1..PLAYERS_PER_TEAM)
+            .filter(|&s| self.active[s])
+            .min_by(|&a, &b| {
+                let (ax, ay) = self.base_formation[a];
+                let (bx, by) = self.base_formation[b];
+                bx.total_cmp(&ax)
+                    .then(ay.abs().total_cmp(&by.abs()))
+                    .then(a.cmp(&b))
+            })
+            .unwrap_or(0)
+    }
+
+    /// Opponents this team sends to press the carrier: the plan's count less one for each
+    /// player out of play, and at least one while the plan presses at all.
+    pub fn pressers(&self) -> usize {
+        let out = self.active.iter().filter(|&&a| !a).count();
+        let count = self.plan.press_count;
+        count.saturating_sub(out).max(count.min(1))
     }
 
     /// The goal this team attacks.
@@ -215,30 +327,11 @@ impl Team {
         DVec2::new((fx - pitch::HALF_LENGTH) * self.attack_x, fy)
     }
 
-    /// Removes `slot` from the formation. The other active slots of its line (the slots with
-    /// the same depth) spread evenly across the line's width, in their order across it.
+    /// Removes `slot` from the formation, as when its player leaves play: every line is laid
+    /// out again around the slots out of play.
     pub fn reshape(&mut self, slot: usize) {
         self.active[slot] = false;
-        let depth = self.formation[slot].0;
-        let line: Vec<usize> = (0..PLAYERS_PER_TEAM)
-            .filter(|&s| self.formation[s].0 == depth)
-            .collect();
-        let (lo, hi) = line
-            .iter()
-            .map(|&s| self.formation[s].1)
-            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), y| {
-                (lo.min(y), hi.max(y))
-            });
-        let mut left: Vec<usize> = line.into_iter().filter(|&s| self.active[s]).collect();
-        left.sort_by(|a, b| self.formation[*a].1.total_cmp(&self.formation[*b].1));
-        let n = left.len();
-        for (k, s) in left.into_iter().enumerate() {
-            self.formation[s].1 = if n == 1 {
-                (lo + hi) / 2.0
-            } else {
-                lo + (hi - lo) * k as f64 / (n - 1) as f64
-            };
-        }
+        self.relayout();
     }
 
     /// Puts `slot` back into the formation, as when a substitute replaces an injured player:
@@ -256,7 +349,7 @@ impl Team {
     /// The formation anchor for `slot` given the ball position: the slot moved up by the
     /// plan's block depth and the slot's duty, widened by the plan, plus the ball shift.
     pub fn anchor(&self, slot: usize, ball: DVec2, t: &Tuning) -> DVec2 {
-        if slot == 0 {
+        if slot == self.keeper_slot() {
             // The keeper stands on the line from the goal centre toward the ball.
             let goal = self.own_goal();
             let out = crate::math::toward(goal, ball) * t.keeper_depth;
@@ -353,30 +446,108 @@ mod tests {
     }
 
     #[test]
-    fn a_back_four_with_one_sent_off_spreads_three_across_the_width() {
+    fn a_back_four_is_kept_compact_at_eleven_against_eleven() {
+        let team = bare(0);
+        let t = Tuning::default();
+        let ys: Vec<f64> = (1..5).map(|s| team.formation[s].1).collect();
+        let g = t.back_line_gap;
+        assert_eq!(ys, vec![-1.5 * g, -0.5 * g, 0.5 * g, 1.5 * g]);
+        assert_eq!(&team.formation[5..], &FORMATION_442[5..]);
+    }
+
+    #[test]
+    fn a_back_four_with_one_sent_off_closes_to_three_and_a_lone_striker_keeps_his_side() {
         let mut team = bare(0);
         team.reshape(2);
         let ys: Vec<f64> = [1, 3, 4].iter().map(|&s| team.formation[s].1).collect();
-        assert_eq!(ys, vec![-22.0, 0.0, 22.0]);
+        assert_eq!(ys, vec![-12.0, 0.0, 12.0]);
         assert!(!team.active[2]);
         let t = Tuning::default();
         for slot in [1, 3, 4] {
             assert!(pitch::contains(team.anchor(slot, DVec2::ZERO, &t)));
         }
         team.reshape(9);
-        assert_eq!(team.formation[10].1, 0.0);
+        assert_eq!(
+            team.formation[10].1, 8.0,
+            "the lone striker is not moved into the gap"
+        );
     }
 
     #[test]
     fn restoring_a_slot_puts_its_line_back_and_keeps_the_others_closed() {
         let mut team = bare(0);
+        let full = team.formation;
         team.reshape(2);
         team.reshape(9);
         team.restore(2);
-        assert_eq!(&team.formation[1..5], &FORMATION_442[1..5]);
+        assert_eq!(&team.formation[1..5], &full[1..5]);
         assert!(team.active[2]);
         assert!(!team.active[9]);
-        assert_eq!(team.formation[10].1, 0.0);
+        assert_eq!(team.formation[10].1, 8.0);
+    }
+
+    #[test]
+    fn slot_zero_keeps_goal_while_it_is_active() {
+        let team = bare(0);
+        assert_eq!(team.keeper_slot(), 0);
+    }
+
+    #[test]
+    fn a_goalkeeper_who_came_on_keeps_goal() {
+        let content = shipped_content();
+        let [a, _] = crate::data::test_support::default_teams(&content);
+        let (mut team, _) =
+            Team::from_file(0, &a, &content.attributes, &content.tuning.engine).unwrap();
+        let gk = (PLAYERS_PER_TEAM..team.squad.len())
+            .find(|&s| team.squad[s].position == Position::GK)
+            .expect("a bench goalkeeper");
+        team.reshape(0);
+        team.lineup[9] = gk;
+        team.relayout();
+        assert_eq!(team.keeper_slot(), 9);
+        assert_eq!(team.formation[9], team.base_formation[0]);
+    }
+
+    #[test]
+    fn the_most_advanced_outfield_player_stands_in_goal_and_stays_there() {
+        // 4-4-2: the strikers are level, so the one nearer the middle, then the lower slot.
+        let mut team = bare(0);
+        team.reshape(0);
+        assert_eq!(team.keeper_slot(), 9);
+        assert_eq!(team.formation[9], FORMATION_442[0]);
+        assert_eq!(team.formation[10].1, 8.0, "the forward line is one short");
+        for slot in [1, 5, 10, 3] {
+            team.reshape(slot);
+            assert_eq!(team.keeper_slot(), 9, "after slot {slot} left");
+        }
+        // 3-5-2 from the tactics file.
+        let content = shipped_content();
+        let schema = &content.tactics;
+        let f = schema
+            .formations
+            .iter()
+            .position(|f| f.name == "3-5-2")
+            .unwrap();
+        let mut team = bare(1);
+        let mut tactics = Tactics::defaults(schema);
+        tactics.set_formation(f as u8, schema);
+        team.set_tactics(tactics, schema, &content.tuning.engine);
+        team.reshape(0);
+        let k = team.keeper_slot();
+        let depth = team.base_formation[k].0;
+        assert!((1..PLAYERS_PER_TEAM).all(|s| team.base_formation[s].0 <= depth));
+    }
+
+    #[test]
+    fn a_team_presses_with_one_fewer_for_each_player_lost() {
+        let mut team = bare(0);
+        team.plan.press_count = 3;
+        assert_eq!(team.pressers(), 3);
+        team.reshape(4);
+        assert_eq!(team.pressers(), 2);
+        team.reshape(5);
+        team.reshape(6);
+        assert_eq!(team.pressers(), 1, "never fewer than one");
     }
 
     #[test]

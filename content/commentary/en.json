@@ -564,6 +564,17 @@
         "Fresh legs coming for {team}: the manager readies a change.",
         "The {team} manager spots a tired player and prepares a substitution."
       ]
+    },
+    {
+      "event": "ai-decision",
+      "when": {
+        "decision": "sub-keeper"
+      },
+      "lines": [
+        "{team} ready their substitute goalkeeper to take the gloves.",
+        "The {team} bench sends the reserve keeper to warm up.",
+        "{team} will bring on a proper goalkeeper against {opponent}."
+      ]
     }
   ]
 }

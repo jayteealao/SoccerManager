@@ -144,6 +144,8 @@ pub struct Player {
     pub status: Status,
     /// Yellow cards shown to the player in this match.
     pub yellow: u8,
+    /// The first tick the player may attempt a tackle again after a foul.
+    pub foul_ready: u32,
 }
 
 impl Player {
@@ -206,6 +208,7 @@ pub(crate) mod test_support {
             facing: DVec2::X,
             status: Status::OnPitch,
             yellow: 0,
+            foul_ready: 0,
         }
     }
 }

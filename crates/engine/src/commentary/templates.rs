@@ -162,6 +162,7 @@ pub enum DecisionCondition {
     MentalityDownLeading,
     SubInjury,
     SubFatigue,
+    SubKeeper,
 }
 
 impl DecisionCondition {
@@ -176,6 +177,7 @@ impl DecisionCondition {
                 AiCode::MentalityDownLeading
             ) | (DecisionCondition::SubInjury, AiCode::SubInjury)
                 | (DecisionCondition::SubFatigue, AiCode::SubFatigue)
+                | (DecisionCondition::SubKeeper, AiCode::SubKeeper)
         )
     }
 }

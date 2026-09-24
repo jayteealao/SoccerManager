@@ -1,7 +1,8 @@
 //! AC-a: the shipped attribute schema loads with 30 to 50 named, grouped attributes on the
 //! 1 to 100 scale. AC-c: a rule pack with an unknown schema version is refused naming the
 //! version, and the current version loads. Plus: the tuning file equals `Tuning::default()`
-//! and a missing file names its path. The rule pack pins the added-time allowance and the
+//! and a missing file names its path; an older tuning block without the defending and
+//! discipline values loads with their defaults. The rule pack pins the added-time allowance and the
 //! minimum team size, and a schema without `aggression` is refused naming it.
 
 mod common;
@@ -142,6 +143,35 @@ fn the_shipped_tuning_equals_the_documented_default() {
     let content = common::content();
     assert_eq!(content.tuning.engine, Tuning::default());
     assert_eq!(content.tuning.generator.squad_size, 22);
+}
+
+#[test]
+fn the_shipped_defending_and_discipline_values_are_pinned() {
+    let t = common::content().tuning.engine;
+    assert_eq!(t.cover_distance, 3.0);
+    assert_eq!(t.cover_channel, 12.0);
+    assert_eq!(t.back_line_gap, 12.0);
+    assert_eq!(t.foul_cooldown_ticks, 150);
+    assert_eq!(t.foul_booked_factor, 0.15);
+}
+
+/// A tuning block written before the defending and discipline values existed still loads,
+/// with the shipped values for them.
+#[test]
+fn a_tuning_block_without_the_defending_values_loads_with_the_defaults() {
+    let mut json = serde_json::to_value(Tuning::default()).unwrap();
+    let block = json.as_object_mut().unwrap();
+    for key in [
+        "cover_distance",
+        "cover_channel",
+        "back_line_gap",
+        "foul_cooldown_ticks",
+        "foul_booked_factor",
+    ] {
+        assert!(block.remove(key).is_some(), "{key} is a tuning field");
+    }
+    let t: Tuning = serde_json::from_value(json).unwrap();
+    assert_eq!(t, Tuning::default());
 }
 
 #[test]

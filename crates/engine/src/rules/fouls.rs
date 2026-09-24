@@ -45,6 +45,16 @@ impl Card {
     pub fn sends_off(&self) -> bool {
         !matches!(self, Card::Yellow)
     }
+
+    /// How severe the card is: a caution below a sending-off, and a second caution below a
+    /// straight red.
+    pub fn severity(&self) -> u8 {
+        match self {
+            Card::Yellow => 0,
+            Card::SecondYellow => 1,
+            Card::Red => 2,
+        }
+    }
 }
 
 /// The outcome of a tackle attempt with win chance `p_win` and foul chance `p_foul`.
@@ -61,11 +71,18 @@ pub fn tackle_outcome(p_win: f64, p_foul: f64, ball_loss: f64, draw: f64) -> Tac
 }
 
 /// The chance that one tackle attempt by `tackler` is a foul: the tuned base rate, raised by
-/// aggression and lowered by tackling skill, both measured from the middle of the scale.
-pub fn foul_chance(tackler: &Derived, t: &Tuning) -> f64 {
+/// aggression and lowered by tackling skill, both measured from the middle of the scale. A
+/// player already shown `yellows` cards tackles more carefully: the chance is multiplied by
+/// the booked factor.
+pub fn foul_chance(tackler: &Derived, yellows: u8, t: &Tuning) -> f64 {
     let aggression = 1.0 + t.foul_aggression_weight * (tackler.aggression - 0.5);
     let skill = 1.0 - t.foul_tackling_weight * (tackler.tackling / 100.0 - 0.5);
-    (t.foul_base * aggression * skill).clamp(0.0, 1.0)
+    let booked = if yellows >= 1 {
+        t.foul_booked_factor
+    } else {
+        1.0
+    };
+    (t.foul_base * aggression * skill * booked).clamp(0.0, 1.0)
 }
 
 /// The card, if any, for a foul by a player with `aggression` (0 to 1) who has already been
@@ -110,13 +127,30 @@ mod tests {
     fn aggression_raises_and_skill_lowers_the_foul_chance() {
         let t = Tuning::default();
         let average = flat_player(0, 50, &t).derived;
-        assert!((foul_chance(&average, &t) - t.foul_base).abs() < 1e-12);
+        assert!((foul_chance(&average, 0, &t) - t.foul_base).abs() < 1e-12);
         let mut hothead = average;
         hothead.aggression = 1.0;
-        assert!(foul_chance(&hothead, &t) > t.foul_base);
+        assert!(foul_chance(&hothead, 0, &t) > t.foul_base);
         let mut expert = average;
         expert.tackling = 100.0;
-        assert!(foul_chance(&expert, &t) < t.foul_base);
+        assert!(foul_chance(&expert, 0, &t) < t.foul_base);
+    }
+
+    #[test]
+    fn a_booked_player_fouls_by_the_booked_factor_less() {
+        let t = Tuning::default();
+        let p = flat_player(0, 70, &t).derived;
+        let unbooked = foul_chance(&p, 0, &t);
+        for yellows in [1, 2] {
+            let booked = foul_chance(&p, yellows, &t);
+            assert!((booked - t.foul_booked_factor * unbooked).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn a_red_card_is_more_severe_than_a_second_yellow_and_a_yellow() {
+        assert!(Card::Red.severity() > Card::SecondYellow.severity());
+        assert!(Card::SecondYellow.severity() > Card::Yellow.severity());
     }
 
     #[test]

@@ -178,7 +178,7 @@ One `match-event` row. The same object is written to
 | `change.rejected_reason` | string | present only on a refused change |
 | `change.state` | enumeration | `queued`, `applies-now`, `applied`, or `rejected` |
 | `change.applied_tick` | integer | on an applied change: the tick it took effect on, which is the tick of the stoppage that admitted it |
-| `ai.decision` | string | on `ai-decision`: `mentality-up-trailing`, `mentality-down-leading`, `sub-injury`, or `sub-fatigue` |
+| `ai.decision` | string | on `ai-decision`: `mentality-up-trailing`, `mentality-down-leading`, `sub-injury`, `sub-fatigue`, or `sub-keeper` (the bench keeper replaces an outfield player keeping goal) |
 | `player.id` | string | the player the event names: the offender on `offside` and `foul`, the booked player on `card`, the injured player on `injury`, the player leaving on `substitution`, the taker on `kick-off` and on every restart, and on `goal` the player who kicked the ball last (a player of the other club on an own goal) |
 | `player.secondary_id` | string | the fouled player, on `foul`; the player coming on, on `substitution` |
 | `card.kind` | enumeration | `yellow`, `second-yellow`, or `red`, on `card`; a second yellow sends the player off |

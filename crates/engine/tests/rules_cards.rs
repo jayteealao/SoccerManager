@@ -23,7 +23,7 @@ fn foul(card_draw: impl Fn(&Simulation) -> f64, arrange: impl Fn(Scene) -> Scene
     let tackler = plain.players()[TACKLER].derived;
     let carrier = plain.players()[CARRIER].derived;
     let p_win = 0.05 * tackler.tackling / (tackler.tackling + carrier.dribbling);
-    let p_foul = foul_chance(&tackler, &config.tuning);
+    let p_foul = foul_chance(&tackler, 0, &config.tuning);
     let at = DVec2::new(0.0, 10.0);
     let scene = spread(Scene::new(config), -30.0, 30.0)
         .place(CARRIER, at)
@@ -31,7 +31,9 @@ fn foul(card_draw: impl Fn(&Simulation) -> f64, arrange: impl Fn(Scene) -> Scene
         .ball(DVec3::new(at.x, at.y, 0.0))
         .carrier(Some(CARRIER))
         .tick(1_001)
-        .rolls(&[p_win + 0.1 * p_foul, card_draw(&plain)]);
+        // Deep in the band of a foul with the ball lost, for a booked tackler too (whose foul
+        // chance is the booked factor times this one).
+        .rolls(&[p_win + 0.01 * p_foul, card_draw(&plain)]);
     let mut sim = arrange(scene).build();
     sim.step();
     sim

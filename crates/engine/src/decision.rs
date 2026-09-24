@@ -11,6 +11,7 @@ use crate::math::{DVec2, segment_distance, toward};
 use crate::pitch;
 use crate::plugin::{DecisionContext, HookPoint, OptionOffsets};
 use crate::sim::{ScriptCache, Simulation};
+use crate::team::PLAYERS_PER_TEAM;
 use crate::tuning::Tuning;
 
 /// A kick the carrier decided on this tick.
@@ -25,14 +26,16 @@ impl Simulation {
     pub(crate) fn decide(&mut self) -> Option<Kick> {
         let ball_xy = self.ball.xy();
         let n = self.players.len();
+        let keepers = [self.keeper(0), self.keeper(1)];
         match self.carrier {
             Some(c) => {
                 let team = self.players[c].team;
+                let def = 1 - team;
                 // Teammates hold their anchors; the nearest opponents press, as many and from
-                // as far as the defending team's pressing instruction says.
-                let defending = &self.teams[1 - team].plan;
-                let count = defending.press_count.min(MAX_PRESSERS);
-                let reach = defending.press_distance;
+                // as far as the defending team's pressing instruction says, less one for each
+                // player the defending team has lost.
+                let count = self.teams[def].pressers().min(MAX_PRESSERS);
+                let reach = self.teams[def].plan.press_distance;
                 let mut pressers = [(f64::INFINITY, usize::MAX); MAX_PRESSERS];
                 for i in 0..n {
                     let p = self.players[i];
@@ -41,7 +44,7 @@ impl Simulation {
                     }
                     let anchor = self.teams[p.team].anchor(p.slot, ball_xy, &self.config.tuning);
                     self.players[i].target = anchor;
-                    if p.team != team && p.slot != 0 && count > 0 {
+                    if p.team != team && i != keepers[def] && count > 0 {
                         let d = (p.pos - ball_xy).length();
                         if d < reach && d < pressers[count - 1].0 {
                             // Insert in distance order among the first `count` places.
@@ -54,11 +57,21 @@ impl Simulation {
                         }
                     }
                 }
+                // Pressers run at the point where they can meet the carrier's run, and go for the
+                // ball once they are close.
+                let run = self.players[c].vel;
                 for &(_, i) in &pressers[..count] {
                     if i != usize::MAX {
-                        self.players[i].target = ball_xy;
+                        let p = self.players[i];
+                        // Within engaging range the presser goes for the ball itself.
+                        self.players[i].target = if (p.pos - ball_xy).length() < PRESS_ENGAGE_M {
+                            ball_xy
+                        } else {
+                            pitch::clamp(intercept(p.pos, p.max_speed(), ball_xy, run), 0.5)
+                        };
                     }
                 }
+                self.cover(def, c, &pressers[..count], keepers[def]);
                 self.decide_carrier(c)
             }
             None => {
@@ -77,7 +90,7 @@ impl Simulation {
                     let anchor = self.teams[p.team].anchor(p.slot, ball_xy, &self.config.tuning);
                     self.players[i].target = anchor;
                     let d = (p.pos - ball_xy).length();
-                    if p.slot != 0 && d < nearest_dist[p.team] {
+                    if i != keepers[p.team] && d < nearest_dist[p.team] {
                         nearest_dist[p.team] = d;
                         nearest[p.team] = i;
                     }
@@ -86,7 +99,7 @@ impl Simulation {
                     if i != usize::MAX {
                         self.players[i].target = predicted;
                     }
-                    let gk = team * crate::team::PLAYERS_PER_TEAM;
+                    let gk = keepers[team];
                     if self.players[gk].active() && (self.players[gk].pos - ball_xy).length() < 16.0
                     {
                         self.players[gk].target = predicted;
@@ -95,6 +108,86 @@ impl Simulation {
                 None
             }
         }
+    }
+
+    /// Goal-side cover (named mechanism) while team `def` defends against carrier `c`. The
+    /// covered attacker is the carrier when he is in `def`'s half inside the central channel,
+    /// otherwise the most advanced attacker there. The nearest active back-line player of
+    /// `def` who is neither pressing nor keeping goal covers him, on the line from the
+    /// attacker to the centre of its own goal:
+    /// - a carrier is tracked `cover_distance` goal-side of him, at his pace, so the covering
+    ///   player stays between him and the goal as he runs;
+    /// - any other attacker is covered at the depth of the defender's own place in the line,
+    ///   so the cover never plays an attacker onside.
+    fn cover(&mut self, def: usize, c: usize, pressers: &[(f64, usize)], keeper: usize) {
+        let t = &self.config.tuning;
+        let side = &self.teams[def];
+        let first = def * PLAYERS_PER_TEAM;
+        let goal = side.own_goal();
+        // Distance from `def`'s goal line toward the halfway line.
+        let depth = |at: DVec2| at.x * side.attack_x + pitch::HALF_LENGTH;
+        let covered = |p: &crate::player::Player| {
+            p.active() && p.pos.y.abs() <= t.cover_channel && depth(p.pos) < pitch::HALF_LENGTH
+        };
+        let attacker = if covered(&self.players[c]) {
+            Some((depth(self.players[c].pos), c))
+        } else {
+            let mut most: Option<(f64, usize)> = None;
+            for (j, p) in self.players.iter().enumerate() {
+                if p.team == def || !covered(p) {
+                    continue;
+                }
+                let d = depth(p.pos);
+                if most.is_none_or(|(best, _)| d < best) {
+                    most = Some((d, j));
+                }
+            }
+            most
+        };
+        let Some((reach, j)) = attacker else {
+            return;
+        };
+        let at = self.players[j].pos;
+        let mut best: Option<(f64, usize)> = None;
+        for slot in side.back_line() {
+            let i = first + slot;
+            let p = &self.players[i];
+            if !p.active() || i == keeper || pressers.iter().any(|&(_, k)| k == i) {
+                continue;
+            }
+            let d = (p.pos - at).length();
+            if best.is_none_or(|(bd, _)| d < bd) {
+                best = Some((d, i));
+            }
+        }
+        let Some((_, i)) = best else {
+            return;
+        };
+        let me = self.players[i];
+        let hold = if j == c {
+            reach - t.cover_distance
+        } else {
+            // The defender's own place in the line: its anchor, set earlier this tick.
+            depth(me.target)
+        }
+        .max(0.5);
+        let share = if reach > 1e-6 {
+            (hold / reach).min(1.0)
+        } else {
+            0.0
+        };
+        let mut spot = DVec2::new(
+            goal.x + side.attack_x * hold,
+            goal.y + (at.y - goal.y) * share,
+        );
+        if j == c {
+            // Lead the spot by the carrier's run over the covering player's braking time, so
+            // steering's slow-down near the spot leaves it running at the carrier's pace.
+            let braking =
+                (me.max_speed() * me.max_speed() / (2.0 * me.max_accel())).max(t.arrive_radius);
+            spot += self.players[c].vel * (braking / me.max_speed());
+        }
+        self.players[i].target = pitch::clamp(spot, 0.5);
     }
 
     /// Scores every option the carrier has (named mechanism: scored-options decision layer).
@@ -112,7 +205,8 @@ impl Simulation {
         let goal = side.target_goal();
         let attack = DVec2::new(side.attack_x, 0.0);
         let goal_dist = (goal - carrier.pos).length();
-        let keeper = carrier.slot == 0;
+        let keeper = c == self.keeper(team);
+        let their_keeper = self.keeper(1 - team);
         let skill = |v: f64| (v - 50.0) / 50.0 * w.skill;
         let noise =
             w.noise * (1.5 - (carrier.derived.decisions + carrier.derived.composure) / 200.0);
@@ -142,7 +236,7 @@ impl Simulation {
             let lane = self
                 .players
                 .iter()
-                .filter(|p| p.team != team && p.slot != 0 && p.active())
+                .filter(|p| p.team != team && p.id != their_keeper && p.active())
                 .map(|p| segment_distance(p.pos, carrier.pos, goal))
                 .fold(f64::INFINITY, f64::min);
             let under_pressure = if nearest_opp < 2.0 && lane > 1.0 {
@@ -267,7 +361,8 @@ impl Simulation {
         }
         match choice.1 {
             Choice::Shot => {
-                Some(self.shot_kick(c, goal, (1 - team) * crate::team::PLAYERS_PER_TEAM, 1.0))
+                let keeper = self.keeper(1 - team);
+                Some(self.shot_kick(c, goal, keeper, 1.0))
             }
             Choice::Pass => {
                 let j = o.pass.map_or(c, |(_, j)| j);
@@ -487,6 +582,46 @@ impl Simulation {
 
 /// The most opponents a pressing instruction can send at the carrier.
 const MAX_PRESSERS: usize = 4;
+/// Metres from the ball within which a presser goes for the ball instead of running at the
+/// intercept point: from there it engages the carrier rather than cutting across his path.
+const PRESS_ENGAGE_M: f64 = 3.0;
+/// The furthest ahead, in seconds, a presser aims along the carrier's run: beyond it the
+/// carrier's run is too uncertain to chase.
+const INTERCEPT_HORIZON_S: f64 = 1.0;
+
+/// Where a player at `p` with top speed `s` meets a carrier at `c` running at `v`: `c + v t`,
+/// where `t` is the smallest positive time with `|c + v t - p| = s t`, capped at
+/// `INTERCEPT_HORIZON_S`. With no such time (a carrier running away faster than the player)
+/// the point is the carrier.
+pub(crate) fn intercept(p: DVec2, s: f64, c: DVec2, v: DVec2) -> DVec2 {
+    let d = c - p;
+    let a = v.dot(v) - s * s;
+    let b = 2.0 * d.dot(v);
+    let k = d.dot(d);
+    let t = if a.abs() < 1e-9 {
+        (b < 0.0).then(|| -k / b)
+    } else {
+        let disc = b * b - 4.0 * a * k;
+        if disc < 0.0 {
+            None
+        } else {
+            let r = disc.sqrt();
+            let (t1, t2) = ((-b - r) / (2.0 * a), (-b + r) / (2.0 * a));
+            let (lo, hi) = (t1.min(t2), t1.max(t2));
+            if lo > 0.0 {
+                Some(lo)
+            } else if hi > 0.0 {
+                Some(hi)
+            } else {
+                None
+            }
+        }
+    };
+    match t {
+        Some(t) => c + v * t.min(INTERCEPT_HORIZON_S),
+        None => c,
+    }
+}
 
 /// The farthest team-mate a throw-in looks for, in metres, and the throw's vertical speed.
 const THROW_RANGE: f64 = 15.0;
@@ -587,10 +722,11 @@ mod tests {
             let mut sim = Simulation::new(config.clone().with_tactics(0, tactics)).unwrap();
             let striker = 9;
             sim.players[striker].pos = DVec2::new(40.0, 2.0);
+            let their_keeper = sim.keeper(1);
             for p in sim
                 .players
                 .iter_mut()
-                .filter(|p| p.team == 1 && p.slot != 0)
+                .filter(|p| p.team == 1 && p.id != their_keeper)
             {
                 p.pos = DVec2::new(-40.0, p.pos.y);
             }

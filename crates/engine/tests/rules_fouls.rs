@@ -23,13 +23,21 @@ fn bands(config: &MatchConfig) -> (f64, f64) {
     let tackler = sim.players()[TACKLER].derived;
     let carrier = sim.players()[CARRIER].derived;
     let p_win = 0.05 * tackler.tackling / (tackler.tackling + carrier.dribbling);
-    (p_win, foul_chance(&tackler, &config.tuning))
+    (p_win, foul_chance(&tackler, 0, &config.tuning))
 }
 
 /// The home carrier holds the ball at `at` and the tackler stands 0.3 m from it. The first
 /// step judges the tackle with `rolls`.
 fn tackle(at: DVec2, rolls: impl Fn(f64, f64) -> Vec<f64>) -> (Simulation, Vec<EngineEvent>) {
-    let config = quiet_match(90);
+    tackle_in(quiet_match(90), at, rolls)
+}
+
+/// `tackle` in a match played under `config`.
+fn tackle_in(
+    config: MatchConfig,
+    at: DVec2,
+    rolls: impl Fn(f64, f64) -> Vec<f64>,
+) -> (Simulation, Vec<EngineEvent>) {
     let (p_win, p_foul) = bands(&config);
     let mut sim = spread(Scene::new(config), -30.0, 30.0)
         .place(CARRIER, at)
@@ -94,8 +102,11 @@ fn a_foul_with_the_ball_kept_plays_advantage() {
 #[test]
 fn a_card_held_for_advantage_is_shown_at_the_next_stoppage() {
     // A yellow-card draw on a foul played on with advantage, then a second foul with the
-    // ball lost and no card of its own.
-    let (mut sim, events) = tackle(DVec2::new(0.0, 10.0), |w, f| {
+    // ball lost and no card of its own. The foul cooldown is off, so the same player can
+    // foul on the next tick.
+    let mut config = quiet_match(90);
+    config.tuning.foul_cooldown_ticks = 0;
+    let (mut sim, events) = tackle_in(config, DVec2::new(0.0, 10.0), |w, f| {
         vec![w + 0.9 * f, 0.01, w + 0.1 * f, NO_CARD]
     });
     assert_eq!(kinds(&events), [EngineEventKind::Foul]);

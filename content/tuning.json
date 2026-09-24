@@ -34,6 +34,9 @@
     "aim_noise": 0.06,
     "compactness_x": 0.3,
     "compactness_y": 0.3,
+    "cover_distance": 3.0,
+    "cover_channel": 12.0,
+    "back_line_gap": 12.0,
     "anchor_tolerance": 15.0,
     "anchor_ball_distance": 30.0,
     "anchor_grace_ticks": 100,
@@ -44,6 +47,8 @@
     "yellow_base": 0.05,
     "yellow_aggression_weight": 0.15,
     "red_base": 0.005,
+    "foul_cooldown_ticks": 150,
+    "foul_booked_factor": 0.15,
     "restart_delay_s": {
       "kick_off": 5.0,
       "throw_in": 3.0,

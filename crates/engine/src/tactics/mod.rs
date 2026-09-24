@@ -164,6 +164,8 @@ pub struct TeamPlan {
     /// Opponents who press this team's opponents' carrier, and from how far.
     pub press_count: usize,
     pub press_distance: f64,
+    /// The widest gap between two neighbours in the back line, from the tuning.
+    pub back_line_gap: f64,
     pub tempo: f64,
     pub directness: f64,
     /// A factor on the team's restart delay while it leads.
@@ -197,6 +199,7 @@ impl TeamPlan {
             width: ins.width.levels[level(WIDTH)].value,
             press_count: usize::from(press.press_count),
             press_distance: t.press_distance * press.press_distance_scale,
+            back_line_gap: t.back_line_gap,
             tempo: ins.tempo.levels[level(TEMPO)].value,
             directness: ins.passing_directness.levels[level(DIRECTNESS)].value,
             time_wasting: ins.time_wasting.levels[level(TIME_WASTING)].value,
@@ -214,6 +217,7 @@ impl TeamPlan {
             width: 1.0,
             press_count: 2,
             press_distance: t.press_distance,
+            back_line_gap: t.back_line_gap,
             tempo: 0.0,
             directness: 0.0,
             time_wasting: 1.0,

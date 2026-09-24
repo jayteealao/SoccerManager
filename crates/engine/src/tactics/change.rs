@@ -332,7 +332,8 @@ impl Simulation {
             && let Phase::DeadBall(mut dead) = self.referee.phase
         {
             // A substitute may have replaced the taker; the law's choice of taker stands.
-            dead.taker = restart::taker(dead.kind, dead.team, dead.spot, &self.players);
+            dead.taker =
+                restart::taker(dead.kind, dead.team, dead.spot, &self.players, &self.teams);
             self.referee.phase = Phase::DeadBall(dead);
         }
         self.timeline.push((now, self.teams.clone()));
@@ -442,10 +443,15 @@ impl Simulation {
         side.lineup[slot] = on;
         let mut incoming = side.player(slot, on, at);
         incoming.target = self.players[i].target;
-        if !side.active[slot] {
+        self.players[i] = incoming;
+        // A goalkeeper coming on for an outfield player keeping goal takes over the goal, so
+        // every line is laid out again after any substitution.
+        let side = &mut self.teams[team];
+        if side.active[slot] {
+            side.relayout();
+        } else {
             side.restore(slot);
         }
-        self.players[i] = incoming;
         self.summary.substitutions[team] += 1;
         let mut event = self.event(EngineEventKind::Substitution, Some(team));
         event.player = Some(i);

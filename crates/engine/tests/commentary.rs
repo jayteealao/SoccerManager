@@ -121,6 +121,7 @@ fn every_event_kind_gets_a_line_naming_its_player_and_club() {
         AiCode::MentalityDownLeading,
         AiCode::SubInjury,
         AiCode::SubFatigue,
+        AiCode::SubKeeper,
     ] {
         let mut c = Commentator::new(&commentary, names.clone(), NINETY, common::SEED);
         let mut event = scripted(EngineEventKind::AiDecision, 75);
@@ -253,7 +254,9 @@ fn a_full_seeded_match_fills_every_placeholder_and_names_every_player() {
             roster[slot] = names.squads[team][on].clone();
         }
     }
-    assert!(lines > 100, "only {lines} lines");
+    // The seed-42 match gives 90 lines (113 before the defending rework, which cut its
+    // stoppages from 58 to 39); the floor only guards against an empty check.
+    assert!(lines > 80, "only {lines} lines");
     assert!(
         events.iter().any(|e| e.kind == EngineEventKind::Goal),
         "the match scored no goal"

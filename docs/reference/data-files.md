@@ -78,6 +78,9 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 | aim_noise | rad | 0.06 | 0 to 0.6 |
 | compactness_x | ratio | 0.3 | 0 to 3 |
 | compactness_y | ratio | 0.3 | 0 to 3 |
+| cover_distance | m | 3.0 | 0 to 10 |
+| cover_channel | m | 12.0 | 0 to 34 |
+| back_line_gap | m | 12.0 | 4 to 30 |
 | anchor_tolerance | m | 15.0 | 0 to 150 |
 | anchor_ball_distance | m | 30.0 | 0 to 300 |
 | anchor_grace_ticks | ticks | 100 | 0 to 1000 |
@@ -88,6 +91,8 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 | yellow_base | probability per foul | 0.05 | 0 to 1 |
 | yellow_aggression_weight | probability per foul | 0.15 | 0 to 1 |
 | red_base | probability per foul | 0.005 | 0 to 1 |
+| foul_cooldown_ticks | ticks | 150 | 0 to 1000 |
+| foul_booked_factor | ratio | 0.15 | 0 to 1 |
 | restart_delay_s.kick_off | s | 5 | 0 to 60 |
 | restart_delay_s.throw_in | s | 3 | 0 to 60 |
 | restart_delay_s.corner | s | 8 | 0 to 60 |
@@ -103,7 +108,9 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 | xg.distance_coef | log-odds per m | -0.1 | -2 to 0 |
 | xg.angle_coef | log-odds per rad | 1.0 | 0 to 10 |
 
-The foul chance of one tackle is `foul_base`, multiplied by `1 + foul_aggression_weight × (aggression − 0.5)` and by `1 − foul_tackling_weight × (tackling − 0.5)`, with both attributes on a 0 to 1 scale. `foul_ball_loss` is the share of fouls after which the fouled team loses the ball. After any other foul, the referee plays advantage outside the penalty area. The yellow-card chance of a foul is `yellow_base + yellow_aggression_weight × aggression`, and the red-card chance is `red_base`. A restart is taken no earlier than its `restart_delay_s`, when the taker is within `restart_ready_radius` of the spot and every opponent stands back. At three times the delay, the restart is taken whatever the players are doing. While the restarting team leads, its delay is multiplied by its time-wasting level.
+While the other team has the ball, one back-line defender covers the ball carrier, or else the most advanced attacker, when that player is in the defending half and within `cover_channel` of the middle of the pitch: a carrier is tracked `cover_distance` goal-side of him, and any other attacker is covered from the defender's place in the line. No two neighbours in the back line stand more than `back_line_gap` apart, so the line narrows as players leave it.
+
+The foul chance of one tackle is `foul_base`, multiplied by `1 + foul_aggression_weight × (aggression − 0.5)` and by `1 − foul_tackling_weight × (tackling − 0.5)`, with both attributes on a 0 to 1 scale. `foul_ball_loss` is the share of fouls after which the fouled team loses the ball. After any other foul, the referee plays advantage outside the penalty area. The yellow-card chance of a foul is `yellow_base + yellow_aggression_weight × aggression`, and the red-card chance is `red_base`. A player already booked fouls less: the foul chance is multiplied by `foul_booked_factor`. A player who commits a foul, advantage or not, makes no tackle attempt for `foul_cooldown_ticks`. While play goes on with advantage, the referee holds at most one card per player, the more severe, and a player is shown at most one card when play stops. A restart is taken no earlier than its `restart_delay_s`, when the taker is within `restart_ready_radius` of the spot and every opponent stands back. At three times the delay, the restart is taken whatever the players are doing. While the restarting team leads, its delay is multiplied by its time-wasting level.
 
 An injury is rolled for the tackled player on every tackle that wins the ball or is a foul (`injury_per_tackle`), and for every player on the pitch once per simulated minute (`injury_per_minute`). Both are the chances for an average player; injury resistance 100 halves them and 0 makes them half again as likely. An injured player leaves play at once. In open play the referee stops play for a dropped ball at the ball (the goalkeeper's, inside its own penalty area), with every other player 4 m away, after `restart_delay_s.drop_ball`.
 
@@ -333,7 +340,7 @@ Each entry is a template set: an `event` kind, an optional `when` with condition
 | `card` | `yellow`, `second-yellow`, `red` | on a card: the card shown |
 | `advantage` | `true`, `false` | on a foul: play continued with advantage |
 | `own_goal` | `true`, `false` | on a goal: the player who kicked the ball last plays for the other club |
-| `decision` | `mentality-up-trailing`, `mentality-down-leading`, `sub-injury`, `sub-fatigue` | on `ai-decision`: the AI manager's choice |
+| `decision` | `mentality-up-trailing`, `mentality-down-leading`, `sub-injury`, `sub-fatigue`, `sub-keeper` | on `ai-decision`: the AI manager's choice |
 
 | Placeholder | Value | Filled on |
 |---|---|---|

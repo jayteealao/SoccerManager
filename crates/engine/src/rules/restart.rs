@@ -68,21 +68,25 @@ pub fn delay_ticks(kind: StoppageKind, t: &Tuning) -> u32 {
     (seconds / t.dt).round() as u32
 }
 
-/// The player of `team` who takes a restart of `kind` at `spot`: the goalkeeper at a goal
-/// kick and at a dropped ball inside its own penalty area, the centre-forward at a
-/// kick-off, otherwise the nearest outfield player on the pitch. A team with only its
-/// goalkeeper left uses the goalkeeper.
-pub fn taker(kind: StoppageKind, team: usize, spot: DVec2, players: &[Player]) -> usize {
+/// The player of `team` who takes a restart of `kind` at `spot`: the acting goalkeeper at a
+/// goal kick and at a dropped ball inside its own penalty area, the centre-forward at a
+/// kick-off (unless that player keeps goal), otherwise the nearest outfield player on the
+/// pitch. A team with only its goalkeeper left uses the goalkeeper. The team's own end comes
+/// from the way it attacks, never from where a player stands.
+pub fn taker(
+    kind: StoppageKind,
+    team: usize,
+    spot: DVec2,
+    players: &[Player],
+    teams: &[Team; 2],
+) -> usize {
     let first = team * PLAYERS_PER_TEAM;
-    let own_end = if players[first].pos.x < 0.0 {
-        -1.0
-    } else {
-        1.0
-    };
+    let own_end = -teams[team].attack_x;
+    let keeper = first + teams[team].keeper_slot();
     let preferred = match kind {
-        StoppageKind::GoalKick => Some(first),
-        StoppageKind::KickOff => Some(first + PLAYERS_PER_TEAM - 1),
-        StoppageKind::Injury if pitch::in_penalty_area(spot, own_end) => Some(first),
+        StoppageKind::GoalKick => Some(keeper),
+        StoppageKind::KickOff => Some(first + PLAYERS_PER_TEAM - 1).filter(|&i| i != keeper),
+        StoppageKind::Injury if pitch::in_penalty_area(spot, own_end) => Some(keeper),
         _ => None,
     };
     if let Some(i) = preferred
@@ -94,7 +98,7 @@ pub fn taker(kind: StoppageKind, team: usize, spot: DVec2, players: &[Player]) -
     for (i, p) in players.iter().enumerate() {
         if p.team != team
             || !p.active()
-            || (p.slot == 0 && !matches!(kind, StoppageKind::GoalKick | StoppageKind::Injury))
+            || (i == keeper && !matches!(kind, StoppageKind::GoalKick | StoppageKind::Injury))
         {
             continue;
         }
@@ -103,7 +107,7 @@ pub fn taker(kind: StoppageKind, team: usize, spot: DVec2, players: &[Player]) -
             best = Some((d, i));
         }
     }
-    best.map_or(first, |(_, i)| i)
+    best.map_or(keeper, |(_, i)| i)
 }
 
 /// Where a player of `team` stands for a kick-off: the formation slot, kept inside its own
@@ -234,7 +238,7 @@ pub fn target(
         ),
         StoppageKind::Penalty => {
             let side = end_of(dead.spot);
-            if opponent && p.slot == 0 {
+            if opponent && team.keeper_slot() == p.slot {
                 DVec2::new(side * (HALF_LENGTH - 0.3), 0.0)
             } else {
                 let behind = DVec2::new(-side, 0.0);
@@ -333,7 +337,7 @@ pub fn is_ready(
                 own_half && (!opponent || distance >= KICK_DISTANCE - JUDGE_MARGIN)
             }
             StoppageKind::Penalty => {
-                (opponent && p.slot == 0)
+                (opponent && teams[p.team].keeper_slot() == p.slot)
                     || (!pitch::in_penalty_area(p.pos, side)
                         && distance >= KICK_DISTANCE - JUDGE_MARGIN)
             }
@@ -364,7 +368,13 @@ mod tests {
         let config = shipped_config(1, 90).unwrap();
         let t = &config.tuning;
         let spot = DVec2::new(20.0, 5.0);
-        let taker = taker(StoppageKind::FreeKick, 0, spot, &config.players);
+        let taker = taker(
+            StoppageKind::FreeKick,
+            0,
+            spot,
+            &config.players,
+            &config.teams,
+        );
         let d = dead(StoppageKind::FreeKick, 0, spot, taker);
         for i in 11..22 {
             let at = target(&d, i, &config.players, &config.teams, t);
@@ -376,7 +386,13 @@ mod tests {
     fn opponents_leave_the_area_at_a_goal_kick() {
         let config = shipped_config(1, 90).unwrap();
         let spot = pitch::goal_kick_spot(-1.0, 3.0);
-        let taker = taker(StoppageKind::GoalKick, 0, spot, &config.players);
+        let taker = taker(
+            StoppageKind::GoalKick,
+            0,
+            spot,
+            &config.players,
+            &config.teams,
+        );
         assert_eq!(taker, 0, "the goalkeeper takes a goal kick");
         let d = dead(StoppageKind::GoalKick, 0, spot, taker);
         for i in 11..22 {
@@ -389,7 +405,13 @@ mod tests {
     fn only_the_taker_and_the_goalkeeper_stay_in_the_area_at_a_penalty() {
         let config = shipped_config(1, 90).unwrap();
         let spot = pitch::penalty_spot(1.0);
-        let taker = taker(StoppageKind::Penalty, 0, spot, &config.players);
+        let taker = taker(
+            StoppageKind::Penalty,
+            0,
+            spot,
+            &config.players,
+            &config.teams,
+        );
         let d = dead(StoppageKind::Penalty, 0, spot, taker);
         for i in 0..22 {
             let at = target(&d, i, &config.players, &config.teams, &config.tuning);
@@ -418,7 +440,13 @@ mod tests {
     fn everyone_keeps_four_metres_from_a_dropped_ball() {
         let config = shipped_config(1, 90).unwrap();
         let spot = DVec2::new(5.0, -3.0);
-        let taker = taker(StoppageKind::Injury, 1, spot, &config.players);
+        let taker = taker(
+            StoppageKind::Injury,
+            1,
+            spot,
+            &config.players,
+            &config.teams,
+        );
         assert_eq!(config.players[taker].team, 1);
         assert_ne!(
             config.players[taker].slot, 0,
@@ -444,8 +472,26 @@ mod tests {
         let config = shipped_config(1, 90).unwrap();
         // The home team defends the negative end at kick-off.
         let spot = DVec2::new(-45.0, 4.0);
-        assert_eq!(taker(StoppageKind::Injury, 0, spot, &config.players), 0);
-        assert_ne!(taker(StoppageKind::Injury, 1, spot, &config.players), 11);
+        assert_eq!(
+            taker(
+                StoppageKind::Injury,
+                0,
+                spot,
+                &config.players,
+                &config.teams
+            ),
+            0
+        );
+        assert_ne!(
+            taker(
+                StoppageKind::Injury,
+                1,
+                spot,
+                &config.players,
+                &config.teams
+            ),
+            11
+        );
     }
 
     #[test]

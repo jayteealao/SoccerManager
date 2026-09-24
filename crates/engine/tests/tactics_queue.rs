@@ -101,7 +101,7 @@ fn a_penalty_admits_no_change_so_the_change_waits_through_it() {
         let p_win = 0.05 * tackler.tackling / (tackler.tackling + carrier.dribbling);
         (
             p_win,
-            engine::rules::fouls::foul_chance(&tackler, &config.tuning),
+            engine::rules::fouls::foul_chance(&tackler, 0, &config.tuning),
         )
     };
     let at = DVec2::new(45.0, 0.0);

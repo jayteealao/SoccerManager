@@ -6,6 +6,8 @@
 //! - from `fatigue_from_minute`, a tired outfield player (energy below `fatigue_energy`) is
 //!   replaced, keeping one substitution back for an injury until
 //!   `keep_for_injury_until_minute`;
+//! - an outfield player keeping goal after the keeper was sent off is replaced by the best
+//!   goalkeeper on the bench, while a substitution can still be made;
 //! - trailing from `trailing_minute`, the mentality rises one step and pressing goes high,
 //!   once per score;
 //! - leading from `leading_minute`, the mentality drops one step and time wasting goes on,
@@ -43,6 +45,7 @@ pub enum AiCode {
     MentalityDownLeading,
     SubInjury,
     SubFatigue,
+    SubKeeper,
 }
 
 impl AiCode {
@@ -53,6 +56,7 @@ impl AiCode {
             AiCode::MentalityDownLeading => "mentality-down-leading",
             AiCode::SubInjury => "sub-injury",
             AiCode::SubFatigue => "sub-fatigue",
+            AiCode::SubKeeper => "sub-keeper",
         }
     }
 }
@@ -218,6 +222,32 @@ impl Simulation {
                 );
             }
         }
+        // The goal: an outfield player keeping goal makes way for the bench keeper, unless a
+        // goalkeeper is already on the way (for an injured keeper, say).
+        let keeper_slot = self.teams[team].keeper_slot();
+        let side = &self.teams[team];
+        let keeper_off = side.lineup[keeper_slot];
+        let keeper_coming = self
+            .queue
+            .incoming(team)
+            .iter()
+            .any(|&s| side.squad[s].position == Position::GK);
+        if side.squad[keeper_off].position != Position::GK
+            && !keeper_coming
+            && !self.queue.has_substitution(team, keeper_off)
+            && self.substitution_possible(team)
+            && let Some(on) = self.bench_keeper(team)
+        {
+            self.ai_queue(
+                team,
+                Change::Substitution {
+                    off: keeper_off,
+                    on,
+                },
+                AiCode::SubKeeper,
+                minute,
+            );
+        }
         // Fatigue.
         let windows_left = self.ledgers[team].windows < self.substitution_limits().1;
         if minute >= ai.fatigue_from_minute && windows_left {
@@ -226,7 +256,8 @@ impl Simulation {
                 .map(|slot| (slot, team * PLAYERS_PER_TEAM + slot))
                 .filter(|&(slot, i)| {
                     let p = &self.players[i];
-                    p.active()
+                    slot != keeper_slot
+                        && p.active()
                         && p.energy < ai.fatigue_energy
                         && !self
                             .queue
@@ -356,6 +387,22 @@ impl Simulation {
             &self.config.tactics,
             &self.config.attributes,
         )
+    }
+
+    /// The best goalkeeper on the bench by fit to the goalkeeper's role, leaving out anyone
+    /// already queued to come on.
+    fn bench_keeper(&self, team: usize) -> Option<usize> {
+        let side = &self.teams[team];
+        let incoming = self.queue.incoming(team);
+        let keepers: Vec<usize> = side
+            .bench
+            .iter()
+            .copied()
+            .filter(|s| !incoming.contains(s) && side.squad[*s].position == Position::GK)
+            .collect();
+        let schema = &self.config.tactics;
+        let role = schema.default_role(Position::GK);
+        best_for(side, &keepers, role, schema, &self.config.attributes)
     }
 
     /// Queues an AI choice and announces it.

@@ -14,7 +14,8 @@
 //!   knockout switch (the byte after the tick), the extra-time periods and their added
 //!   time, the team that kicked off extra time, and the shoot-out: the kickers in order,
 //!   the keepers, both order cursors, the team that kicks first, the end, the scores, the
-//!   kicks taken, and the kick in progress.
+//!   kicks taken, and the kick in progress. Version 5 added each player's foul cooldown (the
+//!   first tick the player may tackle again), after the yellow cards.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -42,7 +43,7 @@ use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 4;
+pub const VERSION: u16 = 5;
 /// The file name of a match's latest snapshot inside its match folder.
 pub const FILE_NAME: &str = "snapshot.smsn";
 
@@ -628,6 +629,7 @@ fn encode(sim: &Simulation, w: &mut Writer) {
         w.v2(p.facing);
         w.u8(status_code(p.status));
         w.u8(p.yellow);
+        w.u32(p.foul_ready);
         w.u8(p.squad as u8);
         w.f64(p.energy);
         w.derived(&p.derived);
@@ -862,6 +864,7 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
             _ => return Err("malformed body: an unknown player status"),
         };
         p.yellow = r.u8()?;
+        p.foul_ready = r.u32()?;
         let team = &sim.teams[p.team];
         let squad = r.some_index(team.squad.len())?;
         let entry = &team.squad[squad];
@@ -1097,7 +1100,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 4"),
+                .contains("unknown version 1; this build reads 5"),
             "{err}"
         );
     }

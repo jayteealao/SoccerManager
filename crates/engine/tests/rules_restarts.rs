@@ -88,7 +88,7 @@ fn opponents_are_ten_yards_away_when_a_free_kick_is_taken() {
     let tackler = plain.players()[TACKLER].derived;
     let carrier = plain.players()[CARRIER].derived;
     let p_win = 0.05 * tackler.tackling / (tackler.tackling + carrier.dribbling);
-    let p_foul = foul_chance(&tackler, &config.tuning);
+    let p_foul = foul_chance(&tackler, 0, &config.tuning);
     let at = DVec2::new(0.0, 10.0);
     // Crowd the spot with the away side, so every opponent must walk away from it.
     let mut scene = spread(Scene::new(config), -30.0, 30.0);
@@ -136,7 +136,7 @@ fn opponents_are_ten_yards_away_when_a_free_kick_is_taken_near_a_touchline() {
     let tackler = plain.players()[TACKLER].derived;
     let carrier = plain.players()[CARRIER].derived;
     let p_win = 0.05 * tackler.tackling / (tackler.tackling + carrier.dribbling);
-    let p_foul = foul_chance(&tackler, &config.tuning);
+    let p_foul = foul_chance(&tackler, 0, &config.tuning);
     // Close to the touchline (34 m) but not on it, and not near a corner: the ten-yard circle
     // around this spot still spills off the pitch, which is what traps an opponent's anchor.
     let at = DVec2::new(4.0, 29.2);
