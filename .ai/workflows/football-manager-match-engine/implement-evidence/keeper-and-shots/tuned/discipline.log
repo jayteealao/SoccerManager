@@ -1,0 +1,13 @@
+   Compiling engine v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine)
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.83s
+     Running tests\discipline.rs (target\release\deps\discipline-73674a723b768fab.exe)
+
+running 4 tests
+test a_stopping_foul_by_a_player_holding_a_card_shows_one_card ... ok
+test two_advantage_fouls_by_one_player_hold_one_card_the_more_severe ... ok
+test a_tackler_who_fouled_with_advantage_makes_no_attempt_on_the_next_tick ... ok
+second yellows per match 0.025, matches with a sending-off 11.5%, same-tick pairs 0
+test discipline_is_realistic ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.59s
+

@@ -1,0 +1,41 @@
+   Compiling engine v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine)
+    Finished `release` profile [optimized + debuginfo] target(s) in 7.84s
+     Running tests\keeper_and_shots.rs (target\release\deps\keeper_and_shots-ef92446cfcc650b0.exe)
+
+running 10 tests
+test a_wide_shot_is_not_on_target_is_not_saved_and_gives_a_goal_kick ... ok
+test a_defender_in_the_lane_blocks_the_shot ... ok
+test a_saved_shot_the_keeper_holds_is_his ... ok
+test a_shot_over_the_bar_is_not_on_target_and_gives_a_goal_kick ... ok
+test a_shot_that_beats_the_keeper_scores_and_is_on_target ... ok
+parries that gave a corner: 14 of 40
+test a_parried_shot_leaves_the_defending_side_last_and_can_give_a_corner ... ok
+penalties: 398 of 500 scored, 0.796
+test penalties_convert_seventy_to_eighty_five_percent ... ok
+corners per team 1.205, goal kicks per match 11.205
+
+thread 'set_pieces_arise_from_play' (61516) panicked at crates\engine\tests\keeper_and_shots.rs:267:5:
+corners per team 1.205
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test set_pieces_arise_from_play ... FAILED
+shots 4358 (10.89 per team per match), on target 0.373, goals 319
+  wide or over    2239 0.514
+  blocked          526 0.121
+  held             393 0.090
+  parried          821 0.188
+  scored           297 0.068
+  other             82 0.019
+test shot_outcome_census ... ok
+test xg_refit has been running for over 60 seconds
+open-play shots 21479, goals 1346; intercept -4.1910, distance_coef -0.0441, angle_coef 6.3836
+fitted expected goals 1346.0 against 1346 goals
+test xg_refit ... ok
+
+failures:
+
+failures:
+    set_pieces_arise_from_play
+
+test result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 85.52s
+
+error: test failed, to rerun pass `-p engine --test keeper_and_shots`

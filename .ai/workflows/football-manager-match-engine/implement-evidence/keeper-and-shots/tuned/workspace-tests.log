@@ -1,0 +1,909 @@
+   Compiling engine v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine)
+   Compiling stream v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\stream)
+   Compiling script v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\script)
+   Compiling engine-cli v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.70s
+     Running unittests src\lib.rs (target\debug\deps\engine-498d00c532ba867a.exe)
+
+running 156 tests
+test ball::tests::a_lofted_ball_lands ... ok
+test ball::tests::a_kicked_ball_stops ... ok
+test ball::tests::speed_never_exceeds_the_cap ... ok
+test commentary::context::tests::form_and_bookings ... ok
+test commentary::context::tests::minute_bands ... ok
+test commentary::context::tests::own_goals ... ok
+test commentary::context::tests::repeats ... ok
+test commentary::context::tests::score_states ... ok
+test commentary::render::tests::a_line_with_no_placeholder_is_unchanged ... ok
+test commentary::render::tests::a_missing_value_gives_no_line ... ok
+test commentary::render::tests::a_stray_brace_is_reported ... ok
+test commentary::render::tests::every_placeholder_fills ... ok
+test commentary::render::tests::placeholders_come_back_in_order ... ok
+test commentary::tests::an_unfillable_event_gets_the_built_in_line ... ok
+test commentary::tests::a_verdict_gets_no_line_and_a_substitute_takes_the_slot_name ... ok
+test commentary::tests::no_line_repeats_inside_the_window_while_an_unused_one_exists ... ok
+test commentary::tests::the_most_specific_set_wins ... ok
+test data::attributes::tests::a_missing_required_name_is_refused_by_name ... ok
+test data::attributes::tests::a_schema_without_injury_resistance_is_refused_by_name ... ok
+test data::attributes::tests::a_schema_without_aggression_is_refused_by_name ... ok
+test data::attributes::tests::too_few_attributes_are_refused ... ok
+test data::attributes::tests::thirty_names_with_the_required_fourteen_validate ... ok
+test data::tests::a_missing_file_names_its_path ... ok
+test commentary::tests::the_same_seed_gives_the_same_lines ... ok
+test data::tests::a_range_violation_names_the_field_path ... ok
+test data::tests::a_version_mismatch_names_both_versions ... ok
+test data::tactics::tests::the_shipped_file_loads_with_ten_formations_and_five_mentalities ... ok
+test data::tests::relative_paths_never_leak_the_root ... ok
+test decision::tests::a_lofted_pass_reaches_its_target_slow_enough_to_control ... ok
+test data::tests::an_unknown_key_is_refused_with_its_name ... ok
+test ai::tests::the_pre_match_setup_is_the_same_every_time ... ok
+test ai::tests::the_pre_match_lineup_puts_a_goalkeeper_in_goal_and_one_on_the_bench ... ok
+test error::tests::every_variant_has_a_type_a_code_and_a_retry_rule ... ok
+test flags::tests::a_setting_parses_name_and_state ... ok
+test flags::tests::active_flags_answer_by_name ... ok
+test math::tests::clamp_len_limits_long_vectors_only ... ok
+test math::tests::segment_distance_projects_inside_and_clamps_outside ... ok
+test data::tactics::tests::a_role_naming_an_unknown_attribute_is_refused_by_file_role_and_attribute ... ok
+test data::tactics::tests::a_formation_without_a_goalkeeper_in_slot_zero_is_refused ... ok
+test math::tests::toward_is_unit_or_zero ... ok
+test fatigue::tests::above_the_threshold_the_multiplier_is_one ... ok
+test fatigue::tests::the_curve_is_exact_at_each_point_and_linear_between ... ok
+test fatigue::tests::a_player_standing_still_drains_only_the_base_rate ... ok
+test observe::process::tests::measurements_are_available_on_windows ... ok
+test observe::tests::a_failure_record_carries_the_envelope_the_correlation_and_the_error_keys_only ... ok
+test observe::tests::a_successful_match_record_carries_no_error_key ... ok
+test observe::identity::tests::match_id_round_trips_through_text ... ok
+test observe::tests::machine_hash_is_twelve_hex_characters ... ok
+test decision::tests::an_open_teammate_draws_a_pass_or_a_shot ... ok
+test observe::tests::an_unknown_stats_version_is_refused ... ok
+test decision::tests::an_attacking_mentality_raises_the_shoot_score_for_the_same_scene ... ok
+test pitch::tests::contains_and_clamp ... ok
+test observe::tests::both_records_carry_every_contract_key ... ok
+test pitch::tests::goal_detection_uses_the_posts ... ok
+test pitch::tests::parking_spots_are_off_the_pitch_and_apart ... ok
+test pitch::tests::a_ball_on_the_line_is_in_and_a_ball_fully_over_it_is_out ... ok
+test pitch::tests::the_crossing_point_lies_on_the_path ... ok
+test pitch::tests::restart_spots_follow_the_laws ... ok
+test pitch::tests::the_viewer_parking_spot_file_matches_the_engine ... ok
+test player::tests::derived_speed_scales_with_pace ... ok
+test plugin::tests::three_failures_in_a_row_switch_the_hook_off_and_a_success_resets_the_count ... ok
+test record::tests::a_fan_out_feeds_both_sinks_in_order ... ok
+test record::tests::an_absent_optional_sink_discards_every_record ... ok
+test record::tests::a_rewound_file_keeps_its_first_records_and_writes_on_from_there ... ok
+test observe::identity::tests::the_owner_id_is_created_once_and_reused ... ok
+test record::tests::record_round_trips_through_bytes ... ok
+test record::tests::a_file_past_its_announced_maximum_reads_once_the_writer_raises_it ... ok
+test rng::tests::a_restored_state_continues_the_stream ... ok
+test rng::tests::different_seed_different_stream ... ok
+test record::tests::a_truncated_file_is_refused ... ok
+test observe::identity::tests::a_corrupt_owner_file_is_refused ... ok
+test record::tests::the_restart_flag_survives_the_file_and_leaves_the_tick_number_alone ... ok
+test rng::tests::same_seed_same_stream ... ok
+test observe::tests::stats_round_trip_through_the_data_folder ... ok
+test rules::clock::tests::a_knockout_match_announces_extra_time_and_the_shootout_allowance ... ok
+test rules::clock::tests::the_minute_counts_regulation_then_added_time ... ok
+test rules::clock::tests::a_full_match_announces_regulation_plus_both_caps ... ok
+test record::tests::a_version_three_file_is_refused_naming_both_versions ... ok
+test rules::clock::tests::added_time_is_the_tally_plus_the_variance_clamped ... ok
+test rules::clock::tests::the_minute_runs_on_past_ninety_in_extra_time ... ok
+test rules::fouls::tests::a_booked_player_fouls_by_the_booked_factor_less ... ok
+test rules::fouls::tests::a_red_card_is_more_severe_than_a_second_yellow_and_a_yellow ... ok
+test rules::fouls::tests::a_second_caution_is_a_second_yellow ... ok
+test rules::fouls::tests::aggression_raises_and_skill_lowers_the_foul_chance ... ok
+test rules::fouls::tests::the_win_chance_at_the_neutral_base_is_the_earlier_formula ... ok
+test rules::fouls::tests::one_draw_splits_into_win_foul_and_miss ... ok
+test rules::fouls::tests::the_win_chance_scales_linearly_with_the_base ... ok
+test rules::offside::tests::behind_the_ball_is_onside ... ok
+test rules::offside::tests::level_with_the_second_last_defender_is_onside ... ok
+test rules::offside::tests::beyond_the_second_last_defender_is_offside ... ok
+test rules::offside::tests::the_away_team_attacks_the_other_way ... ok
+test rules::offside::tests::the_own_half_is_onside ... ok
+test record::tests::file_round_trips_a_thousand_records ... ok
+test rules::discipline::tests::a_send_off_parks_the_player_and_five_abandon_the_match ... ok
+test rules::discipline::tests::a_second_yellow_sends_off_and_a_first_does_not ... ok
+test rules::restart::tests::a_dropped_ball_in_the_own_penalty_area_goes_to_the_goalkeeper ... ok
+test rules::restart::tests::the_delay_comes_from_the_tuning ... ok
+test rules::shootout::tests::the_goalkeeper_keeps_goal_otherwise_the_best_keeper_does ... ok
+test rules::shootout::tests::the_larger_side_drops_its_weakest_kickers_and_keeps_its_goalkeeper ... ok
+test rules::shootout::tests::sudden_death_decides_a_round_the_teams_split ... ok
+test rules::shootout::tests::the_order_is_the_best_kickers_first_and_the_goalkeeper_last ... ok
+test rules::shootout::tests::the_teams_alternate_from_the_toss_winner ... ok
+test rules::shootout::tests::three_to_nothing_after_six_kicks_ends_it_early ... ok
+test rules::restart::tests::everyone_keeps_four_metres_from_a_dropped_ball ... ok
+test rules::restart::tests::everyone_starts_a_kick_off_in_their_own_half ... ok
+test shot::tests::a_shot_aimed_a_metre_outside_a_post_is_not_on_target ... ok
+test shot::tests::a_deflection_keeps_its_share_of_the_speed ... ok
+test shot::tests::a_shot_at_the_centre_from_sixteen_metres_is_on_target ... ok
+test shot::tests::a_shot_at_the_other_goal_is_not_on_target ... ok
+test shot::tests::the_save_chance_falls_from_the_poorest_chances_to_the_best ... ok
+test shot::tests::a_shot_lofted_at_nine_metres_per_second_from_eighteen_metres_goes_over_the_bar ... ok
+test rules::restart::tests::only_the_taker_and_the_goalkeeper_stay_in_the_area_at_a_penalty ... ok
+test rules::restart::tests::opponents_keep_nine_metres_at_a_free_kick ... ok
+test rules::restart::tests::opponents_leave_the_area_at_a_goal_kick ... ok
+test rng::tests::attribute_draws_centre_on_the_mean_and_stay_in_range ... ok
+test rules::tests::a_held_back_caution_for_a_booked_player_is_a_second_yellow ... ok
+test rules::tests::a_penalty_in_play_is_shot_at_goal_at_once ... ok
+test sim::tests::a_chosen_setup_puts_the_chosen_players_in_slot_order ... ok
+test sim::tests::the_config_names_both_clubs_and_the_content ... ok
+test sim::tests::a_knockout_match_announces_extra_time_and_ten_rounds_of_kicks ... ok
+test snapshot::tests::a_version_one_file_is_refused_naming_both_versions ... ok
+test snapshot::tests::shorten_for_log_hides_everything_outside_the_data_folder_or_cwd ... ok
+test sim::tests::zero_minutes_is_rejected ... ok
+test steering::tests::arrive_converges_without_overshoot ... ok
+test steering::tests::separation_pushes_overlapping_players_apart ... ok
+test tactics::change::tests::a_change_an_admitting_stoppage_passed_is_never_applied_and_a_later_one_expired ... ok
+test tactics::tests::a_new_formation_resets_only_the_roles_that_no_longer_suit ... ok
+test tactics::tests::attacking_moves_the_block_forward_and_high_pressing_sends_three ... ok
+test team::tests::a_back_four_is_kept_compact_at_eleven_against_eleven ... ok
+test snapshot::tests::write_failed_reason_carries_the_underlying_os_error ... ok
+test team::tests::a_back_four_with_one_sent_off_closes_to_three_and_a_lone_striker_keeps_his_side ... ok
+test tactics::tests::balanced_four_four_two_with_support_duties_is_the_neutral_plan ... ok
+test team::tests::a_team_presses_with_one_fewer_for_each_player_lost ... ok
+test team::tests::a_formation_with_one_striker_has_a_lone_forward ... ok
+test team::tests::anchors_stay_inside_the_pitch_for_every_corner ... ok
+test team::tests::away_team_mirrors_home ... ok
+test team::tests::a_goalkeeper_who_came_on_keeps_goal ... ok
+test team::tests::slot_zero_keeps_goal_while_it_is_active ... ok
+test team::tests::restoring_a_slot_puts_its_line_back_and_keeps_the_others_closed ... ok
+test team::tests::switching_ends_flips_the_attack ... ok
+test team::tests::the_most_advanced_outfield_player_stands_in_goal_and_stays_there ... ok
+test team::tests::two_strikers_are_not_a_lone_forward_until_one_leaves ... ok
+test tuning::tests::a_probability_above_one_is_refused ... ok
+test team::tests::anchors_stay_inside_the_pitch_for_every_formation_mentality_and_duty ... ok
+test tuning::tests::a_step_that_is_not_one_clock_tick_is_refused ... ok
+test tuning::tests::the_defaults_satisfy_every_bound ... ok
+test snapshot::tests::another_seed_or_content_is_refused_by_name ... ok
+test validate::tests::a_ball_faster_than_the_cap_is_a_violation ... ok
+test validate::tests::a_hand_built_overlap_is_one_violation ... ok
+test validate::tests::a_parked_player_breaks_no_rule ... ok
+test validate::tests::a_restart_tick_exempts_the_jump_and_the_same_jump_without_the_flag_does_not ... ok
+test validate::tests::a_ball_away_from_the_named_restart_spot_is_a_violation ... ok
+test sim::tests::five_minutes_produce_fifteen_thousand_ticks ... ok
+test snapshot::tests::capture_write_read_capture_gives_identical_bytes ... ok
+test sim::tests::every_play_event_names_a_player ... ok
+test sim::tests::the_last_kicker_is_clear_whenever_play_stops ... ok
+
+test result: ok. 156 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.55s
+
+     Running tests\acting_keeper.rs (target\debug\deps\acting_keeper-90be10183cd70220.exe)
+
+running 6 tests
+test a_keeper_sent_off_with_no_substitution_left_leaves_an_outfield_player_in_goal ... ok
+test a_goal_kick_after_half_time_with_the_keeper_parked_is_taken_at_the_defending_end ... ok
+test a_penalty_faces_the_stand_in_on_his_goal_line ... ok
+test a_fast_shot_at_the_stand_in_is_saved_with_the_save_roll ... ok
+test a_keeper_sent_off_is_replaced_by_the_bench_keeper_at_the_next_stoppage ... ok
+test a_shoot_out_kick_faces_the_stand_in ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running tests\ai_trailing.rs (target\debug\deps\ai_trailing-69e13fb64ac9d874.exe)
+
+running 1 test
+test a_trailing_ai_team_changes_its_tactics ... ignored, slow: cargo test --release -p engine -- --ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\commentary.rs (target\debug\deps\commentary-9d943888bf0ba9ab.exe)
+
+running 10 tests
+test another_schema_version_is_refused ... ok
+test a_placeholder_the_kind_cannot_fill_is_refused ... ok
+test an_unknown_placeholder_is_refused ... ok
+test a_kind_with_two_plain_lines_is_refused ... ok
+test every_shipped_line_names_the_player_and_the_club ... ok
+test a_shootout_kick_gets_no_line ... ok
+test a_late_equaliser_and_a_rout_read_as_such ... ok
+test every_event_kind_gets_a_line_naming_its_player_and_club ... ok
+test five_events_of_one_kind_in_ten_minutes_give_three_distinct_lines ... ok
+test a_full_seeded_match_fills_every_placeholder_and_names_every_player ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.48s
+
+     Running tests\content.rs (target\debug\deps\content-8691432ffcdcf881.exe)
+
+running 14 tests
+test a_missing_content_file_names_its_path ... ok
+test a_tuning_block_without_the_lone_forward_values_loads_with_the_defaults ... ok
+test a_tuning_block_without_the_shot_values_loads_with_the_defaults ... ok
+test an_unknown_rule_pack_version_is_refused_naming_the_version ... ok
+test a_tuning_block_without_the_defending_values_loads_with_the_defaults ... ok
+test a_schema_without_aggression_is_refused_naming_it ... ok
+test the_shipped_defending_and_discipline_values_are_pinned ... ok
+test the_current_rule_pack_version_loads ... ok
+test the_shipped_lone_forward_and_tackle_values_are_pinned ... ok
+test the_shipped_shot_values_are_pinned ... ok
+test the_shipped_flags_block_matches_the_code_flags ... ok
+test the_shipped_tuning_equals_the_documented_default ... ok
+test a_version_three_rule_pack_is_refused_by_its_version ... ok
+test the_shipped_attribute_schema_has_thirty_to_fifty_grouped_names ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\defending.rs (target\debug\deps\defending-2572485c922844f8.exe)
+
+running 8 tests
+test a_sending_off_gives_no_advantage ... ignored, slow: cargo test --release -p engine --all-features -- --ignored
+test every_formation_holds ... ignored, slow: cargo test --release -p engine --all-features -- --ignored
+test a_running_carrier_draws_a_presser_to_a_point_ahead_of_him ... ok
+test a_back_line_with_a_centre_back_sent_off_is_at_most_two_gaps_wide ... ok
+test a_central_attacker_in_the_defending_half_draws_a_back_line_defender_goal_side ... ok
+test a_back_four_behind_a_4_3_3_leaves_no_gap_for_a_central_striker ... ok
+test a_team_with_one_player_out_presses_with_one_fewer ... ok
+test the_public_send_off_before_kick_off_plays_as_the_scene_one_and_validates ... ok
+
+test result: ok. 6 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 12.23s
+
+     Running tests\determinism.rs (target\debug\deps\determinism-aa2cd64c0b823e4e.exe)
+
+running 1 test
+test two_runs_are_byte_identical ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.87s
+
+     Running tests\discipline.rs (target\debug\deps\discipline-9946ad9bfb05a4e8.exe)
+
+running 4 tests
+test discipline_is_realistic ... ignored, slow: cargo test --release -p engine --all-features -- --ignored
+test a_tackler_who_fouled_with_advantage_makes_no_attempt_on_the_next_tick ... ok
+test two_advantage_fouls_by_one_player_hold_one_card_the_more_severe ... ok
+test a_stopping_foul_by_a_player_holding_a_card_shows_one_card ... ok
+
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\fatigue.rs (target\debug\deps\fatigue-cd3ea580339b9fa4.exe)
+
+running 4 tests
+test above_the_threshold_the_effective_values_equal_the_base ... ok
+test below_the_threshold_the_curve_scales_the_effective_values ... ok
+test fatigue_runs_on_through_extra_time_without_a_step_at_ninety_minutes ... ok
+test a_full_match_leaves_every_player_tired_but_able ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.57s
+
+     Running tests\flags.rs (target\debug\deps\flags-57e3dd9d028bb7bc.exe)
+
+running 11 tests
+test a_flag_that_switches_nothing_is_refused_naming_it ... ok
+test a_flag_name_that_is_not_lower_snake_case_is_refused ... ok
+test the_shipped_content_with_no_states_is_unchanged ... ok
+test a_flag_the_file_turns_on_applies_at_load_and_the_command_line_turns_it_off ... ok
+test an_override_of_a_value_that_does_not_exist_is_refused_even_when_off ... ok
+test a_flag_that_is_on_changes_only_its_values_and_marks_the_digest ... ok
+test a_state_for_an_undeclared_flag_is_refused_naming_it ... ok
+test an_override_outside_its_bound_is_refused_naming_the_flag ... ok
+test two_flags_on_that_set_the_same_value_are_refused_naming_both ... ok
+test an_override_of_the_wrong_type_or_of_the_flags_is_refused ... ok
+test a_flag_missing_a_required_field_is_refused_naming_the_flag ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests\full_match.rs (target\debug\deps\full_match-748e0d6b8140931c.exe)
+
+running 1 test
+test ninety_minutes_play_to_full_time_under_the_laws ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.12s
+
+     Running tests\generator.rs (target\debug\deps\generator-3960ad82953e10d1.exe)
+
+running 3 tests
+test the_same_seed_gives_the_same_league ... ok
+test per_position_means_fall_inside_the_tuning_bounds ... ok
+test twenty_clubs_have_twenty_two_players_with_legal_positions ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests\identity.rs (target\debug\deps\identity-1ed076b49a2969a8.exe)
+
+running 2 tests
+test owner_and_match_ids_round_trip_through_stats_json ... ok
+test owner_and_match_ids_round_trip_through_the_tick_header ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests\injury.rs (target\debug\deps\injury-68a658e27b446405.exe)
+
+running 3 tests
+test with_the_limit_used_the_team_plays_on_with_ten ... ok
+test an_injured_player_leaves_play_and_the_ai_replaces_him_at_that_stoppage ... ok
+test a_refused_injury_substitution_is_not_asked_for_again ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests\keeper_and_shots.rs (target\debug\deps\keeper_and_shots-f89caad94aac951e.exe)
+
+running 10 tests
+test set_pieces_arise_from_play ... ignored, slow: cargo test --release -p engine --all-features -- --ignored
+test shot_outcome_census ... ignored, slow: cargo test --release -p engine --all-features -- --ignored
+test xg_refit ... ignored, slow: cargo test --release -p engine --all-features -- --ignored
+test a_shot_that_beats_the_keeper_scores_and_is_on_target ... ok
+test a_saved_shot_the_keeper_holds_is_his ... ok
+test a_shot_over_the_bar_is_not_on_target_and_gives_a_goal_kick ... ok
+test a_defender_in_the_lane_blocks_the_shot ... ok
+test a_wide_shot_is_not_on_target_is_not_saved_and_gives_a_goal_kick ... ok
+test a_parried_shot_leaves_the_defending_side_last_and_can_give_a_corner ... ok
+test penalties_convert_seventy_to_eighty_five_percent ... ok
+
+test result: ok. 7 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.57s
+
+     Running tests\lone_forward.rs (target\debug\deps\lone_forward-fa9618a264d16dda.exe)
+
+running 4 tests
+test a_contact_below_the_win_chance_wins_the_ball_and_above_it_is_a_foul ... ok
+test the_lone_forward_holds_the_onside_line_while_his_side_has_the_ball ... ok
+test a_pressed_lone_forward_passes_or_holds_instead_of_dribbling ... ok
+test the_lone_terms_need_a_lone_carrier ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+     Running tests\match_stats.rs (target\debug\deps\match_stats-d58b366c65c2cc45.exe)
+
+running 4 tests
+test expected_goals_fall_with_distance_and_rise_with_the_angle ... ok
+test a_pass_received_by_a_team_mate_counts_as_completed ... ok
+test a_scripted_shot_counts_once_with_an_expected_goal_between_zero_and_one ... ok
+test the_two_possession_shares_of_a_full_match_sum_to_one_hundred ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.55s
+
+     Running tests\mentality.rs (target\debug\deps\mentality-b21b6bb07e5839da.exe)
+
+running 1 test
+test an_attacking_team_shoots_more_than_a_defensive_one ... ignored, slow: cargo test --release -p engine -- --ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\plugin_hooks.rs (target\debug\deps\plugin_hooks-9c9d0ff52b4f00fe.exe)
+
+running 4 tests
+test the_offsets_are_cached_for_the_carrier_until_the_refresh_interval_passes ... ok
+test the_decision_hook_turns_the_carriers_choice_into_the_option_it_favours ... ok
+test a_hook_that_keeps_or_fails_leaves_the_native_choice_and_a_failure_is_recorded ... ok
+test the_rule_hook_replaces_the_referees_card_and_keep_leaves_it ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\rules_cards.rs (target\debug\deps\rules_cards-583342ed451ac8cb.exe)
+
+running 2 tests
+test a_fifth_send_off_abandons_the_match ... ok
+test a_second_yellow_sends_the_player_off_and_the_line_spreads ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests\rules_clock.rs (target\debug\deps\rules_clock-322e6740cc6eb06a.exe)
+
+running 3 tests
+test added_time_follows_the_stoppages_the_cards_and_the_variance_draw ... ok
+test a_shortened_match_plays_no_added_time ... ok
+test a_full_match_ends_at_ninety_minutes_plus_the_added_time ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.56s
+
+     Running tests\rules_extra_time.rs (target\debug\deps\rules_extra_time-dd3c7745e497460f.exe)
+
+running 6 tests
+test a_knockout_match_with_a_winner_at_ninety_minutes_plays_no_extra_time ... ok
+test a_level_match_that_is_not_a_knockout_match_ends_after_ninety_minutes ... ok
+test a_shortened_level_knockout_match_goes_straight_to_the_shootout ... ok
+test the_second_period_of_extra_time_starts_at_minute_one_hundred_and_five ... ok
+test extra_time_adds_one_substitution_in_one_window ... ok
+test a_level_knockout_match_plays_two_periods_of_extra_time ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.15s
+
+     Running tests\rules_fouls.rs (target\debug\deps\rules_fouls-a6e5e2f9494546b1.exe)
+
+running 5 tests
+test a_draw_outside_the_foul_band_is_no_foul ... ok
+test a_foul_with_the_ball_kept_plays_advantage ... ok
+test a_card_held_for_advantage_is_shown_at_the_next_stoppage ... ok
+test a_foul_with_the_ball_lost_gives_a_free_kick_where_it_happened ... ok
+test a_foul_in_the_penalty_area_gives_a_penalty_at_the_mark ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\rules_offside.rs (target\debug\deps\rules_offside-bfb389e48d6c7a2d.exe)
+
+running 4 tests
+test a_player_in_the_own_half_is_onside ... ok
+test a_player_beyond_the_second_last_defender_is_penalised_at_the_first_touch ... ok
+test a_player_level_with_the_second_last_defender_is_onside ... ok
+test a_throw_in_puts_nobody_offside ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests\rules_restarts.rs (target\debug\deps\rules_restarts-1b3077ae3e2b8612.exe)
+
+running 5 tests
+test a_ball_over_the_touchline_gives_a_throw_in_where_it_crossed ... ok
+test a_ball_over_the_goal_line_off_an_attacker_gives_a_goal_kick ... ok
+test a_ball_over_the_goal_line_off_a_defender_gives_a_corner ... ok
+test opponents_are_ten_yards_away_when_a_free_kick_is_taken ... ok
+test opponents_are_ten_yards_away_when_a_free_kick_is_taken_near_a_touchline ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\rules_shootout.rs (target\debug\deps\rules_shootout-f0305806f98c5ad3.exe)
+
+running 8 tests
+test a_team_that_cannot_catch_up_loses_early ... ok
+test level_after_five_kicks_each_sudden_death_decides_it ... ok
+test a_change_queued_during_the_shootout_is_not_applied ... ok
+test the_order_starts_again_once_every_eligible_player_has_kicked ... ok
+test ten_rounds_of_kicks_fit_in_the_announced_maximum ... ok
+test a_team_with_more_players_drops_players_to_equal_the_numbers ... ok
+test one_seed_gives_one_shootout ... ok
+test level_after_extra_time_a_shootout_on_the_pitch_produces_one_winner ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.23s
+
+     Running tests\snapshot.rs (target\debug\deps\snapshot-f266a42fa076f1ce.exe)
+
+running 7 tests
+test a_version_three_snapshot_is_refused_by_name ... ok
+test a_damaged_or_foreign_snapshot_is_refused_by_name ... ok
+test a_resumed_match_keeps_a_foul_cooldown_running ... ok
+test a_snapshot_at_a_shootout_kick_resumes_tick_for_tick ... ok
+test a_snapshot_at_the_break_before_extra_time_resumes_tick_for_tick ... ok
+test a_snapshot_written_read_and_written_again_is_the_same_bytes ... ok
+test a_resumed_match_continues_tick_for_tick ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.20s
+
+     Running tests\strength.rs (target\debug\deps\strength-d2e0a2ee53087920.exe)
+
+running 1 test
+test a_stronger_team_wins_more_than_half_its_matches ... ignored, slow: cargo test --release -p engine -- --ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\substitutions.rs (target\debug\deps\substitutions-72365391290e352b.exe)
+
+running 5 tests
+test a_fifth_substitution_applies_at_the_next_dead_ball ... ok
+test a_sixth_substitution_is_rejected_with_the_limit ... ok
+test a_substitution_with_no_window_left_is_rejected_outside_half_time ... ok
+test a_substitution_and_a_role_change_for_the_same_player_in_either_order ... ok
+test a_half_time_substitution_uses_no_window ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests\tactics_queue.rs (target\debug\deps\tactics_queue-67a5219cb0963ee2.exe)
+
+running 3 tests
+test a_change_waits_in_open_play_and_applies_on_the_stoppage_tick ... ok
+test a_penalty_admits_no_change_so_the_change_waits_through_it ... ok
+test a_change_queued_after_the_last_admitting_stoppage_expires_at_full_time ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests\team_files.rs (target\debug\deps\team_files-afdd5cec903fad7d.exe)
+
+running 2 tests
+test an_attribute_of_120_is_refused_naming_file_player_and_attribute ... ok
+test a_valid_team_file_loads ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\validator.rs (target\debug\deps\validator-63e9bbdd268f7319.exe)
+
+running 2 tests
+test a_corrupted_stream_reports_the_overlap ... ok
+test a_seeded_full_match_has_no_violations ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.72s
+
+     Running unittests src\main.rs (target\debug\deps\engine_cli-6a7c91ae3ce7a996.exe)
+
+running 54 tests
+test calibrate::fixtures::tests::a_pairing_plays_the_equal_clubs_and_alternates_its_home_formation ... ok
+test calibrate::fixtures::tests::the_red_card_suite_plays_every_arm_on_the_same_engine_seeds_in_both_orders ... ok
+test calibrate::fixtures::tests::the_boosted_side_alternates ... ok
+test calibrate::fixtures::tests::a_selected_pairing_keeps_its_place_in_the_full_list ... ok
+test calibrate::fixtures::tests::ten_formations_give_fifty_five_pairings_each_once ... ok
+test calibrate::fixtures::tests::the_same_seed_gives_the_same_fixtures_and_seeds ... ok
+test calibrate::fixtures::tests::a_double_round_robin_plays_every_ordered_pair_once ... ok
+test calibrate::tests::a_pairing_is_named_in_either_order ... ok
+test report::baseline::tests::a_change_inside_two_errors_is_noise ... ok
+test report::bands::tests::the_shipped_bands_are_the_accepted_criteria ... ok
+test report::baseline::tests::a_rerun_against_itself_is_all_noise_with_no_change ... ok
+test report::baseline::tests::every_difference_is_named ... ok
+test report::baseline::tests::an_old_or_foreign_report_is_refused ... ok
+test report::baseline::tests::the_same_seed_matches_and_fixtures_pass_the_guard ... ok
+test report::compare::tests::a_floor_band_adds_only_the_excess_above_its_top ... ok
+test report::compare::tests::a_guardrail_breach_rejects_the_on_arm ... ok
+test report::compare::tests::equal_passes_fall_to_the_distance_and_its_margin ... ok
+test report::compare::tests::more_bands_passed_wins ... ok
+test report::compare::tests::rows_of_the_formations_suite_pair_by_pairing ... ok
+test report::compare::tests::the_margin_boundary_is_not_a_difference ... ok
+test report::compare::tests::the_rows_pair_every_realism_band_and_leave_out_the_time_budget ... ok
+test report::compare::tests::the_table_names_every_row_and_the_verdict ... ok
+test report::bands::tests::another_version_is_refused_naming_the_file ... ok
+test report::bands::tests::a_file_without_a_band_is_refused_naming_the_field ... ok
+test report::bands::tests::an_inverted_band_is_refused_naming_the_field ... ok
+test report::tests::a_band_miss_and_an_outlier_are_named ... ok
+test report::tests::a_suite_slower_than_its_budget_fails_the_wall_band ... ok
+test report::tests::every_band_belongs_to_a_suite_and_the_red_card_suite_is_not_in_all ... ok
+test report::tests::a_ratio_over_no_shots_is_zero_not_a_null ... ok
+test report::tests::every_band_row_carries_its_sampling_error ... ok
+test report::tests::the_equal_suite_aggregates_and_checks_every_band ... ok
+test report::tests::the_formations_suite_checks_three_goal_bands_per_pairing ... ok
+test report::tests::the_sampling_errors_match_hand_worked_values ... ok
+test report::tests::the_red_card_suite_folds_each_arm_against_the_control ... ok
+test report::tests::the_strength_suite_counts_the_stronger_side_and_skips_failures ... ok
+test report::bands::tests::a_version_one_file_is_refused_naming_the_file_and_the_version ... ok
+test calibrate::fixtures::tests::the_boost_rounds_and_clamps_at_one_hundred ... ok
+test stream_run::tests::a_page_lineup_hello_carries_the_home_squad_setup_and_instruction_order ... ok
+test stream_run::tests::a_rewind_keeps_page_changes_the_page_was_told_about_and_drops_the_rest ... ok
+test calibrate::tests::the_fixtures_hash_follows_the_fixtures_and_not_the_tuning ... ok
+test stream_run::tests::every_engine_event_kind_spells_the_wire_type_it_travels_as ... ok
+test stream_run::tests::a_viewer_that_leaves_while_the_match_waits_gets_no_full_time ... ok
+test stream_run::tests::the_hello_roster_lists_the_starters_in_slot_order_then_the_bench ... ok
+test stream_run::tests::the_wire_minute_counts_the_ticks_the_engine_clock_counts ... ok
+test web::tests::a_plain_path_resolves_and_the_root_becomes_the_index ... ok
+test web::tests::a_module_is_typed_as_javascript ... ok
+test web::tests::a_traversal_or_an_absolute_path_is_refused ... ok
+test web::tests::only_a_loopback_host_on_this_port_is_answered ... ok
+test stream_run::tests::statistics_and_energy_are_sent_every_simulated_second_and_statistics_at_full_time ... ok
+test stream_run::tests::a_reported_drawn_tick_holds_the_engine_within_the_lead_bound ... ok
+test stream_run::tests::a_shootout_streams_to_full_time_past_the_tick_cap ... ok
+test stream_run::tests::a_page_change_reaches_the_engine_and_its_verdict_carries_the_page_identifier ... ok
+test stream_run::tests::every_play_event_carries_a_commentary_line ... ok
+test stream_run::tests::a_change_made_while_paused_applies_at_the_next_stoppage_not_on_resume ... ok
+
+test result: ok. 54 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests\calibrate.rs (target\debug\deps\calibrate-2141f8be89533e00.exe)
+
+running 4 tests
+test a_thousand_matches_hold_the_realism_bands ... ignored, slow: 57 000 full matches; run in release with --ignored
+test a_run_keeps_only_the_event_files_of_outliers_by_default ... ok
+test the_formations_suite_reports_every_pairing_and_names_each_failing_band ... ok
+test a_small_run_writes_a_record_per_match_and_a_report_that_validate ... ok
+
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 17.81s
+
+     Running tests\calibrate_pair.rs (target\debug\deps\calibrate_pair-7f60a2f54cd4a68a.exe)
+
+running 3 tests
+test a_bad_flag_name_or_state_is_refused_before_any_match ... ok
+test a_single_state_run_plays_every_match_with_the_flag_on ... ok
+test a_paired_run_plays_both_arms_on_the_same_seeds_and_compares_every_band ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.87s
+
+     Running tests\calibrate_targeted.rs (target\debug\deps\calibrate_targeted-2ec28e4ffd3db105.exe)
+
+running 7 tests
+test a_bad_selection_is_refused_before_any_match ... ok
+test a_band_narrows_the_run_to_the_suites_that_check_it ... ok
+test a_baseline_on_other_fixtures_is_refused_before_any_match_and_names_the_difference ... ok
+test the_red_card_suite_reports_every_arm_the_control_and_the_verdict ... ok
+test a_changed_content_hash_on_the_same_fixtures_is_the_change_under_test ... ok
+test a_rerun_against_its_own_report_is_noise_on_every_row ... ok
+test a_targeted_pairing_and_suite_play_only_their_selection_and_agree_with_a_full_run ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.97s
+
+     Running tests\cli_args.rs (target\debug\deps\cli_args-50308cad0e83a5b0.exe)
+
+running 14 tests
+test a_missing_content_folder_exits_one_naming_the_paths_tried ... ok
+test an_explicit_content_dir_without_attributes_is_not_ignored_for_cwd_content ... ok
+test invalid_seed_exits_non_zero_and_names_the_argument ... ok
+test an_unwritable_tick_path_names_the_os_error_once ... ok
+test a_failed_bench_prints_one_error_record ... ok
+test a_failed_simulate_prints_one_error_record ... ok
+test the_test_seams_stay_out_of_the_help ... ok
+test redirected_stderr_carries_no_ansi_escape ... ok
+test valid_seed_exits_zero ... ok
+test json_dump_replaces_the_tick_file_extension ... ok
+test no_help_line_exceeds_eighty_columns ... ok
+test a_failed_calibration_worker_makes_the_report_an_error ... ok
+test a_failed_calibration_match_writes_an_error_record ... ok
+test generated_teams_simulate_a_full_match_with_the_engine_core_tick_count ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.18s
+
+     Running tests\docs.rs (target\debug\deps\docs-c20de1f5e95c4b08.exe)
+
+running 3 tests
+test every_document_in_the_set_exists ... ok
+test every_command_in_the_guides_is_a_real_command ... ok
+test the_reference_names_every_flag_of_every_command ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests\install_layout.rs (target\debug\deps\install_layout-e364ae32d51f759e.exe)
+
+running 2 tests
+test a_layout_without_the_page_folder_is_refused_naming_both_folders_tried ... ok
+test the_installed_program_serves_the_page_and_the_engine_without_configuration ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.20s
+
+     Running tests\launch.rs (target\debug\deps\launch-8a17735b972f0dcc.exe)
+
+running 5 tests
+test a_missing_engine_is_reported_with_its_path ... ok
+test abandon_stops_the_worker ... ok
+test an_action_from_another_origin_is_refused ... ok
+test a_corrupt_snapshot_is_refused_by_name ... ok
+test a_killed_engine_restarts_from_its_snapshot_with_the_same_score ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+
+     Running tests\licenses.rs (target\debug\deps\licenses-7199a93ac3c2e0c6.exe)
+
+running 2 tests
+test expressions_are_judged_by_their_best_alternative ... ok
+test no_dependency_is_gpl_or_agpl ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests\release_version.rs (target\debug\deps\release_version-852c6e8387d537ac.exe)
+
+running 3 tests
+test the_build_scripts_read_the_version_and_never_write_it ... ok
+test the_printed_version_is_the_workspace_version ... ok
+test the_hello_message_carries_the_printed_version ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests\resume.rs (target\debug\deps\resume-13edb7f0dfebf4bd.exe)
+
+running 2 tests
+test a_resumed_match_reaches_the_same_full_time ... ok
+test a_damaged_snapshot_is_refused_by_name_and_the_valid_one_resumes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.30s
+
+     Running tests\schemas.rs (target\debug\deps\schemas-a7f0e85559334b33.exe)
+
+running 4 tests
+test the_schemas_refuse_a_record_without_its_match_or_with_another_version ... ok
+test a_simulated_match_writes_records_that_validate_against_the_schemas ... ok
+test a_benchmark_report_validates_against_the_run_report_schema ... ok
+test the_schemas_accept_success_and_error_only_and_require_the_keys_of_each ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.64s
+
+     Running tests\script_cli.rs (target\debug\deps\script_cli-ac8a0aec7f65639a.exe)
+
+running 5 tests
+test a_bad_pack_is_refused_naming_the_field ... ok
+test a_script_that_prints_leaves_standard_output_to_the_record ... ok
+test a_denied_hook_is_a_script_event_in_the_stream ... ok
+test the_pack_identity_reaches_the_first_kick_off_and_the_match_statistics ... ok
+test a_scripted_snapshot_resumes_only_with_the_same_pack ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+
+     Running tests\stream_cli.rs (target\debug\deps\stream_cli-ebdc1e0c5ed08ef0.exe)
+
+running 7 tests
+test replay_refuses_a_missing_fixture_naming_the_path ... ok
+test a_viewer_that_closes_in_mid_match_ends_the_run_without_an_error ... ok
+test no_help_line_of_the_streaming_commands_exceeds_eighty_columns ... ok
+test a_drop_before_the_first_stoppage_goes_back_to_kick_off ... ok
+test record_writes_a_fixture_and_prints_its_counts ... ok
+test serve_prints_a_port_writes_the_port_file_and_streams_a_match ... ok
+test a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests\web_cli.rs (target\debug\deps\web_cli-1d131e168a140b2a.exe)
+
+running 2 tests
+test a_missing_page_folder_is_refused_naming_the_path ... ok
+test the_page_is_served_with_its_address_printed_and_both_isolation_headers ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running unittests src\lib.rs (target\debug\deps\protocol-2d59101b1cb16c9b.exe)
+
+running 31 tests
+test codec::tests::a_two_metre_jump_forces_a_keyframe ... ok
+test command::tests::a_kind_the_rule_pack_forbids_is_refused ... ok
+test codec::tests::a_keyframe_round_trips ... ok
+test codec::tests::a_step_at_the_ball_speed_cap_encodes_as_a_delta ... ok
+test command::tests::a_valid_change_is_queued_with_an_identifier ... ok
+test command::tests::an_unknown_change_type_is_refused_naming_the_type ... ok
+test command::tests::every_state_carries_its_viewer_word ... ok
+test codec::tests::a_full_keyframe_cycle_reconstructs_every_position ... ok
+test event::tests::a_goal_carries_both_scores_and_the_minute ... ok
+test event::tests::an_ai_decision_carries_its_code ... ok
+test event::tests::a_second_yellow_names_the_player_the_card_and_the_added_minute ... ok
+test event::tests::every_event_type_writes_the_contract_spelling ... ok
+test event::tests::an_applied_change_names_its_club_and_both_ticks ... ok
+test frame::tests::a_delta_frame_is_forty_eight_bytes_and_needs_its_predecessor ... ok
+test frame::tests::a_restart_keyframe_is_tagged_and_decodes ... ok
+test frame::tests::bytes_round_trip_and_a_bad_length_is_refused ... ok
+test message::tests::a_condition_message_is_tagged_condition ... ok
+test message::tests::a_detail_that_does_not_match_its_kind_is_refused_naming_the_fault ... ok
+test message::tests::an_unknown_field_in_a_detail_is_refused ... ok
+test message::tests::an_unknown_command_type_is_refused ... ok
+test message::tests::an_unknown_field_is_refused ... ok
+test message::tests::each_detail_shape_is_read_for_its_kind ... ok
+test message::tests::every_client_command_round_trips_through_json ... ok
+test message::tests::a_hello_without_kit_colours_is_refused ... ok
+test message::tests::a_hello_without_a_roster_reads_as_an_empty_one ... ok
+test message::tests::a_hello_names_both_kit_colours_under_dotted_keys ... ok
+test tests::every_client_command_name_matches_its_specification ... ok
+test tests::every_specified_field_is_a_non_empty_key ... ok
+test message::tests::set_lineup_round_trips_and_a_hello_without_a_squad_omits_it ... ok
+test tests::messages_names_every_variant_and_nothing_else ... ok
+test message::tests::every_server_message_round_trips_through_json ... ok
+
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\document.rs (target\debug\deps\document-206f4c38ffc216ff.exe)
+
+running 2 tests
+test the_document_names_the_framing_of_every_message ... ok
+test every_message_appears_in_the_document_with_its_fields ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src\lib.rs (target\debug\deps\script-e9ad0131f11e23b2.exe)
+
+running 12 tests
+test hooks::tests::card_reads_the_three_calls_and_keep ... ok
+test hooks::tests::line_caps_the_length ... ok
+test hooks::tests::decide_reads_offsets_and_refuses_bad_ones ... ok
+test sandbox::tests::an_import_is_denied ... ok
+test sandbox::tests::a_loop_aborts_on_the_operation_budget ... ok
+test sandbox::tests::eval_is_refused_at_load ... ok
+test sandbox::tests::print_returns_normally_and_writes_nothing_to_stdout ... ok
+test sandbox::tests::a_long_string_is_refused ... ok
+test sandbox::tests::an_unknown_function_is_denied_naming_it ... ok
+test sandbox::tests::top_level_statements_run_once_under_the_budget ... ok
+test pack::tests::a_valid_pack_gives_the_same_identity_twice ... ok
+test pack::tests::a_bad_manifest_is_refused_naming_the_field ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\decision.rs (target\debug\deps\decision-1e845ff8768eeffe.exe)
+
+running 4 tests
+test a_carrier_in_range_shoots_instead_of_passing_with_the_pack ... ok
+test a_match_without_hooks_is_the_match_without_a_plugin ... ok
+test the_same_seed_and_pack_twice_give_the_same_ticks ... ok
+test the_shoot_bias_pack_changes_the_seeded_match ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.13s
+
+     Running tests\sample.rs (target\debug\deps\sample-3f86eccb72752755.exe)
+
+running 3 tests
+test a_trailing_carrier_near_goal_under_pressure_shoots_more_and_dribbles_less ... ok
+test an_early_first_caution_becomes_no_card_and_later_cards_stand ... ok
+test a_goal_line_gains_its_time_of_the_match ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\sandbox.rs (target\debug\deps\sandbox-70bef19b5664fc74.exe)
+
+running 5 tests
+test a_pack_that_uses_eval_or_lacks_its_hook_function_is_refused_at_load ... ok
+test an_import_is_denied_and_recorded_and_the_match_goes_on ... ok
+test a_network_call_is_denied_naming_the_function ... ok
+test a_bad_return_value_is_aborted ... ok
+test a_looping_decision_hook_is_aborted_logged_and_the_native_decision_stands ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s
+
+     Running unittests src\lib.rs (target\debug\deps\stream-fe8e004d222a1721.exe)
+
+running 22 tests
+test control::tests::an_unreadable_command_is_refused_without_an_event ... ok
+test control::tests::an_admitted_change_reaches_the_inbox_with_its_acknowledged_id ... ok
+test events::tests::a_goal_row_carries_the_envelope_and_both_scores ... ok
+test control::tests::a_change_the_socket_cannot_read_is_refused_and_reaches_no_inbox ... ok
+test control::tests::a_legal_lineup_is_stored_before_kick_off_and_refused_after_it ... ok
+test control::tests::an_illegal_lineup_is_refused_with_its_reason ... ok
+test control::tests::set_speed_is_stored_and_echoed ... ok
+test record::tests::a_huge_declared_frame_count_is_refused_without_allocating_it ... ok
+test record::tests::a_truncated_fixture_is_refused ... ok
+test server::tests::a_refusal_names_both_versions ... ok
+test server::tests::every_loopback_origin_is_allowed_and_a_remote_page_is_not ... ok
+test session::tests::a_keyframe_opens_every_cycle_and_deltas_fill_it ... ok
+test session::tests::a_restart_tick_always_sends_a_tagged_keyframe ... ok
+test session::tests::a_step_too_wide_for_a_delta_sends_a_keyframe ... ok
+test session::tests::the_gauge_follows_the_buffer_and_the_score_packs_both_halves ... ok
+test events::tests::rows_append_one_per_line ... ok
+test record::tests::a_fixture_round_trips_every_frame ... ok
+test record::tests::a_changed_byte_fails_the_hash ... ok
+test server::tests::the_port_file_is_written_and_removed_with_the_server ... ok
+test control::tests::pause_then_start_releases_a_waiting_producer ... ok
+test control::tests::a_held_gate_produces_nothing_until_the_first_start ... ok
+test control::tests::a_reported_drawn_tick_bounds_the_lead_and_a_silent_client_is_not_held ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests\accept_wait.rs (target\debug\deps\accept_wait-88ddd6f5b3c8dfd1.exe)
+
+running 1 test
+test a_silent_client_does_not_hold_the_reconnect_wait_open ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+     Running tests\backpressure.rs (target\debug\deps\backpressure-59b6e986bd803adb.exe)
+
+running 1 test
+test a_slow_client_pauses_the_producer_and_loses_no_tick ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+     Running tests\commands.rs (target\debug\deps\commands-b643fca13d2971fe.exe)
+
+running 2 tests
+test pause_and_set_speed_are_acknowledged ... ok
+test an_unknown_change_type_is_refused_and_a_valid_one_is_queued ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\fixture.rs (target\debug\deps\fixture-b5faca5567cf0880.exe)
+
+running 5 tests
+test a_fixture_that_does_not_open_with_a_hello_is_refused_naming_the_path ... ok
+test a_replayed_hello_carries_the_recorded_kit_colours ... ok
+test a_fixture_of_another_protocol_version_is_refused ... ok
+test a_replayed_fixture_is_byte_identical_to_the_recording ... ok
+test the_sustain_cap_delivers_below_the_requested_speed ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.75s
+
+     Running tests\hello.rs (target\debug\deps\hello-1cb5a1f5d90e0ba4.exe)
+
+running 3 tests
+test an_unknown_protocol_version_is_refused_naming_both ... ok
+test a_page_from_another_origin_is_refused ... ok
+test the_hello_arrives_before_the_first_tick_frame ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\reconnect.rs (target\debug\deps\reconnect-1d24872eee480292.exe)
+
+running 5 tests
+test a_resumed_events_file_keeps_the_rows_up_to_the_resume_tick ... ok
+test a_close_frame_is_a_close ... ok
+test a_connection_lost_without_a_close_frame_is_a_drop ... ok
+test the_drop_seam_cuts_the_connection_at_its_tick ... ok
+test a_snapshot_is_written_only_once_the_socket_has_passed_it ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.22s
+
+     Running tests\throughput.rs (target\debug\deps\throughput-e569ce261471287e.exe)
+
+running 1 test
+test a_full_match_arrives_in_order_with_no_gap ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.23s
+
+   Doc-tests engine
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests protocol
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests script
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests stream
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -1,0 +1,32 @@
+Shot outcome census and set-piece runs (cargo test --release -p engine --all-features --test keeper_and_shots -- --ignored --nocapture shot_outcome_census set_pieces_arise_from_play), 200 matches, seeds 1-200, default clubs. Each run wrote the listed values into content/tuning.json for the run only.
+
+A. parry_speed 0.6, shot_noise 0.25, starting values otherwise (first run, before the tuning loop)
+   shots 4632 (11.58 per team per match), on target 0.650, goals 597
+   wide or over 0.326 | blocked 0.009 | held 0.174 | parried 0.350 | scored 0.121 | other 0.021
+   corners per team 1.663, goal kicks per match 7.570
+
+B. shot_noise 0.4, block_reach 2.0, block_spread 2.0, parry_speed 0.6
+   shots 4531 (11.33), on target 0.462, goals 411
+   wide or over 0.494 | blocked 0.042 | held 0.117 | parried 0.244 | scored 0.086 | other 0.016
+
+C. Ceiling, planned parry model: shot_noise 0.45, save_hold 0.1, parry_speed 0.8, block_reach 3.0, block_chance 1.0, block_spread 3.2, block_speed 0.8
+   shots 4448 (11.12), on target 0.406, goals 322
+   wide or over 0.411 | blocked 0.223 | held 0.029 | parried 0.256 | scored 0.063 | other 0.018
+   corners per team 1.880, goal kicks per match 9.150
+
+D. Experiment only, not shipped: every parry turned toward the goal line (never back into the pitch), same values as C with parry_spread 0.9
+   save_hold 0.333: shots 4677 (11.69), on target 0.414, goals 344
+     wide or over 0.408 | blocked 0.227 | held 0.086 | parried 0.197 | scored 0.070 | other 0.012
+     corners per team 2.635, goal kicks per match 9.550
+   save_hold 0.1:   corners per team 3.175, goal kicks per match 9.420
+
+E. Scene probe (200 seeds per cell, calm match, rolls [0.0, 0.99], keeper at x 49.5): parry outcomes
+   planned model   spread 0.6: corner 62-71, throw-in 46-70, stopped in play 68-83
+                   spread 1.2: corner 68-80, throw-in 27-37, goal 0-15, stopped 83-90
+   toward the line spread 0.6: corner 147-152, throw-in 48-53
+                   spread 1.2: corner 139-173, throw-in 19-27, goal 0-42
+
+F. Shipped values (commit 8fd407b): see tuned/keeper_and_shots.log
+   shots 4358 (10.89), on target 0.373, goals 319
+   wide or over 0.514 | blocked 0.121 | held 0.090 | parried 0.188 | scored 0.068 | other 0.019
+   corners per team 1.205, goal kicks per match 11.205, no corner without a crossing off a defender

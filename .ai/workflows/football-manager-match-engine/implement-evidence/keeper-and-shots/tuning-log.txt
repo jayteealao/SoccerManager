@@ -1,0 +1,22 @@
+t00 {} :: EQ sot=0.634 gxg=1.669 cor=1.71 gk=8.81 goals=3.28 shots=12.83 diff=6
+t01 {"shot_noise": 0.4} :: EQ sot=0.479 gxg=1.211 cor=1.16 gk=11.71 goals=2.23 shots=11.74 diff=6
+t02 {"shot_noise": 0.4, "shots.block_reach": 2.0} :: EQ sot=0.470 gxg=1.262 cor=1.22 gk=11.46 goals=2.33 shots=11.98 diff=5
+t03 {"shot_noise": 0.4, "shots.block_reach": 2.0, "shots.block_spread": 2.0} :: EQ sot=0.467 gxg=1.217 cor=1.22 gk=11.55 goals=2.25 shots=12.07 diff=7
+t04 {"shot_noise": 0.5, "shots.loft_max": 9.0, "shots.block_reach": 2.5, "shots.block_spread": 2.5} :: EQ sot=0.312 gxg=0.749 cor=0.95 gk=13.92 goals=1.33 shots=11.79 diff=8
+t05 {"shot_noise": 0.4, "shots.parry_spread": 0.6} :: EQ sot=0.448 gxg=1.165 cor=1.12 gk=12.54 goals=2.25 shots=12.47 diff=6
+t06 {"shot_noise": 0.4, "shots.parry_spread": 0.6, "shots.block_reach": 3.0, "shots.block_chance": 1.0, "shots.block_spread": 2.5} :: EQ sot=0.444 gxg=0.880 cor=1.30 gk=9.18 goals=1.66 shots=12.40 diff=7
+t07 {"shot_noise": 0.4, "shots.parry_spread": 0.3, "shots.save_hold": 0.2} :: EQ sot=0.425 gxg=1.068 cor=0.92 gk=13.04 goals=2.08 shots=12.89 diff=8
+t08 {"shot_noise": 0.4, "shots.parry_spread": 0.6, "keeper_reach": 3.5} :: EQ sot=0.438 gxg=0.925 cor=1.02 gk=12.63 goals=1.70 shots=12.15 diff=8
+t09 {"shot_noise": 0.4, "shots.save_hold": 0.1, "shots.parry_speed": 0.8} :: EQ sot=0.452 gxg=1.177 cor=1.65 gk=12.39 goals=2.19 shots=12.04 diff=6
+t10 {"shot_noise": 0.4, "shots.block_reach": 3.0, "shots.block_chance": 1.0, "shots.block_spread": 3.2, "shots.block_speed": 0.8} :: EQ sot=0.466 gxg=0.997 cor=1.97 gk=8.41 goals=1.91 shots=12.22 diff=7
+t11 {"shot_noise": 0.4, "shots.save_hold": 0.1, "shots.parry_speed": 0.8, "shots.block_reach": 3.0, "shots.block_chance": 1.0, "shots.block_spread": 3.2, "shots.block_speed": 0.8} :: EQ sot=0.450 gxg=1.038 cor=2.33 gk=9.22 goals=2.06 shots=12.82 diff=8
+r01 {"shot_noise": 0.45, "shots.block_reach": 2.0, "shots.block_chance": 0.7, "shots.block_spread": 2.0} :: EQ sot=0.422 gxg=1.090 cor=1.14 gk=11.69 goals=1.94 shots=11.68 diff=6 | RED ctrl=[0.8042, 0.7458] lim=1.29 ke:F1.18/R2.22X ce:F0.85/R0.94X st:F0.99/R1.26X shots=14.9
+g01 {"shot_noise": 0.45, "shots.block_chance": 0.5, "shots.block_reach": 3.0, "shots.block_spread": 3.2, "shots.block_speed": 0.8, "shots.parry_speed": 0.8} :: EQ sot=0.422 gxg=1.005 cor=1.51 gk=11.00 goals=1.77 shots=11.62 diff=7
+g02 {"shot_noise": 0.45, "shots.block_chance": 1.0, "shots.block_reach": 3.0, "shots.block_spread": 3.2, "shots.block_speed": 0.8, "shots.parry_speed": 0.8} :: EQ sot=0.417 gxg=0.909 cor=1.84 gk=9.40 goals=1.72 shots=12.12 diff=7
+g03 {"shot_noise": 0.5, "shots.block_chance": 0.5, "shots.block_reach": 3.0, "shots.block_spread": 3.2, "shots.block_speed": 0.8, "shots.parry_speed": 0.8} :: EQ sot=0.387 gxg=0.926 cor=1.51 gk=12.23 goals=1.79 shots=12.33 diff=7
+g04 {"shot_noise": 0.55, "shots.block_chance": 0.5, "shots.block_reach": 3.0, "shots.block_spread": 3.2, "shots.block_speed": 0.8, "shots.parry_speed": 0.8} :: EQ sot=0.346 gxg=0.894 cor=1.31 gk=12.22 goals=1.64 shots=11.63 diff=7
+g05 {"shot_noise": 0.4, "shots.loft_max": 9.0, "shots.block_chance": 0.5, "shots.block_reach": 3.0, "shots.block_spread": 3.2, "shots.block_speed": 0.8, "shots.parry_speed": 0.8} :: EQ sot=0.379 gxg=0.879 cor=1.42 gk=12.60 goals=1.68 shots=12.21 diff=7
+g06 {"shot_noise": 0.5, "shots.block_chance": 0.5, "shots.block_reach": 3.0, "shots.block_spread": 3.2, "shots.block_speed": 0.8, "shots.parry_speed": 0.8, "shots.save_hold": 0.2} :: EQ sot=0.384 gxg=0.921 cor=1.70 gk=12.22 goals=1.77 shots=12.44 diff=7
+g07 {"shot_noise": 0.5, "shots.block_chance": 0.5, "shots.block_reach": 3.0, "shots.block_spread": 3.2, "shots.block_speed": 0.8, "shots.parry_speed": 0.8, "shots.save_hold": 0.2, "shots.parry_spread": 0.9} :: EQ sot=0.371 gxg=0.872 cor=1.59 gk=11.93 goals=1.61 shots=11.99 diff=7
+g08 {"shot_noise": 0.5, "shots.block_chance": 0.5, "shots.block_reach": 3.0, "shots.block_spread": 3.2, "shots.block_speed": 0.8, "shots.parry_speed": 0.8, "shots.save_hold": 0.2, "shots.parry_spread": 1.5, "shots.parry_loft": 8.0} :: EQ sot=0.377 gxg=1.034 cor=1.48 gk=11.72 goals=1.91 shots=11.87 diff=7
+g09 {"shot_noise": 0.5, "shots.block_chance": 0.5, "shots.block_reach": 3.0, "shots.block_spread": 3.2, "shots.block_speed": 0.8, "shots.parry_speed": 0.8, "shots.save_hold": 0.0, "shots.parry_spread": 1.2} :: EQ sot=0.380 gxg=0.886 cor=1.97 gk=12.10 goals=1.68 shots=12.19 diff=7

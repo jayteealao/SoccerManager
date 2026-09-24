@@ -5,12 +5,12 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-24T16:09:33Z"
-slices-implemented: 21
+updated-at: "2026-09-24T17:26:30Z"
+slices-implemented: 22
 slices-total: 22
-metric-total-files-changed: 755
-metric-total-lines-added: 63224
-metric-total-lines-removed: 2909
+metric-total-files-changed: 769
+metric-total-lines-added: 64294
+metric-total-lines-removed: 2975
 tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment, scripting, sandbox, plugin-interface, distribution, installer, packaging, release-version, error-record, help-text, realism-bands, formations]
 refs:
   index: 00-index.md
@@ -37,6 +37,7 @@ refs:
     - 05-implement-defending-and-discipline.md
     - 05-implement-tuning-loop.md
     - 05-implement-lone-forward.md
+    - 05-implement-keeper-and-shots.md
 next-command: wf-verify
 next-invocation: "/wf verify football-manager-match-engine tuning-loop"
 ---
@@ -189,7 +190,17 @@ next-invocation: "/wf verify football-manager-match-engine tuning-loop"
   - The seed-42 90-minute match on the default clubs ends 0-0 with no tactics change. A test that needs a goal or a tactics change uses `common::scoring_match()` (seed 7). The two-minute viewer reconnect test serves seed 5.
   - The red-card experiment plays each seed in both club orders (`--suite red-card --seed 1 --matches 240` equals the slow test). The criterion moved to `keeper-and-shots` (Q-LF2) and its slow test still fails; the measured cause is that a side with ten men attacks as if it had eleven. `keeper-and-shots` may now plan (Q-X4).
 
+- `keeper-and-shots` (implemented at commit `8fd407b`; AWAITING INPUT on Q-KS1 and Q-KS2): a new `shot` module and an optional `shots` tuning block. Every later slice inherits these changes:
+  - A shot counts on target when its flight, as struck, crosses between the posts under the bar. A keeper saves only such a shot, on the sourced curve by shot quality, and holds one save in three or parries it. An outfield defender within 3 m can block a shot once. A parry or a block leaves the defending side as the last touch. `keeper_catch_chance` covers only fast balls that are not shots.
+  - Penalties in play count `shots.penalty_xg` 0.76. The shoot-out uses the same save model, and its dive values are tuning values.
+  - `xg` is refitted (−4.191, −0.0441, 6.3836) and the saves read the fixed `shots.quality` model, so a later refit never moves play.
+  - On seed 42 over 1,000 matches: on target 0.387, goals per xG 1.098, goal kicks 13.1, corners 1.59 per team, goals 1.88 per match (under the band, which `realism-tuning` owns).
+  - Test seams under the `scenario` feature: `Scene::penalty()`, `Simulation::last_touch()`, `shot_census()` and `shot_flight()`.
+  - Open: the red-card criterion fails all three arms (Q-KS1), and corners stay under the 3.0 floor at every in-bounds setting (Q-KS2).
+
 ## Recommended Next Stage
+
+- `/wf implement football-manager-match-engine keeper-and-shots` (blocked: after the product owner answers Q-KS1 and Q-KS2 in `po-answers.md`)
 
 - `/wf verify football-manager-match-engine lone-forward` (new: the three kept criteria on the shipped values; the evidence is in `implement-evidence/lone-forward/shipped/`)
 
