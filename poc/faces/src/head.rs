@@ -171,8 +171,10 @@ impl BaseHead {
 
         // Identity: signed shape axes.
         for (axis, decr, incr) in SHAPE_TARGETS {
-            // Gain so identity differences read at portrait size.
-            let x = (g.shape_axis(axis) * 1.35).clamp(-1.0, 1.0);
+            // MakeHuman targets at weight 1 are caricature extremes. Normal
+            // human variation is a fraction of that: skull and overall
+            // proportions vary least, features a little more.
+            let x = g.shape_axis(axis) * shape_range(axis);
             push_signed(&mut w, decr, incr, x);
         }
 
@@ -212,6 +214,15 @@ const SHAPE_TARGETS: [(&str, &str, &str); 24] = [
     ("ear-size", "ears/{s}-ear-scale-decr", "ears/{s}-ear-scale-incr"),
     ("neck-width", "neck/neck-scale-horiz-decr", "neck/neck-scale-horiz-incr"),
 ];
+
+/// Largest target weight a shape gene of +-1 can reach.
+fn shape_range(axis: &str) -> f32 {
+    match axis {
+        "head-width" | "head-height" | "head-depth" | "head-square-oval" | "neck-width" => 0.25,
+        "face-fullness" | "jaw-width" | "forehead-height" => 0.3,
+        _ => 0.45,
+    }
+}
 
 fn expand(name: &str) -> Vec<String> {
     if name.contains("{s}") {

@@ -180,7 +180,7 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--guidance", type=float, default=5.0)
     ap.add_argument("--adapter-scale", type=float, default=0.8)
-    ap.add_argument("--res", type=int, default=768, help="internal working resolution (multiple of 64)")
+    ap.add_argument("--res", type=int, default=512, help="internal working resolution (multiple of 64)")
     ap.add_argument("--threads", type=int, default=os.cpu_count())
     ap.add_argument("--arena", action="store_true", help="enable ORT CPU memory arena (more RAM)")
     ap.add_argument("--log", help="append one JSON line per image to this file")
