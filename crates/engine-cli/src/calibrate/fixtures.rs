@@ -1,5 +1,6 @@
 //! The fixture list of a calibration run: generated leagues of 20 clubs, each playing a
-//! double round-robin, with a seed per match and the stronger club of the strength suite.
+//! double round-robin, with a seed per match, the stronger club of the strength suite, and
+//! the formation pairing of the formations suite.
 
 use engine::Content;
 use engine::data::TeamFile;
@@ -40,6 +41,44 @@ pub fn fixtures(matches: u32) -> Vec<Fixture> {
             index,
             league: index / FIXTURES_PER_LEAGUE,
             clubs: one[(index % FIXTURES_PER_LEAGUE) as usize],
+        })
+        .collect()
+}
+
+/// Every pairing of `n` formations, a formation against itself included: each `[a, b]` with
+/// `a <= b`, in order. Ten formations give 55 pairings.
+pub fn pairings(n: usize) -> Vec<[usize; 2]> {
+    (0..n).flat_map(|a| (a..n).map(move |b| [a, b])).collect()
+}
+
+/// One match of the formations suite.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FormationFixture {
+    /// The match, with the clubs of the equal suite's fixture at the same place in its
+    /// pairing.
+    pub fixture: Fixture,
+    /// The pairing's number in [`pairings`].
+    pub pairing: usize,
+    /// The side of the pairing's first formation: home on even places, away on odd ones.
+    pub first_side: usize,
+}
+
+/// The fixtures of the formations suite: `matches` matches for each of `pairings`
+/// pairings. Match `i` belongs to pairing `i / matches`, at place `i % matches`.
+pub fn formation_fixtures(matches: u32, pairings: usize) -> Vec<FormationFixture> {
+    let equal = fixtures(matches);
+    // At most 16 formations give 136 pairings.
+    (0..matches * pairings as u32)
+        .map(|index| {
+            let local = index % matches;
+            FormationFixture {
+                fixture: Fixture {
+                    index,
+                    ..equal[local as usize]
+                },
+                pairing: (index / matches) as usize,
+                first_side: (local % 2) as usize,
+            }
         })
         .collect()
 }
@@ -188,6 +227,32 @@ mod tests {
         assert_eq!(strong.players[0].attributes[&first], 100);
         assert_eq!(strong.players[1].attributes[&first], 46);
         assert_eq!(strong.club, file.club);
+    }
+
+    #[test]
+    fn ten_formations_give_fifty_five_pairings_each_once() {
+        let list = pairings(10);
+        assert_eq!(list.len(), 55);
+        assert_eq!(list[0], [0, 0]);
+        assert_eq!(list[1], [0, 1]);
+        assert_eq!(list[54], [9, 9]);
+        assert!(list.iter().all(|[a, b]| a <= b));
+        let unique: std::collections::BTreeSet<_> = list.iter().collect();
+        assert_eq!(unique.len(), 55);
+    }
+
+    #[test]
+    fn a_pairing_plays_the_equal_clubs_and_alternates_its_home_formation() {
+        let equal = fixtures(4);
+        let list = formation_fixtures(4, 3);
+        assert_eq!(list.len(), 12);
+        for (i, f) in list.iter().enumerate() {
+            assert_eq!(f.fixture.index, i as u32);
+            assert_eq!(f.pairing, i / 4);
+            assert_eq!(f.fixture.clubs, equal[i % 4].clubs);
+            assert_eq!(f.fixture.league, equal[i % 4].league);
+            assert_eq!(f.first_side, i % 2);
+        }
     }
 
     #[test]

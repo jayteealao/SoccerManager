@@ -190,10 +190,10 @@ Play many AI-managed matches and check the realism bands.
 | Flag | Value | Default | Meaning |
 |---|---|---|---|
 | `--seed` | integer | required | The seed of the run: the leagues, the fixtures, and every match seed. |
-| `--matches` | integer | 1000 | Matches in each suite. |
+| `--matches` | integer | 1000 | Matches in each suite, and in each formation pairing of the formations suite. |
 | `--minutes` | integer | 90 | Minutes of play in each match. |
 | `--jobs` | integer | the number of logical cores | Worker processes. |
-| `--suite` | `all`, `equal`, `strength` | `all` | The suites to play. |
+| `--suite` | `all`, `equal`, `strength`, `formations` | `all` | The suites to play. `all` plays all three. |
 | `--out` | folder | `runs/<run.id>` in the data folder | The run folder. |
 | `--keep-events` | `outliers`, `all` | `outliers` | The event files to keep at the end of the run. |
 | `--flag` | `NAME=on` or `NAME=off` | the state in `tuning.json` | Set a feature flag for the whole run. Repeat it for more than one flag. The flag must be declared in `tuning.json`. |
@@ -201,9 +201,19 @@ Play many AI-managed matches and check the realism bands.
 
 Output: the run report as one JSON line. Files: `report.json`, `stats/<match.id>.json`, and `events/<match.id>.jsonl` in the run folder.
 
+The three suites:
+
+- `equal`: clubs of the same generated strength. The run checks goals, shots, and possession, and the eleven bands of version 2 of `realism-bands.json`.
+- `strength`: one club of each match has every attribute raised by the bands' boost. The run checks that the stronger club wins more than half its matches.
+- `formations`: every pairing of the formations in `tactics.json`, a formation against itself included. Ten formations give 55 pairings, and each pairing plays `--matches` matches with the clubs of the equal suite, its first formation at home in every other match. The run checks goals per match, the share of matches with 10 or more goals, and the share of goalless matches for each pairing. `calib.formations` holds the figures of every pairing, and each of its band checks carries a `pairing` such as `4-3-3 v 4-4-2`.
+
+With the defaults, `--suite all` plays 57,000 matches: about 74 minutes on a 16-core machine. `--suite equal` plays 1,000 matches in about 80 seconds.
+
+Standard error names each failing band on its own `warn` line, with `signal` `calibrate.band_failed`, the suite, the band, the pairing when there is one, the value, and the range.
+
 A match the engine cannot play still writes its `stats/<match.id>.json`, with `outcome` `error`, the keys `error.type`, `error.code`, and `error.retriable`, and zero figures; the run goes on and leaves that match out of the bands. When a worker process fails, the run report has `outcome` `error`, `error.type` `worker`, `error.code` `worker-failed`, and `error.retriable` `false`.
 
-A paired run writes each arm to its own folder: `arms/off/stats/`, `arms/off/events/`, `arms/on/stats/`, and `arms/on/events/`. The one `report.json` stays at the top of the run folder. Its top-level figures are the off arm's. `calib.arms` holds both arms, `calib.compare` holds one row per suite and band with the off value and the on value side by side, and `calib.verdict` is `on-better`, `off-better`, `no-difference`, or `on-rejected`. The same table is printed on standard error.
+A paired run writes each arm to its own folder: `arms/off/stats/`, `arms/off/events/`, `arms/on/stats/`, and `arms/on/events/`. The one `report.json` stays at the top of the run folder. Its top-level figures are the off arm's. `calib.arms` holds both arms, `calib.compare` holds one row per suite, band, and formation pairing with the off value and the on value side by side, and `calib.verdict` is `on-better`, `off-better`, `no-difference`, or `on-rejected`. The same table is printed on standard error.
 
 A flag name that `tuning.json` does not declare, a state other than `on` or `off`, and a `--pair` flag also given with `--flag` are refused with exit code 1 before any match is played.
 

@@ -29,6 +29,13 @@ fn a_simulated_match_writes_records_that_validate_against_the_schemas() {
     let stats = record(&std::fs::read_to_string(folder.join("stats.json")).unwrap());
     schemas.stats(&stats).unwrap();
     assert_eq!(stats, printed);
+    // Throw-ins and goal kicks are two-team counts on every finished match.
+    for key in ["stats.throw_ins", "stats.goal_kicks"] {
+        let counts = stats[key]
+            .as_array()
+            .unwrap_or_else(|| panic!("{key} in {stats}"));
+        assert_eq!(counts.len(), 2, "{key}");
+    }
 
     let events = std::fs::read_to_string(folder.join("events.jsonl")).unwrap();
     let rows: Vec<_> = events.lines().map(record).collect();
@@ -101,6 +108,16 @@ fn the_schemas_accept_success_and_error_only_and_require_the_keys_of_each() {
     assert!(
         schemas.stats(&no_goals).is_err(),
         "success without stats.goals accepted"
+    );
+
+    let mut no_throw_ins = good.clone();
+    no_throw_ins
+        .as_object_mut()
+        .unwrap()
+        .remove("stats.throw_ins");
+    assert!(
+        schemas.stats(&no_throw_ins).is_err(),
+        "success without stats.throw_ins accepted"
     );
 
     // An error record needs no statistic, but it needs all three error keys.

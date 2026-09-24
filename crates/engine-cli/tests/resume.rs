@@ -76,6 +76,8 @@ fn a_resumed_match_reaches_the_same_full_time() {
         "stats.fouls",
         "stats.offsides",
         "stats.corners",
+        "stats.throw_ins",
+        "stats.goal_kicks",
         "rules.stoppages",
         "possession.changes",
     ] {

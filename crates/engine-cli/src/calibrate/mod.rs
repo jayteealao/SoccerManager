@@ -2,6 +2,9 @@
 //! processes of this binary, and write one run report that checks the aggregate figures
 //! against the accepted realism bands.
 //!
+//! `--suite all` plays three suites: equal clubs, a stronger club, and every formation
+//! pairing (`--matches` matches per pairing). Each failing band is named on standard error.
+//!
 //! Run folder: `report.json`, `stats/<match.id>.json` for every match, and
 //! `events/<match.id>.jsonl` for the matches kept (outliers by default). A paired run
 //! (`--pair <flag>`) plays every fixture twice, into `arms/off/` and `arms/on/`, and its one
@@ -26,7 +29,8 @@ use crate::cli::{CalibrateOpts, KeepEvents, SuiteArg};
 use crate::report::bands::Bands;
 use crate::report::compare::{self, Guard};
 use crate::report::{
-    ArmReport, BandCheck, CalibrationReport, FlagEntry, PairInfo, RunBuilder, Suite, SuiteFigures,
+    ArmReport, BandCheck, CalibrationReport, FlagEntry, PairInfo, PairingFigures, RunBuilder,
+    Suite, SuiteFigures,
 };
 
 /// Matches the single-thread benchmark times after its warm-up.
@@ -42,6 +46,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         let suite = match opts.suite {
             SuiteArg::Equal => Suite::Equal,
             SuiteArg::Strength => Suite::Strength,
+            SuiteArg::Formations => Suite::Formations,
             SuiteArg::All => anyhow::bail!("a worker plays one suite"),
         };
         let run_dir = opts
@@ -95,11 +100,34 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         .unwrap_or_else(|| data.join("runs").join(&run_id));
     std::fs::create_dir_all(&run_dir)
         .with_context(|| format!("cannot create the run folder runs/{run_id}"))?;
+    let suites = match opts.suite {
+        SuiteArg::All => Suite::ALL.to_vec(),
+        SuiteArg::Equal => vec![Suite::Equal],
+        SuiteArg::Strength => vec![Suite::Strength],
+        SuiteArg::Formations => vec![Suite::Formations],
+    };
+    let formation_names: Vec<String> = loaded
+        .content
+        .tactics
+        .formations
+        .iter()
+        .map(|f| f.name.clone())
+        .collect();
+    let pairings: Vec<[String; 2]> = fixtures::pairings(formation_names.len())
+        .into_iter()
+        .map(|p| p.map(|i| formation_names[i].clone()))
+        .collect();
+    // The largest suite sets how many workers can have work. At most 136 pairings.
+    let most = if suites.contains(&Suite::Formations) {
+        opts.matches.saturating_mul(pairings.len() as u32)
+    } else {
+        opts.matches
+    };
     let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
     let jobs = opts
         .jobs
         .unwrap_or(u32::try_from(cores).unwrap_or(u32::MAX))
-        .clamp(1, opts.matches);
+        .clamp(1, most);
     let ctx = RunCtx {
         dir: &dir,
         opts,
@@ -107,11 +135,8 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         bands: Bands::load(&dir)?,
         exe: std::env::current_exe().context("cannot find this program to start workers")?,
         jobs,
-        suites: match opts.suite {
-            SuiteArg::All => Suite::ALL.to_vec(),
-            SuiteArg::Equal => vec![Suite::Equal],
-            SuiteArg::Strength => vec![Suite::Strength],
-        },
+        suites,
+        pairings,
         millis,
         run_id: &run_id,
     };
@@ -161,6 +186,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         suites: suite_codes(&first.figures),
         wall_ms: first.wall_ms.clone(),
         bands: first.checks.clone(),
+        formations: first.formations.clone(),
         pass: first.pass,
         bench_matches: BENCH_MATCHES,
         match_wall_ms: first.bench.match_wall_ms,
@@ -242,6 +268,8 @@ struct RunCtx<'a> {
     exe: PathBuf,
     jobs: u32,
     suites: Vec<Suite>,
+    /// The formation names of each pairing of the formations suite.
+    pairings: Vec<[String; 2]>,
     millis: u64,
     run_id: &'a str,
 }
@@ -252,6 +280,7 @@ struct Arm {
     content_hash: String,
     flags_on: Vec<String>,
     figures: BTreeMap<Suite, SuiteFigures>,
+    formations: Vec<PairingFigures>,
     checks: Vec<BandCheck>,
     wall_ms: BTreeMap<String, u64>,
     pass: bool,
@@ -290,6 +319,7 @@ impl Arm {
             suites: suite_codes(&self.figures),
             wall_ms: self.wall_ms.clone(),
             bands: self.checks.clone(),
+            formations: self.formations.clone(),
             pass: self.pass,
             change_never_applied: self.change_never_applied,
             change_expired_at_full_time: self.change_expired_at_full_time,
@@ -349,7 +379,7 @@ impl RunCtx<'_> {
                 signal = "calibrate.suite",
                 run.id = %self.run_id,
                 suite = suite.code(),
-                matches = opts.matches,
+                matches = self.planned(suite).len(),
                 wall_ms,
                 jobs = self.jobs
             );
@@ -367,13 +397,19 @@ impl RunCtx<'_> {
         let events_written = count_files(&events_dir);
         let mut builder = RunBuilder::new(self.bands.clone());
         for &suite in &self.suites {
-            builder.plan(suite, opts.matches);
-            for fixture in fixtures::fixtures(opts.matches) {
-                let id = fixtures::match_id(opts.seed, suite, fixture.index, self.millis);
-                let boosted = (suite == Suite::Strength).then(|| fixture.boosted_side());
+            if suite == Suite::Formations {
+                builder.plan_pairings(opts.matches, self.pairings.clone());
+            } else {
+                builder.plan(suite, opts.matches);
+            }
+            for planned in self.planned(suite) {
+                let id = fixtures::match_id(opts.seed, suite, planned.index, self.millis);
                 match read_stats(&arm_dir.join("stats").join(format!("{id}.json"))) {
                     Ok(stats) => {
-                        let outlier = builder.add(suite, stats, boosted);
+                        let outlier = match planned.pairing {
+                            Some((pairing, side)) => builder.add_pairing(stats, pairing, side),
+                            None => builder.add(suite, stats, planned.boosted),
+                        };
                         if !outlier && opts.keep_events == KeepEvents::Outliers {
                             let _ = std::fs::remove_file(events_dir.join(format!("{id}.jsonl")));
                         }
@@ -386,7 +422,8 @@ impl RunCtx<'_> {
         let events_kept = count_files(&events_dir);
 
         let figures = builder.figures();
-        let mut checks = builder.checks(&figures, &wall);
+        let formations = builder.pairing_figures();
+        let mut checks = builder.checks(&figures, &formations, &wall);
         let change_never_applied = builder.change_never_applied();
         let match_without_stats = builder.missing;
         for (counter, value) in [
@@ -401,7 +438,20 @@ impl RunCtx<'_> {
             && change_never_applied == 0
             && match_without_stats == 0
             && workers_failed == 0;
-        checks.sort_by(|a, b| (&a.suite, &a.band).cmp(&(&b.suite, &b.band)));
+        checks
+            .sort_by(|a, b| (&a.suite, &a.band, &a.pairing).cmp(&(&b.suite, &b.band, &b.pairing)));
+        for c in checks.iter().filter(|c| !c.pass) {
+            tracing::warn!(
+                signal = "calibrate.band_failed",
+                run.id = %self.run_id,
+                suite = %c.suite,
+                band = %c.band,
+                pairing = c.pairing.as_deref(),
+                value = c.value,
+                lo = c.lo,
+                hi = c.hi
+            );
+        }
         let mut wall_ms: BTreeMap<String, u64> = wall
             .iter()
             .map(|(s, &ms)| (s.code().to_string(), ms))
@@ -411,6 +461,7 @@ impl RunCtx<'_> {
             content_hash: config.content_hash.clone(),
             flags_on: content.flags.names().to_vec(),
             figures,
+            formations,
             checks,
             wall_ms,
             pass,
@@ -423,6 +474,40 @@ impl RunCtx<'_> {
             events_kept,
             bench,
         })
+    }
+}
+
+/// One planned match of a suite, as the parent reads it back.
+struct Planned {
+    index: u32,
+    /// The strength suite: the side of the boosted club.
+    boosted: Option<usize>,
+    /// The formations suite: the pairing and the side of its first formation.
+    pairing: Option<(usize, usize)>,
+}
+
+impl RunCtx<'_> {
+    /// Every match `suite` plays, in fixture order.
+    fn planned(&self, suite: Suite) -> Vec<Planned> {
+        let matches = self.opts.matches;
+        if suite == Suite::Formations {
+            return fixtures::formation_fixtures(matches, self.pairings.len())
+                .into_iter()
+                .map(|f| Planned {
+                    index: f.fixture.index,
+                    boosted: None,
+                    pairing: Some((f.pairing, f.first_side)),
+                })
+                .collect();
+        }
+        fixtures::fixtures(matches)
+            .into_iter()
+            .map(|f| Planned {
+                index: f.index,
+                boosted: (suite == Suite::Strength).then(|| f.boosted_side()),
+                pairing: None,
+            })
+            .collect()
     }
 }
 

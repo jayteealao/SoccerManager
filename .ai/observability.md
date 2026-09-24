@@ -38,6 +38,8 @@ schema-domain:
   - { key: "stats.pass_accuracy_pct", type: "float", unit: "engine" }
   - { key: "stats.fouls", type: "int", unit: "engine" }
   - { key: "stats.corners", type: "int", unit: "engine" }
+  - { key: "stats.throw_ins", type: "int", unit: "engine" }
+  - { key: "stats.goal_kicks", type: "int", unit: "engine" }
   - { key: "stats.offsides", type: "int", unit: "engine" }
   - { key: "stats.goals", type: "int", unit: "engine" }
   - { key: "fatigue.mean_pct", type: "float", unit: "engine" }
@@ -57,6 +59,7 @@ schema-domain:
   - { key: "bench.matches", type: "int", unit: "engine-cli" }
   - { key: "machine.hash", type: "string", unit: "engine-cli" }
   - { key: "darkpath.change_never_applied", type: "int", unit: "engine" }
+  - { key: "change.expired_at_full_time", type: "int", unit: "engine" }
   - { key: "darkpath.match_without_stats", type: "int", unit: "engine-cli" }
   - { key: "darkpath.viewer_dropped_ticks", type: "int", unit: "viewer" }
   - { key: "viewer.frame_ms_p50", type: "float", unit: "viewer" }
@@ -112,7 +115,7 @@ backend:
 dashboards:
   target: in-repo-dashboard-page
   analyses:
-    - { id: realism-bands, query-intent: "distributions of goals per match, shots per team, possession, and win rate of the stronger team per run-report, drawn against the accepted bands" }
+    - { id: realism-bands, query-intent: "distributions of goals per match, shots per team, possession, and win rate of the stronger team per run-report, the eleven bands of version 2, and the goal bands of every formation pairing (calib.formations), drawn against the accepted bands" }
     - { id: performance-tripwires, query-intent: "engine.ticks_per_s, bench.match_wall_ms, bench.cpu_ms, and bench.peak_mem_mb per build.hash, with the 10 percent CPU and 25 percent memory tripwires" }
     - { id: dark-paths, query-intent: "the three dark-path counters per run and per match; any non-zero value is highlighted" }
     - { id: match-timeline, query-intent: "one match's match-event stream by minute with score, xG, fatigue, cards, substitutions, and queued versus applied ticks of every change" }
@@ -137,14 +140,14 @@ client-edge:
 additional-contracts:
   - id: realism-bands
     purpose: "The accepted realism thresholds live as data so the calibration harness, the dashboard, and the audit read one source."
-    fields: { goals_per_match: "2.4-3.2", shots_per_team: "8-16", possession_pct: "35-65", stronger_team_win_rate: ">0.50 with 15 percent higher attributes", sample_size: 1000 }
-    enforced-by: "calibration harness assertion; audit lens schema-and-emit"
+    fields: { schema_version: 2, goals_per_match: "2.4-3.2", shots_per_team: "8-16", possession_pct: "35-65", stronger_team_win_rate: ">0.50 with 15 percent higher attributes", ten_plus_goals_share: "0-0.005", sending_off_share: "0.08-0.22", yellow_cards_per_team: "1.2-2.6", shots_on_target_share: "0.30-0.42", goals_per_xg: "0.85-1.15", passes_per_team: "350-550", pass_accuracy_pct: "75-88", corners_per_team: "3.5-6.5", throw_ins_per_match: "35-55", goal_kicks_per_match: "12-22", goalless_share: "0.04-0.12", formation_pairings: "goals_per_match, ten_plus_goals_share and goalless_share for every pairing of the shipped formations", sample_size: 1000 }
+    enforced-by: "calibration harness assertion (signal calibrate.band_failed names each miss on stderr); audit lens schema-and-emit"
   - id: benchmark-tripwires
     purpose: "Every engine slice after the first reruns the benchmark and fails on regression."
     fields: { budget_match_wall_ms: 2000, budget_1000_matches_min: 30, cpu_regression_pct: 10, memory_regression_pct: 25, threads: 1 }
     enforced-by: "benchmark harness compare; verify"
   - id: dark-paths
-    purpose: "Three counters must read zero over every calibration run."
+    purpose: "Three counters must read zero over every calibration run. change_never_applied counts only a change that a stoppage admitting its kind should have applied and did not; a change still queued at full time because no admitting stoppage came after it was queued is expired, counted in change.expired_at_full_time, with no zero rule."
     fields: { change_never_applied: 0, match_without_stats: 0, viewer_dropped_ticks_silent: 0 }
     enforced-by: "calibration harness assertion; dashboard dark-paths; audit"
   - id: schema-versioning
@@ -168,8 +171,8 @@ The one decision that most shapes debuggability is the schema: four record kinds
 Four record kinds carry the vocabulary in Block A:
 
 1. `match-event`: one record per engine event, appended as the event happens. Keys: correlation, service, `tick`, `minute`, `event.type`, `team.id`, `player.id`, `player.secondary_id`, the score, and the change and snapshot keys where the event type uses them.
-2. `match-stats`: one wide event per match, emitted once at full time or abandonment. Keys: correlation, service, outcome, error, both teams' nine statistics, fatigue and injury summaries, the counts of queued, applied, and rejected changes, the snapshot count, engine lag summary, and the dark-path counter `darkpath.change_never_applied`.
-3. `run-report`: one record per calibrate or benchmark run. Keys: correlation (`run.id`, `seed`), service, outcome, `bench.*`, `machine.hash`, the aggregate of every `match-stats` record, the band checks, the tripwire checks, and the dark-path counters.
+2. `match-stats`: one wide event per match, emitted once at full time or abandonment. Keys: correlation, service, outcome, error, both teams' statistics (throw-ins and goal kicks included), fatigue and injury summaries, the counts of queued, applied, and rejected changes, the snapshot count, engine lag summary, the dark-path counter `darkpath.change_never_applied`, and `change.expired_at_full_time` (changes still queued at full time with no admitting stoppage after them; no zero rule).
+3. `run-report`: one record per calibrate or benchmark run. Keys: correlation (`run.id`, `seed`), service, outcome, `bench.*`, `machine.hash`, the aggregate of every `match-stats` record per suite (`equal`, `strength`, `formations`), the band checks (a check of the formations suite carries its `pairing`), the figures of every formation pairing (`calib.formations`), the tripwire checks, and the dark-path counters. Each failing band is also one `warn` line on stderr with `signal` `calibrate.band_failed`.
 4. `viewer-session`: one wide event per viewer session. Keys: correlation (`session.id`, `match.id`, `owner.id`), service, outcome, `viewer.*`, and `darkpath.viewer_dropped_ticks`.
 
 Every record carries `record.kind`, `schema.version`, `build.hash`, `service`, `version`, and `env`. `owner.id` is the actor key; `manager.kind` is `human` or `ai`. Keys are dotted and lower-case; one key per concept in every unit.
@@ -222,7 +225,7 @@ Ceiling: `emit-iac`, read here as files in the repository only: the schema files
 ## Additional contracts
 
 ### realism-bands
-The accepted thresholds as data: goals per match 2.4 to 3.2; shots per team 8 to 16; possession 35 to 65 percent; the stronger team (15 percent higher attributes) wins more than 50 percent; sample size 1000. Enforced by the calibration harness and the audit.
+The accepted thresholds as data, file version 2: goals per match 2.4 to 3.2; shots per team 8 to 16; possession 35 to 65 percent; the stronger team (15 percent higher attributes) wins more than 50 percent; sample size 1000. Version 2 adds eleven bands from real-match data, checked in the equal suite: matches with 10 or more goals at most 0.5 percent; matches with a sending-off 8 to 22 percent; yellow cards per team 1.2 to 2.6; shots on target 30 to 42 percent of shots; goals per expected goal 0.85 to 1.15; passes per team 350 to 550; pass accuracy 75 to 88 percent; corners per team 3.5 to 6.5; throw-ins per match 35 to 55; goal kicks per match 12 to 22; goalless matches 4 to 12 percent. The formations suite checks goals per match, the 10-or-more-goals share and the goalless share for every pairing of the shipped formations. A bands file of version 1 is refused. Enforced by the calibration harness and the audit.
 
 ### benchmark-tripwires
 One match under 2000 ms on one thread; 1000 matches under 30 minutes; more than 10 percent CPU or 25 percent memory regression between builds fails. Enforced by the benchmark harness compare and by verification.

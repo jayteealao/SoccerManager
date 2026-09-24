@@ -4,11 +4,13 @@
 //! The rule, in order: an on arm that breaks a guardrail is rejected; otherwise the arm that
 //! passes more bands wins; on equal passes, the arm closer to the band centres wins when the
 //! summed normalized distance differs by more than [`MARGIN`]; otherwise there is no
-//! difference, and the candidate is removed.
+//! difference, and the candidate is removed. A band that starts at 0 has no centre to aim
+//! for: only a value above its top adds distance.
 
 use serde::Serialize;
 
 use super::BandCheck;
+use super::bands::Band;
 
 /// The smallest difference in summed normalized distance that decides a tie on passes.
 pub const MARGIN: f64 = 0.05;
@@ -24,6 +26,9 @@ const STRONGER: &str = "stronger_team_win_rate";
 pub struct CompareRow {
     pub suite: String,
     pub band: String,
+    /// The formation pairing, for a row of the formations suite.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pairing: Option<String>,
     pub lo: f64,
     pub hi: f64,
     pub off: f64,
@@ -66,16 +71,19 @@ pub struct Guard {
     pub match_wall_ms: u64,
 }
 
-/// One row per suite and realism band that both arms judged. The time budget is not a
-/// realism band and is left out; each arm reports its own.
+/// One row per suite, realism band, and formation pairing that both arms judged. The time
+/// budget is not a realism band and is left out; each arm reports its own.
 pub fn compare(off: &[BandCheck], on: &[BandCheck]) -> Vec<CompareRow> {
     off.iter()
         .filter(|c| c.band != "wall_ms")
         .filter_map(|o| {
-            let n = on.iter().find(|c| c.suite == o.suite && c.band == o.band)?;
+            let n = on
+                .iter()
+                .find(|c| c.suite == o.suite && c.band == o.band && c.pairing == o.pairing)?;
             Some(CompareRow {
                 suite: o.suite.clone(),
                 band: o.band.clone(),
+                pairing: o.pairing.clone(),
                 lo: o.lo,
                 hi: o.hi,
                 off: o.value,
@@ -116,11 +124,20 @@ pub fn verdict(rows: &[CompareRow], off: &Guard, on: &Guard) -> Verdict {
 
 /// The summed distance of one arm to the band centres, each in half-widths of its band.
 /// The stronger team's win rate has a lower bound only, so it has no centre and counts as a
-/// pass and a guardrail, not as a distance.
+/// pass and a guardrail, not as a distance. A floor band (0 to `hi`) adds only the excess
+/// above `hi`, in widths of the band, so a passing 0 adds nothing.
 fn distance(rows: &[CompareRow], value: fn(&CompareRow) -> f64) -> f64 {
     rows.iter()
         .filter(|r| r.band != STRONGER && r.hi > r.lo)
-        .map(|r| (value(r) - (r.lo + r.hi) / 2.0).abs() / ((r.hi - r.lo) / 2.0))
+        .map(|r| {
+            let v = value(r);
+            let band = Band { lo: r.lo, hi: r.hi };
+            if band.is_floor() {
+                (v - r.hi).max(0.0) / r.hi
+            } else {
+                (v - (r.lo + r.hi) / 2.0).abs() / ((r.hi - r.lo) / 2.0)
+            }
+        })
         .sum()
 }
 
@@ -128,21 +145,22 @@ fn distance(rows: &[CompareRow], value: fn(&CompareRow) -> f64) -> f64 {
 pub fn render_table(flag: &str, rows: &[CompareRow], verdict: Verdict) -> String {
     let mut out = format!("paired run of flag {flag}\n");
     out.push_str(&format!(
-        "{:<9} {:<23} {:>15} {:>9} {:>9} {:>9}\n",
-        "suite", "band", "band range", "off", "on", "delta"
+        "{:<10} {:<23} {:>19} {:>9} {:>9} {:>9}  {}\n",
+        "suite", "band", "band range", "off", "on", "delta", "pairing"
     ));
     for r in rows {
         let mark = |pass: bool| if pass { ' ' } else { '*' };
         out.push_str(&format!(
-            "{:<9} {:<23} {:>15} {:>8.3}{} {:>8.3}{} {:>+9.3}\n",
+            "{:<10} {:<23} {:>19} {:>8.3}{} {:>8.3}{} {:>+9.3}  {}\n",
             r.suite,
             r.band,
-            format!("{:.2} to {:.2}", r.lo, r.hi),
+            format!("{:.3} to {:.3}", r.lo, r.hi),
             r.off,
             mark(r.off_pass),
             r.on,
             mark(r.on_pass),
-            r.delta
+            r.delta,
+            r.pairing.as_deref().unwrap_or("")
         ));
     }
     out.push_str("* outside the band\n");
@@ -163,6 +181,7 @@ mod tests {
                 "equal"
             }
             .into(),
+            pairing: None,
             value,
             lo,
             hi,
@@ -262,11 +281,45 @@ mod tests {
     }
 
     #[test]
+    fn a_floor_band_adds_only_the_excess_above_its_top() {
+        let floor = |v: f64| {
+            let arm = vec![check("ten_plus_goals_share", v, 0.0, 0.005)];
+            distance(&compare(&arm, &arm), |r| r.off)
+        };
+        assert_eq!(floor(0.0), 0.0);
+        assert_eq!(floor(0.005), 0.0);
+        assert!((floor(0.01) - 1.0).abs() < 1e-12, "{}", floor(0.01));
+        // The goals band keeps the distance to its centre.
+        let goals = rows((3.0, 12.0), (3.0, 12.0));
+        assert!((distance(&goals, |r| r.off) - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn rows_of_the_formations_suite_pair_by_pairing() {
+        let arm = |v: f64| {
+            ["4-4-2 v 4-4-2", "4-4-2 v 4-3-3"]
+                .map(|p| BandCheck {
+                    suite: "formations".into(),
+                    pairing: Some(p.into()),
+                    ..check("goals_per_match", v, 2.4, 3.2)
+                })
+                .to_vec()
+        };
+        let mut on = arm(3.0);
+        on.reverse();
+        let r = compare(&arm(2.8), &on);
+        assert_eq!(r.len(), 2);
+        assert_eq!(r[0].pairing.as_deref(), Some("4-4-2 v 4-4-2"));
+        assert_eq!(r[1].pairing.as_deref(), Some("4-4-2 v 4-3-3"));
+        assert!(r.iter().all(|r| r.on == 3.0 && r.off == 2.8));
+    }
+
+    #[test]
     fn the_table_names_every_row_and_the_verdict() {
         let r = rows((3.5, 12.0), (3.0, 12.0));
         let text = render_table("probe", &r, Verdict::OnBetter);
         assert!(text.contains("goals_per_match"), "{text}");
-        assert!(text.contains("2.40 to 3.20"), "{text}");
+        assert!(text.contains("2.400 to 3.200"), "{text}");
         assert!(text.contains("3.500*"), "{text}");
         assert!(text.ends_with("verdict: on-better\n"), "{text}");
     }

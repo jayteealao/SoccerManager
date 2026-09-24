@@ -1,6 +1,7 @@
 //! The run-scoped builder of a calibration run: it folds every `match-stats` record of a
 //! suite into the aggregate figures, checks them against the accepted realism bands, sums
-//! the dark paths, and names the outlier matches whose event files are kept.
+//! the dark paths, and names the outlier matches whose event files are kept. The formations
+//! suite is also folded per formation pairing.
 
 pub mod bands;
 pub mod compare;
@@ -22,15 +23,18 @@ pub enum Suite {
     Equal,
     /// One club of each match has every attribute raised by the bands' boost.
     Strength,
+    /// Every formation pairing, with the clubs of the equal suite.
+    Formations,
 }
 
 impl Suite {
-    pub const ALL: [Suite; 2] = [Suite::Equal, Suite::Strength];
+    pub const ALL: [Suite; 3] = [Suite::Equal, Suite::Strength, Suite::Formations];
 
     pub fn code(self) -> &'static str {
         match self {
             Suite::Equal => "equal",
             Suite::Strength => "strength",
+            Suite::Formations => "formations",
         }
     }
 
@@ -39,6 +43,7 @@ impl Suite {
         match self {
             Suite::Equal => 0,
             Suite::Strength => 1,
+            Suite::Formations => 2,
         }
     }
 }
@@ -74,8 +79,43 @@ pub struct SuiteFigures {
     /// The share of matches with both possessions inside the band.
     pub possession_in_band_share: f64,
     pub fouls_per_team_mean: f64,
+    /// The share of matches with 10 or more goals.
+    pub ten_plus_goals_share: f64,
+    /// The share of matches that end 0-0.
+    pub goalless_share: f64,
+    /// The share of matches with at least one player sent off.
+    pub sending_off_share: f64,
+    /// Yellow cards per team, a second yellow included.
+    pub yellow_cards_per_team_mean: f64,
+    /// Shots on target over all shots, pooled over the suite.
+    pub shots_on_target_share: f64,
+    /// Goals over expected goals, pooled over the suite.
+    pub goals_per_xg: f64,
+    pub corners_per_team_mean: f64,
+    pub throw_ins_per_match_mean: f64,
+    pub goal_kicks_per_match_mean: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stronger: Option<StrongerRecord>,
+}
+
+/// The figures of one formation pairing of the formations suite. `pairing` names the two
+/// formations; `goals_for_mean` is the goals each one scored per match, in the same order.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PairingFigures {
+    pub pairing: [String; 2],
+    /// Matches that played to the end.
+    pub matches: u32,
+    pub goals_per_match_mean: f64,
+    pub goals_for_mean: [f64; 2],
+    pub ten_plus_goals_share: f64,
+    pub goalless_share: f64,
+}
+
+impl PairingFigures {
+    /// The label of the pairing in a band check, for example `4-3-3 v 4-4-2`.
+    pub fn label(&self) -> String {
+        format!("{} v {}", self.pairing[0], self.pairing[1])
+    }
 }
 
 /// One band judged: `pass` when `value` lies in `lo` to `hi` (the win rate must exceed
@@ -84,6 +124,9 @@ pub struct SuiteFigures {
 pub struct BandCheck {
     pub band: String,
     pub suite: String,
+    /// The formation pairing, for a check of the formations suite.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pairing: Option<String>,
     pub value: f64,
     pub lo: f64,
     pub hi: f64,
@@ -97,6 +140,9 @@ struct SuiteAcc {
     records: Vec<MatchStats>,
     /// For each record of the strength suite: the side of the boosted club.
     boosted: Vec<Option<usize>>,
+    /// For each record of the formations suite: the pairing, and the side of its first
+    /// formation.
+    pairings: Vec<Option<(usize, usize)>>,
     outliers: u32,
 }
 
@@ -105,6 +151,8 @@ struct SuiteAcc {
 pub struct RunBuilder {
     bands: Bands,
     suites: BTreeMap<Suite, SuiteAcc>,
+    /// The formation names of each pairing of the formations suite.
+    pairing_names: Vec<[String; 2]>,
     /// Statistics records that never appeared (`darkpath.match_without_stats`).
     pub missing: u32,
 }
@@ -114,8 +162,16 @@ impl RunBuilder {
         Self {
             bands,
             suites: BTreeMap::new(),
+            pairing_names: Vec::new(),
             missing: 0,
         }
+    }
+
+    /// The formations suite plays `names.len()` pairings of `matches` matches each.
+    pub fn plan_pairings(&mut self, matches: u32, names: Vec<[String; 2]>) {
+        // At most 16 formations give 136 pairings.
+        self.plan(Suite::Formations, matches * names.len() as u32);
+        self.pairing_names = names;
     }
 
     /// `suite` planned `matches` matches.
@@ -126,11 +182,28 @@ impl RunBuilder {
     /// Folds one record in. `boosted` names the stronger club's side in the strength suite.
     /// Returns `true` when the match is an outlier.
     pub fn add(&mut self, suite: Suite, record: MatchStats, boosted: Option<usize>) -> bool {
+        self.push(suite, record, boosted, None)
+    }
+
+    /// Folds one record of the formations suite in: pairing `pairing`, with its first
+    /// formation on side `first_side`. Returns `true` when the match is an outlier.
+    pub fn add_pairing(&mut self, record: MatchStats, pairing: usize, first_side: usize) -> bool {
+        self.push(Suite::Formations, record, None, Some((pairing, first_side)))
+    }
+
+    fn push(
+        &mut self,
+        suite: Suite,
+        record: MatchStats,
+        boosted: Option<usize>,
+        pairing: Option<(usize, usize)>,
+    ) -> bool {
         let outlier = self.outlier(&record);
         let acc = self.suites.entry(suite).or_default();
         acc.outliers += u32::from(outlier);
         acc.records.push(record);
         acc.boosted.push(boosted);
+        acc.pairings.push(pairing);
         outlier
     }
 
@@ -175,6 +248,11 @@ impl RunBuilder {
         let per_match = |f: &dyn Fn(&MatchStats) -> f64| -> Vec<f64> {
             played.iter().map(|(r, _)| f(r)).collect()
         };
+        let share = |f: &dyn Fn(&MatchStats) -> bool| -> f64 {
+            round_to(mean(&per_match(&|r| f64::from(u8::from(f(r))))), 4)
+        };
+        let total = |f: &dyn Fn(&MatchStats) -> f64| -> f64 { per_match(f).iter().sum() };
+        let both = |a: [u32; 2]| f64::from(a[0] + a[1]);
         let goals = per_match(&|r| f64::from(r.goals[0] + r.goals[1]));
         let per_team = |f: &dyn Fn(&MatchStats, usize) -> f64| -> f64 {
             mean(
@@ -236,14 +314,83 @@ impl RunBuilder {
             possession_away_mean: round_to(mean(&per_match(&|r| r.figures.possession_pct[1])), 3),
             possession_in_band_share: round_to(mean(&in_band), 4),
             fouls_per_team_mean: round_to(per_team(&|r, t| f64::from(r.laws.fouls[t])), 3),
+            ten_plus_goals_share: share(&|r| r.goals[0] + r.goals[1] >= 10),
+            goalless_share: share(&|r| r.goals == [0, 0]),
+            sending_off_share: share(&|r| r.laws.red[0] + r.laws.red[1] > 0),
+            yellow_cards_per_team_mean: round_to(per_team(&|r, t| f64::from(r.laws.yellow[t])), 3),
+            shots_on_target_share: round_to(
+                ratio(
+                    total(&|r| both(r.figures.shots_on_target)),
+                    total(&|r| both(r.tactics.shots)),
+                ),
+                4,
+            ),
+            goals_per_xg: round_to(
+                ratio(
+                    total(&|r| both(r.goals)),
+                    total(&|r| r.figures.xg[0] + r.figures.xg[1]),
+                ),
+                4,
+            ),
+            corners_per_team_mean: round_to(per_team(&|r, t| f64::from(r.laws.corners[t])), 3),
+            throw_ins_per_match_mean: round_to(mean(&per_match(&|r| both(r.laws.throw_ins))), 3),
+            goal_kicks_per_match_mean: round_to(mean(&per_match(&|r| both(r.laws.goal_kicks))), 3),
             stronger,
         }
+    }
+
+    /// The figures of every pairing of the formations suite, in pairing order. A pairing
+    /// with no finished match has zero figures.
+    pub fn pairing_figures(&self) -> Vec<PairingFigures> {
+        let Some(acc) = self.suites.get(&Suite::Formations) else {
+            return Vec::new();
+        };
+        self.pairing_names
+            .iter()
+            .enumerate()
+            .map(|(i, names)| {
+                let played: Vec<(&MatchStats, usize)> = acc
+                    .records
+                    .iter()
+                    .zip(&acc.pairings)
+                    .filter_map(|(r, p)| match p {
+                        Some((pairing, side)) if *pairing == i && r.outcome == "success" => {
+                            Some((r, *side))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                let per_match = |f: &dyn Fn(&MatchStats, usize) -> f64| -> f64 {
+                    let xs: Vec<f64> = played.iter().map(|(r, side)| f(r, *side)).collect();
+                    mean(&xs)
+                };
+                let share = |f: &dyn Fn(&MatchStats) -> bool| -> f64 {
+                    round_to(per_match(&|r, _| f64::from(u8::from(f(r)))), 4)
+                };
+                PairingFigures {
+                    pairing: names.clone(),
+                    // A pairing holds at most 100 000 matches.
+                    matches: played.len() as u32,
+                    goals_per_match_mean: round_to(
+                        per_match(&|r, _| f64::from(r.goals[0] + r.goals[1])),
+                        3,
+                    ),
+                    goals_for_mean: [
+                        round_to(per_match(&|r, side| f64::from(r.goals[side])), 3),
+                        round_to(per_match(&|r, side| f64::from(r.goals[1 - side])), 3),
+                    ],
+                    ten_plus_goals_share: share(&|r| r.goals[0] + r.goals[1] >= 10),
+                    goalless_share: share(&|r| r.goals == [0, 0]),
+                }
+            })
+            .collect()
     }
 
     /// The band checks of the planned suites, given each suite's wall time.
     pub fn checks(
         &self,
         figures: &BTreeMap<Suite, SuiteFigures>,
+        pairings: &[PairingFigures],
         wall_ms: &BTreeMap<Suite, u64>,
     ) -> Vec<BandCheck> {
         let b = &self.bands;
@@ -252,6 +399,7 @@ impl RunBuilder {
             out.push(BandCheck {
                 band: band.to_string(),
                 suite: suite.code().to_string(),
+                pairing: None,
                 value,
                 lo,
                 hi,
@@ -295,6 +443,61 @@ impl RunBuilder {
                 p.hi,
                 within(p, f.possession_away_mean),
             );
+            // The bands of version 2, in the order of the bands file.
+            for (name, band, value) in [
+                (
+                    "ten_plus_goals_share",
+                    b.ten_plus_goals_share,
+                    f.ten_plus_goals_share,
+                ),
+                (
+                    "sending_off_share",
+                    b.sending_off_share,
+                    f.sending_off_share,
+                ),
+                (
+                    "yellow_cards_per_team",
+                    b.yellow_cards_per_team,
+                    f.yellow_cards_per_team_mean,
+                ),
+                (
+                    "shots_on_target_share",
+                    b.shots_on_target_share,
+                    f.shots_on_target_share,
+                ),
+                ("goals_per_xg", b.goals_per_xg, f.goals_per_xg),
+                ("passes_per_team", b.passes_per_team, f.passes_per_team_mean),
+                (
+                    "pass_accuracy_pct",
+                    b.pass_accuracy_pct,
+                    f.pass_accuracy_pct_mean,
+                ),
+                (
+                    "corners_per_team",
+                    b.corners_per_team,
+                    f.corners_per_team_mean,
+                ),
+                (
+                    "throw_ins_per_match",
+                    b.throw_ins_per_match,
+                    f.throw_ins_per_match_mean,
+                ),
+                (
+                    "goal_kicks_per_match",
+                    b.goal_kicks_per_match,
+                    f.goal_kicks_per_match_mean,
+                ),
+                ("goalless_share", b.goalless_share, f.goalless_share),
+            ] {
+                check(
+                    name,
+                    Suite::Equal,
+                    value,
+                    band.lo,
+                    band.hi,
+                    within(band, value),
+                );
+            }
         }
         if let Some(rec) = figures.get(&Suite::Strength).and_then(|f| f.stronger) {
             let lo = b.stronger_team.min_win_rate;
@@ -306,6 +509,29 @@ impl RunBuilder {
                 1.0,
                 rec.win_rate > lo,
             );
+        }
+        let mut paired = Vec::new();
+        for p in pairings {
+            let label = p.label();
+            for (name, band, value) in [
+                ("goals_per_match", b.goals_per_match, p.goals_per_match_mean),
+                (
+                    "ten_plus_goals_share",
+                    b.ten_plus_goals_share,
+                    p.ten_plus_goals_share,
+                ),
+                ("goalless_share", b.goalless_share, p.goalless_share),
+            ] {
+                paired.push(BandCheck {
+                    band: name.to_string(),
+                    suite: Suite::Formations.code().to_string(),
+                    pairing: Some(label.clone()),
+                    value,
+                    lo: band.lo,
+                    hi: band.hi,
+                    pass: band.contains(value),
+                });
+            }
         }
         for (&suite, &ms) in wall_ms {
             let matches = figures.get(&suite).map_or(0, |f| f.matches);
@@ -319,6 +545,7 @@ impl RunBuilder {
                 (ms as f64) < budget,
             );
         }
+        out.extend(paired);
         out
     }
 
@@ -342,6 +569,12 @@ impl RunBuilder {
     fn records(&self) -> impl Iterator<Item = &MatchStats> {
         self.suites.values().flat_map(|a| a.records.iter())
     }
+}
+
+/// `num` over `den`, or 0 when `den` is not positive, so a figure is never `NaN` (which
+/// the record would write as `null`).
+fn ratio(num: f64, den: f64) -> f64 {
+    if den > 0.0 { num / den } else { 0.0 }
 }
 
 fn mean(xs: &[f64]) -> f64 {
@@ -394,6 +627,9 @@ pub struct CalibrationReport {
     pub wall_ms: BTreeMap<String, u64>,
     #[serde(rename = "calib.bands")]
     pub bands: Vec<BandCheck>,
+    /// The figures of every formation pairing; absent when the formations suite did not run.
+    #[serde(rename = "calib.formations", skip_serializing_if = "Vec::is_empty")]
+    pub formations: Vec<PairingFigures>,
     /// Every band, both dark paths, and the time budget pass.
     #[serde(rename = "calib.pass")]
     pub pass: bool,
@@ -480,6 +716,8 @@ pub struct ArmReport {
     pub wall_ms: BTreeMap<String, u64>,
     #[serde(rename = "calib.bands")]
     pub bands: Vec<BandCheck>,
+    #[serde(rename = "calib.formations", skip_serializing_if = "Vec::is_empty")]
+    pub formations: Vec<PairingFigures>,
     #[serde(rename = "calib.pass")]
     pub pass: bool,
     #[serde(rename = "darkpath.change_never_applied")]
@@ -528,6 +766,10 @@ mod tests {
         Bands::load(&dir).unwrap()
     }
 
+    /// A finished match with these goals, shots, and possessions. Every other figure is a
+    /// realistic value inside its band: 36 percent of shots on target, one expected goal per
+    /// goal, 430 passes at 82 percent, 2 yellow cards, 5 corners, 22 throw-ins, and 8 goal
+    /// kicks per team, and no card red.
     fn record(goals: [u32; 2], shots: [u32; 2], possession: [f64; 2]) -> MatchStats {
         MatchStats {
             owner_id: "0123456789abcdef0123456789abcdef".into(),
@@ -555,13 +797,23 @@ mod tests {
             ball_idle_ticks: 0,
             goals,
             flags_on: Vec::new(),
-            laws: LawStats::default(),
+            laws: LawStats {
+                yellow: [2, 2],
+                corners: [5, 5],
+                throw_ins: [22, 22],
+                goal_kicks: [8, 8],
+                ..LawStats::default()
+            },
             tactics: TacticsStats {
                 shots,
                 ..TacticsStats::default()
             },
             figures: MatchFigures {
                 goals,
+                shots_on_target: shots.map(|n| n * 36 / 100),
+                xg: goals.map(f64::from),
+                passes: [430, 430],
+                pass_accuracy_pct: [82.0, 82.0],
                 possession_pct: possession,
                 ..MatchFigures::default()
             },
@@ -569,37 +821,140 @@ mod tests {
         }
     }
 
+    /// The version-2 bands of the equal suite, in the order of the bands file.
+    const V2: [&str; 11] = [
+        "ten_plus_goals_share",
+        "sending_off_share",
+        "yellow_cards_per_team",
+        "shots_on_target_share",
+        "goals_per_xg",
+        "passes_per_team",
+        "pass_accuracy_pct",
+        "corners_per_team",
+        "throw_ins_per_match",
+        "goal_kicks_per_match",
+        "goalless_share",
+    ];
+
     #[test]
     fn the_equal_suite_aggregates_and_checks_every_band() {
         let mut b = RunBuilder::new(bands());
-        b.plan(Suite::Equal, 3);
-        assert!(!b.add(Suite::Equal, record([2, 1], [12, 10], [52.0, 48.0]), None));
-        assert!(!b.add(Suite::Equal, record([1, 2], [9, 14], [45.0, 55.0]), None));
+        b.plan(Suite::Equal, 11);
+        // Ten matches: one goalless, one with a sending-off, 30 goals in all.
+        let scores = [
+            [0, 0],
+            [2, 1],
+            [1, 2],
+            [2, 1],
+            [1, 2],
+            [3, 0],
+            [0, 3],
+            [2, 2],
+            [3, 1],
+            [1, 3],
+        ];
+        for (i, goals) in scores.into_iter().enumerate() {
+            let (shots, possession) = if i % 2 == 0 {
+                ([12, 10], [52.0, 48.0])
+            } else {
+                ([9, 14], [45.0, 55.0])
+            };
+            let mut r = record(goals, shots, possession);
+            if i == 1 {
+                r.laws.red = [1, 0];
+            }
+            assert!(!b.add(Suite::Equal, r, None));
+        }
         b.add_missing();
         let figures = b.figures();
         let f = &figures[&Suite::Equal];
-        assert_eq!(f.matches, 3);
-        assert_eq!(f.recorded, 2);
+        assert_eq!(f.matches, 11);
+        assert_eq!(f.recorded, 10);
         assert_eq!(f.goals_per_match_mean, 3.0);
-        assert_eq!(f.goals_per_match_sd, 0.0);
         assert_eq!(f.shots_per_team_mean, 11.25);
         assert_eq!(f.possession_home_mean, 48.5);
         assert_eq!(f.possession_in_band_share, 1.0);
+        assert_eq!(f.ten_plus_goals_share, 0.0);
+        assert_eq!(f.goalless_share, 0.1);
+        assert_eq!(f.sending_off_share, 0.1);
+        assert_eq!(f.yellow_cards_per_team_mean, 2.0);
+        // 12, 10, 9, and 14 shots give 4, 3, 3, and 5 on target: 75 of 225.
+        assert_eq!(f.shots_on_target_share, 0.3333);
+        assert_eq!(f.goals_per_xg, 1.0);
+        assert_eq!(f.corners_per_team_mean, 5.0);
+        assert_eq!(f.throw_ins_per_match_mean, 44.0);
+        assert_eq!(f.goal_kicks_per_match_mean, 16.0);
         assert_eq!(b.missing, 1);
         let wall = BTreeMap::from([(Suite::Equal, 1_000)]);
-        let checks = b.checks(&figures, &wall);
+        let checks = b.checks(&figures, &[], &wall);
         let names: Vec<&str> = checks.iter().map(|c| c.band.as_str()).collect();
+        let mut expected = vec![
+            "goals_per_match",
+            "shots_per_team",
+            "possession_home_pct",
+            "possession_away_pct",
+        ];
+        expected.extend(V2);
+        expected.push("wall_ms");
+        assert_eq!(names, expected);
+        assert!(checks.iter().all(|c| c.pass), "{checks:?}");
+        assert!(checks.iter().all(|c| c.pairing.is_none()));
+    }
+
+    #[test]
+    fn a_ratio_over_no_shots_is_zero_not_a_null() {
+        let mut b = RunBuilder::new(bands());
+        b.plan(Suite::Equal, 1);
+        b.add(Suite::Equal, record([0, 0], [0, 0], [50.0, 50.0]), None);
+        let f = &b.figures()[&Suite::Equal];
+        assert_eq!(f.shots_on_target_share, 0.0);
+        assert_eq!(f.goals_per_xg, 0.0);
+        let json = serde_json::to_string(f).unwrap();
+        assert!(!json.contains("null"), "{json}");
+    }
+
+    #[test]
+    fn the_formations_suite_checks_three_goal_bands_per_pairing() {
+        let mut b = RunBuilder::new(bands());
+        let names = vec![
+            ["4-4-2".to_string(), "4-4-2".to_string()],
+            ["4-4-2".to_string(), "4-3-3".to_string()],
+        ];
+        b.plan_pairings(2, names);
+        // Pairing 0: 3-0 and 2-1. Pairing 1: the 4-4-2 at home wins 6-5, then away loses 0-0.
+        b.add_pairing(record([3, 0], [12, 10], [50.0, 50.0]), 0, 0);
+        b.add_pairing(record([2, 1], [12, 10], [50.0, 50.0]), 0, 1);
+        b.add_pairing(record([6, 5], [12, 10], [50.0, 50.0]), 1, 0);
+        b.add_pairing(record([0, 0], [12, 10], [50.0, 50.0]), 1, 1);
+        let figures = b.figures();
+        assert_eq!(figures[&Suite::Formations].matches, 4);
+        let pairings = b.pairing_figures();
+        assert_eq!(pairings.len(), 2);
+        assert_eq!(pairings[0].label(), "4-4-2 v 4-4-2");
+        assert_eq!(pairings[0].matches, 2);
+        assert_eq!(pairings[0].goals_per_match_mean, 3.0);
+        // The first formation scored 3 at home, then 1 away.
+        assert_eq!(pairings[0].goals_for_mean, [2.0, 1.0]);
+        assert_eq!(pairings[1].goals_per_match_mean, 5.5);
+        assert_eq!(pairings[1].ten_plus_goals_share, 0.5);
+        assert_eq!(pairings[1].goalless_share, 0.5);
+        let checks = b.checks(&figures, &pairings, &BTreeMap::new());
+        let rows: Vec<(&str, Option<&str>, bool)> = checks
+            .iter()
+            .map(|c| (c.band.as_str(), c.pairing.as_deref(), c.pass))
+            .collect();
         assert_eq!(
-            names,
+            rows,
             [
-                "goals_per_match",
-                "shots_per_team",
-                "possession_home_pct",
-                "possession_away_pct",
-                "wall_ms"
+                ("goals_per_match", Some("4-4-2 v 4-4-2"), true),
+                ("ten_plus_goals_share", Some("4-4-2 v 4-4-2"), true),
+                ("goalless_share", Some("4-4-2 v 4-4-2"), false),
+                ("goals_per_match", Some("4-4-2 v 4-3-3"), false),
+                ("ten_plus_goals_share", Some("4-4-2 v 4-3-3"), false),
+                ("goalless_share", Some("4-4-2 v 4-3-3"), false),
             ]
         );
-        assert!(checks.iter().all(|c| c.pass), "{checks:?}");
+        assert!(checks.iter().all(|c| c.suite == "formations"));
     }
 
     #[test]
@@ -609,19 +964,22 @@ mod tests {
         // Six shots and 70 percent possession: an outlier, and both bands miss.
         assert!(b.add(Suite::Equal, record([5, 1], [6, 6], [70.0, 30.0]), None));
         let figures = b.figures();
-        let checks = b.checks(&figures, &BTreeMap::new());
+        let checks = b.checks(&figures, &[], &BTreeMap::new());
         let failed: Vec<&str> = checks
             .iter()
             .filter(|c| !c.pass)
             .map(|c| c.band.as_str())
             .collect();
+        // One match with no card red and a score: the two share floors miss as well.
         assert_eq!(
             failed,
             [
                 "goals_per_match",
                 "shots_per_team",
                 "possession_home_pct",
-                "possession_away_pct"
+                "possession_away_pct",
+                "sending_off_share",
+                "goalless_share"
             ]
         );
         assert_eq!(figures[&Suite::Equal].outliers, 1);
@@ -654,7 +1012,7 @@ mod tests {
         assert_eq!((rec.wins, rec.draws, rec.losses), (1, 1, 1));
         assert_eq!(rec.win_rate, 0.3333);
         assert_eq!(figures[&Suite::Strength].failures, 1);
-        let checks = b.checks(&figures, &BTreeMap::new());
+        let checks = b.checks(&figures, &[], &BTreeMap::new());
         assert_eq!(checks.len(), 1);
         assert!(!checks[0].pass);
     }
@@ -665,7 +1023,7 @@ mod tests {
         b.plan(Suite::Equal, 1000);
         let figures = b.figures();
         let wall = BTreeMap::from([(Suite::Equal, 1_800_001)]);
-        let checks = b.checks(&figures, &wall);
+        let checks = b.checks(&figures, &[], &wall);
         let time = checks.iter().find(|c| c.band == "wall_ms").unwrap();
         assert_eq!(time.hi, 1_800_000.0);
         assert!(!time.pass);

@@ -40,7 +40,7 @@ To see the effect over many matches, run a calibration run:
 target/release/engine-cli calibrate --seed 2026 --matches 200 --content-dir my-content
 ```
 
-The run report compares goals, shots, and possession against the realism bands. The exit code is 2 when a band fails.
+The run report compares every realism band, and the goal bands of every formation pairing, against `realism-bands.json`. Standard error names each band that fails, and the exit code is 2 when a band fails. Add `--suite equal` to skip the formations suite, which plays 55 pairings. A `realism-bands.json` of version 1 is refused: copy the shipped file of version 2.
 
 ## Add a rule pack
 

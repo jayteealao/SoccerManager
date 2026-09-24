@@ -400,8 +400,12 @@ pub struct CalibrateOpts {
         long_help = "Seed of the run: the leagues, the fixtures, and every match seed."
     )]
     pub seed: u64,
-    /// Matches in each suite.
-    #[arg(long, default_value_t = 1000)]
+    /// Matches per suite or pairing.
+    #[arg(
+        long,
+        default_value_t = 1000,
+        long_help = "Matches in each suite and in each formation pairing."
+    )]
     pub matches: u32,
     /// Minutes of play per match.
     #[arg(long, default_value_t = 90)]
@@ -418,8 +422,9 @@ pub struct CalibrateOpts {
         value_enum,
         default_value = "all",
         hide_possible_values = true,
-        long_help = "Suites to run: equal strength, a stronger club, or both.\n\n\
-                     Values: all, equal, strength."
+        long_help = "Suites to run: equal strength, a stronger club, every formation\n\
+                     pairing, or all three.\n\n\
+                     Values: all, equal, strength, formations."
     )]
     pub suite: SuiteArg,
     /// Run folder; default SM_DATA_DIR/runs/<run.id>.
@@ -496,6 +501,7 @@ pub enum SuiteArg {
     All,
     Equal,
     Strength,
+    Formations,
 }
 
 /// Which event files a calibration run keeps.

@@ -430,10 +430,26 @@ mod tests {
     use crate::data::{Content, TACTICS_FILE};
 
     #[test]
-    fn the_shipped_file_loads_with_four_formations_and_five_mentalities() {
+    fn the_shipped_file_loads_with_ten_formations_and_five_mentalities() {
         let content = shipped_content();
         let t = &content.tactics;
-        assert_eq!(t.formations.len(), 4);
+        let names: Vec<&str> = t.formations.iter().map(|f| f.name.as_str()).collect();
+        // The four first formations keep their places, so saved lineups keep their shape.
+        assert_eq!(
+            names,
+            [
+                "4-4-2",
+                "4-3-3",
+                "4-2-3-1",
+                "3-5-2",
+                "4-1-4-1",
+                "4-4-1-1",
+                "4-1-2-1-2",
+                "3-4-3",
+                "5-3-2",
+                "5-4-1"
+            ]
+        );
         assert_eq!(t.mentalities.len(), 5);
         assert_eq!(t.instructions.defaults(), [1, 1, 1, 1, 1, 0]);
         assert_eq!(t.slots(0), crate::team::FORMATION_442);

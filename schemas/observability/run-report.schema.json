@@ -226,7 +226,8 @@
             "propertyNames": {
               "enum": [
                 "equal",
-                "strength"
+                "strength",
+                "formations"
               ]
             },
             "additionalProperties": {
@@ -238,8 +239,28 @@
                 "goals_per_match_mean",
                 "shots_per_team_mean",
                 "possession_home_mean",
-                "possession_away_mean"
-              ]
+                "possession_away_mean",
+                "ten_plus_goals_share",
+                "goalless_share",
+                "sending_off_share",
+                "yellow_cards_per_team_mean",
+                "shots_on_target_share",
+                "goals_per_xg",
+                "corners_per_team_mean",
+                "throw_ins_per_match_mean",
+                "goal_kicks_per_match_mean"
+              ],
+              "properties": {
+                "ten_plus_goals_share": { "type": "number", "minimum": 0, "maximum": 1 },
+                "goalless_share": { "type": "number", "minimum": 0, "maximum": 1 },
+                "sending_off_share": { "type": "number", "minimum": 0, "maximum": 1 },
+                "yellow_cards_per_team_mean": { "type": "number", "minimum": 0 },
+                "shots_on_target_share": { "type": "number", "minimum": 0, "maximum": 1 },
+                "goals_per_xg": { "type": "number", "minimum": 0 },
+                "corners_per_team_mean": { "type": "number", "minimum": 0 },
+                "throw_ins_per_match_mean": { "type": "number", "minimum": 0 },
+                "goal_kicks_per_match_mean": { "type": "number", "minimum": 0 }
+              }
             }
           },
           "calib.wall_ms": {
@@ -271,8 +292,14 @@
                 "suite": {
                   "enum": [
                     "equal",
-                    "strength"
+                    "strength",
+                    "formations"
                   ]
+                },
+                "pairing": {
+                  "description": "The formation pairing of a formations-suite check, for example 4-3-3 v 4-4-2.",
+                  "type": "string",
+                  "minLength": 1
                 },
                 "value": {
                   "type": "number"
@@ -286,6 +313,39 @@
                 "pass": {
                   "type": "boolean"
                 }
+              }
+            }
+          },
+          "calib.formations": {
+            "description": "The figures of every formation pairing of the formations suite. Absent when that suite did not run.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "pairing",
+                "matches",
+                "goals_per_match_mean",
+                "goals_for_mean",
+                "ten_plus_goals_share",
+                "goalless_share"
+              ],
+              "properties": {
+                "pairing": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "matches": { "type": "integer", "minimum": 0 },
+                "goals_per_match_mean": { "type": "number", "minimum": 0 },
+                "goals_for_mean": {
+                  "type": "array",
+                  "items": { "type": "number", "minimum": 0 },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "ten_plus_goals_share": { "type": "number", "minimum": 0, "maximum": 1 },
+                "goalless_share": { "type": "number", "minimum": 0, "maximum": 1 }
               }
             }
           },
@@ -429,11 +489,16 @@
                 "suite": {
                   "enum": [
                     "equal",
-                    "strength"
+                    "strength",
+                    "formations"
                   ]
                 },
                 "band": {
                   "type": "string"
+                },
+                "pairing": {
+                  "type": "string",
+                  "minLength": 1
                 },
                 "lo": {
                   "type": "number"

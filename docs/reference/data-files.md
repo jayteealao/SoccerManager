@@ -19,10 +19,10 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `attributes.json` | 1 | The attribute schema: 30 to 50 names in four groups |
 | `tuning.json` | 2 | Engine constants, decision weights, injury rates, generator distributions, fatigue curve, stream buffer |
 | `rules/default.json` | 4 | The rule pack |
-| `tactics.json` | 1 | Formations, mentalities, team instructions, roles, duties, and the AI manager's settings |
+| `tactics.json` | 1 | Ten formations, mentalities, team instructions, roles, duties, and the AI manager's settings |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
-| `realism-bands.json` | 1 | The accepted realism bands the calibration run checks. They are acceptance criteria, never tuning values |
+| `realism-bands.json` | 2 | The accepted realism bands the calibration run checks: four from version 1 and eleven from real-match data. They are acceptance criteria, never tuning values |
 
 Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`.
 

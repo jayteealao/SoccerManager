@@ -50,6 +50,7 @@ fn flagged_content(data: &Path) -> PathBuf {
     content
 }
 
+/// A short run of the equal suite only, so the test stays fast.
 fn calibrate(data: &Path, content: &Path, run: &Path, extra: &[&str]) -> std::process::Output {
     bin(data)
         .arg("--content-dir")
@@ -58,6 +59,8 @@ fn calibrate(data: &Path, content: &Path, run: &Path, extra: &[&str]) -> std::pr
             "calibrate",
             "--seed",
             "1",
+            "--suite",
+            "equal",
             "--matches",
             "4",
             "--minutes",
@@ -111,8 +114,8 @@ fn a_paired_run_plays_both_arms_on_the_same_seeds_and_compares_every_band() {
     let schemas = RecordSchemas::load();
     let off = stats_by_seed(&run.join("arms/off/stats"));
     let on = stats_by_seed(&run.join("arms/on/stats"));
-    assert_eq!(off.len(), 8);
-    assert_eq!(on.len(), 8);
+    assert_eq!(off.len(), 4);
+    assert_eq!(on.len(), 4);
     assert_eq!(
         off.keys().collect::<Vec<_>>(),
         on.keys().collect::<Vec<_>>(),
@@ -155,20 +158,29 @@ fn a_paired_run_plays_both_arms_on_the_same_seeds_and_compares_every_band() {
         json!([{ "name": FLAG, "owner": "engine team", "state": "paired", "source": "cli" }])
     );
 
-    // One row per suite and realism band, each with both values side by side.
+    // One row per realism band of the equal suite, sorted by name, each with both values
+    // side by side.
     let rows = report["calib.compare"].as_array().unwrap();
-    let names: Vec<(&str, &str)> = rows
-        .iter()
-        .map(|r| (r["suite"].as_str().unwrap(), r["band"].as_str().unwrap()))
-        .collect();
+    assert!(rows.iter().all(|r| r["suite"] == "equal"), "{rows:?}");
+    let names: Vec<&str> = rows.iter().map(|r| r["band"].as_str().unwrap()).collect();
     assert_eq!(
         names,
         [
-            ("equal", "goals_per_match"),
-            ("equal", "possession_away_pct"),
-            ("equal", "possession_home_pct"),
-            ("equal", "shots_per_team"),
-            ("strength", "stronger_team_win_rate"),
+            "corners_per_team",
+            "goal_kicks_per_match",
+            "goalless_share",
+            "goals_per_match",
+            "goals_per_xg",
+            "pass_accuracy_pct",
+            "passes_per_team",
+            "possession_away_pct",
+            "possession_home_pct",
+            "sending_off_share",
+            "shots_on_target_share",
+            "shots_per_team",
+            "ten_plus_goals_share",
+            "throw_ins_per_match",
+            "yellow_cards_per_team",
         ]
     );
     for row in rows {
@@ -188,6 +200,14 @@ fn a_paired_run_plays_both_arms_on_the_same_seeds_and_compares_every_band() {
     assert!(report["calib.verdict"].is_string());
     assert!(stderr.contains("verdict: "), "{stderr}");
     assert!(stderr.contains("goals_per_match"), "{stderr}");
+    // Each arm names its failing bands before the table.
+    let failed = stderr
+        .find("calibrate.band_failed")
+        .expect("a failing band line");
+    assert!(
+        failed < stderr.find("paired run of flag").unwrap(),
+        "{stderr}"
+    );
     let trusted = ["off", "on"].iter().all(|arm| {
         let a = &report["calib.arms"][*arm];
         a["darkpath.match_without_stats"] == 0

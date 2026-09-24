@@ -262,8 +262,8 @@ impl TacticsStats {
 }
 
 /// The law counts of one match. Per-team arrays are home first. `stats.fouls`,
-/// `stats.offsides`, `stats.corners`, and `rules.pack_version` are contract keys; the rest are
-/// additive extras.
+/// `stats.offsides`, `stats.corners`, `stats.throw_ins`, `stats.goal_kicks`, and
+/// `rules.pack_version` are contract keys; the rest are additive extras.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LawStats {
     #[serde(rename = "stats.fouls")]
@@ -272,6 +272,12 @@ pub struct LawStats {
     pub offsides: [u32; 2],
     #[serde(rename = "stats.corners")]
     pub corners: [u32; 2],
+    /// Throw-ins awarded to each team.
+    #[serde(rename = "stats.throw_ins")]
+    pub throw_ins: [u32; 2],
+    /// Goal kicks awarded to each team.
+    #[serde(rename = "stats.goal_kicks")]
+    pub goal_kicks: [u32; 2],
     #[serde(rename = "rules.pack_version")]
     pub pack_version: u32,
     #[serde(rename = "cards.yellow")]
@@ -337,6 +343,8 @@ impl LawStats {
             fouls: s.fouls,
             offsides: s.offsides,
             corners: s.corners,
+            throw_ins: s.throw_ins,
+            goal_kicks: s.goal_kicks,
             pack_version,
             yellow: s.yellow,
             red: s.red,
@@ -636,6 +644,8 @@ mod tests {
             "\"stats.fouls\":[3,4]",
             "\"stats.offsides\"",
             "\"stats.corners\"",
+            "\"stats.throw_ins\"",
+            "\"stats.goal_kicks\"",
             "\"rules.pack_version\":2",
             "\"cards.yellow\"",
             "\"cards.red\"",

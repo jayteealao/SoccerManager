@@ -1,6 +1,7 @@
 //! One calibration worker: the same binary started by the parent with hidden flags. It
 //! plays its share of one suite's fixtures, each with the AI manager on both sides, and
-//! writes one statistics file and one event file per match into the run folder.
+//! writes one statistics file and one event file per match into the run folder. In the
+//! formations suite, each side starts in its pairing's formation and keeps it.
 
 use std::path::Path;
 use std::time::Instant;
@@ -10,8 +11,8 @@ use engine::observe::{
     LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef, write_stats_at,
 };
 use engine::{
-    Commentary, Commentator, Content, ContentDir, EngineError, MatchConfig, Simulation, Validator,
-    VecSink,
+    Commentary, Commentator, Content, ContentDir, EngineError, MatchConfig, Simulation, Tactics,
+    Validator, VecSink,
 };
 use stream::EventWriter;
 
@@ -55,9 +56,9 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
     let mut leagues = Leagues::new(share.seed, &content);
     let shards = share.shards.max(1);
     let mut inject_match = share.inject == Some(InjectFailure::Match);
-    for fixture in fixtures::fixtures(share.matches)
+    for (fixture, formations) in planned(share.suite, share.matches, &content)
         .into_iter()
-        .filter(|f| f.index % shards == share.shard)
+        .filter(|(f, _)| f.index % shards == share.shard)
     {
         let match_id = fixtures::match_id(share.seed, share.suite, fixture.index, share.run_millis);
         let mut teams = leagues.teams(&fixture);
@@ -72,7 +73,7 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
             play(
                 share,
                 (&content, &commentary),
-                &teams,
+                (&teams, formations),
                 seed,
                 &owner_id,
                 &match_id,
@@ -101,17 +102,49 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
     Ok(0)
 }
 
+/// Every fixture of `suite`, with the formation of each side in the formations suite.
+fn planned(suite: Suite, matches: u32, content: &Content) -> Vec<(Fixture, Option<[u8; 2]>)> {
+    if suite != Suite::Formations {
+        return fixtures::fixtures(matches)
+            .into_iter()
+            .map(|f| (f, None))
+            .collect();
+    }
+    let pairings = fixtures::pairings(content.tactics.formations.len());
+    fixtures::formation_fixtures(matches, pairings.len())
+        .into_iter()
+        .map(|f| {
+            // A tactics file holds at most 16 formations.
+            let [first, second] = pairings[f.pairing].map(|i| i as u8);
+            let sides = if f.first_side == 0 {
+                [first, second]
+            } else {
+                [second, first]
+            };
+            (f.fixture, Some(sides))
+        })
+        .collect()
+}
+
 /// One match to full time, validated, with its events and their commentary lines written.
+/// `formations`, when present, is each side's starting formation.
 fn play(
     share: &Share<'_>,
     (content, commentary): (&Content, &Commentary),
-    teams: &[engine::data::TeamFile; 2],
+    (teams, formations): (&[engine::data::TeamFile; 2], Option<[u8; 2]>),
     seed: u64,
     owner_id: &str,
     match_id: &str,
     events_dir: &Path,
 ) -> Result<MatchStats, EngineError> {
-    let config = MatchConfig::new(seed, share.minutes, content, [&teams[0], &teams[1]])?;
+    let mut config = MatchConfig::new(seed, share.minutes, content, [&teams[0], &teams[1]])?;
+    if let Some(sides) = formations {
+        for (team, formation) in sides.into_iter().enumerate() {
+            let mut tactics = Tactics::defaults(&content.tactics);
+            tactics.set_formation(formation, &content.tactics);
+            config = config.with_tactics(team, tactics);
+        }
+    }
     let pack_version = config.rules.schema_version;
     let refs = team_refs(teams);
     let content_hash = config.content_hash.clone();

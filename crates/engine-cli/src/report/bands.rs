@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 /// The file name inside the content folder.
 pub const BANDS_FILE: &str = "realism-bands.json";
 /// The layout version this build reads.
-pub const BANDS_VERSION: u32 = 1;
+pub const BANDS_VERSION: u32 = 2;
 
 /// A closed range, `lo` to `hi`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
@@ -24,6 +24,11 @@ pub struct Band {
 impl Band {
     pub fn contains(&self, value: f64) -> bool {
         (self.lo..=self.hi).contains(&value)
+    }
+
+    /// A floor band starts at 0, so only a value above `hi` is a miss.
+    pub fn is_floor(&self) -> bool {
+        self.lo == 0.0 && self.hi > 0.0
     }
 }
 
@@ -68,6 +73,33 @@ pub struct Bands {
     /// The wall-time budget of one suite of `sample_size` matches, in minutes.
     #[garde(range(min = 0.1, max = 10_000.0))]
     pub wall_minutes_per_sample: f64,
+    /// Share of matches with 10 or more goals, 0 to 1.
+    #[garde(dive)]
+    pub ten_plus_goals_share: Band,
+    /// Share of matches with at least one sending-off, 0 to 1.
+    #[garde(dive)]
+    pub sending_off_share: Band,
+    #[garde(dive)]
+    pub yellow_cards_per_team: Band,
+    /// Shots on target over all shots, pooled, 0 to 1.
+    #[garde(dive)]
+    pub shots_on_target_share: Band,
+    /// Goals over expected goals, pooled.
+    #[garde(dive)]
+    pub goals_per_xg: Band,
+    #[garde(dive)]
+    pub passes_per_team: Band,
+    #[garde(dive)]
+    pub pass_accuracy_pct: Band,
+    #[garde(dive)]
+    pub corners_per_team: Band,
+    #[garde(dive)]
+    pub throw_ins_per_match: Band,
+    #[garde(dive)]
+    pub goal_kicks_per_match: Band,
+    /// Share of matches that end 0-0, 0 to 1.
+    #[garde(dive)]
+    pub goalless_share: Band,
 }
 
 impl Bands {
@@ -105,6 +137,59 @@ mod tests {
         assert_eq!(b.stronger_team.attribute_boost, 1.15);
         assert_eq!(b.stronger_team.min_win_rate, 0.5);
         assert_eq!(b.wall_budget_ms(1000), 1_800_000);
+        assert_eq!(b.ten_plus_goals_share, Band { lo: 0.0, hi: 0.005 });
+        assert_eq!(b.sending_off_share, Band { lo: 0.08, hi: 0.22 });
+        assert_eq!(b.yellow_cards_per_team, Band { lo: 1.2, hi: 2.6 });
+        assert_eq!(b.shots_on_target_share, Band { lo: 0.3, hi: 0.42 });
+        assert_eq!(b.goals_per_xg, Band { lo: 0.85, hi: 1.15 });
+        assert_eq!(
+            b.passes_per_team,
+            Band {
+                lo: 350.0,
+                hi: 550.0
+            }
+        );
+        assert_eq!(b.pass_accuracy_pct, Band { lo: 75.0, hi: 88.0 });
+        assert_eq!(b.corners_per_team, Band { lo: 3.5, hi: 6.5 });
+        assert_eq!(b.throw_ins_per_match, Band { lo: 35.0, hi: 55.0 });
+        assert_eq!(b.goal_kicks_per_match, Band { lo: 12.0, hi: 22.0 });
+        assert_eq!(b.goalless_share, Band { lo: 0.04, hi: 0.12 });
+        assert!(b.ten_plus_goals_share.is_floor());
+        assert!(!b.goalless_share.is_floor());
+    }
+
+    /// Writes `text` as the bands file of a scratch content folder and returns the refusal.
+    fn refusal(tag: &str, text: &str) -> String {
+        let dir = std::env::temp_dir().join(format!("bands-{tag}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(BANDS_FILE), text).unwrap();
+        let err = Bands::load(&ContentDir::at(&dir)).unwrap_err().to_string();
+        let _ = std::fs::remove_dir_all(&dir);
+        err
+    }
+
+    #[test]
+    fn a_version_one_file_is_refused_naming_the_file_and_the_version() {
+        let text = std::fs::read_to_string(shipped().path(BANDS_FILE))
+            .unwrap()
+            .replace("\"schema_version\": 2", "\"schema_version\": 1");
+        let err = refusal("v1", &text);
+        assert!(err.contains(BANDS_FILE), "{err}");
+        assert!(err.contains("schema_version 1"), "{err}");
+        assert!(err.contains("reads 2"), "{err}");
+    }
+
+    #[test]
+    fn a_file_without_a_band_is_refused_naming_the_field() {
+        let text: String = std::fs::read_to_string(shipped().path(BANDS_FILE))
+            .unwrap()
+            .lines()
+            .filter(|line| !line.contains("goals_per_xg"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(!text.contains("goals_per_xg"));
+        let err = refusal("missing", &text);
+        assert!(err.contains("goals_per_xg"), "{err}");
     }
 
     #[test]

@@ -179,6 +179,24 @@
       "minItems": 2,
       "maxItems": 2
     },
+    "stats.throw_ins": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "stats.goal_kicks": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
     "stats.offsides": {
       "type": "array",
       "items": {
@@ -318,6 +336,8 @@
           "stats.possession_pct",
           "stats.fouls",
           "stats.corners",
+          "stats.throw_ins",
+          "stats.goal_kicks",
           "stats.offsides",
           "rules.pack_version",
           "fatigue.mean_pct",
