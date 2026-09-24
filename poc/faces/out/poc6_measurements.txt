@@ -1,0 +1,14 @@
+measure at 24 (mm)          NAW    AFR    NHV6    CVD4    CVD1    KSI2   NHV13   NHV20
+face width zy-zy          137.0  137.0   131.6   134.5   128.8   144.1   133.8   134.1
+face height n-gn          121.3  128.0   119.1   134.6   113.0   129.3   125.7   129.1
+forehead height tr-n       67.1   72.0    63.4    58.7    72.3    66.1    64.5    65.8
+nose height n-sn           54.8   51.5    52.5    55.9    46.8    54.8    53.8    53.7
+lower face sn-me           72.6   77.5    66.7    78.7    66.2    74.5    71.9    75.3
+upper lip sn-sto           22.3   25.8    22.3    24.7    22.8    22.7    23.3    23.4
+lower lip+chin sto-me      50.3   51.7    44.3    54.0    43.4    51.9    48.5    51.9
+intercanthal en-en         33.3   34.0    27.3    28.2    23.8    32.4    26.2    30.2
+biocular ex-ex             91.2   97.5    89.7    94.6    87.5    93.3    90.5    93.0
+eye width ex-en            31.3   33.5    31.2    33.2    31.8    30.4    32.2    31.4
+nose width al-al           34.9   43.6    32.0    42.4    37.7    36.7    30.2    35.6
+mouth width ch-ch          54.5   55.2    52.1    55.6    50.6    52.6    50.1    55.4
+jaw width go-go            97.0  100.0    97.2   110.3    95.2   112.6   106.2   104.9

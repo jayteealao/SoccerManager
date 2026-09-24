@@ -52,6 +52,11 @@ fn neutral(race: usize) -> (Genome, AgeState) {
     (g, age)
 }
 
+/// Weights for a neutral head: FLAME identity betas off (mean face only).
+fn neutral_weights(bh: &BaseHead, g: &Genome, age: &AgeState) -> Vec<(String, f32)> {
+    bh.weights_for(g, age).into_iter().filter(|(n, _)| !n.starts_with("flame/beta")).collect()
+}
+
 fn measure_with(bh: &mut BaseHead, lm: &Landmarks, base: &[(String, f32)], extra: &[(String, f32)]) -> [f32; M] {
     let mut w = base.to_vec();
     w.extend_from_slice(extra);
@@ -116,7 +121,7 @@ fn fit(fb: &mut FaceBuilder, lm: &Landmarks) {
     let mut cal_out = Vec::new();
     for (race, name) in RACES.iter().enumerate() {
         let (g, age) = neutral(race);
-        let base = fb.base.weights_for(&g, &age);
+        let base = neutral_weights(&fb.base, &g, &age);
         let goal = goal(race);
         let mut x = vec![0.0f32; CAL.len()];
         for _round in 0..3 {
@@ -171,7 +176,7 @@ fn fit(fb: &mut FaceBuilder, lm: &Landmarks) {
     // Shape gene spread: a gene at 1 SD (0.45) should move its measure by
     // about one population SD.
     let (g, age) = neutral(2);
-    let base = fb.base.weights_for(&g, &age);
+    let base = neutral_weights(&fb.base, &g, &age);
     let mut spread = Vec::new();
     for (axis, k) in SPREAD {
         let (_, decr, incr) = SHAPE_TARGETS.iter().find(|t| t.0 == axis).unwrap();
@@ -207,12 +212,22 @@ fn fit(fb: &mut FaceBuilder, lm: &Landmarks) {
         src += &format!("    (\"{a}\", {r:.3}),\n");
     }
     src += "];\n";
-    std::fs::write(concat!(env!("CARGO_MANIFEST_DIR"), "/src/calibration.rs"), src).unwrap();
-    eprintln!("wrote src/calibration.rs; rebuild and rerun without --fit to check");
+    let (file, cmd) = if fb.base.flame.is_some() {
+        ("/src/calibration_flame.rs", "--fit --flame")
+    } else {
+        ("/src/calibration.rs", "--fit")
+    };
+    let src = src.replace("-- --fit`", &format!("-- {cmd}`"));
+    std::fs::write(format!("{}{file}", env!("CARGO_MANIFEST_DIR")), src).unwrap();
+    eprintln!("wrote {file}; rebuild and rerun without --fit to check");
 }
 
 fn main() {
     let mut fb = FaceBuilder::new().expect("MakeHuman assets");
+    let flame = std::env::args().any(|a| a == "--flame");
+    if flame {
+        fb.base.flame = Some(regen_faces_poc::flame::Flame::load().expect("FLAME transfer data"));
+    }
     let lm = Landmarks::find(&mut fb.base);
     if std::env::args().any(|a| a == "--fit") {
         fit(&mut fb, &lm);
@@ -221,7 +236,7 @@ fn main() {
     let mut cols: Vec<(String, [f32; M])> = Vec::new();
     for (i, race) in RACES.iter().enumerate() {
         let (g, age) = neutral(i);
-        let w = fb.base.weights_for(&g, &age);
+        let w = neutral_weights(&fb.base, &g, &age);
         cols.push((race.to_string(), lm.measure(&fb.base.build(&w))));
     }
     for (code, seed) in [("NHV", 6u64), ("CVD", 4), ("CVD", 1), ("KSI", 2), ("NHV", 13), ("NHV", 20)] {

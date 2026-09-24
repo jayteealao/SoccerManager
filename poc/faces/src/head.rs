@@ -37,6 +37,9 @@ pub struct BaseHead {
     dir: PathBuf,
     /// Apply the fitted proportion calibration (off only while fitting it).
     pub calibrate: bool,
+    /// PoC 6: FLAME layers. When set, FLAME supplies the mean face form and
+    /// the identity (its betas replace the hand-made shape genes).
+    pub flame: Option<crate::flame::Flame>,
 }
 
 /// A morphed head, compacted to only the vertices the cut uses.
@@ -89,7 +92,7 @@ impl BaseHead {
             }
         }
         tris.retain(|(t, p)| *p != Part::Skin || t.iter().all(|&i| base[i as usize].y > NECK_CUT_Y));
-        Ok(Self { base, tris, targets: HashMap::new(), dir, calibrate: true })
+        Ok(Self { base, tris, targets: HashMap::new(), dir, calibrate: true, flame: None })
     }
 
     /// Loads (and caches) a target by its path under `targets/`, without the
@@ -105,17 +108,81 @@ impl BaseHead {
 
     /// Applies weighted targets to the base mesh and returns the head cut.
     pub fn build(&mut self, weights: &[(String, f32)]) -> HeadMesh {
+        let has_flame = weights.iter().any(|(n, _)| n.starts_with("flame/"));
+        if !has_flame {
+            let pos = self.morph(weights);
+            return self.cut(pos);
+        }
+        // FLAME offsets were computed on the neutral base mesh; where the
+        // ancestry/age targets have also moved a fold (mouth corners, inner
+        // canthi, ear roots) the two can fold the skin through itself. Fade
+        // FLAME out locally wherever a triangle turns sharply against the
+        // same head built without FLAME.
+        let plain: Vec<(String, f32)> = weights.iter().filter(|(n, _)| !n.starts_with("flame/")).cloned().collect();
+        let without = self.morph(&plain);
+        let with = self.morph(weights);
+        let mut fade = vec![1.0f32; with.len()];
+        let skin: Vec<[u32; 3]> = self.tris.iter().filter(|(_, p)| *p == Part::Skin).map(|(t, _)| *t).collect();
+        let normal = |p: &[Vec3], t: &[u32; 3]| {
+            let (a, b, c) = (p[t[0] as usize], p[t[1] as usize], p[t[2] as usize]);
+            (b - a).cross(c - a).normalize_or_zero()
+        };
+        for _ in 0..40 {
+            let cur: Vec<Vec3> = without.iter().zip(&with).zip(&fade).map(|((a, b), f)| *a + (*b - *a) * *f).collect();
+            let mut hit = Vec::new();
+            for t in &skin {
+                if normal(&without, t).dot(normal(&cur, t)) < 0.5 {
+                    hit.extend_from_slice(t);
+                }
+            }
+            if hit.is_empty() {
+                break;
+            }
+            // Remove FLAME at the offending vertices, ease it out over two rings.
+            for v in &hit {
+                fade[*v as usize] = 0.0;
+            }
+            let mut ring: std::collections::HashSet<u32> = hit.into_iter().collect();
+            for _ in 0..2 {
+                let grow: Vec<u32> = skin
+                    .iter()
+                    .filter(|t| t.iter().any(|v| ring.contains(v)))
+                    .flat_map(|t| t.iter().copied())
+                    .collect();
+                ring.extend(grow);
+            }
+            for v in ring {
+                fade[v as usize] *= 0.7;
+            }
+        }
+        let pos = without.iter().zip(&with).zip(&fade).map(|((a, b), f)| *a + (*b - *a) * *f).collect();
+        self.cut(pos)
+    }
+
+    fn morph(&mut self, weights: &[(String, f32)]) -> Vec<Vec3> {
         let mut pos = self.base.clone();
         for (name, w) in weights {
             if w.abs() < 1e-4 {
                 continue;
             }
             let w = *w;
+            if let Some(rest) = name.strip_prefix("flame/") {
+                let fl = self.flame.as_ref().expect("flame/ weight without FLAME loaded");
+                let d = if rest == "conform" {
+                    &fl.conform
+                } else {
+                    &fl.dirs[rest.trim_start_matches("beta").parse::<usize>().unwrap()]
+                };
+                for (p, o) in pos.iter_mut().zip(d) {
+                    *p += *o * w;
+                }
+                continue;
+            }
             for (i, d) in self.target(name).iter() {
                 pos[*i as usize] += *d * w;
             }
         }
-        self.cut(pos)
+        pos
     }
 
     /// Cuts the head out of full base-mesh positions produced elsewhere (for
@@ -196,7 +263,13 @@ impl BaseHead {
 
         // Calibration toward measured adult male norms, per ancestry.
         if self.calibrate {
-            for (r, cal) in crate::calibration::CALIBRATION.iter().enumerate() {
+            // FLAME changes proportions, so it has its own fitted calibration.
+            let table = if self.flame.is_some() {
+                &crate::calibration_flame::CALIBRATION
+            } else {
+                &crate::calibration::CALIBRATION
+            };
+            for (r, cal) in table.iter().enumerate() {
                 for (name, x) in cal.iter() {
                     let (decr, incr) = signed_pair(name);
                     push_signed(&mut w, &decr, &incr, x * g.mh_mix[r]);
@@ -204,8 +277,16 @@ impl BaseHead {
             }
         }
 
-        // Identity: signed shape axes.
-        for (axis, decr, incr) in SHAPE_TARGETS {
+        // FLAME: mean form plus identity betas replace the hand-made shape genes.
+        if let Some(fl) = &self.flame {
+            w.push(("flame/conform".to_string(), 1.0));
+            for (k, b) in fl.betas(g).into_iter().enumerate() {
+                w.push((format!("flame/beta{k}"), b));
+            }
+        }
+
+        // Identity: signed shape axes (MakeHuman only).
+        for (axis, decr, incr) in SHAPE_TARGETS.iter().filter(|_| self.flame.is_none()) {
             // MakeHuman targets at weight 1 are caricature extremes. Normal
             // human variation is a fraction of that: skull and overall
             // proportions vary least, features a little more.

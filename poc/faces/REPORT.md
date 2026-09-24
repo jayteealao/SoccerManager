@@ -22,6 +22,13 @@ ANNY_CACHE_DIR=downloads/anny-cache downloads/venv/bin/python anny/anny_fit.py o
 cargo run --release --bin anny_sheet -- jobs --anny-calibrated --face-age
 ANNY_CACHE_DIR=downloads/anny-cache downloads/venv/bin/python anny/anny_heads.py out/tmp/anny
 cargo run --release --bin anny_sheet -- render
+# PoC 6 (FLAME; place FLAME2023Open.zip unpacked at assets/flame/open/):
+downloads/venv/bin/python flame/flame_transfer.py
+cargo run --release --bin measure -- --fit --flame
+cargo run --release --bin flame_sheet -- ladder
+cargo run --release --bin flame_sheet -- ages
+downloads/venv/bin/python photo_finish/finish.py --manifest out/tmp/flame/pairs.csv --strength 0.2 --steps 30 --adapter-scale 0.9
+cargo run --release --bin flame_sheet -- compare
 downloads/venv/bin/python photo_finish/landmarks2d.py out/tmp/finish_inputs out/tmp/finished
 ```
 
@@ -234,9 +241,40 @@ Findings:
 - Bake the resulting blendshapes into our own runtime format, so the game never needs PyTorch.
 - Keep our face-age rule, and keep the facial calibration tied to the exact asset version.
 
+### PoC 6: FLAME 2023 Open on the MakeHuman mesh. **Clear gain in facial structure; this is the base to keep.**
+
+Images:
+- [`out/poc6_flame_ladder.jpg`](out/poc6_flame_ladder.jpg): four heads in grey clay, then the full look. Columns: MakeHuman with hand-made shape genes, then plus FLAME's mean form, then plus FLAME identity, then the full look.
+- [`out/poc6_flame_age_sheet.jpg`](out/poc6_flame_age_sheet.jpg): the six-genome age sheet with FLAME.
+- [`out/poc6_finish_compare.jpg`](out/poc6_finish_compare.jpg): the MakeHuman v2 finish, the FLAME render and the FLAME finish, at ages 30 and 60.
+- [`out/poc6_measurements.txt`](out/poc6_measurements.txt): measurements.
+
+**Source.** FLAME 2023 Open, CC-BY-4.0, confirmed from the readme inside the zip. It is a statistical head model learned from real 3D scans: 5,023 vertices, 300 shape directions and 100 expression directions. The person registered and downloaded it; I received it through their Google Drive.
+
+Only `flame2023_Open.pkl` is used. `FLAME_masks.zip` is not used because its licence is unconfirmed.
+
+**How it works** (`flame/flame_transfer.py`, then `src/flame.rs`). FLAME is transferred onto the MakeHuman topology rather than replacing it, so eyes, hair, masks, age rules, the jersey and the Vega finish all work unchanged.
+1. **Alignment.** Umeyama similarity from four landmarks (both eye centres, nose tip, chin), refined by ICP on the face. The result is scale 9.79 from metres to decimetres and a 4.6° tilt.
+2. **Embedding.** Each MakeHuman head vertex is attached to its nearest FLAME triangle, with barycentric coordinates.
+3. **Two layers, applied as pseudo-targets:**
+   - `flame/conform` moves MakeHuman's base head onto FLAME's mean head. This adds the brow ridge, cheek planes and jaw definition that MakeHuman's idealised mesh lacks.
+   - `flame/beta0..99` carry FLAME's first 100 shape directions onto our vertices. A genome draws its betas from a standard normal on its own seeded stream. These replace the hand-made shape genes.
+4. **Keeping the two meshes compatible** took most of the work:
+   - FLAME has holes at the eyes, so each eye zone keeps MakeHuman's lids and eyeball and moves them as one unit with the ring of face around them.
+   - Interior surfaces (mouth cavity, nostrils) are carried along by diffusion and kept beneath FLAME's skin.
+   - Offsets that disagree with their neighbours, or that flip triangles, are relaxed.
+   - Both offset fields are low-pass filtered: FLAME's value is medium-scale structure, and its fine crease detail clashes with MakeHuman's folds.
+   - At build time, FLAME is faded out locally wherever a triangle turns more than 60° against the same head built without FLAME. That is where FLAME's base-mesh offsets conflict with the ancestry and age targets. The 12 sheet heads, ages 24 and 60, have no remaining folds.
+5. **Calibration.** FLAME changes proportions, so it has its own fitted table: `measure --fit --flame` writes `src/calibration_flame.rs`. Neutral FLAME heads sit at the norms. The genome-driven identities spread realistically across the six test faces: nose width 30–42 mm, face height 113–135 mm.
+
+**Result.**
+- In clay, FLAME heads read as adult men, where MakeHuman heads read as mannequins, and identities differ much more.
+- Each row of the age sheet still reads as one person ageing.
+- One tiny speck of a pixel or two remains beside the left nostril crease in close-ups. It is not visible at portrait size.
+
 ## What failed or was blocked, and why
 
-- **FLAME 2023 Open was not used.** It needs registration, which the rules forbid. `poc/faces/assets/flame/` was not present, so everything uses the MakeHuman CC0 mesh. `head.rs` would need a FLAME loader if you add the files.
+- **FLAME 2023 Open** needs registration, which the rules forbid me to do. The person registered, downloaded it, and handed it over through Google Drive; it is used in PoC 6. The separate `FLAME_masks.zip` is not used, because its licence is unconfirmed.
 - **No reference photos.** Wikimedia Commons refused direct file downloads from this container (an error page instead of the image). The proportion work uses published anthropometric numbers instead, and no images of real people are used or committed.
 - **No GPU.** Rendering ran on Mesa lavapipe, installed with apt, outside the repo. The PoC 4 timings are CPU-only.
 - **v1 of the photo finish drifted in age and ancestry.** v2 fixes this for these 18 faces by tuning the render and the prompt (see PoC 4). It departs from the brief's single fixed prompt: v2 uses a fixed prompt per age band and eye colour.
@@ -254,6 +292,7 @@ The full record is in [`LICENSES.md`](LICENSES.md).
 | Rust crates (82 resolved) | MIT / Apache-2.0 / BSD / Zlib, except `libloading` (ISC) and `unicode-ident` (adds Unicode-3.0) | `cargo metadata`; table in `LICENSES.md` |
 | Mesa lavapipe (system, not redistributed) | MIT | Ubuntu package `mesa-vulkan-drivers` 25.2.8 |
 | Python packages for PoC 4 (venv, not committed) | Mostly MIT/Apache/BSD; exceptions listed below | Package metadata; see `photo_finish/NOTES.md` |
+| FLAME 2023 Open | CC-BY-4.0; cite Li et al., ACM ToG 2017 | The readme inside `FLAME2023Open.zip`, and https://flame.is.tue.mpg.de/modellicense.html |
 | Anny (code and bundled MPFB2 data) | Apache-2.0 code; CC0 MakeHuman/MPFB2 data | Repository `LICENSE` and README licence section, https://github.com/naver/anny (commit `ee5b909`) |
 | Facial norms | Published numbers, cited | Wamalwa et al. 2019, https://pmc.ncbi.nlm.nih.gov/articles/PMC6384287/ |
 
@@ -274,7 +313,7 @@ The `jpeg-encoder` crate (which adds an IJG term) was replaced with a small in-c
 3. **Vega's provenance.** Its card says it was distilled from SDXL (Open RAIL++-M) and two community models, trained partly on a Midjourney scrape, and bundles SDXL-like encoders and a VAE. Is its Apache-2.0 label acceptable to your legal review, or should the finish use a model with cleaner lineage?
 4. **Prompt per age and eye colour.** v2 uses 12 fixed prompt sets instead of one, which fixed the age and eye-colour drift. Is that acceptable against the brief's "fixed prompt"?
 5. **Ancestry drift.** v2 holds ancestry for these faces at strength 0.2. A wider test across many more genomes is needed before trusting it. Should that test be the next step?
-6. **FLAME.** Do you want to register for FLAME 2023 Open and place the files in `assets/flame/`, so the shape space can be compared with MakeHuman's?
+6. **FLAME as the base (PoC 6).** Should FLAME become the identity source, with MakeHuman kept only for ancestry and age targets, topology, and attachments? That needs the CC-BY attribution (the FLAME paper) credited wherever the game credits third-party assets.
 7. **Face variety.** Proportions are now calibrated, but faces vary less than real ones do. Should the next step add more shape genes (eye spacing, lip shape, brow ridge, cheek fat)? Or should it fit a proper shape space to measured data, which would need a licensed dataset?
 8. **East Asian norms.** I found no sourced norms, so for that ancestry only face height and mouth width are constrained. Do you have a preferred source?
 9. **Anny as the base.** Anny does not improve portraits over the MakeHuman targets used directly, but it is a better engineering base: differentiable, maintained, with UVs, rig and expressions. Should the next step bake Anny's blendshapes into a Rust runtime format, and use Anny only offline for calibration?

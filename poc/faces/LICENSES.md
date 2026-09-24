@@ -8,7 +8,9 @@ that set is marked **OUTSIDE** below and is also listed as an open question in `
 | Asset | Source | Licence | Confirmed from |
 |---|---|---|---|
 | MakeHuman base mesh `base.obj` and targets (`macrodetails`, `head`, `chin`, `nose`, `mouth`, `cheek`, `eyebrows`, `forehead`, `ears`, `neck`, `eyes`) | https://github.com/makehumancommunity/makehuman at commit `a8bc2d54ff0ac92e78ff71431b1023eda42bf482`, via `scripts/fetch_makehuman.sh` | CC0 1.0 | `LICENSE.md` section C ("These assets have been released under CC0 1.0 Universal"), `LICENSE.ASSETS.md` (full CC0 text), and the header of every file ("explicitly released as CC0 in september 2020"). The MakeHuman *code* is AGPL; this PoC uses none of it. |
-| FLAME 2023 Open | not downloaded | needs registration | Blocked by the brief's rules; see REPORT.md |
+| FLAME 2023 Open, `FLAME2023Open.zip` (sha256 `a6b4c3dc…ee87a91`), containing `flame2023_Open.pkl` and `FLAME2023_Open Readme.pdf` | Downloaded by the person after they registered at https://flame.is.tue.mpg.de and accepted the licence; handed over through their Google Drive; unpacked to `assets/flame/` (git-ignored) | CC-BY-4.0 | The readme inside the zip says "FLAME2023_Open is available under a Creative Commons Attribution 4.0 International License", and https://flame.is.tue.mpg.de/modellicense.html says the same. Attribution: cite Li, Bolkart, Black, Li, Romero, "Learning a model of facial shape and expression from 4D scans", ACM ToG (SIGGRAPH Asia) 2017. The derived files in `downloads/flame_mh/` are also never committed. |
+| `FLAME_masks.zip` (sha256 `c196afeb…24c5dd31`) | Handed over by the person | **Not used: licence unconfirmed.** Its readme states no licence, and it comes from the same registration-gated site, whose non-Open models are non-commercial. | The face-region selection is built in `flame/flame_transfer.py` instead. |
+| `FLAME2023.zip` (in the person's Drive) | Not downloaded | Non-commercial research only | Never fetched. |
 
 PoC 4 model weights are listed in the PoC 4 section below.
 
@@ -168,6 +170,12 @@ The full list with versions is in `photo_finish/NOTES.md`. Each licence was read
 | PyYAML 6.0.3 | MIT | Package metadata |
 
 Note: Anny's `pyproject.toml` lists a `LICENSE_THINGS` licence file, but that file is not in the repository at this commit.
+
+## PoC 6: extra Python package
+
+| Package | Licence | Confirmed from |
+|---|---|---|
+| scipy 1.17.1 (KD-tree, sparse graph tools in `flame/flame_transfer.py`) | BSD-3-Clause | Package metadata |
 
 ## Reference data (numbers only, no images)
 
