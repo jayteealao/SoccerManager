@@ -1,6 +1,6 @@
 # Photo finish: notes (proof of concept 4)
 
-Status: the pipeline runs end to end on CPU through ONNX Runtime. I have tested it only on a synthetic face-like test pair. It has not yet run on real head renders from proof of concept 2.
+Status: the pipeline runs end to end on CPU through ONNX Runtime. It has run on the 18 real head renders from proof of concept 2; the results and a strength sweep are in `../REPORT.md` (PoC 4 section). The timing table below comes from the earlier synthetic runs, which shared the CPU with builds; the clean timings on the real renders are in the report.
 
 ## What runs where
 

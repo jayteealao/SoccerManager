@@ -68,6 +68,20 @@ impl Rgba {
         }
     }
 
+    pub fn load_png(path: &Path) -> Rgba {
+        let dec = png::Decoder::new(std::io::BufReader::new(std::fs::File::open(path).unwrap()));
+        let mut reader = dec.read_info().unwrap();
+        let mut buf = vec![0; reader.output_buffer_size().unwrap()];
+        let info = reader.next_frame(&mut buf).unwrap();
+        let px: Vec<u8> = match info.color_type {
+            png::ColorType::Rgba => buf[..info.buffer_size()].to_vec(),
+            png::ColorType::Rgb => buf[..info.buffer_size()].chunks(3).flat_map(|c| [c[0], c[1], c[2], 255]).collect(),
+            png::ColorType::Grayscale => buf[..info.buffer_size()].iter().flat_map(|&g| [g, g, g, 255]).collect(),
+            other => panic!("unsupported PNG colour type {other:?}"),
+        };
+        Rgba { w: info.width, h: info.height, px }
+    }
+
     pub fn save_png(&self, path: &Path) {
         if let Some(p) = path.parent() {
             std::fs::create_dir_all(p).unwrap();

@@ -115,3 +115,36 @@ Crates outside the allowed set. All three reach the build only through `wgpu` an
 |---|---|---|
 | Mesa lavapipe (`mesa-vulkan-drivers` 25.2.8, Ubuntu) | MIT | Software Vulkan driver used for the headless renders. It is installed with apt and is not part of the crate. |
 
+## PoC 4: model weights (fetched by `photo_finish/fetch_models.py` into `downloads/`, never committed)
+
+| Model | Licence on the model card | Source | Note |
+|---|---|---|---|
+| segmind/Segmind-Vega | `license: apache-2.0` (card YAML front matter) | https://huggingface.co/segmind/Segmind-Vega | Not gated. **Open provenance question**: the card says Vega is distilled from SDXL (CreativeML Open RAIL++-M), ZavyChromaXL and JuggernautXL, and that it was trained on GRIT and a Midjourney scrape. Its bundled text encoders and VAE look like SDXL's own. |
+| TencentARC/t2i-adapter-depth-midas-sdxl-1.0 | `license: apache-2.0` (card YAML front matter, and the card body reads "License: Apache 2.0") | https://huggingface.co/TencentARC/t2i-adapter-depth-midas-sdxl-1.0 | Not gated. It was trained on top of SDXL. We feed it our renderer's depth, not MiDaS. |
+
+No account, token or licence click-through was used. Both cards are saved next to the weights in `downloads/hf/*/README.md`.
+
+## PoC 4: Python packages (venv in `downloads/venv`, never committed)
+
+The full list with versions is in `photo_finish/NOTES.md`. Each licence was read from the package metadata.
+
+| Needed for | Packages | Licence |
+|---|---|---|
+| Running `finish.py` | onnxruntime | MIT |
+| | numpy | BSD-3-Clause |
+| | flatbuffers; protobuf; packaging | Apache-2.0; BSD-3-Clause; Apache-2.0 OR BSD-2-Clause |
+| | sympy | BSD |
+| | **pillow** | **OUTSIDE: MIT-CMU** (HPND-style permissive) |
+| Fetch and export only | torch (CPU) | BSD-3-Clause with bundled Apache/MIT/BSL parts |
+| | diffusers, transformers, huggingface_hub, safetensors, onnx | Apache-2.0 |
+| | **certifi** | **OUTSIDE: MPL-2.0** |
+| | **tqdm** | **OUTSIDE: MPL-2.0 AND MIT** |
+| | **typing_extensions** | **OUTSIDE: PSF-2.0** |
+| | **shellingham** | **OUTSIDE: ISC** |
+| | **regex** | **OUTSIDE (part): CNRI-Python** |
+
+## Reference data (numbers only, no images)
+
+| Data | Source | Use |
+|---|---|---|
+| Adult male facial norms (Farkas NAW; Kenyan and African American means and SDs) | Wamalwa et al. 2019, https://pmc.ncbi.nlm.nih.gov/articles/PMC6384287/; Farkas norms (zy-zy 137, n-gn 121.3) | Only the published means and SDs are cited, in `src/measure.rs`. No data files were downloaded. |
