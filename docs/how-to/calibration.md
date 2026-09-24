@@ -23,7 +23,7 @@ This plays every suite: about 76 minutes on an 8-core machine. Keep `runs/base-4
 For the red-card experiment, make its own baseline:
 
 ```bash
-target/release/engine-cli calibrate --suite red-card --seed 1 --matches 120 --out runs/base-red-card
+target/release/engine-cli calibrate --suite red-card --seed 1 --matches 240 --out runs/base-red-card
 ```
 
 A report made before sampling errors and fixtures hashes existed cannot be a baseline. Make a new one.
@@ -75,10 +75,10 @@ If the run stops before it plays, read the message. It names each difference fro
 ## Run the red-card experiment
 
 ```bash
-target/release/engine-cli calibrate --suite red-card --seed 1 --matches 120 --baseline runs/base-red-card/report.json
+target/release/engine-cli calibrate --suite red-card --seed 1 --matches 240 --baseline runs/base-red-card/report.json
 ```
 
-The experiment plays the default clubs with cards otherwise off: a control, and the away keeper, centre-back, or striker sent off at kick-off. `calib.red_card` in the report holds each arm's goals for the full and the reduced side, the control, and the verdict. The criterion passes when, in each arm, the reduced side does not outscore the full side and the full side scores at most 1.6 times the control's home goals.
+The experiment plays the default clubs with cards otherwise off: a control, and the away keeper, centre-back, or striker sent off at kick-off. Each seed plays twice, once in each home and away order of the two clubs, so each club is the reduced side in half the matches. `--matches 240` plays seeds 1 to 120 in both orders. `calib.red_card` in the report holds each arm's goals for the full and the reduced side, the control, and the verdict. The criterion passes when, in each arm, the reduced side does not outscore the full side and the full side scores at most 1.6 times the control's home goals.
 
 ## Confirm the change on the full suites
 

@@ -104,13 +104,17 @@ pub struct RedCardFixture {
     pub index: u32,
     /// The arm's number in [`crate::report::RED_CARD_ARMS`].
     pub arm: usize,
-    /// The engine seed, used directly: `seed` to `seed + matches - 1` in every arm.
+    /// The engine seed, used directly: each seed from `seed` onward plays twice in a row.
     pub engine_seed: u64,
+    /// `true` when the default clubs play in the other order: the second club at home.
+    pub swapped: bool,
 }
 
-/// The fixtures of the red-card suite: every arm plays the engine seeds `seed` to
-/// `seed + matches - 1` on the default clubs, so `--seed 1 --matches 120` is the slow
-/// test's experiment.
+/// The fixtures of the red-card suite: every arm plays each engine seed from `seed` onward
+/// twice on the default clubs, first in their usual order and then with home and away
+/// swapped. So each club is the reduced side in half the matches, and a difference in club
+/// strength cancels out. `--seed 1 --matches 240` is the slow test's experiment (seeds 1 to
+/// 120 in both orders). An odd `--matches` plays the last seed in the usual order only.
 pub fn red_card_fixtures(seed: u64, matches: u32) -> Vec<RedCardFixture> {
     let arms = crate::report::RED_CARD_ARMS.len();
     (0..arms)
@@ -119,7 +123,8 @@ pub fn red_card_fixtures(seed: u64, matches: u32) -> Vec<RedCardFixture> {
                 // Four arms of at most 100 000 matches each.
                 index: arm as u32 * matches + k,
                 arm,
-                engine_seed: seed.wrapping_add(u64::from(k)),
+                engine_seed: seed.wrapping_add(u64::from(k / 2)),
+                swapped: !k.is_multiple_of(2),
             })
         })
         .collect()
@@ -307,14 +312,16 @@ mod tests {
     }
 
     #[test]
-    fn the_red_card_suite_plays_every_arm_on_the_same_engine_seeds() {
-        let list = red_card_fixtures(1, 120);
-        assert_eq!(list.len(), 480);
+    fn the_red_card_suite_plays_every_arm_on_the_same_engine_seeds_in_both_orders() {
+        let list = red_card_fixtures(1, 240);
+        assert_eq!(list.len(), 960);
         for (i, f) in list.iter().enumerate() {
             assert_eq!(f.index, i as u32);
-            assert_eq!(f.arm, i / 120);
-            assert_eq!(f.engine_seed, 1 + (i % 120) as u64);
+            assert_eq!(f.arm, i / 240);
+            assert_eq!(f.engine_seed, 1 + (i % 240 / 2) as u64);
+            assert_eq!(f.swapped, i % 2 == 1);
         }
+        assert_eq!(list.last().unwrap().engine_seed, 120);
     }
 
     #[test]

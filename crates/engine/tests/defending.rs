@@ -206,18 +206,26 @@ fn the_public_send_off_before_kick_off_plays_as_the_scene_one_and_validates() {
 fn a_sending_off_gives_no_advantage() {
     let content = content();
     let [a, b] = default_teams(&content);
-    let cards_off = |seed: u64| {
-        let mut config = MatchConfig::new(seed, 90, &content, [&a, &b]).unwrap();
+    // Seeds 1 to 120, each in both home and away orders of the default clubs, so each club
+    // is the reduced side in half the matches and club strength cancels out. Match `k`
+    // plays seed `(k + 1) / 2`, with the clubs swapped on even `k`.
+    let cards_off = |k: u64| {
+        let teams = if k.is_multiple_of(2) {
+            [&b, &a]
+        } else {
+            [&a, &b]
+        };
+        let mut config = MatchConfig::new(k.div_ceil(2), 90, &content, teams).unwrap();
         config.tuning.red_base = 0.0;
         config.tuning.yellow_base = 0.0;
         config.tuning.yellow_aggression_weight = 0.0;
         config
     };
-    let control = mean_goals(1..=120, cards_off, |s| s);
+    let control = mean_goals(1..=240, cards_off, |s| s);
     eprintln!("control: home {:.4} away {:.4}", control[0], control[1]);
     let mut failures = Vec::new();
     for (arm, i) in [("keeper", 11), ("centre-back", 13), ("striker", 21)] {
-        let [full, reduced] = mean_goals(1..=120, cards_off, |s| s.sent_off(i));
+        let [full, reduced] = mean_goals(1..=240, cards_off, |s| s.sent_off(i));
         eprintln!(
             "{arm} sent off: full side {full:.4}, reduced side {reduced:.4}, limit {:.4}",
             1.6 * control[0]

@@ -2,8 +2,8 @@
 //! plays its share of one suite's fixtures, each with the AI manager on both sides, and
 //! writes one statistics file and one event file per match into the run folder. In the
 //! formations suite, each side starts in its pairing's formation and keeps it. In the
-//! red-card suite, the default clubs play with cards otherwise off, and the arm's away
-//! player is sent off at kick-off.
+//! red-card suite, the default clubs play with cards otherwise off, in both home and away
+//! orders, and the arm's away player is sent off at kick-off.
 
 use std::path::Path;
 use std::time::Instant;
@@ -49,9 +49,9 @@ struct Job {
     fixture: Fixture,
     /// The formations suite: each side's starting formation.
     formations: Option<[u8; 2]>,
-    /// The red-card suite: the engine seed, and the away player sent off (none for the
-    /// control).
-    red_card: Option<(u64, Option<usize>)>,
+    /// The red-card suite: the engine seed, the away player sent off (none for the
+    /// control), and whether the default clubs play in the other order.
+    red_card: Option<(u64, Option<usize>, bool)>,
 }
 
 /// Plays every fixture of the share. A failed match still writes its statistics record, with
@@ -87,7 +87,14 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
         let fixture = job.fixture;
         let match_id = fixtures::match_id(share.seed, share.suite, fixture.index, share.run_millis);
         let (teams, seed) = match (&defaults, job.red_card) {
-            (Some(defaults), Some((engine_seed, _))) => (defaults.clone(), engine_seed),
+            (Some([first, second]), Some((engine_seed, _, swapped))) => {
+                let teams = if swapped {
+                    [second.clone(), first.clone()]
+                } else {
+                    [first.clone(), second.clone()]
+                };
+                (teams, engine_seed)
+            }
             _ => {
                 let mut teams = leagues.teams(&fixture);
                 if share.suite == Suite::Strength {
@@ -107,7 +114,7 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
             play(
                 share,
                 (&content, &commentary),
-                (&teams, job.formations, job.red_card.map(|(_, off)| off)),
+                (&teams, job.formations, job.red_card.map(|(_, off, _)| off)),
                 seed,
                 &owner_id,
                 &match_id,
@@ -173,10 +180,10 @@ fn planned(share: &Share<'_>, content: &Content) -> Vec<Job> {
                 fixture: Fixture {
                     index: f.index,
                     league: 0,
-                    clubs: [0, 1],
+                    clubs: if f.swapped { [1, 0] } else { [0, 1] },
                 },
                 formations: None,
-                red_card: Some((f.engine_seed, RED_CARD_ARMS[f.arm].1)),
+                red_card: Some((f.engine_seed, RED_CARD_ARMS[f.arm].1, f.swapped)),
             })
             .collect(),
         Suite::Equal | Suite::Strength => fixtures::fixtures(matches)
