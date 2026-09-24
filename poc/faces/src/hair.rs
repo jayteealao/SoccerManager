@@ -16,8 +16,8 @@ pub fn scalp_density(b: Vec3, g: &Genome, age: &AgeState) -> f32 {
     let hl = g.hairline.height * 0.06;
     // Hairline height by angle: front, temple, sideburn, over ear, behind ear, nape.
     let table: [(f32, f32); 7] = [
-        (0.00, 8.08 + hl + 0.30 * rec),
-        (0.55, 7.98 + hl + 0.45 * rec),
+        (0.00, 7.96 + hl + 0.34 * rec),
+        (0.55, 7.88 + hl + 0.5 * rec),
         (0.95, 7.42 + 0.10 * rec),
         (1.30, 7.72),
         (1.75, 7.58),

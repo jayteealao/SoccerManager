@@ -35,6 +35,8 @@ pub struct BaseHead {
     pub tris: Vec<([u32; 3], Part)>,
     targets: HashMap<String, Target>,
     dir: PathBuf,
+    /// Apply the fitted proportion calibration (off only while fitting it).
+    pub calibrate: bool,
 }
 
 /// A morphed head, compacted to only the vertices the cut uses.
@@ -87,7 +89,7 @@ impl BaseHead {
             }
         }
         tris.retain(|(t, p)| *p != Part::Skin || t.iter().all(|&i| base[i as usize].y > NECK_CUT_Y));
-        Ok(Self { base, tris, targets: HashMap::new(), dir })
+        Ok(Self { base, tris, targets: HashMap::new(), dir, calibrate: true })
     }
 
     /// Loads (and caches) a target by its path under `targets/`, without the
@@ -169,6 +171,16 @@ impl BaseHead {
             }
         }
 
+        // Calibration toward measured adult male norms, per ancestry.
+        if self.calibrate {
+            for (r, cal) in crate::calibration::CALIBRATION.iter().enumerate() {
+                for (name, x) in cal.iter() {
+                    let (decr, incr) = signed_pair(name);
+                    push_signed(&mut w, &decr, &incr, x * g.mh_mix[r]);
+                }
+            }
+        }
+
         // Identity: signed shape axes.
         for (axis, decr, incr) in SHAPE_TARGETS {
             // MakeHuman targets at weight 1 are caricature extremes. Normal
@@ -188,7 +200,7 @@ impl BaseHead {
 
 /// Axis name -> (negative target(s), positive target(s)). `{s}` expands to
 /// `l` and `r` for paired features.
-const SHAPE_TARGETS: [(&str, &str, &str); 24] = [
+pub const SHAPE_TARGETS: [(&str, &str, &str); 24] = [
     ("head-width", "head/head-scale-horiz-decr", "head/head-scale-horiz-incr"),
     ("head-height", "head/head-scale-vert-decr", "head/head-scale-vert-incr"),
     ("head-depth", "head/head-scale-depth-decr", "head/head-scale-depth-incr"),
@@ -215,8 +227,25 @@ const SHAPE_TARGETS: [(&str, &str, &str); 24] = [
     ("neck-width", "neck/neck-scale-horiz-decr", "neck/neck-scale-horiz-incr"),
 ];
 
-/// Largest target weight a shape gene of +-1 can reach.
+/// A calibration name like `mouth/mouth-scale-horiz` names a pair of
+/// targets: `-decr`/`-incr`, or `-in`/`-out`, `-down`/`-up`.
+pub fn signed_pair(name: &str) -> (String, String) {
+    for (neg, pos) in [("decr", "incr"), ("in", "out"), ("down", "up")] {
+        let d = format!("{name}-{neg}");
+        let probe = d.replace("{s}", "l");
+        if assets_dir().join("targets").join(format!("{probe}.target")).exists() {
+            return (d, format!("{name}-{pos}"));
+        }
+    }
+    panic!("no signed pair for {name}")
+}
+
+/// Largest target weight a shape gene of +-1 can reach. Fitted ranges (from
+/// population SDs) win; the rest are hand-set.
 fn shape_range(axis: &str) -> f32 {
+    if let Some((_, r)) = crate::calibration::SHAPE_RANGE.iter().find(|(a, _)| *a == axis) {
+        return *r;
+    }
     match axis {
         "head-width" | "head-height" | "head-depth" | "head-square-oval" | "neck-width" => 0.25,
         "face-fullness" | "jaw-width" | "forehead-height" => 0.3,
