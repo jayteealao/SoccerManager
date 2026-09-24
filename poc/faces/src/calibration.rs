@@ -5,19 +5,18 @@
 pub const CALIBRATION: [&[(&str, f32)]; 3] = [
     // african
     &[
-        ("head/head-fat", -0.210),
-        ("mouth/mouth-scale-horiz", 0.800),
-        ("chin/chin-height", 0.336),
+        ("mouth/mouth-scale-horiz", 0.311),
+        ("chin/chin-height", 0.309),
         ("head/head-scale-vert", 0.153),
-        ("head/head-scale-horiz", 0.233),
-        ("nose/nose-scale-horiz", 0.032),
-        ("eyes/{s}-eye-trans", 0.479),
-        ("eyes/{s}-eye-scale", -0.250),
+        ("head/head-scale-horiz", 0.189),
+        ("nose/nose-scale-horiz", 0.217),
+        ("eyes/{s}-eye-trans", -0.031),
+        ("eyes/{s}-eye-scale", -0.174),
     ],
     // asian
     &[
         ("head/head-fat", 0.068),
-        ("mouth/mouth-scale-horiz", 0.800),
+        ("mouth/mouth-scale-horiz", 0.514),
         ("chin/chin-height", 0.379),
         ("head/head-scale-vert", 0.081),
         ("head/head-scale-horiz", 0.250),
@@ -26,15 +25,15 @@ pub const CALIBRATION: [&[(&str, f32)]; 3] = [
     // caucasian
     &[
         ("neck/neck-scale-horiz", -0.500),
-        ("head/head-fat", -0.400),
-        ("mouth/mouth-scale-horiz", 0.800),
-        ("chin/chin-height", 0.228),
+        ("head/head-fat", -0.331),
+        ("mouth/mouth-scale-horiz", 0.432),
+        ("chin/chin-height", 0.164),
         ("chin/chin-bones", -0.600),
         ("head/head-scale-vert", 0.131),
-        ("head/head-scale-horiz", 0.219),
-        ("nose/nose-scale-horiz", -0.159),
+        ("head/head-scale-horiz", 0.118),
+        ("nose/nose-scale-horiz", 0.052),
         ("nose/nose-scale-vert", 0.034),
-        ("eyes/{s}-eye-trans", -0.285),
+        ("eyes/{s}-eye-trans", -0.500),
         ("eyes/{s}-eye-scale", -0.250),
     ],
 ];

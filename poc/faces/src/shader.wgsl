@@ -207,6 +207,8 @@ fn shade_skin(i: VOut) -> vec3<f32> {
     let streak = smoothstep(0.3, 0.75, vnoise(vec3<f32>(p.x * 25.0, p.y * 160.0, p.z * 25.0)));
     albedo = mix(albedo, P.colour2.rgb, clamp(brow * P.p0.z * (0.8 + 0.2 * streak), 0.0, 0.95));
 
+    // Lash line and lid shadow keep the eye opening readable.
+    albedo = mix(albedo, vec3<f32>(0.02, 0.015, 0.012), i.aux2.z * 0.85);
     let gloss = 0.25 + 0.2 * forehead + 0.3 * lip - 0.2 * beard * P.p0.y;
     if (cloth > 0.5) {
         // Plain crew-neck training top.

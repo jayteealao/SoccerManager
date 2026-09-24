@@ -58,21 +58,23 @@ def _torch():
     return torch
 
 
-def export_embeds():
+def export_embeds(prompt=None, negative=None, name="embeds", pipe=None):
     torch = _torch()
     from diffusers import StableDiffusionXLPipeline
 
-    pipe = StableDiffusionXLPipeline.from_pretrained(
+    prompt = prompt or PROMPT
+    negative = negative or NEGATIVE
+    pipe = pipe or StableDiffusionXLPipeline.from_pretrained(
         VEGA, unet=None, vae=None, variant="fp16", torch_dtype=torch.float32
     )
     pe, npe, pooled, npooled = pipe.encode_prompt(
-        prompt=PROMPT,
-        negative_prompt=NEGATIVE,
+        prompt=prompt,
+        negative_prompt=negative,
         device="cpu",
         num_images_per_prompt=1,
         do_classifier_free_guidance=True,
     )
-    d = OUT / "embeds"
+    d = OUT / name
     d.mkdir(parents=True, exist_ok=True)
     import numpy as np
 
@@ -80,8 +82,21 @@ def export_embeds():
     np.save(d / "negative_prompt_embeds.npy", npe.numpy().astype(np.float32))
     np.save(d / "pooled_prompt_embeds.npy", pooled.numpy().astype(np.float32))
     np.save(d / "negative_pooled_prompt_embeds.npy", npooled.numpy().astype(np.float32))
-    (d / "prompt.json").write_text(json.dumps({"prompt": PROMPT, "negative_prompt": NEGATIVE}, indent=2))
-    print("embeds:", pe.shape, npe.shape, pooled.shape, npooled.shape)
+    (d / "prompt.json").write_text(json.dumps({"prompt": prompt, "negative_prompt": negative}, indent=2))
+    print(name, "embeds:", pe.shape, npe.shape, pooled.shape, npooled.shape)
+    return pipe
+
+
+def export_prompt_sets():
+    """Embeddings for every set in prompts.py, into downloads/onnx/embeds_<name>/."""
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).parent))
+    from prompts import prompt_sets
+
+    pipe = None
+    for name, p, n in prompt_sets():
+        pipe = export_embeds(p, n, "embeds_" + name, pipe)
 
 
 def _export(model, args, path, input_names, output_names, dynamic_axes):
@@ -322,8 +337,8 @@ def main():
             globals()[f"export_{c}"]()
         return
     for c in a.components:
-        if c not in COMPONENTS:
-            sys.exit(f"unknown component {c}; choose from {COMPONENTS}")
+        if c not in COMPONENTS + ["prompt_sets"]:
+            sys.exit(f"unknown component {c}; choose from {COMPONENTS} or prompt_sets")
         print(f"=== {c}")
         t = time.time()
         subprocess.run([sys.executable, __file__, "--inproc", c], check=True)

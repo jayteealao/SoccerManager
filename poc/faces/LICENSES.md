@@ -143,6 +143,15 @@ The full list with versions is in `photo_finish/NOTES.md`. Each licence was read
 | | **shellingham** | **OUTSIDE: ISC** |
 | | **regex** | **OUTSIDE (part): CNRI-Python** |
 
+## PoC 4: landmark measurement (venv and model in `downloads/`, never committed)
+
+| Item | Licence | Confirmed from |
+|---|---|---|
+| mediapipe 1.0.1 (pip) | Apache-2.0 | Package metadata |
+| MediaPipe Face Landmarker model `face_landmarker.task` (float16/1), from storage.googleapis.com/mediapipe-models | Apache-2.0 | "Model Card MediaPipe Face Mesh V2" PDF, which reads "LICENSED UNDER Apache License, Version 2.0" |
+| pypdf (pip), used only to read that model card | BSD-3-Clause | Package metadata |
+| libegl1 and libgles2 (apt; MediaPipe needs EGL) | MIT (Mesa / libglvnd) | System packages, not redistributed |
+
 ## Reference data (numbers only, no images)
 
 | Data | Source | Use |

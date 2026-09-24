@@ -1,0 +1,15 @@
+18 pairs. Mean render -> finish, and finish/render change:
+ratio                                      render   finish   change  agree
+eye aperture h/w                            0.334    0.327    -2.0%    56%
+intercanthal / biocular                     0.379    0.369    -2.6%    72%
+brow above eye / biocular                   0.216    0.201    -6.7%   100%
+nose width / biocular                       0.447    0.446    -0.2%    67%
+mouth width / biocular                      0.606    0.604    -0.2%    56%
+upper vermilion / biocular                  0.078    0.071   -10.7%    67%
+lower vermilion / biocular                  0.138    0.137    -1.5%    50%
+philtrum sn-ls / biocular                   0.179    0.184     3.2%    50%
+nose height n-sn / biocular                 0.607    0.598    -1.5%    72%
+lower face sn-me / biocular                 0.796    0.809     1.7%    61%
+face width zy / biocular                    1.583    1.570    -0.8%    72%
+cheek width (mouth level) / biocular        0.904    0.899    -0.5%    56%
+jaw width go / biocular                     1.286    1.277    -0.6%    67%

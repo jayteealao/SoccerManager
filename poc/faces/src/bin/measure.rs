@@ -75,6 +75,9 @@ fn goal(race: usize) -> [(f32, f32); M] {
         let w = 1.0 / n.sd;
         out[k] = match (race, k) {
             (_, 2) => (0.0, 0.0), // forehead: set by the hairline, not by targets
+            // Inner canthus: the 3D pick disagrees with a 2D detector (MediaPipe
+            // puts it wider), so let the outer span drive eye placement.
+            (_, 7) => (0.0, 0.0),
             (0, 1) | (0, 12) => (0.0, 0.0), // no sourced African male value
             (0, _) => (n.african, w),
             // No sourced East Asian norms: constrain only vertical proportions

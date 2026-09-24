@@ -83,15 +83,22 @@ class Finisher:
         self.vae_dec = ort.InferenceSession(str(ONNX / "vae_decoder" / "vae_decoder.onnx"), so, providers=prov)
         self.unet = ort.InferenceSession(str(ONNX / "unet" / "unet.onnx"), so, providers=prov)
         self.load_s = time.time() - t
-        e = ONNX / "embeds"
-        self.pe = np.concatenate([np.load(e / "negative_prompt_embeds.npy"), np.load(e / "prompt_embeds.npy")])
-        self.pooled = np.concatenate(
-            [np.load(e / "negative_pooled_prompt_embeds.npy"), np.load(e / "pooled_prompt_embeds.npy")]
-        )
-        self.prompt = json.loads((e / "prompt.json").read_text())
+        self._embeds = {}
+        self.use_embeds("embeds")
         self.sched = EulerScheduler(json.loads(SCHED_CFG.read_text()))
         self.scaling = json.loads(VAE_CFG.read_text())["scaling_factor"]
         self.threads = threads
+
+    def use_embeds(self, name):
+        """Selects a precomputed prompt set (a folder under downloads/onnx/)."""
+        if name not in self._embeds:
+            e = ONNX / name
+            pe = np.concatenate([np.load(e / "negative_prompt_embeds.npy"), np.load(e / "prompt_embeds.npy")])
+            pooled = np.concatenate(
+                [np.load(e / "negative_pooled_prompt_embeds.npy"), np.load(e / "pooled_prompt_embeds.npy")]
+            )
+            self._embeds[name] = (pe, pooled, json.loads((e / "prompt.json").read_text()))
+        self.pe, self.pooled, self.prompt = self._embeds[name]
 
     def run(self, color_p, depth_p, out_p, strength, steps, seed, guidance, adapter_scale, res):
         T = {}
@@ -174,7 +181,7 @@ def main():
     ap.add_argument("--color")
     ap.add_argument("--depth")
     ap.add_argument("--out")
-    ap.add_argument("--manifest", help="CSV lines color,depth,out (models are loaded once)")
+    ap.add_argument("--manifest", help="CSV lines color,depth,out[,embeds] (models are loaded once)")
     ap.add_argument("--strength", type=float, default=0.3)
     ap.add_argument("--steps", type=int, default=20, help="scheduler steps; UNet runs int(steps*strength)")
     ap.add_argument("--seed", type=int, default=0)
@@ -183,6 +190,7 @@ def main():
     ap.add_argument("--res", type=int, default=512, help="internal working resolution (multiple of 64)")
     ap.add_argument("--threads", type=int, default=os.cpu_count())
     ap.add_argument("--arena", action="store_true", help="enable ORT CPU memory arena (more RAM)")
+    ap.add_argument("--embeds", default="embeds", help="prompt set folder under downloads/onnx (see prompts.py)")
     ap.add_argument("--log", help="append one JSON line per image to this file")
     a = ap.parse_args()
     assert a.res % 64 == 0, "--res must be a multiple of 64"
@@ -191,11 +199,13 @@ def main():
     else:
         if not (a.color and a.depth and a.out):
             ap.error("need --color --depth --out (or --manifest)")
-        jobs = [(a.color, a.depth, a.out)]
+        jobs = [(a.color, a.depth, a.out, a.embeds)]
 
     f = Finisher(a.threads, a.arena)
     print(f"models loaded in {f.load_s:.1f}s")
-    for c, d, o in jobs:
+    for job in jobs:
+        c, d, o = job[:3]
+        f.use_embeds(job[3] if len(job) > 3 and job[3] else a.embeds)
         rec = f.run(c, d, o, a.strength, a.steps, a.seed, a.guidance, a.adapter_scale, a.res)
         tm = rec["timings"]
         print(

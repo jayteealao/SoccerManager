@@ -13,8 +13,10 @@ cargo run --release --bin age_sheet -- --finish-inputs   # PoC 2 (+ PoC 4 inputs
 cargo run --release --bin hair_sheet               # PoC 3
 cargo run --release --bin measure [-- --fit]       # proportion check / refit calibration
 # PoC 4 (setup in photo_finish/README.md):
-downloads/venv/bin/python photo_finish/finish.py --manifest out/tmp/pairs.csv --strength 0.3 --log out/poc4_timings.jsonl
+downloads/venv/bin/python photo_finish/finish.py --manifest out/tmp/pairs.csv --strength 0.2 --steps 30 --adapter-scale 0.9 --log out/poc4_timings.jsonl
+downloads/venv/bin/python photo_finish/export_onnx.py prompt_sets   # v2 prompt embeddings
 cargo run --release --bin finish_sheet
+downloads/venv/bin/python photo_finish/landmarks2d.py out/tmp/finish_inputs out/tmp/finished
 ```
 
 On a machine without a GPU, install Mesa lavapipe (`apt install mesa-vulkan-drivers`). wgpu then renders through software Vulkan.
@@ -94,48 +96,81 @@ Weaknesses:
 - Straight cards look spiky at the hairline.
 - Coils are close to pixel size at portrait framing, so they read as texture rather than as individual coils.
 
-### PoC 4: photo finish. **Runs, but fails "same age" and partly fails "same person" at strength 0.3.**
+### PoC 4: photo finish. **v2 passes on "same person" and "same age" for these 18 faces. v1 failed on both.**
 
 Images:
-- [`out/poc4_finish_pairs.jpg`](out/poc4_finish_pairs.jpg): before and after pairs for 6 faces at ages 19, 30 and 60, strength 0.3.
-- [`out/poc4_strength_sweep.jpg`](out/poc4_strength_sweep.jpg): render against strengths 0.3, 0.2 and 0.15 for the four cases that drifted most.
-- [`out/poc4/`](out/poc4/): full-size pairs for two faces.
+- [`out/poc4_finish_pairs.jpg`](out/poc4_finish_pairs.jpg): v2 before and after pairs for 6 faces at ages 19, 30 and 60.
+- [`out/poc4_v1_vs_v2.jpg`](out/poc4_v1_vs_v2.jpg): render, v1 and v2 side by side at ages 30 and 60.
+- [`out/poc4_strength_sweep.jpg`](out/poc4_strength_sweep.jpg): the v1 strength sweep (0.3, 0.2 and 0.15).
+- [`out/poc4/`](out/poc4/): full-size pairs.
 - [`out/poc4_timings.jsonl`](out/poc4_timings.jsonl): per-image timings, prompt and settings.
 
 Pipeline (`photo_finish/`):
-- **Models.** Segmind Vega plus the TencentARC T2I-Adapter depth-midas SDXL model. The depth input comes from our renderer.
+- **Models.** Segmind Vega plus the TencentARC T2I-Adapter depth-midas SDXL model. The depth input comes from our renderer, not from MiDaS.
 - **ONNX Runtime on CPU:** the UNet (with 4 adapter residual inputs), the adapter, and the VAE encoder and decoder.
-- **Other steps.** The Euler img2img loop runs in numpy. The embeddings for the fixed prompt were computed once with torch at export time.
-- **Settings.** Strength 0.3, 20 scheduler steps (6 UNet evaluations), guidance 5, adapter scale 0.8, 512 px.
+- **Other steps.** The Euler img2img loop runs in numpy. The prompt embeddings were computed once with torch.
 
-**Timing:** 29.7 s per image on average (range 28.6–34.5 s), about 3.4 s per UNet step, with a peak RSS of 4.7 GB.
-- Hardware: Intel Xeon @ 2.80 GHz (Cascade Lake, AVX-512), 4 vCPU (KVM), 15 GB RAM, onnxruntime 1.30, fp32, no GPU.
+**v1, the brief's fixed prompt, at strength 0.3:**
+- It kept pose, outline and hair.
+- It made 60-year-olds look about 45.
+- It pulled the East-Asian-like and mixed faces towards European features.
+- It repainted brown eyes grey-blue.
+
+**v2 tunes the input to Vega in two places.**
+
+1. **The render.** MediaPipe Face Landmarker (Apache-2.0; `photo_finish/landmarks2d.py`) measured 2D proportions on each render and on its v1 finish. The corrections Vega made consistently across the 18 pairs showed where the renders were off:
+
+   | Measure | Vega's change | Pairs agreeing | Our 2D value | Norm |
+   |---|---|---|---|---|
+   | Brow height above eye | −40% | 100% | | |
+   | Mouth width | −4% | 83% | 0.633 | 0.598 |
+   | Lower face | +6% | 89% | | |
+   | Nose height | −8% | 100% | | |
+
+   What was changed in the render as a result:
+   - Brows were moved down and made fuller.
+   - The 3D mouth-corner landmark was re-picked to include the visible corner. The mouth calibration had overshot because of it, and the refit lowered it.
+   - The inner-canthus term was dropped from the fit, because the 3D landmark disagrees with the 2D detector. The outer eye span now drives eye placement, and it lands within the norms.
+   - A dark lash line was added, so the eye opening reads as an eye.
+
+   After these changes, Vega's corrections shrank:
+
+   | Measure | Before | After |
+   |---|---|---|
+   | Brow | −40% | −6.7% |
+   | Mouth | −4% | −0.2% |
+   | Lower face | +6% | +1.7% |
+   | Nose height | −8% | −1.5% |
+
+   Our renders now match the 2D norms for mouth width (0.606 against 0.598) and lower face (0.796 against 0.796). Full numbers are in [`out/poc4_landmarks_v2.txt`](out/poc4_landmarks_v2.txt).
+2. **The conditioning.** There are 12 precomputed prompt sets (`photo_finish/prompts.py`): age band (19, 30, 60) × eye colour from the genome. For age 60, the prompt names wrinkles, eye bags and jowls, and the negative prompt names "young, smooth skin". Ancestry is never put in the prompt. Strength drops from 0.3 to 0.2, and the adapter scale rises from 0.8 to 0.9.
+
+What v2 achieves:
+- At 60, faces now read as about 60, with wrinkles, eye bags and sagging.
+- KSI 2 keeps its East Asian eye shape at 30 and 60.
+- The mixed faces stay close to their renders.
+- Eye colour is kept.
+
+What is still weak:
+- The upper lip is slightly thick. Vega thins it by about 10%, with 67% of pairs agreeing.
+- Some finishes add stubble.
+- The fixed seed means every face shares the same noise.
+
+**Timing (v2):** 31.5 s per image on average (range 30.5–37.9 s), 6 UNet evaluations at about 3.4 s each, peak RSS 4.7 GB.
+- Hardware: Intel Xeon @ 2.80 GHz (Cascade Lake), 4 vCPU, 15 GB RAM, onnxruntime 1.30, fp32, no GPU.
 - **These times do not predict consumer PCs.**
 
-What held:
-- pose, framing, head outline, hair silhouette and hairline;
-- skin tone, broadly;
-- for the fade and the dark-skinned face, most of the identity.
-
-The finish adds convincing skin, hair and eye texture.
-
-What drifted:
-1. **Age.** At 60, every finish looks roughly 10–15 years younger: sagging, eye bags and forehead lines are smoothed away. It gets better at 0.15 but does not go away. **This fails the "same age" criterion.**
-2. **Ancestry.** The East-Asian-like face (KSI 2) and the mixed faces (CVD 1, NHV 13) move towards a European look at 0.3: the epicanthic fold and eye shape change and the nose narrows. This is a representation bias in the model's prior for "professional footballer". At 0.15, KSI 2 keeps its eye shape much better. **"Same person" holds only at low strength.**
-3. **Additions.** Brown eyes often turn grey-blue, and stubble or light beards appear where the render has little.
-
-Suggested next steps, not done:
-- Put age and eye colour into the prompt per image. This needs the text encoders in ONNX or a set of embeddings computed ahead of time.
-- Default the strength to about 0.15–0.2.
-- Mask the finish to the skin and composite the rendered age detail back over it.
-- Test a face-identity metric. It must not be InsightFace, whose weights are non-commercial.
+Suggested next steps:
+- Close the loop automatically: render, finish, landmark, adjust.
+- Mask the finish to the skin.
+- Test an identity metric that is not InsightFace, whose weights are non-commercial.
 
 ## What failed or was blocked, and why
 
 - **FLAME 2023 Open was not used.** It needs registration, which the rules forbid. `poc/faces/assets/flame/` was not present, so everything uses the MakeHuman CC0 mesh. `head.rs` would need a FLAME loader if you add the files.
 - **No reference photos.** Wikimedia Commons refused direct file downloads from this container (an error page instead of the image). The proportion work uses published anthropometric numbers instead, and no images of real people are used or committed.
 - **No GPU.** Rendering ran on Mesa lavapipe, installed with apt, outside the repo. The PoC 4 timings are CPU-only.
-- **The photo finish drifts in age and ancestry** (see PoC 4). It works as a technical pipeline but does not yet meet the brief's bar.
+- **v1 of the photo finish drifted in age and ancestry.** v2 fixes this for these 18 faces by tuning the render and the prompt (see PoC 4). It departs from the brief's single fixed prompt: v2 uses a fixed prompt per age band and eye colour.
 - **The first head proportions were wrong:** shape genes were over-scaled, and two landmark picks were initially wrong. Both were fixed and checked with rendered landmark markers.
 
 ## Licences confirmed, with sources
@@ -167,11 +202,8 @@ The `jpeg-encoder` crate (which adds an IJG term) was replaced with a small in-c
 
    Can they be accepted, or should `finish.py` drop pillow (for example by writing PNGs with numpy and zlib)?
 3. **Vega's provenance.** Its card says it was distilled from SDXL (Open RAIL++-M) and two community models, trained partly on a Midjourney scrape, and bundles SDXL-like encoders and a VAE. Is its Apache-2.0 label acceptable to your legal review, or should the finish use a model with cleaner lineage?
-4. **Age drift in the finish.** Is a finish that makes older staff faces look younger acceptable at all? If not, the options are:
-   - put age in the prompt;
-   - use a skin-only mask;
-   - drop the finish for faces over about 45.
-5. **Ancestry drift.** The finish pulls non-European faces towards European features. How much drift is acceptable, and is a lower strength (0.15), with less photo-realism, the preferred trade-off?
+4. **Prompt per age and eye colour.** v2 uses 12 fixed prompt sets instead of one, which fixed the age and eye-colour drift. Is that acceptable against the brief's "fixed prompt"?
+5. **Ancestry drift.** v2 holds ancestry for these faces at strength 0.2. A wider test across many more genomes is needed before trusting it. Should that test be the next step?
 6. **FLAME.** Do you want to register for FLAME 2023 Open and place the files in `assets/flame/`, so the shape space can be compared with MakeHuman's?
 7. **Face variety.** Proportions are now calibrated, but faces vary less than real ones do. Should the next step add more shape genes (eye spacing, lip shape, brow ridge, cheek fat)? Or should it fit a proper shape space to measured data, which would need a licensed dataset?
 8. **East Asian norms.** I found no sourced norms, so for that ancestry only face height and mouth width are constrained. Do you have a preferred source?

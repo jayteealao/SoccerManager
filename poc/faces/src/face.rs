@@ -14,6 +14,8 @@ use std::collections::HashMap;
 pub struct FaceBuilder {
     pub base: BaseHead,
     lip: HashMap<u32, f32>,
+    /// Base-mesh eyeball centres and radii (left, right).
+    eyes: [(Vec3, f32); 2],
 }
 
 impl FaceBuilder {
@@ -29,7 +31,18 @@ impl FaceBuilder {
                 *e = e.max(m);
             }
         }
-        Ok(Self { base, lip })
+        let eye = |part: Part| {
+            let v: Vec<Vec3> = base
+                .tris
+                .iter()
+                .filter(|(_, p)| *p == part)
+                .flat_map(|(t, _)| t.map(|i| base.base[i as usize]))
+                .collect();
+            let c = v.iter().copied().sum::<Vec3>() / v.len() as f32;
+            (c, v.iter().map(|p| p.distance(c)).fold(0.0, f32::max))
+        };
+        let eyes = [eye(Part::EyeL), eye(Part::EyeR)];
+        Ok(Self { base, lip, eyes })
     }
 
     pub fn head(&mut self, g: &Genome, age: &AgeState) -> HeadMesh {
@@ -81,7 +94,7 @@ impl FaceBuilder {
                         beard_mask(b) * (1.0 - lip),
                         hair::scalp_density(b, g, age),
                     ];
-                    v.aux2 = [jersey_mask(b), crow_mask(b), 0.0, 0.0];
+                    v.aux2 = [jersey_mask(b), crow_mask(b), self.lash_mask(b), 0.0];
                     skin_map[ci] = skin_v.len() as u32;
                     skin_base.push(b);
                     skin_v.push(v);
@@ -145,6 +158,21 @@ impl FaceBuilder {
             draws[0].indices.chunks(3).map(|t| [t[0], t[1], t[2]]).collect(),
         );
         (draws, scalp)
+    }
+}
+
+impl FaceBuilder {
+    /// Lash line: skin on the lid margin, just in front of the eyeball; the
+    /// upper lid carries more (lashes and lid shadow).
+    fn lash_mask(&self, b: Vec3) -> f32 {
+        let (c, r) = if b.x > 0.0 { self.eyes[0] } else { self.eyes[1] };
+        let off = b.distance(c) - r;
+        if b.z < c.z || (b.y - c.y).abs() > 0.09 {
+            return 0.0;
+        }
+        let margin = 1.0 - smoothstep(0.004, 0.028, off.abs());
+        let upper = if b.y > c.y { 1.0 } else { 0.45 };
+        margin * upper
     }
 }
 
@@ -216,8 +244,8 @@ fn brow_mask(b: Vec3) -> f32 {
     if !(0.0..=1.0).contains(&u) {
         return 0.0;
     }
-    let centre = 7.50 + 0.055 * (std::f32::consts::PI * u * 0.85).sin() - 0.02 * u;
-    let half = 0.045 * (1.0 - 0.55 * u) + 0.012;
+    let centre = 7.445 + 0.05 * (std::f32::consts::PI * u * 0.85).sin() - 0.025 * u;
+    let half = 0.052 * (1.0 - 0.5 * u) + 0.014;
     let d = (b.y - centre).abs();
     (1.0 - smoothstep(half * 0.55, half, d)) * smoothstep(0.0, 0.08, u) * (1.0 - smoothstep(0.85, 1.0, u))
 }

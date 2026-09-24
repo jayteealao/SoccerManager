@@ -70,8 +70,8 @@ impl Landmarks {
             t.iter().filter(|(_, d)| d.length() > frac * max).map(|(i, _)| *i).collect()
         };
         let nose_wing = region(bh, "nose/nose-flaring-incr", 0.4);
-        let mut lips = region(bh, "mouth/mouth-upperlip-volume-incr", 0.15);
-        lips.extend(region(bh, "mouth/mouth-lowerlip-volume-incr", 0.15));
+        let mut lips = region(bh, "mouth/mouth-upperlip-volume-incr", 0.03);
+        lips.extend(region(bh, "mouth/mouth-lowerlip-volume-incr", 0.03));
         let b = &bh.base;
         let skin: Vec<u32> = {
             let mut v: Vec<u32> = bh.tris.iter().filter(|(_, p)| *p == Part::Skin).flat_map(|(t, _)| *t).collect();

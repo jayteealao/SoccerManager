@@ -27,6 +27,8 @@ fn main() {
     let mut rows = Vec::new();
     let mut labels = Vec::new();
     let mut times = Vec::new();
+    // PoC 4 manifest: render, depth, output, prompt set (age band + eye colour).
+    let mut manifest = String::new();
     for (code, seed) in SHEET {
         let g = Genome::generate(seed, nation(code).unwrap(), 2004);
         let style = Style::for_genome(&g);
@@ -47,10 +49,18 @@ fn main() {
             if finish && [19.0, 30.0, 60.0].contains(&years) {
                 img.save_png(Path::new(&format!("out/tmp/finish_inputs/{stem}.png")));
                 depth.save_png(Path::new(&format!("out/tmp/finish_inputs/{stem}_depth.png")));
+                let eyes = format!("{:?}", g.eye_colour).to_lowercase();
+                manifest += &format!(
+                    "out/tmp/finish_inputs/{stem}.png,out/tmp/finish_inputs/{stem}_depth.png,out/tmp/finished/{stem}.png,embeds_age{}_{eyes}\n",
+                    years as u32
+                );
             }
             row.push(img);
         }
         rows.push(row);
+    }
+    if finish {
+        std::fs::write("out/tmp/pairs.csv", manifest).unwrap();
     }
     let cols: Vec<String> = SHEET_AGES.iter().map(|a| format!("AGE {a}")).collect();
     let sheet = contact_sheet(&rows, 240, &cols, &labels);
