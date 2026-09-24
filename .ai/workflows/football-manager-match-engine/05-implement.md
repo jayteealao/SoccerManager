@@ -5,12 +5,12 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-24T00:51:46Z"
-slices-implemented: 18
+updated-at: "2026-09-24T03:50:37Z"
+slices-implemented: 19
 slices-total: 22
-metric-total-files-changed: 671
-metric-total-lines-added: 59053
-metric-total-lines-removed: 2568
+metric-total-files-changed: 702
+metric-total-lines-added: 60495
+metric-total-lines-removed: 2691
 tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment, scripting, sandbox, plugin-interface, distribution, installer, packaging, release-version, error-record, help-text, realism-bands, formations]
 refs:
   index: 00-index.md
@@ -34,6 +34,7 @@ refs:
     - 05-implement-distribution.md
     - 05-implement-probe-engine-core.md
     - 05-implement-realism-bands-v2.md
+    - 05-implement-defending-and-discipline.md
 next-command: wf-verify
 next-invocation: "/wf verify football-manager-match-engine realism-bands-v2"
 ---
@@ -165,7 +166,17 @@ next-invocation: "/wf verify football-manager-match-engine realism-bands-v2"
   - Baseline for the next three slices: 9 of 15 equal-suite bands fail on all five seeds; 151 of 165 pairing checks fail on seed 42 (formations run on one seed by Q-I1). A full run takes about 76 minutes on the 8-core reference machine.
 - Checks at implement: 434 Rust tests pass (4 ignored), 128 page tests pass, clippy runs with `-D warnings`, and the benchmark median is 422.0 ms per match and 6.73 MB (tripwires 460.7 ms and 6.82 MB).
 
+- `defending-and-discipline` is implemented (commit `f7fe35b`) and **awaits a product-owner decision**: two of its four criteria fail at every in-bounds tuning (the red-card experiment in all three arms; 4-4-1-1 at 5.18 and 3-4-3 at 4.17 goals per match against 4-4-2). Every later slice inherits these changes:
+  - `Simulation::keeper(team)` / `Team::keeper_slot()` name the acting keeper; no code may assume slot 0 keeps goal. `restart::taker` takes `&[Team; 2]` and reads a side's own end from `attack_x`.
+  - `Team::reshape` lays the whole team out again; the back line is capped at `back_line_gap` between neighbours at 11 against 11 too, so every formation's back line is narrower than the tactics file says.
+  - Pressers go for the ball inside 3 m; the goal-side cover tracks the carrier. Contact near the ball costs about four fouls per won tackle in this engine, so a mechanism that holds a defender in contact floods fouls and penalties.
+  - Snapshot version 5 (`foul_ready`); five new tuning values; decision code `sub-keeper`; the content hash moved.
+  - Equal suite at seed 42: goals per match 4.092 (baseline 3.035), sending-off share 0.326 (0.421).
+- Checks at implement: 458 workspace tests pass (7 ignored), clippy runs with `-D warnings`, and the benchmark median is 1.5312 µs per tick and 6.80 MB (gates 1.6228 µs and 8.27 MB).
+
 ## Recommended Next Stage
+
+- Blocked: `defending-and-discipline` waits for the product owner's answer in `po-answers.md` (widen the slice, move the two criteria to `realism-tuning`, or revisit the slice).
 
 - `/wf verify football-manager-match-engine realism-bands-v2` (new: the four criteria on the release binary, the viewer check of ten formations, and the seed 42 formations evidence)
 
