@@ -1,0 +1,5 @@
+# Downloaded assets and model weights are never committed; scripts fetch them.
+downloads/
+target/
+__pycache__/
+out/tmp/
