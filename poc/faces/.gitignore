@@ -3,3 +3,6 @@ downloads/
 target/
 __pycache__/
 out/tmp/
+
+# FLAME model files you place by hand; never committed.
+assets/flame/
