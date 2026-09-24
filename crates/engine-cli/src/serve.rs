@@ -410,8 +410,16 @@ impl<'a> Serving<'a> {
             );
             let driven = match driven {
                 Ok(driven) => Some(driven),
-                // A message the socket could not take: the viewer is gone.
-                Err(StreamError::ClientGone) => None,
+                // A message the socket could not take: the viewer is gone. The run still
+                // names the viewer that went away, as it does when a tick write fails.
+                Err(StreamError::ClientGone) => {
+                    tracing::info!(
+                        signal = "socket.client_gone",
+                        written = 0,
+                        reason = "the viewer disconnected while a message was sent"
+                    );
+                    None
+                }
                 Err(other) => return Err(other.into()),
             };
             let (streams, _) = sink.into_parts();
