@@ -1,0 +1,8 @@
+control: home 1.4833 away 1.5167
+keeper sent off: full side 2.3500, reduced side 4.5625, limit 2.3733
+centre-back sent off: full side 0.9792, reduced side 1.4833, limit 2.3733
+striker sent off: full side 1.1167, reduced side 2.6333, limit 2.3733
+    "keeper: the reduced side scored 4.56 against 2.35",
+    "centre-back: the reduced side scored 1.48 against 0.98",
+    "striker: the reduced side scored 2.63 against 1.12",
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 55.62s
