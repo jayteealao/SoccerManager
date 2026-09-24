@@ -5,12 +5,12 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-24T06:49:18Z"
-slices-implemented: 19
+updated-at: "2026-09-24T10:21:31Z"
+slices-implemented: 20
 slices-total: 22
-metric-total-files-changed: 702
-metric-total-lines-added: 60495
-metric-total-lines-removed: 2691
+metric-total-files-changed: 722
+metric-total-lines-added: 62666
+metric-total-lines-removed: 2820
 tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment, scripting, sandbox, plugin-interface, distribution, installer, packaging, release-version, error-record, help-text, realism-bands, formations]
 refs:
   index: 00-index.md
@@ -35,8 +35,9 @@ refs:
     - 05-implement-probe-engine-core.md
     - 05-implement-realism-bands-v2.md
     - 05-implement-defending-and-discipline.md
+    - 05-implement-tuning-loop.md
 next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine defending-and-discipline"
+next-invocation: "/wf verify football-manager-match-engine tuning-loop"
 ---
 
 # Implement Index
@@ -174,7 +175,16 @@ next-invocation: "/wf verify football-manager-match-engine defending-and-discipl
   - Equal suite at seed 42: goals per match 4.092 (baseline 3.035), sending-off share 0.326 (0.421).
 - Checks at implement: 458 workspace tests pass (7 ignored), clippy runs with `-D warnings`, and the benchmark median is 1.5312 µs per tick and 6.80 MB (gates 1.6228 µs and 8.27 MB).
 
+- `tuning-loop` is implemented and committed (`a6dc5d2`). Every later tuning slice inherits it:
+  - `calibrate --pairing "A v B"`, `--band NAME` and `--baseline report.json` give a loop of under 2 minutes on the reference machine: 87 s for one pairing at 1,000 matches, 86 s for the equal suite, and 42 s for `--suite red-card --seed 1 --matches 120`.
+  - Every band row carries `se`. The report carries `fixtures.hash`; a baseline must share the seed, the match count and that hash, and a changed `content.hash` is the change under test. A report made before this change cannot be a baseline.
+  - `Simulation::send_off_before_kickoff` is the one send-off-at-kick-off path. `Scene::sent_off` calls it. `--suite red-card` equals the slow test `a_sending_off_gives_no_advantage` to 4 decimals, and its criterion still fails, as `lone-forward` expects.
+  - A targeted run is an inner loop. The full gate (five seeds for equal and strength, one for formations) is unchanged, and `--suite all` does not include red-card.
+  - No faster build profile: fat LTO and a native CPU target were identical in figures and inside run-to-run timing noise.
+
 ## Recommended Next Stage
+
+- `/wf verify football-manager-match-engine tuning-loop` (new: the seven criteria on the release binary; the evidence and scripts are in `implement-evidence/tuning-loop/`)
 
 - `/wf verify football-manager-match-engine defending-and-discipline` (new: discipline, the acting keeper and the eight kept formation pairings; the red-card criterion and the 4-4-1-1 and 3-4-3 pairings belong to `lone-forward`)
 

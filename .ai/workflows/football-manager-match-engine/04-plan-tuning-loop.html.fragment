@@ -1,0 +1,46 @@
+<section class="fragment-plan" data-artifact="plan" data-slice="tuning-loop" data-rev="1">
+  <!-- @include-skip files-touched rows and callouts follow the sibling plan fragments' inline markup so the page renders them identically -->
+  <table class="files-touched pl-files">
+    <thead><tr><th>File</th><th>Status</th><th>Module</th><th>Lines</th></tr></thead>
+    <tbody>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">interface</span> crates/engine-cli/src/cli.rs</summary><div class="pl-card">A red-card suite, and three new options: --pairing and --band (each repeatable) select what a run plays and checks, and --baseline names an earlier report to compare with.</div></details></td><td>modified</td><td>cli</td><td>+60 / -3</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">application</span> crates/engine-cli/src/calibrate (mod.rs, fixtures.rs, worker.rs)</summary><div class="pl-card">A run plays only the selected fixtures, and each fixture keeps its place in the full list, so its match seed is the same as in a full run. The baseline is checked before any match starts. A red-card worker plays the default clubs with cards off and one player sent off before kick-off.</div></details></td><td>modified</td><td>calib</td><td>+300 / -32</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine-cli/src/report/mod.rs</summary><div class="pl-card">Every band check carries its sampling error. The red-card figures and their criterion go into the report as a suite, so a baseline and a diff apply to them.</div></details></td><td>modified</td><td>report</td><td>+200 / -10</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">domain</span> crates/engine-cli/src/report/baseline.rs</summary><div class="pl-card">Refuses a baseline on other fixtures (a different seed, match count or fixtures hash) and names the difference. A changed content hash, from a tuning value or a flag, is allowed and printed as the change under test. Prints, for each band: the baseline value, the new value, the change, its sampling error, and whether the change is noise (inside two errors).</div></details></td><td>new</td><td>report</td><td>+190</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/sim.rs, scenario.rs</summary><div class="pl-card">A public send-off before kick-off, which the test scene now also uses, so the slow test and the calibrate suite share one code path.</div></details></td><td>modified</td><td>engine</td><td>+27 / -8</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">contract</span> run-report schema and key list</summary><div class="pl-card">Additive keys only: the red-card suite, the sampling error of each band, and the selection, baseline and diff of a run. The schema version stays 1.</div></details></td><td>modified</td><td>contract</td><td>+74 / -2</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">config</span> Cargo.toml</summary><div class="pl-card">A calibrate build profile, added only if it is measured faster and gives identical figures for every seed. A native CPU target is never committed.</div></details></td><td>modified</td><td>build</td><td>+5</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">test</span> crates/engine-cli/tests/calibrate_targeted.rs and four updated test files</summary><div class="pl-card">Tests for selection, agreement with a full run, refusal, the diff's noise mark, the red-card suite, schema validity, parity of the two send-off paths, and the document set.</div></details></td><td>new</td><td>tests</td><td>+320 / -4</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">docs</span> docs/reference/cli.md, docs/how-to/calibration.md</summary><div class="pl-card">The new options, and a how-to that walks through measuring a tuning change.</div></details></td><td>new</td><td>docs</td><td>+140 / -2</td></tr>
+    </tbody>
+  </table>
+  <div class="pl-risks">
+    <aside class="callout callout-warn"><strong>The baseline guard checks the fixtures, not the content (medium).</strong> The content hash covers the tuning file and every flag state, so the product owner chose a fixtures hash for the guard. It covers every input the fixtures read. One test edits the tactics content and expects a refusal; another flips a flag and expects the diff.</aside>
+    <aside class="callout callout-warn"><strong>Targeted and full runs drift apart (medium).</strong> A match seed comes from the fixture's place in the full list. The selection keeps that place, and a test compares a targeted run with a full run.</aside>
+    <aside class="callout callout-warn"><strong>A native CPU target moves seeded results (medium).</strong> A profile is kept only if every figure is identical for every seed.</aside>
+    <aside class="callout callout-info"><strong>A tight 2-minute budget (low).</strong> 1,000 matches take about 80 seconds, plus the single-thread figure. This is measured on the reference machine.</aside>
+  </div>
+  <details class="pl-revs">
+    <summary>Prior revisions (1)</summary>
+    <ul>
+      <li>Revision 0 (2026-09-24): written with the baseline identity key open. Snapshot: history/04-plan-tuning-loop-0.md</li>
+    </ul>
+  </details>
+  <style>
+    .fragment-plan .pl-files { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-plan .pl-files th, .fragment-plan .pl-files td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
+    .fragment-plan .pl-files summary { cursor: pointer; }
+    .fragment-plan .pl-chip { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; opacity: 0.8; }
+    .fragment-plan .pl-card { padding: 6px 0 4px 18px; opacity: 0.9; }
+    .fragment-plan .pl-risks { display: grid; gap: 8px; margin-top: 12px; }
+    @media (max-width: 480px) { .fragment-plan .pl-files th:nth-child(3), .fragment-plan .pl-files td:nth-child(3) { display: none; } }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-plan');
+      var files = 18, modules = 8;
+      var risks = root ? root.querySelectorAll('.pl-risks .callout').length : 0;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'plan', artifact: 'plan', counts: { files: files, modules: modules, risks: risks } } }));
+    })();
+  </script>
+</section>

@@ -1,0 +1,108 @@
+2026-09-24T10:13:29.835536Z  INFO engine_cli::calibrate: signal="calibrate.suite" run.id=calib-000000000000002a-1790244731307 suite="equal" matches=1000 wall_ms=78528 jobs=8
+2026-09-24T10:13:29.943481Z  INFO engine::rules: signal="injury.occurred" tick=66000 team=1 player=p-club-00000002-00-14 source="background" energy=0.85
+2026-09-24T10:13:29.943520Z  INFO engine::ai: signal="ai.decision" tick=66000 minute=22 team=1 code="sub-injury" score_state=3-0
+2026-09-24T10:13:30.054927Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=321 variance_s=29.0 added_s=350 announced_min=6
+2026-09-24T10:13:30.127721Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:30.127741Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:30.127745Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:30.134351Z  INFO engine::ai: signal="ai.decision" tick=187500 minute=56 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:30.136778Z  INFO engine::ai: signal="ai.decision" tick=189000 minute=57 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:30.145500Z  INFO engine::ai: signal="ai.decision" tick=195000 minute=59 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:30.158736Z  INFO engine::ai: signal="ai.decision" tick=204000 minute=62 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:30.194182Z  INFO engine::ai: signal="ai.decision" tick=228000 minute=70 team=0 code="mentality-up-trailing" score_state=0-5
+2026-09-24T10:13:30.238017Z  INFO engine::ai: signal="ai.decision" tick=258000 minute=80 team=1 code="mentality-down-leading" score_state=5-0
+2026-09-24T10:13:30.282048Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=72 variance_s=14.0 added_s=86 announced_min=2
+2026-09-24T10:13:30.395567Z  INFO engine::rules: signal="injury.occurred" tick=66000 team=1 player=p-club-00000002-00-14 source="background" energy=0.85
+2026-09-24T10:13:30.395597Z  INFO engine::ai: signal="ai.decision" tick=66000 minute=22 team=1 code="sub-injury" score_state=3-0
+2026-09-24T10:13:30.507017Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=321 variance_s=29.0 added_s=350 announced_min=6
+2026-09-24T10:13:30.580350Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:30.580367Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:30.580373Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:30.587176Z  INFO engine::ai: signal="ai.decision" tick=187500 minute=56 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:30.589763Z  INFO engine::ai: signal="ai.decision" tick=189000 minute=57 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:30.598659Z  INFO engine::ai: signal="ai.decision" tick=195000 minute=59 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:30.611899Z  INFO engine::ai: signal="ai.decision" tick=204000 minute=62 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:30.646885Z  INFO engine::ai: signal="ai.decision" tick=228000 minute=70 team=0 code="mentality-up-trailing" score_state=0-5
+2026-09-24T10:13:30.690696Z  INFO engine::ai: signal="ai.decision" tick=258000 minute=80 team=1 code="mentality-down-leading" score_state=5-0
+2026-09-24T10:13:30.734460Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=72 variance_s=14.0 added_s=86 announced_min=2
+2026-09-24T10:13:30.846354Z  INFO engine::rules: signal="injury.occurred" tick=66000 team=1 player=p-club-00000002-00-14 source="background" energy=0.85
+2026-09-24T10:13:30.846407Z  INFO engine::ai: signal="ai.decision" tick=66000 minute=22 team=1 code="sub-injury" score_state=3-0
+2026-09-24T10:13:30.958199Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=321 variance_s=29.0 added_s=350 announced_min=6
+2026-09-24T10:13:31.031450Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:31.031471Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:31.031477Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:31.037962Z  INFO engine::ai: signal="ai.decision" tick=187500 minute=56 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:31.040154Z  INFO engine::ai: signal="ai.decision" tick=189000 minute=57 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:31.048762Z  INFO engine::ai: signal="ai.decision" tick=195000 minute=59 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:31.062284Z  INFO engine::ai: signal="ai.decision" tick=204000 minute=62 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:31.097492Z  INFO engine::ai: signal="ai.decision" tick=228000 minute=70 team=0 code="mentality-up-trailing" score_state=0-5
+2026-09-24T10:13:31.141105Z  INFO engine::ai: signal="ai.decision" tick=258000 minute=80 team=1 code="mentality-down-leading" score_state=5-0
+2026-09-24T10:13:31.184473Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=72 variance_s=14.0 added_s=86 announced_min=2
+2026-09-24T10:13:31.297752Z  INFO engine::rules: signal="injury.occurred" tick=66000 team=1 player=p-club-00000002-00-14 source="background" energy=0.85
+2026-09-24T10:13:31.297785Z  INFO engine::ai: signal="ai.decision" tick=66000 minute=22 team=1 code="sub-injury" score_state=3-0
+2026-09-24T10:13:31.408137Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=321 variance_s=29.0 added_s=350 announced_min=6
+2026-09-24T10:13:31.480563Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:31.480581Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:31.480585Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:31.487066Z  INFO engine::ai: signal="ai.decision" tick=187500 minute=56 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:31.489555Z  INFO engine::ai: signal="ai.decision" tick=189000 minute=57 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:31.498133Z  INFO engine::ai: signal="ai.decision" tick=195000 minute=59 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:31.511164Z  INFO engine::ai: signal="ai.decision" tick=204000 minute=62 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:31.546393Z  INFO engine::ai: signal="ai.decision" tick=228000 minute=70 team=0 code="mentality-up-trailing" score_state=0-5
+2026-09-24T10:13:31.590326Z  INFO engine::ai: signal="ai.decision" tick=258000 minute=80 team=1 code="mentality-down-leading" score_state=5-0
+2026-09-24T10:13:31.634409Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=72 variance_s=14.0 added_s=86 announced_min=2
+2026-09-24T10:13:31.747468Z  INFO engine::rules: signal="injury.occurred" tick=66000 team=1 player=p-club-00000002-00-14 source="background" energy=0.85
+2026-09-24T10:13:31.747494Z  INFO engine::ai: signal="ai.decision" tick=66000 minute=22 team=1 code="sub-injury" score_state=3-0
+2026-09-24T10:13:31.857963Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=321 variance_s=29.0 added_s=350 announced_min=6
+2026-09-24T10:13:31.929975Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:31.929992Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:31.929997Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:31.936454Z  INFO engine::ai: signal="ai.decision" tick=187500 minute=56 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:31.938629Z  INFO engine::ai: signal="ai.decision" tick=189000 minute=57 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:31.947244Z  INFO engine::ai: signal="ai.decision" tick=195000 minute=59 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:31.960228Z  INFO engine::ai: signal="ai.decision" tick=204000 minute=62 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:31.995438Z  INFO engine::ai: signal="ai.decision" tick=228000 minute=70 team=0 code="mentality-up-trailing" score_state=0-5
+2026-09-24T10:13:32.038564Z  INFO engine::ai: signal="ai.decision" tick=258000 minute=80 team=1 code="mentality-down-leading" score_state=5-0
+2026-09-24T10:13:32.081588Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=72 variance_s=14.0 added_s=86 announced_min=2
+2026-09-24T10:13:32.193190Z  INFO engine::rules: signal="injury.occurred" tick=66000 team=1 player=p-club-00000002-00-14 source="background" energy=0.85
+2026-09-24T10:13:32.193218Z  INFO engine::ai: signal="ai.decision" tick=66000 minute=22 team=1 code="sub-injury" score_state=3-0
+2026-09-24T10:13:32.304447Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=321 variance_s=29.0 added_s=350 announced_min=6
+2026-09-24T10:13:32.377353Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:32.377385Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:32.377396Z  INFO engine::ai: signal="ai.decision" tick=183000 minute=55 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:32.384722Z  INFO engine::ai: signal="ai.decision" tick=187500 minute=56 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:32.386903Z  INFO engine::ai: signal="ai.decision" tick=189000 minute=57 team=1 code="sub-fatigue" score_state=5-0
+2026-09-24T10:13:32.395531Z  INFO engine::ai: signal="ai.decision" tick=195000 minute=59 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:32.408605Z  INFO engine::ai: signal="ai.decision" tick=204000 minute=62 team=0 code="sub-fatigue" score_state=0-5
+2026-09-24T10:13:32.443552Z  INFO engine::ai: signal="ai.decision" tick=228000 minute=70 team=0 code="mentality-up-trailing" score_state=0-5
+2026-09-24T10:13:32.487226Z  INFO engine::ai: signal="ai.decision" tick=258000 minute=80 team=1 code="mentality-down-leading" score_state=5-0
+2026-09-24T10:13:32.530486Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=72 variance_s=14.0 added_s=86 announced_min=2
+2026-09-24T10:13:35.765733Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790244731307 suite=equal band=corners_per_team value=0.012 lo=3.5 hi=6.5
+2026-09-24T10:13:35.765757Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790244731307 suite=equal band=goal_kicks_per_match value=7.926 lo=12.0 hi=22.0
+2026-09-24T10:13:35.765764Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790244731307 suite=equal band=goals_per_match value=4.092 lo=2.4 hi=3.2
+2026-09-24T10:13:35.765768Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790244731307 suite=equal band=goals_per_xg value=1.5333 lo=0.85 hi=1.15
+2026-09-24T10:13:35.765772Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790244731307 suite=equal band=passes_per_team value=1213.333 lo=350.0 hi=550.0
+2026-09-24T10:13:35.765775Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790244731307 suite=equal band=sending_off_share value=0.326 lo=0.08 hi=0.22
+2026-09-24T10:13:35.765778Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790244731307 suite=equal band=shots_on_target_share value=0.7693 lo=0.3 hi=0.42
+2026-09-24T10:13:35.765781Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790244731307 suite=equal band=shots_per_team value=17.165 lo=8.0 hi=16.0
+2026-09-24T10:13:35.765784Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790244731307 suite=equal band=ten_plus_goals_share value=0.043 lo=0.0 hi=0.005
+2026-09-24T10:13:35.765787Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790244731307 suite=equal band=throw_ins_per_match value=17.976 lo=35.0 hi=55.0
+diff against baseline calib-000000000000002a-1790239762222 (seed 42): content 3b3ddb56d4ec -> 3b3ddb56d4ec, content unchanged
+suite      band                    pairing           baseline       new    change    error  mark   verdict
+equal      corners_per_team        -                   0.0120    0.0120   +0.0000   0.0035  noise  miss
+equal      goal_kicks_per_match    -                   7.9260    7.9260   +0.0000   0.1765  noise  miss
+equal      goalless_share          -                   0.0470    0.0470   +0.0000   0.0095  noise  pass
+equal      goals_per_match         -                   4.0920    4.0920   +0.0000   0.1219  noise  miss
+equal      goals_per_xg            -                   1.5333    1.5333   +0.0000   0.0338  noise  miss
+equal      pass_accuracy_pct       -                  86.3120   86.3120   +0.0000   0.0666  noise  pass
+equal      passes_per_team         -                1213.3330 1213.3330   +0.0000   2.4846  noise  miss
+equal      possession_away_pct     -                  49.9740   49.9740   +0.0000   0.2258  noise  pass
+equal      possession_home_pct     -                  50.0260   50.0260   +0.0000   0.2258  noise  pass
+equal      sending_off_share       -                   0.3260    0.3260   +0.0000   0.0210  noise  miss
+equal      shots_on_target_share   -                   0.7693    0.7693   +0.0000   0.0031  noise  miss
+equal      shots_per_team          -                  17.1650   17.1650   +0.0000   0.3173  noise  miss
+equal      ten_plus_goals_share    -                   0.0430    0.0430   +0.0000   0.0091  noise  miss
+equal      throw_ins_per_match     -                  17.9760   17.9760   +0.0000   0.2739  noise  miss
+equal      yellow_cards_per_team   -                   1.8210    1.8210   +0.0000   0.0395  noise  pass
+15 rows: 0 change, 15 noise (a change inside 2 errors is noise)
+2026-09-24T10:13:37.067849Z  INFO engine_cli::calibrate: signal="calibrate.diff" run.id=calib-000000000000002a-1790244731307 baseline=calib-000000000000002a-1790239762222 changes=0 noise=15

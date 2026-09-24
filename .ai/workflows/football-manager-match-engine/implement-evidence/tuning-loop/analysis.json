@@ -1,0 +1,189 @@
+{
+ "pairing_entries_targeted": 1,
+ "pairing_figures_equal_full": true,
+ "pairing_figures": {
+  "goalless_share": 0.023,
+  "goals_for_mean": [
+   1.437,
+   5.792
+  ],
+  "goals_per_match_mean": 7.229,
+  "matches": 1000,
+  "pairing": [
+   "4-4-2",
+   "4-4-1-1"
+  ],
+  "ten_plus_goals_share": 0.295
+ },
+ "pairing_rows_equal_full": true,
+ "equal_figures_equal_full": true,
+ "equal_rows_equal_full": true,
+ "fixtures_hash": {
+  "full": "c4c0a247c3c9",
+  "pair": "c4c0a247c3c9",
+  "equal": "c4c0a247c3c9"
+ },
+ "full_wall_ms": {
+  "equal": 99777,
+  "formations": 4577659,
+  "strength": 103110,
+  "total": 4780549
+ },
+ "diff_pair-a": {
+  "rows": 3,
+  "noise": 3,
+  "changes": 0,
+  "max_abs_change": 0.0,
+  "content_changed": false,
+  "example": {
+   "band": "goalless_share",
+   "baseline": 0.023,
+   "change": 0.0,
+   "error": 0.0067,
+   "new": 0.023,
+   "noise": true,
+   "pairing": "4-4-2 v 4-4-1-1",
+   "pass": false,
+   "suite": "formations"
+  }
+ },
+ "wall_pair-a": {
+  "formations": 79471,
+  "total": 79471
+ },
+ "diff_equal-a": {
+  "rows": 15,
+  "noise": 15,
+  "changes": 0,
+  "max_abs_change": 0.0,
+  "content_changed": false,
+  "example": {
+   "band": "corners_per_team",
+   "baseline": 0.012,
+   "change": 0.0,
+   "error": 0.00349,
+   "new": 0.012,
+   "noise": true,
+   "pass": false,
+   "suite": "equal"
+  }
+ },
+ "wall_equal-a": {
+  "equal": 78528,
+  "total": 78528
+ },
+ "diff_red-a": {
+  "rows": 6,
+  "noise": 6,
+  "changes": 0,
+  "max_abs_change": 0.0,
+  "content_changed": false,
+  "example": {
+   "band": "full_over_control",
+   "baseline": 0.914,
+   "change": 0.0,
+   "error": 0.21312,
+   "new": 0.914,
+   "noise": true,
+   "pairing": "centre-back",
+   "pass": true,
+   "suite": "red-card"
+  }
+ },
+ "wall_red-a": {
+  "red-card": 36297,
+  "total": 36297
+ },
+ "profile_pair_a": {
+  "matches_per_s": 12.58,
+  "wall_ms": {
+   "formations": 79471,
+   "total": 79471
+  }
+ },
+ "profile_pair_a2": {
+  "matches_per_s": 12.2,
+  "wall_ms": {
+   "formations": 81968,
+   "total": 81969
+  },
+  "diff_all_zero": true,
+  "suites_equal": true,
+  "formations_equal": true
+ },
+ "profile_pair_b": {
+  "matches_per_s": 12.69,
+  "wall_ms": {
+   "formations": 78803,
+   "total": 78803
+  },
+  "diff_all_zero": true,
+  "suites_equal": true,
+  "formations_equal": true
+ },
+ "profile_pair_c": {
+  "matches_per_s": 12.53,
+  "wall_ms": {
+   "formations": 79783,
+   "total": 79783
+  },
+  "diff_all_zero": true,
+  "suites_equal": true,
+  "formations_equal": true
+ },
+ "profile_red_b": {
+  "matches_per_s": 13.3,
+  "diff_all_zero": true,
+  "red_card_equal": true
+ },
+ "profile_red_c": {
+  "matches_per_s": 13.18,
+  "diff_all_zero": true,
+  "red_card_equal": true
+ },
+ "profile_red_a": {
+  "matches_per_s": 13.22
+ },
+ "red_card_figures": {
+  "arms": [
+   {
+    "arm": "keeper",
+    "full": 2.0583,
+    "matches": 120,
+    "pass": false,
+    "player": 11,
+    "reduced": 5.8167
+   },
+   {
+    "arm": "centre-back",
+    "full": 0.7083,
+    "matches": 120,
+    "pass": false,
+    "player": 13,
+    "reduced": 2.3917
+   },
+   {
+    "arm": "striker",
+    "full": 0.95,
+    "matches": 120,
+    "pass": false,
+    "player": 21,
+    "reduced": 3.8417
+   }
+  ],
+  "control": [
+   0.775,
+   2.2333
+  ],
+  "control_matches": 120,
+  "limit": 1.24,
+  "matches": 120,
+  "pass": false
+ },
+ "violations": {
+  "full-42": 0,
+  "pair-a": 0,
+  "equal-a": 0,
+  "red-a": 0
+ }
+}
