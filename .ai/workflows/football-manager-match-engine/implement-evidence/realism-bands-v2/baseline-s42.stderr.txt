@@ -1,0 +1,289 @@
+2026-09-23T23:01:54.920058Z  INFO engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-23T23:01:54.920271Z  INFO engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=2 bytes=5021 hash=de80d94141cd
+2026-09-23T23:01:54.920366Z  INFO engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=4 bytes=1416 hash=3560724c9d40
+2026-09-23T23:01:54.920512Z  INFO engine::data: signal="content.loaded" kind="tactics" path="tactics.json" schema_version=1 bytes=11538 hash=cd97c217173f
+2026-09-23T23:01:54.921216Z  INFO engine::data: signal="content.loaded" kind="commentary" path="commentary/en.json" schema_version=1 bytes=17274 hash=67307026bffc
+2026-09-23T23:01:54.921437Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
+2026-09-23T23:01:54.921620Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a
+2026-09-23T23:01:54.922133Z  INFO engine::observe::identity: signal="identity.owner_created" path="owner.id"
+2026-09-23T23:01:54.922400Z  INFO engine::data: signal="content.loaded" kind="realism bands" path="realism-bands.json" schema_version=2 bytes=858 hash=98a38c2614dd
+2026-09-23T23:03:14.914489Z  INFO engine_cli::calibrate: signal="calibrate.suite" run.id=calib-000000000000002a-1790204514922 suite="equal" matches=1000 wall_ms=79992 jobs=8
+2026-09-23T23:04:32.342369Z  INFO engine_cli::calibrate: signal="calibrate.suite" run.id=calib-000000000000002a-1790204514922 suite="strength" matches=1000 wall_ms=77428 jobs=8
+2026-09-23T23:07:54.748968Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=153000 kind="injury" team.id=club-0000002b-03 waited_ticks=3000 taker_distance_m=2.69
+2026-09-23T23:09:13.408991Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=283978 kind="penalty" team.id=club-0000002b-04 waited_ticks=2250 taker_distance_m=0.0
+2026-09-23T23:09:13.435885Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=303942 kind="penalty" team.id=club-0000002b-04 waited_ticks=2250 taker_distance_m=0.0
+2026-09-23T23:15:00.287032Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=141000 kind="injury" team.id=club-0000002c-14 waited_ticks=3000 taker_distance_m=5.12
+2026-09-23T23:22:46.375029Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=141000 kind="injury" team.id=club-0000002c-03 waited_ticks=3000 taker_distance_m=4.24
+2026-09-23T23:24:39.510283Z  WARN engine::rules: signal="rules.abandoned" tick=275948 team.id=club-0000002a-07 on_pitch=6
+2026-09-23T23:24:41.558067Z  WARN engine::rules: signal="rules.abandoned" tick=220282 team.id=club-0000002a-13 on_pitch=6
+2026-09-23T23:29:47.598260Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=183000 kind="injury" team.id=club-0000002a-03 waited_ticks=3000 taker_distance_m=2.36
+2026-09-23T23:30:51.195696Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=183000 kind="injury" team.id=club-0000002b-03 waited_ticks=3000 taker_distance_m=2.43
+2026-09-23T23:31:10.923673Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=183000 kind="injury" team.id=club-0000002c-04 waited_ticks=3000 taker_distance_m=2.88
+2026-09-23T23:31:11.556969Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=183000 kind="injury" team.id=club-0000002c-00 waited_ticks=3000 taker_distance_m=2.12
+2026-09-23T23:31:33.351251Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=141000 kind="injury" team.id=club-0000002a-04 waited_ticks=3000 taker_distance_m=2.59
+2026-09-23T23:32:15.745577Z  WARN engine::rules: signal="rules.abandoned" tick=195000 team.id=club-0000002b-06 on_pitch=6
+2026-09-23T23:32:45.807138Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=156000 kind="injury" team.id=club-0000002a-07 waited_ticks=3000 taker_distance_m=4.49
+2026-09-23T23:33:16.434896Z  WARN engine::rules: signal="rules.abandoned" tick=186797 team.id=club-0000002b-15 on_pitch=6
+2026-09-23T23:34:15.655070Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=291301 kind="free_kick" team.id=club-0000002a-14 waited_ticks=1200 taker_distance_m=0.0
+2026-09-23T23:35:30.326734Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=190815 kind="kick_off" team.id=club-0000002c-07 waited_ticks=750 taker_distance_m=0.1
+2026-09-23T23:38:55.789541Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=141000 kind="injury" team.id=club-0000002b-04 waited_ticks=3000 taker_distance_m=2.42
+2026-09-23T23:39:12.499578Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=141000 kind="injury" team.id=club-0000002c-15 waited_ticks=3000 taker_distance_m=2.51
+2026-09-23T23:43:58.102736Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=141000 kind="injury" team.id=club-0000002a-01 waited_ticks=3000 taker_distance_m=2.32
+2026-09-23T23:45:04.659801Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=141000 kind="injury" team.id=club-0000002a-18 waited_ticks=3000 taker_distance_m=2.59
+2026-09-23T23:45:16.732612Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=141000 kind="injury" team.id=club-0000002a-18 waited_ticks=3000 taker_distance_m=2.49
+2026-09-23T23:47:41.941261Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=292411 kind="penalty" team.id=club-0000002a-17 waited_ticks=2250 taker_distance_m=0.0
+2026-09-23T23:47:43.593979Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=291616 kind="penalty" team.id=club-0000002a-08 waited_ticks=2250 taker_distance_m=0.0
+2026-09-23T23:47:51.406079Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=273709 kind="penalty" team.id=club-0000002a-19 waited_ticks=2250 taker_distance_m=0.0
+2026-09-23T23:49:21.815782Z  WARN engine::rules: signal="rules.abandoned" tick=291002 team.id=club-0000002a-10 on_pitch=6
+2026-09-23T23:50:22.573583Z  WARN engine::rules: signal="rules.abandoned" tick=240000 team.id=club-0000002a-02 on_pitch=6
+2026-09-23T23:51:26.796002Z  WARN engine::rules: signal="rules.abandoned" tick=275101 team.id=club-0000002c-06 on_pitch=6
+2026-09-23T23:51:46.261922Z  WARN engine::rules: signal="rules.abandoned" tick=336000 team.id=club-0000002a-04 on_pitch=6
+2026-09-23T23:51:55.673963Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=150000 kind="injury" team.id=club-0000002b-17 waited_ticks=3000 taker_distance_m=4.77
+2026-09-23T23:53:47.174393Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=141000 kind="injury" team.id=club-0000002c-06 waited_ticks=3000 taker_distance_m=2.59
+2026-09-23T23:56:47.199841Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=147000 kind="injury" team.id=club-0000002a-15 waited_ticks=3000 taker_distance_m=8.86
+2026-09-23T23:57:19.100528Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=290099 kind="penalty" team.id=club-0000002b-12 waited_ticks=2250 taker_distance_m=0.0
+2026-09-24T00:02:41.876379Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=141000 kind="injury" team.id=club-0000002a-06 waited_ticks=3000 taker_distance_m=5.15
+2026-09-24T00:06:29.023974Z  WARN engine::rules: signal="rules.abandoned" tick=143865 team.id=club-0000002a-08 on_pitch=6
+2026-09-24T00:06:31.272732Z  WARN engine::rules: signal="rules.abandoned" tick=252551 team.id=club-0000002a-13 on_pitch=6
+2026-09-24T00:06:39.589974Z  WARN engine::rules: signal="rules.abandoned" tick=249000 team.id=club-0000002a-08 on_pitch=6
+2026-09-24T00:06:45.451700Z  WARN engine::rules: signal="rules.abandoned" tick=287204 team.id=club-0000002a-07 on_pitch=6
+2026-09-24T00:06:58.179704Z  WARN engine::rules: signal="rules.abandoned" tick=275365 team.id=club-0000002b-03 on_pitch=6
+2026-09-24T00:07:08.939433Z  WARN engine::rules: signal="rules.abandoned" tick=285000 team.id=club-0000002b-09 on_pitch=6
+2026-09-24T00:07:17.346818Z  WARN engine::rules: signal="rules.abandoned" tick=279464 team.id=club-0000002b-10 on_pitch=6
+2026-09-24T00:08:43.784088Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=141000 kind="injury" team.id=club-0000002c-15 waited_ticks=3000 taker_distance_m=2.44
+2026-09-24T00:08:53.111618Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=141000 kind="injury" team.id=club-0000002c-08 waited_ticks=3000 taker_distance_m=2.29
+2026-09-24T00:08:54.191283Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=141000 kind="injury" team.id=club-0000002c-02 waited_ticks=3000 taker_distance_m=2.58
+2026-09-24T00:09:32.174716Z  WARN engine::rules: signal="rules.dead_ball_stalled" tick=141000 kind="injury" team.id=club-0000002b-00 waited_ticks=3000 taker_distance_m=0.03
+2026-09-24T00:18:13.704307Z  INFO engine_cli::calibrate: signal="calibrate.suite" run.id=calib-000000000000002a-1790204514922 suite="formations" matches=55000 wall_ms=4421412 jobs=8
+2026-09-24T00:18:13.911959Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=100 variance_s=24.0 added_s=124 announced_min=3
+2026-09-24T00:18:13.966047Z  INFO engine::ai: signal="ai.decision" tick=172500 minute=55 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:13.972842Z  INFO engine::ai: signal="ai.decision" tick=177000 minute=56 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:13.987679Z  INFO engine::ai: signal="ai.decision" tick=187500 minute=60 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:13.991892Z  INFO engine::ai: signal="ai.decision" tick=190500 minute=61 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:13.998183Z  INFO engine::ai: signal="ai.decision" tick=195000 minute=62 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:14.004498Z  INFO engine::ai: signal="ai.decision" tick=199500 minute=64 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:14.030126Z  INFO engine::ai: signal="ai.decision" tick=217500 minute=70 team=1 code="mentality-up-trailing" score_state=0-1
+2026-09-24T00:18:14.100713Z  INFO engine::rules: signal="injury.occurred" tick=267000 team=0 player=p-club-00000001-00-13 source="background" energy=0.49
+2026-09-24T00:18:14.100756Z  INFO engine::ai: signal="ai.decision" tick=267000 minute=86 team=0 code="sub-injury" score_state=1-1
+2026-09-24T00:18:14.100762Z  INFO engine::tactics::change: signal="change.rejected" tick=267000 team=0 kind="substitution" queue_id=q-266999-7 reason=no substitution window left (3 of 3)
+2026-09-24T00:18:14.113046Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=202 variance_s=-5.0 added_s=197 announced_min=4
+2026-09-24T00:18:14.334590Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=100 variance_s=24.0 added_s=124 announced_min=3
+2026-09-24T00:18:14.387943Z  INFO engine::ai: signal="ai.decision" tick=172500 minute=55 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:14.394237Z  INFO engine::ai: signal="ai.decision" tick=177000 minute=56 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:14.409051Z  INFO engine::ai: signal="ai.decision" tick=187500 minute=60 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:14.413259Z  INFO engine::ai: signal="ai.decision" tick=190500 minute=61 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:14.419976Z  INFO engine::ai: signal="ai.decision" tick=195000 minute=62 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:14.426282Z  INFO engine::ai: signal="ai.decision" tick=199500 minute=64 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:14.451627Z  INFO engine::ai: signal="ai.decision" tick=217500 minute=70 team=1 code="mentality-up-trailing" score_state=0-1
+2026-09-24T00:18:14.523117Z  INFO engine::rules: signal="injury.occurred" tick=267000 team=0 player=p-club-00000001-00-13 source="background" energy=0.49
+2026-09-24T00:18:14.523143Z  INFO engine::ai: signal="ai.decision" tick=267000 minute=86 team=0 code="sub-injury" score_state=1-1
+2026-09-24T00:18:14.523148Z  INFO engine::tactics::change: signal="change.rejected" tick=267000 team=0 kind="substitution" queue_id=q-266999-7 reason=no substitution window left (3 of 3)
+2026-09-24T00:18:14.535450Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=202 variance_s=-5.0 added_s=197 announced_min=4
+2026-09-24T00:18:14.760420Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=100 variance_s=24.0 added_s=124 announced_min=3
+2026-09-24T00:18:14.815091Z  INFO engine::ai: signal="ai.decision" tick=172500 minute=55 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:14.822044Z  INFO engine::ai: signal="ai.decision" tick=177000 minute=56 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:14.837125Z  INFO engine::ai: signal="ai.decision" tick=187500 minute=60 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:14.841367Z  INFO engine::ai: signal="ai.decision" tick=190500 minute=61 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:14.847665Z  INFO engine::ai: signal="ai.decision" tick=195000 minute=62 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:14.854496Z  INFO engine::ai: signal="ai.decision" tick=199500 minute=64 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:14.880450Z  INFO engine::ai: signal="ai.decision" tick=217500 minute=70 team=1 code="mentality-up-trailing" score_state=0-1
+2026-09-24T00:18:14.952086Z  INFO engine::rules: signal="injury.occurred" tick=267000 team=0 player=p-club-00000001-00-13 source="background" energy=0.49
+2026-09-24T00:18:14.952111Z  INFO engine::ai: signal="ai.decision" tick=267000 minute=86 team=0 code="sub-injury" score_state=1-1
+2026-09-24T00:18:14.952116Z  INFO engine::tactics::change: signal="change.rejected" tick=267000 team=0 kind="substitution" queue_id=q-266999-7 reason=no substitution window left (3 of 3)
+2026-09-24T00:18:14.964474Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=202 variance_s=-5.0 added_s=197 announced_min=4
+2026-09-24T00:18:15.186849Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=100 variance_s=24.0 added_s=124 announced_min=3
+2026-09-24T00:18:15.241802Z  INFO engine::ai: signal="ai.decision" tick=172500 minute=55 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:15.248096Z  INFO engine::ai: signal="ai.decision" tick=177000 minute=56 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:15.263656Z  INFO engine::ai: signal="ai.decision" tick=187500 minute=60 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:15.267893Z  INFO engine::ai: signal="ai.decision" tick=190500 minute=61 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:15.274531Z  INFO engine::ai: signal="ai.decision" tick=195000 minute=62 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:15.280858Z  INFO engine::ai: signal="ai.decision" tick=199500 minute=64 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:15.308053Z  INFO engine::ai: signal="ai.decision" tick=217500 minute=70 team=1 code="mentality-up-trailing" score_state=0-1
+2026-09-24T00:18:15.378495Z  INFO engine::rules: signal="injury.occurred" tick=267000 team=0 player=p-club-00000001-00-13 source="background" energy=0.49
+2026-09-24T00:18:15.378521Z  INFO engine::ai: signal="ai.decision" tick=267000 minute=86 team=0 code="sub-injury" score_state=1-1
+2026-09-24T00:18:15.378527Z  INFO engine::tactics::change: signal="change.rejected" tick=267000 team=0 kind="substitution" queue_id=q-266999-7 reason=no substitution window left (3 of 3)
+2026-09-24T00:18:15.391438Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=202 variance_s=-5.0 added_s=197 announced_min=4
+2026-09-24T00:18:15.616556Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=100 variance_s=24.0 added_s=124 announced_min=3
+2026-09-24T00:18:15.669957Z  INFO engine::ai: signal="ai.decision" tick=172500 minute=55 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:15.676254Z  INFO engine::ai: signal="ai.decision" tick=177000 minute=56 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:15.691564Z  INFO engine::ai: signal="ai.decision" tick=187500 minute=60 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:15.696263Z  INFO engine::ai: signal="ai.decision" tick=190500 minute=61 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:15.702566Z  INFO engine::ai: signal="ai.decision" tick=195000 minute=62 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:15.708944Z  INFO engine::ai: signal="ai.decision" tick=199500 minute=64 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:15.735274Z  INFO engine::ai: signal="ai.decision" tick=217500 minute=70 team=1 code="mentality-up-trailing" score_state=0-1
+2026-09-24T00:18:15.806067Z  INFO engine::rules: signal="injury.occurred" tick=267000 team=0 player=p-club-00000001-00-13 source="background" energy=0.49
+2026-09-24T00:18:15.806090Z  INFO engine::ai: signal="ai.decision" tick=267000 minute=86 team=0 code="sub-injury" score_state=1-1
+2026-09-24T00:18:15.806096Z  INFO engine::tactics::change: signal="change.rejected" tick=267000 team=0 kind="substitution" queue_id=q-266999-7 reason=no substitution window left (3 of 3)
+2026-09-24T00:18:15.817892Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=202 variance_s=-5.0 added_s=197 announced_min=4
+2026-09-24T00:18:16.043381Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=100 variance_s=24.0 added_s=124 announced_min=3
+2026-09-24T00:18:16.096131Z  INFO engine::ai: signal="ai.decision" tick=172500 minute=55 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:16.102466Z  INFO engine::ai: signal="ai.decision" tick=177000 minute=56 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:16.117194Z  INFO engine::ai: signal="ai.decision" tick=187500 minute=60 team=1 code="sub-fatigue" score_state=0-1
+2026-09-24T00:18:16.121850Z  INFO engine::ai: signal="ai.decision" tick=190500 minute=61 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:16.128132Z  INFO engine::ai: signal="ai.decision" tick=195000 minute=62 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:16.134812Z  INFO engine::ai: signal="ai.decision" tick=199500 minute=64 team=0 code="sub-fatigue" score_state=1-0
+2026-09-24T00:18:16.160530Z  INFO engine::ai: signal="ai.decision" tick=217500 minute=70 team=1 code="mentality-up-trailing" score_state=0-1
+2026-09-24T00:18:16.233032Z  INFO engine::rules: signal="injury.occurred" tick=267000 team=0 player=p-club-00000001-00-13 source="background" energy=0.49
+2026-09-24T00:18:16.233057Z  INFO engine::ai: signal="ai.decision" tick=267000 minute=86 team=0 code="sub-injury" score_state=1-1
+2026-09-24T00:18:16.233062Z  INFO engine::tactics::change: signal="change.rejected" tick=267000 team=0 kind="substitution" queue_id=q-266999-7 reason=no substitution window left (3 of 3)
+2026-09-24T00:18:16.245307Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=202 variance_s=-5.0 added_s=197 announced_min=4
+2026-09-24T00:18:22.977570Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=equal band=corners_per_team value=0.004 lo=3.5 hi=6.5
+2026-09-24T00:18:22.977606Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=equal band=goal_kicks_per_match value=7.402 lo=12.0 hi=22.0
+2026-09-24T00:18:22.977610Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=equal band=goalless_share value=0.192 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977614Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=equal band=goals_per_xg value=1.5255 lo=0.85 hi=1.15
+2026-09-24T00:18:22.977617Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=equal band=passes_per_team value=1304.772 lo=350.0 hi=550.0
+2026-09-24T00:18:22.977620Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=equal band=sending_off_share value=0.421 lo=0.08 hi=0.22
+2026-09-24T00:18:22.977623Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=equal band=shots_on_target_share value=0.7501 lo=0.3 hi=0.42
+2026-09-24T00:18:22.977626Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=equal band=ten_plus_goals_share value=0.063 lo=0.0 hi=0.005
+2026-09-24T00:18:22.977632Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=equal band=throw_ins_per_match value=25.958 lo=35.0 hi=55.0
+2026-09-24T00:18:22.977637Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="3-4-3 v 3-4-3" value=0.003 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977640Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="3-4-3 v 5-3-2" value=0.03 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977643Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="3-4-3 v 5-4-1" value=0.0 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977646Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="3-5-2 v 3-4-3" value=0.017 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977649Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="3-5-2 v 3-5-2" value=0.001 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977652Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="3-5-2 v 4-1-4-1" value=0.369 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977655Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="3-5-2 v 5-3-2" value=0.008 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977658Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="3-5-2 v 5-4-1" value=0.019 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977660Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-1-2-1-2 v 3-4-3" value=0.216 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977663Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-1-2-1-2 v 4-1-2-1-2" value=0.296 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977666Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-1-2-1-2 v 5-4-1" value=0.297 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977669Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-1-4-1 v 3-4-3" value=0.002 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977672Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-1-4-1 v 4-1-2-1-2" value=0.133 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977675Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-1-4-1 v 4-1-4-1" value=0.019 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977678Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-1-4-1 v 4-4-1-1" value=0.015 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977681Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-1-4-1 v 5-3-2" value=0.134 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977683Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-1-4-1 v 5-4-1" value=0.003 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977686Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-2-3-1 v 3-4-3" value=0.03 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977690Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-2-3-1 v 3-5-2" value=0.23 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977693Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-2-3-1 v 4-1-2-1-2" value=0.009 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977696Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-2-3-1 v 4-1-4-1" value=0.031 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977699Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-2-3-1 v 4-2-3-1" value=0.0 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977702Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-2-3-1 v 4-4-1-1" value=0.0 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977705Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-2-3-1 v 5-3-2" value=0.356 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977708Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-2-3-1 v 5-4-1" value=0.005 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977711Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-3-3 v 3-4-3" value=0.001 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977714Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-3-3 v 3-5-2" value=0.028 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977716Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-3-3 v 4-1-2-1-2" value=0.325 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977719Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-3-3 v 4-1-4-1" value=0.134 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977722Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-3-3 v 4-2-3-1" value=0.175 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977725Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-3-3 v 4-3-3" value=0.0 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977728Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-3-3 v 4-4-1-1" value=0.002 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977731Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-3-3 v 5-3-2" value=0.022 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977734Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-3-3 v 5-4-1" value=0.0 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977737Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-4-1-1 v 3-4-3" value=0.0 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977739Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-4-1-1 v 4-1-2-1-2" value=0.008 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977743Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-4-1-1 v 4-4-1-1" value=0.0 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977746Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-4-1-1 v 5-4-1" value=0.0 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977749Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-4-2 v 3-4-3" value=0.001 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977752Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-4-2 v 3-5-2" value=0.028 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977755Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-4-2 v 4-1-2-1-2" value=0.324 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977758Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-4-2 v 4-2-3-1" value=0.029 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977761Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-4-2 v 4-3-3" value=0.004 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977763Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-4-2 v 4-4-1-1" value=0.004 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977766Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-4-2 v 4-4-2" value=0.2 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977769Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-4-2 v 5-3-2" value=0.206 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977772Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="4-4-2 v 5-4-1" value=0.025 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977775Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="5-3-2 v 5-4-1" value=0.003 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977778Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goalless_share pairing="5-4-1 v 5-4-1" value=0.0 lo=0.04 hi=0.12
+2026-09-24T00:18:22.977781Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="3-4-3 v 3-4-3" value=8.414 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977784Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="3-4-3 v 5-3-2" value=6.416 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977786Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="3-4-3 v 5-4-1" value=14.241 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977789Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="3-5-2 v 3-4-3" value=9.708 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977792Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="3-5-2 v 3-5-2" value=9.423 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977795Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="3-5-2 v 4-1-2-1-2" value=3.581 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977838Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="3-5-2 v 4-1-4-1" value=1.454 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977842Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="3-5-2 v 4-4-1-1" value=4.081 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977845Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="3-5-2 v 5-3-2" value=7.18 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977848Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="3-5-2 v 5-4-1" value=9.847 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977851Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-1-2-1-2 v 4-1-2-1-2" value=1.895 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977854Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-1-2-1-2 v 5-3-2" value=3.255 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977857Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-1-4-1 v 3-4-3" value=12.669 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977859Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-1-4-1 v 4-1-2-1-2" value=4.422 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977862Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-1-4-1 v 4-1-4-1" value=8.715 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977865Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-1-4-1 v 4-4-1-1" value=9.507 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977868Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-1-4-1 v 5-4-1" value=9.161 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977871Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-2-3-1 v 3-4-3" value=7.665 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977874Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-2-3-1 v 4-1-2-1-2" value=9.136 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977877Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-2-3-1 v 4-1-4-1" value=10.867 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977880Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-2-3-1 v 4-2-3-1" value=38.461 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977883Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-2-3-1 v 4-4-1-1" value=17.091 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977885Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-2-3-1 v 5-3-2" value=2.084 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977888Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-2-3-1 v 5-4-1" value=14.175 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977908Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-3-3 v 3-4-3" value=12.794 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977911Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-3-3 v 3-5-2" value=8.023 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977914Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-3-3 v 4-1-2-1-2" value=2.092 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977917Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-3-3 v 4-3-3" value=19.842 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977920Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-3-3 v 4-4-1-1" value=9.976 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977923Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-3-3 v 5-3-2" value=7.348 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977926Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-3-3 v 5-4-1" value=12.131 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977929Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-4-1-1 v 3-4-3" value=19.412 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977931Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-4-1-1 v 4-1-2-1-2" value=7.04 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977934Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-4-1-1 v 4-4-1-1" value=20.662 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977937Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-4-1-1 v 5-3-2" value=5.139 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977940Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-4-1-1 v 5-4-1" value=19.352 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977943Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-4-2 v 3-4-3" value=10.146 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977946Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-4-2 v 3-5-2" value=6.35 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977949Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-4-2 v 4-1-2-1-2" value=1.605 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977952Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-4-2 v 4-1-4-1" value=6.106 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977955Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-4-2 v 4-2-3-1" value=7.705 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977957Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-4-2 v 4-3-3" value=8.587 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977961Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-4-2 v 4-4-1-1" value=13.564 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977964Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-4-2 v 5-3-2" value=3.463 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977967Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="4-4-2 v 5-4-1" value=10.165 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977970Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="5-3-2 v 5-3-2" value=3.683 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977973Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="5-3-2 v 5-4-1" value=8.105 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977976Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=goals_per_match pairing="5-4-1 v 5-4-1" value=16.537 lo=2.4 hi=3.2
+2026-09-24T00:18:22.977979Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="3-4-3 v 3-4-3" value=0.329 lo=0.0 hi=0.005
+2026-09-24T00:18:22.977982Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="3-4-3 v 5-3-2" value=0.21 lo=0.0 hi=0.005
+2026-09-24T00:18:22.977984Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="3-4-3 v 5-4-1" value=0.748 lo=0.0 hi=0.005
+2026-09-24T00:18:22.977987Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="3-5-2 v 3-4-3" value=0.471 lo=0.0 hi=0.005
+2026-09-24T00:18:22.977990Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="3-5-2 v 3-5-2" value=0.422 lo=0.0 hi=0.005
+2026-09-24T00:18:22.977993Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="3-5-2 v 4-1-2-1-2" value=0.05 lo=0.0 hi=0.005
+2026-09-24T00:18:22.977996Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="3-5-2 v 4-4-1-1" value=0.073 lo=0.0 hi=0.005
+2026-09-24T00:18:22.977999Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="3-5-2 v 5-3-2" value=0.245 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978002Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="3-5-2 v 5-4-1" value=0.49 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978005Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-1-2-1-2 v 3-4-3" value=0.025 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978007Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-1-2-1-2 v 4-1-2-1-2" value=0.008 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978010Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-1-2-1-2 v 5-3-2" value=0.027 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978013Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-1-2-1-2 v 5-4-1" value=0.04 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978017Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-1-4-1 v 3-4-3" value=0.673 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978020Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-1-4-1 v 4-1-2-1-2" value=0.107 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978023Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-1-4-1 v 4-1-4-1" value=0.389 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978026Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-1-4-1 v 4-4-1-1" value=0.442 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978029Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-1-4-1 v 5-3-2" value=0.028 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978032Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-1-4-1 v 5-4-1" value=0.429 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978034Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-2-3-1 v 3-4-3" value=0.303 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978037Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-2-3-1 v 3-5-2" value=0.064 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978040Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-2-3-1 v 4-1-2-1-2" value=0.42 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978043Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-2-3-1 v 4-1-4-1" value=0.522 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978046Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-2-3-1 v 4-2-3-1" value=1.0 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978049Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-2-3-1 v 4-4-1-1" value=0.873 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978051Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-2-3-1 v 5-3-2" value=0.018 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978054Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-2-3-1 v 5-4-1" value=0.712 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978057Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-3-3 v 3-4-3" value=0.598 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978060Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-3-3 v 3-5-2" value=0.38 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978063Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-3-3 v 4-1-2-1-2" value=0.018 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978067Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-3-3 v 4-1-4-1" value=0.028 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978070Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-3-3 v 4-2-3-1" value=0.019 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978073Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-3-3 v 4-3-3" value=0.964 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978076Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-3-3 v 4-4-1-1" value=0.473 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978078Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-3-3 v 5-3-2" value=0.295 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978081Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-3-3 v 5-4-1" value=0.587 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978087Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-4-1-1 v 3-4-3" value=0.933 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978090Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-4-1-1 v 4-1-2-1-2" value=0.242 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978092Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-4-1-1 v 4-4-1-1" value=0.91 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978095Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-4-1-1 v 5-3-2" value=0.105 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978098Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-4-1-1 v 5-4-1" value=0.888 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978101Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-4-2 v 3-4-3" value=0.445 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978104Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-4-2 v 3-5-2" value=0.205 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978107Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-4-2 v 4-1-2-1-2" value=0.01 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978109Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-4-2 v 4-1-4-1" value=0.218 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978112Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-4-2 v 4-2-3-1" value=0.313 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978115Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-4-2 v 4-3-3" value=0.366 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978118Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-4-2 v 4-4-1-1" value=0.734 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978121Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-4-2 v 4-4-2" value=0.057 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978125Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-4-2 v 5-3-2" value=0.085 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978128Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="4-4-2 v 5-4-1" value=0.494 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978130Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="5-3-2 v 5-3-2" value=0.052 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978133Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="5-3-2 v 5-4-1" value=0.317 lo=0.0 hi=0.005
+2026-09-24T00:18:22.978136Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-000000000000002a-1790204514922 suite=formations band=ten_plus_goals_share pairing="5-4-1 v 5-4-1" value=0.805 lo=0.0 hi=0.005

@@ -5,13 +5,13 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-23T19:09:40Z"
-slices-implemented: 17
-slices-total: 17
-metric-total-files-changed: 649
-metric-total-lines-added: 57862
-metric-total-lines-removed: 2456
-tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment, scripting, sandbox, plugin-interface, distribution, installer, packaging, release-version, error-record, help-text]
+updated-at: "2026-09-24T00:51:46Z"
+slices-implemented: 18
+slices-total: 22
+metric-total-files-changed: 671
+metric-total-lines-added: 59053
+metric-total-lines-removed: 2568
+tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment, scripting, sandbox, plugin-interface, distribution, installer, packaging, release-version, error-record, help-text, realism-bands, formations]
 refs:
   index: 00-index.md
   plan-index: 04-plan.md
@@ -33,8 +33,9 @@ refs:
     - 05-implement-scripting-runtime.md
     - 05-implement-distribution.md
     - 05-implement-probe-engine-core.md
+    - 05-implement-realism-bands-v2.md
 next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine probe-engine-core"
+next-invocation: "/wf verify football-manager-match-engine realism-bands-v2"
 ---
 
 # Implement Index
@@ -155,7 +156,18 @@ next-invocation: "/wf verify football-manager-match-engine probe-engine-core"
   - Hidden seam `calibrate --inject-failure <match|worker>` (shard 0 only).
 - Checks at implement: 414 Rust tests pass (4 ignored), clippy runs with `-D warnings`, and `bench --seed 42 --matches 5` measured 423 ms per match.
 
+- `realism-bands-v2` is implemented (commit `0835298`) and awaits verify. Every later slice inherits these changes:
+  - `content/realism-bands.json` is version 2 with eleven more bands; a version-1 file is refused. Bands change only by a recorded product-owner answer.
+  - `match-stats` carries `stats.throw_ins` and `stats.goal_kicks`, required on success.
+  - `tactics.json` has ten formations; indices 0 to 3 are unchanged. The content hash moved to `b64cecf856ec`.
+  - `calibrate --suite all` plays equal, strength and formations (55 pairings x `--matches`). Pairing checks carry `pairing`; `calib.formations` holds the pairing figures. Each failing band is a `calibrate.band_failed` warn line.
+  - The paired-run distance counts only the excess above the top of a floor band.
+  - Baseline for the next three slices: 9 of 15 equal-suite bands fail on all five seeds; 151 of 165 pairing checks fail on seed 42 (formations run on one seed by Q-I1). A full run takes about 76 minutes on the 8-core reference machine.
+- Checks at implement: 434 Rust tests pass (4 ignored), 128 page tests pass, clippy runs with `-D warnings`, and the benchmark median is 422.0 ms per match and 6.73 MB (tripwires 460.7 ms and 6.82 MB).
+
 ## Recommended Next Stage
+
+- `/wf verify football-manager-match-engine realism-bands-v2` (new: the four criteria on the release binary, the viewer check of ten formations, and the seed 42 formations evidence)
 
 - `/wf verify football-manager-match-engine probe-engine-core` (new: `cargo test -p engine-cli --test cli_args --test schemas`, the three failure drives and both `calibrate --inject-failure` drives on the release binary, and the 20 help-width checks)
 

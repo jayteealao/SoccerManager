@@ -1,0 +1,90 @@
+2026-09-24T00:44:29.016934Z  INFO engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
+2026-09-24T00:44:29.017087Z  INFO engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=2 bytes=5021 hash=de80d94141cd
+2026-09-24T00:44:29.017164Z  INFO engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=4 bytes=1416 hash=3560724c9d40
+2026-09-24T00:44:29.017289Z  INFO engine::data: signal="content.loaded" kind="tactics" path="tactics.json" schema_version=1 bytes=11538 hash=cd97c217173f
+2026-09-24T00:44:29.017977Z  INFO engine::data: signal="content.loaded" kind="commentary" path="commentary/en.json" schema_version=1 bytes=17274 hash=67307026bffc
+2026-09-24T00:44:29.018222Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
+2026-09-24T00:44:29.018415Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a
+2026-09-24T00:44:29.018715Z  INFO engine::data: signal="content.loaded" kind="realism bands" path="realism-bands.json" schema_version=2 bytes=858 hash=98a38c2614dd
+2026-09-24T00:47:03.090104Z  INFO engine_cli::calibrate: signal="calibrate.suite" run.id=calib-00000000000007ea-1790210669018 suite="equal" matches=1000 wall_ms=154072 jobs=8
+2026-09-24T00:47:03.395563Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=102 variance_s=-13.0 added_s=89 announced_min=2
+2026-09-24T00:47:03.481946Z  INFO engine::ai: signal="ai.decision" tick=177000 minute=57 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:03.484075Z  INFO engine::ai: signal="ai.decision" tick=178500 minute=58 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:03.503381Z  INFO engine::ai: signal="ai.decision" tick=181500 minute=59 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:03.503404Z  INFO engine::ai: signal="ai.decision" tick=181500 minute=59 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:03.530703Z  INFO engine::ai: signal="ai.decision" tick=190500 minute=62 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:03.539247Z  INFO engine::ai: signal="ai.decision" tick=196500 minute=64 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:03.563463Z  INFO engine::ai: signal="ai.decision" tick=207000 minute=67 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:03.586472Z  INFO engine::ai: signal="ai.decision" tick=214500 minute=70 team=0 code="mentality-up-trailing" score_state=0-2
+2026-09-24T00:47:03.642322Z  INFO engine::ai: signal="ai.decision" tick=244500 minute=80 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:03.642341Z  INFO engine::ai: signal="ai.decision" tick=244500 minute=80 team=1 code="mentality-down-leading" score_state=2-0
+2026-09-24T00:47:03.701170Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=90 variance_s=23.0 added_s=113 announced_min=2
+2026-09-24T00:47:03.975224Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=102 variance_s=-13.0 added_s=89 announced_min=2
+2026-09-24T00:47:04.037031Z  INFO engine::ai: signal="ai.decision" tick=177000 minute=57 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:04.039152Z  INFO engine::ai: signal="ai.decision" tick=178500 minute=58 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:04.043540Z  INFO engine::ai: signal="ai.decision" tick=181500 minute=59 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:04.043556Z  INFO engine::ai: signal="ai.decision" tick=181500 minute=59 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:04.056321Z  INFO engine::ai: signal="ai.decision" tick=190500 minute=62 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:04.064834Z  INFO engine::ai: signal="ai.decision" tick=196500 minute=64 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:04.079559Z  INFO engine::ai: signal="ai.decision" tick=207000 minute=67 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:04.090173Z  INFO engine::ai: signal="ai.decision" tick=214500 minute=70 team=0 code="mentality-up-trailing" score_state=0-2
+2026-09-24T00:47:04.136984Z  INFO engine::ai: signal="ai.decision" tick=244500 minute=80 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:04.137001Z  INFO engine::ai: signal="ai.decision" tick=244500 minute=80 team=1 code="mentality-down-leading" score_state=2-0
+2026-09-24T00:47:04.180012Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=90 variance_s=23.0 added_s=113 announced_min=2
+2026-09-24T00:47:04.394246Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=102 variance_s=-13.0 added_s=89 announced_min=2
+2026-09-24T00:47:04.453758Z  INFO engine::ai: signal="ai.decision" tick=177000 minute=57 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:04.455880Z  INFO engine::ai: signal="ai.decision" tick=178500 minute=58 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:04.460061Z  INFO engine::ai: signal="ai.decision" tick=181500 minute=59 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:04.460077Z  INFO engine::ai: signal="ai.decision" tick=181500 minute=59 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:04.472813Z  INFO engine::ai: signal="ai.decision" tick=190500 minute=62 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:04.481344Z  INFO engine::ai: signal="ai.decision" tick=196500 minute=64 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:04.498997Z  INFO engine::ai: signal="ai.decision" tick=207000 minute=67 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:04.510244Z  INFO engine::ai: signal="ai.decision" tick=214500 minute=70 team=0 code="mentality-up-trailing" score_state=0-2
+2026-09-24T00:47:04.557935Z  INFO engine::ai: signal="ai.decision" tick=244500 minute=80 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:04.557951Z  INFO engine::ai: signal="ai.decision" tick=244500 minute=80 team=1 code="mentality-down-leading" score_state=2-0
+2026-09-24T00:47:04.606272Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=90 variance_s=23.0 added_s=113 announced_min=2
+2026-09-24T00:47:04.818078Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=102 variance_s=-13.0 added_s=89 announced_min=2
+2026-09-24T00:47:04.877163Z  INFO engine::ai: signal="ai.decision" tick=177000 minute=57 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:04.879287Z  INFO engine::ai: signal="ai.decision" tick=178500 minute=58 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:04.883435Z  INFO engine::ai: signal="ai.decision" tick=181500 minute=59 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:04.883440Z  INFO engine::ai: signal="ai.decision" tick=181500 minute=59 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:04.896503Z  INFO engine::ai: signal="ai.decision" tick=190500 minute=62 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:04.905033Z  INFO engine::ai: signal="ai.decision" tick=196500 minute=64 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:04.919751Z  INFO engine::ai: signal="ai.decision" tick=207000 minute=67 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:04.930388Z  INFO engine::ai: signal="ai.decision" tick=214500 minute=70 team=0 code="mentality-up-trailing" score_state=0-2
+2026-09-24T00:47:04.972965Z  INFO engine::ai: signal="ai.decision" tick=244500 minute=80 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:04.972982Z  INFO engine::ai: signal="ai.decision" tick=244500 minute=80 team=1 code="mentality-down-leading" score_state=2-0
+2026-09-24T00:47:05.015854Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=90 variance_s=23.0 added_s=113 announced_min=2
+2026-09-24T00:47:05.247516Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=102 variance_s=-13.0 added_s=89 announced_min=2
+2026-09-24T00:47:05.314054Z  INFO engine::ai: signal="ai.decision" tick=177000 minute=57 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:05.316223Z  INFO engine::ai: signal="ai.decision" tick=178500 minute=58 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:05.320507Z  INFO engine::ai: signal="ai.decision" tick=181500 minute=59 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:05.320526Z  INFO engine::ai: signal="ai.decision" tick=181500 minute=59 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:05.333391Z  INFO engine::ai: signal="ai.decision" tick=190500 minute=62 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:05.341973Z  INFO engine::ai: signal="ai.decision" tick=196500 minute=64 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:05.356713Z  INFO engine::ai: signal="ai.decision" tick=207000 minute=67 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:05.369998Z  INFO engine::ai: signal="ai.decision" tick=214500 minute=70 team=0 code="mentality-up-trailing" score_state=0-2
+2026-09-24T00:47:05.413015Z  INFO engine::ai: signal="ai.decision" tick=244500 minute=80 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:05.413032Z  INFO engine::ai: signal="ai.decision" tick=244500 minute=80 team=1 code="mentality-down-leading" score_state=2-0
+2026-09-24T00:47:05.459744Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=90 variance_s=23.0 added_s=113 announced_min=2
+2026-09-24T00:47:05.682378Z  INFO engine::rules: signal="rules.added_time" half=0 tally_s=102 variance_s=-13.0 added_s=89 announced_min=2
+2026-09-24T00:47:05.746526Z  INFO engine::ai: signal="ai.decision" tick=177000 minute=57 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:05.748663Z  INFO engine::ai: signal="ai.decision" tick=178500 minute=58 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:05.752821Z  INFO engine::ai: signal="ai.decision" tick=181500 minute=59 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:05.752825Z  INFO engine::ai: signal="ai.decision" tick=181500 minute=59 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:05.765925Z  INFO engine::ai: signal="ai.decision" tick=190500 minute=62 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:05.776504Z  INFO engine::ai: signal="ai.decision" tick=196500 minute=64 team=0 code="sub-fatigue" score_state=0-2
+2026-09-24T00:47:05.791305Z  INFO engine::ai: signal="ai.decision" tick=207000 minute=67 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:05.802316Z  INFO engine::ai: signal="ai.decision" tick=214500 minute=70 team=0 code="mentality-up-trailing" score_state=0-2
+2026-09-24T00:47:05.844262Z  INFO engine::ai: signal="ai.decision" tick=244500 minute=80 team=1 code="sub-fatigue" score_state=2-0
+2026-09-24T00:47:05.844279Z  INFO engine::ai: signal="ai.decision" tick=244500 minute=80 team=1 code="mentality-down-leading" score_state=2-0
+2026-09-24T00:47:05.886051Z  INFO engine::rules: signal="rules.added_time" half=1 tally_s=90 variance_s=23.0 added_s=113 announced_min=2
+2026-09-24T00:47:06.072769Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-00000000000007ea-1790210669018 suite=equal band=corners_per_team value=0.004 lo=3.5 hi=6.5
+2026-09-24T00:47:06.072792Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-00000000000007ea-1790210669018 suite=equal band=goal_kicks_per_match value=6.57 lo=12.0 hi=22.0
+2026-09-24T00:47:06.072796Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-00000000000007ea-1790210669018 suite=equal band=goalless_share value=0.231 lo=0.04 hi=0.12
+2026-09-24T00:47:06.072800Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-00000000000007ea-1790210669018 suite=equal band=goals_per_xg value=1.4924 lo=0.85 hi=1.15
+2026-09-24T00:47:06.072803Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-00000000000007ea-1790210669018 suite=equal band=passes_per_team value=1310.293 lo=350.0 hi=550.0
+2026-09-24T00:47:06.072806Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-00000000000007ea-1790210669018 suite=equal band=sending_off_share value=0.39 lo=0.08 hi=0.22
+2026-09-24T00:47:06.072809Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-00000000000007ea-1790210669018 suite=equal band=shots_on_target_share value=0.7466 lo=0.3 hi=0.42
+2026-09-24T00:47:06.072814Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-00000000000007ea-1790210669018 suite=equal band=ten_plus_goals_share value=0.046 lo=0.0 hi=0.005
+2026-09-24T00:47:06.072819Z  WARN engine_cli::calibrate: signal="calibrate.band_failed" run.id=calib-00000000000007ea-1790210669018 suite=equal band=throw_ins_per_match value=26.665 lo=35.0 hi=55.0
