@@ -1,0 +1,10 @@
+<figure style="margin:0;font:14px/1.45 system-ui,sans-serif">
+  <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:stretch">
+    <div style="flex:1 1 120px;padding:10px;border:1px solid #c9d2e3;border-radius:6px"><strong>Genome</strong><br>Shape genes, skin tone, hair type, ancestry mix, birth year. A few hundred bytes.</div>
+    <div style="flex:1 1 120px;padding:10px;border:1px solid #c9d2e3;border-radius:6px"><strong>Head</strong><br>FLAME 2023 Open shape, MakeHuman CC0 age and ancestry targets.</div>
+    <div style="flex:1 1 120px;padding:10px;border:1px solid #c9d2e3;border-radius:6px"><strong>Age</strong><br>15 to 70 in 3D: growth, fat shift, wrinkles, grey, hairline. Career-stage updates.</div>
+    <div style="flex:1 1 120px;padding:10px;border:1px solid #c9d2e3;border-radius:6px"><strong>Portrait process</strong><br>Rust and wgpu. Hair cards, studio textures expanded from data. Default look.</div>
+    <div style="flex:1 1 120px;padding:10px;border:1px dashed #6b86c4;border-radius:6px"><strong>Optional finish</strong><br>Vega with a depth guide paints skin and light. Never bones, never age.</div>
+  </div>
+  <figcaption style="margin-top:6px;color:#5b6475">The lead route. Identity and age come from the geometry; AI paints only.</figcaption>
+</figure>
