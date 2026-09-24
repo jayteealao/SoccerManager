@@ -1,11 +1,14 @@
 //! One calibration worker: the same binary started by the parent with hidden flags. It
 //! plays its share of one suite's fixtures, each with the AI manager on both sides, and
 //! writes one statistics file and one event file per match into the run folder. In the
-//! formations suite, each side starts in its pairing's formation and keeps it.
+//! formations suite, each side starts in its pairing's formation and keeps it. In the
+//! red-card suite, the default clubs play with cards otherwise off, and the arm's away
+//! player is sent off at kick-off.
 
 use std::path::Path;
 use std::time::Instant;
 
+use engine::data::{TEAM_A_FILE, TEAM_B_FILE, TeamFile};
 use engine::observe::identity::{data_dir, load_or_create_owner_id};
 use engine::observe::{
     LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef, write_stats_at,
@@ -18,8 +21,8 @@ use stream::EventWriter;
 
 use super::fixtures::{self, Fixture, Leagues};
 use crate::cli::InjectFailure;
-use crate::report::Suite;
 use crate::report::bands::Bands;
+use crate::report::{RED_CARD_ARMS, Suite};
 use crate::stream_run::{Ids, match_event};
 
 /// What one worker plays.
@@ -37,6 +40,18 @@ pub struct Share<'a> {
     pub states: &'a engine::FlagStates,
     /// A test seam: make this worker's first match or the worker itself fail.
     pub inject: Option<InjectFailure>,
+    /// The formations suite: the numbers of the pairings to play; empty plays every one.
+    pub pairings: &'a [usize],
+}
+
+/// One match of a worker's share.
+struct Job {
+    fixture: Fixture,
+    /// The formations suite: each side's starting formation.
+    formations: Option<[u8; 2]>,
+    /// The red-card suite: the engine seed, and the away player sent off (none for the
+    /// control).
+    red_card: Option<(u64, Option<usize>)>,
 }
 
 /// Plays every fixture of the share. A failed match still writes its statistics record, with
@@ -54,26 +69,45 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
     let stats_dir = share.run_dir.join("stats");
     let events_dir = share.run_dir.join("events");
     let mut leagues = Leagues::new(share.seed, &content);
+    // The red-card suite plays the default clubs, loaded once.
+    let defaults: Option<[TeamFile; 2]> = if share.suite == Suite::RedCard {
+        Some([
+            content.load_team(&dir, &dir.path(TEAM_A_FILE))?.value,
+            content.load_team(&dir, &dir.path(TEAM_B_FILE))?.value,
+        ])
+    } else {
+        None
+    };
     let shards = share.shards.max(1);
     let mut inject_match = share.inject == Some(InjectFailure::Match);
-    for (fixture, formations) in planned(share.suite, share.matches, &content)
+    for job in planned(share, &content)
         .into_iter()
-        .filter(|(f, _)| f.index % shards == share.shard)
+        .filter(|j| j.fixture.index % shards == share.shard)
     {
+        let fixture = job.fixture;
         let match_id = fixtures::match_id(share.seed, share.suite, fixture.index, share.run_millis);
-        let mut teams = leagues.teams(&fixture);
-        if share.suite == Suite::Strength {
-            let side = fixture.boosted_side();
-            teams[side] = fixtures::boosted(&teams[side], bands.stronger_team.attribute_boost);
-        }
-        let seed = fixtures::match_seed(share.seed, share.suite, fixture.index);
+        let (teams, seed) = match (&defaults, job.red_card) {
+            (Some(defaults), Some((engine_seed, _))) => (defaults.clone(), engine_seed),
+            _ => {
+                let mut teams = leagues.teams(&fixture);
+                if share.suite == Suite::Strength {
+                    let side = fixture.boosted_side();
+                    teams[side] =
+                        fixtures::boosted(&teams[side], bands.stronger_team.attribute_boost);
+                }
+                (
+                    teams,
+                    fixtures::match_seed(share.seed, share.suite, fixture.index),
+                )
+            }
+        };
         let played = if std::mem::take(&mut inject_match) {
             Err(EngineError::InvalidConfig("injected failure".into()))
         } else {
             play(
                 share,
                 (&content, &commentary),
-                (&teams, formations),
+                (&teams, job.formations, job.red_card.map(|(_, off)| off)),
                 seed,
                 &owner_id,
                 &match_id,
@@ -102,36 +136,68 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
     Ok(0)
 }
 
-/// Every fixture of `suite`, with the formation of each side in the formations suite.
-fn planned(suite: Suite, matches: u32, content: &Content) -> Vec<(Fixture, Option<[u8; 2]>)> {
-    if suite != Suite::Formations {
-        return fixtures::fixtures(matches)
-            .into_iter()
-            .map(|f| (f, None))
-            .collect();
-    }
-    let pairings = fixtures::pairings(content.tactics.formations.len());
-    fixtures::formation_fixtures(matches, pairings.len())
-        .into_iter()
-        .map(|f| {
-            // A tactics file holds at most 16 formations.
-            let [first, second] = pairings[f.pairing].map(|i| i as u8);
-            let sides = if f.first_side == 0 {
-                [first, second]
+/// Every fixture of the share's suite, with the formation of each side in the formations
+/// suite and the arm in the red-card suite.
+fn planned(share: &Share<'_>, content: &Content) -> Vec<Job> {
+    let matches = share.matches;
+    match share.suite {
+        Suite::Formations => {
+            let pairings = fixtures::pairings(content.tactics.formations.len());
+            let selected: Vec<usize> = if share.pairings.is_empty() {
+                (0..pairings.len()).collect()
             } else {
-                [second, first]
+                share.pairings.to_vec()
             };
-            (f.fixture, Some(sides))
-        })
-        .collect()
+            fixtures::formation_fixtures_for(matches, pairings.len(), &selected)
+                .into_iter()
+                .map(|f| {
+                    // A tactics file holds at most 16 formations.
+                    let [first, second] = pairings[f.pairing].map(|i| i as u8);
+                    let sides = if f.first_side == 0 {
+                        [first, second]
+                    } else {
+                        [second, first]
+                    };
+                    Job {
+                        fixture: f.fixture,
+                        formations: Some(sides),
+                        red_card: None,
+                    }
+                })
+                .collect()
+        }
+        Suite::RedCard => fixtures::red_card_fixtures(share.seed, matches)
+            .into_iter()
+            .map(|f| Job {
+                // The default clubs play every red-card match; no league is generated.
+                fixture: Fixture {
+                    index: f.index,
+                    league: 0,
+                    clubs: [0, 1],
+                },
+                formations: None,
+                red_card: Some((f.engine_seed, RED_CARD_ARMS[f.arm].1)),
+            })
+            .collect(),
+        Suite::Equal | Suite::Strength => fixtures::fixtures(matches)
+            .into_iter()
+            .map(|fixture| Job {
+                fixture,
+                formations: None,
+                red_card: None,
+            })
+            .collect(),
+    }
 }
 
 /// One match to full time, validated, with its events and their commentary lines written.
-/// `formations`, when present, is each side's starting formation.
+/// `formations`, when present, is each side's starting formation. `red_card`, when present,
+/// plays the match with cards otherwise off and sends the named player off at kick-off,
+/// as the slow test `a_sending_off_gives_no_advantage` does.
 fn play(
     share: &Share<'_>,
     (content, commentary): (&Content, &Commentary),
-    (teams, formations): (&[engine::data::TeamFile; 2], Option<[u8; 2]>),
+    (teams, formations, red_card): (&[TeamFile; 2], Option<[u8; 2]>, Option<Option<usize>>),
     seed: u64,
     owner_id: &str,
     match_id: &str,
@@ -145,11 +211,20 @@ fn play(
             config = config.with_tactics(team, tactics);
         }
     }
+    if red_card.is_some() {
+        // Set on the match, not in the content, so the content hash is unchanged.
+        config.tuning.red_base = 0.0;
+        config.tuning.yellow_base = 0.0;
+        config.tuning.yellow_aggression_weight = 0.0;
+    }
     let pack_version = config.rules.schema_version;
     let refs = team_refs(teams);
     let content_hash = config.content_hash.clone();
     let max_ticks = config.max_ticks() as usize;
     let mut sim = Simulation::new(config)?;
+    if let Some(Some(player)) = red_card {
+        sim.send_off_before_kickoff(player);
+    }
     let mut ids = Ids::new(&sim);
     let mut commentator = Commentator::for_match(commentary, &sim);
     // The validator reads the whole match once it is over, so the records are kept; sized
@@ -203,7 +278,7 @@ fn play(
     })
 }
 
-fn team_refs(teams: &[engine::data::TeamFile; 2]) -> [TeamRef; 2] {
+fn team_refs(teams: &[TeamFile; 2]) -> [TeamRef; 2] {
     [0, 1].map(|t| TeamRef {
         id: teams[t].club.id.clone(),
         name: teams[t].club.name.clone(),
@@ -214,7 +289,7 @@ fn team_refs(teams: &[engine::data::TeamFile; 2]) -> [TeamRef; 2] {
 /// rule pack version and the managers are the ones the match would have used.
 fn failure(
     (owner_id, match_id, seed): (&str, &str, u64),
-    teams: &[engine::data::TeamFile; 2],
+    teams: &[TeamFile; 2],
     fixture: &Fixture,
     err: &EngineError,
     content: &Content,

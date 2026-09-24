@@ -4,6 +4,12 @@
 //!
 //! `--suite all` plays three suites: equal clubs, a stronger club, and every formation
 //! pairing (`--matches` matches per pairing). Each failing band is named on standard error.
+//! `--suite red-card` plays the controlled sending-off experiment instead.
+//!
+//! A targeted run plays only what `--pairing` and `--band` select, and each selected
+//! fixture keeps its place in the full list, so its figures equal a full run's. With
+//! `--baseline`, the run is checked against an earlier report before it plays and a diff
+//! is printed band by band, each change with its sampling error.
 //!
 //! Run folder: `report.json`, `stats/<match.id>.json` for every match, and
 //! `events/<match.id>.jsonl` for the matches kept (outliers by default). A paired run
@@ -19,18 +25,21 @@ use std::process::{Command, Stdio};
 use std::time::Instant;
 
 use anyhow::Context;
+use engine::data::{TeamFile, hex12};
 use engine::flags::{FlagSetting, FlagState, FlagStates, effective};
 use engine::observe::identity::{data_dir, load_or_create_owner_id};
 use engine::observe::{emit_line, machine_hash, read_stats, unix_millis, write_record_at};
-use engine::{ContentDir, MatchConfig};
+use engine::{Content, ContentDir, MatchConfig};
+use sha2::{Digest, Sha256};
 
 use crate::bench::BenchFigures;
 use crate::cli::{CalibrateOpts, KeepEvents, SuiteArg};
 use crate::report::bands::Bands;
+use crate::report::baseline::{self, Identity};
 use crate::report::compare::{self, Guard};
 use crate::report::{
-    ArmReport, BandCheck, CalibrationReport, FlagEntry, PairInfo, PairingFigures, RunBuilder,
-    Suite, SuiteFigures,
+    ArmReport, BAND_NAMES, BandCheck, CalibrationReport, FlagEntry, PairInfo, PairingFigures,
+    RED_CARD_ARMS, RedCardFigures, RunBuilder, Selection, Suite, SuiteFigures, band_suites,
 };
 
 /// Matches the single-thread benchmark times after its warm-up.
@@ -47,6 +56,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             SuiteArg::Equal => Suite::Equal,
             SuiteArg::Strength => Suite::Strength,
             SuiteArg::Formations => Suite::Formations,
+            SuiteArg::RedCard => Suite::RedCard,
             SuiteArg::All => anyhow::bail!("a worker plays one suite"),
         };
         let run_dir = opts
@@ -65,7 +75,13 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             run_millis: opts.run_millis,
             states: &states,
             inject: opts.inject_failure,
+            pairings: &opts.pairing_numbers,
         });
+    }
+    if opts.baseline.is_some() && opts.pair.is_some() {
+        anyhow::bail!(
+            "--baseline cannot be used with --pair: a paired run already compares its two arms"
+        );
     }
 
     // Every flag name and state is checked before a worker starts.
@@ -89,22 +105,12 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     for (_, s) in &arms {
         loaded.content.with_flags(s)?;
     }
-
-    let data = data_dir();
-    let owner_id = load_or_create_owner_id(&data)?;
-    let millis = u64::try_from(unix_millis()).unwrap_or(u64::MAX);
-    let run_id = format!("calib-{:016x}-{millis}", opts.seed);
-    let run_dir = opts
-        .out
-        .clone()
-        .unwrap_or_else(|| data.join("runs").join(&run_id));
-    std::fs::create_dir_all(&run_dir)
-        .with_context(|| format!("cannot create the run folder runs/{run_id}"))?;
-    let suites = match opts.suite {
+    let requested = match opts.suite {
         SuiteArg::All => Suite::ALL.to_vec(),
         SuiteArg::Equal => vec![Suite::Equal],
         SuiteArg::Strength => vec![Suite::Strength],
         SuiteArg::Formations => vec![Suite::Formations],
+        SuiteArg::RedCard => vec![Suite::RedCard],
     };
     let formation_names: Vec<String> = loaded
         .content
@@ -117,12 +123,46 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         .into_iter()
         .map(|p| p.map(|i| formation_names[i].clone()))
         .collect();
-    // The largest suite sets how many workers can have work. At most 136 pairings.
-    let most = if suites.contains(&Suite::Formations) {
-        opts.matches.saturating_mul(pairings.len() as u32)
-    } else {
-        opts.matches
-    };
+    let (suites, selected) = select(&requested, opts, &pairings)?;
+
+    // The baseline is checked before the run folder exists and before any match plays.
+    let fixtures_hash = fixtures_hash(&loaded.content.with_flags(&arms[0].1)?, &loaded.teams)?;
+    let base = opts
+        .baseline
+        .as_deref()
+        .map(|path| {
+            baseline::load(
+                path,
+                Identity {
+                    seed: opts.seed,
+                    matches: opts.matches,
+                    fixtures_hash: &fixtures_hash,
+                },
+            )
+        })
+        .transpose()?;
+
+    let data = data_dir();
+    let owner_id = load_or_create_owner_id(&data)?;
+    let millis = u64::try_from(unix_millis()).unwrap_or(u64::MAX);
+    let run_id = format!("calib-{:016x}-{millis}", opts.seed);
+    let run_dir = opts
+        .out
+        .clone()
+        .unwrap_or_else(|| data.join("runs").join(&run_id));
+    std::fs::create_dir_all(&run_dir)
+        .with_context(|| format!("cannot create the run folder runs/{run_id}"))?;
+    // The largest selected suite sets how many workers can have work. At most 136
+    // pairings, and four red-card arms.
+    let most = suites
+        .iter()
+        .map(|suite| match suite {
+            Suite::Formations => opts.matches.saturating_mul(selected.len() as u32),
+            Suite::RedCard => opts.matches.saturating_mul(RED_CARD_ARMS.len() as u32),
+            Suite::Equal | Suite::Strength => opts.matches,
+        })
+        .max()
+        .unwrap_or(1);
     let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
     let jobs = opts
         .jobs
@@ -135,8 +175,21 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         bands: Bands::load(&dir)?,
         exe: std::env::current_exe().context("cannot find this program to start workers")?,
         jobs,
+        selection: Selection {
+            suites: suites.iter().map(|s| s.code().to_string()).collect(),
+            pairings: if opts.pairings.is_empty() {
+                Vec::new()
+            } else {
+                selected
+                    .iter()
+                    .map(|&p| format!("{} v {}", pairings[p][0], pairings[p][1]))
+                    .collect()
+            },
+            bands: opts.bands.clone(),
+        },
         suites,
         pairings,
+        selected,
         millis,
         run_id: &run_id,
     };
@@ -175,6 +228,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         run_id: run_id.clone(),
         seed: opts.seed,
         content_hash: first.content_hash.clone(),
+        fixtures_hash,
         outcome: if worker_failed { "error" } else { "success" },
         error_type: worker_failed.then_some("worker"),
         error_code: worker_failed.then_some("worker-failed"),
@@ -187,6 +241,10 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         wall_ms: first.wall_ms.clone(),
         bands: first.checks.clone(),
         formations: first.formations.clone(),
+        selection: ctx.selection.clone(),
+        red_card: first.red_card.clone(),
+        baseline: None,
+        diff: None,
         pass: first.pass,
         bench_matches: BENCH_MATCHES,
         match_wall_ms: first.bench.match_wall_ms,
@@ -208,6 +266,19 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         compare: None,
         verdict: None,
     };
+    if let Some(base) = &base {
+        let diff = baseline::diff(base, &report.content_hash, &report.bands);
+        eprint!("{}", baseline::render_table(&base.info, &diff));
+        tracing::info!(
+            signal = "calibrate.diff",
+            run.id = %run_id,
+            baseline = %base.info.run_id,
+            changes = diff.changes,
+            noise = diff.noise
+        );
+        report.baseline = Some(base.info.clone());
+        report.diff = Some(diff);
+    }
 
     let code = match (&opts.pair, played.as_slice()) {
         (Some(flag), [off, on]) => {
@@ -267,11 +338,116 @@ struct RunCtx<'a> {
     bands: Bands,
     exe: PathBuf,
     jobs: u32,
+    selection: Selection,
     suites: Vec<Suite>,
-    /// The formation names of each pairing of the formations suite.
+    /// The formation names of every pairing of the formations suite.
     pairings: Vec<[String; 2]>,
+    /// The numbers of the pairings this run plays, in order.
+    selected: Vec<usize>,
     millis: u64,
     run_id: &'a str,
+}
+
+/// The suites a run plays, and the numbers of the formation pairings it plays: `--suite`
+/// narrowed to the suites that check the `--band` names, and to the formations suite when
+/// `--pairing` names a pairing. Every name is checked before any work.
+fn select(
+    requested: &[Suite],
+    opts: &CalibrateOpts,
+    pairings: &[[String; 2]],
+) -> anyhow::Result<(Vec<Suite>, Vec<usize>)> {
+    let mut suites = requested.to_vec();
+    for band in &opts.bands {
+        if band_suites(band).is_none() {
+            anyhow::bail!(
+                "--band {band}: no such band; the bands are {}",
+                BAND_NAMES.join(", ")
+            );
+        }
+    }
+    if !opts.bands.is_empty() {
+        suites.retain(|s| {
+            opts.bands
+                .iter()
+                .any(|b| band_suites(b).is_some_and(|owners| owners.contains(s)))
+        });
+        if suites.is_empty() {
+            anyhow::bail!(
+                "--band {}: no suite of --suite {} checks it",
+                opts.bands.join(", "),
+                codes(requested)
+            );
+        }
+    }
+    let mut selected: Vec<usize> = (0..pairings.len()).collect();
+    if !opts.pairings.is_empty() {
+        if !suites.contains(&Suite::Formations) {
+            anyhow::bail!(
+                "--pairing needs the formations suite, but the run plays {}; \
+                 use --suite formations",
+                codes(&suites)
+            );
+        }
+        suites.retain(|s| *s == Suite::Formations);
+        selected = opts
+            .pairings
+            .iter()
+            .map(|name| pairing_number(name, pairings))
+            .collect::<anyhow::Result<_>>()?;
+        selected.sort_unstable();
+        selected.dedup();
+    }
+    Ok((suites, selected))
+}
+
+fn codes(suites: &[Suite]) -> String {
+    suites
+        .iter()
+        .map(|s| s.code())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// The number of the pairing `name` names, as `A v B` in either order.
+fn pairing_number(name: &str, pairings: &[[String; 2]]) -> anyhow::Result<usize> {
+    let sides: Vec<&str> = name.split(" v ").map(str::trim).collect();
+    let found = match sides.as_slice() {
+        [a, b] => pairings
+            .iter()
+            .position(|p| (p[0] == *a && p[1] == *b) || (p[0] == *b && p[1] == *a)),
+        _ => None,
+    };
+    found.ok_or_else(|| {
+        let names: Vec<String> = pairings
+            .iter()
+            .map(|p| format!("{} v {}", p[0], p[1]))
+            .collect();
+        anyhow::anyhow!(
+            "--pairing {name}: no such pairing; the pairings are {}",
+            names.join(", ")
+        )
+    })
+}
+
+/// SHA-256, as 12 hex characters, over the inputs that decide a run's fixtures: the
+/// attributes, rules and tactics content, the generator block after the flag states, and
+/// the two default clubs. Parsed values are hashed, so a change of layout alone does not
+/// change it. Tuning values outside the generator block and flag states that leave the
+/// generator alone do not change it: they are the change a baseline diff measures.
+pub fn fixtures_hash(content: &Content, teams: &[TeamFile; 2]) -> anyhow::Result<String> {
+    let mut hasher = Sha256::new();
+    for part in [
+        serde_json::to_vec(&content.attributes)?,
+        serde_json::to_vec(&content.rules)?,
+        serde_json::to_vec(&content.tactics)?,
+        serde_json::to_vec(&content.tuning.generator)?,
+        serde_json::to_vec(&teams[0])?,
+        serde_json::to_vec(&teams[1])?,
+    ] {
+        hasher.update(part.len().to_le_bytes());
+        hasher.update(part);
+    }
+    Ok(hex12(&hasher.finalize()))
 }
 
 /// The outcome of one arm: every suite played in workers under one set of flag states,
@@ -281,6 +457,7 @@ struct Arm {
     flags_on: Vec<String>,
     figures: BTreeMap<Suite, SuiteFigures>,
     formations: Vec<PairingFigures>,
+    red_card: Option<RedCardFigures>,
     checks: Vec<BandCheck>,
     wall_ms: BTreeMap<String, u64>,
     pass: bool,
@@ -397,18 +574,28 @@ impl RunCtx<'_> {
         let events_written = count_files(&events_dir);
         let mut builder = RunBuilder::new(self.bands.clone());
         for &suite in &self.suites {
-            if suite == Suite::Formations {
-                builder.plan_pairings(opts.matches, self.pairings.clone());
-            } else {
-                builder.plan(suite, opts.matches);
+            match suite {
+                Suite::Formations => builder.plan_pairings(
+                    opts.matches,
+                    self.selected
+                        .iter()
+                        .map(|&p| self.pairings[p].clone())
+                        .collect(),
+                ),
+                Suite::RedCard => builder.plan(
+                    suite,
+                    opts.matches.saturating_mul(RED_CARD_ARMS.len() as u32),
+                ),
+                Suite::Equal | Suite::Strength => builder.plan(suite, opts.matches),
             }
             for planned in self.planned(suite) {
                 let id = fixtures::match_id(opts.seed, suite, planned.index, self.millis);
                 match read_stats(&arm_dir.join("stats").join(format!("{id}.json"))) {
                     Ok(stats) => {
-                        let outlier = match planned.pairing {
-                            Some((pairing, side)) => builder.add_pairing(stats, pairing, side),
-                            None => builder.add(suite, stats, planned.boosted),
+                        let outlier = match (planned.pairing, planned.arm) {
+                            (Some((pairing, side)), _) => builder.add_pairing(stats, pairing, side),
+                            (None, Some(arm)) => builder.add_red_card(stats, arm),
+                            (None, None) => builder.add(suite, stats, planned.boosted),
                         };
                         if !outlier && opts.keep_events == KeepEvents::Outliers {
                             let _ = std::fs::remove_file(events_dir.join(format!("{id}.jsonl")));
@@ -424,6 +611,10 @@ impl RunCtx<'_> {
         let figures = builder.figures();
         let formations = builder.pairing_figures();
         let mut checks = builder.checks(&figures, &formations, &wall);
+        // `--band` judges only the named bands; each suite's time budget stays.
+        if !opts.bands.is_empty() {
+            checks.retain(|c| c.band == "wall_ms" || opts.bands.contains(&c.band));
+        }
         let change_never_applied = builder.change_never_applied();
         let match_without_stats = builder.missing;
         for (counter, value) in [
@@ -462,6 +653,7 @@ impl RunCtx<'_> {
             flags_on: content.flags.names().to_vec(),
             figures,
             formations,
+            red_card: builder.red_card_figures(),
             checks,
             wall_ms,
             pass,
@@ -482,32 +674,52 @@ struct Planned {
     index: u32,
     /// The strength suite: the side of the boosted club.
     boosted: Option<usize>,
-    /// The formations suite: the pairing and the side of its first formation.
+    /// The formations suite: the pairing's place in the selection, and the side of its
+    /// first formation.
     pairing: Option<(usize, usize)>,
+    /// The red-card suite: the arm's number in [`RED_CARD_ARMS`].
+    arm: Option<usize>,
 }
 
 impl RunCtx<'_> {
     /// Every match `suite` plays, in fixture order.
     fn planned(&self, suite: Suite) -> Vec<Planned> {
         let matches = self.opts.matches;
-        if suite == Suite::Formations {
-            return fixtures::formation_fixtures(matches, self.pairings.len())
+        match suite {
+            Suite::Formations => {
+                fixtures::formation_fixtures_for(matches, self.pairings.len(), &self.selected)
+                    .into_iter()
+                    .map(|f| Planned {
+                        index: f.fixture.index,
+                        boosted: None,
+                        pairing: self
+                            .selected
+                            .iter()
+                            .position(|&p| p == f.pairing)
+                            .map(|place| (place, f.first_side)),
+                        arm: None,
+                    })
+                    .collect()
+            }
+            Suite::RedCard => fixtures::red_card_fixtures(self.opts.seed, matches)
                 .into_iter()
                 .map(|f| Planned {
-                    index: f.fixture.index,
+                    index: f.index,
                     boosted: None,
-                    pairing: Some((f.pairing, f.first_side)),
+                    pairing: None,
+                    arm: Some(f.arm),
                 })
-                .collect();
+                .collect(),
+            Suite::Equal | Suite::Strength => fixtures::fixtures(matches)
+                .into_iter()
+                .map(|f| Planned {
+                    index: f.index,
+                    boosted: (suite == Suite::Strength).then(|| f.boosted_side()),
+                    pairing: None,
+                    arm: None,
+                })
+                .collect(),
         }
-        fixtures::fixtures(matches)
-            .into_iter()
-            .map(|f| Planned {
-                index: f.index,
-                boosted: (suite == Suite::Strength).then(|| f.boosted_side()),
-                pairing: None,
-            })
-            .collect()
     }
 }
 
@@ -546,6 +758,10 @@ fn worker_command(
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::inherit());
+    if suite == Suite::Formations && ctx.selected.len() < ctx.pairings.len() {
+        let numbers: Vec<String> = ctx.selected.iter().map(usize::to_string).collect();
+        cmd.arg("--pairing-numbers").arg(numbers.join(","));
+    }
     // The test seam reaches the first worker only.
     if let (Some(inject), 0) = (opts.inject_failure, shard) {
         cmd.args(["--inject-failure", inject.code()]);
@@ -568,4 +784,73 @@ fn count_files(dir: &Path) -> u32 {
             .count();
         u32::try_from(n).unwrap_or(u32::MAX)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn shipped() -> (Content, [TeamFile; 2]) {
+        let dir = ContentDir::at(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content"));
+        let content = Content::load(&dir).unwrap();
+        let teams = [engine::data::TEAM_A_FILE, engine::data::TEAM_B_FILE]
+            .map(|f| content.load_team(&dir, &dir.path(f)).unwrap().value);
+        (content, teams)
+    }
+
+    #[test]
+    fn the_fixtures_hash_follows_the_fixtures_and_not_the_tuning() {
+        let (content, teams) = shipped();
+        let base = fixtures_hash(&content, &teams).unwrap();
+        assert_eq!(base.len(), 12);
+        assert_eq!(base, fixtures_hash(&content, &teams).unwrap(), "stable");
+
+        let mut tactics = content.clone();
+        tactics.tactics.formations[0].name.push('x');
+        assert_ne!(
+            base,
+            fixtures_hash(&tactics, &teams).unwrap(),
+            "a formation"
+        );
+
+        let mut generator = content.clone();
+        generator.tuning.generator.squad_size += 1;
+        assert_ne!(
+            base,
+            fixtures_hash(&generator, &teams).unwrap(),
+            "the generator"
+        );
+
+        let mut club = teams.clone();
+        club[1].club.name.push('x');
+        assert_ne!(
+            base,
+            fixtures_hash(&content, &club).unwrap(),
+            "a default club"
+        );
+
+        let mut tuning = content.clone();
+        tuning.tuning.engine.red_base += 0.01;
+        assert_eq!(
+            base,
+            fixtures_hash(&tuning, &teams).unwrap(),
+            "an engine value"
+        );
+    }
+
+    #[test]
+    fn a_pairing_is_named_in_either_order() {
+        let names = vec![
+            ["4-4-2".to_string(), "4-4-2".to_string()],
+            ["4-4-2".to_string(), "4-4-1-1".to_string()],
+        ];
+        assert_eq!(pairing_number("4-4-1-1 v 4-4-2", &names).unwrap(), 1);
+        assert_eq!(pairing_number("4-4-2 v 4-4-1-1", &names).unwrap(), 1);
+        assert_eq!(pairing_number("4-4-2 v 4-4-2", &names).unwrap(), 0);
+        let err = pairing_number("4-4-2 v 9-9-9", &names)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("no such pairing"), "{err}");
+        assert!(err.contains("4-4-2 v 4-4-1-1"), "{err}");
+    }
 }

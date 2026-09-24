@@ -85,6 +85,21 @@ fn a_small_run_writes_a_record_per_match_and_a_report_that_validate() {
         saved["calib.formations"].as_array().unwrap().len() as u64,
         PAIRINGS
     );
+    // Every band row carries its sampling error, and the report its fixtures hash.
+    let bands = saved["calib.bands"].as_array().unwrap();
+    assert!(
+        bands.iter().all(|b| b["se"].as_f64() >= Some(0.0)),
+        "{bands:?}"
+    );
+    assert_eq!(saved["fixtures.hash"].as_str().map(str::len), Some(12));
+    assert_eq!(
+        saved["calib.selection"]["suites"],
+        serde_json::json!(["equal", "strength", "formations"])
+    );
+    assert!(
+        saved.get("calib.red_card").is_none(),
+        "red-card is not in all"
+    );
     assert!(saved["bench.match_wall_ms"].is_u64());
     assert!(saved["bench.cpu_us_per_tick"].is_number());
     assert_eq!(code == Some(0), saved["calib.pass"] == true);

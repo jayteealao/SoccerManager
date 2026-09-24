@@ -190,6 +190,7 @@ mod tests {
             } else {
                 (lo..=hi).contains(&value)
             },
+            se: 0.0,
         }
     }
 

@@ -509,6 +509,7 @@ dependencies = [
  "script",
  "serde",
  "serde_json",
+ "sha2",
  "stream",
  "tracing",
  "tracing-subscriber",

@@ -64,6 +64,7 @@ fn every_document_in_the_set_exists() {
         "README.md",
         "docs/tutorials/first-match.md",
         "docs/how-to/modding.md",
+        "docs/how-to/calibration.md",
         "docs/reference/cli.md",
         "docs/reference/data-files.md",
         "docs/reference/protocol.md",
@@ -97,6 +98,7 @@ fn every_command_in_the_guides_is_a_real_command() {
     for path in [
         "docs/tutorials/first-match.md",
         "docs/how-to/modding.md",
+        "docs/how-to/calibration.md",
         "README.md",
     ] {
         let text = read(path);

@@ -482,6 +482,7 @@ fn the_test_seams_stay_out_of_the_help() {
             "--run-dir",
             "--run-millis",
             "--inject-failure",
+            "--pairing-numbers",
         ] {
             assert!(!stdout.contains(hidden), "calibrate {flag} shows {hidden}");
         }

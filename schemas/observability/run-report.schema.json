@@ -63,6 +63,11 @@
     "content.hash": {
       "type": "string"
     },
+    "fixtures.hash": {
+      "description": "A calibration run: SHA-256 (12 hex characters) over the inputs that decide the fixtures: the attributes, rules and tactics content, the generator block after flag states, and the two default clubs. A baseline must share it.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{12}$"
+    },
     "outcome": {
       "description": "error marks a run or match that failed; it then carries the three error.* keys and need not carry statistics.",
       "enum": [
@@ -227,7 +232,8 @@
               "enum": [
                 "equal",
                 "strength",
-                "formations"
+                "formations",
+                "red-card"
               ]
             },
             "additionalProperties": {
@@ -293,11 +299,12 @@
                   "enum": [
                     "equal",
                     "strength",
-                    "formations"
+                    "formations",
+                    "red-card"
                   ]
                 },
                 "pairing": {
-                  "description": "The formation pairing of a formations-suite check, for example 4-3-3 v 4-4-2.",
+                  "description": "The formation pairing of a formations-suite check, for example 4-3-3 v 4-4-2, or the arm of a red-card check (keeper, centre-back, striker).",
                   "type": "string",
                   "minLength": 1
                 },
@@ -312,6 +319,11 @@
                 },
                 "pass": {
                   "type": "boolean"
+                },
+                "se": {
+                  "description": "The sampling error of value: the standard error of a mean, share, or ratio over the matches judged; 0 for wall_ms.",
+                  "type": "number",
+                  "minimum": 0
                 }
               }
             }
@@ -351,6 +363,96 @@
           },
           "calib.pass": {
             "type": "boolean"
+          },
+          "calib.selection": {
+            "description": "What the run selected: the suites played, the formation pairings (empty when every pairing played), and the bands judged (empty when every band was judged).",
+            "type": "object",
+            "required": ["suites", "pairings", "bands"],
+            "properties": {
+              "suites": {
+                "type": "array",
+                "items": { "enum": ["equal", "strength", "formations", "red-card"] }
+              },
+              "pairings": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+              "bands": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+            }
+          },
+          "calib.red_card": {
+            "description": "The controlled sending-off experiment: mean goals per match of the control and of each arm's full (home) and reduced (away) side, the limit (1.6 times the control's home mean), and the criterion verdict. Absent when the red-card suite did not run.",
+            "type": "object",
+            "required": ["matches", "control", "control_matches", "arms", "limit", "pass"],
+            "properties": {
+              "matches": { "type": "integer", "minimum": 1 },
+              "control": {
+                "type": "array",
+                "items": { "type": "number", "minimum": 0 },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "control_matches": { "type": "integer", "minimum": 0 },
+              "arms": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["arm", "player", "matches", "full", "reduced", "pass"],
+                  "properties": {
+                    "arm": { "enum": ["keeper", "centre-back", "striker"] },
+                    "player": { "type": "integer", "minimum": 0 },
+                    "matches": { "type": "integer", "minimum": 0 },
+                    "full": { "type": "number", "minimum": 0 },
+                    "reduced": { "type": "number", "minimum": 0 },
+                    "pass": { "type": "boolean" }
+                  }
+                }
+              },
+              "limit": { "type": "number", "minimum": 0 },
+              "pass": { "type": "boolean" }
+            }
+          },
+          "calib.baseline": {
+            "description": "The earlier report the run was compared with (--baseline).",
+            "type": "object",
+            "required": ["path", "run.id", "seed", "content.hash"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "run.id": { "type": "string" },
+              "seed": { "type": "integer", "minimum": 0 },
+              "content.hash": { "type": "string" }
+            }
+          },
+          "calib.diff": {
+            "description": "One row per band, pairing, and arm both runs judged: the baseline and new values, the change, its sampling error, and whether the change is inside two errors (noise).",
+            "type": "object",
+            "required": ["content_hashes", "content_changed", "rows", "noise", "changes"],
+            "properties": {
+              "content_hashes": {
+                "type": "array",
+                "items": { "type": "string" },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "content_changed": { "type": "boolean" },
+              "noise": { "type": "integer", "minimum": 0 },
+              "changes": { "type": "integer", "minimum": 0 },
+              "rows": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["suite", "band", "baseline", "new", "change", "error", "noise", "pass"],
+                  "properties": {
+                    "suite": { "enum": ["equal", "strength", "formations", "red-card"] },
+                    "band": { "type": "string" },
+                    "pairing": { "type": "string", "minLength": 1 },
+                    "baseline": { "type": "number" },
+                    "new": { "type": "number" },
+                    "change": { "type": "number" },
+                    "error": { "type": "number", "minimum": 0 },
+                    "noise": { "type": "boolean" },
+                    "pass": { "type": "boolean" }
+                  }
+                }
+              }
+            }
           },
           "darkpath.change_never_applied": {
             "type": "integer",
@@ -490,7 +592,8 @@
                   "enum": [
                     "equal",
                     "strength",
-                    "formations"
+                    "formations",
+                    "red-card"
                   ]
                 },
                 "band": {

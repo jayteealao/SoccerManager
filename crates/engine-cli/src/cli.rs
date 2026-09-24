@@ -423,10 +423,40 @@ pub struct CalibrateOpts {
         default_value = "all",
         hide_possible_values = true,
         long_help = "Suites to run: equal strength, a stronger club, every formation\n\
-                     pairing, or all three.\n\n\
-                     Values: all, equal, strength, formations."
+                     pairing, all three, or the sending-off experiment.\n\n\
+                     Values: all, equal, strength, formations, red-card.\n\
+                     red-card is not part of all: it plays the default clubs\n\
+                     with cards off and an away player sent off at kick-off."
     )]
     pub suite: SuiteArg,
+    /// Play only this formation pairing; repeatable.
+    #[arg(
+        long = "pairing",
+        value_name = "A v B",
+        long_help = "Play only this formation pairing of the formations suite; repeatable.\n\n\
+                     Name it as two formations joined by v, in either order,\n\
+                     for example \"4-4-1-1 v 4-4-2\". Each pairing plays the\n\
+                     same matches as in a full run."
+    )]
+    pub pairings: Vec<String>,
+    /// Judge only this band; repeatable.
+    #[arg(
+        long = "band",
+        value_name = "NAME",
+        long_help = "Judge and show only this realism band; repeatable.\n\n\
+                     The run plays only the suites that check the band."
+    )]
+    pub bands: Vec<String>,
+    /// Compare with an earlier run report.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Compare the run with an earlier report.json, band by band.\n\n\
+                     The baseline must have the same seed, match count, and\n\
+                     fixtures hash, or the run stops before it plays. A change\n\
+                     inside two sampling errors is marked as noise."
+    )]
+    pub baseline: Option<PathBuf>,
     /// Run folder; default SM_DATA_DIR/runs/<run.id>.
     #[arg(long, value_name = "DIR")]
     pub out: Option<PathBuf>,
@@ -472,6 +502,9 @@ pub struct CalibrateOpts {
     pub run_dir: Option<PathBuf>,
     #[arg(long, hide = true, default_value_t = 0)]
     pub run_millis: u64,
+    /// A worker of the formations suite plays only these pairings, by number.
+    #[arg(long = "pairing-numbers", hide = true, value_delimiter = ',')]
+    pub pairing_numbers: Vec<usize>,
     /// Make one match or one worker fail, to exercise the error records; a test seam.
     #[arg(long, hide = true, value_enum, value_name = "WHAT")]
     pub inject_failure: Option<InjectFailure>,
@@ -502,6 +535,7 @@ pub enum SuiteArg {
     Equal,
     Strength,
     Formations,
+    RedCard,
 }
 
 /// Which event files a calibration run keeps.

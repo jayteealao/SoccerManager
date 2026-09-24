@@ -13,7 +13,6 @@ use crate::decision::Kick;
 use crate::fatigue::InjurySource;
 use crate::math::{DVec2, DVec3};
 use crate::rules::clock::{MatchClock, TICKS_PER_MINUTE};
-use crate::rules::discipline;
 use crate::sim::{MatchConfig, Simulation};
 use crate::tactics::change::Change;
 
@@ -89,12 +88,7 @@ impl Scene {
     /// Sends player `i` off before the scene starts, as a card shown would: the player
     /// loses the ball and the team is laid out again.
     pub fn sent_off(mut self, i: usize) -> Self {
-        if self.sim.carrier == Some(i) {
-            self.sim.carrier = None;
-        }
-        discipline::send_off(&mut self.sim.players, &mut self.sim.teams, i);
-        let team = self.sim.players[i].team;
-        self.sim.ai[team].due = true;
+        self.sim.send_off_before_kickoff(i);
         self
     }
 

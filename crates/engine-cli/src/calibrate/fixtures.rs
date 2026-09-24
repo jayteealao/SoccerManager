@@ -83,6 +83,48 @@ pub fn formation_fixtures(matches: u32, pairings: usize) -> Vec<FormationFixture
         .collect()
 }
 
+/// The fixtures of the selected pairings only, in order, each with the index, the match
+/// seed, the clubs, and the home side it has in the full list of [`formation_fixtures`]. So
+/// a targeted run plays the same matches as the same pairings of a full run.
+pub fn formation_fixtures_for(
+    matches: u32,
+    pairings: usize,
+    selected: &[usize],
+) -> Vec<FormationFixture> {
+    formation_fixtures(matches, pairings)
+        .into_iter()
+        .filter(|f| selected.contains(&f.pairing))
+        .collect()
+}
+
+/// One match of the red-card suite.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RedCardFixture {
+    /// The fixture's number in the suite, from 0: arm `a` plays `a x matches` onward.
+    pub index: u32,
+    /// The arm's number in [`crate::report::RED_CARD_ARMS`].
+    pub arm: usize,
+    /// The engine seed, used directly: `seed` to `seed + matches - 1` in every arm.
+    pub engine_seed: u64,
+}
+
+/// The fixtures of the red-card suite: every arm plays the engine seeds `seed` to
+/// `seed + matches - 1` on the default clubs, so `--seed 1 --matches 120` is the slow
+/// test's experiment.
+pub fn red_card_fixtures(seed: u64, matches: u32) -> Vec<RedCardFixture> {
+    let arms = crate::report::RED_CARD_ARMS.len();
+    (0..arms)
+        .flat_map(|arm| {
+            (0..matches).map(move |k| RedCardFixture {
+                // Four arms of at most 100 000 matches each.
+                index: arm as u32 * matches + k,
+                arm,
+                engine_seed: seed.wrapping_add(u64::from(k)),
+            })
+        })
+        .collect()
+}
+
 /// A double round-robin of `n` clubs (`n` even) by the circle method: `n - 1` rounds in
 /// which every club plays once, then the same rounds with home and away swapped. The first
 /// fixtures already spread over every club, so a run shorter than a league stays balanced.
@@ -252,6 +294,26 @@ mod tests {
             assert_eq!(f.fixture.clubs, equal[i % 4].clubs);
             assert_eq!(f.fixture.league, equal[i % 4].league);
             assert_eq!(f.first_side, i % 2);
+        }
+    }
+
+    #[test]
+    fn a_selected_pairing_keeps_its_place_in_the_full_list() {
+        let full = formation_fixtures(4, 55);
+        let picked = formation_fixtures_for(4, 55, &[3, 40]);
+        assert_eq!(picked.len(), 8);
+        assert_eq!(picked[..4], full[12..16]);
+        assert_eq!(picked[4..], full[160..164]);
+    }
+
+    #[test]
+    fn the_red_card_suite_plays_every_arm_on_the_same_engine_seeds() {
+        let list = red_card_fixtures(1, 120);
+        assert_eq!(list.len(), 480);
+        for (i, f) in list.iter().enumerate() {
+            assert_eq!(f.index, i as u32);
+            assert_eq!(f.arm, i / 120);
+            assert_eq!(f.engine_seed, 1 + (i % 120) as u64);
         }
     }
 

@@ -16,7 +16,7 @@ use common::{content, default_teams, index, run_many};
 use engine::math::{DVec2, DVec3, segment_distance};
 use engine::record::NullSink;
 use engine::scenario::Scene;
-use engine::{Content, MatchConfig, Simulation, Tactics};
+use engine::{Content, MatchConfig, Simulation, Tactics, Validator, VecSink};
 
 /// A 90-minute match on the shipped content with decisions every tick and no injuries.
 fn live(seed: u64) -> MatchConfig {
@@ -163,6 +163,45 @@ fn mean_goals(
 }
 
 #[test]
+fn the_public_send_off_before_kick_off_plays_as_the_scene_one_and_validates() {
+    // A 15-minute match with cards otherwise off, as the sending-off experiment plays it.
+    let content = content();
+    let [a, b] = default_teams(&content);
+    let cards_off = |seed: u64| {
+        let mut config = MatchConfig::new(seed, 15, &content, [&a, &b]).unwrap();
+        config.tuning.red_base = 0.0;
+        config.tuning.yellow_base = 0.0;
+        config.tuning.yellow_aggression_weight = 0.0;
+        config
+    };
+    for seed in 1..=3 {
+        for i in [11, 13, 21] {
+            let mut scene = Scene::new(cards_off(seed)).sent_off(i).build();
+            scene.run(&mut NullSink).unwrap();
+            let mut sim = Simulation::new(cards_off(seed)).unwrap();
+            sim.send_off_before_kickoff(i);
+            let mut sink = VecSink::default();
+            sim.run(&mut sink).unwrap();
+            assert_eq!(
+                scene.summary().goals,
+                sim.summary().goals,
+                "seed {seed}, player {i}"
+            );
+            let events = sim.take_events();
+            let validator =
+                Validator::for_match(sim.tuning().clone(), sim.team_timeline(), &events);
+            let violations = validator.check(&sink.records);
+            assert!(
+                violations.is_empty(),
+                "seed {seed}, player {i}: {} violations; first: {:?}",
+                violations.len(),
+                violations.first()
+            );
+        }
+    }
+}
+
+#[test]
 #[ignore = "slow: cargo test --release -p engine --all-features -- --ignored"]
 fn a_sending_off_gives_no_advantage() {
     let content = content();
@@ -175,12 +214,12 @@ fn a_sending_off_gives_no_advantage() {
         config
     };
     let control = mean_goals(1..=120, cards_off, |s| s);
-    eprintln!("control: home {:.2} away {:.2}", control[0], control[1]);
+    eprintln!("control: home {:.4} away {:.4}", control[0], control[1]);
     let mut failures = Vec::new();
     for (arm, i) in [("keeper", 11), ("centre-back", 13), ("striker", 21)] {
         let [full, reduced] = mean_goals(1..=120, cards_off, |s| s.sent_off(i));
         eprintln!(
-            "{arm} sent off: full side {full:.2}, reduced side {reduced:.2}, limit {:.2}",
+            "{arm} sent off: full side {full:.4}, reduced side {reduced:.4}, limit {:.4}",
             1.6 * control[0]
         );
         if reduced > full {

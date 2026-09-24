@@ -556,6 +556,20 @@ impl Simulation {
         })
     }
 
+    /// Sends player `i` off before kick-off, as a card shown would: the player loses the
+    /// ball, the team is laid out again, and its manager reviews the shape. The team shapes
+    /// start again from the current tick, so the validator reads the reduced side from the
+    /// start. Calibration's controlled sending-off experiment uses it.
+    pub fn send_off_before_kickoff(&mut self, i: usize) {
+        if self.carrier == Some(i) {
+            self.carrier = None;
+        }
+        crate::rules::discipline::send_off(&mut self.players, &mut self.teams, i);
+        let team = self.players[i].team;
+        self.ai[team].due = true;
+        self.timeline = vec![(self.tick, self.teams.clone())];
+    }
+
     pub fn tuning(&self) -> &Tuning {
         &self.config.tuning
     }

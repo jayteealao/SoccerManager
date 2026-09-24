@@ -193,7 +193,10 @@ Play many AI-managed matches and check the realism bands.
 | `--matches` | integer | 1000 | Matches in each suite, and in each formation pairing of the formations suite. |
 | `--minutes` | integer | 90 | Minutes of play in each match. |
 | `--jobs` | integer | the number of logical cores | Worker processes. |
-| `--suite` | `all`, `equal`, `strength`, `formations` | `all` | The suites to play. `all` plays all three. |
+| `--suite` | `all`, `equal`, `strength`, `formations`, `red-card` | `all` | The suites to play. `all` plays the first three; `red-card` runs only when named. |
+| `--pairing` | `A v B`, for example `"4-4-1-1 v 4-4-2"` | every pairing | Play only this formation pairing of the formations suite. Name the two formations in either order. Repeat it for more than one pairing. The run then plays the formations suite only. |
+| `--band` | band name, for example `goals_per_match` | every band | Judge and show only this band, and play only the suites that check it. Repeat it for more than one band. |
+| `--baseline` | file | none | Compare the run with an earlier `report.json`, band by band, and print the diff. |
 | `--out` | folder | `runs/<run.id>` in the data folder | The run folder. |
 | `--keep-events` | `outliers`, `all` | `outliers` | The event files to keep at the end of the run. |
 | `--flag` | `NAME=on` or `NAME=off` | the state in `tuning.json` | Set a feature flag for the whole run. Repeat it for more than one flag. The flag must be declared in `tuning.json`. |
@@ -207,7 +210,17 @@ The three suites:
 - `strength`: one club of each match has every attribute raised by the bands' boost. The run checks that the stronger club wins more than half its matches.
 - `formations`: every pairing of the formations in `tactics.json`, a formation against itself included. Ten formations give 55 pairings, and each pairing plays `--matches` matches with the clubs of the equal suite, its first formation at home in every other match. The run checks goals per match, the share of matches with 10 or more goals, and the share of goalless matches for each pairing. `calib.formations` holds the figures of every pairing, and each of its band checks carries a `pairing` such as `4-3-3 v 4-4-2`.
 
+- `red-card`: the controlled sending-off experiment. It is not part of `all`. The default clubs play with cards otherwise off, in four arms: a control, and the away keeper (player 11), centre-back (13), or striker (21) sent off at kick-off. Every arm plays the engine seeds `--seed` to `--seed` + `--matches` - 1, so `--seed 1 --matches 120` is the experiment of the slow test `a_sending_off_gives_no_advantage`. `calib.red_card` holds the control's home and away mean goals, each arm's full-side (home) and reduced-side (away) mean goals, the limit (1.6 times the control's home mean), and `pass`. Each arm has two band checks, with the arm in `pairing`: `reduced_minus_full` (the reduced side's goals less the full side's, at most 0) and `full_over_control` (the full side's goals over the control's home goals, at most 1.6).
+
 With the defaults, `--suite all` plays 57,000 matches: about 74 minutes on a 16-core machine. `--suite equal` plays 1,000 matches in about 80 seconds.
+
+A targeted run plays only what it selects. `--pairing` plays each named pairing's `--matches` matches, with the same match seeds, clubs, and home sides as in a full run, so the figures of a targeted pairing or suite equal the figures of the same pairing or suite in a `--suite all` run on the same seed. `--band` narrows `--suite` to the suites that check the named bands: `goals_per_match`, `ten_plus_goals_share`, and `goalless_share` belong to `equal` and `formations`; `stronger_team_win_rate` to `strength`; `reduced_minus_full` and `full_over_control` to `red-card`; every other band to `equal`. Each suite's `wall_ms` check stays. `calib.selection` names the suites, pairings, and bands the run selected.
+
+Every band check carries `se`, its sampling error: the standard error of a mean (sd / sqrt(n)), of a share (sqrt(p (1 - p) / n)), or of a pooled ratio (the ratio estimator), over the matches judged. `wall_ms` has 0.
+
+A baseline must have the same seed, match count (`calib.matches`), and `fixtures.hash` as the run. `fixtures.hash` covers the inputs that decide the fixtures: the attributes, rules, and tactics content, the generator block of `tuning.json` after the flag states, and the two default clubs. A different `content.hash` (other tuning values or flag states) is allowed: it is the change under test. The baseline is checked before the run folder is made, and a refusal exits with code 1 and names each difference, for example `seed 7 differs from the baseline's 42`, `match count 500 differs from the baseline's 1000`, or `fixtures hash 3f2a9c01b7de differs from the baseline's 0c44e1a9f2b3`. A report without `se` on its band checks or without `fixtures.hash` is refused as made before this check existed; make a new one. `--baseline` cannot be used with `--pair`.
+
+The diff is printed on standard error. Its first line names the baseline's `run.id` and seed, the baseline's and the run's content hashes, and `content changed` or `content unchanged`. Then one row per band, pairing, and arm that both reports judged, the time budget left out, with these columns: `suite`, `band`, `pairing`, `baseline`, `new`, `change` (new less baseline), `error` (sqrt(se_baseline^2 + se_new^2)), the mark (`noise` when the change is at most two errors, otherwise `change`), and the verdict of the new run (`pass` or `miss`). The report holds the same rows in `calib.diff`, and the baseline in `calib.baseline`. The diff does not change the exit code.
 
 Standard error names each failing band on its own `warn` line, with `signal` `calibrate.band_failed`, the suite, the band, the pairing when there is one, the value, and the range.
 
@@ -215,7 +228,7 @@ A match the engine cannot play still writes its `stats/<match.id>.json`, with `o
 
 A paired run writes each arm to its own folder: `arms/off/stats/`, `arms/off/events/`, `arms/on/stats/`, and `arms/on/events/`. The one `report.json` stays at the top of the run folder. Its top-level figures are the off arm's. `calib.arms` holds both arms, `calib.compare` holds one row per suite, band, and formation pairing with the off value and the on value side by side, and `calib.verdict` is `on-better`, `off-better`, `no-difference`, or `on-rejected`. The same table is printed on standard error.
 
-A flag name that `tuning.json` does not declare, a state other than `on` or `off`, and a `--pair` flag also given with `--flag` are refused with exit code 1 before any match is played.
+A flag name that `tuning.json` does not declare, a state other than `on` or `off`, a `--pair` flag also given with `--flag`, an unknown pairing or band, a `--pairing` without the formations suite, and a `--band` that no selected suite checks are refused with exit code 1 before any match is played. Each message lists the valid names.
 
 Exit codes: 0 when every band passes and both dark-path counters are zero; 1; 2 otherwise. For a paired run: 0 when both arms have no missing statistics record, no change left unapplied, no validator violation, and no failed worker; 1; 2 otherwise. The verdict does not change the exit code.
 
