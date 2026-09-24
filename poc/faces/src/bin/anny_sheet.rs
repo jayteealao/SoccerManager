@@ -167,6 +167,8 @@ fn main() {
             std::fs::write(format!("{DIR}/landmarks.json"), serde_json::to_string_pretty(&defs).unwrap()).unwrap();
             eprintln!("wrote {DIR}/landmarks.json");
         }
+        Some("ladder-jobs") => ladder_jobs(&mut fb),
+        Some("ladder") => ladder(&mut fb),
         Some("finish") => {
             // MakeHuman-direct v2 finish vs Anny finish, ages 30 and 60.
             let mut rows = Vec::new();
@@ -188,4 +190,95 @@ fn main() {
         Some("render") => render(&mut fb, &std::env::args().skip_while(|a| a != "--tag").nth(1).unwrap_or_default()),
         _ => eprintln!("usage: anny_sheet jobs [--calibrated | --anny-calibrated] [--face-age] | anny_sheet landmarks | anny_sheet render [--tag NAME]"),
     }
+}
+
+/// Stages for the where-does-it-go-wrong ladder.
+const STAGES: [&str; 5] = ["ANNY DEFAULT", "+ANCESTRY", "+CALIBRATION", "+SHAPE GENES", "+ADULT STRUCTURE"];
+
+/// Adult male structure MakeHuman\'s idealised mesh lacks: brow ridge, cheekbones,
+/// a little lower-lid fullness and a slight nasal hump (Anny labels).
+const STRUCTURE: [(&str, f32); 6] = [
+    ("eyebrows-trans-forward", 0.6),
+    ("l-cheek-bones-incr", 0.35),
+    ("r-cheek-bones-incr", 0.35),
+    ("l-eye-bag-incr", 0.15),
+    ("r-eye-bag-incr", 0.15),
+    ("nose-hump-incr", 0.15),
+];
+const LADDER: [(&str, u64); 3] = [("NHV", 6), ("CVD", 4), ("KSI", 2)];
+
+/// Writes one Anny job per genome and stage, all at 24.
+fn ladder_jobs(fb: &mut FaceBuilder) {
+    fb.base.calibrate = false;
+    let mut out = Vec::new();
+    for (code, seed) in LADDER {
+        let g = Genome::generate(seed, nation(code).unwrap(), 2004);
+        let age = AgeState::new(&g, 24.0);
+        for (k, stage) in STAGES.iter().enumerate() {
+            let mix = if k == 0 { [1.0 / 3.0; 3] } else { g.mh_mix };
+            let (muscle, weight) = if k == 0 { (0.5, 0.5) } else { (age.muscle, age.weight) };
+            let mut local: serde_json::Map<String, serde_json::Value> = if k >= 3 {
+                fb.base
+                    .weights_for(&g, &age)
+                    .into_iter()
+                    .filter(|(n, w)| !n.starts_with("macrodetails") && w.abs() > 1e-4)
+                    .map(|(n, w)| (n, serde_json::json!(w)))
+                    .collect()
+            } else {
+                serde_json::Map::new()
+            };
+            if k >= 4 {
+                for (n, w) in STRUCTURE {
+                    let prev = local.get(n).and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    local.insert(n.to_string(), serde_json::json!(prev + w as f64));
+                }
+            }
+            out.push(serde_json::json!({
+                "id": format!("ladder_{code}_{seed}_{k}"),
+                "stage": stage,
+                "years": 24.0,
+                "anny_age": 5.0 / 9.0,
+                "phenotypes": {"gender": 1.0, "muscle": muscle, "weight": weight, "height": 0.5,
+                               "african": mix[0], "asian": mix[1], "caucasian": mix[2]},
+                "local": local,
+                "anny_calibration": k >= 2,
+            }));
+        }
+    }
+    std::fs::create_dir_all(DIR).unwrap();
+    std::fs::write(format!("{DIR}/jobs.json"), serde_json::to_string_pretty(&out).unwrap()).unwrap();
+}
+
+/// Renders the ladder: clay (geometry only) per stage, then the full look.
+fn ladder(fb: &mut FaceBuilder) {
+    let r = Renderer::new();
+    let cam = Camera::portrait(0.0);
+    let mut rows = Vec::new();
+    let mut labels = Vec::new();
+    for (code, seed) in LADDER {
+        let g = Genome::generate(seed, nation(code).unwrap(), 2004);
+        let age = AgeState::new(&g, 24.0);
+        let mut row = Vec::new();
+        for k in 0..STAGES.len() {
+            let head = fb.base.build_from_positions(load_positions(&format!("ladder_{code}_{seed}_{k}")));
+            let mut draws = fb.portrait_from(&g, &age, &head, None);
+            // Clay: plain grey, no brows, stubble, lip tint or lash line.
+            draws[0].params.colour = [0.32, 0.32, 0.32, 1.0];
+            draws[0].params.p0 = [0.0, 0.0, 0.0, 0.0];
+            for v in &mut draws[0].vertices {
+                v.aux2[2] = 0.0;
+            }
+            row.push(Rgba::from_raw(SIZE, SIZE, r.render(&draws, &cam).colour));
+            if k == STAGES.len() - 1 {
+                let head = fb.base.build_from_positions(load_positions(&format!("ladder_{code}_{seed}_{k}")));
+                let draws = fb.portrait_from(&g, &age, &head, Some(Style::for_genome(&g)));
+                row.push(Rgba::from_raw(SIZE, SIZE, r.render(&draws, &cam).colour));
+            }
+        }
+        rows.push(row);
+        labels.push(format!("{code} SEED {seed}"));
+    }
+    let mut cols: Vec<String> = STAGES.iter().map(|s| s.to_string()).collect();
+    cols.push("FULL LOOK".into());
+    contact_sheet(&rows, 300, &cols, &labels).save_jpeg(Path::new("out/poc5_ladder.jpg"), 82);
 }

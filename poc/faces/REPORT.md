@@ -204,6 +204,24 @@ Findings:
 5. **Ageing is a little weaker.** At 60, Anny heads show less jowl and neck fullness than the MakeHuman-direct ones, because Anny's weight and muscle controls act differently on the head. The age-aware finish still reads as about 60.
 6. **Finish timing:** 31.4 s per image on average (range 30.5–37.7 s), the same pipeline as PoC 4 v2. Details are in `out/poc5_finish_timings.jsonl`.
 
+**Where the unhuman look comes from** ([`out/poc5_ladder.jpg`](out/poc5_ladder.jpg)). Anny heads were built up one layer at a time and rendered in plain grey clay, so geometry is judged without shading. The stages are: Anny default, then ancestry, then facial calibration, then shape genes, then adult structure, then the full look.
+- **Overall proportions are human.** Measured on these heads:
+
+  | Ratio | Ours | Published |
+  |---|---|---|
+  | Skull breadth | 138–149 mm | about 140–151 mm |
+  | Length-to-breadth index | 72–80 | about 76–80 |
+  | Face width / skull width | 0.90–0.97 | about 0.91 |
+  | Jaw width / face width | 0.71–0.79 | about 0.71 |
+
+- **What reads as unhuman is detail.** The MakeHuman mesh that Anny wraps is an idealised, smoothed face: no brow ridge, flat cheek planes, a soft jaw, and no fold from nose to mouth corner. My placeholder shading adds to it: painted brows, flat lips, uniform skin, and eyeballs without a cornea or lid thickness.
+- **Adult structure helps a little but does not fix it.** That stage adds a forward brow ridge, cheekbones, slight lower-lid fullness and a small nasal hump.
+- **Conclusion.** Tuning targets on this mesh, whether through MakeHuman or Anny, will not make raw renders read as human. That needs:
+  - scan-derived facial form, such as FLAME 2023 Open, which is CC-BY-4.0 but needs registration;
+  - scanned skin detail;
+  - a real eye model;
+  - or leaning on the photo finish, which does make the faces read as human (PoC 4 v2).
+
 **Should we use it?** For portrait quality, Anny adds nothing over using the MakeHuman targets directly. Its value is as an engineering base:
 - a maintained, permissively licensed package;
 - exact gradients for calibration and for fitting shape spaces to data;
