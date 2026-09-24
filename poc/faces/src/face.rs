@@ -63,6 +63,18 @@ impl FaceBuilder {
         draws
     }
 
+    /// A portrait from a head built elsewhere (PoC 5: Anny).
+    pub fn portrait_from(&mut self, g: &Genome, age: &AgeState, head: &HeadMesh, style: Option<Style>) -> Vec<Draw> {
+        let (mut draws, scalp) = self.draws(g, age, head);
+        if let Some(style) = style {
+            let colours = Colours::new(g, age);
+            let (hair, tint) = cards::build(style, g, &scalp, &colours);
+            draws[0].params.p1[0] = tint;
+            draws.extend(hair);
+        }
+        draws
+    }
+
     /// Skin and eye draws, plus the scalp for hair placement.
     pub fn draws(&self, g: &Genome, age: &AgeState, head: &HeadMesh) -> (Vec<Draw>, Scalp) {
         let colours = Colours::new(g, age);

@@ -1,0 +1,42 @@
+{
+ "african": {
+  "mouth-scale-horiz-incr": 0.727,
+  "mouth-trans-up": -0.158,
+  "chin-height-incr": 0.571,
+  "chin-bones-incr": -0.316,
+  "head-scale-vert-incr": 0.237,
+  "head-scale-horiz-incr": 0.197,
+  "nose-scale-horiz-incr": 0.452,
+  "{s}-eye-trans-out": -0.097,
+  "{s}-eye-scale-incr": -0.235,
+  "neck-scale-horiz-incr": -0.33
+ },
+ "asian": {
+  "mouth-scale-horiz-incr": 0.742,
+  "mouth-trans-up": -0.178,
+  "chin-height-incr": 0.573,
+  "chin-bones-incr": -0.189,
+  "head-scale-vert-incr": 0.242,
+  "head-scale-horiz-incr": 0.192,
+  "nose-scale-horiz-incr": 0.276,
+  "nose-scale-vert-incr": 0.129,
+  "{s}-eye-trans-out": -0.186,
+  "{s}-eye-scale-incr": -0.142,
+  "neck-scale-horiz-incr": -0.201,
+  "head-fat-incr": 0.368
+ },
+ "caucasian": {
+  "mouth-scale-horiz-incr": 0.772,
+  "mouth-trans-up": 0.348,
+  "chin-height-incr": 0.411,
+  "chin-bones-incr": -0.586,
+  "head-scale-vert-incr": 0.242,
+  "head-scale-horiz-incr": 0.066,
+  "nose-scale-horiz-incr": 0.32,
+  "nose-scale-vert-incr": 0.169,
+  "{s}-eye-trans-out": -0.488,
+  "{s}-eye-scale-incr": -0.245,
+  "neck-scale-horiz-incr": -0.487,
+  "head-fat-incr": -0.162
+ }
+}

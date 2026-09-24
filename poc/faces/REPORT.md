@@ -16,6 +16,12 @@ cargo run --release --bin measure [-- --fit]       # proportion check / refit ca
 downloads/venv/bin/python photo_finish/finish.py --manifest out/tmp/pairs.csv --strength 0.2 --steps 30 --adapter-scale 0.9 --log out/poc4_timings.jsonl
 downloads/venv/bin/python photo_finish/export_onnx.py prompt_sets   # v2 prompt embeddings
 cargo run --release --bin finish_sheet
+# PoC 5 (Anny; see LICENSES.md): git clone https://github.com/naver/anny downloads/anny-src && downloads/venv/bin/pip install -e downloads/anny-src
+cargo run --release --bin anny_sheet -- landmarks
+ANNY_CACHE_DIR=downloads/anny-cache downloads/venv/bin/python anny/anny_fit.py out/tmp/anny
+cargo run --release --bin anny_sheet -- jobs --anny-calibrated --face-age
+ANNY_CACHE_DIR=downloads/anny-cache downloads/venv/bin/python anny/anny_heads.py out/tmp/anny
+cargo run --release --bin anny_sheet -- render
 downloads/venv/bin/python photo_finish/landmarks2d.py out/tmp/finish_inputs out/tmp/finished
 ```
 
@@ -165,6 +171,51 @@ Suggested next steps:
 - Mask the finish to the skin.
 - Test an identity metric that is not InsightFace, whose weights are non-commercial.
 
+### PoC 5: Anny as the head generator. **Works as a drop-in, with no clear visual gain; worth it as an engineering base.**
+
+Images:
+- [`out/poc5_makehuman_vs_anny.jpg`](out/poc5_makehuman_vs_anny.jpg): our MakeHuman-direct heads against Anny heads for the same genomes at ages 19, 30 and 60.
+- [`out/poc5_anny_age_sheet.jpg`](out/poc5_anny_age_sheet.jpg): the full Anny age sheet.
+- [`out/poc5_finish_compare.jpg`](out/poc5_finish_compare.jpg): the MakeHuman-direct v2 finish, the Anny render and the Anny finish, at ages 30 and 60.
+- [`out/poc5_anny_age_sheet_native.jpg`](out/poc5_anny_age_sheet_native.jpg) and [`out/poc5_makehuman_vs_anny_native.jpg`](out/poc5_makehuman_vs_anny_native.jpg): Anny with its own WHO age mapping and no facial calibration.
+- Measurements: [`out/poc5_measurements.txt`](out/poc5_measurements.txt) and [`out/poc5_measurements_native.txt`](out/poc5_measurements_native.txt).
+
+**What Anny is.** [Anny](https://github.com/naver/anny) (NAVER LABS, Apache-2.0) is a differentiable PyTorch model built on MakeHuman's CC0 data (via MPFB2). It has:
+- 6 overall controls (gender, age, muscle, weight, height, proportions) plus african, asian and caucasian weights;
+- 254 signed local targets, 137 of them on the face and neck;
+- UVs, a rig, and CC0 facial expressions.
+
+No registration is needed. Its optional "smplx" and "smpl" topologies download non-commercial data; they are never used here.
+
+**Integration.** The genome and the renderer are unchanged. Only the head generator changes.
+1. `anny_sheet jobs` writes each genome and age as Anny inputs: ancestry, muscle, weight, and the shape and age targets by MakeHuman name.
+2. `anny/anny_heads.py` evaluates Anny at 0.03 s per head on CPU. It converts metres with Z up to MakeHuman decimetres with Y up; that mapping fits exactly (rms 1.5e-7). It writes the vertices in base-mesh indexing, using Anny's `base_mesh_vertex_indices`.
+3. `anny_sheet render` cuts, masks, adds hair and renders exactly as PoC 2 does.
+
+`head-oval` and `head-square` have no Anny label and are skipped.
+
+Findings:
+1. **Same data, same look.** At the same weights, Anny heads are nearly identical to our MakeHuman heads at 19 and 30. The underlying targets are the same MakeHuman assets, in a newer (MPFB2) release.
+2. **Anny's age mapping is for bodies, not faces.** It is fitted to WHO height-for-age, so a 24-year-old gets Anny age 0.78, which is half "old". From 30 to 70 the value moves only from 0.786 to 0.852, so faces barely age. We keep our own face-age rule, converted to Anny's linear age scale (child 1/9, young 5/9, old 1).
+3. **Calibration does not transfer between versions.** Our MakeHuman calibration applied to Anny left lower faces about 10 mm short, because the MPFB2 targets and body controls differ from MakeHuman 1.1.
+4. **Differentiable calibration.** `anny/anny_fit.py` fits the facial calibration by gradient descent through Anny: Adam, 250 steps, about 13 s per ancestry. It uses the same landmark definitions, exported from Rust with `anny_sheet landmarks`, and the same norms.
+   - Unsourced measures get a weak pull (one-third weight) towards the North American value. Without it, the African-like jaw drifted to 115 mm.
+   - After the fit, calibrated Anny heads sit at the norms about as closely as the MakeHuman-direct heads, with slightly narrower jaws.
+5. **Ageing is a little weaker.** At 60, Anny heads show less jowl and neck fullness than the MakeHuman-direct ones, because Anny's weight and muscle controls act differently on the head. The age-aware finish still reads as about 60.
+6. **Finish timing:** 31.4 s per image on average (range 30.5–37.7 s), the same pipeline as PoC 4 v2. Details are in `out/poc5_finish_timings.jsonl`.
+
+**Should we use it?** For portrait quality, Anny adds nothing over using the MakeHuman targets directly. Its value is as an engineering base:
+- a maintained, permissively licensed package;
+- exact gradients for calibration and for fitting shape spaces to data;
+- batched evaluation;
+- UVs, a rig and expressions for later 3D use;
+- WHO-calibrated body sampling for the match engine's bodies.
+
+**Recommended pattern:**
+- Use Anny offline, to calibrate and fit.
+- Bake the resulting blendshapes into our own runtime format, so the game never needs PyTorch.
+- Keep our face-age rule, and keep the facial calibration tied to the exact asset version.
+
 ## What failed or was blocked, and why
 
 - **FLAME 2023 Open was not used.** It needs registration, which the rules forbid. `poc/faces/assets/flame/` was not present, so everything uses the MakeHuman CC0 mesh. `head.rs` would need a FLAME loader if you add the files.
@@ -185,6 +236,7 @@ The full record is in [`LICENSES.md`](LICENSES.md).
 | Rust crates (82 resolved) | MIT / Apache-2.0 / BSD / Zlib, except `libloading` (ISC) and `unicode-ident` (adds Unicode-3.0) | `cargo metadata`; table in `LICENSES.md` |
 | Mesa lavapipe (system, not redistributed) | MIT | Ubuntu package `mesa-vulkan-drivers` 25.2.8 |
 | Python packages for PoC 4 (venv, not committed) | Mostly MIT/Apache/BSD; exceptions listed below | Package metadata; see `photo_finish/NOTES.md` |
+| Anny (code and bundled MPFB2 data) | Apache-2.0 code; CC0 MakeHuman/MPFB2 data | Repository `LICENSE` and README licence section, https://github.com/naver/anny (commit `ee5b909`) |
 | Facial norms | Published numbers, cited | Wamalwa et al. 2019, https://pmc.ncbi.nlm.nih.gov/articles/PMC6384287/ |
 
 The `jpeg-encoder` crate (which adds an IJG term) was replaced with a small in-crate baseline encoder (`src/jpeg.rs`) to stay inside the allowed set.
@@ -207,4 +259,5 @@ The `jpeg-encoder` crate (which adds an IJG term) was replaced with a small in-c
 6. **FLAME.** Do you want to register for FLAME 2023 Open and place the files in `assets/flame/`, so the shape space can be compared with MakeHuman's?
 7. **Face variety.** Proportions are now calibrated, but faces vary less than real ones do. Should the next step add more shape genes (eye spacing, lip shape, brow ridge, cheek fat)? Or should it fit a proper shape space to measured data, which would need a licensed dataset?
 8. **East Asian norms.** I found no sourced norms, so for that ancestry only face height and mouth width are constrained. Do you have a preferred source?
-9. **The invented gene pools** need real, reviewed numbers before any use beyond this proof of concept. Who should own that review?
+9. **Anny as the base.** Anny does not improve portraits over the MakeHuman targets used directly, but it is a better engineering base: differentiable, maintained, with UVs, rig and expressions. Should the next step bake Anny's blendshapes into a Rust runtime format, and use Anny only offline for calibration?
+10. **The invented gene pools** need real, reviewed numbers before any use beyond this proof of concept. Who should own that review?

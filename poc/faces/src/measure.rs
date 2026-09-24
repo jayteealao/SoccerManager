@@ -131,6 +131,27 @@ impl Landmarks {
         v
     }
 
+    /// Each measure as (axis, vertex a, vertex b): the value is
+    /// |coord(a) - coord(b)| * 100 on that axis (0 = x, 1 = y), in `NORMS`
+    /// order. Lets other tools (PoC 5, Anny) measure exactly the same way.
+    pub fn definitions(&self) -> Vec<(u8, u32, u32)> {
+        vec![
+            (0, self.zy[0], self.zy[1]),
+            (1, self.n, self.gn),
+            (1, self.tr, self.n),
+            (1, self.n, self.sn),
+            (1, self.sn, self.gn),
+            (1, self.sn, self.sto),
+            (1, self.sto, self.gn),
+            (0, self.en[0], self.en[1]),
+            (0, self.ex[0], self.ex[1]),
+            (0, self.ex[0], self.en[0]),
+            (0, self.al[0], self.al[1]),
+            (0, self.ch[0], self.ch[1]),
+            (0, self.go[0], self.go[1]),
+        ]
+    }
+
     /// Measurements in mm, in `NORMS` order. Heights are vertical (y) only,
     /// widths are x only, as calipers on a frontal face would read.
     pub fn measure(&self, head: &HeadMesh) -> [f32; 13] {

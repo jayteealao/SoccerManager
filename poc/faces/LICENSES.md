@@ -152,6 +152,23 @@ The full list with versions is in `photo_finish/NOTES.md`. Each licence was read
 | pypdf (pip), used only to read that model card | BSD-3-Clause | Package metadata |
 | libegl1 and libgles2 (apt; MediaPipe needs EGL) | MIT (Mesa / libglvnd) | System packages, not redistributed |
 
+## PoC 5: Anny (cloned into `downloads/anny-src`, never committed)
+
+| Item | Licence | Confirmed from |
+|---|---|---|
+| Anny code, https://github.com/naver/anny at commit `ee5b909f320c67e40059cb7503af87e9d01856d6` | Apache-2.0 | Repository `LICENSE` ("Anny, Copyright (C) 2025 NAVER Corporation … Apache License, Version 2.0") |
+| Anny `data/mpfb2`: MakeHuman assets adapted from MPFB2 (base mesh, targets, UVs, rig) | CC0 1.0 | README "License" section and `src/anny/data/mpfb2/LICENSE.md` (CC0 text) |
+| Anny `data/faceunits01`: Face Units asset pack by Mika Suominen (expressions, not used here) | CC0 1.0 | README "License" section |
+| Anny `data/soma` (not used) | Apache-2.0, adapted from NVlabs SOMA-X | README |
+| Anny `data/shape_calibration` (WHO-based height/weight/age distributions; used only for the age-mapping comparison) | Apache-2.0 as part of the repository | Repository `LICENSE` |
+| **Not used:** the Anny "smplx"/"smpl" topologies | **Non-commercial**, downloaded on demand from download.europe.naverlabs.com/humans/Anny/noncommercial.zip | README. Only the default `anny` topology is used; the download code path (`paths.py`) runs only for smplx/smpl, and it never ran here. |
+| roma 1.6.1 | BSD-3-Clause | Package metadata |
+| trimesh 5.1.0 | MIT | Package metadata |
+| warp-lang 1.17.0 (NVIDIA Warp) | Apache-2.0 | Package metadata |
+| PyYAML 6.0.3 | MIT | Package metadata |
+
+Note: Anny's `pyproject.toml` lists a `LICENSE_THINGS` licence file, but that file is not in the repository at this commit.
+
 ## Reference data (numbers only, no images)
 
 | Data | Source | Use |

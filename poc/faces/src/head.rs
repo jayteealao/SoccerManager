@@ -115,6 +115,29 @@ impl BaseHead {
                 pos[*i as usize] += *d * w;
             }
         }
+        self.cut(pos)
+    }
+
+    /// Cuts the head out of full base-mesh positions produced elsewhere (for
+    /// example by Anny). Vertices the source did not provide are NaN and are
+    /// reported, then filled from the base mesh.
+    pub fn build_from_positions(&self, mut pos: Vec<Vec3>) -> HeadMesh {
+        let mut missing = 0;
+        for (tri, _) in &self.tris {
+            for &g in tri {
+                if pos[g as usize].is_nan() {
+                    missing += 1;
+                    pos[g as usize] = self.base[g as usize];
+                }
+            }
+        }
+        if missing > 0 {
+            eprintln!("warning: {missing} head vertices missing from source; used base mesh");
+        }
+        self.cut(pos)
+    }
+
+    fn cut(&self, pos: Vec<Vec3>) -> HeadMesh {
         let mut remap = HashMap::new();
         let mut positions = Vec::new();
         let mut parts = Vec::new();
