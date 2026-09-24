@@ -5,12 +5,12 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-24T10:21:31Z"
-slices-implemented: 20
+updated-at: "2026-09-24T12:41:48Z"
+slices-implemented: 21
 slices-total: 22
-metric-total-files-changed: 722
-metric-total-lines-added: 62666
-metric-total-lines-removed: 2820
+metric-total-files-changed: 740
+metric-total-lines-added: 63123
+metric-total-lines-removed: 2846
 tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment, scripting, sandbox, plugin-interface, distribution, installer, packaging, release-version, error-record, help-text, realism-bands, formations]
 refs:
   index: 00-index.md
@@ -36,6 +36,7 @@ refs:
     - 05-implement-realism-bands-v2.md
     - 05-implement-defending-and-discipline.md
     - 05-implement-tuning-loop.md
+    - 05-implement-lone-forward.md
 next-command: wf-verify
 next-invocation: "/wf verify football-manager-match-engine tuning-loop"
 ---
@@ -182,7 +183,11 @@ next-invocation: "/wf verify football-manager-match-engine tuning-loop"
   - A targeted run is an inner loop. The full gate (five seeds for equal and strength, one for formations) is unchanged, and `--suite all` does not include red-card.
   - No faster build profile: fat LTO and a native CPU target were identical in figures and inside run-to-run timing noise.
 
+- `lone-forward` (awaiting input, commit `c3cc96f`): five bounded tuning values at neutral values (`tackle_win_base`, `lone_line_hold`, `decision.lone_layoff`, `decision.lone_hold`, `decision.lone_dribble`), `fouls::win_chance()`, `offside::second_last_depth()`, `Team::lone_forward()` and the lone-carrier terms. Play is unchanged at the shipped values (red-card diff 0 on 6 rows). The red-card criterion fails at every realistic in-bounds setting because the away club in the experiment is about 2.8 times stronger (Q-LF1). `keeper-and-shots` still waits for this slice (Q-X4).
+
 ## Recommended Next Stage
+
+- `lone-forward`: blocked on Q-LF1 (`po-answers.md`); re-run `/wf implement football-manager-match-engine lone-forward` after the answer
 
 - `/wf verify football-manager-match-engine tuning-loop` (new: the seven criteria on the release binary; the evidence and scripts are in `implement-evidence/tuning-loop/`)
 
