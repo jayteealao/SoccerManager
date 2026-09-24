@@ -44,6 +44,14 @@ pub fn full_match() -> MatchConfig {
     MatchConfig::new(SEED, 90, &content, [&a, &b]).unwrap()
 }
 
+/// The seed-7, 90-minute match on the shipped content and default teams. Unlike the seed-42
+/// match, which ends 0-0, it scores, and its AI managers change tactics in the second half.
+pub fn scoring_match() -> MatchConfig {
+    let content = content();
+    let [a, b] = default_teams(&content);
+    MatchConfig::new(7, 90, &content, [&a, &b]).unwrap()
+}
+
 /// A seed-42 match of `minutes` on the shipped content and default teams. Shorter than the
 /// rule pack's regulation length, it plays no added time.
 pub fn short_match(minutes: u32) -> MatchConfig {

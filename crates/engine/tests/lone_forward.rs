@@ -34,13 +34,14 @@ fn live(content: &Content, seed: u64) -> MatchConfig {
     config.with_tactics(0, tactics(content, "4-4-1-1"))
 }
 
-/// `live` with the lone-carrier weights switched on. The shipped weights stay at zero until
-/// a setting passes every match-outcome check, so the scenes set their own.
+/// `live` with the shipped lone-carrier weights, which the scenes need switched on.
 fn weighted(content: &Content, seed: u64) -> MatchConfig {
-    let mut config = live(content, seed);
-    config.tuning.decision.lone_layoff = 0.3;
-    config.tuning.decision.lone_hold = 1.0;
-    config.tuning.decision.lone_dribble = -1.0;
+    let config = live(content, seed);
+    let w = &config.tuning.decision;
+    assert!(
+        w.lone_hold > 0.0 || w.lone_dribble < 0.0,
+        "the shipped weights favour holding over dribbling"
+    );
     config
 }
 

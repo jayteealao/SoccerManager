@@ -93,7 +93,7 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 | red_base | probability per foul | 0.005 | 0 to 1 |
 | foul_cooldown_ticks | ticks | 150 | 0 to 1000 |
 | foul_booked_factor | ratio | 0.15 | 0 to 1 |
-| tackle_win_base | probability per tackle | 0.05 | 0 to 0.5 |
+| tackle_win_base | probability per tackle | 0.5 | 0 to 0.5 |
 | lone_line_hold | ratio | 0.0 | 0 to 1 |
 | restart_delay_s.kick_off | s | 5 | 0 to 60 |
 | restart_delay_s.throw_in | s | 3 | 0 to 60 |
@@ -144,10 +144,10 @@ The ball carrier scores every option and takes the highest: a pass to each team-
 | hold_per_s | 0.5 | the cost of each second already held (0 to 5) |
 | noise | 0.1 | noise on every option, each side, for decisions and composure 50; it shrinks as they rise (0 to 2) |
 | lone_layoff | 0.0 | for a lone carrier, the bonus on a pass to a team-mate at or behind him |
-| lone_hold | 0.0 | for a lone carrier who is pressed, the bonus on holding the ball |
-| lone_dribble | 0.0 | for a lone carrier who is pressed, the bonus on a dribble (a negative value is a cost) |
+| lone_hold | 0.5 | for a lone carrier who is pressed, the bonus on holding the ball |
+| lone_dribble | -0.5 | for a lone carrier who is pressed, the bonus on a dribble (a negative value is a cost) |
 
-A carrier is lone when no active outfield team-mate stands nearer the opponents' goal than he does; a goalkeeper is never lone. A team's lone forward is its one active player, other than the one keeping goal, in the formation's front line: the outfield slots less than 4 m behind the most advanced one. While his team has the ball and someone else carries it, he moves from his formation place toward the onside line, 0.5 m short of the second-last opponent, by the share `lone_line_hold`, and never past that line. At the default values of these five fields, play is as it was before they existed; a tuning file without them loads with those values.
+A carrier is lone when no active outfield team-mate stands nearer the opponents' goal than he does; a goalkeeper is never lone. A team's lone forward is its one active player, other than the one keeping goal, in the formation's front line: the outfield slots less than 4 m behind the most advanced one. While his team has the ball and someone else carries it, he moves from his formation place toward the onside line, 0.5 m short of the second-last opponent, by the share `lone_line_hold`, and never past that line. With these weights a pressed lone forward holds the ball or lays it off rather than dribbling into the defender, so a side with one forward does not outscore 4-4-2. A tuning file without these five fields loads with the values that reproduce play before they existed: `tackle_win_base` 0.05 and 0 for the other four.
 
 ### generator
 

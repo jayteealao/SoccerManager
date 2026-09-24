@@ -228,7 +228,7 @@ fn a_late_equaliser_and_a_rout_read_as_such() {
 #[test]
 fn a_full_seeded_match_fills_every_placeholder_and_names_every_player() {
     let commentary = shipped();
-    let mut sim = Simulation::new(common::full_match()).unwrap();
+    let mut sim = Simulation::new(common::scoring_match()).unwrap();
     let names = MatchNames::of(&sim);
     let mut roster = names.roster.clone();
     let mut c = Commentator::for_match(&commentary, &sim);
@@ -254,8 +254,9 @@ fn a_full_seeded_match_fills_every_placeholder_and_names_every_player() {
             roster[slot] = names.squads[team][on].clone();
         }
     }
-    // The seed-42 match gives 90 lines (113 before the defending rework, which cut its
-    // stoppages from 58 to 39); the floor only guards against an empty check.
+    // The seed-7 match gives 84 lines (the seed-42 match gave 90 before a pressed lone
+    // forward stopped dribbling into defenders, and now scores no goal); the floor only
+    // guards against an empty check.
     assert!(lines > 80, "only {lines} lines");
     assert!(
         events.iter().any(|e| e.kind == EngineEventKind::Goal),

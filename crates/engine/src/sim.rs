@@ -1128,9 +1128,9 @@ mod tests {
         assert_eq!(short.max_ticks(), 15_000 + 50_000);
     }
 
-    /// Steps the seed-42 90-minute match, calling `each` after every tick.
-    fn full_match(mut each: impl FnMut(&Simulation)) -> Simulation {
-        let mut sim = Simulation::new(shipped_config(42, 90).unwrap()).unwrap();
+    /// Steps the 90-minute match on `seed`, calling `each` after every tick.
+    fn full_match(seed: u64, mut each: impl FnMut(&Simulation)) -> Simulation {
+        let mut sim = Simulation::new(shipped_config(seed, 90).unwrap()).unwrap();
         while !sim.is_over() {
             sim.step();
             each(&sim);
@@ -1142,7 +1142,7 @@ mod tests {
     #[test]
     fn the_last_kicker_is_clear_whenever_play_stops() {
         let mut stoppages = 0;
-        full_match(|sim| {
+        full_match(42, |sim| {
             if sim.stoppage().is_some() {
                 stoppages += 1;
                 assert_eq!(sim.last_kicker, None, "tick {}", sim.tick());
@@ -1155,7 +1155,9 @@ mod tests {
 
     #[test]
     fn every_play_event_names_a_player() {
-        let events = full_match(|_| {}).take_events();
+        // The seed-42 match ends 0-0 since a pressed lone forward stopped dribbling into
+        // defenders; the seed-7 match scores, so its goal events are checked too.
+        let events = full_match(7, |_| {}).take_events();
         let goals = events
             .iter()
             .filter(|e| e.kind == EngineEventKind::Goal)

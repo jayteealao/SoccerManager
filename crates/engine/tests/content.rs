@@ -177,11 +177,11 @@ fn a_tuning_block_without_the_defending_values_loads_with_the_defaults() {
 #[test]
 fn the_shipped_lone_forward_and_tackle_values_are_pinned() {
     let t = common::content().tuning.engine;
-    assert_eq!(t.tackle_win_base, 0.05);
+    assert_eq!(t.tackle_win_base, 0.5);
     assert_eq!(t.lone_line_hold, 0.0);
     assert_eq!(t.decision.lone_layoff, 0.0);
-    assert_eq!(t.decision.lone_hold, 0.0);
-    assert_eq!(t.decision.lone_dribble, 0.0);
+    assert_eq!(t.decision.lone_hold, 0.5);
+    assert_eq!(t.decision.lone_dribble, -0.5);
 }
 
 /// A tuning block written before the lone-forward and tackle values existed still loads,

@@ -49,7 +49,7 @@
     "red_base": 0.005,
     "foul_cooldown_ticks": 150,
     "foul_booked_factor": 0.15,
-    "tackle_win_base": 0.05,
+    "tackle_win_base": 0.5,
     "lone_line_hold": 0.0,
     "restart_delay_s": {
       "kick_off": 5.0,
@@ -82,8 +82,8 @@
       "hold_per_s": 0.5,
       "noise": 0.1,
       "lone_layoff": 0.0,
-      "lone_hold": 0.0,
-      "lone_dribble": 0.0
+      "lone_hold": 0.5,
+      "lone_dribble": -0.5
     },
     "injury_per_tackle": 0.004,
     "injury_per_minute": 0.0002,

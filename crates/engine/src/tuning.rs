@@ -352,7 +352,7 @@ impl Default for Tuning {
             red_base: 0.005,
             foul_cooldown_ticks: default_foul_cooldown_ticks(),
             foul_booked_factor: default_foul_booked_factor(),
-            tackle_win_base: default_tackle_win_base(),
+            tackle_win_base: TACKLE_WIN_BASE,
             lone_line_hold: default_lone_line_hold(),
             restart_delay_s: RestartDelays {
                 kick_off: 5.0,
@@ -385,8 +385,8 @@ impl Default for Tuning {
                 hold_per_s: 0.5,
                 noise: 0.1,
                 lone_layoff: 0.0,
-                lone_hold: 0.0,
-                lone_dribble: 0.0,
+                lone_hold: 0.5,
+                lone_dribble: -0.5,
             },
             injury_per_tackle: INJURY_PER_TACKLE,
             injury_per_minute: INJURY_PER_MINUTE,
@@ -416,8 +416,12 @@ fn default_foul_cooldown_ticks() -> u32 {
 fn default_foul_booked_factor() -> f64 {
     0.15
 }
+/// The shipped chance that an even tackle wins the ball cleanly, set so that a formation
+/// with one forward holds against 4-4-2.
+const TACKLE_WIN_BASE: f64 = 0.5;
+
 // The lone-forward and tackle values. An older tuning file without them loads with the
-// values that reproduce the behaviour before they existed.
+// values that reproduce the behaviour before they existed, not with the shipped ones.
 fn default_tackle_win_base() -> f64 {
     0.05
 }
