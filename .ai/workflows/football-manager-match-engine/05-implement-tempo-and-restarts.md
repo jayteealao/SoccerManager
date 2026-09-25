@@ -6,7 +6,7 @@ slice-slug: tempo-and-restarts
 status: awaiting-input
 stage-number: 5
 created-at: "2026-09-25T04:27:37Z"
-updated-at: "2026-09-25T08:45:00Z"
+updated-at: "2026-09-25T09:15:00Z"
 metric-files-changed: 18
 metric-lines-added: 1065
 metric-lines-removed: 27
@@ -16,23 +16,27 @@ commit-sha: "4022e47a4c50e88e4564825d571238d7c80e511a"
 commits:
   - "831553b5b49baa7105b9ffdbd33e693661910809"
   - "4022e47a4c50e88e4564825d571238d7c80e511a"
-revision-count: 1
+revision-count: 2
 revisions:
   - rev: 1
     at: "2026-09-25T08:45:00Z"
     trigger: answers-returned
     because: "Q-TR1 answered: add defending levers that contest a ball carrier in this slice"
     changed: "three contest levers built and committed switched off; 181 tuning runs; stopped again on the ball-in-play limit (Q-TR2)"
+  - rev: 2
+    at: "2026-09-25T09:15:00Z"
+    trigger: answers-returned
+    because: "Q-TR2 answered: ship b0, judge ball in play at 52-68 minutes, and stop if b0 fails every_formation_holds, discipline or an earlier criterion"
+    changed: "b0 applied and measured on the server; discipline and the stronger-team criterion fail; b0 not shipped (kept as a patch); stopped on Q-TR3"
 has-blockers: true
 open-questions:
-  - "Q-TR2 The ball stays in play too long once shots are realistic — AWAITING INPUT (po-answers.md)"
+  - "Q-TR3 Setting b0 fails the discipline criterion and the stronger-team criterion — AWAITING INPUT (po-answers.md)"
 steering-honored:
-  - "Q-TR1 (steer.md, 2026-09-25): the added levers only contest a ball carrier (tackle reach, how close pressers come, the chance to win the ball from a running carrier); the clear weight was tuned for throw-ins; no limit, band, card chance per foul, save value, restart median, added time or tick rate changed; the run stopped and reported when the levers could not meet a criterion with 10–16 shots per team."
-  - "Heavy runs go to the server (2026-09-25): every calibrate sweep, the release slow tests, fmt, clippy and the workspace suite ran on the server through the sync script; the benchmark and the two Windows-only tests ran on this PC with -j 6."
-  - "Q-KS2: corners from clearances stay one mechanism (a defender's clearance of a fast pass in his own area); no parry was turned toward the goal line."
-  - "Q-E4: band misses are recorded, not failed; no band or limit was changed."
-  - "Q-I1: targeted calibrate runs were the inner loop only; the slice gate was not run because no setting was accepted."
-  - "Output boundary: code comments, test names, docs and the commit message use product language; the added lines were leak-checked before the commit."
+  - "Q-TR2 (steer.md, 2026-09-25): b0 was applied exactly (19 keys of b0.json, foul chance per tackle attempt 0.04, card chance per foul unchanged); the ball-in-play check was judged at 52-68; the realism-bands.json band was not touched; because b0 failed the discipline criterion and an earlier slice's criterion, the run stopped and reported instead of shipping."
+  - "Q-TR1: the red-card suite (balanced fixtures) was measured on b0 and recorded; no limit was raised."
+  - "Heavy runs go to the server (2026-09-25): the workspace suite and every release slow test ran on the server through the sync script; nothing heavy ran on this PC."
+  - "Q-I1: the slice gate (five seeds, formations suite) was not run, because the shipped setting failed its criteria first."
+  - "Output boundary: no commit carries code this revision; the record commit message uses product language."
   - "Design direction: not applicable; no page changed."
 tags: [engine, passing, restarts, realism, defending]
 refs:
@@ -42,7 +46,7 @@ refs:
   plan: 04-plan-tempo-and-restarts.md
   benchmark: 05c-benchmark.md
   evidence: implement-evidence/tempo-and-restarts/
-  history: history/05-implement-tempo-and-restarts-0.md
+  history: history/05-implement-tempo-and-restarts-1.md
   siblings: [05-implement-keeper-and-shots.md, 05-implement-lone-forward.md, 05-implement-tuning-loop.md, 05-implement-realism-bands-v2.md, 05-implement-defending-and-discipline.md]
   verify: 06-verify-tempo-and-restarts.md
 next-command: wf-implement
@@ -53,139 +57,111 @@ next-invocation: "/wf implement football-manager-match-engine tempo-and-restarts
 
 ## The Implementation
 
-The first pass stopped on Q-TR1: fewer passes gave 27–61 shots per team, because a carrier outran every defender. The product owner allowed defending levers that contest a carrier. Three are now in the engine at commit `4022e47`: `tackle_reach` (how far from the ball a tackle is attempted), `press_engage` (from how far a presser runs at the ball instead of the carrier's path) and `tackle_dribble_win` (an extra win chance against a carrier running with the ball). They ship at values that reproduce play. A 200-match calibration on seed 42 gives the same figures before and after. The counting, the carry window and the clearance levers from `831553b` are unchanged.
+Q-TR2 said to ship setting `b0`, judge ball in play at 52–68 minutes, and stop if `b0` failed `every_formation_holds`, the discipline criterion or an earlier slice's criterion. This run applied `b0` to `content/tuning.json` and `Tuning::default()`, updated the pinned values, the documentation and the ball-in-play limit, and ran every slow criterion on the server over 200 matches. The slice's own criteria pass at `b0`: 493.6 passes per team at 85.28%, 52.95 throw-ins, and 66.22 minutes of ball in play. `every_formation_holds` and the set-piece floor also pass.
 
-The levers work on shots. 181 settings on seed 42 (200 matches each) gave 28 settings with 10–16 shots per team at 373–545 passes. But the fix moved the wall to the ball-in-play limit. With realistic shots, no setting keeps throw-ins at 55 or fewer and the ball in play at 65 minutes or less; the best is 65.5 minutes on seed 42. The best setting that also keeps sending-offs in limit (`b0`) gives 66.22 minutes on the test seeds 1–200. The measured cause is too few stoppages: `b0` gives 1.98 corners per team, under the 3.5–6.5 band, and throw-ins are already at their 55 cap. The restart delays already sit at the sourced medians. The product owner said to stop in this case, so the choice is Q-TR2 in `po-answers.md`.
+Two earlier criteria fail. `discipline_is_realistic` gives 0.160 second yellows per match (limit 0.10) and a sending-off in 30.0% of matches (limit 25%). `a_stronger_team_wins_more_than_half_its_matches` gives 94 wins of 200 (it needs more than 100), with 81 draws. The product owner said to stop in this case. So `b0` is not shipped: the change is saved as `implement-evidence/tempo-and-restarts/b0-ship/b0-ship.patch` (it applies cleanly to `7fd8f12`), and the tree is back at the committed play. No code commit was made. The choice is Q-TR3 in `po-answers.md`.
 
-When Q-TR2 is answered, a rerun ships a setting from these sweeps and runs the earlier criteria and the gate. The top risk is discipline. Fouls rise from 6.4 per team on shipped play to 12–17 at the settings with realistic shots, so the sending-off share sits near its 0.25 limit.
+When Q-TR3 is answered, a rerun applies the patch or a new setting and runs the gate. The top risk is scoring. At `b0` the red-card control sides scored 0.63 and 0.69 goals per match, which leaves the stronger team many draws. Nine fast tests also move at `b0` and must be re-derived when a setting ships (see Known Risks).
 
 ## Summary of Changes
 
-- This revision (`4022e47`):
-  - `tackle_reach`: an opponent attempts a tackle when within this distance of the ball. It was the control reach (`reach_radius`, 1 m).
-  - `press_engage`: a presser runs at the ball inside this distance, and at the point where he meets the carrier's run outside it. It was the constant `PRESS_ENGAGE_M` (3 m).
-  - `tackle_dribble_win`: the win chance of a tackle on a carrier running faster than 2 m/s gains this value, scaled by the same tackling-to-dribbling ratio. A standing carrier is not affected. No draw is added.
-  - Scene tests: a tackle from 1.6 m wins only under a 2 m reach, and a roll between the standing and the running win chance wins only against a running carrier. Two content tests pin the shipped values and load an older tuning file with the values that reproduce play.
-- Kept from the first pass (`831553b`): `Kick::Clear`, the restart-taker mark, the three counters, `stats.ball_in_play_s`, the carry window, the clearance levers, snapshot version 6, `Scene::clear` and the slow criterion tests.
+- This revision (no code commit):
+  - `b0` applied and measured, then reverted. The patch holds the five changed files: `content/tuning.json` (18 values), `crates/engine/src/tuning.rs` (the `Default` values and `FOUL_BASE` 0.04), `crates/engine/tests/content.rs` (the pins), `crates/engine/tests/tempo_and_restarts.rs` (the 52–68 limit) and `docs/reference/data-files.md` (the table values and the default of the `clearances` block).
+  - Q-TR3 recorded in `po-answers.md`.
+- Kept from earlier revisions: the counting and tempo levers (`831553b`) and the contest levers (`4022e47`), shipped at values that reproduce play.
 
 ## Files Changed
 
-This revision:
-- `crates/engine/src/tuning.rs`: the three fields, their bounds and the defaults that reproduce play.
-- `crates/engine/src/sim.rs`: the tackle reach, and the running-carrier chance in the tackle contest (`RUNNING_SPEED` 2 m/s).
-- `crates/engine/src/rules/fouls.rs`: `dribble_win_chance()` and its unit test.
-- `crates/engine/src/decision.rs`: the presser reads `press_engage`; the constant is removed.
-- `content/tuning.json`: the three values at 1.0, 3.0 and 0.0.
-- `crates/engine/tests/tempo_and_restarts.rs`: two scenes and their helpers.
-- `crates/engine/tests/content.rs`: the pin and the older-file test.
-- `docs/reference/data-files.md`: three rows and a paragraph.
+This revision changed no committed code. The slice total, `bce0144..4022e47` outside the workflow folder, stays 18 files, +1,065 and −27 (`history/05-implement-tempo-and-restarts-1.md`).
 
-The first pass changed 18 files, listed in `history/05-implement-tempo-and-restarts-0.md`. The slice total, `bce0144..4022e47` outside the workflow folder, is 18 files, +1,065 and −27.
+In the saved patch (not committed):
+- `content/tuning.json`: the 19 `b0` keys; 18 differ from shipped (`press_engage` stays 3.0).
+- `crates/engine/src/tuning.rs`: the `Default` mirrors the content; the serde defaults for an older file still reproduce play.
+- `crates/engine/tests/content.rs`: pins for the contest values, the foul chance, the decision weights, the clearances and the delays.
+- `crates/engine/tests/tempo_and_restarts.rs`: the ball-in-play check at 52–68, with a comment that the real band is 52–65.
+- `docs/reference/data-files.md`: the new defaults, and that a tuning file without the `clearances` block loads with 0.6 and 0.
 
 ## Shared Files (also touched by sibling slices)
 
-- `crates/engine/src/sim.rs` (tackle contest) and `crates/engine/src/rules/fouls.rs`: `defending-and-discipline` and `lone-forward` own the win chance and `tackle_win_base`. The new chance is added after theirs and leaves them unchanged.
-- `crates/engine/src/decision.rs` (pressers): `defending-and-discipline` added the intercept point and the cover. Only the engage distance moved to tuning.
-- `content/tuning.json` and `crates/engine/src/tuning.rs`: shared by every tuning slice. The new fields have serde defaults, so `TUNING_VERSION` stays 2.
+- None changed this revision. The patch touches `content/tuning.json` and `crates/engine/src/tuning.rs`, which every tuning slice shares.
 
 ## Notes on Design Choices
 
-- The running-carrier chance is added to the win chance and uses the tackle's one draw. A standing carrier keeps today's odds, so shielding the ball and holding it under pressure stay possible.
-- The tackle reach is a separate value from the control reach, so a loose ball is still taken from 1 m.
-- The levers ship at their old values so that other sessions that sync the tree test the play that verify accepted, not an unaccepted setting.
-- The bound of `tackle_dribble_win` is 0 to 1. The sweeps used values up to 1.0 (`s17`–`s23`), because more clean wins per contact means fewer attempts that can be fouls.
+- The `b0` values were checked key by key against `contest/b0.json` after the edit: 19 of 19 match.
+- `Tuning::default()` mirrors the content, as the plan says and `the_shipped_tuning_equals_the_documented_default` requires. The serde defaults stay at the values that reproduce play, so an older file plays as before.
+- The run stopped on the first failed criteria and did not run the slice gate (about 5 hours on the server), because Q-TR2 makes a failed criterion a stop.
 
 ## Verification Seams Built
 
-- Only real passes count → the first pass's seams are unchanged (`Kick::Clear` at `crates/engine/src/decision.rs:24`, counting in `kick_ball()`, `Scene::clear`). `cargo test -p engine --all-features --test tempo_and_restarts` locally: 10 passed, 4 ignored.
-- The contest levers → `tackle_reach` at `crates/engine/src/sim.rs:1327`, the running chance at `crates/engine/src/sim.rs:1331-1334`, `dribble_win_chance` at `crates/engine/src/rules/fouls.rs:81`, `press_engage` at `crates/engine/src/decision.rs:78` and `:83`. The scenes `an_opponent_inside_the_tackle_reach_can_win_the_ball` and `a_running_carrier_is_easier_to_tackle_than_a_standing_one` observe them on the real engine.
-- Passes, ball in play, throw-ins → the slow tests `passes_are_realistic`, `the_ball_is_in_play_for_about_an_hour`, `throw_ins_stay_in_band` and `restart_census` over one shared 200-match run. A candidate setting is measured by patching the synced `content/tuning.json` on the server (`.scratch/remote/patch.py`).
+- None needed this revision: every seam the plan names was built in `831553b` and `4022e47` (listed in `history/05-implement-tempo-and-restarts-1.md`). The slow tests in `crates/engine/tests/tempo_and_restarts.rs` measured `b0` this run.
 
-## Tuning Loop (Q-TR1 rerun)
+## Criterion Results (setting `b0`, server, this run)
 
-Every run is `engine-cli calibrate --suite equal --seed 42 --matches 200` on the server. All 181 rows are in `implement-evidence/tempo-and-restarts/contest/s10.txt`–`s27.txt`, with the patch of each run beside it (`sNN.json`, keys relative to the X1 setting in `x1.json`). `so` is the share of matches with a sending-off.
+Command: `cargo test --release -q -p engine --all-features --test tempo_and_restarts --test defending --test discipline --test keeper_and_shots --test strength --test lone_forward --test ai_trailing --test mentality --no-fail-fast -- --include-ignored --nocapture --test-threads 3`. Output: `implement-evidence/tempo-and-restarts/b0-ship/criteria.txt`.
 
-| Setting | Passes | Acc % | Throw-ins | Ball in play | Shots | Fouls | so | Verdict |
-|---|---|---|---|---|---|---|---|---|
-| X1 (first pass) | 557 | 83.7 | 43.9 | 52.6 | 56.4 | 11.5 | 0.255 | shots ×4 |
-| X1 + reach 2.0 (`s10 r2.0`) | 442 | 81.5 | 52.1 | 49.5 | 29.0 | 35.4 | – | reach cuts shots; fouls ×3 |
-| X1 + reach 3.0 (`s10 r3.0`) | 290 | 82.7 | 47.0 | 42.0 | 12.1 | 64.5 | – | realistic shots only with 65 fouls |
-| reach 1.6, running 1.0, engage 0, fouls 0.05 (`s18 r1.6f0.05`) | 609 | 74.3 | 59.7 | 65.4 | 13.3 | 15.1 | 0.270 | passes fail |
-| surrogate pick, fouls 0.025 (`s22 n2f0.025`) | 486 | 84.7 | 60.8 | 67.3 | 11.0 | 12.3 | 0.180 | ball in play and throw-ins fail |
-| `b0` = `s23 n2f0.04r1.4` | 484 | 86.0 | 55.0 | 65.7 | 14.7 | 14.3 | 0.235 | ball in play fails |
-| `s23 n2f0.045a1.2` | 478 | 85.7 | 51.9 | 65.5 | 13.6 | 16.8 | 0.265 | closest; sending-offs over 0.25 |
-| `s26 db-0.5r1.35c-0.62` | 434 | 85.8 | 61.7 | 63.3 | 16.5 | 14.8 | 0.230 | throw-ins fail |
+| Criterion | Figure at `b0` | Limit | Result |
+|---|---|---|---|
+| Passes are realistic | 493.6 per team, 85.28% | 350–550, 75–88% | pass |
+| The ball is in play for about an hour (Q-TR2 limit) | 66.22 minutes per 90 | 52–68 | pass |
+| Throw-ins stay in band | 52.95 per match | 35–55 | pass |
+| Only real passes count | fast scenes: 13 of 14 pass (see below) | — | pass (counting scenes) |
+| `every_formation_holds` | passed | — | pass |
+| `discipline_is_realistic` | 0.160 second yellows per match; sending-off in 30.0% of matches; 0 same-tick pairs | ≤ 0.10; ≤ 25% | **fail** |
+| `a_stronger_team_wins_more_than_half_its_matches` | won 94, drew 81, lost 25 of 200 | > 100 wins | **fail** |
+| `set_pieces_arise_from_play` | 1.465 corners per team, 13.705 goal kicks | ≥ 1.2, ≥ 10 | pass |
+| `lone_forward` tests | 4 passed | — | pass |
+| `a_trailing_ai_team_changes_its_tactics` | 1 passed | — | pass |
+| `an_attacking_team_shoots_more_than_a_defensive_one` | 1 passed | — | pass |
+| Red-card suite (recorded, owned by `realism-tuning`) | full side 1.32 (keeper off), 1.13 (centre-back), 1.37 (striker); control 0.63 and 0.69 | ≤ 1.01 | fail (not this slice's criterion) |
 
-`b0` on the test seeds 1–200 (`implement-evidence/tempo-and-restarts/contest/b0-criteria.txt`, patch `b0.json`): passes 493.6 per team, accuracy 85.28%, throw-ins 52.95, ball in play 66.22 minutes.
-
-A least-squares fit over the rows gives ball in play ≈ 90.9 − 0.21 × throw-ins − 0.40 × goal kicks − 0.51 × fouls per team − 0.27 × corners per team. With throw-ins at their 55 cap and shots at 16 or fewer, the goal kicks and corners that shots produce are too few to take off the last minute.
-
-A diagnostic on 6 matches at X1 (not committed) showed the cause the levers target: 77% of shots came after a received pass and a carry of 5–20 m, with the nearest opponent 2–4 m away and none within the 1 m tackle reach.
-
-## Criterion Results
-
-At the shipped values (levers off) play is identical to `831553b`: `tr2-shipped` and `tr-count` give the same equal-suite figures on seed 42 (`checks2/shipped-play-compare.txt`). So the counting criterion passes and the other three still fail as at the first pass.
-
-| Criterion | Evidence this run | Result |
-|---|---|---|
-| Only real passes count | `cargo test -p engine --all-features --test tempo_and_restarts` locally: 10 passed, 4 ignored | pass |
-| Passes are realistic (350–550, 75–88%) | `b0` on seeds 1–200: 493.6 per team, 85.28% | passes at `b0` |
-| The ball is in play for about an hour (52–65) | `b0` on seeds 1–200: 66.22 minutes per 90 | fails (Q-TR2) |
-| Throw-ins stay in band (35–55) | `b0` on seeds 1–200: 52.95 per match | passes at `b0` |
-| Shots realistic (Q-TR1 condition, 10–16) | `b0` on seed 42: 14.7 per team | passes at `b0` |
-| Earlier criteria | not run: no setting was accepted | not run |
-
-At `b0` on seeds 1–200 the census gives each restart's median dead time at its source (throw-in 13.8 s, goal kick 23.2 s, corner 31.8 s, free kick 32.5 s), 31.0 fouls per match, and corners from saves and parries (1.00 per team) and blocks (0.47 per team), none from a cleared pass. At `b0` the fast scene `the_kick_off_is_a_restart_kick_and_the_next_pass_is_a_pass` also failed. A rerun that ships a setting must fix that scene or its tuning.
-
-The red-card suite was not measured, because no setting was chosen (steer.md asks for it on the chosen setting).
+The restart census at `b0`: every restart kind's median dead time equals its source (throw-in 13.8 s, goal kick 23.2 s, corner 31.8 s, free kick 32.5 s); 31.01 fouls per match; 41.57 clearances and 42.59 restart kicks per team; corners from save or parry 1.000 and from blocks 0.465 per team, none from a clearance.
 
 ## Checks Run
 
-- Server, on the tree of `4022e47` (`implement-evidence/tempo-and-restarts/checks2/tr2-checks/`): `cargo fmt --all -- --check` exit 0; `cargo clippy --workspace --all-targets --all-features -- -D warnings` exit 0; `cargo test --workspace --all-features --no-fail-fast` 518 passed, 2 failed, 14 ignored. The two failures are `data::tests::relative_paths_never_leak_the_root` and `a_small_run_writes_a_record_per_match_and_a_report_that_validate`, the Windows-only tests steer.md names.
-- This PC: both Windows-only tests passed (`cargo test -p engine --lib relative_paths`: 1 passed; `cargo test -p engine-cli a_small_run_writes_a_record_per_match_and_a_report_that_validate`: 1 passed).
-- Benchmark on this PC (`engine-cli bench --seed 42 --matches 5 --json`, three drives, `implement-evidence/tempo-and-restarts/bench2/`): 1.5847, 1.5966 and 1.5854 µs per tick against the 1.7071 µs gate; peak memory 6.81–6.97 MB against 8.55 MB; 285,850 ticks per match.
-- Shipped play unchanged: `tr2-shipped` (content `4d3369e439b3`) and `tr-count` (content `c8b35962419f`) give identical suite figures, from passes 1,193.798 to yellow cards 0.845.
-- Page tests were not run. No page changed.
+- Server, workspace suite with `b0` applied (`cargo test --workspace --all-features --no-fail-fast`; the last 400 lines are in `b0-ship/workspace-tests-tail.txt`, so a full pass count is not verified): 6 targets failed — `engine --lib`, `engine --test full_match`, `engine --test tempo_and_restarts`, `engine-cli --test calibrate`, `engine-cli --test stream_cli`, `stream --test backpressure`. Details are in `b0-ship/workspace-tests-tail.txt` and `b0-ship/engine-failures.txt`.
+- Of those, two are the Windows-only tests that steer.md names (`data::tests::relative_paths_never_leak_the_root`, `a_small_run_writes_a_record_per_match_and_a_report_that_validate`). The others move at `b0`: see Known Risks.
+- Not run: `cargo fmt`, `cargo clippy`, the benchmark and the slice gate. No code is committed this revision, and the tree is at `7fd8f12`, where the previous revision recorded fmt and clippy at exit 0 and the benchmark at 1.5847–1.5966 µs per tick.
 
 ## Deviations from Plan
 
-1. The first pass's seven deviations stand (`history/05-implement-tempo-and-restarts-0.md`). (class: implementation-detail)
-2. Three defending values were added, which the plan did not list. Q-TR1 (product owner, 2026-09-25) allows bounded values that contest a carrier. Each is a tuning value with a bound and a default that reproduces play. (class: implementation-detail)
-3. `foul_base` (the foul chance of one tackle attempt, bound 0–1) was swept at 0.025–0.07 against its shipped 0.1. With realistic shots a side makes about twice today's tackles. At 0.1, the settings with 10–16 shots gave 22.6–66.7 fouls per team, and sending-offs in 0.46–0.68 of matches where the share was printed. The card chance per foul (RIM-7, Q-TR1) was not changed. No setting with a changed `foul_base` ships in this revision. (class: implementation-detail)
-4. The sweeps also moved `decision.lane`, `min_lane`, `dribble_base`, `hold`, `hold_per_s`, `first_touch` and the clearance aim spread inside their bounds, as the first pass did. (class: implementation-detail)
+1. The deviations of the earlier revisions stand (`history/05-implement-tempo-and-restarts-1.md`). (class: implementation-detail)
+2. `b0` was not shipped although Q-TR2 said to ship it, because Q-TR2 also said to stop if it failed the discipline criterion or an earlier criterion, and it failed both. (class: implementation-detail — this follows the product owner's stop condition; it settles nothing new)
 
 ## Anything Deferred
 
-- Shipping a tuned setting, moving the four restart delays to the sourced medians, running the earlier criteria and the gate, and measuring the red-card suite: all wait for Q-TR2.
-- The cross clearance produced no corner at any measured setting. The fast passes it needs are rare in this engine. `realism-tuning` owns the corners band.
+- Shipping a setting, re-deriving the moved fast tests, the fmt, clippy and benchmark checks on the shipped setting, and the slice gate: all wait for Q-TR3.
+- The cross clearance still produces no corner at `b0` (0 of 586 corners). `realism-tuning` owns the corners band.
 
 ## Known Risks / Caveats
 
-- The slow tests `passes_are_realistic`, `the_ball_is_in_play_for_about_an_hour` and `throw_ins_stay_in_band` fail at the shipped values. They are ignored tests and record the open criteria.
-- `RUNNING_SPEED` (2 m/s) is a literal in `sim.rs`, not a tuning value. It only matters when `tackle_dribble_win` is above 0.
-- With realistic shots the sending-off share sits at 0.18–0.32 on seed 42 against the 0.25 limit of `discipline_is_realistic`. A shipped setting must pass that test on its own seeds.
+- At `b0` these fast tests fail and must be re-derived or fixed when a setting ships:
+  - `decision::tests::an_open_teammate_draws_a_pass_or_a_shot` ("the carrier never passed or shot") and `rules::restart::tests::the_delay_comes_from_the_tuning` (690 ticks against a pinned 150) in `crates/engine` lib.
+  - `ninety_minutes_play_to_full_time_under_the_laws` ("team 1 committed 21 fouls").
+  - `the_kick_off_is_a_restart_kick_and_the_next_pass_is_a_pass`: the first counted kick was an away pass, not the home kick-off.
+  - `a_drop_before_the_first_stoppage_goes_back_to_kick_off` (490 against 1), `record_writes_a_fixture_and_prints_its_counts` and `a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on` in `engine-cli --test stream_cli`.
+  - `a_slow_client_pauses_the_producer_and_loses_no_tick` in `stream --test backpressure`. Not isolated: it may depend on the match, or it may be timing; not verified.
+- The slow tests `passes_are_realistic`, `the_ball_is_in_play_for_about_an_hour` and `throw_ins_stay_in_band` still fail at the committed values. They are ignored tests and record the open criteria.
+- `RUNNING_SPEED` (2 m/s) is a literal in `sim.rs`, as before.
 
 ## Assumptions
 
-- A-I1 (class: implementation-detail): the levers are committed at values that reproduce play, as in the first pass, so that other sessions testing the tree test accepted play.
-- A-I2 (class: implementation-detail): "the chance to win the ball from a dribbler" is an extra win chance against a carrier faster than 2 m/s. "How close pressers come" is the engage distance, plus a tackle reach that is separate from the control reach.
-- A-I3 (class: implementation-detail): the foul chance per tackle attempt is a contest value that Q-TR1 allows to tune. The card chance per foul, which Q-TR1 and RIM-7 fix, is a different value and was not changed.
-- A-I4 (class: implementation-detail): seed 42 runs of 200 matches rank settings (the inner loop); only the test-seed run of `b0` is a criterion reading.
+- A-I5 (class: implementation-detail): the working tree is restored to the committed play after the measurement, and the `b0` change is kept as a patch in the evidence folder. Other sessions that sync the tree then test accepted play, as in the earlier revisions.
+- A-I6 (class: implementation-detail): the red-card suite on balanced fixtures is read from the slow test `a_sending_off_gives_no_advantage`, which plays the same seeds, orders and arms as `calibrate --suite red-card --seed 1 --matches 240` (recorded in the `lone-forward` and `keeper-and-shots` plans).
+- A-I7 (class: implementation-detail): the `strength` and `discipline` slow tests are earlier slices' criteria that Q-TR2 names ("the earlier slices' criteria"), so a failure of either is a stop.
 
 ## Triage Decisions
 
-- Q-TR2 (class: intent-bearing; ac: "The ball is in play for about an hour"; classification: runtime-evidence): stopped. With shots at 10–16 per team, no in-bounds setting of the allowed levers keeps throw-ins at 55 or fewer and the ball in play at 65 minutes or less, while sending-offs stay in limit. Each way out moves a limit, a sourced median or another slice's ownership, so none is taken autonomously. Q-TR2 also asks whether the foul chance per tackle attempt may ship at 0.04 (shipped 0.1).
-- Passes are realistic (class: implementation-detail; ac: "Passes are realistic"; classification: runtime-evidence): met at `b0` on the test seeds (493.6, 85.28%). The setting is not shipped until Q-TR2 is answered.
-- Throw-ins (class: implementation-detail; ac: "Throw-ins stay in band"; classification: runtime-evidence): met at `b0` on the test seeds (52.95).
-- Only real passes count (class: implementation-detail; ac: "Only real passes count"; classification: build-capability): built and proven by the scenes.
-- Contest levers (class: implementation-detail): built as three bounded tuning values within Q-TR1. The code, the tests and the documentation ship.
+- Q-TR3 (class: intent-bearing; ac: "earlier criteria must not regress"; classification: runtime-evidence): stopped. `b0` fails `discipline_is_realistic` and `a_stronger_team_wins_more_than_half_its_matches`. Leaving `b0`, moving a criterion or shipping only the counting each changes what Q-TR2 decided, so none is taken autonomously.
+- The ball is in play for about an hour (class: implementation-detail; ac: "The ball is in play for about an hour"; classification: runtime-evidence): 66.22 at `b0`, inside the Q-TR2 limit of 68. Not shipped.
+- Passes are realistic (class: implementation-detail; ac: "Passes are realistic"; classification: runtime-evidence): 493.6 and 85.28% at `b0`. Not shipped.
+- Throw-ins stay in band (class: implementation-detail; ac: "Throw-ins stay in band"; classification: runtime-evidence): 52.95 at `b0`. Not shipped.
+- Only real passes count (class: implementation-detail; ac: "Only real passes count"; classification: build-capability): built in `831553b`; the counting scenes pass at `b0`.
 
 ## Freshness Research
 
-- No dependency was added or upgraded. `serde(default)` on a field inside a `deny_unknown_fields` struct follows `tackle_win_base` and `lone_line_hold` in `tuning.rs`.
-- The real stoppage counts used in Q-TR2 come from `docs/design/realism/01-engine-realism.md` (fouls 26.2 a match at `:702`, ball in play 55.4% at `:693`, restart medians at `:614`).
+- No dependency was added or upgraded, and no code was committed.
 
 ## Recommended Next Stage
 
-- **Option D: Blocked** → the product owner answers Q-TR2 in `po-answers.md`. Then rerun `/wf implement football-manager-match-engine tempo-and-restarts` to ship a setting under the answer and run the earlier criteria and the gate.
-- **Option C: Revisit Plan** → `/wf plan football-manager-match-engine tempo-and-restarts` if the answer moves the ball-in-play criterion or adds a stoppage lever, since that changes the plan's criteria or lever list.
+- **Option D: Blocked** → the product owner answers Q-TR3 in `po-answers.md`. Then rerun `/wf implement football-manager-match-engine tempo-and-restarts`: apply `b0-ship/b0-ship.patch` or a new setting, re-derive the moved fast tests, and run the criteria, the checks and the gate.
+- **Option C: Revisit Plan** → `/wf plan football-manager-match-engine tempo-and-restarts` if the answer moves a criterion to another slice.

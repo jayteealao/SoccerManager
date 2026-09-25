@@ -5,7 +5,7 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-25T08:45:00Z"
+updated-at: "2026-09-25T09:15:00Z"
 slices-implemented: 23
 slices-total: 24
 metric-total-files-changed: 795
@@ -206,11 +206,11 @@ next-invocation: "/wf implement football-manager-match-engine tempo-and-restarts
   - New tuning values, switched off: `decision.carry_s` and `decision.carry_cost` (the carry window) and the `clearances` block (aim spread and a defender's clearance of a fast pass in his own penalty area). The restart delays stay at 3, 8, 6 and 8 s until Q-TR1 is answered.
   - Test seam under the `scenario` feature: `Scene::clear()`. A scene starts in open play with no restart taker.
   - New tuning values at `4022e47`, at values that reproduce play: `tackle_reach` 1.0 (tackle distance, separate from the control reach), `press_engage` 3.0 (was the constant `PRESS_ENGAGE_M`) and `tackle_dribble_win` 0 (extra win chance against a carrier faster than 2 m/s). Shipped play on seed 42 is identical.
-  - Q-TR1 answered (defending levers allowed). Open: with 10–16 shots per team, no setting keeps throw-ins at 55 or fewer and the ball in play at 65 minutes or less; the best in-limit setting `b0` gives 66.22 minutes on seeds 1–200 (Q-TR2).
+  - Q-TR1 answered (defending levers allowed). Q-TR2 answered (ship `b0`, ball in play judged at 52–68 minutes). At `b0` the slice's criteria pass, but `discipline_is_realistic` (0.160 second yellows per match, 30.0% of matches with a sending-off) and `a_stronger_team_wins_more_than_half_its_matches` (94 of 200) fail, so `b0` is not shipped; it is kept as a patch in the slice's evidence folder. Open: Q-TR3.
 
 ## Recommended Next Stage
 
-- `/wf implement football-manager-match-engine tempo-and-restarts` (blocked: after the product owner answers Q-TR2 in `po-answers.md`)
+- `/wf implement football-manager-match-engine tempo-and-restarts` (blocked: after the product owner answers Q-TR3 in `po-answers.md`)
 
 - `/wf verify football-manager-match-engine lone-forward` (new: the three kept criteria on the shipped values; the evidence is in `implement-evidence/lone-forward/shipped/`)
 
