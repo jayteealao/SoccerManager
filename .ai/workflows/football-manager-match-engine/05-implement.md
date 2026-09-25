@@ -5,11 +5,11 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-25T09:15:00Z"
+updated-at: "2026-09-25T10:23:34Z"
 slices-implemented: 23
 slices-total: 24
 metric-total-files-changed: 795
-metric-total-lines-added: 65363
+metric-total-lines-added: 65366
 metric-total-lines-removed: 3003
 tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment, scripting, sandbox, plugin-interface, distribution, installer, packaging, release-version, error-record, help-text, realism-bands, formations]
 refs:
@@ -39,8 +39,8 @@ refs:
     - 05-implement-lone-forward.md
     - 05-implement-keeper-and-shots.md
     - 05-implement-tempo-and-restarts.md
-next-command: wf-implement
-next-invocation: "/wf implement football-manager-match-engine tempo-and-restarts"
+next-command: wf-verify
+next-invocation: "/wf verify football-manager-match-engine tempo-and-restarts"
 ---
 
 # Implement Index
@@ -199,18 +199,18 @@ next-invocation: "/wf implement football-manager-match-engine tempo-and-restarts
   - Test seams under the `scenario` feature: `Scene::penalty()`, `Simulation::last_touch()`, `shot_census()` and `shot_flight()`.
   - Q-KS1 moved the red-card criterion to `realism-tuning`; Q-KS2 set the corner floor at 1.2 per team and moved corners from clearances and crosses to `tempo-and-restarts`.
 
-- `tempo-and-restarts` (implemented at commits `831553b` and `4022e47`; AWAITING INPUT on Q-TR2): the counting, the tempo levers and the contest levers, shipped at values that reproduce play. Every later slice inherits these changes:
+- `tempo-and-restarts` (implemented at commits `831553b`, `4022e47` and `d6ccbb7`; complete, awaits verify): the counting, the tempo levers and the contest levers, shipped at values that reproduce play. Every later slice inherits these changes:
   - `stats.passes` and pass accuracy count open-play passes only. A clearance (`Kick::Clear`) and the first kick of a restart taker are counted in `stats.clearances` and `stats.restart_kicks`. On seed 42 over 200 matches, passes fall from 1,225.8 to 1,193.8 per team with play identical.
   - `stats.ball_in_play_s` is in match-stats, and the calibrate report has `ball_in_play_min_per_90_mean` (89.6 minutes on shipped play).
   - The snapshot is version 6. A later slice that adds snapshot state takes version 7.
   - New tuning values, switched off: `decision.carry_s` and `decision.carry_cost` (the carry window) and the `clearances` block (aim spread and a defender's clearance of a fast pass in his own penalty area). The restart delays stay at 3, 8, 6 and 8 s until Q-TR1 is answered.
   - Test seam under the `scenario` feature: `Scene::clear()`. A scene starts in open play with no restart taker.
   - New tuning values at `4022e47`, at values that reproduce play: `tackle_reach` 1.0 (tackle distance, separate from the control reach), `press_engage` 3.0 (was the constant `PRESS_ENGAGE_M`) and `tackle_dribble_win` 0 (extra win chance against a carrier faster than 2 m/s). Shipped play on seed 42 is identical.
-  - Q-TR1 answered (defending levers allowed). Q-TR2 answered (ship `b0`, ball in play judged at 52–68 minutes). At `b0` the slice's criteria pass, but `discipline_is_realistic` (0.160 second yellows per match, 30.0% of matches with a sending-off) and `a_stronger_team_wins_more_than_half_its_matches` (94 of 200) fail, so `b0` is not shipped; it is kept as a patch in the slice's evidence folder. Open: Q-TR3.
+  - Q-TR1 answered (defending levers allowed). Q-TR2 answered (ship `b0`, ball in play judged at 52–68 minutes). At `b0` the slice's criteria pass, but `discipline_is_realistic` (0.160 second yellows per match, 30.0% of matches with a sending-off) and `a_stronger_team_wins_more_than_half_its_matches` (94 of 200) fail, so `b0` is not shipped; it is kept as a patch in the slice's evidence folder. Q-TR3 answered: ship the counting only. The slice is judged on "Only real passes count" and no regression; passes, ball in play and throw-ins move to `realism-tuning`, with the `b0` patch as its starting evidence. On the shipped tree every earlier slow criterion and every equal and strength gate report equal the keeper-and-shots figures except the pass counts (34–42 fewer per team) and the new ball-in-play figure (89.3–89.5 minutes per 90).
 
 ## Recommended Next Stage
 
-- `/wf implement football-manager-match-engine tempo-and-restarts` (blocked: after the product owner answers Q-TR3 in `po-answers.md`)
+- `/wf verify football-manager-match-engine tempo-and-restarts` (new: the counting scenes and the no-regression evidence in `implement-evidence/tempo-and-restarts/tr3/`; the benchmark compare)
 
 - `/wf verify football-manager-match-engine lone-forward` (new: the three kept criteria on the shipped values; the evidence is in `implement-evidence/lone-forward/shipped/`)
 
