@@ -11,7 +11,7 @@ use crate::math::{DVec2, segment_distance, toward};
 use crate::pitch;
 use crate::plugin::{DecisionContext, HookPoint, OptionOffsets};
 use crate::rules::offside;
-use crate::sim::{ScriptCache, Simulation};
+use crate::sim::{ScriptCache, Simulation, WIDE_SPREAD, wide_of_goal};
 use crate::team::PLAYERS_PER_TEAM;
 use crate::tuning::Tuning;
 
@@ -454,9 +454,19 @@ impl Simulation {
                 Some(Kick::Pass { dir, speed, loft })
             }
             Choice::Clear => {
-                // Clear long toward the far half.
-                let spread = t.clearances.aim_spread;
-                let dir = rotate(attack, self.rng.range_f64(-spread, spread));
+                // Clear long toward the far half; inside his own penalty area a clearance
+                // may go wide toward his own goal line instead.
+                let own_goal_x = -self.teams[team].attack_x;
+                let c = &t.clearances;
+                let wide = c.wide_chance > 0.0
+                    && pitch::in_penalty_area(carrier.pos, own_goal_x)
+                    && self.rng.referee_draw() < c.wide_chance;
+                let (line, spread) = if wide {
+                    (wide_of_goal(carrier.pos, own_goal_x), WIDE_SPREAD)
+                } else {
+                    (attack, c.aim_spread)
+                };
+                let dir = rotate(line, self.rng.range_f64(-spread, spread));
                 Some(Kick::Clear {
                     dir,
                     speed: kick_speed(CLEARANCE_DISTANCE, CLEARANCE_LOFT, t),

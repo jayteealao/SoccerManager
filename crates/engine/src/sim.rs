@@ -1153,8 +1153,9 @@ impl Simulation {
     /// While an open-play pass is in flight, fast, under `reach_height` and inside the
     /// penalty area of the side that did not play it, each active defending outfield player
     /// within `cross_reach` rolls once per flight to clear it. A clearance deflects the ball
-    /// away from his own goal centre, with his side as the last touch; the pass is not
-    /// completed. Returns `true` when the ball was cleared.
+    /// away from his own goal centre, or wide toward his own goal line with `wide_chance`,
+    /// with his side as the last touch; the pass is not completed. Returns `true` when the
+    /// ball was cleared.
     fn try_clear_cross(&mut self, t: &Tuning) -> bool {
         let Some(passer) = self.pass_in_flight else {
             return false;
@@ -1186,10 +1187,16 @@ impl Simulation {
             }
             self.clearers_tried |= bit;
             if self.rng.referee_draw() < c.cross_chance {
-                let goal = pitch::goal_centre(own_goal_x);
-                let away = match toward(goal, ball_xy) {
-                    v if v == DVec2::ZERO => DVec2::new(-own_goal_x.signum(), 0.0),
-                    v => v,
+                let wide = c.wide_chance > 0.0 && self.rng.referee_draw() < c.wide_chance;
+                let (away, spread) = if wide {
+                    (wide_of_goal(ball_xy, own_goal_x), WIDE_SPREAD)
+                } else {
+                    let goal = pitch::goal_centre(own_goal_x);
+                    let away = match toward(goal, ball_xy) {
+                        v if v == DVec2::ZERO => DVec2::new(-own_goal_x.signum(), 0.0),
+                        v => v,
+                    };
+                    (away, c.cross_spread)
                 };
                 let angle = self.rng.next_f64();
                 let loft = self.rng.next_f64();
@@ -1197,7 +1204,7 @@ impl Simulation {
                     self.ball.vel,
                     away,
                     c.cross_speed,
-                    c.cross_spread,
+                    spread,
                     c.cross_loft,
                     angle,
                     loft,
@@ -1378,6 +1385,16 @@ impl Simulation {
         self.control_since = self.tick;
         self.script_cache = None;
     }
+}
+
+/// The most a wide clearance turns either way from its line, in radians.
+pub(crate) const WIDE_SPREAD: f64 = 0.35;
+
+/// The line of a wide clearance at `ball` by a side whose goal line is at `own_goal_x`:
+/// halfway between toward that goal line and toward the touchline on the ball's side.
+pub(crate) fn wide_of_goal(ball: DVec2, own_goal_x: f64) -> DVec2 {
+    let side = if ball.y < 0.0 { -1.0 } else { 1.0 };
+    DVec2::new(own_goal_x.signum(), side).normalize()
 }
 
 #[cfg(test)]

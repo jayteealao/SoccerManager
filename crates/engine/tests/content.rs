@@ -296,9 +296,10 @@ fn the_shipped_carry_clearance_and_restart_values_are_pinned() {
             c.cross_chance,
             c.cross_speed,
             c.cross_spread,
-            c.cross_loft
+            c.cross_loft,
+            c.wide_chance
         ),
-        (0.6, 2.0, 0.0, 0.7, 1.6, 4.0)
+        (0.6, 2.0, 0.0, 0.7, 1.6, 4.0, 0.0)
     );
     let d = &t.restart_delay_s;
     assert_eq!(
@@ -333,6 +334,18 @@ fn a_tuning_block_without_the_carry_and_clearance_values_loads_with_the_defaults
     assert_eq!((t.decision.carry_s, t.decision.carry_cost), (0.0, 0.0));
     assert_eq!(t.clearances.aim_spread, 0.6);
     assert_eq!(t.clearances.cross_chance, 0.0);
+    assert_eq!(t.clearances.wide_chance, 0.0);
+}
+
+/// A clearances block written before the wide clearance existed still loads, with no
+/// clearance going wide.
+#[test]
+fn a_clearances_block_without_the_wide_chance_loads_with_none() {
+    let mut json = serde_json::to_value(Tuning::default()).unwrap();
+    let clearances = json["clearances"].as_object_mut().unwrap();
+    assert!(clearances.remove("wide_chance").is_some());
+    let t: Tuning = serde_json::from_value(json).unwrap();
+    assert_eq!(t.clearances.wide_chance, 0.0);
 }
 
 #[test]

@@ -220,8 +220,10 @@ pub struct Tuning {
 /// metres of the ball under `reach_height` rolls once per flight against `cross_chance`.
 /// The cleared ball keeps `cross_speed` of its speed and goes away from the defender's goal
 /// centre, turned by up to `cross_spread` radians either way, with a vertical speed of up to
-/// `cross_loft` metres per second. These values have no sourced figure; they are tuning
-/// levers inside their bounds.
+/// `cross_loft` metres per second. A clearance inside the clearer's own penalty area, by a
+/// carrier or of a fast pass, goes wide with `wide_chance` instead: toward his own goal line
+/// on the ball's side, where the ball may go behind for a corner. These values have no
+/// sourced figure; they are tuning levers inside their bounds.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct ClearanceTuning {
@@ -237,10 +239,14 @@ pub struct ClearanceTuning {
     pub cross_spread: f64,
     #[garde(range(min = 0.0, max = 15.0))]
     pub cross_loft: f64,
+    /// An older tuning file without this value loads with 0: no clearance goes wide.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub wide_chance: f64,
 }
 
-/// The values that reproduce play before these levers existed: the old clearance aim and
-/// no cross clearance.
+/// The values that reproduce play before these levers existed: the old clearance aim, no
+/// cross clearance and no wide clearance.
 impl Default for ClearanceTuning {
     fn default() -> Self {
         Self {
@@ -250,6 +256,7 @@ impl Default for ClearanceTuning {
             cross_speed: 0.7,
             cross_spread: 1.6,
             cross_loft: 4.0,
+            wide_chance: 0.0,
         }
     }
 }

@@ -125,7 +125,8 @@
       "cross_chance": 0.0,
       "cross_speed": 0.7,
       "cross_spread": 1.6,
-      "cross_loft": 4.0
+      "cross_loft": 4.0,
+      "wide_chance": 0.0
     }
   },
   "generator": {
