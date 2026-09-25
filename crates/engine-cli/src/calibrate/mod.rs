@@ -573,6 +573,7 @@ impl RunCtx<'_> {
         let events_dir = arm_dir.join("events");
         let events_written = count_files(&events_dir);
         let mut builder = RunBuilder::new(self.bands.clone());
+        builder.minutes = opts.minutes;
         for &suite in &self.suites {
             match suite {
                 Suite::Formations => builder.plan_pairings(

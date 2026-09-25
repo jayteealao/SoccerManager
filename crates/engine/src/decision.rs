@@ -15,11 +15,24 @@ use crate::sim::{ScriptCache, Simulation};
 use crate::team::PLAYERS_PER_TEAM;
 use crate::tuning::Tuning;
 
-/// A kick the carrier decided on this tick.
+/// A kick the carrier decided on this tick. A clearance is kicked away from danger to no
+/// team-mate, and is counted apart from a pass.
 #[derive(Debug, Clone, Copy)]
 pub enum Kick {
     Pass { dir: DVec2, speed: f64, loft: f64 },
     Shot { dir: DVec2, speed: f64, loft: f64 },
+    Clear { dir: DVec2, speed: f64, loft: f64 },
+}
+
+impl Kick {
+    /// The direction, ground speed and vertical speed of the kick.
+    pub fn flight(self) -> (DVec2, f64, f64) {
+        match self {
+            Kick::Pass { dir, speed, loft }
+            | Kick::Shot { dir, speed, loft }
+            | Kick::Clear { dir, speed, loft } => (dir, speed, loft),
+        }
+    }
 }
 
 impl Simulation {
@@ -342,6 +355,14 @@ impl Simulation {
 
         let held = self.tick.saturating_sub(self.control_since);
         let held_s = f64::from(held) * t.dt;
+        // The carry window: an unpressed carrier who has just gained the ball keeps it
+        // rather than releasing it at once. A shot is never charged.
+        let carry = if !pressed && held_s < w.carry_s {
+            w.carry_cost
+        } else {
+            0.0
+        };
+        let pass = pass.map(|(s, j)| (s - carry, j));
         let (dribble, hold) = if keeper {
             (None, None)
         } else {
@@ -373,7 +394,8 @@ impl Simulation {
                 } else {
                     0.0
                 }
-        } + self.rng.range_f64(-noise, noise);
+        } - carry
+            + self.rng.range_f64(-noise, noise);
         Options {
             shot,
             pass,
@@ -432,8 +454,9 @@ impl Simulation {
             }
             Choice::Clear => {
                 // Clear long toward the far half.
-                let dir = rotate(attack, self.rng.range_f64(-0.6, 0.6));
-                Some(Kick::Pass {
+                let spread = t.clearances.aim_spread;
+                let dir = rotate(attack, self.rng.range_f64(-spread, spread));
+                Some(Kick::Clear {
                     dir,
                     speed: kick_speed(CLEARANCE_DISTANCE, CLEARANCE_LOFT, t),
                     loft: CLEARANCE_LOFT,
@@ -799,5 +822,61 @@ mod tests {
             defensive < balanced && balanced < attacking,
             "{defensive} {balanced} {attacking}"
         );
+    }
+
+    /// The options of the home striker at `(40, 2)` with an open team-mate, noise off, the
+    /// carry cost `cost`, having held the ball `held` ticks, with an opponent `opp` metres
+    /// away or none; and the next draw of the stream after scoring them.
+    fn carry_scene(cost: f64, held: u32, opp: Option<f64>) -> (Options, f64) {
+        let mut config = shipped_config(7, 1).unwrap();
+        config.tuning.decision.noise = 0.0;
+        config.tuning.decision.carry_s = 1.5;
+        config.tuning.decision.carry_cost = cost;
+        let mut sim = Simulation::new(config).unwrap();
+        let striker = 9;
+        sim.players[striker].pos = DVec2::new(40.0, 2.0);
+        sim.players[10].pos = DVec2::new(30.0, 12.0);
+        let their_keeper = sim.keeper(1);
+        for p in sim
+            .players
+            .iter_mut()
+            .filter(|p| p.team == 1 && p.id != their_keeper)
+        {
+            p.pos = DVec2::new(-40.0, p.pos.y);
+        }
+        if let Some(d) = opp {
+            sim.players[13].pos = DVec2::new(40.0 + d, 2.0);
+        }
+        sim.carrier = Some(striker);
+        sim.tick = 1_000;
+        sim.control_since = 1_000 - held;
+        let o = sim.options(striker);
+        (o, sim.rng.next_f64())
+    }
+
+    #[test]
+    fn an_unpressed_carrier_pays_the_carry_cost_on_a_pass_and_a_clearance_only() {
+        let (free, next_free) = carry_scene(0.0, 0, None);
+        let (charged, next_charged) = carry_scene(1.0, 0, None);
+        let pass = |o: &Options| o.pass.expect("an open team-mate").0;
+        assert!((pass(&free) - pass(&charged) - 1.0).abs() < 1e-12);
+        assert!((free.clear - charged.clear - 1.0).abs() < 1e-12);
+        assert_eq!(free.shot, charged.shot, "a shot is never charged");
+        assert_eq!(free.dribble, charged.dribble);
+        assert_eq!(free.hold, charged.hold);
+        assert_eq!(next_free, next_charged, "the window draws nothing");
+    }
+
+    #[test]
+    fn a_pressed_carrier_and_one_past_the_window_pay_no_carry_cost() {
+        let pass = |o: &Options| o.pass.expect("an open team-mate").0;
+        let (free, _) = carry_scene(0.0, 0, Some(2.0));
+        let (charged, _) = carry_scene(1.0, 0, Some(2.0));
+        assert_eq!(pass(&free), pass(&charged), "pressed");
+        assert_eq!(free.clear, charged.clear, "pressed");
+        let (free, _) = carry_scene(0.0, 80, None);
+        let (charged, _) = carry_scene(1.0, 80, None);
+        assert_eq!(pass(&free), pass(&charged), "past the window");
+        assert_eq!(free.clear, charged.clear, "past the window");
     }
 }

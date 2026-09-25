@@ -254,7 +254,7 @@ arrives.
 | `stats.shots` | two integers | shots taken |
 | `stats.shots_on_target` | two integers | shots whose flight, as struck, crosses the goal line between the posts and under the bar |
 | `stats.xg` | two floats | expected goals, two decimals |
-| `stats.passes` | two integers | passes played |
+| `stats.passes` | two integers | open-play passes played; a clearance and a restart kick are not passes |
 | `stats.pass_accuracy_pct` | two floats | completed passes over passes played, one decimal; 0 for none |
 | `stats.fouls` | two integers | fouls committed |
 | `stats.corners` | two integers | corners taken |

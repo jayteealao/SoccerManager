@@ -265,7 +265,8 @@
                 "goals_per_xg": { "type": "number", "minimum": 0 },
                 "corners_per_team_mean": { "type": "number", "minimum": 0 },
                 "throw_ins_per_match_mean": { "type": "number", "minimum": 0 },
-                "goal_kicks_per_match_mean": { "type": "number", "minimum": 0 }
+                "goal_kicks_per_match_mean": { "type": "number", "minimum": 0 },
+                "ball_in_play_min_per_90_mean": { "type": "number", "minimum": 0 }
               }
             }
           },

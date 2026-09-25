@@ -260,6 +260,57 @@ fn a_tuning_block_without_the_lone_forward_values_loads_with_the_defaults() {
 }
 
 #[test]
+fn the_shipped_carry_clearance_and_restart_values_are_pinned() {
+    let t = common::content().tuning.engine;
+    assert_eq!((t.decision.carry_s, t.decision.carry_cost), (0.0, 0.0));
+    let c = &t.clearances;
+    assert_eq!(
+        (
+            c.aim_spread,
+            c.cross_reach,
+            c.cross_chance,
+            c.cross_speed,
+            c.cross_spread,
+            c.cross_loft
+        ),
+        (0.6, 2.0, 0.0, 0.7, 1.6, 4.0)
+    );
+    let d = &t.restart_delay_s;
+    assert_eq!(
+        (
+            d.kick_off,
+            d.throw_in,
+            d.corner,
+            d.goal_kick,
+            d.free_kick,
+            d.penalty,
+            d.drop_ball
+        ),
+        (5.0, 3.0, 8.0, 6.0, 8.0, 15.0, 20.0)
+    );
+}
+
+/// A tuning block written before the carry window and the clearance values existed still
+/// loads, with the values that reproduce play before them.
+#[test]
+fn a_tuning_block_without_the_carry_and_clearance_values_loads_with_the_defaults() {
+    let mut json = serde_json::to_value(Tuning::default()).unwrap();
+    let block = json.as_object_mut().unwrap();
+    assert!(
+        block.remove("clearances").is_some(),
+        "clearances is a tuning block"
+    );
+    let decision = block["decision"].as_object_mut().unwrap();
+    for key in ["carry_s", "carry_cost"] {
+        assert!(decision.remove(key).is_some(), "{key} is a decision weight");
+    }
+    let t: Tuning = serde_json::from_value(json).unwrap();
+    assert_eq!((t.decision.carry_s, t.decision.carry_cost), (0.0, 0.0));
+    assert_eq!(t.clearances.aim_spread, 0.6);
+    assert_eq!(t.clearances.cross_chance, 0.0);
+}
+
+#[test]
 fn a_missing_content_file_names_its_path() {
     let dir = ContentDir::at(std::env::temp_dir().join("engine-no-such-content"));
     let err = engine::Content::load(&dir).unwrap_err();

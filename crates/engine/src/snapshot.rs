@@ -43,7 +43,7 @@ use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 5;
+pub const VERSION: u16 = 6;
 /// The file name of a match's latest snapshot inside its match folder.
 pub const FILE_NAME: &str = "snapshot.smsn";
 
@@ -594,6 +594,7 @@ fn encode(sim: &Simulation, w: &mut Writer) {
     w.u32(sim.control_since);
     w.index(sim.last_touch);
     w.u8(u8::from(sim.keeper_beaten));
+    w.index(sim.restart_taker);
     encode_summary(&sim.summary, w);
     for (t, team) in sim.teams.iter().enumerate() {
         w.f64(team.attack_x);
@@ -768,6 +769,9 @@ fn encode_summary(s: &Summary, w: &mut Writer) {
     w.f64(s.xg[1]);
     w.pair(s.passes);
     w.pair(s.passes_completed);
+    w.pair(s.clearances);
+    w.pair(s.restart_kicks);
+    w.u32(s.live_ticks);
     w.pair(s.possession_ticks);
     w.pair(s.extra_added_s);
     w.u8(u8::from(s.extra_time));
@@ -807,6 +811,7 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
     sim.control_since = r.u32()?;
     sim.last_touch = r.index(2)?;
     sim.keeper_beaten = r.bool()?;
+    sim.restart_taker = r.index(PLAYERS)?;
     sim.summary = decode_summary(r)?;
     let schema = sim.config.tactics.clone();
     let tuning = sim.config.tuning.clone();
@@ -1036,6 +1041,9 @@ fn decode_summary(r: &mut Reader<'_>) -> Decoded<Summary> {
         xg: [r.f64()?, r.f64()?],
         passes: r.pair()?,
         passes_completed: r.pair()?,
+        clearances: r.pair()?,
+        restart_kicks: r.pair()?,
+        live_ticks: r.u32()?,
         possession_ticks: r.pair()?,
         extra_added_s: r.pair()?,
         extra_time: r.bool()?,
@@ -1100,7 +1108,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 5"),
+                .contains("unknown version 1; this build reads 6"),
             "{err}"
         );
     }

@@ -164,6 +164,9 @@ pub struct SuiteFigures {
     pub corners_per_team_mean: f64,
     pub throw_ins_per_match_mean: f64,
     pub goal_kicks_per_match_mean: f64,
+    /// Minutes with the ball in play per 90 minutes of match time: each match's
+    /// `stats.ball_in_play_s` over 60, times 90 over the match length. A figure, not a band.
+    pub ball_in_play_min_per_90_mean: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stronger: Option<StrongerRecord>,
 }
@@ -262,6 +265,8 @@ pub struct RunBuilder {
     pairing_names: Vec<[String; 2]>,
     /// Statistics records that never appeared (`darkpath.match_without_stats`).
     pub missing: u32,
+    /// The length of every match, in minutes.
+    pub minutes: u32,
 }
 
 impl RunBuilder {
@@ -271,6 +276,7 @@ impl RunBuilder {
             suites: BTreeMap::new(),
             pairing_names: Vec::new(),
             missing: 0,
+            minutes: 90,
         }
     }
 
@@ -456,6 +462,13 @@ impl RunBuilder {
             corners_per_team_mean: round_to(per_team(&|r, t| f64::from(r.laws.corners[t])), 3),
             throw_ins_per_match_mean: round_to(mean(&per_match(&|r| both(r.laws.throw_ins))), 3),
             goal_kicks_per_match_mean: round_to(mean(&per_match(&|r| both(r.laws.goal_kicks))), 3),
+            ball_in_play_min_per_90_mean: round_to(
+                mean(&per_match(&|r| {
+                    f64::from(r.figures.ball_in_play_s) / 60.0 * 90.0
+                        / f64::from(self.minutes.max(1))
+                })),
+                3,
+            ),
             stronger,
         }
     }

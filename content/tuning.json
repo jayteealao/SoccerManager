@@ -83,7 +83,9 @@
       "noise": 0.1,
       "lone_layoff": 0.0,
       "lone_hold": 0.5,
-      "lone_dribble": -0.5
+      "lone_dribble": -0.5,
+      "carry_s": 0.0,
+      "carry_cost": 0.0
     },
     "injury_per_tackle": 0.004,
     "injury_per_minute": 0.0002,
@@ -113,6 +115,14 @@
       "penalty_spread": 0.25,
       "keeper_dive_m": 2.0,
       "keeper_stays": 0.1
+    },
+    "clearances": {
+      "aim_spread": 0.6,
+      "cross_reach": 2.0,
+      "cross_chance": 0.0,
+      "cross_speed": 0.7,
+      "cross_spread": 1.6,
+      "cross_loft": 4.0
     }
   },
   "generator": {

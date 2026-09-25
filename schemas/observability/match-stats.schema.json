@@ -133,6 +133,7 @@
       "maxItems": 2
     },
     "stats.passes": {
+      "description": "Open-play passes played, home first. A clearance and a restart kick are not passes.",
       "type": "array",
       "items": {
         "type": "integer",
@@ -140,6 +141,31 @@
       },
       "minItems": 2,
       "maxItems": 2
+    },
+    "stats.clearances": {
+      "description": "Clearances, home first: a carrier's clearance and a defender's clearance of a fast pass in his own penalty area.",
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "stats.restart_kicks": {
+      "description": "Restart kicks, home first: a restart taker's first kick before anyone else touches the ball, at a kick-off, a throw-in, a corner, a goal kick or a free kick.",
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "stats.ball_in_play_s": {
+      "description": "Whole seconds with the ball in play over the whole match, the shoot-out excluded.",
+      "type": "integer",
+      "minimum": 0
     },
     "stats.pass_accuracy_pct": {
       "type": "array",

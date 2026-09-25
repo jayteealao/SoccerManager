@@ -138,7 +138,8 @@ impl ScriptFigures {
 
 /// The match figures the realism bands read. Per-team arrays are home first. Every key is
 /// a contract key; `passes.completed` is an additive extra, and the `error.*` keys appear
-/// only on a failed match.
+/// only on a failed match. `stats.passes` counts open-play passes only; clearances and
+/// restart kicks have their own keys.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MatchFigures {
@@ -156,6 +157,13 @@ pub struct MatchFigures {
     /// Completed passes over passes played, one decimal; 0 for a team that played none.
     #[serde(rename = "stats.pass_accuracy_pct")]
     pub pass_accuracy_pct: [f64; 2],
+    #[serde(rename = "stats.clearances")]
+    pub clearances: [u32; 2],
+    #[serde(rename = "stats.restart_kicks")]
+    pub restart_kicks: [u32; 2],
+    /// Whole seconds with the ball in play over the whole match, the shoot-out excluded.
+    #[serde(rename = "stats.ball_in_play_s")]
+    pub ball_in_play_s: u32,
     /// Each team's share of the open-play ticks, one decimal.
     #[serde(rename = "stats.possession_pct")]
     pub possession_pct: [f64; 2],
@@ -188,6 +196,10 @@ impl MatchFigures {
             passes: s.passes,
             passes_completed: s.passes_completed,
             pass_accuracy_pct: [0, 1].map(|t| share(s.passes_completed[t], s.passes[t])),
+            clearances: s.clearances,
+            restart_kicks: s.restart_kicks,
+            // 50 ticks a second.
+            ball_in_play_s: (s.live_ticks + 25) / 50,
             possession_pct: [0, 1].map(|t| share(s.possession_ticks[t], possession)),
             manager_kind: managers.map(|m| {
                 match m {
@@ -670,6 +682,9 @@ mod tests {
             "\"stats.xg\":[1.37,0.52]",
             "\"stats.passes\"",
             "\"stats.pass_accuracy_pct\"",
+            "\"stats.clearances\"",
+            "\"stats.restart_kicks\"",
+            "\"stats.ball_in_play_s\"",
             "\"stats.possession_pct\":[54.2,45.8]",
             "\"manager.kind\":[\"ai\",\"ai\"]",
         ] {

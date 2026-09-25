@@ -127,6 +127,8 @@ impl Simulation {
         self.restart = true;
         self.last_kicker = None;
         self.pass_in_flight = None;
+        self.restart_taker = None;
+        self.clearers_tried = 0;
         self.end_shot();
         for i in 0..self.players.len() {
             let p = self.players[i];
@@ -160,6 +162,7 @@ impl Simulation {
         self.carrier = Some(kicker);
         self.control_since = self.tick;
         self.last_touch = Some(team);
+        self.restart_taker = Some(kicker);
         self.referee.offside = 0;
         self.referee.phase = crate::rules::Phase::Live;
     }
@@ -493,6 +496,8 @@ impl Simulation {
         self.restart = true;
         self.last_kicker = None;
         self.pass_in_flight = None;
+        self.restart_taker = None;
+        self.clearers_tried = 0;
         self.end_shot();
         let since = self.tick + 1;
         let taker = restart::taker(kind, team, spot, &self.players, &self.teams);
@@ -586,6 +591,7 @@ impl Simulation {
         self.carrier = Some(dead.taker);
         self.control_since = self.tick;
         self.last_touch = Some(dead.team);
+        self.restart_taker = Some(dead.taker);
         let kick = match dead.kind {
             StoppageKind::ThrowIn | StoppageKind::Corner => {
                 Some((self.restart_pass(dead.taker, dead.kind), false))
@@ -848,6 +854,8 @@ impl Simulation {
         self.restart = true;
         self.last_kicker = None;
         self.pass_in_flight = None;
+        self.restart_taker = None;
+        self.clearers_tried = 0;
         self.end_shot();
         let since = self.tick + 1;
         let delay = restart::delay_ticks(StoppageKind::Penalty, &self.config.tuning);
@@ -898,7 +906,7 @@ impl Simulation {
             end * (pitch::HALF_LENGTH - 0.3),
             side * t.shots.keeper_dive_m,
         );
-        let (Kick::Shot { dir, speed, loft } | Kick::Pass { dir, speed, loft }) = kick;
+        let (dir, speed, loft) = kick.flight();
         self.ball.kick(dir, speed, loft, t);
         self.end_shot();
         self.shot_on_target = crate::shot::on_target(self.ball, end, t);

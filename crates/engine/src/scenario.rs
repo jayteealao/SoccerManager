@@ -26,6 +26,8 @@ impl Scene {
     pub fn new(config: MatchConfig) -> Self {
         let mut sim = Simulation::new(config).expect("a valid configuration");
         sim.events.clear();
+        // A scene arranges open play: the kick-off taker's first kick is not a restart kick.
+        sim.restart_taker = None;
         Self { sim }
     }
 
@@ -54,6 +56,7 @@ impl Scene {
     /// so a tackle is possible once the scene's tick passes the control cooldown.
     pub fn carrier(mut self, c: Option<usize>) -> Self {
         self.sim.carrier = c;
+        self.sim.restart_taker = None;
         self.sim.control_since = 0;
         if let Some(c) = c {
             self.sim.last_touch = Some(self.sim.players[c].team);
@@ -126,6 +129,21 @@ impl Scene {
         let t = self.sim.config.tuning.clone();
         self.sim.apply_kick(
             Kick::Pass {
+                dir: dir.normalize(),
+                speed,
+                loft,
+            },
+            &t,
+            true,
+        );
+        self
+    }
+
+    /// The carrier clears the ball toward `dir` at `speed` with vertical speed `loft`.
+    pub fn clear(mut self, dir: DVec2, speed: f64, loft: f64) -> Self {
+        let t = self.sim.config.tuning.clone();
+        self.sim.apply_kick(
+            Kick::Clear {
                 dir: dir.normalize(),
                 speed,
                 loft,

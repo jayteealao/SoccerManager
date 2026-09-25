@@ -192,6 +192,51 @@ pub struct Tuning {
     #[serde(default)]
     #[garde(dive)]
     pub shots: ShotTuning,
+    /// Clearances: the aim of a carrier's clearance and a defender's clearance of a fast
+    /// pass inside his own penalty area.
+    #[serde(default)]
+    #[garde(dive)]
+    pub clearances: ClearanceTuning,
+}
+
+/// How a clearance flies. A carrier's clearance goes toward the far half, turned by up to
+/// `aim_spread` radians either way. A fast open-play pass inside the defending side's
+/// penalty area can be cleared: each active defending outfield player within `cross_reach`
+/// metres of the ball under `reach_height` rolls once per flight against `cross_chance`.
+/// The cleared ball keeps `cross_speed` of its speed and goes away from the defender's goal
+/// centre, turned by up to `cross_spread` radians either way, with a vertical speed of up to
+/// `cross_loft` metres per second. These values have no sourced figure; they are tuning
+/// levers inside their bounds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct ClearanceTuning {
+    #[garde(range(min = 0.0, max = 1.6))]
+    pub aim_spread: f64,
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub cross_reach: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub cross_chance: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub cross_speed: f64,
+    #[garde(range(min = 0.0, max = 3.2))]
+    pub cross_spread: f64,
+    #[garde(range(min = 0.0, max = 15.0))]
+    pub cross_loft: f64,
+}
+
+/// The values that reproduce play before these levers existed: the old clearance aim and
+/// no cross clearance.
+impl Default for ClearanceTuning {
+    fn default() -> Self {
+        Self {
+            aim_spread: 0.6,
+            cross_reach: 2.0,
+            cross_chance: 0.0,
+            cross_speed: 0.7,
+            cross_spread: 1.6,
+            cross_loft: 4.0,
+        }
+    }
 }
 
 /// How a shot flies and how a keeper or a defender stops it. A keeper tries to save only a
@@ -365,6 +410,15 @@ pub struct DecisionWeights {
     #[serde(default)]
     #[garde(range(min = -5.0, max = 5.0))]
     pub lone_dribble: f64,
+    /// The carry window: for `carry_s` seconds after gaining the ball, a carrier with no
+    /// opponent within 2.5 m pays `carry_cost` on a pass and on a clearance. A shot is never
+    /// charged.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub carry_s: f64,
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub carry_cost: f64,
 }
 
 /// Seconds between the ball going dead and the restart, per restart kind. Play restarts
@@ -475,6 +529,8 @@ impl Default for Tuning {
                 lone_layoff: 0.0,
                 lone_hold: 0.5,
                 lone_dribble: -0.5,
+                carry_s: 0.0,
+                carry_cost: 0.0,
             },
             injury_per_tackle: INJURY_PER_TACKLE,
             injury_per_minute: INJURY_PER_MINUTE,
@@ -484,6 +540,7 @@ impl Default for Tuning {
                 angle_coef: 6.3836,
             },
             shots: ShotTuning::default(),
+            clearances: ClearanceTuning::default(),
         }
     }
 }

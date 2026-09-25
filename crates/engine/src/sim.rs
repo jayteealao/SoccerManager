@@ -18,7 +18,7 @@ use crate::decision::Kick;
 use crate::error::EngineError;
 use crate::fatigue::InjurySource;
 use crate::flags::ActiveFlags;
-use crate::math::{DVec2, DVec3};
+use crate::math::{DVec2, DVec3, toward};
 use crate::pitch;
 use crate::player::Player;
 use crate::plugin::{Plugins, ScriptNote};
@@ -419,9 +419,17 @@ pub struct Summary {
     pub shots_on_target: [u32; 2],
     /// The expected goals of every shot taken, summed per team.
     pub xg: [f64; 2],
-    /// Passes played, and passes whose next controlling touch was a team-mate's.
+    /// Open-play passes played, and those whose next controlling touch was a team-mate's.
+    /// A clearance and a restart kick are not passes.
     pub passes: [u32; 2],
     pub passes_completed: [u32; 2],
+    /// Clearances: a carrier's clearance, and a defender's clearance of a fast pass.
+    pub clearances: [u32; 2],
+    /// The first kick of a restart taker before anyone else touches the ball, at a
+    /// kick-off, a throw-in, a corner, a goal kick or a free kick.
+    pub restart_kicks: [u32; 2],
+    /// Ticks with the ball in play, the shoot-out excluded.
+    pub live_ticks: u32,
     /// Ticks of open play credited to the team that touched the ball last.
     pub possession_ticks: [u32; 2],
     /// Seconds added to each period of extra time.
@@ -511,6 +519,12 @@ pub struct Simulation {
     pub(crate) shot_on_target: bool,
     pub(crate) shot_quality: f64,
     pub(crate) blockers_tried: u32,
+    /// The restart taker until his first kick or until another player touches the ball;
+    /// his first kick is a restart kick. Every dead ball clears it.
+    pub(crate) restart_taker: Option<usize>,
+    /// The defenders (one bit per roster index) who have already tried to clear the fast
+    /// pass in flight. Cleared with a kick and with `pass_in_flight`.
+    pub(crate) clearers_tried: u32,
     /// Test seam: how each shot ended.
     #[cfg(feature = "scenario")]
     pub(crate) census: ShotCensus,
@@ -569,6 +583,8 @@ impl Simulation {
             ai: [AiState::default(); 2],
             keeper_beaten: false,
             pass_in_flight: None,
+            restart_taker: None,
+            clearers_tried: 0,
             shot_in_flight: None,
             shot_on_target: false,
             shot_quality: 0.0,
@@ -836,6 +852,7 @@ impl Simulation {
             // was set up with, and the keeper the dive it committed to.
             Phase::Live if self.referee.shootout.is_some() => {}
             Phase::Live => {
+                self.summary.live_ticks += 1;
                 if let Some(team) = self.last_touch {
                     self.summary.possession_ticks[team] += 1;
                 }
@@ -945,14 +962,16 @@ impl Simulation {
         offside_counts: bool,
         penalty: bool,
     ) {
-        let (dir, speed, loft) = match kick {
-            Kick::Pass { dir, speed, loft } | Kick::Shot { dir, speed, loft } => (dir, speed, loft),
-        };
+        let (dir, speed, loft) = kick.flight();
         let mut shooter = None;
         self.end_shot();
+        self.clearers_tried = 0;
         if let Some(c) = self.carrier {
             let team = self.players[c].team;
             self.pass_in_flight = None;
+            // A shot is always a shot; otherwise the restart taker's first kick is a restart
+            // kick, then a clearance is a clearance, and only what is left is a pass.
+            let restart_kick = self.restart_taker.take() == Some(c);
             if matches!(kick, Kick::Shot { .. }) {
                 self.summary.shots[team] += 1;
                 let attack_x = self.teams[team].attack_x;
@@ -969,6 +988,10 @@ impl Simulation {
                 self.shot_in_flight = Some(team);
                 self.shot_quality = quality;
                 shooter = Some((team, attack_x));
+            } else if restart_kick {
+                self.summary.restart_kicks[team] += 1;
+            } else if matches!(kick, Kick::Clear { .. }) {
+                self.summary.clearances[team] += 1;
             } else {
                 self.summary.passes[team] += 1;
                 self.pass_in_flight = Some(team);
@@ -1123,6 +1146,69 @@ impl Simulation {
         self.keeper_beaten = true;
     }
 
+    /// While an open-play pass is in flight, fast, under `reach_height` and inside the
+    /// penalty area of the side that did not play it, each active defending outfield player
+    /// within `cross_reach` rolls once per flight to clear it. A clearance deflects the ball
+    /// away from his own goal centre, with his side as the last touch; the pass is not
+    /// completed. Returns `true` when the ball was cleared.
+    fn try_clear_cross(&mut self, t: &Tuning) -> bool {
+        let Some(passer) = self.pass_in_flight else {
+            return false;
+        };
+        let c = &t.clearances;
+        if c.cross_chance <= 0.0
+            || self.ball.speed() <= t.control_speed
+            || self.ball.pos.z > t.reach_height
+        {
+            return false;
+        }
+        let def = 1 - passer;
+        let own_goal_x = -self.teams[def].attack_x;
+        let ball_xy = self.ball.xy();
+        if !pitch::in_penalty_area(ball_xy, own_goal_x) {
+            return false;
+        }
+        let keeper = self.keeper(def);
+        for i in 0..self.players.len() {
+            let p = self.players[i];
+            let bit = 1u32 << i;
+            if p.team != def
+                || i == keeper
+                || !p.active()
+                || self.clearers_tried & bit != 0
+                || (p.pos - ball_xy).length() >= c.cross_reach
+            {
+                continue;
+            }
+            self.clearers_tried |= bit;
+            if self.rng.referee_draw() < c.cross_chance {
+                let goal = pitch::goal_centre(own_goal_x);
+                let away = match toward(goal, ball_xy) {
+                    v if v == DVec2::ZERO => DVec2::new(-own_goal_x.signum(), 0.0),
+                    v => v,
+                };
+                let angle = self.rng.next_f64();
+                let loft = self.rng.next_f64();
+                self.ball.vel = shot::deflect(
+                    self.ball.vel,
+                    away,
+                    c.cross_speed,
+                    c.cross_spread,
+                    c.cross_loft,
+                    angle,
+                    loft,
+                );
+                self.deflected_by(i);
+                self.pass_in_flight = None;
+                self.clearers_tried = 0;
+                self.keeper_beaten = false;
+                self.summary.clearances[def] += 1;
+                return true;
+            }
+        }
+        false
+    }
+
     /// Player `i` deflected the shot in flight: his side touched the ball last and the shot
     /// is over.
     fn deflected_by(&mut self, i: usize) {
@@ -1185,6 +1271,9 @@ impl Simulation {
         match self.carrier {
             None => {
                 if self.contest_shot(t) {
+                    return;
+                }
+                if self.try_clear_cross(t) {
                     return;
                 }
                 if self.ball.pos.z > t.reach_height {
@@ -1268,6 +1357,10 @@ impl Simulation {
         let team = self.players[i].team;
         if self.pass_in_flight.take() == Some(team) {
             self.summary.passes_completed[team] += 1;
+        }
+        self.clearers_tried = 0;
+        if self.restart_taker != Some(i) {
+            self.restart_taker = None;
         }
         self.end_shot();
         if self.last_touch != Some(team) {
