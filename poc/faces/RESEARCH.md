@@ -1,6 +1,6 @@
 # Research: improving face quality, genetic variation and hair, and making the pipeline production-ready
 
-Written 2026-09-25. Four parallel research passes covered face quality, genetic variation, hair, and pipeline quality. Every recommendation was checked against primary sources: licence files, model cards and papers. Items marked **UNVERIFIED** could not be confirmed. Nothing here has been implemented yet; it is the plan after PoC 7 (FLAME on its own; see `REPORT.md`).
+Written 2026-09-25. Four parallel research passes covered face quality, genetic variation, hair, and pipeline quality. Every recommendation was checked against primary sources: licence files, model cards and papers. Items marked **UNVERIFIED** could not be confirmed. It was the plan after PoC 7. Items 1–8 were then proved in PoC 8 (see `REPORT.md`).
 
 Licence labels used throughout:
 - **OK**: inside the allowed set (MIT, Apache-2.0, BSD, zlib, CC0, CC-BY-4.0).
@@ -222,10 +222,12 @@ Fallback:
 | FLAG | MetaHuman (Epic EULA), Unity Digital Human and Unity Hair (Unity Companion Licence), MB-Lab (AGPL), SD 3.5 (Stability Community), PixArt-Σ and LCM-LoRA (OpenRAIL++), Sana (Gemma terms), Kolors (registration), HunyuanDiT (Tencent licence), Hyper-SD (no licence), Texturing.xyz (bans AI use), 3D Scan Store (no character makers), Open Source Afro Hair Library (BOSS licence), dlib library (BSL-1.0; its weights are public domain) |
 | Patent | Hair meshes (Yuksel); statistical wisp model (US 7,418,371, likely expired, UNVERIFIED) |
 
-## Decisions needed
+## Decisions (made 2026-09-25)
 
-1. **GNM Head as the base (PoC 8).** Recommended. It is Apache-2.0, but read its data-provenance section first.
-2. **Vega's OpenRAIL++ obligations.** Accept them (EULA clause plus licence copy), or move the finish to an Apache-2.0 model trained from scratch (Z-Image, FLUX.2 klein), which needs a GPU or server tier.
-3. **The runtime AI finish at all,** or a pre-rendered library (FM-style) plus a strong raw render. The roadmap supports both.
-4. **Legal sign-off on using numbers from CC BY-NC(-ND) articles as facts,** and on internal-only use of face-recognition QA models.
-5. **Community review** of nation templates and ancestry presets.
+1. **GNM Head is the base.** PoC 8 proves roadmap items 1–8 (see REPORT.md, PoC 8).
+2. **Vega's OpenRAIL++ obligations are accepted:** an EULA clause plus a licence copy (`photo_finish/OPENRAIL_NOTICE.md`).
+3. **The finish runs at runtime:** seeded, cached by pipeline key, masked and measured.
+4. **Legal sign-off given** on using numbers from CC BY-NC(-ND) articles as facts, and on internal-only face-recognition QA.
+5. **The FLAME masks are used as they are;** no MPI-IS query.
+
+Still open: community review of nation templates, and GNM's data-provenance section.

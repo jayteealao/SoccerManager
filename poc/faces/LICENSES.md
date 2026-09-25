@@ -182,3 +182,17 @@ Note: Anny's `pyproject.toml` lists a `LICENSE_THINGS` licence file, but that fi
 | Data | Source | Use |
 |---|---|---|
 | Adult male facial norms (Farkas NAW; Kenyan and African American means and SDs) | Wamalwa et al. 2019, https://pmc.ncbi.nlm.nih.gov/articles/PMC6384287/; Farkas norms (zy-zy 137, n-gn 121.3) | Only the published means and SDs are cited, in `src/measure.rs`. No data files were downloaded. |
+
+## PoC 8: GNM Head, evaluation models and data (in `downloads/`, never committed)
+
+| Item | Licence | Confirmed from | Use |
+|---|---|---|---|
+| GNM Head v3.0 (`gnm_head.npz`, `identity_decoder_model.h5`, iBUG-68 landmark file), google/GNM | Apache-2.0 | Repository `LICENSE`; README "released under the Apache 2.0 permissive license suitable for both non-commercial and commercial applications" | Head model and identity sampler. Arrays are derived by `gnm/gnm_prep.py`; no GNM code is run. Cite Ploumpis et al. 2026, arXiv 2607.23687 |
+| ISSA, International Skin Spectra Archive | CC BY 4.0 | figshare record 28228571 v4 | `data/issa_face_skin.json` (derived statistics, committed with attribution) |
+| CreativeML Open RAIL++-M licence text | Licence text (redistributed as required) | https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0 | `photo_finish/licences/`; obligations accepted, see `photo_finish/OPENRAIL_NOTICE.md` |
+| facebook/dinov2-small | Apache-2.0 | Model card YAML | Evaluation only |
+| google/siglip2-base-patch16-224 | Apache-2.0 | Model card YAML | Evaluation only |
+| YuNet face_detection_yunet_2023mar | MIT | opencv_zoo `models/face_detection_yunet/LICENSE` | Evaluation only |
+| SFace face_recognition_sface_2021dec | Apache-2.0 label; training data (MS-Celeb-derived) provenance unknown | opencv_zoo `models/face_recognition_sface/LICENSE` | **Internal QA only, never shipped** (signed off) |
+
+Python packages added for PoC 8 (venv, not committed): h5py (BSD-3-Clause), openpyxl (MIT), keras (Apache-2.0, only for the decoder cross-check), absl-py (Apache-2.0), etils (Apache-2.0), plus transformers, torch and opencv-contrib-python (Apache-2.0 / BSD-3-Clause / Apache-2.0), already present.

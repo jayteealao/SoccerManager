@@ -37,6 +37,16 @@ cargo run --release --bin flame7_sheet -- hair
 downloads/venv/bin/python photo_finish/finish.py --manifest out/tmp/flame7/pairs.csv --strength 0.2 --steps 30 --adapter-scale 0.9
 cargo run --release --bin flame7_sheet -- compare
 downloads/venv/bin/python photo_finish/landmarks2d.py out/tmp/finish_inputs out/tmp/finished
+# PoC 8 (GNM Head, Apache-2.0; git clone --depth 1 https://github.com/google/GNM downloads/GNM):
+downloads/venv/bin/python gnm/gnm_prep.py --check        # asset + decoder check against Keras
+downloads/venv/bin/python gnm/gnm_norms.py               # sampler vs Farkas / Fang, landmark picks
+downloads/venv/bin/python gnm/issa_skin.py               # ISSA face-skin statistics -> data/
+cargo test --release                                     # includes the sourced-genome tests
+cargo run --release --bin gnm8_sheet -- identity         # also: classes ages hair eyes mst family
+downloads/venv/bin/python photo_finish/provenance.py     # model hashes -> models.lock.json
+downloads/venv/bin/python photo_finish/finish.py --manifest out/tmp/gnm8/pairs.csv --strength 0.2 --adapter-scale 0.9 --cache downloads/finish_cache
+cargo run --release --bin gnm8_sheet -- compare
+downloads/venv/bin/python eval/evaluate.py               # evaluation harness v1
 ```
 
 On a machine without a GPU, install Mesa lavapipe (`apt install mesa-vulkan-drivers`). wgpu then renders through software Vulkan.
@@ -324,12 +334,165 @@ Weak points:
 - **Hair.** Hair reaches down the back of the neck, because FLAME's scalp mask extends low at the nape. The medium-wavy cards are still hazy.
 - **Resolution.** FLAME's head is only 3,931 vertices. A subdivision step would help close-ups.
 
+### PoC 8: GNM Head, sourced genome, and roadmap items 1–8. **The best base so far; every roadmap item 1–8 has a working proof.**
+
+Decisions the person made before this PoC:
+- adopt GNM Head;
+- accept Vega's OpenRAIL++ obligations;
+- run the finish at runtime;
+- use the FLAME masks as they are;
+- legal sign-off given, including for using numbers from CC BY-NC(-ND) articles as facts and for internal-only face-recognition QA.
+
+Images:
+- [`out/poc8_gnm_identity.jpg`](out/poc8_gnm_identity.jpg): six genomes at 24, clay and full look.
+- [`out/poc8_gnm_classes.jpg`](out/poc8_gnm_classes.jpg): three latents across GNM's four ethnicity conditions. Only the condition changes.
+- [`out/poc8_gnm_age_sheet.jpg`](out/poc8_gnm_age_sheet.jpg): six genomes at eight ages.
+- [`out/poc8_gnm_eyes.jpg`](out/poc8_gnm_eyes.jpg): eye close-ups without and with the PoC 8 eye model.
+- [`out/poc8_gnm_hair_sheet.jpg`](out/poc8_gnm_hair_sheet.jpg): four styles × four hair colours, old hair path (alpha-to-coverage, Kajiya-Kay) against new (stochastic coverage, Marschner).
+- [`out/poc8_gnm_mst.jpg`](out/poc8_gnm_mst.jpg): the same face with its skin set to each Monk Skin Tone swatch.
+- [`out/poc8_gnm_family.jpg`](out/poc8_gnm_family.jpg): two fathers at 45 and three sons each at 22.
+- [`out/poc8_finish_pairs.jpg`](out/poc8_finish_pairs.jpg): render and constrained-finish pairs at 19, 30 and 60.
+- Numbers:
+  - [`out/poc8_gnm_norms.txt`](out/poc8_gnm_norms.txt): the sampler against published norms;
+  - [`out/poc8_eval.txt`](out/poc8_eval.txt) and [`.json`](out/poc8_eval.json): the evaluation harness;
+  - [`out/poc8_mst.txt`](out/poc8_mst.txt): skin-model fit per MST swatch;
+  - [`out/poc8_finish_timings.jsonl`](out/poc8_finish_timings.jsonl): finish timings.
+
+**1. GNM Head (roadmap 1).**
+- `gnm/gnm_prep.py` reads `gnm_head.npz` and the identity decoder `.h5` from google/GNM (Apache-2.0). It writes plain arrays to `downloads/gnm_asset/`:
+  - 17,821 vertices: skin, eyeballs with separate interior and cornea, teeth, tongue;
+  - 253 identity components;
+  - 46 named vertex groups;
+  - iBUG-68 landmarks.
+- **No GNM code runs** (running GNM's Python package was refused by the session's safety check). The rest-pose forward pass is linear, and the identity decoder is a 5-layer MLP. Both are reimplemented in `src/gnm.rs`; the numpy version matches Keras to 1e-6.
+- **Identity per genome.** Inputs:
+  - GNM's condition is [male] + the genome's ancestry shares mapped to GNM's four classes;
+  - a 64-d latent and a 253-d residual come from the genome.
+
+  The residual (×0.6) restores within-group spread. The decoder alone gives about half the published coefficient of variation, because a conditional VAE decodes towards the mean. An extra class contrast (×1.0) moves between-group contrasts towards Farkas.
+- **Result against norms** (`out/poc8_gnm_norms.txt`, 300 samples per class):
+  - all seven between-group contrasts have the same sign as Farkas 2005, at 40–95% of its size (Farkas gaps are inflated by observer effects);
+  - within-class CVs are 0.04–0.07 against Fang's 0.04–0.09;
+  - nearest-class-mean accuracy is 0.91.
+- **Lids.** GNM's template is a scan average with relaxed lids: a 7.2 mm aperture against the usual 9–10 mm. The smallest-norm combination of GNM's own eye expression components opens it by 1.8 mm.
+- **Ageing:** PoC 7's rules, moved onto GNM's named regions (infraorbital, cheek, zygomatic, lips, nose, ears) and made gentler at the jowls.
+- **Result:**
+  - GNM heads in clay look like real people, with far more natural eye regions, noses and lips than FLAME, and much better than MakeHuman or Anny;
+  - the classes sheet shows the ancestry condition changing eye-region, nasal and lip shape;
+  - the per-person latent still dominates, as the research predicts.
+
+**2. Guardrails (roadmap 2).**
+- The finish seed comes from the genome seed and age (manifest column 6), so regeneration is bit-identical.
+- `photo_finish/provenance.py` writes `models.lock.json`, which pins every model file by SHA-256. `photo_finish/MODELS.md` is the human-readable register.
+- The finish cache key hashes:
+  - the lock;
+  - the prompt set;
+  - the parameters;
+  - `FINISH_VERSION`.
+
+  Outputs are cached under `<cache>/<key>/`. Changing any model invalidates the cache; a rerun hits it.
+- The Vega OpenRAIL++ obligations are accepted and written up in `photo_finish/OPENRAIL_NOTICE.md`: a draft EULA clause, a licence copy in `photo_finish/licences/`, and the modification notice.
+- The FLAME masks stay as they are. PoC 8 does not use them.
+
+**3. Evaluation harness v1 (roadmap 3, `eval/evaluate.py`).** Images only; no race classification. Results on this set:
+- **Landmark drift, render → finish** (MediaPipe): 0.7–2.5% on face width, jaw, nose and eye spacing, and 4.8% on eye aperture. The lips move most (11–13% on vermilion height), because the finish redraws lips. That points at the next mask refinement.
+- **Colorimetry:**
+  - mean |ΔITA| render → finish is 1.1°, with ΔE ≤ 0.8 on the skin mask;
+  - the MST bucket is kept in 100% of images;
+  - the tone lock shifted L\*a\*b\* by under 1 unit on average.
+- **Near-duplicates** (DINOv2-small): 5 cross-genome pairs flagged, all "same skin, same hair style, same age" pairs such as CVD 1 and CVD 4. SFace separates those easily. DINOv2 alone is a coarse duplicate check; pair it with an identity or landmark vector.
+- **Apparent age** (SigLIP 2 zero-shot):
+  - renders: MAE 9.8 years, r = 0.80;
+  - finished: MAE 6.1 years, r = 0.93.
+
+  The finish carries age well. Renders at 19 still read about 27.
+- **Identity** (SFace, internal QA only):
+  - same genome across ages: 0.90 cosine; 19 against 60: 0.85;
+  - different genomes: 0.55; d′ = 3.5;
+  - render against finish: 0.78 (SFace's match threshold is 0.36).
+- Not done: FairFace KD-DINOv2 distance. It needs the FairFace images, which are not downloaded here.
+
+**4. Constrained finish (roadmap 4).**
+- The renderer writes a region mask. R marks skin the finish may change. G marks eyes and B marks hair, brows and lashes, which stay renderer-owned.
+- `finish.py` re-noises the latent from the render outside the mask at every step, composites the result over the render with a feathered mask, and locks mean skin CIELAB to the render.
+- Eyes, brows, lashes and hair come back pixel-exact. Iris colour cannot drift, and neither can hairline or brows.
+- 31.8 s per image on average (22.6–53.1 s) on the 4-vCPU Xeon, with 4 UNet steps (strength 0.2 of 20). A parallel render job slowed some images.
+
+**5. Skin shading (roadmap 5).**
+- **Albedo:** a two-chromophore model (eumelanin with a pheomelanin share, and haemoglobin), fitted so it reaches all ten Monk swatches within ΔE76 4.3. There is a unit test.
+- **Per genome:** the skin CIELAB is inverted to melanin and blood concentrations. Blood is then raised regionally (cheeks, nose tip, ears, lips) from GNM's regions.
+- **Lighting:**
+  - pre-integrated subsurface diffuse (Penner 2011), with a LUT computed from d'Eon's six-Gaussian skin profile and per-vertex curvature;
+  - diffuse on the smooth normal and specular on the pore-bumped normal;
+  - dual-lobe GGX with oiliness from the T-zone;
+  - cavity occlusion.
+- **Finding:** real genomes, whose skin comes from ISSA measurements (L\* 36–65), render at MST 5–7. The display swatches MST 1–4 (L\* 88–94) are lighter than any measured face skin. Fed in directly, they clip to near-white (strip covers buckets 2, 5, 6, 7, 8, 10).
+
+  MST swatches are display colours, not reflectances. Exposure should therefore be calibrated against photographs, not against the swatches.
+
+**6. Hair fixes (roadmap 6).** A new hair path behind `RenderOpts::stochastic_hair`. The old path is untouched; PoC 7 renders are byte-identical.
+- coverage-preserving mipmaps for hair textures (Castaño 2010);
+- stochastic per-sample coverage through `@builtin(sample_mask)` instead of hardware alpha-to-coverage, with a random sample set per fragment, layer and pass;
+- 8 jittered accumulation passes;
+- Marschner R/TT/TRT lobes (Karis 2016 / Frostbite 2019) with melanin absorption from the pbrt-v3 formula.
+
+Result:
+- the grey haze on the wavy fringe is gone;
+- red and brown come from absorption;
+- grey is per-strand salt and pepper.
+
+Coily styles still use the PoC 3 shells, whose grey reads too speckled at 60.
+
+**7. Eye model (roadmap 7).**
+- The eye interior (sclera, iris and pupil geometry from GNM) is shaded with:
+  - a refracted iris lookup (Snell at n = 1.376 over the anterior chamber depth);
+  - a limbal ring that fades with age;
+  - collarette and crypts;
+  - a sclera that yellows with age.
+- The cornea is drawn blended, with Fresnel reflection and a key-light glint.
+- An eye-occlusion shell adds lid and lash shadow per fragment, from cubic fits of the lid margins.
+- Tear meniscus on the lower lid, a caruncle, and eyelashes as tapered Marschner ribbons along the lid margins.
+- `out/poc8_gnm_eyes.jpg` shows the "doll eye" look (bright, shadowless sclera) replaced by shadowed, wet eyes.
+
+**8. Sourced gene pools (roadmap 8, `src/genes.rs`, genome version 2).**
+- Six neutral components, K1–K6. Every number is tagged `Sourced` (with citation) or `Assumed` (with the reason).
+- **Ancestry:** a Dirichlet draw around nation templates.
+- **Two-allele loci per chromosome with local ancestry:**
+  - HERC2 rs12913832 (eye colour);
+  - MC1R R (red hair);
+  - SLC24A5 (skin);
+  - EDAR (hair form).
+
+  Frequencies come from 1000 Genomes.
+- **Skin:** ISSA face-site CIELAB for men, recomputed here from the raw spectra (`gnm/issa_skin.py` → `data/issa_face_skin.json`, CC BY 4.0). It includes the within-group covariance.
+- **Liability thresholds** for curl and baldness.
+- **Greying:** onset from Tobin and Paus, with the span fitted to Panhard 2012.
+- **Baldness curves** from the Chinese Norwood data and Norwood 1975.
+- **Father-to-son inheritance:** Mendelian loci, averaged ancestry, and a face latent with parent-offspring correlation h²/2.
+- **Tests** (`cargo test`) check that:
+  - allele frequencies reproduce their sources;
+  - ISSA skin means and spread reproduce;
+  - a 50/50 K1/K2 mix is 12–20% blue-eyed, and F1 sons under 6%, against 25% under PoC 1's pool-picking;
+  - 3–25% are half grey at 50;
+  - baldness prevalence matches the curve at 35 and 55;
+  - the skin model covers MST 1–10;
+  - skin R² on ancestry exceeds 0.6.
+
+Weak points and what's next:
+- **Hair** is still cards and shells. Strand hair (roadmap 9) is the largest remaining visual gap.
+- **The brows** are painted strokes.
+- **Renders read older than their age at 19.** This is a lighting and skin-detail issue; the finish corrects most of it.
+- **The finish redraws lips.** Add lips to the renderer-owned mask, or feather lower there.
+- **GNM's data provenance and consent** section should still be read against the technical report before shipping.
+
 ## What failed or was blocked, and why
 
 - **FLAME 2023 Open** needs registration, which the rules forbid me to do. The person registered, downloaded it, and handed it over through Google Drive; it is used in PoC 6. The separate `FLAME_masks.zip` is not used, because its licence is unconfirmed.
 - **No reference photos.** Wikimedia Commons refused direct file downloads from this container (an error page instead of the image). The proportion work uses published anthropometric numbers instead, and no images of real people are used or committed.
 - **No GPU.** Rendering ran on Mesa lavapipe, installed with apt, outside the repo. The PoC 4 timings are CPU-only.
 - **v1 of the photo finish drifted in age and ancestry.** v2 fixes this for these 18 faces by tuning the render and the prompt (see PoC 4). It departs from the brief's single fixed prompt: v2 uses a fixed prompt per age band and eye colour.
+- **Running GNM's own Python package** was refused by the session's safety check (external code). PoC 8 reads GNM's published data arrays instead and reimplements the rest-pose forward pass and the identity decoder, validated against Keras.
+- **FairFace distribution distance** (roadmap 3) was not run: it needs the FairFace image set, which was not downloaded.
 - **The first head proportions were wrong:** shape genes were over-scaled, and two landmark picks were initially wrong. Both were fixed and checked with rendered landmark markers.
 
 ## Licences confirmed, with sources
@@ -346,11 +509,25 @@ The full record is in [`LICENSES.md`](LICENSES.md).
 | Python packages for PoC 4 (venv, not committed) | Mostly MIT/Apache/BSD; exceptions listed below | Package metadata; see `photo_finish/NOTES.md` |
 | FLAME 2023 Open | CC-BY-4.0; cite Li et al., ACM ToG 2017 | The readme inside `FLAME2023Open.zip`, and https://flame.is.tue.mpg.de/modellicense.html |
 | Anny (code and bundled MPFB2 data) | Apache-2.0 code; CC0 MakeHuman/MPFB2 data | Repository `LICENSE` and README licence section, https://github.com/naver/anny (commit `ee5b909`) |
+| GNM Head v3.0 (npz data, identity decoder) | Apache-2.0 | Repository `LICENSE` and README ("suitable for both non-commercial and commercial applications"), https://github.com/google/GNM |
+| ISSA skin spectra | CC BY 4.0 | figshare record, https://doi.org/10.6084/m9.figshare.28228571.v4 |
+| DINOv2-small, SigLIP 2 base | Apache-2.0 | Model card YAML on Hugging Face |
+| YuNet / SFace (OpenCV zoo) | MIT / Apache-2.0 (SFace internal QA only) | `LICENSE` files in https://github.com/opencv/opencv_zoo |
 | Facial norms | Published numbers, cited | Wamalwa et al. 2019, https://pmc.ncbi.nlm.nih.gov/articles/PMC6384287/ |
 
 The `jpeg-encoder` crate (which adds an IJG term) was replaced with a small in-crate baseline encoder (`src/jpeg.rs`) to stay inside the allowed set.
 
+## Decisions made (2026-09-25)
+
+- GNM Head adopted as the base (PoC 8).
+- Vega's OpenRAIL++ obligations accepted (`photo_finish/OPENRAIL_NOTICE.md`).
+- The finish runs at runtime, with seeded, cached, masked and measured output.
+- The FLAME masks are used as they are.
+- Legal sign-off given: numbers from CC BY-NC(-ND) articles may be used as facts; face-recognition QA is internal only.
+
 ## Open questions for you
+
+These are the earlier questions. Items 3, 6, 10 and 12 are answered by the decisions above or by PoC 8.
 
 1. **Licences outside the list that cannot be avoided without dropping wgpu:**
    - `libloading` (ISC), which wgpu uses to load the GPU driver;

@@ -210,6 +210,7 @@ fn cards(
                     uv: [u, s],
                     aux: dir.extend(0.0).to_array(),
                     aux2: [0.0; 4],
+                    aux3: [0.0; 4],
                 });
             }
         }
@@ -288,6 +289,7 @@ fn shells(
                 uv: [max_len[i], scalp.dens[i]],
                 aux: [scalp.pos[i].x, scalp.pos[i].y, scalp.pos[i].z, h],
                 aux2: [0.0; 4],
+                aux3: [0.0; 4],
             });
         }
         for (t, k) in scalp.tris.iter().zip(&keep) {
@@ -346,6 +348,7 @@ fn tubes(scalp: &Scalp, rng: &mut Rng, c: &Colours) -> Draw {
                     uv: [j as f32 / ring as f32, s],
                     aux: [dir.x, dir.y, dir.z, id],
                     aux2: [0.0; 4],
+                    aux3: [0.0; 4],
                 });
             }
         }

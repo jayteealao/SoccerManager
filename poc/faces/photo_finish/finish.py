@@ -8,7 +8,20 @@ Output : --out    512x512 RGB PNG, plus <out>.timing.json (and one line appended
 
 Example:
   python finish.py --color c.png --depth d.png --out o.png --strength 0.3 --steps 20 --seed 1
-Batch (loads models once): --manifest pairs.csv   # lines: color_path,depth_path,out_path
+Batch (loads models once): --manifest pairs.csv
+  lines: color,depth,out[,embeds[,mask[,seed[,target_lab]]]]
+
+PoC 8 additions (roadmap 2 and 4):
+  - Guardrails: the noise seed comes from the manifest (derived from the genome
+    seed and age), so a regeneration is bit-identical; every output records a
+    pipeline key (hash of model files, prompt set, scheduler, parameters and
+    FINISH_VERSION) and, with --cache, is stored under cache/<key>/ and reused.
+    Model provenance lives in models.lock.json (provenance.py).
+  - Constrained finish: with a region mask (R = skin the finish may change;
+    eyes, brows, lashes, hair are renderer-owned) the latent is re-noised from
+    the render outside the mask at every step (latent inpainting), the result
+    is composited over the render with a feathered mask, and skin tone is
+    locked to the render in CIELAB (mean L*, a*, b* over the skin mask).
 
 Scheduler: EulerDiscreteScheduler reproduced from Vega's scheduler/scheduler_config.json
 (scaled_linear betas 0.00085..0.012, 1000 train steps, epsilon prediction, timestep_spacing=leading,
@@ -69,6 +82,44 @@ class EulerScheduler:
         return ts[start:], sig[start:]
 
 
+FINISH_VERSION = "poc8-1"
+
+
+def srgb_to_lab(rgb):
+    """sRGB uint8 (..., 3) -> CIELAB D65."""
+    c = rgb.astype(np.float64) / 255.0
+    c = np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+    M = np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]])
+    xyz = c @ M.T / np.array([0.9505, 1.0, 1.089])
+    f = np.where(xyz > 0.008856, np.cbrt(xyz), 7.787 * xyz + 16 / 116)
+    return np.stack([116 * f[..., 1] - 16, 500 * (f[..., 0] - f[..., 1]), 200 * (f[..., 1] - f[..., 2])], -1)
+
+
+def lab_to_srgb(lab):
+    fy = (lab[..., 0] + 16) / 116
+    fx = fy + lab[..., 1] / 500
+    fz = fy - lab[..., 2] / 200
+    inv = lambda f: np.where(f ** 3 > 0.008856, f ** 3, (f - 16 / 116) / 7.787)
+    xyz = np.stack([inv(fx) * 0.9505, inv(fy), inv(fz) * 1.089], -1)
+    Mi = np.linalg.inv(np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]]))
+    c = np.clip(xyz @ Mi.T, 0, 1)
+    c = np.where(c <= 0.0031308, c * 12.92, 1.055 * c ** (1 / 2.4) - 0.055)
+    return (c * 255).round().clip(0, 255).astype(np.uint8)
+
+
+def feather(mask, px):
+    """Box-blur a float mask a few times (cheap Gaussian-ish feather)."""
+    m = mask.astype(np.float32)
+    k = max(int(px), 1)
+    for _ in range(3):
+        pad = np.pad(m, k, mode="edge")
+        c = np.cumsum(np.cumsum(pad, 0), 1)
+        c = np.pad(c, ((1, 0), (1, 0)))
+        n = 2 * k + 1
+        m = (c[n:, n:] - c[:-n, n:] - c[n:, :-n] + c[:-n, :-n]) / (n * n)
+    return m
+
+
 class Finisher:
     def __init__(self, threads: int, arena: bool = False):
         so = ort.SessionOptions()
@@ -100,10 +151,14 @@ class Finisher:
             self._embeds[name] = (pe, pooled, json.loads((e / "prompt.json").read_text()))
         self.pe, self.pooled, self.prompt = self._embeds[name]
 
-    def run(self, color_p, depth_p, out_p, strength, steps, seed, guidance, adapter_scale, res):
+    def run(self, color_p, depth_p, out_p, strength, steps, seed, guidance, adapter_scale, res, mask_p=None, tone_lock=True):
         T = {}
         t0 = time.time()
         rng = np.random.default_rng(seed)
+        skin = None
+        if mask_p:
+            mk = Image.open(mask_p).convert("RGB")
+            skin = np.asarray(mk.resize((res, res), Image.BILINEAR), np.float32)[..., 0] / 255.0
         col = Image.open(color_p).convert("RGB")
         dep = Image.open(depth_p).convert("L")
         in_size = col.size
@@ -125,7 +180,14 @@ class Finisher:
         T["adapter_s"] = time.time() - t
 
         ts, sig = self.sched.schedule(steps, strength)
-        x = (z0 + sig[0] * rng.standard_normal(z0.shape).astype(np.float32)).astype(np.float32)
+        noise = rng.standard_normal(z0.shape).astype(np.float32)
+        x = (z0 + sig[0] * noise).astype(np.float32)
+        if skin is not None:
+            # Latent-space mask (64x64 for 512), slightly eroded so the finish
+            # never reaches into renderer-owned regions.
+            lat = z0.shape[-1]
+            m_lat = np.asarray(Image.fromarray((skin * 255).astype(np.uint8)).resize((lat, lat), Image.BILINEAR), np.float32) / 255.0
+            m_lat = np.clip((m_lat - 0.3) / 0.6, 0, 1)[None, None]
         time_ids = np.array([[res, res, 0, 0, res, res]] * 2, np.float32)
         step_times = []
         for i, tt in enumerate(ts):
@@ -147,6 +209,9 @@ class Finisher:
             )
             eps = eps[0:1] + guidance * (eps[1:2] - eps[0:1])
             x = (x + eps * (sig[i + 1] - sig[i])).astype(np.float32)  # Euler, epsilon pred, s_churn=0
+            if skin is not None:
+                # Outside the mask, follow the render's own noised latent.
+                x = (m_lat * x + (1 - m_lat) * (z0 + sig[i + 1] * noise)).astype(np.float32)
             step_times.append(time.time() - t)
         T["unet_steps"] = len(ts)
         T["unet_total_s"] = float(sum(step_times))
@@ -156,6 +221,20 @@ class Finisher:
         (im,) = self.vae_dec.run(None, {"latent": (x / self.scaling).astype(np.float32)})
         T["vae_decode_s"] = time.time() - t
         im = ((np.clip(im[0], -1, 1) + 1) * 127.5).round().astype(np.uint8).transpose(1, 2, 0)
+        lock = None
+        if skin is not None:
+            src = np.asarray(col_r, np.uint8)
+            sel = skin > 0.6
+            if tone_lock and sel.sum() > 200:
+                lab_f = srgb_to_lab(im)
+                lab_r = srgb_to_lab(src)
+                shift = lab_r[sel].mean(0) - lab_f[sel].mean(0)
+                w = feather(skin, 6)[..., None]
+                im = lab_to_srgb(lab_f + shift * w)
+                lock = [round(float(v), 2) for v in shift]
+            # Renderer-owned regions come back exactly from the render.
+            w = np.clip(feather(np.clip((skin - 0.3) / 0.6, 0, 1), 3), 0, 1)[..., None]
+            im = (w * im + (1 - w) * src).round().astype(np.uint8)
         out = Image.fromarray(im, "RGB")
         if out.size != in_size:
             out = out.resize(in_size, Image.LANCZOS)
@@ -172,6 +251,8 @@ class Finisher:
             "peak_rss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6, 2),
             "cpu": cpu_model(), "onnxruntime": ort.__version__,
             "prompt": self.prompt["prompt"], "negative_prompt": self.prompt["negative_prompt"],
+            "mask": str(mask_p) if mask_p else None, "tone_lock_lab_shift": lock,
+            "finish_version": FINISH_VERSION,
         }
         return rec
 
@@ -192,6 +273,8 @@ def main():
     ap.add_argument("--arena", action="store_true", help="enable ORT CPU memory arena (more RAM)")
     ap.add_argument("--embeds", default="embeds", help="prompt set folder under downloads/onnx (see prompts.py)")
     ap.add_argument("--log", help="append one JSON line per image to this file")
+    ap.add_argument("--no-tone-lock", action="store_true")
+    ap.add_argument("--cache", help="cache root: outputs stored under <cache>/<pipeline key>/ and reused")
     a = ap.parse_args()
     assert a.res % 64 == 0, "--res must be a multiple of 64"
     if a.manifest:
@@ -201,12 +284,29 @@ def main():
             ap.error("need --color --depth --out (or --manifest)")
         jobs = [(a.color, a.depth, a.out, a.embeds)]
 
+    from provenance import pipeline_key
     f = Finisher(a.threads, a.arena)
     print(f"models loaded in {f.load_s:.1f}s")
     for job in jobs:
         c, d, o = job[:3]
-        f.use_embeds(job[3] if len(job) > 3 and job[3] else a.embeds)
-        rec = f.run(c, d, o, a.strength, a.steps, a.seed, a.guidance, a.adapter_scale, a.res)
+        emb = job[3] if len(job) > 3 and job[3] else a.embeds
+        mask = job[4] if len(job) > 4 and job[4] else None
+        seed = int(job[5]) if len(job) > 5 and job[5] else a.seed
+        f.use_embeds(emb)
+        params = dict(strength=a.strength, steps=a.steps, guidance=a.guidance, adapter_scale=a.adapter_scale,
+                      res=a.res, masked=bool(mask), tone_lock=not a.no_tone_lock)
+        key = pipeline_key(emb, params, FINISH_VERSION)
+        cached = Path(a.cache) / key / (Path(o).stem + f"_s{seed}.png") if a.cache else None
+        if cached and cached.exists():
+            Path(o).parent.mkdir(parents=True, exist_ok=True)
+            Path(o).write_bytes(cached.read_bytes())
+            print(f"{o}: cache hit {cached}")
+            continue
+        rec = f.run(c, d, o, a.strength, a.steps, seed, a.guidance, a.adapter_scale, a.res, mask, not a.no_tone_lock)
+        rec["pipeline_key"] = key
+        if cached:
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            cached.write_bytes(Path(o).read_bytes())
         tm = rec["timings"]
         print(
             f"{o}: {tm['total_s']:.1f}s/image  (res {a.res}, {tm['unet_steps']} UNet steps x "

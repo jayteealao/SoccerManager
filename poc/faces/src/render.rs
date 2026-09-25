@@ -19,8 +19,10 @@ pub struct Vertex {
     pub uv: [f32; 2],
     /// Per-kind extra data (skin: brow, lip, beard, scalp masks; hair: tangent).
     pub aux: [f32; 4],
-    /// Skin: jersey mask, crow's-feet mask, unused, unused.
+    /// Skin: jersey mask, crow's-feet mask, lash line, curvature (PoC 8).
     pub aux2: [f32; 4],
+    /// PoC 8 skin: haemoglobin boost, oiliness, wetness, cavity.
+    pub aux3: [f32; 4],
 }
 
 /// Shader kinds; must match `shader.wgsl`.
@@ -30,6 +32,33 @@ pub mod kind {
     pub const HAIR_CARD: u32 = 2;
     pub const HAIR_SHELL: u32 = 3;
     pub const HAIR_TUBE: u32 = 4;
+    /// PoC 8: two-chromophore, pre-integrated skin.
+    pub const SKIN2: u32 = 5;
+    /// PoC 8: eye interior (sclera, iris, pupil) with refracted iris lookup.
+    pub const EYE2: u32 = 6;
+    /// PoC 8: cornea, drawn blended after opaque geometry.
+    pub const CORNEA: u32 = 7;
+    /// PoC 8: eye-occlusion shell, blended.
+    pub const OCCLUSION: u32 = 8;
+    /// PoC 8: Marschner-shaded hair card.
+    pub const HAIR_CARD2: u32 = 9;
+
+    pub fn is_hair(k: u32) -> bool {
+        k == HAIR_CARD || k == HAIR_SHELL || k == HAIR_CARD2
+    }
+    pub fn is_blend(k: u32) -> bool {
+        k == CORNEA || k == OCCLUSION
+    }
+}
+
+/// Rendering options. `Default` reproduces PoC 2-7 exactly.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RenderOpts {
+    /// Stochastic per-sample transparency for hair instead of hardware
+    /// alpha-to-coverage, coverage-preserving mipmaps, and the region mask.
+    pub stochastic_hair: bool,
+    /// Accumulation passes with sub-pixel jitter (1 = off).
+    pub passes: u32,
 }
 
 #[repr(C)]
@@ -62,7 +91,8 @@ struct Globals {
     view_proj: [[f32; 4]; 4],
     view: [[f32; 4]; 4],
     cam_pos: [f32; 4],
-    /// x = near view depth of the head, y = far view depth.
+    /// x = near view depth of the head, y = far view depth, z = pass index,
+    /// w = 1 when stochastic hair is on.
     depth_range: [f32; 4],
 }
 
@@ -104,6 +134,9 @@ impl Camera {
 pub struct Frame {
     pub colour: Vec<u8>,
     pub depth: Vec<u8>,
+    /// Region mask: R = skin the photo finish may change, G = eyes,
+    /// B = hair, brows and lashes (renderer-owned).
+    pub mask: Vec<u8>,
 }
 
 pub struct Renderer {
@@ -111,6 +144,8 @@ pub struct Renderer {
     queue: wgpu::Queue,
     opaque: wgpu::RenderPipeline,
     hair: wgpu::RenderPipeline,
+    hair_stoch: wgpu::RenderPipeline,
+    blend: wgpu::RenderPipeline,
     layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     pub adapter_info: String,
@@ -189,7 +224,7 @@ impl Renderer {
             bind_group_layouts: &[Some(&layout)],
             immediate_size: 0,
         });
-        let make = |entry: &str, a2c: bool| {
+        let make = |entry: &str, a2c: bool, blend: bool| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(entry),
                 layout: Some(&pl),
@@ -200,13 +235,13 @@ impl Renderer {
                     buffers: &[Some(wgpu::VertexBufferLayout {
                         array_stride: std::mem::size_of::<Vertex>() as u64,
                         step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x2, 3 => Float32x4, 4 => Float32x4],
+                        attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x2, 3 => Float32x4, 4 => Float32x4, 5 => Float32x4],
                     })],
                 },
                 primitive: wgpu::PrimitiveState { cull_mode: None, ..Default::default() },
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: wgpu::TextureFormat::Depth32Float,
-                    depth_write_enabled: Some(true),
+                    depth_write_enabled: Some(!blend),
                     depth_compare: Some(wgpu::CompareFunction::Less),
                     stencil: Default::default(),
                     bias: Default::default(),
@@ -223,13 +258,18 @@ impl Renderer {
                     targets: &[
                         Some(wgpu::ColorTargetState {
                             format: COLOR_FORMAT,
-                            blend: None,
+                            blend: blend.then_some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
                             write_mask: wgpu::ColorWrites::ALL,
                         }),
                         Some(wgpu::ColorTargetState {
                             format: DEPTH_OUT_FORMAT,
                             blend: None,
-                            write_mask: wgpu::ColorWrites::ALL,
+                            write_mask: if blend { wgpu::ColorWrites::empty() } else { wgpu::ColorWrites::ALL },
+                        }),
+                        Some(wgpu::ColorTargetState {
+                            format: DEPTH_OUT_FORMAT,
+                            blend: None,
+                            write_mask: if blend { wgpu::ColorWrites::empty() } else { wgpu::ColorWrites::ALL },
                         }),
                     ],
                 }),
@@ -237,8 +277,10 @@ impl Renderer {
                 cache: None,
             })
         };
-        let opaque = make("fs_opaque", false);
-        let hair = make("fs_hair", true);
+        let opaque = make("fs_opaque", false, false);
+        let hair = make("fs_hair", true, false);
+        let hair_stoch = make("fs_hair_stoch", false, false);
+        let blend = make("fs_blend", false, true);
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
@@ -247,11 +289,16 @@ impl Renderer {
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             ..Default::default()
         });
-        Self { device, queue, opaque, hair, layout, sampler, adapter_info }
+        Self { device, queue, opaque, hair, hair_stoch, blend, layout, sampler, adapter_info }
     }
 
     pub fn render(&self, draws: &[Draw], cam: &Camera) -> Frame {
+        self.render_opts(draws, cam, RenderOpts { stochastic_hair: false, passes: 1 })
+    }
+
+    pub fn render_opts(&self, draws: &[Draw], cam: &Camera, opts: RenderOpts) -> Frame {
         let d = &self.device;
+        let passes = opts.passes.max(1);
         let size = wgpu::Extent3d { width: SIZE, height: SIZE, depth_or_array_layers: 1 };
         let tex = |format, samples, usage| {
             d.create_texture(&wgpu::TextureDescriptor {
@@ -269,46 +316,45 @@ impl Renderer {
         let out = att | wgpu::TextureUsages::COPY_SRC;
         let msaa_c = tex(COLOR_FORMAT, SAMPLES, att);
         let msaa_d = tex(DEPTH_OUT_FORMAT, SAMPLES, att);
+        let msaa_m = tex(DEPTH_OUT_FORMAT, SAMPLES, att);
         let res_c = tex(COLOR_FORMAT, 1, out);
         let res_d = tex(DEPTH_OUT_FORMAT, 1, out);
+        let res_m = tex(DEPTH_OUT_FORMAT, 1, out);
         let zbuf = tex(wgpu::TextureFormat::Depth32Float, SAMPLES, att);
         let v = |t: &wgpu::Texture| t.create_view(&Default::default());
-        let (msaa_cv, msaa_dv, res_cv, res_dv, zv) = (v(&msaa_c), v(&msaa_d), v(&res_c), v(&res_d), v(&zbuf));
+        let (msaa_cv, msaa_dv, msaa_mv, res_cv, res_dv, res_mv, zv) =
+            (v(&msaa_c), v(&msaa_d), v(&msaa_m), v(&res_c), v(&res_d), v(&res_m), v(&zbuf));
 
         let view = glam::camera::rh::view::look_at_mat4(cam.eye, cam.target, Vec3::Y);
         let proj = glam::camera::rh::proj::directx::perspective(cam.fov_y_deg.to_radians(), 1.0, 1.0, 40.0);
         let dist = (cam.eye - cam.target).length();
-        let globals = Globals {
-            view_proj: (proj * view).to_cols_array_2d(),
-            view: view.to_cols_array_2d(),
-            cam_pos: cam.eye.extend(1.0).to_array(),
-            depth_range: [dist - 2.2, dist + 1.6, 0.0, 0.0],
-        };
-        let gbuf = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::bytes_of(&globals),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
 
         let white = (1, 1, vec![255u8; 4]);
         struct Prepared {
             vb: wgpu::Buffer,
             ib: wgpu::Buffer,
             n: u32,
-            bg: wgpu::BindGroup,
-            hair: bool,
+            pbuf: wgpu::Buffer,
+            tv: wgpu::TextureView,
+            kind: u32,
         }
         let prepared: Vec<Prepared> = draws
             .iter()
             .filter(|dr| !dr.indices.is_empty())
             .map(|dr| {
                 let (tw, th, px) = dr.texture.as_ref().unwrap_or(&white);
+                let levels = if opts.stochastic_hair && kind::is_hair(dr.params.kind) && dr.texture.is_some() {
+                    coverage_mips(*tw, *th, px, dr.params.p0[0])
+                } else {
+                    vec![px.clone()]
+                };
+                let data: Vec<u8> = levels.concat();
                 let t = d.create_texture_with_data(
                     &self.queue,
                     &wgpu::TextureDescriptor {
                         label: None,
                         size: wgpu::Extent3d { width: *tw, height: *th, depth_or_array_layers: 1 },
-                        mip_level_count: 1,
+                        mip_level_count: levels.len() as u32,
                         sample_count: 1,
                         dimension: wgpu::TextureDimension::D2,
                         format: wgpu::TextureFormat::Rgba8Unorm,
@@ -316,24 +362,8 @@ impl Renderer {
                         view_formats: &[],
                     },
                     wgpu::util::TextureDataOrder::LayerMajor,
-                    px,
+                    &data,
                 );
-                let pbuf = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: None,
-                    contents: bytemuck::bytes_of(&dr.params),
-                    usage: wgpu::BufferUsages::UNIFORM,
-                });
-                let tv = t.create_view(&Default::default());
-                let bg = d.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: None,
-                    layout: &self.layout,
-                    entries: &[
-                        wgpu::BindGroupEntry { binding: 0, resource: gbuf.as_entire_binding() },
-                        wgpu::BindGroupEntry { binding: 1, resource: pbuf.as_entire_binding() },
-                        wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&tv) },
-                        wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::Sampler(&self.sampler) },
-                    ],
-                });
                 Prepared {
                     vb: d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: None,
@@ -346,61 +376,116 @@ impl Renderer {
                         usage: wgpu::BufferUsages::INDEX,
                     }),
                     n: dr.indices.len() as u32,
-                    bg,
-                    hair: dr.params.kind == kind::HAIR_CARD || dr.params.kind == kind::HAIR_SHELL,
+                    pbuf: d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: None,
+                        contents: bytemuck::bytes_of(&dr.params),
+                        usage: wgpu::BufferUsages::UNIFORM,
+                    }),
+                    tv: t.create_view(&Default::default()),
+                    kind: dr.params.kind,
                 }
             })
             .collect();
 
-        let mut enc = d.create_command_encoder(&Default::default());
-        {
-            let bgc = wgpu::Color { r: 0.16, g: 0.18, b: 0.21, a: 1.0 };
-            let mut pass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+        let mut acc = vec![0.0f32; (SIZE * SIZE * 4) as usize];
+        let mut depth = Vec::new();
+        let mut mask = Vec::new();
+        for pass_i in 0..passes {
+            // Sub-pixel jitter (Halton 2, 3); pass 0 is unjittered.
+            let (jx, jy) = if pass_i == 0 { (0.0, 0.0) } else { (halton(pass_i, 2) - 0.5, halton(pass_i, 3) - 0.5) };
+            let jitter = glam::Mat4::from_translation(Vec3::new(jx * 2.0 / SIZE as f32, jy * 2.0 / SIZE as f32, 0.0));
+            let globals = Globals {
+                view_proj: (jitter * proj * view).to_cols_array_2d(),
+                view: view.to_cols_array_2d(),
+                cam_pos: cam.eye.extend(1.0).to_array(),
+                depth_range: [dist - 2.2, dist + 1.6, pass_i as f32, if opts.stochastic_hair { 1.0 } else { 0.0 }],
+            };
+            let gbuf = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: None,
-                color_attachments: &[
-                    Some(wgpu::RenderPassColorAttachment {
-                        view: &msaa_cv,
-                        depth_slice: None,
-                        resolve_target: Some(&res_cv),
-                        ops: wgpu::Operations { load: wgpu::LoadOp::Clear(bgc), store: wgpu::StoreOp::Discard },
-                    }),
-                    Some(wgpu::RenderPassColorAttachment {
-                        view: &msaa_dv,
-                        depth_slice: None,
-                        resolve_target: Some(&res_dv),
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                            store: wgpu::StoreOp::Discard,
-                        },
-                    }),
-                ],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &zv,
-                    depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Discard }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
+                contents: bytemuck::bytes_of(&globals),
+                usage: wgpu::BufferUsages::UNIFORM,
             });
-            // Opaque first, then alpha-to-coverage hair.
-            for hair in [false, true] {
-                pass.set_pipeline(if hair { &self.hair } else { &self.opaque });
-                for p in prepared.iter().filter(|p| p.hair == hair) {
-                    pass.set_bind_group(0, &p.bg, &[]);
-                    pass.set_vertex_buffer(0, p.vb.slice(..));
-                    pass.set_index_buffer(p.ib.slice(..), wgpu::IndexFormat::Uint32);
-                    pass.draw_indexed(0..p.n, 0, 0..1);
+            let bgs: Vec<wgpu::BindGroup> = prepared
+                .iter()
+                .map(|p| {
+                    d.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: None,
+                        layout: &self.layout,
+                        entries: &[
+                            wgpu::BindGroupEntry { binding: 0, resource: gbuf.as_entire_binding() },
+                            wgpu::BindGroupEntry { binding: 1, resource: p.pbuf.as_entire_binding() },
+                            wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&p.tv) },
+                            wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+                        ],
+                    })
+                })
+                .collect();
+
+            let mut enc = d.create_command_encoder(&Default::default());
+            {
+                let bgc = wgpu::Color { r: 0.16, g: 0.18, b: 0.21, a: 1.0 };
+                let att = |view, resolve, clear| {
+                    Some(wgpu::RenderPassColorAttachment {
+                        view,
+                        depth_slice: None,
+                        resolve_target: Some(resolve),
+                        ops: wgpu::Operations { load: wgpu::LoadOp::Clear(clear), store: wgpu::StoreOp::Discard },
+                    })
+                };
+                let mut pass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[
+                        att(&msaa_cv, &res_cv, bgc),
+                        att(&msaa_dv, &res_dv, wgpu::Color::BLACK),
+                        att(&msaa_mv, &res_mv, wgpu::Color::BLACK),
+                    ],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &zv,
+                        depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Discard }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
+                // Opaque, then hair, then blended eye layers.
+                for stage in 0..3 {
+                    let pipe = match stage {
+                        0 => &self.opaque,
+                        1 if opts.stochastic_hair => &self.hair_stoch,
+                        1 => &self.hair,
+                        _ => &self.blend,
+                    };
+                    pass.set_pipeline(pipe);
+                    for (p, bg) in prepared.iter().zip(&bgs) {
+                        let st = if kind::is_blend(p.kind) { 2 } else if kind::is_hair(p.kind) { 1 } else { 0 };
+                        if st != stage {
+                            continue;
+                        }
+                        pass.set_bind_group(0, bg, &[]);
+                        pass.set_vertex_buffer(0, p.vb.slice(..));
+                        pass.set_index_buffer(p.ib.slice(..), wgpu::IndexFormat::Uint32);
+                        pass.draw_indexed(0..p.n, 0, 0..1);
+                    }
                 }
             }
+            let colour = self.read(&mut enc, &res_c);
+            let (dbuf, mbuf) = if pass_i == 0 { (Some(self.read(&mut enc, &res_d)), Some(self.read(&mut enc, &res_m))) } else { (None, None) };
+            self.queue.submit([enc.finish()]);
+            let colour = self.finish_read(colour);
+            if passes == 1 {
+                return Frame { colour, depth: self.finish_read(dbuf.unwrap()), mask: self.finish_read(mbuf.unwrap()) };
+            }
+            if let (Some(db), Some(mb)) = (dbuf, mbuf) {
+                depth = self.finish_read(db);
+                mask = self.finish_read(mb);
+            }
+            for (a, c) in acc.iter_mut().zip(&colour) {
+                *a += srgb_to_linear(*c);
+            }
         }
-        let colour = self.read(&mut enc, &res_c);
-        let depth = self.read(&mut enc, &res_d);
-        self.queue.submit([enc.finish()]);
-        let colour = self.finish_read(colour);
-        let depth = self.finish_read(depth);
-        // Depth PNG is grey: keep one channel replicated.
-        Frame { colour, depth }
+        let colour = acc.iter().map(|a| linear_to_srgb(a / passes as f32)).collect();
+        Frame { colour, depth, mask }
     }
 
     fn read(&self, enc: &mut wgpu::CommandEncoder, t: &wgpu::Texture) -> wgpu::Buffer {
@@ -439,4 +524,72 @@ impl Default for Renderer {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn halton(mut i: u32, base: u32) -> f32 {
+    let (mut f, mut r) = (1.0f32, 0.0f32);
+    while i > 0 {
+        f /= base as f32;
+        r += f * (i % base) as f32;
+        i /= base;
+    }
+    r
+}
+
+fn srgb_to_linear(c: u8) -> f32 {
+    let c = c as f32 / 255.0;
+    if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+}
+
+fn linear_to_srgb(x: f32) -> u8 {
+    let c = if x <= 0.0031308 { x * 12.92 } else { 1.055 * x.powf(1.0 / 2.4) - 0.055 };
+    (c * 255.0 + 0.5).clamp(0.0, 255.0) as u8
+}
+
+/// Mip chain whose alpha keeps the same coverage above `cutoff` at every
+/// level (Castano 2010), so distant hair cards do not thin out into haze.
+/// Alpha is box-filtered; each level's alpha is then scaled by the factor
+/// (found by bisection) that restores level 0's coverage fraction.
+pub fn coverage_mips(w: u32, h: u32, px: &[u8], cutoff: f32) -> Vec<Vec<u8>> {
+    let cov = |p: &[u8], s: f32| p.chunks(4).filter(|c| c[3] as f32 / 255.0 * s > cutoff).count() as f32 / (p.len() / 4) as f32;
+    let target = cov(px, 1.0);
+    let mut levels = vec![px.to_vec()];
+    let (mut lw, mut lh) = (w, h);
+    while lw > 1 && lh > 1 {
+        let prev = levels.last().unwrap();
+        let (nw, nh) = (lw / 2, lh / 2);
+        let mut next = vec![0u8; (nw * nh * 4) as usize];
+        for y in 0..nh {
+            for x in 0..nw {
+                let mut sum = [0.0f32; 4];
+                let mut aw = 0.0;
+                for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                    let i = (((2 * y + dy) * lw + 2 * x + dx) * 4) as usize;
+                    let a = prev[i + 3] as f32;
+                    for k in 0..3 {
+                        sum[k] += prev[i + k] as f32 * a;
+                    }
+                    sum[3] += a;
+                    aw += a;
+                }
+                let o = ((y * nw + x) * 4) as usize;
+                for k in 0..3 {
+                    next[o + k] = if aw > 0.0 { (sum[k] / aw) as u8 } else { 0 };
+                }
+                next[o + 3] = (sum[3] / 4.0) as u8;
+            }
+        }
+        let (mut lo, mut hi) = (0.5f32, 8.0f32);
+        for _ in 0..20 {
+            let mid = 0.5 * (lo + hi);
+            if cov(&next, mid) < target { lo = mid } else { hi = mid }
+        }
+        for c in next.chunks_mut(4) {
+            c[3] = (c[3] as f32 * hi).min(255.0) as u8;
+        }
+        levels.push(next);
+        lw = nw;
+        lh = nh;
+    }
+    levels
 }

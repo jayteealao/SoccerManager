@@ -1,0 +1,300 @@
+{
+ "landmark_drift": {
+  "eye aperture h/w": 4.8412121577943195,
+  "intercanthal / biocular": 2.05459005454406,
+  "brow above eye / biocular": 2.522374153857439,
+  "nose width / biocular": 1.9501827525151276,
+  "mouth width / biocular": 2.484793032249265,
+  "upper vermilion / biocular": 12.869588940491663,
+  "lower vermilion / biocular": 10.712616864427105,
+  "philtrum sn-ls / biocular": 5.879866870977167,
+  "nose height n-sn / biocular": 2.1406882771426368,
+  "lower face sn-me / biocular": 1.701921355690152,
+  "face width zy / biocular": 0.6660278449920454,
+  "cheek width (mouth level) / biocular": 0.8202451603751727,
+  "jaw width go / biocular": 0.7536514006068109
+ },
+ "colorimetry": [
+  {
+   "id": "CVD_1_age19",
+   "ita_render": -15.083275092545454,
+   "ita_finish": -17.430291635935195,
+   "mst_render": 7,
+   "mst_finish": 7,
+   "dE": 0.7313946218552316
+  },
+  {
+   "id": "CVD_1_age30",
+   "ita_render": -18.14886267093738,
+   "ita_finish": -18.961641531188672,
+   "mst_render": 7,
+   "mst_finish": 7,
+   "dE": 0.3770511814892069
+  },
+  {
+   "id": "CVD_1_age60",
+   "ita_render": -9.959611865794052,
+   "ita_finish": -10.521800183195563,
+   "mst_render": 7,
+   "mst_finish": 7,
+   "dE": 0.31753840510931375
+  },
+  {
+   "id": "CVD_4_age19",
+   "ita_render": 5.025404268970406,
+   "ita_finish": 3.490284634835746,
+   "mst_render": 7,
+   "mst_finish": 7,
+   "dE": 0.4466818818227806
+  },
+  {
+   "id": "CVD_4_age30",
+   "ita_render": 2.6014212051449084,
+   "ita_finish": 0.003232710934093463,
+   "mst_render": 7,
+   "mst_finish": 7,
+   "dE": 0.7663836618417234
+  },
+  {
+   "id": "CVD_4_age60",
+   "ita_render": 4.287095332483669,
+   "ita_finish": 3.143336728312492,
+   "mst_render": 7,
+   "mst_finish": 7,
+   "dE": 0.39620272226176373
+  },
+  {
+   "id": "KSI_2_age19",
+   "ita_render": 57.24554365033601,
+   "ita_finish": 55.50656046833738,
+   "mst_render": 5,
+   "mst_finish": 5,
+   "dE": 0.7194498700693414
+  },
+  {
+   "id": "KSI_2_age30",
+   "ita_render": 56.85824254734038,
+   "ita_finish": 56.75299777588963,
+   "mst_render": 5,
+   "mst_finish": 5,
+   "dE": 0.26809502610224006
+  },
+  {
+   "id": "KSI_2_age60",
+   "ita_render": 55.48900570432786,
+   "ita_finish": 55.02545186691678,
+   "mst_render": 5,
+   "mst_finish": 5,
+   "dE": 0.26299179342675777
+  },
+  {
+   "id": "KSI_5_age19",
+   "ita_render": 45.27100725988342,
+   "ita_finish": 43.45611691753545,
+   "mst_render": 6,
+   "mst_finish": 6,
+   "dE": 0.6902448545743423
+  },
+  {
+   "id": "KSI_5_age30",
+   "ita_render": 43.28293593669713,
+   "ita_finish": 41.65466157951896,
+   "mst_render": 6,
+   "mst_finish": 6,
+   "dE": 0.6658627253545707
+  },
+  {
+   "id": "KSI_5_age60",
+   "ita_render": 40.176674163028835,
+   "ita_finish": 39.59436866927374,
+   "mst_render": 6,
+   "mst_finish": 6,
+   "dE": 0.24337386349695883
+  },
+  {
+   "id": "NHV_13_age19",
+   "ita_render": 29.894740416868984,
+   "ita_finish": 29.6065726175604,
+   "mst_render": 6,
+   "mst_finish": 6,
+   "dE": 0.28295458470641627
+  },
+  {
+   "id": "NHV_13_age30",
+   "ita_render": 27.45721306342719,
+   "ita_finish": 26.229733669071564,
+   "mst_render": 6,
+   "mst_finish": 6,
+   "dE": 0.44679096163032056
+  },
+  {
+   "id": "NHV_13_age60",
+   "ita_render": 28.03561210776447,
+   "ita_finish": 27.44239031591863,
+   "mst_render": 6,
+   "mst_finish": 6,
+   "dE": 0.31401638751209066
+  },
+  {
+   "id": "NHV_6_age19",
+   "ita_render": 60.77043639267817,
+   "ita_finish": 60.09866377779235,
+   "mst_render": 5,
+   "mst_finish": 5,
+   "dE": 0.2982140838348946
+  },
+  {
+   "id": "NHV_6_age30",
+   "ita_render": 58.71018925219261,
+   "ita_finish": 57.69415493925161,
+   "mst_render": 5,
+   "mst_finish": 5,
+   "dE": 0.44919020801180554
+  },
+  {
+   "id": "NHV_6_age60",
+   "ita_render": 57.088663825480296,
+   "ita_finish": 56.52051547797205,
+   "mst_render": 5,
+   "mst_finish": 5,
+   "dE": 0.4097803756485092
+  }
+ ],
+ "mst_strip": [
+  [
+   "mst01",
+   89.7,
+   2
+  ],
+  [
+   "mst02",
+   88.3,
+   2
+  ],
+  [
+   "mst03",
+   83.5,
+   2
+  ],
+  [
+   "mst04",
+   78.8,
+   2
+  ],
+  [
+   "mst05",
+   64.7,
+   5
+  ],
+  [
+   "mst06",
+   17.2,
+   6
+  ],
+  [
+   "mst07",
+   -19.6,
+   7
+  ],
+  [
+   "mst08",
+   -61.8,
+   8
+  ],
+  [
+   "mst09",
+   -79.3,
+   10
+  ],
+  [
+   "mst10",
+   -85.0,
+   10
+  ]
+ ],
+ "near_duplicates": {
+  "same_mean": 0.9905557557940483,
+  "same_min": 0.948296308517456,
+  "cross_max": 0.9681012630462646,
+  "flagged": 5
+ },
+ "apparent_age": {
+  "renders": {
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/CVD_1_age16.png": 23.807368644163944,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/CVD_1_age19.png": 24.182955159107223,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/CVD_1_age24.png": 25.198045689612627,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/CVD_1_age30.png": 24.019512625294738,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/CVD_1_age36.png": 23.91857694234932,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/CVD_1_age45.png": 28.36593415075913,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/CVD_1_age60.png": 52.617508912459016,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/CVD_1_age70.png": 55.55041149072349,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/CVD_4_age16.png": 25.11819979257416,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/CVD_4_age19.png": 24.111353373678867,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/CVD_4_age24.png": 25.707941972767003,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/CVD_4_age30.png": 25.715626385761425,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/CVD_4_age36.png": 25.719916132395156,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/CVD_4_age45.png": 25.782847759779543,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/CVD_4_age60.png": 39.75859441049397,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/CVD_4_age70.png": 49.00242264568806,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/KSI_2_age16.png": 35.49480962194502,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/KSI_2_age19.png": 33.418564966414124,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/KSI_2_age24.png": 33.19243021775037,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/KSI_2_age30.png": 36.4469649894163,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/KSI_2_age36.png": 52.82573444209993,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/KSI_2_age45.png": 61.13026904780418,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/KSI_2_age60.png": 62.34654608508572,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/KSI_2_age70.png": 62.43846553075127,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/KSI_5_age16.png": 29.86847964208573,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/KSI_5_age19.png": 27.2025510603562,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/KSI_5_age24.png": 26.728686447255313,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/KSI_5_age30.png": 26.719944449607283,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/KSI_5_age36.png": 26.8044022587128,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/KSI_5_age45.png": 27.894713257905096,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/KSI_5_age60.png": 51.12097989395261,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/KSI_5_age70.png": 61.507686043158174,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/NHV_13_age16.png": 25.49962555197999,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/NHV_13_age19.png": 23.750061151571572,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/NHV_13_age24.png": 23.64443918701727,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/NHV_13_age30.png": 23.659921857062727,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/NHV_13_age36.png": 23.940390279283747,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/NHV_13_age45.png": 26.116101250285283,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/NHV_13_age60.png": 48.512867506593466,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/NHV_13_age70.png": 53.52722359448671,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/NHV_6_age16.png": 28.32476473180577,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/NHV_6_age19.png": 29.15018979040906,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/NHV_6_age24.png": 30.276923910249025,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/NHV_6_age30.png": 30.256452635861933,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/NHV_6_age36.png": 30.269077215343714,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/NHV_6_age45.png": 32.57426837366074,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/NHV_6_age60.png": 52.82001878507435,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/renders/NHV_6_age70.png": 57.68195306882262
+  },
+  "finished": {
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/CVD_1_age19.png": 24.06078637961764,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/CVD_1_age30.png": 32.80591999820899,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/CVD_1_age60.png": 55.88318283576518,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/CVD_4_age19.png": 24.49755205132533,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/CVD_4_age30.png": 32.24894235242391,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/CVD_4_age60.png": 50.508905701339245,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/KSI_2_age19.png": 37.2765174806118,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/KSI_2_age30.png": 42.86214522831142,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/KSI_2_age60.png": 63.40454902581405,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/KSI_5_age19.png": 22.18069283408113,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/KSI_5_age30.png": 29.93363180779852,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/KSI_5_age60.png": 52.36754295229912,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/NHV_13_age19.png": 24.36499552289024,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/NHV_13_age30.png": 29.26294110773597,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/NHV_13_age60.png": 52.71134307421744,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/NHV_6_age19.png": 30.138571464456618,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/NHV_6_age30.png": 36.40353265078738,
+   "/home/user/SoccerManager/poc/faces/out/tmp/gnm8/finished/NHV_6_age60.png": 55.859263428952545
+  }
+ },
+ "identity": {
+  "same": 0.9037145432971773,
+  "cross": 0.5475372324697674,
+  "dprime": 3.4903067219956116,
+  "far_19_60": 0.8462140560150146,
+  "render_finish": 0.7836520936754015
+ }
+}

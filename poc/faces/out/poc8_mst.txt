@@ -1,0 +1,11 @@
+MST swatch -> chromophore fit -> albedo dE76
+MST  1 #f6ede4  Cm 0.09 Ch 0.13  dE 1.55
+MST  2 #f3e7db  Cm 0.16 Ch 0.13  dE 0.80
+MST  3 #f7ead0  Cm 0.28 Ch 0.02  dE 0.80
+MST  4 #eadaba  Cm 0.48 Ch 0.01  dE 1.99
+MST  5 #d7bd96  Cm 0.97 Ch 0.00  dE 2.94
+MST  6 #a07e56  Cm 2.12 Ch 0.06  dE 1.57
+MST  7 #825c43  Cm 2.49 Ch 0.37  dE 3.79
+MST  8 #604134  Cm 3.01 Ch 0.69  dE 2.47
+MST  9 #3a312a  Cm 3.94 Ch 0.83  dE 4.21
+MST 10 #292420  Cm 4.45 Ch 1.00  dE 3.99

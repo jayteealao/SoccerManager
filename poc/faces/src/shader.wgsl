@@ -1,5 +1,7 @@
 // Portrait shader for the regen face PoC.
-// Kinds: 0 skin, 1 eye, 2 hair card, 3 coil shell, 4 twisted tube.
+// Kinds: 0 skin, 1 eye, 2 hair card, 3 coil shell, 4 twisted tube;
+// PoC 8: 5 skin (chromophores, pre-integrated), 6 eye interior, 7 cornea,
+// 8 eye occlusion, 9 Marschner hair card.
 
 struct Globals {
     view_proj: mat4x4<f32>,
@@ -30,6 +32,7 @@ struct VIn {
     @location(2) uv: vec2<f32>,
     @location(3) aux: vec4<f32>,
     @location(4) aux2: vec4<f32>,
+    @location(5) aux3: vec4<f32>,
 };
 
 struct VOut {
@@ -40,6 +43,7 @@ struct VOut {
     @location(3) aux: vec4<f32>,
     @location(4) vdepth: f32,
     @location(5) aux2: vec4<f32>,
+    @location(6) aux3: vec4<f32>,
 };
 
 @vertex
@@ -51,6 +55,7 @@ fn vs_main(v: VIn) -> VOut {
     o.uv = v.uv;
     o.aux = v.aux;
     o.aux2 = v.aux2;
+    o.aux3 = v.aux3;
     o.vdepth = -(G.view * vec4<f32>(v.pos, 1.0)).z;
     return o;
 }
@@ -58,6 +63,8 @@ fn vs_main(v: VIn) -> VOut {
 struct FOut {
     @location(0) colour: vec4<f32>,
     @location(1) depth: vec4<f32>,
+    // Region mask: R = finishable skin, G = eyes, B = hair/brows/lashes.
+    @location(2) mask: vec4<f32>,
 };
 
 // ---------------------------------------------------------------- noise ---
@@ -353,10 +360,20 @@ fn shade_tube(i: VOut) -> Hit {
 fn fs_opaque(i: VOut) -> FOut {
     var o: FOut;
     var c: vec3<f32>;
+    o.mask = vec4<f32>(1.0, 0.0, 0.0, 1.0);
     if (P.kind == 1u) {
         c = shade_eye(i);
+        o.mask = vec4<f32>(0.0, 1.0, 0.0, 1.0);
     } else if (P.kind == 4u) {
         c = shade_tube(i).colour;
+        o.mask = vec4<f32>(0.0, 0.0, 1.0, 1.0);
+    } else if (P.kind == 5u) {
+        let r = shade_skin2(i);
+        c = r.colour;
+        o.mask = r.mask;
+    } else if (P.kind == 6u) {
+        c = shade_eye2(i);
+        o.mask = vec4<f32>(0.0, 1.0, 0.0, 1.0);
     } else {
         c = shade_skin(i);
     }
@@ -370,6 +387,8 @@ fn fs_hair(i: VOut) -> FOut {
     var h: Hit;
     if (P.kind == 3u) {
         h = shade_shell(i);
+    } else if (P.kind == 9u) {
+        h = shade_card2(i);
     } else {
         h = shade_card(i);
     }
@@ -379,5 +398,331 @@ fn fs_hair(i: VOut) -> FOut {
     var o: FOut;
     o.colour = vec4<f32>(tonemap(h.colour), a);
     o.depth = vec4<f32>(depth_out(i.vdepth).rgb, a);
+    o.mask = vec4<f32>(0.0, 0.0, 1.0, a);
+    return o;
+}
+
+// =================================================================== PoC 8 ===
+
+// Two-chromophore skin albedo; must match genes::chromophores.
+fn chromophores(cm: f32, ch: f32) -> vec3<f32> {
+    let f = exp(-cm / 3.456);
+    let eu = vec3<f32>(1.0, 0.756, 1.0);
+    let ph = vec3<f32>(0.0, 0.656, 1.0);
+    let hb = vec3<f32>(0.482, 1.0, 0.0);
+    return vec3<f32>(0.936, 1.0, 0.822) * exp(-(cm * ((1.0 - f) * eu + f * ph) + ch * hb));
+}
+
+fn ggx_spec(n: vec3<f32>, v: vec3<f32>, l: vec3<f32>, rough: f32) -> f32 {
+    let h = normalize(l + v);
+    let a = rough * rough;
+    let a2 = a * a;
+    let nh = max(dot(n, h), 0.0);
+    let nl = max(dot(n, l), 0.0);
+    let nv = max(dot(n, v), 1e-3);
+    let dd = nh * nh * (a2 - 1.0) + 1.0;
+    let D = a2 / (3.14159 * dd * dd);
+    let vis = 0.5 / (nl * sqrt(nv * nv * (1.0 - a2) + a2) + nv * sqrt(nl * nl * (1.0 - a2) + a2) + 1e-5);
+    let F = 0.028 + 0.972 * pow(1.0 - max(dot(v, h), 0.0), 5.0);
+    return D * vis * F * nl;
+}
+
+struct SkinOut {
+    colour: vec3<f32>,
+    mask: vec4<f32>,
+};
+
+// Skin v2 (roadmap 5): chromophore albedo with regional blood and oil,
+// pre-integrated subsurface diffuse (Penner 2011; LUT in the draw texture,
+// indexed by N.L and curvature), diffuse from the smooth normal and
+// specular from the bumped normal, dual-lobe GGX, cavity occlusion.
+fn shade_skin2(i: VOut) -> SkinOut {
+    let v = normalize(G.cam_pos.xyz - i.wpos);
+    let n0 = normalize(i.nrm);
+    let p = i.wpos;
+    let age = P.p0.x;
+    let ao = i.uv.x;
+    let forehead = i.uv.y;
+    let brow = i.aux.x;
+    let lip = i.aux.y;
+    let beard = i.aux.z;
+    let scalp = i.aux.w;
+    let cloth = i.aux2.x;
+    let crow = i.aux2.y;
+    let lashline = i.aux2.z;
+    let curv = i.aux2.w;
+    let hb = i.aux3.x;
+    let oil = i.aux3.y;
+    let wet = i.aux3.z;
+    let cavity = i.aux3.w;
+
+    var o: SkinOut;
+    if (cloth > 0.5) {
+        let fabric = vec3<f32>(0.035, 0.05, 0.09) * (0.85 + 0.3 * vnoise(p * 90.0));
+        o.colour = skin_light(n0, v, fabric, ao, 0.0) * 0.8;
+        o.mask = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+        return o;
+    }
+
+    // Micro-relief: pores (sharper on the nose and cheeks), fine mottling,
+    // forehead lines and crow's feet with age.
+    let pore = vnoise(p * 220.0);
+    var h = (pore - 0.5) * (0.0006 + 0.0006 * oil) + (fbm(p * 45.0) - 0.5) * 0.0008;
+    let lines = 1.0 - abs(sin(p.y * 38.0 + (fbm(p * 5.0) - 0.5) * 3.0));
+    h -= forehead * age * age * pow(lines, 3.0) * 0.006;
+    let rays = 1.0 - abs(sin(atan2(p.y - 7.28, abs(p.x) - 0.3) * 14.0 + fbm(p * 9.0) * 2.0));
+    h -= crow * age * age * pow(rays, 3.0) * 0.004;
+    let n = perturb(n0, p, h);
+
+    // Albedo from chromophores: melanin with low-frequency mottling; blood
+    // raised on cheeks, nose, ears and lips; age adds sallowness.
+    let mottle = fbm(p * 10.0) - 0.5;
+    let cm = P.colour.x * (1.0 + 0.10 * mottle + 0.06 * scalp) ;
+    let ch = P.colour.y + 0.12 * hb + 0.45 * lip * P.p0.w + 0.05 * mottle - 0.08 * age;
+    var albedo = chromophores(cm, max(ch, 0.0));
+    albedo *= mix(vec3<f32>(1.0), vec3<f32>(0.99, 0.97, 0.9), age * 0.6);
+    // Stubble, scalp roots and brows, as in skin v1.
+    let speck = smoothstep(0.35, 0.8, vnoise(p * 260.0)) * (0.6 + 0.4 * fbm(p * 20.0));
+    albedo = mix(albedo, P.colour2.rgb, beard * P.p0.y * (0.35 + 0.5 * speck));
+    albedo = mix(albedo, P.colour2.rgb * 0.8, scalp * P.p1.x);
+    // Brow hairs as fine strokes: medial hairs point up, lateral ones
+    // sweep outwards; stroke spacing ~0.25 mm with jittered presence.
+    let bu = clamp((abs(p.x) - 0.06) / 0.5, 0.0, 1.0);
+    let ang = mix(1.2, 0.25, bu);
+    let dir = vec2<f32>(cos(ang) * sign(p.x), sin(ang));
+    let q2 = vec2<f32>(p.x, p.y);
+    let across = dot(q2, vec2<f32>(-dir.y, dir.x));
+    let along = dot(q2, dir);
+    let lane = across * 420.0 + 2.0 * vnoise(vec3<f32>(along * 30.0, across * 30.0, 1.0));
+    let stroke = smoothstep(0.55, 0.9, 1.0 - abs(fract(lane) * 2.0 - 1.0));
+    let present = smoothstep(0.35, 0.6, vnoise(vec3<f32>(floor(lane) * 0.37, along * 25.0, 2.0)));
+    let hairs = stroke * present;
+    let brow_a = clamp(brow * P.p0.z * (0.6 + 0.5 * hairs), 0.0, 0.95);
+    albedo = mix(albedo, P.colour2.rgb, brow_a);
+    albedo = mix(albedo, vec3<f32>(0.03, 0.02, 0.018), lashline * 0.6);
+
+    let lights = array<vec3<f32>, 3>(normalize(KEY), normalize(FILL), normalize(RIM));
+    let power = array<f32, 3>(1.9, 0.45, 0.8);
+    let rough = mix(0.62, 0.48, oil) + 0.12 * beard * P.p0.y;
+    let r_lo = mix(rough, 0.13, wet);
+    var diff = vec3<f32>(0.0);
+    var spec = 0.0;
+    let cv = clamp(curv * P.p1.y, 0.0, 1.0);
+    for (var k = 0; k < 3; k++) {
+        let l = lights[k];
+        let ndl = dot(n0, l);
+        let sss = textureSampleLevel(tex, samp, vec2<f32>(ndl * 0.5 + 0.5, cv), 0.0).rgb;
+        diff += power[k] * sss;
+        spec += power[k] * (0.85 * ggx_spec(n, v, l, r_lo) + 0.15 * ggx_spec(n, v, l, r_lo * 0.5));
+    }
+    let sky = mix(vec3<f32>(0.10, 0.09, 0.08), vec3<f32>(0.20, 0.22, 0.25), n0.y * 0.5 + 0.5);
+    let fres = 0.028 + 0.972 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
+    let env = mix(vec3<f32>(0.12, 0.12, 0.13), vec3<f32>(0.35, 0.37, 0.40), reflect(-v, n).y * 0.5 + 0.5) * fres * (1.0 - 0.6 * r_lo);
+    let spec_occ = mix(1.0, cavity, 0.8) * ao;
+    o.colour = albedo * (diff + sky * 1.2) * ao + (vec3<f32>(spec) * 0.6 + env * 0.7) * spec_occ;
+    // The finish may change skin; brows, lash line and wet margins stay ours.
+    let own = max(max(brow_a, lashline), wet);
+    o.mask = vec4<f32>(1.0 - own, 0.0, brow_a, 1.0);
+    return o;
+}
+
+// Eye interior (roadmap 7). p1.xyz = eyeball centre, p1.w = iris radius;
+// p0.xyz = gaze axis, p0.w = cornea height over the iris; colour.x = limbal
+// ring strength, colour.y = sclera ageing, colour.z = pupil fraction.
+fn shade_eye2(i: VOut) -> vec3<f32> {
+    let v = normalize(G.cam_pos.xyz - i.wpos);
+    let fwd = normalize(P.p0.xyz);
+    let e = i.wpos - P.p1.xyz;
+    let rv = e - fwd * dot(e, fwd);
+    let iris_r = P.p1.w;
+    let rho = length(rv) / iris_r;
+    var up = vec3<f32>(0.0, 1.0, 0.0);
+    let ax = normalize(cross(up, fwd));
+    let ay = cross(fwd, ax);
+    let is_iris = i.aux.y + i.aux.z;
+    var albedo: vec3<f32>;
+    let n = normalize(i.nrm);
+    if (is_iris > 0.5 || rho < 1.02) {
+        // Refraction through the cornea: shift the iris lookup by the
+        // difference between the refracted and straight rays over the depth
+        // of the anterior chamber at this radius.
+        let depth = P.p0.w * max(1.0 - rho * rho, 0.0) + 0.002;
+        let nc = normalize(fwd + rv / iris_r * 0.55);
+        let r = refract(-v, nc, 1.0 / 1.376);
+        let t_r = depth / max(-dot(r, fwd), 0.2);
+        let t_s = depth / max(dot(v, fwd), 0.2);
+        let shift = (r - fwd * dot(r, fwd)) * t_r - (-v - fwd * dot(-v, fwd)) * t_s;
+        let q = rv + shift;
+        let qx = dot(q, ax) / iris_r;
+        let qy = dot(q, ay) / iris_r;
+        let rr = length(vec2<f32>(qx, qy));
+        let ang = atan2(qy, qx);
+        let fibres = fbm(vec3<f32>(ang * 9.0, rr * 3.0, 1.3)) ;
+        let fine = vnoise(vec3<f32>(ang * 60.0, rr * 8.0, 7.0));
+        let collarette = smoothstep(0.08, 0.0, abs(rr - 0.48 - 0.04 * fibres));
+        let crypt = smoothstep(0.62, 0.8, vnoise(vec3<f32>(ang * 14.0, rr * 10.0, 3.0))) * smoothstep(0.4, 0.6, rr);
+        var iris_c = P.colour2.rgb * (0.55 + 0.7 * fibres + 0.25 * fine);
+        iris_c = mix(iris_c, P.colour2.rgb * 1.5 + vec3<f32>(0.06, 0.05, 0.02), collarette * 0.5);
+        iris_c *= 1.0 - 0.45 * crypt;
+        // Limbal ring: dark band at the iris edge, fading with age.
+        iris_c *= 1.0 - P.colour.x * smoothstep(0.78, 0.97, rr);
+        let pupil = smoothstep(P.colour.z + 0.015, P.colour.z - 0.015, rr);
+        albedo = mix(iris_c, vec3<f32>(0.008), pupil);
+        let limbus = smoothstep(0.97, 1.03, rr);
+        let sclera = vec3<f32>(0.80, 0.77, 0.73);
+        albedo = mix(albedo, sclera, limbus);
+    } else {
+        // Sclera: warm off-white, a few vessels towards the corners, sallower
+        // with age.
+        var sclera = vec3<f32>(0.80, 0.77, 0.73) * (1.0 - vec3<f32>(0.0, 0.05, 0.15) * P.colour.y);
+        let side = smoothstep(1.3, 2.4, rho);
+        let vessel = smoothstep(0.72, 0.8, vnoise(e * 900.0)) * side;
+        sclera = mix(sclera, vec3<f32>(0.62, 0.22, 0.2), vessel * 0.35);
+        albedo = sclera * (1.0 - 0.1 * side);
+    }
+    let diff = clamp(dot(n, normalize(KEY)) * 0.5 + 0.5, 0.0, 1.0);
+    return albedo * (0.22 + 0.95 * diff);
+}
+
+// Cornea (blended, premultiplied): Fresnel reflection of the studio and a
+// sharp key-light glint.
+fn shade_cornea(i: VOut) -> vec4<f32> {
+    let v = normalize(G.cam_pos.xyz - i.wpos);
+    let n = normalize(i.nrm);
+    let F = 0.025 + 0.975 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
+    let r = reflect(-v, n);
+    let env = mix(vec3<f32>(0.05, 0.05, 0.06), vec3<f32>(0.55, 0.58, 0.62), smoothstep(-0.2, 0.6, r.y));
+    let h = normalize(normalize(KEY) + v);
+    let glint = pow(max(dot(n, h), 0.0), 900.0) * 9.0 + pow(max(dot(n, h), 0.0), 120.0) * 0.25;
+    let a = clamp(F * 0.8, 0.0, 1.0);
+    return vec4<f32>(env * F + vec3<f32>(glint), a);
+}
+
+// Eye-occlusion shell: soft shadow from the lids and lashes on the eyeball,
+// per fragment. aux.xyz = eye-local template position; colour.xy = inner and
+// outer corner x; colour2 / p1 = cubic fits of the upper / lower margins.
+fn lid_y(c: vec4<f32>, t: f32) -> f32 {
+    return c.x + t * (c.y + t * (c.z + t * c.w));
+}
+
+fn shade_occlusion(i: VOut) -> vec4<f32> {
+    if (i.aux.z < 0.0) { return vec4<f32>(0.0); }
+    let t = (i.aux.x - P.colour.x) / (P.colour.y - P.colour.x);
+    let tc = clamp(t, 0.0, 1.0);
+    let du = lid_y(P.colour2, tc) - i.aux.y;
+    let dl = i.aux.y - lid_y(P.p1, tc);
+    let dc = min(t, 1.0 - t) * abs(P.colour.y - P.colour.x);
+    let sh_u = (1.0 - smoothstep(0.0, 0.035, du)) * 0.8;
+    let sh_l = (1.0 - smoothstep(0.0, 0.012, dl)) * 0.45;
+    let sh_c = (1.0 - smoothstep(0.0, 0.03, dc)) * 0.5;
+    let a = clamp(max(max(sh_u, sh_l), sh_c) * P.p0.x, 0.0, 0.92);
+    return vec4<f32>(vec3<f32>(0.012, 0.008, 0.006) * a, a);
+}
+
+// Marschner hair (roadmap 6), after Karis 2016 and Frostbite 2019: R, TT
+// and TRT lobes with melanin absorption (pbrt-v3 conversion done on the CPU,
+// sigma_a in p1.xyz), plus a small multiple-scatter diffuse.
+fn gauss(b: f32, x: f32) -> f32 {
+    return exp(-0.5 * x * x / (b * b)) / (2.5066 * b);
+}
+
+fn marschner(t: vec3<f32>, v: vec3<f32>, l: vec3<f32>, sa: vec3<f32>) -> vec3<f32> {
+    let beta = 0.2;
+    let shift = -0.06;
+    let sin_l = clamp(dot(l, t), -1.0, 1.0);
+    let sin_v = clamp(dot(v, t), -1.0, 1.0);
+    let th = 0.5 * (asin(sin_l) + asin(sin_v));
+    let td = 0.5 * (asin(sin_l) - asin(sin_v));
+    let lp = l - t * sin_l;
+    let vp = v - t * sin_v;
+    let cos_phi = dot(lp, vp) * inverseSqrt(dot(lp, lp) * dot(vp, vp) + 1e-4);
+    let cos_half = sqrt(clamp(0.5 + 0.5 * cos_phi, 0.0, 1.0));
+    let cos_td = max(cos(td), 0.2);
+    let f0 = 0.0465; // ((1.55 - 1) / (1.55 + 1))^2
+    let fr = f0 + (1.0 - f0) * pow(1.0 - sqrt(clamp(0.5 + 0.5 * dot(l, v), 0.0, 1.0)), 5.0);
+    let T = exp(-sa * (2.0 / cos_td));
+    let r = gauss(beta, th - shift) * 0.25 * cos_half * fr;
+    let tt = gauss(beta * 0.5, th + shift * 0.5) * exp(-3.65 * cos_phi - 3.98) * (1.0 - f0) * (1.0 - f0) * T;
+    let trt = gauss(beta * 2.0, th + shift * 1.5) * exp(17.0 * cos_phi - 16.78) * (1.0 - f0) * (1.0 - f0) * f0 * T * T;
+    return vec3<f32>(r) + tt + trt;
+}
+
+fn shade_card2(i: VOut) -> Hit {
+    let t = textureSample(tex, samp, i.uv);
+    let v = normalize(G.cam_pos.xyz - i.wpos);
+    let tang = normalize(i.aux.xyz);
+    var n = normalize(i.nrm);
+    if (dot(n, v) < 0.0) { n = -n; }
+    // Per-strand melanin variation; grey strands have almost none.
+    let grey = select(0.0, 1.0, t.r < P.p0.w);
+    var sa = P.p1.xyz * (0.75 + 0.5 * t.g);
+    sa = mix(sa, vec3<f32>(0.22, 0.26, 0.32) * (0.8 + 0.4 * fract(t.r * 13.7)), grey);
+    let lights = array<vec3<f32>, 3>(normalize(KEY), normalize(FILL), normalize(RIM));
+    let power = array<f32, 3>(1.9, 0.5, 1.1);
+    var c = vec3<f32>(0.0);
+    let base = exp(-sa * 2.2);
+    let ao = mix(0.35, 1.0, smoothstep(0.0, 0.7, i.uv.y));
+    for (var k = 0; k < 3; k++) {
+        let l = lights[k];
+        c += power[k] * (marschner(tang, v, l, sa) * 2.2 + base * clamp(dot(n, l) * 0.5 + 0.5, 0.0, 1.0) * 0.28);
+    }
+    c += base * 0.18;
+    var o: Hit;
+    o.alpha = t.a;
+    o.colour = c * ao;
+    return o;
+}
+
+struct FOutS {
+    @location(0) colour: vec4<f32>,
+    @location(1) depth: vec4<f32>,
+    @location(2) mask: vec4<f32>,
+    @builtin(sample_mask) cov: u32,
+};
+
+// Stochastic transparency (roadmap 6): alpha picks how many of the four
+// MSAA samples this fragment covers, with a pseudo-random sample set per
+// fragment, layer and accumulation pass, so overlapping cards add up to
+// opacity instead of sharing one dither pattern.
+@fragment
+fn fs_hair_stoch(i: VOut) -> FOutS {
+    var h: Hit;
+    var a: f32;
+    if (P.kind == 3u) {
+        h = shade_shell(i);
+        a = h.alpha;
+    } else if (P.kind == 9u) {
+        h = shade_card2(i);
+        a = smoothstep(P.p0.x - 0.25, P.p0.x + 0.25, h.alpha);
+    } else {
+        h = shade_card(i);
+        a = smoothstep(P.p0.x - 0.25, P.p0.x + 0.25, h.alpha);
+    }
+    let rnd = hash3(floor(i.wpos * 3000.0) + vec3<f32>(G.depth_range.z * 17.0, i.clip.x * 0.37, i.clip.y * 0.53));
+    let k = u32(clamp(floor(a * 4.0 + rnd), 0.0, 4.0));
+    if (k == 0u) { discard; }
+    let rot = u32(fract(rnd * 7.31) * 4.0);
+    let base = (1u << k) - 1u;
+    var o: FOutS;
+    o.cov = ((base << rot) | (base >> (4u - rot))) & 15u;
+    o.colour = vec4<f32>(tonemap(h.colour), 1.0);
+    o.depth = depth_out(i.vdepth);
+    o.mask = vec4<f32>(0.0, 0.0, 1.0, 1.0);
+    return o;
+}
+
+@fragment
+fn fs_blend(i: VOut) -> FOut {
+    var o: FOut;
+    var c: vec4<f32>;
+    if (P.kind == 7u) {
+        c = shade_cornea(i);
+    } else {
+        c = shade_occlusion(i);
+    }
+    // Premultiplied: tonemap the emitted part only.
+    o.colour = vec4<f32>(tonemap(c.rgb), c.a);
+    o.depth = vec4<f32>(0.0);
+    o.mask = vec4<f32>(0.0);
     return o;
 }

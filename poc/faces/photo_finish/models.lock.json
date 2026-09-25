@@ -1,0 +1,47 @@
+{
+ "models": [
+  {
+   "name": "Segmind-Vega UNet (ONNX export)",
+   "files": [
+    "unet/unet.onnx",
+    "unet/unet.onnx.data"
+   ],
+   "source": "https://huggingface.co/segmind/Segmind-Vega",
+   "licence": "Apache-2.0 (model card)",
+   "obligations": "CreativeML Open RAIL++-M (SDXL lineage): pass the Attachment A use restrictions on as an enforceable EULA clause and ship a copy of the licence; see OPENRAIL_NOTICE.md",
+   "export": "photo_finish/export_onnx.py",
+   "sha256": {
+    "unet/unet.onnx": "cabf1169c5a72c5069ac05c53bd76f36f2a28d280f32f169fa759bedff512252",
+    "unet/unet.onnx.data": "9d105cdadcee2bfb92ea7327a8edcfdc95a8e3f1cdd9894351355183532b7f81"
+   }
+  },
+  {
+   "name": "Segmind-Vega VAE encoder / decoder",
+   "files": [
+    "vae_encoder/vae_encoder.onnx",
+    "vae_decoder/vae_decoder.onnx"
+   ],
+   "source": "https://huggingface.co/segmind/Segmind-Vega",
+   "licence": "Apache-2.0 (model card)",
+   "obligations": "CreativeML Open RAIL++-M (SDXL lineage): pass the Attachment A use restrictions on as an enforceable EULA clause and ship a copy of the licence; see OPENRAIL_NOTICE.md",
+   "export": "photo_finish/export_onnx.py",
+   "sha256": {
+    "vae_encoder/vae_encoder.onnx": "006d0630941a761fc5387dd0f35ba4cf01fb9422674e39e5662a636fcc4eaa78",
+    "vae_decoder/vae_decoder.onnx": "26a67ca049ba9c18f8e14afc727e5f1a87c8a665b9dc518cdeed6b50a88adff7"
+   }
+  },
+  {
+   "name": "T2I-Adapter depth-midas SDXL",
+   "files": [
+    "adapter/adapter.onnx"
+   ],
+   "source": "https://huggingface.co/TencentARC/t2i-adapter-depth-midas-sdxl-1.0",
+   "licence": "Apache-2.0",
+   "obligations": "SDXL-conditioned; treated with the same OpenRAIL++ pass-through",
+   "export": "photo_finish/export_onnx.py",
+   "sha256": {
+    "adapter/adapter.onnx": "42623f03b70516db9082466a6ccdc75b790b653b90dfe25918407cd7ff75737f"
+   }
+  }
+ ]
+}

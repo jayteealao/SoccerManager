@@ -7,6 +7,8 @@ pub mod cards;
 pub mod face;
 pub mod flame;
 pub mod flamehead;
+pub mod genes;
+pub mod gnm;
 pub mod genome;
 pub mod hair;
 pub mod head;

@@ -251,6 +251,7 @@ impl FlameAsset {
                 uv: [ao[v], forehead],
                 aux: [brow(b, c), lip, beard_mask(b) * (1.0 - lip) * if face || neck { 1.0 } else { 0.0 }, scalp],
                 aux2: [jersey, crow_mask(b), lash, 0.0],
+                aux3: [0.0; 4],
             });
         }
         let stubble = g.beard * age.beard_growth * 0.75;
@@ -331,7 +332,7 @@ impl FlameAsset {
 }
 
 /// Eyebrow band above each eye, relative to that eye's centre.
-fn brow(b: Vec3, eye: Vec3) -> f32 {
+pub fn brow(b: Vec3, eye: Vec3) -> f32 {
     if b.z < eye.z - 0.1 {
         return 0.0;
     }

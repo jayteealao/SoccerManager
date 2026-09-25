@@ -1,0 +1,72 @@
+PoC 8 evaluation harness v1 (images only; no race classification)
+
+1. Landmark drift render -> finish (mean |change| %, n pairs)
+   eye aperture h/w                           4.8%  (n 18)
+   intercanthal / biocular                    2.1%  (n 18)
+   brow above eye / biocular                  2.5%  (n 18)
+   nose width / biocular                      2.0%  (n 18)
+   mouth width / biocular                     2.5%  (n 18)
+   upper vermilion / biocular                12.9%  (n 18)
+   lower vermilion / biocular                10.7%  (n 18)
+   philtrum sn-ls / biocular                  5.9%  (n 18)
+   nose height n-sn / biocular                2.1%  (n 18)
+   lower face sn-me / biocular                1.7%  (n 18)
+   face width zy / biocular                   0.7%  (n 18)
+   cheek width (mouth level) / biocular       0.8%  (n 18)
+   jaw width go / biocular                    0.8%  (n 18)
+   Across ages, render 19 -> 60 (identity should hold; ageing moves lids, lips, jaw):
+   eye aperture h/w                          +0.4%
+   intercanthal / biocular                   +1.7%
+   brow above eye / biocular                 +0.1%
+   nose width / biocular                     +1.3%
+   mouth width / biocular                    +5.7%
+   upper vermilion / biocular               -14.7%
+   lower vermilion / biocular               -13.4%
+   philtrum sn-ls / biocular                 -4.6%
+   nose height n-sn / biocular               +5.0%
+   lower face sn-me / biocular               -2.1%
+   face width zy / biocular                  +0.6%
+   cheek width (mouth level) / biocular      +2.0%
+   jaw width go / biocular                   +2.6%
+
+2. Skin colorimetry on the renderer's skin mask (ITA deg, MST bucket)
+   CVD_1_age19        render ITA  -15.1 MST  7 | finish ITA  -17.4 MST  7 | dE  0.7
+   CVD_1_age30        render ITA  -18.1 MST  7 | finish ITA  -19.0 MST  7 | dE  0.4
+   CVD_1_age60        render ITA  -10.0 MST  7 | finish ITA  -10.5 MST  7 | dE  0.3
+   CVD_4_age19        render ITA    5.0 MST  7 | finish ITA    3.5 MST  7 | dE  0.4
+   CVD_4_age30        render ITA    2.6 MST  7 | finish ITA    0.0 MST  7 | dE  0.8
+   CVD_4_age60        render ITA    4.3 MST  7 | finish ITA    3.1 MST  7 | dE  0.4
+   KSI_2_age19        render ITA   57.2 MST  5 | finish ITA   55.5 MST  5 | dE  0.7
+   KSI_2_age30        render ITA   56.9 MST  5 | finish ITA   56.8 MST  5 | dE  0.3
+   KSI_2_age60        render ITA   55.5 MST  5 | finish ITA   55.0 MST  5 | dE  0.3
+   KSI_5_age19        render ITA   45.3 MST  6 | finish ITA   43.5 MST  6 | dE  0.7
+   KSI_5_age30        render ITA   43.3 MST  6 | finish ITA   41.7 MST  6 | dE  0.7
+   KSI_5_age60        render ITA   40.2 MST  6 | finish ITA   39.6 MST  6 | dE  0.2
+   NHV_13_age19       render ITA   29.9 MST  6 | finish ITA   29.6 MST  6 | dE  0.3
+   NHV_13_age30       render ITA   27.5 MST  6 | finish ITA   26.2 MST  6 | dE  0.4
+   NHV_13_age60       render ITA   28.0 MST  6 | finish ITA   27.4 MST  6 | dE  0.3
+   NHV_6_age19        render ITA   60.8 MST  5 | finish ITA   60.1 MST  5 | dE  0.3
+   NHV_6_age30        render ITA   58.7 MST  5 | finish ITA   57.7 MST  5 | dE  0.4
+   NHV_6_age60        render ITA   57.1 MST  5 | finish ITA   56.5 MST  5 | dE  0.4
+   mean |Delta ITA| render -> finish 1.1 deg; MST bucket kept in 100% of images
+   MST strip (genome skin set to each swatch, rendered cheek colour): mst01 -> ITA 89.7 MST 2, mst02 -> ITA 88.3 MST 2, mst03 -> ITA 83.5 MST 2, mst04 -> ITA 78.8 MST 2, mst05 -> ITA 64.7 MST 5, mst06 -> ITA 17.2 MST 6, mst07 -> ITA -19.6 MST 7, mst08 -> ITA -61.8 MST 8, mst09 -> ITA -79.3 MST 10, mst10 -> ITA -85.0 MST 10
+   rendered buckets covered: [2, 5, 6, 7, 8, 10]
+
+3. Near-duplicates (DINOv2-small CLS cosine)
+   same genome, ages <= 6 years apart: mean 0.991, min 0.948
+   different genomes, same age: mean 0.875, max 0.968
+   flagged pairs (different genomes at least as similar as the least-similar same-genome pair): 5
+     CVD_1_age19 ~ CVD_4_age19: 0.968
+     CVD_1_age16 ~ CVD_4_age16: 0.965
+     CVD_1_age24 ~ CVD_4_age24: 0.964
+     KSI_2_age24 ~ KSI_5_age24: 0.957
+     KSI_2_age19 ~ KSI_5_age19: 0.953
+
+4. Apparent age (SigLIP 2 zero-shot, expectation over age prompts)
+   renders  : MAE   9.8 y, corr 0.80, mean predicted at 19/30/60: 27/28/51
+   finished : MAE   6.1 y, corr 0.93, mean predicted at 19/30/60: 27/34/55
+
+5. Identity (SFace; INTERNAL QA ONLY, provenance of its training data unknown)
+   same genome across ages: mean cos 0.904; 19 vs 60: 0.846
+   different genomes: mean cos 0.548; d' = 3.49
+   render vs its finish: mean cos 0.784 (SFace's own match threshold is 0.363)

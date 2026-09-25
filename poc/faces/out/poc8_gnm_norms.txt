@@ -1,0 +1,64 @@
+== raw GNM sampler: GNM Head identity samples (male) vs Farkas 2005 regional aggregates (mm)
+300 samples per class; template = GNM mean head (lids opened 1.8 mm)
+nearest-class-mean accuracy over head components: 0.69
+
+measure  template | middle GNM  Farkas |  asian GNM  Farkas |  white GNM  Farkas |  black GNM  Farkas
+en-en        36.8 |   37.2   31.8 |   38.0   37.2 |   36.8   31.6 |   38.1   36.2
+n-gn        113.4 |  114.7  124.5 |  116.6  122.8 |  115.9  119.9 |  116.2  119.9
+sn-gn        61.6 |   63.7   68.1 |   64.8   71.4 |   64.5   67.7 |   65.6   72.8
+zy-zy       148.1 |  151.8  141.5 |  154.1  145.7 |  151.1  136.9 |  150.4  135.9
+n-sn         51.8 |   51.0   57.8 |   51.9   53.6 |   51.3   54.5 |   50.6   50.6
+al-al        43.3 |   45.1   35.0 |   45.8   39.6 |   44.0   35.4 |   46.8   44.1
+ch-ch        51.6 |   54.7   51.2 |   54.2   49.0 |   53.9   52.2 |   57.2   55.1
+go-go       134.2 |  141.4  104.9 |  141.7  111.1 |  140.3  104.8 |  141.1  102.0
+
+Between-class contrasts (GNM delta vs Farkas delta, mm):
+  en-en asian-white: GNM  +1.2  Farkas  +5.6  same sign
+  al-al black-white: GNM  +2.8  Farkas  +8.7  same sign
+  al-al asian-white: GNM  +1.7  Farkas  +4.2  same sign
+  zy-zy asian-white: GNM  +3.0  Farkas  +8.8  same sign
+  n-sn black-white: GNM  -0.8  Farkas  -3.9  same sign
+  ch-ch black-asian: GNM  +3.0  Farkas  +6.1  same sign
+  sn-gn black-white: GNM  +1.1  Farkas  +5.1  same sign
+
+Within-class coefficient of variation (GNM white class vs Fang 2011):
+  en-en: GNM 0.039  Fang 0.088
+  al-al: GNM 0.044  Fang 0.072
+  ch-ch: GNM 0.037  Fang 0.079
+  n-sn: GNM 0.038  Fang 0.070
+  sn-gn: GNM 0.042  Fang 0.080
+  zy-zy: GNM 0.029  Fang 0.042
+  go-go: GNM 0.042  Fang 0.056
+
+== PoC 8 sampler (class gain 1.0, residual 0.6): GNM Head identity samples (male) vs Farkas 2005 regional aggregates (mm)
+300 samples per class; template = GNM mean head (lids opened 1.8 mm)
+nearest-class-mean accuracy over head components: 0.91
+
+measure  template | middle GNM  Farkas |  asian GNM  Farkas |  white GNM  Farkas |  black GNM  Farkas
+en-en        36.8 |   36.9   31.8 |   38.6   37.2 |   36.1   31.6 |   38.7   36.2
+n-gn        113.4 |  113.2  124.5 |  117.6  122.8 |  116.0  119.9 |  116.4  119.9
+sn-gn        61.6 |   62.6   68.1 |   65.1   71.4 |   64.4   67.7 |   66.7   72.8
+zy-zy       148.1 |  151.9  141.5 |  156.8  145.7 |  150.5  136.9 |  148.8  135.9
+n-sn         51.8 |   50.6   57.8 |   52.5   53.6 |   51.6   54.5 |   49.8   50.6
+al-al        43.3 |   44.8   35.0 |   46.2   39.6 |   42.7   35.4 |   48.2   44.1
+ch-ch        51.6 |   54.4   51.2 |   53.4   49.0 |   53.0   52.2 |   59.3   55.1
+go-go       134.2 |  141.8  104.9 |  142.8  111.1 |  139.4  104.8 |  140.9  102.0
+
+Between-class contrasts (GNM delta vs Farkas delta, mm):
+  en-en asian-white: GNM  +2.5  Farkas  +5.6  same sign
+  al-al black-white: GNM  +5.6  Farkas  +8.7  same sign
+  al-al asian-white: GNM  +3.6  Farkas  +4.2  same sign
+  zy-zy asian-white: GNM  +6.3  Farkas  +8.8  same sign
+  n-sn black-white: GNM  -1.9  Farkas  -3.9  same sign
+  ch-ch black-asian: GNM  +5.8  Farkas  +6.1  same sign
+  sn-gn black-white: GNM  +2.3  Farkas  +5.1  same sign
+
+Within-class coefficient of variation (GNM white class vs Fang 2011):
+  en-en: GNM 0.060  Fang 0.088
+  al-al: GNM 0.069  Fang 0.072
+  ch-ch: GNM 0.058  Fang 0.079
+  n-sn: GNM 0.051  Fang 0.070
+  sn-gn: GNM 0.060  Fang 0.080
+  zy-zy: GNM 0.043  Fang 0.042
+  go-go: GNM 0.062  Fang 0.056
+
