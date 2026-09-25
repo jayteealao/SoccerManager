@@ -5,12 +5,12 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-24T17:26:30Z"
-slices-implemented: 22
-slices-total: 22
-metric-total-files-changed: 769
-metric-total-lines-added: 64294
-metric-total-lines-removed: 2975
+updated-at: "2026-09-25T04:28:03Z"
+slices-implemented: 23
+slices-total: 24
+metric-total-files-changed: 787
+metric-total-lines-added: 65205
+metric-total-lines-removed: 2996
 tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment, scripting, sandbox, plugin-interface, distribution, installer, packaging, release-version, error-record, help-text, realism-bands, formations]
 refs:
   index: 00-index.md
@@ -38,8 +38,9 @@ refs:
     - 05-implement-tuning-loop.md
     - 05-implement-lone-forward.md
     - 05-implement-keeper-and-shots.md
-next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine tuning-loop"
+    - 05-implement-tempo-and-restarts.md
+next-command: wf-implement
+next-invocation: "/wf implement football-manager-match-engine tempo-and-restarts"
 ---
 
 # Implement Index
@@ -190,17 +191,25 @@ next-invocation: "/wf verify football-manager-match-engine tuning-loop"
   - The seed-42 90-minute match on the default clubs ends 0-0 with no tactics change. A test that needs a goal or a tactics change uses `common::scoring_match()` (seed 7). The two-minute viewer reconnect test serves seed 5.
   - The red-card experiment plays each seed in both club orders (`--suite red-card --seed 1 --matches 240` equals the slow test). The criterion moved to `keeper-and-shots` (Q-LF2) and its slow test still fails; the measured cause is that a side with ten men attacks as if it had eleven. `keeper-and-shots` may now plan (Q-X4).
 
-- `keeper-and-shots` (implemented at commit `8fd407b`; AWAITING INPUT on Q-KS1 and Q-KS2): a new `shot` module and an optional `shots` tuning block. Every later slice inherits these changes:
+- `keeper-and-shots` (implemented at commits `8fd407b` and `bce0144`; verified, result pass, after the Q-KS1 and Q-KS2 answers): a new `shot` module and an optional `shots` tuning block. Every later slice inherits these changes:
   - A shot counts on target when its flight, as struck, crosses between the posts under the bar. A keeper saves only such a shot, on the sourced curve by shot quality, and holds one save in three or parries it. An outfield defender within 3 m can block a shot once. A parry or a block leaves the defending side as the last touch. `keeper_catch_chance` covers only fast balls that are not shots.
   - Penalties in play count `shots.penalty_xg` 0.76. The shoot-out uses the same save model, and its dive values are tuning values.
   - `xg` is refitted (−4.191, −0.0441, 6.3836) and the saves read the fixed `shots.quality` model, so a later refit never moves play.
   - On seed 42 over 1,000 matches: on target 0.387, goals per xG 1.098, goal kicks 13.1, corners 1.59 per team, goals 1.88 per match (under the band, which `realism-tuning` owns).
   - Test seams under the `scenario` feature: `Scene::penalty()`, `Simulation::last_touch()`, `shot_census()` and `shot_flight()`.
-  - Open: the red-card criterion fails all three arms (Q-KS1), and corners stay under the 3.0 floor at every in-bounds setting (Q-KS2).
+  - Q-KS1 moved the red-card criterion to `realism-tuning`; Q-KS2 set the corner floor at 1.2 per team and moved corners from clearances and crosses to `tempo-and-restarts`.
+
+- `tempo-and-restarts` (implemented at commit `831553b`; AWAITING INPUT on Q-TR1): the counting and the tempo levers, shipped switched off. Every later slice inherits these changes:
+  - `stats.passes` and pass accuracy count open-play passes only. A clearance (`Kick::Clear`) and the first kick of a restart taker are counted in `stats.clearances` and `stats.restart_kicks`. On seed 42 over 200 matches, passes fall from 1,225.8 to 1,193.8 per team with play identical.
+  - `stats.ball_in_play_s` is in match-stats, and the calibrate report has `ball_in_play_min_per_90_mean` (89.6 minutes on shipped play).
+  - The snapshot is version 6. A later slice that adds snapshot state takes version 7.
+  - New tuning values, switched off: `decision.carry_s` and `decision.carry_cost` (the carry window) and the `clearances` block (aim spread and a defender's clearance of a fast pass in his own penalty area). The restart delays stay at 3, 8, 6 and 8 s until Q-TR1 is answered.
+  - Test seam under the `scenario` feature: `Scene::clear()`. A scene starts in open play with no restart taker.
+  - Open: 350–550 passes per team come only with 27–61 shots per team and 4.0–14.8 goals per match, and the closest setting breaks `every_formation_holds` (Q-TR1).
 
 ## Recommended Next Stage
 
-- `/wf implement football-manager-match-engine keeper-and-shots` (blocked: after the product owner answers Q-KS1 and Q-KS2 in `po-answers.md`)
+- `/wf implement football-manager-match-engine tempo-and-restarts` (blocked: after the product owner answers Q-TR1 in `po-answers.md`)
 
 - `/wf verify football-manager-match-engine lone-forward` (new: the three kept criteria on the shipped values; the evidence is in `implement-evidence/lone-forward/shipped/`)
 
