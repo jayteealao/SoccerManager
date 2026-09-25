@@ -164,6 +164,21 @@ pub struct Tuning {
     #[serde(default = "default_tackle_win_base")]
     #[garde(range(min = 0.0, max = 0.5))]
     pub tackle_win_base: f64,
+    /// Contesting the carrier: the distance in metres from the ball within which an opponent
+    /// attempts a tackle, and the distance from the ball within which a presser runs at the
+    /// ball itself rather than at the point where he meets the carrier's run.
+    #[serde(default = "default_tackle_reach")]
+    #[garde(range(min = 0.5, max = 3.0))]
+    pub tackle_reach: f64,
+    #[serde(default = "default_press_engage")]
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub press_engage: f64,
+    /// The extra chance, on top of `tackle_win_base`, that a tackle wins the ball from a
+    /// carrier running with it (faster than 2 m/s); it scales with the same skill ratio. A
+    /// carrier who stands and shields the ball is not affected.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub tackle_dribble_win: f64,
     /// Off the ball, the share of the way from his anchor to the onside line (0.5 m short of
     /// the second-last defender) that a team's lone forward moves while his team has the ball.
     #[serde(default = "default_lone_line_hold")]
@@ -495,6 +510,9 @@ impl Default for Tuning {
             foul_cooldown_ticks: default_foul_cooldown_ticks(),
             foul_booked_factor: default_foul_booked_factor(),
             tackle_win_base: TACKLE_WIN_BASE,
+            tackle_reach: default_tackle_reach(),
+            press_engage: default_press_engage(),
+            tackle_dribble_win: 0.0,
             lone_line_hold: default_lone_line_hold(),
             restart_delay_s: RestartDelays {
                 kick_off: 5.0,
@@ -573,6 +591,16 @@ fn default_tackle_win_base() -> f64 {
 }
 fn default_lone_line_hold() -> f64 {
     0.0
+}
+
+// The contest values. An older tuning file without them loads with the values that
+// reproduce play before they existed: a tackle from the control reach, a presser who runs
+// at the ball from 3 m, and no extra chance against a running carrier.
+fn default_tackle_reach() -> f64 {
+    1.0
+}
+fn default_press_engage() -> f64 {
+    3.0
 }
 
 /// The shipped foul chance per tackle attempt, set for about ten fouls per team in a

@@ -259,6 +259,31 @@ fn a_tuning_block_without_the_lone_forward_values_loads_with_the_defaults() {
     );
 }
 
+/// A tuning block written before the contest values existed still loads, with the values
+/// that reproduce play before them.
+#[test]
+fn a_tuning_block_without_the_contest_values_loads_with_the_defaults() {
+    let mut json = serde_json::to_value(Tuning::default()).unwrap();
+    let block = json.as_object_mut().unwrap();
+    for key in ["tackle_reach", "press_engage", "tackle_dribble_win"] {
+        assert!(block.remove(key).is_some(), "{key} is a tuning field");
+    }
+    let t: Tuning = serde_json::from_value(json).unwrap();
+    assert_eq!(
+        (t.tackle_reach, t.press_engage, t.tackle_dribble_win),
+        (1.0, 3.0, 0.0)
+    );
+}
+
+#[test]
+fn the_shipped_contest_values_are_pinned() {
+    let t = common::content().tuning.engine;
+    assert_eq!(
+        (t.tackle_reach, t.press_engage, t.tackle_dribble_win),
+        (1.0, 3.0, 0.0)
+    );
+}
+
 #[test]
 fn the_shipped_carry_clearance_and_restart_values_are_pinned() {
     let t = common::content().tuning.engine;

@@ -50,6 +50,9 @@
     "foul_cooldown_ticks": 150,
     "foul_booked_factor": 0.15,
     "tackle_win_base": 0.5,
+    "tackle_reach": 1.0,
+    "press_engage": 3.0,
+    "tackle_dribble_win": 0.0,
     "lone_line_hold": 0.0,
     "restart_delay_s": {
       "kick_off": 5.0,

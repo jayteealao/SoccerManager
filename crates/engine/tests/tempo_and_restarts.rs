@@ -186,6 +186,71 @@ fn the_ball_in_play_figure_is_the_live_ticks() {
     assert_eq!(figures.ball_in_play_s, (s.live_ticks + 25) / 50);
 }
 
+/// The home carrier holds the ball with an away player `gap` metres from it, and a tackle
+/// may come from `reach` metres. The first step judges any tackle with a roll that wins the
+/// ball.
+fn contested(gap: f64, reach: f64) -> Simulation {
+    let mut config = calm_match(90);
+    config.tuning.tackle_reach = reach;
+    let at = DVec2::new(0.0, 10.0);
+    let mut sim = spread(Scene::new(config), -30.0, 30.0)
+        .place(index(0, 5), at)
+        .place(index(1, 5), at + DVec2::new(gap, 0.0))
+        .ball(DVec3::new(at.x, at.y, 0.0))
+        .carrier(Some(index(0, 5)))
+        .tick(1_001)
+        .rolls(&[0.0])
+        .build();
+    sim.step();
+    sim
+}
+
+#[test]
+fn an_opponent_inside_the_tackle_reach_can_win_the_ball() {
+    assert_eq!(
+        contested(1.6, 1.0).carrier(),
+        Some(index(0, 5)),
+        "1.6 m is outside a 1 m reach"
+    );
+    assert_eq!(
+        contested(1.6, 2.0).carrier(),
+        Some(index(1, 5)),
+        "1.6 m is inside a 2 m reach"
+    );
+}
+
+/// The home carrier runs at `speed` metres per second with an away player 0.5 m from the
+/// ball. The tackle roll lies between the standing win chance and the running win chance.
+fn running(speed: f64) -> Simulation {
+    let mut config = calm_match(90);
+    config.tuning.tackle_dribble_win = 0.5;
+    let sim = Simulation::new(config.clone()).unwrap();
+    let (tackler, carrier) = (
+        sim.players()[index(1, 5)].derived,
+        sim.players()[index(0, 5)].derived,
+    );
+    let base = engine::rules::fouls::win_chance(&tackler, &carrier, &config.tuning);
+    let extra = engine::rules::fouls::dribble_win_chance(&tackler, &carrier, &config.tuning);
+    let at = DVec2::new(0.0, 10.0);
+    let mut sim = spread(Scene::new(config), -30.0, 30.0)
+        .place(index(0, 5), at)
+        .velocity(index(0, 5), DVec2::new(0.0, speed))
+        .place(index(1, 5), at + DVec2::new(0.5, 0.0))
+        .ball(DVec3::new(at.x, at.y, 0.0))
+        .carrier(Some(index(0, 5)))
+        .tick(1_001)
+        .rolls(&[base + 0.5 * extra, 0.99])
+        .build();
+    sim.step();
+    sim
+}
+
+#[test]
+fn a_running_carrier_is_easier_to_tackle_than_a_standing_one() {
+    assert_eq!(running(0.0).carrier(), Some(index(0, 5)), "standing: kept");
+    assert_eq!(running(5.0).carrier(), Some(index(1, 5)), "running: won");
+}
+
 /// A calm match on `seed` with the cross clearance on, everyone spread away, the home
 /// striker on the ball at `from`. The home side attacks `x = 52.5` in the first half.
 fn pass_scene(seed: u64, from: DVec2) -> Scene {

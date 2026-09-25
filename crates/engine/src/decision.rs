@@ -75,11 +75,12 @@ impl Simulation {
                 // Pressers run at the point where they can meet the carrier's run, and go for the
                 // ball once they are close.
                 let run = self.players[c].vel;
+                let engage = self.config.tuning.press_engage;
                 for &(_, i) in &pressers[..count] {
                     if i != usize::MAX {
                         let p = self.players[i];
                         // Within engaging range the presser goes for the ball itself.
-                        self.players[i].target = if (p.pos - ball_xy).length() < PRESS_ENGAGE_M {
+                        self.players[i].target = if (p.pos - ball_xy).length() < engage {
                             ball_xy
                         } else {
                             pitch::clamp(intercept(p.pos, p.max_speed(), ball_xy, run), 0.5)
@@ -661,9 +662,6 @@ impl Simulation {
 const ONSIDE_MARGIN: f64 = 0.5;
 
 const MAX_PRESSERS: usize = 4;
-/// Metres from the ball within which a presser goes for the ball instead of running at the
-/// intercept point: from there it engages the carrier rather than cutting across his path.
-const PRESS_ENGAGE_M: f64 = 3.0;
 /// The furthest ahead, in seconds, a presser aims along the carrier's run: beyond it the
 /// carrier's run is too uncertain to chase.
 const INTERCEPT_HORIZON_S: f64 = 1.0;

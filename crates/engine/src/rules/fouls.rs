@@ -76,6 +76,12 @@ pub fn win_chance(tackler: &Derived, carrier: &Derived, t: &Tuning) -> f64 {
     t.tackle_win_base * tackler.tackling / (tackler.tackling + carrier.dribbling)
 }
 
+/// The extra chance that one tackle attempt by `tackler` wins the ball from `carrier` while
+/// he runs with it: `tackle_dribble_win`, scaled by the same skill ratio as `win_chance`.
+pub fn dribble_win_chance(tackler: &Derived, carrier: &Derived, t: &Tuning) -> f64 {
+    t.tackle_dribble_win * tackler.tackling / (tackler.tackling + carrier.dribbling)
+}
+
 /// The chance that one tackle attempt by `tackler` is a foul: the tuned base rate, raised by
 /// aggression and lowered by tackling skill, both measured from the middle of the scale. A
 /// player already shown `yellows` cards tackles more carefully: the chance is multiplied by
@@ -174,6 +180,22 @@ mod tests {
         assert_eq!(at(0.0), 0.0);
         assert!((at(0.2) - 2.0 * at(0.1)).abs() < 1e-15);
         assert!((at(0.1) - 0.1 * 0.6).abs() < 1e-12, "{}", at(0.1));
+    }
+
+    #[test]
+    fn the_running_win_chance_scales_like_the_win_chance() {
+        let t = Tuning {
+            tackle_dribble_win: 0.3,
+            ..Tuning::default()
+        };
+        let tackler = flat_player(0, 60, &t).derived;
+        let carrier = flat_player(1, 40, &t).derived;
+        assert!((dribble_win_chance(&tackler, &carrier, &t) - 0.3 * 0.6).abs() < 1e-12);
+        let off = Tuning {
+            tackle_dribble_win: 0.0,
+            ..t
+        };
+        assert_eq!(dribble_win_chance(&tackler, &carrier, &off), 0.0);
     }
 
     #[test]

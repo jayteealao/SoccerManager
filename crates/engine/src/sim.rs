@@ -34,6 +34,10 @@ use crate::tactics::change::{ChangeId, ChangeKind, ChangeQueue, RejectReason, Su
 use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::{Tuning, XgTuning};
 
+/// Metres per second above which a carrier runs with the ball rather than shields it, for
+/// the extra tackle chance against a running carrier.
+const RUNNING_SPEED: f64 = 2.0;
+
 /// Everything a match needs to start: the seed, the length, the tuning, the rule pack, the
 /// tactics file, and the attribute schema from the content, the two teams with their
 /// starters, who manages each team, and hashes of the files they came from.
@@ -1320,11 +1324,14 @@ impl Simulation {
                     if !p.active()
                         || p.team == carrier.team
                         || self.tick < p.foul_ready
-                        || (p.pos - ball_xy).length() > t.reach_radius
+                        || (p.pos - ball_xy).length() > t.tackle_reach
                     {
                         continue;
                     }
-                    let p_win = fouls::win_chance(&p.derived, &carrier.derived, t);
+                    let mut p_win = fouls::win_chance(&p.derived, &carrier.derived, t);
+                    if carrier.vel.length() > RUNNING_SPEED {
+                        p_win += fouls::dribble_win_chance(&p.derived, &carrier.derived, t);
+                    }
                     let p_foul = fouls::foul_chance(&p.derived, p.yellow, t);
                     let draw = self.rng.referee_draw();
                     match fouls::tackle_outcome(p_win, p_foul, t.foul_ball_loss, draw) {
