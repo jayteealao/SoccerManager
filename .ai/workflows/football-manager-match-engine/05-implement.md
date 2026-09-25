@@ -5,12 +5,12 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-25T04:28:03Z"
+updated-at: "2026-09-25T08:45:00Z"
 slices-implemented: 23
 slices-total: 24
-metric-total-files-changed: 787
-metric-total-lines-added: 65205
-metric-total-lines-removed: 2996
+metric-total-files-changed: 795
+metric-total-lines-added: 65363
+metric-total-lines-removed: 3003
 tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment, scripting, sandbox, plugin-interface, distribution, installer, packaging, release-version, error-record, help-text, realism-bands, formations]
 refs:
   index: 00-index.md
@@ -199,17 +199,18 @@ next-invocation: "/wf implement football-manager-match-engine tempo-and-restarts
   - Test seams under the `scenario` feature: `Scene::penalty()`, `Simulation::last_touch()`, `shot_census()` and `shot_flight()`.
   - Q-KS1 moved the red-card criterion to `realism-tuning`; Q-KS2 set the corner floor at 1.2 per team and moved corners from clearances and crosses to `tempo-and-restarts`.
 
-- `tempo-and-restarts` (implemented at commit `831553b`; AWAITING INPUT on Q-TR1): the counting and the tempo levers, shipped switched off. Every later slice inherits these changes:
+- `tempo-and-restarts` (implemented at commits `831553b` and `4022e47`; AWAITING INPUT on Q-TR2): the counting, the tempo levers and the contest levers, shipped at values that reproduce play. Every later slice inherits these changes:
   - `stats.passes` and pass accuracy count open-play passes only. A clearance (`Kick::Clear`) and the first kick of a restart taker are counted in `stats.clearances` and `stats.restart_kicks`. On seed 42 over 200 matches, passes fall from 1,225.8 to 1,193.8 per team with play identical.
   - `stats.ball_in_play_s` is in match-stats, and the calibrate report has `ball_in_play_min_per_90_mean` (89.6 minutes on shipped play).
   - The snapshot is version 6. A later slice that adds snapshot state takes version 7.
   - New tuning values, switched off: `decision.carry_s` and `decision.carry_cost` (the carry window) and the `clearances` block (aim spread and a defender's clearance of a fast pass in his own penalty area). The restart delays stay at 3, 8, 6 and 8 s until Q-TR1 is answered.
   - Test seam under the `scenario` feature: `Scene::clear()`. A scene starts in open play with no restart taker.
-  - Open: 350–550 passes per team come only with 27–61 shots per team and 4.0–14.8 goals per match, and the closest setting breaks `every_formation_holds` (Q-TR1).
+  - New tuning values at `4022e47`, at values that reproduce play: `tackle_reach` 1.0 (tackle distance, separate from the control reach), `press_engage` 3.0 (was the constant `PRESS_ENGAGE_M`) and `tackle_dribble_win` 0 (extra win chance against a carrier faster than 2 m/s). Shipped play on seed 42 is identical.
+  - Q-TR1 answered (defending levers allowed). Open: with 10–16 shots per team, no setting keeps throw-ins at 55 or fewer and the ball in play at 65 minutes or less; the best in-limit setting `b0` gives 66.22 minutes on seeds 1–200 (Q-TR2).
 
 ## Recommended Next Stage
 
-- `/wf implement football-manager-match-engine tempo-and-restarts` (blocked: after the product owner answers Q-TR1 in `po-answers.md`)
+- `/wf implement football-manager-match-engine tempo-and-restarts` (blocked: after the product owner answers Q-TR2 in `po-answers.md`)
 
 - `/wf verify football-manager-match-engine lone-forward` (new: the three kept criteria on the shipped values; the evidence is in `implement-evidence/lone-forward/shipped/`)
 
