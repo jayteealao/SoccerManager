@@ -10,6 +10,9 @@
 //! - Passes are realistic: 350 to 550 passes per team, 75 to 88% completed.
 //! - The ball is in play for about an hour: 52 to 65 minutes per 90.
 //! - Throw-ins stay in band: 35 to 55 per match.
+//!
+//!   These three are targets for a later tuning pass. The shipped tuning leaves play as it
+//!   was, so they fail today and print the figures that tuning starts from.
 //! - The restart census prints each restart's median dead time against its source and the
 //!   corners by origin, and asserts only that every corner followed a crossing.
 
@@ -443,7 +446,7 @@ fn runs() -> &'static [MatchRun] {
 }
 
 #[test]
-#[ignore = "slow: cargo test --release -p engine --all-features -- --ignored"]
+#[ignore = "slow, and a target for later tuning that fails on the shipped values"]
 fn passes_are_realistic() {
     let runs = runs();
     let n = runs.len() as f64;
@@ -466,7 +469,7 @@ fn passes_are_realistic() {
 }
 
 #[test]
-#[ignore = "slow: cargo test --release -p engine --all-features -- --ignored"]
+#[ignore = "slow, and a target for later tuning that fails on the shipped values"]
 fn the_ball_is_in_play_for_about_an_hour() {
     let runs = runs();
     let per_90: f64 = runs
@@ -479,7 +482,7 @@ fn the_ball_is_in_play_for_about_an_hour() {
 }
 
 #[test]
-#[ignore = "slow: cargo test --release -p engine --all-features -- --ignored"]
+#[ignore = "slow, and a target for later tuning that fails on the shipped values"]
 fn throw_ins_stay_in_band() {
     let runs = runs();
     let throw_ins: u32 = runs
