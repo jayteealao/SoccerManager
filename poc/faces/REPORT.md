@@ -29,6 +29,13 @@ cargo run --release --bin flame_sheet -- ladder
 cargo run --release --bin flame_sheet -- ages
 downloads/venv/bin/python photo_finish/finish.py --manifest out/tmp/flame/pairs.csv --strength 0.2 --steps 30 --adapter-scale 0.9
 cargo run --release --bin flame_sheet -- compare
+# PoC 7 (FLAME on its own; also unpack FLAME_masks.zip to assets/flame/masks/):
+downloads/venv/bin/python flame/flame_prep.py
+cargo run --release --bin flame7_sheet -- identity
+cargo run --release --bin flame7_sheet -- ages
+cargo run --release --bin flame7_sheet -- hair
+downloads/venv/bin/python photo_finish/finish.py --manifest out/tmp/flame7/pairs.csv --strength 0.2 --steps 30 --adapter-scale 0.9
+cargo run --release --bin flame7_sheet -- compare
 downloads/venv/bin/python photo_finish/landmarks2d.py out/tmp/finish_inputs out/tmp/finished
 ```
 
@@ -272,6 +279,51 @@ Only `flame2023_Open.pkl` is used. `FLAME_masks.zip` is not used because its lic
 - Each row of the age sheet still reads as one person ageing.
 - One tiny speck of a pixel or two remains beside the left nostril crease in close-ups. It is not visible at portrait size.
 
+### PoC 7: FLAME on its own, with FLAME's masks. **The most human-looking base so far; ancestry is its weak point.**
+
+Images:
+- [`out/poc7_flame_identity.jpg`](out/poc7_flame_identity.jpg): six genomes at age 24, in clay and in the full look.
+- [`out/poc7_flame_age_sheet.jpg`](out/poc7_flame_age_sheet.jpg): the age sheet.
+- [`out/poc7_flame_hair_sheet.jpg`](out/poc7_flame_hair_sheet.jpg): four hair styles across three skin tones.
+- [`out/poc7_finish_pairs.jpg`](out/poc7_finish_pairs.jpg): render and finish pairs for six faces at 19, 30 and 60.
+- [`out/poc7_finish_timings.jsonl`](out/poc7_finish_timings.jsonl): finish timings.
+
+The person asked for FLAME to be used freshly, with no MakeHuman base, and for FLAME's masks to be used. Everything here comes from FLAME 2023 Open plus `FLAME_masks.pkl`. The masks' licence is unstated; they are used at the person's direction and recorded in LICENSES.md.
+- **Asset** (`flame/flame_prep.py`, then `downloads/flame_asset/`):
+  - FLAME's mean head and eyeballs, scaled to decimetres and anchored at the shared eye point, so the camera and hair code carry over;
+  - 100 shape directions;
+  - the 14 mask regions as per-vertex bits;
+  - landmarks for the 13 measures.
+- **Identity:** 100 betas per genome, drawn from the seed (SD 0.85) around a per-ancestry mean. That mean is fitted by ridge least squares to the published norms, using FLAME's linearity; no MakeHuman targets are involved.
+  - FLAME's surface landmarks for face width and jaw width sit at the edge of the soft-tissue mask, not at bony zygion and gonion, so they read wide against the norms. They are not comparable, and are noted rather than forced.
+- **Masks used:**
+  - the scalp mask sets the resting hairline, which recedes with age;
+  - face, ear and neck exclude hair;
+  - the lip mask is feathered and tints the lips;
+  - the forehead mask places forehead lines;
+  - the shoulder band becomes the jersey;
+  - the lash line comes from head vertices on the eyeball surface. FLAME's lids are closed surfaces wrapped round the eyeball, with no holes.
+- **Eyes:** FLAME's mean has wide-open lids and a 14.3 mm eyeball. The upper-lid band is rotated about each eyeball centre, by 11° plus up to 5° in late life, so the lid covers the top of the iris. The iris angle is set for a real ~11.7 mm iris.
+- **Ageing** (rule-based, because FLAME has no age space and no permissive ageing data is available). All regions come from FLAME's masks and landmarks and are feathered over the mesh to avoid seams.
+  - Jowls drop and spread, and the front of the neck fills.
+  - Eye bags form, and the cheek beside the nasolabial fold fills.
+  - Lips thin toward the stomion.
+  - The nose and ears grow slightly.
+  - Cheeks are fuller at 15–20.
+  - Upper lids droop a little more late in life.
+  - Skin creases, greying, recession and the age-aware finish add the rest.
+- **Photo finish:** the PoC 4 v2 settings (age and eye-colour prompts, strength 0.2, adapter 0.9). 30.6 s per image on average (range 29.7–37.5 s) on the same 4-vCPU Xeon.
+
+Result:
+- In clay and in full, FLAME heads read as real people, with far more natural structure than MakeHuman or Anny.
+- After the finish, the faces look photographic. Each person keeps their identity across 19, 30 and 60, age reads correctly, and eye colour holds.
+
+Weak points:
+- **Ancestry.** It comes only from anthropometric means. Proportions carry some of it, but eye-region shape does not. The East-Asian-like genome (KSI 2) reads fairly European, both before and after the finish. There are no sourced East Asian norms. A licensed FLAME-topology dataset with ancestry labels would fix this, but those found (LYHM, FaceWarehouse, BP4D+) are non-commercial.
+- **Ageing geometry is modest.** The finish carries much of the visible age.
+- **Hair.** Hair reaches down the back of the neck, because FLAME's scalp mask extends low at the nape. The medium-wavy cards are still hazy.
+- **Resolution.** FLAME's head is only 3,931 vertices. A subdivision step would help close-ups.
+
 ## What failed or was blocked, and why
 
 - **FLAME 2023 Open** needs registration, which the rules forbid me to do. The person registered, downloaded it, and handed it over through Google Drive; it is used in PoC 6. The separate `FLAME_masks.zip` is not used, because its licence is unconfirmed.
@@ -317,4 +369,6 @@ The `jpeg-encoder` crate (which adds an IJG term) was replaced with a small in-c
 7. **Face variety.** Proportions are now calibrated, but faces vary less than real ones do. Should the next step add more shape genes (eye spacing, lip shape, brow ridge, cheek fat)? Or should it fit a proper shape space to measured data, which would need a licensed dataset?
 8. **East Asian norms.** I found no sourced norms, so for that ancestry only face height and mouth width are constrained. Do you have a preferred source?
 9. **Anny as the base.** Anny does not improve portraits over the MakeHuman targets used directly, but it is a better engineering base: differentiable, maintained, with UVs, rig and expressions. Should the next step bake Anny's blendshapes into a Rust runtime format, and use Anny only offline for calibration?
-10. **The invented gene pools** need real, reviewed numbers before any use beyond this proof of concept. Who should own that review?
+10. **FLAME masks licence.** `FLAME_masks.pkl` is used in PoC 7 at your direction, but its licence is unstated. Should we ask MPI-IS (flame@tuebingen.mpg.de) to confirm whether it falls under FLAME 2023 Open's CC-BY-4.0?
+11. **Ancestry in FLAME.** Only anthropometric means are available under a permissive licence. Should we commission or license a FLAME-topology scan set with ancestry labels, to fit per-ancestry shape distributions?
+12. **The invented gene pools** need real, reviewed numbers before any use beyond this proof of concept. Who should own that review?
