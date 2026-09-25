@@ -224,13 +224,15 @@ fn shade_eye(i: VOut) -> vec3<f32> {
     let d = normalize(i.wpos - P.p1.xyz);
     let fwd = normalize(vec3<f32>(sign(P.p1.x) * 0.08, -0.03, 1.0));
     let c = dot(d, fwd);
-    let iris_r = 0.875;
+    // p1.w: iris cosine threshold (0 = default); sets iris size on the eyeball.
+    let iris_r = select(0.875, P.p1.w, P.p1.w > 0.0);
     var albedo = vec3<f32>(0.78, 0.74, 0.70);
     let iris = smoothstep(iris_r - 0.01, iris_r + 0.01, c);
     let radial = fbm(d * 60.0);
     let iris_col = P.colour2.rgb * (0.6 + 0.8 * radial) * mix(0.55, 1.0, smoothstep(iris_r, iris_r + 0.04, c));
     albedo = mix(albedo, iris_col, iris);
-    albedo = mix(albedo, vec3<f32>(0.01), smoothstep(0.966, 0.974, c));
+    let pupil = mix(iris_r, 1.0, 0.72);
+    albedo = mix(albedo, vec3<f32>(0.01), smoothstep(pupil - 0.004, pupil + 0.004, c));
     // Wet specular.
     let h = normalize(normalize(KEY) + v);
     let spec = pow(max(dot(n, h), 0.0), 300.0) * 3.0;

@@ -73,6 +73,16 @@ pub struct Camera {
 }
 
 impl Camera {
+    /// Portrait framing for the FLAME head (PoC 7), which is smaller than
+    /// MakeHuman's.
+    pub fn portrait_flame(yaw_deg: f32) -> Self {
+        let target = Vec3::new(0.0, 6.95, 0.6);
+        let dist = 12.0;
+        let yaw = yaw_deg.to_radians();
+        let eye = target + Vec3::new(yaw.sin() * dist, 0.5, yaw.cos() * dist);
+        Self { eye, target, fov_y_deg: 14.0 }
+    }
+
     /// Closer three-quarter view for judging hair.
     pub fn hair_closeup(yaw_deg: f32) -> Self {
         let target = Vec3::new(0.0, 7.55, 0.45);

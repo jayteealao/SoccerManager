@@ -6,6 +6,7 @@ pub mod calibration_flame;
 pub mod cards;
 pub mod face;
 pub mod flame;
+pub mod flamehead;
 pub mod genome;
 pub mod hair;
 pub mod head;

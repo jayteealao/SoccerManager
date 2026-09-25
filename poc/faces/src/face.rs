@@ -247,7 +247,7 @@ impl Colours {
 }
 
 /// Eyebrow band, in base-mesh coordinates (decimetres).
-fn brow_mask(b: Vec3) -> f32 {
+pub fn brow_mask(b: Vec3) -> f32 {
     if b.z < 1.0 {
         return 0.0;
     }
@@ -262,12 +262,12 @@ fn brow_mask(b: Vec3) -> f32 {
     (1.0 - smoothstep(half * 0.55, half, d)) * smoothstep(0.0, 0.08, u) * (1.0 - smoothstep(0.85, 1.0, u))
 }
 
-fn forehead_mask(b: Vec3) -> f32 {
+pub fn forehead_mask(b: Vec3) -> f32 {
     smoothstep(7.62, 7.72, b.y) * (1.0 - smoothstep(7.88, 8.0, b.y)) * smoothstep(1.05, 1.25, b.z)
         * (1.0 - smoothstep(0.35, 0.55, b.x.abs()))
 }
 
-fn beard_mask(b: Vec3) -> f32 {
+pub fn beard_mask(b: Vec3) -> f32 {
     let ax = b.x.abs();
     // Upper edge: from the mouth corner up the cheek to the sideburn.
     let top = if ax < 0.26 { 6.80 } else { 6.80 + (ax - 0.26) / 0.52 * 0.55 };
@@ -280,19 +280,19 @@ fn beard_mask(b: Vec3) -> f32 {
 }
 
 /// Crew-neck collar line: everything below it is the shirt.
-fn jersey_mask(b: Vec3) -> f32 {
+pub fn jersey_mask(b: Vec3) -> f32 {
     let az = b.x.atan2(b.z - 0.2).abs() / std::f32::consts::PI; // 0 front, 1 back
     let collar = 5.78 + 0.28 * az * az;
     1.0 - smoothstep(collar - 0.01, collar + 0.01, b.y)
 }
 
-fn crow_mask(b: Vec3) -> f32 {
+pub fn crow_mask(b: Vec3) -> f32 {
     let d = Vec3::new(b.x.abs() - 0.52, b.y - 7.27, 0.0).length();
     (1.0 - smoothstep(0.05, 0.2, d)) * smoothstep(0.43, 0.5, b.x.abs()) * smoothstep(0.7, 0.95, b.z)
 }
 
 /// Cheap ambient occlusion from local concavity.
-fn curvature_ao(pos: &[Vec3], nrm: &[Vec3], idx: &[u32]) -> Vec<f32> {
+pub fn curvature_ao(pos: &[Vec3], nrm: &[Vec3], idx: &[u32]) -> Vec<f32> {
     let n = pos.len();
     let mut sum = vec![Vec3::ZERO; n];
     let mut cnt = vec![0.0f32; n];
