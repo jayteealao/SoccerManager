@@ -1,5 +1,6 @@
-//! The wide clearance. Inside his own penalty area, a clearance by a carrier or of a fast
-//! pass goes wide toward the clearer's own goal line with `clearances.wide_chance`. The ball
+//! The wide clearance. A cleared fast pass in the clearer's own penalty area, or a carrier's
+//! clearance within `clearances.wide_depth` of his own goal line, goes wide toward that line
+//! with `clearances.wide_chance`. The ball
 //! then goes behind or not as it flies, and a corner still comes only from a ball that
 //! crossed the goal line off a defender.
 
@@ -131,7 +132,7 @@ fn clearing_carrier(wide: f64, at: DVec2) -> Simulation {
 }
 
 #[test]
-fn a_wide_clearance_by_a_carrier_in_his_area_goes_behind_for_a_corner() {
+fn a_wide_clearance_by_a_carrier_near_his_goal_line_goes_behind_for_a_corner() {
     let mut sim = clearing_carrier(1.0, DVec2::new(45.0, 5.0));
     let dead = after_clearance(&mut sim);
     assert_eq!(sim.summary().clearances, [0, 1], "the carrier cleared");
@@ -139,7 +140,7 @@ fn a_wide_clearance_by_a_carrier_in_his_area_goes_behind_for_a_corner() {
 }
 
 #[test]
-fn a_carrier_outside_his_area_never_clears_wide() {
+fn a_carrier_farther_than_the_wide_depth_never_clears_wide() {
     let mut sim = clearing_carrier(1.0, DVec2::new(20.0, 5.0));
     let dead = after_clearance(&mut sim);
     assert_eq!(sim.summary().clearances, [0, 1], "the carrier cleared");

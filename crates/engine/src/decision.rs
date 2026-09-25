@@ -454,12 +454,12 @@ impl Simulation {
                 Some(Kick::Pass { dir, speed, loft })
             }
             Choice::Clear => {
-                // Clear long toward the far half; inside his own penalty area a clearance
-                // may go wide toward his own goal line instead.
+                // Clear long toward the far half; near his own goal line a clearance may go
+                // wide toward that line instead.
                 let own_goal_x = -self.teams[team].attack_x;
                 let c = &t.clearances;
                 let wide = c.wide_chance > 0.0
-                    && pitch::in_penalty_area(carrier.pos, own_goal_x)
+                    && carrier.pos.x * own_goal_x.signum() >= pitch::HALF_LENGTH - c.wide_depth
                     && self.rng.referee_draw() < c.wide_chance;
                 let (line, spread) = if wide {
                     (wide_of_goal(carrier.pos, own_goal_x), WIDE_SPREAD)
