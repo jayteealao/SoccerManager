@@ -2,8 +2,13 @@
 
 pub use glam::{DVec2, DVec3};
 
-/// Clamps `v` to at most `max` in length. A zero vector stays zero.
+/// Clamps `v` to at most `max` in length. A zero vector stays zero. A vector whose squared
+/// length is at or below `sq_keep_limit(max)` is returned before the square root; every
+/// other vector, and every negative or NaN `max`, runs the square-root form unchanged.
 pub fn clamp_len(v: DVec2, max: f64) -> DVec2 {
+    if max >= 0.0 && v.length_squared() <= sq_keep_limit(max) {
+        return v;
+    }
     let len = v.length();
     if len > max && len > 0.0 {
         v * (max / len)
@@ -22,6 +27,15 @@ pub fn clamp_len(v: DVec2, max: f64) -> DVec2 {
 /// conservative.
 pub(crate) fn sq_skip_limit(r: f64) -> f64 {
     (r * r).next_up()
+}
+
+/// The squared-length keep limit for a limit `m` >= 0: every squared length at or below
+/// this value has a rounded square root of at most `m`, so `v.length() > m` is false for it.
+/// This is the mirror of `sq_skip_limit`. An underflowing square gives a negative limit, so
+/// no vector is kept early; an overflowing one gives `f64::MAX`, and every finite squared
+/// length has a root below such an `m`. Callers check `m >= 0.0` first.
+pub(crate) fn sq_keep_limit(m: f64) -> f64 {
+    (m * m).next_down()
 }
 
 /// Unit vector from `from` toward `to`, or zero when the points coincide.
@@ -116,6 +130,80 @@ mod tests {
             }
         }
         assert!(cases > 1_000_000, "{cases} cases");
+    }
+
+    /// Today's `clamp_len` before the squared-length keep, for the threshold tests.
+    fn clamp_len_before(v: DVec2, max: f64) -> DVec2 {
+        let len = v.length();
+        if len > max && len > 0.0 {
+            v * (max / len)
+        } else {
+            v
+        }
+    }
+
+    fn bits(v: DVec2) -> (u64, u64) {
+        (v.x.to_bits(), v.y.to_bits())
+    }
+
+    #[test]
+    fn keep_limit_matches_the_square_root_form() {
+        let mut limits = radii();
+        limits.extend([f64::MAX]);
+        let (sin, cos) = (30f64.to_radians().sin(), 30f64.to_radians().cos());
+        let (mut cases, mut at_square, mut kept, mut scaled) = (0u64, 0u64, 0u64, 0u64);
+        for m in limits {
+            let keep = sq_keep_limit(m);
+            // The branch alone: a squared length kept early must not be clamped by the
+            // square-root form.
+            for d2 in squared_lengths(m) {
+                let early = m >= 0.0 && d2 <= keep;
+                if early {
+                    let len = d2.sqrt();
+                    assert!(!(len > m && len > 0.0), "m = {m:e}, d2 = {d2:e}");
+                }
+            }
+            // Whole vectors along an axis and along 30 degrees, lengths m +- 64 ulps; the
+            // squared length each case tests is its own `length_squared()`.
+            let mut vectors = vec![
+                DVec2::ZERO,
+                DVec2::new(-0.0, 0.0),
+                DVec2::new(f64::INFINITY, 0.0),
+                DVec2::new(f64::NAN, 0.0),
+                DVec2::new(1e200, 1e200),
+                DVec2::new(1e-170, 0.0),
+            ];
+            for len in around(m) {
+                vectors.push(DVec2::new(len, 0.0));
+                vectors.push(DVec2::new(len * cos, len * sin));
+            }
+            for v in vectors {
+                let d2 = v.length_squared();
+                let new = clamp_len(v, m);
+                assert_eq!(
+                    bits(new),
+                    bits(clamp_len_before(v, m)),
+                    "m = {m:e}, v = {v:?}, d2 = {d2:e}"
+                );
+                if (m * m) > 0.0 && d2.to_bits() == (m * m).to_bits() {
+                    at_square += 1;
+                }
+                if m >= 0.0 && d2 <= keep {
+                    kept += 1;
+                } else {
+                    scaled += 1;
+                }
+                cases += 1;
+            }
+        }
+        // The sweep reaches the square itself (the one-ulp band above the keep limit) and
+        // both sides of the limit.
+        assert!(at_square > 10_000, "{at_square} cases at the square");
+        assert!(
+            kept > 100_000 && scaled > 100_000,
+            "{kept} kept, {scaled} scaled"
+        );
+        assert!(cases > 2_000_000, "{cases} cases");
     }
 
     #[test]
