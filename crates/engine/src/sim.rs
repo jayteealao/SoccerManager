@@ -540,8 +540,8 @@ pub struct Simulation {
     /// The decision hook's offsets for the current carrier. A stoppage and a new carrier
     /// clear it, so it never needs to be in the snapshot.
     pub(crate) script_cache: Option<ScriptCache>,
-    finished: bool,
-    scratch: Vec<DVec2>,
+    pub(crate) finished: bool,
+    pub(crate) scratch: Vec<DVec2>,
 }
 
 impl Simulation {

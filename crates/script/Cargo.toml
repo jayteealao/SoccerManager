@@ -16,10 +16,16 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
+[features]
+# The skewed test clock of the sandbox. Only this crate's own tests enable it, so no other
+# build contains it.
+test-clock = []
+
 [dev-dependencies]
 criterion = { workspace = true }
 tracing-subscriber = { workspace = true }
 engine = { path = "../engine", features = ["scenario"] }
+script = { path = ".", features = ["test-clock"] }
 
 [[bench]]
 name = "hook_call"

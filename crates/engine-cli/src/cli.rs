@@ -47,6 +47,38 @@ pub enum Command {
     Resume(ResumeOpts),
     /// Play many AI-managed matches and check the realism bands.
     Calibrate(CalibrateOpts),
+    /// Replay the 22 gate matches and compare them with the golden file.
+    Gate(GateOpts),
+}
+
+#[derive(Debug, Args)]
+pub struct GateOpts {
+    /// Golden file to compare with; default gate/golden.json.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Golden file to compare with; default gate/golden.json in the\n\
+                     current folder (the repository root)."
+    )]
+    pub golden: Option<PathBuf>,
+    /// Play only this fixture; repeat for more.
+    #[arg(
+        long,
+        value_name = "ID",
+        long_help = "Play only this fixture, such as seed-42, change, or knockout.\n\
+                     Repeat the flag for more. Default: all 22 fixtures."
+    )]
+    pub fixture: Vec<String>,
+    /// Print one JSON object per match instead of text.
+    #[arg(long)]
+    pub json: bool,
+    /// Write the first golden file; refused when one exists.
+    #[arg(
+        long,
+        long_help = "Play every fixture and write the first golden file with this\n\
+                     machine's hash set. Refused when the file already exists."
+    )]
+    pub bootstrap: bool,
 }
 
 #[derive(Debug, Args)]

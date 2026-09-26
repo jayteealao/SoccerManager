@@ -232,6 +232,29 @@ A flag name that `tuning.json` does not declare, a state other than `on` or `off
 
 Exit codes: 0 when every band passes and both dark-path counters are zero; 1; 2 otherwise. For a paired run: 0 when both arms have no missing statistics record, no change left unapplied, no validator violation, and no failed worker; 1; 2 otherwise. The verdict does not change the exit code.
 
+## gate
+
+Replay the 22 gate matches and compare their state hashes with the golden file. The gate proves that a change to the engine leaves every match exactly as it was: after every tick it hashes the full match state (positions and velocities as exact bits, stamina, cards, the rules and the restart, the clock, the teams and managers, the pending changes, the script-hook counters, the random stream's position, and the tick's events) into a running SHA-256, and keeps a checkpoint every 1,000 ticks and at the last tick.
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `--golden` | file | `gate/golden.json` | The golden file to compare with. The default path is relative to the current folder, so run the command from the repository root. |
+| `--fixture` | fixture id | every fixture | Play only this fixture: `seed-<seed>`, `change`, or `knockout`. Repeat it for more than one fixture. |
+| `--json` | none | off | Print one JSON object per match instead of a text line. |
+| `--bootstrap` | none | off | Play every fixture and write the first golden file with this machine's hash set. Refused when the file already exists, and with `--fixture`. |
+
+The fixtures, in gate order:
+
+- `seed-42`, `seed-1`, `seed-7`, `seed-99`, `seed-2026`, `seed-0`, `seed-18446744073709551615`, `seed-3`, `seed-11`, `seed-23`, `seed-57`, `seed-123`, `seed-314`, `seed-777`, `seed-1000`, `seed-4242`, `seed-9001`, `seed-31337`, `seed-65535`, `seed-1000003`: a 90-minute match between the default teams, both managed by the AI.
+- `change`: seed 42 with both managers human. A substitution for the home team is queued at tick 60,000 (the player in lineup slot 9 off, the first bench player on), and a mentality change to attacking for the away team at tick 90,000.
+- `knockout`: seed 2, a knockout match with the shipped `sample` script pack. It goes to extra time and a penalty shoot-out. During the gate no script hook is stopped on wall-clock time, so a busy machine cannot change the match; the operation budget still stops a long call.
+
+Output: one line per match on standard output: the fixture id, `match` or `differs`, the tick count, the first 12 characters of the final hash, and for `change` and `knockout` the applied substitutions and tactics changes, or whether the match went to extra time and a shoot-out. A match that differs gets a second line that names the window of ticks in which its state first changed, for example `seed-42 differs: the state first differs between tick 30000 and tick 31000`, or the two tick counts when the match lasted longer or shorter. With `--json`, each match is one JSON object with `fixture`, `verdict`, `ticks`, `final_hash`, `window` (`from` and `to`), `detail`, `extra_time`, `shootout`, `decided_by`, `substitutions_applied`, and `tactics_changes_applied`. Standard error ends with the match count, the machine key, and the run time.
+
+The golden file holds the gate schema version, the state inventory version, the checkpoint spacing, the toolchain, the bootstrap run (engine version, build, UTC time, machine), the fixture list, and one hash set per machine, keyed `<os>-<arch>`, for example `windows-x86_64`. Seeds are decimal strings and hashes are 64 lowercase hex characters. The gate refuses the file, before any match is played, when it is malformed, when a version, the checkpoint spacing, or the fixture list differs from the build's, when it has no hash set for this machine, or when a hash set misses a match, lists one twice, or misses a checkpoint. The message names the fault.
+
+Exit codes: 0 when every selected match matches; 1 when the golden file or the content cannot be read or is refused, or a fixture id is unknown; 2 when a match differs or its hashed state holds a number that is not finite (the line names the field, for example `players[3].pos.x`).
+
 ## Files
 
 Every file the engine reads or writes is in [the data-file reference](data-files.md). Every socket message is in [the protocol reference](protocol.md).

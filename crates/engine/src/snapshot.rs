@@ -495,8 +495,8 @@ fn encode(sim: &Simulation, w: &mut Writer) {
     w.raw(&rng.seed);
     w.u64(rng.stream);
     w.u128(rng.word_pos);
-    w.v3_at("ball.pos", sim.ball.pos);
-    w.v3_at("ball.vel", sim.ball.vel);
+    w.v3_at(&String::new, sim.ball.pos);
+    w.v3_at(&String::new, sim.ball.vel);
     w.index(sim.carrier);
     w.u32(sim.control_since);
     w.index(sim.last_touch);
@@ -504,7 +504,7 @@ fn encode(sim: &Simulation, w: &mut Writer) {
     w.index(sim.restart_taker);
     w.summary(&sim.summary);
     for (t, team) in sim.teams.iter().enumerate() {
-        w.team("teams", team);
+        w.team(&String::new, team);
         let ledger = &sim.ledgers[t];
         w.u8(ledger.used);
         w.u8(ledger.windows);
@@ -517,16 +517,16 @@ fn encode(sim: &Simulation, w: &mut Writer) {
         w.u8(u8::from(ai.due));
     }
     for p in &sim.players {
-        w.v2_at("pos", p.pos);
-        w.v2_at("vel", p.vel);
-        w.v2_at("target", p.target);
-        w.v2_at("facing", p.facing);
+        w.v2_at(&String::new, p.pos);
+        w.v2_at(&String::new, p.vel);
+        w.v2_at(&String::new, p.target);
+        w.v2_at(&String::new, p.facing);
         w.u8(canon::status_code(p.status));
         w.u8(p.yellow);
         w.u32(p.foul_ready);
         w.u8(p.squad as u8);
         w.f64_at(String::new, p.energy);
-        w.derived("derived", &p.derived);
+        w.derived(&String::new, &p.derived);
     }
     w.u32(sim.queue.next);
     // A queue holds far fewer than 4 billion changes.
@@ -569,7 +569,7 @@ fn encode(sim: &Simulation, w: &mut Writer) {
             // Kind and card indices are below 9.
             w.u8(d.kind.index() as u8);
             w.index(Some(d.team));
-            w.v2_at("spot", d.spot);
+            w.v2_at(&String::new, d.spot);
             w.u8(u8::from(d.direct));
             w.u32(d.since);
             w.u32(d.ready_at);

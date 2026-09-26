@@ -221,6 +221,21 @@ impl Plugins {
         self.decision.is_some() || self.rule.is_some() || self.commentary.is_some()
     }
 
+    /// Which hooks are attached now: decision, rule, commentary. A hook switched off for
+    /// failing reads `false`.
+    pub fn hooks_present(&self) -> [bool; 3] {
+        [
+            self.decision.is_some(),
+            self.rule.is_some(),
+            self.commentary.is_some(),
+        ]
+    }
+
+    /// Failures in a row per hook point, in [`HookPoint::ALL`] order.
+    pub fn failures(&self) -> [u32; 3] {
+        self.failures
+    }
+
     /// The text a note points to.
     pub fn detail(&self, note: &ScriptNote) -> &str {
         self.details

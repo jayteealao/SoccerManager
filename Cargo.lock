@@ -1168,6 +1168,7 @@ dependencies = [
  "engine",
  "garde",
  "rhai",
+ "script",
  "serde",
  "serde_json",
  "sha2",

@@ -1,10 +1,11 @@
 //! `engine-cli`: simulate a match headless, benchmark the engine, calibrate it over many
-//! matches, or generate teams.
+//! matches, check it against the replay gate, or generate teams.
 
 mod bench;
 mod calibrate;
 mod cli;
 mod content;
+mod gate;
 mod generate;
 mod launch;
 mod record;
@@ -52,6 +53,7 @@ fn main() {
         cli::Command::Replay(opts) => replay::run(&opts),
         cli::Command::Resume(opts) => resume::run(content_dir, &opts),
         cli::Command::Calibrate(opts) => calibrate::run(content_dir, &opts),
+        cli::Command::Gate(opts) => gate::run(content_dir, &opts),
     };
     match result {
         Ok(code) => std::process::exit(code),

@@ -15,6 +15,32 @@ pub struct RngState {
     pub word_pos: u128,
 }
 
+/// The position of every random stream a match draws from, as the replay gate hashes it:
+/// the stream scheme, then each stream's id and word position in stream order. Today's
+/// engine has one stream, so it reports scheme 0 with one entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamState {
+    pub scheme: u8,
+    /// `(stream id, word position)` per stream, in stream order.
+    pub entries: Vec<(u64, u128)>,
+}
+
+impl StreamState {
+    /// The canonical bytes: the scheme id (u8), the entry count (u32), then per entry the
+    /// stream id (u64) and the word position (u128), all little-endian.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(5 + 24 * self.entries.len());
+        out.push(self.scheme);
+        // A match has a handful of streams, far below 4 billion.
+        out.extend_from_slice(&(self.entries.len() as u32).to_le_bytes());
+        for (stream, word_pos) in &self.entries {
+            out.extend_from_slice(&stream.to_le_bytes());
+            out.extend_from_slice(&word_pos.to_le_bytes());
+        }
+        out
+    }
+}
+
 /// A seeded generator with a fixed algorithm.
 pub struct EngineRng {
     inner: ChaCha8Rng,
@@ -50,6 +76,14 @@ impl EngineRng {
             seed: self.inner.get_seed(),
             stream: self.inner.get_stream(),
             word_pos: self.inner.get_word_pos(),
+        }
+    }
+
+    /// The stream state the replay gate hashes: scheme 0, one entry.
+    pub fn stream_state(&self) -> StreamState {
+        StreamState {
+            scheme: 0,
+            entries: vec![(self.inner.get_stream(), self.inner.get_word_pos())],
         }
     }
 
@@ -150,6 +184,28 @@ mod tests {
             assert_eq!(a.next_f64().to_bits(), b.next_f64().to_bits());
         }
         assert_eq!(a.state(), b.state());
+    }
+
+    #[test]
+    fn todays_stream_state_is_scheme_0_with_one_entry_in_the_documented_bytes() {
+        let mut rng = EngineRng::from_seed(42);
+        for _ in 0..3 {
+            rng.next_f64();
+        }
+        let state = rng.stream_state();
+        assert_eq!(state.scheme, 0);
+        assert_eq!(state.entries.len(), 1);
+        let (stream, word_pos) = state.entries[0];
+        assert_eq!(stream, rng.state().stream);
+        assert_eq!(word_pos, rng.state().word_pos);
+        // Three f64 draws read six 32-bit words.
+        assert_eq!(word_pos, 6);
+        let mut expected = vec![0u8];
+        expected.extend_from_slice(&1u32.to_le_bytes());
+        expected.extend_from_slice(&stream.to_le_bytes());
+        expected.extend_from_slice(&6u128.to_le_bytes());
+        assert_eq!(state.to_bytes(), expected);
+        assert_eq!(state.to_bytes().len(), 1 + 4 + 8 + 16);
     }
 
     #[test]

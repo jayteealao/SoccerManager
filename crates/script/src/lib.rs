@@ -17,7 +17,7 @@ use engine::EngineError;
 use engine::plugin::{HookPoint, Plugins};
 
 pub use pack::{Manifest, PACK_VERSION, Pack};
-pub use sandbox::Sandbox;
+pub use sandbox::{Backstop, Sandbox};
 
 use hooks::{
     CARD_FN, DECIDE_FN, LINE_FN, ScriptCommentaryHook, ScriptDecisionHook, ScriptRuleHook,
@@ -63,11 +63,22 @@ impl LoadedPack {
     /// does not define is refused, and so is a script that does not compile, uses `eval`, or
     /// fails in its top-level statements.
     pub fn load(dir: &Path) -> Result<Self, ScriptError> {
+        Self::load_with(dir, Backstop::default())
+    }
+
+    /// [`LoadedPack::load`] with the wall-clock limit `backstop` on every call. The replay
+    /// gate loads its pack with [`Backstop::Never`].
+    pub fn load_with(dir: &Path, backstop: Backstop) -> Result<Self, ScriptError> {
         let pack = Pack::read(dir)?;
         let shown = pack.manifest_shown();
         let identity = pack.identity();
-        let sandbox = Sandbox::new(&pack.source, pack.manifest.limits.max_operations, &identity)
-            .map_err(|reason| ScriptError::refused(&shown, "entry", reason))?;
+        let sandbox = Sandbox::with_backstop(
+            &pack.source,
+            pack.manifest.limits.max_operations,
+            &identity,
+            backstop,
+        )
+        .map_err(|reason| ScriptError::refused(&shown, "entry", reason))?;
         for (hook, (name, params)) in [
             (HookPoint::Decision, DECIDE_FN),
             (HookPoint::Rule, CARD_FN),

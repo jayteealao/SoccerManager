@@ -36,3 +36,9 @@ rhai = { version = "1.26", features = ["sync"] }
 
 [profile.release]
 debug = 1
+
+# The replay gate hashes the full match state after every tick. An optimized SHA-256 keeps
+# the gate tests fast in debug builds; it cannot change a result, because the hash is not
+# part of play.
+[profile.dev.package.sha2]
+opt-level = 3

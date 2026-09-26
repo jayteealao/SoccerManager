@@ -3,7 +3,9 @@
 //!
 //! - an operation budget per call (the pack's `limits.max_operations`), which is the
 //!   deterministic budget, and a 2 ms wall-clock backstop checked every 256 operations, which
-//!   only catches a slow built-in call;
+//!   only catches a slow built-in call. A caller may switch the backstop off
+//!   ([`Backstop::Never`]); the replay gate does, so a busy machine cannot change a gate
+//!   match;
 //! - 16 call levels, expression depths of 64 and 32, strings of 1,024 characters, arrays of
 //!   256 items, and maps of 64 entries;
 //! - no import: a resolver that refuses every module replaces the default one, which reads
@@ -36,11 +38,45 @@ pub const MAX_STRING: usize = 1_024;
 pub const MAX_ARRAY: usize = 256;
 pub const MAX_MAP: usize = 64;
 
+/// The wall-clock limit on one call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Backstop {
+    /// A call that runs longer than this is stopped. The default is [`CALL_BACKSTOP`].
+    Wall(Duration),
+    /// No call is stopped on time; the operation budget still stops a long call.
+    Never,
+    /// Test clock: every operation checks a clock that reports 10 ms more than the real
+    /// one, so any call runs "long". `limit` is the wall limit on that clock, or `None`
+    /// for no limit, as [`Backstop::Never`].
+    #[cfg(feature = "test-clock")]
+    Skewed { limit: Option<Duration> },
+}
+
+impl Default for Backstop {
+    fn default() -> Self {
+        Backstop::Wall(CALL_BACKSTOP)
+    }
+}
+
+impl Backstop {
+    /// The wall limit, the clock skew, and the operations between two clock checks, or
+    /// `None` when no call is stopped on time.
+    fn clock(self) -> Option<(Duration, Duration, u64)> {
+        match self {
+            Backstop::Wall(limit) => Some((limit, Duration::ZERO, CLOCK_EVERY)),
+            Backstop::Never => None,
+            #[cfg(feature = "test-clock")]
+            Backstop::Skewed { limit } => limit.map(|l| (l, Duration::from_millis(10), 1)),
+        }
+    }
+}
+
 /// A compiled script inside its sandbox.
 pub struct Sandbox {
     engine: Engine,
     ast: AST,
     max_operations: u64,
+    backstop: Backstop,
     /// When the running call must stop, in nanoseconds after `origin`.
     deadline: Arc<AtomicU64>,
     origin: Instant,
@@ -59,6 +95,16 @@ impl Sandbox {
     /// messages. A script that does not compile, uses `eval`, or fails at the top level is
     /// refused with the reason.
     pub fn new(source: &str, max_operations: u64, shown: &str) -> Result<Self, String> {
+        Self::with_backstop(source, max_operations, shown, Backstop::default())
+    }
+
+    /// [`Sandbox::new`] with the wall-clock limit `backstop`.
+    pub fn with_backstop(
+        source: &str,
+        max_operations: u64,
+        shown: &str,
+        backstop: Backstop,
+    ) -> Result<Self, String> {
         let origin = Instant::now();
         let deadline = Arc::new(AtomicU64::new(u64::MAX));
         let mut engine = Engine::new();
@@ -81,21 +127,25 @@ impl Sandbox {
         engine.set_max_array_size(MAX_ARRAY);
         engine.set_max_map_size(MAX_MAP);
         let clock = Arc::clone(&deadline);
-        engine.on_progress(move |ops| {
-            if ops.is_multiple_of(CLOCK_EVERY) {
-                let now = u64::try_from(origin.elapsed().as_nanos()).unwrap_or(u64::MAX);
-                if now > clock.load(Ordering::Relaxed) {
-                    return Some(Dynamic::from("time"));
+        if let Some((_, skew, every)) = backstop.clock() {
+            engine.on_progress(move |ops| {
+                if ops.is_multiple_of(every) {
+                    let elapsed = origin.elapsed() + skew;
+                    let now = u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
+                    if now > clock.load(Ordering::Relaxed) {
+                        return Some(Dynamic::from("time"));
+                    }
                 }
-            }
-            None
-        });
+                None
+            });
+        }
         register_contexts(&mut engine);
         let ast = engine.compile(source).map_err(|e| e.to_string())?;
         let sandbox = Self {
             engine,
             ast,
             max_operations,
+            backstop,
             deadline,
             origin,
         };
@@ -129,7 +179,10 @@ impl Sandbox {
 
     /// Sets the wall-clock deadline for the call about to start.
     fn arm(&self) {
-        let limit = self.origin.elapsed() + CALL_BACKSTOP;
+        let Some((limit, _, _)) = self.backstop.clock() else {
+            return;
+        };
+        let limit = self.origin.elapsed() + limit;
         let nanos = u64::try_from(limit.as_nanos()).unwrap_or(u64::MAX);
         self.deadline.store(nanos, Ordering::Relaxed);
     }
@@ -145,7 +198,10 @@ impl Sandbox {
             )),
             EvalAltResult::ErrorTerminated(..) => HookOutcome::Aborted(format!(
                 "time budget of {} ms exceeded",
-                CALL_BACKSTOP.as_millis()
+                self.backstop
+                    .clock()
+                    .map_or(CALL_BACKSTOP, |(limit, _, _)| limit)
+                    .as_millis()
             )),
             EvalAltResult::ErrorModuleNotFound(path, _) => {
                 HookOutcome::Denied(format!("import {path} is not allowed"))

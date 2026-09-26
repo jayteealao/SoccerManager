@@ -13,6 +13,7 @@ pub mod decision;
 pub mod error;
 pub mod fatigue;
 pub mod flags;
+pub mod gate;
 pub mod math;
 pub mod observe;
 pub mod pitch;

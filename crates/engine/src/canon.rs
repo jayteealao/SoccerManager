@@ -25,8 +25,23 @@ pub(crate) struct Writer {
 }
 
 impl Writer {
+    /// The bytes written so far.
+    pub(crate) fn bytes(&self) -> &[u8] {
+        &self.buf
+    }
+
     pub(crate) fn into_bytes(self) -> Vec<u8> {
         self.buf
+    }
+
+    /// Empties the buffer and keeps its allocation. The fault stays.
+    pub(crate) fn clear(&mut self) {
+        self.buf.clear();
+    }
+
+    /// The field path of the first NaN or infinite float written, if any.
+    pub(crate) fn fault(&self) -> Option<&str> {
+        self.fault.as_deref()
     }
 
     pub(crate) fn raw(&mut self, v: &[u8]) {
@@ -34,6 +49,9 @@ impl Writer {
     }
     pub(crate) fn u8(&mut self, v: u8) {
         self.buf.push(v);
+    }
+    pub(crate) fn u16(&mut self, v: u16) {
+        self.buf.extend_from_slice(&v.to_le_bytes());
     }
     pub(crate) fn u32(&mut self, v: u32) {
         self.buf.extend_from_slice(&v.to_le_bytes());
@@ -44,6 +62,18 @@ impl Writer {
     pub(crate) fn u128(&mut self, v: u128) {
         self.buf.extend_from_slice(&v.to_le_bytes());
     }
+    pub(crate) fn bool(&mut self, v: bool) {
+        self.u8(u8::from(v));
+    }
+    /// A collection length. Match-state collections are far below 4 billion items.
+    pub(crate) fn count(&mut self, n: usize) {
+        self.u32(n as u32);
+    }
+    /// Length-prefixed UTF-8 bytes.
+    pub(crate) fn text(&mut self, s: &str) {
+        self.count(s.len());
+        self.raw(s.as_bytes());
+    }
 
     /// The exact bits of `v`. When `v` is NaN or infinite and no earlier float was, the
     /// writer keeps `path()` as the fault.
@@ -53,14 +83,15 @@ impl Writer {
         }
         self.buf.extend_from_slice(&v.to_bits().to_le_bytes());
     }
-    pub(crate) fn v2_at(&mut self, path: &str, v: DVec2) {
-        self.f64_at(|| format!("{path}.x"), v.x);
-        self.f64_at(|| format!("{path}.y"), v.y);
+    /// A vector under `path()`; the path is built only when a component is not finite.
+    pub(crate) fn v2_at(&mut self, path: &dyn Fn() -> String, v: DVec2) {
+        self.f64_at(|| format!("{}.x", path()), v.x);
+        self.f64_at(|| format!("{}.y", path()), v.y);
     }
-    pub(crate) fn v3_at(&mut self, path: &str, v: DVec3) {
-        self.f64_at(|| format!("{path}.x"), v.x);
-        self.f64_at(|| format!("{path}.y"), v.y);
-        self.f64_at(|| format!("{path}.z"), v.z);
+    pub(crate) fn v3_at(&mut self, path: &dyn Fn() -> String, v: DVec3) {
+        self.f64_at(|| format!("{}.x", path()), v.x);
+        self.f64_at(|| format!("{}.y", path()), v.y);
+        self.f64_at(|| format!("{}.z", path()), v.z);
     }
 
     pub(crate) fn index(&mut self, v: Option<usize>) {
@@ -79,6 +110,10 @@ impl Writer {
         self.u8(u8::from(v.is_some()));
         self.u8(v.unwrap_or(0));
     }
+    pub(crate) fn opt_u32(&mut self, v: Option<u32>) {
+        self.u8(u8::from(v.is_some()));
+        self.u32(v.unwrap_or(0));
+    }
 
     pub(crate) fn tactics(&mut self, t: &Tactics) {
         self.u8(t.formation);
@@ -92,8 +127,8 @@ impl Writer {
         }
     }
 
-    /// The 14 derived values, each under `<path>.<name>`.
-    pub(crate) fn derived(&mut self, path: &str, d: &Derived) {
+    /// The 14 derived values, each under `<path()>.<name>`.
+    pub(crate) fn derived(&mut self, path: &dyn Fn() -> String, d: &Derived) {
         for (name, v) in [
             ("max_speed", d.max_speed),
             ("max_accel", d.max_accel),
@@ -110,18 +145,18 @@ impl Writer {
             ("natural_fitness", d.natural_fitness),
             ("injury_resistance", d.injury_resistance),
         ] {
-            self.f64_at(|| format!("{path}.{name}"), v);
+            self.f64_at(|| format!("{}.{name}", path()), v);
         }
     }
 
     /// A team's shape as the snapshot stores it: the attack direction, each slot's activity
     /// and place, the tactics, the lineup, and the bench.
-    pub(crate) fn team(&mut self, path: &str, team: &Team) {
-        self.f64_at(|| format!("{path}.attack_x"), team.attack_x);
+    pub(crate) fn team(&mut self, path: &dyn Fn() -> String, team: &Team) {
+        self.f64_at(|| format!("{}.attack_x", path()), team.attack_x);
         for (slot, (active, (x, y))) in team.active.iter().zip(team.formation.iter()).enumerate() {
             self.u8(u8::from(*active));
-            self.f64_at(|| format!("{path}.formation[{slot}].x"), *x);
-            self.f64_at(|| format!("{path}.formation[{slot}].y"), *y);
+            self.f64_at(|| format!("{}.formation[{slot}].x", path()), *x);
+            self.f64_at(|| format!("{}.formation[{slot}].y", path()), *y);
         }
         self.tactics(&team.tactics);
         // Squad indices are below 40, the team file's limit.
@@ -196,5 +231,31 @@ pub(crate) fn manager_code(m: Manager) -> u8 {
     match m {
         Manager::Ai => 0,
         Manager::Human => 1,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_nan_or_an_infinity_names_the_first_field_and_is_still_written() {
+        let mut w = Writer::default();
+        w.f64_at(|| "a".into(), 1.0);
+        assert_eq!(w.fault(), None);
+        w.v2_at(&|| "players[3].vel".into(), DVec2::new(0.0, f64::NAN));
+        w.f64_at(|| "later".into(), f64::INFINITY);
+        assert_eq!(w.fault(), Some("players[3].vel.y"));
+        assert_eq!(w.bytes().len(), 32);
+        let mut w = Writer::default();
+        w.f64_at(|| "ball.pos.z".into(), f64::NEG_INFINITY);
+        assert_eq!(w.fault(), Some("ball.pos.z"));
+    }
+
+    #[test]
+    fn a_float_is_its_exact_little_endian_bits() {
+        let mut w = Writer::default();
+        w.f64_at(|| unreachable!(), -0.0);
+        assert_eq!(w.bytes(), (-0.0f64).to_bits().to_le_bytes());
     }
 }
