@@ -1,6 +1,10 @@
 //! AC-c: a client that reads slower than the engine produces makes the server pause at the
 //! buffer bound and resume when the client drains it. No tick is dropped.
 
+// Windows only: Linux loopback socket buffers are large enough to hold the match, so the
+// producer cannot be made to reach the bound there. The Windows run checks the pause.
+#![cfg(windows)]
+
 mod common;
 
 use std::time::Duration;
