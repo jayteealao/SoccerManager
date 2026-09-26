@@ -11,6 +11,8 @@ pub mod guard;
 mod inventory;
 
 #[cfg(feature = "scenario")]
+pub mod audit;
+#[cfg(feature = "scenario")]
 pub mod fault;
 
 use serde::{Deserialize, Serialize};
@@ -274,6 +276,9 @@ pub(crate) struct Probe<'a> {
     pub against: Option<&'a MatchHashes>,
     #[cfg(feature = "scenario")]
     pub fault: Option<fault::Fault>,
+    /// Switches the carrier-options audit on; the run leaves the audit's counts here.
+    #[cfg(feature = "scenario")]
+    pub audit: Option<&'a std::cell::RefCell<audit::OptionsAudit>>,
 }
 
 pub(crate) fn run(
@@ -282,6 +287,10 @@ pub(crate) fn run(
     probe: &Probe<'_>,
 ) -> Result<Played, GateError> {
     let mut sim = build(fixture, inputs)?;
+    #[cfg(feature = "scenario")]
+    if let Some(audit) = probe.audit {
+        sim.options_audit = Some(audit.borrow().clone());
+    }
     let mut hasher = Sha256::new();
     let mut w = Writer::default();
     inventory::header(&mut w, fixture, &sim);
@@ -347,6 +356,10 @@ pub(crate) fn run(
                 break;
             }
         }
+    }
+    #[cfg(feature = "scenario")]
+    if let (Some(audit), Some(counts)) = (probe.audit, sim.options_audit.take()) {
+        *audit.borrow_mut() = counts;
     }
     let summary = sim.summary();
     facts.extra_time = summary.extra_time;

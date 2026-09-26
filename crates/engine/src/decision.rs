@@ -7,9 +7,13 @@
 //! every target instead, and a restart kick comes from `restart_pass`.
 
 use crate::data::rules::StoppageKind;
+#[cfg(feature = "scenario")]
+use crate::gate::audit::{self, Candidate, Control};
 use crate::math::{DVec2, segment_distance, toward};
 use crate::pitch;
 use crate::plugin::{DecisionContext, HookPoint, OptionOffsets};
+#[cfg(feature = "scenario")]
+use crate::rng::EngineRng;
 use crate::rules::offside;
 use crate::sim::{ScriptCache, Simulation, WIDE_SPREAD, wide_of_goal};
 use crate::team::PLAYERS_PER_TEAM;
@@ -319,18 +323,37 @@ impl Simulation {
             }
             let d = (mate.pos - carrier.pos).length();
             if !(4.0..=45.0).contains(&d) {
+                #[cfg(feature = "scenario")]
+                audit::record(&mut self.options_audit, Candidate::Distance(j));
                 continue;
             }
             let mut lane: f64 = 6.0;
             let mut receiver_space: f64 = 8.0;
+            #[cfg(feature = "scenario")]
+            let mut visited = 0u32;
             for opp in &self.players {
                 if opp.team == team || !opp.active() {
                     continue;
                 }
+                #[cfg(feature = "scenario")]
+                {
+                    visited += 1;
+                }
                 lane = lane.min(segment_distance(opp.pos, carrier.pos, mate.pos));
+                // Early exit: `lane` only falls (`f64::min` ignores NaN), so this team-mate
+                // is rejected just below whatever the other opponents give, and
+                // `receiver_space` is read only in his score. The exit skips no draw, no
+                // score, no tie-break, and no eligibility check.
+                if lane < w.min_lane {
+                    #[cfg(feature = "scenario")]
+                    audit::record_break(&mut self.options_audit, &self.players, team, visited);
+                    break;
+                }
                 receiver_space = receiver_space.min((opp.pos - mate.pos).length());
             }
             if lane < w.min_lane {
+                #[cfg(feature = "scenario")]
+                audit::record(&mut self.options_audit, Candidate::Lane(j));
                 continue;
             }
             let progress = ((mate.pos - carrier.pos).dot(attack) / 40.0).clamp(-1.0, 1.0);
@@ -349,6 +372,14 @@ impl Simulation {
                 + plan.tempo
                 + layoff
                 + self.rng.range_f64(-noise, noise);
+            #[cfg(feature = "scenario")]
+            audit::record(
+                &mut self.options_audit,
+                Candidate::Scored {
+                    mate: j,
+                    score: score.to_bits(),
+                },
+            );
             if pass.is_none_or(|(s, _)| score > s) {
                 pass = Some((score, j));
             }
@@ -408,6 +439,13 @@ impl Simulation {
     }
 
     pub(crate) fn decide_carrier(&mut self, c: usize) -> Option<Kick> {
+        #[cfg(feature = "scenario")]
+        let mut o = if self.options_audit.is_some() {
+            self.audited_options(c)
+        } else {
+            self.options(c)
+        };
+        #[cfg(not(feature = "scenario"))]
         let mut o = self.options(c);
         if let Some(off) = self.script_offsets(c) {
             o.shot = o.shot.map(|s| s + off.shoot);
@@ -742,6 +780,269 @@ fn rotate(v: DVec2, angle: f64) -> DVec2 {
     DVec2::new(v.x * c - v.y * s, v.x * s + v.y * c)
 }
 
+/// Every value of `o` as bits, for the audit's exact compare.
+#[cfg(feature = "scenario")]
+type OptionBits = (
+    Option<u64>,
+    Option<(u64, usize)>,
+    Option<u64>,
+    u64,
+    Option<u64>,
+    (u64, u64),
+);
+
+#[cfg(feature = "scenario")]
+fn option_bits(o: &Options) -> OptionBits {
+    (
+        o.shot.map(f64::to_bits),
+        o.pass.map(|(s, j)| (s.to_bits(), j)),
+        o.dribble.map(f64::to_bits),
+        o.clear.to_bits(),
+        o.hold.map(f64::to_bits),
+        (o.nearest_opp_pos.x.to_bits(), o.nearest_opp_pos.y.to_bits()),
+    )
+}
+
+#[cfg(feature = "scenario")]
+impl Simulation {
+    /// The carrier-options audit's reference: the options code before the pass-lane early
+    /// exit, verbatim except for the team-mate records and the audit's test controls.
+    /// A later change to the draws of `options()` must change this copy in the same
+    /// commit, or the audit test fails.
+    fn options_reference(&mut self, c: usize) -> (Options, Vec<Candidate>) {
+        let control = self.options_audit.as_ref().and_then(|a| a.control);
+        let mut records = Vec::new();
+        let mut rejected_one = false;
+        let mut bumped = false;
+        let t = &self.config.tuning;
+        let w = &t.decision;
+        let carrier = self.players[c];
+        let team = carrier.team;
+        let side = &self.teams[team];
+        let plan = side.plan;
+        let role = plan.slots[carrier.slot];
+        let goal = side.target_goal();
+        let attack = DVec2::new(side.attack_x, 0.0);
+        let goal_dist = (goal - carrier.pos).length();
+        let keeper = c == self.keeper(team);
+        let their_keeper = self.keeper(1 - team);
+        let skill = |v: f64| (v - 50.0) / 50.0 * w.skill;
+        let noise =
+            w.noise * (1.5 - (carrier.derived.decisions + carrier.derived.composure) / 200.0);
+
+        // Pressure and space around the carrier.
+        let mut nearest_opp = f64::INFINITY;
+        let mut nearest_opp_pos = carrier.pos;
+        let mut space_ahead: f64 = 10.0;
+        for p in &self.players {
+            if p.team == team || !p.active() {
+                continue;
+            }
+            let d = p.pos - carrier.pos;
+            let dist = d.length();
+            if dist < nearest_opp {
+                nearest_opp = dist;
+                nearest_opp_pos = p.pos;
+            }
+            if dist < 10.0 && dist > 1e-6 && d.dot(attack) / dist > 0.5 {
+                space_ahead = space_ahead.min(dist);
+            }
+        }
+        let pressed = nearest_opp < 2.5;
+        // A lone carrier: an outfield carrier with no active outfield team-mate ahead of him.
+        let depth = carrier.pos.x * attack.x;
+        let lone = !keeper
+            && !self.players.iter().enumerate().any(|(j, p)| {
+                p.team == team
+                    && j != c
+                    && j != self.keeper(team)
+                    && p.active()
+                    && p.pos.x * attack.x > depth
+            });
+
+        // Shot.
+        let shot = if !keeper && goal_dist < t.shot_range {
+            let lane = self
+                .players
+                .iter()
+                .filter(|p| p.team != team && p.id != their_keeper && p.active())
+                .map(|p| segment_distance(p.pos, carrier.pos, goal))
+                .fold(f64::INFINITY, f64::min);
+            let under_pressure = if nearest_opp < 2.0 && lane > 1.0 {
+                w.pressure
+            } else {
+                0.0
+            };
+            Some(
+                w.shot_base + w.shot_lane * ((lane.min(5.0) - 2.5) / 2.5)
+                    - w.shot_distance * goal_dist / t.shot_range
+                    + under_pressure
+                    + skill(carrier.derived.finishing)
+                    + plan.shoot
+                    + role.shoot
+                    + self.rng.range_f64(-noise, noise),
+            )
+        } else {
+            None
+        };
+
+        // Passes.
+        let mut pass: Option<(f64, usize)> = None;
+        for j in 0..self.players.len() {
+            let mate = &self.players[j];
+            if mate.team != team || j == c || !mate.active() {
+                continue;
+            }
+            let d = (mate.pos - carrier.pos).length();
+            if !(4.0..=45.0).contains(&d) {
+                records.push(Candidate::Distance(j));
+                continue;
+            }
+            let mut lane: f64 = 6.0;
+            let mut receiver_space: f64 = 8.0;
+            for opp in &self.players {
+                if opp.team == team || !opp.active() {
+                    continue;
+                }
+                lane = lane.min(segment_distance(opp.pos, carrier.pos, mate.pos));
+                receiver_space = receiver_space.min((opp.pos - mate.pos).length());
+            }
+            if lane < w.min_lane || (control == Some(Control::RejectMate) && !rejected_one) {
+                rejected_one |= lane >= w.min_lane;
+                records.push(Candidate::Lane(j));
+                continue;
+            }
+            let progress = ((mate.pos - carrier.pos).dot(attack) / 40.0).clamp(-1.0, 1.0);
+            let forward = progress.max(0.0);
+            let layoff = if lone && progress <= 0.0 {
+                w.lone_layoff
+            } else {
+                0.0
+            };
+            let score = (w.progress + plan.progress + role.progress) * progress
+                + skill(carrier.derived.vision) * forward
+                + w.lane * (lane / 6.0)
+                + w.space * (receiver_space / 8.0)
+                - w.distance * (d / 45.0)
+                + plan.directness * (d / 45.0)
+                + plan.tempo
+                + layoff
+                + self.rng.range_f64(-noise, noise);
+            let score = if control == Some(Control::OneUlp) && !bumped {
+                bumped = true;
+                score.next_up()
+            } else {
+                score
+            };
+            records.push(Candidate::Scored {
+                mate: j,
+                score: score.to_bits(),
+            });
+            if pass.is_none_or(|(s, _)| score > s) {
+                pass = Some((score, j));
+            }
+        }
+
+        let held = self.tick.saturating_sub(self.control_since);
+        let held_s = f64::from(held) * t.dt;
+        // The carry window: an unpressed carrier who has just gained the ball keeps it
+        // rather than releasing it at once. A shot is never charged.
+        let carry = if !pressed && held_s < w.carry_s {
+            w.carry_cost
+        } else {
+            0.0
+        };
+        let pass = pass.map(|(s, j)| (s - carry, j));
+        let (dribble, hold) = if keeper {
+            (None, None)
+        } else {
+            let (lone_dribble, lone_hold) = if lone && pressed {
+                (w.lone_dribble, w.lone_hold)
+            } else {
+                (0.0, 0.0)
+            };
+            let dribble = w.dribble_base + w.dribble_space * (space_ahead / 10.0)
+                - if pressed { w.pressure } else { 0.0 }
+                + if held < 10 { w.first_touch } else { 0.0 }
+                + skill(carrier.derived.dribbling)
+                + role.dribble
+                - plan.tempo
+                + lone_dribble
+                + self.rng.range_f64(-noise, noise);
+            let hold = w.hold + plan.hold - plan.tempo - w.hold_per_s * held_s
+                + lone_hold
+                + self.rng.range_f64(-noise, noise);
+            (Some(dribble), Some(hold))
+        };
+        let own_third = carrier.pos.x * attack.x < -pitch::HALF_LENGTH / 3.0;
+        let clear = if keeper {
+            w.keeper_clear
+        } else {
+            w.clear
+                + if pressed && own_third {
+                    w.clear_pressure
+                } else {
+                    0.0
+                }
+        } - carry
+            + self.rng.range_f64(-noise, noise);
+        if control == Some(Control::ExtraDraw) {
+            self.rng.next_f64();
+        }
+        (
+            Options {
+                shot,
+                pass,
+                dribble,
+                clear,
+                hold,
+                nearest_opp_pos,
+            },
+            records,
+        )
+    }
+
+    /// The carrier's options with the audit on: the reference copy scores them first from a
+    /// copy of the stream, then the live code scores them from the real stream, and the two
+    /// results are compared. The match goes on from the live call.
+    fn audited_options(&mut self, c: usize) -> Options {
+        let start = self.rng.state();
+        let real = std::mem::replace(&mut self.rng, EngineRng::from_state(start));
+        let (want, want_records) = self.options_reference(c);
+        let want_stream = self.rng.stream_state();
+        self.rng = real;
+        if let Some(a) = self.options_audit.as_mut() {
+            a.candidates.clear();
+        }
+        let got = self.options(c);
+        let got_stream = self.rng.stream_state();
+        let tick = self.tick;
+        let a = self
+            .options_audit
+            .as_mut()
+            .expect("the audit is on while it runs");
+        let got_records = std::mem::take(&mut a.candidates);
+        a.calls += 1;
+        let scored = |r: &Candidate| matches!(r, Candidate::Scored { .. });
+        if got_records.iter().any(|r| !scored(r)) && got_records.iter().any(scored) {
+            a.mixed_calls += 1;
+        }
+        let differs = if got_records != want_records {
+            Some("team-mate records")
+        } else if option_bits(&got) != option_bits(&want) {
+            Some("option scores or pass")
+        } else if got_stream != want_stream {
+            Some("stream position")
+        } else {
+            None
+        };
+        if let Some(what) = differs {
+            a.mismatch(tick, c, what);
+        }
+        got
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -886,5 +1187,91 @@ mod tests {
         let (charged, _) = carry_scene(1.0, 80, None);
         assert_eq!(pass(&free), pass(&charged), "past the window");
         assert_eq!(free.clear, charged.clear, "past the window");
+    }
+
+    /// The home striker (slot 9) at `(40, 2)` with one team-mate (slot 10) at `(30, 2)`,
+    /// every other player out of passing range, noise on; one opponent (roster index
+    /// `blocker`) at `at` when given. Returns the audit of one audited options call.
+    #[cfg(feature = "scenario")]
+    fn lane_scene(blocker: Option<(usize, DVec2)>) -> crate::gate::audit::OptionsAudit {
+        let mut sim = Simulation::new(shipped_config(7, 1).unwrap()).unwrap();
+        let striker = 9;
+        for (i, p) in sim.players.iter_mut().enumerate() {
+            p.pos = DVec2::new(-50.0, -30.0 + 2.5 * i as f64);
+        }
+        sim.players[striker].pos = DVec2::new(40.0, 2.0);
+        sim.players[10].pos = DVec2::new(30.0, 2.0);
+        if let Some((i, at)) = blocker {
+            assert_eq!(sim.players[i].team, 1, "the blocker is an opponent");
+            sim.players[i].pos = at;
+        }
+        sim.carrier = Some(striker);
+        sim.tick = 1_000;
+        sim.control_since = 990;
+        sim.options_audit = Some(crate::gate::audit::OptionsAudit::default());
+        sim.audited_options(striker);
+        sim.options_audit.take().unwrap()
+    }
+
+    #[cfg(feature = "scenario")]
+    #[test]
+    fn the_lane_early_exit_matches_the_reference_for_first_last_absent_and_equal_blockers() {
+        let first = 11;
+        let last = 21;
+        let mid = DVec2::new(35.0, 2.0);
+        // The blocker on the lane, first among the opponents: the loop ends at once.
+        let a = lane_scene(Some((first, mid)));
+        assert_eq!((a.calls, a.mismatches, a.breaks), (1, 0, 1), "{a:?}");
+        assert_eq!(a.skipped_opponents, 10);
+        // Last among the opponents: the break fires with nothing left to skip.
+        let a = lane_scene(Some((last, mid)));
+        assert_eq!((a.calls, a.mismatches, a.breaks), (1, 0, 1), "{a:?}");
+        assert_eq!(a.skipped_opponents, 0);
+        // No blocker: no break, and the team-mate is scored.
+        let a = lane_scene(None);
+        assert_eq!((a.calls, a.mismatches, a.breaks), (1, 0, 0), "{a:?}");
+        // A blocker exactly the minimum lane (1.5 m) from the lane: not rejected, no break.
+        let t = crate::tuning::Tuning::default();
+        assert_eq!(t.decision.min_lane, 1.5);
+        let at = DVec2::new(35.0, 3.5);
+        assert_eq!(
+            segment_distance(at, DVec2::new(40.0, 2.0), DVec2::new(30.0, 2.0)),
+            1.5
+        );
+        let a = lane_scene(Some((first, at)));
+        assert_eq!((a.calls, a.mismatches, a.breaks), (1, 0, 0), "{a:?}");
+    }
+
+    #[cfg(feature = "scenario")]
+    #[test]
+    fn the_lane_scene_audit_sees_each_control() {
+        use crate::gate::audit::{Control, OptionsAudit};
+        let mid = DVec2::new(35.0, 2.0);
+        for (control, blocker) in [
+            (Control::ExtraDraw, Some((11, mid))),
+            (Control::OneUlp, None),
+            (Control::RejectMate, None),
+        ] {
+            let mut sim = Simulation::new(shipped_config(7, 1).unwrap()).unwrap();
+            let striker = 9;
+            for (i, p) in sim.players.iter_mut().enumerate() {
+                p.pos = DVec2::new(-50.0, -30.0 + 2.5 * i as f64);
+            }
+            sim.players[striker].pos = DVec2::new(40.0, 2.0);
+            sim.players[10].pos = DVec2::new(30.0, 2.0);
+            if let Some((i, at)) = blocker {
+                sim.players[i].pos = at;
+            }
+            sim.carrier = Some(striker);
+            sim.tick = 1_000;
+            sim.control_since = 990;
+            sim.options_audit = Some(OptionsAudit {
+                control: Some(control),
+                ..OptionsAudit::default()
+            });
+            sim.audited_options(striker);
+            let a = sim.options_audit.take().unwrap();
+            assert_eq!(a.mismatches, 1, "{control:?}: {a:?}");
+        }
     }
 }

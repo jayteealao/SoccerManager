@@ -113,6 +113,7 @@ pub fn play_faulted(
         &Probe {
             against: Some(against),
             fault: Some(fault),
+            audit: None,
         },
     )
 }
