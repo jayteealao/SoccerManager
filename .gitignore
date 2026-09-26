@@ -26,3 +26,9 @@ dist/
 !.ai/observability.md
 !.ai/release-announcement-template.md
 !.ai/pipeline-compliance.md
+
+# Local notes, research, and reference images: kept on this PC, never tracked.
+/inspo/
+/docs/research/
+/docs/design/realism/
+/%SystemDrive%/
