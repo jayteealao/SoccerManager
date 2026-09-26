@@ -20,7 +20,7 @@ pub struct Fault {
 pub enum FaultKind {
     /// G3: flips bit `bit` of the x velocity of roster player `player`.
     VelocityBit { player: usize, bit: u32 },
-    /// G10: one extra draw on the match's random stream.
+    /// G10: one extra draw on the match's added-time key.
     ExtraDraw,
     /// G3: adds `delta` to the energy of roster player `player`.
     Stamina { player: usize, delta: f64 },
@@ -59,7 +59,9 @@ impl Fault {
                 vel.x = f64::from_bits(vel.x.to_bits() ^ (1u64 << bit));
             }
             FaultKind::ExtraDraw => {
-                sim.rng.next_f64();
+                sim.streams.draw(crate::streams::Key::of_match(
+                    crate::streams::Action::AddedTime,
+                ));
             }
             FaultKind::Stamina { player, delta } => sim.players[player].energy += delta,
             FaultKind::Card { player } => card(sim, player),
@@ -113,7 +115,7 @@ pub fn play_faulted(
         &Probe {
             against: Some(against),
             fault: Some(fault),
-            audit: None,
+            ..Probe::default()
         },
     )
 }

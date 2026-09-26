@@ -28,6 +28,7 @@ pub mod shot;
 pub mod sim;
 pub mod snapshot;
 pub mod steering;
+pub mod streams;
 pub mod tactics;
 pub mod team;
 pub mod tuning;

@@ -2,7 +2,9 @@
 //!
 //! `ChaCha8Rng` is the generator the Rand Book names as reproducible across versions
 //! (source: https://rust-random.github.io/book/). The engine never uses a thread-local
-//! generator; every random draw goes through one `EngineRng` passed by mutable reference.
+//! generator. Match play draws every random number through the keyed stream registry
+//! ([`crate::streams`]); `EngineRng` serves offline generation (club and player data) and is
+//! the reference the registry's scheme 0 is tested against.
 
 use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
@@ -15,8 +17,8 @@ pub struct RngState {
     pub word_pos: u128,
 }
 
-/// The random-stream scheme id. Today's engine draws from one stream (scheme 0); the golden
-/// file's ledger records it with every entry.
+/// The random-stream scheme this build plays ([`crate::streams::Scheme`]): scheme 0, one
+/// shared stream. The golden file's ledger records it with every entry.
 pub const STREAM_SCHEME: u8 = 0;
 
 /// The position of every random stream a match draws from, as the replay gate hashes it:
@@ -48,13 +50,6 @@ impl StreamState {
 /// A seeded generator with a fixed algorithm.
 pub struct EngineRng {
     inner: ChaCha8Rng,
-    /// Draws a test scripted for the referee, consumed before the stream.
-    #[cfg(feature = "scenario")]
-    scripted: std::collections::VecDeque<f64>,
-    /// Draws a test scripted for injury rolls, consumed before the stream. They are kept
-    /// apart from the referee's so a law test's scripted draws never feed an injury roll.
-    #[cfg(feature = "scenario")]
-    injuries: std::collections::VecDeque<f64>,
 }
 
 impl EngineRng {
@@ -64,13 +59,7 @@ impl EngineRng {
     }
 
     fn wrap(inner: ChaCha8Rng) -> Self {
-        Self {
-            inner,
-            #[cfg(feature = "scenario")]
-            scripted: std::collections::VecDeque::new(),
-            #[cfg(feature = "scenario")]
-            injuries: std::collections::VecDeque::new(),
-        }
+        Self { inner }
     }
 
     /// The generator's position (source: `rand_chacha-0.10.0/src/chacha.rs:145-198` in the
@@ -97,37 +86,6 @@ impl EngineRng {
         inner.set_stream(state.stream);
         inner.set_word_pos(state.word_pos);
         Self::wrap(inner)
-    }
-
-    /// A draw in `[0, 1)` for a law decision: a tackle, a card, or the added-time variance.
-    /// A test scene may script these draws.
-    pub fn referee_draw(&mut self) -> f64 {
-        #[cfg(feature = "scenario")]
-        if let Some(draw) = self.scripted.pop_front() {
-            return draw;
-        }
-        self.next_f64()
-    }
-
-    /// Queues draws that `referee_draw` returns before it reads the stream.
-    #[cfg(feature = "scenario")]
-    pub fn script(&mut self, draws: &[f64]) {
-        self.scripted.extend(draws.iter().copied());
-    }
-
-    /// A draw in `[0, 1)` for an injury roll. A test scene may script these draws.
-    pub fn injury_draw(&mut self) -> f64 {
-        #[cfg(feature = "scenario")]
-        if let Some(draw) = self.injuries.pop_front() {
-            return draw;
-        }
-        self.next_f64()
-    }
-
-    /// Queues draws that `injury_draw` returns before it reads the stream.
-    #[cfg(feature = "scenario")]
-    pub fn script_injuries(&mut self, draws: &[f64]) {
-        self.injuries.extend(draws.iter().copied());
     }
 
     /// A value in `[0, 1)`.

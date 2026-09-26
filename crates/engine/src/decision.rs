@@ -12,10 +12,9 @@ use crate::gate::audit::{self, Candidate, Control};
 use crate::math::{DVec2, segment_distance, toward};
 use crate::pitch;
 use crate::plugin::{DecisionContext, HookPoint, OptionOffsets};
-#[cfg(feature = "scenario")]
-use crate::rng::EngineRng;
 use crate::rules::offside;
 use crate::sim::{ScriptCache, Simulation, WIDE_SPREAD, wide_of_goal};
+use crate::streams::{Action, Key};
 use crate::team::PLAYERS_PER_TEAM;
 use crate::tuning::Tuning;
 
@@ -308,7 +307,9 @@ impl Simulation {
                     + skill(carrier.derived.finishing)
                     + plan.shoot
                     + role.shoot
-                    + self.rng.range_f64(-noise, noise),
+                    + self
+                        .streams
+                        .range(Key::player(Action::ShotScore, &carrier), -noise, noise),
             )
         } else {
             None
@@ -371,7 +372,9 @@ impl Simulation {
                 + plan.directness * (d / 45.0)
                 + plan.tempo
                 + layoff
-                + self.rng.range_f64(-noise, noise);
+                + self
+                    .streams
+                    .range(Key::player(Action::PassScore, &carrier), -noise, noise);
             #[cfg(feature = "scenario")]
             audit::record(
                 &mut self.options_audit,
@@ -410,10 +413,14 @@ impl Simulation {
                 + role.dribble
                 - plan.tempo
                 + lone_dribble
-                + self.rng.range_f64(-noise, noise);
+                + self
+                    .streams
+                    .range(Key::player(Action::DribbleScore, &carrier), -noise, noise);
             let hold = w.hold + plan.hold - plan.tempo - w.hold_per_s * held_s
                 + lone_hold
-                + self.rng.range_f64(-noise, noise);
+                + self
+                    .streams
+                    .range(Key::player(Action::HoldScore, &carrier), -noise, noise);
             (Some(dribble), Some(hold))
         };
         let own_third = carrier.pos.x * attack.x < -pitch::HALF_LENGTH / 3.0;
@@ -427,7 +434,9 @@ impl Simulation {
                     0.0
                 }
         } - carry
-            + self.rng.range_f64(-noise, noise);
+            + self
+                .streams
+                .range(Key::player(Action::ClearScore, &carrier), -noise, noise);
         Options {
             shot,
             pass,
@@ -485,7 +494,8 @@ impl Simulation {
                 let noise = t.aim_noise * (1.5 - skill);
                 let dir = rotate(
                     toward(carrier.pos, mate_pos),
-                    self.rng.range_f64(-noise, noise),
+                    self.streams
+                        .range(Key::player(Action::PassAim, &carrier), -noise, noise),
                 );
                 let loft = if d > 25.0 { 3.0 + d * 0.08 } else { 0.0 };
                 let speed = kick_speed(d, loft, t);
@@ -498,13 +508,17 @@ impl Simulation {
                 let c = &t.clearances;
                 let wide = c.wide_chance > 0.0
                     && carrier.pos.x * own_goal_x.signum() >= pitch::HALF_LENGTH - c.wide_depth
-                    && self.rng.referee_draw() < c.wide_chance;
+                    && self.streams.draw(Key::player(Action::ClearWide, &carrier)) < c.wide_chance;
                 let (line, spread) = if wide {
                     (wide_of_goal(carrier.pos, own_goal_x), WIDE_SPREAD)
                 } else {
                     (attack, c.aim_spread)
                 };
-                let dir = rotate(line, self.rng.range_f64(-spread, spread));
+                let dir = rotate(
+                    line,
+                    self.streams
+                        .range(Key::player(Action::ClearAim, &carrier), -spread, spread),
+                );
                 Some(Kick::Clear {
                     dir,
                     speed: kick_speed(CLEARANCE_DISTANCE, CLEARANCE_LOFT, t),
@@ -609,23 +623,40 @@ impl Simulation {
         let finishing = (carrier.derived.finishing / 100.0).clamp(0.0, 1.0);
         let keeper = &self.players[keeper];
         let side = if !keeper.active() {
-            if self.rng.chance(0.5) { 1.0 } else { -1.0 }
+            if self
+                .streams
+                .chance(Key::player(Action::ShotSide, &carrier), 0.5)
+            {
+                1.0
+            } else {
+                -1.0
+            }
         } else if keeper.pos.y > goal.y {
             -1.0
         } else {
             1.0
         };
         let reach = pitch::GOAL_WIDTH / 2.0 * (0.4 + 0.5 * finishing);
-        let aim = DVec2::new(goal.x, side * self.rng.range_f64(0.5 * reach, reach));
+        let aim = DVec2::new(
+            goal.x,
+            side * self
+                .streams
+                .range(Key::player(Action::ShotAim, &carrier), 0.5 * reach, reach),
+        );
         let spread = t.shot_noise * (1.5 - finishing) * spread_scale;
         let dir = rotate(
             toward(carrier.pos, aim),
-            self.rng.range_f64(-spread, spread),
+            self.streams
+                .range(Key::player(Action::ShotSpread, &carrier), -spread, spread),
         );
         Kick::Shot {
             dir,
             speed: t.shot_speed,
-            loft: self.rng.range_f64(0.0, t.shots.loft_max),
+            loft: self.streams.range(
+                Key::player(Action::ShotLoft, &carrier),
+                0.0,
+                t.shots.loft_max,
+            ),
         }
     }
 }
@@ -880,7 +911,9 @@ impl Simulation {
                     + skill(carrier.derived.finishing)
                     + plan.shoot
                     + role.shoot
-                    + self.rng.range_f64(-noise, noise),
+                    + self
+                        .streams
+                        .range(Key::player(Action::ShotScore, &carrier), -noise, noise),
             )
         } else {
             None
@@ -927,7 +960,9 @@ impl Simulation {
                 + plan.directness * (d / 45.0)
                 + plan.tempo
                 + layoff
-                + self.rng.range_f64(-noise, noise);
+                + self
+                    .streams
+                    .range(Key::player(Action::PassScore, &carrier), -noise, noise);
             let score = if control == Some(Control::OneUlp) && !bumped {
                 bumped = true;
                 score.next_up()
@@ -968,10 +1003,14 @@ impl Simulation {
                 + role.dribble
                 - plan.tempo
                 + lone_dribble
-                + self.rng.range_f64(-noise, noise);
+                + self
+                    .streams
+                    .range(Key::player(Action::DribbleScore, &carrier), -noise, noise);
             let hold = w.hold + plan.hold - plan.tempo - w.hold_per_s * held_s
                 + lone_hold
-                + self.rng.range_f64(-noise, noise);
+                + self
+                    .streams
+                    .range(Key::player(Action::HoldScore, &carrier), -noise, noise);
             (Some(dribble), Some(hold))
         };
         let own_third = carrier.pos.x * attack.x < -pitch::HALF_LENGTH / 3.0;
@@ -985,9 +1024,11 @@ impl Simulation {
                     0.0
                 }
         } - carry
-            + self.rng.range_f64(-noise, noise);
+            + self
+                .streams
+                .range(Key::player(Action::ClearScore, &carrier), -noise, noise);
         if control == Some(Control::ExtraDraw) {
-            self.rng.next_f64();
+            self.streams.draw(Key::player(Action::ClearScore, &carrier));
         }
         (
             Options {
@@ -1006,16 +1047,15 @@ impl Simulation {
     /// copy of the stream, then the live code scores them from the real stream, and the two
     /// results are compared. The match goes on from the live call.
     fn audited_options(&mut self, c: usize) -> Options {
-        let start = self.rng.state();
-        let real = std::mem::replace(&mut self.rng, EngineRng::from_state(start));
+        let real = self.streams.clone();
         let (want, want_records) = self.options_reference(c);
-        let want_stream = self.rng.stream_state();
-        self.rng = real;
+        let want_stream = self.streams.stream_state();
+        self.streams = real;
         if let Some(a) = self.options_audit.as_mut() {
             a.candidates.clear();
         }
         let got = self.options(c);
-        let got_stream = self.rng.stream_state();
+        let got_stream = self.streams.stream_state();
         let tick = self.tick;
         let a = self
             .options_audit
@@ -1160,7 +1200,7 @@ mod tests {
         sim.tick = 1_000;
         sim.control_since = 1_000 - held;
         let o = sim.options(striker);
-        (o, sim.rng.next_f64())
+        (o, sim.streams.draw(Key::of_match(Action::AddedTime)))
     }
 
     #[test]

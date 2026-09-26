@@ -10,8 +10,8 @@
 //!
 //! Injuries roll once for the tackled player on every tackle that wins the ball or is a foul,
 //! and once per simulated minute for every player on the pitch, scaled by injury resistance.
-//! The rolls use the engine's generator through `EngineRng::injury_draw`, which a test scene
-//! may script.
+//! The rolls draw through the stream registry on the rolling player's injury keys, which a
+//! test scene may script.
 
 use crate::TICKS_PER_SECOND;
 use crate::data::tuning::FatigueTuning;
@@ -19,6 +19,7 @@ use crate::player::{Derived, Player};
 use crate::rules::Phase;
 use crate::rules::clock::TICKS_PER_MINUTE;
 use crate::sim::Simulation;
+use crate::streams::{Action, Key};
 
 /// Ticks between two recomputations of the effective values.
 pub const REFRESH_TICKS: u32 = TICKS_PER_SECOND;
@@ -111,8 +112,9 @@ impl Simulation {
                 if !self.players[i].active() {
                     continue;
                 }
-                let chance = injury_chance(&self.players[i], rate);
-                if self.rng.injury_draw() < chance {
+                let p = self.players[i];
+                let chance = injury_chance(&p, rate);
+                if self.streams.draw(Key::player(Action::InjuryMinute, &p)) < chance {
                     self.injure(i, InjurySource::Background);
                 }
             }
@@ -142,8 +144,9 @@ impl Simulation {
         if !self.players[c].active() {
             return;
         }
-        let chance = injury_chance(&self.players[c], self.config.tuning.injury_per_tackle);
-        if self.rng.injury_draw() < chance {
+        let p = self.players[c];
+        let chance = injury_chance(&p, self.config.tuning.injury_per_tackle);
+        if self.streams.draw(Key::player(Action::InjuryTackle, &p)) < chance {
             self.injure(c, InjurySource::Tackle);
         }
     }

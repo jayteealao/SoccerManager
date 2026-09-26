@@ -76,9 +76,16 @@ impl Scene {
         self
     }
 
-    /// The referee's next draws, before the seeded stream: tackles, cards, and added time.
+    /// The referee's next draws, before the seeded stream: tackles, cards, and added time
+    /// (every referee-class key of the stream table).
     pub fn rolls(mut self, draws: &[f64]) -> Self {
-        self.sim.rng.script(draws);
+        self.sim.streams.script_referee(draws);
+        self
+    }
+
+    /// Plays the scene in the keyed stream scheme (scheme 1): every key reads its own stream.
+    pub fn keyed_streams(mut self) -> Self {
+        self.sim.use_keyed_streams();
         self
     }
 
@@ -200,7 +207,7 @@ impl Scene {
 
     /// The injury rolls' next draws, before the seeded stream.
     pub fn injury_rolls(mut self, draws: &[f64]) -> Self {
-        self.sim.rng.script_injuries(draws);
+        self.sim.streams.script_injuries(draws);
         self
     }
 

@@ -23,6 +23,7 @@ use crate::math::DVec2;
 use crate::pitch::{self, Exit, Line};
 use crate::player::Status;
 use crate::sim::{DecidedBy, EngineEventKind, EventDetail, Simulation};
+use crate::streams::{Action, Key};
 use crate::tuning::Tuning;
 use clock::{KICK_LIVE_TICKS, MatchClock, Tally};
 use fouls::Card;
@@ -246,7 +247,7 @@ impl Simulation {
         let at = self.players[c].pos;
         let penalty = pitch::in_penalty_area(at, own_end);
         let advantage = !ball_lost && !penalty;
-        let draw = self.rng.referee_draw();
+        let draw = self.streams.draw(Key::player(Action::FoulCard, &offender));
         let mut card = fouls::card_outcome(offender.derived.aggression, offender.yellow, t, draw);
         let mut event = self.event(EngineEventKind::Foul, Some(offender.team));
         event.player = Some(i);
@@ -653,7 +654,7 @@ impl Simulation {
                 0
             } else if clock.in_extra_time() {
                 let added = clock::extra_time_allowance(&self.config.rules);
-                let draw = self.rng.referee_draw();
+                let draw = self.streams.draw(Key::of_match(Action::ExtraTimeAdded));
                 let seconds = clock::added_seconds(&self.referee.tally, &added, draw);
                 tracing::info!(
                     signal = "rules.extra_time",
@@ -665,7 +666,7 @@ impl Simulation {
                 seconds
             } else {
                 let added = &self.config.rules.added_time;
-                let draw = self.rng.referee_draw();
+                let draw = self.streams.draw(Key::of_match(Action::AddedTime));
                 let seconds = clock::added_seconds(&self.referee.tally, added, draw);
                 tracing::info!(
                     signal = "rules.added_time",
@@ -754,7 +755,7 @@ impl Simulation {
             1 - first
         } else {
             self.summary.extra_time = true;
-            let team = usize::from(self.rng.referee_draw() >= 0.5);
+            let team = usize::from(self.streams.draw(Key::of_match(Action::ExtraKickOff)) >= 0.5);
             self.referee.extra_kick_off = Some(team);
             team
         };
@@ -797,8 +798,8 @@ impl Simulation {
         let eligible = shootout::equalise(candidates);
         let keepers = [0, 1].map(|team| shootout::keeper(&eligible[team]).unwrap_or(acting[team]));
         let order = [0, 1].map(|team| shootout::order(&eligible[team], Some(keepers[team])));
-        let first = usize::from(self.rng.referee_draw() >= 0.5);
-        let end = if self.rng.referee_draw() < 0.5 {
+        let first = usize::from(self.streams.draw(Key::of_match(Action::ShootoutFirstTeam)) >= 0.5);
+        let end = if self.streams.draw(Key::of_match(Action::ShootoutEnd)) < 0.5 {
             -1.0
         } else {
             1.0
@@ -898,7 +899,10 @@ impl Simulation {
         let goal = pitch::goal_centre(end);
         self.referee.phase = Phase::Live;
         let kick = self.shot_kick(dead.taker, goal, keeper, t.shots.penalty_spread);
-        let dive = self.rng.range_f64(-1.0, 1.0);
+        let diver = self.players[keeper];
+        let dive = self
+            .streams
+            .range(Key::player(Action::KeeperDive, &diver), -1.0, 1.0);
         let side = if dive.abs() < t.shots.keeper_stays {
             0.0
         } else {
@@ -952,11 +956,12 @@ impl Simulation {
                 return;
             }
             let save = crate::shot::save_chance(t.shots.penalty_xg, t);
-            if self.rng.referee_draw() >= save {
+            let k = self.players[keeper];
+            if self.streams.draw(Key::player(Action::ShootoutSave, &k)) >= save {
                 self.keeper_beaten = true;
                 return;
             }
-            if self.rng.referee_draw() >= t.shots.save_hold {
+            if self.streams.draw(Key::player(Action::ShootoutSaveHold, &k)) >= t.shots.save_hold {
                 self.parry(keeper, t);
                 return;
             }

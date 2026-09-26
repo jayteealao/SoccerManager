@@ -34,11 +34,11 @@ use crate::error::EngineError;
 use crate::math::{DVec2, DVec3};
 use crate::player::{Derived, Status};
 use crate::record::TickSink;
-use crate::rng::{EngineRng, RngState};
 use crate::rules::clock::Tally;
 use crate::rules::fouls::Card;
 use crate::rules::{DeadBall, PendingCard, Phase, Shootout, Stoppage};
 use crate::sim::{DecidedBy, MatchConfig, Simulation, Summary};
+use crate::streams::{Scheme, Streams};
 use crate::tactics::change::{Change, ChangeId, QueuedChange, SubLedger};
 use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
@@ -491,10 +491,13 @@ fn encode(sim: &Simulation, w: &mut Writer) {
     w.u32(sim.tick);
     w.u8(u8::from(sim.config.knockout));
     w.u8(u8::from(sim.restart));
-    let rng = sim.rng.state();
-    w.raw(&rng.seed);
-    w.u64(rng.stream);
-    w.u128(rng.word_pos);
+    w.raw(&sim.streams.seed());
+    let state = sim.streams.stream_state();
+    let [(stream, word_pos)] = state.entries[..] else {
+        panic!("a version 6 snapshot holds the one shared stream of scheme 0");
+    };
+    w.u64(stream);
+    w.u128(word_pos);
     w.v3_at(&String::new, sim.ball.pos);
     w.v3_at(&String::new, sim.ball.vel);
     w.index(sim.carrier);
@@ -645,11 +648,9 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
     }
     sim.restart = r.bool()?;
     let rng_seed: [u8; 32] = r.take(32)?.try_into().expect("32 bytes");
-    sim.rng = EngineRng::from_state(RngState {
-        seed: rng_seed,
-        stream: r.u64()?,
-        word_pos: r.u128()?,
-    });
+    let entry = (r.u64()?, r.u128()?);
+    sim.streams = Streams::restore(rng_seed, Scheme::Legacy, &[entry])
+        .map_err(|_| "malformed body: the random stream is not the shared stream")?;
     sim.ball.pos = r.v3()?;
     sim.ball.vel = r.v3()?;
     sim.carrier = r.index(PLAYERS)?;

@@ -23,12 +23,12 @@ use crate::pitch;
 use crate::player::Player;
 use crate::plugin::{Plugins, ScriptNote};
 use crate::record::{TickRecord, TickSink};
-use crate::rng::EngineRng;
 use crate::rules::fouls::{self, Card, Tackle};
 use crate::rules::offside;
 use crate::rules::{Phase, Referee, Stoppage};
 use crate::shot;
 use crate::steering;
+use crate::streams::{Action, Key, Streams};
 use crate::tactics::Tactics;
 use crate::tactics::change::{ChangeId, ChangeKind, ChangeQueue, RejectReason, SubLedger};
 use crate::team::{PLAYERS_PER_TEAM, Team};
@@ -489,7 +489,8 @@ pub struct Simulation {
     pub(crate) teams: [Team; 2],
     pub(crate) players: Vec<Player>,
     pub(crate) ball: Ball,
-    pub(crate) rng: EngineRng,
+    /// Every random draw of the match, by key.
+    pub(crate) streams: Streams,
     pub(crate) tick: u32,
     pub(crate) carrier: Option<usize>,
     pub(crate) control_since: u32,
@@ -566,14 +567,14 @@ impl Simulation {
         }
         let teams = config.teams.clone();
         let players = config.players.clone();
-        let rng = EngineRng::from_seed(config.seed);
+        let streams = Streams::legacy(config.seed);
         let referee = Referee::new(config.minutes, &config.rules, config.knockout);
         Ok(Self {
             timeline: vec![(0, teams.clone())],
             teams,
             players,
             ball: Ball::at(DVec2::ZERO),
-            rng,
+            streams,
             tick: 0,
             carrier: None,
             control_since: 0,
@@ -794,6 +795,25 @@ impl Simulation {
     #[cfg(feature = "scenario")]
     pub fn shot_flight(&self) -> Option<bool> {
         self.shot_in_flight.map(|_| self.shot_on_target)
+    }
+
+    /// Test seam: switches a match that has drawn nothing yet to the keyed stream scheme
+    /// (scheme 1). Scripted draws already queued stay queued.
+    #[cfg(feature = "scenario")]
+    pub fn use_keyed_streams(&mut self) {
+        self.streams.set_scheme(crate::streams::Scheme::Keyed);
+    }
+
+    /// Test seam: the position of every random stream the match has used.
+    #[cfg(feature = "scenario")]
+    pub fn stream_state(&self) -> crate::rng::StreamState {
+        self.streams.stream_state()
+    }
+
+    /// Test seam: the random draws the match has taken since it was built or resumed.
+    #[cfg(feature = "scenario")]
+    pub fn draws(&self) -> u64 {
+        self.streams.draws()
     }
 
     /// The dead ball waiting for its restart, if play is stopped.
@@ -1074,10 +1094,10 @@ impl Simulation {
                 continue;
             }
             self.blockers_tried |= bit;
-            if self.rng.referee_draw() < t.shots.block_chance {
+            if self.streams.draw(Key::player(Action::Block, &p)) < t.shots.block_chance {
                 let s = &t.shots;
                 let back = -DVec2::new(self.ball.vel.x, self.ball.vel.y);
-                let angle = self.rng.next_f64();
+                let angle = self.streams.draw(Key::player(Action::BlockDeflect, &p));
                 self.ball.vel = shot::deflect(
                     self.ball.vel,
                     back,
@@ -1111,11 +1131,14 @@ impl Simulation {
         {
             return;
         }
-        if self.rng.referee_draw() >= shot::save_chance(self.shot_quality, t) {
+        let keeper = self.players[k];
+        if self.streams.draw(Key::player(Action::Save, &keeper))
+            >= shot::save_chance(self.shot_quality, t)
+        {
             self.keeper_beaten = true;
             return;
         }
-        if self.rng.referee_draw() < t.shots.save_hold {
+        if self.streams.draw(Key::player(Action::SaveHold, &keeper)) < t.shots.save_hold {
             #[cfg(feature = "scenario")]
             {
                 self.census.held += 1;
@@ -1135,13 +1158,18 @@ impl Simulation {
     /// a loft of up to `parry_loft`. The keeper gets no second touch of this flight.
     pub(crate) fn parry(&mut self, k: usize, t: &Tuning) {
         let s = &t.shots;
+        let keeper = self.players[k];
         let side = if self.ball.pos.y == 0.0 {
-            if self.rng.next_f64() < 0.5 { 1.0 } else { -1.0 }
+            if self.streams.draw(Key::player(Action::ParrySide, &keeper)) < 0.5 {
+                1.0
+            } else {
+                -1.0
+            }
         } else {
             self.ball.pos.y.signum()
         };
-        let angle = self.rng.next_f64();
-        let loft = self.rng.next_f64();
+        let angle = self.streams.draw(Key::player(Action::ParryAngle, &keeper));
+        let loft = self.streams.draw(Key::player(Action::ParryLoft, &keeper));
         self.ball.vel = shot::deflect(
             self.ball.vel,
             DVec2::new(0.0, side),
@@ -1191,8 +1219,9 @@ impl Simulation {
                 continue;
             }
             self.clearers_tried |= bit;
-            if self.rng.referee_draw() < c.cross_chance {
-                let wide = c.wide_chance > 0.0 && self.rng.referee_draw() < c.wide_chance;
+            if self.streams.draw(Key::player(Action::CrossClear, &p)) < c.cross_chance {
+                let wide = c.wide_chance > 0.0
+                    && self.streams.draw(Key::player(Action::CrossWide, &p)) < c.wide_chance;
                 let (away, spread) = if wide {
                     (wide_of_goal(ball_xy, own_goal_x), WIDE_SPREAD)
                 } else {
@@ -1203,8 +1232,8 @@ impl Simulation {
                     };
                     (away, c.cross_spread)
                 };
-                let angle = self.rng.next_f64();
-                let loft = self.rng.next_f64();
+                let angle = self.streams.draw(Key::player(Action::CrossAngle, &p));
+                let loft = self.streams.draw(Key::player(Action::CrossLoft, &p));
                 self.ball.vel = shot::deflect(
                     self.ball.vel,
                     away,
@@ -1318,7 +1347,11 @@ impl Simulation {
                         if self.keeper_beaten {
                             return;
                         }
-                        if !self.rng.chance(t.keeper_catch_chance) {
+                        let catcher = self.players[i];
+                        if !self.streams.chance(
+                            Key::player(Action::KeeperCatch, &catcher),
+                            t.keeper_catch_chance,
+                        ) {
                             self.keeper_beaten = true;
                             return;
                         }
@@ -1345,7 +1378,7 @@ impl Simulation {
                         p_win += fouls::dribble_win_chance(&p.derived, &carrier.derived, t);
                     }
                     let p_foul = fouls::foul_chance(&p.derived, p.yellow, t);
-                    let draw = self.rng.referee_draw();
+                    let draw = self.streams.draw(Key::player(Action::Tackle, &p));
                     match fouls::tackle_outcome(p_win, p_foul, t.foul_ball_loss, draw) {
                         Tackle::Win => {
                             self.gain(i, t);
