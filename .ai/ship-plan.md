@@ -2,9 +2,9 @@
 schema: sdlc/v1
 type: ship-plan
 slug: soccer-manager
-plan-version: 1
+plan-version: 2
 created-at: "2026-09-25T23:46:20Z"
-updated-at: "2026-09-25T23:46:20Z"
+updated-at: "2026-09-26T00:45:53Z"
 project-name: "SoccerManager"
 template-hint: none
 
@@ -25,6 +25,7 @@ ship-cadence: on-demand
 version-scheme: semver
 version-source-of-truth:
   - { path: "Cargo.toml", field: "workspace.package.version" }
+  - { path: "e2e/package.json", field: "version", bump: false, note: "private browser-test harness; never published, never bumped with a release" }
 version-bump-rule: manual
 version-bump-cmd: "cargo release version <major|minor|patch|x.y.z-beta.N|x.y.z-rc.N> --execute"
 prerelease-suffix: "-beta.N | -rc.N"
@@ -45,9 +46,12 @@ ci-pipeline:
     - gitleaks
     - semgrep
     - windows-build
+    - content-changelog
+  pr-workflow-files: [".github/workflows/pr-checks.yml", ".github/workflows/pr-title.yml"]
+  rollback-workflow-file: ".github/workflows/rollback.yml"
   release-trigger: tag-on-main
   release-workflow-file: ".github/workflows/release.yml"
-  release-jobs: [version-gate, build-windows, build-linux, smoke-linux, draft-release, attest]
+  release-jobs: [version-gate, test, build-windows, build-linux, smoke-linux, draft-release, verify-draft, attest]
   publish-dry-run-cmd: "gh workflow run release.yml -f dry-run=true"
   publish-cmd: "git push origin v<version>  # the workflow uploads to a draft release; publish with: gh release edit v<version> --draft=false [--prerelease]"
   required-secrets:
@@ -57,7 +61,7 @@ ci-pipeline:
     dep-cache: true
     matrix: { os: ["windows-latest", "ubuntu-22.04"], versions: ["rust-toolchain.toml"] }
     release-concurrency: true
-    path-filters: true
+    path-filters: { ignore: [".ai/**"], note: "docs/ is checked, because crates/engine-cli/tests/docs.rs reads it" }
 
 # Block D — post-publish verification contract
 post-publish-checks:
@@ -143,7 +147,7 @@ governance:
   branch-protection:
     base-branch: "main"
     mechanism: branch-protection
-    required-checks: ["fmt", "clippy", "test-fast", "coverage", "commit-convention", "pr-title", "cargo-deny", "npm-audit-e2e", "gitleaks", "semgrep", "windows-build"]
+    required-checks: ["fmt", "clippy", "test-fast", "coverage", "commit-convention", "pr-title", "cargo-deny", "npm-audit-e2e", "gitleaks", "semgrep", "windows-build", "content-changelog"]
     required-approvals: 0
     dismiss-stale-reviews: false
     require-up-to-date: true
@@ -233,14 +237,17 @@ The version is semver, and it lives in one place: `[workspace.package].version` 
 ## CI/CD pipeline
 Releases run on GitHub Actions. This reverses the earlier "hosted CI later" decision from the packaging brainstorm. A pushed `v*` tag starts `.github/workflows/release.yml`:
 
-1. The version gate fails unless the tag equals the `Cargo.toml` version.
-2. `windows-latest` builds the setup file with `build.ps1`.
-3. `ubuntu-22.04` builds the archive with `build.sh` (glibc 2.35 floor) and runs `smoke.sh`.
-4. The workflow uploads all four files to a draft release and attests their provenance.
+1. The version gate fails unless the tag equals the `Cargo.toml` version and `CHANGELOG.md` has a section for that version.
+2. The fast tests run again on the release commit.
+3. `windows-latest` builds the setup file with `build.ps1`.
+4. `ubuntu-22.04` builds the archive with `build.sh` (glibc 2.35 floor) and runs `smoke.sh`.
+5. The workflow uploads all four files to a draft release.
+6. A check downloads the draft's files and confirms the asset list, the hashes, and the version.
+7. Provenance attestation runs only when the repository allows it (inert while the repository is private).
 
 The workflow also runs by hand (`workflow_dispatch`), one run at a time, with `contents: write` as its only write permission, and with third-party actions pinned to a commit.
 
-Every PR runs the light checks on Ubuntu (format, clippy, fast tests, coverage, commit and PR-title conventions, cargo-deny, npm audit, gitleaks, semgrep) and a Windows build job. PRs that change only `.ai/` or `docs/` skip the checks. Heavy runs (slow tests, calibrate) stay on this PC or the Contabo server, and the owner is asked first. The only secret is the built-in `GITHUB_TOKEN`. Private-repository Actions minutes are metered, and Windows minutes count double.
+Every PR runs the light checks on Ubuntu (format, clippy, fast tests, coverage, commit and PR-title conventions, cargo-deny, npm audit, gitleaks, semgrep, and the content-changelog check) and a Windows build job. The checks live in `.github/workflows/pr-checks.yml` and `.github/workflows/pr-title.yml`. PRs that change only `.ai/` skip the checks. PRs that change `docs/` run them, because a test reads `docs/`. A rollback runs from `.github/workflows/rollback.yml` once that file is on `main`. Heavy runs (slow tests, calibrate) stay on this PC or the Contabo server, and the owner is asked first. The only secret is the built-in `GITHUB_TOKEN`. Private-repository Actions minutes are metered, and Windows minutes count double.
 
 ## Post-publish verification
 The release is checked while it is still a draft:
