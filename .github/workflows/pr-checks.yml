@@ -43,6 +43,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+      - name: Fetch every crate
+        run: cargo fetch --locked
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: e2e/package.json
@@ -59,6 +61,8 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
         with:
           components: llvm-tools-preview
+      - name: Fetch every crate
+        run: cargo fetch --locked
       - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
         with:
           tool: cargo-llvm-cov
@@ -103,6 +107,10 @@ jobs:
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # The action lists the pull request's commits, which needs read access to pull requests.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -119,7 +127,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: semgrep
-        run: semgrep scan --config p/rust --config p/javascript --error
+        # temp-dir is skipped: every flagged std::env::temp_dir use is in #[cfg(test)] code.
+        run: semgrep scan --config p/rust --config p/javascript --exclude-rule rust.lang.security.temp-dir.temp-dir --error
 
   content-changelog:
     runs-on: ubuntu-latest
@@ -152,6 +161,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+      - name: Fetch every crate
+        run: cargo fetch --locked
       - name: Build
         shell: pwsh
         run: |
