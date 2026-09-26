@@ -29,14 +29,14 @@ The match is live and the player is in charge. In the first five seconds the pit
 
 ## Strategic Principles
 1. The pitch and the numbers share the screen. Neither hides behind a tab.
-2. Legibility of small tabular numbers on a light background wins over banner motion. Prove the contrast before you add the motion.
+2. Legibility of small tabular numbers on the dark broadcast background wins over banner motion. Prove the contrast before you add the motion.
 3. Team kit colors appear only on the pitch and in the score. The brand color owns headers and controls.
 4. Motion conveys state: a goal, a card, a substitution applied. Product transitions run under 300 ms; the goal banner leaves within 1.5 s. The reduced-motion preference disables all of it.
 
 ## Constraints
 - Frontend: plain HTML, CSS, and JavaScript. No UI framework and no component library is chosen.
 - Brand assets: none exist. Generate the logo, the palette, and any illustration programmatically in JavaScript as part of the product. Do not source them from image files.
-- Team names, crests, and players are fictional and generated.
+- Clubs and competitions are facsimiles of real ones where public sources are rich: a near name, the real city, and the real club's size, standing, trophies, and rivalries. Crests and kits echo the real club's colours and shape, never the real badge. Clubs where sources are thin are generated. Players are invented and generated. Real names, badges, and likenesses do not ship.
 - Licenses: MIT-compatible or Apache-2.0-compatible dependencies only. Do not copy from GPL code.
-- Light scene first: the screen must read in a lit room during the day. A darker pitchside treatment applies only to overlays drawn on the pitch.
+- Dark broadcast scene first: the dark Broadcast Blue look is the main look, and the screen must still read in a lit room during the day. Prove the contrast of every text size before a screen ships.
 - First platform: Windows 11 desktop, a browser page served by a local engine process.
