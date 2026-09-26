@@ -59,9 +59,6 @@ impl Writer {
     pub(crate) fn u64(&mut self, v: u64) {
         self.buf.extend_from_slice(&v.to_le_bytes());
     }
-    pub(crate) fn u128(&mut self, v: u128) {
-        self.buf.extend_from_slice(&v.to_le_bytes());
-    }
     pub(crate) fn bool(&mut self, v: bool) {
         self.u8(u8::from(v));
     }

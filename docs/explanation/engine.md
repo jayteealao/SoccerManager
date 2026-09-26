@@ -50,7 +50,7 @@ The queue also keeps the result the same for the same inputs. A change applies a
 
 ## The snapshot
 
-At each stoppage, the engine writes a snapshot of the whole match to a file: the clock, the score, each player, the change queue, and the exact position of the random-number generator. The engine replaces the file at each stoppage.
+At each stoppage, the engine writes a snapshot of the whole match to a file: the clock, the score, each player, the change queue, the stream scheme, and the exact position of every random stream the match has used. The engine replaces the file at each stoppage. Snapshot version 7 added the stream scheme and the list of streams; the engine refuses a snapshot of an older version.
 
 A snapshot lets a match continue after a crash. The launcher restarts the engine from the newest snapshot, and the match continues from that stoppage with the same score and the same clock. A resumed match plays tick for tick as the match would have played without the crash.
 
@@ -58,9 +58,11 @@ A stoppage is the right time for a snapshot because the ball is dead: no pass or
 
 ## The seedable random-number generator
 
-Every random draw in the engine comes from one generator, ChaCha8, created from the seed of the match. The engine never uses a random source that the seed does not control. The same seed, the same inputs, the same build, and the same computer give the same match, byte for byte.
+Every random draw in the engine comes from the generator ChaCha8, created from the seed of the match. The engine never uses a random source that the seed does not control. The same seed, the same inputs, the same build, and the same computer give the same match, byte for byte.
 
-The snapshot stores the exact position of the generator. This is why a resumed match continues the same random sequence.
+Every match draw goes through the stream registry. A fixed table gives each draw a key: the part of the engine the draw belongs to, the kind of action, and the player who acts (or a named match key when no one player acts). A player is named by his place in the squad, so a substitute gets his own key. Scheme 0, which matches play today, reads every key from one shared stream in draw order. Scheme 1 gives each key its own stream from the match seed, so extra draws for one key leave every other key's sequence unchanged. Scheme 1 is built and tested, but it stays switched off until one recorded result change switches it on. A committed digest per scheme fails a test when the table, the key-to-stream derivation, or the draw conversion changes without a new scheme number. In a debug or test build, a draw on a key that the table does not hold fails and names the key.
+
+The snapshot stores the scheme and the exact position of every stream used. This is why a resumed match continues the same random sequences, including for a key that the match first uses after the resume. The engine refuses a snapshot of an unknown scheme, of a scheme the build does not play, or with a malformed stream entry, and names the fault.
 
 ## The watchdog mark
 
