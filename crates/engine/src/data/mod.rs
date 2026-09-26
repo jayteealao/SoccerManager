@@ -456,6 +456,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn relative_paths_never_leak_the_root() {
         let dir = ContentDir::at("C:\\somewhere\\content");
         assert_eq!(

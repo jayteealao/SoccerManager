@@ -101,7 +101,12 @@ fn a_small_run_writes_a_record_per_match_and_a_report_that_validate() {
         "red-card is not in all"
     );
     assert!(saved["bench.match_wall_ms"].is_u64());
-    assert!(saved["bench.cpu_us_per_tick"].is_number());
+    // The processor time per tick is measured on Windows only.
+    if cfg!(windows) {
+        assert!(saved["bench.cpu_us_per_tick"].is_number());
+    } else {
+        assert!(saved["bench.cpu_us_per_tick"].is_null());
+    }
     assert_eq!(code == Some(0), saved["calib.pass"] == true);
 
     let stats = files(&run.join("stats"));
@@ -288,7 +293,12 @@ fn a_thousand_matches_hold_the_realism_bands() {
         assert!(within(band(&report, suite, "wall_ms")), "{suite} too slow");
     }
     assert!(report["bench.match_wall_ms"].as_u64().unwrap() > 0);
-    assert!(report["bench.cpu_us_per_tick"].is_number());
+    // The processor time per tick is measured on Windows only.
+    if cfg!(windows) {
+        assert!(report["bench.cpu_us_per_tick"].is_number());
+    } else {
+        assert!(report["bench.cpu_us_per_tick"].is_null());
+    }
     assert_eq!(out.status.code(), Some(0));
     let _ = std::fs::remove_dir_all(&data);
 }
