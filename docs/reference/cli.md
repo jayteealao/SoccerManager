@@ -242,6 +242,9 @@ Replay the 22 gate matches and compare their state hashes with the golden file. 
 | `--fixture` | fixture id | every fixture | Play only this fixture: `seed-<seed>`, `change`, or `knockout`. Repeat it for more than one fixture. |
 | `--json` | none | off | Print one JSON object per match instead of a text line. |
 | `--bootstrap` | none | off | Play every fixture and write the first golden file with this machine's hash set. Refused when the file already exists, and with `--fixture`. |
+| `--regenerate` | none | off | Play every fixture and rewrite the golden file with this build's hashes for this machine. Appends one `regenerate` entry to the ledger and drops the other machines' hash sets, which each machine then adds again with `--add-machine-set`. Needs `--reason`. |
+| `--add-machine-set` | none | off | Play every fixture and add this machine's hash set, with one `add-machine-set` entry. Refused when this machine already has a set, or when the file does not fit this build. Needs `--reason`. |
+| `--reason` | text | none | Why the golden file is written; recorded in the new ledger entry. Needed by `--regenerate` and `--add-machine-set`; optional for `--bootstrap`. |
 
 The fixtures, in gate order:
 
@@ -251,9 +254,41 @@ The fixtures, in gate order:
 
 Output: one line per match on standard output: the fixture id, `match` or `differs`, the tick count, the first 12 characters of the final hash, and for `change` and `knockout` the applied substitutions and tactics changes, or whether the match went to extra time and a shoot-out. A match that differs gets a second line that names the window of ticks in which its state first changed, for example `seed-42 differs: the state first differs between tick 30000 and tick 31000`, or the two tick counts when the match lasted longer or shorter. With `--json`, each match is one JSON object with `fixture`, `verdict`, `ticks`, `final_hash`, `window` (`from` and `to`), `detail`, `extra_time`, `shootout`, `decided_by`, `substitutions_applied`, and `tactics_changes_applied`. Standard error ends with the match count, the machine key, and the run time.
 
-The golden file holds the gate schema version, the state inventory version, the checkpoint spacing, the toolchain, the bootstrap run (engine version, build, UTC time, machine), the fixture list, and one hash set per machine, keyed `<os>-<arch>`, for example `windows-x86_64`. Seeds are decimal strings and hashes are 64 lowercase hex characters. The gate refuses the file, before any match is played, when it is malformed, when a version, the checkpoint spacing, or the fixture list differs from the build's, when it has no hash set for this machine, or when a hash set misses a match, lists one twice, or misses a checkpoint. The message names the fault.
+The golden file holds, in this order: the gate schema version, the state inventory version, the checkpoint spacing, the toolchain, the fixture list, the `ledger`, the `set_differences` record, and one hash set per machine, keyed `<os>-<arch>`, for example `windows-x86_64`. Seeds are decimal strings and hashes are 64 lowercase hex characters.
+
+The ledger is append-only. Each entry has a `kind` (`bootstrap` for the first file, `add-machine-set` for a second machine's set of unchanged code, `regenerate` for a hash change), the `reason`, the `engine_version`, the `build` commit, the random-stream `scheme`, the `utc` time, and the `machine`. A `regenerate` entry also has the `candidate` commit and a `band_result` path, `gate/bands/ledger-<index>.json`, fixed when the entry is written. The `set_differences` record has one item per pair of machines: `a`, `b`, the ids of the matches that `differ`, and the count of matches that are the `same`. A file written before the ledger existed, with a top-level `bootstrap` object, reads as a ledger of one `bootstrap` entry.
+
+The gate refuses the file, before any match is played, when it is malformed, when a version, the checkpoint spacing, or the fixture list differs from the build's, when it has no hash set for this machine, when a hash set misses a match, lists one twice, or misses a checkpoint, when the ledger is empty, does not start with its only `bootstrap` entry, has an entry with no reason, or does not account for exactly the hash sets present, or when the `set_differences` record differs from the one the hash sets give. The message names the fault.
+
+The write modes check their flags and the reason before they read the golden file or play a match, and write through `<file>.tmp` and a rename. A refusal, or a match that fails, leaves the golden file byte-identical. [The replay-gate guide](../how-to/replay-gate.md) says when each mode is allowed.
 
 Exit codes: 0 when every selected match matches; 1 when the golden file or the content cannot be read or is refused, or a fixture id is unknown; 2 when a match differs or its hashed state holds a number that is not finite (the line names the field, for example `players[3].pos.x`).
+
+## guard
+
+Check every commit that changes the golden file against the ledger rules. The command lists the commits in `<base>..<head>` that change the file, oldest first, and compares each one's file with its first parent's. It plays no match and reads no content. Run it from the repository root; CI runs it on every pull request.
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `--base` | revision | required | The base revision, such as `main` or the pull request's base commit. |
+| `--head` | revision | `HEAD` | The last revision of the range. |
+| `--golden` | path | `gate/golden.json` | The golden file's path from the repository root, with forward slashes. |
+
+The rules each change must keep:
+
+1. The golden file is not deleted.
+2. A new golden file holds exactly one ledger entry, a `bootstrap`, and exactly one hash set, keyed by that entry's machine.
+3. The old ledger entries stay, unchanged and in order. One commit adds at most one entry, and never a second `bootstrap`.
+4. A change to the fixture list, the state inventory version, or the checkpoint spacing needs a higher gate schema version and a new `regenerate` entry. The gate schema never decreases.
+5. A change to the gate schema, the toolchain, or a hash set in both files, or a removed hash set, needs a new `regenerate` entry. The entry's `candidate` must be a clean build (no `-dirty` mark, not `unknown`) of a commit that is an ancestor of the commit.
+6. A new `add-machine-set` entry adds exactly one hash set, keyed by its machine, and changes nothing else.
+7. A new hash set needs a new entry, and a new entry needs a change that it records. The file also keeps the ledger rules of the gate's strict load.
+
+A merge commit is compared with its first parent.
+
+Output: one line per commit on standard output, `<short commit> ok`, or one line per broken rule, for example `3f2a9c1 rule 5: hash set linux-x86_64 changes with no new regenerate entry`. Standard error ends with the commit count and the number that fail.
+
+Exit codes: 0 when every commit passes, or no commit in the range changes the file; 1 when git cannot run or a revision cannot be read; 2 when a commit breaks a rule.
 
 ## Files
 

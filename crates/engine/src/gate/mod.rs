@@ -7,6 +7,7 @@
 //! the running hasher, so taking one does not end the run.
 
 pub mod golden;
+pub mod guard;
 mod inventory;
 
 #[cfg(feature = "scenario")]

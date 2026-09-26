@@ -1,7 +1,9 @@
 //! `engine-cli gate`: the special fixtures show what they exist for (extra time and a
 //! shoot-out; an applied substitution and an applied tactics change), a broken golden file
-//! exits 1 naming the fault, a second bootstrap is refused, and, in release, all 22 matches
-//! of the committed golden file match.
+//! exits 1 naming the fault, a second bootstrap is refused, a regeneration with no reason
+//! exits 1 and leaves the golden file byte-identical (AC-8), the write modes refuse a fixture,
+//! a second mode, and an existing set, and, in release, all 22 matches of the committed golden
+//! file match and a regeneration rewrites a copy with one new ledger entry.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -175,4 +177,158 @@ fn all_22_matches_match_the_committed_golden_file() {
         let verdict = line.split_whitespace().nth(1);
         assert_eq!(verdict, Some("match"), "{line}");
     }
+}
+
+fn sha256(path: &Path) -> String {
+    use sha2::{Digest, Sha256};
+    let bytes = std::fs::read(path).unwrap();
+    Sha256::digest(&bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+/// A temporary copy of the committed golden file.
+fn golden_copy(name: &str) -> PathBuf {
+    let path = temp(name).join("golden.json");
+    std::fs::copy(golden(), &path).unwrap();
+    path
+}
+
+#[test]
+fn a_regeneration_with_no_reason_exits_one_and_leaves_the_file_byte_identical() {
+    let path = golden_copy("no-reason");
+    let before = sha256(&path);
+    let golden_arg = path.to_str().unwrap();
+    for (label, extra) in [
+        ("absent", &[][..]),
+        ("empty", &["--reason", ""][..]),
+        ("blank", &["--reason", "   "][..]),
+    ] {
+        let mut args = vec!["--regenerate", "--golden", golden_arg];
+        args.extend_from_slice(extra);
+        let out = gate(&format!("no-reason-{label}"), &args);
+        assert_eq!(out.status.code(), Some(1), "{label}");
+        let stderr = text(&out.stderr);
+        assert!(
+            stderr.contains("--regenerate needs --reason \"<why the hashes change>\""),
+            "{label}: {stderr}"
+        );
+        assert!(text(&out.stdout).is_empty(), "{label}: no match is played");
+        assert_eq!(sha256(&path), before, "{label}: the file is byte-identical");
+    }
+    assert!(
+        !path.with_file_name("golden.json.tmp").exists(),
+        "no temporary file is left"
+    );
+
+    let out = gate(
+        "no-reason-add",
+        &["--add-machine-set", "--golden", golden_arg, "--reason", " "],
+    );
+    assert_eq!(out.status.code(), Some(1));
+    assert!(text(&out.stderr).contains("--add-machine-set needs --reason"));
+    assert_eq!(sha256(&path), before);
+}
+
+#[test]
+fn the_write_modes_refuse_a_fixture_a_second_mode_and_an_existing_set() {
+    let path = golden_copy("refusals");
+    let before = sha256(&path);
+    let golden_arg = path.to_str().unwrap();
+    let cases: [(&str, &[&str], &str); 4] = [
+        (
+            "fixture",
+            &["--regenerate", "--reason", "r", "--fixture", "seed-42"],
+            "--regenerate plays every fixture; leave out --fixture",
+        ),
+        (
+            "two-modes",
+            &["--regenerate", "--add-machine-set", "--reason", "r"],
+            "--regenerate and --add-machine-set cannot be used together",
+        ),
+        (
+            "reason-alone",
+            &["--reason", "r"],
+            "--reason goes with --regenerate, --add-machine-set, or --bootstrap",
+        ),
+        (
+            "bootstrap-and-regenerate",
+            &["--bootstrap", "--regenerate", "--reason", "r"],
+            "--bootstrap and --regenerate cannot be used together",
+        ),
+    ];
+    for (label, extra, message) in cases {
+        let mut args = vec!["--golden", golden_arg];
+        args.extend_from_slice(extra);
+        let out = gate(&format!("refuse-{label}"), &args);
+        assert_eq!(out.status.code(), Some(1), "{label}");
+        let stderr = text(&out.stderr);
+        assert!(stderr.contains(message), "{label}: {stderr}");
+        assert_eq!(sha256(&path), before, "{label}");
+    }
+
+    // A machine that already has a set is refused before any match is played.
+    let machine = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+    let file: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    if file["hash_sets"].get(&machine).is_none() {
+        println!("note: skipping the existing-set refusal: no {machine} set is committed");
+        return;
+    }
+    let out = gate(
+        "refuse-existing",
+        &[
+            "--add-machine-set",
+            "--golden",
+            golden_arg,
+            "--reason",
+            "again",
+        ],
+    );
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = text(&out.stderr);
+    assert!(
+        stderr.contains("golden file already has a hash set for this machine"),
+        "{stderr}"
+    );
+    assert!(text(&out.stdout).is_empty());
+    assert_eq!(sha256(&path), before);
+}
+
+/// A regeneration end to end on a temporary copy: 22 matches, one new entry, the set of this
+/// machine only. Run it in release:
+/// `cargo test --release -p engine-cli --test gate -- --ignored`.
+#[test]
+#[ignore = "plays all 22 gate matches; run in release"]
+fn a_regeneration_rewrites_a_copy_with_one_new_entry() {
+    let path = golden_copy("regenerate");
+    let before: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let old_entries = before["ledger"].as_array().map_or(1, Vec::len);
+    let out = gate(
+        "regenerate",
+        &[
+            "--regenerate",
+            "--golden",
+            path.to_str().unwrap(),
+            "--reason",
+            "end-to-end test of the regeneration",
+        ],
+    );
+    let stderr = text(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{stderr}");
+    assert!(stderr.contains("regenerated 22 matches"), "{stderr}");
+    let after: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let ledger = after["ledger"].as_array().unwrap();
+    assert_eq!(ledger.len(), old_entries + 1);
+    let entry = ledger.last().unwrap();
+    assert_eq!(entry["kind"], "regenerate");
+    assert_eq!(entry["reason"], "end-to-end test of the regeneration");
+    assert_eq!(
+        entry["band_result"],
+        format!("gate/bands/ledger-{old_entries}.json")
+    );
+    assert_eq!(after["hash_sets"].as_object().unwrap().len(), 1);
+    // The regenerated copy passes the gate.
+    let out = gate("regenerate-check", &["--golden", path.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
 }

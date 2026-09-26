@@ -49,6 +49,8 @@ pub enum Command {
     Calibrate(CalibrateOpts),
     /// Replay the 22 gate matches and compare them with the golden file.
     Gate(GateOpts),
+    /// Check each commit's golden-file change against the ledger rules.
+    Guard(GuardOpts),
 }
 
 #[derive(Debug, Args)]
@@ -79,6 +81,58 @@ pub struct GateOpts {
                      machine's hash set. Refused when the file already exists."
     )]
     pub bootstrap: bool,
+    /// Rewrite the hashes with this build's; needs --reason.
+    #[arg(
+        long,
+        long_help = "Play every fixture and rewrite the golden file with this build's\n\
+                     hashes for this machine. Appends one regenerate entry to the\n\
+                     ledger and drops the other machines' sets, which each machine\n\
+                     then adds again. Needs --reason."
+    )]
+    pub regenerate: bool,
+    /// Add this machine's hash set; needs --reason.
+    #[arg(
+        long,
+        long_help = "Play every fixture and add this machine's hash set to the golden\n\
+                     file, with one add-machine-set entry. Refused when this machine\n\
+                     already has a set or the file does not fit this build. Needs\n\
+                     --reason."
+    )]
+    pub add_machine_set: bool,
+    /// Why the file is written; recorded in the ledger.
+    #[arg(
+        long,
+        value_name = "TEXT",
+        long_help = "Why the golden file is written. Recorded in the new ledger entry.\n\
+                     Needed by --regenerate and --add-machine-set; optional for\n\
+                     --bootstrap."
+    )]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct GuardOpts {
+    /// The base revision of the range, such as main.
+    #[arg(
+        long,
+        value_name = "REV",
+        long_help = "The base revision: the commits after it that change the golden\n\
+                     file are checked, such as main or the pull request's base."
+    )]
+    pub base: String,
+    /// The last revision of the range.
+    #[arg(long, value_name = "REV", default_value = "HEAD")]
+    pub head: String,
+    /// Golden file; default gate/golden.json.
+    #[arg(
+        long,
+        value_name = "PATH",
+        default_value = "gate/golden.json",
+        hide_default_value = true,
+        long_help = "The golden file's path from the repository root, with forward\n\
+                     slashes."
+    )]
+    pub golden: String,
 }
 
 #[derive(Debug, Args)]

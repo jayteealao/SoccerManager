@@ -1,7 +1,10 @@
 //! The replay gate is sensitive and strict: a fault in any state-inventory group fails the
 //! gate at the window of the fault, a one-tick fault still fails it, a NaN names its field,
 //! a broken golden file is refused with the fault named, the hashes repeat in one process
-//! and match the committed golden file, and the stream state has the documented bytes.
+//! and match the committed golden file, and the stream state has the documented bytes. The
+//! golden file ledger: a regeneration appends one entry with its reason (AC-7), two hash sets
+//! record which matches differ (AC-GG-1), a broken ledger is refused, and the first file form
+//! reads as a one-entry bootstrap ledger.
 //!
 //! The faulted runs compare with a clean run of the same fixture in the same process, so
 //! they do not depend on this machine's hash set.
@@ -178,7 +181,11 @@ fn synthetic() -> (GoldenFile, Vec<Fixture>) {
             ],
         })
         .collect();
-    (GoldenFile::first(&fixtures, matches), fixtures)
+    let machine = golden::machine_key();
+    (
+        GoldenFile::first(&fixtures, &machine, matches, golden::BOOTSTRAP_REASON),
+        fixtures,
+    )
 }
 
 /// The matches of `machine`'s hash set in a golden file's JSON.
@@ -314,4 +321,199 @@ fn the_stream_state_is_scheme_0_with_one_entry() {
     assert_eq!(&bytes[5..13], &0u64.to_le_bytes(), "the stream id");
     assert_eq!(&bytes[13..29], &2u128.to_le_bytes(), "the word position");
     assert_eq!(bytes.len(), 29);
+}
+
+/// `matches` with the final hash (and the last checkpoint) of each match in `ids` replaced.
+fn with_changed(mut matches: Vec<MatchHashes>, ids: &[&str], n: u32) -> Vec<MatchHashes> {
+    for m in matches.iter_mut().filter(|m| ids.contains(&m.id.as_str())) {
+        m.final_hash = format!("{n:064x}");
+        m.checkpoints.last_mut().unwrap().hash = m.final_hash.clone();
+    }
+    matches
+}
+
+#[test]
+fn a_regeneration_writes_the_new_hashes_and_appends_one_entry() {
+    let (file, fixtures) = synthetic();
+    let machine = golden::machine_key();
+    let old = file.set_for(&machine).unwrap().to_vec();
+    let new = with_changed(old.clone(), &["seed-42", "knockout"], 9);
+    assert_ne!(new, old);
+    let (regen, dropped) = file.clone().regenerated(
+        &fixtures,
+        &machine,
+        new.clone(),
+        "the maths library replaces the platform sin and cos",
+    );
+    assert!(dropped.is_empty());
+    assert_eq!(regen.set_for(&machine).unwrap(), new.as_slice());
+    assert_eq!(regen.ledger.len(), file.ledger.len() + 1);
+    assert_eq!(
+        regen.ledger[0], file.ledger[0],
+        "the old entry is unchanged"
+    );
+    let entry = &regen.ledger[1];
+    assert_eq!(entry.kind, golden::EntryKind::Regenerate);
+    assert_eq!(
+        entry.reason,
+        "the maths library replaces the platform sin and cos"
+    );
+    assert_eq!(entry.engine_version, engine::version());
+    assert_eq!(entry.scheme, 0);
+    assert_eq!(entry.scheme, engine::rng::STREAM_SCHEME);
+    assert_eq!(entry.machine, machine);
+    assert_eq!(entry.candidate.as_deref(), Some(engine::build_hash()));
+    assert_eq!(
+        entry.band_result.as_deref(),
+        Some("gate/bands/ledger-1.json")
+    );
+    // The written text loads strictly and reads back equal.
+    let loaded = golden::parse(&regen.to_text(), &fixtures).unwrap();
+    assert_eq!(loaded, regen);
+
+    // A regeneration drops the other machines' sets, which are stale after a hash change.
+    let two = file
+        .with_machine_set("linux-other", old, "second machine")
+        .unwrap();
+    let (regen, dropped) = two.regenerated(&fixtures, &machine, new, "a hash change");
+    assert_eq!(dropped, vec!["linux-other".to_string()]);
+    assert_eq!(regen.hash_sets.len(), 1);
+    assert_eq!(
+        regen.ledger[2].band_result.as_deref(),
+        Some("gate/bands/ledger-2.json")
+    );
+    golden::parse(&regen.to_text(), &fixtures).unwrap();
+}
+
+#[test]
+fn two_hash_sets_record_which_matches_differ() {
+    let (file, fixtures) = synthetic();
+    let machine = golden::machine_key();
+    let other = with_changed(file.set_for(&machine).unwrap().to_vec(), &["seed-7"], 7);
+    let two = file
+        .with_machine_set("zz-other", other, "a second machine")
+        .unwrap();
+    assert_eq!(two.set_differences.len(), 1);
+    let d = &two.set_differences[0];
+    assert_eq!((d.a.as_str(), d.b.as_str()), (machine.as_str(), "zz-other"));
+    assert_eq!(d.differ, vec!["seed-7".to_string()]);
+    assert_eq!(d.same, 21);
+    let entry = two.ledger.last().unwrap();
+    assert_eq!(entry.kind, golden::EntryKind::AddMachineSet);
+    assert_eq!(entry.candidate, None);
+    assert_eq!(entry.band_result, None);
+
+    // Read back, the record is the same.
+    let text = two.to_text();
+    let loaded = golden::parse(&text, &fixtures).unwrap();
+    assert_eq!(loaded.set_differences, two.set_differences);
+
+    // An edited record is refused.
+    let mut edited: serde_json::Value = serde_json::from_str(&text).unwrap();
+    edited["set_differences"][0]["differ"] = serde_json::json!([]);
+    edited["set_differences"][0]["same"] = 22.into();
+    assert_eq!(
+        refused(&edited, &fixtures),
+        "golden file set_differences: the record differs from the one the hash sets give"
+    );
+
+    // A second set for the same machine is refused.
+    let again = loaded
+        .with_machine_set("zz-other", Vec::new(), "again")
+        .unwrap_err();
+    assert_eq!(
+        again.to_string(),
+        "golden file already has a hash set for this machine (zz-other)"
+    );
+}
+
+#[test]
+fn a_broken_ledger_is_refused_naming_the_fault() {
+    let (file, fixtures) = synthetic();
+    let machine = golden::machine_key();
+    let old = file.set_for(&machine).unwrap().to_vec();
+    let (regen, _) = file.regenerated(&fixtures, &machine, old, "a reason");
+    let base: serde_json::Value = serde_json::from_str(&regen.to_text()).unwrap();
+    let with = |f: &dyn Fn(&mut serde_json::Value)| {
+        let mut v = base.clone();
+        f(&mut v);
+        refused(&v, &fixtures)
+    };
+
+    assert_eq!(
+        with(&|v| v["ledger"] = serde_json::json!([])),
+        "golden file ledger: it is empty; the first entry must be a bootstrap"
+    );
+    assert_eq!(
+        with(&|v| v["ledger"][0]["kind"] = "add-machine-set".into()),
+        "golden file ledger: entry 0 is add-machine-set; the first entry must be a bootstrap"
+    );
+    assert_eq!(
+        with(&|v| {
+            let first = v["ledger"][0].clone();
+            v["ledger"].as_array_mut().unwrap().push(first);
+        }),
+        "golden file ledger: entry 2 is a second bootstrap"
+    );
+    assert_eq!(
+        with(&|v| v["ledger"][1]["reason"] = "   ".into()),
+        "golden file ledger: entry 1 (regenerate) has no reason"
+    );
+    assert_eq!(
+        with(&|v| v["ledger"][1]["band_result"] = "gate/bands/mine.json".into()),
+        "golden file ledger: entry 1 (regenerate) must have band_result \"gate/bands/ledger-1.json\""
+    );
+    let why = with(&|v| {
+        let set = v["hash_sets"][&machine].clone();
+        v["hash_sets"]["zz-unrecorded"] = set;
+    });
+    assert!(
+        why.starts_with(&format!(
+            "golden file ledger: the hash sets are {machine}, zz-unrecorded, but the entries"
+        )),
+        "{why}"
+    );
+    let why = with(&|v| v["ledger"][1]["unknown_field"] = 1.into());
+    assert!(why.starts_with("golden file is malformed: "), "{why}");
+}
+
+#[test]
+fn the_first_file_form_reads_as_a_one_entry_bootstrap_ledger() {
+    let (file, fixtures) = synthetic();
+    let machine = golden::machine_key();
+    let mut v: serde_json::Value = serde_json::from_str(&file.to_text()).unwrap();
+    let obj = v.as_object_mut().unwrap();
+    obj.remove("ledger");
+    obj.remove("set_differences");
+    obj.insert(
+        "bootstrap".into(),
+        serde_json::json!({
+            "engine_version": "0.1.0",
+            "build": "d3cd95d",
+            "utc": "2026-09-26T13:47:07Z",
+            "machine": machine,
+        }),
+    );
+    let read = golden::parse(&v.to_string(), &fixtures).unwrap();
+    assert_eq!(read.ledger.len(), 1);
+    let e = &read.ledger[0];
+    assert_eq!(e.kind, golden::EntryKind::Bootstrap);
+    assert_eq!(e.reason, golden::BOOTSTRAP_REASON);
+    assert_eq!(
+        (e.engine_version.as_str(), e.build.as_str(), e.utc.as_str()),
+        ("0.1.0", "d3cd95d", "2026-09-26T13:47:07Z")
+    );
+    assert_eq!(e.scheme, 0);
+    assert!(read.set_differences.is_empty());
+    // Every write uses the ledger form.
+    let text = read.to_text();
+    assert!(text.contains("\"ledger\""));
+    assert!(!text.contains("\"bootstrap\": {"));
+
+    // Both forms at once are refused.
+    v["ledger"] = serde_json::json!([]);
+    assert_eq!(
+        refused(&v, &fixtures),
+        "golden file has both a bootstrap object and a ledger; it must have one"
+    );
 }

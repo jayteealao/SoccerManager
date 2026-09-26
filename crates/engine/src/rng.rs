@@ -15,6 +15,10 @@ pub struct RngState {
     pub word_pos: u128,
 }
 
+/// The random-stream scheme id. Today's engine draws from one stream (scheme 0); the golden
+/// file's ledger records it with every entry.
+pub const STREAM_SCHEME: u8 = 0;
+
 /// The position of every random stream a match draws from, as the replay gate hashes it:
 /// the stream scheme, then each stream's id and word position in stream order. Today's
 /// engine has one stream, so it reports scheme 0 with one entry.
@@ -82,7 +86,7 @@ impl EngineRng {
     /// The stream state the replay gate hashes: scheme 0, one entry.
     pub fn stream_state(&self) -> StreamState {
         StreamState {
-            scheme: 0,
+            scheme: STREAM_SCHEME,
             entries: vec![(self.inner.get_stream(), self.inner.get_word_pos())],
         }
     }

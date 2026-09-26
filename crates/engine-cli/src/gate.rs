@@ -1,6 +1,9 @@
 //! `engine-cli gate`: plays the replay-gate fixtures, prints one line per match, and exits 0
 //! when every match has its golden hashes, 2 when one differs, and 1 when the golden file or
-//! the content cannot be read or is not valid. The hashing, the compare, and the report text
+//! the content cannot be read or is not valid. Its write modes (`--bootstrap`,
+//! `--regenerate`, `--add-machine-set`) check their flags and reason before any file is read
+//! and write through a temporary file, so a refusal or a failed match leaves the golden file
+//! byte-identical. The hashing, the compare, and the report text
 //! live in `engine::gate`, which the engine's fault tests use as well.
 
 use std::path::{Path, PathBuf};
@@ -14,28 +17,89 @@ use script::{Backstop, LoadedPack};
 
 use crate::cli::GateOpts;
 
-pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
-    let all = gate::fixtures();
-    if opts.bootstrap && !opts.fixture.is_empty() {
-        bail!("--bootstrap plays every fixture; leave out --fixture");
+/// What a gate run does with the golden file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    Compare,
+    Bootstrap,
+    Regenerate,
+    AddMachineSet,
+}
+
+/// The run's mode and the reason to record, checked before any file is read or match is
+/// played, so a refusal leaves the golden file untouched.
+fn mode(opts: &GateOpts) -> anyhow::Result<(Mode, String)> {
+    let modes = [
+        (opts.bootstrap, "--bootstrap", Mode::Bootstrap),
+        (opts.regenerate, "--regenerate", Mode::Regenerate),
+        (
+            opts.add_machine_set,
+            "--add-machine-set",
+            Mode::AddMachineSet,
+        ),
+    ];
+    let set: Vec<_> = modes.iter().filter(|(on, _, _)| *on).collect();
+    if set.len() > 1 {
+        bail!("{} and {} cannot be used together", set[0].1, set[1].1);
     }
+    let Some(&&(_, flag, mode)) = set.first() else {
+        if opts.reason.is_some() {
+            bail!("--reason goes with --regenerate, --add-machine-set, or --bootstrap");
+        }
+        return Ok((Mode::Compare, String::new()));
+    };
+    if !opts.fixture.is_empty() {
+        bail!("{flag} plays every fixture; leave out --fixture");
+    }
+    let reason = opts.reason.as_deref().map(str::trim).unwrap_or_default();
+    if !reason.is_empty() {
+        return Ok((mode, reason.to_string()));
+    }
+    match mode {
+        Mode::Bootstrap => Ok((mode, golden::BOOTSTRAP_REASON.to_string())),
+        Mode::Regenerate => bail!("--regenerate needs --reason \"<why the hashes change>\""),
+        _ => bail!("--add-machine-set needs --reason \"<why this machine's set is added>\""),
+    }
+}
+
+pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
+    let (mode, reason) = mode(opts)?;
+    let all = gate::fixtures();
     let selected = select(&all, &opts.fixture)?;
     let path = opts
         .golden
         .clone()
         .unwrap_or_else(|| PathBuf::from(golden::DEFAULT_PATH));
     let machine = golden::machine_key();
-    let expected: Option<Vec<MatchHashes>> = if opts.bootstrap {
-        if path.exists() {
-            return Err(golden::GoldenError::Exists {
-                path: path.display().to_string(),
+    let mut old: Option<GoldenFile> = None;
+    let expected: Option<Vec<MatchHashes>> = match mode {
+        Mode::Bootstrap => {
+            if path.exists() {
+                return Err(golden::GoldenError::Exists {
+                    path: path.display().to_string(),
+                }
+                .into());
             }
-            .into());
+            None
         }
-        None
-    } else {
-        let file = golden::load(&path, &all)?;
-        Some(file.set_for(&machine)?.to_vec())
+        Mode::Compare => {
+            let file = golden::load(&path, &all)?;
+            Some(file.set_for(&machine)?.to_vec())
+        }
+        // A regeneration reads the old file without the strict checks, so a gate-schema or
+        // fixture change in the code can still be regenerated.
+        Mode::Regenerate => {
+            old = Some(golden::load_lenient(&path)?);
+            None
+        }
+        Mode::AddMachineSet => {
+            let file = golden::load(&path, &all)?;
+            if file.hash_sets.contains_key(&machine) {
+                return Err(golden::GoldenError::SetExists { machine }.into());
+            }
+            old = Some(file);
+            None
+        }
     };
 
     let loaded = crate::content::load(content_dir, None, None, None)?;
@@ -93,26 +157,52 @@ pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
         written.push(played.hashes);
     }
     let seconds = started.elapsed().as_secs_f64();
-    if opts.bootstrap {
-        if code != 0 {
-            bail!("the bootstrap run failed a match; no golden file was written");
+    let played = selected.len();
+    if mode != Mode::Compare && code != 0 {
+        bail!("a match failed; the golden file was not written");
+    }
+    match (mode, old) {
+        (Mode::Compare, _) => {
+            let failed = if code == 0 {
+                "none differ"
+            } else {
+                "some differ"
+            };
+            eprintln!("gate: {played} matches for {machine} in {seconds:.1} s; {failed}");
         }
-        GoldenFile::first(&all, written).write_new(&path)?;
-        eprintln!(
-            "wrote {}: {} matches for {machine} in {seconds:.1} s",
-            path.display(),
-            selected.len()
-        );
-    } else {
-        let failed = if code == 0 {
-            "none differ"
-        } else {
-            "some differ"
-        };
-        eprintln!(
-            "gate: {} matches for {machine} in {seconds:.1} s; {failed}",
-            selected.len()
-        );
+        (Mode::Bootstrap, _) => {
+            GoldenFile::first(&all, &machine, written, &reason).write_new(&path)?;
+            eprintln!(
+                "wrote {}: {played} matches for {machine} in {seconds:.1} s",
+                path.display()
+            );
+        }
+        (Mode::Regenerate, Some(old)) => {
+            let unchanged = old.hash_sets.get(&machine) == Some(&written);
+            let (file, dropped) = old.regenerated(&all, &machine, written, &reason);
+            file.write_replace(&path)?;
+            eprintln!(
+                "wrote {}: regenerated {played} matches for {machine} in {seconds:.1} s{}",
+                path.display(),
+                if unchanged { "; hashes unchanged" } else { "" }
+            );
+            if !dropped.is_empty() {
+                eprintln!(
+                    "dropped the stale hash sets of {}; add each again with                      `engine-cli gate --add-machine-set --reason <TEXT>` on that machine",
+                    dropped.join(", ")
+                );
+            }
+        }
+        (Mode::AddMachineSet, Some(old)) => {
+            let file = old.with_machine_set(&machine, written, &reason)?;
+            file.write_replace(&path)?;
+            let differ: usize = file.set_differences.iter().map(|d| d.differ.len()).sum();
+            eprintln!(
+                "wrote {}: added {played} matches for {machine} in {seconds:.1} s;                  {differ} differ from the other sets",
+                path.display()
+            );
+        }
+        (_, None) => unreachable!("the write modes read the old file"),
     }
     Ok(code)
 }

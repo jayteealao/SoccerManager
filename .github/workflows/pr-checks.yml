@@ -181,3 +181,56 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Engine tests (ignored slow tests excluded)
         run: cargo test --workspace --locked
+
+  # The replay gate on the pinned images: a release build plays the 22 gate matches against
+  # the committed golden file, and each image must match its own hash set. The Linux leg also
+  # checks every commit's change to the golden file. When the Linux set is missing, the Linux
+  # leg uploads a candidate golden file with the set this image made (gate-candidate-linux).
+  gate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+      - name: Fetch every crate
+        run: cargo fetch --locked
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if ($env:RUSTFLAGS) { throw "RUSTFLAGS is set ('$env:RUSTFLAGS'); it would override the static C runtime in .cargo/config.toml" }
+          cargo build --release --locked -p engine-cli
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: cargo build --release --locked -p engine-cli
+      - name: Golden-file history check
+        if: runner.os == 'Linux'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: ./target/release/engine-cli guard --base "$BASE" --head "$HEAD"
+      - name: Replay gate
+        run: ./target/release/engine-cli gate
+      - name: Candidate golden file with this image's set
+        if: failure() && runner.os == 'Linux'
+        run: |
+          cp gate/golden.json candidate.json
+          if ./target/release/engine-cli gate --add-machine-set --golden candidate.json --reason "linux-x86_64 set from the pinned ubuntu-24.04 image"; then
+            echo "candidate=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No candidate: this machine already has a set, or the file does not fit the build."
+          fi
+        id: candidate
+      - name: Upload the candidate golden file
+        if: failure() && runner.os == 'Linux' && steps.candidate.outputs.candidate == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gate-candidate-linux
+          path: candidate.json
+          if-no-files-found: error

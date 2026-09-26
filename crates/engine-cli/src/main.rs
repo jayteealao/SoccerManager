@@ -7,6 +7,7 @@ mod cli;
 mod content;
 mod gate;
 mod generate;
+mod guard;
 mod launch;
 mod record;
 mod replay;
@@ -54,6 +55,7 @@ fn main() {
         cli::Command::Resume(opts) => resume::run(content_dir, &opts),
         cli::Command::Calibrate(opts) => calibrate::run(content_dir, &opts),
         cli::Command::Gate(opts) => gate::run(content_dir, &opts),
+        cli::Command::Guard(opts) => guard::run(&opts),
     };
     match result {
         Ok(code) => std::process::exit(code),
