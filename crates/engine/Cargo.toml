@@ -28,6 +28,7 @@ scenario = []
 
 [dev-dependencies]
 criterion = { workspace = true }
+tracing-subscriber = { workspace = true }
 engine = { path = ".", features = ["scenario"] }
 
 [[bench]]

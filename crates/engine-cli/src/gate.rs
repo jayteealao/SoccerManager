@@ -13,7 +13,7 @@ use anyhow::{Context, bail};
 use engine::ContentDir;
 use engine::gate::golden::{self, GoldenFile};
 use engine::gate::{self, Fixture, Inputs, MatchHashes, PackInputs, Played, Verdict};
-use script::{Backstop, LoadedPack};
+use script::LoadedPack;
 
 use crate::cli::GateOpts;
 
@@ -107,10 +107,10 @@ pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
     let pack = if needs_pack {
         let dir = ContentDir::resolve(content_dir)?;
         let pack_dir = dir.path(&format!("scripts/{}", gate::KNOCKOUT_PACK));
-        // The gate clock: no hook call is stopped on time, so a busy machine cannot change a
-        // gate match. The operation budget still stops a long call.
+        // The real wall clock: a slow hook call is not stopped, it only marks the match, so a
+        // busy machine plays the same gate match and prints a warning.
         Some(
-            LoadedPack::load_with(&pack_dir, Backstop::Never)
+            LoadedPack::load(&pack_dir)
                 .with_context(|| format!("the {} script pack", gate::KNOCKOUT_PACK))?,
         )
     } else {
@@ -154,6 +154,10 @@ pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
             code = 2;
         }
         emit(opts.json, fixture, &played, verdict);
+        // A marked match warns and is still compared; the verdict above follows the hashes.
+        if let Some(warning) = gate::warning_line(fixture, &played) {
+            eprintln!("{warning}");
+        }
         written.push(played.hashes);
     }
     let seconds = started.elapsed().as_secs_f64();
@@ -255,6 +259,8 @@ fn emit(json: bool, fixture: &Fixture, played: &Played, verdict: Verdict) {
         "decided_by": f.decided_by.map(|d| d.code()),
         "substitutions_applied": f.substitutions,
         "tactics_changes_applied": f.tactics_changes,
+        "slow_calls": f.slow_calls,
+        "invalid": (f.slow_calls > 0).then_some(engine::plugin::INVALID_SLOW_SCRIPT),
     });
     println!("{line}");
 }

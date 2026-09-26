@@ -1,10 +1,11 @@
 //! Script packs for the football match engine. A pack is a folder with `pack.json` and one
 //! Rhai script; the script can adjust the ball carrier's option scores, review the referee's
 //! card for a foul, and rewrite commentary lines, through the engine's plugin interface
-//! (`engine::plugin`). The script runs in a sandbox with an operation budget, a 2 ms
-//! wall-clock backstop, size limits, no import, no `eval`, and no file or network function
-//! (see [`sandbox`]). A hook that fails never stops a match: the engine keeps its own choice
-//! and records the failure.
+//! (`engine::plugin`). The script runs in a sandbox with an operation budget, size limits, no
+//! import, no `eval`, and no file or network function (see [`sandbox`]). A hook that fails
+//! never stops a match: the engine keeps its own choice and records the failure. A call past
+//! the 2 ms wall-clock limit is not stopped: it keeps its result and marks the match invalid
+//! (the watchdog mark), because wall-clock time differs between machines.
 
 pub mod hooks;
 pub mod pack;
@@ -66,8 +67,8 @@ impl LoadedPack {
         Self::load_with(dir, Backstop::default())
     }
 
-    /// [`LoadedPack::load`] with the wall-clock limit `backstop` on every call. The replay
-    /// gate loads its pack with [`Backstop::Never`].
+    /// [`LoadedPack::load`] with the wall-clock limit `backstop` on every call. The limit
+    /// marks a slow call and never stops it; [`Backstop::Never`] reads no clock.
     pub fn load_with(dir: &Path, backstop: Backstop) -> Result<Self, ScriptError> {
         let pack = Pack::read(dir)?;
         let shown = pack.manifest_shown();
@@ -119,19 +120,96 @@ impl LoadedPack {
         &self.pack.sha
     }
 
-    /// Fresh hooks for one match, with counters at zero. The compiled script is shared.
+    /// Fresh hooks for one match, with counters and the watchdog mark at zero. The compiled
+    /// script is shared; the mark is the match's own.
     pub fn plugins(&self) -> Plugins {
         let mut plugins = Plugins::new(self.identity());
         plugins.refresh_ticks = self.pack.manifest.decision.refresh_ticks;
         if self.pack.has_hook(HookPoint::Decision) {
-            plugins.decision = Some(Box::new(ScriptDecisionHook(Arc::clone(&self.sandbox))));
+            plugins.decision = Some(Box::new(ScriptDecisionHook {
+                sandbox: Arc::clone(&self.sandbox),
+                mark: plugins.watchdog(),
+            }));
         }
         if self.pack.has_hook(HookPoint::Rule) {
-            plugins.rule = Some(Box::new(ScriptRuleHook(Arc::clone(&self.sandbox))));
+            plugins.rule = Some(Box::new(ScriptRuleHook {
+                sandbox: Arc::clone(&self.sandbox),
+                mark: plugins.watchdog(),
+            }));
         }
         if self.pack.has_hook(HookPoint::Commentary) {
-            plugins.commentary = Some(Box::new(ScriptCommentaryHook(Arc::clone(&self.sandbox))));
+            plugins.commentary = Some(Box::new(ScriptCommentaryHook {
+                sandbox: Arc::clone(&self.sandbox),
+                mark: plugins.watchdog(),
+            }));
         }
         plugins
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sandbox::CALL_BACKSTOP;
+    use engine::plugin::DecisionContext;
+
+    fn fixture() -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/shoot-bias")
+    }
+
+    fn ctx() -> DecisionContext {
+        DecisionContext {
+            tick: 0,
+            minute: 0,
+            team: 0,
+            slot: 1,
+            goals_for: 0,
+            goals_against: 0,
+            goal_distance: 20.0,
+            nearest_opponent: 3.0,
+            progress: 0.5,
+        }
+    }
+
+    #[test]
+    fn two_matches_of_one_pack_have_their_own_marks() {
+        let pack = LoadedPack::load_with(
+            &fixture(),
+            Backstop::Skewed {
+                limit: Some(CALL_BACKSTOP),
+                only_call: Some(1),
+            },
+        )
+        .unwrap();
+        let mut a = pack.plugins();
+        let mut b = pack.plugins();
+        a.decision.as_mut().unwrap().adjust(&ctx());
+        b.decision.as_mut().unwrap().adjust(&ctx());
+        assert_eq!((a.slow_calls(), b.slow_calls()), (1, 0));
+
+        let pack = LoadedPack::load_with(
+            &fixture(),
+            Backstop::Skewed {
+                limit: Some(CALL_BACKSTOP),
+                only_call: None,
+            },
+        )
+        .unwrap();
+        let (a, b) = std::thread::scope(|scope| {
+            let run = |n: u32| {
+                let pack = &pack;
+                scope.spawn(move || {
+                    let mut p = pack.plugins();
+                    for _ in 0..n {
+                        p.decision.as_mut().unwrap().adjust(&ctx());
+                    }
+                    p.slow_calls()
+                })
+            };
+            let a = run(50);
+            let b = run(70);
+            (a.join().unwrap(), b.join().unwrap())
+        });
+        assert_eq!((a, b), (50, 70));
     }
 }

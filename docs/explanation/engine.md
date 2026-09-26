@@ -62,6 +62,14 @@ Every random draw in the engine comes from one generator, ChaCha8, created from 
 
 The snapshot stores the exact position of the generator. This is why a resumed match continues the same random sequence.
 
+## The watchdog mark
+
+A script pack's hook call has two limits. The operation budget counts script operations; the count is the same on every machine, so the budget stops a long call in the same place everywhere. After three such stops in a row, the hook is switched off for the rest of the match.
+
+The second limit is 2 ms of wall-clock time. A call that runs past it is not stopped: the call's result stands, and the match is marked invalid (`match.invalid: "slow script"` in the match statistics, with `script.slow_calls`, and one `match.invalid` log line). Wall-clock time differs between machines. If a slow call were stopped, a slow or busy machine would play a different match from the same seed and inputs. The mark is not a failure, writes no event, and is not in the snapshot or in the replay gate's hashed state.
+
+The replay gate plays with the real clock. It prints a warning for a marked match and still compares its hashes, so a warning never hides a difference.
+
 ## Best-effort determinism
 
 The engine promises the same match only on the same build and the same computer. It does not promise the same match on another computer.

@@ -553,7 +553,7 @@ impl Simulation {
         }
         let ctx = self.decision_context(c);
         let outcome = self.plugins.decision.as_mut()?.adjust(&ctx);
-        let (value, notes) = self.plugins.settle(HookPoint::Decision, outcome);
+        let (value, notes) = self.plugins.settle(HookPoint::Decision, outcome, self.tick);
         self.push_script_notes(notes);
         let offsets = value.unwrap_or_default();
         self.script_cache = Some(ScriptCache {

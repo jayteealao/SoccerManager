@@ -232,6 +232,8 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
 
     // G9 plugin state. The boxed hooks show through their presence and through play; the
     // pack identity is in the header; the text of `details` is a log signal and is excluded.
+    // The watchdog mark (`slow_calls`) depends on the machine's speed and is excluded, so a
+    // slow machine hashes the same match.
     for present in plugins.hooks_present() {
         w.bool(present);
     }

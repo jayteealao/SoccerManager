@@ -96,6 +96,19 @@ fn the_special_fixtures_show_extra_time_a_shootout_and_applied_changes() {
     assert_eq!(knockout["extra_time"], true, "{knockout}");
     assert_eq!(knockout["shootout"], true, "{knockout}");
     assert_eq!(knockout["decided_by"], "shoot-out", "{knockout}");
+    // The watchdog mark: the gate plays with the real clock, so a busy machine may mark the
+    // match; the key is always there, `invalid` names the reason only when marked, and the
+    // verdict above still follows the hashes.
+    let slow = knockout["slow_calls"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("slow_calls is a count: {knockout}"));
+    if slow == 0 {
+        assert!(knockout["invalid"].is_null(), "{knockout}");
+    } else {
+        assert_eq!(knockout["invalid"], "slow script", "{knockout}");
+    }
+    assert_eq!(change["slow_calls"], 0, "the change fixture has no pack");
+    assert!(change["invalid"].is_null(), "{change}");
 }
 
 #[test]

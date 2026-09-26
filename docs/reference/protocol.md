@@ -193,7 +193,7 @@ One `match-event` row. The same object is written to
 | `commentary` | string | one English commentary line, on every event except `tactics-change` and `script`; the lines come from `content/commentary/en.json` and name the player and the club, and a script pack's commentary hook can rewrite them |
 | `script.pack` | string | on the first `kick-off` of a match that runs a script pack: the pack identity, `id@version+hash`, where the hash is the first 12 hex characters of the SHA-256 of `pack.json` followed by the script file |
 | `script.hook` | enumeration | on `script`: the hook that failed, `decision`, `rule`, or `commentary` |
-| `script.outcome` | enumeration | on `script`: `aborted` (the call ran out of its operation or time budget, or failed), `denied` (the call tried an import or a function the sandbox does not allow), or `disabled` (the hook failed three times in a row and is off for the rest of the match) |
+| `script.outcome` | enumeration | on `script`: `aborted` (the call ran out of its operation budget, or failed; a call past the 2 ms wall-clock limit is not aborted and only marks the match invalid in `match-stats`), `denied` (the call tried an import or a function the sandbox does not allow), or `disabled` (the hook failed three times in a row and is off for the rest of the match) |
 | `script.detail` | string | on `script`: why, such as `operation budget of 10000 exhausted` or `function http_get is not available` |
 
 A `script` event names no team or player and carries no `commentary`. Play goes on with the

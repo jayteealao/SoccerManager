@@ -665,9 +665,9 @@ impl Simulation {
             scores: event.scores,
         };
         let outcome = hook.line(&ctx, native);
-        let (line, notes) = self
-            .plugins
-            .settle(crate::plugin::HookPoint::Commentary, outcome);
+        let (line, notes) =
+            self.plugins
+                .settle(crate::plugin::HookPoint::Commentary, outcome, event.tick);
         let events = notes
             .into_iter()
             .map(|note| self.script_event_at(event.tick, note))

@@ -9,13 +9,16 @@
 //!   characters, or `()` to keep it.
 //!
 //! Any other return is a script error: the call is aborted and the engine keeps its choice.
+//!
+//! Each hook holds its match's [`WatchdogMark`]; a call past the wall-clock limit adds a hit
+//! to it and keeps its result.
 
 use std::sync::Arc;
 
 use engine::Card;
 use engine::plugin::{
     CommentaryHook, DecisionContext, DecisionHook, FoulContext, HookOutcome, LineContext,
-    OptionOffsets, RuleHook,
+    OptionOffsets, RuleHook, WatchdogMark,
 };
 use rhai::Dynamic;
 
@@ -40,11 +43,15 @@ fn failed<T>(err: HookOutcome<()>) -> HookOutcome<T> {
     }
 }
 
-pub struct ScriptDecisionHook(pub Arc<Sandbox>);
+pub struct ScriptDecisionHook {
+    pub sandbox: Arc<Sandbox>,
+    /// The watchdog mark of the match this hook plays in.
+    pub mark: WatchdogMark,
+}
 
 impl DecisionHook for ScriptDecisionHook {
     fn adjust(&mut self, ctx: &DecisionContext) -> HookOutcome<OptionOffsets> {
-        match self.0.call(DECIDE_FN.0, (*ctx,)) {
+        match self.sandbox.call(DECIDE_FN.0, (*ctx,), &self.mark) {
             Ok(value) => offsets(value),
             Err(err) => failed(err),
         }
@@ -89,7 +96,11 @@ pub fn offsets(value: Dynamic) -> HookOutcome<OptionOffsets> {
     HookOutcome::Value(out)
 }
 
-pub struct ScriptRuleHook(pub Arc<Sandbox>);
+pub struct ScriptRuleHook {
+    pub sandbox: Arc<Sandbox>,
+    /// The watchdog mark of the match this hook plays in.
+    pub mark: WatchdogMark,
+}
 
 impl RuleHook for ScriptRuleHook {
     fn card(&mut self, ctx: &FoulContext, native: Option<Card>) -> HookOutcome<Option<Card>> {
@@ -99,7 +110,10 @@ impl RuleHook for ScriptRuleHook {
             Some(Card::SecondYellow) => "second-yellow",
             Some(Card::Red) => "red",
         };
-        match self.0.call(CARD_FN.0, (*ctx, native.to_string())) {
+        match self
+            .sandbox
+            .call(CARD_FN.0, (*ctx, native.to_string()), &self.mark)
+        {
             Ok(value) => card(value),
             Err(err) => failed(err),
         }
@@ -119,11 +133,18 @@ pub fn card(value: Dynamic) -> HookOutcome<Option<Card>> {
     }
 }
 
-pub struct ScriptCommentaryHook(pub Arc<Sandbox>);
+pub struct ScriptCommentaryHook {
+    pub sandbox: Arc<Sandbox>,
+    /// The watchdog mark of the match this hook plays in.
+    pub mark: WatchdogMark,
+}
 
 impl CommentaryHook for ScriptCommentaryHook {
     fn line(&mut self, ctx: &LineContext, native: &str) -> HookOutcome<String> {
-        match self.0.call(LINE_FN.0, (*ctx, native.to_string())) {
+        match self
+            .sandbox
+            .call(LINE_FN.0, (*ctx, native.to_string()), &self.mark)
+        {
             Ok(value) => line(value),
             Err(err) => failed(err),
         }

@@ -100,8 +100,11 @@ characters, or `()` to keep it.
 
 - **Operations:** a call may run `limits.max_operations` script operations. The count is the
   same on every machine, so a pack that fits the budget fits it everywhere.
-- **Time:** a call that runs longer than 2 ms of wall-clock time is stopped. This only catches
-  a slow built-in function; the operation budget stops a loop first.
+- **Time:** a call that runs longer than 2 ms of wall-clock time is not stopped; its result
+  stands, and the match is marked invalid (`match.invalid: "slow script"` in `match-stats`, and
+  one `match.invalid` log line). Wall-clock time differs between machines, so stopping the call
+  would make a slow machine play a different match. The operation budget is the only limit
+  that stops a call.
 - **Sizes:** strings of at most 1,024 characters, arrays of 256 items, maps of 64 entries, 16
   nested calls, and expressions nested 64 deep (32 inside a function).
 - **No files and no network:** `import` is refused, and Rhai has no file or network functions.
@@ -119,9 +122,11 @@ and logs a warning (`script.aborted` or `script.denied`). A hook that fails thre
 row is **disabled** for the rest of the match, with one more `script` event.
 
 The first `kick-off` event carries `script.pack`. The `match-stats` record carries
-`script.pack`, `script.calls`, `script.aborts`, `script.denials`, and `script.disabled`. A
-resumed match counts calls from the resume tick, because the counters are not in the
-snapshot. `bench` names the pack in the run report as `script.pack`.
+`script.pack`, `script.calls`, `script.aborts`, `script.denials`, `script.disabled`, and
+`script.slow_calls` (calls past the 2 ms wall-clock limit), plus `match.invalid` when a call
+was slow. A slow call is not a failure: it is never aborted, never counted toward the three
+failures that disable a hook, and writes no `script` event. A resumed match counts calls from
+the resume tick, because the counters are not in the snapshot. `bench` names the pack in the run report as `script.pack`.
 
 A decision hook runs once per refresh, not once per tick, so a pack costs little: one call of
 the sample pack's decision hook takes about a microsecond.

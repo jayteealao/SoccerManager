@@ -2,10 +2,12 @@
 //! with these limits:
 //!
 //! - an operation budget per call (the pack's `limits.max_operations`), which is the
-//!   deterministic budget, and a 2 ms wall-clock backstop checked every 256 operations, which
-//!   only catches a slow built-in call. A caller may switch the backstop off
-//!   ([`Backstop::Never`]); the replay gate does, so a busy machine cannot change a gate
-//!   match;
+//!   deterministic budget and the only limit that stops a call;
+//! - a 2 ms wall-clock limit per call (named mechanism: watchdog mark), checked once when
+//!   the call returns. A call past it is not stopped and keeps its result: wall-clock time
+//!   differs between machines, and a stopped call would make a slow machine play another
+//!   match. The call is recorded on the match's [`WatchdogMark`], which marks the match
+//!   invalid. A caller may skip the clock ([`Backstop::Never`]);
 //! - 16 call levels, expression depths of 64 and 32, strings of 1,024 characters, arrays of
 //!   256 items, and maps of 64 entries;
 //! - no import: a resolver that refuses every module replaces the default one, which reads
@@ -16,21 +18,20 @@
 //! - `print` and `debug` go to the log, never to standard output, which carries records.
 //!
 //! The script is compiled once, and its top-level statements run once when the pack loads,
-//! under the same budget. Every hook call starts from an empty scope, so a script keeps no
+//! under the same operation budget and with no wall-clock check (there is no match to mark). Every hook call starts from an empty scope, so a script keeps no
 //! state from one call to the next.
 
-use std::sync::Arc;
+#[cfg(feature = "test-clock")]
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use engine::plugin::{DecisionContext, FoulContext, HookOutcome, LineContext};
+use engine::plugin::{DecisionContext, FoulContext, HookOutcome, LineContext, WatchdogMark};
 use rhai::module_resolvers::DummyModuleResolver;
 use rhai::{AST, CallFnOptions, Dynamic, Engine, EvalAltResult, FuncArgs, Scope};
 
-/// Wall-clock time one call may take before it is stopped.
+/// Wall-clock time one call may take before the match is marked invalid. The call is not
+/// stopped.
 pub const CALL_BACKSTOP: Duration = Duration::from_millis(2);
-/// Operations between two checks of the wall clock.
-const CLOCK_EVERY: u64 = 256;
 pub const MAX_CALL_LEVELS: usize = 16;
 pub const MAX_EXPR_DEPTH: usize = 64;
 pub const MAX_FN_EXPR_DEPTH: usize = 32;
@@ -38,36 +39,29 @@ pub const MAX_STRING: usize = 1_024;
 pub const MAX_ARRAY: usize = 256;
 pub const MAX_MAP: usize = 64;
 
-/// The wall-clock limit on one call.
+/// The wall-clock limit on one call. A call past it marks the match and is not stopped;
+/// the operation budget alone stops a long call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Backstop {
-    /// A call that runs longer than this is stopped. The default is [`CALL_BACKSTOP`].
+    /// A call that runs longer than this marks the match. The default is
+    /// [`CALL_BACKSTOP`].
     Wall(Duration),
-    /// No call is stopped on time; the operation budget still stops a long call.
+    /// No clock is read and no call marks the match.
     Never,
-    /// Test clock: every operation checks a clock that reports 10 ms more than the real
-    /// one, so any call runs "long". `limit` is the wall limit on that clock, or `None`
-    /// for no limit, as [`Backstop::Never`].
+    /// Test clock: the check at return adds 10 ms to the real elapsed time, so a timed call
+    /// runs "long". `limit` is the wall limit on that clock, or `None` for no limit, as
+    /// [`Backstop::Never`]. `only_call` times only the call with that number (the first call
+    /// after the load is 1); `None` times every call.
     #[cfg(feature = "test-clock")]
-    Skewed { limit: Option<Duration> },
+    Skewed {
+        limit: Option<Duration>,
+        only_call: Option<u64>,
+    },
 }
 
 impl Default for Backstop {
     fn default() -> Self {
         Backstop::Wall(CALL_BACKSTOP)
-    }
-}
-
-impl Backstop {
-    /// The wall limit, the clock skew, and the operations between two clock checks, or
-    /// `None` when no call is stopped on time.
-    fn clock(self) -> Option<(Duration, Duration, u64)> {
-        match self {
-            Backstop::Wall(limit) => Some((limit, Duration::ZERO, CLOCK_EVERY)),
-            Backstop::Never => None,
-            #[cfg(feature = "test-clock")]
-            Backstop::Skewed { limit } => limit.map(|l| (l, Duration::from_millis(10), 1)),
-        }
     }
 }
 
@@ -77,9 +71,9 @@ pub struct Sandbox {
     ast: AST,
     max_operations: u64,
     backstop: Backstop,
-    /// When the running call must stop, in nanoseconds after `origin`.
-    deadline: Arc<AtomicU64>,
-    origin: Instant,
+    /// Calls made since the load, for [`Backstop::Skewed`]'s `only_call`.
+    #[cfg(feature = "test-clock")]
+    calls: AtomicU64,
 }
 
 impl std::fmt::Debug for Sandbox {
@@ -98,15 +92,14 @@ impl Sandbox {
         Self::with_backstop(source, max_operations, shown, Backstop::default())
     }
 
-    /// [`Sandbox::new`] with the wall-clock limit `backstop`.
+    /// [`Sandbox::new`] with the wall-clock limit `backstop`. The limit marks a slow call
+    /// ([`Sandbox::call`]); it never stops one, and the top-level statements are not timed.
     pub fn with_backstop(
         source: &str,
         max_operations: u64,
         shown: &str,
         backstop: Backstop,
     ) -> Result<Self, String> {
-        let origin = Instant::now();
-        let deadline = Arc::new(AtomicU64::new(u64::MAX));
         let mut engine = Engine::new();
         // Refuses every import with `ErrorModuleNotFound` (rhai-1.26.1
         // src/module/resolvers/dummy.rs, read from the installed crate).
@@ -126,19 +119,6 @@ impl Sandbox {
         engine.set_max_string_size(MAX_STRING);
         engine.set_max_array_size(MAX_ARRAY);
         engine.set_max_map_size(MAX_MAP);
-        let clock = Arc::clone(&deadline);
-        if let Some((_, skew, every)) = backstop.clock() {
-            engine.on_progress(move |ops| {
-                if ops.is_multiple_of(every) {
-                    let elapsed = origin.elapsed() + skew;
-                    let now = u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
-                    if now > clock.load(Ordering::Relaxed) {
-                        return Some(Dynamic::from("time"));
-                    }
-                }
-                None
-            });
-        }
         register_contexts(&mut engine);
         let ast = engine.compile(source).map_err(|e| e.to_string())?;
         let sandbox = Self {
@@ -146,10 +126,9 @@ impl Sandbox {
             ast,
             max_operations,
             backstop,
-            deadline,
-            origin,
+            #[cfg(feature = "test-clock")]
+            calls: AtomicU64::new(0),
         };
-        sandbox.arm();
         if let Err(err) = sandbox.engine.run_ast(&sandbox.ast) {
             return Err(match sandbox.classify(*err) {
                 HookOutcome::Aborted(why) | HookOutcome::Denied(why) => why,
@@ -167,24 +146,47 @@ impl Sandbox {
     }
 
     /// Calls the script function `name` with `args` from an empty scope, under the budget.
-    /// A failure comes back as `Aborted` or `Denied` with the reason.
-    pub fn call(&self, name: &str, args: impl FuncArgs) -> Result<Dynamic, HookOutcome<()>> {
-        self.arm();
+    /// A failure comes back as `Aborted` or `Denied` with the reason. When the call returns
+    /// (with a value or a failure) past the wall-clock limit, it adds one hit to `mark`; the
+    /// result is the same either way. `Instant` is monotonic, so a call that passed the
+    /// limit at any point has passed it at return. A call that never returns is stopped by
+    /// the operation budget alone.
+    pub fn call(
+        &self,
+        name: &str,
+        args: impl FuncArgs,
+        mark: &WatchdogMark,
+    ) -> Result<Dynamic, HookOutcome<()>> {
+        let timing = self.clock_for_this_call();
+        let started = timing.map(|_| Instant::now());
         let mut scope = Scope::new();
         let options = CallFnOptions::new().eval_ast(false).rewind_scope(true);
-        self.engine
-            .call_fn_with_options::<Dynamic>(options, &mut scope, &self.ast, name, args)
-            .map_err(|err| self.classify(*err))
+        let result = self
+            .engine
+            .call_fn_with_options::<Dynamic>(options, &mut scope, &self.ast, name, args);
+        if let (Some((limit, skew)), Some(started)) = (timing, started)
+            && started.elapsed() + skew > limit
+        {
+            mark.hit();
+        }
+        result.map_err(|err| self.classify(*err))
     }
 
-    /// Sets the wall-clock deadline for the call about to start.
-    fn arm(&self) {
-        let Some((limit, _, _)) = self.backstop.clock() else {
-            return;
-        };
-        let limit = self.origin.elapsed() + limit;
-        let nanos = u64::try_from(limit.as_nanos()).unwrap_or(u64::MAX);
-        self.deadline.store(nanos, Ordering::Relaxed);
+    /// The wall limit and the clock skew for the call about to start, or `None` when this
+    /// call reads no clock.
+    fn clock_for_this_call(&self) -> Option<(Duration, Duration)> {
+        match self.backstop {
+            Backstop::Wall(limit) => Some((limit, Duration::ZERO)),
+            Backstop::Never => None,
+            #[cfg(feature = "test-clock")]
+            Backstop::Skewed { limit, only_call } => {
+                let number = self.calls.fetch_add(1, Ordering::Relaxed) + 1;
+                let timed = only_call.is_none_or(|n| n == number);
+                limit
+                    .filter(|_| timed)
+                    .map(|l| (l, Duration::from_millis(10)))
+            }
+        }
     }
 
     /// Sorts a Rhai error into an abort or a denial with a reason a modder can act on.
@@ -195,13 +197,6 @@ impl Sandbox {
             EvalAltResult::ErrorTooManyOperations(_) => HookOutcome::Aborted(format!(
                 "operation budget of {} exhausted",
                 self.max_operations
-            )),
-            EvalAltResult::ErrorTerminated(..) => HookOutcome::Aborted(format!(
-                "time budget of {} ms exceeded",
-                self.backstop
-                    .clock()
-                    .map_or(CALL_BACKSTOP, |(limit, _, _)| limit)
-                    .as_millis()
             )),
             EvalAltResult::ErrorModuleNotFound(path, _) => {
                 HookOutcome::Denied(format!("import {path} is not allowed"))
@@ -280,7 +275,9 @@ mod tests {
     }
 
     fn fails(body: &str) -> HookOutcome<()> {
-        sandbox(body).call("run", ()).unwrap_err()
+        sandbox(body)
+            .call("run", (), &WatchdogMark::default())
+            .unwrap_err()
     }
 
     #[test]
@@ -327,7 +324,7 @@ mod tests {
         // Standard output is checked end to end in the command-line test; here the call
         // succeeds with print routed away.
         let out = sandbox(r#"print("x"); debug("y"); 7"#)
-            .call("run", ())
+            .call("run", (), &WatchdogMark::default())
             .unwrap();
         assert_eq!(out.as_int().unwrap(), 7);
     }
@@ -336,5 +333,72 @@ mod tests {
     fn top_level_statements_run_once_under_the_budget() {
         let err = Sandbox::new("loop {}", 10_000, "test").unwrap_err();
         assert!(err.contains("operation budget"), "{err}");
+    }
+
+    fn skewed(body: &str, only_call: Option<u64>) -> Sandbox {
+        Sandbox::with_backstop(
+            &format!("fn run() {{ {body} }}"),
+            10_000,
+            "test",
+            Backstop::Skewed {
+                limit: Some(CALL_BACKSTOP),
+                only_call,
+            },
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_slow_call_marks_once_whatever_its_operation_count() {
+        // Bodies around the old in-call check interval of 256 operations: the mark comes
+        // from the one check at return, so it cannot depend on where a count stops.
+        for n in [1_i64, 255, 256, 257] {
+            let body = if n == 1 {
+                "1".to_string()
+            } else {
+                format!("let x = 0; for i in 0..{n} {{ x += 1; }} x")
+            };
+            let sandbox = skewed(&body, None);
+            let mark = WatchdogMark::default();
+            let out = sandbox.call("run", (), &mark).unwrap();
+            assert_eq!(out.as_int().unwrap(), n, "the call keeps its value");
+            assert_eq!(mark.hits(), 1, "exactly one hit for a body of {n}");
+        }
+    }
+
+    #[test]
+    fn an_operation_budget_abort_still_aborts_and_marks() {
+        let mark = WatchdogMark::default();
+        let err = skewed("loop {}", None).call("run", (), &mark).unwrap_err();
+        assert_eq!(
+            err,
+            HookOutcome::Aborted("operation budget of 10000 exhausted".into())
+        );
+        assert_eq!(mark.hits(), 1);
+    }
+
+    #[test]
+    fn only_the_named_call_is_slow() {
+        let sandbox = skewed("7", Some(2));
+        let mark = WatchdogMark::default();
+        let _ = sandbox.call("run", (), &mark).unwrap();
+        assert_eq!(mark.hits(), 0, "call 1 is untimed");
+        let _ = sandbox.call("run", (), &mark).unwrap();
+        assert_eq!(mark.hits(), 1, "call 2 is slow");
+        let _ = sandbox.call("run", (), &mark).unwrap();
+        assert_eq!(mark.hits(), 1, "call 3 is untimed");
+    }
+
+    #[test]
+    fn no_mark_without_a_hit() {
+        for backstop in [Backstop::Wall(Duration::from_secs(60)), Backstop::Never] {
+            let sandbox =
+                Sandbox::with_backstop("fn run() { 7 }", 10_000, "test", backstop).unwrap();
+            let mark = WatchdogMark::default();
+            for _ in 0..10 {
+                let _ = sandbox.call("run", (), &mark).unwrap();
+            }
+            assert_eq!(mark.hits(), 0, "{backstop:?}");
+        }
     }
 }

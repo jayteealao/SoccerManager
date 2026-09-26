@@ -265,7 +265,9 @@ impl Simulation {
                 penalty,
             };
             let outcome = hook.card(&ctx, card);
-            let (value, notes) = self.plugins.settle(crate::plugin::HookPoint::Rule, outcome);
+            let (value, notes) =
+                self.plugins
+                    .settle(crate::plugin::HookPoint::Rule, outcome, self.tick);
             self.push_script_notes(notes);
             if let Some(scripted) = value {
                 card = scripted;

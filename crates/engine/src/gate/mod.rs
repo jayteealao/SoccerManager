@@ -232,9 +232,12 @@ pub struct Facts {
     pub substitutions: u32,
     /// Tactics changes applied, both teams.
     pub tactics_changes: u32,
-    /// Script hook calls, and those stopped on budget or time.
+    /// Script hook calls, and those stopped on the operation budget.
     pub script_calls: u32,
     pub script_aborts: u32,
+    /// Script hook calls past the wall-clock limit (the watchdog mark). Machine-dependent,
+    /// so it is reported and never hashed.
+    pub slow_calls: u32,
 }
 
 /// A played gate match.
@@ -368,6 +371,7 @@ pub(crate) fn run(
     facts.goals = summary.goals;
     facts.script_calls = sim.plugins().stats.calls;
     facts.script_aborts = sim.plugins().stats.aborts;
+    facts.slow_calls = sim.plugins().slow_calls();
     let last = checkpoints
         .last()
         .cloned()
@@ -493,6 +497,21 @@ pub fn report_line(fixture: &Fixture, played: &Played, verdict: Verdict) -> Stri
         )),
     }
     line
+}
+
+/// The warning for a gate match marked invalid by a slow script call, or `None` when the
+/// match is not marked. The mark depends on the machine's speed, so it never decides the
+/// verdict: the hashes of a marked match are compared as for any other.
+pub fn warning_line(fixture: &Fixture, played: &Played) -> Option<String> {
+    let n = played.facts.slow_calls;
+    (n > 0).then(|| {
+        format!(
+            "warning: {} is marked invalid: {} ({n} hook call{} ran past the wall-clock limit); its hashes were compared",
+            fixture.id,
+            crate::plugin::INVALID_SLOW_SCRIPT,
+            if n == 1 { "" } else { "s" }
+        )
+    })
 }
 
 /// The special-match facts in words: extra time and the shoot-out for the knockout
