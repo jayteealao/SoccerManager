@@ -1,0 +1,29 @@
+[package]
+name = "engine-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Headless command line for the football match engine: simulate and bench"
+
+[[bin]]
+name = "engine-cli"
+path = "src/main.rs"
+
+[dependencies]
+engine = { path = "../engine" }
+protocol = { path = "../protocol" }
+script = { path = "../script" }
+stream = { path = "../stream" }
+clap = { workspace = true }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+garde = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+# JSON Schema validation of the records in tests only; the release binary does not link it.
+boon = { workspace = true }

@@ -1,0 +1,56 @@
+name: Rollback
+
+# Yank a bad release: mark it as a prerelease so it is no longer "latest", and mark the prior
+# release as latest again. Nothing is deleted; every release stays downloadable. Then fix
+# forward with a new patch version.
+#
+# GitHub offers a workflow_dispatch workflow only once the file is on the default branch.
+# Until then, run the same two commands by hand:
+#   gh release edit v<bad> --prerelease --latest=false
+#   gh release edit v<prior> --latest
+
+on:
+  workflow_dispatch:
+    inputs:
+      bad:
+        description: "Version to yank, without the v (for example 0.2.1)"
+        required: true
+      prior:
+        description: "Version to mark as latest again (for example 0.2.0)"
+        required: true
+      reason:
+        description: "Reason for the rollback"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Yank and re-point latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BAD: ${{ inputs.bad }}
+          PRIOR: ${{ inputs.prior }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          gh release view "v$PRIOR" >/dev/null
+          gh release edit "v$BAD" --prerelease --latest=false
+          gh release edit "v$PRIOR" --latest
+          echo "Yanked v$BAD, latest is v$PRIOR. Reason: $REASON" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Confirm latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PRIOR: ${{ inputs.prior }}
+        run: |
+          latest=$(gh release view --json tagName --jq .tagName)
+          test "$latest" = "v$PRIOR" || { echo "::error::latest is $latest, expected v$PRIOR"; exit 1; }

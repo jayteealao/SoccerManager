@@ -1,0 +1,20 @@
+{
+  "name": "touchline-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser tests for the match viewer, driven against the live engine.",
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "playwright test",
+    "test:viewer": "playwright test --project=viewer",
+    "test:scenario": "playwright test --project=scenario",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

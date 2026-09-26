@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "id": "shoot-bias",
+  "version": "1.0.0",
+  "name": "Test: shoot whenever in range",
+  "plugin_api": 1,
+  "entry": "main.rhai",
+  "hooks": ["decision"]
+}

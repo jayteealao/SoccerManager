@@ -1,0 +1,283 @@
+name: Release
+
+# A pushed version tag builds the Windows setup file and the Linux archive, checks the Linux
+# archive on a fresh home, and uploads all four files to a DRAFT release. The owner then runs
+# the Windows Sandbox check on the draft setup file and publishes the same files by hand:
+#   gh release edit v<version> --draft=false            (a -beta.N / -rc.N tag stays a prerelease)
+# No stage rebuilds a file.
+#
+# A manual run (workflow_dispatch) builds and checks from a branch and uploads nothing.
+
+on:
+  push:
+    tags: ["v[0-9]*"]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Build and check only; create no release (a manual run is always a dry run)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: version
+        name: The tag names the workspace version
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version=$(sed -n '/^\[workspace.package\]/,/^\[/{s/^version *= *"\(.*\)"/\1/p}' Cargo.toml)
+          if [ -z "$version" ]; then
+            echo "::error file=Cargo.toml::cannot read [workspace.package].version"
+            exit 1
+          fi
+          if [ "$EVENT" = "push" ] && [ "${REF_NAME#v}" != "$version" ]; then
+            echo "::error::tag $REF_NAME does not match Cargo.toml version $version. Do not re-tag; see docs/runbooks/version-mismatch.md"
+            exit 1
+          fi
+          case "$version" in
+            *-*) prerelease=true ;;
+            *) prerelease=false ;;
+          esac
+          # A tag needs this version's section in CHANGELOG.md; check it before any build.
+          awk -v v="$version" '
+            index($0, "## [" v "]") == 1 { on = 1; next }
+            on && /^## / { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          if [ "$EVENT" = "push" ] && ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error file=CHANGELOG.md::no '## [$version]' section with entries in CHANGELOG.md"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "Version $version (prerelease: $prerelease)"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-notes
+          path: notes.md
+
+  test:
+    needs: version-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: e2e/package.json
+      - name: Engine tests (ignored slow tests excluded)
+        run: cargo test --workspace --locked
+      - name: Page tests
+        run: node --test "web/tests/*.test.mjs"
+
+  build-windows:
+    needs: version-gate
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        with:
+          build-warnings: ""
+      - name: Install NSIS when the runner lacks it
+        shell: pwsh
+        run: |
+          $nsis = Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue) -and -not (Test-Path $nsis)) {
+            choco install nsis -y --no-progress
+          }
+      - name: Build the setup file
+        shell: pwsh
+        run: |
+          if ($env:RUSTFLAGS) { throw "RUSTFLAGS is set; it would override the static C runtime in .cargo/config.toml" }
+          pwsh packaging/windows/build.ps1
+      - name: The program links the C runtime statically
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $dumpbin = & $vswhere -latest -products * -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
+          if (-not $dumpbin) { throw 'dumpbin.exe not found' }
+          $imports = & $dumpbin /dependents target\release\engine-cli.exe
+          $imports
+          if ($imports -match '(?i)vcruntime\d*\.dll|msvcp\d*\.dll') { throw 'engine-cli.exe imports the Visual C++ runtime; the static C runtime is missing' }
+      - name: The setup file names the gated version
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.version-gate.outputs.version }}
+        run: |
+          $setup = "dist/SoccerManager-$env:VERSION-windows-x64-setup.exe"
+          if (-not (Test-Path $setup)) { Get-ChildItem dist; throw "$setup was not built" }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows
+          path: |
+            dist/SoccerManager-*-windows-x64-setup.exe
+            dist/SoccerManager-*-windows-x64-setup.exe.sha256
+          if-no-files-found: error
+
+  build-linux:
+    needs: version-gate
+    # ubuntu-22.04 sets the archive's glibc floor at 2.35.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        with:
+          build-warnings: ""
+      - name: Build the archive
+        run: sh packaging/unix/build.sh
+      - name: The archive names the gated version
+        env:
+          VERSION: ${{ needs.version-gate.outputs.version }}
+        run: test -f "dist/SoccerManager-$VERSION-linux-x86_64.tar.gz" || { ls dist; exit 1; }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux
+          path: |
+            dist/SoccerManager-*-linux-x86_64.tar.gz
+            dist/SoccerManager-*-linux-x86_64.tar.gz.sha256
+          if-no-files-found: error
+
+  smoke-linux:
+    needs: [version-gate, build-linux]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        with:
+          build-warnings: ""
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux
+          path: dist
+      - name: Check the archive on a fresh home
+        env:
+          VERSION: ${{ needs.version-gate.outputs.version }}
+        run: sh packaging/unix/smoke.sh "dist/SoccerManager-$VERSION-linux-x86_64.tar.gz" "dist/evidence/linux/${{ github.run_id }}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: smoke-linux-evidence
+          path: dist/evidence/linux/
+          if-no-files-found: ignore
+
+  draft-release:
+    needs: [version-gate, test, build-windows, smoke-linux]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows
+          path: assets
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux
+          path: assets
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-notes
+      - name: Upload to a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version-gate.outputs.version }}
+          PRERELEASE: ${{ needs.version-gate.outputs.prerelease }}
+        run: |
+          # notes.md is this version's section of CHANGELOG.md, checked in version-gate.
+          ls -l assets
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # A re-run refreshes the files and the notes of the existing draft.
+            gh release upload "$TAG" assets/* --clobber
+            gh release edit "$TAG" --notes-file notes.md --prerelease="$PRERELEASE"
+          else
+            flags="--draft"
+            if [ "$PRERELEASE" = "true" ]; then flags="$flags --prerelease"; fi
+            gh release create "$TAG" $flags --verify-tag --title "SoccerManager $VERSION" --notes-file notes.md assets/*
+          fi
+
+  verify-draft:
+    needs: [version-gate, draft-release]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - name: Assets, hashes, and version of the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version-gate.outputs.version }}
+        run: |
+          names=$(gh release view "$TAG" --json assets --jq '.assets[].name' | sort)
+          echo "$names"
+          for want in \
+            "SoccerManager-$VERSION-windows-x64-setup.exe" \
+            "SoccerManager-$VERSION-windows-x64-setup.exe.sha256" \
+            "SoccerManager-$VERSION-linux-x86_64.tar.gz" \
+            "SoccerManager-$VERSION-linux-x86_64.tar.gz.sha256"; do
+            printf '%s\n' "$names" | grep -qx "$want" || { echo "::error::missing asset $want"; exit 1; }
+          done
+          mkdir verify && cd verify
+          gh release download "$TAG"
+          sha256sum -c ./*.sha256
+          tar -xzf "SoccerManager-$VERSION-linux-x86_64.tar.gz"
+          printed=$("./SoccerManager-$VERSION-linux-x86_64/engine-cli" --version | awk '{ print $2 }')
+          if [ "$printed" != "$VERSION" ]; then
+            echo "::error::engine-cli --version prints $printed, expected $VERSION"
+            exit 1
+          fi
+          echo "Draft $TAG verified. Next: run the Windows Sandbox check on the draft setup file, then publish."
+
+  attest:
+    # Build provenance needs a public repository or GitHub Enterprise Cloud. Inert until
+    # the repository variable SDLC_GATE_PROVENANCE is 'true'.
+    needs: [draft-release]
+    if: ${{ vars.SDLC_GATE_PROVENANCE == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows
+          path: assets
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux
+          path: assets
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            assets/SoccerManager-*-windows-x64-setup.exe
+            assets/SoccerManager-*-linux-x86_64.tar.gz

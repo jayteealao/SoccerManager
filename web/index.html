@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=1280" />
+    <title>Touchline — match</title>
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="fonts/fonts.css" />
+    <link rel="stylesheet" href="layout.css" />
+    <link rel="stylesheet" href="components/match-control.css" />
+    <link rel="stylesheet" href="components/panels.css" />
+    <link rel="stylesheet" href="components/chip.css" />
+    <link rel="stylesheet" href="components/editor.css" />
+    <link rel="stylesheet" href="components/surfaces.css" />
+  </head>
+  <body>
+    <div class="page">
+      <!-- The header band: the mark, both clubs around the score bug, the clock, and the
+           speed. The score is written in the frame the pitch draws the goal, never earlier. -->
+      <header class="header">
+        <canvas class="header__mark" id="mark" width="28" height="28" role="img"
+                aria-label="Touchline"></canvas>
+        <h1 class="header__title">Touchline</h1>
+        <div class="scoreboard" id="scoreboard">
+          <span class="scoreboard__name scoreboard__name--home" id="team-home">Waiting for the engine</span>
+          <canvas class="scoreboard__crest" id="crest-home" width="28" height="28" role="img"
+                  aria-label="Home crest"></canvas>
+          <span class="score-bug" id="score-bug" data-pulse="off" aria-label="Score 0 – 0">
+            <span id="score-home">0</span><span aria-hidden="true">–</span><span id="score-away">0</span>
+          </span>
+          <canvas class="scoreboard__crest" id="crest-away" width="28" height="28" role="img"
+                  aria-label="Away crest"></canvas>
+          <span class="scoreboard__name" id="team-away"></span>
+        </div>
+        <span class="header__clock tl-num" id="clock" aria-label="Match clock">00:00</span>
+        <span class="header__speed tl-num" id="header-speed" aria-label="Playback speed">1x</span>
+        <span class="header__teams tl-num" id="engine-version"></span>
+      </header>
+
+      <div class="body">
+        <section class="panel" aria-labelledby="left-label">
+          <h2 class="panel__label" id="left-label">Lineups</h2>
+          <!-- Before kick-off: the formation, the bench, the lineup's reason, and kick-off.
+               The formation slots sit on the pitch tile and the squad under the controls. -->
+          <div class="editor" id="lineup-editor" hidden></div>
+          <div class="lineups" id="lineups"></div>
+        </section>
+
+        <div class="stage">
+          <section class="panel pitch-panel">
+            <canvas
+              class="pitch"
+              id="pitch"
+              width="616"
+              height="411"
+              role="img"
+              aria-label="The pitch, with twenty-two player markers and the ball. The clock, the speed and any notice are read out in text beside it."
+            ></canvas>
+            <!-- A content area never shows a spinner. The skeleton says what is coming. -->
+            <!-- The goal banner is the one overlay on the pitch besides the markers. The feed
+                 announces the goal to a screen reader, so the banner itself stays quiet. -->
+            <div class="goal-banner" id="goal-banner" data-theme="pitchside" data-shown="false"
+                 aria-hidden="true">
+              <span id="goal-banner-text"></span>
+            </div>
+            <div class="board" id="board" role="group" aria-label="Formation slots" hidden></div>
+            <div class="skeleton" id="skeleton">
+              <strong>Getting the match ready</strong>
+              <span>The pitch draws as soon as play starts.</span>
+              <ol class="steps" id="steps" aria-label="Loading steps">
+                <li data-step="engine" data-state="active"><span class="steps__word">In progress</span><span>Starting the engine</span></li>
+                <li data-step="connect" data-state="waiting"><span class="steps__word">Waiting</span><span>Connecting to the match</span></li>
+                <li data-step="kickoff" data-state="waiting"><span class="steps__word">Waiting</span><span>Waiting for kick-off</span></li>
+              </ol>
+            </div>
+            <!-- The first-run and error panel. It names the failure in words and offers only
+                 what can still be done. -->
+            <div class="surface" id="surface" role="alert" data-kind="" hidden>
+              <p class="surface__word" id="surface-word"></p>
+              <h2 class="surface__title" id="surface-title"></h2>
+              <p class="surface__body" id="surface-body"></p>
+              <code class="surface__path" id="surface-path" hidden></code>
+              <p class="surface__hint" id="surface-hint" hidden></p>
+              <div class="surface__actions">
+                <button class="match-control" id="surface-restart" type="button" hidden>Restart</button>
+                <button class="match-control match-control--quiet" id="surface-abandon" type="button" hidden>Abandon</button>
+                <button class="match-control" id="surface-save" type="button" hidden>Save replay</button>
+                <button class="match-control match-control--quiet" id="surface-open" type="button" hidden>Open a replay</button>
+              </div>
+            </div>
+          </section>
+
+          <div class="controls" role="group" aria-label="Playback">
+            <button class="match-control match-control--sm" id="play" data-playing="true">
+              Pause
+            </button>
+            <button class="match-control match-control--sm match-control--quiet" id="skip">
+              Next stop
+            </button>
+            <button class="match-control match-control--sm" id="speed-1" aria-pressed="true">
+              1x
+            </button>
+            <button class="match-control match-control--sm" id="speed-2" aria-pressed="false">
+              2x
+            </button>
+            <button class="match-control match-control--sm" id="speed-4" aria-pressed="false">
+              4x
+            </button>
+            <button class="match-control match-control--sm" id="speed-8" aria-pressed="false">
+              8x
+            </button>
+            <span class="controls__speed tl-num" id="speed-effective">1x</span>
+            <input
+              class="controls__scrub"
+              id="scrub"
+              type="range"
+              min="0"
+              max="270000"
+              value="0"
+              step="1"
+              aria-label="Rewind to a tick"
+            />
+            <span class="controls__gauge tl-num" id="gauge">0 fps · 0 Hz · 0 MB</span>
+          </div>
+
+          <!-- One notice, two kinds. The state word is written with the text, never left
+               standing, so a dead stream is never labelled "Lag". -->
+          <div
+            class="notice"
+            id="notice"
+            data-shown="false"
+            data-kind="lag"
+            role="status"
+            aria-hidden="true"
+          >
+            <span class="notice__word" id="notice-word"></span>
+            <span id="notice-text"></span>
+          </div>
+
+          <section class="panel stats-panel" aria-labelledby="stats-label">
+            <h2 class="panel__label" id="stats-label">Statistics</h2>
+            <div class="stats__tables" id="stats"></div>
+            <div class="squad" id="squad" hidden></div>
+          </section>
+        </div>
+
+        <div class="side-column">
+          <section class="panel feed-panel" aria-labelledby="right-label">
+            <h2 class="panel__label" id="right-label">Match feed</h2>
+            <div class="feed__body">
+              <p class="feed__empty" id="feed-empty">No events yet. The feed fills as the match plays.</p>
+              <ol class="feed__list" id="feed" tabindex="0" aria-label="Match events, oldest first"></ol>
+            </div>
+          </section>
+
+          <!-- Open at any time. A change made during play is queued and applies at the next
+               stoppage that admits it; its chip says where it stands. -->
+          <section class="panel tactics-panel" aria-labelledby="tactics-label">
+            <h2 class="panel__label" id="tactics-label">Tactics</h2>
+            <ul class="chips" id="chips" aria-label="Pending changes" aria-live="polite"></ul>
+            <div class="tactics" id="tactics"></div>
+            <div class="picker" id="picker"></div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- The canvas is a picture to a screen reader, so the clock, the speed and the lag
+         notice are mirrored here as text. -->
+    <p class="visually-hidden" id="live" aria-live="polite"></p>
+    <!-- Goals and cards only, so a screen reader is not flooded at eight times speed. -->
+    <p class="visually-hidden" id="feed-live" aria-live="polite"></p>
+
+    <!-- The half-time and full-time report. Counted from the same events the feed shows. -->
+    <dialog class="report" id="report" aria-labelledby="report-title">
+      <h2 class="report__title" id="report-title"></h2>
+      <p class="report__score tl-num" id="report-score"></p>
+      <table class="report__table" id="report-table"></table>
+      <h3 class="report__label">Goals and cards</h3>
+      <ol class="report__moments" id="report-moments"></ol>
+      <div class="report__actions" id="report-actions">
+        <button class="match-control" id="report-continue" type="button" data-for="half-time">Continue</button>
+        <button class="match-control" id="report-save" type="button" data-for="full-time">Save replay</button>
+        <button class="match-control match-control--quiet" id="report-open" type="button" data-for="full-time">Open a replay</button>
+        <button class="match-control match-control--quiet" id="report-close" type="button" data-for="full-time">Close</button>
+      </div>
+    </dialog>
+    <input id="replay-input" type="file" accept=".smfx" hidden />
+
+    <script type="module" src="main.mjs"></script>
+  </body>
+</html>

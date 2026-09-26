@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "sample_size": 1000,
+  "goals_per_match": { "lo": 2.4, "hi": 3.2 },
+  "shots_per_team": { "lo": 8.0, "hi": 16.0 },
+  "possession_pct": { "lo": 35.0, "hi": 65.0 },
+  "stronger_team": { "attribute_boost": 1.15, "min_win_rate": 0.5 },
+  "wall_minutes_per_sample": 30.0,
+  "ten_plus_goals_share": { "lo": 0.0, "hi": 0.005 },
+  "sending_off_share": { "lo": 0.08, "hi": 0.22 },
+  "yellow_cards_per_team": { "lo": 1.2, "hi": 2.6 },
+  "shots_on_target_share": { "lo": 0.3, "hi": 0.42 },
+  "goals_per_xg": { "lo": 0.85, "hi": 1.15 },
+  "passes_per_team": { "lo": 350.0, "hi": 550.0 },
+  "pass_accuracy_pct": { "lo": 75.0, "hi": 88.0 },
+  "corners_per_team": { "lo": 3.5, "hi": 6.5 },
+  "throw_ins_per_match": { "lo": 35.0, "hi": 55.0 },
+  "goal_kicks_per_match": { "lo": 12.0, "hi": 22.0 },
+  "goalless_share": { "lo": 0.04, "hi": 0.12 }
+}

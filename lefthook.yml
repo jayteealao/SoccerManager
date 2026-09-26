@@ -1,0 +1,14 @@
+# Local git hooks. Install once per checkout: lefthook install
+# Heavy runs (tests, clippy) are not hooked: they run in CI or on the build server.
+pre-commit:
+  commands:
+    fmt:
+      glob: "*.rs"
+      run: cargo fmt --all --check
+    gitleaks:
+      run: gitleaks protect --staged --redact
+
+commit-msg:
+  commands:
+    committed:
+      run: committed --commit-file {1}

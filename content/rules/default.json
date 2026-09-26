@@ -1,0 +1,43 @@
+{
+  "schema_version": 4,
+  "halves": 2,
+  "half_minutes": 45,
+  "substitutions": { "limit": 5, "windows": 3, "windows_exempt": ["half_time"] },
+  "stoppages": [
+    { "kind": "kick_off", "admits_tactics": true, "admits_substitution": true },
+    { "kind": "throw_in", "admits_tactics": true, "admits_substitution": true },
+    { "kind": "corner", "admits_tactics": true, "admits_substitution": true },
+    { "kind": "goal_kick", "admits_tactics": true, "admits_substitution": true },
+    { "kind": "free_kick", "admits_tactics": true, "admits_substitution": true },
+    { "kind": "penalty", "admits_tactics": false, "admits_substitution": false },
+    { "kind": "goal", "admits_tactics": true, "admits_substitution": true },
+    { "kind": "half_time", "admits_tactics": true, "admits_substitution": true },
+    { "kind": "injury", "admits_tactics": true, "admits_substitution": true }
+  ],
+  "added_time": {
+    "per_kind": {
+      "kick_off": 0,
+      "throw_in": 1,
+      "corner": 3,
+      "goal_kick": 3,
+      "free_kick": 4,
+      "penalty": 30,
+      "goal": 40,
+      "half_time": 0,
+      "injury": 60
+    },
+    "card_s": 15,
+    "variance_s": 30,
+    "min_s": 60,
+    "max_s": 900
+  },
+  "min_players": 7,
+  "extra_time": {
+    "periods": 2,
+    "period_minutes": 15,
+    "added_max_s": 300,
+    "extra_substitutions": 1,
+    "extra_windows": 1
+  },
+  "shootout": { "kicks": 5, "allowance_rounds": 10 }
+}

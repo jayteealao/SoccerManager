@@ -1,0 +1,301 @@
+/* The 1280 by 800 screen.
+ *
+ * Fixed tracks, no breakpoints and no fluid columns: the target is one desktop size, with
+ * no mobile and no tablet layout. The header, the lineups on the left, the statistics under
+ * the controls, and the match feed on the right are styled in components/panels.css; this
+ * file holds the frame they sit in, so the pitch is measured in its shipping position and a
+ * frame-rate reading describes the real screen.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--tl-bg);
+  color: var(--tl-fg);
+  /* The one place the text face is named. The three font tokens set the roles on top of
+     it, and `web/pitch.mjs` reads this family back for the shirt numbers, so no second
+     copy of the stack exists to drift from this one. */
+  font: 400 16px/1.45 "IBM Plex Sans", sans-serif;
+}
+
+.page {
+  display: grid;
+  grid-template-rows: var(--tl-header-h) 1fr;
+  width: 1280px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--tl-gap);
+  padding: 0 var(--tl-padx-md);
+  background: var(--tl-brand);
+  color: var(--tl-on-brand);
+  border-bottom: 1px solid var(--tl-line);
+}
+
+.header__mark {
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+
+.header__title {
+  font: var(--tl-font-display);
+  font-size: 20px;
+  letter-spacing: 0.01em;
+  margin: 0;
+}
+
+/* No opacity on a numeric row. Paper on brand measures 4.61:1; compositing it at 92
+ * percent drops it to 4.13:1, under the 4.5:1 floor the brief names as its top risk. */
+.header__teams {
+  font: var(--tl-font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.body {
+  display: grid;
+  grid-template-columns: var(--tl-col-left) var(--tl-col-mid) var(--tl-col-right);
+  gap: var(--tl-gap);
+  padding: var(--tl-gap);
+  align-items: start;
+}
+
+.panel {
+  background: var(--tl-panel);
+  border-radius: var(--tl-radius-xl);
+  box-shadow: var(--tl-shadow-1);
+  padding: var(--tl-gap);
+}
+
+.panel__label {
+  margin: 0;
+  font: var(--tl-font-md);
+  color: var(--tl-fg-muted);
+}
+
+/* Every changing number on the page. The token alone is not enough: the `font:`
+ * shorthand resets `font-variant-numeric`, so the two always travel together. A number
+ * that changes width as it changes value makes the whole row twitch. */
+.tl-num {
+  font: var(--tl-font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A region a later version fills (the tactics panel). It is a labelled empty panel, not a blank space, so the
+ * screen reads as unfinished rather than broken. */
+.region--empty {
+  min-height: 120px;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+}
+
+.region--empty .region__note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tl-fg-muted);
+}
+
+/* The middle column: pitch, then controls, then the statistics region. */
+.stage {
+  display: grid;
+  gap: var(--tl-gap);
+}
+
+/* The pitch tile IS the middle column: the grid track is 616 and the tile is 616, so the
+ * panel carries no padding of its own. Padding it would push the tile past its track and
+ * shove the right column off the screen. The concentric-radius rule therefore lands on the
+ * control strip instead, where the buttons sit inside 6 px of padding. */
+.pitch-panel {
+  position: relative;
+  padding: 0;
+  border-radius: var(--tl-radius-lg);
+  overflow: hidden;
+  /* The hairline is an outset ring rather than a border, so the tile stays exactly 616 by
+   * 411 and the rendered position of a marker is the simulated position. */
+  box-shadow:
+    var(--tl-shadow-1),
+    0 0 0 1px var(--tl-line);
+}
+
+.pitch {
+  display: block;
+  width: var(--tl-col-mid);
+  height: var(--tl-pitch-h);
+  border: 0;
+  background: var(--tl-pitch);
+}
+
+/* The strip is exactly the width of the pitch above it. Every control has to fit inside
+ * that, so the gaps and the button padding are tighter here than the token defaults. */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: var(--tl-col-mid);
+  height: var(--tl-controls-h);
+  padding: 0 6px;
+  border-radius: var(--tl-radius-md);
+  background: var(--tl-panel);
+  box-shadow: var(--tl-shadow-1);
+}
+
+.controls .match-control {
+  padding: 0 8px;
+  flex: none;
+}
+
+.controls__speed {
+  font: var(--tl-font-num);
+  font-variant-numeric: tabular-nums;
+  min-width: 26px;
+  text-align: center;
+  color: var(--tl-fg-muted);
+  flex: none;
+}
+
+.controls__scrub {
+  flex: 1;
+  accent-color: var(--tl-brand);
+  min-width: 0;
+}
+
+.controls__scrub:hover:not(:disabled) {
+  accent-color: var(--tl-brand-hover);
+  cursor: pointer;
+}
+
+.controls__scrub:active:not(:disabled) {
+  accent-color: var(--tl-brand-pressed);
+}
+
+.controls__scrub:disabled {
+  accent-color: var(--tl-line);
+  cursor: not-allowed;
+}
+
+.controls__scrub:focus-visible {
+  outline: 2px solid var(--tl-brand);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--tl-ring);
+}
+
+.controls__gauge {
+  font: var(--tl-font-num);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--tl-fg-muted);
+  white-space: nowrap;
+  flex: none;
+}
+
+/* The notice. It always carries a state word, so its colour never has to be read.
+ *
+ * A full hairline and a background tint, never a side accent stripe: a stripe is a
+ * decoration that says nothing, and the contract bans it outright. Its slot stays
+ * reserved whether or not it is shown, so a notice appearing does not shove the
+ * statistics region down the screen while a manager is reading it. */
+.notice {
+  display: flex;
+  align-items: center;
+  gap: var(--tl-gap);
+  padding: var(--tl-pady-md) var(--tl-padx-md);
+  border: 1px solid var(--tl-warning);
+  border-radius: var(--tl-radius-md);
+  background: color-mix(in oklch, var(--tl-warning) 8%, var(--tl-panel));
+  box-shadow: var(--tl-shadow-1);
+  font: var(--tl-font-md);
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 150ms ease-in,
+    transform 150ms ease-in;
+}
+
+.notice[data-shown="true"] {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 200ms var(--tl-ease),
+    transform 200ms var(--tl-ease);
+}
+
+/* The error state of the page and of the canvas, stubbed here and completed in a later
+ * version. It is a different colour AND a different word. The close after full time is
+ * neither lag nor a fault, so it has its own quiet kind and its own word. */
+.notice[data-kind="end"] {
+  border-color: var(--tl-fg-muted);
+  background: var(--tl-panel);
+}
+
+.notice[data-kind="end"] .notice__word {
+  color: var(--tl-fg);
+}
+
+.notice[data-kind="error"] {
+  border-color: var(--tl-danger);
+  background: color-mix(in oklch, var(--tl-danger) 8%, var(--tl-panel));
+}
+
+.notice__word {
+  font-weight: 600;
+  color: var(--tl-warning);
+}
+
+.notice[data-kind="error"] .notice__word {
+  color: var(--tl-danger);
+}
+
+/* The skeleton pitch, shown until the first tick arrives. A content area never shows a
+ * spinner: a spinner says "wait" and a skeleton says what is coming. */
+.skeleton {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--tl-radius-lg);
+  background: var(--tl-skeleton);
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  font: var(--tl-font-md);
+  color: var(--tl-fg-muted);
+  transition: opacity 250ms var(--tl-ease);
+  text-align: center;
+  padding: 0 var(--tl-padx-md);
+}
+
+/* The cross-fade the motion table names. `hidden` alone would snap, because `display`
+ * is not animatable, so the opacity runs first and the element leaves the flow after. */
+.skeleton[data-leaving="true"] {
+  opacity: 0;
+}
+
+.skeleton[hidden] {
+  display: none;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice,
+  .notice[data-shown="true"],
+  .skeleton {
+    transition-duration: 0.01ms;
+  }
+}

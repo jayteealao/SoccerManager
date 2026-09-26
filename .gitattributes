@@ -1,0 +1,5 @@
+# Check out every text file with LF endings on every system; tests split Markdown on "\n## ".
+* text=auto eol=lf
+
+# The Unix scripts run under sh, which reads a carriage return as part of a command.
+packaging/unix/* text eol=lf

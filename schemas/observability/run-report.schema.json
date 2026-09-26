@@ -1,0 +1,651 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://touchline.local/schemas/observability/run-report.schema.json",
+  "title": "run-report",
+  "description": "One record per benchmark or calibration run. A calibration run writes it as runs/<run.id>/report.json and prints it. Additive extras are allowed.",
+  "type": "object",
+  "required": [
+    "record.kind",
+    "schema.version",
+    "owner.id",
+    "service",
+    "version",
+    "build.hash",
+    "env",
+    "operation",
+    "run.id",
+    "seed",
+    "content.hash",
+    "outcome",
+    "machine.hash"
+  ],
+  "properties": {
+    "record.kind": {
+      "const": "run-report"
+    },
+    "schema.version": {
+      "const": "1"
+    },
+    "owner.id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "service": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "build.hash": {
+      "type": "string",
+      "minLength": 1
+    },
+    "env": {
+      "type": "string",
+      "minLength": 1
+    },
+    "operation": {
+      "enum": [
+        "benchmark",
+        "calibrate"
+      ]
+    },
+    "run.id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "content.hash": {
+      "type": "string"
+    },
+    "fixtures.hash": {
+      "description": "A calibration run: SHA-256 (12 hex characters) over the inputs that decide the fixtures: the attributes, rules and tactics content, the generator block after flag states, and the two default clubs. A baseline must share it.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{12}$"
+    },
+    "outcome": {
+      "description": "error marks a run or match that failed; it then carries the three error.* keys and need not carry statistics.",
+      "enum": [
+        "success",
+        "error"
+      ]
+    },
+    "error.type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "error.code": {
+      "description": "One code per engine error variant, finer than error.type.",
+      "type": "string",
+      "minLength": 1
+    },
+    "error.retriable": {
+      "description": "true when the same run may succeed if tried again.",
+      "type": "boolean"
+    },
+    "machine.hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{12}$"
+    },
+    "machine.cpu_model": {
+      "type": "string"
+    },
+    "bench.match_wall_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "bench.cpu_us_per_tick": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "bench.peak_mem_mb": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "bench.matches": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "error"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "required": [
+          "error.type",
+          "error.code",
+          "error.retriable"
+        ]
+      },
+      "else": {
+        "required": [
+          "bench.match_wall_ms",
+          "bench.cpu_us_per_tick",
+          "bench.peak_mem_mb"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "benchmark"
+          },
+          "outcome": {
+            "not": {
+              "const": "error"
+            }
+          }
+        },
+        "required": [
+          "operation"
+        ]
+      },
+      "then": {
+        "required": [
+          "bench.matches",
+          "bench.ticks_per_match",
+          "budget.pass"
+        ],
+        "properties": {
+          "budget.pass": {
+            "type": "boolean"
+          },
+          "script.pack": {
+            "description": "The script pack every timed match ran with: id@version+hash. Absent without a pack.",
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*@[^+]+[+][0-9a-f]{12}$"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "calibrate"
+          },
+          "outcome": {
+            "not": {
+              "const": "error"
+            }
+          }
+        },
+        "required": [
+          "operation"
+        ]
+      },
+      "then": {
+        "required": [
+          "calib.matches",
+          "calib.minutes",
+          "calib.jobs",
+          "calib.suites",
+          "calib.wall_ms",
+          "calib.bands",
+          "calib.pass",
+          "darkpath.change_never_applied",
+          "change.expired_at_full_time",
+          "darkpath.match_without_stats",
+          "validate.violations",
+          "events.files_written",
+          "events.files_kept",
+          "machine.cpu_model"
+        ],
+        "properties": {
+          "calib.matches": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "calib.minutes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "calib.jobs": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "calib.suites": {
+            "type": "object",
+            "minProperties": 1,
+            "propertyNames": {
+              "enum": [
+                "equal",
+                "strength",
+                "formations",
+                "red-card"
+              ]
+            },
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "matches",
+                "recorded",
+                "failures",
+                "goals_per_match_mean",
+                "shots_per_team_mean",
+                "possession_home_mean",
+                "possession_away_mean",
+                "ten_plus_goals_share",
+                "goalless_share",
+                "sending_off_share",
+                "yellow_cards_per_team_mean",
+                "shots_on_target_share",
+                "goals_per_xg",
+                "corners_per_team_mean",
+                "throw_ins_per_match_mean",
+                "goal_kicks_per_match_mean"
+              ],
+              "properties": {
+                "ten_plus_goals_share": { "type": "number", "minimum": 0, "maximum": 1 },
+                "goalless_share": { "type": "number", "minimum": 0, "maximum": 1 },
+                "sending_off_share": { "type": "number", "minimum": 0, "maximum": 1 },
+                "yellow_cards_per_team_mean": { "type": "number", "minimum": 0 },
+                "shots_on_target_share": { "type": "number", "minimum": 0, "maximum": 1 },
+                "goals_per_xg": { "type": "number", "minimum": 0 },
+                "corners_per_team_mean": { "type": "number", "minimum": 0 },
+                "throw_ins_per_match_mean": { "type": "number", "minimum": 0 },
+                "goal_kicks_per_match_mean": { "type": "number", "minimum": 0 },
+                "ball_in_play_min_per_90_mean": { "type": "number", "minimum": 0 }
+              }
+            }
+          },
+          "calib.wall_ms": {
+            "type": "object",
+            "required": [
+              "total"
+            ],
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "calib.bands": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "band",
+                "suite",
+                "value",
+                "lo",
+                "hi",
+                "pass"
+              ],
+              "properties": {
+                "band": {
+                  "type": "string"
+                },
+                "suite": {
+                  "enum": [
+                    "equal",
+                    "strength",
+                    "formations",
+                    "red-card"
+                  ]
+                },
+                "pairing": {
+                  "description": "The formation pairing of a formations-suite check, for example 4-3-3 v 4-4-2, or the arm of a red-card check (keeper, centre-back, striker).",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "value": {
+                  "type": "number"
+                },
+                "lo": {
+                  "type": "number"
+                },
+                "hi": {
+                  "type": "number"
+                },
+                "pass": {
+                  "type": "boolean"
+                },
+                "se": {
+                  "description": "The sampling error of value: the standard error of a mean, share, or ratio over the matches judged; 0 for wall_ms.",
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "calib.formations": {
+            "description": "The figures of every formation pairing of the formations suite. Absent when that suite did not run.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "pairing",
+                "matches",
+                "goals_per_match_mean",
+                "goals_for_mean",
+                "ten_plus_goals_share",
+                "goalless_share"
+              ],
+              "properties": {
+                "pairing": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "matches": { "type": "integer", "minimum": 0 },
+                "goals_per_match_mean": { "type": "number", "minimum": 0 },
+                "goals_for_mean": {
+                  "type": "array",
+                  "items": { "type": "number", "minimum": 0 },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "ten_plus_goals_share": { "type": "number", "minimum": 0, "maximum": 1 },
+                "goalless_share": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          },
+          "calib.pass": {
+            "type": "boolean"
+          },
+          "calib.selection": {
+            "description": "What the run selected: the suites played, the formation pairings (empty when every pairing played), and the bands judged (empty when every band was judged).",
+            "type": "object",
+            "required": ["suites", "pairings", "bands"],
+            "properties": {
+              "suites": {
+                "type": "array",
+                "items": { "enum": ["equal", "strength", "formations", "red-card"] }
+              },
+              "pairings": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+              "bands": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+            }
+          },
+          "calib.red_card": {
+            "description": "The controlled sending-off experiment: mean goals per match of the control and of each arm's full (home) and reduced (away) side, the limit (1.6 times the control's home mean), and the criterion verdict. Absent when the red-card suite did not run.",
+            "type": "object",
+            "required": ["matches", "control", "control_matches", "arms", "limit", "pass"],
+            "properties": {
+              "matches": { "type": "integer", "minimum": 1 },
+              "control": {
+                "type": "array",
+                "items": { "type": "number", "minimum": 0 },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "control_matches": { "type": "integer", "minimum": 0 },
+              "arms": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["arm", "player", "matches", "full", "reduced", "pass"],
+                  "properties": {
+                    "arm": { "enum": ["keeper", "centre-back", "striker"] },
+                    "player": { "type": "integer", "minimum": 0 },
+                    "matches": { "type": "integer", "minimum": 0 },
+                    "full": { "type": "number", "minimum": 0 },
+                    "reduced": { "type": "number", "minimum": 0 },
+                    "pass": { "type": "boolean" }
+                  }
+                }
+              },
+              "limit": { "type": "number", "minimum": 0 },
+              "pass": { "type": "boolean" }
+            }
+          },
+          "calib.baseline": {
+            "description": "The earlier report the run was compared with (--baseline).",
+            "type": "object",
+            "required": ["path", "run.id", "seed", "content.hash"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "run.id": { "type": "string" },
+              "seed": { "type": "integer", "minimum": 0 },
+              "content.hash": { "type": "string" }
+            }
+          },
+          "calib.diff": {
+            "description": "One row per band, pairing, and arm both runs judged: the baseline and new values, the change, its sampling error, and whether the change is inside two errors (noise).",
+            "type": "object",
+            "required": ["content_hashes", "content_changed", "rows", "noise", "changes"],
+            "properties": {
+              "content_hashes": {
+                "type": "array",
+                "items": { "type": "string" },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "content_changed": { "type": "boolean" },
+              "noise": { "type": "integer", "minimum": 0 },
+              "changes": { "type": "integer", "minimum": 0 },
+              "rows": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["suite", "band", "baseline", "new", "change", "error", "noise", "pass"],
+                  "properties": {
+                    "suite": { "enum": ["equal", "strength", "formations", "red-card"] },
+                    "band": { "type": "string" },
+                    "pairing": { "type": "string", "minLength": 1 },
+                    "baseline": { "type": "number" },
+                    "new": { "type": "number" },
+                    "change": { "type": "number" },
+                    "error": { "type": "number", "minimum": 0 },
+                    "noise": { "type": "boolean" },
+                    "pass": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          },
+          "darkpath.change_never_applied": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "change.expired_at_full_time": {
+            "description": "Changes still waiting at full time because no stoppage that admits their kind opened after they were queued. No zero rule.",
+            "type": "integer",
+            "minimum": 0
+          },
+          "darkpath.match_without_stats": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "validate.violations": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "events.files_written": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "events.files_kept": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "calib.flags": {
+            "description": "Every feature flag the tuning file declares, with its state for this run.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "owner",
+                "state",
+                "source"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "owner": {
+                  "type": "string"
+                },
+                "state": {
+                  "enum": [
+                    "on",
+                    "off",
+                    "paired"
+                  ]
+                },
+                "source": {
+                  "enum": [
+                    "file",
+                    "cli"
+                  ]
+                }
+              }
+            }
+          },
+          "calib.pair": {
+            "description": "A paired run: the flag compared. The top-level figures describe the off arm.",
+            "type": "object",
+            "required": [
+              "flag",
+              "owner",
+              "hypothesis",
+              "removal_condition",
+              "pinned"
+            ],
+            "properties": {
+              "flag": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "string",
+                "minLength": 1
+              },
+              "hypothesis": {
+                "type": "string",
+                "minLength": 1
+              },
+              "removal_condition": {
+                "type": "string",
+                "minLength": 1
+              },
+              "pinned": {
+                "type": "object",
+                "additionalProperties": {
+                  "enum": [
+                    "on",
+                    "off"
+                  ]
+                }
+              }
+            }
+          },
+          "calib.arms": {
+            "type": "object",
+            "required": [
+              "off",
+              "on"
+            ],
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "content.hash",
+                "tuning.flags_on",
+                "calib.suites",
+                "calib.wall_ms",
+                "calib.bands",
+                "calib.pass",
+                "darkpath.change_never_applied",
+                "darkpath.match_without_stats",
+                "validate.violations",
+                "bench.match_wall_ms"
+              ]
+            }
+          },
+          "calib.compare": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "suite",
+                "band",
+                "lo",
+                "hi",
+                "off",
+                "on",
+                "delta",
+                "off_pass",
+                "on_pass"
+              ],
+              "properties": {
+                "suite": {
+                  "enum": [
+                    "equal",
+                    "strength",
+                    "formations",
+                    "red-card"
+                  ]
+                },
+                "band": {
+                  "type": "string"
+                },
+                "pairing": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "lo": {
+                  "type": "number"
+                },
+                "hi": {
+                  "type": "number"
+                },
+                "off": {
+                  "type": "number"
+                },
+                "on": {
+                  "type": "number"
+                },
+                "delta": {
+                  "type": "number"
+                },
+                "off_pass": {
+                  "type": "boolean"
+                },
+                "on_pass": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "calib.verdict": {
+            "enum": [
+              "on-rejected",
+              "on-better",
+              "off-better",
+              "no-difference"
+            ]
+          }
+        },
+        "dependentRequired": {
+          "calib.pair": [
+            "calib.arms",
+            "calib.compare",
+            "calib.verdict"
+          ]
+        }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Planning notes: the word key before plain identifiers, no secrets"
+paths = ['''^\.ai/''']

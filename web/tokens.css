@@ -1,0 +1,90 @@
+/* The single source of every value on the screen.
+ *
+ * Every colour is OKLCH at hue 250, except the turf and its markings at hue 145. There is
+ * no pure black and no pure white anywhere, including in a kit colour taken from a team
+ * file: `colour.mjs` pulls every kit colour into the same safe band before it is drawn.
+ *
+ * DESIGN.md carries the same rows. `web/tests/colour.test.mjs` reads this file and fails
+ * when the four values the canvas needs drift from the module that draws with them.
+ */
+
+:root {
+  /* Surfaces and ink */
+  --tl-bg: oklch(0.985 0.006 250);
+  --tl-panel: oklch(0.995 0.003 250);
+  --tl-fg: oklch(0.24 0.02 250);
+  --tl-fg-muted: oklch(0.48 0.02 250);
+  --tl-line: oklch(0.90 0.008 250);
+
+  /* Brand: the header band, the controls, and the focus ring. Never on the pitch. */
+  --tl-brand: oklch(0.55 0.17 250);
+  --tl-brand-hover: oklch(0.49 0.17 250);
+  --tl-brand-pressed: oklch(0.43 0.17 250);
+  --tl-on-brand: oklch(0.985 0.006 250);
+  --tl-ring: oklch(0.55 0.17 250 / 0.35);
+
+  /* The pitch is the most saturated object on the screen. */
+  --tl-pitch: oklch(0.62 0.13 145);
+  --tl-pitch-line: oklch(0.97 0.01 145);
+  --tl-pitchside-bg: oklch(0.28 0.03 250);
+
+  /* State. Every one of these carries a state word beside it, never colour alone. */
+  --tl-success: oklch(0.52 0.14 150);
+  --tl-warning: oklch(0.55 0.13 75);
+  --tl-danger: oklch(0.50 0.19 25);
+  --tl-card-yellow: oklch(0.85 0.16 95);
+  --tl-skeleton: oklch(0.93 0.01 250);
+
+  /* Radii, concentric: a tile inside a panel with 8 px of padding gains 8. */
+  --tl-radius-sm: 4px;
+  --tl-radius-md: 6px;
+  --tl-radius-lg: 8px;
+  --tl-radius-xl: 10px;
+
+  --tl-padx-md: 14px;
+  --tl-pady-md: 8px;
+  --tl-gap: 8px;
+
+  /* Type. Both faces ship from web/fonts/; no font service is ever contacted.
+   *
+   * CAUTION: the `font:` shorthand resets `font-variant-numeric` to normal, so
+   * `font: var(--tl-font-num)` on its own gives proportional figures and a changing
+   * number makes the whole row twitch. Use the `.tl-num` class in layout.css, which
+   * applies the token and the variant together, rather than the token alone. */
+  --tl-font-display: 700 30px/1.05 "Barlow Condensed", sans-serif;
+  --tl-font-md: 600 14px/1.2 "IBM Plex Sans", sans-serif;
+  --tl-font-num: 500 14px/1.2 "IBM Plex Sans", sans-serif;
+
+  --tl-ease: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* The goal moment. The banner enters, holds, and leaves inside 1.5 seconds of wall
+   * time; `web/goal-moment.mjs` times the same three values and a test holds them equal.
+   * The reduced-motion block in components/panels.css sets every one to 0.01ms. */
+  --tl-goal-in: 250ms;
+  --tl-goal-hold: 1050ms;
+  --tl-goal-out: 200ms;
+  --tl-pulse: 600ms;
+  --tl-shadow-1: 0 1px 2px oklch(0.24 0.02 250 / 0.12);
+
+  /* The 1280 by 800 screen, as fixed tracks. There are no breakpoints: the target is one
+   * desktop size and stack.platforms carries no mobile or tablet. */
+  --tl-header-h: 56px;
+  --tl-col-left: 336px;
+  --tl-col-mid: 616px;
+  --tl-col-right: 296px;
+  --tl-pitch-h: 411px;
+  --tl-controls-h: 40px;
+}
+
+/* The pitchside theme governs surfaces drawn OVER the turf — the score bug, the goal
+ * banner, an overlay control — where a light panel disappears into the pitch markings.
+ * It is not a dark theme for the page: DESIGN.md rules that out for the first release,
+ * and no page panel carries this attribute. It changes surfaces only, so every other
+ * token still holds. A later version is the first to use it. */
+[data-theme="pitchside"] {
+  --tl-bg: var(--tl-pitchside-bg);
+  --tl-panel: oklch(0.34 0.03 250);
+  --tl-fg: oklch(0.97 0.01 250);
+  --tl-fg-muted: oklch(0.78 0.02 250);
+  --tl-line: oklch(0.44 0.03 250);
+}

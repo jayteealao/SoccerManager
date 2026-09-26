@@ -1,0 +1,35 @@
+[package]
+name = "engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Headless football match engine: fixed-timestep simulation, tick stream, validator"
+build = "build.rs"
+
+[dependencies]
+glam = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+sha2 = { workspace = true }
+garde = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true }
+
+[features]
+# The test scene builder and scripted referee draws. Only this crate's own tests enable it,
+# so a release build never contains either.
+scenario = []
+
+[dev-dependencies]
+criterion = { workspace = true }
+engine = { path = ".", features = ["scenario"] }
+
+[[bench]]
+name = "tick_step"
+harness = false
