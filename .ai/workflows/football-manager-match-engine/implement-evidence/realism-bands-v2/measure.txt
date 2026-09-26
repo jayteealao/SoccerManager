@@ -1,6 +1,0 @@
-normal exit 2
-normal wall_ms {'equal': 75250, 'total': 75250} files_written 1000
-58M	/c/Users/jayte/AppData/Local/Temp/claude/C--Users-jayte-Documents-dev-SoccerManager/a7ca6102-5eb6-4026-b025-47fc91bca540/scratchpad/measure/run-normal/events
-noevents exit 2
-noevents wall_ms {'equal': 74917, 'total': 74917} files_written 0
-measure done

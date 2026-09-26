@@ -1,5 +1,0 @@
-   Compiling engine v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine)
-    Checking protocol v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\protocol)
-    Checking stream v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\stream)
-    Checking engine-cli v0.1.0 (C:\Users\jayte\Documents\dev\SoccerManager\crates\engine-cli)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.52s

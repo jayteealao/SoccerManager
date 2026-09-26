@@ -1,8 +1,0 @@
-2026-09-22T13:31:27.874850Z  INFO simulate{seed=42 minutes=90}: engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
-2026-09-22T13:31:27.875021Z  INFO simulate{seed=42 minutes=90}: engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3891 hash=0f5d068f7d43
-2026-09-22T13:31:27.875084Z  INFO simulate{seed=42 minutes=90}: engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=1 bytes=858 hash=6ebfdf131295
-2026-09-22T13:31:27.875289Z  INFO simulate{seed=42 minutes=90}: engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
-2026-09-22T13:31:27.875960Z  INFO simulate{seed=42 minutes=90}: engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a
-2026-09-22T13:31:27.876604Z  INFO simulate{seed=42 minutes=90}: engine::observe::identity: signal="identity.owner_created" path="owner.id"
-2026-09-22T13:31:27.876757Z  INFO simulate{seed=42 minutes=90}: engine::record: signal="tickfile.header" schema_version=3 seed=42 dt_ms=20.0 ticks_expected=270000 float_width=4 owner_id=95efc7cc9d847b1079ae03e1be796568 match_id=000000000000002a-1790083887876
-2026-09-22T13:31:28.278398Z  INFO simulate{seed=42 minutes=90}: engine::record: signal="tickfile.trailer" ticks_written=270000 bytes=51840080

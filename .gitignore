@@ -13,3 +13,16 @@ e2e/playwright-report/
 
 # Release builds: staged folders, setup files, archives, and smoke-test evidence.
 dist/
+
+# Workflow test evidence: hundreds of thousands of generated files and browser profiles.
+.ai/workflows/**/implement-evidence/
+.ai/workflows/**/verify-evidence/
+**/.profiles/
+
+# sdlc-workflow artifacts: local only. The project-level contracts stay tracked.
+.ai/*
+!.ai/ship-plan.md
+!.ai/sdlc-config.json
+!.ai/observability.md
+!.ai/release-announcement-template.md
+!.ai/pipeline-compliance.md

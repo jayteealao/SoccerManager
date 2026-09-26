@@ -1,3 +1,0 @@
-2026-09-22T12:54:35.874511Z  INFO stream::server: signal="socket.listening" port=50243 protocol_version=1 match_id=000000000000002a-1790081675823
-2026-09-22T12:54:35.921198Z  INFO stream::server: signal="socket.client" origin=http://localhost:5173 protocol_version=1 match_id=000000000000002a-1790081675823
-2026-09-22T12:54:50.921102Z  INFO stream::replay: signal="fixture.replayed" path=probe.smfx frames=6003 speed=8.0 hash=ce483d844c17

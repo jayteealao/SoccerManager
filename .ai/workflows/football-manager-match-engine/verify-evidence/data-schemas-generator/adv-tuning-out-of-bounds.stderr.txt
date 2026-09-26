@@ -1,3 +1,0 @@
-2026-09-22T09:55:17.277501Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
-2026-09-22T09:55:17.280689Z ERROR simulate{seed=1 minutes=1}: engine::data: signal="content.refused" kind="tuning" path="tuning.json" field=engine.keeper_catch_chance reason=greater than 1
-error: content refused: tuning tuning.json: engine.keeper_catch_chance: greater than 1

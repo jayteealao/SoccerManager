@@ -1,7 +1,0 @@
-2026-09-22T18:46:34.014927Z  INFO stream::server: signal="socket.listening" port=54765 protocol_version=1 match_id=0000000000000007-1790091490622
-54765
-2026-09-22T18:46:34.016261Z  INFO engine_cli::web: signal="web.serving" dir=web files=31 isolated=true port=54766
-http://127.0.0.1:54766/
-2026-09-22T18:46:34.084695Z  INFO stream::server: signal="socket.client" origin=http://127.0.0.1:54766 protocol_version=1 match_id=0000000000000007-1790091490622
-
-exit killed by driver

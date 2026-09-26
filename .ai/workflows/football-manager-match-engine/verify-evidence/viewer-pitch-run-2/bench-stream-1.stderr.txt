@@ -1,9 +1,0 @@
-2026-09-22T18:11:01.516619Z  INFO engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
-2026-09-22T18:11:01.516777Z  INFO engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3891 hash=0f5d068f7d43
-2026-09-22T18:11:01.516845Z  INFO engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=1 bytes=858 hash=6ebfdf131295
-2026-09-22T18:11:01.517050Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
-2026-09-22T18:11:01.517386Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a
-2026-09-22T18:11:02.293484Z  INFO stream::server: signal="socket.listening" port=59215 protocol_version=1 match_id=000000000000002a-1790100662292
-2026-09-22T18:11:02.294000Z  INFO stream::server: signal="socket.client" origin=http://localhost:5173 protocol_version=1 match_id=000000000000002a-1790100662292
-2026-09-22T18:11:02.483038Z  INFO stream::session: signal="socket.backpressure" tick=120839 bound=500 paused_ms=0 resumes=1
-2026-09-22T18:11:02.484933Z  INFO stream::session: signal="socket.backpressure" tick=121650 bound=500 paused_ms=0 resumes=2

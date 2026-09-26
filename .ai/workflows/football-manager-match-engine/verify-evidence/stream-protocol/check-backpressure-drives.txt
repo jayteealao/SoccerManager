@@ -1,5 +1,0 @@
-test a_slow_client_pauses_the_producer_and_loses_no_tick ... ok 
-test a_slow_client_pauses_the_producer_and_loses_no_tick ... ok 
-test a_slow_client_pauses_the_producer_and_loses_no_tick ... ok 
-test a_slow_client_pauses_the_producer_and_loses_no_tick ... ok 
-test a_slow_client_pauses_the_producer_and_loses_no_tick ... ok 

@@ -1,5 +1,0 @@
-2026-09-22T12:55:44.710612Z  INFO engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
-2026-09-22T12:55:44.710762Z  INFO engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3891 hash=0f5d068f7d43
-2026-09-22T12:55:44.710826Z  INFO engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=1 bytes=858 hash=6ebfdf131295
-2026-09-22T12:55:44.711064Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
-2026-09-22T12:55:44.711384Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a

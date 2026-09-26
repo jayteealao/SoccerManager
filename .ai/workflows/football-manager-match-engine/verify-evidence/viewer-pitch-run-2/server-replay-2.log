@@ -1,5 +1,0 @@
-2026-09-22T17:52:26.871253Z  INFO stream::server: signal="socket.listening" port=49541 protocol_version=1 match_id=0000000000000007-1790091490622
-49541
-2026-09-22T17:52:26.872413Z  INFO engine_cli::web: signal="web.serving" dir=web files=30 isolated=true port=49542
-http://127.0.0.1:49542/
-2026-09-22T17:52:41.605096Z  INFO stream::server: signal="socket.client" origin=http://127.0.0.1:49542 protocol_version=1 match_id=0000000000000007-1790091490622

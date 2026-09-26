@@ -1,0 +1,5 @@
+# One toolchain for this machine, the build server, and CI. Cargo.toml's rust-version (1.87)
+# stays the minimum the code supports.
+[toolchain]
+channel = "1.92.0"
+components = ["rustfmt", "clippy"]

@@ -1,4 +1,0 @@
-﻿msedge after launch --open: 0
-http UserChoice: MSEdgeHTM
-.html=htmlfile
-msedge after Start-Process url: 0

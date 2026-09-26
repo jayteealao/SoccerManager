@@ -1,8 +1,0 @@
-tick_step               time:   [1.4965 µs 1.5018 µs 1.5075 µs]
-                        change: [−1.2521% −0.5906% +0.0987%] (p = 0.09 > 0.05)
-                        No change in performance detected.
-
-steering_pass_22        time:   [872.09 ns 875.22 ns 878.79 ns]
-                        change: [−0.4928% +0.7551% +1.7827%] (p = 0.21 > 0.05)
-                        No change in performance detected.
-

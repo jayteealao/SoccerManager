@@ -1,5 +1,0 @@
-2026-09-22T09:55:16.832783Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
-2026-09-22T09:55:16.832931Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3703 hash=be104d740f46
-2026-09-22T09:55:16.832998Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=1 bytes=858 hash=6ebfdf131295
-2026-09-22T09:55:16.837318Z ERROR simulate{seed=1 minutes=1}: engine::data: signal="content.refused" kind="team" path="adv-attribute-zero.json" field=players reason=player p-club-00000001-00-05: attribute stamina is 0; allowed 1 to 100
-error: content refused: team adv-attribute-zero.json: players: player p-club-00000001-00-05: attribute stamina is 0; allowed 1 to 100

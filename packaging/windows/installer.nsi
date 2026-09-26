@@ -30,7 +30,12 @@ RequestExecutionLevel user
 InstallDir "$LOCALAPPDATA\Programs\SoccerManager"
 SetCompressor /SOLID lzma
 
-VIProductVersion "${VERSION}.0"
+; VIProductVersion takes four numbers only, so a prerelease version (0.2.0-rc.1) passes its
+; numeric part in NUMERIC_VERSION. ProductVersion keeps the full version.
+!ifndef NUMERIC_VERSION
+  !define NUMERIC_VERSION "${VERSION}"
+!endif
+VIProductVersion "${NUMERIC_VERSION}.0"
 VIAddVersionKey "ProductName" "${APP_NAME}"
 VIAddVersionKey "ProductVersion" "${VERSION}"
 VIAddVersionKey "FileVersion" "${VERSION}"

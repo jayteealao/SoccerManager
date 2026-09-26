@@ -55,7 +55,9 @@ if (-not $makensis) {
 $setupName = "SoccerManager-$version-windows-x64-setup.exe"
 $setup = Join-Path $dist $setupName
 $script = Join-Path $PSScriptRoot 'installer.nsi'
-& $makensis /V2 "/DVERSION=$version" "/DSTAGE=$stage" "/DOUTFILE=$setup" $script
+# The installer's numeric version field cannot hold a prerelease suffix such as -rc.1.
+$numeric = ($version -split '-')[0]
+& $makensis /V2 "/DVERSION=$version" "/DNUMERIC_VERSION=$numeric" "/DSTAGE=$stage" "/DOUTFILE=$setup" $script
 if ($LASTEXITCODE -ne 0) { throw "makensis failed with exit code $LASTEXITCODE" }
 
 $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()

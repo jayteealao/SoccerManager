@@ -1,0 +1,11 @@
+# Commit-message rules, checked by `committed` in the commit-msg hook (lefthook.yml) and on
+# every pull request. Conventional commits with a lowercase subject, as the history uses.
+style = "conventional"
+allowed_types = ["feat", "fix", "docs", "test", "chore", "refactor", "perf", "style", "build", "ci", "revert"]
+subject_length = 100
+line_length = 100
+subject_capitalized = false
+subject_not_punctuated = true
+imperative_subject = true
+no_fixup = true
+no_wip = true

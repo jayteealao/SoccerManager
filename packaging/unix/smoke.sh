@@ -42,7 +42,10 @@ fact() {
 }
 
 name=$(basename "$archive" .tar.gz)
-archive_version=$(echo "$name" | sed -n 's/^SoccerManager-\([^-]*\)-.*$/\1/p')
+# The name is SoccerManager-<version>-<os>-<arch>. A prerelease version holds a hyphen of its
+# own (0.2.0-rc.1), so remove the known prefix and the two platform fields instead.
+archive_version=${name#SoccerManager-}
+archive_version=${archive_version%-*-*}
 
 # (a) A fresh home, and the archive unpacked into it.
 home=$(mktemp -d)

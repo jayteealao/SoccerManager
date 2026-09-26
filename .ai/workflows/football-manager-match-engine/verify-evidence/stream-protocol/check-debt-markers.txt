@@ -1,8 +1,0 @@
-sdlc-debt: markers in the slice diff 333ed06...HEAD
-150:+- The restart flag on the tick record, which retires the `sdlc-debt:` marker in the validator.
-175:+- `crates/engine/src/validate.rs`: the jump rule reads the restart flag at line 74; the `sdlc-debt:` marker and its two-metre guess are gone.
-237:+- **The touchline and goal-line `sdlc-debt:` marker in `crates/engine/src/sim.rs`** is untouched; it names `match-rules`, not this slice.
-1990:-                // sdlc-debt: the record carries no restart flag, so a jump above RESTART_JUMP is
----
-markers in the tree today:
-crates/engine/src/sim.rs:272:                // sdlc-debt: touchlines and goal lines bounce the ball like walls until the

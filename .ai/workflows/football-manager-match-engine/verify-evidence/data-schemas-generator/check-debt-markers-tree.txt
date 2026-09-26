@@ -1,2 +1,0 @@
-crates/engine/src/sim.rs:221:                // sdlc-debt: touchlines and goal lines bounce the ball like walls until the
-crates/engine/src/validate.rs:77:                // sdlc-debt: the record carries no restart flag, so a jump above RESTART_JUMP is

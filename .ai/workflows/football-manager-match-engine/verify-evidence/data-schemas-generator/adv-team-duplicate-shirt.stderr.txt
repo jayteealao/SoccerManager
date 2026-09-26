@@ -1,5 +1,0 @@
-2026-09-22T09:55:16.606153Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
-2026-09-22T09:55:16.606311Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3703 hash=be104d740f46
-2026-09-22T09:55:16.606383Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=1 bytes=858 hash=6ebfdf131295
-2026-09-22T09:55:16.610304Z ERROR simulate{seed=1 minutes=1}: engine::data: signal="content.refused" kind="team" path="adv-duplicate-shirt.json" field=players reason=player p-club-00000001-00-02: shirt 1 is already worn
-error: content refused: team adv-duplicate-shirt.json: players: player p-club-00000001-00-02: shirt 1 is already worn

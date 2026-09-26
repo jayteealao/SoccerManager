@@ -1,1 +1,0 @@
-r3_w50d05h05 {"tackle_win_base": 0.5, "decision.lone_dribble": -0.5, "decision.lone_hold": 0.5} :: PAIRS 4-4-2v4-4-1-1:[0.872, 3.198] 4-4-2v3-4-3:[0.743, 2.951] fouls=9.8 shots=19.3 yc=1.29 so=0.219

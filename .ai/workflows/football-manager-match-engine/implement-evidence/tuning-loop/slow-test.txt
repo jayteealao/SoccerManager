@@ -1,6 +1,0 @@
-control: home 0.7750 away 2.2333
-keeper sent off: full side 2.0583, reduced side 5.8167, limit 1.2400
-centre-back sent off: full side 0.7083, reduced side 2.3917, limit 1.2400
-striker sent off: full side 0.9500, reduced side 3.8417, limit 1.2400
-thread 'a_sending_off_gives_no_advantage' (2476) panicked at crates\engine\tests\defending.rs:237:5:
-test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 48.26s

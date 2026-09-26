@@ -1,2 +1,0 @@
-concurrent outputs byte-identical
-stats equal (excluding ids/timing): True

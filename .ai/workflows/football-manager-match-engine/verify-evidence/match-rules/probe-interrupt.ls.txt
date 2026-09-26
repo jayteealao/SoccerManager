@@ -1,4 +1,0 @@
-total 4
-drwxr-xr-x 1 jayte 197609    0 Sep 22 22:27 ./
-drwxr-xr-x 1 jayte 197609    0 Sep 22 22:27 ../
--rw-r--r-- 1 jayte 197609 2346 Sep 22 22:27 snapshot.smsn

@@ -1,5 +1,0 @@
-match-stats: planned 19, present 19, missing [], extra ['goals']
-run-report: planned 20, present 20, missing [], extra ['owner.id']
-types: duration_ms int=True match_wall_ms int=True ticks_per_s float=True outcome='success'/'success' env='dev'
-machine.hash hex12=True build.hash='27d21f5-dirty' cpu_model_nonempty=True ratio=0.985 wall_ms=395 budget_pass=True
-match-stats: ticks.written=270000 validate.ran=True violations=0 possession.changes=773 idle=854 max_speed=27.07 goals=[0, 0]

@@ -1,5 +1,0 @@
-error: unexpected argument '--threads' found
-
-Usage: engine-cli.exe bench --seed <SEED>
-
-For more information, try '--help'.

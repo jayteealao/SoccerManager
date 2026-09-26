@@ -1,5 +1,0 @@
-2026-09-22T09:55:16.911426Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
-2026-09-22T09:55:16.911617Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3703 hash=be104d740f46
-2026-09-22T09:55:16.911692Z  INFO simulate{seed=1 minutes=1}: engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=1 bytes=858 hash=6ebfdf131295
-2026-09-22T09:55:16.915729Z ERROR simulate{seed=1 minutes=1}: engine::data: signal="content.refused" kind="team" path="adv-empty-name.json" field=players[5].name reason=length is lower than 2
-error: content refused: team adv-empty-name.json: players[5].name: length is lower than 2

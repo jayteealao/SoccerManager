@@ -1,9 +1,0 @@
-pair-a exe=a exit=2 wall_s=86.7 stats=1000
-equal-a exe=a exit=2 wall_s=85.8 stats=1000
-red-a exe=a exit=2 wall_s=41.9 stats=480
-pair-b exe=b exit=2 wall_s=86.1 stats=1000
-pair-c exe=c exit=2 wall_s=87.1 stats=1000
-pair-a2 exe=a exit=2 wall_s=89.2 stats=1000
-red-b exe=b exit=2 wall_s=41.6 stats=480
-red-c exe=c exit=2 wall_s=41.9 stats=480
-MEASURE_DONE

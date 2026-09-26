@@ -1,1 +1,0 @@
-error: invalid configuration: --matches must be at least 1

@@ -1,9 +1,0 @@
-2026-09-22T12:56:33.428911Z  INFO engine::data: signal="content.loaded" kind="attributes" path="attributes.json" schema_version=1 bytes=1884 hash=096020d4ab81
-2026-09-22T12:56:33.429087Z  INFO engine::data: signal="content.loaded" kind="tuning" path="tuning.json" schema_version=1 bytes=3891 hash=0f5d068f7d43
-2026-09-22T12:56:33.429151Z  INFO engine::data: signal="content.loaded" kind="rules" path="rules/default.json" schema_version=1 bytes=858 hash=6ebfdf131295
-2026-09-22T12:56:33.429357Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-a.json" schema_version=1 bytes=23735 hash=c4154f222b4e
-2026-09-22T12:56:33.430029Z  INFO engine::data: signal="content.loaded" kind="team" path="teams/default-b.json" schema_version=1 bytes=23734 hash=62e16684340a
-2026-09-22T12:56:34.215816Z  INFO stream::server: signal="socket.listening" port=56062 protocol_version=1 match_id=000000000000002a-1790081794213
-2026-09-22T12:56:34.216661Z  INFO stream::server: signal="socket.client" origin=http://localhost:5173 protocol_version=1 match_id=000000000000002a-1790081794213
-2026-09-22T12:56:34.287777Z  INFO stream::session: signal="socket.backpressure" tick=45103 bound=500 paused_ms=0 resumes=1
-{"bench.cpu_ms":391,"bench.cpu_wall_ratio":0.9974489795918368,"bench.match_wall_ms":392,"bench.matches":1,"bench.peak_mem_mb":7.30859375,"bench.stream_pauses":1,"bench.stream_ticks_per_s":634857.4850755587,"budget.pass":true,"build.hash":"65a3414-dirty","content.hash":"02d33ad91de5","engine.ticks_per_s":688775.5102040817,"env":"dev","machine.cpu_model":"AMD Ryzen 7 9800X3D 8-Core Processor","machine.hash":"74ca12fc08a4","machine.power_plan":"Ultimate Performance","operation":"benchmark","outcome":"success","owner.id":"71d6efead12e5254b7a1cbe3878a3ee0","record.kind":"run-report","run.id":"bench-1790081794642","schema.version":"1","seed":42,"service":"engine-cli","version":"0.1.0"}

@@ -1,2 +1,0 @@
-2026-09-22T21:27:58.883353Z ERROR engine::snapshot: signal="snapshot.refused" path="C:/Users/jayte/AppData/Local/Temp/tmp.RmUyp0cCSg/trailer.smsn" reason=checksum mismatch: the file is corrupt
-error: snapshot refused: C:/Users/jayte/AppData/Local/Temp/tmp.RmUyp0cCSg/trailer.smsn: checksum mismatch: the file is corrupt

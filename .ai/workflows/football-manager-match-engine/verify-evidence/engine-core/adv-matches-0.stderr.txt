@@ -1,1 +1,0 @@
-error: --matches must be at least 1

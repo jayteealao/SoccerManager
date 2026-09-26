@@ -1,0 +1,172 @@
+name: PR Checks
+
+# The light checks for every pull request. Heavy runs (the ignored slow tests and the
+# calibrate suite) stay on the owner's machine or the build server.
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - ".ai/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        with:
+          cache: false
+      - name: fmt
+        run: cargo fmt --all --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  test-fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: e2e/package.json
+      - name: Engine tests (ignored slow tests excluded)
+        run: cargo test --workspace --locked
+      - name: Page tests
+        run: node --test "web/tests/*.test.mjs"
+
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+        with:
+          tool: cargo-llvm-cov
+      - name: coverage
+        run: cargo llvm-cov --workspace --locked --fail-under-lines 78
+
+  commit-convention:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: crate-ci/committed@faeed42f2e10c244533a01525f13c4d8b6ce383f # v1.1.11
+        with:
+          # Merge commits are allowed (the repository merges with merge commits); committed
+          # skips them.
+          args: "-vv"
+          commits: ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
+
+  cargo-deny:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check
+
+  npm-audit-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: e2e/package.json
+      - name: npm audit (e2e)
+        working-directory: e2e
+        run: npm audit --audit-level=high
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  semgrep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: semgrep
+        run: semgrep scan --config p/rust --config p/javascript --error
+
+  content-changelog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: A content change needs a Content entry in CHANGELOG.md
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          changed=$(git diff --name-only "$BASE...$HEAD")
+          content=$(printf '%s\n' "$changed" | grep -E '^content/(rules/|teams/|tuning\.json|attributes\.json|tactics\.json)' || true)
+          if [ -z "$content" ]; then
+            echo "No player-facing content changed."
+            exit 0
+          fi
+          echo "Content files changed:"
+          printf '%s\n' "$content"
+          if ! printf '%s\n' "$changed" | grep -qx 'CHANGELOG.md'; then
+            echo "::error file=CHANGELOG.md::Content changed, but CHANGELOG.md did not. Add an entry under 'Content' in the Unreleased section."
+            exit 1
+          fi
+
+  windows-build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+      - name: Build
+        shell: pwsh
+        run: |
+          if ($env:RUSTFLAGS) { throw "RUSTFLAGS is set ('$env:RUSTFLAGS'); it would override the static C runtime in .cargo/config.toml" }
+          cargo build --release --locked -p engine-cli
+      - name: The program links the C runtime statically
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $dumpbin = & $vswhere -latest -products * -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
+          if (-not $dumpbin) { throw 'dumpbin.exe not found' }
+          $imports = & $dumpbin /dependents target\release\engine-cli.exe
+          $imports
+          if ($imports -match '(?i)vcruntime\d*\.dll|msvcp\d*\.dll') { throw 'engine-cli.exe imports the Visual C++ runtime; the static C runtime is missing' }
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Engine tests (ignored slow tests excluded)
+        run: cargo test --workspace --locked
