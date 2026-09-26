@@ -188,7 +188,7 @@ pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
             );
             if !dropped.is_empty() {
                 eprintln!(
-                    "dropped the stale hash sets of {}; add each again with                      `engine-cli gate --add-machine-set --reason <TEXT>` on that machine",
+                    "dropped the stale hash sets of {}; add each again with `engine-cli gate --add-machine-set --reason <TEXT>` on that machine",
                     dropped.join(", ")
                 );
             }
@@ -198,7 +198,7 @@ pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
             file.write_replace(&path)?;
             let differ: usize = file.set_differences.iter().map(|d| d.differ.len()).sum();
             eprintln!(
-                "wrote {}: added {played} matches for {machine} in {seconds:.1} s;                  {differ} differ from the other sets",
+                "wrote {}: added {played} matches for {machine} in {seconds:.1} s; {differ} differ from the other sets",
                 path.display()
             );
         }
