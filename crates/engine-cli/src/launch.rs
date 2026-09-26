@@ -205,6 +205,7 @@ fn engine_path(flag: Option<&Path>) -> PathBuf {
     if let Some(path) = std::env::var_os("SM_ENGINE_PATH").filter(|p| !p.is_empty()) {
         return PathBuf::from(path);
     }
+    // nosemgrep: rust.lang.security.current-exe.current-exe -- only used to start the engine that sits next to this program
     std::env::current_exe().unwrap_or_else(|_| PathBuf::from("engine-cli"))
 }
 

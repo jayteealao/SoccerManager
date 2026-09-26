@@ -62,6 +62,7 @@ impl ContentDir {
         }
         let mut tried: Vec<PathBuf> = Vec::new();
         tried.push(PathBuf::from("content"));
+        // nosemgrep: rust.lang.security.current-exe.current-exe -- only finds the content folder next to the program; not a security decision
         if let Some(dir) = std::env::current_exe()
             .ok()
             .and_then(|exe| exe.parent().map(Path::to_path_buf))

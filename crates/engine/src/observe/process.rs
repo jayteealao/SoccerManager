@@ -15,6 +15,7 @@ pub fn cpu_time_ms() -> Option<u64> {
     let (mut creation, mut exit, mut kernel, mut user) = (zero, zero, zero, zero);
     // SAFETY: the pseudo-handle from GetCurrentProcess is always valid, and every pointer
     // refers to a live local FILETIME for the duration of the call.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage -- Windows process-counter API call; see SAFETY above
     let ok = unsafe {
         GetProcessTimes(
             GetCurrentProcess(),
@@ -51,6 +52,7 @@ pub fn peak_memory_mb() -> Option<f64> {
         PeakPagefileUsage: 0,
     };
     // SAFETY: the pseudo-handle is valid and `counters` is a live, correctly sized struct.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage -- Windows process-counter API call; see SAFETY above
     let ok = unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), &mut counters, counters.cb) };
     if ok == 0 {
         return None;

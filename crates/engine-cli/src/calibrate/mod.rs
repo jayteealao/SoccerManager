@@ -173,6 +173,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         opts,
         loaded: &loaded,
         bands: Bands::load(&dir)?,
+        // nosemgrep: rust.lang.security.current-exe.current-exe -- only used to start worker copies of this program
         exe: std::env::current_exe().context("cannot find this program to start workers")?,
         jobs,
         selection: Selection {

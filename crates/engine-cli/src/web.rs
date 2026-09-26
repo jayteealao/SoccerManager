@@ -110,6 +110,7 @@ pub fn resolve_web_dir(flag: Option<&Path>) -> anyhow::Result<PathBuf> {
         vec![PathBuf::from(dir)]
     } else {
         let mut tried = vec![PathBuf::from("web")];
+        // nosemgrep: rust.lang.security.current-exe.current-exe -- only finds the page folder next to the program; not a security decision
         if let Some(dir) = std::env::current_exe()
             .ok()
             .and_then(|exe| exe.parent().map(Path::to_path_buf))
