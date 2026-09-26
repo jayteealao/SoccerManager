@@ -28,6 +28,7 @@ use std::path::{Path, PathBuf};
 use sha2::{Digest, Sha256};
 
 use crate::ai::{AiState, Manager};
+use crate::canon::{self, NONE, Writer};
 use crate::data::rules::StoppageKind;
 use crate::error::EngineError;
 use crate::math::{DVec2, DVec3};
@@ -57,8 +58,6 @@ const CONTENT_AT: usize = 24;
 const CONTENT_BYTES: usize = 12;
 const OWNER_AT: usize = 36;
 const MILLIS_AT: usize = 52;
-/// An absent roster index.
-const NONE: u8 = u8::MAX;
 
 /// One snapshot: the match identity in the header and the encoded match state.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,7 +79,7 @@ impl Snapshot {
             content_hash: sim.config.content_hash.clone(),
             owner_id,
             match_millis,
-            body: w.0,
+            body: w.into_bytes(),
         }
     }
 
@@ -367,83 +366,6 @@ fn fit(text: &str, len: usize) -> &str {
     &text[..end]
 }
 
-#[derive(Default)]
-struct Writer(Vec<u8>);
-
-impl Writer {
-    fn u8(&mut self, v: u8) {
-        self.0.push(v);
-    }
-    fn u32(&mut self, v: u32) {
-        self.0.extend_from_slice(&v.to_le_bytes());
-    }
-    fn u64(&mut self, v: u64) {
-        self.0.extend_from_slice(&v.to_le_bytes());
-    }
-    fn u128(&mut self, v: u128) {
-        self.0.extend_from_slice(&v.to_le_bytes());
-    }
-    fn f64(&mut self, v: f64) {
-        self.0.extend_from_slice(&v.to_bits().to_le_bytes());
-    }
-    fn v2(&mut self, v: DVec2) {
-        self.f64(v.x);
-        self.f64(v.y);
-    }
-    fn v3(&mut self, v: DVec3) {
-        self.f64(v.x);
-        self.f64(v.y);
-        self.f64(v.z);
-    }
-    fn index(&mut self, v: Option<usize>) {
-        // Roster indices are below 22 and team indices below 2.
-        self.u8(v.map_or(NONE, |i| i as u8));
-    }
-    fn pair(&mut self, v: [u32; 2]) {
-        self.u32(v[0]);
-        self.u32(v[1]);
-    }
-    fn opt_pair(&mut self, v: Option<[u32; 2]>) {
-        self.u8(u8::from(v.is_some()));
-        self.pair(v.unwrap_or([0, 0]));
-    }
-    fn opt_u8(&mut self, v: Option<u8>) {
-        self.u8(u8::from(v.is_some()));
-        self.u8(v.unwrap_or(0));
-    }
-    fn tactics(&mut self, t: &Tactics) {
-        self.u8(t.formation);
-        self.u8(t.mentality);
-        for level in t.instructions {
-            self.u8(level);
-        }
-        for rd in &t.roles {
-            self.u8(rd.role);
-            self.u8(rd.duty);
-        }
-    }
-    fn derived(&mut self, d: &Derived) {
-        for v in [
-            d.max_speed,
-            d.max_accel,
-            d.passing,
-            d.dribbling,
-            d.tackling,
-            d.positioning,
-            d.aggression,
-            d.finishing,
-            d.vision,
-            d.decisions,
-            d.composure,
-            d.stamina,
-            d.natural_fitness,
-            d.injury_resistance,
-        ] {
-            self.f64(v);
-        }
-    }
-}
-
 struct Reader<'a> {
     buf: &'a [u8],
     at: usize,
@@ -558,82 +480,53 @@ impl<'a> Reader<'a> {
     }
 }
 
-fn status_code(s: Status) -> u8 {
-    match s {
-        Status::OnPitch => 0,
-        Status::SentOff => 1,
-        Status::Injured => 2,
-    }
-}
-
-fn manager_code(m: Manager) -> u8 {
-    match m {
-        Manager::Ai => 0,
-        Manager::Human => 1,
-    }
-}
-
 const PLAYERS: usize = 2 * PLAYERS_PER_TEAM;
 
 fn encode(sim: &Simulation, w: &mut Writer) {
     w.u64(sim.config.seed);
     w.u32(sim.config.minutes);
     for digest in &sim.config.team_digests {
-        w.0.extend_from_slice(digest);
+        w.raw(digest);
     }
     w.u32(sim.tick);
     w.u8(u8::from(sim.config.knockout));
     w.u8(u8::from(sim.restart));
     let rng = sim.rng.state();
-    w.0.extend_from_slice(&rng.seed);
+    w.raw(&rng.seed);
     w.u64(rng.stream);
     w.u128(rng.word_pos);
-    w.v3(sim.ball.pos);
-    w.v3(sim.ball.vel);
+    w.v3_at("ball.pos", sim.ball.pos);
+    w.v3_at("ball.vel", sim.ball.vel);
     w.index(sim.carrier);
     w.u32(sim.control_since);
     w.index(sim.last_touch);
     w.u8(u8::from(sim.keeper_beaten));
     w.index(sim.restart_taker);
-    encode_summary(&sim.summary, w);
+    w.summary(&sim.summary);
     for (t, team) in sim.teams.iter().enumerate() {
-        w.f64(team.attack_x);
-        for (active, (x, y)) in team.active.iter().zip(team.formation.iter()) {
-            w.u8(u8::from(*active));
-            w.f64(*x);
-            w.f64(*y);
-        }
-        w.tactics(&team.tactics);
-        // Squad indices are below 40, the team file's limit.
-        for s in team.lineup {
-            w.u8(s as u8);
-        }
-        w.u8(team.bench.len() as u8);
-        for s in &team.bench {
-            w.u8(*s as u8);
-        }
+        w.team("teams", team);
         let ledger = &sim.ledgers[t];
         w.u8(ledger.used);
         w.u8(ledger.windows);
         w.u8(u8::from(ledger.window_at.is_some()));
         w.u32(ledger.window_at.unwrap_or(0));
-        w.u8(manager_code(sim.managers[t]));
+        w.u8(canon::manager_code(sim.managers[t]));
         let ai = &sim.ai[t];
         w.opt_pair(ai.trailing_acted);
         w.opt_pair(ai.leading_acted);
         w.u8(u8::from(ai.due));
     }
     for p in &sim.players {
-        w.v2(p.pos);
-        w.v2(p.vel);
-        w.v2(p.target);
-        w.v2(p.facing);
-        w.u8(status_code(p.status));
+        w.v2_at("pos", p.pos);
+        w.v2_at("vel", p.vel);
+        w.v2_at("target", p.target);
+        w.v2_at("facing", p.facing);
+        w.u8(canon::status_code(p.status));
         w.u8(p.yellow);
         w.u32(p.foul_ready);
         w.u8(p.squad as u8);
-        w.f64(p.energy);
-        w.derived(&p.derived);
+        w.f64_at(String::new, p.energy);
+        w.derived("derived", &p.derived);
     }
     w.u32(sim.queue.next);
     // A queue holds far fewer than 4 billion changes.
@@ -676,7 +569,7 @@ fn encode(sim: &Simulation, w: &mut Writer) {
             // Kind and card indices are below 9.
             w.u8(d.kind.index() as u8);
             w.index(Some(d.team));
-            w.v2(d.spot);
+            w.v2_at("spot", d.spot);
             w.u8(u8::from(d.direct));
             w.u32(d.since);
             w.u32(d.ready_at);
@@ -733,54 +626,6 @@ fn encode(sim: &Simulation, w: &mut Writer) {
             w.u32(s.live_since.unwrap_or(0));
         }
     }
-}
-
-fn encode_summary(s: &Summary, w: &mut Writer) {
-    w.u32(s.possession_changes);
-    w.f64(s.ball_max_speed);
-    w.u32(s.ball_idle_ticks);
-    for pair in [
-        s.goals,
-        s.fouls,
-        s.offsides,
-        s.corners,
-        s.throw_ins,
-        s.goal_kicks,
-        s.free_kicks,
-        s.penalties,
-        s.yellow,
-        s.red,
-        s.added_s,
-    ] {
-        w.pair(pair);
-    }
-    w.u32(s.stoppages);
-    w.u32(s.dead_ball_ticks);
-    w.u32(s.offside_checks);
-    w.pair(s.shots);
-    w.pair(s.substitutions);
-    w.pair(s.injuries);
-    w.u32(s.changes_queued);
-    w.u32(s.changes_applied);
-    w.u32(s.changes_rejected);
-    w.u32(s.ai_decisions);
-    w.pair(s.shots_on_target);
-    w.f64(s.xg[0]);
-    w.f64(s.xg[1]);
-    w.pair(s.passes);
-    w.pair(s.passes_completed);
-    w.pair(s.clearances);
-    w.pair(s.restart_kicks);
-    w.u32(s.live_ticks);
-    w.pair(s.possession_ticks);
-    w.pair(s.extra_added_s);
-    w.u8(u8::from(s.extra_time));
-    w.opt_pair(s.shootout);
-    w.u32(s.shootout_kicks);
-    w.u8(s
-        .decided_by
-        .and_then(|d| DecidedBy::ALL.iter().position(|x| *x == d))
-        .map_or(0, |k| k as u8 + 1));
 }
 
 fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {

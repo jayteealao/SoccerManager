@@ -6,6 +6,7 @@
 
 pub mod ai;
 pub mod ball;
+mod canon;
 pub mod commentary;
 pub mod data;
 pub mod decision;
