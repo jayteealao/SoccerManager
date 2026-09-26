@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="slice">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · slice — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="slice">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span aria-hidden="true">/</span><span class="m-here">scripting-runtime</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · slice</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">scripting-runtime</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/03-slice-scripting-runtime.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">03-slice-scripting-runtime.md</div>
+      <h1 class="pg-title">Slice · <code>scripting-runtime</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="stage-badge">slice</span><span class="meta">2026-09-23T18:01:24Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-slice" tabindex="-1"><a class="header-anchor" href="#the-slice"><span>The Slice</span></a></h2>
+<p>The product owner chose full modding (shape Q28) and sequenced the scripting runtime after the plugin boundary (Q31). RIM-6 names the risk that this slice never gets scheduled and “customizable” is reported done on the strength of data files alone. This file is the clearing mechanism: the slice exists, is named, and stays open until built.</p>
+<p>This slice embeds a sandboxed scripting runtime in the Rust engine behind the plugin interface the data slice defined, so a script can override player decisions and rule-pack behaviors within a performance budget.</p>
+<p>It ships after the first release and after calibration, so scripted behavior can be measured against the same bands. The top risk is the tick budget: a script hook that runs per agent per tick must stay inside the benchmark tripwire.</p></section>
+    <section class="slice-stages">
+    <h2 class="sdlc-h2">stages</h2>
+    <div class="slice-grid"><a class="slice-card" href="../../plan/scripting-runtime/INDEX.html"><span class="slice-slug"><code>plan</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../implement/scripting-runtime/INDEX.html"><span class="slice-slug"><code>implement</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../verify/scripting-runtime/INDEX.html"><span class="slice-slug"><code>verify</code></span>
+    <span class="status-badge is-ok">complete</span></a></div>
+  </section>
+    
+    <dl class="frontmatter-card"><div><dt>type</dt><dd>slice</dd></div><div><dt>slug</dt><dd>football-manager-match-engine</dd></div><div><dt>slice-slug</dt><dd>scripting-runtime</dd></div><div><dt>status</dt><dd>complete</dd></div><div><dt>stage-number</dt><dd>3</dd></div><div><dt>created-at</dt><dd>2026-09-21T19:50:41Z</dd></div><div><dt>updated-at</dt><dd>2026-09-23T18:01:24Z</dd></div><div><dt>complexity</dt><dd>l</dd></div><div><dt>depends-on</dt><dd>data-schemas-generator, tactics-and-ai, calibration</dd></div><div><dt>tags</dt><dd>engine, modding, scripting, deferred, rim-6</dd></div><div><dt>deferred</dt><dd>true</dd></div><div><dt>refs</dt><dd>{&quot;index&quot;:&quot;00-index.md&quot;,&quot;slice-index&quot;:&quot;03-slice.md&quot;,&quot;siblings&quot;:[&quot;03-slice-data-schemas-generator.md&quot;,&quot;03-slice-tactics-and-ai.md&quot;,&quot;03-slice-calibration.md&quot;],&quot;plan&quot;:&quot;04-plan-scripting-runtime.md&quot;,&quot;implement&quot;:&quot;05-implement-scripting-runtime.md&quot;}</dd></div></dl>
+    <div class="prose"><h1 id="slice-scripting-runtime-for-modding" tabindex="-1"><a class="header-anchor" href="#slice-scripting-runtime-for-modding"><span>Slice: Scripting Runtime for Modding</span></a></h1>
+<h2 id="goal" tabindex="-1"><a class="header-anchor" href="#goal"><span>Goal</span></a></h2>
+<p>A modder writes a script that changes how players decide or how a rule behaves, and the engine runs it safely inside the tick budget.</p>
+<h2 id="why-this-slice-exists" tabindex="-1"><a class="header-anchor" href="#why-this-slice-exists"><span>Why This Slice Exists</span></a></h2>
+<p>Q28 set the customization ceiling; Q31 deferred the runtime; RIM-6 requires a named slice so the wall clears visibly.</p>
+<h2 id="scope" tabindex="-1"><a class="header-anchor" href="#scope"><span>Scope</span></a></h2>
+<p>In: runtime choice (plan decides among embeddable options with a permissive license), sandbox limits (time, memory, no file or network access), hook points (decision scoring, rule handlers, commentary), a script pack format, a sample script, and a benchmark rerun with the tripwire.
+Out: a script editor in the viewer; script sharing or marketplace.</p>
+<h2 id="acceptance-criteria" tabindex="-1"><a class="header-anchor" href="#acceptance-criteria"><span>Acceptance Criteria</span></a></h2>
+<ul>
+<li>Given a script pack that overrides the decision scoring hook, When a seeded match runs, Then the scripted decisions take effect and the event stream records the pack identifier.<!-- observable: false — cargo test with a sample script -->
+</li>
+<li>Given a script that exceeds its time budget on a tick, Then the engine aborts that hook, logs it, and continues with the default decision.<!-- observable: false — cargo test with a looping script -->
+</li>
+<li>Given a script that attempts file or network access, Then the sandbox denies it and the engine records the denial.<!-- observable: false — cargo test -->
+</li>
+<li>Given the benchmark reruns with the sample script loaded, Then CPU time per match is within 10 percent of the calibration baseline.<!-- observable: true — developer-visible benchmark report -->
+verify: { method: cargo bench harness compare, env: reference laptop, fixture: seed 42 with the sample pack, rung: cli-direct }</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<ul>
+<li><code>data-schemas-generator</code>: the plugin interface and pack schemas.</li>
+<li><code>tactics-and-ai</code>: the decision hooks.</li>
+<li><code>calibration</code>: the baseline to compare scripted behavior against.</li>
+</ul>
+<h2 id="risks" tabindex="-1"><a class="header-anchor" href="#risks"><span>Risks</span></a></h2>
+<ul>
+<li>Runtime license or maintenance risk: plan checks the license (NFR-5) and the release cadence before choosing.</li>
+<li>Per-tick hook cost: hooks run at decision frequency, not steering frequency.</li>
+</ul></div>
+    
+  
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-23T18:01:24Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/03-slice-scripting-runtime.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">slice</a><span class="m-sheet-here" aria-current="page">scripting-runtime</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/03-slice-scripting-runtime.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-23T18:01:24Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="slice">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · slice — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="slice">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span aria-hidden="true">/</span><span class="m-here">tactics-and-ai</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · slice</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">tactics-and-ai</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/03-slice-tactics-and-ai.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">03-slice-tactics-and-ai.md</div>
+      <h1 class="pg-title">Slice · <code>tactics-and-ai</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">defined</span><span class="stage-badge">slice</span><span class="meta">2026-09-21T19:50:41Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-slice" tabindex="-1"><a class="header-anchor" href="#the-slice"><span>The Slice</span></a></h2>
+<p>Match rules deliver a lawful game with stoppages and a rule pack that names which stoppages admit which change. The shape’s Tier 2 tactics model, the stoppage-gated change queue, fatigue, injuries, substitution limits, and the reactive AI manager are still missing, and they are the substance of commitments C1, C3, and C5.</p>
+<p>This slice adds the tactics model (formation, mentality, 6 to 8 team instructions, per-player roles and duties), a decision layer that reads attributes and roles, fatigue curves and injuries from the tuning file, the change queue driven by the rule pack, the 5-in-3-windows substitution limit, and the AI manager module that manages either team.</p>
+<p>Calibration measures the result next. The top risk is that decisions become a tangle of special cases; the decision layer is a scored-options mechanism, named below, so every choice is a weighted comparison the tuning file can move.</p></section>
+    <section class="slice-stages">
+    <h2 class="sdlc-h2">stages</h2>
+    <div class="slice-grid"><a class="slice-card" href="../../plan/tactics-and-ai/INDEX.html"><span class="slice-slug"><code>plan</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../implement/tactics-and-ai/INDEX.html"><span class="slice-slug"><code>implement</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../verify/tactics-and-ai/INDEX.html"><span class="slice-slug"><code>verify</code></span>
+    <span class="status-badge is-ok">complete</span></a></div>
+  </section>
+    
+    <dl class="frontmatter-card"><div><dt>type</dt><dd>slice</dd></div><div><dt>slug</dt><dd>football-manager-match-engine</dd></div><div><dt>slice-slug</dt><dd>tactics-and-ai</dd></div><div><dt>status</dt><dd>defined</dd></div><div><dt>stage-number</dt><dd>3</dd></div><div><dt>created-at</dt><dd>2026-09-21T19:50:41Z</dd></div><div><dt>updated-at</dt><dd>2026-09-21T19:50:41Z</dd></div><div><dt>complexity</dt><dd>l</dd></div><div><dt>depends-on</dt><dd>match-rules, data-schemas-generator</dd></div><div><dt>tags</dt><dd>engine, tactics, ai-manager, fatigue, substitutions</dd></div><div><dt>refs</dt><dd>{&quot;index&quot;:&quot;00-index.md&quot;,&quot;slice-index&quot;:&quot;03-slice.md&quot;,&quot;siblings&quot;:[&quot;03-slice-match-rules.md&quot;,&quot;03-slice-data-schemas-generator.md&quot;,&quot;03-slice-calibration.md&quot;,&quot;03-slice-viewer-lineup-tactics.md&quot;,&quot;03-slice-scripting-runtime.md&quot;],&quot;plan&quot;:&quot;04-plan-tactics-and-ai.md&quot;,&quot;implement&quot;:&quot;05-implement-tactics-and-ai.md&quot;}</dd></div></dl>
+    <div class="prose"><h1 id="slice-tactics-fatigue-and-the-ai-manager" tabindex="-1"><a class="header-anchor" href="#slice-tactics-fatigue-and-the-ai-manager"><span>Slice: Tactics, Fatigue, and the AI Manager</span></a></h1>
+<h2 id="goal" tabindex="-1"><a class="header-anchor" href="#goal"><span>Goal</span></a></h2>
+<p>Attributes and tactics change what happens; managers change tactics and substitute at stoppages; the computer manages its own team.</p>
+<h2 id="why-this-slice-exists" tabindex="-1"><a class="header-anchor" href="#why-this-slice-exists"><span>Why This Slice Exists</span></a></h2>
+<p>Without this slice the engine is a physics toy. C1, C3, and C5 are proven here, and the AI manager is what makes headless calibration meaningful.</p>
+<h2 id="scope" tabindex="-1"><a class="header-anchor" href="#scope"><span>Scope</span></a></h2>
+<p>In:</p>
+<ul>
+<li>Tactics model: formation, mentality, team instructions (pressing, width, tempo, line height, passing directness, time wasting), roles and duties per player; data model leaves room for Tier 3.</li>
+<li>Decision layer: each agent scores candidate actions (pass to N teammates, dribble, shoot, clear, hold) by attributes, role, and instructions, and picks the highest with RNG noise (named mechanism: <strong>scored-options decision layer</strong>, replaces hand-written branching so tuning moves behavior).</li>
+<li>Fatigue curves and their effect on attributes; injuries with a rate from the tuning file.</li>
+<li>Stoppage-gated change queue driven by the rule pack (named mechanism per the shape): tactics at any dead ball, substitutions at any dead ball within the limit; rejections with reasons; conflict rule (substitution wins over a role change for the same player).</li>
+<li>Substitution limit: 5 changes in 3 windows plus half-time.</li>
+<li>AI manager module (named mechanism per the shape): pre-match setup, mentality change when trailing late, substitutions for fatigue and injury.</li>
+<li>Benchmark rerun with the tripwire.</li>
+</ul>
+<p>Out:</p>
+<ul>
+<li>Calibration of realism bands: <code>calibration</code>.</li>
+<li>The tactics panel UI: <code>viewer-lineup-tactics</code>.</li>
+<li>Scripted decisions: <code>scripting-runtime</code> (deferred).</li>
+</ul>
+<h2 id="acceptance-criteria" tabindex="-1"><a class="header-anchor" href="#acceptance-criteria"><span>Acceptance Criteria</span></a></h2>
+<ul>
+<li>Given a queued tactics change, When the next dead ball occurs, Then the change applies at that tick and an event records it; and Given the same queued change with no dead ball, Then it has not applied.<!-- observable: false — cargo test injects a change at a known tick -->
+</li>
+<li>Given five substitutions used across three windows, When a sixth is queued, Then it is rejected with a reason event; and Given four used, When a fifth is queued, Then it applies at the next dead ball.<!-- observable: false — cargo test -->
+</li>
+<li>Given a substitution and a role change queued for the same player, Then the substitution applies and the role change is rejected with a reason.<!-- observable: false — cargo test -->
+</li>
+<li>Given a player’s fatigue passes the tuning threshold, Then that player’s pace and decision attributes degrade per the curve.<!-- observable: false — cargo test reads effective attributes -->
+</li>
+<li>Given an injury event, Then the injured player leaves play, and the AI manager queues a substitution that applies within the next window when one is available.<!-- observable: false — cargo test -->
+</li>
+<li>Given team A with attributes 15 percent higher than team B, When 200 seeded matches run headless, Then team A wins more than 50 percent (a coarse pre-calibration check; the 1000-match band is in <code>calibration</code>).<!-- observable: false — cargo test, marked slow -->
+</li>
+<li>Given the AI manager’s team trails after minute 70, Then a tactical-change event appears before full time in at least 90 percent of 100 headless runs.<!-- observable: false — cargo test, marked slow -->
+</li>
+<li>Given a mentality set to defensive versus attacking with identical squads, When 200 matches run each, Then shots per match differ in the expected direction.<!-- observable: false — cargo test, marked slow -->
+</li>
+<li>Given the benchmark reruns after this slice, Then CPU time per match is within 10 percent and memory within 25 percent of the match-rules baseline.<!-- observable: true — developer-visible benchmark report -->
+verify: { method: cargo bench harness compare, env: reference laptop, fixture: seed 42, rung: cli-direct }</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<ul>
+<li><code>match-rules</code>: stoppages, events, snapshots.</li>
+<li><code>data-schemas-generator</code>: attribute schema, tuning file, rule pack, generated teams.</li>
+</ul>
+<h2 id="risks" tabindex="-1"><a class="header-anchor" href="#risks"><span>Risks</span></a></h2>
+<ul>
+<li>Decision scoring produces passive or chaotic play: calibration tunes weights; the experiment-flags slice later compares models.</li>
+<li>Benchmark regression from scoring many candidates per agent per tick: limit candidate sets and decision frequency (decide every N ticks, steer every tick).</li>
+</ul></div>
+    
+  
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-21T19:50:41Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/03-slice-tactics-and-ai.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">slice</a><span class="m-sheet-here" aria-current="page">tactics-and-ai</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/03-slice-tactics-and-ai.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-21T19:50:41Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

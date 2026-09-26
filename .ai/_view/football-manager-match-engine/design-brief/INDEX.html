@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="design-contract">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Touchline match screen visual contract — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="design-contract">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><span class="m-here">design-brief</span></span></div>
+    <h1 class="m-title">Touchline match screen visual contract</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">design-brief</b></div>
+    <div class="actions"><a href="../../../workflows/football-manager-match-engine/02c-craft.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">02c-craft.md</div>
+      <h1 class="pg-title">Touchline match screen visual contract</h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">ready</span><span class="stage-badge">design-contract</span><span class="meta">match-control</span><span class="meta">based on 02b-design.md</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-contract" tabindex="-1"><a class="header-anchor" href="#the-contract"><span>The Contract</span></a></h2>
+<p>The design brief left two gates open and named plan as their owner. Both close here without an image run. The standing steering file <code>steer.md</code> names the Design canvas “Match Viewer Design” as the north-star mock, instructs that the direction is confirmed, and forbids a competing mock, so <code>image-gate</code> reads <code>pass</code> with <code>steer.md</code> as its source. The brief-confirm gate is satisfied by a user-confirmed <a href="http://PRODUCT.md">PRODUCT.md</a>, recorded at design setup Round 1 Q5. The product now has a name, Touchline, which clears the <code>[TODO]</code> marker that blocked this stage.</p>
+<p>The canvas is private and no sub-agent can open it, so <code>steer.md</code> carries every constraint as text and this contract is built from that text, not from pixels. Thirty-six tokens, one grid, two typefaces, and one drawing function make up the whole surface. The load-bearing decision is the token prefix: <code>steer.md</code> fixes <code>--tl-</code>, which supersedes the <code>--mv-</code> prefix written into <code>02b-design.md</code> and <code>02b-design.yaml</code> before the product was named. Those two files are stale on that one point, not in conflict.</p>
+<p>Ten fidelity items survive into implementation, and four of them belong to <code>viewer-pitch</code>: the grid, the pitch tile, the control strip, and the marker treatment. The other six are pinned here so the three later viewer slices inherit them rather than re-deciding. The top risk is the one the brief named and the product owner ranked second in <a href="http://PRODUCT.md">PRODUCT.md</a>: broadcast energy on a light scene competes with 14-pixel tabular numbers, so the contrast of the numeric row is proved before any banner motion is written.</p></section><div class="metric-row"><div class="metric">
+      <span class="metric-label">tokens</span>
+      <span class="metric-value">36</span>
+      
+    </div><div class="metric">
+      <span class="metric-label">states</span>
+      <span class="metric-value">8</span>
+      
+    </div><div class="metric">
+      <span class="metric-label">sizes</span>
+      <span class="metric-value">1</span>
+      
+    </div><div class="metric">
+      <span class="metric-label">themes</span>
+      <span class="metric-value">2</span>
+      
+    </div></div><p class="sdlc-lede">The Touchline match screen at 1280 by 800: 36 OKLCH --tl- tokens, a 336 / 616 / 296 grid under a 56-pixel header, a 616 by 411 pitch canvas, a 40-pixel playback strip, two locally bundled typefaces, and one function that draws the touchline mark. Ten fidelity items reach implementation; four belong to viewer-pitch and six are pinned for the later viewer slices. Both design gates close here: the image gate on steer.md, the brief-confirm gate on a user-confirmed PRODUCT.md.</p><div class="fragment"><section class="fragment-design-contract" data-artifact="design-contract" data-component="match-control">
+
+  <h2 class="sdlc-h2">Coverage grid · element × state</h2>
+  <p class="dc-lede">Ten elements against the eight states in the contract. A filled cell is a state this contract commits to for that element. An empty cell is a state the element does not have.</p>
+
+  <div class="dc-grid-wrap">
+    <table class="dc-grid">
+      <thead>
+        <tr>
+          <th scope="col" class="dc-rowhead">Element</th>
+          <th scope="col">default</th>
+          <th scope="col">hover</th>
+          <th scope="col">focus</th>
+          <th scope="col">active</th>
+          <th scope="col">disabled</th>
+          <th scope="col">loading</th>
+          <th scope="col">empty</th>
+          <th scope="col">error</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><th scope="row" class="dc-rowhead">Page grid</th><td class="is-on" aria-label="default committed">&#9632;</td><td></td><td></td><td></td><td></td><td class="is-on" aria-label="loading committed">&#9632;</td><td></td><td class="is-on" aria-label="error committed">&#9632;</td></tr>
+        <tr><th scope="row" class="dc-rowhead">Pitch canvas</th><td class="is-on" aria-label="default committed">&#9632;</td><td></td><td></td><td></td><td></td><td class="is-on" aria-label="loading committed">&#9632;</td><td class="is-on" aria-label="empty committed">&#9632;</td><td class="is-on" aria-label="error committed">&#9632;</td></tr>
+        <tr><th scope="row" class="dc-rowhead">Player marker</th><td class="is-on" aria-label="default committed">&#9632;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><th scope="row" class="dc-rowhead">Ball and trail</th><td class="is-on" aria-label="default committed">&#9632;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><th scope="row" class="dc-rowhead">match-control button</th><td class="is-on" aria-label="default committed">&#9632;</td><td class="is-on" aria-label="hover committed">&#9632;</td><td class="is-on" aria-label="focus committed">&#9632;</td><td class="is-on" aria-label="active committed">&#9632;</td><td class="is-on" aria-label="disabled committed">&#9632;</td><td></td><td></td><td></td></tr>
+        <tr><th scope="row" class="dc-rowhead">Playback control strip</th><td class="is-on" aria-label="default committed">&#9632;</td><td></td><td></td><td></td><td class="is-on" aria-label="disabled committed">&#9632;</td><td></td><td></td><td></td></tr>
+        <tr><th scope="row" class="dc-rowhead">Lag notice</th><td class="is-on" aria-label="default committed">&#9632;</td><td></td><td></td><td></td><td></td><td></td><td></td><td class="is-on" aria-label="error committed">&#9632;</td></tr>
+        <tr><th scope="row" class="dc-rowhead">Numeric readouts</th><td class="is-on" aria-label="default committed">&#9632;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><th scope="row" class="dc-rowhead">Touchline mark</th><td class="is-on" aria-label="default committed">&#9632;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><th scope="row" class="dc-rowhead">Token file</th><td class="is-on" aria-label="default committed">&#9632;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="sdlc-h2">The mark is the touchline</h2>
+  <p class="dc-lede">The one figure this contract draws rather than describes. Three zones, one marker, one ball, no image file. The same function draws every club crest with kit colours in place of the turf.</p>
+
+  <div class="dc-mark-row">
+    <figure class="dc-mark">
+      <svg viewBox="0 0 120 120" width="120" height="120" role="img" aria-labelledby="dc-mark-primary-t">
+        <title id="dc-mark-primary-t">Primary mark: turf tile, white touchline at 58 percent, pitchside band below</title>
+        <defs><clipPath id="dc-clip-a"><rect x="0" y="0" width="120" height="120" rx="25.2" ry="25.2"/></clipPath></defs>
+        <g clip-path="url(#dc-clip-a)">
+          <rect x="0" y="0" width="120" height="120" fill="oklch(0.62 0.13 145)"/>
+          <circle cx="60" cy="26" r="17" fill="none" stroke="oklch(0.97 0.01 145)" stroke-width="1.5" opacity="0.55"/>
+          <rect x="0" y="67.2" width="120" height="3" fill="oklch(0.97 0.01 145)"/>
+          <rect x="0" y="70.2" width="120" height="49.8" fill="oklch(0.28 0.03 250)"/>
+          <circle cx="44" cy="48" r="9" fill="oklch(0.55 0.17 250)" stroke="oklch(0.97 0.01 145)" stroke-width="2"/>
+          <circle cx="74" cy="56" r="4.5" fill="oklch(0.97 0.01 145)"/>
+        </g>
+      </svg>
+      <figcaption>primary</figcaption>
+    </figure>
+
+    <figure class="dc-mark">
+      <svg viewBox="0 0 120 120" width="120" height="120" role="img" aria-labelledby="dc-mark-rev-t">
+        <title id="dc-mark-rev-t">Reversed mark: paper tile with a brand touchline</title>
+        <defs><clipPath id="dc-clip-b"><rect x="0" y="0" width="120" height="120" rx="25.2" ry="25.2"/></clipPath></defs>
+        <g clip-path="url(#dc-clip-b)">
+          <rect x="0" y="0" width="120" height="120" fill="oklch(0.985 0.006 250)"/>
+          <circle cx="60" cy="26" r="17" fill="none" stroke="oklch(0.90 0.008 250)" stroke-width="1.5"/>
+          <rect x="0" y="67.2" width="120" height="3" fill="oklch(0.55 0.17 250)"/>
+          <rect x="0" y="70.2" width="120" height="49.8" fill="oklch(0.90 0.008 250)"/>
+          <circle cx="44" cy="48" r="9" fill="oklch(0.55 0.17 250)" stroke="oklch(0.985 0.006 250)" stroke-width="2"/>
+          <circle cx="74" cy="56" r="4.5" fill="oklch(0.24 0.02 250)"/>
+        </g>
+      </svg>
+      <figcaption>reversed</figcaption>
+    </figure>
+
+    <figure class="dc-mark">
+      <svg viewBox="0 0 120 120" width="120" height="120" role="img" aria-labelledby="dc-mark-crest-t">
+        <title id="dc-mark-crest-t">Club crest: the same function with kit colours in place of the turf</title>
+        <defs><clipPath id="dc-clip-c"><rect x="0" y="0" width="120" height="120" rx="25.2" ry="25.2"/></clipPath></defs>
+        <g clip-path="url(#dc-clip-c)">
+          <rect x="0" y="0" width="120" height="120" fill="oklch(0.52 0.19 22)"/>
+          <circle cx="60" cy="26" r="17" fill="none" stroke="oklch(0.97 0.01 145)" stroke-width="1.5" opacity="0.5"/>
+          <rect x="0" y="67.2" width="120" height="3" fill="oklch(0.97 0.01 145)"/>
+          <rect x="0" y="70.2" width="120" height="49.8" fill="oklch(0.28 0.03 250)"/>
+          <circle cx="44" cy="48" r="9" fill="oklch(0.52 0.19 22)" stroke="oklch(0.30 0.02 250)" stroke-width="2"/>
+          <circle cx="74" cy="56" r="4.5" fill="oklch(0.97 0.01 145)"/>
+        </g>
+      </svg>
+      <figcaption>club crest</figcaption>
+    </figure>
+  </div>
+  <p class="dc-note">Corner radius is tile size &times; 0.21, so 120 &times; 0.21 = 25.2. The touchline sits at 58 percent of the tile height. The crest reuses the same three zones with the club's clamped kit primary as the field.</p>
+
+  <h2 class="sdlc-h2">Per-element obligations</h2>
+  <p class="dc-lede">Ten rows. Each opens to the tokens it must use, the states it must cover, and the requirement <code>/wf implement</code> builds against.</p>
+
+  <div class="dc-rows">
+    <details class="dc-row"><summary><span class="dc-el">Page grid</span><span class="dc-chips"><span class="dc-chip">6 tokens</span><span class="dc-chip">3 states</span></span></summary>
+      <p class="dc-req">CSS Grid at 1280 by 800. Row one is the 56-pixel header; row two holds three fixed columns of 336, 616 and 296 pixels with an 8-pixel gutter. No breakpoints and no fluid tracks, because <code>stack.platforms</code> names one desktop target. <code>viewer-pitch</code> builds the header and both side columns empty so the pitch lands at its shipping position.</p>
+      <p class="dc-toks"><code>--tl-header-h</code> <code>--tl-col-left</code> <code>--tl-col-mid</code> <code>--tl-col-right</code> <code>--tl-gap</code> <code>--tl-bg</code></p></details>
+
+    <details class="dc-row"><summary><span class="dc-el">Pitch canvas</span><span class="dc-chips"><span class="dc-chip">6 tokens</span><span class="dc-chip">4 states</span></span></summary>
+      <p class="dc-req">Exactly 616 by 411 CSS pixels, with the backing store multiplied by <code>devicePixelRatio</code> and the context scaled to match. Markings are drawn from the engine's own 105 by 68 metre space centred on the origin, so a rendered position maps one to one onto a simulated position. The loading state is a skeleton pitch in <code>--tl-skeleton</code>, never a spinner. <code>role="img"</code> with a label, plus a visually hidden <code>aria-live</code> region mirroring clock, speed and lag in text.</p>
+      <p class="dc-toks"><code>--tl-pitch</code> <code>--tl-pitch-line</code> <code>--tl-pitch-h</code> <code>--tl-col-mid</code> <code>--tl-radius-md</code> <code>--tl-line</code></p></details>
+
+    <details class="dc-row"><summary><span class="dc-el">Player marker</span><span class="dc-chips"><span class="dc-chip">4 tokens</span><span class="dc-chip">1 state</span></span></summary>
+      <p class="dc-req">A disc filled with the club's safe kit primary; a ring in the safe kit secondary when that colour measures 3:1 against turf, otherwise <code>--tl-pitch-line</code>. The shirt number is white or ink, whichever contrasts more with the fill, drawn at 10 pixels in IBM Plex Sans 600. Every kit hex converts to OKLCH and clamps its lightness into 0.20 to 0.88 before the 3:1 test runs, because <code>content/teams/default-a.json</code> ships pure black.</p>
+      <p class="dc-toks"><code>--tl-pitch</code> <code>--tl-pitch-line</code> <code>--tl-fg</code> <code>--tl-on-brand</code></p></details>
+
+    <details class="dc-row"><summary><span class="dc-el">Ball and trail</span><span class="dc-chips"><span class="dc-chip">2 tokens</span><span class="dc-chip">1 state</span></span></summary>
+      <p class="dc-req">The ball plus the last N tick positions at falling alpha, drawn as one path rather than N strokes. The trail belongs to the ball alone; no player carries one.</p>
+      <p class="dc-toks"><code>--tl-pitch-line</code> <code>--tl-fg</code></p></details>
+
+    <details class="dc-row"><summary><span class="dc-el">match-control button</span><span class="dc-chips"><span class="dc-chip">12 tokens</span><span class="dc-chip">5 states</span></span></summary>
+      <p class="dc-req">Four heights (28, 36, 44, 52) and two themes defined in full, with <code>viewer-pitch</code> shipping the 28 and 36 sizes so later slices add no new geometry. Colour transition at 150 ms on <code>--tl-ease</code>; no press-scale, because the playback strip is pressed tens of times per match and the frequency rule in <code>animate.md</code> removes motion there. A static variant turns the press-scale off. Focus ring at 3:1 via <code>:focus-visible</code>. Any button under 40 by 40 carries a centred pseudo-element hit area, and adjacent hit areas never overlap.</p>
+      <p class="dc-toks"><code>--tl-brand</code> <code>--tl-brand-hover</code> <code>--tl-brand-pressed</code> <code>--tl-on-brand</code> <code>--tl-ring</code> <code>--tl-radius-sm</code> <code>--tl-padx-md</code> <code>--tl-pady-md</code> <code>--tl-gap</code> <code>--tl-font-md</code> <code>--tl-ease</code> <code>--tl-shadow-1</code></p></details>
+
+    <details class="dc-row"><summary><span class="dc-el">Playback control strip</span><span class="dc-chips"><span class="dc-chip">5 tokens</span><span class="dc-chip">2 states</span></span></summary>
+      <p class="dc-req">A 40-pixel strip immediately under the pitch, holding play and pause, the 1x to 8x speed selector, skip to next stoppage, and the rewind scrubber. Concentric radius: 6 pixels of padding around <code>--tl-radius-sm</code> buttons gives the strip <code>--tl-radius-md</code>. The play triangle shifts 2 pixels right of geometric centre.</p>
+      <p class="dc-toks"><code>--tl-controls-h</code> <code>--tl-panel</code> <code>--tl-radius-md</code> <code>--tl-gap</code> <code>--tl-line</code></p></details>
+
+    <details class="dc-row"><summary><span class="dc-el">Lag notice</span><span class="dc-chips"><span class="dc-chip">6 tokens</span><span class="dc-chip">2 states</span></span></summary>
+      <p class="dc-req">Names the sustained speed in words and digits, for example "Playing at 3x &mdash; the engine sustains 3x". Colour never carries the state alone. Enter at 200 ms on <code>--tl-ease</code> with opacity and an 8-pixel rise; exit at 150 ms on <code>ease-in</code>. A transition, never a keyframe, so a rapidly re-triggered notice retargets instead of restarting.</p>
+      <p class="dc-toks"><code>--tl-warning</code> <code>--tl-fg</code> <code>--tl-panel</code> <code>--tl-radius-sm</code> <code>--tl-font-num</code> <code>--tl-ease</code></p></details>
+
+    <details class="dc-row"><summary><span class="dc-el">Numeric readouts</span><span class="dc-chips"><span class="dc-chip">4 tokens</span><span class="dc-chip">1 state</span></span></summary>
+      <p class="dc-req">Clock, speed, frame-time counter and memory gauge all carry <code>font-variant-numeric: tabular-nums</code> so the row does not twitch as values change. Each must measure at least 4.5:1 against <code>--tl-panel</code>, proved before any banner motion is written. This is the brief's named top risk and PRODUCT.md's second strategic principle.</p>
+      <p class="dc-toks"><code>--tl-font-num</code> <code>--tl-fg</code> <code>--tl-panel</code> <code>--tl-fg-muted</code></p></details>
+
+    <details class="dc-row"><summary><span class="dc-el">Touchline mark</span><span class="dc-chips"><span class="dc-chip">3 tokens</span><span class="dc-chip">1 state</span></span></summary>
+      <p class="dc-req">One exported JavaScript function draws three zones: the field above, a white line at 58 percent of the tile height, and the pitchside band below. Inputs are the tile size and a corner radius of tile size times 0.21. One marker and the ball sit on the field. Four variants: primary, reversed, pitchside, mono. Never loaded from an image file. Club crests call the same function with kit colours in place of the turf.</p>
+      <p class="dc-toks"><code>--tl-pitch</code> <code>--tl-pitch-line</code> <code>--tl-pitchside-bg</code></p></details>
+
+    <details class="dc-row"><summary><span class="dc-el">Token file</span><span class="dc-chips"><span class="dc-chip">7 tokens</span><span class="dc-chip">1 state</span></span></summary>
+      <p class="dc-req">One <code>:root</code> block in <code>web/tokens.css</code> is the single source of every colour, radius, spacing, font and easing value. Every value is OKLCH; no pure black and no pure white appears anywhere. The <code>--tl-</code> prefix supersedes the <code>--mv-</code> prefix in <code>02b-design.md</code> and <code>02b-design.yaml</code>, which were written before the product was named. DESIGN.md gains the ten new rows in the same step so the two files never disagree.</p>
+      <p class="dc-toks"><code>--tl-bg</code> <code>--tl-fg</code> <code>--tl-brand</code> <code>--tl-pitch</code> <code>--tl-ring</code> <code>--tl-ease</code> <code>--tl-shadow-1</code></p></details>
+  </div>
+
+  <h2 class="sdlc-h2">Anti-patterns</h2>
+
+  <aside class="callout callout-warn dc-anti"><strong>Football Manager 3D clutter.</strong> No overlay on the pitch beyond the score bug and the goal banner, and nothing drawn over a player marker.</aside>
+  <aside class="callout callout-warn dc-anti"><strong>Sponsor-board clutter.</strong> No logos and no advertising boards on or beside the pitch.</aside>
+  <aside class="callout callout-warn dc-anti"><strong>Arcade styling.</strong> No drop shadow, glow, or motion trail on a player marker. The trail belongs to the ball alone.</aside>
+  <aside class="callout callout-warn dc-anti"><strong>Purple-blue gradient.</strong> Banned anywhere, including the header band, which stays flat <code>--tl-brand</code>.</aside>
+  <aside class="callout callout-warn dc-anti"><strong>Nested cards.</strong> The pitch panel holds the canvas directly and contains no second card.</aside>
+  <aside class="callout callout-warn dc-anti"><strong>Decorative side accent stripe.</strong> Use a full hairline or a background tint instead.</aside>
+  <aside class="callout callout-warn dc-anti"><strong>Bounce or elastic easing.</strong> Banned, including on the scrubber handle. <code>bounce</code> stays 0.</aside>
+  <aside class="callout callout-warn dc-anti"><strong>Pure black or pure white.</strong> Banned, including a kit colour read from a team file. Clamp the lightness first.</aside>
+  <aside class="callout callout-warn dc-anti"><strong>A spinner in a content area.</strong> The pitch shows a skeleton.</aside>
+  <aside class="callout callout-warn dc-anti"><strong>A font service.</strong> Both faces load from <code>web/fonts/</code> as <code>woff2</code>.</aside>
+  <aside class="callout callout-warn dc-anti"><strong>A logo loaded from an image file.</strong> The mark is drawn by <code>web/mark.mjs</code>.</aside>
+  <aside class="callout callout-warn dc-anti"><strong>Colour as the only state signal.</strong> The lag notice carries its state in words.</aside>
+
+  <style>
+    .fragment-design-contract .dc-lede { color: var(--tl-fg-muted, oklch(0.48 0.02 250)); margin: 0 0 12px; max-width: 70ch; }
+    .fragment-design-contract .dc-note { color: var(--tl-fg-muted, oklch(0.48 0.02 250)); font-size: 13px; margin: 8px 0 0; }
+    .fragment-design-contract .dc-grid-wrap { overflow-x: auto; margin: 0 0 8px; }
+    .fragment-design-contract .dc-grid { border-collapse: collapse; font-size: 13px; }
+    .fragment-design-contract .dc-grid th,
+    .fragment-design-contract .dc-grid td { border: 1px solid oklch(0.90 0.008 250); padding: 6px 10px; text-align: center; }
+    .fragment-design-contract .dc-grid th[scope="col"] { font-weight: 600; white-space: nowrap; }
+    .fragment-design-contract .dc-rowhead { text-align: left; font-weight: 600; white-space: nowrap; }
+    .fragment-design-contract .dc-grid td.is-on { color: oklch(0.55 0.17 250); }
+    .fragment-design-contract .dc-mark-row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; margin: 0 0 4px; }
+    .fragment-design-contract .dc-mark { margin: 0; text-align: center; }
+    .fragment-design-contract .dc-mark figcaption { font-size: 12px; color: oklch(0.48 0.02 250); margin-top: 6px; }
+    .fragment-design-contract .dc-rows { display: flex; flex-direction: column; gap: 6px; }
+    .fragment-design-contract .dc-row { border: 1px solid oklch(0.90 0.008 250); border-radius: 8px; padding: 8px 12px; }
+    .fragment-design-contract .dc-row summary { cursor: pointer; display: flex; gap: 12px; align-items: baseline; justify-content: space-between; }
+    .fragment-design-contract .dc-el { font-weight: 600; }
+    .fragment-design-contract .dc-chips { display: inline-flex; gap: 6px; }
+    .fragment-design-contract .dc-chip { font-size: 11px; border: 1px solid oklch(0.90 0.008 250); border-radius: 999px; padding: 1px 8px; color: oklch(0.48 0.02 250); white-space: nowrap; }
+    .fragment-design-contract .dc-req { margin: 10px 0 8px; max-width: 78ch; }
+    .fragment-design-contract .dc-toks { margin: 0; font-size: 12px; line-height: 1.9; }
+    .fragment-design-contract .dc-toks code { background: oklch(0.96 0.006 250); border-radius: 4px; padding: 1px 5px; }
+    .fragment-design-contract .dc-anti { margin: 6px 0; }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-design-contract');
+      if (!root) return;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', {
+        detail: { name: 'design-contract', artifact: 'design-contract', counts: { tokens: 36, states: 8, sizes: 1, themes: 2 } }
+      }));
+    })();
+  </script>
+</section>
+</div><dl class="frontmatter-card"><div><dt>component</dt><dd>match-control</dd></div><div><dt>based-on</dt><dd>02b-design.md</dd></div><div><dt>register</dt><dd>product</dd></div><div><dt>image-gate</dt><dd>pass</dd></div><div><dt>north-star-mock</dt><dd>Design canvas &quot;Match Viewer Design&quot; — https://claude.ai/artifact/5gcPdykgjpXMuRuGzeHEG2 (private; every constraint transcribed as text in steer.md)</dd></div><div><dt>references-loaded</dt><dd>typeset, animate, colorize, layout, optimize, harden, polish, product</dd></div><div><dt>refs</dt><dd>{&quot;design&quot;:&quot;02b-design.md&quot;,&quot;index&quot;:&quot;00-index.md&quot;,&quot;steer&quot;:&quot;steer.md&quot;,&quot;plan&quot;:&quot;04-plan-viewer-pitch.md&quot;}</dd></div></dl><div class="prose"><h1 id="visual-contract-touchline-match-screen" tabindex="-1"><a class="header-anchor" href="#visual-contract-touchline-match-screen"><span>Visual contract: Touchline match screen</span></a></h1>
+<h2 id="1-visual-direction-confirmed" tabindex="-1"><a class="header-anchor" href="#1-visual-direction-confirmed"><span>1. Visual direction confirmed</span></a></h2>
+<p>The product owner confirmed this direction in session on 2026-09-24 as an interim design. It stays in place while the engine slices are built, and a final design replaces it later (<code>po-answers.md</code>, design confirmation). No drawing changed at confirmation, because the remaining slices change only the engine.</p>
+<p>Product register, committed colour strategy, light scene. Light panels tinted toward hue 250, one brand blue on headers and controls, and team kit colours confined to the pitch and the score. The pitch is the most saturated object on the screen and every other surface stays quieter than the turf. Energy lives in the score bug, the goal banner, and the event highlights; the panels stay calm and tabular.</p>
+<p>Three deviations from the brief emerged while writing this contract, each recorded rather than silently applied:</p>
+<ol>
+<li><strong>Token prefix.</strong> The brief and its YAML use <code>--mv-</code>. <code>steer.md</code> fixes <code>--tl-</code> (Touchline). This contract uses <code>--tl-</code> throughout and treats the brief’s prefix as stale.</li>
+<li><strong>Typeface names.</strong> The brief left typography as “one system sans family”. <code>steer.md</code> names Barlow Condensed 700 for display and IBM Plex Sans 400/500/600 for text and numbers. <code>design/typeset.md</code> carries IBM Plex on its reflex-reject list, which governs <em>brand</em>-register font discovery; this is a product-register surface where the product owner has already named the faces, so the named faces stand. Recorded as a deliberate deviation, not an oversight.</li>
+<li><strong>Kit colour safety.</strong> <code>steer.md</code> says the marker ring is the kit secondary when it measures 3:1 on turf. The shipped team file <code>content/teams/default-a.json</code> sets that colour to <code>#000000</code>, which <a href="http://DESIGN.md">DESIGN.md</a> bans. Plan Round 3 Q11 resolved this: every kit hex is converted to OKLCH and its lightness clamped into <code>0.20 … 0.88</code> before the 3:1 test runs.</li>
+</ol>
+<h2 id="2-north-star-mock" tabindex="-1"><a class="header-anchor" href="#2-north-star-mock"><span>2. North-star mock</span></a></h2>
+<ul>
+<li><strong>Path:</strong> the Design canvas “Match Viewer Design”, <code>https://claude.ai/artifact/5gcPdykgjpXMuRuGzeHEG2</code>. The link is private. No local image file exists and none is generated.</li>
+<li><strong>Scene sentence:</strong> the manager plays at a desk in a lit room during the day; the screen must read against ambient light, so panels are light and the pitch is a saturated green field with high-contrast markers.</li>
+</ul>
+<p>Annotated callouts, transcribed from <code>steer.md</code>:</p>
+<ol>
+<li><strong>Header band, 56 pixels.</strong> Carries the score bug. Full page width. Implementation note: <code>viewer-pitch</code> builds the band empty; <code>viewer-match-day</code> fills it.</li>
+<li><strong>Body grid, 336 / 616 / 296 with an 8-pixel gutter.</strong> Three columns under the header at a 1280 by 800 viewport. Implementation note: CSS Grid with fixed track widths; no breakpoint behaviour, because the target is one desktop size.</li>
+<li><strong>Pitch, 616 by 411.</strong> Fills the middle column. Implementation note: a canvas sized in CSS pixels at 616 by 411, with the backing store multiplied by <code>devicePixelRatio</code> and the context scaled to match, so markings stay crisp.</li>
+<li><strong>Playback controls, 40 pixels, directly under the pitch.</strong> Implementation note: <code>match-control</code> buttons at the <code>sm</code> size (28 pixels) inside a 40-pixel strip, so the strip height is the token, not the button height.</li>
+<li><strong>Statistics below the controls.</strong> Implementation note: <code>viewer-match-day</code>. <code>viewer-pitch</code> leaves the region empty.</li>
+<li><strong>Match feed and tactics panel in the right column.</strong> Implementation note: <code>viewer-match-day</code> and <code>viewer-lineup-tactics</code>.</li>
+<li><strong>Player marker.</strong> A filled disc in the club’s safe kit primary, a ring in the safe kit secondary when it measures 3:1 against turf and pitch-line white otherwise, and a shirt number in white or ink, whichever contrasts more with the fill.</li>
+<li><strong>Ball with a short trail.</strong> Implementation note: the trail is the last N tick positions at falling alpha, drawn as one path, never as N separate strokes.</li>
+<li><strong>The mark is the touchline.</strong> One JavaScript function draws three zones into a canvas or an SVG: the field above, a white line at 58 percent of the tile height, and the pitchside band below it. Inputs are the tile size, a corner radius of tile size times 0.21, and the tokens <code>--tl-pitch</code>, <code>--tl-pitch-line</code>, <code>--tl-pitchside-bg</code>. One marker and the ball sit on the field. No logo is ever loaded from an image file. Club crests call the same function with the club’s kit colours in place of the turf.</li>
+<li><strong>State words on every chip.</strong> Queued, Applies now, Applied, Rejected. Colour never carries the state alone. The same rule governs cards, fatigue bands, and injury markers.</li>
+</ol>
+<h2 id="3-mock-fidelity-inventory" tabindex="-1"><a class="header-anchor" href="#3-mock-fidelity-inventory"><span>3. Mock fidelity inventory</span></a></h2>
+<p>Each item names the slice that owns it. <code>viewer-pitch</code> carries a plan step for every item it owns; the rest are pinned here so the later viewer slices inherit them.</p>
+<ol>
+<li><strong>The 1280 by 800 grid</strong> — header 56, columns 336 / 616 / 296, gutter 8 — page shell — non-negotiable because the pitch’s final size and position depend on it, and evidence measured at any other layout does not describe the shipping screen. Owner: <code>viewer-pitch</code>.</li>
+<li><strong>Pitch tile at exactly 616 by 411</strong> with the full markings drawn from the engine’s own 105 by 68 metre coordinate space — middle column — non-negotiable because the aspect ratio ties rendered position to simulated position, and a mismatch would put markers outside the touchline. Owner: <code>viewer-pitch</code>.</li>
+<li><strong>Playback control strip, 40 pixels, immediately under the pitch</strong> — middle column — non-negotiable because the product owner’s first-five-seconds statement requires the controls visible without scrolling. Owner: <code>viewer-pitch</code>.</li>
+<li><strong>Marker treatment: safe kit-primary fill, conditional ring, contrast-chosen shirt number</strong> — on the pitch — non-negotiable because it is the only place team identity appears on the pitch, and because the ring rule is the accessibility guarantee that colour is not the only signal separating two teams. Owner: <code>viewer-pitch</code>.</li>
+<li><strong>Ball with a short falling-alpha trail</strong> — on the pitch — non-negotiable because the trail is the Opta and Second Spectrum reference that separates this from an arcade view. Owner: <code>viewer-pitch</code>.</li>
+<li><strong>Barlow Condensed 700 for display, IBM Plex Sans 400/500/600 for text and numbers, both from a local bundle, with <code>font-variant-numeric: tabular-nums</code> on every changing number</strong> — everywhere — non-negotiable because a number that changes width as it changes value makes the whole numeric row twitch, and because a font service is forbidden. Owner: <code>viewer-pitch</code> lands the bundle and the numeric treatment; later slices reuse it.</li>
+<li><strong>The <code>--tl-</code> OKLCH token set at hue 250, with no pure black and no pure white anywhere</strong> — everywhere — non-negotiable because it is the single source of every colour and because two files still carry the stale <code>--mv-</code> prefix. Owner: <code>viewer-pitch</code> writes the token file.</li>
+<li><strong>The touchline mark drawn programmatically, never loaded from an image</strong> — favicon, header mark, club crests — non-negotiable because the product owner ruled that no asset files exist and every mark is generated in JavaScript. Owner: <code>viewer-pitch</code> writes the function and uses it for the favicon and the empty header mark; <code>viewer-match-day</code> uses it for club crests.</li>
+<li><strong>State words beside every state colour</strong> — chips, cards, fatigue bands, injury markers — non-negotiable because NFR-6 forbids colour as the only indicator. Owner: <code>viewer-lineup-tactics</code> (chips) and <code>viewer-match-day</code> (cards, fatigue). <code>viewer-pitch</code> applies it to the lag notice, which names the sustained speed in words and digits.</li>
+<li><strong>Skeletons and a step list while the engine starts, never a spinner in a content area</strong> — loading state — non-negotiable because the brief weights the loading state and the product owner named skeletons directly. Owner: <code>viewer-reports-recovery</code>. <code>viewer-pitch</code> reserves the skeleton token and draws the skeleton pitch before the first tick arrives.</li>
+</ol>
+<h2 id="4-implementation-contract" tabindex="-1"><a class="header-anchor" href="#4-implementation-contract"><span>4. Implementation contract</span></a></h2>
+<h3 id="token-choices" tabindex="-1"><a class="header-anchor" href="#token-choices"><span>Token choices</span></a></h3>
+<p>Write <code>web/tokens.css</code> as the single <code>:root</code> block. Every value is OKLCH. No pure black and no pure white appears anywhere.</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Token</th>
+<th>Value</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--tl-bg</code></td>
+<td><code>oklch(0.985 0.006 250)</code></td>
+<td>page paper</td>
+</tr>
+<tr>
+<td><code>--tl-panel</code></td>
+<td><code>oklch(0.995 0.003 250)</code></td>
+<td>panel surface</td>
+</tr>
+<tr>
+<td><code>--tl-fg</code></td>
+<td><code>oklch(0.24 0.02 250)</code></td>
+<td>ink</td>
+</tr>
+<tr>
+<td><code>--tl-fg-muted</code></td>
+<td><code>oklch(0.48 0.02 250)</code></td>
+<td>secondary label</td>
+</tr>
+<tr>
+<td><code>--tl-line</code></td>
+<td><code>oklch(0.90 0.008 250)</code></td>
+<td>hairline divider</td>
+</tr>
+<tr>
+<td><code>--tl-brand</code></td>
+<td><code>oklch(0.55 0.17 250)</code></td>
+<td>header and control fill</td>
+</tr>
+<tr>
+<td><code>--tl-brand-hover</code></td>
+<td><code>oklch(0.49 0.17 250)</code></td>
+<td>hover</td>
+</tr>
+<tr>
+<td><code>--tl-brand-pressed</code></td>
+<td><code>oklch(0.43 0.17 250)</code></td>
+<td>pressed</td>
+</tr>
+<tr>
+<td><code>--tl-on-brand</code></td>
+<td><code>oklch(0.985 0.006 250)</code></td>
+<td>label on brand</td>
+</tr>
+<tr>
+<td><code>--tl-pitch</code></td>
+<td><code>oklch(0.62 0.13 145)</code></td>
+<td>turf, the most saturated object</td>
+</tr>
+<tr>
+<td><code>--tl-pitch-line</code></td>
+<td><code>oklch(0.97 0.01 145)</code></td>
+<td>pitch markings, fallback marker ring</td>
+</tr>
+<tr>
+<td><code>--tl-pitchside-bg</code></td>
+<td><code>oklch(0.28 0.03 250)</code></td>
+<td>overlays drawn on the pitch</td>
+</tr>
+<tr>
+<td><code>--tl-ring</code></td>
+<td><code>oklch(0.55 0.17 250 / 0.35)</code></td>
+<td>focus ring, 3:1 against paper</td>
+</tr>
+<tr>
+<td><code>--tl-success</code></td>
+<td><code>oklch(0.52 0.14 150)</code></td>
+<td>applied state</td>
+</tr>
+<tr>
+<td><code>--tl-warning</code></td>
+<td><code>oklch(0.55 0.13 75)</code></td>
+<td>lag notice</td>
+</tr>
+<tr>
+<td><code>--tl-danger</code></td>
+<td><code>oklch(0.50 0.19 25)</code></td>
+<td>rejected, error</td>
+</tr>
+<tr>
+<td><code>--tl-card-yellow</code></td>
+<td><code>oklch(0.85 0.16 95)</code></td>
+<td>caution card</td>
+</tr>
+<tr>
+<td><code>--tl-skeleton</code></td>
+<td><code>oklch(0.93 0.01 250)</code></td>
+<td>skeleton fill</td>
+</tr>
+<tr>
+<td><code>--tl-radius-sm</code> … <code>-xl</code></td>
+<td><code>4px</code>, <code>6px</code>, <code>8px</code>, <code>10px</code></td>
+<td>radii</td>
+</tr>
+<tr>
+<td><code>--tl-padx-md</code> / <code>--tl-pady-md</code></td>
+<td><code>14px</code> / <code>8px</code></td>
+<td>control padding</td>
+</tr>
+<tr>
+<td><code>--tl-gap</code></td>
+<td><code>8px</code></td>
+<td>icon to label, and the grid gutter</td>
+</tr>
+<tr>
+<td><code>--tl-font-display</code></td>
+<td><code>&quot;Barlow Condensed&quot;, sans-serif</code> at 700</td>
+<td>score bug, goal banner, report titles</td>
+</tr>
+<tr>
+<td><code>--tl-font-md</code></td>
+<td><code>14px / 600 &quot;IBM Plex Sans&quot;</code></td>
+<td>control label</td>
+</tr>
+<tr>
+<td><code>--tl-font-num</code></td>
+<td><code>14px / 500 &quot;IBM Plex Sans&quot;</code>, <code>tabular-nums</code></td>
+<td>clock, score, statistics, frame counter</td>
+</tr>
+<tr>
+<td><code>--tl-ease</code></td>
+<td><code>cubic-bezier(0.32, 0.72, 0, 1)</code></td>
+<td>every transition</td>
+</tr>
+<tr>
+<td><code>--tl-shadow-1</code></td>
+<td><code>0 1px 2px oklch(0.24 0.02 250 / 0.12)</code></td>
+<td>panel elevation, shadows over borders</td>
+</tr>
+<tr>
+<td><code>--tl-header-h</code></td>
+<td><code>56px</code></td>
+<td>header band</td>
+</tr>
+<tr>
+<td><code>--tl-col-left</code> / <code>-mid</code> / <code>-right</code></td>
+<td><code>336px</code> / <code>616px</code> / <code>296px</code></td>
+<td>body grid tracks</td>
+</tr>
+<tr>
+<td><code>--tl-pitch-h</code></td>
+<td><code>411px</code></td>
+<td>pitch tile height</td>
+</tr>
+<tr>
+<td><code>--tl-controls-h</code></td>
+<td><code>40px</code></td>
+<td>playback strip</td>
+</tr>
+</tbody>
+</table>
+<p><strong>New tokens added by this contract</strong> beyond <a href="http://DESIGN.md">DESIGN.md</a>: <code>--tl-fg-muted</code>, <code>--tl-line</code>, <code>--tl-panel</code>, <code>--tl-skeleton</code>, <code>--tl-success</code>, <code>--tl-warning</code>, <code>--tl-danger</code>, <code>--tl-card-yellow</code> (all from <code>steer.md</code>), <code>--tl-font-display</code>, and the six layout tokens. <a href="http://DESIGN.md">DESIGN.md</a> must gain the same rows when <code>viewer-pitch</code> writes the token file, so the two never disagree.</p>
+<h3 id="component-decisions" tabindex="-1"><a class="header-anchor" href="#component-decisions"><span>Component decisions</span></a></h3>
+<ul>
+<li><strong>Create</strong> <code>match-control</code>, the button primitive of record, in <code>web/components/match-control.css</code>. Four sizes (28 / 36 / 44 / 52 pixels high), five states, two themes. <code>viewer-pitch</code> ships the <code>sm</code> and <code>md</code> sizes in the light and pitchside themes; the remaining sizes ship unused but defined, so later slices add no new geometry.</li>
+<li><strong>Create</strong> <code>web/mark.mjs</code>, the touchline-mark function. One exported function, three tokens and two numbers in, one drawn tile out. The favicon, the empty header mark, and every later club crest call it.</li>
+<li><strong>Create</strong> <code>web/pitch.mjs</code>, the pitch renderer. It owns the coordinate mapping from the engine’s centred metre space to canvas pixels, and nothing else draws to the canvas.</li>
+<li><strong>Do not create</strong> a component library, a CSS framework, or a build step. <a href="http://PRODUCT.md">PRODUCT.md</a> forbids all three.</li>
+</ul>
+<h3 id="layout-structure" tabindex="-1"><a class="header-anchor" href="#layout-structure"><span>Layout structure</span></a></h3>
+<p>CSS Grid. One page-level grid of two rows (<code>--tl-header-h</code>, then the rest) and, in the second row, three columns of <code>--tl-col-left</code>, <code>--tl-col-mid</code>, <code>--tl-col-right</code> with <code>gap: var(--tl-gap)</code>. No breakpoints and no fluid tracks: the target is a single 1280 by 800 desktop viewport, and <code>stack.platforms</code> carries no mobile or tablet. The middle column stacks the pitch (<code>--tl-pitch-h</code>) above the control strip (<code>--tl-controls-h</code>) above the statistics region, which stays empty in this slice.</p>
+<h3 id="type-scale" tabindex="-1"><a class="header-anchor" href="#type-scale"><span>Type scale</span></a></h3>
+<p>Product register, fixed rem scale, ratio 1.125 to 1.2. <code>12px</code> caption, <code>14px</code> control label and number, <code>16px</code> body minimum, <code>18px</code> and <code>20px</code> for panel headings, <code>30px</code> and above for the score bug in Barlow Condensed 700. Shirt numbers on the canvas are drawn at 10 pixels in IBM Plex Sans 600, which is below the 12-pixel floor for CSS text and is permitted only because a canvas shirt number is a graphic label with a redundant ring and position, not readable prose.</p>
+<h3 id="colour-application" tabindex="-1"><a class="header-anchor" href="#colour-application"><span>Colour application</span></a></h3>
+<ul>
+<li>Turf, pitch markings, and the marker fills are the only saturated objects. Panels never exceed chroma 0.01.</li>
+<li>Brand blue appears on the header band, the playback controls, and the focus ring. It never appears on the pitch.</li>
+<li>Kit colours appear on the pitch and, later, in the score. Nowhere else.</li>
+<li>The lag notice uses <code>--tl-warning</code> <strong>and</strong> the words “Playing at 3x — the engine sustains 3x”, so the colour is never the only signal.</li>
+<li>Every numeric readout is <code>--tl-fg</code> on <code>--tl-panel</code> and must measure at least 4.5:1 before any motion is written. This is the brief’s named top risk and <a href="http://PRODUCT.md">PRODUCT.md</a>’s second strategic principle.</li>
+</ul>
+<h3 id="motion" tabindex="-1"><a class="header-anchor" href="#motion"><span>Motion</span></a></h3>
+<p>Apply <code>design/animate.md</code>’s frequency rule. The playback controls are pressed tens of times per match, so they get a colour transition only, never a press-scale bounce; <code>match-control</code> ships a <code>static</code> variant and the playback strip uses it.</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Interaction</th>
+<th>Animate?</th>
+<th>Timing</th>
+<th>Easing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Control hover and press</td>
+<td>yes, colour only</td>
+<td>150 ms</td>
+<td><code>--tl-ease</code></td>
+</tr>
+<tr>
+<td>Focus ring appearance</td>
+<td>no</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Lag notice enter</td>
+<td>yes, opacity and 8-pixel rise</td>
+<td>200 ms</td>
+<td><code>--tl-ease</code></td>
+</tr>
+<tr>
+<td>Lag notice exit</td>
+<td>yes, opacity and 8-pixel fall</td>
+<td>150 ms</td>
+<td><code>ease-in</code></td>
+</tr>
+<tr>
+<td>Speed change</td>
+<td>no</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Scrubber drag</td>
+<td>no transition; the value follows the pointer directly</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Skeleton pitch to first tick</td>
+<td>yes, cross-fade</td>
+<td>250 ms</td>
+<td><code>--tl-ease</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>bounce: 0</code> everywhere. No keyframe animation on anything re-triggerable; transitions only, so a rapidly toggled notice retargets instead of restarting. Animate <code>opacity</code> and <code>transform</code> only. <code>@media (prefers-reduced-motion: reduce)</code> sets every transition to <code>0.01ms</code>; it never touches the canvas redraw, which is content.</p>
+<h3 id="finish-and-detail" tabindex="-1"><a class="header-anchor" href="#finish-and-detail"><span>Finish and detail</span></a></h3>
+<ul>
+<li><strong>Concentric radius.</strong> The pitch tile sits in a panel with 8 pixels of padding, so the panel radius is the tile radius plus 8. The control strip’s buttons at <code>--tl-radius-sm</code> inside a strip with 6 pixels of padding give the strip <code>--tl-radius-md</code>.</li>
+<li><strong>Shadows over borders.</strong> Panels lift with <code>--tl-shadow-1</code>. The pitch-tile edge and the divider under the header stay real 1-pixel borders in <code>--tl-line</code>.</li>
+<li><strong>Hit areas.</strong> Every playback control is at least 40 by 40 pixels. The <code>sm</code> button is 28 pixels tall, so it carries a centred pseudo-element extending the hit area to 40 by 40, and adjacent hit areas never overlap.</li>
+<li><strong>Optical alignment.</strong> The play triangle shifts 2 pixels right of geometric centre.</li>
+<li><strong>Tabular figures</strong> on the clock, the speed readout, the frame-time counter, and the memory gauge. Not on the shirt numbers, which are static per player.</li>
+</ul>
+<h3 id="state-coverage" tabindex="-1"><a class="header-anchor" href="#state-coverage"><span>State coverage</span></a></h3>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Element</th>
+<th>Required states</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>match-control</code> button</td>
+<td>default, hover, focus, active, disabled</td>
+</tr>
+<tr>
+<td>Speed selector</td>
+<td>default, hover, focus, active, disabled, selected</td>
+</tr>
+<tr>
+<td>Rewind scrubber</td>
+<td>default, hover, focus, active, disabled</td>
+</tr>
+<tr>
+<td>Lag notice</td>
+<td>hidden, shown</td>
+</tr>
+<tr>
+<td>Pitch canvas</td>
+<td>loading (skeleton), empty (kick-off, no motion), default (playing), error (socket dropped)</td>
+</tr>
+<tr>
+<td>Page</td>
+<td>loading, default, error</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>error</code> state for the canvas and the page is stubbed in this slice and completed by <code>viewer-reports-recovery</code>; the stub renders the panel and the text, with no recovery action.</p>
+<h2 id="5-anti-patterns-to-avoid" tabindex="-1"><a class="header-anchor" href="#5-anti-patterns-to-avoid"><span>5. Anti-patterns to avoid</span></a></h2>
+<p>Specific to this surface, drawn from the brief’s anti-goals and the absolute bans:</p>
+<ul>
+<li><strong>No Football Manager 3D clutter.</strong> No overlays on the pitch beyond the score bug and the goal banner. Nothing is drawn over a player marker.</li>
+<li><strong>No sponsor-board clutter.</strong> No logos, no advertising boards drawn on or beside the pitch.</li>
+<li><strong>No arcade or cartoon styling.</strong> No drop shadows on markers, no glow, no motion trails on players — the trail belongs to the ball alone.</li>
+<li><strong>No purple-blue gradient</strong> anywhere, including the header band, which is flat <code>--tl-brand</code>.</li>
+<li><strong>No nested cards.</strong> The pitch panel holds the canvas directly; it does not contain a second card.</li>
+<li><strong>No decorative side accent stripe</strong> on any panel. Use a full hairline or a background tint.</li>
+<li><strong>No bounce or elastic easing</strong>, including on the scrubber handle.</li>
+<li><strong>No pure black and no pure white</strong>, including in a kit colour taken from a team file — clamp it first.</li>
+<li><strong>No spinner in a content area.</strong> The pitch shows a skeleton.</li>
+<li><strong>No font service.</strong> Both faces load from <code>web/fonts/</code> as <code>woff2</code>.</li>
+<li><strong>No logo image file.</strong> The mark is drawn by <code>web/mark.mjs</code>.</li>
+<li><strong>No colour-only state.</strong> The lag notice, and later every chip and card, carries its state word.</li>
+</ul>
+<h2 id="6-implementation-references" tabindex="-1"><a class="header-anchor" href="#6-implementation-references"><span>6. Implementation references</span></a></h2>
+<p><code>/wf implement</code> loads, from <code>skills/wf/reference/design/</code>: <code>product.md</code> (register), <code>typeset.md</code> (type scale, tabular figures, the reflex-reject deviation recorded in section 1), <code>animate.md</code> (the frequency rule, strong easing, interruptible transitions, <code>bounce: 0</code>), <code>colorize.md</code> (OKLCH, committed strategy, kit-colour mapping), <code>layout.md</code> (the fixed three-column grid), <code>optimize.md</code> (canvas at 60 frames per second), <code>harden.md</code> (focus rings at 3:1, colour never the only indicator, canvas accessibility), and <code>polish.md</code> (concentric radius, shadows over borders, hit areas, optical alignment).</p>
+<p>The authoritative list is the <code>references-loaded:</code> array in this file’s frontmatter. A reference named here and missing there is not loaded.</p>
+<h2 id="7-carry-the-contract-into-the-plan" tabindex="-1"><a class="header-anchor" href="#7-carry-the-contract-into-the-plan"><span>7. Carry the contract into the plan</span></a></h2>
+<p><code>04-plan-viewer-pitch.md</code> carries a concrete step for every inventory item owned by <code>viewer-pitch</code> — items 1, 2, 3, 4, 5, 6, 7, and 8 — and one step that writes the token file and the <code>match-control</code> primitive in full, so items 9 and 10 and the four sizes this slice does not use are already defined when <code>viewer-match-day</code>, <code>viewer-lineup-tactics</code>, and <code>viewer-reports-recovery</code> arrive. The implementation contract’s token, component, layout, type, colour, motion, finish, and state decisions are pointers from those steps, not restatements.</p>
+<p><code>00-index.md</code> moves <code>current-stage</code> to <code>plan</code>. There is no hand-back to a separate design command.</p></div><details class="history revisions">
+    <summary>1 prior revision</summary>
+    <ol><li><a href="history/0/INDEX.html">Rev 0 — 2026-09-22T14:41:32Z</a></li></ol>
+  </details>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-24T11:22:17Z</span>
+    <a href="../../../workflows/football-manager-match-engine/02c-craft.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../INDEX.html">football-manager-match-engine</a><span class="m-sheet-here" aria-current="page">design-brief</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../workflows/football-manager-match-engine/02c-craft.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-24T11:22:17Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="implement">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · implement — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="implement">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../../../INDEX.html">implement</a><span aria-hidden="true">/</span><a href="../../INDEX.html">tempo-and-restarts</a><span aria-hidden="true">/</span><a href="../INDEX.html">history</a><span aria-hidden="true">/</span><span class="m-here">0</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · implement</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../../INDEX.html">implement</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">tempo-and-restarts</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">history</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">0</b></div>
+    <div class="actions"><a href="../../../../../../workflows/football-manager-match-engine/history/05-implement-tempo-and-restarts-0.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">history/05-implement-tempo-and-restarts-0.md</div>
+      <h1 class="pg-title">Implement · tempo-and-restarts</h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">awaiting-input</span><span class="meta">stage 5</span><span class="meta">updated 2026-09-25T04:27:37Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-implementation" tabindex="-1"><a class="header-anchor" href="#the-implementation"><span>The Implementation</span></a></h2>
+<p>The slice started from <code>bce0144</code>, where teams made 1,225 passes each at 86.4% and the ball was live for about 90 minutes. The counting and every lever the plan named are now in the engine, at commit <code>831553b</code>. A clearance is its own kick, the first kick of a restart taker is a restart kick, and <code>stats.passes</code> counts open-play passes only. <code>stats.clearances</code>, <code>stats.restart_kicks</code> and <code>stats.ball_in_play_s</code> are in match-stats, and the calibrate report shows the minutes in play per 90. The carry window, the clearance aim spread and the cross clearance are tuning values. They ship switched off, so play is unchanged: on seed 42 over 200 matches, the counting alone moves passes from 1,225.8 to 1,193.8 per team and leaves throw-ins, goal kicks and goals identical. Eight fast scenes prove the counting, the timing and the cross clearance.</p>
+<p>The tuning stopped. 60 settings on seed 42 found two walls. First, the aim spread and the cross clearance at their bounds give 18.3 throw-ins per match against a floor of 35; only the carrier’s clearance weight reaches the band. Second, every setting with 550 or fewer passes per team makes carriers dribble forward, and gives 27–61 shots per team (13.2 today) and 4.0–14.8 goals per match. The best setting for the four criteria fails “Passes are realistic” on the test seeds (603 per team) and breaks <code>every_formation_holds</code> in 6 of 10 pairings. The plan said to stop and report, so the choice is with the product owner as Q-TR1 in <code>po-answers.md</code>.</p>
+<p>When Q-TR1 is answered, a rerun of implement tunes the shipped values and moves the restart delays to the sourced medians. The code, the seams and the slow tests do not change. The top risk: in this engine a carried ball advances faster and more safely than a passed one, so any answer that keeps 350–550 passes needs carrying to be contested.</p></section><dl class="frontmatter-card"><div><dt>type</dt><dd>implement</dd></div><div><dt>slug</dt><dd>football-manager-match-engine</dd></div><div><dt>slice-slug</dt><dd>tempo-and-restarts</dd></div><div><dt>status</dt><dd>awaiting-input</dd></div><div><dt>stage-number</dt><dd>5</dd></div><div><dt>created-at</dt><dd>2026-09-25T04:27:37Z</dd></div><div><dt>updated-at</dt><dd>2026-09-25T04:27:37Z</dd></div><div><dt>metric-files-changed</dt><dd>18</dd></div><div><dt>metric-lines-added</dt><dd>911</dd></div><div><dt>metric-lines-removed</dt><dd>21</dd></div><div><dt>metric-deviations-from-plan</dt><dd>7</dd></div><div><dt>metric-review-fixes-applied</dt><dd>0</dd></div><div><dt>commit-sha</dt><dd>831553b5b49baa7105b9ffdbd33e693661910809</dd></div><div><dt>commits</dt><dd>831553b5b49baa7105b9ffdbd33e693661910809</dd></div><div><dt>has-blockers</dt><dd>true</dd></div><div><dt>open-questions</dt><dd>Q-TR1 Fewer passes make the match a shooting gallery — AWAITING INPUT (po-answers.md)</dd></div><div><dt>steering-honored</dt><dd>Heavy runs go to the server (2026-09-25): every calibrate run, every release slow test, fmt, clippy and the workspace suite ran on the server through the sync script; the benchmark, the page tests and the two Windows-only tests ran on this PC with -j 6., Q-KS2: corners from clearances and crosses are built as one mechanism, a defender&#x27;s clearance of a fast pass inside his own penalty area; a corner still needs the ball to cross the goal line after a defending touch (RIM-9). No parry was turned toward the goal line., Q-E4: band misses are recorded, not failed; no band, limit or criterion was changed., Q-I1: targeted calibrate runs were used only as the inner loop; the slice gate was not run because the slice stopped before a setting was accepted., Output boundary: code comments, test names, docs and the commit message use product language; the added lines were leak-checked before the commit., Design direction: not applicable; no page changed.</dd></div><div><dt>tags</dt><dd>engine, passing, restarts, realism</dd></div><div><dt>refs</dt><dd>{&quot;index&quot;:&quot;00-index.md&quot;,&quot;implement-index&quot;:&quot;05-implement.md&quot;,&quot;slice-def&quot;:&quot;03-slice-tempo-and-restarts.md&quot;,&quot;plan&quot;:&quot;04-plan-tempo-and-restarts.md&quot;,&quot;benchmark&quot;:&quot;05c-benchmark.md&quot;,&quot;evidence&quot;:&quot;implement-evidence/tempo-and-restarts/&quot;,&quot;siblings&quot;:[&quot;05-implement-keeper-and-shots.md&quot;,&quot;05-implement-lone-forward.md&quot;,&quot;05-implement-tuning-loop.md&quot;,&quot;05-implement-realism-bands-v2.md&quot;,&quot;05-implement-defending-and-discipline.md&quot;],&quot;verify&quot;:&quot;06-verify-tempo-and-restarts.md&quot;}</dd></div><div><dt>next-command</dt><dd>wf-implement</dd></div><div><dt>next-invocation</dt><dd>/wf implement football-manager-match-engine tempo-and-restarts</dd></div></dl><div class="prose"><h1 id="implement-tempo-and-restarts" tabindex="-1"><a class="header-anchor" href="#implement-tempo-and-restarts"><span>Implement: Tempo and restarts</span></a></h1>
+<h2 id="summary-of-changes" tabindex="-1"><a class="header-anchor" href="#summary-of-changes"><span>Summary of Changes</span></a></h2>
+<ul>
+<li>A clearance is <code>Kick::Clear</code>. A carrier who chooses to clear kicks one, aimed with <code>clearances.aim_spread</code> (the hard-set 0.6 rad before).</li>
+<li>The restart taker is marked when play restarts and when a half kicks off. His first kick, before anyone else touches the ball, is a restart kick. A shot is always a shot.</li>
+<li><code>Summary</code> counts <code>clearances</code>, <code>restart_kicks</code> and <code>live_ticks</code>. Only an open-play pass adds to <code>passes</code> and can be completed, so pass accuracy is over open-play passes.</li>
+<li>A defender can clear a fast open-play pass inside his own penalty area, once per flight, by deflection. The ball goes away from his goal centre, his side touches it last, and one clearance is counted. It ships off (<code>cross_chance</code> 0).</li>
+<li>The carry window: for <code>carry_s</code> after gaining the ball, an unpressed carrier pays <code>carry_cost</code> on a pass and on a clearance. It ships off (<code>carry_cost</code> 0).</li>
+<li>match-stats gets <code>stats.clearances</code>, <code>stats.restart_kicks</code> and <code>stats.ball_in_play_s</code>. The calibrate report gets <code>ball_in_play_min_per_90_mean</code>. Both schemas allow them, and <code>stats.passes</code> is described as open-play passes.</li>
+<li>The snapshot moves to version 6 for the three counters and the restart-taker mark.</li>
+<li><code>Scene::clear</code> is a new scene seam. <code>tests/tempo_and_restarts.rs</code> holds 8 fast scenes and 4 slow criterion tests.</li>
+</ul>
+<h2 id="files-changed" tabindex="-1"><a class="header-anchor" href="#files-changed"><span>Files Changed</span></a></h2>
+<ul>
+<li><code>crates/engine/src/decision.rs</code>: <code>Kick::Clear</code> and <code>Kick::flight</code>; the carry window in <code>options()</code>; the clearance aim from the tuning; two unit tests of the carry window.</li>
+<li><code>crates/engine/src/sim.rs</code>: the three counters; the restart-taker mark and the per-flight clearer mask; counting by kind in <code>kick_ball()</code>; <code>live_ticks</code> in the live arm; <code>try_clear_cross()</code> before the ordinary contest.</li>
+<li><code>crates/engine/src/rules/mod.rs</code>: the mark set at a restart and at a kick-off, cleared at every dead ball; the shoot-out kick reads <code>Kick::flight</code>.</li>
+<li><code>crates/engine/src/tuning.rs</code>: <code>carry_s</code>, <code>carry_cost</code> and the <code>ClearanceTuning</code> block, with bounds and defaults.</li>
+<li><code>crates/engine/src/snapshot.rs</code>: version 6; the counters and the mark.</li>
+<li><code>crates/engine/src/observe/mod.rs</code>: the three match-stats keys and their contract check.</li>
+<li><code>crates/engine/src/scenario.rs</code>: <code>Scene::clear</code>; a scene starts in open play with no restart taker.</li>
+<li><code>crates/engine-cli/src/report/mod.rs</code>, <code>crates/engine-cli/src/calibrate/mod.rs</code>: <code>ball_in_play_min_per_90_mean</code>, scaled by the run’s match length.</li>
+<li><code>content/tuning.json</code>: the carry and clearance values, switched off.</li>
+<li><code>crates/engine/tests/tempo_and_restarts.rs</code> (new): the fast scenes and the slow criterion tests.</li>
+<li><code>crates/engine/tests/content.rs</code>: the new values pinned; an older tuning block loads with the defaults.</li>
+<li><code>crates/engine/tests/snapshot.rs</code>: the version in the refusal message.</li>
+<li><code>schemas/observability/match-stats.schema.json</code>, <code>schemas/observability/run-report.schema.json</code>: the optional keys; the <code>stats.passes</code> description.</li>
+<li><code>docs/reference/data-files.md</code>, <code>docs/reference/protocol.md</code>, <code>.ai/observability.md</code>: the rows, the clearance paragraph, the <code>stats.passes</code> wording and the key list.</li>
+</ul>
+<h2 id="shared-files-also-touched-by-sibling-slices" tabindex="-1"><a class="header-anchor" href="#shared-files-also-touched-by-sibling-slices"><span>Shared Files (also touched by sibling slices)</span></a></h2>
+<ul>
+<li><code>crates/engine/src/sim.rs</code> and <code>crates/engine/src/rules/mod.rs</code>: <code>keeper-and-shots</code> added the shot contest and <code>deflected_by()</code>. The cross clearance reuses both and runs after the shot contest.</li>
+<li><code>crates/engine/src/decision.rs</code>: <code>lone-forward</code> added the lone-carrier weights to <code>options()</code>. The carry window sits beside them and does not read them.</li>
+<li><code>content/tuning.json</code>, <code>crates/engine/src/tuning.rs</code>: shared by every tuning slice. The new fields have serde defaults, so <code>TUNING_VERSION</code> stays 2.</li>
+<li><code>crates/engine/src/snapshot.rs</code>: the version moves from 5 to 6.</li>
+</ul>
+<h2 id="notes-on-design-choices" tabindex="-1"><a class="header-anchor" href="#notes-on-design-choices"><span>Notes on Design Choices</span></a></h2>
+<ul>
+<li>The carry window is a soft cost, not a stored decision, so every agent still decides every tick and no draw is added (the unit test checks the next draw).</li>
+<li>The restart-taker mark is in the snapshot. A half’s kick-off sets it while play is live, so a resumed match needs it to count the same.</li>
+<li>A dropped ball restarts through the same path, so its taker’s first kick is also a restart kick (Law 8 makes it a restart).</li>
+<li>The minutes-per-90 figure is a report figure, not a band. The bands file is the product owner’s sourced data.</li>
+<li>The fast scenes switch the cross clearance on in their own configuration, so they prove the mechanism while it ships off.</li>
+</ul>
+<h2 id="verification-seams-built" tabindex="-1"><a class="header-anchor" href="#verification-seams-built"><span>Verification Seams Built</span></a></h2>
+<ul>
+<li>Only real passes count → <code>Kick::Clear</code> at <code>crates/engine/src/decision.rs:24</code>, the restart-taker mark at <code>crates/engine/src/sim.rs:524</code> (set at <code>crates/engine/src/rules/mod.rs:165</code> and <code>:594</code>), counting at <code>crates/engine/src/sim.rs:974-998</code>, and <code>Scene::clear</code> at <code>crates/engine/src/scenario.rs:143</code> (enables <code>cargo test -p engine --all-features --test tempo_and_restarts</code> to observe a clearance and each restart kick on the real engine).</li>
+<li>The ball is in play for about an hour → <code>Summary::live_ticks</code> counted at <code>crates/engine/src/sim.rs:855</code>, <code>stats.ball_in_play_s</code> at <code>crates/engine/src/observe/mod.rs:202</code>, <code>ball_in_play_min_per_90_mean</code> at <code>crates/engine-cli/src/report/mod.rs:465</code> (enables the slow test <code>the_ball_is_in_play_for_about_an_hour</code> and <code>engine-cli calibrate</code> to read it).</li>
+<li>Passes are realistic, Throw-ins stay in band → the slow tests <code>passes_are_realistic</code> (<code>crates/engine/tests/tempo_and_restarts.rs:382</code>) and <code>throw_ins_stay_in_band</code> (<code>:418</code>) over one shared run of 200 matches (<code>runs()</code> at <code>:375</code>).</li>
+<li>Corners from clearances (Q-KS2) → <code>try_clear_cross()</code> at <code>crates/engine/src/sim.rs:1154</code> and the scene <code>a_cleared_pass_along_the_goal_line_can_give_a_corner</code> (<code>crates/engine/tests/tempo_and_restarts.rs:248</code>); <code>restart_census</code> (<code>:442</code>) asserts that every corner followed a crossing.</li>
+</ul>
+<h2 id="tuning-loop-step-9" tabindex="-1"><a class="header-anchor" href="#tuning-loop-step-9"><span>Tuning Loop (step 9)</span></a></h2>
+<p>Every run is <code>engine-cli calibrate --suite equal --seed 42 --matches 200</code> on the server. The full table of 60 settings is <code>implement-evidence/tempo-and-restarts/inner/sweeps.txt</code>, tabulated from each run’s report and statistics records. Representative rows:</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Setting</th>
+<th>Passes per team</th>
+<th>Accuracy %</th>
+<th>Throw-ins</th>
+<th>Ball in play (min/90)</th>
+<th>Shots per team</th>
+<th>Goals per match</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Shipped at <code>bce0144</code> (<code>tr-set-base</code>)</td>
+<td>1,225.8</td>
+<td>86.5</td>
+<td>21.1</td>
+<td>89.6 (from <code>tr-count</code>)</td>
+<td>12.0</td>
+<td>1.79</td>
+<td>baseline</td>
+</tr>
+<tr>
+<td>Counting alone (<code>tr-count</code>)</td>
+<td>1,193.8</td>
+<td>86.7</td>
+<td>21.1</td>
+<td>89.6</td>
+<td>12.0</td>
+<td>1.79</td>
+<td>play identical</td>
+</tr>
+<tr>
+<td>Plan start: carry 1.5 s / 1.0, medians, cross 0.3 (<code>tr-start</code>)</td>
+<td>606.7</td>
+<td>92.2</td>
+<td>16.9</td>
+<td>60.2</td>
+<td>42.8</td>
+<td>5.12</td>
+<td>shots x3.6</td>
+</tr>
+<tr>
+<td>Aim spread 1.6, cross chance 1.0, reach 3, spread 3.2 (<code>s8-W7</code>)</td>
+<td>606.3</td>
+<td>92.2</td>
+<td>18.3</td>
+<td>60.0</td>
+<td>43.3</td>
+<td>5.45</td>
+<td>throw-in wall of the named levers</td>
+</tr>
+<tr>
+<td>Hold 0, dribble −0.8, clear −0.5 (<code>s2-L</code>)</td>
+<td>742.9</td>
+<td>94.3</td>
+<td>40.1</td>
+<td>71.1</td>
+<td>6.4</td>
+<td>0.67</td>
+<td>passes and ball in play fail</td>
+</tr>
+<tr>
+<td>Carry 1.0 s / 1.5, <code>clear</code> −0.3, <code>min_lane</code> 0.5, <code>lane</code> 0.3 (<code>s6-U8</code>)</td>
+<td>695.8</td>
+<td>87.9</td>
+<td>63.2</td>
+<td>67.7</td>
+<td>12.5</td>
+<td>1.49</td>
+<td>realistic shots; passes fail</td>
+</tr>
+<tr>
+<td><code>clear</code> −0.3, <code>clear_pressure</code> 2.0 (<code>s2-H</code>)</td>
+<td>484.9</td>
+<td>93.2</td>
+<td>75.1</td>
+<td>49.6</td>
+<td>27.0</td>
+<td>3.96</td>
+<td>fewest shots under 550 passes</td>
+</tr>
+<tr>
+<td><code>min_lane</code> 0, <code>lane</code> 0, <code>clear</code> −0.45 (<code>s9-X1</code>)</td>
+<td>557.0</td>
+<td>83.7</td>
+<td>43.9</td>
+<td>52.6</td>
+<td>56.4</td>
+<td>7.85</td>
+<td>closest to the four criteria</td>
+</tr>
+</tbody>
+</table>
+<p>Two code variants were tried and reverted: charging the carry cost on a shot too (<code>s5-T*</code>: goals rose to 4.9–14.8) and applying the window only outside the shooting range (<code>s7-V*</code>: 39.7 shots per team at the start values). Neither broke the coupling.</p>
+<h2 id="criterion-results" tabindex="-1"><a class="header-anchor" href="#criterion-results"><span>Criterion Results</span></a></h2>
+<p>At the shipped values (levers off) the counting criterion passes. The other three are not met; the slice stopped before a setting was accepted.</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Criterion</th>
+<th>Evidence this run</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Only real passes count</td>
+<td><code>cargo test -p engine --all-features --test tempo_and_restarts</code> locally: 8 passed, 4 ignored (clearance, restart kicks for throw-in, corner, goal kick and kick-off, next pass is a pass)</td>
+<td>pass</td>
+</tr>
+<tr>
+<td>Passes are realistic (350–550, 75–88%)</td>
+<td>X1 on seeds 1–200 (<code>implement-evidence/tempo-and-restarts/x1-tempo/criteria.txt</code>): 603.1 per team, 81.27%</td>
+<td>fails (Q-TR1)</td>
+</tr>
+<tr>
+<td>The ball is in play for about an hour (52–65)</td>
+<td>X1 on seeds 1–200: 55.37 min per 90</td>
+<td>passes only at a setting that breaks formations</td>
+</tr>
+<tr>
+<td>Throw-ins stay in band (35–55)</td>
+<td>X1 on seeds 1–200: 39.96 per match (census)</td>
+<td>passes only with the <code>clear</code> weight</td>
+</tr>
+<tr>
+<td>Earlier criteria at X1</td>
+<td><code>every_formation_holds</code> fails in 6 of 10 pairings (<code>x1-crit/criteria.txt</code>); the run stopped at the first failing binary</td>
+<td>regression</td>
+</tr>
+</tbody>
+</table>
+<p>The restart census at X1 shows the median dead time of each restart at its source: throw-in 13.8 s, goal kick 23.2 s, corner 31.8 s, free kick 32.5 s. Every corner followed a crossing after a defending touch.</p>
+<h2 id="checks-run" tabindex="-1"><a class="header-anchor" href="#checks-run"><span>Checks Run</span></a></h2>
+<ul>
+<li>Server, on the committed tree: <code>cargo fmt --all -- --check</code> clean; <code>cargo clippy --workspace --all-targets --all-features -- -D warnings</code> clean; <code>cargo test --workspace --all-features --no-fail-fast</code> 513 passed, 2 failed, 14 ignored (<code>implement-evidence/tempo-and-restarts/checks/</code>). The two failures are the Windows-only tests <a href="http://steer.md">steer.md</a> names (<code>relative_paths_never_leak_the_root</code> and <code>a_small_run_writes_a_record_per_match_and_a_report_that_validate</code>); both pass on this PC.</li>
+<li>This PC: <code>data::tests::relative_paths_never_leak_the_root</code> passed; <code>a_small_run_writes_a_record_per_match_and_a_report_that_validate</code> passed; <code>node --test web/tests/*.test.mjs</code> 128 passed.</li>
+<li>Benchmark on this PC (<code>engine-cli bench --seed 42 --matches 5 --json</code>, three drives, <code>implement-evidence/tempo-and-restarts/bench/</code>): 1.5854, 1.5743 and 1.5526 µs per tick against the 1.7071 µs gate; peak memory 6.76 MB against 8.55 MB; 285,850 ticks per match, as at the baseline.</li>
+<li>Baselines (step 1, <code>implement-evidence/tempo-and-restarts/baseline/</code>): <code>tr-equal-base</code> (1,000 matches) and <code>tr-set-base</code> (200 matches) at <code>bce0144</code>, content <code>8170d2f2d5fa</code>, fixtures <code>c4c0a247c3c9</code>.</li>
+</ul>
+<h2 id="deviations-from-plan" tabindex="-1"><a class="header-anchor" href="#deviations-from-plan"><span>Deviations from Plan</span></a></h2>
+<ol>
+<li>The shipped values keep the levers off (<code>carry_cost</code> 0, <code>cross_chance</code> 0) and the restart delays at 3, 8, 6 and 8 s, not the starting values and the medians. The tuning stopped (Q-TR1), and the starting values give 42.8 shots per team; shipping them would make the match worse than it is today. Pins in <code>tests/content.rs</code> follow the shipped values. (class: implementation-detail)</li>
+<li>The throw-in delay scene asserts the tuned delay (<code>restart::delay_ticks</code>), not a hard 690 ticks, because the delay stays at 3 s until Q-TR1 is answered. (class: implementation-detail)</li>
+<li>The throw-in levers the plan named cannot reach 35 (18.3 at their bounds, <code>s8-W7</code>). The sweeps also used the carrier’s <code>clear</code> and <code>clear_pressure</code> weights, which are decision weights inside their bounds. A rerun after Q-TR1 uses them. (class: implementation-detail)</li>
+<li>The restart-taker mark is in the snapshot, beside the counters, because a half’s kick-off sets it during live play. (class: implementation-detail)</li>
+<li>A dropped ball’s first kick is a restart kick too. (class: implementation-detail)</li>
+<li>Step 3’s counting-alone run used a content copy with the levers off and the old delays, as planned; the step-11 run of earlier criteria used the X1 setting, not a shipped setting, to test whether the closest setting regresses. (class: implementation-detail)</li>
+<li>Steps 10–12 and 14.3 (criterion runs on a shipped setting, re-derived pins, slice gate) did not run: no setting was accepted. No pinned expectation moved, because play at the shipped values is identical to <code>bce0144</code> (<code>tr-count</code> against <code>tr-set-base</code>). (class: implementation-detail)</li>
+</ol>
+<h2 id="anything-deferred" tabindex="-1"><a class="header-anchor" href="#anything-deferred"><span>Anything Deferred</span></a></h2>
+<ul>
+<li>Tuning the carry window, the clearances and the pass weights to the criteria, and moving the four restart delays to the sourced medians: waits for Q-TR1.</li>
+<li>The slice gate (equal and strength on five seeds, formations on seed 42): waits for an accepted setting.</li>
+</ul>
+<h2 id="known-risks-caveats" tabindex="-1"><a class="header-anchor" href="#known-risks-caveats"><span>Known Risks / Caveats</span></a></h2>
+<ul>
+<li>The slow tests <code>passes_are_realistic</code>, <code>the_ball_is_in_play_for_about_an_hour</code> and <code>throw_ins_stay_in_band</code> fail at the shipped values. They are ignored tests and record the open criteria.</li>
+<li>Pass accuracy now covers open-play passes only; on shipped play it moved from 86.5% to 86.7%.</li>
+<li>The cross clearance produced no corner in the X1 census (all corners came from saves, parries and blocks). With <code>cross_chance</code> 0.3 and a 2 m reach it fires rarely. The rerun should read the census before settling its values.</li>
+</ul>
+<h2 id="assumptions" tabindex="-1"><a class="header-anchor" href="#assumptions"><span>Assumptions</span></a></h2>
+<ul>
+<li>A-I1 (class: implementation-detail): the foundation is committed with play unchanged so that other sessions that sync the tree to the server test shipped play, not an unaccepted setting.</li>
+<li>A-I2 (class: implementation-detail): the census attributes a corner to the last save, block or clearance since the ball was last controlled; any other corner is “other”.</li>
+<li>A-I3 (class: implementation-detail): the X1 setting was chosen for the regression check because it is the closest of the 60 to all four criteria on seed 42.</li>
+</ul>
+<h2 id="triage-decisions" tabindex="-1"><a class="header-anchor" href="#triage-decisions"><span>Triage Decisions</span></a></h2>
+<ul>
+<li>Q-TR1 (class: intent-bearing; ac: “Passes are realistic”; classification: runtime-evidence): stopped. Keeping 350–550 passes needs either a defending lever, a moved criterion, or accepted shots and goals with a relaxed formations criterion. Each changes the product owner’s scope or limits, so none is taken autonomously.</li>
+<li>Throw-ins (class: implementation-detail; ac: “Throw-ins stay in band”; classification: runtime-evidence): the carrier’s clearance weight is an in-scope decision weight; the rerun uses it.</li>
+<li>Ball in play (class: implementation-detail; ac: “The ball is in play for about an hour”; classification: runtime-evidence): reachable at the medians (55.4 at X1); depends on the Q-TR1 setting.</li>
+<li>Only real passes count (class: implementation-detail; ac: “Only real passes count”; classification: build-capability): built and proven by the scenes.</li>
+</ul>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<ul>
+<li>No dependency was added or upgraded. <code>serde(default)</code> on fields and on a nested block inside a <code>deny_unknown_fields</code> struct follows the <code>lone_*</code> weights and the <code>shots</code> block already in <code>tuning.rs</code>.</li>
+<li>The restart medians are <code>docs/design/realism/01-engine-realism.md:614</code>; the restart census reproduced them at X1.</li>
+</ul>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option D: Blocked</strong> → the product owner answers Q-TR1 in <code>po-answers.md</code>. Then rerun <code>/wf implement football-manager-match-engine tempo-and-restarts</code> to tune the shipped values under the answer.</li>
+<li><strong>Option C: Revisit Plan</strong> → <code>/wf plan football-manager-match-engine tempo-and-restarts</code> if the answer adds a defending lever (option 1), since that changes the plan’s lever list.</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-25T04:27:37Z</span>
+    <a href="../../../../../../workflows/football-manager-match-engine/history/05-implement-tempo-and-restarts-0.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../../../INDEX.html">football-manager-match-engine</a><a href="../../../INDEX.html">implement</a><a href="../../INDEX.html">tempo-and-restarts</a><a href="../INDEX.html">history</a><span class="m-sheet-here" aria-current="page">0</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../../../workflows/football-manager-match-engine/history/05-implement-tempo-and-restarts-0.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-25T04:27:37Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

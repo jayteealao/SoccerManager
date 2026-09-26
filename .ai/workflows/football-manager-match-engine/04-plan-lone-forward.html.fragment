@@ -1,0 +1,42 @@
+<section class="fragment-plan" data-artifact="plan" data-slice="lone-forward" data-rev="0">
+  <!-- @include-skip files-touched rows and callouts follow the sibling plan fragments' inline markup so the page renders them identically -->
+  <table class="files-touched pl-files">
+    <thead><tr><th>File</th><th>Status</th><th>Module</th><th>Lines</th></tr></thead>
+    <tbody>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">config</span> crates/engine/src/tuning.rs, content/tuning.json</summary><div class="pl-card">Five bounded values: three decision weights for a lone carrier (hold-up, lay-off, a cost on a pressed dribble), the tackle win base, and how far the lone forward holds the offside line. Each lands at a neutral value that changes nothing, then the tuning loop moves it.</div></details></td><td>modified</td><td>tuning</td><td>+45</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/rules/fouls.rs, sim.rs</summary><div class="pl-card">The won-tackle chance becomes one function with a tuned base in place of a fixed 0.05. The foul side of the odds is the existing foul base. The card chances do not change.</div></details></td><td>modified</td><td>tackle</td><td>+31 / -1</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/decision.rs</summary><div class="pl-card">A carrier with no outfield team-mate ahead of him gets a bonus on passes back and, when pressed, on holding the ball, and a cost on a dribble. Off the ball, the team's lone forward plays on the second-last defender's line and stays onside.</div></details></td><td>modified</td><td>decide</td><td>+60 / -2</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/team.rs, rules/offside.rs</summary><div class="pl-card">The team's lone forward is read from the front line of its formation. The referee's offside line becomes one shared function, so the forward and the referee read the same line.</div></details></td><td>modified</td><td>decide</td><td>+50 / -10</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">test</span> crates/engine/tests/lone_forward.rs and nine updated test files</summary><div class="pl-card">Scenes: a pressed lone forward passes or holds on 40 seeds; the terms need a lone carrier; the lone forward stays onside; a contact draw splits into a won tackle and a foul at the tuned odds. The copied win-chance formula in eight test files calls the new function.</div></details></td><td>new</td><td>tests</td><td>+254 / -9</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">docs</span> docs/reference/data-files.md</summary><div class="pl-card">Five tuning rows and a paragraph on the lone forward and the tackle odds.</div></details></td><td>modified</td><td>docs</td><td>+8</td></tr>
+    </tbody>
+  </table>
+  <div class="pl-risks">
+    <aside class="callout callout-danger"><strong>Both levers at their bounds may fall short (high).</strong> The keeper arm is 5.82 against 2.06 today, and 4-4-1-1 scores 5.18 against a 4.0 limit. Implement stops and reports the figures. It never raises a limit.</aside>
+    <aside class="callout callout-warn"><strong>The lone terms reach other formations (medium).</strong> All ten pairings are rerun, and the eight that pass now are a criterion.</aside>
+    <aside class="callout callout-warn"><strong>Fewer fouls, fewer cards (medium).</strong> The discipline test is rerun. Band misses are recorded, not failed.</aside>
+    <aside class="callout callout-warn"><strong>Hold-up play invites contact (medium).</strong> The hold decays each second, and the tackle odds are tuned in the same loop.</aside>
+    <aside class="callout callout-warn"><strong>Every seeded result moves (medium).</strong> A neutral-value step shows no change first. Each moved expectation is then re-derived and recorded.</aside>
+  </div>
+  <details class="pl-revs">
+    <summary>Prior revisions (0)</summary>
+    <ul><li>No prior revision.</li></ul>
+  </details>
+  <style>
+    .fragment-plan .pl-files { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-plan .pl-files th, .fragment-plan .pl-files td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
+    .fragment-plan .pl-files summary { cursor: pointer; }
+    .fragment-plan .pl-chip { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; opacity: 0.8; }
+    .fragment-plan .pl-card { padding: 6px 0 4px 18px; opacity: 0.9; }
+    .fragment-plan .pl-risks { display: grid; gap: 8px; margin-top: 12px; }
+    @media (max-width: 480px) { .fragment-plan .pl-files th:nth-child(3), .fragment-plan .pl-files td:nth-child(3) { display: none; } }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-plan');
+      var files = 12, modules = 5;
+      var risks = root ? root.querySelectorAll('.pl-risks .callout').length : 0;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'plan', artifact: 'plan', counts: { files: files, modules: modules, risks: risks } } }));
+    })();
+  </script>
+</section>

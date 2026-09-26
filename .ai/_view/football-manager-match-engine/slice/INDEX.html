@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.171.0" data-artifact-type="slice-index">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · slice-index — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="slice-index">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><span class="m-here">slice</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · slice-index</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">slice</b></div>
+    <div class="actions"><a href="../../../workflows/football-manager-match-engine/03-slice.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">03-slice.md</div>
+      <h1 class="pg-title">Slice index</h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="meta">24 slices</span></div>
+    </header><div class="metric-row"><div class="metric">
+      <span class="metric-label">total</span>
+      <span class="metric-value">24</span>
+      
+    </div><div class="metric is-ok">
+      <span class="metric-label">complete</span>
+      <span class="metric-value">23</span>
+      
+    </div><div class="metric">
+      <span class="metric-label">in progress</span>
+      <span class="metric-value">0</span>
+      
+    </div><div class="metric is-bad">
+      <span class="metric-label">blocked</span>
+      <span class="metric-value">0</span>
+      
+    </div></div>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-slices" tabindex="-1"><a class="header-anchor" href="#the-slices"><span>The Slices</span></a></h2>
+<p>Shape handed over a spec that spans a Rust engine, a stream protocol, a browser viewer with four weighted design states, a team generator, a calibration harness, and an observability feed, with six adjudicated intent risks and one open performance risk. The design brief added an empty state, a first-run state, and an error and recovery state to the four weighted ones.</p>
+<p>Six product-owner answers cut the roster. The engine ships first so the 50-ticks-per-second performance risk retires before anything is drawn; the viewer starts against a recorded fixture through a mock server; the cut is thin at 12 buildable slices; the visible milestone lands at <code>viewer-pitch</code>, the fourth slice, with crude play driven by the live engine; and four parts are deferred as named slices, not dropped: extra time and penalties, feature flags, the scripting runtime that clears RIM-6, and distribution. Review is slug-wide by the product owner’s choice, and commentary stands alone while stoppage snapshots ride with match rules. Two chains run in parallel after the root: engine core → data schemas → match rules → tactics and AI → calibration, and engine core → stream protocol → viewer pitch → match-day panels → lineup and tactics → reports and recovery, meeting at integration, the final slice that runs the whole charter scenario.</p>
+<p>Plan takes <code>engine-core</code> first. The top open risk is unchanged from shape: the single-thread benchmark in the first slice, whose miss reopens the tick rate with the product owner rather than lowering the positional model.</p></section>
+    <div class="d-only"><figure class="figure-canvas">
+  <figcaption class="figure-meta">
+    <span class="figure-title"><b>Figure 5</b> · 24 slices, depends-on arrows · slice dependency graph</span>
+    <span class="figure-legend" aria-hidden="true"><span class="legend-entry"><span class="sw complete"></span>complete</span><span class="legend-entry"><span class="sw review"></span>in review</span><span class="legend-entry"><span class="sw blocked"></span>blocked</span><span class="legend-entry"><span class="sw queued"></span>queued</span></span>
+  </figcaption>
+  <svg viewBox="0 0 920 384" width="100%" preserveAspectRatio="xMinYMid meet" aria-label="Slice dependency graph">
+    <defs>
+    <marker id="slice-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8377"/>
+    </marker>
+  </defs><path d="M 382 111 C 368 111, 368 39, 354 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 198 39 C 276 39, 276 39, 354 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 290 39 C 276 39, 276 39, 262 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 106 39 C 92 39, 92 39, 78 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 566 111 C 552 111, 552 39, 538 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 658 111 C 644 111, 644 39, 630 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 474 39 C 460 39, 460 39, 446 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 290 39 C 322 39, 322 111, 354 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 382 111 C 368 111, 368 111, 354 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 474 39 C 506 39, 506 111, 538 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 382 39 C 460 39, 460 111, 538 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 566 255 C 552 255, 552 111, 538 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 566 327 C 552 327, 552 111, 538 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 658 39 C 644 39, 644 111, 630 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 658 183 C 644 183, 644 183, 630 183" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 658 39 C 644 39, 644 183, 630 183" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 106 39 C 138 39, 138 39, 170 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 198 39 C 184 39, 184 39, 170 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 474 39 C 460 39, 460 111, 446 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 106 111 C 276 111, 276 111, 446 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 842 39 C 828 39, 828 39, 814 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 198 39 C 322 39, 322 183, 446 183" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 382 111 C 414 111, 414 183, 446 183" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 474 39 C 460 39, 460 183, 446 183" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 106 39 C 92 39, 92 111, 78 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 290 39 C 276 39, 276 111, 262 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 198 39 C 230 39, 230 111, 262 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 750 111 C 736 111, 736 39, 722 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 566 111 C 552 111, 552 183, 538 183" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 474 183 C 460 183, 460 255, 446 255" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 382 111 C 414 111, 414 255, 446 255" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 290 111 C 322 111, 322 183, 354 183" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 198 111 C 276 111, 276 183, 354 183" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 382 39 C 368 39, 368 183, 354 183" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 198 111 C 184 111, 184 111, 170 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 474 183 C 460 183, 460 327, 446 327" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><path d="M 290 39 C 368 39, 368 327, 446 327" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#slice-arrow)"/><rect x="354" y="16" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="366" y="36" font-size="11" font-weight="600" fill="#1f1b16">calibration</text>
+      <text x="366" y="52" font-size="9" fill="#8a8377">complete</text><rect x="262" y="16" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="274" y="36" font-size="11" font-weight="600" fill="#1f1b16">commentary</text>
+      <text x="274" y="52" font-size="9" fill="#8a8377">complete</text><rect x="78" y="16" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="90" y="36" font-size="11" font-weight="600" fill="#1f1b16">data-schemas-generator</text>
+      <text x="90" y="52" font-size="9" fill="#8a8377">complete</text><rect x="538" y="16" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="550" y="36" font-size="11" font-weight="600" fill="#1f1b16">defending-and-discipli</text>
+      <text x="550" y="52" font-size="9" fill="#8a8377">complete</text><rect x="630" y="16" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="642" y="36" font-size="11" font-weight="600" fill="#1f1b16">distribution</text>
+      <text x="642" y="52" font-size="9" fill="#8a8377">complete</text><rect x="-14" y="16" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="-2" y="36" font-size="11" font-weight="600" fill="#1f1b16">engine-core</text>
+      <text x="-2" y="52" font-size="9" fill="#8a8377">complete</text><rect x="446" y="16" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="458" y="36" font-size="11" font-weight="600" fill="#1f1b16">experiment-flags</text>
+      <text x="458" y="52" font-size="9" fill="#8a8377">complete</text><rect x="354" y="88" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="366" y="108" font-size="11" font-weight="600" fill="#1f1b16">extra-time-penalties</text>
+      <text x="366" y="124" font-size="9" fill="#8a8377">complete</text><rect x="538" y="88" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="550" y="108" font-size="11" font-weight="600" fill="#1f1b16">integration</text>
+      <text x="550" y="124" font-size="9" fill="#8a8377">complete</text><rect x="630" y="88" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="642" y="108" font-size="11" font-weight="600" fill="#1f1b16">keeper-and-shots</text>
+      <text x="642" y="124" font-size="9" fill="#8a8377">complete</text><rect x="630" y="160" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="642" y="180" font-size="11" font-weight="600" fill="#1f1b16">lone-forward</text>
+      <text x="642" y="196" font-size="9" fill="#8a8377">complete</text><rect x="170" y="16" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="182" y="36" font-size="11" font-weight="600" fill="#1f1b16">match-rules</text>
+      <text x="182" y="52" font-size="9" fill="#8a8377">complete</text><rect x="-14" y="88" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="-2" y="108" font-size="11" font-weight="600" fill="#1f1b16">probe-engine-core</text>
+      <text x="-2" y="124" font-size="9" fill="#8a8377">complete</text><rect x="446" y="88" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="458" y="108" font-size="11" font-weight="600" fill="#1f1b16">realism-bands-v2</text>
+      <text x="458" y="124" font-size="9" fill="#8a8377">complete</text><rect x="814" y="16" width="120" height="46" rx="6" fill="#fbfaf6" stroke="#cbc4b1" stroke-width="1.2" stroke-dasharray="3 2"/>
+      <text x="826" y="36" font-size="11" font-weight="600" fill="#1f1b16">realism-tuning</text>
+      <text x="826" y="52" font-size="9" fill="#8a8377">not-started</text><rect x="446" y="160" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="458" y="180" font-size="11" font-weight="600" fill="#1f1b16">scripting-runtime</text>
+      <text x="458" y="196" font-size="9" fill="#8a8377">complete</text><rect x="78" y="88" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="90" y="108" font-size="11" font-weight="600" fill="#1f1b16">stream-protocol</text>
+      <text x="90" y="124" font-size="9" fill="#8a8377">complete</text><rect x="262" y="88" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="274" y="108" font-size="11" font-weight="600" fill="#1f1b16">tactics-and-ai</text>
+      <text x="274" y="124" font-size="9" fill="#8a8377">complete</text><rect x="722" y="16" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="734" y="36" font-size="11" font-weight="600" fill="#1f1b16">tempo-and-restarts</text>
+      <text x="734" y="52" font-size="9" fill="#8a8377">complete</text><rect x="538" y="160" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="550" y="180" font-size="11" font-weight="600" fill="#1f1b16">tuning-loop</text>
+      <text x="550" y="196" font-size="9" fill="#8a8377">complete</text><rect x="446" y="232" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="458" y="252" font-size="11" font-weight="600" fill="#1f1b16">viewer-lineup-tactics</text>
+      <text x="458" y="268" font-size="9" fill="#8a8377">complete</text><rect x="354" y="160" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="366" y="180" font-size="11" font-weight="600" fill="#1f1b16">viewer-match-day</text>
+      <text x="366" y="196" font-size="9" fill="#8a8377">complete</text><rect x="170" y="88" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="182" y="108" font-size="11" font-weight="600" fill="#1f1b16">viewer-pitch</text>
+      <text x="182" y="124" font-size="9" fill="#8a8377">complete</text><rect x="446" y="304" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="458" y="324" font-size="11" font-weight="600" fill="#1f1b16">viewer-reports-recover</text>
+      <text x="458" y="340" font-size="9" fill="#8a8377">complete</text>
+  </svg>
+</figure></div>
+    <div class="prose"><h1 id="slice-index" tabindex="-1"><a class="header-anchor" href="#slice-index"><span>Slice Index</span></a></h1>
+<h2 id="slice-strategy" tabindex="-1"><a class="header-anchor" href="#slice-strategy"><span>Slice Strategy</span></a></h2>
+<p>Two tracks after one root. The engine track retires simulation risk in order: loop and physics, then data, then laws, then tactics, then measurement. The viewer track builds from the pitch outward, each slice verified against the fixture before the live engine. The tracks join at <code>integration</code>.</p>
+<p>Design states and surfaces, per the design brief, map to slices as follows:</p>
+<ul>
+<li>Live play state → <code>viewer-pitch</code> (the canvas and playback controls are the live surface).</li>
+<li>Goal moment → <code>viewer-match-day</code>; grouped with the panels because the goal moment is a change of the score bug, the feed, and the banner, all of which are panel surfaces.</li>
+<li>Empty state at kick-off → <code>viewer-match-day</code>; grouped with the feed because the empty state is the feed’s first-time state.</li>
+<li>Pre-match lineup screen → <code>viewer-lineup-tactics</code>.</li>
+<li>Stoppage intervention (tactics panel, pending chips, substitutions) → <code>viewer-lineup-tactics</code>; grouped with the lineup screen because both edit the same formation, roles, and squad model, and a separate slice would duplicate the editor.</li>
+<li>Loading and first-run states → <code>viewer-reports-recovery</code>; grouped with error and recovery because all four are the non-play surfaces around the pitch, and all consume engine launch state.</li>
+<li>Error and recovery → <code>viewer-reports-recovery</code>.</li>
+<li>Half-time and full-time reports → <code>viewer-reports-recovery</code>; grouped with recovery because both consume the snapshot and replay files (the product owner’s coupling answer).</li>
+</ul>
+<p>Engine coupling per the product owner: commentary is its own slice; snapshot-at-every-stoppage rides with <code>match-rules</code>.</p>
+<h2 id="recommended-order" tabindex="-1"><a class="header-anchor" href="#recommended-order"><span>Recommended Order</span></a></h2>
+<ol>
+<li><code>engine-core</code> — retires the performance risk; every slice consumes its loop.</li>
+<li><code>data-schemas-generator</code> — rules and tactics need the schemas; calibration needs the generator.</li>
+<li><code>stream-protocol</code> — the viewer cannot start without the stream and the fixture.</li>
+<li><code>viewer-pitch</code> — the visible milestone; charter scenario through step 5.</li>
+<li><code>match-rules</code> — laws, restarts, and snapshots; the hinge for changes and recovery.</li>
+<li><code>tactics-and-ai</code> — C1, C3, C5 in the engine.</li>
+<li><code>commentary</code> — small; needs only the events.</li>
+<li><code>calibration</code> — realism bands and the observability records.</li>
+<li><code>viewer-match-day</code> — panels and the goal moment; needs commentary lines.</li>
+<li><code>viewer-lineup-tactics</code> — the manager’s authority on the page; needs the change queue.</li>
+<li><code>viewer-reports-recovery</code> — reports, replay files, recovery.</li>
+<li><code>integration</code> — full charter scenario, Playwright suite, full benchmark, documentation.</li>
+</ol>
+<p>Deferred, after the first release: <code>extra-time-penalties</code>, <code>experiment-flags</code>, <code>scripting-runtime</code>, <code>distribution</code>.</p>
+<p>Parallel option: slices 3 and 4 may run alongside slices 2 and 5 because they depend only on <code>engine-core</code>; slice 9 may run alongside slices 6 to 8 once <code>commentary</code> lands.</p>
+<p>Extension round 1, strictly in order, after every earlier slice:</p>
+<ol start="13">
+<li><code>realism-bands-v2</code> — the bands first, so each later slice shows its progress against them.</li>
+<li><code>defending-and-discipline</code> — the defending bug behind the ten-player collapse and the card rate.</li>
+<li><code>keeper-and-shots</code> — keeper saves, blocks and shot flight, which bring corners and goal kicks.</li>
+<li><code>tempo-and-restarts</code> — carry time, restart delays and pass counting.</li>
+<li><code>realism-tuning</code> — the final retune against every band on five seeds, and the browser suite.</li>
+</ol>
+<p>Extension round 2 places two slices after <code>defending-and-discipline</code> and before <code>keeper-and-shots</code> (Q-I2, Q-X4). The numbers continue the list; the order to build is 14, 18, 19, 15, 16, 17:</p>
+<ol start="18">
+<li><code>tuning-loop</code> — targeted calibrate runs with a baseline diff, so every later tuning step takes minutes, not hours.</li>
+<li><code>lone-forward</code> — the lone central forward and the tackle odds, which own the red-card criterion and the 4-4-1-1 and 3-4-3 pairings.</li>
+</ol>
+<h2 id="cross-cutting-concerns" tabindex="-1"><a class="header-anchor" href="#cross-cutting-concerns"><span>Cross-Cutting Concerns</span></a></h2>
+<ul>
+<li>Benchmark tripwire: every engine slice after <code>engine-core</code> reruns the benchmark; more than 10 percent CPU or 25 percent memory regression fails verify.</li>
+<li>Schema versions: every data file carries a version; the fail-closed loader rejects unknown versions.</li>
+<li>Identity fields: owner and match identifiers on every record and stream header (RIM-2, RIM-4).</li>
+<li>Observability: <code>/wf observability init</code> before <code>calibration</code> plans, so the record schema is agreed; <code>/wf observability build</code> before <code>integration</code>.</li>
+<li>Design: <code>PRODUCT.md</code> is missing; run <code>/wf design football-manager-match-engine setup</code> before the first viewer slice plans, or plan stops at the design preflight.</li>
+<li>Playwright: enters at <code>integration</code>; earlier viewer slices use the in-app browser.</li>
+<li>License: permissive; the dependency audit runs at <code>integration</code>; GPL references (FootballEngine) are read, not copied.</li>
+<li>Review: slug-wide, one report at handoff.</li>
+</ul>
+<h2 id="dependencies-between-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-between-slices"><span>Dependencies Between Slices</span></a></h2>
+<ul>
+<li><code>engine-core</code> → <code>data-schemas-generator</code>, <code>stream-protocol</code>.</li>
+<li><code>data-schemas-generator</code> → <code>match-rules</code>, <code>tactics-and-ai</code>, <code>calibration</code>, <code>scripting-runtime</code>.</li>
+<li><code>stream-protocol</code> → <code>viewer-pitch</code>, <code>viewer-match-day</code>.</li>
+<li><code>match-rules</code> → <code>tactics-and-ai</code>, <code>commentary</code>, <code>viewer-reports-recovery</code>, <code>extra-time-penalties</code>.</li>
+<li><code>tactics-and-ai</code> → <code>calibration</code>, <code>viewer-lineup-tactics</code>, <code>extra-time-penalties</code>, <code>scripting-runtime</code>.</li>
+<li><code>commentary</code> → <code>viewer-match-day</code>, <code>integration</code>.</li>
+<li><code>calibration</code> → <code>integration</code>, <code>experiment-flags</code>, <code>scripting-runtime</code>.</li>
+<li><code>viewer-pitch</code> → <code>viewer-match-day</code>.</li>
+<li><code>viewer-match-day</code> → <code>viewer-lineup-tactics</code>, <code>viewer-reports-recovery</code>.</li>
+<li><code>viewer-lineup-tactics</code>, <code>viewer-reports-recovery</code> → <code>integration</code>.</li>
+<li><code>integration</code> → <code>distribution</code>.</li>
+</ul>
+<p>Longest chain: <code>engine-core</code> → <code>data-schemas-generator</code> → <code>match-rules</code> → <code>tactics-and-ai</code> → <code>calibration</code> → <code>integration</code> (six deep).</p>
+<h2 id="deferred-optional-slices" tabindex="-1"><a class="header-anchor" href="#deferred-optional-slices"><span>Deferred / Optional Slices</span></a></h2>
+<ul>
+<li><code>extra-time-penalties</code> — deferred by slice Q4; narrows shape Q21 for the first release only.</li>
+<li><code>experiment-flags</code> — deferred until a second model exists.</li>
+<li><code>scripting-runtime</code> — deferred by shape Q31; clears RIM-6; the workflow’s “customizable” status reads “boundary shipped, runtime open” until it closes.</li>
+<li><code>distribution</code> — deferred; resolves U-3.</li>
+</ul>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<ul>
+<li>Source: <a href="https://gafferongames.com/post/fix_your_timestep/">Fix Your Timestep!</a>
+Why it matters: the fixed-timestep loop in <code>engine-core</code> and the tick-bounded interpolation in <code>viewer-pitch</code> follow it; slicing the loop before the renderer keeps the two decoupled.
+Takeaway: the engine slice owns the timestep; the viewer slice owns interpolation; neither slice touches the other’s clock.</li>
+<li>Source: <a href="https://rcsoccersim.readthedocs.io/en/latest/soccermonitor.html">RoboCup soccer monitor</a>
+Why it matters: a monitor that replays a recorded server stream is the precedent for the fixture harness in <code>stream-protocol</code>.
+Takeaway: record the stream once, replay it for every viewer slice.</li>
+<li>Source: <a href="https://playwright.dev/docs/intro">Playwright</a>
+Why it matters: Node 22 is present; the install is <code>npm init playwright@latest</code> and needs browser binaries; the product owner placed it after stable markup.
+Takeaway: <code>integration</code> authorizes the install as a rung-0 bootstrap; earlier viewer slices use the in-app browser.</li>
+</ul>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option A (default):</strong> <code>/wf plan football-manager-match-engine engine-core</code> — the root slice and the performance risk; nothing else can be planned in detail before the loop exists.</li>
+<li><strong>Option B:</strong> <code>/wf plan football-manager-match-engine all</code> — not recommended: eleven slices depend on decisions the engine-core plan makes (crate layout, tick frame shape); planning them now would guess.</li>
+<li><strong>Option C:</strong> <code>/wf shape football-manager-match-engine</code> — not needed: slicing surfaced no gap in the spec.</li>
+<li><strong>Before the first viewer slice plans:</strong> <code>/wf design football-manager-match-engine setup</code> (<a href="http://PRODUCT.md">PRODUCT.md</a> is missing) and <code>/wf observability init</code> (record schema for <code>calibration</code>).</li>
+</ul>
+<h2 id="extension-round-1-2026-09-23" tabindex="-1"><a class="header-anchor" href="#extension-round-1-2026-09-23"><span>Extension Round 1 — 2026-09-23</span></a></h2>
+<p>Source: user request</p>
+<h3 id="new-slices-added" tabindex="-1"><a class="header-anchor" href="#new-slices-added"><span>New Slices Added</span></a></h3>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Slice</th>
+<th>Goal</th>
+<th>Complexity</th>
+<th>Depends On</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>realism-bands-v2</code></td>
+<td>Eleven sourced realism bands, a formations suite and the missing record fields; failing bands become the baseline.</td>
+<td>M</td>
+<td><code>calibration</code>, <code>probe-engine-core</code></td>
+</tr>
+<tr>
+<td><code>defending-and-discipline</code></td>
+<td>Goal-side cover in every formation, a real 10-player shape, an acting keeper, and realistic second yellows.</td>
+<td>L</td>
+<td><code>realism-bands-v2</code></td>
+</tr>
+<tr>
+<td><code>keeper-and-shots</code></td>
+<td>On-frame saves by shot quality, parries and blocks, shots that rise, honest on-target and xG; corners and goal kicks follow.</td>
+<td>L</td>
+<td><code>defending-and-discipline</code></td>
+</tr>
+<tr>
+<td><code>tempo-and-restarts</code></td>
+<td>Realistic carry time and restart delays, ball in play about an hour, only real passes counted, throw-ins in band.</td>
+<td>M</td>
+<td><code>keeper-and-shots</code></td>
+</tr>
+<tr>
+<td><code>realism-tuning</code></td>
+<td>Every band on five seeds, the formations suite, the benchmark and the 21-test browser suite.</td>
+<td>M</td>
+<td><code>tempo-and-restarts</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="motivation" tabindex="-1"><a class="header-anchor" href="#motivation"><span>Motivation</span></a></h3>
+<p>A fresh 10,000-match calibration at <code>5a235a4</code> passed every band on five seeds, but the matches were not realistic. Ten or more goals came in 10.5% of matches, 45% had a sending-off, 75% of shots were on target, teams made about 1,300 passes each, and almost no corners were awarded. Research found three root causes. Defending has no marking or goal-side cover, so a lone central striker, whether left after a red card or placed by a 4-3-3, scores at will. The keeper holds every save and no defender blocks, so nothing goes behind for a corner. Players release the ball about 0.25 s after receiving it, with restarts about four times too short. The product owner asked for bands first, three mechanism slices judged on their own criteria, and one final tuning slice that must pass every band. The two ship-blocking deferrals stay open by the product owner’s choice.</p>
+<p>Intent delta: RIM-7 to RIM-10 are adjudicated in place by the extension interview. Charter commitment C7 is added. Existing slices are not modified.</p>
+<h2 id="extension-round-2-2026-09-24" tabindex="-1"><a class="header-anchor" href="#extension-round-2-2026-09-24"><span>Extension Round 2 — 2026-09-24</span></a></h2>
+<p>Source: user request (after <code>po-answers.md</code> Q-I2)</p>
+<h3 id="new-slices-added-1" tabindex="-1"><a class="header-anchor" href="#new-slices-added-1"><span>New Slices Added</span></a></h3>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Slice</th>
+<th>Goal</th>
+<th>Complexity</th>
+<th>Depends On</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tuning-loop</code></td>
+<td>Targeted calibrate runs on one seed, a stored baseline with a per-band diff and sampling error, the red-card experiment as a suite, and a measured build profile; one target in under 2 minutes.</td>
+<td>M</td>
+<td><code>realism-bands-v2</code></td>
+</tr>
+<tr>
+<td><code>lone-forward</code></td>
+<td>A lone central forward that passes, holds up and stays onside, and realistic won-tackle against foul odds; no advantage from a red card, and 4-4-1-1 and 3-4-3 hold against 4-4-2.</td>
+<td>L</td>
+<td><code>tuning-loop</code>, <code>defending-and-discipline</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="motivation-1" tabindex="-1"><a class="header-anchor" href="#motivation-1"><span>Motivation</span></a></h3>
+<p><code>defending-and-discipline</code> built every planned mechanism, but two criteria failed at every in-bounds tuning: the reduced side outscored the full side in all three red-card arms, and 4-4-1-1 (5.18) and 3-4-3 (4.17) scored above 4.0 against 4-4-2. The measured cause is a lone central forward with no forward team-mate, who dribbles and shoots twice as often and is never offside, plus about four fouls for each won tackle. The product owner moved both criteria into a new <code>lone-forward</code> slice before <code>keeper-and-shots</code> (Q-I2). The same product owner agreed a fast tuning loop earlier: one seed of every suite takes about 76 minutes, and the remaining slices are tuning work. <code>defending-and-discipline</code> is verified on the criteria it keeps; its slice file is not changed, and <code>steer.md</code> records the moved criteria for verify.</p>
+<p>Intent delta: RIM-11 and RIM-12 are adjudicated in place by the extension interview (Q-X1 to Q-X3). Charter delta: none; both slices serve C7, and no new commitment is added. Existing slices are not modified.</p></div>
+    <section class="slice-grid"><a class="slice-card complete" href="calibration/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">calibration</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="commentary/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">commentary</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="data-schemas-generator/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">data-schemas-generator</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="defending-and-discipline/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">defending-and-discipline</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="distribution/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">distribution</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="engine-core/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">engine-core</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="experiment-flags/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">experiment-flags</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="extra-time-penalties/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">extra-time-penalties</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="integration/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">integration</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="keeper-and-shots/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">keeper-and-shots</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>20 hr ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="lone-forward/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">lone-forward</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="match-rules/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">match-rules</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="probe-engine-core/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">probe-engine-core</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="realism-bands-v2/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">realism-bands-v2</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card not-started" href="realism-tuning/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">realism-tuning</span>
+      <span class="sc-pill not-started">queued</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:0%"></i></div>
+    <div class="sc-foot"><span>5 min ago</span><span class="pct">0%</span></div>
+  </a><a class="slice-card complete" href="scripting-runtime/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">scripting-runtime</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="stream-protocol/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">stream-protocol</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="tactics-and-ai/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">tactics-and-ai</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="tempo-and-restarts/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">tempo-and-restarts</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="tuning-loop/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">tuning-loop</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="viewer-lineup-tactics/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">viewer-lineup-tactics</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="viewer-match-day/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">viewer-match-day</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="viewer-pitch/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">viewer-pitch</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="viewer-reports-recovery/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">viewer-reports-recovery</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a></section>
+    
+  
+<section class="narrative-fragments" aria-label="narrative fragments">
+<section class="nfrag" data-label="01-dependency-graph">
+<section class="slice-dependency-graph">
+  <h3>Two tracks after one root</h3>
+  <svg viewBox="0 0 900 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Slice dependency graph: engine track and viewer track meeting at integration, with four deferred slices">
+    <defs><marker id="sg-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="currentColor"/></marker></defs>
+    <g font-family="system-ui, sans-serif" font-size="11" fill="currentColor">
+      <rect x="10" y="130" width="110" height="40" rx="6" fill="none" stroke="currentColor" stroke-width="2"/>
+      <text x="65" y="154" text-anchor="middle" font-weight="600">1 engine-core</text>
+
+      <text x="180" y="30" font-size="10" opacity="0.7">ENGINE TRACK</text>
+      <rect x="160" y="40" width="130" height="40" rx="6" fill="none" stroke="currentColor"/><text x="225" y="64" text-anchor="middle">2 data-schemas</text>
+      <rect x="320" y="40" width="120" height="40" rx="6" fill="none" stroke="currentColor"/><text x="380" y="64" text-anchor="middle">5 match-rules</text>
+      <rect x="470" y="40" width="120" height="40" rx="6" fill="none" stroke="currentColor"/><text x="530" y="64" text-anchor="middle">6 tactics-and-ai</text>
+      <rect x="620" y="40" width="110" height="40" rx="6" fill="none" stroke="currentColor"/><text x="675" y="64" text-anchor="middle">8 calibration</text>
+      <rect x="470" y="100" width="120" height="34" rx="6" fill="none" stroke="currentColor"/><text x="530" y="121" text-anchor="middle">7 commentary</text>
+
+      <text x="180" y="200" font-size="10" opacity="0.7">VIEWER TRACK</text>
+      <rect x="160" y="210" width="130" height="40" rx="6" fill="none" stroke="currentColor"/><text x="225" y="234" text-anchor="middle">3 stream-protocol</text>
+      <rect x="320" y="210" width="120" height="40" rx="6" fill="none" stroke="currentColor" stroke-width="2"/><text x="380" y="228" text-anchor="middle" font-weight="600">4 viewer-pitch</text><text x="380" y="242" text-anchor="middle" font-size="9">visible milestone</text>
+      <rect x="470" y="210" width="120" height="40" rx="6" fill="none" stroke="currentColor"/><text x="530" y="234" text-anchor="middle">9 match-day</text>
+      <rect x="620" y="180" width="110" height="34" rx="6" fill="none" stroke="currentColor"/><text x="675" y="201" text-anchor="middle">10 lineup-tactics</text>
+      <rect x="620" y="230" width="110" height="34" rx="6" fill="none" stroke="currentColor"/><text x="675" y="251" text-anchor="middle">11 reports-recovery</text>
+
+      <rect x="770" y="120" width="120" height="50" rx="6" fill="none" stroke="currentColor" stroke-width="2"/><text x="830" y="141" text-anchor="middle" font-weight="600">12 integration</text><text x="830" y="157" text-anchor="middle" font-size="9">full charter scenario</text>
+
+      <line x1="120" y1="140" x2="158" y2="70" stroke="currentColor" marker-end="url(#sg-arrow)"/>
+      <line x1="120" y1="160" x2="158" y2="225" stroke="currentColor" marker-end="url(#sg-arrow)"/>
+      <line x1="290" y1="60" x2="318" y2="60" stroke="currentColor" marker-end="url(#sg-arrow)"/>
+      <line x1="440" y1="60" x2="468" y2="60" stroke="currentColor" marker-end="url(#sg-arrow)"/>
+      <line x1="590" y1="60" x2="618" y2="60" stroke="currentColor" marker-end="url(#sg-arrow)"/>
+      <line x1="440" y1="75" x2="468" y2="110" stroke="currentColor" marker-end="url(#sg-arrow)"/>
+      <line x1="290" y1="230" x2="318" y2="230" stroke="currentColor" marker-end="url(#sg-arrow)"/>
+      <line x1="440" y1="230" x2="468" y2="230" stroke="currentColor" marker-end="url(#sg-arrow)"/>
+      <line x1="530" y1="134" x2="530" y2="208" stroke="currentColor" stroke-dasharray="3 3" marker-end="url(#sg-arrow)"/>
+      <line x1="590" y1="222" x2="618" y2="200" stroke="currentColor" marker-end="url(#sg-arrow)"/>
+      <line x1="590" y1="238" x2="618" y2="246" stroke="currentColor" marker-end="url(#sg-arrow)"/>
+      <line x1="730" y1="60" x2="768" y2="130" stroke="currentColor" marker-end="url(#sg-arrow)"/>
+      <line x1="730" y1="197" x2="768" y2="150" stroke="currentColor" marker-end="url(#sg-arrow)"/>
+      <line x1="730" y1="247" x2="768" y2="160" stroke="currentColor" marker-end="url(#sg-arrow)"/>
+      <line x1="590" y1="80" x2="618" y2="185" stroke="currentColor" stroke-dasharray="3 3" marker-end="url(#sg-arrow)"/>
+
+      <text x="10" y="295" font-size="10" opacity="0.7">DEFERRED (after the first release)</text>
+      <rect x="10" y="302" width="150" height="24" rx="6" fill="none" stroke="currentColor" stroke-dasharray="4 3"/><text x="85" y="318" text-anchor="middle">extra-time-penalties</text>
+      <rect x="175" y="302" width="130" height="24" rx="6" fill="none" stroke="currentColor" stroke-dasharray="4 3"/><text x="240" y="318" text-anchor="middle">experiment-flags</text>
+      <rect x="320" y="302" width="150" height="24" rx="6" fill="none" stroke="currentColor" stroke-dasharray="4 3"/><text x="395" y="318" text-anchor="middle">scripting-runtime (RIM-6)</text>
+      <rect x="485" y="302" width="110" height="24" rx="6" fill="none" stroke="currentColor" stroke-dasharray="4 3"/><text x="540" y="318" text-anchor="middle">distribution</text>
+    </g>
+  </svg>
+</section>
+
+</section>
+</section>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-24T06:26:59Z</span>
+    <a href="../../../workflows/football-manager-match-engine/03-slice.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../INDEX.html">football-manager-match-engine</a><span class="m-sheet-here" aria-current="page">slice</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../workflows/football-manager-match-engine/03-slice.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-24T06:26:59Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

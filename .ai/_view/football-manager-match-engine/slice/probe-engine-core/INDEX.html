@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="slice">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · slice — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="slice">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span aria-hidden="true">/</span><span class="m-here">probe-engine-core</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · slice</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">probe-engine-core</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/03-slice-probe-engine-core.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">03-slice-probe-engine-core.md</div>
+      <h1 class="pg-title">Slice · <code>probe-engine-core</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="stage-badge">slice</span><span class="meta">2026-09-22T06:03:50Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-probe" tabindex="-1"><a class="header-anchor" href="#the-probe"><span>The Probe</span></a></h2>
+<p>Verify handed over a <code>pass</code> on all six criteria of <code>engine-core</code> with live evidence for the benchmark and two low-severity copy observations. This probe re-drove the release binary from a fresh build (commit <code>27d21f5</code>) on the same reference machine, with a new seed (2026) beside the verified seed 42, and read every surface against the acceptance criteria, the charter constraints C2 and C4, and the surface-defect taxonomy.</p>
+<p>All six criteria held again: 270,000 ticks per 90-minute match, byte-identical files for one seed, zero validator violations on two seeds, a 397 ms median against a 2,000 ms budget, and clean exit codes for valid and invalid seeds. The tick dump showed one ball position and 22 player positions in every one of 3,000 records, which is C2 observed directly. Thirteen enumerated surfaces were driven; none was unreached. Five findings resulted, two at <code>medium</code>: the <code>simulate --json</code> help text names a dump path the binary does not write, and every failure inside a run emits prose on stderr and no structured record, so the <code>outcome: error</code> value the instrumentation contract defines is never produced. Both were re-observed from a clean state on three and four paths respectively.</p>
+<p>Next is a fix intake scoped to this probe slice, because every finding is local and none is above <code>medium</code>; the review stage can carry them as ledger items instead if the product owner prefers to batch. The top risk is unchanged from verify: realism is untuned, and nothing in this probe can decide it.</p></section>
+    <section class="slice-stages">
+    <h2 class="sdlc-h2">stages</h2>
+    <div class="slice-grid"><a class="slice-card" href="../../plan/probe-engine-core/INDEX.html"><span class="slice-slug"><code>plan</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../implement/probe-engine-core/INDEX.html"><span class="slice-slug"><code>implement</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../verify/probe-engine-core/INDEX.html"><span class="slice-slug"><code>verify</code></span>
+    <span class="status-badge is-ok">complete</span></a></div>
+  </section>
+    
+    <dl class="frontmatter-card"><div><dt>type</dt><dd>slice</dd></div><div><dt>slug</dt><dd>football-manager-match-engine</dd></div><div><dt>slice-slug</dt><dd>probe-engine-core</dd></div><div><dt>slice-type</dt><dd>probe</dd></div><div><dt>compressed</dt><dd>true</dd></div><div><dt>origin</dt><dd>probe</dd></div><div><dt>stage-number</dt><dd>3</dd></div><div><dt>status</dt><dd>complete</dd></div><div><dt>complexity</dt><dd>xs</dd></div><div><dt>created-at</dt><dd>2026-09-22T06:03:50Z</dd></div><div><dt>updated-at</dt><dd>2026-09-22T06:03:50Z</dd></div><div><dt>probe-target</dt><dd>engine-core</dd></div><div><dt>target-resolution</dt><dd>{&quot;matched-ac&quot;:[{&quot;slice&quot;:&quot;engine-core&quot;,&quot;ac-id-or-quote&quot;:&quot;AC-a: Given a seed and two built-in teams, When `engine-cli simulate` runs 90 minutes, Then the output holds 270,000 ticks&quot;,&quot;score&quot;:0.5},{&quot;slice&quot;:&quot;engine-core&quot;,&quot;ac-id-or-quote&quot;:&quot;AC-f: Given an invalid seed argument, When `engine-cli simulate` runs, Then it exits non-zero with a message naming the argument&quot;,&quot;score&quot;:0.5}],&quot;matched-slices&quot;:[&quot;engine-core&quot;],&quot;inferred-surfaces&quot;:[],&quot;ad-hoc&quot;:false}</dd></div><div><dt>adapters-used</dt><dd>cli</dd></div><div><dt>matched-adapters</dt><dd>cli</dd></div><div><dt>partial-bootstrap-failures</dt><dd></dd></div><div><dt>evidence-dir</dt><dd>.ai/workflows/football-manager-match-engine/probe-evidence/engine-core/</dd></div><div><dt>stack-source</dt><dd>confirmed</dd></div><div><dt>stack-adapter-divergence</dt><dd>false</dd></div><div><dt>comparison-basis</dt><dd>ac, charter, taxonomy</dd></div><div><dt>environment-class</dt><dd>local-emulated</dd></div><div><dt>surface-coverage</dt><dd>{&quot;enumeration-method&quot;:&quot;recipe&quot;,&quot;enumerated&quot;:13,&quot;driven&quot;:13,&quot;unreached&quot;:[]}</dd></div><div><dt>decidability</dt><dd>{&quot;observable&quot;:[&quot;tick-count&quot;,&quot;same-machine-determinism&quot;,&quot;validator-invariants&quot;,&quot;benchmark-wall-time&quot;,&quot;exit-codes&quot;,&quot;error-copy&quot;,&quot;record-schema&quot;,&quot;help-copy&quot;],&quot;not-observable&quot;:[{&quot;class&quot;:&quot;match realism (goals, possession, movement plausibility)&quot;,&quot;why&quot;:&quot;a statistical property; one seeded match does not decide it&quot;,&quot;covered-by&quot;:&quot;the calibration slice&#x27;s realism bands and the review stage&quot;},{&quot;class&quot;:&quot;continuous motion quality between ticks&quot;,&quot;why&quot;:&quot;a continuous surface; output capture is the wrong instrument&quot;,&quot;covered-by&quot;:&quot;the viewer-pitch slice, which renders the ticks&quot;},{&quot;class&quot;:&quot;cross-machine determinism&quot;,&quot;why&quot;:&quot;out of scope by NFR-4; only same-machine reproduction is claimed&quot;,&quot;covered-by&quot;:&quot;none; recorded as a boundary&quot;},{&quot;class&quot;:&quot;1000-match batch time&quot;,&quot;why&quot;:&quot;a long-run measurement; this run drove single matches&quot;,&quot;covered-by&quot;:&quot;the calibration slice batch run&quot;}]}</dd></div><div><dt>perturbations</dt><dd>[object Object], [object Object]</dd></div><div><dt>retracted-findings</dt><dd></dd></div><div><dt>findings-count</dt><dd>5</dd></div><div><dt>findings-severity</dt><dd>{&quot;critical&quot;:0,&quot;high&quot;:0,&quot;medium&quot;:2,&quot;low&quot;:3,&quot;incidental&quot;:0}</dd></div><div><dt>recommended-next</dt><dd>/wf intake fix football-manager-match-engine probe-engine-core</dd></div><div><dt>depends-on</dt><dd></dd></div><div><dt>tags</dt><dd>probe, cli, engine</dd></div><div><dt>refs</dt><dd>{&quot;index&quot;:&quot;00-index.md&quot;,&quot;slice-index&quot;:&quot;03-slice.md&quot;,&quot;adapters&quot;:&quot;runtime-adapters.md&quot;,&quot;verify&quot;:&quot;06-verify-engine-core.md&quot;,&quot;plan&quot;:&quot;04-plan-probe-engine-core.md&quot;,&quot;implement&quot;:&quot;05-implement-probe-engine-core.md&quot;}</dd></div></dl>
+    <div class="prose"><h1 id="compressed-slice-probe" tabindex="-1"><a class="header-anchor" href="#compressed-slice-probe"><span>Compressed Slice: probe</span></a></h1>
+<p>Generated by <code>/wf probe</code> on 2026-09-22T06:03:50Z against slug <code>football-manager-match-engine</code>.</p>
+<p><strong>Decidability statement.</strong> The engine’s product-level correctness, match realism, is a statistical property that a session-length drive cannot decide. This probe decides the slice’s own promises: tick count, determinism, validator invariants, benchmark wall time, exit codes, and copy. Read no finding below as a verdict on realism; the <code>calibration</code> slice owns that.</p>
+<h2 id="1-what-was-probed" tabindex="-1"><a class="header-anchor" href="#1-what-was-probed"><span>1. What was probed</span></a></h2>
+<p>The exact <code>probe-target</code> string: <code>engine-core</code>.</p>
+<h2 id="2-how-the-target-was-interpreted" tabindex="-1"><a class="header-anchor" href="#2-how-the-target-was-interpreted"><span>2. How the target was interpreted</span></a></h2>
+<ul>
+<li>Layer 1 (AC text match): 2 matches in <code>engine-core</code> (AC-a and AC-f name <code>engine-cli</code>; content-word overlap 0.5). No match in another slice reached the threshold.</li>
+<li>Layer 2 (Slice match): <code>engine-core</code> (exact slug match). The drive plan covers every criterion of that slice.</li>
+<li>Layer 3 (Surface inference): none.</li>
+<li>Layer 4 (Ad-hoc): false.</li>
+</ul>
+<h2 id="3-adapters" tabindex="-1"><a class="header-anchor" href="#3-adapters"><span>3. Adapters</span></a></h2>
+<ul>
+<li><code>cli</code> — matched by <code>Cargo.toml</code> with a binary crate (<code>crates/engine-cli</code>); listed in the confirmed <code>stack.platforms</code>. Bootstrap: <code>cargo build --release --workspace</code>, exit 0, binary at <code>target/release/engine-cli.exe</code>. Enumerate: the clap <code>--help</code> tree at the recipe rung: 3 commands (<code>simulate</code>, <code>bench</code>, <code>help</code>), 2 global flags, 8 subcommand flags (<code>enumerate.help.txt</code>).</li>
+<li><code>web</code> is listed in <code>stack.platforms</code> but matched no detection signal (no <code>package.json</code>, no HTML), so <code>matched-adapters</code> and the stack intersection agree on <code>[cli]</code>; no divergence.</li>
+<li>Partial bootstrap failures: none.</li>
+</ul>
+<h2 id="stack-context" tabindex="-1"><a class="header-anchor" href="#stack-context"><span>Stack context</span></a></h2>
+<pre><code class="hljs language-yaml">platforms: [web, cli]
+languages: [rust, javascript]
+build: [cargo]
+testing: [cargo-test]
+toolchains-present: [&quot;rustc 1.92.0&quot;, &quot;cargo&quot;, &quot;node v22.15.0&quot;, &quot;npm 10.9.2&quot;]
+user-confirmed: true
+</code></pre>
+<h2 id="4-observations" tabindex="-1"><a class="header-anchor" href="#4-observations"><span>4. Observations</span></a></h2>
+<ul>
+<li>
+<p><strong>AC-a</strong>: “Given a seed and two built-in teams, When <code>engine-cli simulate</code> runs 90 minutes, Then the output holds 270,000 ticks, each with one ball position and 22 player positions.”</p>
+<ul>
+<li><strong>Adapter</strong>: cli</li>
+<li><strong>Evidence</strong>: <code>ac-a-simulate-42.stdout.txt</code>, <code>ac-a-simulate-42.exit-code</code></li>
+<li><strong>What was observed</strong>: exit 0; the record reports <code>ticks.written</code> 270000; the file size was 51,840,080 bytes, which equals 64 + 270,000 × 192 + 16. The per-tick content was observed under C2 below.</li>
+<li><strong>Result</strong>: pass</li>
+</ul>
+</li>
+<li>
+<p><strong>AC-b</strong>: “Given the same seed and build on the same machine, When two simulations run, Then the two tick outputs are byte-identical.”</p>
+<ul>
+<li><strong>Adapter</strong>: cli</li>
+<li><strong>Evidence</strong>: <code>ac-b.sha256.txt</code>, <code>ac-b.cmp.txt</code>, <code>ac-b-simulate-42-again.*</code></li>
+<li><strong>What was observed</strong>: two sequential seed-42 runs produced files with the same SHA-256 (<code>753ea575…989e</code>), and <code>cmp</code> reported no difference.</li>
+<li><strong>Result</strong>: pass</li>
+</ul>
+</li>
+<li>
+<p><strong>AC-c</strong>: “Given any tick, Then no player is outside the pitch bounds, no two players share a point within 0.1 m, and ball speed is at most 40 m/s.”</p>
+<ul>
+<li><strong>Adapter</strong>: cli</li>
+<li><strong>Evidence</strong>: <code>ac-a-simulate-42.stdout.txt</code>, <code>ac-c-simulate-2026.stdout.txt</code></li>
+<li><strong>What was observed</strong>: <code>validate.ran</code> true and <code>validate.violations</code> 0 on seed 42 and on the new seed 2026; <code>ball.max_speed</code> 27.07 and 28.57 m/s.</li>
+<li><strong>Result</strong>: pass</li>
+</ul>
+</li>
+<li>
+<p><strong>AC-d</strong>: “Given open play with the ball more than 30 m from a player, Then that player’s distance to the formation anchor stays within the tolerance the tuning constants set.”</p>
+<ul>
+<li><strong>Adapter</strong>: cli</li>
+<li><strong>Evidence</strong>: <code>ac-c-simulate-2026.stdout.txt</code></li>
+<li><strong>What was observed</strong>: the anchor drift rule runs inside the validator, and the violation count is 0 on both seeds. This probe observes the count, not the rule itself; the unit test <code>a_corrupted_stream_reports_the_overlap</code> proves the validator fires.</li>
+<li><strong>Result</strong>: pass</li>
+</ul>
+</li>
+<li>
+<p><strong>AC-e</strong>: “Given the benchmark harness on the reference laptop with one thread, When it simulates one 90-minute match, Then wall time is under 2 seconds and the report records machine name and build hash.”</p>
+<ul>
+<li><strong>Adapter</strong>: cli</li>
+<li><strong>Evidence</strong>: <code>ac-e-bench-42.stdout.txt</code>, <code>ac-e-bench-42.exit-code</code></li>
+<li><strong>What was observed</strong>: exit 0; <code>bench.match_wall_ms</code> 397; <code>budget.pass</code> true; <code>bench.cpu_wall_ratio</code> 0.991; <code>machine.hash</code> <code>74ca12fc08a4</code>; <code>machine.cpu_model</code> “AMD Ryzen 7 9800X3D 8-Core Processor”; <code>build.hash</code> <code>27d21f5-dirty</code>. The report carries a hashed machine identifier plus the CPU model, not a literal machine name; the plan (<code>04-plan-engine-core.md</code> § The Plan) chose the hash to reconcile the criterion with the observability contract, and this probe reads the criterion the same way.</li>
+<li><strong>Result</strong>: pass</li>
+</ul>
+</li>
+<li>
+<p><strong>AC-f</strong>: “Given an invalid seed argument, When <code>engine-cli simulate</code> runs, Then it exits non-zero with a message naming the argument; and Given a valid seed, Then it exits zero.”</p>
+<ul>
+<li><strong>Adapter</strong>: cli</li>
+<li><strong>Evidence</strong>: <code>ac-f-invalid-seed.*</code>, <code>ac-f-valid-seed.*</code></li>
+<li><strong>What was observed</strong>: <code>--seed abc</code> exits 2 with “invalid value ‘abc’ for ‘–seed <SEED>’: invalid digit found in string”; <code>--seed 7 --minutes 1</code> exits 0 with a <code>match-stats</code> record.</li>
+<li><strong>Result</strong>: pass</li>
+</ul>
+</li>
+<li>
+<p><strong>Charter C2</strong>: “The engine computes the ball and all 22 player positions every tick.”</p>
+<ul>
+<li><strong>Adapter</strong>: cli</li>
+<li><strong>Evidence</strong>: <code>c2-simulate-json-1m.*</code>, <code>c2-record-shape.txt</code></li>
+<li><strong>What was observed</strong>: <code>simulate --json</code> for one minute wrote 3,000 JSON Lines records, tick 1 to tick 3000; every record holds <code>ball</code> as three floats and <code>players</code> as 22 pairs of floats.</li>
+<li><strong>Result</strong>: pass</li>
+</ul>
+</li>
+<li>
+<p><strong>Charter C4</strong>: “The engine runs headless behind a defined data contract … and emits structured events and statistics for the observability pipeline.”</p>
+<ul>
+<li><strong>Adapter</strong>: cli</li>
+<li><strong>Evidence</strong>: <code>ac-a-simulate-42.stdout.txt</code>, <code>ac-e-bench-42.stdout.txt</code>, <code>tax-branch-gap-minutes-0.*</code>, <code>tax-branch-gap-bench-matches-0.*</code>, <code>tax-leak-missing-dir.*</code>, <code>tax-leak-ticks-out-is-dir.*</code></li>
+<li><strong>What was observed</strong>: every successful run prints one structured record on stdout. Every failure inside a run (<code>--minutes 0</code>, <code>--minutes 201</code>, <code>--matches 0</code>, an unwritable output path) prints one prose line on stderr, exits 1, and prints no record. See finding 2.</li>
+<li><strong>Result</strong>: partial</li>
+</ul>
+</li>
+<li>
+<p><strong>Taxonomy sweep of the enumerated surfaces</strong> (advisory in target mode):</p>
+<ul>
+<li><code>dead-affordance</code>: <code>bench --json</code> prints the same record as <code>bench</code> without the flag (<code>tax-dead-affordance-bench-*.stdout.txt</code>, key sets equal). The help text states this (“the default output is the same record”), so the flag advertises nothing it lacks. No finding.</li>
+<li><code>error-surface-leak</code>: no traceback, no internal path beyond the user-supplied one, on any failure path. No finding.</li>
+<li><code>terminal-wait</code>: no progress state exists; every command terminates. No finding.</li>
+<li><code>fabricated-value</code>: every reported figure changes with seed, minutes, and environment (<code>tax-env-staging.stdout.txt</code> reads <code>env</code> staging). No finding.</li>
+<li><code>dependency-collapse</code>: the binary reads no config file and no network; nothing to perturb. No finding.</li>
+<li><code>ambiguous-copy</code>: findings 1 and 3.</li>
+<li><code>branch-gap</code>: findings 2 and 4.</li>
+<li><code>boundary-overflow</code>: finding 5.</li>
+<li><code>env-interference</code>: none; every drive ran from a fresh process with files as stdout and stderr, and the re-observations used fresh output paths.</li>
+</ul>
+</li>
+</ul>
+<h2 id="5-findings" tabindex="-1"><a class="header-anchor" href="#5-findings"><span>5. Findings</span></a></h2>
+<ol>
+<li>
+<ul>
+<li><strong>Severity</strong>: medium</li>
+<li><strong>Class</strong>: <code>ambiguous-copy</code> (W8: the concrete path the help names must be the path the binary writes)</li>
+<li><strong>Surface</strong>: cli, <code>simulate --json</code> help text</li>
+<li><strong>Defect</strong>: the help reads “Also write a JSON Lines dump of every tick next to the tick file (<code>&lt;FILE&gt;.jsonl</code>)”. The binary replaces the extension instead of appending: <code>match.ticks</code> produced <code>match.jsonl</code>, <code>two.dots.bin</code> produced <code>two.dots.jsonl</code>, and only the extensionless <code>noext</code> produced <code>noext.jsonl</code>. A script that reads <code>&lt;FILE&gt;.jsonl</code> as documented finds no file.</li>
+<li><strong>Evidence</strong>: <code>enumerate.help.txt</code>, <code>reobs-json-path.listing.txt</code>, <code>reobs-json-path-1..3.*</code> (clean-state re-observation on three paths)</li>
+<li><strong>Suggested fix shape</strong>: pick one rule in the <code>--json</code> path derivation in <code>engine-cli</code> and make the help text state that rule; the smaller change is the help text.</li>
+</ul>
+</li>
+<li>
+<ul>
+<li><strong>Severity</strong>: medium</li>
+<li><strong>Class</strong>: <code>branch-gap</code></li>
+<li><strong>Surface</strong>: cli, <code>simulate</code> and <code>bench</code> failure paths inside <code>run()</code></li>
+<li><strong>Defect</strong>: the instrumentation contract (<code>04b-instrument.md</code> § rules) defines <code>outcome</code> as <code>success</code>, <code>error</code>, or <code>abandoned</code>, and charter C4 promises structured events for the observability pipeline. On every failure inside a run (invalid minutes, invalid matches, unwritable output path) the binary prints prose on stderr and no record on stdout, so the pipeline never sees a failed run and the <code>error</code> value is never produced. Argument-parse failures (exit 2) happen before a run starts and are not counted here.</li>
+<li><strong>Evidence</strong>: <code>tax-branch-gap-minutes-0.*</code>, <code>tax-minutes-201.*</code>, <code>tax-branch-gap-bench-matches-0.*</code>, <code>tax-leak-missing-dir.*</code> (four failure paths, both subcommands)</li>
+<li><strong>Suggested fix shape</strong>: emit the <code>match-stats</code> or <code>run-report</code> record with <code>outcome: error</code> and a reason field on the error branch of each <code>run()</code>, or record a product-owner decision that pre-run failures stay prose-only and narrow the contract’s <code>outcome</code> enum.</li>
+</ul>
+</li>
+<li>
+<ul>
+<li><strong>Severity</strong>: low</li>
+<li><strong>Class</strong>: <code>ambiguous-copy</code> (S5 in reverse: identical wording twice reads as two events)</li>
+<li><strong>Surface</strong>: cli, <code>simulate</code> with an unwritable <code>--ticks-out</code> path</li>
+<li><strong>Defect</strong>: the message repeats the operating-system text: “cannot create <path>: io error: Access is denied. (os error 5): Access is denied. (os error 5)”. The error type’s display already includes its source and the binary prints the chain as well. Verify carried this as an informational item; it reproduced on two new paths.</li>
+<li><strong>Evidence</strong>: <code>tax-leak-ticks-out-is-dir.stderr.txt</code>, <code>tax-leak-missing-dir.stderr.txt</code></li>
+<li><strong>Suggested fix shape</strong>: print either the display or the chain in the binary’s error reporting, not both.</li>
+</ul>
+</li>
+<li>
+<ul>
+<li><strong>Severity</strong>: low</li>
+<li><strong>Class</strong>: <code>branch-gap</code> (non-tty path)</li>
+<li><strong>Surface</strong>: cli, stderr diagnostics when stderr is a file</li>
+<li><strong>Defect</strong>: the tracing lines on stderr carry ANSI colour codes when stderr is redirected. Verify carried this as an informational item; it reproduced.</li>
+<li><strong>Evidence</strong>: <code>c2-simulate-json-1m.stderr.txt</code></li>
+<li><strong>Suggested fix shape</strong>: enable colour in the tracing subscriber only when stderr is a terminal.</li>
+</ul>
+</li>
+<li>
+<ul>
+<li><strong>Severity</strong>: low</li>
+<li><strong>Class</strong>: <code>boundary-overflow</code></li>
+<li><strong>Surface</strong>: cli, <code>simulate --help</code></li>
+<li><strong>Defect</strong>: the longest help line is 108 columns (the <code>--json</code> option line); the taxonomy anchor is 80 columns. Meaning is not truncated; an 80-column terminal wraps the line mid-sentence.</li>
+<li><strong>Evidence</strong>: <code>enumerate.help.txt</code></li>
+<li><strong>Suggested fix shape</strong>: shorten the <code>--json</code> help sentence, or enable clap’s help wrapping.</li>
+</ul>
+</li>
+</ol>
+<p>Findings 3 and 4 duplicate the two informational items verify already routed to the review ledger; they are recorded here so the probe evidence set is complete, and they add no new work.</p>
+<h2 id="6-tripwires" tabindex="-1"><a class="header-anchor" href="#6-tripwires"><span>6. Tripwires</span></a></h2>
+<p>None fired. One adapter ran, so multi-adapter divergence cannot fire; the target matched a slice, so no ad-hoc criterion exists; bootstrap completed; finding 2 appears in both subcommands, which are both inside scope. <code>runtime-evidence-deferrals</code> is empty, so the clearing-event tripwire had nothing to run.</p>
+<h2 id="7-recommended-next-command" tabindex="-1"><a class="header-anchor" href="#7-recommended-next-command"><span>7. Recommended next command</span></a></h2>
+<p><code>/wf intake fix football-manager-match-engine probe-engine-core</code> — five findings, none above <code>medium</code>, each local to <code>crates/engine-cli</code>; a fix intake fits them in at most three files and leaves the lifecycle position unchanged.</p>
+<p>Alternates, in priority order:</p>
+<ol>
+<li><code>/wf review football-manager-match-engine engine-core</code> — the lifecycle’s next stage; the review ledger can carry findings 1 and 2 as items beside the two verify already routed, if the product owner prefers one batch of fixes after review.</li>
+<li><code>/wf status football-manager-match-engine</code> — the detail view with this probe slice registered.</li>
+</ol></div>
+    
+  
+<section class="narrative-fragments" aria-label="narrative fragments">
+<section class="nfrag" data-label="01-dump-path">
+<div class="probe-dump-path">
+  <style>@scope (.nfrag[data-label="01-dump-path"]) {
+
+    .probe-dump-path { margin: 1.5rem 0; }
+    .probe-dump-path h3 { font-size: 1rem; margin: 0 0 .5rem; }
+    .probe-dump-path table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+    .probe-dump-path th, .probe-dump-path td { border: 1px solid rgba(127,127,127,.35); padding: .35rem .6rem; text-align: left; vertical-align: top; }
+    .probe-dump-path code { font-family: ui-monospace, Consolas, monospace; }
+    .probe-dump-path .miss { color: #b3261e; font-weight: 600; }
+    .probe-dump-path .hit { color: #1b7f3b; font-weight: 600; }
+    .probe-dump-path p { font-size: .85rem; margin: .5rem 0 0; }
+  
+}</style>
+  <h3>Finding 1 — the dump path the help names against the path the binary writes</h3>
+  <table>
+    <thead>
+      <tr><th><code>--ticks-out</code> value</th><th>Help text promises (<code>&lt;FILE&gt;.jsonl</code>)</th><th>Binary wrote</th><th>Match</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>match.ticks</code></td><td><code>match.ticks.jsonl</code></td><td><code>match.jsonl</code></td><td class="miss">differs</td></tr>
+      <tr><td><code>two.dots.bin</code></td><td><code>two.dots.bin.jsonl</code></td><td><code>two.dots.jsonl</code></td><td class="miss">differs</td></tr>
+      <tr><td><code>noext</code></td><td><code>noext.jsonl</code></td><td><code>noext.jsonl</code></td><td class="hit">equal</td></tr>
+      <tr><td><code>s42-1m.ticks</code> (first drive)</td><td><code>s42-1m.ticks.jsonl</code></td><td><code>s42-1m.jsonl</code></td><td class="miss">differs</td></tr>
+    </tbody>
+  </table>
+  <p>Rule observed: the binary replaces the last extension with <code>.jsonl</code>. The help text holds only when the tick path has no extension. Evidence: <code>probe-evidence/engine-core/reobs-json-path.listing.txt</code>.</p>
+</div>
+
+</section>
+</section>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-22T06:03:50Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/03-slice-probe-engine-core.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">slice</a><span class="m-sheet-here" aria-current="page">probe-engine-core</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/03-slice-probe-engine-core.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-22T06:03:50Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

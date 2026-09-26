@@ -1,0 +1,27 @@
+<section class="fragment-plan" data-artifact="plan" data-slice="distribution" data-rev="2">
+  <!-- @include-skip hand-written rows mirror 04-plan-distribution.yaml; same structure as the sibling plan fragments -->
+  <table class="files-touched pl-files">
+    <thead><tr><th>File</th><th>Status</th><th>Module</th><th>Lines</th></tr></thead>
+    <tbody>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">config</span> .cargo/config.toml</summary><div class="pl-card">Static C runtime for the Windows target only; the current release binary imports VCRUNTIME140.dll, which a clean machine lacks.</div></details></td><td>new</td><td>build</td><td>+6</td></tr>
+      <tr class="is-mod"><td><details><summary><span class="pl-chip">domain</span> cli.rs, launch.rs, web.rs</summary><div class="pl-card">The launcher finds the page folder beside the binary, chooses and prints a seed when none is given, and with --open opens the default browser on each platform. No new command.</div></details></td><td>modified</td><td>cli</td><td>+89 / -5</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">test</span> install_layout.rs, release_version.rs</summary><div class="pl-card">The installed layout, or a packaged folder, runs from an unrelated folder with no configuration and answers hello with its own version; every artifact name uses the same version.</div></details></td><td>new</td><td>cli tests</td><td>+245</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">infra</span> packaging/windows/installer.nsi, build.ps1</summary><div class="pl-card">Per-user NSIS installer with a Start-menu entry and uninstaller; the build names the setup file from the binary's own version.</div></details></td><td>new</td><td>packaging</td><td>+190</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">infra</span> packaging/windows/smoke.ps1, run-sandbox.ps1</summary><div class="pl-card">A clean Windows 11 sandbox installs silently, starts the shortcut, waits for kick-off, screenshots the page, checks the version, and uninstalls.</div></details></td><td>new</td><td>packaging</td><td>+210</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">infra</span> packaging/unix/build.sh, soccermanager, smoke.sh</summary><div class="pl-card">A versioned Linux x86_64 archive with a start script, built and smoke-tested from a fresh home in WSL Ubuntu 24.04. The same scripts run on a Mac when one is provided.</div></details></td><td>new</td><td>unix packaging</td><td>+175</td></tr>
+      <tr class="is-mod"><td><details><summary><span class="pl-chip">docs</span> packaging/README.md, README.md, .gitignore</summary><div class="pl-card">How to build, install, and smoke-test on both platforms; the glibc floor; the unsigned-download warning; the macOS status; dist/ ignored.</div></details></td><td>new + modified</td><td>root</td><td>+97</td></tr>
+    </tbody>
+  </table>
+  <div class="callout callout-warn pl-risk"><strong>Clean-machine runtime.</strong> The Windows release binary needs the Visual C++ runtime today; step 1 links it statically and the sandbox run proves it.</div>
+  <div class="callout callout-warn pl-risk"><strong>Linux glibc floor.</strong> The archive is built on Ubuntu 24.04 and needs glibc 2.39 or newer.</div>
+  <div class="callout callout-warn pl-risk"><strong>macOS deferred.</strong> No Mac is available; an operator with one runs the same build and smoke scripts to clear the deferral.</div>
+  <div class="callout callout-warn pl-risk"><strong>Unsigned download.</strong> SmartScreen warns on a downloaded setup file; the sandbox copy does not reproduce the warning.</div>
+  <details class="pl-revs"><summary>Prior revisions</summary><p>Revision 0 (2026-09-22): first plan, stopped on two product questions. Snapshot: <a href="history/04-plan-distribution-0.md">history/04-plan-distribution-0.md</a>.</p><p>Revision 1 (2026-09-23): auto-review. Page-folder discovery matched to content discovery; citations refreshed; both questions still open. Snapshot: <a href="history/04-plan-distribution-1.md">history/04-plan-distribution-1.md</a>.</p><p>Revision 2 (2026-09-23): the product owner chose Windows plus Linux with macOS deferred, and the Start-menu shortcut. Linux build and smoke steps added; plan complete.</p></details>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-plan');
+      if (!root) return;
+      root.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { bubbles: true, detail: { name: 'plan', artifact: 'plan', counts: { files: 16, modules: 6, risks: 5 } } }));
+    })();
+  </script>
+</section>

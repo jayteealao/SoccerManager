@@ -1,0 +1,64 @@
+artifact: plan
+schema: sdlc/v1
+slug: football-manager-match-engine
+slice: extra-time-penalties
+rev: 1
+status: awaiting-input
+revisions:
+  - rev: 1
+    at: "2026-09-23T07:03:59Z"
+    trigger: manual
+    because: "auto-review — 9 issues found"
+    changed: "tactics slice has landed: steps grounded on fatigue.rs and tactics/change.rs; rule pack schema 4 and snapshot version 4; break before extra time gives no energy back; Q-1 still open"
+modules:
+  - { id: rules, label: "crates/engine/src/rules (clock, referee, new shoot-out module)", role: domain }
+  - { id: data, label: "crates/engine/src/data and content/ (rule pack schema 4)", role: config }
+  - { id: engine, label: "crates/engine core (sim, snapshot, observe, scenario, rng)", role: domain }
+  - { id: tactics, label: "crates/engine/src/tactics (change queue and substitution ledger)", role: domain }
+  - { id: protocol, label: "crates/protocol and docs/reference/protocol.md", role: domain }
+  - { id: cli, label: "crates/engine-cli", role: service }
+  - { id: tests, label: "crates/engine/tests", role: test }
+files:
+  - { path: "content/rules/default.json", status: modified, role: config, module: data, loc: 45, delta: { add: 12, rem: 1 }, planned_change: { intent: "schema_version 4; new extra_time block: periods 2, period_minutes 15, added_max_s 300, extra_substitutions 1, extra_windows 1; new shootout block: kicks 5." } }
+  - { path: "crates/engine/src/data/rules.rs", status: modified, role: config, module: data, loc: 225, delta: { add: 60, rem: 2 }, planned_change: { intent: "RULES_VERSION 4. ExtraTime and Shootout structs with garde bounds and deny_unknown_fields; RulePack gains both; extra_minutes() helper." } }
+  - { path: "content/README.md", status: modified, role: docs, module: data, loc: 323, delta: { add: 25, rem: 2 }, planned_change: { intent: "Modder reference for the two new rule pack blocks and the knockout switch." } }
+  - { path: "crates/engine/tests/content.rs", status: modified, role: test, module: tests, loc: 121, delta: { add: 30, rem: 2 }, planned_change: { intent: "Pin the new rule pack values; a schema 3 rule pack is refused by version; out-of-range extra_time values are refused with the field path." } }
+  - { path: "crates/engine/src/rules/clock.rs", status: modified, role: domain, module: rules, loc: 185, delta: { add: 70, rem: 30 }, planned_change: { intent: "MatchClock generalised from two halves to periods: per-period length, added ticks per period (up to four), minute() summing earlier periods so minute 105 reads 105; in_extra_time(); max_ticks() adds both extra-time periods and their cap for a knockout match." } }
+  - { path: "crates/engine/src/rules/mod.rs", status: modified, role: domain, module: rules, loc: 571, delta: { add: 80, rem: 10 }, planned_change: { intent: "check_clock: at the end of the last regulation half of a level knockout match, open an extra-time break (a half-time stoppage, with no energy recovery) instead of full time; at the end of extra time, if level, start the shoot-out." } }
+  - { path: "crates/engine/src/rules/shootout.rs", status: new, role: domain, module: rules, loc: 220, delta: { add: 220, rem: 0 }, planned_change: { intent: "Pure law functions: eligible kickers (players on the pitch at the end of extra time, numbers equalised), kicker order, alternating kicks, the first-five decision rule and sudden death, the order restarting once every eligible player has kicked. Kick resolution depends on Q-1." } }
+  - { path: "crates/engine/src/tactics/change.rs", status: modified, role: domain, module: tactics, loc: 457, delta: { add: 20, rem: 4 }, planned_change: { intent: "substitute() reads the effective limit and window count: the rule pack values plus extra_substitutions and extra_windows once the clock is in extra time. The half_time exemption already covers the break before extra time and the interval." } }
+  - { path: "crates/engine/src/sim.rs", status: modified, role: domain, module: engine, loc: 908, delta: { add: 70, rem: 5 }, planned_change: { intent: "MatchConfig gains knockout (default false) and with_knockout(); EngineEvent gains period and shoot-out fields; Summary gains extra-time added seconds, shoot-out scores and kicks, and the deciding phase." } }
+  - { path: "crates/engine/src/snapshot.rs", status: modified, role: domain, module: engine, loc: 1074, delta: { add: 40, rem: 4 }, planned_change: { intent: "Snapshot VERSION 4: knockout flag, period index and start, four added-time slots, and the extra-time added seconds, so a match resumed in extra time continues tick for tick. The substitution ledgers are already stored." } }
+  - { path: "crates/engine/src/observe/mod.rs", status: modified, role: domain, module: engine, loc: 600, delta: { add: 35, rem: 0 }, planned_change: { intent: "MatchStats additive extras: extra_time.played, extra_time.added_s, shootout.scores, shootout.kicks, result.decided_by (regulation, extra-time, shoot-out)." } }
+  - { path: "crates/engine/src/scenario.rs", status: modified, role: test, module: engine, loc: 205, delta: { add: 25, rem: 0 }, planned_change: { intent: "Test-only builder methods knockout(), period(n), substitutions_used(team, n); score() and energy() already exist." } }
+  - { path: "crates/engine/src/rng.rs", status: modified, role: domain, module: engine, loc: 174, delta: { add: 12, rem: 0 }, planned_change: { intent: "A shoot-out draw (coin toss for the first kicker, and kick outcomes under Q-1 option A) on the referee's word position, scriptable in tests." } }
+  - { path: "crates/protocol/src/event.rs", status: modified, role: domain, module: protocol, loc: 408, delta: { add: 30, rem: 0 }, planned_change: { intent: "Optional event fields: period (1 to 4) on kick-off and half-time; shootout.round, shootout.scored, shootout.scores on penalty events in the shoot-out; shootout.scores and result.decided_by on full-time. No new event type." } }
+  - { path: "crates/protocol/src/message.rs", status: modified, role: domain, module: protocol, loc: 259, delta: { add: 15, rem: 0 }, planned_change: { intent: "Carry the optional fields in the event message; PROTOCOL_VERSION unchanged under Q-1 options A and B." } }
+  - { path: "docs/reference/protocol.md", status: modified, role: docs, module: protocol, loc: 252, delta: { add: 25, rem: 2 }, planned_change: { intent: "Document the optional fields, the knockout maximum length, and how a shoot-out appears on the wire." } }
+  - { path: "crates/engine-cli/src/cli.rs", status: modified, role: service, module: cli, loc: 251, delta: { add: 12, rem: 0 }, planned_change: { intent: "--knockout on simulate, bench, serve, and record, under the 80-column help rule." } }
+  - { path: "crates/engine-cli/src/simulate.rs", status: modified, role: service, module: cli, loc: 115, delta: { add: 6, rem: 1 }, planned_change: { intent: "Pass --knockout into MatchConfig." } }
+  - { path: "crates/engine-cli/src/bench.rs", status: modified, role: service, module: cli, loc: 258, delta: { add: 4, rem: 1 }, planned_change: { intent: "Pass --knockout into MatchConfig." } }
+  - { path: "crates/engine-cli/src/serve.rs", status: modified, role: service, module: cli, loc: 163, delta: { add: 4, rem: 1 }, planned_change: { intent: "Pass --knockout into MatchConfig." } }
+  - { path: "crates/engine-cli/src/record.rs", status: modified, role: service, module: cli, loc: 100, delta: { add: 4, rem: 1 }, planned_change: { intent: "Pass --knockout into MatchConfig." } }
+  - { path: "crates/engine/tests/rules_extra_time.rs", status: new, role: test, module: tests, loc: 180, delta: { add: 180, rem: 0 }, planned_change: { intent: "AC-1 part one: a level knockout match at minute 89 plays two 15-minute periods with added time and minute 105 on the clock; a non-knockout level match ends at full time; a knockout match with a winner ends at 90. AC-2: the sixth substitution applies in extra time, a seventh is rejected with a change-rejected event." } }
+  - { path: "crates/engine/tests/rules_shootout.rs", status: new, role: test, module: tests, loc: 200, delta: { add: 200, rem: 0 }, planned_change: { intent: "AC-1 part two: a forced level extra time produces a shoot-out with a winner; alternating order; early decision after fewer than five kicks; sudden death; order restarts after every eligible player kicks; numbers equalised after a red card; determinism across two runs with one seed." } }
+  - { path: "crates/engine/tests/fatigue.rs", status: modified, role: test, module: tests, loc: 71, delta: { add: 60, rem: 0 }, planned_change: { intent: "AC-3: a level knockout match from minute 89 to 106; the per-tick energy change across minute 90 and the break is no larger than the largest change elsewhere and never positive; at minute 105 the effective values equal the base times multiplier(energy)." } }
+  - { path: "crates/engine/tests/snapshot.rs", status: modified, role: test, module: tests, loc: 187, delta: { add: 40, rem: 0 }, planned_change: { intent: "A snapshot taken at the break before extra time resumes tick for tick through extra time; a version 3 snapshot is refused by version." } }
+edges:
+  - { from: "crates/engine/src/rules/mod.rs", to: "crates/engine/src/rules/clock.rs", kind: calls }
+  - { from: "crates/engine/src/rules/mod.rs", to: "crates/engine/src/rules/shootout.rs", kind: calls }
+  - { from: "crates/engine/src/rules/clock.rs", to: "crates/engine/src/data/rules.rs", kind: import }
+  - { from: "crates/engine/src/rules/shootout.rs", to: "crates/engine/src/rng.rs", kind: calls }
+  - { from: "crates/engine/src/tactics/change.rs", to: "crates/engine/src/rules/clock.rs", kind: calls }
+  - { from: "crates/engine/src/sim.rs", to: "crates/engine/src/rules/mod.rs", kind: calls }
+  - { from: "crates/engine/src/snapshot.rs", to: "crates/engine/src/sim.rs", kind: import }
+  - { from: "crates/engine/src/observe/mod.rs", to: "crates/engine/src/sim.rs", kind: import }
+  - { from: "crates/protocol/src/event.rs", to: "crates/engine/src/sim.rs", kind: import }
+  - { from: "crates/engine-cli/src/simulate.rs", to: "crates/engine/src/sim.rs", kind: calls }
+risks:
+  - { title: "Q-1 open: how the shoot-out is simulated", severity: high, body: "A shoot-out resolved by attribute draws sits outside the per-tick positional model the product owner ratified; one simulated on the pitch makes the announced maximum match length unbounded under sudden death.", mitigation: "Plan stops at awaiting-input with three options; everything else is planned." }
+  - { title: "A missed field breaks resume in extra time", severity: medium, body: "Any clock field not in the snapshot makes a resumed match drift.", mitigation: "Snapshot version 4 and a continuation test from the break before extra time." }
+  - { title: "The default match changes by accident", severity: medium, body: "One extra draw or reordered branch changes every tick file.", mitigation: "Extra-time draws only when extra time starts; the unchanged determinism test is the gate." }
+  - { title: "Knockout matches are longer", severity: low, body: "The announced maximum rises from 360,000 to 480,000 ticks, about 45 MB of page history.", mitigation: "Only when --knockout is set; the default match is unchanged, and the benchmark runs the default match." }
+history:
+  - { rev: 0, at: "2026-09-22T22:23:31Z", path: "history/04-plan-extra-time-penalties-0.md", because: "first plan; Q-1 opened" }

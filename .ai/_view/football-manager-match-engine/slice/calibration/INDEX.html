@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="slice">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · slice — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="slice">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span aria-hidden="true">/</span><span class="m-here">calibration</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · slice</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">calibration</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/03-slice-calibration.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">03-slice-calibration.md</div>
+      <h1 class="pg-title">Slice · <code>calibration</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">defined</span><span class="stage-badge">slice</span><span class="meta">2026-09-21T19:50:41Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-slice" tabindex="-1"><a class="header-anchor" href="#the-slice"><span>The Slice</span></a></h2>
+<p>Tactics and the AI manager make the engine play a game worth measuring. The shape’s realism bands (goals, shots, possession, strength advantage) and the aggregate statistics record for the observability pipeline are untested until many matches run.</p>
+<p>This slice builds the 1000-match calibration harness, the per-match statistics record and the event stream file output (the instrument augmentation’s signals), the aggregate report, and one tuning pass that lands the realism bands. The record schema is agreed with the observability plan (U-2).</p>
+<p>Integration consumes the tuned engine. The top risk is the tuning loop taking longer than the slice: the acceptance criteria accept the bands, and a miss records the residual as an open tuning item rather than widening the bands.</p></section>
+    <section class="slice-stages">
+    <h2 class="sdlc-h2">stages</h2>
+    <div class="slice-grid"><a class="slice-card" href="../../plan/calibration/INDEX.html"><span class="slice-slug"><code>plan</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../implement/calibration/INDEX.html"><span class="slice-slug"><code>implement</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../verify/calibration/INDEX.html"><span class="slice-slug"><code>verify</code></span>
+    <span class="status-badge is-ok">complete</span></a></div>
+  </section>
+    
+    <dl class="frontmatter-card"><div><dt>type</dt><dd>slice</dd></div><div><dt>slug</dt><dd>football-manager-match-engine</dd></div><div><dt>slice-slug</dt><dd>calibration</dd></div><div><dt>status</dt><dd>defined</dd></div><div><dt>stage-number</dt><dd>3</dd></div><div><dt>created-at</dt><dd>2026-09-21T19:50:41Z</dd></div><div><dt>updated-at</dt><dd>2026-09-21T19:50:41Z</dd></div><div><dt>complexity</dt><dd>m</dd></div><div><dt>depends-on</dt><dd>tactics-and-ai, data-schemas-generator</dd></div><div><dt>tags</dt><dd>engine, calibration, statistics, observability</dd></div><div><dt>refs</dt><dd>{&quot;index&quot;:&quot;00-index.md&quot;,&quot;slice-index&quot;:&quot;03-slice.md&quot;,&quot;siblings&quot;:[&quot;03-slice-tactics-and-ai.md&quot;,&quot;03-slice-data-schemas-generator.md&quot;,&quot;03-slice-experiment-flags.md&quot;,&quot;03-slice-integration.md&quot;],&quot;plan&quot;:&quot;04-plan-calibration.md&quot;,&quot;implement&quot;:&quot;05-implement-calibration.md&quot;}</dd></div></dl>
+    <div class="prose"><h1 id="slice-calibration-harness-and-statistics-record" tabindex="-1"><a class="header-anchor" href="#slice-calibration-harness-and-statistics-record"><span>Slice: Calibration Harness and Statistics Record</span></a></h1>
+<h2 id="goal" tabindex="-1"><a class="header-anchor" href="#goal"><span>Goal</span></a></h2>
+<p>Realism statistics inside the shape’s bands over 1000 matches, and every match emitting the records the pipeline needs.</p>
+<h2 id="why-this-slice-exists" tabindex="-1"><a class="header-anchor" href="#why-this-slice-exists"><span>Why This Slice Exists</span></a></h2>
+<p>C3 and C4 are measured here; the product owner named the observability pipeline as the measure of success (intake Q3).</p>
+<h2 id="scope" tabindex="-1"><a class="header-anchor" href="#scope"><span>Scope</span></a></h2>
+<p>In:</p>
+<ul>
+<li><code>engine-cli calibrate --matches 1000 --seed N</code>: runs matches with the AI manager on both sides over generated leagues, in parallel processes, and writes an aggregate report.</li>
+<li>Per-match statistics record and event stream file output, schema shared with <code>.ai/observability.md</code> (named mechanism per the shape: <strong>event stream and statistics record</strong>).</li>
+<li>Tuning pass on the tuning file until the bands hold.</li>
+<li>Dark-path counters: queued change that never applied, match without a statistics record.</li>
+</ul>
+<p>Out:</p>
+<ul>
+<li>Feature flags for competing models: <code>experiment-flags</code> (deferred).</li>
+<li>The pipeline itself: <code>/wf observability init</code> and build.</li>
+</ul>
+<h2 id="acceptance-criteria" tabindex="-1"><a class="header-anchor" href="#acceptance-criteria"><span>Acceptance Criteria</span></a></h2>
+<ul>
+<li>Given 1000 matches between generated teams of equal strength, Then goals per match lie in 2.4 to 3.2, shots per team in 8 to 16, and possession for either side in 35 to 65 percent.<!-- observable: false — the harness asserts the bands; marked slow -->
+</li>
+<li>Given team A with attributes 15 percent higher than team B, When 1000 matches run, Then team A wins more than 50 percent.<!-- observable: false — harness assertion; marked slow -->
+</li>
+<li>Given any match, Then the engine writes one statistics record and one event stream file that validate against the agreed schema without transformation.<!-- observable: false — cargo test validates against the schema file -->
+</li>
+<li>Given 1000 matches, Then the dark-path counters read zero.<!-- observable: false — harness assertion -->
+</li>
+<li>Given 1000 matches on the reference laptop, Then wall time is under 30 minutes, and the report also records the single-thread per-match time from the benchmark harness.<!-- observable: true — the developer reads the report -->
+verify: { method: harness report, env: reference laptop, fixture: seed 2026 generated league, rung: cli-direct }</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<ul>
+<li><code>tactics-and-ai</code>: decisions, fatigue, AI manager.</li>
+<li><code>data-schemas-generator</code>: generated teams and the tuning file.</li>
+</ul>
+<h2 id="risks" tabindex="-1"><a class="header-anchor" href="#risks"><span>Risks</span></a></h2>
+<ul>
+<li>Bands unreachable with the current decision model: record the residual and route to <code>experiment-flags</code>; never widen the bands silently (they are PO-accepted criteria).</li>
+<li>Schema disagreement with the observability plan: run <code>/wf observability init</code> before this slice’s plan.</li>
+</ul></div>
+    
+  
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-21T19:50:41Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/03-slice-calibration.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">slice</a><span class="m-sheet-here" aria-current="page">calibration</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/03-slice-calibration.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-21T19:50:41Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

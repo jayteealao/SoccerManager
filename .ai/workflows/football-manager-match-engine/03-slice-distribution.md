@@ -3,10 +3,10 @@ schema: sdlc/v1
 type: slice
 slug: football-manager-match-engine
 slice-slug: distribution
-status: defined
+status: complete
 stage-number: 3
 created-at: "2026-09-21T19:50:41Z"
-updated-at: "2026-09-21T19:50:41Z"
+updated-at: "2026-09-23T18:36:35Z"
 complexity: m
 depends-on: [integration]
 tags: [distribution, installer, packaging, deferred]

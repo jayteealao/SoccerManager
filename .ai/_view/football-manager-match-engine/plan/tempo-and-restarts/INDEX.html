@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="plan">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · plan — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="plan">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span aria-hidden="true">/</span><span class="m-here">tempo-and-restarts</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · plan</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">tempo-and-restarts</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/04-plan-tempo-and-restarts.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">04-plan-tempo-and-restarts.md</div>
+      <h1 class="pg-title">Plan · <code>tempo-and-restarts</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="stage-badge">plan</span><span class="meta">rev 0</span><span class="meta">2026-09-25T03:12:00Z</span></div>
+    </header><div class="metric-row"><div class="metric">
+      <span class="metric-label">files to touch</span>
+      <span class="metric-value">19</span>
+      
+    </div><div class="metric">
+      <span class="metric-label">steps</span>
+      <span class="metric-value">15</span>
+      
+    </div><div class="metric is-ok">
+      <span class="metric-label">blockers</span>
+      <span class="metric-value">none</span>
+      
+    </div></div>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-plan" tabindex="-1"><a class="header-anchor" href="#the-plan"><span>The Plan</span></a></h2>
+<p><code>keeper-and-shots</code> shipped at <code>8fd407b</code> and <code>bce0144</code> and passed verify on its four criteria. On that play, a 24-match probe on seed 42 in this run measured 1,216 passes per team at 86.6% accuracy, 20.4 throw-ins per match, and the ball live for 90.0 of 94.1 minutes. The code shows why. A carrier who is not pressed passes about 0.2 s after he gains the ball, because the dribble bonus lasts 10 ticks and holding loses 0.5 per second (<code>decision.rs:343-363</code>). Throw-ins wait 3 s and free kicks 8 s (<code>tuning.rs:445-453</code>). Every <code>Kick::Pass</code> adds to <code>passes</code>, so clearances and restart kicks count (<code>sim.rs:973</code>). Throw-ins are also out of band now. The slice expected 33–43, but the keeper-and-shots gate measured 22.4–24.1.</p>
+<p>The plan keeps “every agent decides every tick”. It adds a carry window to what the carrier prefers. For <code>carry_s</code> seconds after he gains the ball, a carrier with no opponent within 2.5 m pays <code>carry_cost</code> on a pass and on a clearance. A shot is exempt. The four restart delays move to the sourced medians: 13.8, 23.2, 31.8 and 32.5 s. A clearance becomes its own kick (<code>Kick::Clear</code>), and the first kick of a restart taker is a restart kick. Each is counted under its own key, and <code>stats.passes</code> keeps only open-play passes. A new <code>stats.ball_in_play_s</code> goes in <code>match-stats</code>, and the calibrate report shows the minutes per 90. Throw-ins and corners get physical levers only. The clearance aim spread becomes a tuning value. A defender can also clear a fast pass inside his own penalty area, once per flight. That clearance gives the corners from clearances and crosses that the product owner moved here (Q-KS2). A corner or a throw-in still comes only from a ball that crosses a line.</p>
+<p>The work is 15 steps over 19 files, 1 of them new. The benchmark is re-baselined on <code>bce0144</code> at 1.5519 µs per tick (gate 1.7071 µs, 8.55 MB). When it lands, <code>realism-tuning</code> can tune goals on a match with a real rhythm. The top risk is the ball-in-play figure. The engine awards fewer stoppages than real matches (12.8 fouls and 20.4 throw-ins per match), so the sourced medians alone may leave the figure near 70 minutes. If it stays above 65 with every lever in bounds, implement stops and reports. It never sets a delay above a median.</p></section><figure class="figure-canvas">
+  <figcaption class="figure-meta">
+    <span class="figure-title"><b>Figure 3</b> · File-change topology</span>
+    <span class="figure-legend" aria-hidden="true"><span class="legend-entry"><span class="sw modified"></span>modified</span><span class="legend-entry"><span class="sw new"></span>new</span><span class="legend-entry"><span class="sw deleted"></span>deleted</span><span class="legend-entry"><span class="sw external"></span>external</span></span>
+  </figcaption>
+  <svg viewBox="0 0 980 482" width="100%" preserveAspectRatio="xMinYMid meet" aria-label="File-change topology">
+    <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8377"/>
+    </marker>
+  </defs><rect x="20" y="30" width="301.3333333333333" height="108" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC/TUNING.RS AND CONTENT/TUNING.JSON</text><rect x="333.3333333333333" y="30" width="301.3333333333333" height="76" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC/DECISION.RS</text><rect x="646.6666666666666" y="30" width="301.3333333333333" height="140" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC (SIM.RS, RULES/MOD.RS, RULES/RESTART.RS)</text><rect x="20" y="258" width="301.3333333333333" height="204" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="276" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC (OBSERVE/MOD.RS, SNAPSHOT.RS), CRATES/ENGINE-CLI/SRC/REPORT, SCHEMAS/OBSERVABILITY</text><rect x="333.3333333333333" y="130" width="301.3333333333333" height="76" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="148" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC/SCENARIO.RS</text><rect x="646.6666666666666" y="194" width="301.3333333333333" height="140" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="212" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/TESTS</text><rect x="20" y="230" width="301.3333333333333" height="76" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="248" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">DOCS/REFERENCE AND THE OBSERVABILITY CONTRACT</text><rect x="32" y="58" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tuning.rs</text>
+      <text x="40" y="80" font-size="8" fill="#8a8377">config · +70/−4</text><rect x="32" y="90" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tuning.json</text>
+      <text x="40" y="112" font-size="8" fill="#8a8377">config · +12/−4</text><rect x="345.3333333333333" y="58" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">decision.rs</text>
+      <text x="353.3333333333333" y="80" font-size="8" fill="#8a8377">domain · +25/−6</text><rect x="658.6666666666666" y="58" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">sim.rs</text>
+      <text x="666.6666666666666" y="80" font-size="8" fill="#8a8377">domain · +90/−8</text><rect x="658.6666666666666" y="90" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="666.6666666666666" y="112" font-size="8" fill="#8a8377">domain · +12/−2</text><rect x="658.6666666666666" y="122" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="134" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">restart.rs</text>
+      <text x="666.6666666666666" y="144" font-size="8" fill="#8a8377">domain · +0/−0</text><rect x="32" y="286" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="298" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">snapshot.rs</text>
+      <text x="40" y="308" font-size="8" fill="#8a8377">contract · +8/−1</text><rect x="32" y="318" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="330" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="40" y="340" font-size="8" fill="#8a8377">contract · +20/−2</text><rect x="32" y="350" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="362" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="40" y="372" font-size="8" fill="#8a8377">contract · +15/−0</text><rect x="32" y="382" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="394" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">match-stats.schema.json</text>
+      <text x="40" y="404" font-size="8" fill="#8a8377">contract · +12/−0</text><rect x="32" y="414" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="426" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">run-report.schema.json</text>
+      <text x="40" y="436" font-size="8" fill="#8a8377">contract · +1/−0</text><rect x="345.3333333333333" y="158" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="170" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">scenario.rs</text>
+      <text x="353.3333333333333" y="180" font-size="8" fill="#8a8377">test-support · +15/−0</text><rect x="658.6666666666666" y="222" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="234" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tempo_and_restarts.rs</text>
+      <text x="666.6666666666666" y="244" font-size="8" fill="#8a8377">test · +360/−0</text><rect x="658.6666666666666" y="254" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="266" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">match_stats.rs, content.rs, snapshot.rs, plugin_hooks.rs</text>
+      <text x="666.6666666666666" y="276" font-size="8" fill="#8a8377">test · +40/−6</text><rect x="658.6666666666666" y="286" width="277.3333333333333" height="24" rx="3" fill="#f0ece1" stroke="#cbc4b1" stroke-width="1"/>
+      <text x="666.6666666666666" y="298" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">keeper_and_shots.rs (set_pieces_arise_from_play)</text>
+      <text x="666.6666666666666" y="308" font-size="8" fill="#8a8377">test · +0/−0</text><rect x="32" y="258" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="270" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">observability.md</text>
+      <text x="40" y="280" font-size="8" fill="#8a8377">docs · +30/−3</text><path d="M 622.6666666666666 71 C 327.3333333333333 71, 327.3333333333333 71, 32 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 71 C 640.6666666666666 71, 640.6666666666666 71, 345.3333333333333 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 103 C 797.3333333333333 103, 797.3333333333333 71, 658.6666666666666 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 331 C 484 331, 484 71, 658.6666666666666 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 299 C 484 299, 484 71, 658.6666666666666 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 363 C 170.66666666666666 363, 170.66666666666666 331, 32 331" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 235 C 640.6666666666666 235, 640.6666666666666 171, 345.3333333333333 171" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/>
+  </svg>
+</figure><div class="fragment"><section class="fragment-plan" data-artifact="plan" data-slice="tempo-and-restarts" data-rev="0">
+  <!-- @include-skip files-touched rows and callouts follow the sibling plan fragments' inline markup so the page renders them identically -->
+  <table class="files-touched pl-files">
+    <thead><tr><th>File</th><th>Status</th><th>Module</th><th>Lines</th></tr></thead>
+    <tbody>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">config</span> crates/engine/src/tuning.rs, content/tuning.json</summary><div class="pl-card">A carry window for the carrier (how long and how much a pass costs while he is not pressed), an optional clearances block (the clearance aim spread and the cross clearance values), and the four restart delays at the sourced medians: 13.8, 23.2, 31.8 and 32.5 seconds.</div></details></td><td>modified</td><td>tuning</td><td>+82 / -8</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/decision.rs</summary><div class="pl-card">A clearance becomes its own kind of kick. An unpressed carrier who has just gained the ball pays a cost on a pass and a clearance for a short window, so he carries or holds. A shot is never charged. Every player still decides every tick.</div></details></td><td>modified</td><td>decide</td><td>+25 / -6</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/sim.rs, rules/mod.rs</summary><div class="pl-card">Only open-play passes count as passes. Clearances and the first kick of each restart are counted under their own keys. Live ticks are counted. A defender can clear a fast pass inside his own penalty area once per flight, and the ball then crosses a line or not as the physics decides.</div></details></td><td>modified</td><td>play</td><td>+102 / -10</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">contract</span> observe, snapshot, calibrate report, record schemas</summary><div class="pl-card">Three new match statistics: clearances, restart kicks and seconds of ball in play. The snapshot carries the new counters at the next version. The calibrate report shows ball-in-play minutes per 90 beside the bands. The schema properties are optional.</div></details></td><td>modified</td><td>records</td><td>+56 / -3</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">test-support</span> crates/engine/src/scenario.rs</summary><div class="pl-card">A scripted clearance for tests only.</div></details></td><td>modified</td><td>seams</td><td>+15</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">test</span> crates/engine/tests/tempo_and_restarts.rs and four updated test files</summary><div class="pl-card">Scenes for a clearance, each restart kick, the throw-in delay, the live-tick count and a cleared cross. Slow tests over 200 matches for passes and accuracy, ball in play and throw-ins, and a census of restart times and corner origins.</div></details></td><td>new</td><td>tests</td><td>+400 / -6</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">docs</span> data-files, protocol and the observability contract</summary><div class="pl-card">The new tuning rows and delays, the pass count described as open-play passes, and the three new statistics keys.</div></details></td><td>modified</td><td>docs</td><td>+30 / -3</td></tr>
+    </tbody>
+  </table>
+  <div class="pl-risks">
+    <aside class="callout callout-danger"><strong>The ball may stay in play for more than 65 minutes (high).</strong> The engine awards fewer stoppages than real matches, so the sourced medians alone may leave about 70 live minutes. Implement stops and reports rather than set a delay above a median.</aside>
+    <aside class="callout callout-danger"><strong>Throw-ins are 20 to 24 per match (high).</strong> The slice expected them in band. The clearance aim and the cross clearance are tuned, and a throw-in always needs a ball over the touchline.</aside>
+    <aside class="callout callout-warn"><strong>Pass accuracy may leave 75 to 88 percent (medium).</strong> The counting change is measured alone first. The pass weights are secondary levers.</aside>
+    <aside class="callout callout-warn"><strong>Every seeded result moves (medium).</strong> Each moved expectation is re-derived and recorded.</aside>
+    <aside class="callout callout-info"><strong>Goals fall further (low).</strong> The product owner accepted this until the final tuning slice.</aside>
+  </div>
+  <details class="pl-revs">
+    <summary>Prior revisions (0)</summary>
+    <ul><li>No prior revision.</li></ul>
+  </details>
+  <style>
+    .fragment-plan .pl-files { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-plan .pl-files th, .fragment-plan .pl-files td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
+    .fragment-plan .pl-files summary { cursor: pointer; }
+    .fragment-plan .pl-chip { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; opacity: 0.8; }
+    .fragment-plan .pl-card { padding: 6px 0 4px 18px; opacity: 0.9; }
+    .fragment-plan .pl-risks { display: grid; gap: 8px; margin-top: 12px; }
+    @media (max-width: 480px) { .fragment-plan .pl-files th:nth-child(3), .fragment-plan .pl-files td:nth-child(3) { display: none; } }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-plan');
+      var files = 16, modules = 7;
+      var risks = root ? root.querySelectorAll('.pl-risks .callout').length : 0;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'plan', artifact: 'plan', counts: { files: files, modules: modules, risks: risks } } }));
+    })();
+  </script>
+</section>
+</div><div class="prose"><h1 id="plan-tempo-and-restarts" tabindex="-1"><a class="header-anchor" href="#plan-tempo-and-restarts"><span>Plan: Tempo and Restarts</span></a></h1>
+<h2 id="current-state" tabindex="-1"><a class="header-anchor" href="#current-state"><span>Current State</span></a></h2>
+<ul>
+<li>Code: HEAD <code>bce0144</code>. <code>git status</code> shows no change under <code>crates</code>, <code>content</code>, <code>web</code>, <code>Cargo.toml</code> or <code>Cargo.lock</code>. <code>06-verify-keeper-and-shots.md</code> (status complete, result pass, at <code>bce0144</code>) records the workspace suite at 501 passed on the server, with the two Linux-only failures passed on this PC.</li>
+<li><strong>The carrier’s decision</strong> (<code>decision.rs:226-385</code>, <code>decide_carrier</code> <code>:387-460</code>): every tick the carrier scores a shot, the best pass, a dribble, a hold and a clearance, each with fresh noise, and takes the highest. The dribble has <code>first_touch</code> (0.6) only while <code>held &lt; 10</code> ticks. The hold is <code>hold</code> (−0.4) minus <code>hold_per_s</code> (0.5) per second held. <code>pressed</code> is an opponent within 2.5 m (<code>:261</code>). <code>decision_interval_ticks</code> is 1 (<code>content/tuning.json:5</code>).</li>
+<li><strong>Clearances</strong> (<code>decision.rs:433-441</code>): <code>Choice::Clear</code> returns a <code>Kick::Pass</code> toward the far half, turned by up to ±0.6 rad, over 55 m with loft 6 m/s (<code>CLEARANCE_DISTANCE</code>, <code>CLEARANCE_LOFT</code>, <code>:685-687</code>). The keeper clears with <code>keeper_clear</code>.</li>
+<li><strong>Pass counting</strong> (<code>sim.rs:939-990</code>): <code>kick_ball</code> adds every <code>Kick::Pass</code> to <code>summary.passes</code> and sets <code>pass_in_flight</code>. <code>gain()</code> counts a completion when the same side gains the ball next (<code>:1269-1271</code>). <code>Kick</code> has two variants, <code>Pass</code> and <code>Shot</code> (<code>decision.rs:20-23</code>). They are matched in <code>sim.rs:949</code>, <code>rules/mod.rs:901</code> and <code>scenario.rs:128,143</code>.</li>
+<li><strong>Restarts</strong> (<code>rules/mod.rs:580-620</code>, <code>rules/restart.rs:49-70</code>): a throw-in, a corner and an indirect free kick are kicked with <code>restart_pass()</code>. A goal kick uses <code>decide_carrier</code>. A kick-off and a direct free kick leave the taker holding the ball, and he decides on the next tick. The restart may be taken once <code>delay_ticks(kind)</code> has passed, the taker is at the ball and every player the law moves has moved. The hard limit is three times the delay. Delays today: kick-off 5, throw-in 3, corner 8, goal kick 6, free kick 8, penalty 15, drop ball 20 s (<code>content/tuning.json:54-62</code>).</li>
+<li><strong>Added time</strong> (<code>rules/clock.rs:44-51</code>, <code>content/rules/default.json:17-33</code>): priced per stoppage kind and card, with ±30 s variance and a clamp of 60–900 s. It does not read the restart delays, so longer delays do not change added time.</li>
+<li><strong>The fast-ball contest</strong> (<code>sim.rs:1008-1075</code>, <code>:1179-1215</code>): only the acting keepers can take a ball faster than <code>control_speed</code> (12 m/s). While a shot is in flight, <code>try_block</code> gives each outfield defender within <code>block_reach</code> one roll per flight, and <code>shot::deflect</code> turns the ball (<code>shot.rs:54-72</code>). Nothing contests a fast pass except the keeper.</li>
+<li><strong>Counters and records</strong>: <code>Summary</code> (<code>sim.rs:385-440</code>) is written into the snapshot (<code>snapshot.rs:740-782</code>, VERSION 5 at <code>:46</code>). The reader refuses another version or another build (<code>:156-160</code>). <code>MatchFigures</code> (<code>observe/mod.rs:141-208</code>) carries <code>stats.passes</code>, <code>passes.completed</code> and <code>stats.pass_accuracy_pct</code>. <code>LawStats</code> carries <code>ticks.played</code> and <code>rules.dead_ball_ticks</code> (<code>:263-300</code>). Both schema files allow extra keys (<code>match-stats.schema.json:352</code>, and the run-report suite object lists properties without <code>additionalProperties: false</code>). The protocol’s <code>stats.passes</code> is described as “passes played” (<code>docs/reference/protocol.md:257</code>).</li>
+<li><strong>The calibrate report</strong> (<code>engine-cli/src/report/mod.rs:131-170</code>): the suite figures include <code>passes_per_team_mean</code>, <code>pass_accuracy_pct_mean</code> and <code>throw_ins_per_match_mean</code>. They have no ball-in-play figure. The bands (<code>content/realism-bands.json</code>) include passes 350–550, accuracy 75–88 and throw-ins 35–55. They have no ball-in-play band.</li>
+<li><strong>Measured on shipped play</strong> (this run, <code>engine-cli calibrate --suite equal --seed 42 --matches 24</code>, stats records in the session scratch folder): passes 1,216.5 per team; accuracy 86.6%; throw-ins 20.4, goal kicks 12.3, corners 2.6 and fouls 12.8 per match; <code>ticks.played</code> 282,325 and <code>rules.dead_ball_ticks</code> 12,458 per match, which is 90.0 live minutes of 94.1; added time 246.5 s per match. The keeper-and-shots gate (<code>verify-evidence/keeper-and-shots/equal-table.txt</code>, 1,000 matches on five seeds) gives passes 1,219.8–1,246.8 per team and throw-ins 22.4–24.1 per match.</li>
+<li><strong>Real figures</strong> (<code>docs/design/realism/01-engine-realism.md</code>): median stoppage before a restart is 13.8 s for a throw-in, 23.2 s for a goal kick, 31.8 s for a corner and 32.5 s for a free kick (<code>:614</code>). Fouls are 26.2 a match (<code>:702</code>). The ball is in play for 55.4% of a match (<code>:693</code>).</li>
+</ul>
+<h2 id="simplicity-ladder" tabindex="-1"><a class="header-anchor" href="#simplicity-ladder"><span>Simplicity Ladder</span></a></h2>
+<ul>
+<li>Carry window → rung 3 reuse with modification — <code>decision.rs</code> → <code>options()</code> already reads <code>held</code> and <code>pressed</code>. Two tuning weights and one subtraction are added. No draw is added and no loop is added. A per-possession stored decision (the other option in the slice scope) would need a new field in the snapshot and a new invalidation rule, so the soft window is the smaller change.</li>
+<li>Restart delays → rung 3 reuse — <code>RestartDelays</code> and <code>delay_ticks()</code> exist. Only the content values change.</li>
+<li>Clearance and restart-kick counting → rung 3 reuse with modification — <code>kick_ball()</code> already branches on the kick kind. A <code>Kick::Clear</code> variant lets the compiler find every match site. The restart taker mark follows the <code>pass_in_flight</code> pattern.</li>
+<li>Ball-in-play figure → rung 3 reuse — a <code>live_ticks</code> counter at the <code>Phase::Live</code> arm, where <code>possession_ticks</code> is counted (<code>sim.rs:838-846</code>). It could be derived from <code>ticks.played − rules.dead_ball_ticks</code>, but half-time and the shoot-out make that derivation fragile.</li>
+<li>Cross clearance → rung 3 reuse with modification — <code>try_block()</code> and <code>shot::deflect()</code> from <code>keeper-and-shots</code>, with the same once-per-flight mask pattern and <code>deflected_by()</code> for the last touch.</li>
+<li>Clearance aim spread → rung 3 reuse — the hard-set 0.6 rad becomes <code>clearances.aim_spread</code>, a tuning value with bounds.</li>
+<li>Tuning values with bounds and defaults → rung 3 reuse — <code>serde(default)</code> fields and a nested <code>garde(dive)</code> block, as <code>lone_*</code> and <code>shots</code> are (<code>tuning.rs:191-194</code>, <code>:356-368</code>).</li>
+<li>Measurement → rung 3 reuse — <code>engine-cli calibrate --suite equal --baseline</code> and <code>common::run_many</code> for the slow tests.</li>
+<li>Report figure → rung 3 reuse — one field in <code>SuiteFigures</code> beside <code>throw_ins_per_match_mean</code>.</li>
+</ul>
+<h2 id="applied-learnings" tabindex="-1"><a class="header-anchor" href="#applied-learnings"><span>Applied Learnings</span></a></h2>
+<p>No applicable learnings found. <code>.ai/solutions/INDEX.md</code> does not exist.</p>
+<p>Repeat-deferral tripwire: <code>00-index.md</code> holds two deferrals, the human legibility reading (viewer-match-day) and the macOS build (distribution). This slice is verified by headless engine runs with <code>cargo test</code> and <code>engine-cli calibrate</code>. It names neither wall, so the tripwire does not fire.</p>
+<h2 id="likely-files-areas-to-touch" tabindex="-1"><a class="header-anchor" href="#likely-files-areas-to-touch"><span>Likely Files / Areas to Touch</span></a></h2>
+<ul>
+<li><code>crates/engine/src/tuning.rs</code>: <code>carry_s</code> and <code>carry_cost</code> in <code>DecisionWeights</code>; the <code>ClearanceTuning</code> block (<code>clearances</code>); the <code>RestartDelays</code> default.</li>
+<li><code>content/tuning.json</code>: the four delays, the carry values and the <code>clearances</code> block.</li>
+<li><code>crates/engine/src/decision.rs</code>: <code>Kick::Clear</code>, the carry window in <code>options()</code>, and the aim spread in <code>decide_carrier</code>.</li>
+<li><code>crates/engine/src/sim.rs</code>: the three counters, the counting in <code>kick_ball()</code>, <code>live_ticks</code>, and <code>try_clear_cross()</code> in the fast-ball contest.</li>
+<li><code>crates/engine/src/rules/mod.rs</code>: the restart taker mark in <code>take_restart()</code> and clearing it at every dead ball; the <code>Kick</code> match at <code>:901</code>.</li>
+<li><code>crates/engine/src/snapshot.rs</code>: VERSION 6 and the three counters.</li>
+<li><code>crates/engine/src/observe/mod.rs</code>: <code>stats.clearances</code>, <code>stats.restart_kicks</code> and <code>stats.ball_in_play_s</code>.</li>
+<li><code>crates/engine-cli/src/report/mod.rs</code>: <code>ball_in_play_min_per_90_mean</code>.</li>
+<li><code>schemas/observability/match-stats.schema.json</code>, <code>schemas/observability/run-report.schema.json</code>: the optional properties.</li>
+<li><code>crates/engine/src/scenario.rs</code>: <code>Scene::clear()</code>.</li>
+<li><code>crates/engine/tests/tempo_and_restarts.rs</code> (new): the fast scenes and the slow criterion tests.</li>
+<li><code>crates/engine/tests/content.rs</code>, <code>match_stats.rs</code>, <code>snapshot.rs</code>, <code>plugin_hooks.rs</code>: pins and changed expectations.</li>
+<li><code>docs/reference/data-files.md</code>, <code>docs/reference/protocol.md</code>, <code>.ai/observability.md</code>: the rows, the <code>stats.passes</code> wording and the key list.</li>
+<li>Pinned tests that may move and are re-derived: <code>full_match.rs</code>, <code>determinism.rs</code>, <code>rules_restarts.rs</code>, <code>rules_extra_time.rs</code>, <code>commentary.rs</code>, <code>lone_forward.rs</code>, <code>strength.rs</code>, the <code>sim.rs</code> unit tests, <code>crates/script/tests/decision.rs</code>, <code>crates/engine-cli/tests/stream_cli.rs</code>, <code>crates/stream/tests</code>.</li>
+</ul>
+<h2 id="proposed-change-strategy" tabindex="-1"><a class="header-anchor" href="#proposed-change-strategy"><span>Proposed Change Strategy</span></a></h2>
+<ul>
+<li><strong>A carry window, not a slower clock.</strong> For <code>decision.carry_s</code> seconds after the carrier gains the ball, when no opponent is within 2.5 m, <code>decision.carry_cost</code> is subtracted from the pass score and the clearance score. A shot is never charged. A pressed carrier releases as today. So a one-touch pass under pressure stays possible, and an unpressed carrier carries or holds. The hold and dribble weights (<code>hold</code>, <code>hold_per_s</code>, <code>dribble_base</code>, <code>dribble_space</code>, <code>first_touch</code>) are retuned with it. The carrier still decides every tick (engine-core Q5), and no draw is added.</li>
+<li><strong>The delays move to the medians.</strong> <code>throw_in</code> 13.8, <code>goal_kick</code> 23.2, <code>corner</code> 31.8 and <code>free_kick</code> 32.5 s (<code>01-engine-realism.md:614</code>). Players still walk to their restart targets during the delay. The hard limit stays three times the delay. <code>kick_off</code>, <code>penalty</code> and <code>drop_ball</code> are not named in the slice and have no sourced median, so they stay at their current values. Added time is not touched. During tuning a delay may move only between its current value and its median. It never goes above the median.</li>
+<li><strong>Three kinds of kick, three keys.</strong> <code>Kick::Clear</code> is a clearance. The first kick by a restart taker, before anyone else touches the ball, is a restart kick. This covers a kick-off, a throw-in, a corner, a goal kick and a free kick. Precedence is restart kick, then clearance, then pass. A shot is always a shot, and so is a direct free kick struck at goal or a penalty. Only an open-play pass adds to <code>passes</code> and sets <code>pass_in_flight</code>, so <code>pass_accuracy_pct</code> is over open-play passes only. A defender’s clearance of a fast pass also counts in <code>clearances</code>.</li>
+<li><strong>Ball in play is a counted figure.</strong> <code>Summary::live_ticks</code> counts every <code>Phase::Live</code> tick outside the shoot-out. <code>match-stats</code> gets <code>stats.ball_in_play_s</code>, which is <code>live_ticks / 50</code> rounded, for the whole match. The calibrate report gets <code>ball_in_play_min_per_90_mean</code>, the mean of <code>ball_in_play_s / 60 × 90 / minutes</code>. For a 90-minute match that is the live minutes of the whole match, added time included, which is how “per 90 minutes of match time” reads. It is a reported figure and not a band. The bands file is the product owner’s sourced data (RIM-8), and it has no ball-in-play band.</li>
+<li><strong>Corners from clearances and crosses (Q-KS2).</strong> A fast open-play pass (above <code>control_speed</code>) inside the defending side’s penalty area, under <code>reach_height</code>, can be cleared. Each active defending outfield player within <code>clearances.cross_reach</code> rolls <code>referee_draw() &lt; clearances.cross_chance</code>, once per flight (a 22-bit mask cleared with the flight). A clearance deflects the ball with <code>shot::deflect</code>. It is turned around the direction away from the defender’s goal centre by up to <code>cross_spread</code>, with <code>cross_speed</code> of the ball’s speed and up to <code>cross_loft</code>. <code>deflected_by()</code> sets the defending side as the last touch. The pass is not completed, and one clearance is counted. The existing <code>ball_out</code> gives a corner only when the ball then crosses the goal line, and a throw-in when it crosses a touchline (RIM-9). A parry is not changed (Q-KS2: no parry turned toward the goal line).</li>
+<li><strong>Throw-ins by physical levers.</strong> Throw-ins must rise from 20–24 to 35–55. <code>clearances.aim_spread</code> (today the hard-set 0.6 rad) and the cross clearance are tuned so more balls leave over a touchline. A throw-in is never scripted, and never awarded without the ball crossing the touchline.</li>
+<li><strong>Contracts moved only as the slice scope says.</strong> The slice scope names the new keys and the contract update. <code>Summary</code> is in the snapshot, so the snapshot moves to version 6. The reader already refuses a file from another build, so nothing old is migrated. <code>04-plan.md</code> says later slices take the next number. The schema properties are optional. No protocol message, event kind or band changes. <code>stats.passes</code> keeps its name and now counts open-play passes, which is the criterion “Only real passes count”. <code>TUNING_VERSION</code> stays 2, because every new tuning field has a default.</li>
+<li><strong>Measure with the tuning loop.</strong> The inner loop is <code>calibrate --suite equal --seed 42 --matches 200 --baseline …</code> on the server. The criterion runs are the slow tests over 200 matches. The slice gate runs the full calibrate suites: five seeds for equal and strength, and one seed for formations (<a href="http://steer.md">steer.md</a>, Q-I1). Every heavy run goes to the server through <code>.scratch/remote/vps.sh</code>. The benchmark and the two Windows-only tests run on this PC (<a href="http://steer.md">steer.md</a>, 2026-09-25).</li>
+<li><strong>No NFR is the rationale for a mechanism choice.</strong> The benchmark gate (+10% per tick) is the only performance line. Wall time per match does not change, because the tick count depends only on match time and added time. The 2000 ms per-match budget (NFR-1, <code>yields-to: C2</code>) is not in tension.</li>
+</ul>
+<h2 id="step-by-step-plan" tabindex="-1"><a class="header-anchor" href="#step-by-step-plan"><span>Step-by-Step Plan</span></a></h2>
+<ol>
+<li><strong>Baselines.</strong> At <code>bce0144</code>, before any code change, run on the server and copy each <code>report.json</code> into <code>implement-evidence/tempo-and-restarts/baseline/</code>:
+<ul>
+<li><code>engine-cli calibrate --suite equal --seed 42 --matches 1000 --out ../out/tr-equal-base</code>;</li>
+<li><code>engine-cli calibrate --suite equal --seed 42 --matches 200 --out ../out/tr-set-base</code>.
+Record the command, commit and <code>fixtures.hash</code> of each (Q-X6). The benchmark baseline is already in <code>05c-benchmark.md</code> rev 9.</li>
+</ul>
+</li>
+<li><strong>Tuning values.</strong> Add <code>carry_s</code> (0 to 5) and <code>carry_cost</code> (0 to 5) to <code>DecisionWeights</code> with <code>#[serde(default)]</code>. Add <code>ClearanceTuning</code> as <code>Tuning::clearances</code> with <code>#[serde(default)]</code> and <code>#[garde(dive)]</code>. It holds <code>aim_spread</code> (0 to 1.6, default 0.6), <code>cross_reach</code> (0 to 3), <code>cross_chance</code> (0 to 1, default 0.0), <code>cross_speed</code> (0 to 1), <code>cross_spread</code> (0 to 3.2) and <code>cross_loft</code> (0 to 15). Starting content values: <code>carry_s</code> 1.5, <code>carry_cost</code> 1.0, <code>aim_spread</code> 0.6, <code>cross_reach</code> 2.0, <code>cross_chance</code> 0.3, <code>cross_speed</code> 0.7, <code>cross_spread</code> 1.6, <code>cross_loft</code> 4.0. Set the four delays to 13.8, 23.2, 31.8 and 32.5 s. Mirror the content in <code>Default</code>. In <code>tests/content.rs</code>, pin the values, and add a test that a tuning block without the new fields loads with the defaults. <code>TUNING_VERSION</code> stays 2.</li>
+<li><strong>Counting first, alone.</strong> Add <code>Kick::Clear</code>, and return it from <code>Choice::Clear</code> with <code>clearances.aim_spread</code>. Add <code>clearances</code>, <code>restart_kicks</code> and <code>live_ticks</code> to <code>Summary</code>. Mark the restart taker in <code>take_restart()</code>, and clear the mark at every kick, every <code>gain()</code> by another player and every dead ball (with <code>pass_in_flight</code>). Count in <code>kick_ball()</code> by the precedence above. Count <code>live_ticks</code> in the <code>Phase::Live</code> arm outside the shoot-out. Update the <code>Kick</code> matches in <code>rules/mod.rs:901</code> and <code>scenario.rs</code>. Snapshot VERSION 6 with the three counters. Add the <code>match-stats</code> keys and the report figure. Then, with the delays and tuning still at today’s values (a scratch content copy), run <code>calibrate --suite equal --seed 42 --matches 200</code> on the server. Record passes, accuracy and clearances. This separates the counting effect from the tuning.</li>
+<li><strong>Seams.</strong> Add <code>Scene::clear(dir, speed, loft)</code> under the <code>scenario</code> feature.</li>
+<li><strong>Fast scenes</strong> in <code>tests/tempo_and_restarts.rs</code>, built like <code>match_stats.rs</code> (a calm match, everyone else spread away):
+<ul>
+<li><strong>Clearance:</strong> <code>Scene::clear</code> → <code>passes</code> 0, <code>clearances</code> 1, and no completion when a team-mate gains it.</li>
+<li><strong>Restart kicks:</strong> a ball over the touchline, then over the goal line off each side, then a goal. Step until each restart is taken → <code>restart_kicks[team]</code> 1 each, <code>passes</code> unchanged. The next open-play pass adds 1 to <code>passes</code>.</li>
+<li><strong>Throw-in timing:</strong> a throw-in is not taken before tick <code>since + 690</code> (13.8 s).</li>
+<li><strong>Live ticks:</strong> in a 5-minute match, <code>live_ticks + dead_ball_ticks</code> equals the ticks played, and <code>stats.ball_in_play_s</code> is <code>live_ticks / 50</code> rounded.</li>
+</ul>
+</li>
+<li><strong>Carry window.</strong> In <code>options()</code>, subtract <code>carry_cost</code> from the pass and clearance scores while <code>held_s &lt; carry_s</code> and not <code>pressed</code>. Unit tests in <code>decision.rs</code>: with the other weights fixed, an unpressed carrier at <code>held</code> 0 has his pass score lowered by exactly <code>carry_cost</code>; a pressed carrier and a carrier past <code>carry_s</code> do not; a shot score is unchanged. No draw is added (the draw count of one <code>options()</code> call is unchanged).</li>
+<li><strong>Cross clearance.</strong> Add <code>try_clear_cross()</code> to the carrier-less branch of <code>resolve_possession()</code>, after <code>contest_shot()</code> and before the ordinary contest. It runs only while <code>pass_in_flight</code> is set, the ball is fast, under <code>reach_height</code>, and inside the defending side’s penalty area (<code>pitch::in_penalty_area</code>). It uses the per-flight mask and <code>referee_draw()</code>, then <code>shot::deflect</code> with a main-stream draw for the angle and the loft, then <code>deflected_by()</code>. It clears <code>pass_in_flight</code> and adds 1 to <code>clearances</code> for the defending side. Scenes: a fast lofted pass into the box with a defender 1 m from its path and rolls <code>[0.0]</code> → defending side last, <code>clearances</code> 1, <code>passes_completed</code> unchanged; the same with <code>[0.99]</code> → no clearance, and the flight continues; on seeds 1–40 with rolls <code>[0.0]</code> and the pass along the goal line, at least one seed gives a corner, and every corner comes after the ball crosses the goal line.</li>
+<li><strong>Slow tests (ignored, release)</strong> in the same file. A <code>OnceLock</code> holds the figures of 200 matches of the default clubs on seeds 1–200 (<code>common::run_many</code>), so the matches run once per test binary:
+<ul>
+<li><code>passes_are_realistic</code>: mean passes per team 350–550; pooled accuracy (completed over passes) 75–88%. Both are printed.</li>
+<li><code>the_ball_is_in_play_for_about_an_hour</code>: the mean of <code>ball_in_play_s / 60 × 90 / minutes</code> is 52–65.</li>
+<li><code>throw_ins_stay_in_band</code>: mean throw-ins per match 35–55.</li>
+<li><code>restart_census</code>: prints each restart kind’s median dead-ball seconds against the sourced median, clearances per team, and corners by origin (save or parry, block, cross clearance, other). It asserts that every corner follows a defending last touch with the ball at or beyond the goal line. It asserts no rate.</li>
+</ul>
+</li>
+<li><strong>Inner tuning loop (server).</strong> Levers, each inside its bounds: <code>carry_s</code>, <code>carry_cost</code>, <code>hold</code>, <code>hold_per_s</code>, <code>dribble_base</code>, <code>dribble_space</code>, <code>first_touch</code>, <code>clearances.*</code>. The pass weights <code>lane</code>, <code>min_lane</code> and <code>distance</code> are used only if accuracy leaves 75–88. Each delay may move only between its current value and its median. After each change, run <code>calibrate --suite equal --seed 42 --matches 200 --baseline …/tr-set-base/report.json</code> and the census. Record each setting, its diff and its verdict in a table in the implement record. A change that the diff marks as noise is no change. Order: passes first, then throw-ins, then ball in play.</li>
+<li><strong>Criterion runs (release, server).</strong>
+<ul>
+<li><code>cargo test --release -p engine --all-features --test tempo_and_restarts -- --include-ignored --nocapture</code>.</li>
+<li><code>calibrate --suite equal --seed 42 --matches 1000</code> (<code>passes_per_team</code>, <code>pass_accuracy_pct</code>, <code>throw_ins_per_match</code> bands, and <code>ball_in_play_min_per_90_mean</code>).
+If a criterion fails with every lever at every in-bounds setting, stop and report its figures and the settings tried. Do not widen a criterion, change a band, set a delay above its median, change added time, script a throw-in or a corner, or change the tick rate or the decision interval.</li>
+</ul>
+</li>
+<li><strong>Earlier criteria.</strong> Run on the server in release: <code>keeper_and_shots set_pieces_arise_from_play</code> (at least 1.2 corners per team and 10 goal kicks per match), <code>defending every_formation_holds</code> and <code>discipline_is_realistic</code>, <code>lone_forward</code> slow tests and <code>strength</code>. Record each result. A criterion that passed before and fails now is a regression. Fix it inside this slice’s levers, or stop and report.</li>
+<li><strong>Re-derive moved expectations.</strong> Use the method in step 12 of the <code>lone-forward</code> plan. Record the value before and after, and the reason. Never widen a tolerance.</li>
+<li><strong>Contract and documents.</strong> Add the optional schema properties. Change the <code>stats.passes</code> description to open-play passes in <code>match-stats.schema.json</code> and <code>docs/reference/protocol.md:257</code>. Add the three keys to the key list and to the <code>match-stats</code> paragraph of <code>.ai/observability.md</code>. Add the carry and clearance rows and the new delays to <code>docs/reference/data-files.md</code>, and note that <code>keeper_catch_chance</code> still covers every fast ball that no defender clears.</li>
+<li><strong>Close.</strong>
+<ol>
+<li>Run <code>cargo fmt --all -- --check</code>, <code>cargo clippy --workspace --all-targets --all-features -- -D warnings</code> and <code>cargo test --workspace --all-features</code> on the server. Run the two Windows-only tests on this PC.</li>
+<li>Run the benchmark compare from <code>05c-benchmark.md</code> on this PC (gate 1.7071 µs per tick and 8.55 MB).</li>
+<li>Run the slice gate on the server: <code>calibrate --suite equal</code> and <code>--suite strength</code> on seeds 1, 7, 42, 99 and 2026, and <code>--suite formations --seed 42</code>, each at 1,000 matches. The formations suite takes about 2.6 hours, so run it in the background. Record band misses against <code>…/tr-equal-base</code>. They are recorded, not failed (Q-E4).</li>
+</ol>
+</li>
+<li><strong>Leak check.</strong> Search the changed source, comments and commit text for workflow vocabulary before the commit.</li>
+</ol>
+<h2 id="verification-strategy" tabindex="-1"><a class="header-anchor" href="#verification-strategy"><span>Verification Strategy</span></a></h2>
+<p>The four criteria are about match statistics and one counting rule. The engine produces them headless, so no screen is needed. The rung for each is headless runs of the real engine library or the real release binary (<code>cargo test</code> in <code>stack.testing</code>, and <code>engine-cli calibrate</code>). A unit test or static reasoning alone never counts.</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>AC</th>
+<th>Tool / method + ladder rung</th>
+<th>Environment need — satisfiable in target env?</th>
+<th>What must be BUILT to make it verifiable</th>
+<th>Fallback chain</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Passes are realistic (350–550 per team, 75–88%)</td>
+<td><code>cargo test --release -p engine --all-features --test tempo_and_restarts -- --include-ignored --nocapture passes_are_realistic</code> (headless engine runs, 200 matches)</td>
+<td>Rust 1.92 and cargo on the server and on the reference PC — yes</td>
+<td><code>passes_are_realistic</code>; the counting change (step 3)</td>
+<td><code>engine-cli calibrate --suite equal --seed 42 --matches 200</code> (<code>passes_per_team_mean</code>, <code>pass_accuracy_pct_mean</code>) → the same on the five gate seeds → pre-registered deferral (not expected: no wall)</td>
+</tr>
+<tr>
+<td>The ball is in play for about an hour (52–65 min per 90)</td>
+<td><code>… --test tempo_and_restarts … the_ball_is_in_play_for_about_an_hour</code> (200 matches)</td>
+<td>yes</td>
+<td><code>Summary::live_ticks</code>, <code>stats.ball_in_play_s</code>, the slow test</td>
+<td><code>calibrate --suite equal --seed 42 --matches 200</code> (<code>ball_in_play_min_per_90_mean</code>) → pre-registered deferral</td>
+</tr>
+<tr>
+<td>Throw-ins stay in band (35–55 per match)</td>
+<td><code>… --test tempo_and_restarts … throw_ins_stay_in_band</code> (200 matches)</td>
+<td>yes</td>
+<td>the slow test</td>
+<td><code>calibrate --suite equal --seed 42 --matches 200</code> (<code>throw_ins_per_match_mean</code>) → pre-registered deferral</td>
+</tr>
+<tr>
+<td>Only real passes count</td>
+<td><code>cargo test -p engine --all-features --test tempo_and_restarts</code> (the clearance and restart-kick scenes on the real engine)</td>
+<td>yes</td>
+<td><code>Scene::clear</code>; the restart scenes; <code>Kick::Clear</code>; the restart taker mark</td>
+<td>a traced match: a stats record where <code>stats.passes + stats.clearances + stats.restart_kicks</code> equals the kicks in the step-3 count → pre-registered deferral</td>
+</tr>
+</tbody>
+</table>
+<p>No criterion depends on credentials, a device, an external service or missing infrastructure. Every run is local or on the server, and uses tools already in <code>stack:</code>. So no <code>constraint-resolution:</code> line is needed, and no wall is named. The server is an execution host that <a href="http://steer.md">steer.md</a> chose for heavy runs. It is not a verification tool outside <code>stack:</code>.</p>
+<h2 id="test-verification-plan" tabindex="-1"><a class="header-anchor" href="#test-verification-plan"><span>Test / Verification Plan</span></a></h2>
+<h3 id="automated-checks" tabindex="-1"><a class="header-anchor" href="#automated-checks"><span>Automated checks</span></a></h3>
+<ul>
+<li>Lint and type check: <code>cargo fmt --all -- --check</code>; <code>cargo clippy --workspace --all-targets --all-features -- -D warnings</code> (server).</li>
+<li>Unit: <code>decision.rs</code> (the carry window); <code>shot.rs</code> stays as it is.</li>
+<li>Integration (fast): <code>tests/tempo_and_restarts.rs</code> (the counting, timing, live-tick and cross-clearance scenes), <code>tests/content.rs</code>, <code>match_stats.rs</code>, <code>snapshot.rs</code>, <code>rules_restarts.rs</code>, <code>plugin_hooks.rs</code>. The full-match validator must still read 0 violations (<code>tests/validator.rs</code>).</li>
+<li>Slow (ignored, release, server): <code>passes_are_realistic</code>, <code>the_ball_is_in_play_for_about_an_hour</code>, <code>throw_ins_stay_in_band</code>, <code>restart_census</code>, <code>set_pieces_arise_from_play</code>, <code>every_formation_holds</code>, <code>discipline_is_realistic</code>, the <code>lone_forward</code> and <code>strength</code> slow tests.</li>
+<li>Calibrate: the equal suite against the step-1 baselines (inner loop and criterion), and the full slice gate (step 14).</li>
+<li>Benchmark compare against <code>05c-benchmark.md</code> (this PC).</li>
+<li>Page tests stay green: <code>node --test web/tests/*.test.mjs</code> (this PC). The page reads <code>stats.passes</code> unchanged in shape.</li>
+</ul>
+<h3 id="interactive-verification-human-in-the-loop" tabindex="-1"><a class="header-anchor" href="#interactive-verification-human-in-the-loop"><span>Interactive verification (human-in-the-loop)</span></a></h3>
+<p>Automated only. Every criterion is a statistic of engine runs or a counting rule on scripted engine scenes. The page shows no new element. Its pass count now shows open-play passes, and a longer stoppage is a longer quiet spell that the existing skip-to-next-event control covers.</p>
+<h2 id="risks-watchouts" tabindex="-1"><a class="header-anchor" href="#risks-watchouts"><span>Risks / Watchouts</span></a></h2>
+<ul>
+<li><strong>The ball stays in play for more than 65 minutes</strong> (high). Today it is 90.0 live minutes of 94.1. The engine awards 20.4 throw-ins, 12.3 goal kicks, 2.6 corners and 12.8 fouls per match. At the four medians those counts give about 20 minutes of dead time, which leaves about 70 live minutes. Longer carries mean more tackles, so more fouls and free kicks may follow, and the throw-in and cross-clearance levers add stoppages. The census shows each kind’s median dead time against its source. If the figure stays above 65 with every lever in bounds, step 10 stops and reports. It never sets a delay above a median, and it never changes added time.</li>
+<li><strong>Throw-ins are 20–24, not 33–43</strong> (high). Fewer passes can lower them further. The aim spread and the cross clearance are the levers. If 35 is out of reach, implement stops and reports.</li>
+<li><strong>Pass accuracy leaves 75–88%</strong> (medium). Taking out clearances raises it, and taking out throw-ins lowers it. Step 3 measures the counting change alone first. The pass weights are secondary levers.</li>
+<li><strong>A deflected clearance can go into the defender’s own goal</strong> (low). The clearance turns around the direction away from goal, so this is rare. An own goal from a real deflection is legal play. The census counts goals after a clearance.</li>
+<li><strong>Every seeded result moves</strong> (medium). Each moved expectation is re-derived and recorded.</li>
+<li><strong>Goals fall further</strong> (low). Less live time means fewer shots, which the product owner accepted until <code>realism-tuning</code> (Q-E4).</li>
+<li><strong>Viewer timing</strong> (low). A 32.5 s free kick is a longer quiet spell in the live stream. The skip-to-next-event control covers it, and the stream paces by ticks.</li>
+<li><strong>Per-tick cost</strong> (low). The carry window adds no loop. The cross-clearance check is one pass over the players, and only while a fast pass is inside a penalty area. Dead-ball ticks are cheaper, so the per-tick mean may fall. The gate is 1.7071 µs per tick.</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<ul>
+<li><code>keeper-and-shots</code> (complete, verified at <code>bce0144</code>): the block and deflection machinery this slice reuses, and its set-piece floor (at least 1.2 corners per team and 10 goal kicks per match), which must still pass. Q-KS2 moved corners from clearances and crosses here.</li>
+<li><code>realism-bands-v2</code> (complete, verified): the passes, pass accuracy and throw-in bands.</li>
+<li><code>tuning-loop</code> (complete, verified): <code>--baseline</code> and the noise mark.</li>
+<li><code>lone-forward</code> and <code>defending-and-discipline</code> (complete, verified): their slow criteria must not regress.</li>
+<li><code>realism-tuning</code> (next): final goals tuning, the corners band 3.5–6.5 and the red-card criterion. It plans after this slice.</li>
+</ul>
+<h2 id="assumptions" tabindex="-1"><a class="header-anchor" href="#assumptions"><span>Assumptions</span></a></h2>
+<p>Autonomous run: no product owner was present. Each discovery question the interview would have asked is answered here in the direction that meets the criteria at the least cost. None changes the scope, a public contract beyond what the slice scope names, a persisted data shape beyond what the slice scope requires, or a product owner answer.</p>
+<ul>
+<li>A1 (class: implementation-detail): tempo is a soft carry window (<code>carry_s</code>, <code>carry_cost</code>) on the pass and clearance scores of an unpressed carrier, not a stored per-possession decision. The slice scope offers either. The window needs no snapshot field and no draw, and it leaves “every agent decides every tick” intact.</li>
+<li>A2 (class: implementation-detail): a pressed carrier (an opponent within 2.5 m, the existing <code>pressed</code> test) and a shot are exempt from the carry cost. A one-touch pass under pressure and a chance on goal stay possible.</li>
+<li>A3 (class: implementation-detail): the new decision weights default to 0.0 when a tuning file omits them, so an older file plays as today, as the <code>lone_*</code> weights do. The shipped values live in <code>content/tuning.json</code> and in <code>Default</code>.</li>
+<li>A4 (class: implementation-detail): the four named delays go to the sourced medians. Kick-off, penalty and drop ball are not named in the slice and have no sourced median, so they stay at 5, 15 and 20 s. Tuning moves a delay only between its current value and its median, because the slice says “toward the real medians”.</li>
+<li>A5 (class: implementation-detail): added time is not changed. It is priced per stoppage kind and does not read the delays, so the 900 s clamp stays as it is and added time stays plausible.</li>
+<li>A6 (class: implementation-detail; ac: “Only real passes count”; classification: build-capability): a clearance is a <code>Kick::Clear</code> (the carrier’s clearance choice, the keeper’s included) or a defender’s clearance of a fast pass. A restart kick is the first kick by the restart taker before anyone else touches the ball, at a kick-off, a throw-in, a corner, a goal kick or a free kick. Precedence is restart kick, then clearance, then pass. A shot is always a shot. Scenes on the real engine prove each rule.</li>
+<li>A7 (class: implementation-detail): pass accuracy is completed open-play passes over open-play passes. Clearances and restart kicks carry no completion count, because the slice counts them under their own keys and the accuracy band is about passes.</li>
+<li>A8 (class: implementation-detail): the new keys are <code>stats.clearances</code> and <code>stats.restart_kicks</code> (two integers, home first) and <code>stats.ball_in_play_s</code> (integer seconds, the whole match, the shoot-out excluded). They are optional in the schema, and nothing is added to <code>required</code>. The slice scope asks for these keys and for the contract update.</li>
+<li>A9 (class: implementation-detail): the snapshot moves to VERSION 6 to carry the three new <code>Summary</code> counters. The reader already refuses a file from another build, so no migration exists to write. <code>04-plan.md</code> says later slices take the next number.</li>
+<li>A10 (class: implementation-detail): the protocol does not change. <code>stats.passes</code> keeps its name and shape, and the viewer now shows open-play passes, which is the criterion itself. No clearance or ball-in-play figure is added to the page.</li>
+<li>A11 (class: implementation-detail; ac: “The ball is in play for about an hour”; classification: runtime-evidence): “per 90 minutes of match time” is read as the live minutes of the whole match, added time included, scaled by 90 over the match’s regulation minutes. For the default 90-minute match the figure is the live minutes. It is judged over 200 matches of the default clubs on seeds 1–200.</li>
+<li>A12 (class: implementation-detail): the calibrate report shows <code>ball_in_play_min_per_90_mean</code> as a figure, not a band. The bands file is the product owner’s sourced data (RIM-8), and adding a band is his decision. The slow test judges the criterion.</li>
+<li>A13 (class: implementation-detail): corners from clearances and crosses (Q-KS2) come from one mechanism. A defending outfield player can clear a fast open-play pass inside his own penalty area, once per flight, by deflection. The existing out-of-play rule gives the corner only after the ball crosses the goal line. A parry is not changed.</li>
+<li>A14 (class: implementation-detail): the clearance and cross-clearance values have no sourced figure in the repository, so they are tuning levers inside bounds. <code>cross_chance</code> defaults to 0.0, which is off, so an older file plays as today. The census reports the clearances per team for review.</li>
+<li>A15 (class: implementation-detail; ac: “Throw-ins stay in band”; classification: runtime-evidence): throw-ins are 20–24 per match on shipped play, below the slice’s expected 33–43. They are raised only by physical levers: the clearance aim spread and the cross clearance. A throw-in comes only from a ball crossing the touchline. If 35 is out of reach in bounds, implement stops and reports. This keeps the criterion and the product owner’s scope as they are.</li>
+<li>A16 (class: implementation-detail; ac: “Passes are realistic”; classification: runtime-evidence): 200 matches of the default clubs on seeds 1–200, with mean passes per team and pooled accuracy. The pass weights <code>lane</code>, <code>min_lane</code> and <code>distance</code> are levers only if accuracy leaves its band. They are decision weights, and the slice changes what a decision prefers.</li>
+<li>A17 (class: implementation-detail): the counting change lands and is measured alone (step 3) before any tuning, so the effect of the new count is known apart from the effect of the tempo.</li>
+<li>A18 (class: implementation-detail): the slow tests share one 200-match run per test binary through a <code>OnceLock</code>, so four tests cost one run.</li>
+<li>A19 (class: implementation-detail): augmentations. The benchmark is re-baselined on <code>bce0144</code> (<code>05c-benchmark.md</code> rev 9, 1.5519 µs per tick; gate 1.7071 µs and 8.55 MB), because the slice changes per-tick code. <code>04b-instrument.md</code> is not re-authored, because no dark path or dark-path counter is added. The three new keys are statistics, and the observability contract is amended in step 13. <code>04c-experiment.md</code> is not involved, because no flag is added.</li>
+<li>A20 (class: implementation-detail): the second-opinion consult is not fired, although <code>appetite-medium-or-larger</code> holds. The product owner excluded <code>consult</code> at intake (<code>00-index.md</code> <code>stack.excluded-by-po</code>), as in earlier plans.</li>
+<li>A21 (class: implementation-detail): the design gate is settled (<code>02c-craft.md</code>). This slice changes no page.</li>
+<li>A22 (class: implementation-detail): heavy runs (the workspace suite, clippy, fmt, the slow tests and every calibrate run) go to the server through <code>.scratch/remote/vps.sh</code>. The benchmark, the page tests and the two Windows-only tests stay on this PC (<a href="http://steer.md">steer.md</a>, 2026-09-25).</li>
+<li>A23 (class: implementation-detail): baselines are copied into the slice’s evidence folder, and nothing new is committed for them (Q-X6). The slice gate runs the full suites (Q-I1). Band misses are recorded, not failed (Q-E4).</li>
+<li>A24 (class: implementation-detail): in <code>00-index.md</code> this run marks the slice <code>in-progress</code>, points the benchmark entry at this slice, adds the plan files, and moves the current stage to plan with this slice selected. <code>keeper-and-shots</code> verify is complete with result pass, and review is slug-wide, so no per-slice review waits on it.</li>
+</ul>
+<h2 id="blockers" tabindex="-1"><a class="header-anchor" href="#blockers"><span>Blockers</span></a></h2>
+<p>None.</p>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<ul>
+<li>No dependency is added or upgraded. The slice uses std <code>f64</code> arithmetic and the crates already in the workspace (<code>garde</code> for bounds, <code>serde</code> for defaults). <code>04-plan-data-schemas-generator.md</code> § Freshness Research records the <code>serde</code> 1.0 and <code>garde</code> 0.23 behaviour. A field-level <code>serde(default)</code> inside a <code>deny_unknown_fields</code> struct is already proven by the <code>lone_*</code> weights (<code>tuning.rs:356-368</code>). A nested optional block with <code>garde(dive)</code> is proven by <code>shots</code> (<code>tuning.rs:191-194</code>).</li>
+<li>The restart medians, the ball-in-play share and the foul rate are the sourced figures in <code>docs/design/realism/01-engine-realism.md:614</code>, <code>:693</code> and <code>:702</code>. The passes, accuracy and throw-in bands are the product owner’s sourced values (Q-E1).</li>
+<li>The laws are not re-read here. The restart kinds and who takes them already follow IFAB Laws 8 and 13–17 (<code>rules/restart.rs:1-11</code>). This slice changes only how long the ball is dead before a restart, and how kicks are counted.</li>
+</ul>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option A (default): Implement</strong> → <code>/wf implement football-manager-match-engine tempo-and-restarts</code>. The plan has no blocker, and the benchmark is re-baselined. Compact the session first. Workflow state lives in the artifact files, and the SessionStart hook re-reads it after compaction.</li>
+<li><strong>Option C: Revisit slice</strong> → <code>/wf slice football-manager-match-engine</code>. Take this only if implement shows that the ball-in-play or throw-in criterion cannot pass at any in-bounds setting (step 10 stop).</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-25T03:12:00Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/04-plan-tempo-and-restarts.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">plan</a><span class="m-sheet-here" aria-current="page">tempo-and-restarts</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/04-plan-tempo-and-restarts.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-25T03:12:00Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

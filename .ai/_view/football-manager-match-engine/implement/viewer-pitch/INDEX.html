@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="implement">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · implement — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="implement">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">implement</a><span aria-hidden="true">/</span><span class="m-here">viewer-pitch</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · implement</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">implement</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">viewer-pitch</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/05-implement-viewer-pitch.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">05-implement-viewer-pitch.md</div>
+      <h1 class="pg-title">Implement · viewer-pitch</h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="meta">stage 5</span><span class="meta">updated 2026-09-22T16:30:00Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-implementation" tabindex="-1"><a class="header-anchor" href="#the-implementation"><span>The Implementation</span></a></h2>
+<p>Three slices before this one built an engine that computes a match, a protocol that
+describes it, and a socket that streams it. Nothing in the repository could show a match
+to a person. This slice adds the page: <code>web/</code>, thirty files, and a static server inside
+<code>engine-cli</code> that sends it with the two isolation headers the page’s memory gauge needs.</p>
+<p>Four decisions carry the work. The page is twelve DOM-free modules plus one wiring file,
+so six of the eight acceptance criteria are provable by <code>node --test</code> with no install, no
+<code>package.json</code>, and no browser. The renderer maps the engine’s own metre space uniformly
+onto the canvas, because the 616 by 411 tile is squarer than a 105 by 68 pitch and
+stretching one axis would draw a marker where the engine never put one. The history keeps
+decoded <code>Int16Array</code> components rather than wire frames: a full 90-minute match measures
+24.2 megabytes against a 300-megabyte budget. The lag notice is measured in the page and
+never announced by the server, because no server message carries it and
+<code>WebSocket.bufferedAmount</code> counts outgoing bytes only.</p>
+<p>Two facts the plan did not have now stand on the record. A recorded fixture stored no
+hello, so team names and kit colours could not survive a replay; the recorder now writes
+the hello as the fixture’s first entry. The live <code>serve</code> command sends a whole match as
+fast as the socket accepts it — 270,000 ticks in about 13 seconds — then closes, so a
+live watch is in fact a fast load followed by local playback. That is the top open
+question for <code>viewer-match-day</code>. The page absorbs it: it stores the match and the
+scrubber reaches every tick of it.</p></section><dl class="frontmatter-card"><div><dt>type</dt><dd>implement</dd></div><div><dt>slug</dt><dd>football-manager-match-engine</dd></div><div><dt>slice-slug</dt><dd>viewer-pitch</dd></div><div><dt>status</dt><dd>complete</dd></div><div><dt>stage-number</dt><dd>5</dd></div><div><dt>created-at</dt><dd>2026-09-22T16:30:00Z</dd></div><div><dt>updated-at</dt><dd>2026-09-22T16:30:00Z</dd></div><div><dt>metric-files-changed</dt><dd>50</dd></div><div><dt>metric-lines-added</dt><dd>4098</dd></div><div><dt>metric-lines-removed</dt><dd>68</dd></div><div><dt>metric-deviations-from-plan</dt><dd>7</dd></div><div><dt>metric-review-fixes-applied</dt><dd>0</dd></div><div><dt>commit-sha</dt><dd>62a5dab8acd9a83ce2cff6010c4263d7e3fb8763</dd></div><div><dt>tags</dt><dd>viewer, canvas, playback, milestone</dd></div><div><dt>refs</dt><dd>{&quot;index&quot;:&quot;00-index.md&quot;,&quot;implement-index&quot;:&quot;05-implement.md&quot;,&quot;slice-def&quot;:&quot;03-slice-viewer-pitch.md&quot;,&quot;plan&quot;:&quot;04-plan-viewer-pitch.md&quot;,&quot;siblings&quot;:[&quot;05-implement-data-schemas-generator.md&quot;,&quot;05-implement-engine-core.md&quot;,&quot;05-implement-stream-protocol.md&quot;],&quot;verify&quot;:&quot;06-verify-viewer-pitch.md&quot;}</dd></div><div><dt>next-command</dt><dd>wf-verify</dd></div><div><dt>next-invocation</dt><dd>/wf verify football-manager-match-engine viewer-pitch</dd></div></dl><div class="prose"><h1 id="implement-viewer-pitch-and-playback" tabindex="-1"><a class="header-anchor" href="#implement-viewer-pitch-and-playback"><span>Implement: Viewer Pitch and Playback</span></a></h1>
+<h2 id="summary-of-changes" tabindex="-1"><a class="header-anchor" href="#summary-of-changes"><span>Summary of Changes</span></a></h2>
+<ul>
+<li><code>web/</code> ships the page: 13 ES modules, 4 stylesheets, 2 fonts with their licences, the
+shell, a diagnostic page, and 7 test files with 40 tests.</li>
+<li><code>crates/engine-cli/src/web.rs</code> serves that folder over plain HTTP with
+<code>Cross-Origin-Opener-Policy</code> and <code>Cross-Origin-Embedder-Policy</code> on every response.</li>
+<li>A generated <code>GET /engine.json</code> tells the page the socket port and the protocol version.</li>
+<li><code>--web &lt;DIR&gt;</code> is added to <code>serve</code> and to <code>replay</code>; <code>--sustain &lt;SPEED&gt;</code> is added to
+<code>replay</code> as the harness AC-e needs.</li>
+<li><code>TeamRef</code> gains <code>team.kit.primary</code> and <code>team.kit.secondary</code>; the recorder stores the
+hello; the replayer forwards the stored hello instead of inventing one.</li>
+<li><code>StreamError::FixtureNoHello</code> refuses a fixture that does not open with a hello.</li>
+<li><code>README.md</code>, <code>DESIGN.md</code>, and <code>docs/reference/protocol.md</code> follow the code.</li>
+</ul>
+<h2 id="files-changed" tabindex="-1"><a class="header-anchor" href="#files-changed"><span>Files Changed</span></a></h2>
+<ul>
+<li><code>web/index.html</code>: the 1280 by 800 shell, the header mark canvas, three columns, the
+pitch panel with its skeleton, the control strip, the notice, and the live region.</li>
+<li><code>web/tokens.css</code>: the 36 <code>--tl-</code> tokens in one <code>:root</code> block, all OKLCH.</li>
+<li><code>web/layout.css</code>: the grid, the panels, the notice, the scrubber, and the skeleton.</li>
+<li><code>web/components/match-control.css</code>: the button primitive, four sizes, six states.</li>
+<li><code>web/fonts/fonts.css</code>, <code>fonts/barlow-condensed-700.woff2</code>,
+<code>fonts/ibm-plex-sans-var.woff2</code>, and the two OFL licence files: the local font bundle.</li>
+<li><code>web/signal.mjs</code>: the <code>viewer-event</code> envelope, <code>console.info</code>, and a 256-row ring.</li>
+<li><code>web/colour.mjs</code>: OKLCH conversion, lightness clamping, contrast, and <code>safeKit</code>.</li>
+<li><code>web/decode.mjs</code>: the wire decoder, ported constants, <code>viewer.decode_refused</code>.</li>
+<li><code>web/interpolate.mjs</code>: one clamped segment function, which cannot extrapolate.</li>
+<li><code>web/history.mjs</code>: two <code>Int16Array</code> buffers, byte accounting, <code>viewer.history</code>.</li>
+<li><code>web/schedule.mjs</code>: the tick cursor, skipping, and the frame-budget window.</li>
+<li><code>web/stoppages.mjs</code>: the stoppage index behind Prev stop and Next stop.</li>
+<li><code>web/mark.mjs</code>: the touchline mark, drawn for the favicon and the header.</li>
+<li><code>web/pitch.mjs</code>: the canvas renderer and the metre-to-pixel mapping.</li>
+<li><code>web/socket.mjs</code>: the client, the address builder, and the drop signals.</li>
+<li><code>web/playback.mjs</code>: the speed selector, the sustained-rate estimator, the notice text.</li>
+<li><code>web/main.mjs</code>: the wiring, the clock, the scrubber, and the <code>__touchline</code> hook.</li>
+<li><code>web/handshake.html</code>: the diagnostic page that opens the socket and prints the hello.</li>
+<li><code>web/tests/*</code>: <code>helpers.mjs</code> and seven test files.</li>
+<li><code>crates/engine-cli/src/web.rs</code>: the static server, the MIME table, <code>/engine.json</code>.</li>
+<li><code>crates/engine-cli/tests/web_cli.rs</code>: the server’s own tests, with a child-process guard.</li>
+<li><code>crates/engine-cli/src/cli.rs</code>: <code>--web</code> on both commands, <code>--sustain</code> on <code>replay</code>.</li>
+<li><code>crates/engine-cli/src/main.rs</code>: the <code>web</code> module declaration.</li>
+<li><code>crates/engine-cli/src/replay.rs</code>: the fallible <code>Replayer::new</code>, both printed addresses.</li>
+<li><code>crates/engine-cli/src/record.rs</code>: the hello is written as the fixture’s first entry.</li>
+<li><code>crates/engine-cli/src/serve.rs</code>, <code>src/bench.rs</code>: kit colours in the hello builders.</li>
+<li><code>crates/engine-cli/tests/stream_cli.rs</code>: the frame count rises to 3004 for the hello.</li>
+<li><code>crates/protocol/src/message.rs</code>: the two kit fields and their two tests.</li>
+<li><code>crates/protocol/src/lib.rs</code>: the <code>MESSAGES</code> field list and a note on the version.</li>
+<li><code>crates/stream/src/replay.rs</code>: the stored hello, the <code>sustain</code> cap, the wider signal.</li>
+<li><code>crates/stream/src/lib.rs</code>: <code>FixtureNoHello</code>.</li>
+<li><code>crates/stream/tests/fixture.rs</code>, <code>tests/hello.rs</code>, <code>tests/common/mod.rs</code>: coverage.</li>
+<li><code>docs/reference/protocol.md</code>: the nested teams table and a page-server section.</li>
+<li><code>README.md</code>: Watch a match, and Test the page.</li>
+<li><code>DESIGN.md</code>: eight colour rows, the two faces, the 36 tokens, the mark’s file.</li>
+<li><code>PRODUCT.md</code>: the product name, Touchline.</li>
+</ul>
+<h2 id="shared-files-also-touched-by-sibling-slices" tabindex="-1"><a class="header-anchor" href="#shared-files-also-touched-by-sibling-slices"><span>Shared Files (also touched by sibling slices)</span></a></h2>
+<ul>
+<li><code>crates/protocol/src/message.rs</code> and <code>src/lib.rs</code>: <code>stream-protocol</code> owns the hello.
+The two kit fields are additive and <code>PROTOCOL_VERSION</code> stays 1, which the doc comment
+records with its reason.</li>
+<li><code>crates/stream/src/replay.rs</code> and <code>src/lib.rs</code>: <code>stream-protocol</code> owns the replayer.</li>
+<li><code>crates/engine-cli/src/cli.rs</code>, <code>main.rs</code>, <code>serve.rs</code>, <code>record.rs</code>, <code>bench.rs</code>: shared by
+every prior slice.</li>
+<li><code>docs/reference/protocol.md</code>, <code>README.md</code>, <code>DESIGN.md</code>: the documentation plan.</li>
+</ul>
+<h2 id="notes-on-design-choices" tabindex="-1"><a class="header-anchor" href="#notes-on-design-choices"><span>Notes on Design Choices</span></a></h2>
+<ul>
+<li><strong>Rung 1 wherever the standard library reaches.</strong> The static server is <code>std::net</code> and a
+match over file extensions. No HTTP crate and no bundler entered the workspace.</li>
+<li><strong>The page has no build step.</strong> ES modules load directly, which is why a static server
+exists at all: the <code>file://</code> scheme blocks module loading.</li>
+<li><strong>The isolation headers sit on every response</strong>, not on the page alone, because
+<code>crossOriginIsolated</code> is a document property and one stylesheet without them poisons it.</li>
+<li><strong><code>safeKit</code> clamps lightness and chooses the ring by measured contrast.</strong> A kit that is
+too dark or too light on turf is lifted into range; a trim colour under 3:1 against the
+turf is replaced by the pitch line. Colour is never the only separation between teams.</li>
+<li><strong>The shirt-number face is read back from the page</strong> rather than written a second time
+in JavaScript, so the canvas cannot drift from the stylesheet.</li>
+<li><strong>The mark is drawn from the live token values.</strong> No image file exists in the product.</li>
+</ul>
+<h2 id="verification-seams-built" tabindex="-1"><a class="header-anchor" href="#verification-seams-built"><span>Verification Seams Built</span></a></h2>
+<ul>
+<li><strong>AC-a</strong> 60 frames per second with zero dropped ticks → <code>viewer.frame_budget</code>, derived
+from consecutive <code>requestAnimationFrame</code> deltas with <code>refresh_hz</code> beside it, at
+<a href="web/schedule.mjs:130">web/schedule.mjs:130</a>, plus <code>window.__touchline.frame()</code> at
+<a href="web/main.mjs:231">web/main.mjs:231</a> (enables the browser drive to read the rate and the
+panel’s own limit in one row).</li>
+<li><strong>AC-b</strong> a marker lies on the segment between two ticks → <code>between()</code> as a DOM-free
+module at <a href="web/interpolate.mjs:1">web/interpolate.mjs:1</a> and
+<code>window.__touchline.lastRendered()</code> at <a href="web/main.mjs:221">web/main.mjs:221</a> (enables
+<code>node --test</code> and the drive to read the same numbers).</li>
+<li><strong>AC-c</strong> at 8x the viewer skips and never passes the newest tick → <code>Scheduler.advance</code>
+with an injected timestamp at <a href="web/schedule.mjs:1">web/schedule.mjs:1</a> and
+<code>viewer.tick_skipped</code> at <a href="web/schedule.mjs:119">web/schedule.mjs:119</a> (enables
+<code>node --test</code> with a synthetic stream).</li>
+<li><strong>AC-d</strong> the 4x clock within 2 percent → the clock readout and the speed selector, with
+<code>lastRenderedTick()</code> at <a href="web/main.mjs:222">web/main.mjs:222</a> (enables the drive to take
+two readings and divide).</li>
+<li><strong>AC-e</strong> a sustained 3x drops playback to 3x with a notice → <code>--sustain</code> on <code>ReplayOpts</code>
+at <a href="crates/engine-cli/src/cli.rs:119">crates/engine-cli/src/cli.rs:119</a> and the paced
+minimum at <a href="crates/stream/src/replay.rs:72">crates/stream/src/replay.rs:72</a>, with
+<code>viewer.lag</code> at <a href="web/playback.mjs:102">web/playback.mjs:102</a> (enables a server that
+sustains less than it is asked for, which is what makes this criterion drivable at all).</li>
+<li><strong>AC-f</strong> rewind draws exactly the stored positions → <code>window.__touchline.lastRewind()</code>
+at <a href="web/main.mjs:232">web/main.mjs:232</a>, which compares the drawn array to the stored
+array component by component and reports <code>exact</code>, and <code>viewer.rewind</code> at
+<a href="web/main.mjs:174">web/main.mjs:174</a> (enables the drive to prove equality, not presence).</li>
+<li><strong>AC-g</strong> a full match under 300 MB → <code>History.bytes()</code> and <code>viewer.history</code> at
+<a href="web/history.mjs:90">web/history.mjs:90</a>, the two isolation headers at
+<a href="crates/engine-cli/src/web.rs:241">crates/engine-cli/src/web.rs:241</a>, and
+<code>page_bytes_reason</code>, which names a refused measurement instead of reporting a bare null
+(enables <code>node --test</code> for the accounting and the drive for the page gauge).</li>
+<li><strong>AC-h</strong> the charter scenario against the live engine → <code>--web</code> on <code>ServeOpts</code> and the
+generated <code>/engine.json</code> at
+<a href="crates/engine-cli/src/web.rs:39">crates/engine-cli/src/web.rs:39</a> (enables one command
+to start the engine and serve the page, with the page finding the socket by itself).</li>
+</ul>
+<h2 id="visual-contract-honored" tabindex="-1"><a class="header-anchor" href="#visual-contract-honored"><span>Visual Contract Honored</span></a></h2>
+<ol>
+<li><strong>The 1280 by 800 grid</strong> — honored at <a href="web/layout.css:65">web/layout.css:65</a>, with the
+tokens at <a href="web/tokens.css:63">web/tokens.css:63</a>. Measured in the browser at 1280 by
+800 with columns 336, 616, and 296.</li>
+<li><strong>Pitch tile at exactly 616 by 411 with markings from the 105 by 68 metre space</strong> —
+honored at <a href="web/index.html:36">web/index.html:36</a> and
+<a href="web/pitch.mjs:72">web/pitch.mjs:72</a>. | deviation: the panel carries no padding and its
+hairline is an outset shadow ring, because 8 pixels of padding pushed the tile past its
+616-pixel track and moved the right column off the screen.</li>
+<li><strong>Playback control strip, 40 pixels, under the pitch</strong> — honored at
+<a href="web/layout.css:143">web/layout.css:143</a>. Measured at exactly 616 by 40.</li>
+<li><strong>Marker treatment: safe fill, conditional ring, contrast-chosen number</strong> — honored at
+<a href="web/colour.mjs:128">web/colour.mjs:128</a> and <a href="web/pitch.mjs:196">web/pitch.mjs:196</a>.</li>
+<li><strong>Ball with a short falling-alpha trail</strong> — honored at
+<a href="web/pitch.mjs:194">web/pitch.mjs:194</a>: one path, twelve ticks, the ball alone.</li>
+<li><strong>Barlow Condensed 700 and IBM Plex Sans from a local bundle, tabular numbers</strong> —
+honored at <a href="web/fonts/fonts.css:14">web/fonts/fonts.css:14</a> and
+<a href="web/layout.css:87">web/layout.css:87</a>. | deviation: two font files ship, not four. One
+variable IBM Plex Sans file covers 400, 500, and 600 in fewer bytes than three static
+files.</li>
+<li><strong>The <code>--tl-</code> OKLCH token set, no pure black and no pure white</strong> — honored at
+<a href="web/tokens.css:13">web/tokens.css:13</a>. No hex, <code>rgb()</code>, or <code>hsl()</code> value appears
+anywhere in <code>web/</code> outside the conversion module and its tests.</li>
+<li><strong>The touchline mark drawn programmatically</strong> — honored at
+<a href="web/mark.mjs:80">web/mark.mjs:80</a>, used for the header canvas and for the favicon as a
+data URI. No image file exists in <code>web/</code>.</li>
+<li><strong>State words beside every state colour</strong> — honored at
+<a href="web/index.html:92">web/index.html:92</a> and <a href="web/playback.mjs:61">web/playback.mjs:61</a>:
+the notice carries the word Lag and names the rate in digits and in words.</li>
+<li><strong>Skeletons, never a spinner in a content area</strong> — honored at
+<a href="web/index.html:42">web/index.html:42</a> and <a href="web/layout.css:257">web/layout.css:257</a>,
+with a cross-fade when the first tick arrives.</li>
+</ol>
+<h2 id="deviations-from-plan" tabindex="-1"><a class="header-anchor" href="#deviations-from-plan"><span>Deviations from Plan</span></a></h2>
+<ol>
+<li><strong>Step 3 assumed a stored hello that did not exist.</strong> <code>engine-cli record</code> wrote tick
+entries only, so “replay forwards the stored hello” had nothing to forward, and team
+names were unrecoverable from any fixture. The recorder now writes the hello as the
+fixture’s first entry, and <code>stream_cli.rs</code> expects 3004 frames instead of 3003.</li>
+<li><strong>The plan did not say how the page learns the socket port.</strong> The page and the socket
+sit on two ports, both chosen by the operating system. The server generates
+<code>GET /engine.json</code>, which answers with the socket port and the protocol version.</li>
+<li><strong>Seven test files, not six.</strong> Step 16 names a determinism test for the mark, which has
+no file in the plan’s list of six. <code>web/tests/mark.test.mjs</code> carries it.</li>
+<li><strong>Step 7’s goal tick and restart tick do not exist.</strong> The fixture scores 0 to 0 and
+contains no restart frame, because <code>match-rules</code> has not shipped. AC-f was driven at
+plain mid-match ticks instead.</li>
+<li><strong>The hello builder is not in <code>crates/stream/src/server.rs</code>.</strong> The builders live in
+<code>engine-cli</code>’s <code>serve.rs</code>, <code>record.rs</code>, and <code>bench.rs</code>, plus the stream tests’ helper.
+All four now carry the kit colours.</li>
+<li><strong>Two font files, not four.</strong> See the visual contract, item 6.</li>
+<li><strong><code>crates/engine-cli/tests/cli_args.rs</code> needed no change.</strong> Its help-width assertions
+already cover the new options, which the passing suite confirms.</li>
+</ol>
+<h2 id="anything-deferred" tabindex="-1"><a class="header-anchor" href="#anything-deferred"><span>Anything Deferred</span></a></h2>
+<ul>
+<li><strong>A worker with <code>OffscreenCanvas</code>.</strong> The slice’s own risk list names it. The main thread
+holds every frame the panel offers at 8x with zero dropped frames, so the work is not
+needed yet. Ceiling: a panel above 60 hertz with a heavier overlay. Upgrade path: the
+renderer takes a canvas in its constructor and transfers cleanly.</li>
+<li><strong><code>performance.measureUserAgentSpecificMemory()</code> is refused by this browser pane</strong>, with
+<code>crossOriginIsolated</code> true, both headers present, and the function itself defined. The
+page records <code>page_bytes_reason</code> with the thrown message instead of a silent null.
+Ceiling: <code>page_bytes</code> is unmeasured in this driver. Upgrade path: any Chromium build
+that resolves the promise, or a headless run at verify.</li>
+<li><strong>Stoppage navigation ships without stoppages.</strong> <code>stoppages.mjs</code> and its two buttons are
+built and tested, and the fixture contains no restart frame to fill the index.
+<code>match-rules</code> fills it.</li>
+</ul>
+<h2 id="known-risks-caveats" tabindex="-1"><a class="header-anchor" href="#known-risks-caveats"><span>Known Risks / Caveats</span></a></h2>
+<ul>
+<li><strong>AC-a cannot pass in this driver.</strong> The browser pane refreshes at 32 hertz, so the page
+reports 32 frames per second with <code>refresh_hz</code> 32, <code>frame_ms_p95</code> 31.62, and zero
+dropped frames. The page draws every frame the pane offers. The 60 in the criterion
+describes a 60-hertz panel, and R1’s guard is what makes this visible instead of a false
+pass.</li>
+<li><strong><code>requestAnimationFrame</code> is throttled while the pane does not paint.</strong> Any measurement
+at verify must keep the tab in front for its whole window.</li>
+<li><strong><code>engine-cli serve</code> does not pace to real time.</strong> It sends 270,000 ticks in about 13
+seconds and closes the session. The page absorbs it, and the manager then watches a
+stored match. A paced live mode is a decision for <code>viewer-match-day</code>.</li>
+<li>No new <code>sdlc-debt:</code> marker was written by this slice.</li>
+</ul>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<ul>
+<li><strong>Node 22 <code>node:test</code></strong> — the runner accepts a glob, and a bare directory argument fails
+with <code>MODULE_NOT_FOUND</code>. The documented command is
+<code>node --test &quot;web/tests/*.test.mjs&quot;</code>, which <code>README.md</code> records.</li>
+<li><strong><code>WebSocket.bufferedAmount</code></strong> — it counts outgoing bytes only. A client cannot read its
+own inbound queue, which is why the lag estimator measures arrival times instead.</li>
+<li><strong><code>performance.measureUserAgentSpecificMemory()</code></strong> — it needs cross-origin isolation,
+which the server provides; the pane still refuses it. The refusal is recorded, not
+hidden.</li>
+<li><strong>ES modules over the <code>file://</code> scheme</strong> — the browser blocks them, which is the reason
+the static server exists.</li>
+<li><strong>OKLCH to sRGB and WCAG contrast</strong> — the conversion and the 3:1 ring threshold were
+measured, not assumed: a clamped black reaches 5.23:1 on turf and stays the ring, while
+the orange trim reaches 1.21:1 and falls back to the pitch line.</li>
+</ul>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option A (default):</strong> <code>/wf verify football-manager-match-engine viewer-pitch</code>. Six of
+the eight criteria are user-observable, two augmentations are due to re-check, and
+AC-a’s refresh-rate shortfall needs a verdict from the stage that owns the gate.</li>
+<li><strong>Option B:</strong> <code>/wf review football-manager-match-engine viewer-pitch</code>. Choose this only
+to review the page’s structure before the criteria are exercised again. It skips the
+benchmark compare and the instrument key check, and both are due.</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-22T16:30:00Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/05-implement-viewer-pitch.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">implement</a><span class="m-sheet-here" aria-current="page">viewer-pitch</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/05-implement-viewer-pitch.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-22T16:30:00Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="plan">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · plan — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="plan">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span aria-hidden="true">/</span><span class="m-here">tactics-and-ai</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · plan</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">tactics-and-ai</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/04-plan-tactics-and-ai.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">04-plan-tactics-and-ai.md</div>
+      <h1 class="pg-title">Plan · <code>tactics-and-ai</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="stage-badge">plan</span><span class="meta">rev 0</span><span class="meta">2026-09-22T22:18:43Z</span></div>
+    </header><div class="metric-row"><div class="metric">
+      <span class="metric-label">files to touch</span>
+      <span class="metric-value">49</span>
+      
+    </div><div class="metric">
+      <span class="metric-label">steps</span>
+      <span class="metric-value">22</span>
+      
+    </div><div class="metric is-ok">
+      <span class="metric-label">blockers</span>
+      <span class="metric-value">none</span>
+      
+    </div></div>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-plan" tabindex="-1"><a class="header-anchor" href="#the-plan"><span>The Plan</span></a></h2>
+<p>The engine now plays a lawful match, but every team plays a fixed 4-4-2 with the first eleven players in its file. Nobody tires, nobody is hurt, and a queued change is acknowledged and never applied: the queue lives on the socket thread (<code>crates/stream/src/control.rs:98</code>), and the stoppage hook gives a sink a read-only <code>&amp;Simulation</code> (<code>crates/engine/src/record.rs:160</code>), so no sink can change the match. The tree is green at 192 Rust tests and 46 page tests. The benchmark baseline on <code>837cb5c</code> is 418.8 ms of processor time per match, 1.4965 µs per tick, and 5.45 MB peak memory.</p>
+<p>The engine owns the change queue and applies it inside the tick that opens a stoppage, so a change applies on that tick, and a substitute’s entry lands on a restart tick that the validator already exempts from the jump check. The hook stays the one outside view of a stoppage, for snapshots. The page’s changes do not reach this queue yet. The format of a change sent over the socket is an open product-owner question in the lineup-editor plan (its OQ-2), and no criterion of this slice needs it, so this plan leaves that format undecided. A new data file, <code>content/tactics.json</code>, holds four formations, five mentalities, six instructions, and roles and duties mapped to attributes. A per-team plan is computed once for each tactics change, so the decision layer reads it every tick at no extra cost. The carrier scores pass, dribble, shoot, clear, and hold with weights from the tuning file. Energy drains with effort, and a curve lowers pace and decision values below a threshold. An injury stops play for a dropped ball, which uses the <code>injury</code> stoppage kind the rule pack already names. Half-time substitutions use no window, which the rule pack states as <code>windows_exempt</code>. The AI manager uses the same queue as the human manager and draws no random numbers.</p>
+<p>Implement touches 49 files, 13 of them new, in 22 steps: content, then the models, then the loop, then the snapshot, the event types, and the command line, then the tests and one measurement. Calibration tunes the weights next. Once the product owner answers the payload question, the lineup editor connects the socket to <code>Simulation::queue_change</code>. The top risk is the 10 percent tripwire on a tick that the decision layer makes heavier. The second risk is that the stronger-team criterion must pass before calibration.</p></section><figure class="figure-canvas">
+  <figcaption class="figure-meta">
+    <span class="figure-title"><b>Figure 3</b> · File-change topology</span>
+    <span class="figure-legend" aria-hidden="true"><span class="legend-entry"><span class="sw modified"></span>modified</span><span class="legend-entry"><span class="sw new"></span>new</span><span class="legend-entry"><span class="sw deleted"></span>deleted</span><span class="legend-entry"><span class="sw external"></span>external</span></span>
+  </figcaption>
+  <svg viewBox="0 0 980 930" width="100%" preserveAspectRatio="xMinYMid meet" aria-label="File-change topology">
+    <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8377"/>
+    </marker>
+  </defs><rect x="20" y="30" width="301.3333333333333" height="172" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CONTENT/ (SHIPPED DATA FILES)</text><rect x="333.3333333333333" y="30" width="301.3333333333333" height="204" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC/DATA</text><rect x="646.6666666666666" y="30" width="301.3333333333333" height="172" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC/TACTICS (NEW) AND AI.RS, FATIGUE.RS (NEW)</text><rect x="20" y="450" width="301.3333333333333" height="396" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="468" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC</text><rect x="333.3333333333333" y="130" width="301.3333333333333" height="76" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="148" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC/OBSERVE</text><rect x="646.6666666666666" y="482" width="301.3333333333333" height="428" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="500" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/TESTS</text><rect x="20" y="486" width="301.3333333333333" height="204" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="504" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/PROTOCOL AND DOCS/REFERENCE</text><rect x="333.3333333333333" y="422" width="301.3333333333333" height="172" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="440" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE-CLI</text><rect x="646.6666666666666" y="294" width="301.3333333333333" height="108" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="312" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">WEB/</text><rect x="20" y="330" width="301.3333333333333" height="76" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="348" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">WORKSPACE ROOT</text><rect x="32" y="58" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="40" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tactics.json</text>
+      <text x="40" y="80" font-size="8" fill="#8a8377">data · +260/−0</text><rect x="32" y="90" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tuning.json</text>
+      <text x="40" y="112" font-size="8" fill="#8a8377">data · +38/−3</text><rect x="32" y="122" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="134" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">default.json</text>
+      <text x="40" y="144" font-size="8" fill="#8a8377">data · +1/−2</text><rect x="32" y="154" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="166" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">README.md</text>
+      <text x="40" y="176" font-size="8" fill="#8a8377">docs · +70/−6</text><rect x="345.3333333333333" y="58" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">attributes.rs</text>
+      <text x="353.3333333333333" y="80" font-size="8" fill="#8a8377">domain · +10/−3</text><rect x="345.3333333333333" y="90" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">rules.rs</text>
+      <text x="353.3333333333333" y="112" font-size="8" fill="#8a8377">domain · +22/−2</text><rect x="345.3333333333333" y="122" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="134" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tuning.rs</text>
+      <text x="353.3333333333333" y="144" font-size="8" fill="#8a8377">domain · +55/−8</text><rect x="345.3333333333333" y="154" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="166" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tactics.rs</text>
+      <text x="353.3333333333333" y="176" font-size="8" fill="#8a8377">domain · +260/−0</text><rect x="345.3333333333333" y="186" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="198" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="353.3333333333333" y="208" font-size="8" fill="#8a8377">domain · +30/−6</text><rect x="658.6666666666666" y="58" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="666.6666666666666" y="80" font-size="8" fill="#8a8377">domain · +240/−0</text><rect x="658.6666666666666" y="90" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">change.rs</text>
+      <text x="666.6666666666666" y="112" font-size="8" fill="#8a8377">domain · +330/−0</text><rect x="658.6666666666666" y="122" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="134" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">ai.rs</text>
+      <text x="666.6666666666666" y="144" font-size="8" fill="#8a8377">domain · +260/−0</text><rect x="658.6666666666666" y="154" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="166" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">fatigue.rs</text>
+      <text x="666.6666666666666" y="176" font-size="8" fill="#8a8377">domain · +180/−0</text><rect x="32" y="478" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="490" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">decision.rs</text>
+      <text x="40" y="500" font-size="8" fill="#8a8377">domain · +190/−110</text><rect x="32" y="510" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="522" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">player.rs</text>
+      <text x="40" y="532" font-size="8" fill="#8a8377">domain · +45/−6</text><rect x="32" y="542" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="554" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">team.rs</text>
+      <text x="40" y="564" font-size="8" fill="#8a8377">domain · +70/−12</text><rect x="32" y="574" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="586" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">sim.rs</text>
+      <text x="40" y="596" font-size="8" fill="#8a8377">domain · +150/−20</text><rect x="32" y="606" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="618" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="40" y="628" font-size="8" fill="#8a8377">domain · +40/−2</text><rect x="32" y="638" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="650" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">restart.rs</text>
+      <text x="40" y="660" font-size="8" fill="#8a8377">domain · +35/−3</text><rect x="32" y="670" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="682" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tuning.rs</text>
+      <text x="40" y="692" font-size="8" fill="#8a8377">domain · +60/−0</text><rect x="32" y="702" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="714" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">snapshot.rs</text>
+      <text x="40" y="724" font-size="8" fill="#8a8377">domain · +110/−10</text><rect x="32" y="734" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="746" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">scenario.rs</text>
+      <text x="40" y="756" font-size="8" fill="#8a8377">domain · +60/−0</text><rect x="32" y="766" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="778" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">validate.rs</text>
+      <text x="40" y="788" font-size="8" fill="#8a8377">domain · +20/−4</text><rect x="345.3333333333333" y="158" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="170" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="353.3333333333333" y="180" font-size="8" fill="#8a8377">observability · +36/−0</text><rect x="32" y="798" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="810" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">lib.rs</text>
+      <text x="40" y="820" font-size="8" fill="#8a8377">domain · +8/−0</text><rect x="658.6666666666666" y="510" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="522" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="666.6666666666666" y="532" font-size="8" fill="#8a8377">test · +70/−0</text><rect x="658.6666666666666" y="542" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="554" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">content.rs</text>
+      <text x="666.6666666666666" y="564" font-size="8" fill="#8a8377">test · +45/−6</text><rect x="658.6666666666666" y="574" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="586" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tactics_queue.rs</text>
+      <text x="666.6666666666666" y="596" font-size="8" fill="#8a8377">test · +130/−0</text><rect x="658.6666666666666" y="606" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="618" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">substitutions.rs</text>
+      <text x="666.6666666666666" y="628" font-size="8" fill="#8a8377">test · +170/−0</text><rect x="658.6666666666666" y="638" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="650" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">fatigue.rs</text>
+      <text x="666.6666666666666" y="660" font-size="8" fill="#8a8377">test · +110/−0</text><rect x="658.6666666666666" y="670" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="682" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">injury.rs</text>
+      <text x="666.6666666666666" y="692" font-size="8" fill="#8a8377">test · +140/−0</text><rect x="658.6666666666666" y="702" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="714" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">strength.rs</text>
+      <text x="666.6666666666666" y="724" font-size="8" fill="#8a8377">test · +70/−0</text><rect x="658.6666666666666" y="734" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="746" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">ai_trailing.rs</text>
+      <text x="666.6666666666666" y="756" font-size="8" fill="#8a8377">test · +90/−0</text><rect x="658.6666666666666" y="766" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="778" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mentality.rs</text>
+      <text x="666.6666666666666" y="788" font-size="8" fill="#8a8377">test · +80/−0</text><rect x="658.6666666666666" y="798" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="810" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">snapshot.rs</text>
+      <text x="666.6666666666666" y="820" font-size="8" fill="#8a8377">test · +40/−2</text><rect x="658.6666666666666" y="830" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="842" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">full_match.rs</text>
+      <text x="666.6666666666666" y="852" font-size="8" fill="#8a8377">test · +15/−2</text><rect x="658.6666666666666" y="862" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="874" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">validator.rs</text>
+      <text x="666.6666666666666" y="884" font-size="8" fill="#8a8377">test · +6/−0</text><rect x="32" y="514" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="526" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">event.rs</text>
+      <text x="40" y="536" font-size="8" fill="#8a8377">contract · +55/−6</text><rect x="32" y="546" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="558" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">command.rs</text>
+      <text x="40" y="568" font-size="8" fill="#8a8377">contract · +4/−4</text><rect x="32" y="578" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="590" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">message.rs</text>
+      <text x="40" y="600" font-size="8" fill="#8a8377">contract · +2/−0</text><rect x="32" y="610" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="622" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">lib.rs</text>
+      <text x="40" y="632" font-size="8" fill="#8a8377">contract · +4/−0</text><rect x="32" y="642" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="654" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">protocol.md</text>
+      <text x="40" y="664" font-size="8" fill="#8a8377">docs · +20/−2</text><rect x="345.3333333333333" y="450" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="462" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">stream_run.rs</text>
+      <text x="353.3333333333333" y="472" font-size="8" fill="#8a8377">cli · +45/−6</text><rect x="345.3333333333333" y="482" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="494" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">serve.rs</text>
+      <text x="353.3333333333333" y="504" font-size="8" fill="#8a8377">cli · +4/−1</text><rect x="345.3333333333333" y="514" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="526" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">simulate.rs</text>
+      <text x="353.3333333333333" y="536" font-size="8" fill="#8a8377">cli · +4/−1</text><rect x="345.3333333333333" y="546" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="558" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">resume.rs</text>
+      <text x="353.3333333333333" y="568" font-size="8" fill="#8a8377">cli · +6/−2</text><rect x="658.6666666666666" y="322" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="334" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">stoppages.mjs</text>
+      <text x="666.6666666666666" y="344" font-size="8" fill="#8a8377">ui · +1/−0</text><rect x="658.6666666666666" y="354" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="366" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">stoppages.test.mjs</text>
+      <text x="666.6666666666666" y="376" font-size="8" fill="#8a8377">test · +8/−0</text><rect x="32" y="358" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="370" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">README.md</text>
+      <text x="40" y="380" font-size="8" fill="#8a8377">docs · +18/−2</text><path d="M 309.3333333333333 587 C 484 587, 484 103, 658.6666666666666 103" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 587 C 484 587, 484 135, 658.6666666666666 135" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 587 C 484 587, 484 167, 658.6666666666666 167" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 135 C 797.3333333333333 135, 797.3333333333333 103, 658.6666666666666 103" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 103 C 640.6666666666666 103, 640.6666666666666 103, 345.3333333333333 103" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 71 C 640.6666666666666 71, 640.6666666666666 167, 345.3333333333333 167" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 491 C 484 491, 484 71, 658.6666666666666 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 555 C 484 555, 484 71, 658.6666666666666 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 167 C 640.6666666666666 167, 640.6666666666666 135, 345.3333333333333 135" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 619 C 170.66666666666666 619, 170.66666666666666 651, 32 651" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 715 C 484 715, 484 103, 658.6666666666666 103" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 199 C 484 199, 484 167, 345.3333333333333 167" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 463 C 327.3333333333333 463, 327.3333333333333 527, 32 527" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 623 C 170.66666666666666 623, 170.66666666666666 655, 32 655" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/>
+  </svg>
+</figure><div class="fragment"><section class="fragment-plan" data-artifact="plan" data-slice="tactics-and-ai" data-rev="0">
+  <!-- @include-skip the published snippets are hand-inlined here as in the sibling plans, so the five plan fragments share one markup -->
+  <table class="files-touched pl-files">
+    <thead><tr><th>File</th><th>Status</th><th>Module</th><th>Lines</th></tr></thead>
+    <tbody>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">data</span> content/tactics.json (new); tuning.json, rules/default.json, README.md (modified)</summary><div class="pl-card">The tactics schema: four formations, five mentalities, six instructions, roles mapped to attributes, three duties, and the AI manager's thresholds. Tuning version 2 with the decision weights, the fatigue curve, and injury rates. Rule pack version 3 with windows_exempt for half-time.</div></details></td><td>new</td><td>content/</td><td>+369 / -11</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/data/tactics.rs (new); data/mod.rs, attributes.rs, rules.rs, tuning.rs</summary><div class="pl-card">The fail-closed tactics loader with a cross-file role check; fourteen required attributes; the substitution exemptions; the fatigue block the engine now reads.</div></details></td><td>new</td><td>crates/engine/src/data</td><td>+377 / -19</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/tactics/mod.rs, tactics/change.rs, ai.rs, fatigue.rs</summary><div class="pl-card">The tactics model and a per-team plan computed once per change; the stoppage-gated change queue inside the engine with the substitution ledger and the conflict rule; the AI manager on threshold rules with no random draws; energy, the fatigue curve, and injury rolls.</div></details></td><td>new</td><td>crates/engine/src</td><td>+1010</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/decision.rs, player.rs, team.rs, sim.rs, rules/mod.rs, rules/restart.rs, tuning.rs, snapshot.rs, scenario.rs, validate.rs, lib.rs</summary><div class="pl-card">The scored-options decision layer; squad identity, energy, and statuses on each player; formations and plan offsets in the anchors; changes applied on the stoppage tick; injury stoppages with a dropped ball; snapshot version 2; scene helpers; validator exemptions.</div></details></td><td>modified</td><td>crates/engine/src</td><td>+788 / -167</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">observability</span> crates/engine/src/observe/mod.rs</summary><div class="pl-card">match-stats gains shots, injury.count, fatigue.mean_pct, the change counts, substitutions, and darkpath.change_never_applied. Shots on target stay with the statistics work that defines them.</div></details></td><td>modified</td><td>crates/engine/src/observe</td><td>+36</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">test</span> crates/engine/tests/tactics_queue.rs, substitutions.rs, fatigue.rs, injury.rs, strength.rs, ai_trailing.rs, mentality.rs (new); common/mod.rs, content.rs, snapshot.rs, full_match.rs, validator.rs</summary><div class="pl-card">One file per criterion. The three statistical criteria are slow tests run in release across threads; the continuation test crosses a substitution and a tactics change.</div></details></td><td>new</td><td>crates/engine/tests</td><td>+966 / -10</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">contract</span> crates/protocol/src/event.rs, command.rs (comment), message.rs, lib.rs; docs/reference/protocol.md</summary><div class="pl-card">Substitution, injury, and ai-decision events and the change.applied_tick and ai.decision fields, all reserved by the observability contract; team.id on change events. The queue-change detail stays opaque: its format is an open product-owner question. Protocol version 2 survives because every addition is additive.</div></details></td><td>modified</td><td>crates/protocol and docs</td><td>+85 / -12</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">cli</span> crates/engine-cli/src/stream_run.rs, serve.rs, simulate.rs, resume.rs</summary><div class="pl-card">The driver maps the new events and refreshes player ids after a substitution; the AI manages the away team in serve; resume restores managers and tactics from the snapshot.</div></details></td><td>modified</td><td>crates/engine-cli</td><td>+59 / -10</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">ui</span> web/stoppages.mjs, tests/stoppages.test.mjs; README.md</summary><div class="pl-card">The injury event joins the list of events that stop play; the README names tactics, fatigue, injuries, substitutions, and the slow-test command.</div></details></td><td>modified</td><td>web/ and root</td><td>+27 / -2</td></tr>
+    </tbody>
+  </table>
+  <div class="pl-risks">
+    <aside class="callout callout-warn"><div class="callout-hd">R1 · Processor time per match exceeds the 10 percent tripwire</div><div class="callout-body">Baseline 418.8 ms per match and 1.4965 microseconds per tick on 837cb5c; the limits are 460.7 ms and 6.82 MB. The plan is precomputed and the refresh and check intervals are coarse. Step 21 measures three drives; a miss goes to the product owner with the levers, and no lever is pulled silently.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R2 · The stronger team does not win more than half</div><div class="callout-body">Judged before calibration over 200 matches split home and away. Finishing, decisions, composure, and vision now reach the decision layer; a failure is fixed with the decision weights inside this slice and recorded with the counts.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R3 · A resumed match drifts after a change</div><div class="callout-body">Snapshot version 2 carries squad identity, energy, tactics, the ledger, the queue, and the AI state; the continuation test crosses a substitution and a tactics change byte for byte.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R4 · Play turns passive or chaotic</div><div class="callout-body">Hold carries a negative base and a held-time penalty; the possession and idle-ball bands stay in the full-match test; calibration tunes the weights.</div></aside>
+    <aside class="callout callout-info"><div class="callout-hd">R5 · Injury stoppages lengthen matches</div><div class="callout-body">About 0.6 injuries per match by default, each adding 60 seconds to the half; ticks per match is reported beside the gate.</div></aside>
+    <aside class="callout callout-info"><div class="callout-hd">R6 · Unrelated staged files ride into the commit</div><div class="callout-body">The index holds staged work from elsewhere; the commit names its own paths explicitly.</div></aside>
+  </div>
+  <details class="pl-revs"><summary>0 prior revisions</summary><ul></ul></details>
+  <style>
+    .fragment-plan .pl-files { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-plan .pl-files th, .fragment-plan .pl-files td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
+    .fragment-plan .pl-files summary { cursor: pointer; }
+    .fragment-plan .pl-chip { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; opacity: 0.8; }
+    .fragment-plan .pl-card { padding: 6px 0 4px 18px; opacity: 0.9; }
+    .fragment-plan .pl-risks { display: grid; gap: 8px; margin-top: 12px; }
+    .fragment-plan .pl-revs { margin-top: 12px; }
+    @media (max-width: 480px) { .fragment-plan .pl-files th:nth-child(3), .fragment-plan .pl-files td:nth-child(3) { display: none; } }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-plan');
+      var files = 49, modules = 10;
+      var risks = root ? root.querySelectorAll('.pl-risks .callout').length : 0;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'plan', artifact: 'plan', counts: { files: files, modules: modules, risks: risks } } }));
+    })();
+  </script>
+</section>
+</div><div class="prose"><h1 id="plan-tactics-fatigue-and-the-ai-manager" tabindex="-1"><a class="header-anchor" href="#plan-tactics-fatigue-and-the-ai-manager"><span>Plan: Tactics, Fatigue, and the AI Manager</span></a></h1>
+<h2 id="current-state" tabindex="-1"><a class="header-anchor" href="#current-state"><span>Current State</span></a></h2>
+<ul>
+<li>Branch <code>feat/football-manager-match-engine</code> at <code>837cb5c</code>. Five slices are implemented and verified. <code>cargo test --workspace</code> passes 192 tests in 30 test binaries, with 0 failed and 0 ignored. <code>node --test web/tests/*.test.mjs</code> passes 46 tests. Both counts come from this run.</li>
+<li><code>decision.rs:96-229</code> decides for the carrier with a shot threshold (<code>lane &gt; 2.5</code> at <code>:132</code>), scored passes (<code>:171</code>), a dribble score (<code>:178</code>), and a goalkeeper clearance special case (<code>:204</code>). <code>decision_interval_ticks</code> is 1, a product-owner choice (<code>decision.rs:3</code>). Two opponents press (<code>:29-57</code>).</li>
+<li><code>Team</code> (<code>team.rs:37-49</code>) has one formation constant, <code>FORMATION_442</code>, and no tactics. <code>Team::from_file</code> starts the first eleven entries of the file (<code>team.rs:89-113</code>). The shipped squads have 22 players (<code>content/tuning.json:58</code>).</li>
+<li><code>Player</code> (<code>player.rs:344-363</code>) has no energy and no squad identity. <code>Simulation::player_ids()</code> maps <code>slot</code> to <code>team.player_ids[slot]</code> (<code>sim.rs:276-281</code>), which is wrong after a substitution. <code>stream_run.rs:44</code> reads the ids once, before kick-off.</li>
+<li><code>Derived</code> reads seven required attributes (<code>data/attributes.rs:181-189</code>). The shipped schema has 36 attributes, including <code>finishing</code>, <code>vision</code>, <code>decisions</code>, <code>composure</code>, <code>stamina</code>, <code>natural_fitness</code>, and <code>injury_resistance</code> (<code>content/attributes.json</code>).</li>
+<li><code>FatigueTuning</code> has <code>minutes_to_half_stamina</code> and <code>recovery_per_day</code>, and “the engine does not read them yet” (<code>data/tuning.rs:100-110</code>).</li>
+<li>The rule pack has <code>substitutions { limit: 5, windows: 3 }</code> and nine stoppage kinds with admission flags. <code>injury</code> admits both kinds of change and adds 60 s (<code>content/rules/default.json</code>). No code opens an injury stoppage. <code>restart.rs</code> sends an unknown kind to the free-kick branches (<code>restart.rs:59</code>, <code>:73</code>, <code>:197</code>).</li>
+<li><code>open_dead_ball</code> sets <code>restart = true</code> and <code>self.stoppage</code> inside <code>step</code> (<code>rules/mod.rs:280-325</code>). <code>run</code> calls <code>on_stoppage</code> after <code>on_tick</code> (<code>sim.rs:331-341</code>), with <code>&amp;Simulation</code>.</li>
+<li><code>protocol::Queue</code> (<code>command.rs:97-150</code>) assigns <code>q-{tick}-{n}</code> ids and checks admission. <code>QueueChange.detail</code> is opaque JSON (<code>message.rs:93-95</code>). <code>MatchEvent::change</code> sets <code>team.id</code> to <code>None</code> (<code>event.rs:220-229</code>).</li>
+<li>The observability contract already reserves <code>event.type</code> values <code>injury</code>, <code>substitution</code>, and <code>ai-decision</code>, and the keys <code>change.applied_tick</code>, <code>ai.decision</code>, <code>fatigue.mean_pct</code>, <code>injury.count</code>, <code>stats.shots</code>, and <code>darkpath.change_never_applied</code> (<code>.ai/observability.md:27-59</code>).</li>
+<li>The snapshot body stores positions, status, and yellow cards per player (<code>snapshot.rs:485-492</code>). It stores no squad identity, energy, tactics, or substitutions.</li>
+<li>The page labels markers by slot number 1 to 11 (<code>web/pitch.mjs:221-224</code>). A substitution in place keeps its marker.</li>
+<li>Baseline on <code>837cb5c</code> (three drives): processor time per match 418.8, 418.8, and 415.8 ms; per tick 1.4965, 1.4965, and 1.4858 µs; wall time 421, 421, and 419 ms; 279,850 ticks per match; peak memory 5.469, 5.453, and 5.445 MB; tick step 1.5264 µs. Evidence is in <code>bench-baseline/tactics-and-ai/</code>.</li>
+<li>Another session’s release test run recorded one failure in <code>crates/engine-cli/tests/stream_cli.rs:174</code> (“the viewer disconnected”; <code>04-plan-calibration.md</code> Current State). The debug run in this session passed that test, so the test may be timing-sensitive. Implement reruns it once before treating a failure there as its own.</li>
+<li>The index holds staged files from other work: the design documents under <code>docs/design/realism/</code>, and <code>crates/engine/tests/zz_stall_probe.rs</code>, which is staged as added and deleted from the working tree (git status at session start).</li>
+</ul>
+<h2 id="simplicity-ladder" tabindex="-1"><a class="header-anchor" href="#simplicity-ladder"><span>Simplicity Ladder</span></a></h2>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Capability</th>
+<th>Rung</th>
+<th>Choice</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tactics data file and validation</td>
+<td>rung 3 reuse</td>
+<td><code>load_json</code> in <code>data/mod.rs</code> and <code>garde</code> rules, as the other three content files use. No new dependency.</td>
+</tr>
+<tr>
+<td>Tactics model and per-team plan</td>
+<td>rung 4 new code</td>
+<td>No tactics type exists. It copies the index-into-schema idiom of <code>StoppageKind</code> (<code>data/rules.rs:11-53</code>). The plan is computed once for each change, so no per-tick lookup occurs.</td>
+</tr>
+<tr>
+<td>Formations</td>
+<td>rung 3 reuse with modification</td>
+<td><code>Team::formation</code> and <code>anchor()</code> (<code>team.rs:41</code>, <code>:165-176</code>) read slot coordinates from the schema. The 4-4-2 entry equals <code>FORMATION_442</code>. <code>reshape()</code> already works on any line layout.</td>
+</tr>
+<tr>
+<td>Scored-options decision layer</td>
+<td>rung 3 reuse with modification</td>
+<td><code>decide_carrier</code> (<code>decision.rs:96-229</code>) already scores passes. It is generalised into five option kinds with tuned weights. <code>segment_distance</code> and <code>toward</code> (<code>math.rs</code>) are reused.</td>
+</tr>
+<tr>
+<td>Change queue in the engine</td>
+<td>rung 4 new code</td>
+<td><code>protocol::Queue</code> (<code>command.rs:97-150</code>) cannot mutate the match, and the engine crate cannot depend on the protocol crate (NFR-8). The engine queue copies its id format <code>q-{tick}-{n}</code> so a later socket bridge can carry ids through unchanged.</td>
+</tr>
+<tr>
+<td>Fatigue curve</td>
+<td>rung 4 new code</td>
+<td>A piecewise-linear lookup over at most eight points. No in-repo interpolation helper exists.</td>
+</tr>
+<tr>
+<td>Injury stoppage and dropped ball</td>
+<td>rung 3 reuse with modification</td>
+<td><code>open_dead_ball</code>, <code>restart::spot</code>, <code>target</code>, <code>taker</code>, and <code>delay_ticks</code> gain the <code>Injury</code> kind. The parking spot for a sent-off player (<code>pitch::parking_spot</code>) takes injured and substituted-off players.</td>
+</tr>
+<tr>
+<td>Substitution in place</td>
+<td>rung 3 reuse</td>
+<td>The roster slot and the 22-position record stay. The incoming player replaces <code>attributes</code>, <code>derived</code>, <code>shirt</code>, and <code>squad</code> at that slot. <code>Team::reshape</code> already handles ten players, and <code>restore</code> is its inverse.</td>
+</tr>
+<tr>
+<td>AI manager</td>
+<td>rung 4 new code</td>
+<td>No manager logic exists. Threshold rules with no random draws keep the generator stream the same as a match without the AI.</td>
+</tr>
+<tr>
+<td>Snapshot version 2</td>
+<td>rung 3 reuse</td>
+<td>The <code>Writer</code> and <code>Reader</code> helpers and the version refusal in <code>snapshot.rs:36</code>, <code>:141</code>.</td>
+</tr>
+<tr>
+<td>Parallel slow tests</td>
+<td>rung 1 stdlib</td>
+<td><code>std::thread::scope</code> in the test helpers. Each match still runs on one thread.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="applied-learnings" tabindex="-1"><a class="header-anchor" href="#applied-learnings"><span>Applied Learnings</span></a></h2>
+<p>No applicable learnings found: <code>.ai/solutions/INDEX.md</code> does not exist and <code>.ai/sdlc-config.json</code> does not exist. <code>runtime-evidence-deferrals</code> in <code>00-index.md</code> is empty, so the repeat-deferral tripwire does not fire.</p>
+<p>One in-repo design record agrees with this plan and changes nothing in it. <code>docs/design/realism/01-engine-realism.md:581</code> records that the AI manager’s live changes use the same change queue as the human’s and take effect at the next stoppage.</p>
+<h2 id="likely-files-areas-to-touch" tabindex="-1"><a class="header-anchor" href="#likely-files-areas-to-touch"><span>Likely Files / Areas to Touch</span></a></h2>
+<ul>
+<li><code>content/tactics.json</code> (new), <code>content/tuning.json</code>, <code>content/rules/default.json</code>, <code>content/README.md</code>: the tactics schema, the fatigue and injury tuning (version 2), <code>windows_exempt</code> (rule pack version 3), and the modder reference.</li>
+<li><code>crates/engine/src/data/tactics.rs</code> (new), <code>data/mod.rs</code>, <code>data/attributes.rs</code>, <code>data/rules.rs</code>, <code>data/tuning.rs</code>: the loader, the cross-file role check, the 14 required attributes, and the new fields.</li>
+<li><code>crates/engine/src/tactics/mod.rs</code>, <code>tactics/change.rs</code>, <code>ai.rs</code>, <code>fatigue.rs</code> (new): the model, the queue, the AI manager, and fatigue with injuries.</li>
+<li><code>crates/engine/src/decision.rs</code>, <code>player.rs</code>, <code>team.rs</code>, <code>sim.rs</code>, <code>rules/mod.rs</code>, <code>rules/restart.rs</code>, <code>tuning.rs</code>, <code>snapshot.rs</code>, <code>scenario.rs</code>, <code>validate.rs</code>, <code>observe/mod.rs</code>, <code>lib.rs</code>: the loop and its seams.</li>
+<li><code>crates/engine/tests/</code>: 7 new criterion files (3 of them slow and ignored by default), plus <code>common/mod.rs</code>, <code>content.rs</code>, <code>snapshot.rs</code>, <code>full_match.rs</code>, and <code>validator.rs</code>.</li>
+<li><code>crates/protocol/src/event.rs</code>, <code>command.rs</code> (comment only), <code>message.rs</code>, <code>lib.rs</code>, and <code>docs/reference/protocol.md</code>: three event types and two fields the observability contract already reserves. The queue-change detail stays opaque.</li>
+<li><code>crates/engine-cli/src/stream_run.rs</code>, <code>serve.rs</code>, <code>simulate.rs</code>, and <code>resume.rs</code>.</li>
+<li><code>web/stoppages.mjs</code>, <code>web/tests/stoppages.test.mjs</code>: <code>injury</code> joins <code>STOPS_PLAY</code>.</li>
+<li><code>README.md</code>.</li>
+</ul>
+<p>Full topology with line estimates: <code>04-plan-tactics-and-ai.yaml</code>.</p>
+<h2 id="proposed-change-strategy" tabindex="-1"><a class="header-anchor" href="#proposed-change-strategy"><span>Proposed Change Strategy</span></a></h2>
+<p>The <strong>stoppage-gated change queue</strong> (named mechanism, shape “Stoppage-gated change queue driven by a rule pack”) moves into the engine. <code>Simulation::queue_change(team, Change)</code> takes a change from the AI manager or a test, and later from the page once the socket payload is decided. <code>step</code> applies the queue on the tick that opens a stoppage. It runs after the referee and the clock and before overlap resolution, so the change lands on the tick the record marks as a restart. Substitutions apply first, in queue order, and then tactics changes. The rule pack decides admission: a change waits for a stoppage whose kind admits it. The <code>penalty</code> kind admits neither kind of change. Each verdict becomes an engine event, <code>ChangeApplied</code> with its applied tick or <code>ChangeRejected</code> with a reason. <code>TickSink::on_stoppage</code> still announces the stoppage after the record, and the snapshot written there includes the changes just applied.</p>
+<p>The <strong>substitution limit</strong> reads the rule pack. A window is a stoppage where a team makes at least one substitution. A stoppage kind listed in <code>windows_exempt</code> (half-time) uses no window. The limit counts every substitution. Rejection reasons are ordered: limit reached, no window left, player not on the pitch, player not on the bench or already played, player injured. The conflict rule is part of the same pass. A tactics change that names a role for a player substituted off at this stoppage is rejected whole with a reason that names the player.</p>
+<p>The <strong>scored-options decision layer</strong> (named mechanism, slice Scope) replaces the branches in <code>decide_carrier</code>. Each option’s score is <code>features · weights + plan offsets + noise</code>. The weights come from a new <code>decision</code> block in the tuning file. The offsets come from the team’s plan (mentality, tempo, directness, role, and duty). The noise width shrinks as effective <code>decisions</code> and <code>composure</code> rise. Pressing sets how many opponents press and from how far. Width, line height, mentality, and duty move the anchors. Decisions still run on every tick, as the product owner chose.</p>
+<p><strong>Fatigue</strong> is energy from 1.0 down, drained each tick by effort and scaled by stamina. Every 50 ticks the effective values are recomputed from the unfatigued base values and the curve multiplier. <strong>Injuries</strong> roll once per tackle for the tackled player and once per minute per active player, scaled by <code>injury_resistance</code>. An injured player leaves play at once and parks beside the pitch. The team reshapes to ten, and the referee opens an <code>injury</code> stoppage with a dropped ball (IFAB Law 8). The <strong>AI manager</strong> (named mechanism, shape) checks every 30 simulated seconds and at every injury. It queues through the same queue and emits an <code>ai-decision</code> event for each choice.</p>
+<p>Performance: NFR-1 governs the mechanism choices and <code>yields-to: C2</code>. The plan is precomputed, effective values refresh once a second, and the AI and injury checks run once per interval, so the added per-tick work is one energy update per player and a wider option loop for the carrier. The slice criterion is judged as written: processor time per match within 10 percent and peak memory within 25 percent of the baseline. Processor time per tick and ticks per match are reported beside it.</p>
+<h2 id="step-by-step-plan" tabindex="-1"><a class="header-anchor" href="#step-by-step-plan"><span>Step-by-Step Plan</span></a></h2>
+<ol>
+<li><strong>Content schema.</strong> In <code>data/attributes.rs</code>, add <code>finishing</code>, <code>vision</code>, <code>decisions</code>, <code>composure</code>, <code>stamina</code>, <code>natural_fitness</code>, and <code>injury_resistance</code> to <code>REQUIRED</code>. In <code>data/rules.rs</code>, set <code>RULES_VERSION</code> to 3 and add <code>Substitutions::windows_exempt</code> with a rule that names each kind once. In <code>data/tuning.rs</code>, set <code>TUNING_VERSION</code> to 2 and rewrite <code>FatigueTuning</code> with <code>threshold</code>, <code>curve</code>, <code>drain_base_per_s</code>, <code>drain_effort_per_s</code>, <code>half_time_recovery</code>, and <code>recovery_per_day</code>, with garde ranges. Update <code>content/rules/default.json</code> and <code>content/tuning.json</code> with the values in <code>04-plan-tactics-and-ai.yaml</code>. Update <code>tests/content.rs</code>. Run <code>cargo test -p engine --test content</code>. All tests must pass.</li>
+<li><strong>Tactics schema.</strong> Write <code>data/tactics.rs</code> and <code>content/tactics.json</code> with the formations, mentalities, instructions, roles, duties, and <code>ai</code> block listed in the YAML. In <code>data/mod.rs</code>, add <code>TACTICS_FILE</code>, load it, include it in the digest, and check that every role attribute is in the attribute schema. Refuse a failure naming the file, the role, and the attribute. Unit test: the shipped file loads; a bad role is refused by name; a formation with no goalkeeper in slot 0 is refused.</li>
+<li><strong>Tactics model.</strong> Write <code>tactics/mod.rs</code>: <code>Tactics</code>, <code>TacticsPatch</code>, <code>RoleDuty</code>, and <code>TeamPlan::from(&amp;Tactics, &amp;TacticsSchema, &amp;Tuning)</code>. Unit tests: balanced 4-4-2 with no roles gives zero offsets and the <code>FORMATION_442</code> coordinates; attacking moves the block forward; high pressing gives three pressers.</li>
+<li><strong>Players and teams.</strong> In <code>player.rs</code>, add <code>squad</code>, <code>energy</code>, <code>base</code>, the <code>Injured</code> and <code>SubstitutedOff</code> statuses, and the new <code>Derived</code> fields. In <code>team.rs</code>, add <code>tactics</code>, <code>plan</code>, <code>lineup</code>, <code>bench</code>, the formation from the schema, the plan offsets in <code>anchor()</code>, and <code>restore(slot)</code>. Keep <code>anchors_stay_inside_the_pitch_for_every_corner</code> passing for every formation and mentality.</li>
+<li><strong>Match configuration.</strong> In <code>sim.rs</code>, add <code>Manager { Ai, Human }</code> and <code>MatchConfig::managers</code>, which defaults to both AI. <code>MatchConfig::new</code> keeps its signature and runs the AI pre-match setup for both teams. Add <code>with_manager(team, Manager)</code> and <code>with_tactics(team, Tactics)</code>. <code>player_ids()</code> reads each slot’s squad index.</li>
+<li><strong>Fatigue.</strong> Write <code>fatigue.rs</code>: the per-tick energy drain, <code>multiplier(energy, curve)</code>, the 50-tick refresh of effective values from <code>base</code>, and half-time recovery. Call it from <code>step</code> after the referee. Unit tests: the curve at each point and between points; above the threshold the multiplier is 1.0; a player standing still drains only the base rate.</li>
+<li><strong>Injuries.</strong> In <code>fatigue.rs</code>, add the per-tackle and per-minute rolls, which use <code>EngineRng::referee_draw</code> so a scene can script them. In <code>rules/mod.rs</code>, add <code>injure(i)</code>: status, parking, reshape, the injury event, and an <code>Injury</code> stoppage. A foul on the same tick keeps its free kick. In <code>rules/restart.rs</code>, add the dropped-ball spot, taker, 4 m targets, and the <code>drop_ball</code> delay. Unit tests for the restart geometry.</li>
+<li><strong>Decision layer.</strong> In <code>tuning.rs</code>, add <code>DecisionWeights</code>. In <code>decision.rs</code>, replace the shot threshold, the pass, dribble, and clearance branches with the scored options. Pressing sets the press count (1, 2, or 3) and the press distance scale. Apply the time-wasting factor to the restarting team’s delay while it leads. Keep <code>a_lofted_pass_reaches_its_target_slow_enough_to_control</code> and <code>an_open_teammate_draws_a_pass_or_a_shot</code> passing. Add a unit test: an attacking mentality raises the shoot score for the same scene.</li>
+<li><strong>Shots counter.</strong> In <code>sim.rs</code>, count a shot per team in <code>Summary</code> when a <code>Kick::Shot</code> is applied. Shots on target, passes, possession, and xG stay with the calibration plan, which defines them and skips any counter that already exists (<code>04-plan-calibration.md</code> steps 1 and 2).</li>
+<li><strong>Change queue.</strong> Write <code>tactics/change.rs</code>: <code>Change</code>, <code>QueuedChange</code>, <code>SubLedger</code>, and <code>apply_at_stoppage</code>. Call it in <code>step</code> when <code>self.stoppage</code> is set, after the AI check. A substitute enters at the halfway touchline entry point on its side. The team’s timeline gains the new plan. Every verdict pushes <code>ChangeApplied</code> or <code>ChangeRejected</code>, and an applied substitution also pushes a <code>Substitution</code> event with the player off and the player on. Unit tests: admission by kind, ledger counting, exempt windows, rejection reasons, and the conflict rule in both queue orders.</li>
+<li><strong>AI manager.</strong> Write <code>ai.rs</code>: <code>pre_match</code> and <code>in_match</code> with the rules in the YAML. Every queued change also pushes an <code>AiDecision</code> event with a short <code>ai.decision</code> code (<code>mentality-up-trailing</code>, <code>mentality-down-leading</code>, <code>sub-injury</code>, <code>sub-fatigue</code>). No random draws. A <code>Human</code> team gets <code>pre_match</code> only.</li>
+<li><strong>Records.</strong> In <code>observe/mod.rs</code>, add <code>stats.shots</code>, <code>injury.count</code>, <code>fatigue.mean_pct</code>, the three change counts, substitutions per team, and <code>darkpath.change_never_applied</code>. Fold in the signals from <code>04b-instrument.md</code> section 2. Unit test: every contract key is present.</li>
+<li><strong>Snapshot.</strong> In <code>snapshot.rs</code>, set <code>VERSION</code> to 2 and add every new field listed in the YAML. <code>Simulation::from_snapshot</code> restores managers, lineups, tactics, plans, the ledger, the queue, and the AI state. Keep <code>capture_write_read_capture_gives_identical_bytes</code> passing.</li>
+<li><strong>Scenario builder.</strong> In <code>scenario.rs</code>, add <code>energy</code>, <code>score</code>, <code>at_minute</code>, <code>subs_used</code>, <code>injure</code>, <code>manager</code>, and <code>queue</code>.</li>
+<li><strong>Validator.</strong> In <code>validate.rs</code>, exempt the injured and substituted-off parking spots and allow the entry point on a restart tick. Read anchors from the timeline.</li>
+<li><strong>Protocol.</strong> In <code>crates/protocol</code>, add <code>substitution</code>, <code>injury</code>, and <code>ai-decision</code> to <code>EventType</code>, and add the optional fields <code>change.applied_tick</code> and <code>ai.decision</code>. All five are already in the observability contract. Put <code>team.id</code> on change events. Leave <code>Queue</code>, <code>QueueChange</code>, and <code>detail</code> unchanged, and rewrite the module comment at <code>command.rs:1-4</code> in product language to say what now applies and what does not. Keep <code>PROTOCOL_VERSION</code> at 2 and write the reason beside it. Update <code>docs/reference/protocol.md</code>. Run <code>cargo test -p protocol</code>. The document test must pass.</li>
+<li><strong>Command line.</strong> In <code>stream_run.rs</code>, map the five new engine events and refresh player ids after a substitution. In <code>serve.rs</code>, the home team is <code>Human</code> and the away team is <code>Ai</code>. In <code>simulate.rs</code>, keep the default of both AI. In <code>resume.rs</code>, take managers, lineups, and tactics from the snapshot.</li>
+<li><strong>Page.</strong> In <code>web/stoppages.mjs</code>, add <code>injury</code> to <code>STOPS_PLAY</code>. Extend <code>web/tests/stoppages.test.mjs</code>. Run <code>node --test web/tests/*.test.mjs</code>. All tests must pass.</li>
+<li><strong>Criterion tests.</strong> Write <code>tactics_queue.rs</code>, <code>substitutions.rs</code>, <code>fatigue.rs</code>, and <code>injury.rs</code> in <code>crates/engine/tests</code> per the YAML. Update <code>snapshot.rs</code>, <code>full_match.rs</code>, <code>validator.rs</code>, and <code>content.rs</code>. Run <code>cargo test --workspace</code>. All tests must pass.</li>
+<li><strong>Slow tests.</strong> Write <code>strength.rs</code>, <code>ai_trailing.rs</code>, and <code>mentality.rs</code> with <code>#[ignore = &quot;slow: cargo test --release -p engine -- --ignored&quot;]</code>, and add <code>stronger</code> and <code>run_many</code> to <code>tests/common/mod.rs</code>. Run <code>cargo test --release -p engine -- --ignored</code>. All tests must pass. On a failure, print and record the counts (wins, draws, and losses; runs with a change; mean shots). Tune only the decision weights and the ai block, then rerun.</li>
+<li><strong>First measurement.</strong> Run <code>cargo build --release -p engine-cli</code>, then run <code>target/release/engine-cli.exe bench --seed 42 --matches 5 --json</code> three times, with <code>SM_DATA_DIR</code> set to a scratch folder. Record <code>bench.cpu_ms / bench.matches</code>, <code>bench.cpu_us_per_tick</code>, <code>bench.ticks_per_match</code>, and <code>bench.peak_mem_mb</code> in the implement artifact. Processor time per match must be at most 460.7 ms, and peak memory at most 6.82 MB. If either limit is exceeded, stop and report to the product owner with the levers (<code>decision_interval_ticks</code>, the pass candidate count, the fatigue refresh interval) and the per-tick figure. Do not change a lever to meet the limit.</li>
+<li><strong>Fixture, documents, and gates.</strong> Regenerate the local fixture with <code>engine-cli record --seed 7 --out fixture.smfx</code>. Update <code>README.md</code> and <code>content/README.md</code>. Search <code>crates/</code>, <code>web/</code>, <code>docs/reference/</code>, <code>content/</code>, and <code>README.md</code> for workflow vocabulary (slice names, stage names, <code>.ai/</code>). The search must return nothing. Run <code>cargo fmt --all -- --check</code>, <code>cargo clippy --workspace --all-targets -- -D warnings</code>, <code>cargo test --workspace</code>, and <code>node --test web/tests/*.test.mjs</code>. Commit only the paths this slice changes, named explicitly, in product language, ending with the attribution line the session requires.</li>
+</ol>
+<h2 id="verification-strategy" tabindex="-1"><a class="header-anchor" href="#verification-strategy"><span>Verification Strategy</span></a></h2>
+<table class="prose-table">
+<thead>
+<tr>
+<th>AC</th>
+<th>Tool / method + ladder rung</th>
+<th>Environment need — satisfiable in target env?</th>
+<th>What must be BUILT to make it verifiable</th>
+<th>Fallback chain</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AC-9: the benchmark reruns; processor time per match within 10 percent and memory within 25 percent of the baseline</td>
+<td><code>engine-cli bench --seed 42 --matches 5 --json</code>, three drives (<code>cli-direct</code>, cli adapter)</td>
+<td>Windows 11 reference machine, rustc 1.92 — yes (this machine, AMD Ryzen 7 9800X3D, Ultimate Performance plan; baseline measured here in this run)</td>
+<td>Nothing new: <code>bench.cpu_ms</code>, <code>bench.matches</code>, <code>bench.cpu_us_per_tick</code>, <code>bench.ticks_per_match</code>, and <code>bench.peak_mem_mb</code> already exist in the run report. The baseline on <code>837cb5c</code> is in <code>05c-benchmark.md</code>. Capture stdout, stderr, and the exit code as evidence.</td>
+<td>Rerun with <code>--matches 10</code> when <code>bench.cpu_wall_ratio</code> is below 0.9 → run from a fresh shell with no other heavy process → pre-registered deferral only if the machine is unavailable. Clearing event: the developer runs the same command on the reference machine.</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><code>constraint-resolution: prerequisite-slice: tactics-and-ai</code> — the harness already exists (<code>crates/engine-cli/src/bench.rs</code>), and step 21 runs it. Nothing outside the slice is needed. <code>wall-ownership: code-owned</code>.</li>
+</ul>
+<p>Every other criterion is automated (<code>observable: false</code> in the slice) and runs under <code>cargo test</code>. AC-1 to AC-5 run in the default <code>cargo test --workspace</code>. AC-6 to AC-8 are marked slow, as the slice says, and run with <code>cargo test --release -p engine -- --ignored</code>. The criteria keep the slice’s wording, with two recorded readings. For AC-2, the four substitutions in the second case are spread over at most two windows or include half-time, so a window remains. The literal “four used” does not say how many windows they took. For AC-7, the 100 runs start from a scene at minute 70 with the AI team one goal down, because “trails after minute 70” needs a trailing team in every run.</p>
+<h2 id="test-verification-plan" tabindex="-1"><a class="header-anchor" href="#test-verification-plan"><span>Test / Verification Plan</span></a></h2>
+<h3 id="automated-checks" tabindex="-1"><a class="header-anchor" href="#automated-checks"><span>Automated checks</span></a></h3>
+<ul>
+<li>Format: <code>cargo fmt --all -- --check</code>.</li>
+<li>Lint: <code>cargo clippy --workspace --all-targets -- -D warnings</code>.</li>
+<li>Unit and integration: <code>cargo test --workspace</code>. At baseline this is 192 tests; the 90-minute tests take about 8 seconds each in a debug build.</li>
+<li>Slow criteria: <code>cargo test --release -p engine -- --ignored</code>. This runs about 700 matches spread across threads, one match per thread at a time.</li>
+<li>Page: <code>node --test web/tests/*.test.mjs</code> (the glob form).</li>
+<li>Criteria map: AC-1 <code>tactics_queue.rs</code>; AC-2 and AC-3 <code>substitutions.rs</code>; AC-4 <code>fatigue.rs</code>; AC-5 <code>injury.rs</code>; AC-6 <code>strength.rs</code>; AC-7 <code>ai_trailing.rs</code>; AC-8 <code>mentality.rs</code>; AC-9 the benchmark drive below. The event mapping is covered by the existing <code>crates/stream/tests/fixture.rs</code> and <code>crates/protocol/tests/document.rs</code>.</li>
+<li>Regression: <code>determinism.rs</code> keeps its byte-identical assertion with both teams AI-managed; <code>snapshot.rs</code> continuation runs past a substitution; <code>validator.rs</code> asserts zero violations.</li>
+<li>Contract check: the record test in step 12 asserts every contract key; <code>crates/protocol/tests/document.rs</code> asserts every event field is documented.</li>
+<li>Benchmark compare: <code>/wf verify</code> loads <code>augment/benchmark.md</code> in compare mode against <code>05c-benchmark.md</code>.</li>
+</ul>
+<h3 id="interactive-verification-human-in-the-loop" tabindex="-1"><a class="header-anchor" href="#interactive-verification-human-in-the-loop"><span>Interactive verification (human-in-the-loop)</span></a></h3>
+<ul>
+<li><strong>AC-9 (benchmark report).</strong> Platform <code>cli</code> from <code>stack.platforms</code>; driver: the binary itself (<code>cli-direct</code>); no companion skill needed.
+<ol>
+<li>Run <code>cargo build --release -p engine-cli</code>.</li>
+<li>Set <code>SM_DATA_DIR</code> to a scratch folder.</li>
+<li>From Git Bash, run <code>target/release/engine-cli.exe bench --seed 42 --matches 5 --json &gt; &lt;evidence-dir&gt;/ac-9-&lt;n&gt;.stdout.txt 2&gt; &lt;evidence-dir&gt;/ac-9-&lt;n&gt;.stderr.txt</code> for <code>n</code> = 1, 2, 3, then write <code>$?</code> to <code>&lt;evidence-dir&gt;/ac-9-&lt;n&gt;.exit-code</code>.</li>
+<li>Read each stdout file. Each holds one JSON line with <code>record.kind</code> <code>run-report</code>. Pass criteria: the median of <code>bench.cpu_ms / bench.matches</code> is at most 460.7 ms, the median <code>bench.peak_mem_mb</code> is at most 6.82, <code>bench.match_wall_ms</code> is at most 2000, <code>budget.pass</code> is true, <code>bench.cpu_wall_ratio</code> is at least 0.9, <code>build.hash</code> is not <code>unknown</code>, and the exit code is 0. Report <code>bench.cpu_us_per_tick</code> (baseline 1.4965 µs) and <code>bench.ticks_per_match</code> (baseline 279,850) beside the gate. If the per-match gate fails but the per-tick figure is within 10 percent, the product owner decides. The drive never passes that case by itself.</li>
+<li>Evidence layout per the cli adapter: <code>&lt;evidence-dir&gt;/ac-9-&lt;n&gt;.stdout.txt</code>, <code>ac-9-&lt;n&gt;.stderr.txt</code>, and <code>ac-9-&lt;n&gt;.exit-code</code>.</li>
+</ol>
+</li>
+</ul>
+<h2 id="risks-watchouts" tabindex="-1"><a class="header-anchor" href="#risks-watchouts"><span>Risks / Watchouts</span></a></h2>
+<ul>
+<li>R1 (high): processor time per match exceeds the tripwire. The plan is precomputed, and the refresh and check intervals are coarse. Step 21 measures before the slow tests are finalised. A miss goes to the product owner, and no lever is pulled silently.</li>
+<li>R2 (high): team A does not win more than 100 of 200. The new attributes reach the decision layer, and the test balances home and away. A failure is fixed with the decision weights inside this slice and recorded with the counts.</li>
+<li>R3 (high): a resumed match drifts after a change. Snapshot version 2 carries every new field, and the continuation test crosses a substitution and a tactics change.</li>
+<li>R4 (medium): scored options make play passive or chaotic (slice risk). Hold carries a negative base and a held-time penalty. The possession and idle-ball bands in <code>full_match.rs</code> stay in place, and calibration tunes the weights.</li>
+<li>R5 (medium): the new required attributes refuse a modder’s schema that lacks them. The shipped schema has all 14. The refusal names the missing attribute (NFR-7), and <code>content/README.md</code> lists the 14.</li>
+<li>R6 (medium): rule pack version 3, tuning version 2, and snapshot version 2 refuse earlier files by version. No such file is in the repository except the shipped ones this slice updates. Snapshots belong to one running match.</li>
+<li>R7 (low): injury stoppages add time, so ticks per match rise. The default rate gives about 0.6 injuries per match, and ticks per match is reported beside the gate.</li>
+<li>R8 (low): other work’s staged files could enter the commit. Step 22 commits named paths only.</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<ul>
+<li>Consumes <code>match-rules</code> (the referee, <code>open_dead_ball</code>, restart geometry, the stoppage kinds, the snapshot, and the scenario builder) and <code>data-schemas-generator</code> (the loader, the attribute schema, the tuning file, and the rule pack).</li>
+<li>Touches <code>stream-protocol</code> files (<code>crates/protocol/*</code>) and two <code>viewer-pitch</code> files (<code>web/stoppages.mjs</code> and its test), after those slices are verified, never in parallel.</li>
+<li>Consumers: <code>calibration</code> tunes <code>decision</code>, <code>fatigue</code>, the injury rates, and the <code>ai</code> block, and runs the AI manager on both teams. <code>viewer-lineup-tactics</code> owns the socket bridge into <code>Simulation::queue_change</code> and the pre-kick-off lineup message, both behind its open product-owner questions OQ-1 and OQ-2. Until those are answered, the human team starts with the AI pre-match lineup and its socket changes are acknowledged and not applied, as they are today. That slice reads <code>content/tactics.json</code> wherever OQ-2 places it, and shows <code>change.state</code>. <code>commentary</code> reads <code>substitution</code>, <code>injury</code>, and <code>ai-decision</code>. <code>extra-time-penalties</code> extends the ledger with the extra-time allowance. Its plan also numbers a rule pack schema 3 and a snapshot version 2, and so does this plan. Whichever lands second takes the next number (<code>04-plan.md</code> Conflicts). <code>scripting-runtime</code> calls <code>queue_change</code> as its entry point for scripted decisions.</li>
+</ul>
+<h2 id="assumptions" tabindex="-1"><a class="header-anchor" href="#assumptions"><span>Assumptions</span></a></h2>
+<p>Each entry records a question the plan’s discovery round would have asked. Every entry except entry 3 was resolved without the product owner under the autonomous policy and is stamped <code>class: implementation-detail</code>: it picks among ways to meet criteria the shape and slice already fixed, and it changes no ratified scope. Entry 3 records a question that is intent-bearing by nature and that this run did not resolve. The plan that owns it carries it, and nothing in this plan depends on it (see Blockers). No <code>carried</code> intent-risk exists (<code>00-index.md</code> marks all six adjudicated), so no decision touches one.</p>
+<ol>
+<li><strong>Where changes apply</strong> (<code>class: implementation-detail</code>). The engine owns the queue and applies it inside <code>step</code> on the tick that opens a stoppage, not inside <code>TickSink::on_stoppage</code>. Why: the hook receives <code>&amp;Simulation</code> (<code>record.rs:160</code>) and runs after the record (<code>sim.rs:333-337</code>), so it cannot change the match, and a change made there would land one tick late on a tick that is not a restart. The master plan’s sentence “applies queued changes through the stoppage hook” is corrected in <code>04-plan.md</code>. The hook stays the one outside view of a stoppage.</li>
+<li><strong>No socket bridge in this slice</strong> (<code>class: implementation-detail</code>). The socket’s <code>queue-change</code> path is left as it is: acknowledged, recorded, and not applied. The engine queue is filled by the AI manager and by tests through <code>Simulation::queue_change</code>. Why: every criterion of this slice is an engine test or the benchmark, and none needs the socket. The bridge needs a wire format for the change <code>detail</code>, and a parallel plan records that format as an open intent-bearing question for the product owner (<code>04-plan-viewer-lineup-tactics.md</code> Blockers, OQ-2, “what does a change’s <code>detail</code> hold?”). Settling it here would make that product decision without the product owner. Leaving the bridge out is the smaller change and keeps both plans consistent. The bridge becomes a step of whichever slice the product owner’s answer names.</li>
+<li><strong>Carried, not decided: the wire payload.</strong> This entry records no decision. The format of <code>QueueChange.detail</code> for tactics and substitution changes is a public protocol contract. This plan records it as an open question carried by <code>04-plan-viewer-lineup-tactics.md</code> OQ-2 and makes no choice. The engine’s own <code>Change</code> and <code>TacticsPatch</code> types are internal Rust types, not a wire format, so a later bridge can map any answer onto them. No criterion of this slice depends on the answer, so the question blocks nothing in this plan.</li>
+<li><strong>Tactics data</strong> (<code>class: implementation-detail</code>). The data lives in a new <code>content/tactics.json</code>, validated fail-closed and included in the content hash. It ships four formations, five mentalities, the six instructions the slice names (3 levels each, 2 for time wasting), roles per position, and three duties. Why: shape Q26 maps roles to attributes through data, and the panel slice renders from “the tactics schema”. The file is data, so a modder can extend it without code.</li>
+<li><strong>Required attributes</strong> (<code>class: implementation-detail</code>). <code>REQUIRED</code> grows from 7 to 14. Why: finishing, vision, decisions, and composure must reach the decision layer for C3, and stamina, natural fitness, and injury resistance must reach fatigue and injuries for C5. The shipped schema holds all of them, and the refusal names the missing one (NFR-7). This follows the precedent of <code>aggression</code> in the previous slice.</li>
+<li><strong>Decision cadence</strong> (<code>class: implementation-detail</code>). <code>decision_interval_ticks</code> stays 1, the product owner’s choice. The slice’s mitigation “decide every N ticks” is held as a lever that only the product owner may pull if the tripwire fires.</li>
+<li><strong>Fatigue model</strong> (<code>class: implementation-detail</code>). Energy is drained each tick. Effective values refresh every 50 ticks through a piecewise-linear curve that equals 1.0 at or above the threshold. The degraded values are pace (max speed and acceleration) and the decision values (passing, finishing, decisions, composure). The default numbers are estimates for calibration to tune. <code>TUNING_VERSION</code> rises to 2 because the fatigue block changes meaning (“not read yet” becomes read).</li>
+<li><strong>Injury flow</strong> (<code>class: implementation-detail</code>). An injured player leaves play at once, and the referee stops play with an <code>injury</code> stoppage and a dropped-ball restart. Why: the rule pack already names <code>injury</code> as a stoppage that admits both kinds of change and adds 60 s, and shape Q19 lists “injury stoppage” among the real-life substitution windows. The AI’s substitution therefore applies at that same stoppage. A foul on the same tick keeps its free kick.</li>
+<li><strong>Half-time windows</strong> (<code>class: implementation-detail</code>). The slice text “5 changes in 3 windows plus half-time” becomes <code>substitutions.windows_exempt: [&quot;half_time&quot;]</code> in rule pack version 3. Why: the shape’s named mechanism puts substitution limits in the rule pack, not in the loop.</li>
+<li><strong>Conflict rule scope</strong> (<code>class: implementation-detail</code>). A tactics change that names a role for a player substituted off at the same stoppage is rejected whole, and the reason names the player. Substitutions always apply before tactics at a stoppage, whatever the queue order. Why: a whole change applies or fails as one, so a chip never shows a half-applied change.</li>
+<li><strong>AI manager behaviour</strong> (<code>class: implementation-detail</code>). The AI uses threshold rules from the <code>ai</code> block in <code>content/tactics.json</code>. It checks every 30 s and at every injury, and it draws no random numbers. It raises mentality one step when trailing after minute 70, lowers it one step and turns time wasting on when leading after minute 80, makes injury substitutions at once, and makes fatigue substitutions below energy 0.55 from minute 55, keeping one for injuries until minute 80. Pre-match, it picks the best role fit per slot of the default formation and seven substitutes that include a goalkeeper. Why: shape Q4 fixed the behaviours and not their quality, and deterministic rules keep a match reproducible.</li>
+<li><strong>Human lineup before kick-off</strong> (<code>class: implementation-detail</code>). This slice adds no pre-kick-off lineup message. The human’s team starts with the AI pre-match lineup until <code>viewer-lineup-tactics</code> adds the editor and its message. Why: the lineup path is that slice’s open question OQ-1, which the product owner answers there. The AI pre-match lineup replaces the file-order lineup (<code>team.rs:89-113</code>) for both teams, because shape Q4 gives the AI manager the pre-match setup.</li>
+<li><strong>Substitution in place</strong> (<code>class: implementation-detail</code>). The incoming player takes the outgoing player’s roster slot, so the 22-position record and the page’s slot labels are unchanged. The incoming player enters at the halfway touchline point on the restart tick. The <code>substitution</code> event carries <code>player.id</code> (off) and <code>player.secondary_id</code> (on).</li>
+<li><strong>Snapshot version 2</strong> (<code>class: implementation-detail</code>). The snapshot gains squad identity, energy, statuses, tactics, the ledger, the pending queue, and the AI state. Why: shape AC-14 requires a resume with “the same lineups and used substitutions”, and NFR-4 already refuses another version by name. A snapshot belongs to one running match, so no stored user data migrates.</li>
+<li><strong>Slow criteria</strong> (<code>class: implementation-detail</code>). AC-6 to AC-8 are <code>#[ignore]</code> tests run in release with <code>std::thread::scope</code>, using seeds 1 to N. A debug build plays one 90-minute match in about 8 s (the slowest single-test binary in this run’s <code>cargo test --workspace</code> took 7.61 s), so 200 matches would take about 25 minutes.</li>
+<li><strong>AC-6 fixture</strong> (<code>class: implementation-detail</code>). Team A is default-b with every attribute times 1.15, rounded and clamped to 100, under a new club id. It plays 100 home and 100 away against default-b. “Wins more than 50 percent” means more than 100 wins of 200.</li>
+<li><strong>AC-8 comparison</strong> (<code>class: implementation-detail</code>). Team A’s in-match AI changes are off, so its mentality stays as set. The criterion holds when mean shots per match for A are higher when attacking than when defensive.</li>
+<li><strong>Benchmark gate reading</strong> (<code>class: implementation-detail</code>). The slice criterion is judged as written, per match, against the new baseline on <code>837cb5c</code>. That baseline is the state match-rules left. The per-tick figure is reported beside it. Why: the product owner’s per-tick reading (plan Round 4 Q13) was scoped to the match-rules criterion, and reusing it here would reinterpret a criterion without the product owner. A per-match miss caused by match length alone goes to the product owner.</li>
+<li><strong>Page list</strong> (<code>class: implementation-detail</code>). <code>injury</code> joins <code>STOPS_PLAY</code> because it now stops play. <code>substitution</code> and <code>ai-decision</code> do not. This follows the master plan’s rule that a slice adding an event type decides whether it joins the list.</li>
+<li><strong>Augmentations</strong> (<code>class: implementation-detail</code>). <code>05c-benchmark.md</code> is re-baselined on <code>837cb5c</code> and <code>04b-instrument.md</code> is re-authored for this slice. The prior records are byte-copied to <code>history/05c-benchmark-4.*</code> and <code>history/04b-instrument-4.*</code>. The <code>experiment</code> augmentation stays deferred to <code>experiment-flags</code>. The index entry for both artifacts is left for the run driver to record, because this run does not write <code>00-index.md</code>.</li>
+<li><strong>Consult</strong> (<code>class: implementation-detail</code>). The triggers <code>appetite-medium-or-larger</code> and <code>touches-migration</code> hold. The product owner excluded <code>consult</code> at intake (<code>00-index.md</code> <code>stack.excluded-by-po</code>), so no consult ran (<code>consult-runs: []</code>).</li>
+<li><strong>Shots on target stay with calibration</strong> (<code>class: implementation-detail</code>). This slice counts shots, which the mentality criterion needs, and nothing else from the statistics set. Why: <code>04-plan-calibration.md</code> step 2 defines shots on target (a goal, a save, or a catch), passes, possession, and xG, and skips any counter already present. Two definitions of the same key would conflict.</li>
+<li><strong>Version numbers shared with a sibling plan</strong> (<code>class: implementation-detail</code>). This plan raises the rule pack to schema 3 and the snapshot to version 2. <code>04-plan-extra-time-penalties.md</code> numbers its own changes the same way, and <code>04-plan-calibration.md</code> raises the snapshot by one. The recorded order puts this slice first, so it takes 3 and 2, and each later slice takes the next number when it lands.</li>
+<li><strong>Design contract</strong> (<code>class: implementation-detail</code>). <code>02c-craft.md</code> binds no step: the only page change is one list entry in page logic, with no visual element.</li>
+</ol>
+<h2 id="blockers" tabindex="-1"><a class="header-anchor" href="#blockers"><span>Blockers</span></a></h2>
+<p>None for this slice. One product-owner question touches this slice’s work and blocks none of its criteria. It is carried by <code>04-plan-viewer-lineup-tactics.md</code> as OQ-2: the wire format of a queued change’s <code>detail</code>, and with it the socket bridge into <code>Simulation::queue_change</code>. This plan does not answer it (Assumptions 2 and 3).</p>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<p>The three IFAB entries are recalled from the published Laws and were not re-fetched in this run: the product owner excluded the web-search tools, and the match-rules plan cites the same pages. Implement should confirm the dropped-ball distance and the half-time substitution rule against the linked pages before step 7 and step 1.</p>
+<ul>
+<li>Source: <a href="https://www.theifab.com/laws/latest/the-players/">IFAB Law 3 The Players</a>. Why it matters: it sets the substitution procedure and the competition rules for the number of substitutes, including the separate half-time opportunity. Takeaway: the half-time allowance goes in <code>windows_exempt</code>, and a player substituted off takes no further part.</li>
+<li>Source: <a href="https://www.theifab.com/laws/latest/the-start-and-restart-of-play/">IFAB Law 8 The Start and Restart of Play</a>. Why it matters: it defines the dropped ball after play stops for an injury: dropped for the team that last had the ball, or for the goalkeeper inside the penalty area, with all other players at least 4 m away. Takeaway: the injury restart in <code>restart.rs</code>.</li>
+<li>Source: <a href="https://www.theifab.com/laws/latest/the-duration-of-the-match/">IFAB Law 7 The Duration of the Match</a>. Why it matters: time lost to injuries and substitutions is added. Takeaway: the injury kind keeps its 60 s in the rule pack. Substitutions add no time in this slice, because the rule pack has no substitution kind, and calibration may add one.</li>
+<li>Source: installed dependencies read in the repository. <code>garde</code> 0.23 <code>dive</code> and <code>custom</code> are already used for nested content structs (<code>crates/engine/src/data/tuning.rs:260-267</code>), and <code>serde</code> <code>deny_unknown_fields</code> is used on every content struct. No new dependency and no new API is used, so no <code>study-sources</code> read was needed. No step asserts that a dependency lacks a capability.</li>
+<li>Source: <code>.ai/observability.md:27-59</code>, read in this run. Why it matters: it is the contract for the new event types and keys. Takeaway: <code>injury</code>, <code>substitution</code>, <code>ai-decision</code>, <code>change.applied_tick</code>, <code>ai.decision</code>, <code>fatigue.mean_pct</code>, <code>injury.count</code>, <code>stats.shots</code>, and <code>darkpath.change_never_applied</code> are already reserved, so only the detail payloads are new keys.</li>
+<li>The fatigue, injury, and decision numbers are unsourced estimates. The injury default (about 0.6 per match) is a planning estimate, not a measured league rate. <code>calibration</code> owns sourcing and tuning them.</li>
+</ul>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option A (default):</strong> <code>/wf implement football-manager-match-engine tactics-and-ai</code>. The plan is complete, and both augmentation artifacts are re-authored for this slice. Compact the session first so the SessionStart hook re-reads the artifacts.</li>
+<li><strong>Option B:</strong> <code>/wf plan football-manager-match-engine commentary</code>. Commentary depends only on <code>match-rules</code>, so it can be planned in parallel. It would read the three event types this slice adds, so implementing it after this slice avoids a second mapping pass.</li>
+<li><strong>Option C:</strong> <code>/wf slice football-manager-match-engine</code>. Not needed: the slice boundary held. The lineup message and the socket bridge stay with <code>viewer-lineup-tactics</code> behind its open questions (Assumptions 2, 3, and 12).</li>
+<li><strong>Option D:</strong> <code>/wf shape football-manager-match-engine</code>. Not needed: the spec held, and every open choice was an implementation detail recorded above.</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-22T22:18:43Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/04-plan-tactics-and-ai.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">plan</a><span class="m-sheet-here" aria-current="page">tactics-and-ai</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/04-plan-tactics-and-ai.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-22T22:18:43Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

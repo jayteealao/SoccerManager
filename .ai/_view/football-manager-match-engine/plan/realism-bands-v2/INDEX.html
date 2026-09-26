@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="plan">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · plan — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="plan">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span aria-hidden="true">/</span><span class="m-here">realism-bands-v2</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · plan</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">realism-bands-v2</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/04-plan-realism-bands-v2.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">04-plan-realism-bands-v2.md</div>
+      <h1 class="pg-title">Plan · <code>realism-bands-v2</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="stage-badge">plan</span><span class="meta">rev 0</span><span class="meta">2026-09-23T22:29:35Z</span></div>
+    </header><div class="metric-row"><div class="metric">
+      <span class="metric-label">files to touch</span>
+      <span class="metric-value">22</span>
+      
+    </div><div class="metric">
+      <span class="metric-label">steps</span>
+      <span class="metric-value">14</span>
+      
+    </div><div class="metric is-ok">
+      <span class="metric-label">blockers</span>
+      <span class="metric-value">none</span>
+      
+    </div></div>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-plan" tabindex="-1"><a class="header-anchor" href="#the-plan"><span>The Plan</span></a></h2>
+<p>A 10,000-match run at <code>5a235a4</code> passed every existing band. Yet 10.5% of matches had ten or more goals, and 45% had a sending-off. The four bands measure averages only, so floods and goalless draws cancel out. This slice adds eleven sourced bands to the equal suite, adds <code>stats.throw_ins</code> and <code>stats.goal_kicks</code> to the match record, and adds a formations suite. It changes no engine behaviour. The research confirmed that nine of the eleven figures already reach the report builder. Only throw-ins and goal kicks are missing, and the engine already counts both (<code>sim.rs:394-395</code>).</p>
+<p>The product owner widened the formations suite in planning. It now pairs every formation against every other formation, and each pairing plays 1,000 matches and is checked against the three goal bands (Q-P1, Q-P2). Six formations join the four shipped ones, so 10 formations give 55 pairings (Q-P5). <code>--suite all</code> always includes the suite (Q-P6), and every pairing plays all its matches (Q-P8). The bands file moves to version 2 and refuses an older file (Q-P7). The paired-run distance counts only the excess above the high end for a band whose low end is 0 (Q-P4, delegated). The ignored slow test asserts every band and stays red until <code>realism-tuning</code> (Q-P3).</p>
+<p>The work is 14 steps over 22 files. When it lands, the next three slices get a five-seed baseline of every suite (Q-P9). The top risk is run time: a full run plays 57,000 matches, about 74 minutes per seed and about 6 hours for the baseline. The plan saves time without cutting matches. The formations suite runs as one suite on one worker pool, and the worker writes a replay file only for an outlier when step 11 measures a gain.</p></section><figure class="figure-canvas">
+  <figcaption class="figure-meta">
+    <span class="figure-title"><b>Figure 3</b> · File-change topology</span>
+    <span class="figure-legend" aria-hidden="true"><span class="legend-entry"><span class="sw modified"></span>modified</span><span class="legend-entry"><span class="sw new"></span>new</span><span class="legend-entry"><span class="sw deleted"></span>deleted</span><span class="legend-entry"><span class="sw external"></span>external</span></span>
+  </figcaption>
+  <svg viewBox="0 0 980 614" width="100%" preserveAspectRatio="xMinYMid meet" aria-label="File-change topology">
+    <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8377"/>
+    </marker>
+  </defs><rect x="20" y="30" width="301.3333333333333" height="140" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CONTENT/ (SHIPPED DATA FILES)</text><rect x="333.3333333333333" y="30" width="301.3333333333333" height="108" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">SCHEMAS/OBSERVABILITY</text><rect x="646.6666666666666" y="30" width="301.3333333333333" height="76" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC/OBSERVE</text><rect x="20" y="130" width="301.3333333333333" height="76" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="148" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC/DATA</text><rect x="333.3333333333333" y="130" width="301.3333333333333" height="76" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="148" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/TESTS</text><rect x="646.6666666666666" y="194" width="301.3333333333333" height="140" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="212" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE-CLI/SRC/REPORT</text><rect x="20" y="358" width="301.3333333333333" height="140" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="376" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE-CLI/SRC/CALIBRATE</text><rect x="333.3333333333333" y="422" width="301.3333333333333" height="172" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="440" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE-CLI (CLI.RS, TESTS)</text><rect x="646.6666666666666" y="422" width="301.3333333333333" height="172" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="440" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">DOCS AND THE OBSERVABILITY CONTRACT</text><rect x="32" y="58" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">realism-bands.json</text>
+      <text x="40" y="80" font-size="8" fill="#8a8377">data · +13/−1</text><rect x="32" y="90" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tactics.json</text>
+      <text x="40" y="112" font-size="8" fill="#8a8377">data · +96/−0</text><rect x="32" y="122" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="134" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">README.md</text>
+      <text x="40" y="144" font-size="8" fill="#8a8377">docs · +30/−4</text><rect x="345.3333333333333" y="58" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">match-stats.schema.json</text>
+      <text x="353.3333333333333" y="80" font-size="8" fill="#8a8377">contract · +20/−0</text><rect x="345.3333333333333" y="90" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">run-report.schema.json</text>
+      <text x="353.3333333333333" y="112" font-size="8" fill="#8a8377">contract · +70/−3</text><rect x="658.6666666666666" y="58" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="666.6666666666666" y="80" font-size="8" fill="#8a8377">observability · +14/−0</text><rect x="32" y="158" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="170" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tactics.rs</text>
+      <text x="40" y="180" font-size="8" fill="#8a8377">domain · +2/−2</text><rect x="345.3333333333333" y="158" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="170" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">resume.rs</text>
+      <text x="353.3333333333333" y="180" font-size="8" fill="#8a8377">test · +2/−0</text><rect x="658.6666666666666" y="222" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="234" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">bands.rs</text>
+      <text x="666.6666666666666" y="244" font-size="8" fill="#8a8377">observability · +45/−6</text><rect x="658.6666666666666" y="254" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="266" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="666.6666666666666" y="276" font-size="8" fill="#8a8377">observability · +190/−40</text><rect x="658.6666666666666" y="286" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="298" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">compare.rs</text>
+      <text x="666.6666666666666" y="308" font-size="8" fill="#8a8377">observability · +30/−8</text><rect x="32" y="386" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="398" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">fixtures.rs</text>
+      <text x="40" y="408" font-size="8" fill="#8a8377">cli · +60/−0</text><rect x="32" y="418" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="430" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">worker.rs</text>
+      <text x="40" y="440" font-size="8" fill="#8a8377">cli · +35/−6</text><rect x="32" y="450" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="462" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="40" y="472" font-size="8" fill="#8a8377">cli · +55/−10</text><rect x="345.3333333333333" y="450" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="462" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">cli.rs</text>
+      <text x="353.3333333333333" y="472" font-size="8" fill="#8a8377">cli · +4/−3</text><rect x="345.3333333333333" y="482" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="494" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">schemas.rs</text>
+      <text x="353.3333333333333" y="504" font-size="8" fill="#8a8377">test · +12/−0</text><rect x="345.3333333333333" y="514" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="526" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">calibrate.rs</text>
+      <text x="353.3333333333333" y="536" font-size="8" fill="#8a8377">test · +45/−10</text><rect x="345.3333333333333" y="546" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="558" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">calibrate_pair.rs</text>
+      <text x="353.3333333333333" y="568" font-size="8" fill="#8a8377">test · +14/−8</text><rect x="658.6666666666666" y="450" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="462" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">observability.md</text>
+      <text x="666.6666666666666" y="472" font-size="8" fill="#8a8377">docs · +22/−4</text><rect x="658.6666666666666" y="482" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="494" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">cli.md</text>
+      <text x="666.6666666666666" y="504" font-size="8" fill="#8a8377">docs · +12/−3</text><rect x="658.6666666666666" y="514" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="526" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">data-files.md</text>
+      <text x="666.6666666666666" y="536" font-size="8" fill="#8a8377">docs · +2/−1</text><rect x="658.6666666666666" y="546" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="558" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">modding.md</text>
+      <text x="666.6666666666666" y="568" font-size="8" fill="#8a8377">docs · +3/−1</text><path d="M 936 235 C 484 235, 484 71, 32 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 267 C 797.3333333333333 267, 797.3333333333333 235, 658.6666666666666 235" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 299 C 797.3333333333333 299, 797.3333333333333 267, 658.6666666666666 267" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 463 C 170.66666666666666 463, 170.66666666666666 399, 32 399" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 463 C 484 463, 484 267, 658.6666666666666 267" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 431 C 484 431, 484 267, 658.6666666666666 267" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 431 C 170.66666666666666 431, 170.66666666666666 103, 32 103" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 431 C 484 431, 484 71, 658.6666666666666 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 463 C 327.3333333333333 463, 327.3333333333333 463, 32 463" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 71 C 640.6666666666666 71, 640.6666666666666 71, 658.6666666666666 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 103 C 640.6666666666666 103, 640.6666666666666 267, 658.6666666666666 267" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/>
+  </svg>
+</figure><div class="fragment"><section class="fragment-plan" data-artifact="plan" data-slice="realism-bands-v2" data-rev="0">
+  <!-- @include-skip files-touched rows and callouts follow the sibling plan fragments' inline markup so the page renders them identically -->
+  <table class="files-touched pl-files">
+    <thead><tr><th>File</th><th>Status</th><th>Module</th><th>Lines</th></tr></thead>
+    <tbody>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">data</span> content/realism-bands.json</summary><div class="pl-card">Schema version 2. Eleven new bands: 10 or more goals share 0 to 0.5%, sending-off share 8 to 22%, yellow cards per team 1.2 to 2.6, shots on target share 30 to 42%, goals per xG 0.85 to 1.15, passes per team 350 to 550, pass accuracy 75 to 88%, corners per team 3.5 to 6.5, throw-ins per match 35 to 55, goal kicks per match 12 to 22, goalless share 4 to 12%.</div></details></td><td>modified</td><td>content</td><td>+13 / -1</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">data</span> content/tactics.json</summary><div class="pl-card">Six formations are appended after the four shipped ones: 4-1-4-1, 4-4-1-1, 4-1-2-1-2, 3-4-3, 5-3-2 and 5-4-1. Indices 0 to 3 do not move.</div></details></td><td>modified</td><td>content</td><td>+96</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">observability</span> crates/engine-cli/src/report/mod.rs, bands.rs, compare.rs</summary><div class="pl-card">The bands loader reads version 2 and refuses version 1. The equal suite adds eleven checks. The formations suite checks goals per match, the 10 or more goals share and the goalless share for each of 55 pairings. A check carries an optional pairing. The paired-run distance counts only the excess above the high end for a band whose low end is 0.</div></details></td><td>modified</td><td>crates/engine-cli/src/report</td><td>+265 / -54</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">cli</span> crates/engine-cli/src/calibrate/*, cli.rs</summary><div class="pl-card">A formations suite in --suite all: every unordered formation pair with mirrors, 1,000 matches each, the formation at home alternating. Both sides get their formation through MatchConfig::with_tactics. One warn line names each failing band. Events are written only for outlier matches when the measurement shows a gain.</div></details></td><td>modified</td><td>crates/engine-cli/src/calibrate</td><td>+154 / -19</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">observability</span> crates/engine/src/observe/mod.rs</summary><div class="pl-card">The match-stats record gains stats.throw_ins and stats.goal_kicks, copied from the counters the engine already keeps.</div></details></td><td>modified</td><td>crates/engine/src/observe</td><td>+14</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">contract</span> schemas/observability/match-stats and run-report</summary><div class="pl-card">The two new statistics are required on a success record. The run report accepts the formations suite, the new figures, the pairing field and the calib.formations list.</div></details></td><td>modified</td><td>schemas/observability</td><td>+90 / -3</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">test</span> crates/engine-cli/tests, crates/engine tests</summary><div class="pl-card">A formations smoke run with 1 match per pairing, a stderr check for a failing band, the schema checks for the new keys, the pinned compare rows, the formation count, and the slow test on every band (red until realism-tuning).</div></details></td><td>modified</td><td>tests</td><td>+75 / -18</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">docs</span> .ai/observability.md, docs/reference, docs/how-to, content/README.md</summary><div class="pl-card">The new keys, the bands with their sources, the formations suite and its run time, and the refusal of an old bands file.</div></details></td><td>modified</td><td>docs</td><td>+69 / -13</td></tr>
+    </tbody>
+  </table>
+  <div class="pl-risks">
+    <aside class="callout callout-warn"><strong>A full run takes over an hour (high).</strong> --suite all plays 57,000 matches: about 74 minutes per seed, and about 6 hours for the five-seed baseline. Every pairing plays 1,000 matches by the product owner's choice.</aside>
+    <aside class="callout callout-warn"><strong>Expected red runs (medium).</strong> Calibration exits 2 and the ignored slow test fails until realism-tuning. The product owner accepted this.</aside>
+    <aside class="callout callout-warn"><strong>Content hash moves (medium).</strong> New formations change tactics.json, so a snapshot saved before this slice is refused on resume. Implement re-derives every pinned hash on the record.</aside>
+    <aside class="callout callout-info"><strong>Band values from local sources (low).</strong> Seven values come from the design document's local Wyscout and StatsBomb outputs, not the document itself. content/README.md cites each one.</aside>
+  </div>
+  <style>
+    .fragment-plan .pl-files { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-plan .pl-files th, .fragment-plan .pl-files td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
+    .fragment-plan .pl-files summary { cursor: pointer; }
+    .fragment-plan .pl-chip { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; opacity: 0.8; }
+    .fragment-plan .pl-card { padding: 6px 0 4px 18px; opacity: 0.9; }
+    .fragment-plan .pl-risks { display: grid; gap: 8px; margin-top: 12px; }
+    @media (max-width: 480px) { .fragment-plan .pl-files th:nth-child(3), .fragment-plan .pl-files td:nth-child(3) { display: none; } }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-plan');
+      var files = 22, modules = 9;
+      var risks = root ? root.querySelectorAll('.pl-risks .callout').length : 0;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'plan', artifact: 'plan', counts: { files: files, modules: modules, risks: risks } } }));
+    })();
+  </script>
+</section>
+</div><div class="prose"><h1 id="plan-realism-bands-version-2" tabindex="-1"><a class="header-anchor" href="#plan-realism-bands-version-2"><span>Plan: Realism Bands, Version 2</span></a></h1>
+<h2 id="current-state" tabindex="-1"><a class="header-anchor" href="#current-state"><span>Current State</span></a></h2>
+<ul>
+<li>Code: HEAD <code>5a235a4</code>. The four research reads in this run cite that tree.</li>
+<li><code>content/realism-bands.json</code> has 9 lines: <code>schema_version</code> 1, <code>sample_size</code> 1000, <code>goals_per_match</code> 2.4–3.2, <code>shots_per_team</code> 8–16, <code>possession_pct</code> 35–65, <code>stronger_team</code> {1.15, 0.5}, <code>wall_minutes_per_sample</code> 30 (lines 2–8).</li>
+<li><code>report/bands.rs</code>: <code>Band</code> (:15–22) and <code>Bands</code> (:52–71) both use <code>deny_unknown_fields</code>. <code>BANDS_VERSION = 1</code> (:12). The loader is <code>Bands::load</code> (:76–79). The tests <code>the_shipped_bands_are_the_accepted_criteria</code> (:99–108) and <code>an_inverted_band_is_refused_naming_the_field</code> (:122–132) pin the values and the goals line.</li>
+<li><code>report/mod.rs</code>:
+<ul>
+<li><code>Suite</code> has <code>Equal</code> and <code>Strength</code> (:19–44). <code>number()</code> feeds <code>match_seed</code> (<code>fixtures.rs:74-76</code>).</li>
+<li><code>RunBuilder::add</code> (:128) keeps each whole <code>MatchStats</code>. <code>suite_figures</code> (:168–241) uses only <code>outcome == &quot;success&quot;</code> records and the closures <code>per_match</code> (:175) and <code>per_team</code> (:179).</li>
+<li><code>SuiteFigures</code> (:57–79) already computes <code>shots_on_target_per_team_mean</code>, <code>xg_per_match_mean</code>, <code>passes_per_team_mean</code>, <code>pass_accuracy_pct_mean</code> and <code>fouls_per_team_mean</code> without a band, and one share, <code>possession_in_band_share</code> (:188–192).</li>
+<li><code>checks()</code> (:244–323) emits the five checks and <code>wall_ms</code> per suite. The wall budget scales with the match count (<code>wall_budget_ms</code>, :311).</li>
+<li><code>outlier()</code> (:144–158) is a per-match predicate over the bands only.</li>
+</ul>
+</li>
+<li>Per-match data for the new figures, all in <code>MatchStats</code>: goals <code>r.goals</code>; red <code>r.laws.red</code> (:280), which counts a straight red and a second yellow; yellow <code>r.laws.yellow</code> (:278), which also counts a second yellow (<code>rules/mod.rs:322,332</code>); shots <code>r.tactics.shots</code>; on target, xG (2 decimals per match, <code>observe/mod.rs:187</code>), passes and pass accuracy in <code>r.figures</code>; corners <code>r.laws.corners</code>. Throw-ins and goal kicks are missing: <code>LawStats</code> (<code>observe/mod.rs:268-330</code>) has no field for them, and <code>LawStats::new</code> (:335–355) does not copy <code>Summary.throw_ins</code> and <code>Summary.goal_kicks</code>.</li>
+<li><code>report/compare.rs</code>: <code>distance()</code> (:253–258) adds <code>|v − centre| / half-width</code> for every row except <code>STRONGER</code> and <code>hi &lt;= lo</code>, so a passing 0 in a 0–0.005 band adds 1.0. <code>compare()</code> drops only <code>wall_ms</code> (:206). Rows are keyed by suite and band.</li>
+<li><code>calibrate/mod.rs</code>: suites run one after another, each on <code>jobs</code> worker processes (:326–358). <code>jobs</code> defaults to the logical core count (:98; 16 on the reference machine). The parent reads every <code>stats/&lt;id&gt;.json</code>, adds it to the builder, and deletes the replay file of a non-outlier (:369–385). Exit code 2 comes from :219–225. An unpaired run prints no band result on stderr. Only <code>calibrate.darkpath</code> (:397) and <code>calibrate.worker_failed</code> (:340) warn.</li>
+<li>Formations: four in <code>content/tactics.json</code> (:5, :21, :37, :53), found by name through <code>TacticsSchema::formation_index</code> (<code>data/tactics.rs:382</code>). A test pins 4 (<code>data/tactics.rs:436</code>). The computer manager starts in <code>ai.formation</code> “4-4-2” (<code>tactics.json:211</code>) and its in-match patches change only mentality and instructions (<code>ai.rs:266-291</code>). So a formation set through <code>MatchConfig::with_tactics</code> (<code>sim.rs:159-166</code>) after <code>Tactics::set_formation</code> (<code>tactics/mod.rs:58</code>) holds for the whole match. <code>tests/mentality.rs:21-26</code> shows this pattern. The lineup editor and the tactics panel list formations from the schema in a <code>&lt;select&gt;</code> (<code>web/lineup-editor.mjs:75-81</code>).</li>
+<li>Schemas (<code>boon</code> 0.6.1, draft 2020-12): <code>match-stats.schema.json</code> requires the <code>stats.*</code> keys in the <code>else</code> branch (:308–331) and allows extra keys (:332). <code>run-report.schema.json</code> lists the suite names <code>equal</code> and <code>strength</code> as an enum in three places (:227–230, :272–275, :430–433). It requires seven suite figures (:234–242).</li>
+<li>Tests at this tree: <code>cargo test -p engine-cli --bin engine-cli report</code> gave 14 passed. <code>--test schemas</code> gave 4, <code>--test calibrate</code> 2 passed and 1 ignored, <code>--test docs</code> 3 passed. <code>calibrate_pair.rs:164-173</code> pins five compare rows. The ignored slow test (<code>calibrate.rs:146-183</code>) pins the band names and exit 0.</li>
+<li>Timing: 1,000 matches take about 78 s per suite with 16 workers (<code>06-verify-calibration.md:124</code>).</li>
+<li>The slice definition names <code>docs/design/realism/01-engine-realism.md</code> as the source of the values. Four values are in that document: goalless share (:120), pass accuracy (:124), throw-ins and goal kicks (:128). The other seven come from its local sources: <code>.scratch/out/FINDINGS.md:140-153</code>, <code>.scratch/out/ACTIONS.md:345-347, 413, 562</code>, and a count over the Wyscout match files <code>.scratch/out/wy2_*.csv</code> (0 of 1,941 matches with 10 or more goals; 15.7% with a sending-off; 428.6 passes and 4.98 corners per team). The values are the product owner’s answer Q-E1 and do not change.</li>
+</ul>
+<h2 id="simplicity-ladder" tabindex="-1"><a class="header-anchor" href="#simplicity-ladder"><span>Simplicity Ladder</span></a></h2>
+<ul>
+<li>Eleven band fields → rung 3 reuse — <code>report/bands.rs</code> → <code>Band</code> with <code>#[garde(dive)]</code>, exact match; reuse as-is.</li>
+<li>Shares (10 or more goals, sending-off, goalless) → rung 3 reuse — <code>report/mod.rs</code> → the <code>per_match</code> closure with a 0/1 indicator and <code>mean()</code> (:175, :347), the same pattern as <code>possession_in_band_share</code>; reuse as-is.</li>
+<li>Per-team means (yellows, corners) and per-match means (throw-ins, goal kicks) → rung 3 reuse — <code>per_team</code> and <code>per_match</code>; reuse as-is. <code>passes_per_team_mean</code> and <code>pass_accuracy_pct_mean</code> already exist; reuse as-is.</li>
+<li>Pooled ratios (shots on target over shots, goals over xG) → rung 1 stdlib — <code>f64</code> division with an explicit guard. Rust has no safe-ratio built-in, and <code>serde_json</code> writes a non-finite <code>f64</code> as <code>null</code> (<code>serde_json-1.0.151/src/ser.rs:169-180</code>), so a small <code>ratio(num, den)</code> helper returns 0.0 when <code>den &lt;= 0</code>.</li>
+<li>Throw-ins and goal kicks in the record → rung 3 reuse — <code>sim.rs</code> → <code>Summary.throw_ins</code> and <code>Summary.goal_kicks</code> exist; add the two fields to <code>LawStats</code> and copy them in <code>LawStats::new</code>.</li>
+<li>Formations suite → rung 3 reuse with modification — <code>calibrate/fixtures.rs</code> → <code>fixtures()</code> and <code>double_round_robin()</code> supply the clubs; <code>worker.rs</code> sharding by <code>index % shards</code> (:58–61) and the parent read-back are reused; <code>MatchConfig::with_tactics</code> and <code>Tactics::set_formation</code> apply the formation. New code: the pairing list and the pairing figures (rung 4, because nothing enumerates formation pairs today).</li>
+<li>Six new formations → rung 3 reuse — <code>content/tactics.json</code> slot objects over the ten existing position codes (<code>data/team.rs:17-28</code>); data only.</li>
+<li>Failing-band stderr lines → rung 3 reuse — <code>tracing::warn!</code> with a <code>signal</code> field, as in <code>calibrate.darkpath</code> (:397).</li>
+<li>Floor-band distance → rung 4 new code — one branch in <code>distance()</code>; no existing helper covers a one-sided band.</li>
+<li>Outlier-only replay files → rung 3 reuse with modification — <code>RunBuilder::outlier()</code> becomes a free function <code>report::is_outlier(&amp;Bands, &amp;MatchStats)</code> that the worker and the parent share.</li>
+</ul>
+<h2 id="applied-learnings" tabindex="-1"><a class="header-anchor" href="#applied-learnings"><span>Applied Learnings</span></a></h2>
+<p>No applicable learnings found (<code>.ai/solutions/INDEX.md</code> does not exist, and <code>solutions.globalDir</code> is not set).</p>
+<p>Repeat-deferral tripwire: the two open deferrals (the legibility reading and the macOS build) name a human reader and Apple hardware. This slice’s verification needs neither, so the tripwire does not fire.</p>
+<h2 id="likely-files-areas-to-touch" tabindex="-1"><a class="header-anchor" href="#likely-files-areas-to-touch"><span>Likely Files / Areas to Touch</span></a></h2>
+<ul>
+<li><code>content/realism-bands.json</code>: version 2 and eleven bands.</li>
+<li><code>content/tactics.json</code>: six formations appended.</li>
+<li><code>content/README.md</code>: the bands with units, values and sources; the new formations.</li>
+<li><code>schemas/observability/match-stats.schema.json</code>: two new required statistics.</li>
+<li><code>schemas/observability/run-report.schema.json</code>: the formations suite, the new figures, <code>pairing</code>, <code>calib.formations</code>.</li>
+<li><code>crates/engine/src/observe/mod.rs</code>: <code>LawStats</code> fields and copy; the literal at :598; the contract-key test at :622–650.</li>
+<li><code>crates/engine/src/data/tactics.rs</code>: the formation count test (:436).</li>
+<li><code>crates/engine/tests/resume.rs</code>: the contract-key list (:70–83).</li>
+<li><code>crates/engine-cli/src/report/bands.rs</code>, <code>report/mod.rs</code>, <code>report/compare.rs</code>: bands, figures, checks, pairings, distance.</li>
+<li><code>crates/engine-cli/src/calibrate/fixtures.rs</code>, <code>worker.rs</code>, <code>mod.rs</code>: the formations suite, stderr lines, replay files.</li>
+<li><code>crates/engine-cli/src/cli.rs</code>: <code>SuiteArg::Formations</code> and its help (:416–424, :494–499).</li>
+<li><code>crates/engine-cli/tests/schemas.rs</code>, <code>calibrate.rs</code>, <code>calibrate_pair.rs</code>: the tests.</li>
+<li><code>.ai/observability.md</code>: the contract keys (:33–44, :139–142, :172–173, :225–226).</li>
+<li><code>docs/reference/cli.md</code> (:186–210), <code>docs/reference/data-files.md</code> (:25), <code>docs/how-to/modding.md</code> (:43).</li>
+<li>Not touched: <code>dist/stage*/content/</code> (build output, regenerated by packaging), <code>.kilo/worktrees/</code> (another tool’s worktree), <code>docs/design/realism/*</code> (another programme’s staged document).</li>
+</ul>
+<h2 id="proposed-change-strategy" tabindex="-1"><a class="header-anchor" href="#proposed-change-strategy"><span>Proposed Change Strategy</span></a></h2>
+<p>The engine does not change. Every new number comes from counters the engine already keeps, and the six formations are data that the computer manager never picks by default. So equal-suite and strength-suite matches for a given seed stay the same, and the baseline measures the engine exactly as <code>5a235a4</code> plays.</p>
+<p>Charter C7 (at-risk, <code>00-index.md</code>) commits to realistic statistics “for every shipped formation and after a sending-off”. This slice gives C7 its measurement. The fixes belong to the next three slices. Charter C1 (a match in under 2,000 ms on one thread) is not affected, because the per-tick code does not change.</p>
+<p>Suite design:</p>
+<ul>
+<li>The equal suite checks the eleven new bands.</li>
+<li>The strength suite does not change.</li>
+<li>The formations suite plays <code>pairings × matches</code> fixtures in one worker pool. Fixture <code>i</code> belongs to pairing <code>i / matches</code> at local index <code>i % matches</code>. It takes the clubs of equal-suite fixture <code>local</code>. The first formation of the pairing is at home when <code>local</code> is even. The parent derives the pairing from the index, as it derives <code>boosted_side</code> today, so the record needs no new field. Each pairing gets three checks: <code>goals_per_match</code>, <code>ten_plus_goals_share</code> and <code>goalless_share</code>, each with a <code>pairing</code> field such as <code>&quot;4-3-3 v 4-4-2&quot;</code>.</li>
+</ul>
+<p>Figure definitions, chosen to match how the reference values were measured:</p>
+<ul>
+<li>Shares are per match: a sending-off share counts a match with <code>laws.red[0] + laws.red[1] &gt; 0</code> (the source counts a straight red and a second yellow, 15.7%).</li>
+<li>Shots on target share and goals per xG are pooled ratios of totals, because the sources derive them that way (35.0% of all shots; 2.93 goals over 2.96 xG).</li>
+<li>Pass accuracy keeps the mean of per-team percentages (the source is 81.6% per team-match).</li>
+<li>Yellow cards per team include a second yellow, as the engine counts it. The source’s 3.83 yellows per match does not count the 0.085 second yellows per match, so the difference is under 0.05 per team.</li>
+</ul>
+<p>Time savings, all without fewer matches:</p>
+<ul>
+<li>One pool for all 55 pairings. Workers wait only at the three suite boundaries.</li>
+<li>Step 11 measures the replay-file cost. If writing and deleting non-outlier replay files costs 5% or more of a suite’s wall time, the worker decides the outlier itself and writes only outlier files. <code>events.files_written</code> then counts the files written, which equals <code>events.files_kept</code> on a run with outlier retention.</li>
+<li>The 4-4-2 mirror pairing is not taken from the equal suite. It would save 2% and would couple two suites.</li>
+</ul>
+<h2 id="step-by-step-plan" tabindex="-1"><a class="header-anchor" href="#step-by-step-plan"><span>Step-by-Step Plan</span></a></h2>
+<ol>
+<li><strong>Bands file version 2.</strong>
+<ol>
+<li>Set <code>schema_version</code> to 2 in <code>content/realism-bands.json</code>.</li>
+<li>Add <code>ten_plus_goals_share</code> {0, 0.005}, <code>sending_off_share</code> {0.08, 0.22}, <code>yellow_cards_per_team</code> {1.2, 2.6}, <code>shots_on_target_share</code> {0.30, 0.42}, <code>goals_per_xg</code> {0.85, 1.15}, <code>passes_per_team</code> {350, 550}, <code>pass_accuracy_pct</code> {75, 88}, <code>corners_per_team</code> {3.5, 6.5}, <code>throw_ins_per_match</code> {35, 55}, <code>goal_kicks_per_match</code> {12, 22} and <code>goalless_share</code> {0.04, 0.12}. Shares are fractions from 0 to 1, as <code>min_win_rate</code> is. Percentages stay as <code>possession_pct</code> is.</li>
+<li>In <code>report/bands.rs</code>, set <code>BANDS_VERSION</code> to 2 and add the eleven <code>Band</code> fields with <code>#[garde(dive)]</code>. Add <code>Band::is_floor()</code> (<code>lo == 0.0</code>).</li>
+<li>Update the pinned-values test. Add a test that a version-1 file is refused with a message that names the file and the version. Add a test that a file without <code>goals_per_xg</code> is refused and names that field.</li>
+</ol>
+</li>
+<li><strong>Record fields.</strong> Add <code>#[serde(rename = &quot;stats.throw_ins&quot;)] throw_ins: [u32; 2]</code> and <code>stats.goal_kicks</code> to <code>LawStats</code>. Copy both in <code>LawStats::new</code>. Update the literals at <code>worker.rs:207</code> and <code>observe/mod.rs:598</code>, the contract-key test (<code>observe/mod.rs:622-650</code>) and <code>tests/resume.rs:70-83</code>.</li>
+<li><strong>Match-stats schema.</strong> Declare both keys as two-element arrays of integers of 0 or more, as <code>stats.corners</code> is (:173–181). Add both to the success <code>required</code> list. In <code>tests/schemas.rs</code>, assert that a real <code>simulate</code> record carries both keys, and that a record without <code>stats.throw_ins</code> is refused.</li>
+<li><strong>Figures.</strong> Add these fields to <code>SuiteFigures</code>, each from <code>outcome == &quot;success&quot;</code> records: <code>ten_plus_goals_share</code>, <code>goalless_share</code>, <code>sending_off_share</code>, <code>yellow_cards_per_team_mean</code>, <code>shots_on_target_share</code>, <code>goals_per_xg</code>, <code>corners_per_team_mean</code>, <code>throw_ins_per_match_mean</code> and <code>goal_kicks_per_match_mean</code>. Add <code>ratio(num, den)</code>, which returns 0.0 when <code>den &lt;= 0</code>. A 0.0 ratio fails its band, because every ratio band has <code>lo &gt; 0</code>.</li>
+<li><strong>Equal-suite checks.</strong> Add the eleven checks to <code>checks()</code> after the existing four, in the band-file order. Use one local helper for a <code>Band</code> check so each check is one line.</li>
+<li><strong>Formation data.</strong> Append six formations to <code>content/tactics.json</code> after 3-5-2, modelled on the shipped slot style (x from the own goal line, y across the pitch):
+<ul>
+<li><code>4-1-4-1</code>: back four as 4-4-2; DM (36, 0); LW (48, −24), CM (48, −8), CM (48, 8), RW (48, 24); ST (66, 0).</li>
+<li><code>4-4-1-1</code>: back four and midfield four as 4-4-2; AM (57, 0); ST (66, 0).</li>
+<li><code>4-1-2-1-2</code>: back four; DM (36, 0); CM (45, −14), CM (45, 14); AM (55, 0); ST (65, −8), ST (65, 8).</li>
+<li><code>3-4-3</code>: CB (24, −14), CB (22, 0), CB (24, 14); LB (44, −26), CM (44, −8), CM (44, 8), RB (44, 26); LW (62, −22), ST (66, 0), RW (62, 22).</li>
+<li><code>5-3-2</code>: LB (30, −26), CB (23, −14), CB (21, 0), CB (23, 14), RB (30, 26); CM (43, −15), DM (38, 0), CM (43, 15); ST (63, −8), ST (63, 8).</li>
+<li><code>5-4-1</code>: back five as 5-3-2; LW (46, −24), CM (44, −8), CM (44, 8), RW (46, 24); ST (64, 0).
+Update the count test in <code>data/tactics.rs:436</code> to 10 and pin the names in order. The content validator must accept every new formation.</li>
+</ul>
+</li>
+<li><strong>Formation pairings.</strong> In <code>calibrate/fixtures.rs</code>, add <code>pairings(n) -&gt; Vec&lt;[usize; 2]&gt;</code>, which lists every <code>[a, b]</code> with <code>a &lt;= b</code> (55 for 10 formations). Add <code>formation_fixture(matches, pairings, i)</code>, which gives the pairing, the local index, the clubs of equal fixture <code>local</code> and the home side. Add tests: 55 pairings for 10; the formation at home alternates; the clubs at local index <code>k</code> equal the equal-suite clubs at <code>k</code>.</li>
+<li><strong>Formations suite.</strong> Add <code>Suite::Formations</code> (code <code>formations</code>, <code>number()</code> 2) and <code>SuiteArg::Formations</code>. Include it in <code>Suite::ALL</code>, so <code>--suite all</code> runs it. Plan <code>pairings × matches</code> fixtures for it. In the worker, give each side <code>Tactics::defaults(schema).set_formation(idx, schema)</code> through <code>MatchConfig::with_tactics</code>. In the parent, pass the pairing to the builder with each record. Update the <code>--suite</code> help in <code>cli.rs</code> to list <code>formations</code>. Every help line must stay under 80 columns.</li>
+<li><strong>Pairing figures and checks.</strong> Add <code>PairingFigures { pairing: [String; 2], matches, goals_per_match_mean, goals_for_mean: [f64; 2], ten_plus_goals_share, goalless_share }</code> and write the list as <code>calib.formations</code>. Add <code>pairing: Option&lt;String&gt;</code> to <code>BandCheck</code>, skipped when absent. Emit the three goal-band checks for each pairing. Sort the checks by suite, band and pairing.</li>
+<li><strong>Failing bands on stderr.</strong> After the checks are computed, emit one <code>tracing::warn!</code> for each failing check: <code>signal = &quot;calibrate.band_failed&quot;</code>, with <code>run.id</code>, <code>suite</code>, <code>band</code>, <code>pairing</code> when present, <code>value</code>, <code>lo</code> and <code>hi</code>. The line is visible at the default <code>SM_LOG=warn</code> level. Paired runs emit the lines too, before the table.</li>
+<li><strong>Replay-file cost (measured gate).</strong>
+<ol>
+<li>On the release build, run <code>engine-cli calibrate --seed 42 --suite equal --matches 1000 --keep-events outliers</code> and then the same with <code>--keep-events all</code>. Record both <code>calib.wall_ms</code> figures.</li>
+<li>If writing non-outlier replay files costs 5% or more, move the predicate to a free function <code>report::is_outlier(&amp;Bands, &amp;MatchStats)</code>. Make the worker buffer a match’s events and write the file only for an outlier when retention is <code>outliers</code>. Keep the parent’s delete for the retention <code>all</code> case.</li>
+<li>If the cost is under 5%, record the figures and make no change.</li>
+</ol>
+</li>
+<li><strong>Paired-run distance.</strong> In <code>compare.rs</code>, key rows by suite, band and pairing. In <code>distance()</code>, for a floor band (<code>lo == 0</code> and <code>hi &gt; 0</code>), add <code>max(0, v − hi) / hi</code>. Other rows keep today’s formula. Add tests: a floor band at 0 adds 0.0; at twice <code>hi</code> it adds 1.0; the goals row is unchanged.</li>
+<li><strong>Run-report schema, contract and documents.</strong>
+<ol>
+<li>Add <code>formations</code> to the three suite enums. Add the new suite figures and require them. Add an optional <code>pairing</code> string to the <code>calib.bands</code> and <code>calib.compare</code> items. Add a <code>calib.formations</code> array of pairing figures, optional because <code>--suite equal</code> omits it.</li>
+<li>Update <code>.ai/observability.md</code>: the two record keys, the version-2 bands, the formations suite, <code>calib.formations</code>, <code>pairing</code>, and the signal <code>calibrate.band_failed</code>.</li>
+<li>Update <code>content/README.md</code> with every band’s unit, range, real value and source (file and line, as in Current State), and the six formations. Update <code>docs/reference/cli.md</code> (the <code>--suite</code> values, the pairing count, about 74 minutes per seed on the reference machine, the stderr lines), <code>docs/reference/data-files.md:25</code> and <code>docs/how-to/modding.md:43</code>.</li>
+</ol>
+</li>
+<li><strong>Tests and the baseline.</strong>
+<ol>
+<li>Update the report unit tests. Extend the <code>record()</code> helper (<code>report/mod.rs:531-570</code>) with the new figures, and give it realistic defaults so the existing “all pass” test stays meaningful. Re-pin the equal-suite band list and the failed list.</li>
+<li>Update the pinned rows in <code>calibrate_pair.rs:164-173</code>. Keep that test on <code>--suite equal</code> so it stays fast.</li>
+<li>In <code>calibrate.rs</code>, add a formations smoke test: <code>calibrate --seed 1 --suite formations --matches 1 --minutes 5 --jobs 2</code> writes a valid report with 55 <code>calib.formations</code> rows, each with <code>matches</code> 1. Add a test that stderr names a failing band. Make the slow test assert every band and exit 0 (Q-P3).</li>
+<li>Run <code>cargo fmt --check</code>, <code>cargo clippy --workspace --all-targets -- -D warnings</code> and <code>cargo test --workspace</code>. Everything must pass except the ignored slow test.</li>
+<li>Check every pinned content hash and snapshot fixture that <code>tactics.json</code> moves. Re-derive each one and record it in the implement record.</li>
+<li>Build the release binary. For each seed in 42, 1, 7, 99 and 2026, run <code>engine-cli calibrate --seed &lt;s&gt; --matches 1000 --out &lt;scratch&gt;/baseline/s&lt;s&gt;</code>. Each run must exit 2. Record every band’s value, range and verdict per seed, and every failing pairing, in <code>05-implement-realism-bands-v2.md</code> as the baseline (Q-P9).</li>
+<li>Run <code>engine-cli bench --seed 42 --matches 5 --json</code>. The figures must stay within the tripwires in <code>05c-benchmark.md</code> (+10% CPU per tick, +25% peak memory).</li>
+</ol>
+</li>
+</ol>
+<h2 id="verification-strategy" tabindex="-1"><a class="header-anchor" href="#verification-strategy"><span>Verification Strategy</span></a></h2>
+<table class="prose-table">
+<thead>
+<tr>
+<th>AC</th>
+<th>Tool / method + ladder rung</th>
+<th>Environment need — satisfiable in target env?</th>
+<th>What must be BUILT to make it verifiable</th>
+<th>Fallback chain</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Every band is reported</td>
+<td><code>engine-cli calibrate --seed 42</code> on the release binary, read <code>report.json</code> and the exit code (cli-direct, live)</td>
+<td>Windows reference machine, release build — yes</td>
+<td>nothing beyond steps 1–5</td>
+<td>the ignored slow test → the smoke test with <code>--minutes 5</code> (proxy for shape only)</td>
+</tr>
+<tr>
+<td>The baseline is recorded</td>
+<td>the same run, read stderr for <code>calibrate.band_failed</code> lines (cli-direct, live)</td>
+<td>same — yes</td>
+<td>step 10</td>
+<td>none needed</td>
+</tr>
+<tr>
+<td>Formations are reported</td>
+<td><code>engine-cli calibrate --seed 42 --suite formations</code>, read <code>calib.formations</code> and the pairing checks (cli-direct, live)</td>
+<td>same — yes; about 72 minutes</td>
+<td>steps 6–9</td>
+<td>the smoke test with 1 match per pairing (shape only)</td>
+</tr>
+<tr>
+<td>New keys pass the schema</td>
+<td><code>engine-cli simulate --seed 7</code>, validate <code>stats.json</code> with the schema test (cli-direct, headless validator)</td>
+<td>same — yes</td>
+<td>step 3</td>
+<td>none needed</td>
+</tr>
+</tbody>
+</table>
+<p>No acceptance criterion depends on an environment outside the reference machine, so no <code>constraint-resolution:</code> line is needed.</p>
+<h2 id="test-verification-plan" tabindex="-1"><a class="header-anchor" href="#test-verification-plan"><span>Test / Verification Plan</span></a></h2>
+<h3 id="automated-checks" tabindex="-1"><a class="header-anchor" href="#automated-checks"><span>Automated checks</span></a></h3>
+<ul>
+<li><code>cargo fmt --check</code> and <code>cargo clippy --workspace --all-targets -- -D warnings</code>.</li>
+<li><code>cargo test -p engine-cli --bin engine-cli report</code> and <code>calibrate</code>: bands, figures, checks, pairings, distance.</li>
+<li><code>cargo test -p engine-cli --test schemas --test calibrate --test calibrate_pair --test cli_args --test docs</code>.</li>
+<li><code>cargo test -p engine --test resume</code> and the <code>data::tactics</code> and <code>observe</code> unit tests.</li>
+<li><code>cargo test --workspace</code>: every test passes except the ignored slow test.</li>
+<li>Web unit tests (<code>node --test web/tests</code>) still pass with 10 formations.</li>
+<li>The ignored slow test is run once on the release build and is expected to fail on the new bands. Its output goes in the implement record.</li>
+</ul>
+<h3 id="interactive-verification-human-in-the-loop" tabindex="-1"><a class="header-anchor" href="#interactive-verification-human-in-the-loop"><span>Interactive verification (human-in-the-loop)</span></a></h3>
+<ul>
+<li><strong>The baseline (CLI).</strong> Drive the release <code>engine-cli.exe</code> directly, with <code>SM_DATA_DIR</code> in a scratch folder, for the five seeds in step 14.6. Capture <code>report.json</code>, stdout and stderr for each seed under <code>implement-evidence/realism-bands-v2/</code> and <code>verify-evidence/realism-bands-v2/</code>. Pass: every run exits 2, every report validates, and stderr names each failing band.</li>
+<li><strong>The new formations in the viewer (web).</strong> The formation list is user-visible. Start <code>engine-cli launch</code>. Open the page in the in-app browser (<code>Claude_Browser</code>, the chosen driver, Q29). Open the lineup editor and read the <code>formation</code> select (<code>data-testid=&quot;formation&quot;</code>). Pass: 10 options, the new six after the shipped four. Pick 5-4-1, start the match, and take a screenshot of the pitch. Pass: 11 home markers in the 5-4-1 shape. Save the screenshots in <code>verify-evidence/realism-bands-v2/</code>.</li>
+</ul>
+<h2 id="risks-watchouts" tabindex="-1"><a class="header-anchor" href="#risks-watchouts"><span>Risks / Watchouts</span></a></h2>
+<ul>
+<li><strong>Run time (high).</strong> <code>--suite all</code> plays 57,000 matches: about 74 minutes per seed, and about 6 hours for the baseline. Run the baseline in the background, one seed at a time, and record the wall time of each. A paired run (<code>--pair</code>) plays both arms, so it takes about 2.5 hours.</li>
+<li><strong>Expected red runs (medium).</strong> Calibration exits 2 and the slow test fails until <code>realism-tuning</code>. The implement record states this at its top.</li>
+<li><strong>Content hash (medium).</strong> New formations change the content hash. A snapshot saved before this slice is refused on resume (<code>snapshot.rs:239</code>). This is designed behaviour. Pinned hashes and replay fixtures (for example <code>web/tests/data/one-minute.smfx</code>) are checked in step 14.5.</li>
+<li><strong>Compare rows grow (medium).</strong> A paired run now has 11 + 165 more rows. The pass count comes first in the verdict, so the formations rows weigh most. This is intended: the formations are where the regression shows.</li>
+<li><strong>Formation slot positions (low).</strong> The coordinates in step 6 are a starting point. The defending slice may move them. Because indices 0 to 3 do not move, saved lineups keep their formation.</li>
+<li><strong>Next slices’ criteria.</strong> <code>defending-and-discipline</code> measures each formation against 4-4-2 at no more than 4.0 goals per side, and <code>realism-tuning</code> tightens this to the goals band. With the all-against-all suite (Q-P1), their plans read those criteria over all 55 pairings.</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<ul>
+<li><code>calibration</code> (complete): the harness, the bands loader and the report that this slice extends.</li>
+<li><code>probe-engine-core</code> (complete): the <code>error</code> outcome and the schema shape. Records with <code>outcome: error</code> stay out of every figure.</li>
+<li><code>tactics-and-ai</code> (complete): <code>Tactics::set_formation</code> and the computer manager, which keeps the formation in play.</li>
+<li>Later: <code>defending-and-discipline</code>, <code>keeper-and-shots</code>, <code>tempo-and-restarts</code> and <code>realism-tuning</code> read this slice’s baseline and bands.</li>
+</ul>
+<h2 id="assumptions" tabindex="-1"><a class="header-anchor" href="#assumptions"><span>Assumptions</span></a></h2>
+<ul>
+<li>A1 (class: implementation-detail): shares are stored as fractions and percentages as 0–100, matching the existing file.</li>
+<li>A2 (class: implementation-detail): the formations suite checks the three goal bands, reading “check goal bands” in Q-P1 as goals per match, the 10 or more goals share and the goalless share.</li>
+<li>A3 (class: implementation-detail): pairings are unordered with mirrors, and home and away alternate inside each pairing, so 10 formations give 55 pairings.</li>
+<li>A4 (class: implementation-detail): the 4-4-2 mirror pairing is played in the formations suite and not reused from the equal suite. The saving is 2%.</li>
+<li>A5 (class: implementation-detail): no augmentation is re-authored. The engine’s per-tick code does not change, so the benchmark baseline in <code>05c-benchmark.md</code> stays valid and step 14.7 re-checks it. The new keys join the contract in step 13 and add no dark path, so <code>04b-instrument.md</code> does not change. <code>04c-experiment.md</code> is not involved.</li>
+<li>A6 (class: implementation-detail): no consult ran. The trigger <code>appetite-medium-or-larger</code> holds, but the product owner excluded <code>consult</code> at intake (<code>stack.excluded-by-po</code>), so <code>consult-runs: []</code>.</li>
+</ul>
+<h2 id="blockers" tabindex="-1"><a class="header-anchor" href="#blockers"><span>Blockers</span></a></h2>
+<p>None.</p>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<ul>
+<li><code>serde</code> 1.0.229, <code>serde_derive</code> 1.0.229, <code>serde_json</code> 1.0.151 and <code>boon</code> 0.6.1 are the newest stable releases on <a href="http://crates.io">crates.io</a> (<a href="http://crates.io">crates.io</a> API, read in this run). No upgrade is needed.</li>
+<li><code>deny_unknown_fields</code> refuses extra keys only. A missing field is refused unless it has <code>#[serde(default)]</code> or is an <code>Option</code> (<code>serde_derive-1.0.229/src/de.rs:766-806</code>; <code>serde-1.0.229/src/private/de.rs:24-60</code>). So required new fields give Q-P7 its refusal with no extra code.</li>
+<li><code>serde_json</code> writes a NaN or an infinite <code>f64</code> as <code>null</code> (<code>serde_json-1.0.151/src/ser.rs:169-180</code>). The <code>ratio</code> guard in step 4 prevents a <code>null</code> figure.</li>
+<li><code>boon</code> uses draft 2020-12 by default (<code>boon-0.6.1/src/compiler.rs:66-71</code>), and a <code>required</code> inside <code>then</code> or <code>else</code> applies only on that branch (<code>validator.rs:736-744</code>). So the new record keys are required on success records only.</li>
+</ul>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option A (default): Implement</strong> → <code>/wf implement football-manager-match-engine realism-bands-v2</code>. The plan is complete and has no blocker. Compact the session first. The baseline in step 14.6 runs for about 6 hours, so start it in the background.</li>
+<li><strong>Option C: Revisit slice</strong> → <code>/wf slice football-manager-match-engine</code>. Choose this only if the all-against-all formations suite should move to its own slice.</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-23T22:29:35Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/04-plan-realism-bands-v2.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">plan</a><span class="m-sheet-here" aria-current="page">realism-bands-v2</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/04-plan-realism-bands-v2.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-23T22:29:35Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

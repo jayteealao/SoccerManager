@@ -1,0 +1,36 @@
+<section class="fragment-benchmark" data-artifact="benchmark" data-slice="defending-and-discipline" data-mode="baseline">
+  <!-- @include-skip the metric table is hand-inlined as in the prior revisions of this artifact -->
+  <table class="bm-metrics">
+    <thead><tr><th>Metric</th><th>Baseline (2089ed7)</th><th>Tripwire</th><th>Unit</th><th>Direction</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr data-role="gate"><td>bench.cpu_us_per_tick</td><td>1.4753</td><td>1.6228</td><td>us</td><td>lower is better</td><td>gate</td></tr>
+      <tr data-role="gate"><td>bench.peak_mem_mb</td><td>6.617</td><td>8.27</td><td>MB</td><td>lower is better</td><td>gate</td></tr>
+      <tr data-role="report"><td>bench.cpu_ms_per_match</td><td>422.0</td><td>reported (464.2)</td><td>ms</td><td>lower is better</td><td>reported</td></tr>
+      <tr data-role="report"><td>bench.match_wall_ms</td><td>424</td><td>budget 2000</td><td>ms</td><td>lower is better</td><td>reported</td></tr>
+      <tr data-role="report"><td>bench.ticks_per_match</td><td>286050</td><td>at most 360000</td><td>ticks</td><td>lower is better</td><td>reported</td></tr>
+      <tr data-role="report"><td>engine.ticks_per_s</td><td>674646</td><td>none</td><td>ticks/s</td><td>higher is better</td><td>reported</td></tr>
+      <tr data-role="report"><td>criterion.tick_step_us</td><td>1.4903</td><td>none</td><td>us</td><td>lower is better</td><td>reported</td></tr>
+      <tr data-role="report"><td>criterion.steering_pass_22_ns</td><td>888.01</td><td>none</td><td>ns</td><td>lower is better</td><td>reported</td></tr>
+      <tr data-role="report"><td>bench.stream_ticks_per_s</td><td>460105</td><td>none</td><td>ticks/s</td><td>higher is better</td><td>reported</td></tr>
+      <tr data-role="gate"><td>bench.stream_peak_mem_mb</td><td>8.1875</td><td>10.23</td><td>MB</td><td>lower is better</td><td>stream gate</td></tr>
+    </tbody>
+  </table>
+
+  <aside class="callout callout-info"><div class="callout-hd">The gate is per tick</div><div class="callout-body">The slice names a +10 percent processor-time-per-tick tripwire, because the goal-side marking search runs every tick. Processor time per match is reported beside it; the new mechanisms change play, so match length may move.</div></aside>
+
+  <aside class="callout callout-info"><div class="callout-hd">A higher stream memory baseline</div><div class="callout-body">The stream workload reads 8.19 MB, up from 7.344 MB at the last comparison. The protocol version 3 messages landed in between, so this is a new baseline, not a regression of this slice.</div></aside>
+
+  <style>
+    .fragment-benchmark .bm-metrics { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-benchmark .bm-metrics th, .fragment-benchmark .bm-metrics td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); }
+    .fragment-benchmark .bm-metrics tr[data-role="gate"] td:first-child { font-weight: 600; }
+    .fragment-benchmark .callout { margin-top: 12px; }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-benchmark');
+      var metrics = root ? root.querySelectorAll('.bm-metrics tbody tr').length : 0;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'benchmark', artifact: 'benchmark', counts: { metrics: metrics, regressions: 0, improvements: 0 } } }));
+    })();
+  </script>
+</section>

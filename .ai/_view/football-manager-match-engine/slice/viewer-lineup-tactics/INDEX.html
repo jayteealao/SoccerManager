@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="slice">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · slice — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="slice">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span aria-hidden="true">/</span><span class="m-here">viewer-lineup-tactics</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · slice</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">viewer-lineup-tactics</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/03-slice-viewer-lineup-tactics.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">03-slice-viewer-lineup-tactics.md</div>
+      <h1 class="pg-title">Slice · <code>viewer-lineup-tactics</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">defined</span><span class="stage-badge">slice</span><span class="meta">2026-09-21T19:50:41Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-slice" tabindex="-1"><a class="header-anchor" href="#the-slice"><span>The Slice</span></a></h2>
+<p>The match-day screen shows the match; the engine accepts queued changes. The manager still has no way to pick a lineup or change tactics from the page, which is the first and fifth step of the core loop and the substance of C1 and C5.</p>
+<p>This slice adds the pre-match lineup editor (formation slots, eleven plus bench from a squad, validation), the Tier 2 tactics panel (mentality, team instructions, roles and duties), the substitution picker, and the pending-change chips that clear when a change applies. The panel opens at any time; changes queue and apply at the next qualifying stoppage.</p>
+<p>Reports and recovery come next; integration proves the whole loop after that. The top risk is the editor’s complexity on a canvas-heavy page; the editor is ordinary DOM, not canvas, so it stays accessible.</p></section>
+    <section class="slice-stages">
+    <h2 class="sdlc-h2">stages</h2>
+    <div class="slice-grid"><a class="slice-card" href="../../plan/viewer-lineup-tactics/INDEX.html"><span class="slice-slug"><code>plan</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../implement/viewer-lineup-tactics/INDEX.html"><span class="slice-slug"><code>implement</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../verify/viewer-lineup-tactics/INDEX.html"><span class="slice-slug"><code>verify</code></span>
+    <span class="status-badge is-ok">complete</span></a></div>
+  </section>
+    
+    <dl class="frontmatter-card"><div><dt>type</dt><dd>slice</dd></div><div><dt>slug</dt><dd>football-manager-match-engine</dd></div><div><dt>slice-slug</dt><dd>viewer-lineup-tactics</dd></div><div><dt>status</dt><dd>defined</dd></div><div><dt>stage-number</dt><dd>3</dd></div><div><dt>created-at</dt><dd>2026-09-21T19:50:41Z</dd></div><div><dt>updated-at</dt><dd>2026-09-21T19:50:41Z</dd></div><div><dt>complexity</dt><dd>l</dd></div><div><dt>depends-on</dt><dd>viewer-match-day, tactics-and-ai</dd></div><div><dt>tags</dt><dd>viewer, lineup, tactics, substitutions</dd></div><div><dt>refs</dt><dd>{&quot;index&quot;:&quot;00-index.md&quot;,&quot;slice-index&quot;:&quot;03-slice.md&quot;,&quot;siblings&quot;:[&quot;03-slice-viewer-match-day.md&quot;,&quot;03-slice-tactics-and-ai.md&quot;,&quot;03-slice-viewer-reports-recovery.md&quot;,&quot;03-slice-integration.md&quot;],&quot;plan&quot;:&quot;04-plan-viewer-lineup-tactics.md&quot;,&quot;implement&quot;:&quot;05-implement-viewer-lineup-tactics.md&quot;}</dd></div></dl>
+    <div class="prose"><h1 id="slice-lineup-editor-and-tactics-panel" tabindex="-1"><a class="header-anchor" href="#slice-lineup-editor-and-tactics-panel"><span>Slice: Lineup Editor and Tactics Panel</span></a></h1>
+<h2 id="goal" tabindex="-1"><a class="header-anchor" href="#goal"><span>Goal</span></a></h2>
+<p>The manager sets the team before kick-off and changes it during the match from the page, with clear feedback on what is pending, applied, or rejected.</p>
+<h2 id="why-this-slice-exists" tabindex="-1"><a class="header-anchor" href="#why-this-slice-exists"><span>Why This Slice Exists</span></a></h2>
+<p>Round 1 Q2 chose eleven plus bench; Q3 chose Tier 2; Round 3 Q11 required the panel at any time with stoppage application; the design brief weights the pre-match screen and the stoppage intervention.</p>
+<h2 id="scope" tabindex="-1"><a class="header-anchor" href="#scope"><span>Scope</span></a></h2>
+<p>In:</p>
+<ul>
+<li>Pre-match lineup editor: formation picker, eleven slots plus up to seven bench slots, click or drag from the squad list, role fit and fitness per slot, inline validation, kick-off disabled until legal.</li>
+<li>Tactics panel: mentality, 6 to 8 team instructions, roles and duties per slot; available during play and while paused.</li>
+<li>Substitution picker with the remaining-count display; rejected changes show the engine’s reason.</li>
+<li>Pending-change chips (named mechanism: <strong>pending-change list</strong>, mirrors the engine’s queue so the manager sees what is queued, applied, or rejected).</li>
+<li>DOM-based editor; keyboard operable; focus rings; color never the only indicator.</li>
+</ul>
+<p>Out:</p>
+<ul>
+<li>Set-piece routines and per-player instructions (Tier 3): out of scope.</li>
+<li>Reports, recovery: <code>viewer-reports-recovery</code>.</li>
+</ul>
+<h2 id="acceptance-criteria" tabindex="-1"><a class="header-anchor" href="#acceptance-criteria"><span>Acceptance Criteria</span></a></h2>
+<ul>
+<li>Given fewer than eleven starters, no goalkeeper, or a player placed twice, Then kick-off is disabled and the reason shows inline; and Given a legal lineup, Then kick-off is enabled.<!-- observable: true — visible validation -->
+verify: { method: in-app browser drive with screenshots for each illegal case and the legal case (Playwright later), env: Windows 11, Node 22, engine built with tactics-and-ai, fixture: generated squad seed 11, rung: web-2 }</li>
+<li>Given the manager queues a mentality change during play, Then a pending chip shows, and at the next dead ball the chip clears and the feed shows “Tactical change applied”.<!-- observable: true — visible chip lifecycle -->
+verify: { method: in-app browser drive against the live engine with the socket on, env: as above, fixture: seed 42 default teams, rung: web-2 }</li>
+<li>Given the manager queues a substitution, Then it applies at the next dead ball, the lineup panel swaps the players, and the remaining count decrements.<!-- observable: true — visible lineup change -->
+verify: { method: in-app browser drive against the live engine, env: as above, fixture: seed 42, rung: web-2 }</li>
+<li>Given the substitution limit is used, When the manager queues another, Then the page shows the engine’s rejection reason.<!-- observable: true — visible rejection -->
+verify: { method: in-app browser drive against the live engine after five substitutions, env: as above, fixture: seed 42, rung: web-2 }</li>
+<li>Given the tactics panel is open while paused, When the manager changes a role and resumes, Then the change applies at the next dead ball, not at resume.<!-- observable: true — visible timing -->
+verify: { method: in-app browser drive reading the applied-event minute, env: as above, fixture: seed 42, rung: web-2 }</li>
+<li>Given keyboard-only operation, Then every slot, control, and picker is reachable and operable with visible focus.<!-- observable: false — a Testing Library test over roles and focus order -->
+</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<ul>
+<li><code>viewer-match-day</code>: the page and the lineup panel it updates.</li>
+<li><code>tactics-and-ai</code>: the change queue, rejection reasons, and the tactics model.</li>
+</ul>
+<h2 id="risks" tabindex="-1"><a class="header-anchor" href="#risks"><span>Risks</span></a></h2>
+<ul>
+<li>Drag and drop on the editor fights accessibility: click-to-place is primary; drag is an enhancement.</li>
+<li>Tier 2 instruction count grows: the panel renders from the tactics schema, so new instructions need no UI change.</li>
+</ul></div>
+    
+  
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-21T19:50:41Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/03-slice-viewer-lineup-tactics.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">slice</a><span class="m-sheet-here" aria-current="page">viewer-lineup-tactics</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/03-slice-viewer-lineup-tactics.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-21T19:50:41Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

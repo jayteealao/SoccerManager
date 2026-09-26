@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="project-context">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Design context — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="project-context">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">__project__</a><span aria-hidden="true">/</span><a href="../INDEX.html">project</a><span aria-hidden="true">/</span><span class="m-here">DESIGN.html</span></span></div>
+    <h1 class="m-title">Design context</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">__project__</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">project</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">DESIGN.html</b></div>
+    <div class="actions"><a href="../../../DESIGN.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">DESIGN.md</div>
+      <h1 class="pg-title">Design context</h1>
+      <p class="sdlc-lede">source DESIGN.md</p>
+      <div class="meta-row"><span class="status-badge is-ok">active</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <dl class="frontmatter-card"><div><dt>type</dt><dd>project-context</dd></div><div><dt>title</dt><dd>Design context</dd></div><div><dt>status</dt><dd>active</dd></div><div><dt>source</dt><dd>DESIGN.md</dd></div></dl><div class="prose"><h1 id="design" tabindex="-1"><a class="header-anchor" href="#design"><span>Design</span></a></h1>
+<h2 id="colors" tabindex="-1"><a class="header-anchor" href="#colors"><span>Colors</span></a></h2>
+<p>Strategy: Committed, on a light scene. All colors are OKLCH. Neutrals are tinted toward the brand hue. Never pure black or pure white.</p>
+<p>Working brand hue: 250 (blue). This is a working choice, not a brand decision. The generated palette may replace it.</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Role</th>
+<th>Value</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Paper (background)</td>
+<td><code>oklch(0.985 0.006 250)</code></td>
+<td>tinted toward the brand hue</td>
+</tr>
+<tr>
+<td>Ink (text)</td>
+<td><code>oklch(0.24 0.02 250)</code></td>
+<td>never pure black</td>
+</tr>
+<tr>
+<td>Brand</td>
+<td><code>oklch(0.55 0.17 250)</code></td>
+<td>headers and controls</td>
+</tr>
+<tr>
+<td>Brand hover</td>
+<td><code>oklch(0.49 0.17 250)</code></td>
+<td>lightness minus 6</td>
+</tr>
+<tr>
+<td>Brand pressed</td>
+<td><code>oklch(0.43 0.17 250)</code></td>
+<td>lightness minus 12</td>
+</tr>
+<tr>
+<td>On brand</td>
+<td><code>oklch(0.985 0.006 250)</code></td>
+<td>label on brand</td>
+</tr>
+<tr>
+<td>Pitch turf</td>
+<td><code>oklch(0.62 0.13 145)</code></td>
+<td>the most saturated object</td>
+</tr>
+<tr>
+<td>Pitch markings</td>
+<td><code>oklch(0.97 0.01 145)</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Pitchside overlay</td>
+<td><code>oklch(0.28 0.03 250)</code></td>
+<td>score bug and overlays on the pitch</td>
+</tr>
+<tr>
+<td>Focus ring</td>
+<td><code>oklch(0.55 0.17 250 / 0.35)</code></td>
+<td>must measure 3:1 against paper</td>
+</tr>
+<tr>
+<td>Panel</td>
+<td><code>oklch(0.995 0.003 250)</code></td>
+<td>panel surface, quieter than paper</td>
+</tr>
+<tr>
+<td>Muted ink</td>
+<td><code>oklch(0.48 0.02 250)</code></td>
+<td>secondary label</td>
+</tr>
+<tr>
+<td>Hairline</td>
+<td><code>oklch(0.90 0.008 250)</code></td>
+<td>divider</td>
+</tr>
+<tr>
+<td>Success</td>
+<td><code>oklch(0.52 0.14 150)</code></td>
+<td>applied state</td>
+</tr>
+<tr>
+<td>Warning</td>
+<td><code>oklch(0.55 0.13 75)</code></td>
+<td>lag notice</td>
+</tr>
+<tr>
+<td>Danger</td>
+<td><code>oklch(0.50 0.19 25)</code></td>
+<td>rejected, error</td>
+</tr>
+<tr>
+<td>Caution card</td>
+<td><code>oklch(0.85 0.16 95)</code></td>
+<td>the yellow card</td>
+</tr>
+<tr>
+<td>Skeleton</td>
+<td><code>oklch(0.93 0.01 250)</code></td>
+<td>skeleton fill while content loads</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Team kit colors come from team data. Use them on the pitch and in the score only. Map each kit color to a contrast-safe on-pitch variant.</li>
+<li>Semantic states to define before the first screen ships: hover, focus, active, disabled, selected, loading, error, warning, success, info. One meaning per color on every screen.</li>
+</ul>
+<h2 id="typography" tabindex="-1"><a class="header-anchor" href="#typography"><span>Typography</span></a></h2>
+<ul>
+<li>Barlow Condensed 700 for the score bug, the goal banner, and report titles. IBM Plex Sans 400/500/600 for text and numbers. Both ship from <code>web/fonts/</code> as <code>woff2</code> under the SIL Open Font License; no font service is contacted. IBM Plex Sans ships as one variable file covering 400 to 700.</li>
+<li>Numerals: <code>font-variant-numeric: tabular-nums</code> for the clock, the score, and the statistics.</li>
+<li>Scale: fixed rem scale, ratio 1.125 to 1.2. Body text 16 px minimum, line height 1.5 or more. Control labels 14 px at weight 600. Numbers 14 px at weight 500. The statistics panel at 14 px must pass contrast on paper before it ships.</li>
+</ul>
+<h2 id="elevation" tabindex="-1"><a class="header-anchor" href="#elevation"><span>Elevation</span></a></h2>
+<ul>
+<li>Shadows over borders for panels: <code>0 1px 2px oklch(0.24 0.02 250 / 0.12)</code>.</li>
+<li>Concentric radius: outer radius equals inner radius plus padding.</li>
+</ul>
+<h2 id="components" tabindex="-1"><a class="header-anchor" href="#components"><span>Components</span></a></h2>
+<ul>
+<li>No component library. Plain HTML, CSS, and JavaScript.</li>
+<li>Component of record: <code>match-control</code>, the button primitive for play, pause, speed, confirm substitution, and kick-off.
+<ul>
+<li>Sizes: sm 28 px, md 36 px, lg 44 px, xl 52 px (height).</li>
+<li>States: default, hover, pressed, focus, disabled.</li>
+<li>Themes: light, pitchside.</li>
+</ul>
+</li>
+<li>Radii: 4, 6, 8, 10 px. Spacing base 4 px. Control padding 14 px horizontal, 8 px vertical. Icon-to-label gap 8 px.</li>
+<li>Loading uses skeletons (a skeleton pitch), never spinners in content areas. Empty states teach: kick-off with no events and 0 to 0.</li>
+</ul>
+<h2 id="motion" tabindex="-1"><a class="header-anchor" href="#motion"><span>Motion</span></a></h2>
+<ul>
+<li>Easing: <code>cubic-bezier(0.32, 0.72, 0, 1)</code> (ease-out). Product transitions run 150 to 250 ms.</li>
+<li>Goal: the score bug pulses; the banner enters from the pitch edge and leaves within 1.5 s.</li>
+<li>No bounce and no elastic easing. <code>@media (prefers-reduced-motion: reduce)</code> disables every animation.</li>
+</ul>
+<h2 id="tokens" tabindex="-1"><a class="header-anchor" href="#tokens"><span>Tokens</span></a></h2>
+<ul>
+<li><code>web/tokens.css</code> is the token file. It holds all 36 tokens in one <code>:root</code> block and is the single source for CSS; this file carries the same values so the two never disagree. <code>web/tests/colour.test.mjs</code> reads <code>web/tokens.css</code> and fails when the four values the canvas draws with drift from the module that draws them.</li>
+<li>Prefix: <code>--tl-</code>. Names: <code>--tl-bg</code>, <code>--tl-panel</code>, <code>--tl-fg</code>, <code>--tl-fg-muted</code>, <code>--tl-line</code>, <code>--tl-brand</code>, <code>--tl-brand-hover</code>, <code>--tl-brand-pressed</code>, <code>--tl-on-brand</code>, <code>--tl-pitch</code>, <code>--tl-pitch-line</code>, <code>--tl-pitchside-bg</code>, <code>--tl-ring</code>, <code>--tl-success</code>, <code>--tl-warning</code>, <code>--tl-danger</code>, <code>--tl-card-yellow</code>, <code>--tl-skeleton</code>, <code>--tl-radius-sm</code>, <code>--tl-radius-md</code>, <code>--tl-radius-lg</code>, <code>--tl-radius-xl</code>, <code>--tl-padx-md</code>, <code>--tl-pady-md</code>, <code>--tl-gap</code>, <code>--tl-font-display</code>, <code>--tl-font-md</code>, <code>--tl-font-num</code>, <code>--tl-ease</code>, <code>--tl-shadow-1</code>, <code>--tl-header-h</code>, <code>--tl-col-left</code>, <code>--tl-col-mid</code>, <code>--tl-col-right</code>, <code>--tl-pitch-h</code>, <code>--tl-controls-h</code>.</li>
+<li>Layout tokens fix the 1280 by 800 screen: header 56, columns 336 / 616 / 296, gutter 8, pitch 411 tall, control strip 40.</li>
+</ul>
+<h2 id="brand-assets" tabindex="-1"><a class="header-anchor" href="#brand-assets"><span>Brand Assets</span></a></h2>
+<ul>
+<li>No asset files exist and none are added. Generate the logo, the palette, and any illustration programmatically in JavaScript.</li>
+<li><code>web/mark.mjs</code> is that function. <strong>The mark is the touchline.</strong> One function draws three zones into an SVG or a canvas: the field above, a white line at 58 percent of the tile height, and the pitchside band below it, where the manager stands. Two objects sit on the field: one marker and the ball, with one faint pitch marking. Inputs: tile size, corner radius (tile size x 0.21), and the tokens <code>--tl-pitch</code>, <code>--tl-pitch-line</code>, <code>--tl-pitchside-bg</code>.</li>
+<li>Four variants: primary (turf tile), reversed (paper tile, brand line), pitchside (turf tile with a paper ring, for dark surfaces), mono (outline, for the favicon and print).</li>
+<li>Club crests call the same function with the club’s kit colours in place of the turf and a marker position seeded from the club id.</li>
+<li>Schedule the generator as its own feature before the first public screen.</li>
+</ul>
+<h2 id="notes" tabindex="-1"><a class="header-anchor" href="#notes"><span>Notes</span></a></h2>
+<ul>
+<li>Themes: light is primary. Pitchside governs overlays drawn on the pitch. No dark theme for the panels in the first release.</li>
+<li>Icon set: not chosen. Decide before the first control ships.</li>
+<li>Accessibility: focus rings visible at 3:1 against the adjacent background. Color is never the only indicator for cards, fatigue, or errors.</li>
+<li>Rendering: the pitch is a canvas at 60 frames per second with 23 moving markers (22 players and the ball).</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated"></span>
+    <a href="../../../DESIGN.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">__project__</a><a href="../INDEX.html">project</a><span class="m-sheet-here" aria-current="page">DESIGN.html</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../DESIGN.md" class="src-link" title="storage source">md &#8599;</a></div>
+    
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

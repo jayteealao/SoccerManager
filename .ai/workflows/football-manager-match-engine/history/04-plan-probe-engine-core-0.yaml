@@ -1,0 +1,27 @@
+artifact: plan
+schema: sdlc/v1
+slug: football-manager-match-engine
+slice: probe-engine-core
+rev: 0
+modules:
+  - { id: cli, label: "crates/engine-cli/src", role: cli }
+  - { id: cli-tests, label: "crates/engine-cli/tests", role: test }
+  - { id: observe, label: "crates/engine/src/observe", role: domain }
+  - { id: docs, label: "README.md", role: docs }
+files:
+  - { path: "crates/engine-cli/src/cli.rs", status: modified, role: cli, module: cli, loc: 191, delta: { add: 14, rem: 6 }, planned_change: { intent: "Findings 1 and 5. Shorten the five short-help strings that exceed 80 columns under -h (--content-dir, replay --speed, bench --matches, bench --json, bench --stream) and move the detail into long_help. resume --json gains the same long_help as simulate --json, which states that the extension is replaced by .jsonl." } }
+  - { path: "crates/engine-cli/tests/cli_args.rs", status: modified, role: test, module: cli-tests, loc: 197, delta: { add: 150, rem: 6 }, planned_change: { intent: "The 80-column test covers -h and --help for the top level and all seven subcommands. New regression tests: the --json dump replaces the extension (match.ticks gives match.jsonl and no match.ticks.jsonl); an unwritable --ticks-out names the OS error once; redirected stderr carries no ESC byte. Awaiting Q-1: a failed simulate (--minutes 0, a directory as --ticks-out) and a failed bench (--matches 0) each print one record with outcome error and the error keys, and still exit 1 with the prose line on stderr." } }
+  - { path: "crates/engine/src/observe/mod.rs", status: modified, role: domain, module: observe, loc: 380, delta: { add: 60, rem: 0 }, planned_change: { intent: "Awaiting Q-1. FailureRecord { kind, operation, owner_id, seed, duration_ms, error_type, error_code, error_retriable } implements Record; it serializes outcome error and the contract keys error.type, error.code, error.retriable, and no statistic key. EngineError::classify() -> (type, code, retriable). Unit tests on the key set and the classification." } }
+  - { path: "crates/engine-cli/src/main.rs", status: modified, role: cli, module: cli, loc: 47, delta: { add: 30, rem: 3 }, planned_change: { intent: "Awaiting Q-1. Take the start instant and the seed before dispatch. On Err from simulate or bench, print one FailureRecord line on stdout (match-stats for simulate, run-report for bench), then the existing prose line on stderr, then exit 1. Other subcommands keep prose only." } }
+  - { path: "crates/engine-cli/src/bench.rs", status: modified, role: cli, module: cli, loc: 223, delta: { add: 2, rem: 1 }, planned_change: { intent: "Awaiting Q-1. The --matches check returns EngineError::InvalidConfig instead of an untyped bail, so the failure record classifies it as config like --minutes 0. The message text is unchanged." } }
+  - { path: "README.md", status: modified, role: docs, module: docs, loc: 230, delta: { add: 4, rem: 0 }, planned_change: { intent: "Awaiting Q-1. The simulate and bench sections state that a failed run prints one record with outcome error, exits 1, and names the reason on stderr." } }
+edges:
+  - { from: "crates/engine-cli/src/main.rs", to: "crates/engine/src/observe/mod.rs", kind: calls }
+  - { from: "crates/engine-cli/src/main.rs", to: "crates/engine-cli/src/cli.rs", kind: import }
+  - { from: "crates/engine-cli/src/bench.rs", to: "crates/engine/src/observe/mod.rs", kind: calls }
+  - { from: "crates/engine-cli/tests/cli_args.rs", to: "crates/engine-cli/src/main.rs", kind: calls }
+risks:
+  - { title: "Q-1 is a contract decision", severity: high, body: "Finding 2 has two remedies. The first emits a failure record. The second narrows the outcome values in the observability contract. The probe names both, and two earlier artifacts routed the choice outside the plan. The record shape for a run that fails before kick-off is not written anywhere.", mitigation: "The plan stops at awaiting-input. It recommends option A, which implements the ratified contract keys and changes no persisted file. Steps 5 to 9 wait for the answer." }
+  - { title: "Outcome value drift with the calibration plan", severity: medium, body: "04-plan-calibration.md step 15 writes outcome failure. The instrumentation contract lists success, error, and abandoned.", mitigation: "This plan uses error. It records the conflict for the calibration plan to correct before calibration is implemented." }
+  - { title: "Help text regresses when later slices add options", severity: low, body: "Short help (-h) puts each description on the option line, so a description longer than about 53 characters exceeds 80 columns. The existing test reads --help only.", mitigation: "The test covers -h and --help for every subcommand, so a later option fails the gate." }
+history: []

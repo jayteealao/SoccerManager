@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="review">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · review — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="review">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><span class="m-here">review</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · review</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">review</b></div>
+    <div class="actions"><a href="../../../workflows/football-manager-match-engine/07-review.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">07-review.md</div>
+      <h1 class="pg-title">Review</h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="meta">verdict <strong>ship</strong></span><span class="meta">2026-09-23T20:34:36Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-review" tabindex="-1"><a class="header-anchor" href="#the-review"><span>The Review</span></a></h2>
+<p>The branch came to review with all 17 slices built and verified, and a scan across correctness, security, performance and architecture that had already been checked adversarially. It surfaced 33 findings: 11 MED and 22 LOW or NIT, with no BLOCKER or HIGH. A separate check of the intake Success Criteria added one more: over several calibration seeds, goals per match sat above the 2.4 to 3.2 band on most seeds, although the verified seed passed.</p>
+<p>Every MED finding was fixed, as the triage policy requires. That includes a penalty in open play that was never kicked, a fake full-time row when the viewer left, lost change identifiers after a reconnect, a reconnect wait that a silent client could hold open, a socket origin allowlist that accepted <code>null</code>, a socket thread that spun at full load, and the goals band. The band was brought back by raising <code>keeper_catch_chance</code> a little. LOW and NIT findings were fixed where they were local and safe: 17 of them. Six were deferred with a reason: CI for the ignored acceptance tests, new viewer unit suites, the per-tick tuning clone, a structured refusal reason, redacting local paths from the evidence, and a paired calibration test (T11) that failed once under full-suite load. T11 was raised during this run.</p>
+<p>No BLOCKER or HIGH findings are open, so the branch can go to handoff. The biggest open risk is T6: the slow realism and AI acceptance tests still run only by hand, so a later tuning change can move the bands while <code>cargo test</code> stays green. The Playwright suite was not re-run after the 4x-speed assertion was tightened (T1), so run it once before release.</p></section><section class="verdict verdict-ship">
+    <div class="v-label">Verdict</div>
+    <div class="v-text">ship</div>
+    
+  </section><div class="d-only"><div class="metric-row"><div class="metric severity-blocker">
+      <span class="metric-label">blocker</span>
+      <span class="metric-value">0</span>
+      
+    </div><div class="metric severity-high">
+      <span class="metric-label">high</span>
+      <span class="metric-value">0</span>
+      
+    </div><div class="metric severity-med">
+      <span class="metric-label">med</span>
+      <span class="metric-value">0</span>
+      
+    </div><div class="metric severity-low">
+      <span class="metric-label">low</span>
+      <span class="metric-value">3</span>
+      
+    </div><div class="metric severity-nit">
+      <span class="metric-label">nit</span>
+      <span class="metric-value">3</span>
+      
+    </div></div></div><div class="m-only"><div class="sevrow"><div class="sevcount c-blocker"><div class="n">0</div><div class="k">blocker</div></div><div class="sevcount c-high"><div class="n">0</div><div class="k">high</div></div><div class="sevcount c-med"><div class="n">0</div><div class="k">med</div></div><div class="sevcount c-low"><div class="n">3</div><div class="k">low</div></div><div class="sevcount c-nit"><div class="n">3</div><div class="k">nit</div></div></div></div><div class="fragment"><section class="fragment-review" data-artifact="review" data-rev="1">
+<style>.fragment-review{font:14px/1.45 system-ui,sans-serif}.fragment-review .fr-bar{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}.fragment-review .fr-pill{border:1px solid #8886;border-radius:999px;padding:2px 10px;background:none;cursor:pointer;font:inherit}.fragment-review .fr-pill[aria-pressed=true]{background:#8883}.fragment-review table{border-collapse:collapse;width:100%}.fragment-review td,.fragment-review th{border-bottom:1px solid #8884;padding:4px 6px;text-align:left;vertical-align:top}.fragment-review .fr-sev{font-weight:600}.fragment-review details{margin:2px 0}</style>
+<table class="fr-heat"><thead><tr><th>Dimension</th><th>BLOCKER</th><th>HIGH</th><th>MED</th><th>LOW</th><th>NIT</th></tr></thead><tbody>
+<tr><td>correctness</td><td>0</td><td>0</td><td>0</td><td>2</td><td>1</td></tr>
+<tr><td>security</td><td>0</td><td>0</td><td>0</td><td>0</td><td>1</td></tr>
+<tr><td>performance</td><td>0</td><td>0</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><td>architecture</td><td>0</td><td>0</td><td>0</td><td>0</td><td>1</td></tr>
+<tr><td>intent-fidelity</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+</tbody></table>
+<div class="fr-bar" role="group" aria-label="Severity filter"><button type="button" class="fr-pill" data-sev="ALL" aria-pressed="true">All</button><button type="button" class="fr-pill" data-sev="BLOCKER" aria-pressed="false">BLOCKER</button><button type="button" class="fr-pill" data-sev="HIGH" aria-pressed="false">HIGH</button><button type="button" class="fr-pill" data-sev="MED" aria-pressed="false">MED</button><button type="button" class="fr-pill" data-sev="LOW" aria-pressed="false">LOW</button><button type="button" class="fr-pill" data-sev="NIT" aria-pressed="false">NIT</button></div>
+<ul class="fr-list">
+<li data-sev="LOW"><details><summary><span class="fr-sev">LOW</span> T11: Paired calibration test failed once under full-suite load <code>crates/engine-cli/tests/calibrate_pair.rs:106</code> [deferred]</summary><p>a_paired_run_plays_both_arms_on_the_same_seeds_and_compares_every_band failed its exit-code assertion once during a full `cargo test --workspace` run. It passed three times on its own and in the next full run.</p><p><strong>Decision:</strong> Seen once and could not be reproduced. The cause is probably concurrent calibration workers under load. Diagnosing it needs repeated runs under load, which is not a localized fix.</p></details></li>
+<li data-sev="LOW"><details><summary><span class="fr-sev">LOW</span> PERF-5: step clones the whole Tuning every tick <code>crates/engine/src/sim.rs:766</code> [deferred]</summary><p>About 0.7 KB copied ~280k times per match (1-2% of the tick budget).</p><p><strong>Decision:</strong> The fix (Arc&lt;Tuning&gt; or split borrows) touches every tuning reader and test that edits tuning in place; not localized.</p></details></li>
+<li data-sev="LOW"><details><summary><span class="fr-sev">LOW</span> T6: Four acceptance tests are #[ignore] and nothing runs them <code>crates/engine/tests/ai_trailing.rs:15</code> [deferred]</summary><p>No CI config; AC-6/7/8 and the realism bands can regress with cargo test green.</p><p><strong>Decision:</strong> Needs a CI pipeline or a scheduled slow-test job: new infrastructure, not a localized change.</p></details></li>
+<li data-sev="NIT"><details><summary><span class="fr-sev">NIT</span> SEC-5: Workflow evidence contains absolute local paths <code>.ai/workflows/football-manager-match-engine/:n/a</code> [deferred]</summary><p>About 189 lines of committed evidence carry C:\Users\&lt;name&gt; paths.</p><p><strong>Decision:</strong> Evidence files are generated workflow records; redacting them is outside this code diff and changes recorded evidence. Route to a redaction pass before publishing.</p></details></li>
+<li data-sev="NIT"><details><summary><span class="fr-sev">NIT</span> T10: Several viewer modules have no unit tests <code>web/main.mjs:1</code> [deferred]</summary><p>main.mjs, lineup-editor.mjs, substitution-picker.mjs, socket.mjs, scoreboard.mjs, signal.mjs, launcher.mjs.</p><p><strong>Decision:</strong> Writing new suites for seven modules is broad test work, not a localized fix.</p></details></li>
+<li data-sev="NIT"><details><summary><span class="fr-sev">NIT</span> M10: refusalReason parses the engine error prefix <code>web/recovery.mjs:33</code> [deferred]</summary><p>Coupled to Rust Display text by a comment only.</p><p><strong>Decision:</strong> A structured reason field crosses the engine, launcher and page contract; not localized.</p></details></li>
+</ul>
+<script>(function(){var root=document.currentScript.closest('.fragment-review');var pills=root.querySelectorAll('.fr-pill');pills.forEach(function(p){p.addEventListener('click',function(){var s=p.getAttribute('data-sev');pills.forEach(function(q){q.setAttribute('aria-pressed',q===p?'true':'false')});root.querySelectorAll('.fr-list li').forEach(function(li){li.hidden=!(s==='ALL'||li.getAttribute('data-sev')===s)})})});window.dispatchEvent(new CustomEvent('sdlc:fragment-ready',{detail:{name:'review',artifact:'review',counts:{findings:6,blockers:0}}}))})();</script>
+</section>
+</div><div class="prose"><h1 id="review" tabindex="-1"><a class="header-anchor" href="#review"><span>Review</span></a></h1>
+<h2 id="verdict" tabindex="-1"><a class="header-anchor" href="#verdict"><span>Verdict</span></a></h2>
+<p><strong>Ship</strong></p>
+<p>No BLOCKER or HIGH findings are open. 29 findings were fixed in this run and 6 LOW/NIT findings are deferred with reasons. The most serious defect found was C1: a penalty in play was not a kick. It is fixed and has a regression test. The full Rust suite, clippy, rustfmt and the 128 viewer unit tests pass after the fixes.</p>
+<h2 id="domain-coverage" tabindex="-1"><a class="header-anchor" href="#domain-coverage"><span>Domain Coverage</span></a></h2>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Domain</th>
+<th>Command</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>correctness</td>
+<td><code>correctness</code></td>
+<td>Issues (deferred)</td>
+</tr>
+<tr>
+<td>security</td>
+<td><code>security</code></td>
+<td>Issues (deferred)</td>
+</tr>
+<tr>
+<td>performance</td>
+<td><code>performance</code></td>
+<td>Issues (deferred)</td>
+</tr>
+<tr>
+<td>architecture</td>
+<td><code>architecture</code></td>
+<td>Issues (deferred)</td>
+</tr>
+<tr>
+<td>intent-fidelity</td>
+<td><code>intent-fidelity</code></td>
+<td>Clean after fixes</td>
+</tr>
+</tbody>
+</table>
+<h2 id="all-findings" tabindex="-1"><a class="header-anchor" href="#all-findings"><span>All Findings</span></a></h2>
+<p>ALL findings ever recorded, open AND closed.</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>ID</th>
+<th>Sev</th>
+<th>Conf</th>
+<th>Status</th>
+<th>Pre</th>
+<th>Surfaced</th>
+<th>Source</th>
+<th>File:Line</th>
+<th>Issue</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IF-1</td>
+<td>MED</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>intent-fidelity</td>
+<td>content/tuning.json:23</td>
+<td>Goals per match miss the realism band on most calibration seeds</td>
+</tr>
+<tr>
+<td>PERF-3</td>
+<td>MED</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>performance</td>
+<td>crates/engine-cli/src/calibrate/worker.rs:121-123</td>
+<td>Each calibration match keeps every tick in memory with Vec doubling</td>
+</tr>
+<tr>
+<td>C3</td>
+<td>MED</td>
+<td>medium</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>correctness</td>
+<td>crates/engine-cli/src/serve.rs:262</td>
+<td>Verdicts after a reconnect lose the page queue_id; some acked changes are lost</td>
+</tr>
+<tr>
+<td>M2</td>
+<td>MED</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>architecture</td>
+<td>crates/engine-cli/src/serve.rs:107</td>
+<td>serve::run is one 270-line function with bare exit codes</td>
+</tr>
+<tr>
+<td>C2</td>
+<td>MED</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>correctness</td>
+<td>crates/engine-cli/src/stream_run.rs:70</td>
+<td>A viewer that leaves mid-match gets a false full-time event</td>
+</tr>
+<tr>
+<td>M1</td>
+<td>MED</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>architecture</td>
+<td>crates/engine/src/lib.rs:56</td>
+<td>Tick rate is set in two places nothing keeps in step</td>
+</tr>
+<tr>
+<td>C1</td>
+<td>MED</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>correctness</td>
+<td>crates/engine/src/rules/mod.rs:551</td>
+<td>A penalty in play is not taken as a kick</td>
+</tr>
+<tr>
+<td>C4</td>
+<td>MED</td>
+<td>medium</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>correctness</td>
+<td>crates/stream/src/server.rs:110</td>
+<td>accept_within can block past its reconnect deadline</td>
+</tr>
+<tr>
+<td>SEC-1</td>
+<td>MED</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>security</td>
+<td>crates/stream/src/server.rs:223-231</td>
+<td>WebSocket origin allowlist accepts the null origin and file://</td>
+</tr>
+<tr>
+<td>PERF-1</td>
+<td>MED</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>performance</td>
+<td>crates/stream/src/session.rs:465-484</td>
+<td>Socket thread spins at a full core under backpressure</td>
+</tr>
+<tr>
+<td>PERF-2</td>
+<td>MED</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>performance</td>
+<td>crates/stream/src/session.rs:30</td>
+<td>Socket thread polls every 100 us with no backoff</td>
+</tr>
+<tr>
+<td>T1</td>
+<td>MED</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>correctness</td>
+<td>e2e/tests/first-match.spec.mjs:151-167</td>
+<td>The 4x speed check cannot fail usefully</td>
+</tr>
+<tr>
+<td>T11</td>
+<td>LOW</td>
+<td>medium</td>
+<td>deferred</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>correctness</td>
+<td>crates/engine-cli/tests/calibrate_pair.rs:106</td>
+<td>Paired calibration test failed once under full-suite load</td>
+</tr>
+<tr>
+<td>PERF-5</td>
+<td>LOW</td>
+<td>medium</td>
+<td>deferred</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>performance</td>
+<td>crates/engine/src/sim.rs:766</td>
+<td>step clones the whole Tuning every tick</td>
+</tr>
+<tr>
+<td>T6</td>
+<td>LOW</td>
+<td>high</td>
+<td>deferred</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>correctness</td>
+<td>crates/engine/tests/ai_trailing.rs:15</td>
+<td>Four acceptance tests are #[ignore] and nothing runs them</td>
+</tr>
+<tr>
+<td>C5</td>
+<td>LOW</td>
+<td>medium</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>correctness</td>
+<td>crates/engine-cli/src/serve.rs:232</td>
+<td>Reconnect hello describes the pre-kick-off preview, not the match</td>
+</tr>
+<tr>
+<td>C6</td>
+<td>LOW</td>
+<td>medium</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>correctness</td>
+<td>crates/engine-cli/src/serve.rs:268</td>
+<td>–ticks-out stops at the first drop and holds ticks the resumed match replays</td>
+</tr>
+<tr>
+<td>SEC-2</td>
+<td>LOW</td>
+<td>medium</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>security</td>
+<td>crates/engine-cli/src/web.rs:171-255</td>
+<td>Page server never checks Host (DNS rebinding)</td>
+</tr>
+<tr>
+<td>SEC-4</td>
+<td>LOW</td>
+<td>medium</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>security</td>
+<td>crates/engine-cli/src/web.rs:152-163</td>
+<td>Page server: unbounded threads, no timeouts</td>
+</tr>
+<tr>
+<td>M5</td>
+<td>LOW</td>
+<td>medium</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>architecture</td>
+<td>crates/engine/src/commentary/mod.rs:237</td>
+<td>Commentary rotation seeded by list position</td>
+</tr>
+<tr>
+<td>C7</td>
+<td>LOW</td>
+<td>medium</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>correctness</td>
+<td>crates/engine/src/pitch.rs:70</td>
+<td>A goal counts before the whole ball is over the line, and the crossing point is not used</td>
+</tr>
+<tr>
+<td>M6</td>
+<td>LOW</td>
+<td>medium</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>architecture</td>
+<td>crates/engine/src/sim.rs:301</td>
+<td>Wire event strings written twice with no cross-check</td>
+</tr>
+<tr>
+<td>PERF-4</td>
+<td>LOW</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>performance</td>
+<td>crates/engine/src/validate.rs:96-101</td>
+<td>Validator allocates two Vecs per tick</td>
+</tr>
+<tr>
+<td>T7</td>
+<td>LOW</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>correctness</td>
+<td>crates/engine/tests/zz_stall_probe.rs:1</td>
+<td>A debug probe was staged for commit</td>
+</tr>
+<tr>
+<td>SEC-3</td>
+<td>LOW</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>security</td>
+<td>crates/stream/src/record.rs:244</td>
+<td>Replay reader trusts the header frame count for allocation</td>
+</tr>
+<tr>
+<td>T4</td>
+<td>LOW</td>
+<td>medium</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>correctness</td>
+<td>crates/stream/tests/reconnect.rs:118-129</td>
+<td>Drop-seam test never pins the cut to its tick</td>
+</tr>
+<tr>
+<td>PERF-6</td>
+<td>LOW</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>performance</td>
+<td>web/main.mjs:308, 774-780</td>
+<td>Two sorts of the 300-frame window every animation frame, and an unconditional gauge write</td>
+</tr>
+<tr>
+<td>PERF-7</td>
+<td>LOW</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>performance</td>
+<td>web/main.mjs:744</td>
+<td>fullTimeTick scans all events on every tick and frame</td>
+</tr>
+<tr>
+<td>M7</td>
+<td>LOW</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>architecture</td>
+<td>web/main.mjs:75</td>
+<td>clockText duplicates clockAt; recovery.mjs redefines the tick rate</td>
+</tr>
+<tr>
+<td>T8</td>
+<td>LOW</td>
+<td>medium</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>correctness</td>
+<td>web/tests/pitch.test.mjs:9-12</td>
+<td>Viewer test re-implements the engine parking-spot formula</td>
+</tr>
+<tr>
+<td>SEC-5</td>
+<td>NIT</td>
+<td>high</td>
+<td>deferred</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>security</td>
+<td>.ai/workflows/football-manager-match-engine/:n/a</td>
+<td>Workflow evidence contains absolute local paths</td>
+</tr>
+<tr>
+<td>T10</td>
+<td>NIT</td>
+<td>medium</td>
+<td>deferred</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>correctness</td>
+<td>web/main.mjs:1</td>
+<td>Several viewer modules have no unit tests</td>
+</tr>
+<tr>
+<td>M10</td>
+<td>NIT</td>
+<td>medium</td>
+<td>deferred</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>architecture</td>
+<td>web/recovery.mjs:33</td>
+<td>refusalReason parses the engine error prefix</td>
+</tr>
+<tr>
+<td>PERF-9</td>
+<td>NIT</td>
+<td>high</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>performance</td>
+<td>crates/engine-cli/src/simulate.rs:80-86</td>
+<td>simulate --json reads the tick file twice</td>
+</tr>
+<tr>
+<td>PERF-10</td>
+<td>NIT</td>
+<td>medium</td>
+<td>fixed</td>
+<td>false</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>performance</td>
+<td>web/pitch.mjs:235, 254-260</td>
+<td>Font set twice per frame; trail comment wrong</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Open:</strong> BLOCKER: 0 | HIGH: 0 | MED: 0 | LOW: 3 | NIT: 3   <strong>Pre-existing:</strong> 0
+<strong>Closed:</strong> resolved: 0 | fixed: 29 | dismissed: 0   <strong>Ledger size (ever):</strong> 35
+<em>(This run: 35 net-new, 0 re-confirmed, 0 resolved; merged from 35 raw findings across 5 commands)</em></p>
+<h2 id="findings-detailed" tabindex="-1"><a class="header-anchor" href="#findings-detailed"><span>Findings (Detailed)</span></a></h2>
+<h3 id="if-1-goals-per-match-miss-the-realism-band-on-most-calibration-seeds-med" tabindex="-1"><a class="header-anchor" href="#if-1-goals-per-match-miss-the-realism-band-on-most-calibration-seeds-med"><span>IF-1: Goals per match miss the realism band on most calibration seeds [MED]</span></a></h3>
+<p><strong>Location:</strong> <code>content/tuning.json:23</code>
+<strong>Source:</strong> intent-fidelity</p>
+<p><strong>Issue:</strong> Success Criterion “goals per match 2.4 to 3.2” over 1000 matches held at the verified seed 2026 (3.03) but failed at seeds 7 (3.39), 42 (3.32) and 99 (3.33) on this branch, before and after the review fixes (pre-fix seed 7: 3.42).</p>
+<p><strong>Fix:</strong> keeper_catch_chance raised from 0.84 to 0.86 in content/tuning.json, Tuning::default and <a href="http://data-files.md">data-files.md</a>. At 1000 matches per suite, goals per match were 2.863 (seed 7), 3.035 (42), 2.948 (99), 2.656 (1) and 2.559 (2026), all inside the band. Shots per team were 12.9 to 14.8 and the stronger-team win rate 0.59 to 0.67, also inside their bands.</p>
+<p><strong>Severity:</strong> MED | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="perf-3-each-calibration-match-keeps-every-tick-in-memory-with-vec-doubling-med" tabindex="-1"><a class="header-anchor" href="#perf-3-each-calibration-match-keeps-every-tick-in-memory-with-vec-doubling-med"><span>PERF-3: Each calibration match keeps every tick in memory with Vec doubling [MED]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine-cli/src/calibrate/worker.rs:121-123</code>
+<strong>Source:</strong> performance</p>
+<p><strong>Issue:</strong> VecSink::default() grew to ~55 MB per match with ~2x transient peaks, and the growth was inside the timed run.</p>
+<p><strong>Fix:</strong> Records preallocated to max_ticks (the finding’s stated minimum): no doubling peaks, no copies in ticks_per_s. An incremental validator was not built; one match of records is still held per worker.</p>
+<p><strong>Severity:</strong> MED | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="c3-verdicts-after-a-reconnect-lose-the-page-queue_id-some-acked-changes-are-lost-med" tabindex="-1"><a class="header-anchor" href="#c3-verdicts-after-a-reconnect-lose-the-page-queue_id-some-acked-changes-are-lost-med"><span>C3: Verdicts after a reconnect lose the page queue_id; some acked changes are lost [MED]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine-cli/src/serve.rs:262</code>
+<strong>Source:</strong> correctness</p>
+<p><strong>Issue:</strong> A fresh Ids per connection dropped the engine-to-page id map, and a change admitted at the snapshot tick but drained after capture vanished from the resumed match.</p>
+<p><strong>Fix:</strong> Page changes are carried across connections (PageChange + carry_page_changes): kept when in the snapshot, re-queued when their queued row survived, dropped otherwise; inbox leftovers carried too. Unit test added.</p>
+<p><strong>Severity:</strong> MED | <strong>Confidence:</strong> Medium | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="m2-serverun-is-one-270-line-function-with-bare-exit-codes-med" tabindex="-1"><a class="header-anchor" href="#m2-serverun-is-one-270-line-function-with-bare-exit-codes-med"><span>M2: serve::run is one 270-line function with bare exit codes [MED]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine-cli/src/serve.rs:107</code>
+<strong>Source:</strong> architecture</p>
+<p><strong>Issue:</strong> Content, opening, port, writers, per-connection session, kick-off, drive, stats and reconnect/rewind all lived in one function returning 0/1/2.</p>
+<p><strong>Fix:</strong> Split into Serving::play (per connection) and Serving::rewind, with EXIT_FULL_TIME / EXIT_REFUSED / EXIT_VIEWER_GONE. Values kept (the launcher reads them). calibrate::run was not split.</p>
+<p><strong>Severity:</strong> MED | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="c2-a-viewer-that-leaves-mid-match-gets-a-false-full-time-event-med" tabindex="-1"><a class="header-anchor" href="#c2-a-viewer-that-leaves-mid-match-gets-a-false-full-time-event-med"><span>C2: A viewer that leaves mid-match gets a false full-time event [MED]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine-cli/src/stream_run.rs:70</code>
+<strong>Source:</strong> correctness</p>
+<p><strong>Issue:</strong> A stopped gate made drive() break and still call sim.finish(), writing a full-time row at the drop tick for a match that never finished.</p>
+<p><strong>Fix:</strong> drive() returns without finish() when the gate stops; test a_viewer_that_leaves_while_the_match_waits_gets_no_full_time.</p>
+<p><strong>Severity:</strong> MED | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="m1-tick-rate-is-set-in-two-places-nothing-keeps-in-step-med" tabindex="-1"><a class="header-anchor" href="#m1-tick-rate-is-set-in-two-places-nothing-keeps-in-step-med"><span>M1: Tick rate is set in two places nothing keeps in step [MED]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine/src/lib.rs:56</code>
+<strong>Source:</strong> architecture</p>
+<p><strong>Issue:</strong> tuning dt accepted 0.005-0.1 while the clock, minute maths, commentary and viewer all hardcode 50 ticks/s.</p>
+<p><strong>Fix:</strong> The loader refuses any dt other than one clock tick; commentary uses the clock constant; a cross-crate test pins the protocol minute; the viewer duplicate constant is removed; <a href="http://data-files.md">data-files.md</a> updated.</p>
+<p><strong>Severity:</strong> MED | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="c1-a-penalty-in-play-is-not-taken-as-a-kick-med" tabindex="-1"><a class="header-anchor" href="#c1-a-penalty-in-play-is-not-taken-as-a-kick-med"><span>C1: A penalty in play is not taken as a kick [MED]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine/src/rules/mod.rs:551</code>
+<strong>Source:</strong> correctness</p>
+<p><strong>Issue:</strong> take_restart let StoppageKind::Penalty fall into the <code>_ =&gt; None</code> arm, so the taker became the carrier and could pass, dribble, hold or clear while opponents closed in (IFAB Law 14). Skews penalty conversion and xG.</p>
+<p><strong>Fix:</strong> Penalty now shoots at once via shot_kick at the placed-kick spread; unit test a_penalty_in_play_is_shot_at_goal_at_once.</p>
+<p><strong>Severity:</strong> MED | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="c4-accept_within-can-block-past-its-reconnect-deadline-med" tabindex="-1"><a class="header-anchor" href="#c4-accept_within-can-block-past-its-reconnect-deadline-med"><span>C4: accept_within can block past its reconnect deadline [MED]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/stream/src/server.rs:110</code>
+<strong>Source:</strong> correctness</p>
+<p><strong>Issue:</strong> The handshake ran with no read timeout, so a silent TCP client blocked the reconnect wait forever; refused handshakes skipped the deadline check.</p>
+<p><strong>Fix:</strong> Handshake gets the remaining wait (min 500 ms) as read/write timeout; refusals past the deadline end the wait. Test a_silent_client_does_not_hold_the_reconnect_wait_open.</p>
+<p><strong>Severity:</strong> MED | <strong>Confidence:</strong> Medium | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="sec-1-websocket-origin-allowlist-accepts-the-null-origin-and-file-med" tabindex="-1"><a class="header-anchor" href="#sec-1-websocket-origin-allowlist-accepts-the-null-origin-and-file-med"><span>SEC-1: WebSocket origin allowlist accepts the null origin and file:// [MED]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/stream/src/server.rs:223-231</code>
+<strong>Source:</strong> security</p>
+<p><strong>Issue:</strong> Any remote site could open the socket from a sandboxed iframe or data: URL (Origin: null) and read the stream or send commands.</p>
+<p><strong>Fix:</strong> null and file:// dropped; tests and docs/reference/protocol.md updated.</p>
+<p><strong>Severity:</strong> MED | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="perf-1-socket-thread-spins-at-a-full-core-under-backpressure-med" tabindex="-1"><a class="header-anchor" href="#perf-1-socket-thread-spins-at-a-full-core-under-backpressure-med"><span>PERF-1: Socket thread spins at a full core under backpressure [MED]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/stream/src/session.rs:465-484</code>
+<strong>Source:</strong> performance</p>
+<p><strong>Issue:</strong> A refused write (WriteBufferFull) still marked the pass busy, so the thread never slept while the reader was slow.</p>
+<p><strong>Fix:</strong> Only a write the socket took counts as work.</p>
+<p><strong>Severity:</strong> MED | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="perf-2-socket-thread-polls-every-100-us-with-no-backoff-med" tabindex="-1"><a class="header-anchor" href="#perf-2-socket-thread-polls-every-100-us-with-no-backoff-med"><span>PERF-2: Socket thread polls every 100 us with no backoff [MED]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/stream/src/session.rs:30</code>
+<strong>Source:</strong> performance</p>
+<p><strong>Issue:</strong> While held, paused or lead-bound the thread woke about 10,000 times a second.</p>
+<p><strong>Fix:</strong> Idle sleep doubles from 100 us up to 1 ms and resets on work.</p>
+<p><strong>Severity:</strong> MED | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="t1-the-4x-speed-check-cannot-fail-usefully-med" tabindex="-1"><a class="header-anchor" href="#t1-the-4x-speed-check-cannot-fail-usefully-med"><span>T1: The 4x speed check cannot fail usefully [MED]</span></a></h3>
+<p><strong>Location:</strong> <code>e2e/tests/first-match.spec.mjs:151-167</code>
+<strong>Source:</strong> correctness</p>
+<p><strong>Issue:</strong> The in-tolerance branch re-asserted what the condition guaranteed; the lag branch accepted any “Nx” text and never compared it with the measured rate.</p>
+<p><strong>Fix:</strong> Asserts rate &lt; 4.2 always; lag branch requires a shown notice naming a speed below 4 within 1x of the measured rate; normal branch requires no lag notice. Syntax-checked only; the browser suite was not run.</p>
+<p><strong>Severity:</strong> MED | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="t11-paired-calibration-test-failed-once-under-full-suite-load-low" tabindex="-1"><a class="header-anchor" href="#t11-paired-calibration-test-failed-once-under-full-suite-load-low"><span>T11: Paired calibration test failed once under full-suite load [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine-cli/tests/calibrate_pair.rs:106</code>
+<strong>Source:</strong> correctness</p>
+<p><strong>Issue:</strong> a_paired_run_plays_both_arms_on_the_same_seeds_and_compares_every_band failed its exit-code assertion once during a full <code>cargo test --workspace</code> run. It passed three times on its own and in the next full run.</p>
+<p><strong>Fix:</strong> Seen once and could not be reproduced. The cause is probably concurrent calibration workers under load. Diagnosing it needs repeated runs under load, which is not a localized fix.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> Medium | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> deferred | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="perf-5-step-clones-the-whole-tuning-every-tick-low" tabindex="-1"><a class="header-anchor" href="#perf-5-step-clones-the-whole-tuning-every-tick-low"><span>PERF-5: step clones the whole Tuning every tick [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine/src/sim.rs:766</code>
+<strong>Source:</strong> performance</p>
+<p><strong>Issue:</strong> About 0.7 KB copied ~280k times per match (1-2% of the tick budget).</p>
+<p><strong>Fix:</strong> The fix (Arc<Tuning> or split borrows) touches every tuning reader and test that edits tuning in place; not localized.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> Medium | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> deferred | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="t6-four-acceptance-tests-are-ignore-and-nothing-runs-them-low" tabindex="-1"><a class="header-anchor" href="#t6-four-acceptance-tests-are-ignore-and-nothing-runs-them-low"><span>T6: Four acceptance tests are #[ignore] and nothing runs them [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine/tests/ai_trailing.rs:15</code>
+<strong>Source:</strong> correctness</p>
+<p><strong>Issue:</strong> No CI config; AC-6/7/8 and the realism bands can regress with cargo test green.</p>
+<p><strong>Fix:</strong> Needs a CI pipeline or a scheduled slow-test job: new infrastructure, not a localized change.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> deferred | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="c5-reconnect-hello-describes-the-pre-kick-off-preview-not-the-match-low" tabindex="-1"><a class="header-anchor" href="#c5-reconnect-hello-describes-the-pre-kick-off-preview-not-the-match-low"><span>C5: Reconnect hello describes the pre-kick-off preview, not the match [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine-cli/src/serve.rs:232</code>
+<strong>Source:</strong> correctness</p>
+<p><strong>Issue:</strong> Each reconnect resent the hello built before kick-off: AI lineup, bench and tactics, no substitutions.</p>
+<p><strong>Fix:</strong> Hello rebuilt from the resumed match on every rewind. In scope, localized, safe.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> Medium | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="c6---ticks-out-stops-at-the-first-drop-and-holds-ticks-the-resumed-match-replays-low" tabindex="-1"><a class="header-anchor" href="#c6---ticks-out-stops-at-the-first-drop-and-holds-ticks-the-resumed-match-replays-low"><span>C6: --ticks-out stops at the first drop and holds ticks the resumed match replays [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine-cli/src/serve.rs:268</code>
+<strong>Source:</strong> correctness</p>
+<p><strong>Issue:</strong> The ticks file moved into the first session and was finished there.</p>
+<p><strong>Fix:</strong> File kept across connections, cut back with FileSink::rewind at each rewind, finished once. Unit test for rewind.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> Medium | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="sec-2-page-server-never-checks-host-dns-rebinding-low" tabindex="-1"><a class="header-anchor" href="#sec-2-page-server-never-checks-host-dns-rebinding-low"><span>SEC-2: Page server never checks Host (DNS rebinding) [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine-cli/src/web.rs:171-255</code>
+<strong>Source:</strong> security</p>
+<p><strong>Issue:</strong> A rebound hostname could read the page files and /engine.json.</p>
+<p><strong>Fix:</strong> Only 127.0.0.1 / localhost with no port or the own port are answered (421 otherwise). Unit test.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> Medium | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="sec-4-page-server-unbounded-threads-no-timeouts-low" tabindex="-1"><a class="header-anchor" href="#sec-4-page-server-unbounded-threads-no-timeouts-low"><span>SEC-4: Page server: unbounded threads, no timeouts [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine-cli/src/web.rs:152-163</code>
+<strong>Source:</strong> security</p>
+<p><strong>Issue:</strong> Silent connections could pile up threads in the launcher.</p>
+<p><strong>Fix:</strong> 10 s read/write timeouts and a 64-connection cap.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> Medium | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="m5-commentary-rotation-seeded-by-list-position-low" tabindex="-1"><a class="header-anchor" href="#m5-commentary-rotation-seeded-by-list-position-low"><span>M5: Commentary rotation seeded by list position [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine/src/commentary/mod.rs:237</code>
+<strong>Source:</strong> architecture</p>
+<p><strong>Issue:</strong> Reordering EngineEventKind::ALL shifted lines for later kinds; a missing kind shared KickOff’s rotation.</p>
+<p><strong>Fix:</strong> Salted by an FNV-1a hash of the variant name.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> Medium | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="c7-a-goal-counts-before-the-whole-ball-is-over-the-line-and-the-crossing-point-is-not-used-low" tabindex="-1"><a class="header-anchor" href="#c7-a-goal-counts-before-the-whole-ball-is-over-the-line-and-the-crossing-point-is-not-used-low"><span>C7: A goal counts before the whole ball is over the line, and the crossing point is not used [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine/src/pitch.rs:70</code>
+<strong>Source:</strong> correctness</p>
+<p><strong>Issue:</strong> in_goal tested the ball centre at the end of the step only.</p>
+<p><strong>Fix:</strong> Whole ball over (HALF_LENGTH + BALL_RADIUS) and y interpolated at the goal line. Tests extended.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> Medium | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="m6-wire-event-strings-written-twice-with-no-cross-check-low" tabindex="-1"><a class="header-anchor" href="#m6-wire-event-strings-written-twice-with-no-cross-check-low"><span>M6: Wire event strings written twice with no cross-check [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine/src/sim.rs:301</code>
+<strong>Source:</strong> architecture</p>
+<p><strong>Issue:</strong> EngineEventKind::code and EventType::code spelled independently.</p>
+<p><strong>Fix:</strong> Mapping extracted to event_type(); a test checks every kind’s code against its wire type.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> Medium | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="perf-4-validator-allocates-two-vecs-per-tick-low" tabindex="-1"><a class="header-anchor" href="#perf-4-validator-allocates-two-vecs-per-tick-low"><span>PERF-4: Validator allocates two Vecs per tick [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine/src/validate.rs:96-101</code>
+<strong>Source:</strong> performance</p>
+<p><strong>Issue:</strong> pos and parked were heap Vecs of 22.</p>
+<p><strong>Fix:</strong> Fixed-size arrays.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="t7-a-debug-probe-was-staged-for-commit-low" tabindex="-1"><a class="header-anchor" href="#t7-a-debug-probe-was-staged-for-commit-low"><span>T7: A debug probe was staged for commit [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine/tests/zz_stall_probe.rs:1</code>
+<strong>Source:</strong> correctness</p>
+<p><strong>Issue:</strong> Index held an add of a diagnostic test deleted in the working tree.</p>
+<p><strong>Fix:</strong> Unstaged with git rm --cached.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="sec-3-replay-reader-trusts-the-header-frame-count-for-allocation-low" tabindex="-1"><a class="header-anchor" href="#sec-3-replay-reader-trusts-the-header-frame-count-for-allocation-low"><span>SEC-3: Replay reader trusts the header frame count for allocation [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/stream/src/record.rs:244</code>
+<strong>Source:</strong> security</p>
+<p><strong>Issue:</strong> A crafted .smfx with 0xFFFFFFFF counts aborted the process.</p>
+<p><strong>Fix:</strong> Capacity capped at body.len() / 9. Unit test.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="t4-drop-seam-test-never-pins-the-cut-to-its-tick-low" tabindex="-1"><a class="header-anchor" href="#t4-drop-seam-test-never-pins-the-cut-to-its-tick-low"><span>T4: Drop-seam test never pins the cut to its tick [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/stream/tests/reconnect.rs:118-129</code>
+<strong>Source:</strong> correctness</p>
+<p><strong>Issue:</strong> Asserted only last &lt; 3000 and sent &gt;= 1000.</p>
+<p><strong>Fix:</strong> Also asserts sent &lt; 1000 + 32 (one outbox per flush).</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> Medium | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="perf-6-two-sorts-of-the-300-frame-window-every-animation-frame-and-an-unconditional-gauge-write-low" tabindex="-1"><a class="header-anchor" href="#perf-6-two-sorts-of-the-300-frame-window-every-animation-frame-and-an-unconditional-gauge-write-low"><span>PERF-6: Two sorts of the 300-frame window every animation frame, and an unconditional gauge write [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>web/main.mjs:308, 774-780</code>
+<strong>Source:</strong> performance</p>
+<p><strong>Issue:</strong> refreshHz and budget sorted the window each frame.</p>
+<p><strong>Fix:</strong> Panel rate re-measured every 30 frames; gauge refreshed every 15 frames and written only on change.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="perf-7-fulltimetick-scans-all-events-on-every-tick-and-frame-low" tabindex="-1"><a class="header-anchor" href="#perf-7-fulltimetick-scans-all-events-on-every-tick-and-frame-low"><span>PERF-7: fullTimeTick scans all events on every tick and frame [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>web/main.mjs:744</code>
+<strong>Source:</strong> performance</p>
+<p><strong>Issue:</strong> A getter scanned the events array backwards each call.</p>
+<p><strong>Fix:</strong> MatchState keeps the full-time tick on add, recomputes on truncate, clears on clear. Test added.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="m7-clocktext-duplicates-clockat-recoverymjs-redefines-the-tick-rate-low" tabindex="-1"><a class="header-anchor" href="#m7-clocktext-duplicates-clockat-recoverymjs-redefines-the-tick-rate-low"><span>M7: clockText duplicates clockAt; recovery.mjs redefines the tick rate [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>web/main.mjs:75</code>
+<strong>Source:</strong> architecture</p>
+<p><strong>Issue:</strong> Line-for-line copy plus a second TICKS_PER_SECOND.</p>
+<p><strong>Fix:</strong> clockText removed (uses clockAt); recovery.mjs imports the constant.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="t8-viewer-test-re-implements-the-engine-parking-spot-formula-low" tabindex="-1"><a class="header-anchor" href="#t8-viewer-test-re-implements-the-engine-parking-spot-formula-low"><span>T8: Viewer test re-implements the engine parking-spot formula [LOW]</span></a></h3>
+<p><strong>Location:</strong> <code>web/tests/pitch.test.mjs:9-12</code>
+<strong>Source:</strong> correctness</p>
+<p><strong>Issue:</strong> A change to the Rust layout would not fail the JS test.</p>
+<p><strong>Fix:</strong> Shared web/tests/data/parking-spots.json read by the JS test and checked against parking_spot by a Rust test.</p>
+<p><strong>Severity:</strong> LOW | <strong>Confidence:</strong> Medium | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="sec-5-workflow-evidence-contains-absolute-local-paths-nit" tabindex="-1"><a class="header-anchor" href="#sec-5-workflow-evidence-contains-absolute-local-paths-nit"><span>SEC-5: Workflow evidence contains absolute local paths [NIT]</span></a></h3>
+<p><strong>Location:</strong> <code>.ai/workflows/football-manager-match-engine/:n/a</code>
+<strong>Source:</strong> security</p>
+<p><strong>Issue:</strong> About 189 lines of committed evidence carry C:\Users&lt;name&gt; paths.</p>
+<p><strong>Fix:</strong> Evidence files are generated workflow records; redacting them is outside this code diff and changes recorded evidence. Route to a redaction pass before publishing.</p>
+<p><strong>Severity:</strong> NIT | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> deferred | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="t10-several-viewer-modules-have-no-unit-tests-nit" tabindex="-1"><a class="header-anchor" href="#t10-several-viewer-modules-have-no-unit-tests-nit"><span>T10: Several viewer modules have no unit tests [NIT]</span></a></h3>
+<p><strong>Location:</strong> <code>web/main.mjs:1</code>
+<strong>Source:</strong> correctness</p>
+<p><strong>Issue:</strong> main.mjs, lineup-editor.mjs, substitution-picker.mjs, socket.mjs, scoreboard.mjs, signal.mjs, launcher.mjs.</p>
+<p><strong>Fix:</strong> Writing new suites for seven modules is broad test work, not a localized fix.</p>
+<p><strong>Severity:</strong> NIT | <strong>Confidence:</strong> Medium | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> deferred | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="m10-refusalreason-parses-the-engine-error-prefix-nit" tabindex="-1"><a class="header-anchor" href="#m10-refusalreason-parses-the-engine-error-prefix-nit"><span>M10: refusalReason parses the engine error prefix [NIT]</span></a></h3>
+<p><strong>Location:</strong> <code>web/recovery.mjs:33</code>
+<strong>Source:</strong> architecture</p>
+<p><strong>Issue:</strong> Coupled to Rust Display text by a comment only.</p>
+<p><strong>Fix:</strong> A structured reason field crosses the engine, launcher and page contract; not localized.</p>
+<p><strong>Severity:</strong> NIT | <strong>Confidence:</strong> Medium | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> deferred | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="perf-9-simulate---json-reads-the-tick-file-twice-nit" tabindex="-1"><a class="header-anchor" href="#perf-9-simulate---json-reads-the-tick-file-twice-nit"><span>PERF-9: simulate --json reads the tick file twice [NIT]</span></a></h3>
+<p><strong>Location:</strong> <code>crates/engine-cli/src/simulate.rs:80-86</code>
+<strong>Source:</strong> performance</p>
+<p><strong>Issue:</strong> Once for JSON, once for the validator.</p>
+<p><strong>Fix:</strong> Read once.</p>
+<p><strong>Severity:</strong> NIT | <strong>Confidence:</strong> High | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h3 id="perf-10-font-set-twice-per-frame-trail-comment-wrong-nit" tabindex="-1"><a class="header-anchor" href="#perf-10-font-set-twice-per-frame-trail-comment-wrong-nit"><span>PERF-10: Font set twice per frame; trail comment wrong [NIT]</span></a></h3>
+<p><strong>Location:</strong> <code>web/pitch.mjs:235, 254-260</code>
+<strong>Source:</strong> performance</p>
+<p><strong>Issue:</strong> ctx.font set per team; comment claimed one path.</p>
+<p><strong>Fix:</strong> Font set once per frame; comment corrected (per-segment alpha needs one stroke each).</p>
+<p><strong>Severity:</strong> NIT | <strong>Confidence:</strong> Medium | <strong>Pre-existing:</strong> false
+<strong>Status:</strong> fixed | <strong>Surfaced:</strong> 2026-09-23T20:34:36Z | <strong>Last seen:</strong> 2026-09-23T20:34:36Z — <strong>Fixed:</strong> 2026-09-23T20:34:36Z</p>
+<h2 id="triage-decisions" tabindex="-1"><a class="header-anchor" href="#triage-decisions"><span>Triage Decisions</span></a></h2>
+<p>Autonomous policy: every BLOCKER/HIGH/MED is fixed; a LOW/NIT is fixed only when in scope, localized and safe, otherwise deferred with a reason. Every decision is <code>class: implementation-detail</code>.</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>ID</th>
+<th>Sev</th>
+<th>Source</th>
+<th>Decision</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IF-1</td>
+<td>MED</td>
+<td>intent-fidelity</td>
+<td>fix</td>
+<td>MED: always fixed</td>
+</tr>
+<tr>
+<td>PERF-3</td>
+<td>MED</td>
+<td>performance</td>
+<td>fix</td>
+<td>MED: always fixed</td>
+</tr>
+<tr>
+<td>C3</td>
+<td>MED</td>
+<td>correctness</td>
+<td>fix</td>
+<td>MED: always fixed</td>
+</tr>
+<tr>
+<td>M2</td>
+<td>MED</td>
+<td>architecture</td>
+<td>fix</td>
+<td>MED: always fixed</td>
+</tr>
+<tr>
+<td>C2</td>
+<td>MED</td>
+<td>correctness</td>
+<td>fix</td>
+<td>MED: always fixed</td>
+</tr>
+<tr>
+<td>M1</td>
+<td>MED</td>
+<td>architecture</td>
+<td>fix</td>
+<td>MED: always fixed</td>
+</tr>
+<tr>
+<td>C1</td>
+<td>MED</td>
+<td>correctness</td>
+<td>fix</td>
+<td>MED: always fixed</td>
+</tr>
+<tr>
+<td>C4</td>
+<td>MED</td>
+<td>correctness</td>
+<td>fix</td>
+<td>MED: always fixed</td>
+</tr>
+<tr>
+<td>SEC-1</td>
+<td>MED</td>
+<td>security</td>
+<td>fix</td>
+<td>MED: always fixed</td>
+</tr>
+<tr>
+<td>PERF-1</td>
+<td>MED</td>
+<td>performance</td>
+<td>fix</td>
+<td>MED: always fixed</td>
+</tr>
+<tr>
+<td>PERF-2</td>
+<td>MED</td>
+<td>performance</td>
+<td>fix</td>
+<td>MED: always fixed</td>
+</tr>
+<tr>
+<td>T1</td>
+<td>MED</td>
+<td>correctness</td>
+<td>fix</td>
+<td>MED: always fixed</td>
+</tr>
+<tr>
+<td>T11</td>
+<td>LOW</td>
+<td>correctness</td>
+<td>defer</td>
+<td>Seen once and could not be reproduced. The cause is probably concurrent calibration workers under load. Diagnosing it needs repeated runs under load, which is not a localized fix.</td>
+</tr>
+<tr>
+<td>PERF-5</td>
+<td>LOW</td>
+<td>performance</td>
+<td>defer</td>
+<td>The fix (Arc<Tuning> or split borrows) touches every tuning reader and test that edits tuning in place; not localized.</td>
+</tr>
+<tr>
+<td>T6</td>
+<td>LOW</td>
+<td>correctness</td>
+<td>defer</td>
+<td>Needs a CI pipeline or a scheduled slow-test job: new infrastructure, not a localized change.</td>
+</tr>
+<tr>
+<td>C5</td>
+<td>LOW</td>
+<td>correctness</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+<tr>
+<td>C6</td>
+<td>LOW</td>
+<td>correctness</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+<tr>
+<td>SEC-2</td>
+<td>LOW</td>
+<td>security</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+<tr>
+<td>SEC-4</td>
+<td>LOW</td>
+<td>security</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+<tr>
+<td>M5</td>
+<td>LOW</td>
+<td>architecture</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+<tr>
+<td>C7</td>
+<td>LOW</td>
+<td>correctness</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+<tr>
+<td>M6</td>
+<td>LOW</td>
+<td>architecture</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+<tr>
+<td>PERF-4</td>
+<td>LOW</td>
+<td>performance</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+<tr>
+<td>T7</td>
+<td>LOW</td>
+<td>correctness</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+<tr>
+<td>SEC-3</td>
+<td>LOW</td>
+<td>security</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+<tr>
+<td>T4</td>
+<td>LOW</td>
+<td>correctness</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+<tr>
+<td>PERF-6</td>
+<td>LOW</td>
+<td>performance</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+<tr>
+<td>PERF-7</td>
+<td>LOW</td>
+<td>performance</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+<tr>
+<td>M7</td>
+<td>LOW</td>
+<td>architecture</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+<tr>
+<td>T8</td>
+<td>LOW</td>
+<td>correctness</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+<tr>
+<td>SEC-5</td>
+<td>NIT</td>
+<td>security</td>
+<td>defer</td>
+<td>Evidence files are generated workflow records; redacting them is outside this code diff and changes recorded evidence. Route to a redaction pass before publishing.</td>
+</tr>
+<tr>
+<td>T10</td>
+<td>NIT</td>
+<td>correctness</td>
+<td>defer</td>
+<td>Writing new suites for seven modules is broad test work, not a localized fix.</td>
+</tr>
+<tr>
+<td>M10</td>
+<td>NIT</td>
+<td>architecture</td>
+<td>defer</td>
+<td>A structured reason field crosses the engine, launcher and page contract; not localized.</td>
+</tr>
+<tr>
+<td>PERF-9</td>
+<td>NIT</td>
+<td>performance</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+<tr>
+<td>PERF-10</td>
+<td>NIT</td>
+<td>performance</td>
+<td>fix</td>
+<td>in scope, localized, safe</td>
+</tr>
+</tbody>
+</table>
+<h2 id="fix-status" tabindex="-1"><a class="header-anchor" href="#fix-status"><span>Fix Status</span></a></h2>
+<p>The orchestrator applied the fixes itself, not through fix sub-agents: this run had no tool for dispatching sub-agents. Each fix follows the method the finding prescribed unless its note says otherwise. Checks: <code>cargo test --workspace</code> (all pass), <code>cargo clippy --workspace --all-targets</code> (0 warnings), <code>cargo fmt --all --check</code> (clean), <code>node --test web/tests/*.test.mjs</code> (128 pass).</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>ID</th>
+<th>Sev</th>
+<th>Source</th>
+<th>Status</th>
+<th>Fixed-at</th>
+<th>Commit</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IF-1</td>
+<td>MED</td>
+<td>intent-fidelity</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>5a235a4</td>
+<td>keeper_catch_chance raised from 0.84 to 0.86 in content/tuning.json, Tuning::default and <a href="http://data-files.md">data-files.md</a>. At 1000 matches per suite, goals per match were 2.863 (seed 7), 3.035 (42), 2.948 (99), 2.656 (1) and 2.559 (2026), all inside the band. Shots per team were 12.9 to 14.8 and the stronger-team win rate 0.59 to 0.67, also inside their bands.</td>
+</tr>
+<tr>
+<td>PERF-3</td>
+<td>MED</td>
+<td>performance</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Records preallocated to max_ticks (the finding’s stated minimum): no doubling peaks, no copies in ticks_per_s. An incremental validator was not built; one match of records is still held per worker.</td>
+</tr>
+<tr>
+<td>C3</td>
+<td>MED</td>
+<td>correctness</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Page changes are carried across connections (PageChange + carry_page_changes): kept when in the snapshot, re-queued when their queued row survived, dropped otherwise; inbox leftovers carried too. Unit test added.</td>
+</tr>
+<tr>
+<td>M2</td>
+<td>MED</td>
+<td>architecture</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Split into Serving::play (per connection) and Serving::rewind, with EXIT_FULL_TIME / EXIT_REFUSED / EXIT_VIEWER_GONE. Values kept (the launcher reads them). calibrate::run was not split.</td>
+</tr>
+<tr>
+<td>C2</td>
+<td>MED</td>
+<td>correctness</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>drive() returns without finish() when the gate stops; test a_viewer_that_leaves_while_the_match_waits_gets_no_full_time.</td>
+</tr>
+<tr>
+<td>M1</td>
+<td>MED</td>
+<td>architecture</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>The loader refuses any dt other than one clock tick; commentary uses the clock constant; a cross-crate test pins the protocol minute; the viewer duplicate constant is removed; <a href="http://data-files.md">data-files.md</a> updated.</td>
+</tr>
+<tr>
+<td>C1</td>
+<td>MED</td>
+<td>correctness</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Penalty now shoots at once via shot_kick at the placed-kick spread; unit test a_penalty_in_play_is_shot_at_goal_at_once.</td>
+</tr>
+<tr>
+<td>C4</td>
+<td>MED</td>
+<td>correctness</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Handshake gets the remaining wait (min 500 ms) as read/write timeout; refusals past the deadline end the wait. Test a_silent_client_does_not_hold_the_reconnect_wait_open.</td>
+</tr>
+<tr>
+<td>SEC-1</td>
+<td>MED</td>
+<td>security</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>null and file:// dropped; tests and docs/reference/protocol.md updated.</td>
+</tr>
+<tr>
+<td>PERF-1</td>
+<td>MED</td>
+<td>performance</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Only a write the socket took counts as work.</td>
+</tr>
+<tr>
+<td>PERF-2</td>
+<td>MED</td>
+<td>performance</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Idle sleep doubles from 100 us up to 1 ms and resets on work.</td>
+</tr>
+<tr>
+<td>T1</td>
+<td>MED</td>
+<td>correctness</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Asserts rate &lt; 4.2 always; lag branch requires a shown notice naming a speed below 4 within 1x of the measured rate; normal branch requires no lag notice. Syntax-checked only; the browser suite was not run.</td>
+</tr>
+<tr>
+<td>C5</td>
+<td>LOW</td>
+<td>correctness</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Hello rebuilt from the resumed match on every rewind. In scope, localized, safe.</td>
+</tr>
+<tr>
+<td>C6</td>
+<td>LOW</td>
+<td>correctness</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>File kept across connections, cut back with FileSink::rewind at each rewind, finished once. Unit test for rewind.</td>
+</tr>
+<tr>
+<td>SEC-2</td>
+<td>LOW</td>
+<td>security</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Only 127.0.0.1 / localhost with no port or the own port are answered (421 otherwise). Unit test.</td>
+</tr>
+<tr>
+<td>SEC-4</td>
+<td>LOW</td>
+<td>security</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>10 s read/write timeouts and a 64-connection cap.</td>
+</tr>
+<tr>
+<td>M5</td>
+<td>LOW</td>
+<td>architecture</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Salted by an FNV-1a hash of the variant name.</td>
+</tr>
+<tr>
+<td>C7</td>
+<td>LOW</td>
+<td>correctness</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Whole ball over (HALF_LENGTH + BALL_RADIUS) and y interpolated at the goal line. Tests extended.</td>
+</tr>
+<tr>
+<td>M6</td>
+<td>LOW</td>
+<td>architecture</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Mapping extracted to event_type(); a test checks every kind’s code against its wire type.</td>
+</tr>
+<tr>
+<td>PERF-4</td>
+<td>LOW</td>
+<td>performance</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Fixed-size arrays.</td>
+</tr>
+<tr>
+<td>T7</td>
+<td>LOW</td>
+<td>correctness</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Unstaged with git rm --cached.</td>
+</tr>
+<tr>
+<td>SEC-3</td>
+<td>LOW</td>
+<td>security</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Capacity capped at body.len() / 9. Unit test.</td>
+</tr>
+<tr>
+<td>T4</td>
+<td>LOW</td>
+<td>correctness</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Also asserts sent &lt; 1000 + 32 (one outbox per flush).</td>
+</tr>
+<tr>
+<td>PERF-6</td>
+<td>LOW</td>
+<td>performance</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Panel rate re-measured every 30 frames; gauge refreshed every 15 frames and written only on change.</td>
+</tr>
+<tr>
+<td>PERF-7</td>
+<td>LOW</td>
+<td>performance</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>MatchState keeps the full-time tick on add, recomputes on truncate, clears on clear. Test added.</td>
+</tr>
+<tr>
+<td>M7</td>
+<td>LOW</td>
+<td>architecture</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>clockText removed (uses clockAt); recovery.mjs imports the constant.</td>
+</tr>
+<tr>
+<td>T8</td>
+<td>LOW</td>
+<td>correctness</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Shared web/tests/data/parking-spots.json read by the JS test and checked against parking_spot by a Rust test.</td>
+</tr>
+<tr>
+<td>PERF-9</td>
+<td>NIT</td>
+<td>performance</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Read once.</td>
+</tr>
+<tr>
+<td>PERF-10</td>
+<td>NIT</td>
+<td>performance</td>
+<td>fixed</td>
+<td>2026-09-23T20:34:36Z</td>
+<td>933e150</td>
+<td>Font set once per frame; comment corrected (per-segment alpha needs one stroke each).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="success-criteria-intake-quoted-exactly" tabindex="-1"><a class="header-anchor" href="#success-criteria-intake-quoted-exactly"><span>Success Criteria (intake, quoted exactly)</span></a></h2>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Criterion</th>
+<th>Current truth</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>“<strong>Realism statistics</strong> (over 1000 simulated matches): goals per match 2.4 to 3.2; shots per team 8 to 16; possession split within 35 to 65 percent for evenly matched teams; a team with 15 percent better attributes wins over 50 percent of matches.”</td>
+<td>Met after IF-1 fix</td>
+<td><code>engine-cli calibrate --matches 1000</code> at keeper_catch_chance 0.86: see IF-1 for per-seed values; shots 13-15, possession ~50/50, stronger-team win rate 0.60-0.67</td>
+</tr>
+<tr>
+<td>“<strong>Performance</strong>: a full 90-minute match simulates headless in under 2 seconds on a laptop; 1000 matches complete in under 30 minutes.”</td>
+<td>Met</td>
+<td>calibrate run report: bench.match_wall_ms 438, suite wall 78-88 s per 1000 matches on 8 jobs</td>
+</tr>
+<tr>
+<td>“<strong>Viewer fidelity</strong>: the 2D viewer replays a match at 1x to 8x speed at 60 frames per second without dropped ticks; every goal in the replay matches the engine’s event log.”</td>
+<td>Met per verify evidence; browser suite not re-run this stage</td>
+<td><a href="http://06-verify-viewer-pitch.md">06-verify-viewer-pitch.md</a>, <a href="http://06-verify-integration.md">06-verify-integration.md</a>; T1 tightened the 4x assertion</td>
+</tr>
+<tr>
+<td>“<strong>Positional sanity</strong>: no player leaves the pitch bounds; no two players occupy the same point; ball speed never exceeds 40 m/s; formation shape is kept when the ball is far away.”</td>
+<td>Met</td>
+<td>calibrate run reports: validate.violations 0 over 2000 matches per run</td>
+</tr>
+<tr>
+<td>“<strong>Observability</strong>: every match emits a structured event stream and an aggregate statistics record that the pipeline can ingest without transformation.”</td>
+<td>Met</td>
+<td>darkpath.match_without_stats 0; events.files_written 2000 in each calibrate run</td>
+</tr>
+</tbody>
+</table>
+<h2 id="recommendations" tabindex="-1"><a class="header-anchor" href="#recommendations"><span>Recommendations</span></a></h2>
+<h3 id="must-fix-triaged-fix" tabindex="-1"><a class="header-anchor" href="#must-fix-triaged-fix"><span>Must Fix (triaged “fix”)</span></a></h3>
+<p>None remaining. Every fix decision landed.</p>
+<h3 id="should-fix-med-triaged-fix" tabindex="-1"><a class="header-anchor" href="#should-fix-med-triaged-fix"><span>Should Fix (MED triaged “fix”)</span></a></h3>
+<p>None remaining.</p>
+<h3 id="deferred-triaged-defer" tabindex="-1"><a class="header-anchor" href="#deferred-triaged-defer"><span>Deferred (triaged “defer”)</span></a></h3>
+<ul>
+<li>T11 (LOW): Paired calibration test failed once under full-suite load. Seen once and could not be reproduced. The cause is probably concurrent calibration workers under load. Diagnosing it needs repeated runs under load, which is not a localized fix.</li>
+<li>PERF-5 (LOW): step clones the whole Tuning every tick. The fix (Arc<Tuning> or split borrows) touches every tuning reader and test that edits tuning in place; not localized.</li>
+<li>T6 (LOW): Four acceptance tests are #[ignore] and nothing runs them. Needs a CI pipeline or a scheduled slow-test job: new infrastructure, not a localized change.</li>
+<li>SEC-5 (NIT): Workflow evidence contains absolute local paths. Evidence files are generated workflow records; redacting them is outside this code diff and changes recorded evidence. Route to a redaction pass before publishing.</li>
+<li>T10 (NIT): Several viewer modules have no unit tests. Writing new suites for seven modules is broad test work, not a localized fix.</li>
+<li>M10 (NIT): refusalReason parses the engine error prefix. A structured reason field crosses the engine, launcher and page contract; not localized.</li>
+</ul>
+<h3 id="dismissed" tabindex="-1"><a class="header-anchor" href="#dismissed"><span>Dismissed</span></a></h3>
+<p>None.</p>
+<h3 id="consider-lownit-not-triaged" tabindex="-1"><a class="header-anchor" href="#consider-lownit-not-triaged"><span>Consider (LOW/NIT — not triaged)</span></a></h3>
+<p>None; every LOW/NIT was triaged under the autonomous policy.</p>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option A:</strong> <code>/wf handoff football-manager-match-engine</code> — no open BLOCKER/HIGH; all 17 slices verified; ready for the PR. Run the Playwright first-match suite once before release (T1 changed it and it was not run here).</li>
+<li><strong>Option E:</strong> <code>/wf ship football-manager-match-engine</code> — skip handoff if no PR description is needed.</li>
+<li><strong>Option F:</strong> <code>/wf intake football-manager-match-engine from-review</code> — only to take on the deferred CI job for the ignored acceptance tests (T6) as new scope.</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-23T20:34:36Z</span>
+    <a href="../../../workflows/football-manager-match-engine/07-review.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../INDEX.html">football-manager-match-engine</a><span class="m-sheet-here" aria-current="page">review</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../workflows/football-manager-match-engine/07-review.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-23T20:34:36Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

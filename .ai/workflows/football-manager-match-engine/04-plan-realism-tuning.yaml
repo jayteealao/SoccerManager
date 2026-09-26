@@ -1,0 +1,37 @@
+artifact: plan
+schema: sdlc/v1
+slug: football-manager-match-engine
+slice: realism-tuning
+rev: 0
+modules:
+  - { id: tuning, label: "crates/engine/src/tuning.rs and content/tuning.json", role: config }
+  - { id: play, label: "crates/engine/src (sim.rs, decision.rs)", role: domain }
+  - { id: tests, label: "crates/engine/tests and crates/engine-cli/tests", role: test }
+  - { id: e2e, label: "e2e/tests", role: test }
+  - { id: docs, label: "docs/reference and the build book", role: docs }
+files:
+  - { path: "content/tuning.json", status: modified, role: config, module: tuning, loc: 198, delta: { add: 30, rem: 30 }, planned_change: { intent: "The chosen setting: restart delays at the sourced medians (13.8, 31.8, 23.2, 32.5 s), contest levers, foul_base, foul_booked_factor, foul_cooldown_ticks, decision weights and carry window, shot weights, shot_range, shot and aim noise, refitted xG coefficients, and the new corner-source chance. Every value inside its declared bound. The card chance per foul, the save curve and the hold share do not change." } }
+  - { path: "crates/engine/src/tuning.rs", status: modified, role: config, module: tuning, loc: 620, delta: { add: 25, rem: 20 }, planned_change: { intent: "Tuning::default() mirrors the new content values. The clearances block gains the corner-source value (serde default 0.0, so an older file plays as today) with a garde bound." } }
+  - { path: "crates/engine/src/sim.rs", status: modified, role: domain, module: play, loc: 1420, delta: { add: 60, rem: 5 }, planned_change: { intent: "A new corner source: a pressured clearance or a cross clearance near the defenders' own goal line can go off the defender at a wide angle, with one referee draw per event. The ball then crosses the goal line or not as the physics decides, and the existing out-of-play rule gives a corner only after a defending touch over the goal line (RIM-9)." } }
+  - { path: "crates/engine/src/decision.rs", status: modified, role: domain, module: play, loc: 810, delta: { add: 10, rem: 2 }, planned_change: { intent: "Only if the corner source needs it: the clearance direction under pressure reads the new value. No change to how often a player decides." } }
+  - { path: "crates/engine/tests/corner_source.rs", status: new, role: test, module: tests, loc: 0, delta: { add: 160, rem: 0 }, planned_change: { intent: "Scenes: a pressured clearance at the goal line with a scripted draw goes over the own goal line and gives a corner; the same scene with the value at 0.0 gives no corner; a ball that stops before the line gives no corner; the last touch is the defending side." } }
+  - { path: "crates/engine/tests/defending.rs", status: modified, role: test, module: tests, loc: 300, delta: { add: 20, rem: 6 }, planned_change: { intent: "every_formation_holds judges total goals per match (both sides) against 2.4 to 3.2 for each formation against 4-4-2, 120 matches, read from content/realism-bands.json. The doc comment is updated. a_sending_off_gives_no_advantage is unchanged and must pass." } }
+  - { path: "crates/engine/tests/tempo_and_restarts.rs", status: modified, role: test, module: tests, loc: 560, delta: { add: 3, rem: 8 }, planned_change: { intent: "The three tests marked as later-tuning targets in d6ccbb7 get the plain slow marker back, and the targets paragraph is removed. Limits unchanged: passes 350 to 550 per team at 75 to 88 percent, ball in play 52 to 65 minutes, throw-ins 35 to 55." } }
+  - { path: "crates/engine-cli/tests/calibrate.rs", status: modified, role: test, module: tests, loc: 300, delta: { add: 10, rem: 10 }, planned_change: { intent: "The all-suites test judges every equal and strength band and exit 0 on those suites. Formations bands are printed and not asserted (Q-RT1). The comment that bands miss until realism-tuning is removed." } }
+  - { path: "crates/engine/tests (content.rs, full_match.rs, commentary.rs, common/mod.rs, keeper_and_shots.rs, match_stats.rs and others the retune moves)", status: modified, role: test, module: tests, loc: 2000, delta: { add: 40, rem: 40 }, planned_change: { intent: "Pins that tuning.json equals Tuning::default(); seeded expectations the retune moves, each re-derived and recorded with its reason. No tolerance is widened." } }
+  - { path: "e2e/tests (match-day.spec.mjs, first-match.spec.mjs)", status: modified, role: test, module: e2e, loc: 700, delta: { add: 6, rem: 6 }, planned_change: { intent: "Only if a seed no longer scores in time: pick a new seed that does and record it. Any timeout change is recorded." } }
+  - { path: "docs/reference/data-files.md and the build book run analysis", status: modified, role: docs, module: docs, loc: 900, delta: { add: 40, rem: 20 }, planned_change: { intent: "The new values and the corner-source row; the run analysis regenerated from the gate reports." } }
+edges:
+  - { from: "crates/engine/src/sim.rs", to: "crates/engine/src/tuning.rs", kind: import }
+  - { from: "crates/engine/src/decision.rs", to: "crates/engine/src/tuning.rs", kind: import }
+  - { from: "crates/engine/tests/corner_source.rs", to: "crates/engine/src/sim.rs", kind: calls }
+  - { from: "crates/engine/tests/defending.rs", to: "content/tuning.json", kind: calls }
+  - { from: "crates/engine-cli/tests/calibrate.rs", to: "content/tuning.json", kind: calls }
+risks:
+  - { title: "No setting passes every gated band on five seeds", severity: high, body: "Bands pull against each other: more fouls help yellows and ball in play but hurt the sending-off band and discipline; more contest helps passes, shots and the red card but lowers goals; more clear helps throw-ins but raises passes. b0 already failed discipline and the stronger-team test.", mitigation: "A feasibility stage tests the four walls first; tune jointly within 8 rounds, then check five seeds. If no setting passes, stop and report the closest result and the conflicting pair. Never widen a band." }
+  - { title: "Goals and the red-card control are linked", severity: high, body: "The red-card test caps the full side at 1.6 times the control. At b0 the reduced side scored less in every arm, but the control scored too little, so the test failed on the cap.", mitigation: "Proportional goals leave the cap ratio unchanged, so the feasibility stage measures the control and all three arms early, and the loop measures them every round. The xG refit corrects goals per xG only; it does not drive saves." }
+  - { title: "The 10 v 4-4-2 formations test is still far out", severity: high, body: "Today only 4-2-3-1 is clearly inside 2.4 to 3.2; 4-1-2-1-2 gives 0.84 and 3-4-3 gives 3.76.", mitigation: "The feasibility stage sweeps 4-1-2-1-2, 3-4-3 and 4-4-2 on the exact test fixtures first. If shared values cannot bring every pairing into band, stop and report." }
+  - { title: "The corner source changes other bands", severity: medium, body: "More corners add dead time and set pieces, so ball in play, shots and goals move too.", mitigation: "Build the source at 0.0 first, commit it with its scenes, then tune its chance together with the other values." }
+  - { title: "Seeded browser tests stop scoring", severity: medium, body: "match-day.spec.mjs needs seed 3 to score early; first-match.spec.mjs needs seed 42 to score at 8x.", mitigation: "Re-pick the seed only when it no longer scores, and record it." }
+history: []
+revisions: []

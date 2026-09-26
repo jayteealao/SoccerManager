@@ -3,10 +3,10 @@ schema: sdlc/v1
 type: slice
 slug: football-manager-match-engine
 slice-slug: realism-bands-v2
-status: defined
+status: complete
 stage-number: 3
 created-at: "2026-09-23T22:03:35Z"
-updated-at: "2026-09-23T22:03:35Z"
+updated-at: "2026-09-24T02:30:58Z"
 complexity: m
 depends-on: [calibration, probe-engine-core]
 source: extension

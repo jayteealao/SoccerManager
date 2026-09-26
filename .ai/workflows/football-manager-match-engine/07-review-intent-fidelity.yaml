@@ -1,0 +1,14 @@
+schema: "sdlc/v1"
+artifact: "review-dimension"
+dimension: "intent-fidelity"
+parent: "07-review.md"
+rev: 1
+verdict: "ship"
+summary: "1 findings; 1 fixed, 0 deferred."
+counts:
+  blocker: 0
+  high: 0
+  med: 0
+  low: 0
+  nit: 0
+findings: []

@@ -3,10 +3,10 @@ schema: sdlc/v1
 type: slice
 slug: football-manager-match-engine
 slice-slug: scripting-runtime
-status: defined
+status: complete
 stage-number: 3
 created-at: "2026-09-21T19:50:41Z"
-updated-at: "2026-09-21T19:50:41Z"
+updated-at: "2026-09-23T18:01:24Z"
 complexity: l
 depends-on: [data-schemas-generator, tactics-and-ai, calibration]
 tags: [engine, modding, scripting, deferred, rim-6]

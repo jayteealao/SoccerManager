@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="slice">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · slice — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="slice">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span aria-hidden="true">/</span><span class="m-here">realism-bands-v2</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · slice</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">realism-bands-v2</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/03-slice-realism-bands-v2.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">03-slice-realism-bands-v2.md</div>
+      <h1 class="pg-title">Slice · <code>realism-bands-v2</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="stage-badge">slice</span><span class="meta">2026-09-24T02:30:58Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    
+    <section class="slice-stages">
+    <h2 class="sdlc-h2">stages</h2>
+    <div class="slice-grid"><a class="slice-card" href="../../plan/realism-bands-v2/INDEX.html"><span class="slice-slug"><code>plan</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../implement/realism-bands-v2/INDEX.html"><span class="slice-slug"><code>implement</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../verify/realism-bands-v2/INDEX.html"><span class="slice-slug"><code>verify</code></span>
+    <span class="status-badge is-ok">complete</span></a></div>
+  </section>
+    
+    <dl class="frontmatter-card"><div><dt>type</dt><dd>slice</dd></div><div><dt>slug</dt><dd>football-manager-match-engine</dd></div><div><dt>slice-slug</dt><dd>realism-bands-v2</dd></div><div><dt>status</dt><dd>complete</dd></div><div><dt>stage-number</dt><dd>3</dd></div><div><dt>created-at</dt><dd>2026-09-23T22:03:35Z</dd></div><div><dt>updated-at</dt><dd>2026-09-24T02:30:58Z</dd></div><div><dt>complexity</dt><dd>m</dd></div><div><dt>depends-on</dt><dd>calibration, probe-engine-core</dd></div><div><dt>source</dt><dd>extension</dd></div><div><dt>source-ref</dt><dd>user description</dd></div><div><dt>extension-round</dt><dd>1</dd></div><div><dt>tags</dt><dd>calibration, realism, observability</dd></div><div><dt>refs</dt><dd>{&quot;index&quot;:&quot;00-index.md&quot;,&quot;slice-index&quot;:&quot;03-slice.md&quot;,&quot;source&quot;:&quot;&quot;,&quot;plan&quot;:&quot;04-plan-realism-bands-v2.md&quot;,&quot;implement&quot;:&quot;05-implement-realism-bands-v2.md&quot;}</dd></div></dl>
+    <div class="prose"><h1 id="slice-realism-bands-version-2" tabindex="-1"><a class="header-anchor" href="#slice-realism-bands-version-2"><span>Slice: Realism bands, version 2</span></a></h1>
+<h2 id="goal" tabindex="-1"><a class="header-anchor" href="#goal"><span>Goal</span></a></h2>
+<p>Make calibration measure what a real match looks like, not only its averages. Add eleven bands from real-match data, a formation suite, and the missing record fields. The engine does not change in this slice, so several of the new bands fail on purpose. Their failures are the baseline that the next three slices work down.</p>
+<h2 id="why-this-slice-exists" tabindex="-1"><a class="header-anchor" href="#why-this-slice-exists"><span>Why This Slice Exists</span></a></h2>
+<p>A fresh run of 10,000 matches at <code>5a235a4</code> passed every existing band on five seeds. The same matches were not realistic:</p>
+<ul>
+<li><strong>Goals:</strong> 10.5% had ten or more goals, against none in 1,941 real matches.</li>
+<li><strong>Cards:</strong> 45% had a sending-off, against a real 15.7%.</li>
+<li><strong>Shots:</strong> 75% of shots were on target, against a real 35%.</li>
+<li><strong>Passes and set pieces:</strong> passes ran at about three times the real volume, and teams earned almost no corners.</li>
+</ul>
+<p>The goals band passes because blowouts and extra goalless draws average out to about three goals. The product owner asked for bands first, so that every later slice shows its progress against them (<code>po-answers.md</code>, extend round 1).</p>
+<h2 id="scope" tabindex="-1"><a class="header-anchor" href="#scope"><span>Scope</span></a></h2>
+<ul>
+<li><strong>In:</strong>
+<ul>
+<li>
+<p>Add these bands to <code>content/realism-bands.json</code>. The values are sourced from Wyscout and StatsBomb data, as recorded in <code>docs/design/realism/01-engine-realism.md</code> and its local sources.</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Band</th>
+<th>Low</th>
+<th>High</th>
+<th>Real value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Share of matches with 10 or more goals</td>
+<td>0</td>
+<td>0.5%</td>
+<td>0 of 1,941</td>
+</tr>
+<tr>
+<td>Share of matches with a sending-off</td>
+<td>8%</td>
+<td>22%</td>
+<td>15.7%</td>
+</tr>
+<tr>
+<td>Yellow cards per team</td>
+<td>1.2</td>
+<td>2.6</td>
+<td>about 1.4–2.5</td>
+</tr>
+<tr>
+<td>Shots on target, share of shots</td>
+<td>30%</td>
+<td>42%</td>
+<td>35%</td>
+</tr>
+<tr>
+<td>Goals per unit of xG</td>
+<td>0.85</td>
+<td>1.15</td>
+<td>0.99</td>
+</tr>
+<tr>
+<td>Passes per team</td>
+<td>350</td>
+<td>550</td>
+<td>429</td>
+</tr>
+<tr>
+<td>Pass accuracy</td>
+<td>75%</td>
+<td>88%</td>
+<td>82–83%</td>
+</tr>
+<tr>
+<td>Corners per team</td>
+<td>3.5</td>
+<td>6.5</td>
+<td>4.98</td>
+</tr>
+<tr>
+<td>Throw-ins per match</td>
+<td>35</td>
+<td>55</td>
+<td>42–46</td>
+</tr>
+<tr>
+<td>Goal kicks per match</td>
+<td>12</td>
+<td>22</td>
+<td>16–17</td>
+</tr>
+<tr>
+<td>Share of goalless draws</td>
+<td>4%</td>
+<td>12%</td>
+<td>7.1%</td>
+</tr>
+</tbody>
+</table>
+</li>
+<li>
+<p>Compute each new figure in <code>crates/engine-cli/src/report/</code> and check it in the equal suite.</p>
+</li>
+<li>
+<p>Give the <code>Bands</code> struct, its loader tests and the pinned band lists the new fields.</p>
+</li>
+<li>
+<p>Add <code>stats.throw_ins</code> and <code>stats.goal_kicks</code> to the <code>match-stats</code> record. <code>Summary</code> already counts both, but <code>LawStats::new</code> does not copy them.</p>
+</li>
+<li>
+<p>Update <code>schemas/observability/*.schema.json</code> and <code>.ai/observability.md</code>, so the new figures become contract keys.</p>
+</li>
+<li>
+<p>Add a <code>formations</code> suite to <code>calibrate</code>. Each shipped formation (4-4-2, 4-3-3, 4-2-3-1, 3-5-2) plays against 4-4-2 with equal clubs. Each pairing reports goals per match and the share of matches with ten or more goals.</p>
+</li>
+<li>
+<p>Record the failing bands as the baseline for the later slices.</p>
+</li>
+</ul>
+</li>
+<li><strong>Out:</strong>
+<ul>
+<li>Any change to engine behaviour or tuning. The following slices own those.</li>
+<li>Widening a band to make it pass. Bands change only by a recorded product-owner answer.</li>
+</ul>
+</li>
+</ul>
+<h2 id="acceptance-criteria" tabindex="-1"><a class="header-anchor" href="#acceptance-criteria"><span>Acceptance Criteria</span></a></h2>
+<ul>
+<li><strong>Every band is reported.</strong> Given the shipped bands, when <code>engine-cli calibrate --seed 42</code> runs 1,000 matches per suite, then <code>report.json</code> holds every one of the eleven new bands with its value, <code>lo</code>, <code>hi</code> and <code>pass</code>, and a failed band sets exit code 2 as today.</li>
+<li><strong>The baseline is recorded.</strong> Given the engine at this slice, when the run completes, then stderr names each failing band. The run is recorded as the baseline in this slice’s implement record. At least these bands fail: the 10-or-more-goals share, the sending-off share, shots on target, passes per team and corners per team.</li>
+<li><strong>Formations are reported.</strong> Given every shipped formation, when the <code>formations</code> suite runs, then the report holds goals per match and the share of 10 or more goals for each pairing against 4-4-2.</li>
+<li><strong>New keys pass the schema.</strong> Given a finished match, when <code>match-stats</code> is written, then it holds <code>stats.throw_ins</code> and <code>stats.goal_kicks</code> for both teams, and the record passes its schema.</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<ul>
+<li><code>calibration</code>: the harness, the band loader and the report this slice extends.</li>
+<li><code>probe-engine-core</code>: the <code>error</code> outcome word and the schema shape it settled.</li>
+</ul>
+<h2 id="risks" tabindex="-1"><a class="header-anchor" href="#risks"><span>Risks</span></a></h2>
+<ul>
+<li><strong>Expected failures.</strong> The ignored slow test <code>a_thousand_matches_hold_the_realism_bands</code> and the calibration exit code fail until <code>realism-tuning</code>. The product owner accepted this: slices before the final tuning slice are judged on their own criteria, and their band misses are recorded rather than treated as failures.</li>
+<li><strong>Paired-run verdict.</strong> A band that starts at 0 adds distance-to-centre in <code>report/compare.rs</code> <code>verdict()</code>, even when it passes. The paired-run verdict must stay meaningful.</li>
+<li><strong>Reference values.</strong> The values come from another programme’s staged document and its local sources. This slice cites them at their line numbers and does not edit that document.</li>
+</ul></div>
+    
+  
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-24T02:30:58Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/03-slice-realism-bands-v2.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">slice</a><span class="m-sheet-here" aria-current="page">realism-bands-v2</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/03-slice-realism-bands-v2.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-24T02:30:58Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

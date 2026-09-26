@@ -1,0 +1,45 @@
+artifact: plan
+schema: sdlc/v1
+slug: football-manager-match-engine
+slice: probe-engine-core
+rev: 3
+modules:
+  - { id: cli, label: "crates/engine-cli/src", role: cli }
+  - { id: cli-tests, label: "crates/engine-cli/tests", role: test }
+  - { id: engine, label: "crates/engine/src", role: domain }
+  - { id: schemas, label: "schemas/observability", role: contract }
+  - { id: docs, label: "README.md and docs/reference", role: docs }
+files:
+  - { path: "crates/engine-cli/src/cli.rs", status: modified, role: cli, module: cli, loc: 401, delta: { add: 66, rem: 47 }, planned_change: { intent: "Finding 5 residual and finding 1. Shorten every short-help string whose -h line exceeds 80 columns: 47 lines over 10 help surfaces at HEAD 89fe959 (serve -h reaches 116 columns, calibrate -h 145). Hide the possible values of calibrate --suite and --keep-events in the option line and name them in long_help. resume --json gets the replace-rule long_help of simulate --json. Add the hidden test seam calibrate --inject-failure <match|worker>." } }
+  - { path: "crates/engine-cli/tests/cli_args.rs", status: modified, role: test, module: cli-tests, loc: 216, delta: { add: 170, rem: 9 }, planned_change: { intent: "The 80-column test reads -h and --help on all 10 help surfaces (20 checks). Regression tests: the --json dump replaces the extension; an unwritable --ticks-out names the OS error once; redirected stderr carries no ESC byte. Failure-record tests for simulate and bench validated against the record schemas; calibration drives with the injected failure; the hidden-seam test covers --inject-failure." } }
+  - { path: "crates/engine-cli/tests/schemas.rs", status: modified, role: test, module: cli-tests, loc: 92, delta: { add: 40, rem: 0 }, planned_change: { intent: "Negative schema checks: outcome failure is refused by both schemas; a success record without stats.goals is refused; an error record without error.code is refused." } }
+  - { path: "crates/engine/src/error.rs", status: modified, role: domain, module: engine, loc: 48, delta: { add: 45, rem: 0 }, planned_change: { intent: "EngineError::error_type(), error_code(), and retriable(). error_type() returns the values the calibration worker already writes (invalid-config, io, format, sink, content, snapshot). Unit test per variant." } }
+  - { path: "crates/engine/src/observe/mod.rs", status: modified, role: domain, module: engine, loc: 693, delta: { add: 70, rem: 0 }, planned_change: { intent: "FailureRecord implements Record: envelope, operation, correlation keys, seed, content.hash, duration_ms, outcome error, error.type, error.code, error.retriable, and no statistic key. MatchFigures gains optional error.code and error.retriable beside error.type. Unit tests on the key sets." } }
+  - { path: "crates/engine-cli/src/main.rs", status: modified, role: cli, module: cli, loc: 53, delta: { add: 40, rem: 3 }, planned_change: { intent: "On Err from simulate or bench, print one FailureRecord on stdout (match-stats for simulate, run-report for bench), then the prose line on stderr, then exit 1. The other seven subcommands keep prose only." } }
+  - { path: "crates/engine-cli/src/bench.rs", status: modified, role: cli, module: cli, loc: 263, delta: { add: 2, rem: 1 }, planned_change: { intent: "The --matches 0 check (lines 22-23) returns EngineError::InvalidConfig in place of an untyped bail." } }
+  - { path: "crates/engine-cli/src/calibrate/worker.rs", status: modified, role: cli, module: cli, loc: 208, delta: { add: 20, rem: 13 }, planned_change: { intent: "A failed match writes outcome error (was failure) with error.type, error.code, and error.retriable from the moved classifier. The private error_type() (lines 199-208) is removed. The injected match failure fails fixture 0 of shard 0 through the same failure() path." } }
+  - { path: "crates/engine-cli/src/calibrate/mod.rs", status: modified, role: cli, module: cli, loc: 480, delta: { add: 30, rem: 3 }, planned_change: { intent: "The run report says outcome error (was failure) when a worker failed, and then carries error.type worker, error.code worker-failed, error.retriable false. worker_command forwards --inject-failure to shard 0." } }
+  - { path: "crates/engine-cli/src/report/mod.rs", status: modified, role: cli, module: cli, loc: 666, delta: { add: 12, rem: 1 }, planned_change: { intent: "CalibrationReport gains optional error.type, error.code, and error.retriable. The strength-suite test marks its failed record outcome error. The filters compare against success and do not change." } }
+  - { path: "schemas/observability/match-stats.schema.json", status: modified, role: contract, module: schemas, planned_change: { intent: "Product-owner answer Q-2 = C. outcome accepts success and error only; error.code and error.retriable are declared; the statistic keys are required only when outcome is not error; an error record requires error.type, error.code, and error.retriable. The envelope and correlation keys stay required." } }
+  - { path: "schemas/observability/run-report.schema.json", status: modified, role: contract, module: schemas, planned_change: { intent: "Same rule: outcome success or error; the bench.* keys and the operation branches apply only when outcome is not error; an error record requires the three error keys; error.* declared." } }
+  - { path: "docs/reference/cli.md", status: modified, role: docs, module: docs, planned_change: { intent: "The simulate and bench sections state that a failed run prints one record with outcome error on standard output and exits 1. The calibrate section names outcome error for a failed match and a failed worker." } }
+  - { path: "README.md", status: modified, role: docs, module: docs, loc: 107, delta: { add: 2, rem: 0 }, planned_change: { intent: "One sentence beside the benchmark exit codes that a failed run prints one record and exits 1." } }
+edges:
+  - { from: "crates/engine-cli/src/main.rs", to: "crates/engine/src/observe/mod.rs", kind: calls }
+  - { from: "crates/engine-cli/src/main.rs", to: "crates/engine/src/error.rs", kind: calls }
+  - { from: "crates/engine-cli/src/calibrate/worker.rs", to: "crates/engine/src/error.rs", kind: calls }
+  - { from: "crates/engine-cli/src/calibrate/mod.rs", to: "crates/engine-cli/src/report/mod.rs", kind: calls }
+  - { from: "crates/engine-cli/src/bench.rs", to: "crates/engine/src/error.rs", kind: calls }
+  - { from: "crates/engine-cli/tests/cli_args.rs", to: "schemas/observability/match-stats.schema.json", kind: import }
+  - { from: "crates/engine-cli/tests/schemas.rs", to: "schemas/observability/run-report.schema.json", kind: import }
+  - { from: "crates/engine-cli/tests/cli_args.rs", to: "crates/engine-cli/src/main.rs", kind: calls }
+risks:
+  - { title: "Calibration output changes after its verification", severity: medium, body: "Calibration writes failure today in per-match records and in its run report. Option C changes the word to error and adds two keys. Run folders saved before the change fail the new schema.", mitigation: "The product owner accepted this: earlier run folders are not a compatibility target. The calibrate tests and a real calibration drive with an injected failure prove the new shape." }
+  - { title: "An error run report without the error keys", severity: medium, body: "Today a calibration run with a failed worker writes outcome failure and no error key. After the schema change an error record without error.type, error.code, and error.retriable is refused.", mitigation: "Step 10 adds the three keys to the run report, and the injected worker failure drives the path against the real schema." }
+  - { title: "The injected failure leaks into a real run", severity: low, body: "The calibrate test seam makes a match or a worker fail on purpose.", mitigation: "The flag is hidden, off by default, applies to shard 0 only, and the hidden-seam test asserts it stays out of the help." }
+  - { title: "Help text keeps growing with each slice", severity: low, body: "Later slices took the over-width count from 9 options to 47 lines. The existing test reads --help only, on 7 of 10 surfaces.", mitigation: "The test reads -h and --help on every surface, so a later option fails the gate." }
+  - { title: "Stdout consumers of a failed run", severity: low, body: "A script that treats non-empty stdout as success would misread a failed simulate or bench run.", mitigation: "The exit code stays 1, and the command reference and the README state what a failed run prints." }
+history:
+  - { rev: 0, at: "2026-09-22T22:29:40Z", snapshot: "history/04-plan-probe-engine-core-0.md", summary: "First plan; stopped on Q-1 (failure record or narrowed contract)." }
+  - { rev: 1, at: "2026-09-23T08:44:00Z", snapshot: "history/04-plan-probe-engine-core-1.md", summary: "Q-1 answered A; stopped on new Q-2 (record schemas and the outcome word)." }
+  - { rev: 2, at: "2026-09-23T18:39:54Z", snapshot: "history/04-plan-probe-engine-core-2.md", summary: "Re-grounded on HEAD 89fe959; Q-2 still open." }

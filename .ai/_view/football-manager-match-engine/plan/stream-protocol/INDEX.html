@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="plan">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · plan — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="plan">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span aria-hidden="true">/</span><span class="m-here">stream-protocol</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · plan</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">stream-protocol</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/04-plan-stream-protocol.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">04-plan-stream-protocol.md</div>
+      <h1 class="pg-title">Plan · <code>stream-protocol</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="stage-badge">plan</span><span class="meta">rev 0</span><span class="meta">2026-09-22T11:28:51Z</span></div>
+    </header><div class="metric-row"><div class="metric">
+      <span class="metric-label">files to touch</span>
+      <span class="metric-value">38</span>
+      
+    </div><div class="metric">
+      <span class="metric-label">steps</span>
+      <span class="metric-value">20</span>
+      
+    </div><div class="metric is-ok">
+      <span class="metric-label">blockers</span>
+      <span class="metric-value">none</span>
+      
+    </div></div>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-plan" tabindex="-1"><a class="header-anchor" href="#the-plan"><span>The Plan</span></a></h2>
+<p>Two slices handed over an engine that produces 694,087 ticks per second into a file and reads every data file from <code>content/</code>, with one seam for a consumer: the <code>TickSink</code> trait, called once per tick. Nothing in the workspace speaks to a network, no thread is spawned anywhere, and no test uses a socket, a channel, or a clock. The slice asks for a live stream to a browser page, and research settled the first fact: a page can open a WebSocket or an HTTP connection to a local program and nothing else, so the “TCP on loopback” default named in the slice needs WebSocket framing above it.</p>
+<p>Twelve product-owner answers fixed the build. The transport is <code>tungstenite</code> 0.30, blocking, one thread per client, because version 1 serves one viewer and <code>tokio</code> would add an executor for concurrency the engine does not have. The tick encoding closes unknown U-1: a 98-byte keyframe every 50 ticks and 47-byte delta frames between, about 13 megabytes per match against 51.8 raw and a 300-megabyte budget. Two new crates keep the split NFR-8 asks for: <code>crates/protocol</code> holds the messages and the codec with no input or output, so the viewer decoder and a later WebAssembly build can mirror it, and <code>crates/stream</code> holds the server, the recorder, and the replayer. The engine simulates as fast as the client reads, up to 500 ticks of lead held in <code>content/tuning.json</code>; a full <code>sync_channel</code> blocks the simulation thread, which is the backpressure. The fixture records the wire bytes exactly as sent, so the replay is byte-identical by construction.</p>
+<p>Implement builds 26 new files across 20 steps, the codec first and the command line last, and retires one debt marker on the way: the event stream names a kick-off, so the validator stops reading every two-metre ball jump as a restart. The top risk is the encoder on the hot path — 270,000 frames per match with no allocation allowed — and step 19 measures it against the 384-millisecond and 5.62-megabyte tripwires before any test is called done.</p></section><figure class="figure-canvas">
+  <figcaption class="figure-meta">
+    <span class="figure-title"><b>Figure 3</b> · File-change topology</span>
+    <span class="figure-legend" aria-hidden="true"><span class="legend-entry"><span class="sw modified"></span>modified</span><span class="legend-entry"><span class="sw new"></span>new</span><span class="legend-entry"><span class="sw deleted"></span>deleted</span><span class="legend-entry"><span class="sw external"></span>external</span></span>
+  </figcaption>
+  <svg viewBox="0 0 980 674" width="100%" preserveAspectRatio="xMinYMid meet" aria-label="File-change topology">
+    <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8377"/>
+    </marker>
+  </defs><rect x="20" y="30" width="301.3333333333333" height="108" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">WORKSPACE ROOT</text><rect x="333.3333333333333" y="30" width="301.3333333333333" height="300" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/PROTOCOL (MESSAGES AND CODEC, NO I/O)</text><rect x="646.6666666666666" y="30" width="301.3333333333333" height="492" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/STREAM (SERVER, RECORDER, REPLAYER)</text><rect x="20" y="226" width="301.3333333333333" height="172" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="244" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC</text><rect x="333.3333333333333" y="162" width="301.3333333333333" height="108" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="180" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CONTENT/ (SHIPPED DATA FILES)</text><rect x="646.6666666666666" y="354" width="301.3333333333333" height="300" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="372" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE-CLI</text><rect x="20" y="230" width="301.3333333333333" height="76" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="248" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">DOCS/REFERENCE</text><rect x="333.3333333333333" y="166" width="301.3333333333333" height="44" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="184" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">INTEGRATION TESTS</text><rect x="32" y="58" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">Cargo.toml</text>
+      <text x="40" y="80" font-size="8" fill="#8a8377">config · +6/−1</text><rect x="345.3333333333333" y="58" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">Cargo.toml</text>
+      <text x="353.3333333333333" y="80" font-size="8" fill="#8a8377">config · +20/−0</text><rect x="345.3333333333333" y="90" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">lib.rs</text>
+      <text x="353.3333333333333" y="112" font-size="8" fill="#8a8377">domain · +70/−0</text><rect x="345.3333333333333" y="122" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="134" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">message.rs</text>
+      <text x="353.3333333333333" y="144" font-size="8" fill="#8a8377">domain · +200/−0</text><rect x="345.3333333333333" y="154" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="166" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">codec.rs</text>
+      <text x="353.3333333333333" y="176" font-size="8" fill="#8a8377">domain · +240/−0</text><rect x="345.3333333333333" y="186" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="198" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">event.rs</text>
+      <text x="353.3333333333333" y="208" font-size="8" fill="#8a8377">domain · +120/−0</text><rect x="345.3333333333333" y="218" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="230" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">command.rs</text>
+      <text x="353.3333333333333" y="240" font-size="8" fill="#8a8377">domain · +150/−0</text><rect x="345.3333333333333" y="250" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="262" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">frame.rs</text>
+      <text x="353.3333333333333" y="272" font-size="8" fill="#8a8377">domain · +90/−0</text><rect x="345.3333333333333" y="282" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="294" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">document.rs</text>
+      <text x="353.3333333333333" y="304" font-size="8" fill="#8a8377">test · +90/−0</text><rect x="658.6666666666666" y="58" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">Cargo.toml</text>
+      <text x="666.6666666666666" y="80" font-size="8" fill="#8a8377">config · +22/−0</text><rect x="658.6666666666666" y="90" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">lib.rs</text>
+      <text x="666.6666666666666" y="112" font-size="8" fill="#8a8377">service · +60/−0</text><rect x="658.6666666666666" y="122" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="134" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">server.rs</text>
+      <text x="666.6666666666666" y="144" font-size="8" fill="#8a8377">service · +260/−0</text><rect x="658.6666666666666" y="154" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="166" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">session.rs</text>
+      <text x="666.6666666666666" y="176" font-size="8" fill="#8a8377">service · +280/−0</text><rect x="658.6666666666666" y="186" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="198" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">control.rs</text>
+      <text x="666.6666666666666" y="208" font-size="8" fill="#8a8377">service · +180/−0</text><rect x="658.6666666666666" y="218" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="230" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">record.rs</text>
+      <text x="666.6666666666666" y="240" font-size="8" fill="#8a8377">service · +200/−0</text><rect x="658.6666666666666" y="250" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="262" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">replay.rs</text>
+      <text x="666.6666666666666" y="272" font-size="8" fill="#8a8377">service · +200/−0</text><rect x="658.6666666666666" y="282" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="294" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">events.rs</text>
+      <text x="666.6666666666666" y="304" font-size="8" fill="#8a8377">service · +140/−0</text><rect x="658.6666666666666" y="314" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="326" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">hello.rs</text>
+      <text x="666.6666666666666" y="336" font-size="8" fill="#8a8377">test · +110/−0</text><rect x="658.6666666666666" y="346" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="358" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">throughput.rs</text>
+      <text x="666.6666666666666" y="368" font-size="8" fill="#8a8377">test · +150/−0</text><rect x="658.6666666666666" y="378" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="390" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">backpressure.rs</text>
+      <text x="666.6666666666666" y="400" font-size="8" fill="#8a8377">test · +140/−0</text><rect x="658.6666666666666" y="410" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="422" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">fixture.rs</text>
+      <text x="666.6666666666666" y="432" font-size="8" fill="#8a8377">test · +130/−0</text><rect x="658.6666666666666" y="442" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="454" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">commands.rs</text>
+      <text x="666.6666666666666" y="464" font-size="8" fill="#8a8377">test · +120/−0</text><rect x="658.6666666666666" y="474" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="486" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="666.6666666666666" y="496" font-size="8" fill="#8a8377">test · +90/−0</text><rect x="32" y="254" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="266" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">sim.rs</text>
+      <text x="40" y="276" font-size="8" fill="#8a8377">domain · +30/−2</text><rect x="32" y="286" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="298" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">record.rs</text>
+      <text x="40" y="308" font-size="8" fill="#8a8377">domain · +14/−2</text><rect x="32" y="318" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="330" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">validate.rs</text>
+      <text x="40" y="340" font-size="8" fill="#8a8377">domain · +8/−6</text><rect x="32" y="350" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="362" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tuning.rs</text>
+      <text x="40" y="372" font-size="8" fill="#8a8377">domain · +10/−1</text><rect x="345.3333333333333" y="190" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="202" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tuning.json</text>
+      <text x="353.3333333333333" y="212" font-size="8" fill="#8a8377">data · +5/−0</text><rect x="345.3333333333333" y="222" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="234" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">README.md</text>
+      <text x="353.3333333333333" y="244" font-size="8" fill="#8a8377">docs · +12/−0</text><rect x="658.6666666666666" y="382" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="394" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">Cargo.toml</text>
+      <text x="666.6666666666666" y="404" font-size="8" fill="#8a8377">config · +2/−0</text><rect x="658.6666666666666" y="414" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="426" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">cli.rs</text>
+      <text x="666.6666666666666" y="436" font-size="8" fill="#8a8377">cli · +60/−2</text><rect x="658.6666666666666" y="446" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="458" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">serve.rs</text>
+      <text x="666.6666666666666" y="468" font-size="8" fill="#8a8377">cli · +120/−0</text><rect x="658.6666666666666" y="478" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="490" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">record.rs</text>
+      <text x="666.6666666666666" y="500" font-size="8" fill="#8a8377">cli · +90/−0</text><rect x="658.6666666666666" y="510" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="522" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">replay.rs</text>
+      <text x="666.6666666666666" y="532" font-size="8" fill="#8a8377">cli · +80/−0</text><rect x="658.6666666666666" y="542" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="554" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">bench.rs</text>
+      <text x="666.6666666666666" y="564" font-size="8" fill="#8a8377">cli · +35/−2</text><rect x="658.6666666666666" y="574" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="586" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">main.rs</text>
+      <text x="666.6666666666666" y="596" font-size="8" fill="#8a8377">cli · +6/−0</text><rect x="658.6666666666666" y="606" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="618" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">cli_args.rs</text>
+      <text x="666.6666666666666" y="628" font-size="8" fill="#8a8377">test · +70/−0</text><rect x="32" y="258" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="40" y="270" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">protocol.md</text>
+      <text x="40" y="280" font-size="8" fill="#8a8377">docs · +260/−0</text><rect x="32" y="90" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">README.md</text>
+      <text x="40" y="112" font-size="8" fill="#8a8377">docs · +16/−0</text><path d="M 936 135 C 640.6666666666666 135, 640.6666666666666 135, 345.3333333333333 135" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 167 C 640.6666666666666 167, 640.6666666666666 167, 345.3333333333333 167" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 167 C 484 167, 484 299, 32 299" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 199 C 640.6666666666666 199, 640.6666666666666 231, 345.3333333333333 231" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 295 C 640.6666666666666 295, 640.6666666666666 199, 345.3333333333333 199" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 295 C 484 295, 484 267, 32 267" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 231 C 640.6666666666666 231, 640.6666666666666 263, 345.3333333333333 263" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 263 C 797.3333333333333 263, 797.3333333333333 231, 658.6666666666666 231" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 167 C 327.3333333333333 167, 327.3333333333333 299, 32 299" fill="none" stroke="#b5305f" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#arrow)"/><text x="327.3333333333333" y="229" text-anchor="middle" font-size="8" fill="#b5305f">replaces</text><path d="M 622.6666666666666 295 C 327.3333333333333 295, 327.3333333333333 271, 32 271" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 331 C 170.66666666666666 331, 170.66666666666666 299, 32 299" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 363 C 327.3333333333333 363, 327.3333333333333 203, 345.3333333333333 203" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 459 C 797.3333333333333 459, 797.3333333333333 135, 658.6666666666666 135" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 491 C 797.3333333333333 491, 797.3333333333333 231, 658.6666666666666 231" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 523 C 797.3333333333333 523, 797.3333333333333 263, 658.6666666666666 263" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 555 C 797.3333333333333 555, 797.3333333333333 167, 658.6666666666666 167" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 587 C 797.3333333333333 587, 797.3333333333333 459, 658.6666666666666 459" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/>
+  </svg>
+</figure><div class="fragment"><section class="fragment-plan" data-artifact="plan" data-slice="stream-protocol" data-rev="0">
+  <table class="files-touched pl-files">
+    <thead><tr><th>File</th><th>Status</th><th>Module</th><th>Lines</th></tr></thead>
+    <tbody>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">config</span> Cargo.toml, crates/protocol/Cargo.toml, crates/stream/Cargo.toml, crates/engine-cli/Cargo.toml</summary><div class="pl-card">Two new workspace members; tungstenite 0.30 with the handshake feature and no transport-layer security, about eight permissive transitive crates. The protocol crate depends on serde and thiserror only, so it carries no network dependency.</div></details></td><td>modified</td><td>workspace root</td><td>+50 / -1</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">domain</span> crates/protocol/src/lib.rs, message.rs, codec.rs, event.rs, command.rs, frame.rs</summary><div class="pl-card">PROTOCOL_VERSION 1; the six server messages and four client commands as serde enums with dotted keys; the tick codec, a 98-byte keyframe every 50 ticks and 47-byte delta frames of signed centimetre steps between, encoded into a reused buffer; the match-event record with kick-off, goal, and full-time; the change queue with its identifiers. No input or output anywhere in the crate.</div></details></td><td>new</td><td>crates/protocol</td><td>+870</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">service</span> crates/stream/src/lib.rs, server.rs, session.rs, control.rs, record.rs, replay.rs, events.rs</summary><div class="pl-card">The blocking WebSocket server on 127.0.0.1:0 with an Origin allowlist and a version check, one thread per client; the socket sink and its bounded channel of 500 ticks, whose full state blocks the simulation thread; the command reader; the fixture recorder that stores the wire bytes; the replayer that writes them back at speed times 50 frames per second; the event writer.</div></details></td><td>new</td><td>crates/stream</td><td>+1320</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/sim.rs, record.rs, validate.rs, data/tuning.rs</summary><div class="pl-card">take_events() for the three events the engine can produce; a restart flag on the frame and a FanoutSink so one run can write a file and stream at once; the validator reads the flag and the sdlc-debt marker at validate.rs:77 is deleted with its shortcut; a stream block in the tuning schema.</div></details></td><td>modified</td><td>crates/engine/src</td><td>+62 / -11</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">data</span> content/tuning.json, content/README.md</summary><div class="pl-card">buffer_ticks 500 and keyframe_interval 50, each with its unit, default, and bound in the modder reference.</div></details></td><td>modified</td><td>content/</td><td>+17</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">cli</span> crates/engine-cli/src/cli.rs, main.rs, serve.rs (new), record.rs (new), replay.rs (new), bench.rs</summary><div class="pl-card">Three subcommands: serve runs a match under client control and prints the port, record writes a fixture, replay serves one back. bench gains --stream, which reports ticks delivered per second over the socket and the pause count. Every help line stays at 80 columns or fewer.</div></details></td><td>modified</td><td>crates/engine-cli</td><td>+293 / -4</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">test</span> crates/stream/tests/hello.rs, throughput.rs, backpressure.rs, fixture.rs, commands.rs, common/mod.rs; crates/protocol/tests/document.rs; crates/engine-cli/tests/cli_args.rs (modified)</summary><div class="pl-card">One integration test per criterion, each binding an ephemeral loopback port in the test process: the hello arrives first; 270,000 ticks arrive in order with the buffer inside its bound; a throttled client pauses and resumes the producer with nothing dropped; a recorded fixture replays byte-identically; an unknown change type is rejected verbatim. The document test parses the message tables and fails if the code and the reference disagree.</div></details></td><td>new</td><td>integration tests</td><td>+830</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">docs</span> docs/reference/protocol.md, README.md (modified)</summary><div class="pl-card">The protocol reference: the handshake, the version rule, one table per message with every field and type, the tick frame byte layout, the fixture file layout, the command set, and the close codes. The enumeration test reads these tables, so the document cannot drift from the code.</div></details></td><td>new</td><td>docs/reference</td><td>+276</td></tr>
+    </tbody>
+  </table>
+  <div class="pl-risks">
+    <aside class="callout callout-error"><div class="callout-hd">R1 · The encoder lands on the hot path</div><div class="callout-body">encode_into writes into one reused buffer owned by the sink; the channel carries a fixed-size frame, never a Vec per tick; step 19 measures bench --stream against the 384 ms and 5.62 MB tripwires before any test is called done.</div></aside>
+    <aside class="callout callout-error"><div class="callout-hd">R2 · Determinism through a second sink</div><div class="callout-body">FanoutSink calls A then B in order and returns the first error; the determinism test keeps running on the file path; the fixture test compares recorded bytes rather than re-encoded ones.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R3 · tungstenite buffers without a bound by default</div><div class="callout-body">max_write_buffer_size defaults to usize::MAX, so a slow client would grow the write buffer instead of blocking. Set it to four keyframes and treat WriteBufferFull as the same pause signal as a full channel.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R4 · A delta step wider than one signed byte</div><div class="callout-body">A signed byte covers 1.27 m per tick and the 40 m/s ball cap is 0.80 m, but a restart teleport is unbounded. The encoder forces a keyframe on overflow and the codec test drives a restart.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R5 · The Origin allowlist blocks the real viewer</div><div class="callout-body">Accept any http://localhost or http://127.0.0.1 origin regardless of port, and name the origin in the refusal line so viewer-pitch can diagnose it in one look.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R6 · change.queue_id is outside the contract vocabulary</div><div class="callout-body">Block A reserves change.queued_tick and change.rejected_reason but no key for the identifier an acknowledgement returns. Emitted as an additive extra and settled by the observability audit.</div></aside>
+    <aside class="callout callout-info"><div class="callout-hd">R7 · Three threads in one binary</div><div class="callout-body">The channel disconnect is the shutdown signal in both directions; every test joins its handles with a timeout and the command-line test asserts the process exits.</div></aside>
+    <aside class="callout callout-info"><div class="callout-hd">R8 · A stale port file after a crash</div><div class="callout-body">serve removes engine.port on a clean exit, and the hello message carries match.id, so a page that reaches the wrong engine can tell and reconnect.</div></aside>
+  </div>
+  <details class="pl-revs"><summary>0 prior revisions</summary><ul></ul></details>
+  <style>
+    .fragment-plan .pl-files { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-plan .pl-files th, .fragment-plan .pl-files td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
+    .fragment-plan .pl-files summary { cursor: pointer; }
+    .fragment-plan .pl-chip { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; opacity: 0.8; }
+    .fragment-plan .pl-card { padding: 6px 0 4px 18px; opacity: 0.9; }
+    .fragment-plan .pl-risks { display: grid; gap: 8px; margin-top: 12px; }
+    .fragment-plan .pl-revs { margin-top: 12px; }
+    @media (max-width: 480px) { .fragment-plan .pl-files th:nth-child(3), .fragment-plan .pl-files td:nth-child(3) { display: none; } }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-plan');
+      var files = 38, modules = 8;
+      var risks = root ? root.querySelectorAll('.pl-risks .callout').length : 0;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'plan', artifact: 'plan', counts: { files: files, modules: modules, risks: risks } } }));
+    })();
+  </script>
+</section>
+</div><div class="prose"><h1 id="plan-stream-protocol-and-fixture-harness" tabindex="-1"><a class="header-anchor" href="#plan-stream-protocol-and-fixture-harness"><span>Plan: Stream Protocol and Fixture Harness</span></a></h1>
+<h2 id="current-state" tabindex="-1"><a class="header-anchor" href="#current-state"><span>Current State</span></a></h2>
+<ul>
+<li><code>crates/engine</code> is network-free and single-threaded. <code>Simulation::run</code> (<code>crates/engine/src/sim.rs:144-150</code>) loops <code>step()</code> then <code>sink.on_tick(&amp;self.record())</code>; <code>step()</code> is public, so a serve loop can drive the simulation tick by tick instead of calling <code>run</code>. <code>Simulation</code> holds only plain data and is <code>Send</code> by inference.</li>
+<li><code>TickSink</code> is the one consumer seam (<code>crates/engine/src/record.rs:131-133</code>): <code>fn on_tick(&amp;mut self, record: &amp;TickRecord) -&gt; Result&lt;(), EngineError&gt;</code>. Three implementations exist (<code>NullSink</code>, <code>VecSink</code>, <code>FileSink</code>) and no combinator, so a run feeds exactly one sink today.</li>
+<li><code>TickRecord</code> is 192 bytes (<code>crates/engine/src/record.rs:34-39</code>): <code>tick: u32</code>, <code>ball: [f32; 3]</code>, <code>players: [[f32; 2]; 22]</code>, packed with <code>to_le_bytes</code> into a reused buffer.</li>
+<li>Identity is settled and reusable: <code>owner.id</code> and <code>MatchId</code> (<code>crates/engine/src/observe/identity.rs:34-126</code>), <code>engine::version()</code> and <code>engine::build_hash()</code> (<code>crates/engine/src/lib.rs:39-46</code>), <code>content_hash</code> (<code>crates/engine/src/sim.rs:51-56</code>). The hello message reuses all five rather than inventing identifiers.</li>
+<li>The tick file header is schema 2 and fails closed on an unknown version, naming both (<code>crates/engine/src/record.rs:107-112</code>). This is the pattern the protocol version copies.</li>
+<li><code>.ai/observability.md</code> already assumes this socket exists: it names it at lines 81, 101, 134, 162, 181, and 201, reserves <code>viewer.socket_drops</code> at line 65, and defines a <code>match-event</code> record kind with <code>change.queued_tick</code>, <code>change.applied_tick</code>, and <code>change.rejected_reason</code> (lines 21-52) that no code has ever written.</li>
+<li><code>crates/engine/src/validate.rs:77</code> carries an <code>sdlc-debt:</code> marker that names this slice as its upgrade path: the record has no restart flag, so a ball jump above two metres is read as a kick-off.</li>
+<li>No async runtime exists (<code>tokio</code> is absent from <code>Cargo.lock</code>); no <code>std::net</code>, <code>std::thread</code>, <code>std::sync::mpsc</code>, <code>Instant</code>-pacing, or <code>sleep</code> appears in any test. 66 tests pass on commit <code>d58fce3</code>.</li>
+<li>The registry holds no WebSocket crate, no SHA-1, and no base64, so the transport is the one dependency this slice fetches.</li>
+</ul>
+<h2 id="simplicity-ladder" tabindex="-1"><a class="header-anchor" href="#simplicity-ladder"><span>Simplicity Ladder</span></a></h2>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Capability</th>
+<th>Rung</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Accept a loopback connection</td>
+<td>rung 1 stdlib</td>
+<td><code>std::net::TcpListener::bind(&quot;127.0.0.1:0&quot;)</code>; <code>local_addr()</code> returns the assigned port</td>
+</tr>
+<tr>
+<td>WebSocket handshake and framing</td>
+<td>rung 4 new-code</td>
+<td>No <code>tungstenite</code>, <code>sha1</code>, <code>base64</code>, or <code>httparse</code> in <code>~/.cargo/registry</code>; the handshake needs SHA-1, which <code>sha2</code> does not provide. <code>tungstenite</code> 0.30 is MIT OR Apache-2.0, MSRV 1.85, needs no runtime, and refuses an unmasked client frame by default (<code>.scratch/sources/rust/tungstenite-0.30.0/src/protocol/frame/mod.rs:214-224</code>)</td>
+</tr>
+<tr>
+<td>Binary tick framing</td>
+<td>rung 3 reuse</td>
+<td><code>TickRecord::write_to</code> (<code>crates/engine/src/record.rs:43-56</code>) is the little-endian pattern; the codec quantises to <code>i16</code> centimetres and adds the delta</td>
+</tr>
+<tr>
+<td>Bounded buffer and backpressure</td>
+<td>rung 1 stdlib</td>
+<td><code>std::sync::mpsc::sync_channel(bound)</code>: <code>send</code> blocks when the buffer is full and unblocks as the consumer drains, which is the criterion verbatim</td>
+</tr>
+<tr>
+<td>Two sinks at once</td>
+<td>rung 4 new-code</td>
+<td>No fan-out exists; a <code>FanoutSink&lt;A, B&gt;</code> forwarding <code>on_tick</code> to both is about fifteen lines, cheaper than duplicating the <code>run</code> loop</td>
+</tr>
+<tr>
+<td>Fixture recorder</td>
+<td>rung 3 reuse</td>
+<td><code>FileSink</code> (<code>crates/engine/src/record.rs:158-212</code>) is the header-records-trailer pattern; the fixture stores frames instead of records</td>
+</tr>
+<tr>
+<td>Replay pacing</td>
+<td>rung 1 stdlib</td>
+<td><code>std::time::Instant</code> plus <code>sleep</code>; no timer crate exists or is needed</td>
+</tr>
+<tr>
+<td>Control-channel encoding</td>
+<td>rung 3 reuse</td>
+<td><code>serde_json</code> is installed and already carries every record; MessagePack and CBOR would add a dependency and a second format for a low-rate channel</td>
+</tr>
+<tr>
+<td>Event records</td>
+<td>rung 3 reuse</td>
+<td><code>observe::to_json</code> and the <code>Record</code> trait (<code>crates/engine/src/observe/mod.rs:45-49,148-165</code>) already build the envelope every record kind shares</td>
+</tr>
+</tbody>
+</table>
+<h2 id="applied-learnings" tabindex="-1"><a class="header-anchor" href="#applied-learnings"><span>Applied Learnings</span></a></h2>
+<ul>
+<li><code>.ai/solutions/INDEX.md</code> does not exist. No applicable learnings found.</li>
+<li>Carry-over from <code>05-implement-engine-core.md</code>: the <code>sdlc-debt:</code> marker at <code>crates/engine/src/validate.rs:77</code> names this slice. Step 12 removes the shortcut and the marker together.</li>
+<li>Carry-over from <code>03-slice-probe-engine-core.md</code> finding 2: a failed run leaves no structured record. This slice adds failure paths of the same shape (a refused handshake, a dropped client), and <code>socket.refused</code> plus the <code>full-time</code> event cover them on the socket side; the <code>outcome: error</code> record stays with <code>/wf observability init</code> (U-2).</li>
+<li>Carry-over from <code>06-verify-data-schemas-generator.md</code>: two runs of one seed now differ in header bytes 44 to 51 because the header carries <code>match.id</code>. The fixture header repeats the pattern, so the byte-identity test compares frame bytes, never the whole file.</li>
+<li>Repeat-deferral tripwire: <code>00-index.md</code> <code>runtime-evidence-deferrals</code> is empty. No wall is inherited and none is named by this slice; every criterion is <code>observable: false</code>.</li>
+</ul>
+<h2 id="likely-files-areas-to-touch" tabindex="-1"><a class="header-anchor" href="#likely-files-areas-to-touch"><span>Likely Files / Areas to Touch</span></a></h2>
+<ul>
+<li><code>crates/protocol/</code> (new): <code>lib.rs</code>, <code>message.rs</code>, <code>codec.rs</code>, <code>event.rs</code>, <code>command.rs</code>, <code>frame.rs</code>, <code>tests/document.rs</code>. Messages, the codec, the version, and the enumeration the document test reads. No input or output.</li>
+<li><code>crates/stream/</code> (new): <code>lib.rs</code>, <code>server.rs</code>, <code>session.rs</code>, <code>control.rs</code>, <code>record.rs</code>, <code>replay.rs</code>, <code>events.rs</code>, and five test files plus <code>tests/common/mod.rs</code>. The server, the bounded buffer, the recorder, and the replayer.</li>
+<li><code>crates/engine/src/sim.rs</code>: <code>take_events()</code> for the three events the engine can produce.</li>
+<li><code>crates/engine/src/record.rs</code>: the restart flag on the frame and <code>FanoutSink</code>.</li>
+<li><code>crates/engine/src/validate.rs</code>: read the restart flag; delete the debt marker.</li>
+<li><code>crates/engine/src/data/tuning.rs</code> and <code>content/tuning.json</code>: the <code>stream</code> block with <code>buffer_ticks</code> and <code>keyframe_interval</code>.</li>
+<li><code>crates/engine-cli/</code>: <code>cli.rs</code>, <code>main.rs</code>, <code>serve.rs</code> (new), <code>record.rs</code> (new), <code>replay.rs</code> (new), <code>bench.rs</code>, <code>tests/cli_args.rs</code>.</li>
+<li><code>docs/reference/protocol.md</code> (new), <code>content/README.md</code>, <code>README.md</code>, workspace <code>Cargo.toml</code>.</li>
+</ul>
+<h2 id="proposed-change-strategy" tabindex="-1"><a class="header-anchor" href="#proposed-change-strategy"><span>Proposed Change Strategy</span></a></h2>
+<p>Build from the inside out and prove each layer before the next uses it: the codec with no network, then the messages, then the server, then the recorder and the replayer, then the command line. <code>crates/protocol</code> never depends on <code>crates/stream</code>, on <code>tungstenite</code>, or on any input or output, which is what lets the document test and a later WebAssembly build use it.</p>
+<p>NFR-2 governs the encoding choice and <code>yields-to: C2</code> (PO-ratified): the delta scheme exists to hold 60 frames per second at 8x playback with a whole-match history under 300 megabytes, and it never invents a position — a delta is an exact centimetre step between two computed ticks, and the decoder reconstructs absolute positions. NFR-8 governs the crate split. NFR-9 keeps the target at Windows 11; the code uses <code>std::net</code> only, so no platform branch is needed.</p>
+<p>The backpressure has two guards because the socket has two buffers: the <code>sync_channel</code> bound (500 ticks, from the tuning file) and <code>tungstenite</code>’s <code>max_write_buffer_size</code>, which defaults to unbounded and must be set. Both must say “pause”, or the criterion passes in one buffer and fails in the other.</p>
+<h2 id="step-by-step-plan" tabindex="-1"><a class="header-anchor" href="#step-by-step-plan"><span>Step-by-Step Plan</span></a></h2>
+<ol>
+<li><strong>Workspace and dependency.</strong> Add <code>crates/protocol</code> and <code>crates/stream</code> to <code>members</code>; add <code>tungstenite = { version = &quot;0.30&quot;, default-features = false, features = [&quot;handshake&quot;] }</code> to <code>workspace.dependencies</code>. Confirm the fetched tree is <code>bytes</code>, <code>log</code>, <code>rand</code>, <code>thiserror</code>, <code>data-encoding</code>, <code>http</code>, <code>httparse</code>, <code>sha1</code>, each MIT or Apache-2.0 (NFR-5). No transport-layer-security feature.</li>
+<li><strong>Protocol crate skeleton.</strong> <code>crates/protocol/Cargo.toml</code> (serde, serde_json, thiserror only) and <code>lib.rs</code> with <code>PROTOCOL_VERSION: u16 = 1</code>, <code>KEYFRAME_INTERVAL</code> re-exported from the codec, and <code>ProtocolError</code> (thiserror; explicit <code>#[source]</code>, never <code>#[from]</code> on a type whose display repeats its source, per the probe finding 3 fix).</li>
+<li><strong>Tick codec.</strong> <code>codec.rs</code>: <code>Quantised { tick: u32, ball: [i16; 3], players: [[i16; 2]; 22] }</code> in centimetres; <code>encode_keyframe_into(&amp;Quantised, &amp;mut [u8; 98])</code>, <code>encode_delta_into(&amp;Quantised, &amp;Quantised, &amp;mut [u8; 47]) -&gt; Option&lt;()&gt;</code> returning <code>None</code> when any step exceeds <code>i8</code>, and the matching decoders. Unit tests: a round trip; a delta at the 40 m/s ball cap (80 cm per tick) encodes; a two-metre jump forces a keyframe; a full 50-tick cycle reconstructs every absolute position within one centimetre.</li>
+<li><strong>Frames.</strong> <code>frame.rs</code>: <code>Frame::Binary(Vec&lt;u8&gt;)</code> and <code>Frame::Text(String)</code> with a one-byte kind tag, the single place that decides ticks are binary frames and control messages are JSON text frames.</li>
+<li><strong>Messages.</strong> <code>message.rs</code>: <code>ServerMessage { Hello, Tick, Event, Stats, Ack, Reject }</code> and <code>ClientCommand { Start, Pause, SetSpeed, QueueChange }</code> as serde enums with <code>deny_unknown_fields</code> and dotted rename keys. <code>Hello</code> carries <code>protocol.version</code>, <code>engine.version</code>, <code>build.hash</code>, <code>owner.id</code>, <code>match.id</code>, <code>seed</code>, <code>dt_ms</code>, <code>ticks_expected</code>, <code>keyframe_interval</code>, and both <code>team.id</code> and <code>team.name</code> values. Unit test: every message round-trips through JSON and an unknown field is refused.</li>
+<li><strong>Message enumeration.</strong> <code>MESSAGES: &amp;[MessageSpec { name, direction, fields }]</code> in <code>lib.rs</code>, filled from the two enums by hand and asserted complete by a unit test that matches on every variant, so a new message cannot be added without a compile error in the test.</li>
+<li><strong>Events.</strong> <code>event.rs</code>: <code>MatchEvent</code> with the contract keys (<code>tick</code>, <code>minute</code>, <code>event.type</code>, <code>team.id</code>, <code>home.score</code>, <code>away.score</code>) and <code>EventType { KickOff, Goal, FullTime }</code>; a <code>Record</code> implementation so the envelope matches <code>match-stats</code>. Unit test: a goal event serialises with <code>record.kind</code> <code>match-event</code> and both scores.</li>
+<li><strong>Commands and the queue.</strong> <code>command.rs</code>: <code>ChangeKind { Tactics, Substitution }</code> checked against the loaded <code>RulePack</code>; <code>Queue</code> holds pending changes in order, assigns <code>q-{tick}-{n}</code>, and answers <code>Ack { queue_id, queued_tick, state }</code> or <code>Reject { reason }</code>. <code>ChangeState { Queued, AppliesNow, Applied, Rejected }</code> carries the four state words <code>steer.md</code> fixes for the viewer chips; this slice produces <code>Queued</code> and <code>Rejected</code> only, and <code>match-rules</code> produces the other two. The rejection wording is fixed here and asserted verbatim later: <code>unknown change type &lt;name&gt;</code>. Nothing is applied to play (PO Q8).</li>
+<li><strong>Engine events.</strong> <code>crates/engine/src/sim.rs</code>: <code>EngineEvent { tick, kind, team, scores }</code> pushed during <code>step()</code> at the three places the engine already knows — kick-off or restart after a goal, the goal itself (the <code>match.goal</code> trace site), and the final tick — plus <code>take_events()</code> draining the buffer. No protocol type enters <code>crates/engine</code>.</li>
+<li><strong>Restart flag.</strong> <code>crates/engine/src/record.rs</code>: <code>TickRecord</code> gains <code>restart: bool</code> carried in the frame, not in the 192-byte file record, which stays byte-identical for the validator and the benchmark. <code>FanoutSink&lt;A: TickSink, B: TickSink&gt;</code> forwards <code>on_tick</code> to A then B and returns the first error.</li>
+<li><strong>Tuning block.</strong> <code>crates/engine/src/data/tuning.rs</code>: <code>StreamTuning { buffer_ticks: 500, keyframe_interval: 50 }</code> with garde ranges <code>10..=5000</code> and <code>1..=500</code>; a fourth block in <code>TuningFile</code>. Update <code>content/tuning.json</code> and <code>content/README.md</code> (every field, unit, default, bound). The existing test that pins the file to the defaults must keep passing.</li>
+<li><strong>Validator.</strong> <code>crates/engine/src/validate.rs</code>: the jump rule reads the restart flag instead of the two-metre guess; delete the <code>sdlc-debt:</code> marker at line 77 with its shortcut. Test: a hand-built stream with a restart flag reports no violation, and the same stream without the flag reports one.</li>
+<li><strong>Stream crate skeleton.</strong> <code>crates/stream/Cargo.toml</code> (engine, protocol, tungstenite, serde_json, tracing) and <code>lib.rs</code> with <code>StreamError</code>.</li>
+<li><strong>Server.</strong> <code>server.rs</code>: <code>Server::bind()</code> on <code>127.0.0.1:0</code>, read the assigned port, write <code>SM_DATA_DIR/engine.port</code>, emit <code>socket.listening</code>. <code>accept()</code> runs the <code>tungstenite</code> handshake with an <code>Origin</code> allowlist (<code>null</code>, <code>file://</code>, any <code>http://localhost</code> or <code>http://127.0.0.1</code> port) and a protocol-version check that refuses with both versions named; emit <code>socket.client</code> or <code>socket.refused</code>; <code>set_nodelay(true)</code>; set <code>max_write_buffer_size</code> to four keyframes; one thread per client.</li>
+<li><strong>Session and backpressure.</strong> <code>session.rs</code>: <code>SocketSink</code> implements <code>TickSink</code>, encodes into one reused buffer, and pushes into <code>sync_channel(buffer_ticks)</code>; the writer thread drains it to the socket. A full channel blocks the simulation thread. A high-water gauge (<code>Arc&lt;AtomicUsize&gt;</code>) is exposed for the test. Emit <code>socket.backpressure</code> once per pause with <code>paused_ms</code> and the resume count. Treat <code>WriteBufferFull</code> as the same pause.</li>
+<li><strong>Control channel.</strong> <code>control.rs</code>: the reader thread decodes client commands; <code>Start</code> and <code>Pause</code> gate production through a condition variable, <code>SetSpeed</code> is stored and echoed in the acknowledgement, <code>QueueChange</code> goes to <code>protocol::Queue</code>; every verdict also becomes a <code>match-event</code> row.</li>
+<li><strong>Event writer.</strong> <code>events.rs</code>: drain <code>take_events()</code> each tick, write each as a JSON Lines row into <code>matches/&lt;match.id&gt;/events.jsonl</code> through one writer opened at kick-off, and send the same message over the socket.</li>
+<li><strong>Recorder and replayer.</strong> <code>record.rs</code>: a <code>.smfx</code> fixture — 32-byte header (magic <code>SMFX</code>, protocol version, match millis, frame count), length-prefixed frames with their kind tag and tick index, then a trailer with the count and the hash; emit <code>fixture.recorded</code>. <code>replay.rs</code>: serve the same protocol from the file, writing the stored bytes with no re-encoding, paced at <code>speed x 50</code> frames per second through <code>Instant</code>; emit <code>fixture.replayed</code>.</li>
+<li><strong>Command line and the first measurement.</strong> <code>cli.rs</code>, <code>main.rs</code>, <code>serve.rs</code>, <code>record.rs</code>, <code>replay.rs</code>, and <code>bench.rs --stream</code>. Run <code>cargo build --release</code> then <code>engine-cli bench --seed 42 --matches 1 --stream --json</code> and record <code>bench.stream_ticks_per_s</code> and <code>bench.stream_pauses</code>. Compare <code>bench --seed 42 --matches 5 --json</code> against 384 milliseconds and 5.62 megabytes before writing any further test. If the processor time exceeds the tripwire, the encoder allocates; fix it here, not later.</li>
+<li><strong>Documentation and the tests.</strong> <code>docs/reference/protocol.md</code> with one table per message; the six integration tests (<code>hello.rs</code>, <code>throughput.rs</code>, <code>backpressure.rs</code>, <code>fixture.rs</code>, <code>commands.rs</code>, <code>protocol/tests/document.rs</code>) and <code>crates/stream/tests/common/mod.rs</code>; the CLI tests; <code>README.md</code>. Run <code>cargo fmt --all -- --check</code>, <code>cargo clippy --workspace --all-targets -- -D warnings</code>, and <code>cargo test --workspace</code>.</li>
+</ol>
+<h2 id="verification-strategy" tabindex="-1"><a class="header-anchor" href="#verification-strategy"><span>Verification Strategy</span></a></h2>
+<p>No user-observable AC — automated only. Every one of the six criteria in <code>03-slice-stream-protocol.md</code> is annotated <code>observable: false</code> and names a Rust test. No environment wall exists: every test binds <code>127.0.0.1:0</code> in the test process, sets <code>SM_DATA_DIR</code> to a temp folder, and needs no device, credential, browser, or external service. No <code>constraint-resolution:</code> line is needed.</p>
+<p>One verification-relevant constraint is recorded rather than resolved: a browser page cannot reach a raw TCP socket, which is why the transport is WebSocket (PO Q1). A browser smoke test of the socket is possible from the in-app browser once a page exists; no page exists in this slice, so the first browser-driven evidence belongs to <code>viewer-pitch</code>, which the fixture and the replayer exist to serve.</p>
+<h2 id="test-verification-plan" tabindex="-1"><a class="header-anchor" href="#test-verification-plan"><span>Test / Verification Plan</span></a></h2>
+<h3 id="automated-checks" tabindex="-1"><a class="header-anchor" href="#automated-checks"><span>Automated checks</span></a></h3>
+<ul>
+<li><code>cargo fmt --all -- --check</code> and <code>cargo clippy --workspace --all-targets -- -D warnings</code>: blocking, as in both prior slices.</li>
+<li><code>cargo test --workspace</code>: the 66 existing tests plus the new files. <code>crates/protocol</code>: codec round trip, delta overflow forces a keyframe, message JSON round trip, unknown field refused, the <code>MESSAGES</code> completeness test, and <code>tests/document.rs</code> (AC-f). <code>crates/stream</code>: <code>hello.rs</code> (AC-a), <code>throughput.rs</code> (AC-b), <code>backpressure.rs</code> (AC-c), <code>fixture.rs</code> (AC-d), <code>commands.rs</code> (AC-e). <code>crates/engine</code>: the codec-adjacent restart test in <code>validate.rs</code> and the unchanged determinism, full-match, and validator tests. <code>crates/engine-cli</code>: <code>record</code> writes a fixture and prints its counts, <code>replay</code> refuses a missing fixture naming the path, <code>serve</code> prints a port and writes <code>engine.port</code>, and no help line exceeds 80 columns.</li>
+<li>Benchmark compare: <code>/wf verify</code> loads <code>augment/benchmark.md</code> in compare mode against <code>05c-benchmark.md</code> (389 ms, 694,087 ticks/s, 384 ms CPU, 5.62 MB, 1.4342 µs) and records the fifth target for the first time; tripwires 10 percent processor time (422 ms) and 25 percent memory (7.03 MB).</li>
+<li>Instrument key check: <code>04b-instrument.md</code> section 2 against the live records and stderr — <code>socket.listening</code>, <code>socket.client</code>, <code>socket.refused</code>, <code>socket.backpressure</code>, <code>fixture.recorded</code>, <code>fixture.replayed</code> on stderr; <code>match-event</code> rows in <code>events.jsonl</code> and over the socket.</li>
+</ul>
+<h3 id="interactive-verification-human-in-the-loop" tabindex="-1"><a class="header-anchor" href="#interactive-verification-human-in-the-loop"><span>Interactive verification (human-in-the-loop)</span></a></h3>
+<p>Automated only — every criterion is annotated <code>observable: false</code>; the slice ships no user interface, and its one user-visible surface is the command line, whose output the automated tests parse. <code>stack.platforms: [web, cli]</code>, <code>stack.testing: [cargo-test]</code>, <code>user-confirmed: true</code>. The <code>web</code> adapter has no detection signal in the repository yet (no <code>package.json</code>, no HTML), so no web adapter runs.</p>
+<h2 id="risks-watchouts" tabindex="-1"><a class="header-anchor" href="#risks-watchouts"><span>Risks / Watchouts</span></a></h2>
+<ul>
+<li>R1 (high) the encoder on the hot path: 270,000 frames per match at 694,087 ticks per second. <code>encode_into</code> writes into one reused buffer owned by the sink; the channel carries a fixed-size frame, never a <code>Vec</code> per tick; step 19 measures before the tests are declared done.</li>
+<li>R2 (high) determinism through a second sink: <code>FanoutSink</code> calls A then B in order and returns the first error; the determinism test keeps running on the file path; the fixture test compares recorded bytes, not re-encoded ones.</li>
+<li>R3 (medium) <code>tungstenite</code> buffers without a bound by default (<code>max_write_buffer_size</code> is <code>usize::MAX</code>, <code>.scratch/sources/rust/tungstenite-0.30.0/src/protocol/mod.rs:100</code>). Set it to four keyframes; treat <code>WriteBufferFull</code> as a pause; the throttled test asserts the high-water mark.</li>
+<li>R4 (medium) a delta step wider than one signed byte: <code>i8</code> covers 1.27 m per tick and the ball cap is 0.80 m, but a restart teleport is unbounded. The encoder forces a keyframe on overflow and the codec test drives a restart.</li>
+<li>R5 (medium) the Origin allowlist blocking the real viewer: accept any <code>http://localhost</code> or <code>http://127.0.0.1</code> origin regardless of port, and name the origin in the refusal line.</li>
+<li>R6 (medium) <code>change.queue_id</code> is outside the Block A vocabulary; emitted as an additive extra, settled by the observability audit.</li>
+<li>R7 (low) three threads in one binary must all end: the channel disconnect is the shutdown signal both ways; every test joins with a timeout; the CLI test asserts the process exits.</li>
+<li>R8 (low) a stale <code>engine.port</code> after a crash: <code>serve</code> removes the file on a clean exit, and the hello carries <code>match.id</code> so a page that reaches the wrong engine can tell.</li>
+<li>Watch: <code>tungstenite</code> must never mask a server frame and must refuse an unmasked client frame; both are its default behaviour (<code>.scratch/sources/rust/tungstenite-0.30.0/src/protocol/frame/mod.rs:214-224</code>). Do not set <code>accept_unmasked_frames</code>.</li>
+<li>Watch: bind <code>127.0.0.1</code>, never <code>0.0.0.0</code>, which also avoids a Windows Firewall prompt.</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<ul>
+<li><code>engine-core</code> (complete): the tick loop, <code>TickSink</code>, and the command line.</li>
+<li><code>data-schemas-generator</code> (complete): <code>Content</code>, the <code>RulePack</code> the command validator reads, and <code>observe::identity</code>.</li>
+<li><code>viewer-pitch</code> (later): consumes the fixture, the replayer, and the decoder mirror of <code>crates/protocol</code>.</li>
+<li><code>match-rules</code> (later): takes the held queue and applies changes at qualifying stoppages; adds the event types this slice does not emit.</li>
+<li><code>commentary</code> (later): reads the event stream this slice opens.</li>
+<li><code>/wf observability init</code> (done, plan-version 1): this slice writes the first <code>match-event</code> records against its vocabulary; the audit settles <code>change.queue_id</code>.</li>
+</ul>
+<h2 id="assumptions" tabindex="-1"><a class="header-anchor" href="#assumptions"><span>Assumptions</span></a></h2>
+<ul>
+<li>The visual contract <code>02c-craft.md</code> is not authored here: the slice ships no user-interface surface; the <code>viewer-pitch</code> plan authors it.</li>
+<li>The <code>experiment</code> augmentation stays deferred to the <code>experiment-flags</code> slice per the shape.</li>
+<li>One client per match in version 1; the debug dashboard is a second connection later, which the thread-per-client server already serves.</li>
+<li>The fixture file extension is <code>.smfx</code> and is gitignored like <code>.ticks</code>; the viewer slices generate their own.</li>
+<li>Standing steering (<code>steer.md</code>, written 2026-09-22) binds the viewer slices, not this one, with one exception folded into step 8: the four change-state words. Its layout, typography, palette, and mark rules apply when <code>viewer-pitch</code> authors the visual contract.</li>
+<li>Consult: triggers <code>appetite-medium-or-larger</code> and <code>unknowns-present</code> hold; the PO excluded <code>consult</code> at intake; not fired.</li>
+</ul>
+<h2 id="blockers" tabindex="-1"><a class="header-anchor" href="#blockers"><span>Blockers</span></a></h2>
+<p>None.</p>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<ul>
+<li>Source: MDN WebSocket API and the WICG Local Network Access specification. Why it matters: whether the page can reach the engine at all. Takeaway: a page can open WebSocket or HTTP only; loopback is a secure context, so a <code>file://</code> or <code>http://localhost</code> page reaching <code>ws://127.0.0.1</code> is neither mixed-content blocked nor permission-prompted; <code>WebSocket.bufferedAmount</code> exists but the API has no built-in backpressure, so the client paces itself.</li>
+<li>Source: <code>.scratch/sources/rust/tungstenite-0.30.0/src/protocol/mod.rs</code> (fetched 2026-09-22). Why it matters: the chosen transport. Takeaway: <code>read</code>, <code>write</code>, <code>flush</code> on a blocking stream with no runtime; <code>WebSocketConfig::max_write_buffer_size</code> defaults to <code>usize::MAX</code> and must be set for bounded backpressure; <code>max_message_size</code> 64 MiB and <code>max_frame_size</code> 16 MiB are far above any frame here; <code>Error::WriteBufferFull</code> is the pause signal.</li>
+<li>Source: <code>.scratch/sources/rust/tungstenite-0.30.0/src/protocol/frame/mod.rs:214-224</code>. Why it matters: protocol correctness. Takeaway: the library unmasks client frames, refuses an unmasked one by default, and never masks a server frame, as RFC 6455 section 5.1 requires.</li>
+<li>Source: <a href="http://crates.io">crates.io</a> and <a href="http://lib.rs">lib.rs</a> for <code>tungstenite</code> 0.30.0, <code>tokio-tungstenite</code>, <code>fastwebsockets</code>, <code>soketto</code>. Why it matters: the dependency decision. Takeaway: <code>tungstenite</code> is the only candidate that needs no async runtime; MIT OR Apache-2.0, MSRV 1.85, about eight permissive transitive crates; <code>fastwebsockets</code> and <code>soketto</code> both need <code>tokio</code> or a futures executor. RUSTSEC-2023-0065 affects versions before 0.20.1 and not 0.30.0.</li>
+<li>Source: RFC 6455 section 5.1. Why it matters: who may connect. Takeaway: the <code>Origin</code> header exists to stop cross-origin use from a browser, cannot be forged by page code, and the server may refuse on it, which is the guard chosen over a token.</li>
+<li>Source: Rust standard library documentation for <code>std::sync::mpsc::sync_channel</code> (1.92). Why it matters: the bounded buffer. Takeaway: <code>send</code> blocks when the buffer is full and unblocks as the receiver drains; a disconnected receiver returns <code>SendError</code>, which is the shutdown signal.</li>
+<li>Source: V8 blog on <code>DataView</code> performance. Why it matters: the decoder on the page. Takeaway: <code>DataView</code> matches typed-array speed for fixed-offset little-endian reads, so the viewer can decode 400 frames per second without a typed-array overlay; a structure-of-arrays target avoids per-tick allocation.</li>
+<li>Source: Clippy lint-group documentation. Why it matters: the blocking gate. Takeaway: <code>cast_possible_truncation</code> and <code>cast_sign_loss</code> sit in <code>pedantic</code>, which is not enabled here, so the quantisation casts do not need allowances; <code>clippy::all</code> stays clean.</li>
+</ul>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option A (recommended): <code>/wf implement football-manager-match-engine stream-protocol</code></strong> — the plan is complete, no blocker exists, and both augmentation artifacts are ready. Compact the session first; the SessionStart hook re-reads the artifacts.</li>
+<li><strong>Option C: <code>/wf slice football-manager-match-engine</code></strong> — only if the two new crates are judged to be two slices rather than one. The plan holds them together because the codec is useless without a server and the fixture is the viewer’s prerequisite.</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-22T11:28:51Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/04-plan-stream-protocol.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">plan</a><span class="m-sheet-here" aria-current="page">stream-protocol</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/04-plan-stream-protocol.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-22T11:28:51Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

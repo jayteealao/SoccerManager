@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="plan">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · plan — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="plan">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span aria-hidden="true">/</span><span class="m-here">scripting-runtime</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · plan</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">scripting-runtime</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/04-plan-scripting-runtime.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">04-plan-scripting-runtime.md</div>
+      <h1 class="pg-title">Plan · <code>scripting-runtime</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="stage-badge">plan</span><span class="meta">rev 0</span><span class="meta">2026-09-22T22:30:09Z</span></div>
+    </header><div class="metric-row"><div class="metric">
+      <span class="metric-label">files to touch</span>
+      <span class="metric-value">45</span>
+      
+    </div><div class="metric">
+      <span class="metric-label">steps</span>
+      <span class="metric-value">17</span>
+      
+    </div><div class="metric is-ok">
+      <span class="metric-label">blockers</span>
+      <span class="metric-value">none</span>
+      
+    </div></div>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-plan" tabindex="-1"><a class="header-anchor" href="#the-plan"><span>The Plan</span></a></h2>
+<p>Modders can change the data files today, but no code of theirs can run. The shape promised a plugin boundary, and that boundary exists only as a sentence: the source has no plugin trait, no hook, and no script (<code>grep -i plugin crates/</code> returns nothing, run this session). The carrier decides every tick, a product-owner choice (<code>crates/engine/src/decision.rs:3</code>, <code>tuning.rs:155</code>). A match runs about 280,000 ticks, and the latest recorded baseline is 418.8 ms of processor time per match (<code>05c-benchmark.md</code>, commit <code>837cb5c</code>). This slice is built after <code>tactics-and-ai</code> and <code>calibration</code>, so its budget is the calibration baseline, which implement measures at step 1.</p>
+<p>Four decisions set the build. First, the runtime is Rhai 1.26 (MIT OR Apache-2.0, released 2026-09-10). It is pure Rust. No C compiler is on this machine (<code>where cl</code> and <code>where clang</code> find nothing), and that rules out the Lua and QuickJS bindings, which compile C. Rhai also has a deterministic operation budget. Second, the engine owns a runtime-free plugin interface, <code>crates/engine/src/plugin.rs</code>. A new <code>script</code> crate implements it, so the engine and a match without a pack do not change. Third, a script does not run every tick. It returns offsets to the native option scores. The engine caches them and asks again when the carrier changes, after a stoppage, or every 25 ticks. Decisions still run every tick, and one call per refresh fits the budget. Fourth, the pack’s hash is folded into the existing content hash. The snapshot layout stays the same, and a resume with a different pack is refused by the check that already exists.</p>
+<p>Implement touches 45 files (23 new, 22 modified) in 17 steps. A modder can then write a script that changes decisions, cards, and commentary, and the slice clears RIM-6. The top risk is the tick budget. Step 2 measures the cost of one call before anything else is built, and stops for the product owner if one call costs more than 3 microseconds.</p></section><figure class="figure-canvas">
+  <figcaption class="figure-meta">
+    <span class="figure-title"><b>Figure 3</b> · File-change topology</span>
+    <span class="figure-legend" aria-hidden="true"><span class="legend-entry"><span class="sw modified"></span>modified</span><span class="legend-entry"><span class="sw new"></span>new</span><span class="legend-entry"><span class="sw deleted"></span>deleted</span><span class="legend-entry"><span class="sw external"></span>external</span></span>
+  </figcaption>
+  <svg viewBox="0 0 980 674" width="100%" preserveAspectRatio="xMinYMid meet" aria-label="File-change topology">
+    <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8377"/>
+    </marker>
+  </defs><rect x="20" y="30" width="301.3333333333333" height="204" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/SCRIPT (NEW)</text><rect x="333.3333333333333" y="30" width="301.3333333333333" height="172" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/SCRIPT/TESTS AND BENCHES (NEW)</text><rect x="646.6666666666666" y="30" width="301.3333333333333" height="268" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC</text><rect x="20" y="194" width="301.3333333333333" height="140" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="212" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/PROTOCOL AND DOCS/REFERENCE</text><rect x="333.3333333333333" y="162" width="301.3333333333333" height="108" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="180" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">SCHEMAS/OBSERVABILITY</text><rect x="646.6666666666666" y="354" width="301.3333333333333" height="300" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="372" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE-CLI</text><rect x="20" y="230" width="301.3333333333333" height="76" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="248" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/STREAM/TESTS</text><rect x="333.3333333333333" y="422" width="301.3333333333333" height="172" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="440" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CONTENT/SCRIPTS (NEW) AND CONTENT/README.MD</text><rect x="646.6666666666666" y="294" width="301.3333333333333" height="108" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="312" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">WORKSPACE ROOT</text><rect x="658.6666666666666" y="322" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="334" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">Cargo.toml</text>
+      <text x="666.6666666666666" y="344" font-size="8" fill="#8a8377">config · +3/−1</text><rect x="658.6666666666666" y="354" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="366" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">Cargo.lock</text>
+      <text x="666.6666666666666" y="376" font-size="8" fill="#8a8377">config · +60/−0</text><rect x="32" y="58" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="40" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">Cargo.toml</text>
+      <text x="40" y="80" font-size="8" fill="#8a8377">config · +25/−0</text><rect x="32" y="90" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="40" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">lib.rs</text>
+      <text x="40" y="112" font-size="8" fill="#8a8377">domain · +60/−0</text><rect x="32" y="122" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="40" y="134" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">pack.rs</text>
+      <text x="40" y="144" font-size="8" fill="#8a8377">domain · +170/−0</text><rect x="32" y="154" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="40" y="166" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">sandbox.rs</text>
+      <text x="40" y="176" font-size="8" fill="#8a8377">domain · +200/−0</text><rect x="32" y="186" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="40" y="198" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">hooks.rs</text>
+      <text x="40" y="208" font-size="8" fill="#8a8377">domain · +220/−0</text><rect x="345.3333333333333" y="58" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">sandbox.rs</text>
+      <text x="353.3333333333333" y="80" font-size="8" fill="#8a8377">test · +170/−0</text><rect x="345.3333333333333" y="90" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">decision.rs</text>
+      <text x="353.3333333333333" y="112" font-size="8" fill="#8a8377">test · +140/−0</text><rect x="345.3333333333333" y="122" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="134" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace"></text>
+      <text x="353.3333333333333" y="144" font-size="8" fill="#8a8377">test · +90/−0</text><rect x="345.3333333333333" y="154" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="166" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">hook_call.rs</text>
+      <text x="353.3333333333333" y="176" font-size="8" fill="#8a8377">test · +70/−0</text><rect x="658.6666666666666" y="58" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">plugin.rs</text>
+      <text x="666.6666666666666" y="80" font-size="8" fill="#8a8377">domain · +180/−0</text><rect x="658.6666666666666" y="90" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">lib.rs</text>
+      <text x="666.6666666666666" y="112" font-size="8" fill="#8a8377">domain · +2/−0</text><rect x="658.6666666666666" y="122" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="134" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">sim.rs</text>
+      <text x="666.6666666666666" y="144" font-size="8" fill="#8a8377">domain · +60/−2</text><rect x="658.6666666666666" y="154" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="166" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">decision.rs</text>
+      <text x="666.6666666666666" y="176" font-size="8" fill="#8a8377">domain · +40/−2</text><rect x="658.6666666666666" y="186" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="198" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="666.6666666666666" y="208" font-size="8" fill="#8a8377">domain · +18/−1</text><rect x="658.6666666666666" y="218" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="230" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">scenario.rs</text>
+      <text x="666.6666666666666" y="240" font-size="8" fill="#8a8377">domain · +8/−0</text><rect x="658.6666666666666" y="250" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="262" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="666.6666666666666" y="272" font-size="8" fill="#8a8377">observability · +20/−0</text><rect x="32" y="222" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="234" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">event.rs</text>
+      <text x="40" y="244" font-size="8" fill="#8a8377">contract · +24/−0</text><rect x="32" y="254" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="266" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">lib.rs</text>
+      <text x="40" y="276" font-size="8" fill="#8a8377">contract · +8/−0</text><rect x="32" y="286" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="298" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">protocol.md</text>
+      <text x="40" y="308" font-size="8" fill="#8a8377">docs · +16/−0</text><rect x="345.3333333333333" y="190" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="202" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">match-event.schema.json</text>
+      <text x="353.3333333333333" y="212" font-size="8" fill="#8a8377">contract · +8/−1</text><rect x="345.3333333333333" y="222" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="234" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">match-stats.schema.json</text>
+      <text x="353.3333333333333" y="244" font-size="8" fill="#8a8377">contract · +10/−0</text><rect x="658.6666666666666" y="382" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="394" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">Cargo.toml</text>
+      <text x="666.6666666666666" y="404" font-size="8" fill="#8a8377">config · +1/−0</text><rect x="658.6666666666666" y="414" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="426" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">cli.rs</text>
+      <text x="666.6666666666666" y="436" font-size="8" fill="#8a8377">cli · +14/−0</text><rect x="658.6666666666666" y="446" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="458" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">content.rs</text>
+      <text x="666.6666666666666" y="468" font-size="8" fill="#8a8377">cli · +25/−0</text><rect x="658.6666666666666" y="478" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="490" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">stream_run.rs</text>
+      <text x="666.6666666666666" y="500" font-size="8" fill="#8a8377">cli · +30/−1</text><rect x="658.6666666666666" y="510" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="522" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">simulate.rs</text>
+      <text x="666.6666666666666" y="532" font-size="8" fill="#8a8377">cli · +8/−0</text><rect x="658.6666666666666" y="542" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="554" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">bench.rs</text>
+      <text x="666.6666666666666" y="564" font-size="8" fill="#8a8377">cli · +10/−0</text><rect x="658.6666666666666" y="574" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="586" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">resume.rs</text>
+      <text x="666.6666666666666" y="596" font-size="8" fill="#8a8377">cli · +8/−0</text><rect x="658.6666666666666" y="606" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="618" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">script_cli.rs</text>
+      <text x="666.6666666666666" y="628" font-size="8" fill="#8a8377">test · +110/−0</text><rect x="32" y="258" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="270" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="40" y="280" font-size="8" fill="#8a8377">test · +6/−0</text><rect x="345.3333333333333" y="450" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="462" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">pack.json</text>
+      <text x="353.3333333333333" y="472" font-size="8" fill="#8a8377">data · +14/−0</text><rect x="345.3333333333333" y="482" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="494" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">main.rhai</text>
+      <text x="353.3333333333333" y="504" font-size="8" fill="#8a8377">data · +45/−0</text><rect x="345.3333333333333" y="514" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="526" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">README.md</text>
+      <text x="353.3333333333333" y="536" font-size="8" fill="#8a8377">docs · +90/−0</text><rect x="345.3333333333333" y="546" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="558" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">README.md</text>
+      <text x="353.3333333333333" y="568" font-size="8" fill="#8a8377">docs · +3/−0</text><path d="M 309.3333333333333 199 C 484 199, 484 71, 658.6666666666666 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 199 C 170.66666666666666 199, 170.66666666666666 167, 32 167" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 103 C 170.66666666666666 103, 170.66666666666666 135, 32 135" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 167 C 797.3333333333333 167, 797.3333333333333 71, 658.6666666666666 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 199 C 797.3333333333333 199, 797.3333333333333 71, 658.6666666666666 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 135 C 797.3333333333333 135, 797.3333333333333 71, 658.6666666666666 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 459 C 484 459, 484 103, 32 103" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 491 C 484 491, 484 235, 32 235" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 491 C 797.3333333333333 491, 797.3333333333333 71, 658.6666666666666 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/>
+  </svg>
+</figure><div class="fragment"><section class="fragment-plan" data-artifact="plan" data-slice="scripting-runtime" data-rev="0">
+  <!-- @include-skip the files-touched rows are grouped per module with collapsible cards, matching the sibling plan fragments -->
+  <table class="files-touched pl-files">
+    <thead><tr><th>File</th><th>Status</th><th>Module</th><th>Lines</th></tr></thead>
+    <tbody>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">domain</span> crates/script/src/lib.rs, pack.rs, sandbox.rs, hooks.rs; Cargo.toml</summary><div class="pl-card">The Rhai runtime behind the engine's plugin interface. The pack loader refuses a bad manifest by file, field, and reason. The sandbox refuses every import, disables eval, sends print to the log, and caps operations, call depth, and sizes, with a 2 ms backstop. The hooks parse offsets, cards, and lines, and a hook that fails three times in a row is disabled.</div></details></td><td>new</td><td>crates/script</td><td>+675</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">test</span> crates/script/tests/sandbox.rs, decision.rs, fixtures/ (10 files); benches/hook_call.rs</summary><div class="pl-card">A looping script is aborted and the match continues. An import or a network call is denied and recorded. A shoot-bias pack raises shots. The same seed and pack give identical ticks. The call-cost bench gates the build at 3 microseconds per decide call.</div></details></td><td>new</td><td>crates/script</td><td>+470</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/plugin.rs</summary><div class="pl-card">Plugin interface version 1: decision, rule, and commentary traits, plain context data, and the hook outcomes. It has no runtime dependency.</div></details></td><td>new</td><td>crates/engine/src</td><td>+180</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/sim.rs, decision.rs, rules/mod.rs, scenario.rs, lib.rs, observe/mod.rs</summary><div class="pl-card">Cached offsets are added to the option scores and refreshed on a carrier change, after a stoppage, or every 25 ticks. The referee's card is offered to the rule hook. A script event is recorded for every failure. The pack hash is folded into the content hash. The statistics gain the script counters.</div></details></td><td>modified</td><td>crates/engine/src</td><td>+148 / -5</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">contract</span> crates/protocol/src/event.rs, lib.rs; docs/reference/protocol.md; schemas/observability (2 files)</summary><div class="pl-card">An additive script event type and four optional script fields. The protocol stays at version 2 under the recorded additive rule.</div></details></td><td>modified</td><td>crates/protocol</td><td>+66 / -1</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">cli</span> crates/engine-cli: cli.rs, content.rs, stream_run.rs, simulate.rs, bench.rs, resume.rs, Cargo.toml; tests/script_cli.rs (new)</summary><div class="pl-card">The --script-pack flag on every command that builds a match. The pack identity appears on the first kick-off event and in the run report. The commentary hook runs at the shared driver. A resume with a different pack is refused.</div></details></td><td>modified + new</td><td>crates/engine-cli</td><td>+206 / -1</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">data</span> content/scripts/sample/pack.json, main.rhai, README.md; content/README.md</summary><div class="pl-card">The sample pack uses all three hooks, and the modder reference documents the fields, signatures, limits, and failure behaviour.</div></details></td><td>new + modified</td><td>content/</td><td>+152</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">config</span> Cargo.toml, Cargo.lock; crates/stream/tests/common/mod.rs</summary><div class="pl-card">The new member, the rhai workspace dependency with the sync feature, and the test helper's script event arm.</div></details></td><td>modified</td><td>workspace root</td><td>+69 / -1</td></tr>
+    </tbody>
+  </table>
+  <div class="pl-risks">
+    <aside class="callout callout-warn"><div class="callout-hd">R1 · Tick budget</div><div class="callout-body">The carrier decides every tick, so scripts give cached offsets that are refreshed about 8,000 times a match. The build stops for the product owner if one call costs more than 3 microseconds.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R2 · Seams drawn from sibling plans</div><div class="callout-body">Scored options, the commentator, and the calibration baseline are not built yet. Step 1 re-checks them and stops for a plan re-review if they differ.</div></aside>
+    <aside class="callout callout-info"><div class="callout-hd">R3 · Default import reads files</div><div class="callout-body">The upstream default resolver loads files, so the sandbox replaces it, and the import-escape fixture proves the replacement.</div></aside>
+    <aside class="callout callout-info"><div class="callout-hd">R4 · Determinism</div><div class="callout-body">No random function, no state between calls, and the cache clears at stoppages. Two seeded runs are compared byte for byte.</div></aside>
+    <aside class="callout callout-info"><div class="callout-hd">R5 · Stdout</div><div class="callout-body">Script print output goes to the log, never to the record stream.</div></aside>
+  </div>
+  <details class="pl-revs"><summary>0 prior revisions</summary><ul></ul></details>
+  <style>
+    .fragment-plan .pl-files { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-plan .pl-files th, .fragment-plan .pl-files td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
+    .fragment-plan .pl-files summary { cursor: pointer; }
+    .fragment-plan .pl-chip { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; opacity: 0.8; }
+    .fragment-plan .pl-card { padding: 6px 0 4px 18px; opacity: 0.9; }
+    .fragment-plan .pl-risks { display: grid; gap: 8px; margin-top: 12px; }
+    .fragment-plan .pl-revs { margin-top: 12px; }
+    @media (max-width: 480px) { .fragment-plan .pl-files th:nth-child(3), .fragment-plan .pl-files td:nth-child(3) { display: none; } }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-plan');
+      var files = 45, modules = 9;
+      var risks = root ? root.querySelectorAll('.pl-risks .callout').length : 0;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'plan', artifact: 'plan', counts: { files: files, modules: modules, risks: risks } } }));
+    })();
+  </script>
+</section>
+</div><div class="prose"><h1 id="plan-scripting-runtime-for-modding" tabindex="-1"><a class="header-anchor" href="#plan-scripting-runtime-for-modding"><span>Plan: Scripting Runtime for Modding</span></a></h1>
+<h2 id="current-state" tabindex="-1"><a class="header-anchor" href="#current-state"><span>Current State</span></a></h2>
+<ul>
+<li><strong>No plugin interface in code.</strong> The shape says “the engine defines the interface a scripting runtime will call” (<code>02-shape.md:58</code>). The data slice built the data half only (<code>03-slice-data-schemas-generator.md:27</code>). A search for <code>plugin</code>, <code>script</code>, and <code>hook</code> in <code>crates/**/*.rs</code> finds only the stoppage hook (<code>record.rs:154-164</code>) and the referee’s test draws (<code>rng.rs:21-71</code>).</li>
+<li><strong>Decision path.</strong> <code>Simulation::decide</code> sets every target and calls <code>decide_carrier</code> (<code>decision.rs:22-94</code>). <code>decide_carrier</code> scores passes (<code>:171</code>), a dribble (<code>:178</code>), and a shot threshold (<code>:132</code>) today. The tactics plan turns it into five scored options (pass, dribble, shoot, clear, hold) with tuned weights (<code>04-plan-tactics-and-ai.md</code> step 8). <code>decision_interval_ticks</code> is 1 (<code>tuning.rs:155</code>, used at <code>sim.rs:377</code>).</li>
+<li><strong>Rule path.</strong> Cards come from <code>fouls::card_outcome(aggression, yellows, tuning, draw)</code> (<code>rules/fouls.rs:73</code>) and are applied by <code>discipline::book</code> (<code>rules/discipline.rs:14</code>).</li>
+<li><strong>Commentary path.</strong> The commentary plan puts the commentator outside the tick loop. The shared match driver <code>stream_run.rs</code> attaches one line to each mapped event (<code>04-plan-commentary.md:86</code>).</li>
+<li><strong>Events.</strong> <code>EngineEventKind</code> has twelve kinds (<code>sim.rs:95-115</code>). <code>EngineEvent</code> is <code>Copy</code> (<code>sim.rs:133-156</code>). <code>MatchEvent</code> uses <code>deny_unknown_fields</code>, and every field must be documented (<code>protocol/src/event.rs:91-146</code>, <code>crates/protocol/tests/document.rs</code>). The rule beside <code>PROTOCOL_VERSION</code> (<code>protocol/src/lib.rs:21-34</code>) keeps version 2 for additive fields.</li>
+<li><strong>Snapshot.</strong> The header holds a 12-byte content hash (<code>snapshot.rs:6-7</code>), and resume refuses a mismatch (<code>snapshot.rs:224-227</code>). <code>MatchConfig::new</code> computes the hash from the content (<code>sim.rs:38</code>, <code>:76</code>).</li>
+<li><strong>Threads.</strong> The stream session runs the match on a spawned thread (<code>stream/src/session.rs:264</code>), so a hook object must be <code>Send</code>.</li>
+<li><strong>Toolchain.</strong> The target is <code>x86_64-pc-windows-msvc</code> (<code>rustup show</code>). <code>where cl</code> and <code>where clang</code> report “Could not find”, and <code>00-index.md</code> <code>stack.toolchains-absent</code> lists <code>clang</code>, <code>cl</code>, and <code>zig</code>.</li>
+<li><strong>Siblings not built yet.</strong> <code>tactics-and-ai</code>, <code>commentary</code>, and <code>calibration</code> are planned and not implemented (<code>00-index.md</code> <code>slices:</code>). This plan relies on their planned seams, and step 1 re-checks them.</li>
+</ul>
+<h2 id="simplicity-ladder" tabindex="-1"><a class="header-anchor" href="#simplicity-ladder"><span>Simplicity Ladder</span></a></h2>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Capability</th>
+<th>Rung</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Embedded, sandboxed script interpreter</td>
+<td>rung 4 new dependency</td>
+<td>Rungs 1 to 3 do not hold: Rust has no built-in interpreter, and <code>Cargo.lock</code> has none. Rhai 1.26.1 is chosen from five candidates (Assumption A-1). Evidence: <a href="http://crates.io">crates.io</a> API (<code>https://crates.io/api/v1/crates/rhai</code>), license MIT OR Apache-2.0, meets NFR-5. Upstream <code>Cargo.toml</code> (<code>https://raw.githubusercontent.com/rhaiscript/rhai/main/Cargo.toml</code>) has no <code>cc</code> build dependency.</td>
+</tr>
+<tr>
+<td>Operation and time budget</td>
+<td>rung 3 reuse (of the new dependency)</td>
+<td><code>Engine::set_max_operations</code> plus <code>Engine::on_progress(Fn(u64) -&gt; Option&lt;Dynamic&gt;)</code>. Returning <code>Some</code> ends the call with <code>ErrorTerminated</code> (<code>https://rhai.rs/book/safety/progress.html</code>, read this run).</td>
+</tr>
+<tr>
+<td>No file or network access</td>
+<td>rung 3 reuse with modification</td>
+<td>Rhai has no file or network functions. <code>Engine::new()</code> installs a <code>FileModuleResolver</code> (upstream <code>src/engine.rs</code>, read this run), so the sandbox must replace it with a refusing resolver.</td>
+</tr>
+<tr>
+<td>Pack manifest loading and validation</td>
+<td>rung 3 reuse</td>
+<td><code>data::load_json</code> and the garde idiom (<code>crates/engine/src/data/mod.rs</code>), <code>sha2</code> (workspace).</td>
+</tr>
+<tr>
+<td>Hook call sites</td>
+<td>rung 3 reuse with modification</td>
+<td>The scored-options layer from the tactics slice, <code>card_outcome</code> (<code>rules/fouls.rs:73</code>), and the commentator attachment point in <code>stream_run.rs</code>.</td>
+</tr>
+<tr>
+<td>Pack identity in resume</td>
+<td>rung 3 reuse</td>
+<td>The snapshot’s content-hash check (<code>snapshot.rs:224</code>). The pack hash is folded into <code>content_hash</code>, so no new field is added.</td>
+</tr>
+<tr>
+<td>Benchmark compare</td>
+<td>rung 3 reuse</td>
+<td><code>engine-cli bench --json</code> (<code>crates/engine-cli/src/bench.rs</code>), extracted by the calibration plan into <code>measure()</code>.</td>
+</tr>
+<tr>
+<td>Plugin interface traits</td>
+<td>rung 4 new code</td>
+<td>No trait exists (search above). About 180 lines of plain traits and <code>Copy</code> context structs.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="applied-learnings" tabindex="-1"><a class="header-anchor" href="#applied-learnings"><span>Applied Learnings</span></a></h2>
+<p><code>.ai/solutions/INDEX.md</code> does not exist (<code>ls .ai/solutions</code> returned nothing). <code>.ai/sdlc-config.json</code> does not exist, so no global learnings directory applies. No applicable learnings found.</p>
+<p>Repeat-deferral tripwire: <code>00-index.md</code> <code>runtime-evidence-deferrals: []</code>. It does not fire.</p>
+<h2 id="likely-files-areas-to-touch" tabindex="-1"><a class="header-anchor" href="#likely-files-areas-to-touch"><span>Likely Files / Areas to Touch</span></a></h2>
+<ul>
+<li><code>Cargo.toml</code>, <code>Cargo.lock</code>: the new member and the <code>rhai</code> workspace dependency.</li>
+<li><code>crates/script/</code> (new: <code>Cargo.toml</code>, <code>src/lib.rs</code>, <code>pack.rs</code>, <code>sandbox.rs</code>, <code>hooks.rs</code>, <code>tests/sandbox.rs</code>, <code>tests/decision.rs</code>, <code>tests/fixtures/</code> with five packs of two files each, <code>benches/hook_call.rs</code>): the runtime, the pack loader, the sandbox, and the criterion tests.</li>
+<li><code>crates/engine/src/plugin.rs</code> (new), <code>lib.rs</code>, <code>sim.rs</code>, <code>decision.rs</code>, <code>rules/mod.rs</code>, <code>scenario.rs</code>, <code>observe/mod.rs</code>: the interface and its three call sites.</li>
+<li><code>crates/protocol/src/event.rs</code>, <code>lib.rs</code>, <code>docs/reference/protocol.md</code>: the <code>script</code> event type and the <code>script.*</code> fields.</li>
+<li><code>schemas/observability/match-event.schema.json</code>, <code>match-stats.schema.json</code> (from the calibration slice): the new enum value and keys.</li>
+<li><code>crates/engine-cli/Cargo.toml</code>, <code>src/cli.rs</code>, <code>content.rs</code>, <code>stream_run.rs</code>, <code>simulate.rs</code>, <code>bench.rs</code>, <code>resume.rs</code>, <code>tests/script_cli.rs</code> (new): the flag, the loading, the mapping, and the command-line test.</li>
+<li><code>crates/stream/tests/common/mod.rs</code>: the helper’s own event mapping.</li>
+<li><code>content/scripts/sample/pack.json</code>, <code>main.rhai</code>, <code>content/scripts/README.md</code> (new), <code>content/README.md</code>: the sample pack and the modder reference.</li>
+</ul>
+<h2 id="proposed-change-strategy" tabindex="-1"><a class="header-anchor" href="#proposed-change-strategy"><span>Proposed Change Strategy</span></a></h2>
+<p><strong>The plugin interface (named mechanism: shape “Plugin boundary”).</strong> <code>crates/engine/src/plugin.rs</code> defines <code>PLUGIN_API_VERSION = 1</code> and three traits. <code>DecisionHook::adjust(&amp;mut self, &amp;DecisionContext) -&gt; HookOutcome&lt;OptionOffsets&gt;</code>. <code>RuleHook::card(&amp;mut self, &amp;FoulContext, native: Option&lt;Card&gt;) -&gt; HookOutcome&lt;Option&lt;Card&gt;&gt;</code>. <code>CommentaryHook::line(&amp;mut self, &amp;LineContext, native: &amp;str) -&gt; HookOutcome&lt;String&gt;</code>. <code>HookOutcome</code> is <code>Value</code>, <code>Keep</code>, <code>Aborted(reason)</code>, <code>Denied(kind)</code>, or <code>Disabled</code>. <code>Plugins</code> holds the pack identity, the three optional boxed hooks (<code>Send</code>), and <code>ScriptStats</code>. The engine does not depend on any runtime. NFR-8 (“the plugin boundary is a versioned interface”, <code>02-shape.md:167</code>) is met by the constant and the <code>plugin_api</code> field in every pack.</p>
+<p><strong>Decision hook cadence.</strong> Native scoring runs every tick, as the product owner chose. The script adds offsets to the five option scores. The engine keeps a cache <code>{ carrier, until_tick, offsets }</code> and refreshes it through the hook in three cases: the carrier changes, a stoppage has occurred, or <code>refresh_ticks</code> have passed (pack field, 5 to 250, default 25). Estimate: about 168,000 ticks with a carrier divided by 25, plus about 1,500 carrier changes, gives about 8,200 calls per match. At 2 µs per call that is about 16 ms, or 4 percent of 418.8 ms. Step 2 measures the real figure. NFR-1 yields to C2 (<code>02-shape.md:160</code>). This mechanism leaves the per-tick model and the decision interval unchanged, so it does not narrow any charter commitment.</p>
+<p><strong>The sandbox (named mechanism: slice Scope “sandbox limits”).</strong> Start with <code>rhai::Engine::new()</code>. Replace the module resolver with <code>DenyResolver</code>, which refuses every <code>import</code> and records a denial. Disable the <code>eval</code> symbol, so a pack that uses it is refused at load. Route <code>print</code> and <code>debug</code> to <code>tracing</code>. Set these limits: operations per call (pack field, 1,000 to 50,000, default 10,000), call levels 16, expression depths 64 and 32, string size 1,024, array size 256, and map size 64. <code>on_progress</code> checks a 2 ms wall-clock backstop every 256 operations. The operation limit is the deterministic budget, and the backstop only catches a slow native call. The AST is compiled and its top-level statements run once at load, under the same budget. Each call uses <code>CallFnOptions::eval_ast(false)</code> and a fresh scope, so a script keeps no state between calls. Errors are classified as follows. Too many operations, or a termination, is <code>Aborted(budget)</code>. A refused import, or a call to a function the sandbox does not expose, is <code>Denied(name)</code>; Rhai has no file or network functions, so any such attempt lands here. Any other error is <code>Aborted(error)</code>. After three consecutive failures, a hook is <code>Disabled</code> for the rest of the match.</p>
+<p><strong>Failure is never fatal.</strong> On any failure the engine keeps the native choice: zero offsets, the referee’s card, or the native line. It also pushes <code>EngineEventKind::Script</code> with a <code>ScriptNote { hook, outcome }</code>, logs a <code>tracing</code> warning, and increments <code>ScriptStats</code>. No random draw happens on the hook path, so the random stream stays aligned with the no-pack match.</p>
+<p><strong>The pack format.</strong> A folder holds <code>pack.json</code> (schema version 1) and one <code>.rhai</code> entry file. Fields: <code>id</code>, <code>version</code>, <code>name</code>, <code>plugin_api</code>, <code>entry</code>, <code>hooks</code>, <code>decision.refresh_ticks</code>, and <code>limits.max_operations</code>. They use <code>deny_unknown_fields</code>, garde ranges, and refusals that name the file, the field, and the reason (NFR-7). The identity is <code>id@version+sha12</code>, where the hash is SHA-256 over <code>pack.json</code> followed by the entry bytes. <code>--script-pack &lt;DIR&gt;</code> selects a pack on every command that builds a match. The pack hash is folded into <code>MatchConfig::content_hash</code>.</p>
+<p><strong>The contract.</strong> An additive event type <code>script</code> and four optional fields: <code>script.pack</code> (on the tick-0 kick-off event), <code>script.hook</code>, <code>script.outcome</code> (<code>aborted</code>, <code>denied</code>, or <code>disabled</code>), and <code>script.detail</code>. The match-stats record gains <code>script.pack</code> and the counters. Protocol version 2 stays, under the rule at <code>protocol/src/lib.rs:21-34</code>. The observability schema files gain the enum value and the keys.</p>
+<h2 id="step-by-step-plan" tabindex="-1"><a class="header-anchor" href="#step-by-step-plan"><span>Step-by-Step Plan</span></a></h2>
+<ol>
+<li><strong>Re-read the landed seams and capture the baseline.</strong> Confirm these seams in the tree: the five-option scoring in <code>decision.rs</code>, the <code>card_outcome</code> call site in <code>rules/mod.rs</code>, the commentator attachment point in <code>stream_run.rs</code>, <code>bench::measure</code>, and the observability schema files. If any seam differs from this plan, stop and re-run the plan for this slice. Run <code>cargo build --release -p engine-cli</code>, then run <code>target/release/engine-cli.exe bench --seed 42 --matches 5 --json</code> three times. Record the median <code>bench.cpu_ms / bench.matches</code>, <code>bench.cpu_us_per_tick</code>, and <code>bench.peak_mem_mb</code> in the implement artifact as the calibration baseline. Also record the SHA-256 of <code>simulate --seed 42 --minutes 90</code> tick output.</li>
+<li><strong>Spike the call cost (gate).</strong> Create <code>crates/script</code> with <code>rhai</code> only, and write <code>benches/hook_call.rs</code> with the draft sample <code>decide</code> and a representative context. Run <code>cargo bench -p script --bench hook_call</code>. The build must succeed with no C compiler; this is the evidence for rung 4. If the median decide call is more than 3 µs, stop and report to the product owner with the figure and the lever (the default <code>refresh_ticks</code>). Do not change <code>decision_interval_ticks</code>.</li>
+<li><strong>Plugin interface.</strong> Write <code>crates/engine/src/plugin.rs</code> as in the change strategy, and export it from <code>lib.rs</code>. Add <code>Plugins</code> and the script cache to <code>Simulation</code> with <code>set_plugins</code>. Add <code>EngineEventKind::Script</code> and <code>ScriptNote</code>. Add <code>MatchConfig::fold_pack_hash</code>. Add <code>plugins(...)</code> to the scenario builder. Run <code>cargo test -p engine</code>; all tests must pass. Re-run the step 1 <code>simulate</code>; its SHA-256 must be equal.</li>
+<li><strong>Decision call site.</strong> In <code>decision.rs</code>, add the cached offsets to the option scores before the best option is chosen. Refresh the cache under the three triggers, and clear it in the stoppage path and on a carrier change in <code>sim.rs</code>. Unit test: a scene with a fake <code>DecisionHook</code> that returns a large shoot offset turns a pass into a shot. A fake hook that returns <code>Aborted</code> leaves the native choice and pushes one <code>Script</code> event.</li>
+<li><strong>Rule call site.</strong> In <code>rules/mod.rs</code>, offer the referee’s card to the <code>RuleHook</code> after the draw. <code>Value</code> replaces it. <code>Keep</code> and any failure keep it. Unit test with a fake hook.</li>
+<li><strong>Counters.</strong> Add the optional <code>script.*</code> keys to <code>MatchStats</code> in <code>observe/mod.rs</code>, filled from <code>ScriptStats</code>. Run <code>cargo test -p engine</code>; all tests must pass.</li>
+<li><strong>Pack loader.</strong> Write <code>pack.rs</code> as described in the YAML. Unit tests: an unknown field, <code>plugin_api</code> 2, an entry with <code>..</code> or a separator, an empty <code>hooks</code> list, and <code>refresh_ticks</code> 4 are each refused with the field named. A valid pack gives the same identity twice.</li>
+<li><strong>Sandbox.</strong> Write <code>sandbox.rs</code> as in the change strategy. Unit tests: <code>loop {}</code> aborts with a budget reason; <code>import &quot;x&quot; as y;</code> is denied; <code>http_get(&quot;u&quot;)</code> is denied naming the function; <code>eval(&quot;1&quot;)</code> is refused at load; <code>print(&quot;x&quot;)</code> writes nothing to stdout; a 2,000-character string is refused.</li>
+<li><strong>Hooks.</strong> Write <code>hooks.rs</code>. Register <code>DecisionContext</code>, <code>FoulContext</code>, and <code>LineContext</code> as custom types with getters. Parse the return shapes, reject non-finite or out-of-range offsets, cap lines at 280 characters, and add the circuit breaker. Unit tests for each return shape and for the breaker.</li>
+<li><strong>Command line.</strong> Add <code>--script-pack</code> in <code>cli.rs</code>. Add one shared loader in <code>content.rs</code>: load the pack, fold the hash, and return the <code>Plugins</code>. In <code>stream_run.rs</code>: attach the plugins, map <code>Script</code>, put <code>script.pack</code> on the tick-0 kick-off event, and offer each commentary line to the commentary hook. Wire the same loader into <code>simulate.rs</code>, <code>bench.rs</code> (with <code>script.pack</code> in the run report), and <code>resume.rs</code> (load the pack before the snapshot check).</li>
+<li><strong>Protocol.</strong> In <code>event.rs</code>, add <code>EventType::Script</code> and the four fields. In <code>lib.rs</code>, add the fields to <code>MESSAGES</code> and the version-2 reason. Add the rows and examples to <code>docs/reference/protocol.md</code>. Add the arm to <code>crates/stream/tests/common/mod.rs</code>. Update both schema files. Run <code>cargo test -p protocol -p stream</code>; all tests must pass.</li>
+<li><strong>Sample pack and reference.</strong> Write <code>content/scripts/sample/pack.json</code> and <code>main.rhai</code> as described in the YAML. Write <code>content/scripts/README.md</code> and the pointer in <code>content/README.md</code>.</li>
+<li><strong>Fixtures.</strong> Write the five fixture packs in <code>crates/script/tests/fixtures/</code>: <code>shoot-bias</code>, <code>looping</code>, <code>import-escape</code>, <code>network-call</code>, and <code>bad-return</code>.</li>
+<li><strong>Criterion tests.</strong> Write <code>crates/script/tests/decision.rs</code> (AC-1, engine side, with the determinism checks), <code>crates/script/tests/sandbox.rs</code> (AC-2, AC-3, and the breaker), and <code>crates/engine-cli/tests/script_cli.rs</code> (AC-1, stream side, the bad-pack refusal, and the resume refusal). Run <code>cargo test --workspace</code>; all tests must pass.</li>
+<li><strong>Call-cost recheck.</strong> Re-run <code>cargo bench -p script --bench hook_call</code> with the final sample pack, and record the median decide and card call times.</li>
+<li><strong>Benchmark compare (AC-4).</strong> Run <code>target/release/engine-cli.exe bench --seed 42 --matches 5 --json --script-pack content/scripts/sample</code> three times, then run the same command three times without the flag. Pass: the scripted median processor time per match is at most 1.10 times the step 1 baseline. Also, the unscripted median must be within the run-to-run noise of the baseline (at most 1.02 times). Record <code>script.calls</code> per match. If the scripted run fails, stop and report to the product owner with the figures. Do not lower <code>refresh_ticks</code> below the default without the product owner.</li>
+<li><strong>Gates.</strong> Search <code>crates/</code>, <code>content/</code>, <code>docs/</code>, <code>schemas/</code>, and <code>README.md</code> for workflow vocabulary (slice names, stage names, <code>.ai/</code>); the search must return nothing. Run <code>cargo fmt --all -- --check</code>, <code>cargo clippy --workspace --all-targets -- -D warnings</code>, <code>cargo test --workspace</code>, and <code>node --test web/tests/*.test.mjs</code>. Commit with a product-language message that ends with the attribution line the session requires.</li>
+</ol>
+<h2 id="verification-strategy" tabindex="-1"><a class="header-anchor" href="#verification-strategy"><span>Verification Strategy</span></a></h2>
+<p>The slice definition marks AC-1 to AC-3 <code>observable: false</code>, and they are verified by <code>cargo test</code>. AC-4 is developer-visible.</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>AC</th>
+<th>Tool / method + ladder rung</th>
+<th>Environment need — satisfiable in target env?</th>
+<th>What must be BUILT to make it verifiable</th>
+<th>Fallback chain</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AC-4 benchmark with the sample pack is within 10 percent of the calibration baseline</td>
+<td><code>engine-cli bench --json</code> with and without <code>--script-pack</code> (cli-direct)</td>
+<td>The reference laptop (this Windows machine; the earlier baselines ran here) — yes. The calibration baseline figure — produced at step 1 once <code>calibration</code> lands</td>
+<td>The <code>--script-pack</code> flag on <code>bench</code>, <code>script.pack</code> in the run report, the sample pack, and the step 1 baseline capture</td>
+<td>The criterion call-cost bench (<code>hook_call</code>) × <code>script.calls</code> per match as a proxy → pre-registered deferral cleared when the implementer runs step 16 on the reference laptop</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>AC-4: <code>constraint-resolution: prerequisite-slice: calibration</code> — <code>wall-ownership: code-owned</code>. The baseline exists only after the calibration slice lands, and this slice’s <code>depends-on</code> already orders it. Step 1 captures the figure, so no external wall remains.</li>
+</ul>
+<h2 id="test-verification-plan" tabindex="-1"><a class="header-anchor" href="#test-verification-plan"><span>Test / Verification Plan</span></a></h2>
+<h3 id="automated-checks" tabindex="-1"><a class="header-anchor" href="#automated-checks"><span>Automated checks</span></a></h3>
+<ul>
+<li><code>cargo fmt --all -- --check</code>, <code>cargo clippy --workspace --all-targets -- -D warnings</code>.</li>
+<li><code>cargo test -p script</code>: pack refusals, sandbox classification, return-shape parsing, breaker, <code>tests/decision.rs</code> (AC-1 and determinism), <code>tests/sandbox.rs</code> (AC-2, AC-3).</li>
+<li><code>cargo test -p engine</code>: fake-hook unit tests for the decision and rule call sites; the no-pack tick output equals the step 1 SHA-256.</li>
+<li><code>cargo test -p engine-cli --test script_cli</code>: <code>script.pack</code> in <code>events.jsonl</code> and <code>stats.json</code>, the bad-pack exit, and the resume refusal.</li>
+<li><code>cargo test -p protocol</code>: the document test covers the new fields.</li>
+<li><code>cargo bench -p script --bench hook_call</code> (steps 2 and 15).</li>
+<li><code>node --test web/tests/*.test.mjs</code>: unchanged and green.</li>
+</ul>
+<p>AC classification: AC-1, AC-2, and AC-3 are <code>build-capability</code> (cargo tests). AC-4 is <code>runtime-evidence</code> on the reference laptop through <code>cli-direct</code>.</p>
+<h3 id="interactive-verification-human-in-the-loop" tabindex="-1"><a class="header-anchor" href="#interactive-verification-human-in-the-loop"><span>Interactive verification (human-in-the-loop)</span></a></h3>
+<p>AC-4 on the command line (runtime adapter <code>cli</code>, <code>stack.platforms: [web, cli]</code>, <code>stack.testing: [cargo-test]</code>, <code>stack.observability: []</code>, <code>user-confirmed: true</code>):</p>
+<ol>
+<li><code>cargo build --release -p engine-cli</code>.</li>
+<li>Run <code>target/release/engine-cli.exe bench --seed 42 --matches 5 --json --script-pack content/scripts/sample</code> three times, keeping stdout, stderr, and the exit code of each run under the verify evidence folder.</li>
+<li>Run the same command three times without <code>--script-pack</code>.</li>
+<li>Read each stdout file. Each holds one <code>run-report</code> JSON line. Pass criteria: the scripted median of <code>bench.cpu_ms / bench.matches</code> is at most 1.10 times the step 1 baseline; <code>script.pack</code> starts with <code>sample@1.0.0+</code>; the exit code is 0; <code>build.hash</code> is not <code>unknown</code>; <code>bench.peak_mem_mb</code> is at most 1.25 times the baseline.</li>
+</ol>
+<p>No page is involved. The page ignores the <code>script</code> event type, which <code>web/stoppages.mjs</code> does not list.</p>
+<h2 id="risks-watchouts" tabindex="-1"><a class="header-anchor" href="#risks-watchouts"><span>Risks / Watchouts</span></a></h2>
+<ul>
+<li><strong>R1 (high) Tick budget.</strong> A per-tick interpreted call would cost several times the budget. Mitigations: cached offsets with a refresh interval, the step 2 gate, and the stop rule at step 16. <code>decision_interval_ticks</code> is never changed.</li>
+<li><strong>R2 (high) Sibling seams drawn from plans.</strong> The scored options, the commentator, <code>bench::measure</code>, and the schema files come from sibling plans that are not built yet. Step 1 stops for a plan re-review on a mismatch.</li>
+<li><strong>R3 (medium) Default import resolver reads files.</strong> The upstream <code>Engine::new()</code> installs a <code>FileModuleResolver</code>. The sandbox replaces it, and the <code>import-escape</code> fixture proves the replacement.</li>
+<li><strong>R4 (medium) Determinism.</strong> No random function is exposed, scripts are stateless, the cache clears at stoppages, and a byte-for-byte test covers two seeded runs. Rhai’s internal <code>ahash</code> uses <code>compile-time-rng</code> (upstream <code>Cargo.toml</code>, read this run). It affects only function lookup inside Rhai, not what a script can observe, and the byte-for-byte test covers that claim.</li>
+<li><strong>R5 (medium) Stdout corruption.</strong> Rhai <code>print</code> writes to stdout by default, so it is routed to <code>tracing</code>, and a test checks this.</li>
+<li><strong>R6 (low) Resumed counters.</strong> <code>ScriptStats</code> is not in the snapshot, so a resumed match counts script calls from the resume tick. <code>content/scripts/README.md</code> states this.</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<ul>
+<li><code>data-schemas-generator</code> (complete): <code>data::load_json</code>, the garde idiom, and <code>ContentDir</code>.</li>
+<li><code>tactics-and-ai</code> (planned): the five-option scoring in <code>decision.rs</code>, which is the decision call site. The tactics plan names <code>queue_change</code> as this slice’s entry point for scripted decisions (<code>04-plan-tactics-and-ai.md:186</code>). This plan chooses score offsets instead, and a scripted manager that queues changes is not in this slice’s scope (Assumption A-4).</li>
+<li><code>commentary</code> (planned): the attachment point in <code>stream_run.rs</code>, which is the commentary call site.</li>
+<li><code>calibration</code> (planned): <code>bench::measure</code>, the schema files, and the baseline figure.</li>
+<li><code>experiment-flags</code> (deferred): no interaction.</li>
+<li><code>.ai/observability.md</code> lists the contract keys. The new <code>script</code> event type and <code>script.*</code> keys are written into the schema files by this slice. The contract list needs the same keys at the next observability audit. That update is outside this plan’s writes.</li>
+</ul>
+<h2 id="assumptions" tabindex="-1"><a class="header-anchor" href="#assumptions"><span>Assumptions</span></a></h2>
+<p>Each entry records a question the plan’s discovery round would have asked. It was resolved without the product owner under the autonomous policy, and each one is stamped <code>class: implementation-detail</code>. Each entry picks among ways to meet criteria that the shape and the slice already fixed, inside scope that the slice delegates to this plan (“runtime choice (plan decides among embeddable options with a permissive license), sandbox limits, hook points, a script pack format”, <code>03-slice-scripting-runtime.md</code> Scope). No <code>carried</code> intent-risk exists (<code>00-index.md</code> marks all six adjudicated), so no decision touches one. No product-owner question was asked. A summary line is appended to <code>po-answers.md</code> with <code>stage: plan</code>.</p>
+<ol>
+<li><strong>A-1 Runtime</strong> (<code>class: implementation-detail</code>). Rhai 1.26. Rejected: mlua with vendored Lua, because <code>lua-src</code> depends on <code>cc</code> (<code>https://raw.githubusercontent.com/mlua-rs/lua-src-rs/main/Cargo.toml</code>, read this run) and no C compiler is present. rquickjs, because it binds the QuickJS C library; that crate’s build was not read this run, so this rejection rests on the same missing-compiler evidence and must be re-checked if a compiler is added. wasmtime, because it is a large dependency and modders would need a separate WebAssembly toolchain. boa, because it is heavier and has no general operation budget in the pages read. piccolo, because it is pre-1.0. Why Rhai: pure Rust, MIT OR Apache-2.0 (NFR-5), a release on 2026-09-10 (maintenance risk in the slice), and a deterministic operation budget.</li>
+<li><strong>A-2 Separate crate</strong> (<code>class: implementation-detail</code>). The interface lives in the engine and the runtime in <code>crates/script</code>. Why: NFR-8 asks for separate packages and a versioned boundary, and a match without a pack keeps a byte-identical path.</li>
+<li><strong>A-3 Hook cadence</strong> (<code>class: implementation-detail</code>). Cached offsets refresh on a carrier change, after a stoppage, or every <code>refresh_ticks</code> (default 25, 5 to 250). Why: the tick budget (slice risk “hooks run at decision frequency, not steering frequency”). The product owner’s per-tick decision interval is kept.</li>
+<li><strong>A-4 Hook shape</strong> (<code>class: implementation-detail</code>). The decision hook returns offsets from -10 to 10 for the five options. An offset in that range can force any option, so a script can override the choice (AC-1). Scripted manager changes through <code>queue_change</code> are not planned; the slice’s hook list names decision scoring, rule handlers, and commentary only.</li>
+<li><strong>A-5 Time budget unit</strong> (<code>class: implementation-detail</code>). The budget is an operation count (deterministic), with a 2 ms wall-clock backstop. Why: best-effort determinism (Q6, Q32) holds only with a count, and the backstop keeps the literal “time budget” of AC-2.</li>
+<li><strong>A-6 Denial model</strong> (<code>class: implementation-detail</code>). The only file path in Rhai is <code>import</code>, and it is refused and recorded. Rhai exposes no network function, so a call to any function that the sandbox does not expose is recorded as a denial that names the function. <code>eval</code> is refused at load.</li>
+<li><strong>A-7 Stateless scripts</strong> (<code>class: implementation-detail</code>). There is no state between calls and no random function. Why: resume from a stoppage snapshot and determinism need no script state in the snapshot.</li>
+<li><strong>A-8 Circuit breaker</strong> (<code>class: implementation-detail</code>). Three consecutive failures disable a hook for the match, recorded as <code>disabled</code>. Why: a pack that fails on every call would otherwise pay the full budget on every refresh.</li>
+<li><strong>A-9 Pack format and selection</strong> (<code>class: implementation-detail</code>). A folder with <code>pack.json</code> schema version 1 and one <code>.rhai</code> entry, selected by <code>--script-pack &lt;DIR&gt;</code>. No pack is loaded by default. Why: the slice puts the pack format in this plan’s scope, and an explicit flag keeps every existing run unchanged.</li>
+<li><strong>A-10 Pack identity and resume</strong> (<code>class: implementation-detail</code>). The identity is <code>id@version+sha12</code>. Its hash is folded into <code>content_hash</code>, so the snapshot layout and version do not change, and a resume with a different pack is refused by the existing check.</li>
+<li><strong>A-11 Event contract</strong> (<code>class: implementation-detail</code>). An additive <code>script</code> event type and optional <code>script.pack</code>, <code>script.hook</code>, <code>script.outcome</code>, and <code>script.detail</code> fields. Protocol version 2 stays, under the recorded additive rule, following the commentary plan’s precedent. Why: AC-1 requires the stream to record the pack, and AC-2 and AC-3 require the engine to record aborts and denials.</li>
+<li><strong>A-12 Counters outside the snapshot</strong> (<code>class: implementation-detail</code>). <code>ScriptStats</code> lives in <code>Plugins</code>, not in <code>Summary</code>. Why: this keeps the snapshot version. The cost is that a resumed match counts from the resume tick (R6).</li>
+<li><strong>A-13 Rule and commentary hook scope</strong> (<code>class: implementation-detail</code>). The rule hook can change the card that the referee chose for a foul. The commentary hook can replace a line at the shared driver. Why: these are the lowest-frequency sites that meet “rule handlers” and “commentary” in the slice scope. Neither criterion tests them, so they carry unit tests only.</li>
+<li><strong>A-14 Augmentations</strong> (<code>class: implementation-detail</code>). <code>05c-benchmark.md</code> and <code>04b-instrument.md</code> are not rewritten in this run. Step 1 captures the benchmark baseline at implement time, when the calibration baseline exists. Why: this follows the calibration plan’s precedent (its Assumption 12), and those shared files will be re-authored by the slices planned before this one. The experiment augmentation is deferred to <code>experiment-flags</code> (<code>00-index.md</code> <code>augmentations:</code>). Signals of this slice: <code>event.type</code> <code>script</code> with <code>script.outcome</code>, <code>tracing</code> warnings <code>script.aborted</code>, <code>script.denied</code>, and <code>script.disabled</code>, and match-stats <code>script.calls</code>, <code>script.aborts</code>, <code>script.denials</code>, and <code>script.disabled</code>. The dark path is a hook that silently never runs; <code>script.calls</code> of zero with a pack loaded exposes it.</li>
+<li><strong>A-15 Second opinion</strong> (<code>class: implementation-detail</code>). The consult trigger <code>appetite-medium-or-larger</code> holds (<code>00-index.md</code> <code>appetite: large</code>), but the product owner excluded <code>consult</code> at intake (<code>00-index.md</code> <code>stack.excluded-by-po</code>). No consult is run, and <code>consult-runs</code> stays empty.</li>
+<li><strong>A-16 Visual contract</strong> (<code>class: implementation-detail</code>). The slice has no page surface, so no visual contract step applies. The image gate in <code>steer.md</code> covers viewer slices only.</li>
+</ol>
+<h2 id="blockers" tabindex="-1"><a class="header-anchor" href="#blockers"><span>Blockers</span></a></h2>
+<p>None.</p>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<ul>
+<li>Source: <a href="http://crates.io">crates.io</a> API for <code>rhai</code>, read this run. The newest stable version is 1.26.1 (2026-09-10), and earlier releases came out on 2026-08-25, 2026-05-29, 2026-05-24, and 2026-01-19. License MIT OR Apache-2.0. Takeaway: actively maintained, and the license is permissive (NFR-5).</li>
+<li>Source: <code>https://raw.githubusercontent.com/rhaiscript/rhai/main/Cargo.toml</code>, read this run. No <code>cc</code> or C build step. The minimum Rust version is 1.66, below the workspace’s 1.87. <code>ahash</code> uses <code>compile-time-rng</code>. The <code>sync</code> feature makes the engine <code>Send + Sync</code>. Takeaway: it builds on this machine’s toolchain, and the <code>sync</code> feature meets the thread requirement.</li>
+<li>Source: <code>https://raw.githubusercontent.com/rhaiscript/rhai/main/src/engine.rs</code>, read this run. <code>Engine::new()</code> sets <code>module_resolver = FileModuleResolver::new()</code> when <code>no_module</code>, <code>no_std</code>, and <code>no_ast</code> are off; <code>new_raw()</code> sets <code>None</code>. Takeaway: the sandbox must replace the resolver (R3).</li>
+<li>Source: <code>https://rhai.rs/book/safety/progress.html</code>, read this run. <code>on_progress</code> takes <code>Fn(u64) -&gt; Option&lt;Dynamic&gt;</code>, and <code>Some</code> terminates with <code>ErrorTerminated</code>. Takeaway: this is the time backstop.</li>
+<li>Source: <code>https://rhai.rs/book/engine/call-fn.html</code>, read this run. <code>call_fn</code> evaluates the whole AST before each call by default, and <code>CallFnOptions::eval_ast(false)</code> skips that. Takeaway: every call uses <code>eval_ast(false)</code>, otherwise the cost of each call grows with the size of the script.</li>
+<li>Source: <code>https://raw.githubusercontent.com/mlua-rs/lua-src-rs/main/Cargo.toml</code>, read this run. <code>lua-src</code> depends on <code>cc</code> 1.2. Takeaway: vendored Lua cannot build here (A-1).</li>
+<li>Not verified this run: the exact error variant names of Rhai 1.26 (<code>ErrorTooManyOperations</code>, <code>ErrorModuleNotFound</code>, <code>ErrorFunctionNotFound</code>), and whether <code>set_max_modules</code> treats 0 as unlimited. Step 2 reads the installed source under <code>~/.cargo/registry</code> before step 8 relies on them, and the plan does not use <code>set_max_modules</code>.</li>
+<li>The Rhai per-call cost of about 2 µs used in the estimate is a planning guess. Step 2 measures the real figure.</li>
+</ul>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option A (default):</strong> <code>/wf implement football-manager-match-engine scripting-runtime</code>, after <code>tactics-and-ai</code>, <code>commentary</code>, and <code>calibration</code> are implemented. The plan is complete. Its step 1 re-checks their seams, and step 2 gates the call cost. Compact the session first so the SessionStart hook re-reads the artifacts.</li>
+<li><strong>Option B:</strong> <code>/wf implement football-manager-match-engine tactics-and-ai</code>, to continue the buildable order that this deferred slice depends on.</li>
+<li><strong>Option C:</strong> <code>/wf slice football-manager-match-engine</code>, only if the scripted-manager capability (queued changes from a script) is wanted in this slice; A-4 leaves it out.</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-22T22:30:09Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/04-plan-scripting-runtime.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">plan</a><span class="m-sheet-here" aria-current="page">scripting-runtime</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/04-plan-scripting-runtime.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-22T22:30:09Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

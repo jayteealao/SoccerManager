@@ -1,0 +1,10 @@
+<section style="font-family:system-ui,sans-serif;max-width:760px">
+  <h3 style="margin:0 0 8px">How the host list narrowed</h3>
+  <ol style="margin:0;padding-left:20px;line-height:1.6">
+    <li><strong>Start:</strong> the browser tab, a browser app window, Tauri 2, Electron, Godot, Bevy, and Unity.</li>
+    <li><strong>Reach drives the choice:</strong> the browser app window leaves, because it has no store path.</li>
+    <li><strong>Testing and Linux:</strong> Unity leaves (its HTML plugin has no Linux build); Godot and Bevy leave (a rebuilt page loses every page test).</li>
+    <li><strong>Size, touch, and the Rust link:</strong> the choice leans to Tauri 2, with Electron as the fallback.</li>
+    <li><strong>The gate:</strong> a trial on Windows and Linux ends with a go or no-go for Tauri.</li>
+  </ol>
+</section>

@@ -5,8 +5,8 @@ slug: football-manager-match-engine
 status: complete
 stage-number: 3
 created-at: "2026-09-21T19:50:41Z"
-updated-at: "2026-09-22T13:35:00Z"
-total-slices: 17
+updated-at: "2026-09-24T06:26:59Z"
+total-slices: 24
 best-first-slice: engine-core
 tags: [game, simulation, match-engine, 2d-viewer, rust]
 consult-runs: []
@@ -32,53 +32,96 @@ slices:
     complexity: l
     depends-on: [engine-core, data-schemas-generator]
   - slug: tactics-and-ai
-    status: in-progress
+    status: complete
     complexity: l
     depends-on: [match-rules, data-schemas-generator]
   - slug: commentary
-    status: defined
+    status: complete
     complexity: s
     depends-on: [match-rules]
   - slug: calibration
-    status: defined
+    status: complete
     complexity: m
     depends-on: [tactics-and-ai, data-schemas-generator]
   - slug: viewer-match-day
-    status: defined
+    status: complete
     complexity: m
     depends-on: [viewer-pitch, stream-protocol, commentary]
   - slug: viewer-lineup-tactics
-    status: defined
+    status: complete
     complexity: l
     depends-on: [viewer-match-day, tactics-and-ai]
   - slug: viewer-reports-recovery
-    status: defined
+    status: complete
     complexity: m
     depends-on: [viewer-match-day, match-rules]
   - slug: integration
-    status: defined
+    status: complete
     complexity: m
     depends-on: [calibration, commentary, viewer-lineup-tactics, viewer-reports-recovery]
   - slug: extra-time-penalties
-    status: defined
+    status: complete
     complexity: s
     depends-on: [match-rules, tactics-and-ai]
   - slug: experiment-flags
-    status: defined
+    status: complete
     complexity: s
     depends-on: [calibration]
   - slug: scripting-runtime
-    status: defined
+    status: complete
     complexity: l
     depends-on: [data-schemas-generator, tactics-and-ai, calibration]
   - slug: distribution
-    status: defined
+    status: complete
     complexity: m
     depends-on: [integration]
   - slug: probe-engine-core
-    status: defined
+    status: complete
     slice-type: probe
     compressed: true
+  - slug: realism-bands-v2
+    status: complete
+    complexity: m
+    depends-on: [calibration, probe-engine-core]
+    source: extension
+    extension-round: 1
+  - slug: defending-and-discipline
+    status: complete
+    complexity: l
+    depends-on: [realism-bands-v2]
+    source: extension
+    extension-round: 1
+  - slug: tuning-loop
+    status: complete
+    complexity: m
+    depends-on: [realism-bands-v2]
+    source: extension
+    extension-round: 2
+  - slug: lone-forward
+    status: complete
+    complexity: l
+    depends-on: [tuning-loop, defending-and-discipline]
+    source: extension
+    extension-round: 2
+  - slug: keeper-and-shots
+    status: complete
+    complexity: l
+    depends-on: [defending-and-discipline]
+    source: extension
+    extension-round: 1
+  - slug: tempo-and-restarts
+    status: complete
+    complexity: m
+    depends-on: [keeper-and-shots]
+    source: extension
+    extension-round: 1
+  - slug: realism-tuning
+    status: skipped
+    skip-record: skip-slice-realism-tuning.md
+    complexity: m
+    depends-on: [tempo-and-restarts]
+    source: extension
+    extension-round: 1
 refs:
   index: 00-index.md
   shape: 02-shape.md
@@ -133,6 +176,19 @@ Deferred, after the first release: `extra-time-penalties`, `experiment-flags`, `
 
 Parallel option: slices 3 and 4 may run alongside slices 2 and 5 because they depend only on `engine-core`; slice 9 may run alongside slices 6 to 8 once `commentary` lands.
 
+Extension round 1, strictly in order, after every earlier slice:
+
+13. `realism-bands-v2` — the bands first, so each later slice shows its progress against them.
+14. `defending-and-discipline` — the defending bug behind the ten-player collapse and the card rate.
+15. `keeper-and-shots` — keeper saves, blocks and shot flight, which bring corners and goal kicks.
+16. `tempo-and-restarts` — carry time, restart delays and pass counting.
+17. `realism-tuning` — the final retune against every band on five seeds, and the browser suite.
+
+Extension round 2 places two slices after `defending-and-discipline` and before `keeper-and-shots` (Q-I2, Q-X4). The numbers continue the list; the order to build is 14, 18, 19, 15, 16, 17:
+
+18. `tuning-loop` — targeted calibrate runs with a baseline diff, so every later tuning step takes minutes, not hours.
+19. `lone-forward` — the lone central forward and the tackle odds, which own the red-card criterion and the 4-4-1-1 and 3-4-3 pairings.
+
 ## Cross-Cutting Concerns
 
 - Benchmark tripwire: every engine slice after `engine-core` reruns the benchmark; more than 10 percent CPU or 25 percent memory regression fails verify.
@@ -185,3 +241,34 @@ Longest chain: `engine-core` → `data-schemas-generator` → `match-rules` → 
 - **Option B:** `/wf plan football-manager-match-engine all` — not recommended: eleven slices depend on decisions the engine-core plan makes (crate layout, tick frame shape); planning them now would guess.
 - **Option C:** `/wf shape football-manager-match-engine` — not needed: slicing surfaced no gap in the spec.
 - **Before the first viewer slice plans:** `/wf design football-manager-match-engine setup` (PRODUCT.md is missing) and `/wf observability init` (record schema for `calibration`).
+
+## Extension Round 1 — 2026-09-23
+Source: user request
+
+### New Slices Added
+| Slice | Goal | Complexity | Depends On |
+|-------|------|------------|------------|
+| `realism-bands-v2` | Eleven sourced realism bands, a formations suite and the missing record fields; failing bands become the baseline. | M | `calibration`, `probe-engine-core` |
+| `defending-and-discipline` | Goal-side cover in every formation, a real 10-player shape, an acting keeper, and realistic second yellows. | L | `realism-bands-v2` |
+| `keeper-and-shots` | On-frame saves by shot quality, parries and blocks, shots that rise, honest on-target and xG; corners and goal kicks follow. | L | `defending-and-discipline` |
+| `tempo-and-restarts` | Realistic carry time and restart delays, ball in play about an hour, only real passes counted, throw-ins in band. | M | `keeper-and-shots` |
+| `realism-tuning` | Every band on five seeds, the formations suite, the benchmark and the 21-test browser suite. | M | `tempo-and-restarts` |
+
+### Motivation
+A fresh 10,000-match calibration at `5a235a4` passed every band on five seeds, but the matches were not realistic. Ten or more goals came in 10.5% of matches, 45% had a sending-off, 75% of shots were on target, teams made about 1,300 passes each, and almost no corners were awarded. Research found three root causes. Defending has no marking or goal-side cover, so a lone central striker, whether left after a red card or placed by a 4-3-3, scores at will. The keeper holds every save and no defender blocks, so nothing goes behind for a corner. Players release the ball about 0.25 s after receiving it, with restarts about four times too short. The product owner asked for bands first, three mechanism slices judged on their own criteria, and one final tuning slice that must pass every band. The two ship-blocking deferrals stay open by the product owner's choice.
+
+Intent delta: RIM-7 to RIM-10 are adjudicated in place by the extension interview. Charter commitment C7 is added. Existing slices are not modified.
+
+## Extension Round 2 — 2026-09-24
+Source: user request (after `po-answers.md` Q-I2)
+
+### New Slices Added
+| Slice | Goal | Complexity | Depends On |
+|-------|------|------------|------------|
+| `tuning-loop` | Targeted calibrate runs on one seed, a stored baseline with a per-band diff and sampling error, the red-card experiment as a suite, and a measured build profile; one target in under 2 minutes. | M | `realism-bands-v2` |
+| `lone-forward` | A lone central forward that passes, holds up and stays onside, and realistic won-tackle against foul odds; no advantage from a red card, and 4-4-1-1 and 3-4-3 hold against 4-4-2. | L | `tuning-loop`, `defending-and-discipline` |
+
+### Motivation
+`defending-and-discipline` built every planned mechanism, but two criteria failed at every in-bounds tuning: the reduced side outscored the full side in all three red-card arms, and 4-4-1-1 (5.18) and 3-4-3 (4.17) scored above 4.0 against 4-4-2. The measured cause is a lone central forward with no forward team-mate, who dribbles and shoots twice as often and is never offside, plus about four fouls for each won tackle. The product owner moved both criteria into a new `lone-forward` slice before `keeper-and-shots` (Q-I2). The same product owner agreed a fast tuning loop earlier: one seed of every suite takes about 76 minutes, and the remaining slices are tuning work. `defending-and-discipline` is verified on the criteria it keeps; its slice file is not changed, and `steer.md` records the moved criteria for verify.
+
+Intent delta: RIM-11 and RIM-12 are adjudicated in place by the extension interview (Q-X1 to Q-X3). Charter delta: none; both slices serve C7, and no new commitment is added. Existing slices are not modified.

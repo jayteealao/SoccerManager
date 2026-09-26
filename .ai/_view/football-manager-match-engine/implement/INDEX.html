@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.171.0" data-artifact-type="implement-index">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · implement-index — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="implement-index">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><span class="m-here">implement</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · implement-index</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">implement</b></div>
+    <div class="actions"><a href="../../../workflows/football-manager-match-engine/05-implement.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">05-implement.md</div>
+      <h1 class="pg-title">Implementation</h1>
+      <p class="sdlc-lede">31 slices implemented · 23 complete</p>
+      <div class="meta-row"><span class="status-badge is-ok">in-progress</span><span class="meta">31 slices</span></div>
+    </header><div class="metric-row"><div class="metric">
+      <span class="metric-label">slices</span>
+      <span class="metric-value">31</span>
+      
+    </div><div class="metric is-ok">
+      <span class="metric-label">complete</span>
+      <span class="metric-value">23</span>
+      
+    </div><div class="metric">
+      <span class="metric-label">files changed</span>
+      <span class="metric-value">928</span>
+      
+    </div><div class="metric">
+      <span class="metric-label">fixes applied</span>
+      <span class="metric-value">0</span>
+      
+    </div></div>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    
+    <div class="d-only"><figure class="figure-canvas">
+  <figcaption class="figure-meta">
+    <span class="figure-title"><b>Figure 5</b> · 31 slices, depends-on arrows · implementation dependency graph</span>
+    <span class="figure-legend" aria-hidden="true"><span class="legend-entry"><span class="sw complete"></span>complete</span><span class="legend-entry"><span class="sw review"></span>in review</span><span class="legend-entry"><span class="sw blocked"></span>blocked</span><span class="legend-entry"><span class="sw queued"></span>queued</span></span>
+  </figcaption>
+  <svg viewBox="0 0 920 456" width="100%" preserveAspectRatio="xMinYMid meet" aria-label="Slice dependency graph">
+    <defs>
+    <marker id="impl-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8377"/>
+    </marker>
+  </defs><path d="M 382 111 C 368 111, 368 39, 354 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 198 39 C 276 39, 276 39, 354 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 290 39 C 276 39, 276 39, 262 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 106 39 C 92 39, 92 39, 78 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 566 111 C 552 111, 552 255, 538 255" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 658 111 C 644 111, 644 39, 630 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 474 39 C 460 39, 460 39, 446 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 290 39 C 322 39, 322 111, 354 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 382 111 C 368 111, 368 111, 354 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 474 39 C 506 39, 506 111, 538 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 382 39 C 460 39, 460 111, 538 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 566 255 C 552 255, 552 111, 538 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 566 327 C 552 327, 552 111, 538 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 658 255 C 644 255, 644 255, 630 255" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 658 183 C 644 183, 644 399, 630 399" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 658 255 C 644 255, 644 399, 630 399" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 106 39 C 138 39, 138 39, 170 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 198 39 C 184 39, 184 39, 170 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 474 39 C 460 39, 460 111, 446 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 106 111 C 276 111, 276 111, 446 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 842 255 C 828 255, 828 39, 814 39" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 198 39 C 322 39, 322 183, 446 183" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 382 111 C 414 111, 414 183, 446 183" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 474 39 C 460 39, 460 183, 446 183" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 106 39 C 92 39, 92 111, 78 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 290 39 C 276 39, 276 111, 262 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 198 39 C 230 39, 230 111, 262 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 750 255 C 736 255, 736 255, 722 255" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 566 111 C 552 111, 552 183, 538 183" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 474 183 C 460 183, 460 255, 446 255" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 382 111 C 414 111, 414 255, 446 255" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 290 111 C 322 111, 322 183, 354 183" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 198 111 C 276 111, 276 183, 354 183" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 382 39 C 368 39, 368 183, 354 183" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 198 111 C 184 111, 184 111, 170 111" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 474 183 C 460 183, 460 327, 446 327" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 290 39 C 368 39, 368 327, 446 327" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 566 111 C 552 111, 552 255, 538 255" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 658 255 C 644 255, 644 255, 630 255" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 658 183 C 644 183, 644 399, 630 399" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 658 255 C 644 255, 644 399, 630 399" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 658 183 C 644 183, 644 399, 630 399" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 658 255 C 644 255, 644 399, 630 399" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 750 255 C 736 255, 736 255, 722 255" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 750 255 C 736 255, 736 255, 722 255" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><path d="M 750 255 C 736 255, 736 255, 722 255" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#impl-arrow)"/><rect x="354" y="16" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="366" y="36" font-size="11" font-weight="600" fill="#1f1b16">calibration</text>
+      <text x="366" y="52" font-size="9" fill="#8a8377">complete</text><rect x="262" y="16" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="274" y="36" font-size="11" font-weight="600" fill="#1f1b16">commentary</text>
+      <text x="274" y="52" font-size="9" fill="#8a8377">complete</text><rect x="78" y="16" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="90" y="36" font-size="11" font-weight="600" fill="#1f1b16">data-schemas-generator</text>
+      <text x="90" y="52" font-size="9" fill="#8a8377">complete</text><rect x="538" y="232" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="550" y="252" font-size="11" font-weight="600" fill="#1f1b16">defending-and-discipli</text>
+      <text x="550" y="268" font-size="9" fill="#8a8377">complete</text><rect x="630" y="16" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="642" y="36" font-size="11" font-weight="600" fill="#1f1b16">distribution</text>
+      <text x="642" y="52" font-size="9" fill="#8a8377">complete</text><rect x="-14" y="16" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="-2" y="36" font-size="11" font-weight="600" fill="#1f1b16">engine-core</text>
+      <text x="-2" y="52" font-size="9" fill="#8a8377">complete</text><rect x="446" y="16" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="458" y="36" font-size="11" font-weight="600" fill="#1f1b16">experiment-flags</text>
+      <text x="458" y="52" font-size="9" fill="#8a8377">complete</text><rect x="354" y="88" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="366" y="108" font-size="11" font-weight="600" fill="#1f1b16">extra-time-penalties</text>
+      <text x="366" y="124" font-size="9" fill="#8a8377">complete</text><rect x="538" y="88" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="550" y="108" font-size="11" font-weight="600" fill="#1f1b16">integration</text>
+      <text x="550" y="124" font-size="9" fill="#8a8377">complete</text><rect x="630" y="232" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="642" y="252" font-size="11" font-weight="600" fill="#1f1b16">keeper-and-shots</text>
+      <text x="642" y="268" font-size="9" fill="#8a8377">complete</text><rect x="630" y="376" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="642" y="396" font-size="11" font-weight="600" fill="#1f1b16">lone-forward</text>
+      <text x="642" y="412" font-size="9" fill="#8a8377">complete</text><rect x="170" y="16" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="182" y="36" font-size="11" font-weight="600" fill="#1f1b16">match-rules</text>
+      <text x="182" y="52" font-size="9" fill="#8a8377">complete</text><rect x="-14" y="88" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="-2" y="108" font-size="11" font-weight="600" fill="#1f1b16">probe-engine-core</text>
+      <text x="-2" y="124" font-size="9" fill="#8a8377">complete</text><rect x="446" y="88" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="458" y="108" font-size="11" font-weight="600" fill="#1f1b16">realism-bands-v2</text>
+      <text x="458" y="124" font-size="9" fill="#8a8377">complete</text><rect x="814" y="16" width="120" height="46" rx="6" fill="#fbfaf6" stroke="#cbc4b1" stroke-width="1.2" stroke-dasharray="3 2"/>
+      <text x="826" y="36" font-size="11" font-weight="600" fill="#1f1b16">realism-tuning</text>
+      <text x="826" y="52" font-size="9" fill="#8a8377">not-started</text><rect x="446" y="160" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="458" y="180" font-size="11" font-weight="600" fill="#1f1b16">scripting-runtime</text>
+      <text x="458" y="196" font-size="9" fill="#8a8377">complete</text><rect x="78" y="88" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="90" y="108" font-size="11" font-weight="600" fill="#1f1b16">stream-protocol</text>
+      <text x="90" y="124" font-size="9" fill="#8a8377">complete</text><rect x="262" y="88" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="274" y="108" font-size="11" font-weight="600" fill="#1f1b16">tactics-and-ai</text>
+      <text x="274" y="124" font-size="9" fill="#8a8377">complete</text><rect x="722" y="232" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="734" y="252" font-size="11" font-weight="600" fill="#1f1b16">tempo-and-restarts</text>
+      <text x="734" y="268" font-size="9" fill="#8a8377">complete</text><rect x="538" y="160" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="550" y="180" font-size="11" font-weight="600" fill="#1f1b16">tuning-loop</text>
+      <text x="550" y="196" font-size="9" fill="#8a8377">complete</text><rect x="446" y="232" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="458" y="252" font-size="11" font-weight="600" fill="#1f1b16">viewer-lineup-tactics</text>
+      <text x="458" y="268" font-size="9" fill="#8a8377">complete</text><rect x="354" y="160" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="366" y="180" font-size="11" font-weight="600" fill="#1f1b16">viewer-match-day</text>
+      <text x="366" y="196" font-size="9" fill="#8a8377">complete</text><rect x="170" y="88" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="182" y="108" font-size="11" font-weight="600" fill="#1f1b16">viewer-pitch</text>
+      <text x="182" y="124" font-size="9" fill="#8a8377">complete</text><rect x="446" y="304" width="120" height="46" rx="6" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1.2"/>
+      <text x="458" y="324" font-size="11" font-weight="600" fill="#1f1b16">viewer-reports-recover</text>
+      <text x="458" y="340" font-size="9" fill="#8a8377">complete</text><rect x="538" y="232" width="120" height="46" rx="6" fill="#fbfaf6" stroke="#cbc4b1" stroke-width="1.2" stroke-dasharray="3 2"/>
+      <text x="550" y="252" font-size="11" font-weight="600" fill="#1f1b16">defending-and-discipli</text>
+      <text x="550" y="268" font-size="9" fill="#8a8377">not-started</text><rect x="630" y="232" width="120" height="46" rx="6" fill="#fbfaf6" stroke="#cbc4b1" stroke-width="1.2" stroke-dasharray="3 2"/>
+      <text x="642" y="252" font-size="11" font-weight="600" fill="#1f1b16">keeper-and-shots</text>
+      <text x="642" y="268" font-size="9" fill="#8a8377">not-started</text><rect x="630" y="376" width="120" height="46" rx="6" fill="#fbfaf6" stroke="#cbc4b1" stroke-width="1.2" stroke-dasharray="3 2"/>
+      <text x="642" y="396" font-size="11" font-weight="600" fill="#1f1b16">lone-forward</text>
+      <text x="642" y="412" font-size="9" fill="#8a8377">not-started</text><rect x="630" y="376" width="120" height="46" rx="6" fill="#fbfaf6" stroke="#cbc4b1" stroke-width="1.2" stroke-dasharray="3 2"/>
+      <text x="642" y="396" font-size="11" font-weight="600" fill="#1f1b16">lone-forward</text>
+      <text x="642" y="412" font-size="9" fill="#8a8377">not-started</text><rect x="722" y="232" width="120" height="46" rx="6" fill="#fbfaf6" stroke="#cbc4b1" stroke-width="1.2" stroke-dasharray="3 2"/>
+      <text x="734" y="252" font-size="11" font-weight="600" fill="#1f1b16">tempo-and-restarts</text>
+      <text x="734" y="268" font-size="9" fill="#8a8377">not-started</text><rect x="722" y="232" width="120" height="46" rx="6" fill="#fbfaf6" stroke="#cbc4b1" stroke-width="1.2" stroke-dasharray="3 2"/>
+      <text x="734" y="252" font-size="11" font-weight="600" fill="#1f1b16">tempo-and-restarts</text>
+      <text x="734" y="268" font-size="9" fill="#8a8377">not-started</text><rect x="722" y="232" width="120" height="46" rx="6" fill="#fbfaf6" stroke="#cbc4b1" stroke-width="1.2" stroke-dasharray="3 2"/>
+      <text x="734" y="252" font-size="11" font-weight="600" fill="#1f1b16">tempo-and-restarts</text>
+      <text x="734" y="268" font-size="9" fill="#8a8377">not-started</text>
+  </svg>
+</figure></div>
+    <div class="prose"><h1 id="implement-index" tabindex="-1"><a class="header-anchor" href="#implement-index"><span>Implement Index</span></a></h1>
+<h2 id="cross-slice-integration-notes" tabindex="-1"><a class="header-anchor" href="#cross-slice-integration-notes"><span>Cross-Slice Integration Notes</span></a></h2>
+<ul>
+<li>
+<p><code>realism-tuning</code> added <code>clearances.wide_chance</code> and <code>clearances.wide_depth</code> (shipped 0.0 and 16.5, play unchanged) and stopped at the formations wall of its feasibility stage. Q-RT5: a separate formation-behaviour slice comes before the tuning resumes. No tuned value is written.</p>
+</li>
+<li>
+<p><code>engine-core</code> is the root slice; it is implemented, verified, and committed on <code>feat/football-manager-match-engine</code>.</p>
+</li>
+<li>
+<p><code>data-schemas-generator</code> is implemented and awaits verify: <code>MatchConfig::new(seed, minutes, &amp;Content, [&amp;TeamFile; 2])</code> replaced the built-in teams and <code>Tuning::default()</code> on the binary path; the tick-file header is schema 2; <code>owner.id</code> and <code>match.id</code> ride in <code>stats.json</code> and the header.</p>
+</li>
+<li>
+<p><code>stream-protocol</code> is implemented, verified, and committed. It wraps the <code>TickSink</code> trait in <code>crates/engine/src/record.rs</code> with <code>FrameSink</code>, adds <code>FanoutSink</code> beside it, and raises the tick-file header to schema 3: the restart flag now rides in bit 31 of the stored tick number, so the validator reads kick-offs instead of guessing from a two-metre ball jump. Two new crates: <code>crates/protocol</code> (messages, codec, change queue, no input or output) and <code>crates/stream</code> (server, session, recorder, replayer).</p>
+</li>
+<li>
+<p>A slice that reads a <code>.ticks</code> file written before this change must be rebuilt: header schema 2 is refused by name, as the header’s fail-closed pattern requires.</p>
+</li>
+<li>
+<p><code>match-rules</code> consumes <code>RulePack</code> from <code>crates/engine/src/data/rules.rs</code>, replaces the wall bounce in <code>crates/engine/src/sim.rs</code>, and takes <code>protocol::Queue::pending()</code> to apply the changes <code>stream-protocol</code> only holds. It also adds the event types beyond kick-off, goal, and full time.</p>
+</li>
+<li>
+<p><code>viewer-pitch</code> is implemented and awaits verify. It adds <code>web/</code>, a page with no build step, and <code>crates/engine-cli/src/web.rs</code>, a static server that sends the folder with <code>Cross-Origin-Opener-Policy</code> and <code>Cross-Origin-Embedder-Policy</code> on every response. The page finds the socket through a generated <code>GET /engine.json</code>, because the page and the socket sit on two ports the operating system chooses.</p>
+</li>
+<li>
+<p><code>viewer-pitch</code> changed two things every later slice inherits. <code>TeamRef</code> now carries <code>team.kit.primary</code> and <code>team.kit.secondary</code>, additively, with <code>PROTOCOL_VERSION</code> still 1. <code>engine-cli record</code> now writes the hello as the fixture’s first entry, so a fixture recorded before this change is refused by name through <code>StreamError::FixtureNoHello</code>; record it again.</p>
+</li>
+<li>
+<p><code>viewer-match-day</code>, <code>viewer-lineup-tactics</code>, and <code>viewer-reports-recovery</code> inherit <code>web/tokens.css</code>, <code>web/components/match-control.css</code>, and <code>web/mark.mjs</code>. They add no second button style, no second token prefix, and no image file.</p>
+</li>
+<li>
+<p><code>match-rules</code> fills <code>web/stoppages.mjs</code>, which ships built and tested against a fixture that contains no restart frame.</p>
+</li>
+<li>
+<p><code>viewer-match-day</code> owns one open question: <code>engine-cli serve</code> streams a whole match as fast as the socket accepts it, about 270,000 ticks in 13 seconds, and then closes. A paced live mode does not exist.</p>
+</li>
+<li>
+<p><code>tactics-and-ai</code> maps roles onto the ten <code>Position</code> codes and reads <code>FatigueTuning</code>.</p>
+</li>
+<li>
+<p><code>calibration</code> calls <code>generate_league</code> for 20-club leagues and tunes <code>per_position</code> and the constants in <code>Tuning</code>.</p>
+</li>
+<li>
+<p>Benchmark: engine-core 398 ms at implement and 393 ms at verify (the baseline); data-schemas-generator measured 390 ms at implement with 5.69 MB peak memory; stream-protocol measured 390 ms wall, 387.4 ms processor time, and 6.01 MB at implement, inside the 422 ms and 7.03 MB tripwires, and recorded the first socket value at 640,057 delivered ticks per second with no pause. <code>viewer-pitch</code> adds four browser targets, which verify measures for the first time; the page already reports 32 frames per second with zero dropped frames on a 32 hertz pane, and a full match stores 24.2 megabytes against the 300-megabyte budget.</p>
+</li>
+<li>
+<p><code>match-rules</code> is implemented and verified. It adds the referee (<code>crates/engine/src/rules/</code>), the snapshot (<code>crates/engine/src/snapshot.rs</code>), and <code>engine-cli resume</code>. Every later slice inherits four changes:</p>
+<ul>
+<li><code>PROTOCOL_VERSION</code> is 2, because <code>ticks_expected</code> now means the most ticks a match can last. The full-time event marks the real last tick.</li>
+<li>The tick-file header is schema 4, with <code>expected_ticks</code> as a maximum. A schema 3 file is refused by name. The rule pack is schema 2, and the attribute schema requires <code>aggression</code>.</li>
+<li><code>Simulation::run(&amp;mut sink)</code> plays to full time with no tick count. <code>TickSink::on_stoppage</code> announces every stoppage after the tick record; <code>tactics-and-ai</code> applies queued changes there.</li>
+<li>A sent-off player stays in the roster, parked at (±(10 + slot), −37). Code that loops over players checks <code>Player::active()</code>.</li>
+</ul>
+</li>
+<li>
+<p><code>commentary</code> reads 13 event types, <code>player.id</code>, <code>player.secondary_id</code>, <code>card.kind</code>, <code>foul.advantage</code>, <code>minute.added</code>, and <code>added_time.s</code>.</p>
+</li>
+<li>
+<p><code>viewer-match-day</code> shows cards and added time from those fields and hides parked markers. <code>viewer-reports-recovery</code> builds crash recovery on <code>snapshot.smsn</code> and <code>resume</code>.</p>
+</li>
+<li>
+<p><code>calibration</code> tunes <code>foul_base</code> (0.1, tuned on four seeds), the card rates, and the added-time defaults. Offsides and corners are rare until <code>tactics-and-ai</code> adds forward runs.</p>
+</li>
+<li>
+<p>Benchmark: <code>match-rules</code> measured 1.4719 to 1.5053 µs of processor time per tick over five runs, against the 1.566 µs limit, with 276,100 ticks in the median match and 5.45 MB peak memory against 6.69 MB. The margin is about 4 percent.</p>
+</li>
+<li>
+<p><code>tactics-and-ai</code> is implemented and awaits verify. Every later slice inherits these changes:</p>
+<ul>
+<li><code>content/tactics.json</code> (version 1) holds formations, mentalities, instructions, roles, duties, and the AI settings. The rule pack is schema 3 (<code>substitutions.windows_exempt</code>), the tuning file is schema 2 (fatigue curve, <code>decision</code> weights, injury rates, <code>restart_delay_s.drop_ball</code>), and the attribute schema requires 14 names.</li>
+<li>The engine owns the change queue: <code>Simulation::queue_change(team, Change)</code> applies at the next admitting stoppage inside <code>step</code>, substitutions first, and every verdict is an event. The socket’s <code>queue-change</code> is still not routed into it; the slice that settles the change <code>detail</code> format adds that bridge.</li>
+<li>A substitute takes the leaving player’s roster slot; <code>Player::squad</code> and <code>Team::lineup</code> name who is on. <code>Status::Injured</code> parks a player like a sent-off one.</li>
+<li>Snapshot version 2; a version-1 file is refused by name. The protocol stays at version 2 with three new event types and two optional fields.</li>
+<li>The keeper’s catch is rolled once per flight. Matches now score: 3.0 goals, 6.2 shots, and 9.6 fouls per team per match on 12 seeds.</li>
+</ul>
+</li>
+<li>
+<p><code>commentary</code> reads <code>injury</code>, <code>substitution</code>, <code>ai-decision</code>, and the <code>tactics-change</code> verdicts. <code>viewer-lineup-tactics</code> renders <code>tactics.json</code>. <code>calibration</code> tunes the <code>decision</code> block, the mentality offsets (attacking 33.69 shots per match against defensive 2.15 is far too wide), the fatigue curve, and the injury rates.</p>
+</li>
+<li>
+<p>Benchmark: <code>tactics-and-ai</code> measured 431.2 to 434.4 ms of processor time per match (limit 460.7), 1.445 to 1.456 µs per tick, 298,350 ticks per match, and 6.14 to 6.21 MB peak memory (limit 6.82).</p>
+</li>
+<li>
+<p><code>commentary</code> is implemented (commit <code>a414df5</code>) and awaits verify. Every later slice inherits these changes:</p>
+<ul>
+<li>Every event except a <code>tactics-change</code> verdict carries an optional <code>commentary</code> line. Protocol version 2 is kept. The lines come from <code>content/commentary/en.json</code> (schema 1), which stays outside the content hash, and every <code>engine-cli</code> command now loads that file with the content.</li>
+<li><code>player.id</code> now also names the taker on <code>kick-off</code> and every restart, and on <code>goal</code> the player who kicked the ball last (a player of the other club on an own goal). The engine’s <code>last_kicker</code> is cleared at every dead ball, so the snapshot layout is unchanged, and the seed-42 tick records are byte-identical.</li>
+<li><code>stream_run::Drive</code> takes <code>commentary: &amp;Commentary</code>. <code>simulate</code> and <code>resume</code> still route no events; when <code>calibration</code> makes <code>match_event</code> a shared function, the slice that lands second threads the commentator through it.</li>
+</ul>
+</li>
+<li>
+<p><code>viewer-match-day</code> renders <code>commentary</code> in the feed. <code>integration</code> checks the lines end to end.</p>
+</li>
+<li>
+<p>Benchmark: <code>commentary</code> measured a median of 1.4352 µs per tick (baseline 1.4453 at <code>e79ad61</code>, limit 1.10 times) and 6.30 MB peak memory (baseline 6.14, limit 1.25 times). <code>bench --json</code> times the bare simulation, so these numbers show that the engine change adds no cost to the simulation. They do not time the commentator.</p>
+</li>
+<li>
+<p><code>calibration</code> is implemented (commits <code>80f976d</code> and <code>c00eaac</code>) and awaits verify. Every later slice inherits these changes:</p>
+<ul>
+<li><code>Summary</code> counts shots on target, expected goals, passes, completed passes, and open-play possession ticks. The snapshot is version 3, and a version-2 file is refused by name.</li>
+<li><code>match-stats</code> carries a third flattened block (<code>MatchFigures</code>): <code>stats.goals</code>, <code>stats.shots_on_target</code>, <code>stats.xg</code>, <code>stats.passes</code>, <code>stats.pass_accuracy_pct</code>, <code>stats.possession_pct</code>, <code>manager.kind</code>, <code>passes.completed</code>, and <code>error.type</code> on a failure. It stays at <code>schema.version</code> “1”, and every new field defaults.</li>
+<li><code>schemas/observability/{match-event,match-stats,run-report}.schema.json</code> are the record contract. <code>crates/engine-cli/tests/schemas.rs</code> validates the binary’s output against them with <code>boon</code>, which only the tests use, so a new record key must be added to the schema or it passes as an additive extra.</li>
+<li><code>simulate</code> writes <code>events.jsonl</code> with commentary lines. <code>stream_run::match_event</code> and <code>Ids</code> are shared crate-wide, and the commentator is threaded through every saved event file.</li>
+<li><code>engine-cli calibrate</code> and <code>content/realism-bands.json</code> exist. The feature-flags work adds <code>--flag</code> to <code>calibrate</code>, and the scripting runtime reuses the harness.</li>
+<li>Tuning moved <code>shot_noise</code> to 0.25, <code>keeper_catch_chance</code> to 0.84, and <code>decision.skill</code> to 0.8. The AI manager checks the score on every goal’s stoppage.</li>
+</ul>
+</li>
+<li>
+<p><code>calibration</code> leaves AC-d failing: <code>darkpath.change_never_applied</code> = 288 over 2000 matches, all queued after the last stoppage of the match. 183 of them come from the AI re-queueing refused injury substitutions, which is handed off to a follow-up task. The product owner has an open question on whether a change that expires at full time counts. The goals tail (sd 3.36) and the untuned mentality offsets are open tuning items.</p>
+</li>
+<li>
+<p>Benchmark: <code>calibration</code> measured 412.4 to 418.8 ms of processor time per match (median 415.8, gate 460.7), 1.4593 to 1.482 µs per tick, 282,600 ticks per match, and 6.320 to 6.352 MB peak memory (gate 6.82). A 1000-match suite takes 78 seconds on 8 workers.</p>
+</li>
+<li>
+<p><code>viewer-match-day</code> is implemented (commits <code>9e684e9</code> and <code>4d21041</code>) and awaits verify. Every later slice inherits these changes:</p>
+<ul>
+<li><code>PROTOCOL_VERSION</code> is 3. Each hello team carries <code>roster</code> (11 starters in wire-slot order, then the named bench; <code>player.id</code>, <code>player.name</code>, <code>player.shirt</code>, <code>player.position</code>, <code>player.squad_index</code>). <code>stats</code> is sent every 50 ticks and at full time with nine <code>stats.*</code> pairs from <code>MatchFigures</code> and <code>Summary</code>. <code>condition</code> carries 22 energy values on the same cadence. Every earlier recording is refused by version.</li>
+<li><code>serve</code>, <code>record</code>, and the streaming <code>bench</code> build the simulation before the hello and share <code>stream_run::hello_teams</code>. <code>viewer-lineup-tactics</code> adds its squad, lineup hold, <code>set-lineup</code>, and tactics schema under version 3 and tells the page about a changed lineup.</li>
+<li>The page reads the match at the rendered tick through <code>web/match-state.mjs</code>; every event-kind string the panels read sits in its <code>KIND</code> table. <code>web/components/panels.css</code> holds the panel styles and the one reduced-motion block (<code>&lt;html data-motion=&quot;reduce&quot;&gt;</code>, set from the media query or <code>?motion=reduce</code>). <code>__touchline.matchDay()</code> is the read-only hook for the panels.</li>
+<li>Parked (sent-off) markers are no longer drawn. The close after full time reads “Full time”.</li>
+</ul>
+</li>
+<li>
+<p>Benchmark: <code>viewer-match-day</code> measured the stream at 609,885 to 611,588 delivered ticks per second (baseline 609,220) with 7.61 MB median peak memory (tripwire 8.55), and 416.7 ms of processor time per match (gate 460.7). A 90-minute recording grew from 16.3 MB to 20.5 MB. The p95 restatement and the four page targets are left to verify, because the browser pane was hidden at implement time.</p>
+</li>
+<li>
+<p><code>viewer-lineup-tactics</code> is implemented (commit <code>b46f083</code>) and awaits verify. Every later slice inherits these changes:</p>
+<ul>
+<li><code>serve</code> holds before kick-off (<code>Gate::held</code>) until the page sends <code>start</code>. A client must send <code>start</code> after the hello; <code>record</code> and <code>bench</code> keep an open gate. <code>set-lineup</code> is accepted only before the first <code>start</code>. <code>queue-change</code> is refused before it, and after it an admitted change reaches the engine through an inbox with the page’s change identifier.</li>
+<li>The hello for <code>serve</code> carries the home <code>squad</code> and <code>setup</code>, and every hello carries <code>tactics</code> (with <code>instruction_order</code>, because JSON keys carry no order) and <code>substitutions</code>. <code>ServerMessage::Hello</code> is boxed. A hello longer than the 8 KB write bound is sent whole through <code>stream::send_whole</code>.</li>
+<li>The page paces the engine with <code>pause</code> and <code>start</code> (<code>web/lead.mjs</code>) on every tick arrival and every drawn frame. Without that pacing, <code>serve</code> finishes the match in seconds. <code>viewer-reports-recovery</code> inherits the <code>Dugout</code> phases in <code>web/main.mjs</code> and the <code>pending()</code>, <code>lineup()</code>, and <code>dugout()</code> test readers.</li>
+</ul>
+</li>
+<li>
+<p>Checks at implement: 290 Rust tests and 103 page tests pass, and clippy runs with <code>-D warnings</code>. One live drive on seed 11 took a mentality change from Queued to Applied at tick 1992, with the feed row “Tactical change applied”. Page height is 800 at 1280 × 800.</p>
+</li>
+<li>
+<p><code>viewer-reports-recovery</code> is implemented (commits <code>b03163d</code> and <code>aa10882</code>) and awaits verify. Later slices inherit these changes:</p>
+<ul>
+<li><code>engine-cli launch</code> is the way a match starts when it must survive an engine crash: it serves the page, runs <code>serve</code> as a worker with <code>--reconnect-wait 120</code> and a launcher-chosen <code>--match-millis</code>, and answers <code>/engine.json</code> with <code>engine.state</code>, <code>engine.pid</code>, <code>snapshot.tick</code>, <code>match.id</code>, and <code>launcher</code>. <code>POST /engine/restart</code> and <code>POST /engine/abandon</code> require the page’s own origin. <code>integration</code> starts the charter scenario through it.</li>
+<li><code>Session::finish</code> returns <code>SessionEnd</code> (<code>Done</code>, <code>Closed</code>, <code>Dropped</code>); <code>SessionConfig</code> has a <code>drop_at</code> test seam; <code>MatchState::sent_tick</code> is the newest flushed tick frame. Every caller that builds a <code>SessionConfig</code> passes <code>drop_at</code>.</li>
+<li>The serving path writes snapshots through <code>GatedSnapshots</code> (captured at every stoppage and at kick-off, persisted once the socket passed them). <code>simulate</code> and <code>resume</code> keep <code>SnapshotSink</code>. File name, layout, and location are unchanged.</li>
+<li>The page cuts its history, stoppages, events, and frame store back at a reconnect’s first keyframe; <code>PROTOCOL_VERSION</code> stays 3. The page keeps every frame’s wire bytes (<code>web/replay-file.mjs</code>), so a saved replay is the engine’s <code>.smfx</code> layout byte for byte.</li>
+<li>New hook readers: <code>recovery()</code>, <code>report()</code>, <code>replay()</code>, <code>lastSavedBytes()</code>, <code>events()</code>.</li>
+</ul>
+</li>
+<li>
+<p>Checks at implement: 305 Rust tests and 126 page tests pass, clippy runs with <code>-D warnings</code>, and the stream benchmark median is 608,360 ticks per second with 7.83 MB peak (tripwire 8.55 MB).</p>
+</li>
+<li>
+<p><code>integration</code> is implemented (commit <code>e71ebfd</code>) and awaits verify. It adds these changes:</p>
+<ul>
+<li><code>e2e/</code> is a Playwright 1.63.0 suite of 21 tests. Each test starts its own engine with a temporary <code>SM_DATA_DIR</code>. The whole first match passes all twelve steps against the live engine. <code>e2e/README.md</code> maps every viewer behaviour to a test or to one of three human checks.</li>
+<li><code>serve</code> (and so <code>launch</code>) now writes <code>stats.json</code> at full time. Before this change, a match played in the browser left no statistics record. A served match that the viewer abandons still writes none (deferred).</li>
+<li>The header names the engine state in words (“Engine connected · v0.1.0”, reconnecting, stopped, finished, replay).</li>
+<li><code>docs/</code> holds the tutorial, the modding how-to, the command-line and data-file references, and the engine explanation. <code>content/README.md</code> is now a pointer. <code>docs.rs</code> and <code>licenses.rs</code> keep the references and the dependency licenses honest.</li>
+</ul>
+</li>
+<li>
+<p>Checks at implement: 310 Rust tests (4 ignored) and 126 page tests pass, clippy runs with <code>-D warnings</code>, and the browser suite passes 21 of 21 in 24.4 minutes. Benchmark: the median is 420 ms (before 418 ms), processor time rises by at most 1.5 percent, and peak memory is 6.54 MB or less. 1000 matches take 423.5 s.</p>
+</li>
+<li>
+<p><code>extra-time-penalties</code> is implemented (commit <code>90d4ee1</code>) and awaits verify. Every later slice inherits these changes:</p>
+<ul>
+<li>The rule pack is schema 4 (<code>extra_time</code>, <code>shootout</code>); a schema 3 pack is refused by version. The snapshot is format 4; a format 3 file is refused by name.</li>
+<li><code>MatchConfig::knockout</code> (off by default, <code>--knockout</code> on <code>simulate</code>, <code>bench</code>, <code>serve</code>, <code>record</code>) turns on extra time and an on-pitch shoot-out. A regular match is unchanged: the seed-42 records are byte-identical.</li>
+<li><code>MatchClock::half</code> counts every period; <code>MatchClock::new</code> takes the knockout switch. Events gain optional <code>period</code>, <code>shootout_round</code>, <code>shootout_scored</code>, <code>shootout_scores</code>, and <code>decided_by</code>; protocol version 3 is kept.</li>
+<li>The validator exempts the anchor rule during a shoot-out, and a tick file past its announced length gets its header raised at finish.</li>
+</ul>
+</li>
+<li>
+<p>Benchmark: <code>extra-time-penalties</code> measured 421.8 to 422.0 ms of processor time per match (gate 460.7), 1.4926 to 1.4933 µs per tick, and 6.54 to 6.58 MB peak memory (gate 6.82).</p>
+</li>
+<li>
+<p><code>experiment-flags</code> is implemented (commit <code>aca285f</code>) and awaits verify. Every later slice inherits these changes:</p>
+<ul>
+<li><code>tuning.json</code> has an optional <code>flags</code> block (shipped empty; <code>TUNING_VERSION</code> stays 2). A flag needs an owner, a hypothesis, and a removal condition, and it must switch something: tuning overrides by dotted path, or a name in <code>engine::flags::CODE_FLAGS</code>. A candidate model registers its name there, declares it in the shipped file, and reads <code>config.flags.is_on(name)</code> in the same change.</li>
+<li><code>Content::with_flags(&amp;FlagStates)</code> applies states once, at load; <code>Content::load</code> applies the file’s states. <code>MatchConfig.flags</code> carries the on-list. The shipped content hash moved once, because the tuning file’s bytes changed. The seed-42 tick records are byte-identical.</li>
+<li>Every <code>MatchStats</code> literal needs <code>flags_on</code>; <code>tuning.flags_on</code> rides in every statistics record.</li>
+<li><code>calibrate</code> is restructured into per-arm runs (<code>RunCtx::play_arm</code>); <code>--flag</code> and <code>--pair</code> exist, and a paired report adds <code>calib.flags</code>, <code>calib.pair</code>, <code>calib.arms</code>, <code>calib.compare</code>, and <code>calib.verdict</code>. The scripting runtime can gate scripted models with the same flags block.</li>
+</ul>
+</li>
+<li>
+<p>Checks at implement: 364 Rust tests (4 ignored) and 127 page tests pass, and clippy runs with <code>-D warnings</code>. Benchmark: 418.8 / 422.0 / 418.8 ms of processor time per match (gate 460.7), and 6.555 to 6.746 MB peak memory (median 6.582, gate 6.82).</p>
+</li>
+<li>
+<p><code>scripting-runtime</code> is implemented (commit <code>7fd5197</code>) and awaits verify. Every later slice inherits these changes:</p>
+<ul>
+<li>The engine has a plugin interface (<code>engine::plugin</code>, <code>PLUGIN_API_VERSION</code> 1) with decision, rule, and commentary hooks, and a <code>script</code> crate runs Rhai 1.26.1 packs behind it. <code>--script-pack &lt;DIR&gt;</code> works on <code>simulate</code>, <code>bench</code>, <code>serve</code>, <code>record</code>, and <code>resume</code>. Without a pack, the seed-42 tick records are byte-identical.</li>
+<li><code>EngineEventKind::Script</code> (18 kinds) and <code>EventDetail::Script</code>; the protocol adds the <code>script</code> event type and <code>script.pack</code>, <code>script.hook</code>, <code>script.outcome</code>, and <code>script.detail</code>, with version 3 kept. <code>ServerMessage::Event</code> is boxed, so a constructor writes <code>Box::new</code>.</li>
+<li>Every <code>MatchStats</code> literal needs <code>script</code> (<code>ScriptFigures</code>); <code>RunReport</code> has <code>script_pack</code>. <code>content::load</code> takes a fourth argument, and <code>bench::measure</code> takes the pack.</li>
+<li>The pack hash is folded into the content hash, so a scripted snapshot resumes only with the same pack.</li>
+</ul>
+</li>
+<li>
+<p>Checks at implement: 398 Rust tests (4 ignored) and 127 page tests pass, and clippy runs with <code>-D warnings</code>. Benchmark on <code>3066066</code>: baseline 422.0 ms per match. With the sample pack the median is 431.4 ms (1.022 times, limit 1.10) and peak memory is 8.29 MB (1.22 times, limit 1.25). Without a pack the median is 425.0 ms.</p>
+</li>
+<li>
+<p><code>distribution</code> is implemented (commit <code>6a5d347</code>) and awaits verify. It adds these changes:</p>
+<ul>
+<li><code>engine-cli launch</code> needs no flag: <code>--seed</code> defaults to a clock seed (printed as <code>seed &lt;n&gt;</code> on stderr), and <code>--web</code> falls through <code>SM_WEB_DIR</code>, <code>./web</code>, then <code>web/</code> beside the program (<code>web::resolve_web_dir</code>). <code>--open</code> opens the page in the default browser and logs <code>launch.open_failed</code> when it cannot.</li>
+<li>The Windows build links the C runtime statically (<code>.cargo/config.toml</code>), for every MSVC build in the workspace, tests and benches included.</li>
+<li><code>packaging/</code> builds <code>SoccerManager-&lt;version&gt;-windows-x64-setup.exe</code> (per-user NSIS, Start-menu entry <code>launch --open</code>) and <code>SoccerManager-&lt;version&gt;-linux-x86_64.tar.gz</code> (glibc 2.39 floor) into the git-ignored <code>dist/</code>, each with a <code>.sha256</code> file. The version comes only from <code>engine-cli --version</code>, and <code>tests/release_version.rs</code> holds it equal to <code>hello</code> and the workspace.</li>
+<li><code>packaging/windows/run-sandbox.ps1</code> and <code>packaging/unix/smoke.sh</code> are the clean-machine checks.</li>
+</ul>
+</li>
+<li>
+<p>Checks at implement: 403 Rust tests and 127 page tests pass, and clippy runs with <code>-D warnings</code>. Windows Sandbox passed 11 of 11 checks on an image without <code>vcruntime140.dll</code>, and the WSL archive check passed 7 of 7. In the sandbox, the Start-menu entry opened no browser, because the sandbox image cannot open <code>http</code> links.</p>
+</li>
+<li>
+<p><code>probe-engine-core</code> is implemented (commit <code>733839c</code>) and awaits verify. Every later slice inherits these changes:</p>
+<ul>
+<li>A failed <code>simulate</code> or <code>bench</code> run prints one record on stdout (<code>FailureRecord</code>): the success <code>record.kind</code>, <code>outcome</code> <code>error</code>, <code>error.type</code>, <code>error.code</code>, <code>error.retriable</code>, and no statistic key. Exit code 1 and the prose line are kept. Other commands keep prose-only failures.</li>
+<li><code>EngineError</code> classifies itself (<code>error_type</code>, <code>error_code</code>, <code>retriable</code>). Code that writes an error record uses these, not a private classifier.</li>
+<li><code>outcome</code> is <code>success</code> or <code>error</code> in both record schemas; <code>failure</code> is refused. Statistic and benchmark keys are required only when the outcome is not <code>error</code>, and an error record requires the three <code>error.*</code> keys. A failed calibration match writes <code>error</code>; a failed worker makes the run report <code>error</code> with <code>error.type</code> <code>worker</code>. Run folders from before this commit do not validate.</li>
+<li>Short help (<code>-h</code>) must fit 80 columns on all 10 help surfaces, and <code>no_help_line_exceeds_eighty_columns</code> checks <code>-h</code> and <code>--help</code> on each. A new option puts its detail in <code>long_help</code>.</li>
+<li>Hidden seam <code>calibrate --inject-failure &lt;match|worker&gt;</code> (shard 0 only).</li>
+</ul>
+</li>
+<li>
+<p>Checks at implement: 414 Rust tests pass (4 ignored), clippy runs with <code>-D warnings</code>, and <code>bench --seed 42 --matches 5</code> measured 423 ms per match.</p>
+</li>
+<li>
+<p><code>realism-bands-v2</code> is implemented (commit <code>0835298</code>) and awaits verify. Every later slice inherits these changes:</p>
+<ul>
+<li><code>content/realism-bands.json</code> is version 2 with eleven more bands; a version-1 file is refused. Bands change only by a recorded product-owner answer.</li>
+<li><code>match-stats</code> carries <code>stats.throw_ins</code> and <code>stats.goal_kicks</code>, required on success.</li>
+<li><code>tactics.json</code> has ten formations; indices 0 to 3 are unchanged. The content hash moved to <code>b64cecf856ec</code>.</li>
+<li><code>calibrate --suite all</code> plays equal, strength and formations (55 pairings x <code>--matches</code>). Pairing checks carry <code>pairing</code>; <code>calib.formations</code> holds the pairing figures. Each failing band is a <code>calibrate.band_failed</code> warn line.</li>
+<li>The paired-run distance counts only the excess above the top of a floor band.</li>
+<li>Baseline for the next three slices: 9 of 15 equal-suite bands fail on all five seeds; 151 of 165 pairing checks fail on seed 42 (formations run on one seed by Q-I1). A full run takes about 76 minutes on the 8-core reference machine.</li>
+</ul>
+</li>
+<li>
+<p>Checks at implement: 434 Rust tests pass (4 ignored), 128 page tests pass, clippy runs with <code>-D warnings</code>, and the benchmark median is 422.0 ms per match and 6.73 MB (tripwires 460.7 ms and 6.82 MB).</p>
+</li>
+<li>
+<p><code>defending-and-discipline</code> is implemented (commit <code>f7fe35b</code>) and awaits verify. Its kept criteria pass: discipline, the acting keeper and eight of ten formation pairings. The product owner moved the red-card criterion and the 4-4-1-1 (5.18) and 3-4-3 (4.17) pairings to <code>lone-forward</code> with their limits unchanged (Q-I2). A re-run on <code>cd9669c</code> reproduced every figure. Every later slice inherits these changes:</p>
+<ul>
+<li><code>Simulation::keeper(team)</code> / <code>Team::keeper_slot()</code> name the acting keeper; no code may assume slot 0 keeps goal. <code>restart::taker</code> takes <code>&amp;[Team; 2]</code> and reads a side’s own end from <code>attack_x</code>.</li>
+<li><code>Team::reshape</code> lays the whole team out again; the back line is capped at <code>back_line_gap</code> between neighbours at 11 against 11 too, so every formation’s back line is narrower than the tactics file says.</li>
+<li>Pressers go for the ball inside 3 m; the goal-side cover tracks the carrier. Contact near the ball costs about four fouls per won tackle in this engine, so a mechanism that holds a defender in contact floods fouls and penalties.</li>
+<li>Snapshot version 5 (<code>foul_ready</code>); five new tuning values; decision code <code>sub-keeper</code>; the content hash moved.</li>
+<li>Equal suite at seed 42: goals per match 4.092 (baseline 3.035), sending-off share 0.326 (0.421).</li>
+</ul>
+</li>
+<li>
+<p>Checks at implement: 458 workspace tests pass (7 ignored), clippy runs with <code>-D warnings</code>, and the benchmark median is 1.5312 µs per tick and 6.80 MB (gates 1.6228 µs and 8.27 MB).</p>
+</li>
+<li>
+<p><code>tuning-loop</code> is implemented and committed (<code>a6dc5d2</code>). Every later tuning slice inherits it:</p>
+<ul>
+<li><code>calibrate --pairing &quot;A v B&quot;</code>, <code>--band NAME</code> and <code>--baseline report.json</code> give a loop of under 2 minutes on the reference machine: 87 s for one pairing at 1,000 matches, 86 s for the equal suite, and 42 s for <code>--suite red-card --seed 1 --matches 120</code>.</li>
+<li>Every band row carries <code>se</code>. The report carries <code>fixtures.hash</code>; a baseline must share the seed, the match count and that hash, and a changed <code>content.hash</code> is the change under test. A report made before this change cannot be a baseline.</li>
+<li><code>Simulation::send_off_before_kickoff</code> is the one send-off-at-kick-off path. <code>Scene::sent_off</code> calls it. <code>--suite red-card</code> equals the slow test <code>a_sending_off_gives_no_advantage</code> to 4 decimals, and its criterion still fails, as <code>lone-forward</code> expects.</li>
+<li>A targeted run is an inner loop. The full gate (five seeds for equal and strength, one for formations) is unchanged, and <code>--suite all</code> does not include red-card.</li>
+<li>No faster build profile: fat LTO and a native CPU target were identical in figures and inside run-to-run timing noise.</li>
+</ul>
+</li>
+<li>
+<p><code>lone-forward</code> (implemented, commits <code>c3cc96f</code>, <code>7bd5fa5</code> and <code>07d87c2</code>; awaits verify): five bounded tuning values; shipped <code>tackle_win_base</code> 0.5, <code>decision.lone_hold</code> 0.5, <code>decision.lone_dribble</code> −0.5, with <code>lone_layoff</code> and <code>lone_line_hold</code> at 0. <code>fouls::win_chance()</code>, <code>offside::second_last_depth()</code>, <code>Team::lone_forward()</code> and the lone-carrier terms. Every later slice inherits these changes:</p>
+<ul>
+<li>An even tackle wins the ball ten times as often (0.25 against 0.025). In the equal suite, fouls are about 7 per team and yellow cards about 0.9 per team, below the band floor (recorded, Q-E4). Goals, shots and the sending-off share are inside their bands.</li>
+<li>All ten pairings with 4-4-2 hold at 4.0 or less; 4-4-1-1 3.22 and 3-4-3 2.91 in <code>every_formation_holds</code>.</li>
+<li>The seed-42 90-minute match on the default clubs ends 0-0 with no tactics change. A test that needs a goal or a tactics change uses <code>common::scoring_match()</code> (seed 7). The two-minute viewer reconnect test serves seed 5.</li>
+<li>The red-card experiment plays each seed in both club orders (<code>--suite red-card --seed 1 --matches 240</code> equals the slow test). The criterion moved to <code>keeper-and-shots</code> (Q-LF2) and its slow test still fails; the measured cause is that a side with ten men attacks as if it had eleven. <code>keeper-and-shots</code> may now plan (Q-X4).</li>
+</ul>
+</li>
+<li>
+<p><code>keeper-and-shots</code> (implemented at commits <code>8fd407b</code> and <code>bce0144</code>; verified, result pass, after the Q-KS1 and Q-KS2 answers): a new <code>shot</code> module and an optional <code>shots</code> tuning block. Every later slice inherits these changes:</p>
+<ul>
+<li>A shot counts on target when its flight, as struck, crosses between the posts under the bar. A keeper saves only such a shot, on the sourced curve by shot quality, and holds one save in three or parries it. An outfield defender within 3 m can block a shot once. A parry or a block leaves the defending side as the last touch. <code>keeper_catch_chance</code> covers only fast balls that are not shots.</li>
+<li>Penalties in play count <code>shots.penalty_xg</code> 0.76. The shoot-out uses the same save model, and its dive values are tuning values.</li>
+<li><code>xg</code> is refitted (−4.191, −0.0441, 6.3836) and the saves read the fixed <code>shots.quality</code> model, so a later refit never moves play.</li>
+<li>On seed 42 over 1,000 matches: on target 0.387, goals per xG 1.098, goal kicks 13.1, corners 1.59 per team, goals 1.88 per match (under the band, which <code>realism-tuning</code> owns).</li>
+<li>Test seams under the <code>scenario</code> feature: <code>Scene::penalty()</code>, <code>Simulation::last_touch()</code>, <code>shot_census()</code> and <code>shot_flight()</code>.</li>
+<li>Q-KS1 moved the red-card criterion to <code>realism-tuning</code>; Q-KS2 set the corner floor at 1.2 per team and moved corners from clearances and crosses to <code>tempo-and-restarts</code>.</li>
+</ul>
+</li>
+<li>
+<p><code>tempo-and-restarts</code> (implemented at commits <code>831553b</code>, <code>4022e47</code> and <code>d6ccbb7</code>; complete, awaits verify): the counting, the tempo levers and the contest levers, shipped at values that reproduce play. Every later slice inherits these changes:</p>
+<ul>
+<li><code>stats.passes</code> and pass accuracy count open-play passes only. A clearance (<code>Kick::Clear</code>) and the first kick of a restart taker are counted in <code>stats.clearances</code> and <code>stats.restart_kicks</code>. On seed 42 over 200 matches, passes fall from 1,225.8 to 1,193.8 per team with play identical.</li>
+<li><code>stats.ball_in_play_s</code> is in match-stats, and the calibrate report has <code>ball_in_play_min_per_90_mean</code> (89.6 minutes on shipped play).</li>
+<li>The snapshot is version 6. A later slice that adds snapshot state takes version 7.</li>
+<li>New tuning values, switched off: <code>decision.carry_s</code> and <code>decision.carry_cost</code> (the carry window) and the <code>clearances</code> block (aim spread and a defender’s clearance of a fast pass in his own penalty area). The restart delays stay at 3, 8, 6 and 8 s until Q-TR1 is answered.</li>
+<li>Test seam under the <code>scenario</code> feature: <code>Scene::clear()</code>. A scene starts in open play with no restart taker.</li>
+<li>New tuning values at <code>4022e47</code>, at values that reproduce play: <code>tackle_reach</code> 1.0 (tackle distance, separate from the control reach), <code>press_engage</code> 3.0 (was the constant <code>PRESS_ENGAGE_M</code>) and <code>tackle_dribble_win</code> 0 (extra win chance against a carrier faster than 2 m/s). Shipped play on seed 42 is identical.</li>
+<li>Q-TR1 answered (defending levers allowed). Q-TR2 answered (ship <code>b0</code>, ball in play judged at 52–68 minutes). At <code>b0</code> the slice’s criteria pass, but <code>discipline_is_realistic</code> (0.160 second yellows per match, 30.0% of matches with a sending-off) and <code>a_stronger_team_wins_more_than_half_its_matches</code> (94 of 200) fail, so <code>b0</code> is not shipped; it is kept as a patch in the slice’s evidence folder. Q-TR3 answered: ship the counting only. The slice is judged on “Only real passes count” and no regression; passes, ball in play and throw-ins move to <code>realism-tuning</code>, with the <code>b0</code> patch as its starting evidence. On the shipped tree every earlier slow criterion and every equal and strength gate report equal the keeper-and-shots figures except the pass counts (34–42 fewer per team) and the new ball-in-play figure (89.3–89.5 minutes per 90).</li>
+</ul>
+</li>
+</ul>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li>
+<p><code>/wf verify football-manager-match-engine tempo-and-restarts</code> (new: the counting scenes and the no-regression evidence in <code>implement-evidence/tempo-and-restarts/tr3/</code>; the benchmark compare)</p>
+</li>
+<li>
+<p><code>/wf verify football-manager-match-engine lone-forward</code> (new: the three kept criteria on the shipped values; the evidence is in <code>implement-evidence/lone-forward/shipped/</code>)</p>
+</li>
+<li>
+<p><code>/wf verify football-manager-match-engine tuning-loop</code> (new: the seven criteria on the release binary; the evidence and scripts are in <code>implement-evidence/tuning-loop/</code>)</p>
+</li>
+<li>
+<p><code>/wf verify football-manager-match-engine defending-and-discipline</code> (new: discipline, the acting keeper and the eight kept formation pairings; the red-card criterion and the 4-4-1-1 and 3-4-3 pairings belong to <code>lone-forward</code>)</p>
+</li>
+<li>
+<p><code>/wf verify football-manager-match-engine realism-bands-v2</code> (new: the four criteria on the release binary, the viewer check of ten formations, and the seed 42 formations evidence)</p>
+</li>
+<li>
+<p><code>/wf verify football-manager-match-engine probe-engine-core</code> (new: <code>cargo test -p engine-cli --test cli_args --test schemas</code>, the three failure drives and both <code>calibrate --inject-failure</code> drives on the release binary, and the 20 help-width checks)</p>
+</li>
+<li>
+<p><code>/wf verify football-manager-match-engine distribution</code> (new: <code>run-sandbox.ps1</code> and the WSL <code>smoke.sh</code>, <code>cargo test --test release_version --test install_layout</code> on both platforms, the benchmark compare after the static runtime, and the pre-registered macOS deferral)</p>
+</li>
+<li>
+<p><code>/wf verify football-manager-match-engine scripting-runtime</code> (new: <code>cargo test -p script</code> and <code>cargo test -p engine-cli --test script_cli</code>, the six-drive benchmark compare against 422.0 ms, and the seed-42 byte-identity check)</p>
+</li>
+<li>
+<p><code>/wf verify football-manager-match-engine experiment-flags</code> (new: automated <code>cargo test -p engine --test flags</code> and <code>cargo test -p engine-cli --test calibrate_pair</code>, the benchmark compare, and the seed-42 byte-identity check)</p>
+</li>
+<li>
+<p><code>/wf verify football-manager-match-engine extra-time-penalties</code> (new: automated cargo tests, and re-read IFAB Laws 3, 7, and 10)</p>
+</li>
+<li>
+<p><code>/wf verify football-manager-match-engine integration</code></p>
+</li>
+<li>
+<p><code>/wf verify football-manager-match-engine viewer-reports-recovery</code></p>
+</li>
+<li>
+<p><code>/wf verify football-manager-match-engine viewer-lineup-tactics</code></p>
+</li>
+<li>
+<p><code>/wf verify football-manager-match-engine viewer-match-day</code> (still open)</p>
+</li>
+</ul></div>
+    <section class="slice-grid"><a class="slice-card complete" href="calibration/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">calibration</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">36 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>3 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="commentary/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">commentary</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">20 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>3 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="data-schemas-generator/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">data-schemas-generator</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">47 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="defending-and-discipline/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">defending-and-discipline</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">31 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="distribution/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">distribution</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">18 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="engine-core/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">engine-core</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">36 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>4 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="experiment-flags/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">experiment-flags</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">26 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="extra-time-penalties/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">extra-time-penalties</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">43 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="integration/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">integration</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">25 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="keeper-and-shots/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">keeper-and-shots</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">14 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>1 day ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="lone-forward/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">lone-forward</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">27 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>1 day ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="match-rules/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">match-rules</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">70 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>3 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="probe-engine-core/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">probe-engine-core</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">14 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="realism-bands-v2/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">realism-bands-v2</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">22 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card not-started" href="realism-tuning/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">realism-tuning</span>
+      <span class="sc-pill not-started">queued</span>
+    </div>
+    
+    <div class="sc-meta">7 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:0%"></i></div>
+    <div class="sc-foot"><span>2 hr ago</span><span class="pct">0%</span></div>
+  </a><a class="slice-card complete" href="scripting-runtime/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">scripting-runtime</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">58 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="stream-protocol/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">stream-protocol</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">47 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>3 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="tactics-and-ai/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">tactics-and-ai</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">51 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>3 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="tempo-and-restarts/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">tempo-and-restarts</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">18 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>10 hr ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="tuning-loop/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">tuning-loop</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">20 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="viewer-lineup-tactics/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">viewer-lineup-tactics</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">37 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>3 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="viewer-match-day/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">viewer-match-day</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">32 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>3 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="viewer-pitch/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">viewer-pitch</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">50 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>3 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card complete" href="viewer-reports-recovery/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">viewer-reports-recovery</span>
+      <span class="sc-pill complete">complete</span>
+    </div>
+    
+    <div class="sc-meta">39 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:100%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">100%</span></div>
+  </a><a class="slice-card not-started" href="defending-and-discipline/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">defending-and-discipline</span>
+      <span class="sc-pill not-started">queued</span>
+    </div>
+    
+    <div class="sc-meta">31 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:0%"></i></div>
+    <div class="sc-foot"><span>2 days ago</span><span class="pct">0%</span></div>
+  </a><a class="slice-card not-started" href="keeper-and-shots/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">keeper-and-shots</span>
+      <span class="sc-pill not-started">queued</span>
+    </div>
+    
+    <div class="sc-meta">14 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:0%"></i></div>
+    <div class="sc-foot"><span>1 day ago</span><span class="pct">0%</span></div>
+  </a><a class="slice-card not-started" href="lone-forward/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">lone-forward</span>
+      <span class="sc-pill not-started">queued</span>
+    </div>
+    
+    <div class="sc-meta">18 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:0%"></i></div>
+    <div class="sc-foot"><span>1 day ago</span><span class="pct">0%</span></div>
+  </a><a class="slice-card not-started" href="lone-forward/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">lone-forward</span>
+      <span class="sc-pill not-started">queued</span>
+    </div>
+    
+    <div class="sc-meta">23 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:0%"></i></div>
+    <div class="sc-foot"><span>1 day ago</span><span class="pct">0%</span></div>
+  </a><a class="slice-card not-started" href="tempo-and-restarts/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">tempo-and-restarts</span>
+      <span class="sc-pill not-started">queued</span>
+    </div>
+    
+    <div class="sc-meta">18 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:0%"></i></div>
+    <div class="sc-foot"><span>18 hr ago</span><span class="pct">0%</span></div>
+  </a><a class="slice-card not-started" href="tempo-and-restarts/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">tempo-and-restarts</span>
+      <span class="sc-pill not-started">queued</span>
+    </div>
+    
+    <div class="sc-meta">18 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:0%"></i></div>
+    <div class="sc-foot"><span>14 hr ago</span><span class="pct">0%</span></div>
+  </a><a class="slice-card not-started" href="tempo-and-restarts/INDEX.html">
+    <div class="sc-hd">
+      <span class="sc-name">tempo-and-restarts</span>
+      <span class="sc-pill not-started">queued</span>
+    </div>
+    
+    <div class="sc-meta">18 files · 0 reviews</div>
+    <div class="sc-bar"><i style="width:0%"></i></div>
+    <div class="sc-foot"><span>14 hr ago</span><span class="pct">0%</span></div>
+  </a></section>
+    
+  
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-25T20:21:36Z</span>
+    <a href="../../../workflows/football-manager-match-engine/05-implement.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../INDEX.html">football-manager-match-engine</a><span class="m-sheet-here" aria-current="page">implement</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../workflows/football-manager-match-engine/05-implement.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-25T20:21:36Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="plan">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · plan — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="plan">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span aria-hidden="true">/</span><span class="m-here">defending-and-discipline</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · plan</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">defending-and-discipline</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/04-plan-defending-and-discipline.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">04-plan-defending-and-discipline.md</div>
+      <h1 class="pg-title">Plan · <code>defending-and-discipline</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="stage-badge">plan</span><span class="meta">rev 0</span><span class="meta">2026-09-24T02:46:11Z</span></div>
+    </header><div class="metric-row"><div class="metric">
+      <span class="metric-label">files to touch</span>
+      <span class="metric-value">26</span>
+      
+    </div><div class="metric">
+      <span class="metric-label">steps</span>
+      <span class="metric-value">16</span>
+      
+    </div><div class="metric is-ok">
+      <span class="metric-label">blockers</span>
+      <span class="metric-value">none</span>
+      
+    </div></div>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-plan" tabindex="-1"><a class="header-anchor" href="#the-plan"><span>The Plan</span></a></h2>
+<p>The realism-bands-v2 baseline shows the defending bug in numbers. At <code>2089ed7</code>, seven of the nine pairings against 4-4-2 have a side that averages more than 4.0 goals per match (4-4-1-1 scores 11.60, 3-4-3 8.48, 5-4-1 7.62, 4-3-3 7.43). The send-off research reproduces the same cause with ten men: a lone striker is recentred into the 16 m gap between the centre-backs and dribbles through it, and nobody marks him (<code>team.rs:236-237</code>, <code>decision.rs:29-61</code>, <code>team.rs:258-274</code>). Second yellows come from repeated fouls on the next tick after an advantage foul (<code>rules/mod.rs:259-263</code>), from held cards stacking, and from a foul chance that ignores a booking.</p>
+<p>The plan fixes the defending first and the card rate second, as RIM-7 requires. Three defending mechanisms go into <code>decision.rs</code> and <code>team.rs</code>: a goal-side cover on the most advanced central attacker, pressers that run at the intercept point, and a back line whose width shrinks with the players left in it. The acting keeper is a function of the team’s state (<code>Team::keeper_slot()</code>), not a stored field. So every fixed “slot 0 is the keeper” check becomes one call, and the validator and the snapshot need no new team data. The keeper-less case needs no hand-built shape: the most advanced forward goes in goal, which gives the 4-4-1 style shape, and the computer manager then brings on its bench keeper for him. Discipline gets a per-player foul cooldown (the snapshot moves to version 5 to carry it), one held card per player per advantage spell, and a booked-player factor. Five new tuning values carry the numbers, and each has bounds.</p>
+<p>The work is 16 steps over 26 files, and the benchmark is re-baselined at 1.4753 µs per tick. When it lands, <code>keeper-and-shots</code> inherits an acting keeper that saves, penalties and restarts already use. The top risk is the formations criterion. The worst pairing today is 11.6 goals per match for one side against a 4.0 limit. If the three mechanisms, tuned inside their bounds, cannot bring a pairing under 4.0, implement stops and reports that pairing. It does not raise the limit.</p></section><figure class="figure-canvas">
+  <figcaption class="figure-meta">
+    <span class="figure-title"><b>Figure 3</b> · File-change topology</span>
+    <span class="figure-legend" aria-hidden="true"><span class="legend-entry"><span class="sw modified"></span>modified</span><span class="legend-entry"><span class="sw new"></span>new</span><span class="legend-entry"><span class="sw deleted"></span>deleted</span><span class="legend-entry"><span class="sw external"></span>external</span></span>
+  </figcaption>
+  <svg viewBox="0 0 980 998" width="100%" preserveAspectRatio="xMinYMid meet" aria-label="File-change topology">
+    <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8377"/>
+    </marker>
+  </defs><rect x="20" y="30" width="301.3333333333333" height="76" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC/TEAM.RS (SHAPE AND THE ACTING KEEPER)</text><rect x="333.3333333333333" y="30" width="301.3333333333333" height="140" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC (DECISION.RS, SIM.RS, PLAYER.RS)</text><rect x="646.6666666666666" y="30" width="301.3333333333333" height="172" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC/RULES</text><rect x="20" y="194" width="301.3333333333333" height="140" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="212" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC (AI.RS, TACTICS/CHANGE.RS, COMMENTARY)</text><rect x="333.3333333333333" y="194" width="301.3333333333333" height="140" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="212" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC (TUNING.RS, SNAPSHOT.RS, SCENARIO.RS)</text><rect x="646.6666666666666" y="162" width="301.3333333333333" height="108" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="180" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CONTENT/ (SHIPPED DATA FILES)</text><rect x="20" y="678" width="301.3333333333333" height="300" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="696" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/TESTS</text><rect x="333.3333333333333" y="294" width="301.3333333333333" height="108" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="312" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">DOCS/REFERENCE</text><rect x="32" y="58" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">team.rs</text>
+      <text x="40" y="80" font-size="8" fill="#8a8377">domain · +120/−20</text><rect x="345.3333333333333" y="58" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">decision.rs</text>
+      <text x="353.3333333333333" y="80" font-size="8" fill="#8a8377">domain · +110/−25</text><rect x="345.3333333333333" y="90" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">sim.rs</text>
+      <text x="353.3333333333333" y="112" font-size="8" fill="#8a8377">domain · +30/−8</text><rect x="345.3333333333333" y="122" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="134" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">player.rs</text>
+      <text x="353.3333333333333" y="144" font-size="8" fill="#8a8377">domain · +4/−0</text><rect x="658.6666666666666" y="58" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="666.6666666666666" y="80" font-size="8" fill="#8a8377">domain · +45/−10</text><rect x="658.6666666666666" y="90" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">fouls.rs</text>
+      <text x="666.6666666666666" y="112" font-size="8" fill="#8a8377">domain · +30/−4</text><rect x="658.6666666666666" y="122" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="134" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">restart.rs</text>
+      <text x="666.6666666666666" y="144" font-size="8" fill="#8a8377">domain · +25/−12</text><rect x="658.6666666666666" y="154" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="166" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">discipline.rs</text>
+      <text x="666.6666666666666" y="176" font-size="8" fill="#8a8377">domain · +6/−2</text><rect x="32" y="222" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="234" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">ai.rs</text>
+      <text x="40" y="244" font-size="8" fill="#8a8377">domain · +40/−0</text><rect x="32" y="254" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="266" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">change.rs</text>
+      <text x="40" y="276" font-size="8" fill="#8a8377">domain · +4/−3</text><rect x="32" y="286" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="298" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">templates.rs</text>
+      <text x="40" y="308" font-size="8" fill="#8a8377">domain · +4/−0</text><rect x="345.3333333333333" y="222" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="234" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tuning.rs</text>
+      <text x="353.3333333333333" y="244" font-size="8" fill="#8a8377">config · +35/−0</text><rect x="345.3333333333333" y="254" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="266" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">snapshot.rs</text>
+      <text x="353.3333333333333" y="276" font-size="8" fill="#8a8377">infrastructure · +6/−2</text><rect x="345.3333333333333" y="286" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="298" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">scenario.rs</text>
+      <text x="353.3333333333333" y="308" font-size="8" fill="#8a8377">test · +12/−2</text><rect x="658.6666666666666" y="190" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="202" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tuning.json</text>
+      <text x="666.6666666666666" y="212" font-size="8" fill="#8a8377">data · +5/−0</text><rect x="658.6666666666666" y="222" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="234" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">en.json</text>
+      <text x="666.6666666666666" y="244" font-size="8" fill="#8a8377">data · +12/−0</text><rect x="32" y="706" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="40" y="718" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">defending.rs</text>
+      <text x="40" y="728" font-size="8" fill="#8a8377">test · +260/−0</text><rect x="32" y="738" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="40" y="750" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">discipline.rs</text>
+      <text x="40" y="760" font-size="8" fill="#8a8377">test · +170/−0</text><rect x="32" y="770" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="40" y="782" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">acting_keeper.rs</text>
+      <text x="40" y="792" font-size="8" fill="#8a8377">test · +200/−0</text><rect x="32" y="802" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="814" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">rules_fouls.rs</text>
+      <text x="40" y="824" font-size="8" fill="#8a8377">test · +6/−4</text><rect x="32" y="834" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="846" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">rules_cards.rs</text>
+      <text x="40" y="856" font-size="8" fill="#8a8377">test · +6/−4</text><rect x="32" y="866" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="878" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">commentary.rs</text>
+      <text x="40" y="888" font-size="8" fill="#8a8377">test · +1/−0</text><rect x="32" y="898" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="910" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">snapshot.rs</text>
+      <text x="40" y="920" font-size="8" fill="#8a8377">test · +10/−0</text><rect x="32" y="930" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="942" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">content.rs</text>
+      <text x="40" y="952" font-size="8" fill="#8a8377">test · +8/−0</text><rect x="345.3333333333333" y="322" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="334" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">data-files.md</text>
+      <text x="353.3333333333333" y="344" font-size="8" fill="#8a8377">docs · +12/−1</text><rect x="345.3333333333333" y="354" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="366" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">protocol.md</text>
+      <text x="353.3333333333333" y="376" font-size="8" fill="#8a8377">docs · +1/−1</text><path d="M 622.6666666666666 71 C 327.3333333333333 71, 327.3333333333333 71, 32 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 103 C 327.3333333333333 103, 327.3333333333333 71, 32 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 103 C 640.6666666666666 103, 640.6666666666666 103, 658.6666666666666 103" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 71 C 797.3333333333333 71, 797.3333333333333 135, 658.6666666666666 135" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 71 C 797.3333333333333 71, 797.3333333333333 167, 658.6666666666666 167" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 167 C 484 167, 484 71, 32 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 235 C 170.66666666666666 235, 170.66666666666666 71, 32 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 267 C 170.66666666666666 267, 170.66666666666666 71, 32 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 267 C 484 267, 484 135, 345.3333333333333 135" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 235 C 640.6666666666666 235, 640.6666666666666 203, 658.6666666666666 203" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 299 C 484 299, 484 235, 658.6666666666666 235" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 719 C 327.3333333333333 719, 327.3333333333333 299, 345.3333333333333 299" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 751 C 327.3333333333333 751, 327.3333333333333 299, 345.3333333333333 299" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 783 C 327.3333333333333 783, 327.3333333333333 299, 345.3333333333333 299" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/>
+  </svg>
+</figure><div class="fragment"><section class="fragment-plan" data-artifact="plan" data-slice="defending-and-discipline" data-rev="0">
+  <!-- @include-skip files-touched rows and callouts follow the sibling plan fragments' inline markup so the page renders them identically -->
+  <table class="files-touched pl-files">
+    <thead><tr><th>File</th><th>Status</th><th>Module</th><th>Lines</th></tr></thead>
+    <tbody>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/team.rs</summary><div class="pl-card">The acting keeper is derived from the team's state: slot 0 while it plays, else a goalkeeper who came on, else the most advanced outfield player. A lone survivor keeps its place across the pitch. The back line is never wider than one tuned gap per space between its players, so it narrows as players leave. One fewer player presses for each player out of play.</div></details></td><td>modified</td><td>team</td><td>+120 / -20</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/decision.rs, sim.rs, player.rs</summary><div class="pl-card">Pressers run at the point where they can meet the carrier. One back-line defender covers the most advanced central attacker, goal-side. Every keeper check uses the acting keeper. A tackler in its foul cooldown makes no tackle attempt, and a booked player fouls less.</div></details></td><td>modified</td><td>play</td><td>+144 / -33</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/rules/*</summary><div class="pl-card">Every foul starts the tackler's cooldown, advantage included. A player holds at most one card per advantage spell, the most severe, and is never shown two cards on one tick. Penalties, the shoot-out and restarts use the acting keeper, and a restart reads the team's own end from its attack direction, not from a parked keeper.</div></details></td><td>modified</td><td>rules</td><td>+106 / -28</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/ai.rs, tactics/change.rs, commentary</summary><div class="pl-card">After a keeper's red card, the computer manager brings on its bench keeper for the acting keeper when a substitution is left (decision sub-keeper, with three commentary lines). Every substitution lays the team out again.</div></details></td><td>modified</td><td>ai</td><td>+48 / -3</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">infrastructure</span> crates/engine/src/tuning.rs, snapshot.rs, scenario.rs; content/tuning.json</summary><div class="pl-card">Five bounded tuning values with defaults (cover distance, cover channel, back-line gap, foul cooldown, booked factor); an older tuning file still loads. The snapshot moves to version 5 to carry each player's foul cooldown.</div></details></td><td>modified</td><td>state</td><td>+58 / -4</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">test</span> crates/engine/tests/defending.rs, discipline.rs, acting_keeper.rs</summary><div class="pl-card">A regression scene for each mechanism, and three slow criterion runs: the sending-off experiment over 120 seeds, every shipped formation against 4-4-2 over 120 seeds, and discipline over 200 matches.</div></details></td><td>new</td><td>engine-tests</td><td>+630</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">test</span> crates/engine/tests (rules, commentary, snapshot, content)</summary><div class="pl-card">Updated calls and re-derived expectations, each recorded with its value before and after.</div></details></td><td>modified</td><td>engine-tests</td><td>+31 / -8</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">docs</span> docs/reference/data-files.md, protocol.md; content/commentary/en.json</summary><div class="pl-card">The five tuning rows, the foul paragraph, and the sub-keeper decision value and its lines.</div></details></td><td>modified</td><td>docs</td><td>+25 / -2</td></tr>
+    </tbody>
+  </table>
+  <div class="pl-risks">
+    <aside class="callout callout-warn"><strong>Formations far outside the limit today (high).</strong> Seven of nine pairings against 4-4-2 have a side above 4.0 goals per match; 4-4-1-1 averages 11.60. If the three defending mechanisms cannot fix a pairing inside their bounds, implement stops and reports it.</aside>
+    <aside class="callout callout-warn"><strong>Every seeded result moves (medium).</strong> Pinned tests are re-derived and recorded with values before and after, never loosened.</aside>
+    <aside class="callout callout-warn"><strong>Goals fall below the band (medium).</strong> Card chaos made about 23 percent of goals. The misses are recorded against the baseline; realism-tuning retunes.</aside>
+    <aside class="callout callout-warn"><strong>Per-tick cost (medium).</strong> The cover search and the intercept solve run every tick. The gate is 1.6228 microseconds per tick.</aside>
+    <aside class="callout callout-info"><strong>Validator drift rule (low).</strong> Cover applies only while the opponents hold the ball in the defending half, so the anchor rule keeps reading zero violations.</aside>
+  </div>
+  <style>
+    .fragment-plan .pl-files { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-plan .pl-files th, .fragment-plan .pl-files td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
+    .fragment-plan .pl-files summary { cursor: pointer; }
+    .fragment-plan .pl-chip { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; opacity: 0.8; }
+    .fragment-plan .pl-card { padding: 6px 0 4px 18px; opacity: 0.9; }
+    .fragment-plan .pl-risks { display: grid; gap: 8px; margin-top: 12px; }
+    @media (max-width: 480px) { .fragment-plan .pl-files th:nth-child(3), .fragment-plan .pl-files td:nth-child(3) { display: none; } }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-plan');
+      var files = 26, modules = 8;
+      var risks = root ? root.querySelectorAll('.pl-risks .callout').length : 0;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'plan', artifact: 'plan', counts: { files: files, modules: modules, risks: risks } } }));
+    })();
+  </script>
+</section>
+</div><div class="prose"><h1 id="plan-defending-and-discipline" tabindex="-1"><a class="header-anchor" href="#plan-defending-and-discipline"><span>Plan: Defending and Discipline</span></a></h1>
+<h2 id="current-state" tabindex="-1"><a class="header-anchor" href="#current-state"><span>Current State</span></a></h2>
+<ul>
+<li>Code: HEAD <code>2089ed7</code>. <code>git status</code> shows no change under <code>crates</code>, <code>content</code> or <code>web</code>. <code>cargo test -p engine --all-features</code> at this tree gave 241 passed, 0 failed and 3 ignored (<code>ai_trailing</code>, <code>mentality</code> and <code>strength</code> are the slow tests).</li>
+<li><strong>Pressing and marking</strong> (<code>decision.rs:25-98</code>): with a carrier, every active player targets its anchor. The <code>press_count</code> (at most <code>MAX_PRESSERS</code> 4, <code>:489</code>) nearest opponents within <code>press_distance</code>, outfield players only (<code>slot != 0</code>, <code>:44</code>), target the ball’s current position (<code>:59</code>). With a loose ball, each team’s nearest outfield player chases a point 0.3 s ahead (<code>:66-87</code>). The keeper is <code>team * PLAYERS_PER_TEAM</code> (<code>:89-93</code>). Nothing marks an attacker.</li>
+<li><strong>Shape</strong> (<code>team.rs</code>): <code>anchor()</code> (<code>:258-274</code>) returns the keeper anchor for <code>slot == 0</code>. For every other slot, it returns the formation slot moved by the block depth, the duty and the plan’s width, plus <code>compactness_x</code>/<code>compactness_y</code> (0.3) of the ball offset. <code>reshape()</code> (<code>:220-242</code>) groups a line by equal depth and spreads the survivors across the line’s full width. A lone survivor goes to <code>(lo + hi) / 2</code> (<code>:236-237</code>). <code>relayout()</code> (<code>:194-200</code>) rebuilds the layout from <code>base_formation</code> around every inactive slot. <code>set_tactics()</code> rebuilds the <code>TeamPlan</code> (<code>:186-191</code>). <code>reshape()</code> does not rebuild it, so <code>press_count</code> ignores the numbers left (<code>tactics/mod.rs:198</code>).</li>
+<li><strong>Fixed keeper checks.</strong> In play: <code>decision.rs:44, 80, 89, 115, 145, 270</code>, <code>sim.rs:953</code> (keeper reach and catch) and <code>sim.rs:1031</code> (shots on target). In the rules: <code>rules/mod.rs:567</code> (the penalty keeper is <code>(1 - team) * 11</code>), <code>:740</code> and <code>:752</code> (shoot-out candidates and the keeper fallback), and <code>restart.rs:76-104</code> (the taker). There, <code>first = team * 11</code>, the own end is read from <code>players[first].pos.x</code>, the goal kick goes to <code>first</code>, and slot 0 is excluded. Also <code>restart.rs:237</code> and <code>:336</code> (the penalty keeper’s place and judgement). A sent-off player parks at <code>pitch::parking_spot(team, slot)</code> (<code>pitch.rs:169-172</code>), whose side is fixed per team. So after half-time, a parked keeper puts the own end on the wrong side.</li>
+<li><strong>Send-off</strong> (<code>rules/discipline.rs:22-29</code>): parks the player and calls <code>reshape</code>. <code>show_card</code> clears the carrier and pushes the team timeline (<code>rules/mod.rs:308-354</code>). <code>Scene::sent_off</code> (<code>scenario.rs:89</code>) does neither.</li>
+<li><strong>Computer manager</strong> (<code>ai.rs:193-302</code>): it reacts to injuries, fatigue and the score only. <code>substitute()</code> (<code>tactics/change.rs:389-455</code>) puts the incoming player into the leaving player’s slot and refuses a sent-off player (<code>:419-421</code>). It calls <code>restore</code> only for an inactive slot.</li>
+<li><strong>Fouls</strong> (<code>sim.rs:984-1011</code>, <code>rules/fouls.rs:62-66</code>, <code>rules/mod.rs:226-285</code>): once the carrier’s <code>control_cooldown_ticks</code> (25) has passed, every opponent within <code>reach_radius</code> draws once per tick. <code>foul_chance</code> reads aggression and tackling only. On an advantage foul, <code>foul()</code> pushes a <code>PendingCard</code> and returns without touching the tackler. <code>show_pending_cards</code> (<code>:429-433</code>) shows every held card at the next stoppage. A stopping foul shows its own card first and then the held cards (<code>:264-266</code>, then <code>open_dead_ball</code> at <code>:446</code>), so one player can receive two cards on one tick.</li>
+<li><strong>Tuning</strong> (<code>tuning.rs</code>, <code>deny_unknown_fields</code> at <code>:25</code>, garde bounds per field; <code>TUNING_VERSION = 2</code> in <code>data/tuning.rs:17</code>): <code>foul_base</code> 0.1, <code>yellow_base</code> 0.05, <code>yellow_aggression_weight</code> 0.15, <code>red_base</code> 0.005, <code>compactness_y</code> 0.3 (<code>content/tuning.json:35-46</code>).</li>
+<li><strong>Snapshot</strong> (<code>snapshot.rs:45</code>, <code>VERSION = 4</code>): it writes each player’s fields one by one (yellow at <code>:630</code>, read at <code>:864</code>), and each team’s per-slot <code>active</code> flag and formation place (<code>:813-823</code>). The reader refuses a snapshot from another build, so a snapshot never crosses builds (NFR-4; plan answer “does NOT promise cross-machine or cross-build resume”).</li>
+<li><strong>Measured cause</strong> (research at <code>5a235a4</code>, 120 seeds, cards otherwise off): with the away striker sent off, the away side scored 11.41 goals per match against 1.05 in the control. With the away keeper sent off, the home side scored 2.71 against 0.66. With 4-3-3 at 11 against 11 and no card, the away side scored 11.38. In an 80-match CLI sample with cards on, 44 matches had a red card, and 12 of 44 second yellows came on the same tick as the first yellow.</li>
+<li><strong>Formations baseline</strong> (<code>implement-evidence/realism-bands-v2/baseline-s42.report.json</code>, 1,000 matches per pairing, cards on; goals for the first formation, then for the second): 4-4-2 v 4-4-2 1.46/1.52; v 4-3-3 1.16/7.43; v 4-2-3-1 2.92/4.78; v 3-5-2 4.59/1.77; v 4-1-4-1 0.93/5.18; v 4-4-1-1 1.96/11.60; v 4-1-2-1-2 0.70/0.91; v 3-4-3 1.67/8.48; v 5-3-2 2.68/0.78; v 5-4-1 2.55/7.62.</li>
+<li><strong>Test seams</strong>: the <code>scenario</code> feature (<code>Cargo.toml:24-27</code>) builds <code>Scene</code> with <code>sent_off</code>, <code>rolls</code>, <code>yellow</code>, <code>carrier</code>, <code>subs_used</code>, <code>manager</code> and <code>queue</code>. <code>tests/common/mod.rs:135</code> <code>run_many</code> runs seeds on every core. Slow tests are <code>#[ignore = &quot;slow: cargo test --release -p engine -- --ignored&quot;]</code> (<code>strength.rs:14</code>).</li>
+</ul>
+<h2 id="simplicity-ladder" tabindex="-1"><a class="header-anchor" href="#simplicity-ladder"><span>Simplicity Ladder</span></a></h2>
+<ul>
+<li>Acting-keeper lookup → rung 3 reuse — <code>team.rs</code> → <code>Team</code> already holds <code>active</code>, <code>lineup</code>, <code>squad[].position</code> and <code>base_formation</code>. A method derives the keeper from them, which is a close match; nothing is stored. Reuse with a new method.</li>
+<li>Lone forward kept in place and the back line narrowed → rung 3 reuse with modification — <code>team.rs</code> → <code>reshape()</code>. It changes two branches and stays backward-compatible for lines of two or more inside the gap.</li>
+<li>One fewer presser → rung 3 reuse — <code>TeamPlan.press_count</code> (<code>tactics/mod.rs:165</code>), read through a new <code>Team::pressers()</code> that subtracts the players out of play.</li>
+<li>Intercept point → rung 4 new code — std <code>f64</code> only. No in-repo intercept solver exists; the loose-ball chase at <code>decision.rs:66-69</code> is a fixed 0.3 s lead, not a pursuit solve. Rungs 1 to 3 give nothing closer.</li>
+<li>Goal-side cover → rung 4 new code — std only. No in-repo marking logic exists (the research’s R2 finding). The target point reuses <code>math::toward</code> (<code>decision.rs:10</code>).</li>
+<li>Foul cooldown → rung 3 reuse — the <code>control_since</code> cooldown pattern at <code>sim.rs:981</code> is the model. Implement fresh per player, because <code>control_since</code> is per carrier, not per tackler.</li>
+<li>One held card per spell → rung 3 reuse with modification — <code>Referee.pending: Vec&lt;PendingCard&gt;</code> (<code>rules/mod.rs:58-61, 98</code>), with an in-place replace by player.</li>
+<li>Booked-player factor → rung 3 reuse with modification — <code>fouls::foul_chance</code> (<code>rules/fouls.rs:62-66</code>).</li>
+<li>Tuning values with bounds → rung 3 reuse — garde <code>range</code> on <code>Tuning</code> fields (<code>tuning.rs:85-135</code>), plus serde <code>default</code> so an older file still loads.</li>
+<li>Keeper reaction → rung 3 reuse — <code>ai_queue</code>, <code>substitute_for</code>-style bench search, <code>substitution_possible</code> (<code>ai.rs:314-373</code>).</li>
+<li>Sending-off and formations experiments → rung 3 reuse — the research harness pattern (<code>Scene::sent_off</code> plus <code>run_many</code>) and the formation setting through <code>Tactics::set_formation</code> + <code>MatchConfig::with_tactics</code> (<code>sim.rs:159-166</code>, <code>tests/mentality.rs:21-26</code>).</li>
+</ul>
+<h2 id="applied-learnings" tabindex="-1"><a class="header-anchor" href="#applied-learnings"><span>Applied Learnings</span></a></h2>
+<p>No applicable learnings found. <code>.ai/solutions/INDEX.md</code> does not exist, and <code>.ai/sdlc-config.json</code> sets no global directory.</p>
+<p>Repeat-deferral tripwire: <code>00-index.md</code> holds two deferrals, the human legibility reading (viewer-match-day) and the macOS build (distribution). This slice’s verification is headless engine runs with <code>cargo test</code>. It names neither wall, so the tripwire does not fire.</p>
+<h2 id="likely-files-areas-to-touch" tabindex="-1"><a class="header-anchor" href="#likely-files-areas-to-touch"><span>Likely Files / Areas to Touch</span></a></h2>
+<ul>
+<li><code>crates/engine/src/team.rs</code>: <code>keeper_slot()</code>, <code>pressers()</code>, the lone-survivor and back-line-gap rules in <code>reshape()</code>, the acting keeper in <code>relayout()</code> and <code>anchor()</code>, and unit tests.</li>
+<li><code>crates/engine/src/decision.rs</code>: the intercept point, the goal-side cover, and the acting keeper in place of slot 0.</li>
+<li><code>crates/engine/src/sim.rs</code>: <code>keeper(team)</code>, the acting keeper in <code>resolve_possession</code> and <code>gain</code>, and the tackler cooldown in the tackle loop.</li>
+<li><code>crates/engine/src/player.rs</code>: <code>foul_ready</code>.</li>
+<li><code>crates/engine/src/rules/mod.rs</code>: the cooldown on every foul, card merging, and the penalty and shoot-out keepers.</li>
+<li><code>crates/engine/src/rules/fouls.rs</code>: the booked factor in <code>foul_chance</code>, and <code>Card::severity</code>.</li>
+<li><code>crates/engine/src/rules/restart.rs</code>: the own end from the attack direction, and the acting keeper for goal kicks, dropped balls, kick-offs and penalties.</li>
+<li><code>crates/engine/src/rules/discipline.rs</code>: <code>send_off</code> lays the team out again and asks the computer manager to check.</li>
+<li><code>crates/engine/src/ai.rs</code>: <code>AiCode::SubKeeper</code> and the keeper reaction.</li>
+<li><code>crates/engine/src/tactics/change.rs</code>: <code>relayout</code> after every substitution.</li>
+<li><code>crates/engine/src/commentary/templates.rs</code> and <code>content/commentary/en.json</code>: the <code>sub-keeper</code> decision and its lines.</li>
+<li><code>crates/engine/src/tuning.rs</code> and <code>content/tuning.json</code>: five bounded values.</li>
+<li><code>crates/engine/src/snapshot.rs</code>: version 5 with <code>foul_ready</code>.</li>
+<li><code>crates/engine/src/scenario.rs</code>: <code>sent_off</code> made faithful to a shown card; <code>foul_ready</code>.</li>
+<li><code>crates/engine/tests/defending.rs</code>, <code>discipline.rs</code>, <code>acting_keeper.rs</code> (new), plus <code>rules_fouls.rs</code>, <code>rules_cards.rs</code>, <code>commentary.rs</code>, <code>snapshot.rs</code> and <code>content.rs</code>. Pinned tests that may move and are re-derived: <code>full_match.rs</code>, <code>strength.rs</code>, <code>mentality.rs</code> and <code>ai_trailing.rs</code>.</li>
+<li><code>docs/reference/data-files.md</code> and <code>docs/reference/protocol.md</code>: the tuning rows and the <code>sub-keeper</code> value.</li>
+</ul>
+<h2 id="proposed-change-strategy" tabindex="-1"><a class="header-anchor" href="#proposed-change-strategy"><span>Proposed Change Strategy</span></a></h2>
+<ul>
+<li><strong>Defending before discipline.</strong> Steps 2 to 9 change the shape and the defending. Steps 10 to 12 then change the discipline. The sending-off experiment runs with cards otherwise off, so it judges the defending alone (RIM-7).</li>
+<li><strong>The acting keeper is derived, not stored.</strong> <code>Team::keeper_slot()</code> returns one of three slots, checked in this order:
+<ol>
+<li>slot 0 while it is active;</li>
+<li>otherwise the lowest active slot whose squad player is a goalkeeper by position (a keeper who came on);</li>
+<li>otherwise the most advanced active outfield slot by base-formation depth, then the smallest <code>|y|</code>, then the lowest slot.
+<code>Simulation::keeper(team)</code> maps the slot to a player index. Every fixed check listed in Current State calls it. The snapshot already stores <code>active</code>, the lineups and the formation places, so a resumed match derives the same keeper. The validator reads <code>Team::anchor</code>, so it follows the keeper without a change.</li>
+</ol>
+</li>
+<li><strong>The 4-4-1 style shape comes from the keeper choice.</strong> A forward that becomes the acting keeper leaves the forward line, and the rest of the shape stays. When a substitution is left, the computer manager then queues its best bench goalkeeper on for the acting keeper at the next stoppage. The keeper takes over the goal from the forward’s slot, and the forward line stays one short. No formation is rewritten and no team flag is added.</li>
+<li><strong>Shape rules in <code>reshape()</code>.</strong> A lone survivor keeps its own <code>y</code>. The deepest outfield line’s width is capped at <code>(n - 1) × back_line_gap</code>, centred on the line, so it narrows as players leave. <code>Team::pressers()</code> gives <code>press_count</code> minus the players out of play, and never less than 1.</li>
+<li><strong>Pressers run at the intercept point.</strong> For a presser at <code>p</code> with top speed <code>s</code>, and a carrier at <code>c</code> moving at <code>v</code>, the target is <code>c + v·t</code>, where <code>t</code> is the smallest positive root of <code>|c + v·t − p| = s·t</code>. <code>t</code> is capped at a 1.0 s horizon. With no root, the target is the carrier.</li>
+<li><strong>Goal-side cover.</strong> Cover applies while the opponents hold the ball. Among the attackers in the defending team’s half and inside the central channel (<code>|y| ≤ cover_channel</code>), the most advanced one is covered by the nearest active back-line player. That player is not a presser and not the keeper. Its target is the attacker’s position moved <code>cover_distance</code> toward the centre of its own goal.</li>
+<li><strong>Discipline.</strong>
+<ul>
+<li>Every foul, advantage included, sets the tackler’s <code>foul_ready</code> to <code>tick + foul_cooldown_ticks</code>. Before that tick, the tackler makes no tackle attempt and takes no draw.</li>
+<li>A held card for a player who already has one replaces it only when it is more severe (<code>Card::severity</code>).</li>
+<li>A stopping foul’s card merges with that player’s held card, so one card is shown per player per tick.</li>
+<li>A booked player’s foul chance is multiplied by <code>foul_booked_factor</code>.</li>
+<li>The card chances (<code>yellow_*</code>, <code>red_base</code>) do not change in this slice.</li>
+</ul>
+</li>
+<li><strong>Tuning.</strong> Five fields are added with bounds, and each has a serde default equal to the shipped value. An older tuning file still loads, and <code>TUNING_VERSION</code> stays 2. Implement tunes the five values inside their bounds, using the slow criterion tests as the loop.</li>
+<li><strong>No NFR is the rationale for a mechanism choice.</strong> The benchmark tripwire (+10 percent processor time per tick) is the slice’s own risk line, and the 2000 ms budget (NFR-1, <code>yields-to: C2</code>) is not in tension.</li>
+</ul>
+<h2 id="step-by-step-plan" tabindex="-1"><a class="header-anchor" href="#step-by-step-plan"><span>Step-by-Step Plan</span></a></h2>
+<ol>
+<li><strong>Tuning values.</strong> Add <code>cover_distance</code> (m, 0 to 10), <code>cover_channel</code> (m, 0 to 34), <code>back_line_gap</code> (m, 4 to 30), <code>foul_cooldown_ticks</code> (0 to 1000) and <code>foul_booked_factor</code> (0 to 1) to <code>Tuning</code>. Give each garde bounds and <code>#[serde(default = …)]</code>, and mirror them in <code>Default</code>. Write starting values into <code>content/tuning.json</code>: 2.0, 12.0, 12.0, 150 and 0.5. Pin them in <code>tests/content.rs</code>, and add a test that a tuning file without them loads with the defaults. Add the five rows to <code>docs/reference/data-files.md</code>.</li>
+<li><strong>Acting keeper.</strong> In <code>team.rs</code>, add <code>keeper_slot()</code> as described in the strategy. Make <code>relayout()</code> take the acting keeper’s slot out of its line, the same way it takes out an inactive slot. Make <code>anchor()</code> return the keeper anchor for <code>keeper_slot()</code>. Add <code>Simulation::keeper(team) -&gt; usize</code>. Unit tests cover:
+<ul>
+<li>slot 0 active;</li>
+<li>a goalkeeper who came on in slot 9;</li>
+<li>an outfield fallback in a 4-4-2 (a striker) and in a 3-5-2;</li>
+<li>the fallback staying the same player as other outfield players leave.</li>
+</ul>
+</li>
+<li><strong>Shape after a sending-off.</strong> In <code>reshape()</code>, a lone survivor keeps its <code>y</code>. The deepest outfield line gets the <code>back_line_gap</code> cap in <code>relayout()</code>, so the cap also holds at 11 against 11 (a 4-4-2 back four at 12 m becomes −18, −6, 6, 18). <code>Team::new</code> calls <code>relayout()</code> so a bare team follows the same rule. Add <code>Team::pressers()</code>. <code>discipline::send_off</code> calls <code>relayout()</code> and sets <code>ai[team].due</code> for a computer-managed team (through the caller in <code>show_card</code>). Re-derive <code>team.rs</code> <code>a_back_four_with_one_sent_off_spreads_three_across_the_width</code>: the back line becomes −12, 0, 12 with the starting gap, and <code>formation[10].1</code> stays 8.0. Re-derive <code>restoring_a_slot_puts_its_line_back_and_keeps_the_others_closed</code>, which compares against the uncapped <code>FORMATION_442</code>. Re-derive <code>rules_cards.rs</code> <code>a_second_yellow_sends_the_player_off_and_the_line_spreads</code>. Record both values.</li>
+<li><strong>Keeper checks in play.</strong> Replace the fixed checks at <code>decision.rs:44, 80, 89-93, 115, 145, 270</code>, <code>sim.rs:953, 1031</code> and the test filter at <code>decision.rs:593</code> with <code>keeper(team)</code> or <code>keeper_slot()</code>. Use <code>Team::pressers()</code> at <code>decision.rs:34</code>.</li>
+<li><strong>Keeper checks in the rules.</strong>
+<ul>
+<li>Penalty keeper: <code>rules/mod.rs:567</code>.</li>
+<li>Shoot-out candidates and the keeper fallback: <code>:740, :752</code>.</li>
+<li><code>restart::taker</code> takes <code>own_end: f64</code> from <code>-teams[team].attack_x</code>, and every caller passes it (<code>rules/mod.rs</code>, <code>tactics/change.rs:319</code>). The goal kick and the dropped ball in the own area prefer the acting keeper. The kick-off preference skips the acting keeper. The outfield filter excludes the acting keeper.</li>
+<li><code>restart.rs:237, :336</code>: the penalty keeper’s place and judgement use the acting keeper.</li>
+</ul>
+</li>
+<li><strong>Substitutions and scenes.</strong> <code>substitute()</code> calls <code>relayout()</code> after every applied substitution, not only for an inactive slot. <code>Scene::sent_off</code> clears the carrier and lays the team out again, as <code>show_card</code> does. Add <code>Scene::foul_ready(i, tick)</code>.</li>
+<li><strong>The computer manager’s keeper reaction.</strong> In <code>ai_check</code>, add a first branch. When <code>keeper_slot()</code> is not a goalkeeper by position, a bench goalkeeper is free, no keeper substitution is queued and <code>substitution_possible(team)</code> holds, queue <code>Substitution { off: the acting keeper's squad index, on: the best free bench goalkeeper }</code> with <code>AiCode::SubKeeper</code> (code <code>sub-keeper</code>). Add <code>DecisionCondition::SubKeeper</code> in <code>commentary/templates.rs</code>, three lines in <code>content/commentary/en.json</code>, the code in <code>tests/commentary.rs</code>, and the value in <code>docs/reference/protocol.md</code> and <code>docs/reference/data-files.md</code>.</li>
+<li><strong>Pressers at the intercept point.</strong> In <code>decide()</code>, set each chosen presser’s target from the intercept solve in the strategy. The top speed is the player’s derived top speed. Keep the horizon as a named constant with a comment.</li>
+<li><strong>Goal-side cover.</strong> In <code>decide()</code>, after the pressers are chosen, pick the covered attacker and the covering defender as the strategy describes. Set that defender’s target. Use one pass over the opponents and one pass over the back line.</li>
+<li><strong>Foul cooldown.</strong>
+<ul>
+<li>Add <code>foul_ready: u32</code> to <code>Player</code>, set to 0 in <code>Team::player</code>.</li>
+<li>In the tackle loop (<code>sim.rs:984</code>), skip a tackler with <code>tick &lt; foul_ready</code>, before the draw.</li>
+<li>In <code>foul()</code>, set <code>foul_ready = tick + foul_cooldown_ticks</code> on every foul.</li>
+<li>Move the snapshot to <code>VERSION = 5</code>: write and read <code>foul_ready</code> after <code>yellow</code>, and name version 5 in the header comment.</li>
+<li>Extend <code>tests/snapshot.rs</code> so a resumed match crosses a cooldown.</li>
+</ul>
+</li>
+<li><strong>Held cards.</strong> Add <code>Card::severity()</code>. In <code>foul()</code>, an advantage card replaces a held card for the same player only when it is more severe. A stopping foul takes that player’s held card out of <code>pending</code> and shows one card, the more severe of the two. <code>show_pending_cards</code> is unchanged. A held caution for an already-booked player is still shown as a second yellow (<code>rules/mod.rs:315-319</code>).</li>
+<li><strong>Booked-player factor.</strong> Change <code>foul_chance(tackler, yellows, t)</code> to multiply by <code>foul_booked_factor</code> when <code>yellows &gt;= 1</code>. Update the caller at <code>sim.rs:996</code> and <code>tests/rules_fouls.rs:26</code>. Add a unit test: a booked player’s chance is exactly the factor times the unbooked chance.</li>
+<li><strong>Regression scenes (fast, not ignored).</strong>
+<ul>
+<li><code>tests/defending.rs</code>:
+<ul>
+<li>a central attacker in the defending half draws a back-line defender goal-side;</li>
+<li>a moving carrier draws a presser ahead of it;</li>
+<li>after a centre-back is sent off, the back line is no wider than <code>2 × back_line_gap</code>;</li>
+<li>with one player out, there is one fewer presser;</li>
+<li>a 4-3-3 at 11 against 11 has no back-line gap wider than <code>back_line_gap</code> while its opponent’s lone striker is central.</li>
+</ul>
+</li>
+<li><code>tests/discipline.rs</code>:
+<ul>
+<li>two foul draws for one tackler on consecutive ticks after an advantage foul give one foul;</li>
+<li>two advantage fouls by one player hold one card, the more severe;</li>
+<li>a stopping foul by a player with a held card shows one card.</li>
+</ul>
+</li>
+<li><code>tests/acting_keeper.rs</code>:
+<ul>
+<li>keeper sent off with a substitution left: the bench keeper comes on at the next stoppage, <code>keeper(team)</code> is that player, and one <code>sub-keeper</code> decision is recorded;</li>
+<li>keeper sent off with no substitution left: an outfield acting keeper, and the forward line is one short;</li>
+<li>a fast shot at the acting keeper is caught with the catch chance;</li>
+<li>a penalty and a shoot-out kick face the acting keeper;</li>
+<li>a goal kick in the second half with the keeper parked is taken at the defending end.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>Criterion tests (slow, ignored) and the tuning loop.</strong>
+<ul>
+<li><code>tests/defending.rs</code> <code>a_sending_off_gives_no_advantage</code> covers seeds 1 to 120, with the cards set off through tuning (<code>red_base</code>, <code>yellow_base</code> and <code>yellow_aggression_weight</code> at 0). It plays a control and three arms with the away player sent off at kick-off: keeper (index 11), centre-back (13) and striker (21). For each arm it asserts that the reduced side’s mean goals are at most the full side’s, and that the full side’s mean is at most 1.6 × the control’s home mean. It prints every figure.</li>
+<li><code>tests/defending.rs</code> <code>every_formation_holds</code> plays seeds 1 to 120 for each of the 10 shipped formations against 4-4-2. The formation is at home on odd seeds and away on even seeds, with cards on. It asserts that neither side’s mean exceeds 4.0.</li>
+<li><code>tests/discipline.rs</code> <code>discipline_is_realistic</code> plays seeds 1 to 200 with default content. It counts second-yellow card events per match, the share of matches with a sending-off, and any player with two card events on one tick, and asserts at most 0.10, at most 25% and none.</li>
+<li>Run all three with <code>cargo test --release -p engine --all-features -- --ignored</code>. Tune only the five new values inside their bounds, and record each value with the run that chose it. If a criterion still fails with those values at their bounds, stop and report the failing arm or pairing. Do not change the limits, the card chances or the goal tuning.</li>
+</ul>
+</li>
+<li><strong>Re-derive the moved expectations.</strong> Run <code>cargo test -p engine --all-features</code> and <code>cargo test --release -p engine --all-features -- --ignored</code>. For every assertion that moves (expected: <code>full_match.rs</code>, <code>strength.rs</code>, <code>mentality.rs</code>, <code>ai_trailing.rs</code>, the rules tests), record the value before and after in the implement record, and give the reason the new value is right. Never widen a tolerance to make a test pass.</li>
+<li><strong>Close.</strong>
+<ol>
+<li>Run <code>cargo fmt --check</code>, <code>cargo clippy --workspace --all-targets --all-features -- -D warnings</code> and <code>cargo test --workspace --all-features</code>.</li>
+<li>Run the benchmark compare from <code>05c-benchmark.md</code> (gate 1.6228 µs per tick and 8.27 MB).</li>
+<li>Run one <code>engine-cli calibrate --suite equal --seed 42</code> and record the band misses against the realism-bands-v2 baseline (Q-E4: recorded, not failed).</li>
+<li>Search the changed source, comments and commit text for workflow vocabulary before the commit.</li>
+</ol>
+</li>
+</ol>
+<h2 id="verification-strategy" tabindex="-1"><a class="header-anchor" href="#verification-strategy"><span>Verification Strategy</span></a></h2>
+<p>The four criteria are about match outcomes. The engine produces them headless, so no screen is needed. The rung for each criterion is headless runs of the real engine library over many seeded matches (<code>cargo test</code>, in <code>stack.testing</code>). A unit test or static reasoning never counts.</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>AC</th>
+<th>Tool / method + ladder rung</th>
+<th>Environment need — satisfiable in target env?</th>
+<th>What must be BUILT to make it verifiable</th>
+<th>Fallback chain</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No advantage from a red card</td>
+<td><code>cargo test --release -p engine --all-features -- --ignored a_sending_off_gives_no_advantage</code> (headless engine runs, 480 matches)</td>
+<td>Rust 1.92 and cargo on the reference machine — yes</td>
+<td><code>tests/defending.rs</code> slow test; <code>Scene::sent_off</code> made faithful (step 6); tuning-driven cards-off config</td>
+<td>the same harness at 60 seeds for a timing check → pre-registered deferral (not expected: no wall)</td>
+</tr>
+<tr>
+<td>Every formation holds</td>
+<td><code>cargo test … -- --ignored every_formation_holds</code> (1,200 matches); cross-check with the <code>goals_for_mean</code> of the <code>calibrate --suite formations</code> pairings with 4-4-2 when verify runs it</td>
+<td>yes</td>
+<td><code>tests/defending.rs</code> slow test, formation set through <code>with_tactics</code></td>
+<td><code>engine-cli calibrate --suite formations --seed 42</code> pairings with 4-4-2 → pre-registered deferral</td>
+</tr>
+<tr>
+<td>Discipline is realistic</td>
+<td><code>cargo test … -- --ignored discipline_is_realistic</code> (200 matches, events read)</td>
+<td>yes</td>
+<td><code>tests/discipline.rs</code> slow test</td>
+<td><code>engine-cli calibrate --suite equal</code> sending-off share and card events → pre-registered deferral</td>
+</tr>
+<tr>
+<td>The acting keeper covers a red card</td>
+<td><code>cargo test -p engine --all-features --test acting_keeper</code> (scripted scenes on the real engine) plus the keeper arm of the sending-off test</td>
+<td>yes</td>
+<td><code>tests/acting_keeper.rs</code>; <code>Scene::foul_ready</code>; <code>Simulation::keeper</code></td>
+<td>a traced single match (<code>engine-cli simulate</code> events) showing the <code>sub-keeper</code> decision and the substitution → pre-registered deferral</td>
+</tr>
+</tbody>
+</table>
+<p>No criterion depends on credentials, a device, an external service or missing infrastructure. Every run is local and uses tools already in <code>stack:</code>, so no <code>constraint-resolution:</code> line is needed. No wall is named.</p>
+<h2 id="test-verification-plan" tabindex="-1"><a class="header-anchor" href="#test-verification-plan"><span>Test / Verification Plan</span></a></h2>
+<h3 id="automated-checks" tabindex="-1"><a class="header-anchor" href="#automated-checks"><span>Automated checks</span></a></h3>
+<ul>
+<li>Lint and type check: <code>cargo fmt --check</code>; <code>cargo clippy --workspace --all-targets --all-features -- -D warnings</code>.</li>
+<li>Unit: <code>team.rs</code> (acting keeper, lone survivor, back-line gap, pressers), <code>rules/fouls.rs</code> (booked factor, severity), <code>restart.rs</code> (own end after half-time with a parked keeper).</li>
+<li>Integration (fast): <code>tests/defending.rs</code>, <code>tests/discipline.rs</code> and <code>tests/acting_keeper.rs</code>, plus the updated <code>rules_fouls.rs</code>, <code>rules_cards.rs</code>, <code>commentary.rs</code>, <code>snapshot.rs</code>, <code>content.rs</code> and <code>validator.rs</code> (the full-match validator must still read 0 violations).</li>
+<li>Criterion runs (slow, ignored, release): <code>a_sending_off_gives_no_advantage</code>, <code>every_formation_holds</code>, <code>discipline_is_realistic</code>, and the existing <code>strength</code>, <code>mentality</code> and <code>ai_trailing</code>.</li>
+<li>Benchmark compare against <code>05c-benchmark.md</code>.</li>
+</ul>
+<h3 id="interactive-verification-human-in-the-loop" tabindex="-1"><a class="header-anchor" href="#interactive-verification-human-in-the-loop"><span>Interactive verification (human-in-the-loop)</span></a></h3>
+<p>Automated only. Every criterion is a statistic of engine runs or a scripted engine scene. The page shows no new element: the <code>sub-keeper</code> decision is an <code>ai-decision</code> event, which the viewer hides (<code>web/match-state.mjs:32</code>), and a substitution uses the existing substitution event.</p>
+<h2 id="risks-watchouts" tabindex="-1"><a class="header-anchor" href="#risks-watchouts"><span>Risks / Watchouts</span></a></h2>
+<ul>
+<li><strong>The formations criterion starts far away</strong> (high). The worst side against 4-4-2 averages 11.60 goals per match (4-4-1-1), and seven of nine pairings fail today. The three defending mechanisms are the only allowed levers. If a pairing still fails at the tuning bounds, implement stops and reports it (step 14).</li>
+<li><strong>Every seeded result moves</strong> (medium). Step 15 re-derives each moved expectation and records it.</li>
+<li><strong>Goals fall below the band</strong> (medium). This is accepted (Q-E4). The band misses are recorded against the realism-bands-v2 baseline in step 16.</li>
+<li><strong>Per-tick cost</strong> (medium). The cover search is one pass over the opponents, and the intercept solve is one quadratic per presser. The gate is 1.6228 µs per tick.</li>
+<li><strong>Validator drift rule</strong> (low). Cover applies only while the opponents hold the ball and the attacker is in the defending half. The validator’s closing-distance exemption covers a defender moving toward its target.</li>
+<li><strong>The script decision hook still reports the formation slot</strong> (low). <code>DecisionContext.slot</code> documents “0 for the goalkeeper” (<code>plugin.rs:86-87</code>). An outfield acting keeper reports its own slot. The public scripting interface is not changed in this slice.</li>
+<li><strong>The acting keeper can change on a formation change</strong> (low). The fallback reads the base formation. If the manager changes formation while an outfield player keeps goal, the most advanced slot can move to another player. Step 2’s test pins the stable case (players leaving). A formation change moving the keeper is recorded as known behaviour for <code>keeper-and-shots</code>.</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<ul>
+<li><code>realism-bands-v2</code> (complete, verified): the sending-off, yellow-card and 10-or-more-goals bands, the formations suite, and the seed-42 baseline this plan cites.</li>
+<li><code>keeper-and-shots</code> (next): it owns the save model and inherits <code>Simulation::keeper(team)</code>.</li>
+<li><code>realism-tuning</code> (last): it owns goals, shots and possession tuning, and tightens the pairing bands.</li>
+<li>Files that earlier verified slices created: <code>match-rules</code> (the rules, discipline, restart and snapshot files), <code>tactics-and-ai</code> (<code>ai.rs</code>, <code>tactics/change.rs</code>), <code>extra-time-penalties</code> (the shoot-out code in <code>rules/mod.rs</code>) and <code>commentary</code> (templates and <code>en.json</code>). All are verified, so the changes run in sequence.</li>
+</ul>
+<h2 id="assumptions" tabindex="-1"><a class="header-anchor" href="#assumptions"><span>Assumptions</span></a></h2>
+<p>Autonomous run: no product owner was present. Each discovery question the interview would have asked is answered here in the direction that meets the criteria at the least cost. None changes the scope, a public contract or a product owner answer.</p>
+<ul>
+<li>A1 (class: implementation-detail): the acting keeper is derived by <code>Team::keeper_slot()</code> from <code>active</code>, <code>lineup</code>, the squad positions and the base formation. No team field is added. The snapshot and the validator already carry those inputs, so there is no new persisted team data.</li>
+<li>A2 (class: implementation-detail): the outfield acting keeper is the most advanced active outfield player. The slice says “an outfield player becomes the acting keeper” and does not say which. This choice keeps the back four and the midfield, which is the 4-4-1 style shape the slice asks the computer manager to reach, and it adds no formation rewrite. The keeper save model uses flat tuning values, not the keeper’s attributes (<code>sim.rs:953-975</code>), so the choice does not weaken saves. The same rule applies to a human-managed team, because every team needs an acting keeper under the fourth criterion.</li>
+<li>A3 (class: implementation-detail): the computer manager’s keeper reaction takes the acting keeper off and puts the best free bench goalkeeper on, at the next admitting stoppage. It uses a new decision code, <code>sub-keeper</code>. <code>ai.decision</code> is a string field (<code>docs/reference/protocol.md:181</code>), and the page hides <code>ai-decision</code> events (<code>web/match-state.mjs:32</code>). The value is added to both reference lists and gets three commentary lines, the same way the four existing codes did.</li>
+<li>A4 (class: implementation-detail): goal-side cover applies while the opponents hold the ball. It covers the most advanced attacker in the defending half inside <code>|y| ≤ cover_channel</code>, using the nearest non-pressing back-line player, at <code>cover_distance</code> toward the centre of the own goal.</li>
+<li>A5 (class: implementation-detail): the intercept point is the closed-form pursuit solution with a 1.0 s horizon kept as a code constant. It is not a tuning value, because the slice names no tuned value for it.</li>
+<li>A6 (class: implementation-detail): a lone survivor keeps its <code>y</code> in every line. The deepest outfield line’s width is capped at <code>(n - 1) × back_line_gap</code> in every layout, 11 against 11 included, because the slice’s scope lists the back-line compactness under defending as a whole. This is how “compactness that scales with the number of players left” is built.</li>
+<li>A7 (class: implementation-detail): <code>Team::pressers()</code> subtracts the players out of play from <code>press_count</code>, with at least 1. It is derived, not stored, so a snapshot and a tactics change stay consistent.</li>
+<li>A8 (class: implementation-detail): the foul cooldown is a per-player tick (<code>foul_ready</code>). During the cooldown, the player makes no tackle attempt and takes no draw. The snapshot moves to version 5 to carry it. Snapshots are refused across builds (NFR-4), and the tactics-and-ai and extra-time plans raised the version the same way.</li>
+<li>A9 (class: implementation-detail): one held card per player per advantage spell, the most severe kept. A stopping foul merges with the held card, so one player is never shown two cards on one tick.</li>
+<li>A10 (class: implementation-detail): the booked factor multiplies the foul chance when <code>yellow &gt;= 1</code>. The card chances per foul stay unchanged in this slice. RIM-7 says the defending fix comes first and the card rate is fixed separately, so the plan does not lower card chances to meet the discipline criterion. A miss stops implement instead.</li>
+<li>A11 (class: implementation-detail): the five tuning fields are optional with serde defaults, and <code>TUNING_VERSION</code> stays 2. A modder’s older tuning file still loads. The slice asks for “a tuned factor with bounds in tuning.json”, and the bounds are garde ranges like every other field.</li>
+<li>A12 (class: implementation-detail; ac: “Every formation holds”; classification: runtime-evidence): “each shipped formation” is read as the 10 formations in <code>content/tactics.json</code> today, the 4-4-2 mirror included. This is a superset of the four named in RIM-10. The formation side alternates home and away by seed parity.</li>
+<li>A13 (class: implementation-detail; ac: “No advantage from a red card”; classification: runtime-evidence): the experiment follows the research harness. Seeds 1 to 120, default clubs, both sides computer-managed, cards off through the three tuning values set to 0. The away keeper (11), centre-back (13) and striker (21) are sent off at kick-off. The no-send-off control on the same seeds gives the full side’s baseline.</li>
+<li>A14 (class: implementation-detail; ac: “Discipline is realistic”; classification: runtime-evidence): seeds 1 to 200 with default content. Second yellows and same-tick cards are counted from card events. The sending-off share comes from the summary’s red count.</li>
+<li>A15 (class: implementation-detail; ac: “The acting keeper covers a red card”; classification: runtime-evidence): scripted scenes on the real engine prove each branch and each use (saves, a penalty, a shoot-out, restarts). The keeper arm of the sending-off experiment proves it over many matches.</li>
+<li>A16 (class: implementation-detail): the script decision hook’s <code>slot</code> field is not changed. A new keeper flag would change the public scripting interface, which is not in this slice’s scope.</li>
+<li>A17 (class: implementation-detail): augmentations. The benchmark is re-baselined, because this slice changes per-tick code (<code>05c-benchmark.md</code> rev 6, 1.4753 µs per tick). <code>04b-instrument.md</code> is not re-authored: the keeper substitution goes through the change queue, whose counters and <code>darkpath.change_never_applied</code> already cover it, and no new dark path is added. <code>04c-experiment.md</code> is not involved, because no flag is added.</li>
+<li>A18 (class: implementation-detail): the second-opinion consult is not fired, although <code>appetite-medium-or-larger</code> holds. The product owner excluded <code>consult</code> at intake (<code>00-index.md</code> <code>stack.excluded-by-po</code>), as in earlier plans.</li>
+<li>A19 (class: implementation-detail): the tuning loop in step 14 may change only the five new values. It may not change the limits, the card chances, <code>keeper_catch_chance</code> or any band. A criterion that cannot be met stops implement with the figures.</li>
+</ul>
+<h2 id="blockers" tabindex="-1"><a class="header-anchor" href="#blockers"><span>Blockers</span></a></h2>
+<p>None.</p>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<ul>
+<li>No dependency is added or upgraded. The slice uses only std <code>f64</code> arithmetic and the crates already in the workspace (<code>garde</code> for bounds, <code>serde</code> for defaults).</li>
+<li><code>serde</code>’s field-level <code>#[serde(default = &quot;path&quot;)]</code> works together with <code>#[serde(deny_unknown_fields)]</code> on the container. <code>deny_unknown_fields</code> refuses unknown keys, and <code>default</code> fills missing ones. <code>04-plan-data-schemas-generator.md</code> § Freshness Research records the <code>serde</code> 1.0 and <code>garde</code> 0.23 behaviour this relies on. The <code>flatten</code> caveat recorded there does not apply, because <code>Tuning</code> has no flattened field.</li>
+<li>IFAB Law 12 lets the referee delay a caution while playing advantage and show it at the next stoppage. A player cautioned twice is sent off. “At most one held card per player per advantage spell” matches the law’s single-caution-per-incident practice. <code>04-plan-match-rules.md</code> § Freshness Research carries the IFAB Laws 3 and 12 reads.</li>
+</ul>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option A (default): Implement</strong> → <code>/wf implement football-manager-match-engine defending-and-discipline</code>. The plan has no blocker, and the benchmark is re-baselined. Compact the session first. Workflow state lives in the artifact files, and the SessionStart hook re-reads it after compaction.</li>
+<li><strong>Option C: Revisit slice</strong> → <code>/wf slice football-manager-match-engine</code>. Take this only if implement shows that the formations criterion cannot be met with the three defending mechanisms (step 14 stop).</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-24T02:46:11Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/04-plan-defending-and-discipline.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">plan</a><span class="m-sheet-here" aria-current="page">defending-and-discipline</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/04-plan-defending-and-discipline.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-24T02:46:11Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="implement">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · implement — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="implement">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">implement</a><span aria-hidden="true">/</span><span class="m-here">viewer-lineup-tactics</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · implement</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">implement</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">viewer-lineup-tactics</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/05-implement-viewer-lineup-tactics.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">05-implement-viewer-lineup-tactics.md</div>
+      <h1 class="pg-title">Implement · viewer-lineup-tactics</h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="meta">stage 5</span><span class="meta">updated 2026-09-23T10:43:56Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-implementation" tabindex="-1"><a class="header-anchor" href="#the-implementation"><span>The Implementation</span></a></h2>
+<p>The page could watch a match but not manage one. The engine already applied queued changes at stoppages, but a change sent over the socket stopped at the stream’s queue, and <code>serve</code> simulated a whole match in about 13 seconds before any person could act. The work now bridges the socket into the engine. <code>serve</code> holds before kick-off (<code>Gate::held</code>), takes the page’s lineup and pre-match patch through a new <code>set-lineup</code> command, and builds the match from them (<code>MatchConfig::with_setup</code>). During play, an admitted <code>queue-change</code> is parsed into a typed detail, placed in an inbox, and drained into <code>Simulation::queue_change</code> only while the match runs. The verdict event carries the page’s own change identifier.</p>
+<p>Two decisions carry the weight. First, the page paces the engine with the existing <code>pause</code> and <code>start</code> commands. It pauses once it holds more than 5 seconds of undrawn match and restarts it below 2 seconds (<code>web/lead.mjs</code>). It paces on every tick arrival as well as on every drawn frame, because a throttled tab draws few frames. The first drive paced from frames only: the engine ran to full time at tick 284950 while the page had drawn 790 ticks. The second drive, pacing on arrival too, held the engine to within 1238 ticks at 8x speed with 19 pauses. Second, the hello grew past the socket’s 8 KB write bound, so tungstenite refused it and every client saw a reset. <code>send_whole</code> lifts the bound for that one message only. The run ends with 290 Rust tests and 103 page tests passing, clippy clean, and one live drive on seed 11 in which a mentality change went from Queued to Applied at tick 1992, with the feed row “Tactical change applied”.</p>
+<p>Verify now drives AC-a to AC-f against the live engine. The top open risk is AC-e timing under page flow control. The engine test proves a change made while paused applies at the next stoppage. The live drive has not yet read <code>applied_tick</code> against a stoppage event tick with the page’s own pause in play.</p></section><dl class="frontmatter-card"><div><dt>type</dt><dd>implement</dd></div><div><dt>slug</dt><dd>football-manager-match-engine</dd></div><div><dt>slice-slug</dt><dd>viewer-lineup-tactics</dd></div><div><dt>status</dt><dd>complete</dd></div><div><dt>stage-number</dt><dd>5</dd></div><div><dt>created-at</dt><dd>2026-09-23T10:43:56Z</dd></div><div><dt>updated-at</dt><dd>2026-09-23T10:43:56Z</dd></div><div><dt>metric-files-changed</dt><dd>37</dd></div><div><dt>metric-lines-added</dt><dd>3843</dd></div><div><dt>metric-lines-removed</dt><dd>162</dd></div><div><dt>metric-deviations-from-plan</dt><dd>14</dd></div><div><dt>metric-review-fixes-applied</dt><dd>0</dd></div><div><dt>commit-sha</dt><dd>b46f0832ef0b17e18ea5ab289da231bda417bc81</dd></div><div><dt>commits</dt><dd>b46f0832ef0b17e18ea5ab289da231bda417bc81</dd></div><div><dt>steering-honored</dt><dd>Tokens: every colour in web/components/chip.css and web/components/editor.css is a --tl- token (--tl-success, --tl-warning, --tl-danger, --tl-fg-muted and the existing surface tokens). No new colour value, no second prefix., State words: every chip renders its word as text beside the state colour: Queued, Applies now, Applied, Rejected (web/pending.mjs:13 STATE_WORDS). Fit and fitness show a number and a word band (web/lineup.mjs fitWord, fitnessWord)., No spinners: kick-off shows a disabled control reading &#x27;Kicking off&#x27; while it waits (web/lineup-editor.mjs:361-362); no spinner element was added., Layout 1280 x 800 with no page scroll: measured document.documentElement.scrollHeight = 800 and scrollWidth = 1280 pre-match and live on seed 11 in the in-app browser., Product-owner answers OQ-1 = 1 and OQ-2 = 1: protocol version 3 carries the squad, the setup, the tactics file, and the substitution limits; serve holds before kick-off; set-lineup is a new command., Output boundary: the commit message, code comments, and docs/reference/protocol.md use product language; a scan of every added line for workflow vocabulary found only the code method `slice`.</dd></div><div><dt>tags</dt><dd>viewer, lineup, tactics, substitutions, protocol-v3, flow-control</dd></div><div><dt>refs</dt><dd>{&quot;index&quot;:&quot;00-index.md&quot;,&quot;implement-index&quot;:&quot;05-implement.md&quot;,&quot;slice-def&quot;:&quot;03-slice-viewer-lineup-tactics.md&quot;,&quot;plan&quot;:&quot;04-plan-viewer-lineup-tactics.md&quot;,&quot;siblings&quot;:[&quot;05-implement-engine-core.md&quot;,&quot;05-implement-data-schemas-generator.md&quot;,&quot;05-implement-stream-protocol.md&quot;,&quot;05-implement-viewer-pitch.md&quot;,&quot;05-implement-match-rules.md&quot;,&quot;05-implement-tactics-and-ai.md&quot;,&quot;05-implement-commentary.md&quot;,&quot;05-implement-calibration.md&quot;,&quot;05-implement-viewer-match-day.md&quot;],&quot;verify&quot;:&quot;06-verify-viewer-lineup-tactics.md&quot;}</dd></div><div><dt>next-command</dt><dd>wf-verify</dd></div><div><dt>next-invocation</dt><dd>/wf verify football-manager-match-engine viewer-lineup-tactics</dd></div></dl><div class="prose"><h1 id="implement-lineup-editor-tactics-panel-and-substitutions" tabindex="-1"><a class="header-anchor" href="#implement-lineup-editor-tactics-panel-and-substitutions"><span>Implement: Lineup Editor, Tactics Panel, and Substitutions</span></a></h1>
+<h2 id="summary-of-changes" tabindex="-1"><a class="header-anchor" href="#summary-of-changes"><span>Summary of Changes</span></a></h2>
+<ul>
+<li>Protocol version 3 additions: <code>TeamRef.squad</code> (<code>SquadEntry</code> with role fit and natural fitness) and <code>TeamRef.setup</code> (lineup, bench, formation, mentality, instructions, roles). The hello gains <code>tactics</code> (the tactics file plus <code>instruction_order</code>) and <code>substitutions</code> (<code>limit</code>, <code>windows</code>). New types: <code>ClientCommand::SetLineup</code>, <code>PatchWire</code>, <code>ChangeDetail</code>, and <code>QueueChange::detail_typed()</code>.</li>
+<li>The stream crate gains a held gate with a <code>started</code> flag, <code>PreMatch</code>, <code>LineupRules</code>, <code>check_lineup</code>, <code>Inbox</code>/<code>Admitted</code>, <code>engine_change</code>, <code>tactics_patch</code>, and the <code>set-lineup</code> and pre-start <code>queue-change</code> verdicts.</li>
+<li>The engine gains <code>MatchConfig::with_setup</code> and <code>TacticsPatch::applied_to</code>. The latter is shared by the pre-match patch and the in-play change.</li>
+<li><code>serve</code> holds, applies the page setup, and bridges the inbox. <code>record</code> and <code>bench</code> keep an open gate and no inbox.</li>
+<li>New page parts: the lineup rules, the lineup editor with kick-off, the tactics panel, the substitution picker, the pending-change list with chips, and page-side lead control. They are wired in <code>web/main.mjs</code> with the <code>pending()</code>, <code>lineup()</code>, and <code>dugout()</code> test readers.</li>
+<li><code>docs/reference/protocol.md</code> documents version 3: the hold, <code>set-lineup</code>, the new hello fields, and the queue-change detail shapes.</li>
+</ul>
+<h2 id="files-changed" tabindex="-1"><a class="header-anchor" href="#files-changed"><span>Files Changed</span></a></h2>
+<ul>
+<li><code>crates/protocol/src/message.rs</code>: version 3 squad, setup, tactics, and substitution fields; <code>set-lineup</code>; the typed change detail parsed by kind; <code>Hello</code> boxed in <code>ServerMessage</code>.</li>
+<li><code>crates/protocol/src/lib.rs</code>: re-exports, the version 3 paragraph, and the <code>MESSAGES</code> field lists for the document test.</li>
+<li><code>crates/protocol/src/command.rs</code>: the module doc says socket changes now reach the engine.</li>
+<li><code>crates/stream/src/control.rs</code>: the held gate, pre-match lineup rules and verdicts, the inbox, and the change mapping, with tests.</li>
+<li><code>crates/stream/src/lib.rs</code>: re-exports and <code>send_whole</code> for a hello longer than the write bound.</li>
+<li><code>crates/stream/src/session.rs</code>: hello via <code>send_whole</code>; the gate stops when the socket pump ends, so a held producer never hangs.</li>
+<li><code>crates/stream/src/replay.rs</code>: frames via <code>send_whole</code>; hello unboxed.</li>
+<li><code>crates/stream/tests/common/mod.rs</code>, <code>crates/stream/tests/fixture.rs</code>: the new <code>TeamRef</code>, <code>Hello</code>, and <code>CommandContext</code> fields.</li>
+<li><code>crates/stream/tests/commands.rs</code>: the substitution detail now uses <code>{off, on}</code>.</li>
+<li><code>crates/engine/src/sim.rs</code>: <code>MatchConfig::with_setup</code>, with a slot-order test.</li>
+<li><code>crates/engine/src/tactics/mod.rs</code>: <code>TacticsPatch::applied_to</code>.</li>
+<li><code>crates/engine/src/tactics/change.rs</code>: <code>retactic</code> uses <code>applied_to</code>.</li>
+<li><code>crates/engine-cli/src/stream_run.rs</code>: inbox drain, engine-to-page id map, hello squad, setup, tactics, and substitutions builders, with three new tests.</li>
+<li><code>crates/engine-cli/src/serve.rs</code>: held gate, pre-match rules, page setup applied before the simulation is built, client-gone exit during the hold.</li>
+<li><code>crates/engine-cli/src/record.rs</code>, <code>crates/engine-cli/src/bench.rs</code>: the new hello builders and an absent inbox.</li>
+<li><code>crates/engine-cli/tests/stream_cli.rs</code>: the serve tests send <code>start</code> after connecting.</li>
+<li><code>docs/reference/protocol.md</code>: version 3.</li>
+<li><code>web/lineup.mjs</code> (new): lineup legality and reasons; fit and fitness words.</li>
+<li><code>web/pending.mjs</code> (new): the pending-change list and state words.</li>
+<li><code>web/lead.mjs</code> (new): page-side lead control.</li>
+<li><code>web/lineup-editor.mjs</code> (new): formation picker, slots, bench, squad list, click and drag placement, kick-off.</li>
+<li><code>web/tactics-panel.mjs</code> (new): mentality, instructions, roles and duties from the hello tactics; <code>detailFor</code>, <code>labelFor</code>, <code>applyPatch</code>, <code>prematchPatch</code>.</li>
+<li><code>web/substitution-picker.mjs</code> (new): off and on lists, the remaining count, queue.</li>
+<li><code>web/components/chip.css</code>, <code>web/components/editor.css</code> (new): chip, editor, tactics, and picker styles.</li>
+<li><code>web/main.mjs</code>: the <code>Dugout</code> controller, message routing, pacing, and test readers.</li>
+<li><code>web/index.html</code>: editor, board, and squad regions; the tactics column under the feed.</li>
+<li><code>web/feed.mjs</code>: change rows in words.</li>
+<li><code>web/match-state.mjs</code>: tactics-change rows without a team are left out of the feed.</li>
+<li><code>web/socket.mjs</code>: <code>send(command)</code>.</li>
+<li><code>web/tests/lineup.test.mjs</code>, <code>web/tests/pending.test.mjs</code>, <code>web/tests/lead.test.mjs</code>, <code>web/tests/tactics-panel.test.mjs</code> (new); <code>web/tests/feed.test.mjs</code> (change-row test).</li>
+</ul>
+<h2 id="shared-files-also-touched-by-sibling-slices" tabindex="-1"><a class="header-anchor" href="#shared-files-also-touched-by-sibling-slices"><span>Shared Files (also touched by sibling slices)</span></a></h2>
+<ul>
+<li><code>crates/protocol/src/message.rs</code>, <code>crates/protocol/src/lib.rs</code>, <code>docs/reference/protocol.md</code>: also changed by <code>stream-protocol</code> and <code>viewer-match-day</code>. Version 3 now carries both slices’ fields.</li>
+<li><code>crates/engine-cli/src/stream_run.rs</code>: <code>hello_teams</code> came from <code>viewer-match-day</code> and is extended, not duplicated.</li>
+<li><code>crates/engine/src/sim.rs</code>, <code>crates/engine/src/tactics/*</code>: owned by <code>engine-core</code> and <code>tactics-and-ai</code>.</li>
+<li><code>web/main.mjs</code>, <code>web/index.html</code>, <code>web/feed.mjs</code>, <code>web/match-state.mjs</code>: <code>viewer-pitch</code> and <code>viewer-match-day</code>. <code>viewer-reports-recovery</code> will inherit the <code>Dugout</code> phases.</li>
+</ul>
+<h2 id="notes-on-design-choices" tabindex="-1"><a class="header-anchor" href="#notes-on-design-choices"><span>Notes on Design Choices</span></a></h2>
+<ul>
+<li>The chip never predicts. Its state comes only from <code>ack</code>, <code>reject</code>, and the engine’s <code>tactics-change</code> events. It shows a verdict once the drawn tick reaches the verdict tick, so the pitch and the chip agree.</li>
+<li>The engine and the computer manager share one change counter. The driver therefore keeps <code>engine id → page id</code> and writes the page id into the event (<code>crates/engine-cli/src/stream_run.rs:335</code>).</li>
+<li><code>ChangeDetail</code> is parsed by <code>change.kind</code> rather than as an untagged enum. A detail that does not match its kind is refused with a reason that names the kind.</li>
+<li>The pre-match patch and the in-play change share <code>TacticsPatch::applied_to</code>, so a formation change resets unsuitable roles the same way before kick-off and during play.</li>
+<li>The page’s Pause button stays a local playback pause. Engine pause and start are sent only by lead control.</li>
+</ul>
+<h2 id="verification-seams-built" tabindex="-1"><a class="header-anchor" href="#verification-seams-built"><span>Verification Seams Built</span></a></h2>
+<ul>
+<li>AC-a (illegal lineup disables kick-off with a reason) → <code>data-testid</code> <code>slot-n</code>, <code>bench-n</code>, <code>squad-i</code>, <code>formation</code>, <code>lineup-reason</code>, <code>kick-off</code> at <code>web/lineup-editor.mjs:26</code>, <code>:76</code>, <code>:123</code>, plus <code>__touchline.lineup()</code> at <code>web/main.mjs:716</code>. This lets a browser drive read <code>legal</code> against the control’s <code>disabled</code> state. The rules are unit-tested in <code>web/tests/lineup.test.mjs</code>.</li>
+<li>AC-b (mentality change: chip, then applied) → <code>data-testid</code> <code>mentality</code> at <code>web/tactics-panel.mjs:190</code>, chip <code>chip-&lt;queue_id&gt;</code> at <code>web/main.mjs:569</code>, and <code>__touchline.pending()</code> at <code>web/main.mjs:715</code> with <code>queued_tick</code> and <code>applied_tick</code>. The bridge test is at <code>crates/engine-cli/src/stream_run.rs:659</code>.</li>
+<li>AC-c and AC-d (substitution applies; the sixth is rejected) → <code>sub-off</code>, <code>sub-on</code>, <code>sub-queue</code>, <code>subs-left</code> at <code>web/substitution-picker.mjs:41-53</code>; <code>__touchline.dugout().subs_left</code> at <code>web/main.mjs:717</code>.</li>
+<li>AC-e (a change while paused applies at the next stoppage) → the inbox is drained after the gate wait at <code>crates/engine-cli/src/stream_run.rs:76</code>; the engine test is at <code>crates/engine-cli/src/stream_run.rs:713</code>; <code>pending()</code> exposes both ticks; <code>__touchline.dugout().lead_holding</code> and <code>lead_pauses</code> separate the page’s pacing pauses from the manager’s pause.</li>
+<li>AC-f (keyboard only) → native <code>select</code> and <code>button</code> controls throughout; <code>:focus-visible</code> rings at <code>web/components/editor.css:41-43</code>.</li>
+<li>Hold and pre-match verdicts → <code>Gate::held</code> at <code>crates/stream/src/control.rs:51</code> and <code>check_lineup</code> at <code>crates/stream/src/control.rs:238</code>, with unit tests in the same file.</li>
+</ul>
+<h2 id="visual-contract-honored" tabindex="-1"><a class="header-anchor" href="#visual-contract-honored"><span>Visual Contract Honored</span></a></h2>
+<ul>
+<li>Item 1, the 1280 × 800 grid → honored. Measured scrollHeight 800 and scrollWidth 1280 pre-match and live. Deviation: before kick-off the editor borrows the left column, the pitch tile (<code>#board</code> over the pitch), and the statistics region (<code>#squad</code>), because the squad list and eleven slots do not fit a 296-pixel column. After kick-off they hand back to the match-day panels.</li>
+<li>Item 6, type and tabular numbers → honored. Fit, fitness, and the remaining count use the existing <code>.tl-num</code> treatment. No new font.</li>
+<li>Item 7, <code>--tl-</code> tokens → honored in <code>web/components/chip.css:39-70</code> and <code>web/components/editor.css</code>.</li>
+<li>Item 9, state words beside every state colour → honored at <code>web/pending.mjs:13</code> and in chip rendering at <code>web/main.mjs:569</code>.</li>
+<li>Item 10, no spinner → honored. No spinner was added.</li>
+</ul>
+<h2 id="deviations-from-plan" tabindex="-1"><a class="header-anchor" href="#deviations-from-plan"><span>Deviations from Plan</span></a></h2>
+<ol>
+<li>No <code>crates/engine-cli/src/hello.rs</code>. The shared builder <code>hello_teams</code> from the match-day work was extended, as plan step 10 allows.</li>
+<li><code>TeamSetup</code> also carries formation, mentality, instructions, and roles, so the editor starts from the computer manager’s tactics.</li>
+<li><code>squad</code> and <code>setup</code> are sent for the home team only, and only by <code>serve</code>. <code>record</code> and <code>bench</code> send neither, which keeps fixtures small.</li>
+<li>The plan had no pacing. Page-side lead control was added (<code>web/lead.mjs</code>, <code>web/tests/lead.test.mjs</code>) using the existing <code>pause</code> and <code>start</code> commands, because <code>serve</code> otherwise finishes the match in about 13 s. Product-owner answers Q4 (client pull, bounded lead) and Q10 (a 500-tick lead) cover it. It paces on tick arrival as well as on drawn frames; see The Implementation.</li>
+<li>New file <code>web/components/editor.css</code>, beyond the plan’s <code>chip.css</code>.</li>
+<li>Files changed beyond the plan: <code>web/socket.mjs</code>, <code>web/feed.mjs</code>, <code>web/match-state.mjs</code>, <code>crates/engine-cli/tests/stream_cli.rs</code>, <code>crates/stream/src/session.rs</code>, <code>crates/stream/src/replay.rs</code>, <code>crates/engine/src/tactics/mod.rs</code>, <code>crates/engine/src/tactics/change.rs</code>, <code>crates/stream/tests/commands.rs</code>.</li>
+<li><code>ServerMessage::Hello</code> is boxed, because clippy <code>large_enum_variant</code> refused the grown hello under <code>-D warnings</code>.</li>
+<li><code>send_whole</code>: the hello exceeded the 8 KB write bound. Source: the local cargo registry copy of <code>tungstenite-0.30.0/src/protocol/frame/mod.rs:254</code> (<code>buffer_frame</code>) refuses a single frame longer than <code>max_write_buffer_size</code>. The observed failure was <code>ResetWithoutClosingHandshake</code> in both serve tests.</li>
+<li>The session stops the gate when the socket pump ends, because a held <code>serve</code> whose client left otherwise hung. Orphaned test processes showed this.</li>
+<li><code>instruction_order</code> in the hello tactics. <code>serde_json::Value</code> sorts object keys, so the page listed instructions alphabetically and mapped levels to the wrong index. The first drive showed this.</li>
+<li><code>ChangeDetail</code> is dispatched by kind rather than untagged; see Design Choices.</li>
+<li>The editor borrows the pitch tile and the statistics region before kick-off; see Visual Contract item 1.</li>
+<li>The page Pause button stays local; engine pause belongs to lead control.</li>
+<li>No contract-check or research helper was run. The installed tungstenite source was read directly for deviation 8.</li>
+</ol>
+<h2 id="anything-deferred" tabindex="-1"><a class="header-anchor" href="#anything-deferred"><span>Anything Deferred</span></a></h2>
+<ul>
+<li>The live drives for AC-a (four illegal cases with screenshots), AC-c, AC-d, AC-e, and AC-f were not run in this stage. They are verify’s browser drives. This stage ran one live drive for AC-b on seed 11 rather than 42.</li>
+<li>The away team’s squad is not sent. The page manages the home team only, as the slice scopes it.</li>
+</ul>
+<h2 id="known-risks-caveats" tabindex="-1"><a class="header-anchor" href="#known-risks-caveats"><span>Known Risks / Caveats</span></a></h2>
+<ul>
+<li><code>sdlc-debt:</code> The lead thresholds are fixed at 5 s and 2 s of match at playback speed (<code>web/lead.mjs</code>). At 8x the engine holds up to about 2000 ticks ahead, so a change can take effect up to about 5 s of drawn match after the manager expected. The ceiling is acceptable under the Q10 500-tick guidance only at 1x. Upgrade path: scale the pause threshold to a tick bound rather than seconds.</li>
+<li>AC-e under page flow control: the engine test proves the rule, but the live drive has not compared <code>applied_tick</code> with a stoppage event tick while the page’s own pauses are in play.</li>
+<li>The first <code>set-lineup</code> wins. A second one before <code>start</code> replaces it; the page sends one per kick-off press.</li>
+</ul>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<ul>
+<li>tungstenite 0.30.0, the local registry source <code>src/protocol/frame/mod.rs:254</code>. Relevance: the socket write bound. Takeaway: a single frame larger than <code>max_write_buffer_size</code> is refused outright, not split, so a large hello must lift the bound for that message.</li>
+<li>serde_json <code>Value</code> object key order (observed in the first drive). Relevance: the hello tactics. Takeaway: without <code>preserve_order</code>, keys are sorted, so order-bearing lists must be sent as arrays.</li>
+</ul>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option A (default):</strong> <code>/wf verify football-manager-match-engine viewer-lineup-tactics</code>. Six browser-observable ACs need live drives against <code>serve</code>, and every seam they read is in place.</li>
+<li><strong>Option B:</strong> <code>/wf review football-manager-match-engine viewer-lineup-tactics</code>. Only if verify is deferred; not recommended, because AC-e timing under page pacing is unproven live.</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-23T10:43:56Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/05-implement-viewer-lineup-tactics.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">implement</a><span class="m-sheet-here" aria-current="page">viewer-lineup-tactics</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/05-implement-viewer-lineup-tactics.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-23T10:43:56Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

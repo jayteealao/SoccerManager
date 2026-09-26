@@ -1,0 +1,43 @@
+<section class="fragment-plan" data-artifact="plan" data-slice="calibration" data-rev="0">
+  <!-- @include-skip the files-touched rows are grouped per module with collapsible cards, matching the sibling plan fragments -->
+  <table class="files-touched pl-files">
+    <thead><tr><th>File</th><th>Status</th><th>Module</th><th>Lines</th></tr></thead>
+    <tbody>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">contract</span> schemas/observability/match-event.schema.json, match-stats.schema.json, run-report.schema.json</summary><div class="pl-card">JSON Schema draft 2020-12 for the three engine record kinds, written from the observability contract's key list: envelope keys required, the per-team statistics as two-element arrays, an if/then on operation for the benchmark and calibration reports, and additive extras allowed.</div></details></td><td>new</td><td>schemas/observability</td><td>+370</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">data</span> content/realism-bands.json; tuning.json, README.md (modified)</summary><div class="pl-card">The accepted bands as data: goals 2.4 to 3.2, shots per team 8 to 16, possession 35 to 65 percent, a stronger team (attributes x 1.15) winning more than half, 1000 matches, under 30 minutes. The xG coefficients and the tuning-pass changes, each with unit, default, and bound in the modder reference.</div></details></td><td>new + modified</td><td>content/</td><td>+52 / -8</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/sim.rs, tuning.rs, snapshot.rs</summary><div class="pl-card">Shots, shots on target, passes, completed passes, open-play possession ticks, and xG per team, counted at the two existing resolution points; the xG logistic function; the snapshot carries the new counters and its version rises by one.</div></details></td><td>modified</td><td>crates/engine/src</td><td>+93 / -6</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">observability</span> crates/engine/src/observe/mod.rs</summary><div class="pl-card">MatchStats gains the contract's statistics keys, the change dark path, and the manager kind, with serde defaults so older files load; the calibration run-report record; a writer for the run folder.</div></details></td><td>modified</td><td>crates/engine/src/observe</td><td>+70</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">cli</span> crates/engine-cli/src/calibrate/mod.rs, fixtures.rs, worker.rs</summary><div class="pl-card">The parent plans the fixtures over generated leagues, starts one worker process per core, times each suite, runs the single-thread benchmark on an idle machine, prunes in-band event files, and writes one report. Each worker writes a statistics file and an event file per match, after the positional validator runs.</div></details></td><td>new</td><td>crates/engine-cli/src/calibrate</td><td>+470</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">observability</span> crates/engine-cli/src/report/mod.rs, bands.rs</summary><div class="pl-card">The run-scoped builder named by the contract: per-suite aggregates, band checks, dark-path counters, and the outlier rule; the fail-closed loader for the bands file.</div></details></td><td>new</td><td>crates/engine-cli/src/report</td><td>+290</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">cli</span> crates/engine-cli/src/cli.rs, main.rs, simulate.rs, resume.rs, bench.rs, stream_run.rs; crates/stream/src/events.rs</summary><div class="pl-card">The calibrate command with hidden worker flags; simulate writes an event file beside the statistics file; the benchmark's measurement is extracted so calibrate reuses it; the event mapping and the event writer are shared.</div></details></td><td>modified</td><td>crates/engine-cli and crates/stream</td><td>+118 / -24</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">test</span> crates/engine-cli/tests/schemas.rs, calibrate.rs; crates/engine/tests/match_stats.rs; content.rs, full_match.rs, identity.rs (modified)</summary><div class="pl-card">Real simulate and calibrate output validated against the schema files with an independent validator; a smoke run in the default test run; a slow release run of 2000 full matches that asserts the bands, the strength effect, and the dark paths; counter scenes on the scenario feature.</div></details></td><td>new + modified</td><td>tests</td><td>+446 / -6</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">config</span> Cargo.toml, crates/engine-cli/Cargo.toml, Cargo.lock; README.md</summary><div class="pl-card">boon 0.6 as a test-only dependency (pure Rust, MIT OR Apache-2.0); the README's calibrate section.</div></details></td><td>modified</td><td>workspace root</td><td>+115</td></tr>
+    </tbody>
+  </table>
+  <div class="pl-risks">
+    <aside class="callout callout-warn"><div class="callout-hd">R1 · The bands are not reachable with the tactics slice's decision model</div><div class="callout-body">Tuning moves only tuning-file knobs, one group per 200-match iteration, with a cap of 12 iterations. A miss is recorded as an open tuning item with its measured distance; the bands are never widened.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R2 · The plan precedes the tactics slice's plan and code</div><div class="callout-body">The computer manager on both sides and the change-queue counters are read from the slice definition. Step 1 reads the landed code and stops for a plan re-review if either differs.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R3 · The stronger team wins no more than half its matches</div><div class="callout-body">A win excludes draws. The report shows wins, draws, and losses, and the attribute-weighted knobs are a tuning group of their own.</div></aside>
+    <aside class="callout callout-info"><div class="callout-hd">R4 · Schema files drift from the code</div><div class="callout-body">The default test run validates the binary's real output with an independent validator, so a drift fails loudly.</div></aside>
+    <aside class="callout callout-info"><div class="callout-hd">R5 · Worker memory</div><div class="callout-body">About 60 MB of tick records per worker for the validator, about 0.5 GB at 8 workers; --jobs caps it.</div></aside>
+  </div>
+  <details class="pl-revs"><summary>0 prior revisions</summary><ul></ul></details>
+  <style>
+    .fragment-plan .pl-files { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-plan .pl-files th, .fragment-plan .pl-files td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
+    .fragment-plan .pl-files summary { cursor: pointer; }
+    .fragment-plan .pl-chip { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; opacity: 0.8; }
+    .fragment-plan .pl-card { padding: 6px 0 4px 18px; opacity: 0.9; }
+    .fragment-plan .pl-risks { display: grid; gap: 8px; margin-top: 12px; }
+    .fragment-plan .pl-revs { margin-top: 12px; }
+    @media (max-width: 480px) { .fragment-plan .pl-files th:nth-child(3), .fragment-plan .pl-files td:nth-child(3) { display: none; } }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-plan');
+      var files = 32, modules = 10;
+      var risks = root ? root.querySelectorAll('.pl-risks .callout').length : 0;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'plan', artifact: 'plan', counts: { files: files, modules: modules, risks: risks } } }));
+    })();
+  </script>
+</section>

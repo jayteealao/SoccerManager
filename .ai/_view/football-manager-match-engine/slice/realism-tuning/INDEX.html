@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.171.0" data-artifact-type="slice">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · slice — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="slice">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span aria-hidden="true">/</span><span class="m-here">realism-tuning</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · slice</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">realism-tuning</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/03-slice-realism-tuning.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">03-slice-realism-tuning.md</div>
+      <h1 class="pg-title">Slice · <code>realism-tuning</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-skip">skipped</span><span class="stage-badge">slice</span><span class="meta">2026-09-25T22:45:37Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    
+    <section class="slice-stages">
+    <h2 class="sdlc-h2">stages</h2>
+    <div class="slice-grid"><a class="slice-card" href="../../plan/realism-tuning/INDEX.html"><span class="slice-slug"><code>plan</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../implement/realism-tuning/INDEX.html"><span class="slice-slug"><code>implement</code></span>
+    <span class="status-badge is-ok">awaiting-input</span></a><div class="slice-card is-missing"><span class="slice-slug"><code>verify</code></span>
+    <span class="meta">not started</span></div></div>
+  </section>
+    
+    <dl class="frontmatter-card"><div><dt>type</dt><dd>slice</dd></div><div><dt>slug</dt><dd>football-manager-match-engine</dd></div><div><dt>slice-slug</dt><dd>realism-tuning</dd></div><div><dt>status</dt><dd>skipped</dd></div><div><dt>skipped</dt><dd>true</dd></div><div><dt>skip-record</dt><dd>skip-slice-realism-tuning.md</dd></div><div><dt>stage-number</dt><dd>3</dd></div><div><dt>created-at</dt><dd>2026-09-23T22:03:35Z</dd></div><div><dt>updated-at</dt><dd>2026-09-25T22:45:37Z</dd></div><div><dt>complexity</dt><dd>m</dd></div><div><dt>depends-on</dt><dd>tempo-and-restarts</dd></div><div><dt>source</dt><dd>extension</dd></div><div><dt>source-ref</dt><dd>user description</dd></div><div><dt>extension-round</dt><dd>1</dd></div><div><dt>tags</dt><dd>calibration, tuning, realism, e2e</dd></div><div><dt>refs</dt><dd>{&quot;index&quot;:&quot;00-index.md&quot;,&quot;slice-index&quot;:&quot;03-slice.md&quot;,&quot;source&quot;:&quot;&quot;,&quot;plan&quot;:&quot;04-plan-realism-tuning.md&quot;,&quot;implement&quot;:&quot;05-implement-realism-tuning.md&quot;}</dd></div></dl>
+    <div class="prose"><h1 id="slice-realism-tuning" tabindex="-1"><a class="header-anchor" href="#slice-realism-tuning"><span>Slice: Realism tuning</span></a></h1>
+<h2 id="goal" tabindex="-1"><a class="header-anchor" href="#goal"><span>Goal</span></a></h2>
+<p>Bring every band into range on every seed, and prove that the whole product still works end to end. This is the final tuning slice the product owner asked for. It is the only extension slice that must pass every band.</p>
+<h2 id="why-this-slice-exists" tabindex="-1"><a class="header-anchor" href="#why-this-slice-exists"><span>Why This Slice Exists</span></a></h2>
+<p>The three mechanism slices before it each change match results, and each is judged on its own criteria. The product owner chose one final tuning slice to retune once over the combined behaviour, instead of retuning after every slice (<code>po-answers.md</code>, extend round 1). The browser suite was not run again after review fix T1 (<code>07-review.md</code>). The product owner asked for it before handoff.</p>
+<h2 id="scope" tabindex="-1"><a class="header-anchor" href="#scope"><span>Scope</span></a></h2>
+<ul>
+<li><strong>In:</strong>
+<ul>
+<li><strong>Retuning:</strong> retune <code>content/tuning.json</code> and <code>Tuning::default()</code> together, so that every band passes in the equal, strength and formations suites. The bands include the original four and the eleven from <code>realism-bands-v2</code>.</li>
+<li><strong>Seeds:</strong> tune on seeds 42, 1, 7, 99 and 2026. Record the tuning log.</li>
+<li><strong>Tests:</strong> re-derive every pinned expectation the retune moves, and record each one.</li>
+<li><strong>Formation bands:</strong> tighten the formation-pairing check from “at most 4.0 goals per side” to the goals-per-match band for every pairing.</li>
+<li><strong>Benchmark:</strong> run it against the tripwires (+10% CPU per tick, +25% peak memory). A breach is recorded and re-baselined only by a product-owner answer.</li>
+<li><strong>Browser suite:</strong> run the 21-test Playwright suite on a fresh release build.</li>
+<li><strong>Run analysis:</strong> regenerate the run analysis so the build book can be updated.</li>
+</ul>
+</li>
+<li><strong>Out:</strong>
+<ul>
+<li><strong>The two ship-blocking deferrals:</strong> the legibility reading and the macOS build. The product owner chose to leave both open (<code>po-answers.md</code>, extend round 1).</li>
+<li><strong>Handoff:</strong> handoff is the next command after this slice, not part of it.</li>
+<li><strong>CI:</strong> review item T6 stays deferred.</li>
+</ul>
+</li>
+</ul>
+<h2 id="acceptance-criteria" tabindex="-1"><a class="header-anchor" href="#acceptance-criteria"><span>Acceptance Criteria</span></a></h2>
+<ul>
+<li><strong>Every band passes on every seed.</strong> <code>engine-cli calibrate --seed &lt;s&gt;</code> runs 1,000 matches per suite for each of the seeds 42, 1, 7, 99 and 2026. Every band passes in every suite, including the formations suite, and each run exits 0.</li>
+<li><strong>No advantage from a red card.</strong> The controlled sending-off experiment from <code>defending-and-discipline</code> still passes on the tuned build.</li>
+<li><strong>The browser suite passes.</strong> On a fresh <code>cargo build --release</code>, <code>npm test</code> in <code>e2e/</code> passes 21 of 21.</li>
+<li><strong>The benchmark holds.</strong> <code>bench --seed 42 --matches 5</code> stays within the tripwires, or a recorded product-owner answer re-baselines it.</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<ul>
+<li><code>tempo-and-restarts</code>, <code>keeper-and-shots</code> and <code>defending-and-discipline</code>: the mechanisms being tuned.</li>
+<li><code>realism-bands-v2</code>: the band set and the formations suite.</li>
+</ul>
+<h2 id="risks" tabindex="-1"><a class="header-anchor" href="#risks"><span>Risks</span></a></h2>
+<ul>
+<li><strong>Bands that conflict.</strong> Some bands pull against each other. For example, fewer passes and more restart time lower shots and goals. If no tuning passes every band on every seed, the slice stops and brings the product owner the closest result and the conflicting pair. It never widens a band silently.</li>
+<li><strong>Seed sensitivity.</strong> A result tuned on one seed can miss on another. The review found this at IF-1. All five seeds are part of the criterion.</li>
+<li><strong>Browser suite runtime.</strong> The suite takes about 25 minutes, and the whole-match scenario is about 15 of those. Engine changes that lengthen stoppages lengthen the scenario, so its timeout may need to change. Any timeout change is recorded.</li>
+</ul></div>
+    
+  
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-25T22:45:37Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/03-slice-realism-tuning.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">slice</a><span class="m-sheet-here" aria-current="page">realism-tuning</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/03-slice-realism-tuning.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-25T22:45:37Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

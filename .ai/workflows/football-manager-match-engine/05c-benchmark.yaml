@@ -1,21 +1,24 @@
 artifact: benchmark
-target: "engine-cli bench --seed 42 --matches 5 --json (five 90-minute matches, one thread, reference machine), cargo bench -p engine --bench tick_step, and engine-cli bench --stream; the gate is processor time per match as the tactics-and-ai criterion states it, with processor time per tick reported beside it"
+target: "engine-cli bench --seed 42 --matches 5 --json (five 90-minute matches, one thread, reference machine), cargo bench -p engine --bench tick_step, and engine-cli bench --stream; the gate is processor time per tick (+10 percent) and peak memory (+25 percent), with processor time per match reported beside it"
 language: "rust"
 framework: "timing-fallback (engine-cli bench with std::time::Instant, GetProcessTimes, GetProcessMemoryInfo) plus criterion 0.8 for the tick step"
 mode: baseline
-measured_at: "2026-09-22T22:13:37Z"
-baseline_commit: "837cb5c"
+measured_at: "2026-09-25T03:03:17Z"
+baseline_commit: "bce0144"
 metrics:
-  - { name: "bench.cpu_ms_per_match", after: 418.8, unit: "ms", direction: lower-is-better, note: "bench.cpu_ms / bench.matches; drives 418.8, 418.8, 415.8. Tripwire 460.7 ms (+10 percent). This is the gate." }
-  - { name: "bench.peak_mem_mb", after: 5.45, unit: "MB", direction: lower-is-better, note: "Drives 5.469, 5.453, 5.445. Tripwire 6.82 MB (+25 percent). Gate." }
-  - { name: "bench.cpu_us_per_tick", after: 1.4965, unit: "us", direction: lower-is-better, note: "Drives 1.4965, 1.4965, 1.4858. Reported beside the gate; +10 percent would be 1.646 us." }
-  - { name: "bench.match_wall_ms", after: 421, unit: "ms", direction: lower-is-better, note: "Drives 421, 421, 419. Budget 2000 ms per match (NFR-1)." }
-  - { name: "bench.ticks_per_match", after: 279850, unit: "ticks", direction: lower-is-better, note: "Seed 42 with added time; at most 360,000. Reported." }
-  - { name: "engine.ticks_per_s", after: 664727, unit: "ticks/s", direction: higher-is-better, note: "Drives 664,727, 664,727, 667,900." }
-  - { name: "criterion.tick_step_us", after: 1.5264, unit: "us", direction: lower-is-better, note: "Interval 1.5118 to 1.5457 us; criterion found no change against its saved state." }
-  - { name: "criterion.steering_pass_22_ns", after: 1027.1, unit: "ns", direction: lower-is-better, note: "Interval 998.86 to 1058.2 ns. Criterion reported +23 percent against its saved state with no steering code changed since the verify reading of 875.22 ns on a4893c8; recorded as machine noise, not a code change, and not a gate." }
-  - { name: "bench.stream_ticks_per_s", after: 609220, unit: "ticks/s", direction: higher-is-better, note: "0 pauses." }
-  - { name: "bench.stream_peak_mem_mb", after: 6.84, unit: "MB", direction: lower-is-better, note: "Tripwire 8.55 MB (+25 percent)." }
+  - { name: "bench.cpu_us_per_tick", after: 1.5519, unit: "us", direction: lower-is-better, note: "Drives 1.5631, 1.5414, 1.5519. Tripwire 1.7071 us (+10 percent). This is the gate." }
+  - { name: "bench.peak_mem_mb", after: 6.840, unit: "MB", direction: lower-is-better, note: "Drives 6.840, 6.840, 6.852. Tripwire 8.55 MB (+25 percent). Gate." }
+  - { name: "bench.cpu_ms_per_match", after: 443.6, unit: "ms", direction: lower-is-better, note: "bench.cpu_ms / bench.matches; drives 446.8, 440.6, 443.6. Reported; +10 percent would be 488.0 ms." }
+  - { name: "bench.match_wall_ms", after: 448, unit: "ms", direction: lower-is-better, note: "Drives 447, 448, 449. Budget 2000 ms per match (NFR-1)." }
+  - { name: "bench.ticks_per_match", after: 285850, unit: "ticks", direction: lower-is-better, note: "Seed 42 with added time; at most 360,000. Reported." }
+  - { name: "engine.ticks_per_s", after: 638058, unit: "ticks/s", direction: higher-is-better, note: "Drives 639,485, 638,058, 636,637." }
+  - { name: "criterion.tick_step_us", after: 1.5786, unit: "us", direction: lower-is-better, note: "Interval 1.5654 to 1.5912 us. Criterion reports -2.0 percent against its saved state from the previous baseline run; not a gate." }
+  - { name: "criterion.steering_pass_22_ns", after: 864.72, unit: "ns", direction: lower-is-better, note: "Interval 862.56 to 867.10 ns; no change detected (p = 0.31). Not a gate." }
+  - { name: "bench.stream_ticks_per_s", after: 440037, unit: "ticks/s", direction: higher-is-better, note: "One drive, 1 pause. Reported." }
+  - { name: "bench.stream_peak_mem_mb", after: 8.355, unit: "MB", direction: lower-is-better, note: "One drive. Tripwire 10.44 MB (+25 percent)." }
 regressions: []
 improvements: []
-notes: "Baseline for tactics-and-ai on 837cb5c, before the slice changes code; the code equals a4893c8, the verified match-rules state. Build hash 837cb5c-dirty from untracked workflow files and the staged documents of other work. Content hash 30e098265c77. The match-rules record with its comparison is kept at history/05c-benchmark-4.md."
+notes: "Baseline for tempo-and-restarts on bce0144, before the slice changes code. git status shows no change under crates, content, web, Cargo.toml or Cargo.lock; the build hash bce0144-dirty comes from workflow files and staged design documents. Content hash 8170d2f2d5fa. Machine hash 74ca12fc08a4 (the 8-core reference machine). All five commands exited 0. The keeper-and-shots record is kept at history/05c-benchmark-8.md."
+revisions:
+  - { rev: 8, at: "2026-09-24T16:33:38Z", trigger: new-slice, because: "keeper-and-shots plan re-baselines the engine on a30313b; the slice changes the fast-ball contest, the shot kick and the save on every shot in flight", changed: "slice, baseline commit and seven targets re-measured; gate per tick (1.7743 us) and peak memory (8.39 MB)" }
+  - { rev: 9, at: "2026-09-25T03:06:16Z", trigger: new-slice, because: "tempo-and-restarts plan re-baselines the engine on bce0144; the slice changes the carrier's decision, the restart delays and the contest for a fast pass in the penalty area", changed: "slice, baseline commit and seven targets re-measured; gate per tick (1.7071 us) and peak memory (8.55 MB)" }

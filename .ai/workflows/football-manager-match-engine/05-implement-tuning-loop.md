@@ -166,6 +166,7 @@ Autonomous run: no product owner was present. Each decision below is an implemen
 - D11 (class: implementation-detail): the content-change acceptance test declares a flag in a copied content folder, because the shipped `tuning.json` declares no flags. The flag's override (`engine.shot_range`) leaves the generator alone, which is exactly the case the plan names.
 - D12 (class: implementation-detail): research ran inline. No sub-agent tool was used, and the plan's cited code was re-read before editing. The only commit after the plan touches workflow records.
 - D13 (class: implementation-detail): the previous driver was presumed dead. The plan on disk is `status: complete`, the index's `selected-slice` is `tuning-loop` with `next-command: wf-implement`, and the working tree had no code change under `crates/`, `schemas/` or `Cargo.toml` before this run. No state contradicted the index.
+- D15 (class: implementation-detail): the slice's own records (this file, the plan files, the slice definition, `05-implement.md` and `implement-evidence/tuning-loop/`) were committed by path as `bb2a9ff`. The shared control files `00-index.md` and `03-slice.md` were updated on disk but not committed. They carry other sessions' pending edits, and a path commit would sweep those in.
 - D14 (class: implementation-detail): the staged files under `docs/design/realism/` are not this change's. They were left staged and out of the commit, which used explicit paths.
 
 ## Triage Decisions

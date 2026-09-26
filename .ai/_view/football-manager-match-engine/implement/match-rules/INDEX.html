@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="implement">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · implement — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="implement">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">implement</a><span aria-hidden="true">/</span><span class="m-here">match-rules</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · implement</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">implement</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">match-rules</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/05-implement-match-rules.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">05-implement-match-rules.md</div>
+      <h1 class="pg-title">Implement · match-rules</h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="meta">stage 5</span><span class="meta">updated 2026-09-22T20:41:00Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-implementation" tabindex="-1"><a class="header-anchor" href="#the-implementation"><span>The Implementation</span></a></h2>
+<p>The engine that this slice inherited moved 22 players and a ball, but no law applied. The ball bounced off invisible walls, a tackle always succeeded or failed cleanly, and a match ended at exactly 270,000 ticks. This slice adds a referee inside the loop. The referee owns the phase of play (live, dead ball, full time) and enforces the ball out of play, offside, fouls with advantage, three kinds of card, six restarts, half-time, added time, and abandonment. It announces every stoppage through one hook, and a snapshot of the whole match is written at every stoppage.</p>
+<p>Four decisions carry the work. First, one referee draw decides each tackle as a win, a foul with the ball lost, a foul with the ball kept, or a miss, so a test scripts one number to get one outcome. Second, the snapshot holds every field of the simulation, the generator’s word position included, so a resumed match continues tick for tick: the continuation test compares every tick record after the 30th stoppage, byte for byte, and they match. Third, <code>ticks_expected</code> now means the most ticks a match can last, which is a change of meaning, so the protocol goes to version 2. Fourth, the removal of the wall bounce exposed a defect that the bounce had hidden: a lofted pass used the ground-roll speed and overshot its target. The first full match had 350 throw-ins and 22 minutes of dead ball. A new <code>kick_speed</code> gives a lofted pass the speed that lands it and rolls it to its target, and throw-ins fell to about 2 per match.</p>
+<p>This slice unblocks tactics, commentary, and crash recovery: tactics applies queued changes through the stoppage hook, commentary reads the new events and <code>player.id</code>, and recovery builds on <code>resume</code>. The top open risk is the processor budget. The engine now costs 1.47 to 1.51 µs per tick against a limit of 1.566 µs, a margin of about 4 percent, and the next slice adds decisions on top.</p></section><dl class="frontmatter-card"><div><dt>type</dt><dd>implement</dd></div><div><dt>slug</dt><dd>football-manager-match-engine</dd></div><div><dt>slice-slug</dt><dd>match-rules</dd></div><div><dt>status</dt><dd>complete</dd></div><div><dt>stage-number</dt><dd>5</dd></div><div><dt>created-at</dt><dd>2026-09-22T20:41:00Z</dd></div><div><dt>updated-at</dt><dd>2026-09-22T20:41:00Z</dd></div><div><dt>metric-files-changed</dt><dd>70</dd></div><div><dt>metric-lines-added</dt><dd>5048</dd></div><div><dt>metric-lines-removed</dt><dd>319</dd></div><div><dt>metric-deviations-from-plan</dt><dd>10</dd></div><div><dt>metric-review-fixes-applied</dt><dd>0</dd></div><div><dt>commit-sha</dt><dd>0611856b858dd9c975ae4d897423b2a1d521f2a7</dd></div><div><dt>steering-honored</dt><dd>No visual change: the page gains only an event filter and a scrubber bound, so the --tl- tokens, the no-spinner rule, and the colour rule are untouched., Colour never carries a state alone: a card travels as the word in card.kind (yellow, second-yellow, red), never as a colour.</dd></div><div><dt>tags</dt><dd>engine, laws, referee, snapshot, resume, protocol, milestone</dd></div><div><dt>refs</dt><dd>{&quot;index&quot;:&quot;00-index.md&quot;,&quot;implement-index&quot;:&quot;05-implement.md&quot;,&quot;slice-def&quot;:&quot;03-slice-match-rules.md&quot;,&quot;plan&quot;:&quot;04-plan-match-rules.md&quot;,&quot;siblings&quot;:[&quot;05-implement-engine-core.md&quot;,&quot;05-implement-data-schemas-generator.md&quot;,&quot;05-implement-stream-protocol.md&quot;,&quot;05-implement-viewer-pitch.md&quot;],&quot;verify&quot;:&quot;06-verify-match-rules.md&quot;}</dd></div><div><dt>next-command</dt><dd>wf-verify</dd></div><div><dt>next-invocation</dt><dd>/wf verify football-manager-match-engine match-rules</dd></div></dl><div class="prose"><h1 id="implement-match-rules-restarts-and-snapshots" tabindex="-1"><a class="header-anchor" href="#implement-match-rules-restarts-and-snapshots"><span>Implement: Match Rules, Restarts, and Snapshots</span></a></h1>
+<h2 id="summary-of-changes" tabindex="-1"><a class="header-anchor" href="#summary-of-changes"><span>Summary of Changes</span></a></h2>
+<ul>
+<li>The rule pack is version 2. It prices each stoppage kind in seconds of added time, and it sets <code>min_players</code> 7. The attribute schema requires <code>aggression</code>.</li>
+<li>Six law modules under <code>crates/engine/src/rules/</code>: five pure modules (clock, fouls, offside, restart, discipline) and the referee in <code>mod.rs</code>.</li>
+<li>The simulation loop runs the referee after the ball moves and possession resolves. The wall bounce is gone. The ball leaves the pitch.</li>
+<li>A sent-off player parks beside the pitch at a fixed spot. The team reshapes the player’s line across the gap.</li>
+<li>Players walk to restart positions during a dead ball. The taker restarts play when every opponent stands back, or at three times the delay.</li>
+<li>The snapshot is a binary file with a SHA-256 trailer, written atomically at every stoppage to <code>SM_DATA_DIR/matches/&lt;match.id&gt;/snapshot.smsn</code>. <code>engine-cli resume</code> continues a match from it.</li>
+<li>A test-only scene builder (the <code>scenario</code> feature) arranges players, the ball, cards, the tally, and the referee’s next draws.</li>
+<li>The protocol is version 2: 13 event types, a <code>card.kind</code> word, and six optional event fields. The page counts only events that stop play as stoppage marks, and it stops the scrubber at the last tick.</li>
+<li><code>match-stats</code> carries the law counts. <code>run-report</code> carries <code>bench.ticks_per_match</code> and <code>bench.cpu_us_per_tick</code>.</li>
+</ul>
+<h2 id="files-changed" tabindex="-1"><a class="header-anchor" href="#files-changed"><span>Files Changed</span></a></h2>
+<ul>
+<li><code>content/rules/default.json</code>: schema 2, <code>added_time</code> per kind with card, variance, minimum, and cap, and <code>min_players</code> 7.</li>
+<li><code>content/tuning.json</code>: foul, card, restart-delay, and ready-radius constants.</li>
+<li><code>content/README.md</code>: the new rule and tuning fields with units, defaults, and bounds, the aggression requirement, and the added-time formula.</li>
+<li><code>README.md</code>: the laws, the snapshot location, <code>resume</code>, <code>?v=2</code>, and the variable match length.</li>
+<li><code>Cargo.lock</code>: the engine’s self dev-dependency.</li>
+<li><code>crates/engine/Cargo.toml</code>: the <code>scenario</code> feature and the self dev-dependency that turns it on for tests.</li>
+<li><code>crates/engine/src/data/attributes.rs</code>: <code>aggression</code> required; seven required names.</li>
+<li><code>crates/engine/src/data/rules.rs</code>: <code>RULES_VERSION</code> 2, <code>AddedTime</code> with its checks, <code>min_players</code>, <code>regulation_minutes</code>, ordered <code>StoppageKind</code>.</li>
+<li><code>crates/engine/src/data/mod.rs</code>: re-exports <code>AddedTime</code>; loader tests at version 2.</li>
+<li><code>crates/engine/src/data/tuning.rs</code>: comments no longer name a later work item.</li>
+<li><code>crates/engine/src/player.rs</code>: <code>Derived.aggression</code>, <code>Status</code>, <code>yellow</code>, <code>active()</code>.</li>
+<li><code>crates/engine/src/team.rs</code>: <code>active</code> slots, <code>reshape</code>, <code>switch_ends</code>.</li>
+<li><code>crates/engine/src/tuning.rs</code>: the new constants and <code>RestartDelays</code>.</li>
+<li><code>crates/engine/src/rng.rs</code>: <code>RngState</code> save and restore, <code>referee_draw</code>, scripted draws behind <code>scenario</code>.</li>
+<li><code>crates/engine/src/pitch.rs</code>: law constants, line exits, every restart spot, the penalty area, parking spots.</li>
+<li><code>crates/engine/src/rules/clock.rs</code> (new): the match clock, the added-time formula, <code>max_ticks</code>.</li>
+<li><code>crates/engine/src/rules/fouls.rs</code> (new): the three-way tackle, the foul chance, the card outcome.</li>
+<li><code>crates/engine/src/rules/offside.rs</code> (new): the offside set at a kick and the offence at a touch.</li>
+<li><code>crates/engine/src/rules/restart.rs</code> (new): the dead ball, delays, takers, restart targets, readiness.</li>
+<li><code>crates/engine/src/rules/discipline.rs</code> (new): booking, sending off, on-pitch counts, abandonment.</li>
+<li><code>crates/engine/src/rules/mod.rs</code> (new): the referee state machine and its <code>Simulation</code> methods.</li>
+<li><code>crates/engine/src/sim.rs</code>: the referee in the loop, the 12 event kinds with player, card, minute, and spot, the law counters, <code>run</code> to full time, <code>minute()</code>.</li>
+<li><code>crates/engine/src/decision.rs</code>: inactive players skipped, <code>restart_pass</code>, <code>kick_speed</code> for lofted passes and the keeper’s clearance.</li>
+<li><code>crates/engine/src/steering.rs</code>: inactive players stand still and are skipped in separation and overlaps.</li>
+<li><code>crates/engine/src/record.rs</code>: tick-file schema 4, <code>ticks_expected</code> as a maximum, the <code>on_stoppage</code> hook forwarded by <code>FanoutSink</code> and <code>Option</code>.</li>
+<li><code>crates/engine/src/validate.rs</code>: the team timeline across half-time and send-offs, parking exemptions, the <code>restart_spot</code> rule.</li>
+<li><code>crates/engine/src/error.rs</code>: <code>EngineError::Snapshot</code> naming the path and the reason.</li>
+<li><code>crates/engine/src/snapshot.rs</code> (new): the file format, capture, restore, refusals, <code>SnapshotSink</code>.</li>
+<li><code>crates/engine/src/scenario.rs</code> (new): the test scene builder.</li>
+<li><code>crates/engine/src/lib.rs</code>: the new modules and re-exports.</li>
+<li><code>crates/engine/src/observe/mod.rs</code>: <code>LawStats</code> in <code>match-stats</code>; two benchmark keys in <code>run-report</code>.</li>
+<li><code>crates/engine/benches/tick_step.rs</code>: rebuilds a warmed match when the match ends.</li>
+<li><code>crates/engine/tests/common/mod.rs</code>: <code>short_match</code>, <code>quiet_match</code>, <code>index</code>, <code>spread</code>.</li>
+<li><code>crates/engine/tests/content.rs</code>, <code>determinism.rs</code>, <code>identity.rs</code>, <code>validator.rs</code>, <code>full_match.rs</code>: the new rule pack, <code>run</code> to full time, the timeline validator, and the full-match law bands.</li>
+<li><code>crates/engine/tests/rules_offside.rs</code>, <code>rules_fouls.rs</code>, <code>rules_cards.rs</code>, <code>rules_restarts.rs</code>, <code>rules_clock.rs</code>, <code>snapshot.rs</code> (new): the criterion tests.</li>
+<li><code>crates/protocol/src/event.rs</code>: 13 event types, <code>CardKind</code>, six optional fields and their builders.</li>
+<li><code>crates/protocol/src/lib.rs</code>: <code>PROTOCOL_VERSION</code> 2 with its reason; the event field list.</li>
+<li><code>crates/protocol/src/command.rs</code>, <code>message.rs</code>: comments; <code>ticks_expected</code> documented as a maximum.</li>
+<li><code>docs/reference/protocol.md</code>: version 2, the new event types and fields, <code>ticks_expected</code> as a maximum.</li>
+<li><code>crates/stream/src/server.rs</code>: the version-refusal test at version 2.</li>
+<li><code>crates/stream/src/record.rs</code>: a comment no longer names a later work item.</li>
+<li><code>crates/stream/tests/common/mod.rs</code>, <code>fixture.rs</code>, <code>throughput.rs</code>: every event kind mapped, the loop ends at full time, the tick count is regulation plus added time.</li>
+<li><code>crates/engine-cli/src/stream_run.rs</code>: every event mapped with player ids, card, advantage, minute, and added time; the stoppage hook forwarded; <code>Driven { written, full_time }</code>.</li>
+<li><code>crates/engine-cli/src/simulate.rs</code>: <code>max_ticks</code> in the header, the snapshot sink, <code>--no-snapshot</code>, the timeline validator, the law counts.</li>
+<li><code>crates/engine-cli/src/serve.rs</code>, <code>record.rs</code>: <code>max_ticks</code>, the snapshot sink on <code>serve</code>, exit 0 at full time.</li>
+<li><code>crates/engine-cli/src/bench.rs</code>: ticks per match and processor time per tick; no snapshot sink.</li>
+<li><code>crates/engine-cli/src/cli.rs</code>, <code>main.rs</code>: <code>resume</code> and <code>--no-snapshot</code>.</li>
+<li><code>crates/engine-cli/src/resume.rs</code> (new): the resume command.</li>
+<li><code>crates/engine-cli/tests/resume.rs</code> (new): resume reaches the same full time; damaged files are refused.</li>
+<li><code>crates/engine-cli/tests/cli_args.rs</code>, <code>stream_cli.rs</code>, <code>web_cli.rs</code>: tick count with added time, 3,006 frames for a two-half minute, protocol version 2.</li>
+<li><code>web/stoppages.mjs</code>: <code>STOPS_PLAY</code> and <code>stopsPlay</code>.</li>
+<li><code>web/main.mjs</code>: only events that stop play become marks; the scrubber stops at the last tick at full time.</li>
+<li><code>web/tests/stoppages.test.mjs</code>, <code>web/tests/decode.test.mjs</code>: the filter, and the fixture at version 2.</li>
+</ul>
+<h2 id="shared-files-also-touched-by-sibling-slices" tabindex="-1"><a class="header-anchor" href="#shared-files-also-touched-by-sibling-slices"><span>Shared Files (also touched by sibling slices)</span></a></h2>
+<ul>
+<li><code>crates/engine/src/sim.rs</code>, <code>record.rs</code>, <code>validate.rs</code>, <code>decision.rs</code>, <code>steering.rs</code>: built by the engine core; the referee changes the loop order and the tick-file schema.</li>
+<li><code>crates/engine/src/data/*</code>, <code>content/*</code>: built by the data slice; the rule pack and the attribute schema change version or content.</li>
+<li><code>crates/protocol/*</code>, <code>crates/stream/*</code>, <code>docs/reference/protocol.md</code>: built by the stream slice; the protocol goes to version 2.</li>
+<li><code>crates/engine-cli/src/*</code>: shared by every slice.</li>
+<li><code>web/main.mjs</code>, <code>web/stoppages.mjs</code>: built by the viewer slice; the stoppage index now filters events.</li>
+</ul>
+<h2 id="notes-on-design-choices" tabindex="-1"><a class="header-anchor" href="#notes-on-design-choices"><span>Notes on Design Choices</span></a></h2>
+<ul>
+<li>The laws are pure functions with unit tests. The referee in <code>rules/mod.rs</code> is the only code that changes match state for a law.</li>
+<li>One draw per tackle, split into bands, keeps a scene reproducible with one scripted number. The card draw is a second number.</li>
+<li>Scripted draws replace only <code>referee_draw</code>, not every draw. Decision noise draws every tick and would empty the scripted queue before the tackle.</li>
+<li>Advantage applies only outside the offender’s penalty area. A card held for advantage is shown at the next stoppage, before the restart.</li>
+<li>The offside set is a bitmask fixed at a kick in open play and judged at the next first touch. A throw-in, a corner, and a goal kick clear the bitmask.</li>
+<li>A sent-off player parks at (±(10 + slot), −37), outside the pitch, so the tick record keeps 22 positions and the validator exempts parking spots.</li>
+<li>The snapshot header holds the build hash, the content hash, the owner, and the match time. The body holds every simulation field except the scratch buffer and the drained events. A refusal names its reason from the reader’s own checks and never prints file bytes.</li>
+<li><code>SnapshotSink</code> logs a failed write and lets the match continue, because a lost snapshot must not end a match.</li>
+<li><code>resume</code> keeps the original match id, so a resumed match overwrites the same <code>stats.json</code> and snapshot.</li>
+</ul>
+<h2 id="verification-seams-built" tabindex="-1"><a class="header-anchor" href="#verification-seams-built"><span>Verification Seams Built</span></a></h2>
+<ul>
+<li>AC-a to AC-e (every law) → the scene builder <code>Scene</code> at <code>crates/engine/src/scenario.rs:13</code>, with scripted referee draws at <code>crates/engine/src/scenario.rs:70</code> and <code>crates/engine/src/rng.rs:70</code>, consumed by <code>referee_draw</code> at <code>crates/engine/src/rng.rs:60</code> (enables <code>cargo test</code> to arrange one law situation and get one outcome).</li>
+<li>AC-a to AC-e → <code>quiet_match</code> at <code>crates/engine/tests/common/mod.rs:72</code> turns off player decisions, and <code>spread</code> at <code>crates/engine/tests/common/mod.rs:86</code> places both sides far from the scene (enables a scene that moves only as the test and the referee move it).</li>
+<li>AC-d → the validator rule <code>restart_spot</code> with <code>RESTART_SPOT_TOLERANCE</code> 0.5 m at <code>crates/engine/src/validate.rs:20</code>, fed by the event spots through <code>Validator::for_match</code> at <code>crates/engine/src/validate.rs:52</code> (enables <code>simulate</code> to report every misplaced restart in <code>validate.violations</code>).</li>
+<li>AC-f → <code>Snapshot::capture</code> at <code>crates/engine/src/snapshot.rs:65</code> and <code>Simulation::from_snapshot</code> at <code>crates/engine/src/snapshot.rs:213</code>, with the generator state at <code>crates/engine/src/rng.rs:42</code> and <code>crates/engine/src/rng.rs:51</code>, called through the stoppage hook at <code>crates/engine/src/sim.rs:336</code> (enables a byte-for-byte comparison of resumed and uninterrupted tick records).</li>
+<li>AC-f → the <code>match.resumed</code> log line at <code>crates/engine-cli/src/resume.rs:79</code>, with score, half, on-pitch counts, and cards (enables the command-line test and a person to see where a match picked up).</li>
+<li>AC-g → the ordered refusals in <code>Snapshot::from_bytes</code> at <code>crates/engine/src/snapshot.rs:120</code> and the exit code 1 with <code>snapshot.refused</code> at <code>crates/engine-cli/src/resume.rs:65</code> (enables a test to damage a file and read the reason on stderr).</li>
+<li>AC-h → <code>bench.cpu_us_per_tick</code> at <code>crates/engine/src/observe/mod.rs:180</code> (enables the benchmark gate to be judged per tick, because added time makes the match length vary).</li>
+<li>Page → <code>stopsPlay</code> at <code>web/stoppages.mjs:30</code> and the full-time scrubber bound at <code>web/main.mjs:128</code> (enables <code>node --test</code> to check the stoppage filter with no browser).</li>
+<li>Operations → <code>rules.added_time</code> at <code>crates/engine/src/rules/mod.rs:407</code>, <code>rules.abandoned</code> at <code>crates/engine/src/rules/mod.rs:260</code>, and <code>rules.dead_ball_stalled</code> at <code>crates/engine/src/rules/mod.rs:349</code>.</li>
+</ul>
+<h2 id="deviations-from-plan" tabindex="-1"><a class="header-anchor" href="#deviations-from-plan"><span>Deviations from Plan</span></a></h2>
+<ol>
+<li><code>crates/engine/src/decision.rs</code> gained <code>kick_speed</code> for lofted passes and a longer, lofted goalkeeper clearance. The plan did not name this change. The wall bounce had hidden an overshoot: a lofted pass used the ground-roll speed formula. With the bounce removed, the first full match had 350 throw-ins and 22 minutes of dead ball. After the fix, a full match has about 2 throw-ins, and the test <code>a_lofted_pass_reaches_its_target_slow_enough_to_control</code> holds the fix.</li>
+<li>The full-match band in <code>crates/engine/tests/full_match.rs</code> asserts fouls (4 to 20 per team), free kicks, out-of-play restarts, half-time, full time, and the stoppage count. Offsides and corners are counted and not banded. Open play has no forward runs and no deflections, so seed 42 gives 0 offsides and 0 corners. The criterion tests prove both laws with scenes.</li>
+<li>The continuation test resumes at the 30th stoppage, not the 40th. The seed-42 match has 34 stoppages.</li>
+<li>Scripted draws apply to <code>referee_draw</code> only, not to every draw (see the design notes).</li>
+<li><code>SnapshotSink</code> lives in <code>crates/engine/src/snapshot.rs</code>, not in the command-line crate, so <code>simulate</code>, <code>serve</code>, and <code>resume</code> share one sink.</li>
+<li>The <code>rules.abandoned</code> warning is emitted in <code>crates/engine/src/rules/mod.rs</code>, where the referee ends the match, not in the command line.</li>
+<li><code>resume</code> also accepts <code>--team-a</code> and <code>--team-b</code>, so a match started with other clubs resumes with the same files; the digests refuse any other file.</li>
+<li>The match driver returns <code>Driven { written, full_time }</code> and <code>Simulation</code> gained <code>minute()</code>. <code>serve</code> and <code>record</code> exit 0 when the referee ended the match, because the tick count no longer fixes the end.</li>
+<li>Files beyond the plan: <code>crates/engine/benches/tick_step.rs</code>, <code>crates/engine/tests/determinism.rs</code>, <code>identity.rs</code>, <code>common/mod.rs</code>, <code>crates/stream/src/server.rs</code> (test), <code>crates/stream/tests/common/mod.rs</code>, <code>fixture.rs</code>, <code>throughput.rs</code>, <code>crates/engine-cli/tests/cli_args.rs</code>, <code>stream_cli.rs</code>, <code>web_cli.rs</code>, and <code>web/tests/decode.test.mjs</code>. Each asserted a fixed length of 270,000 ticks, protocol version 1, or three event kinds.</li>
+<li>Three older comments named later work items (<code>crates/protocol/src/lib.rs</code>, <code>crates/engine/src/data/tuning.rs</code>, <code>crates/stream/src/record.rs</code>). They are rewritten without workflow vocabulary.</li>
+</ol>
+<h2 id="anything-deferred" tabindex="-1"><a class="header-anchor" href="#anything-deferred"><span>Anything Deferred</span></a></h2>
+<ul>
+<li>Queued tactical changes and substitutions are not applied. The stoppage hook announces every stoppage; the tactics slice applies the queue through it. <code>admits_tactics</code>, <code>admits_substitution</code>, and <code>substitutions</code> are validated only.</li>
+<li>The <code>injury</code> stoppage kind is priced in the rule pack and never produced. Injuries have no model yet.</li>
+<li>Forward runs and deflections do not exist, so offsides and corners are rare in open play. Calibration tunes the rates when tactics adds forward runs.</li>
+<li>Extra time and penalty shoot-outs extend <code>MatchClock</code> in their own slice.</li>
+<li>A paced live mode for <code>serve</code> is still absent; the viewer slice owns that question.</li>
+</ul>
+<h2 id="known-risks-caveats" tabindex="-1"><a class="header-anchor" href="#known-risks-caveats"><span>Known Risks / Caveats</span></a></h2>
+<ul>
+<li>The processor budget margin is small. Five benchmark runs gave 1.4719 to 1.5053 µs per tick against the 1.566 µs limit, and the median match is 276,100 ticks. Peak memory is 5.45 MB against 6.69 MB.</li>
+<li>A snapshot resumes only on the build that wrote it. A development build with uncommitted changes has a <code>-dirty</code> build hash, so any rebuild refuses every earlier snapshot. This is the intended guard; it is noted because it surprises during development.</li>
+<li><code>foul_base</code> 0.1 was tuned on seeds 42, 1, 2, and 3 (5 to 15 fouls per team). Calibration owns the final value.</li>
+<li>A restart that stalls is taken at three times its delay whatever the players are doing, with a <code>rules.dead_ball_stalled</code> warning. The free-kick test shows no stall in the crowded scene.</li>
+</ul>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<ul>
+<li><code>rand_chacha</code> 0.10, installed source <code>rand_chacha-0.10.0/src/chacha.rs:145-198</code>: <code>get_seed</code>, <code>get_stream</code>, <code>get_word_pos</code>, and <code>set_word_pos</code> restore a generator at an exact word, so the snapshot stores three values instead of a draw count.</li>
+<li>Rust standard library, <code>std::fs::rename</code> (<a href="https://doc.rust-lang.org/std/fs/fn.rename.html">https://doc.rust-lang.org/std/fs/fn.rename.html</a>): on Windows 10 1607 and later, a rename replaces an existing file, so the snapshot write is atomic with no remove step.</li>
+<li><code>garde</code>, installed source: a validation report lists errors in field-path order, so a range test must hold a complete <code>per_kind</code> map to reach the field under test.</li>
+</ul>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option A (default):</strong> <code>/wf verify football-manager-match-engine match-rules</code>. The slice changes testable behavior on every surface: the engine, the protocol, the command line, and the page. Consider compacting the session before <code>/wf verify</code>; workflow state lives in artifact files on disk and the SessionStart hook re-reads it after compaction.</li>
+<li><strong>Option C:</strong> <code>/wf plan football-manager-match-engine match-rules</code> only if verify shows the relaxed full-match band hides a law defect.</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-22T20:41:00Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/05-implement-match-rules.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">implement</a><span class="m-sheet-here" aria-current="page">match-rules</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/05-implement-match-rules.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-22T20:41:00Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

@@ -4,18 +4,18 @@ type: augmentation
 augmentation-type: benchmark
 slug: football-manager-match-engine
 parent-workflow: football-manager-match-engine
-slice-slug: tactics-and-ai
+slice-slug: tempo-and-restarts
 mode: baseline
 language: "rust"
 benchmark-framework: "timing-fallback (engine-cli bench) plus criterion 0.8"
-targets-measured: 6
+targets-measured: 7
 targets-failed: 0
 baseline-branch: feat/football-manager-match-engine
-baseline-commit: "837cb5c"
-measured-at: "2026-09-22T22:13:37Z"
+baseline-commit: "bce0144"
+measured-at: "2026-09-25T03:03:17Z"
 created-at: "2026-09-22T06:37:07Z"
-updated-at: "2026-09-22T22:18:43Z"
-revision-count: 5
+updated-at: "2026-09-25T03:06:16Z"
+revision-count: 9
 revisions:
   - rev: 1
     at: "2026-09-22T06:37:07Z"
@@ -42,32 +42,52 @@ revisions:
     trigger: new-slice
     because: "tactics-and-ai plan re-baselines the engine on 837cb5c; its criterion names processor time per match, so the gate returns to per match with the per-tick figure reported beside it"
     changed: "slice-slug, mode back to baseline, six engine targets re-measured, gate per match (460.7 ms) and memory (6.82 MB); the match-rules record with its comparison is kept at history/05c-benchmark-4.md"
+  - rev: 6
+    at: "2026-09-24T02:42:52Z"
+    trigger: new-slice
+    because: "defending-and-discipline plan re-baselines the engine on 2089ed7; the slice names a +10 percent processor-time-per-tick tripwire for the new marking search"
+    changed: "slice-slug, mode back to baseline, gate moves to processor time per tick, seven targets re-measured with new tripwires; the tactics-and-ai record with its comparison is kept at history/05c-benchmark-5.md"
+  - rev: 7
+    at: "2026-09-24T11:05:00Z"
+    trigger: new-slice
+    because: "lone-forward plan re-baselines the engine on a447ff1; the slice changes the carrier's per-tick decision and the tackle draw"
+    changed: "slice-slug, baseline commit and seven targets re-measured; gate stays processor time per tick (+10 percent) and peak memory (+25 percent); the defending-and-discipline record is kept at history/05c-benchmark-6.md"
+  - rev: 8
+    at: "2026-09-24T16:33:38Z"
+    trigger: new-slice
+    because: "keeper-and-shots plan re-baselines the engine on a30313b; the slice changes the fast-ball contest, the shot kick and the save on every shot in flight"
+    changed: "slice-slug, baseline commit and seven targets re-measured; gate stays processor time per tick (+10 percent) and peak memory (+25 percent); the lone-forward record is kept at history/05c-benchmark-7.md"
+  - rev: 9
+    at: "2026-09-25T03:06:16Z"
+    trigger: new-slice
+    because: "tempo-and-restarts plan re-baselines the engine on bce0144; the slice changes the carrier's decision, the restart delays and the contest for a fast pass in the penalty area"
+    changed: "slice-slug, baseline commit and seven targets re-measured; gate stays processor time per tick (+10 percent) and peak memory (+25 percent); the keeper-and-shots record is kept at history/05c-benchmark-8.md"
 refs:
   index: 00-index.md
   shape: 02-shape.md
-  plan: 04-plan-tactics-and-ai.md
-  prior: history/05c-benchmark-4.md
+  plan: 04-plan-tempo-and-restarts.md
+  prior: history/05c-benchmark-8.md
 ---
 
-# Benchmark: Tactics, Fatigue, and the AI Manager (baseline)
+# Benchmark: Tempo and Restarts (baseline)
 
 ## The Benchmark
 
-The match-rules slice closed with no tripwire fired: 1.5080 microseconds per tick against a 1.566 limit, and 5.45 MB peak memory. That record and its comparison table are byte-copied at `history/05c-benchmark-4.md`.
+The keeper-and-shots comparison closed with no tripwire fired: 1.5638 µs of processor time per tick against a 1.7743 µs limit (`06-verify-keeper-and-shots.md`). That baseline record is byte-copied at `history/05c-benchmark-8.md`. Three commits landed after the `a30313b` baseline: `8fd407b` changes engine code (the shot, save and block model), `bce0144` changes one test file, and `c5a5ff3` is documents. So this plan measures again before the slice changes code.
 
-This baseline re-measures the engine on `837cb5c`, before the slice changes any code. The code on `837cb5c` equals the verified match-rules state `a4893c8`: `git diff --stat a4893c8 837cb5c` over `crates`, `web`, `content`, `docs`, and `README.md` is empty. Three drives gave 418.8, 418.8, and 415.8 milliseconds of processor time per match, and 1.4965, 1.4965, and 1.4858 microseconds per tick. Wall time was 421, 421, and 419 ms over 279,850 ticks per match. Peak memory was 5.469, 5.453, and 5.445 MB.
+This baseline measures the engine on `bce0144`. `git status` shows no change under `crates`, `content`, `web`, `Cargo.toml` or `Cargo.lock`. Three drives gave 1.5631, 1.5414 and 1.5519 microseconds of processor time per tick, and 446.8, 440.6 and 443.6 milliseconds per match. Wall time was 447, 448 and 449 ms over 285,850 ticks per match. Peak memory was 6.840, 6.840 and 6.852 MB.
 
-This slice's criterion names processor time per match, so the gate is per match: 460.7 ms (+10 percent) and 6.82 MB (+25 percent). The product owner's per-tick reading (plan Round 4 Q13) was scoped to the match-rules criterion. Processor time per tick and ticks per match are reported beside the gate. If the per-match gate fails only because the match is longer, the product owner decides. The top risk is the decision layer: every tick the carrier scores more options on a tick that already costs about 1.5 microseconds.
+The slice changes three things. The carrier's decision gets a carry window, which adds no loop. The restart delays grow, so more ticks are dead-ball ticks. A fast pass inside the penalty area can be cleared by a defender, which is one pass over the players only while such a pass is in flight. The slice names no tripwire of its own, so the gate stays per tick at the default rule: 1.7071 µs (+10 percent) and 8.55 MB peak memory (+25 percent). Processor time per match (488.0 ms at +10 percent) and ticks per match are reported beside the gate. Dead-ball ticks cost less than live ticks, so the per-tick mean can fall when the ball is in play for less time. A fall that the live share alone explains is not an improvement of the code. The top risk is the clearance check. The plan runs it only while a fast pass is inside a penalty area.
 
 ## Benchmark Targets
 
 | Target | Type | File:line | Framework | Command |
 |--------|------|-----------|-----------|---------|
-| `processor time per match` (the gate) | cpu | `crates/engine-cli/src/bench.rs` (`bench.cpu_ms`, `bench.matches`) | engine-cli bench | `target/release/engine-cli.exe bench --seed 42 --matches 5 --json`; `bench.cpu_ms / bench.matches` |
-| `processor time per tick` | cpu | `crates/engine-cli/src/bench.rs` | engine-cli bench | same command; field `bench.cpu_us_per_tick` |
+| `processor time per tick` (the gate) | cpu | `crates/engine-cli/src/bench.rs` (`bench.cpu_us_per_tick`) | engine-cli bench | `target/release/engine-cli.exe bench --seed 42 --matches 5 --json` |
+| `peak memory` (gate) | memory | `crates/engine/src/observe/process.rs` | engine-cli bench | same command; field `bench.peak_mem_mb` |
+| `processor time per match` | cpu | `crates/engine-cli/src/bench.rs` | engine-cli bench | same command; `bench.cpu_ms / bench.matches` |
 | `full match wall time` | latency | `crates/engine-cli/src/bench.rs:run_one` | engine-cli bench | same command; fields `bench.match_wall_ms` and `bench.ticks_per_match` |
 | `ticks per second` | throughput | `crates/engine/src/sim.rs:run` | engine-cli bench | same command; field `engine.ticks_per_s` |
-| `peak memory` | memory | `crates/engine/src/observe/process.rs` | engine-cli bench | same command; field `bench.peak_mem_mb` |
 | `tick step` | cpu | `crates/engine/benches/tick_step.rs` | criterion 0.8 | `cargo bench -p engine --bench tick_step` |
 | `stream throughput` | throughput | `crates/stream/src/session.rs` | engine-cli bench | `target/release/engine-cli.exe bench --seed 42 --matches 1 --stream --json`; field `bench.stream_ticks_per_s` |
 
@@ -75,44 +95,44 @@ This slice's criterion names processor time per match, so the gate is per match:
 
 | Target | Median | P95 | P99 | Allocs/op | Bytes/op | Runs | Notes |
 |--------|--------|-----|-----|-----------|----------|------|-------|
-| `processor time per match` | 418.8 ms | N/A | N/A | N/A | N/A | 3 drives x 5 matches | drives 418.8, 418.8, 415.8 ms; tripwire 460.7 ms (+10%) |
-| `peak memory` | 5.45 MB | N/A | N/A | N/A | N/A | 3 drives | drives 5.469, 5.453, 5.445 MB; tripwire 6.82 MB (+25%) |
-| `processor time per tick` | 1.4965 µs | N/A | N/A | N/A | N/A | 3 drives | drives 1.4965, 1.4965, 1.4858 µs; reported, +10% would be 1.646 µs |
-| `full match wall time` | 421 ms | N/A | N/A | N/A | N/A | 3 drives | drives 421, 421, 419 ms; 279,850 ticks per match; budget 2000 ms |
-| `ticks per second` | 664,727 | N/A | N/A | N/A | N/A | 3 drives | 664,727 to 667,900 |
-| `tick step` | 1.5264 µs | N/A | N/A | N/A | N/A | criterion auto | interval 1.5118 to 1.5457 µs; `steering_pass_22` 1.0271 µs (interval 998.86 ns to 1.0582 µs) |
-| `stream throughput` | 609,220 ticks/s delivered | N/A | N/A | N/A | N/A | 1 drive | 0 pauses; peak memory 6.84 MB on this workload; stream memory tripwire 8.55 MB |
+| `processor time per tick` (gate) | 1.5519 µs | N/A | N/A | N/A | N/A | 3 drives x 5 matches | drives 1.5631, 1.5414, 1.5519 µs; tripwire 1.7071 µs (+10%) |
+| `peak memory` (gate) | 6.840 MB | N/A | N/A | N/A | N/A | 3 drives | drives 6.840, 6.840, 6.852 MB; tripwire 8.55 MB (+25%) |
+| `processor time per match` | 443.6 ms | N/A | N/A | N/A | N/A | 3 drives | drives 446.8, 440.6, 443.6 ms; reported, +10% would be 488.0 ms |
+| `full match wall time` | 448 ms | N/A | N/A | N/A | N/A | 3 drives | drives 447, 448, 449 ms; 285,850 ticks per match; budget 2000 ms |
+| `ticks per second` | 638,058 | N/A | N/A | N/A | N/A | 3 drives | 639,485, 638,058, 636,637 |
+| `tick step` | 1.5786 µs | N/A | N/A | N/A | N/A | criterion auto | interval 1.5654 to 1.5912 µs; criterion reports -2.0% against its saved state from the previous baseline run, which is not the gate; `steering_pass_22` 864.72 ns (interval 862.56 to 867.10 ns, no change, p = 0.31) |
+| `stream throughput` | 440,037 ticks/s delivered | N/A | N/A | N/A | N/A | 1 drive | 1 pause; peak memory 8.355 MB on this workload; stream memory tripwire 10.44 MB |
 
-Evidence: `bench-baseline/tactics-and-ai/bench-1.stdout.txt`, `bench-2.stdout.txt`, `bench-3.stdout.txt`, `bench-stream-1.stdout.txt`, and `criterion.stdout.txt`, each with its `.stderr.txt` and `.exit-code` (all 0), plus `build.stderr.txt`, `commit.txt` (`837cb5c`), and `measured-at.txt`. The build hash is `837cb5c-dirty`. The `-dirty` suffix comes from untracked workflow files and the staged documents of other work, not from engine code. The content hash is `30e098265c77`. The machine hash is `74ca12fc08a4` (AMD Ryzen 7 9800X3D, Ultimate Performance plan). The processor-to-wall ratios are 0.993, 0.994, and 0.991. No reading is discarded.
+Evidence: `bench-baseline/tempo-and-restarts/bench-1.stdout.txt`, `bench-2.stdout.txt` and `bench-3.stdout.txt` (the JSON of each drive, each with an `.exit-code` of 0), `bench-stream-1.stdout.txt` and `criterion.stdout.txt` (each with its `.stderr.txt` and `.exit-code`, all 0), `commit.txt` (`bce0144`) and `measured-at.txt` (`2026-09-25T03:03:17Z`). The release build was already current (`cargo build --release -p engine-cli` finished in 0.14 s with nothing to compile). The build hash is `bce0144-dirty`. The suffix comes from workflow files and staged design documents, not from engine code. The content hash is `8170d2f2d5fa`. The machine hash is `74ca12fc08a4` (the 8-core reference machine). The processor-to-wall ratios are 0.998, 0.982 and 0.987. No reading is discarded.
 
-Criterion reported `steering_pass_22` 23 percent slower than its saved state, although no steering code changed since the verify reading of 875.22 ns on `a4893c8`. The whole-tick figure from the same run showed no change (+0.4 percent, p = 0.24). The steering reading is recorded as machine noise and is not a gate.
+The per-tick figure (1.5519 µs) is 3.8% under the keeper-and-shots baseline (1.613 µs) and close to that slice's own compare reading (1.5638 µs). It is a new baseline, not a change made by this slice. The stream drive had 1 pause, against 0 in the previous baseline. The stream gate is memory, and one pause on one drive is reported, not judged.
 
 ## Measurement Commands
 
 Exact commands to reproduce these results, in order:
 
 ```bash
-# 1. processor time per match (the gate), per tick, wall time, ticks per second, peak memory
+# 1. processor time per tick (the gate), per match, wall time, ticks per second, peak memory
 #    (one thread; warm-up run discarded; 5 timed matches per drive; three drives, median of drives)
 cargo build --release -p engine-cli
 target/release/engine-cli.exe bench --seed 42 --matches 5 --json
 
 # 2. tick step (criterion, harness = false)
-cargo bench -p engine --bench tick_step
+cargo bench -j 6 -p engine --bench tick_step
 
 # 3. stream throughput (socket on, in-process client reading as fast as it can)
 target/release/engine-cli.exe bench --seed 42 --matches 1 --stream --json
 ```
 
-Run every command from Git Bash or PowerShell with no other heavy process running, and with `SM_DATA_DIR` set to a scratch folder. Command 3 must never run while command 1 is running.
+Run every command on the reference PC (steer.md: the benchmark stays on this PC), from Git Bash or PowerShell with no other heavy process running, and with `SM_DATA_DIR` set to a scratch folder. Command 3 must never run while command 1 is running.
 
 ## Targets That Could Not Be Measured
 
-None of the engine targets failed. The four page targets from the viewer slice are not re-measured, because this slice changes no drawing, decoding, or history code. `viewer-match-day` still takes their readings from `history/05c-benchmark-3.md`.
+None of the engine targets failed. The four page targets from the viewer slice are not re-measured, because this slice changes no drawing, decoding or history code.
 
 ## Compare rules for this baseline
 
-- The gate is `bench.cpu_ms / bench.matches` against 460.7 ms (+10 percent) and `bench.peak_mem_mb` against 6.82 MB (+25 percent), each the median of three drives. A reading over either limit is a tripwire.
-- `bench.cpu_us_per_tick` (1.4965 µs at baseline) and `bench.ticks_per_match` (279,850) are reported beside the gate with their deltas. If the per-match gate fires while the per-tick figure is within 10 percent, the product owner decides. The comparison does not pass that case by itself.
-- The 2000 ms per-match budget still applies (NFR-1). The stream workload keeps its own memory tripwire of 8.55 MB.
+- The gate is `bench.cpu_us_per_tick` against 1.7071 µs (+10 percent) and `bench.peak_mem_mb` against 8.55 MB (+25 percent), each the median of three drives. A reading over either limit is a tripwire.
+- `bench.cpu_ms / bench.matches` (443.6 ms at baseline) and `bench.ticks_per_match` (285,850) are reported beside the gate with their deltas. The 2000 ms per-match budget still applies (NFR-1).
+- The stream workload keeps its own memory tripwire of 10.44 MB.
 - **Update the sibling `05c-benchmark.yaml` in the same pass:** set `mode: compare`, fill `compare_commit`, move each baseline value from `after` to `before`, and write the new reading to `after`.

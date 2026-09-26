@@ -7,8 +7,8 @@ status: active
 current-stage: implement
 stage-number: 5
 created-at: "2026-09-21T16:46:41Z"
-updated-at: "2026-09-22T23:27:52Z"
-selected-slice: "tactics-and-ai"
+updated-at: "2026-09-25T22:45:37Z"
+selected-slice: ""
 branch-strategy: dedicated
 branch: "feat/football-manager-match-engine"
 base-branch: "main"
@@ -19,7 +19,6 @@ pr-url: ""
 pr-number: 0
 open-questions:
   - "U-2 Observability sink and transport for the event stream — /wf observability init"
-  - "U-3 Operating systems and packaging beyond Windows — slice, then the product owner"
 tags: [game, simulation, match-engine, 2d-viewer, rust, greenfield]
 stack:
   detected-at: "2026-09-21T16:46:41Z"
@@ -100,6 +99,54 @@ intent-risks:
     decision: "The scripting runtime is a named later slice that slice must create; the Definition of Done reads \"boundary shipped, runtime open\" until that slice closes. Tradeoff: the workflow stays open longer than the first release."
     po-ratified: true
     po-answer: "po-answers.md · shape Extension round 2 Q31"
+  - id: RIM-7
+    risk: "\"Fix the ten-man issue\" is read as lowering the card rate so red cards rarely happen, which hides the defending bug instead of fixing it."
+    severity: high
+    status: adjudicated
+    adjudicated-by: "03-slice-defending-and-discipline.md#acceptance-criteria"
+    decision: "Fix the team shape and defending first; a controlled sending-off experiment with cards otherwise off is the criterion, and the card rate is fixed separately. Tradeoff: a larger engine change than a tuning tweak."
+    po-ratified: true
+    po-answer: "po-answers.md · extend round 1 Q-E2, Q-E3"
+  - id: RIM-8
+    risk: "\"Recalibrate against new bands\" is read as widening bands or tuning to one seed until the gate is green."
+    severity: high
+    status: adjudicated
+    adjudicated-by: "03-slice-realism-tuning.md#risks"
+    decision: "Band values are fixed by the product owner from sourced data; tuning must pass on five seeds; no band is widened without a recorded answer. Tradeoff: the tuning slice may stop and return to the product owner."
+    po-ratified: true
+    po-answer: "po-answers.md · extend round 1 Q-E1, Q-E4"
+  - id: RIM-9
+    risk: "\"Fix corners\" is read as awarding corners by a scripted rate instead of from the ball crossing the line after a defending touch."
+    severity: high
+    status: adjudicated
+    adjudicated-by: "03-slice-keeper-and-shots.md#acceptance-criteria"
+    decision: "Corners must arise from parries, blocks, deflections or clearances over the goal line; a criterion forbids a corner without a crossing. Tradeoff: corners depend on the keeper and block models being right."
+    po-ratified: true
+    po-answer: "po-answers.md · extend round 1 Q-E3"
+  - id: RIM-10
+    risk: "The ten-player fix is read as covering only a 4-4-2 side reduced to ten, leaving other formations broken at 11 against 11."
+    severity: high
+    status: adjudicated
+    adjudicated-by: "03-slice-defending-and-discipline.md#acceptance-criteria"
+    decision: "Every shipped formation (4-4-2, 4-3-3, 4-2-3-1, 3-5-2) is measured against 4-4-2 in a formations suite and must hold. Tradeoff: calibration takes longer."
+    po-ratified: true
+    po-answer: "po-answers.md · extend round 1 Q-E2"
+  - id: RIM-11
+    risk: "\"A fast tuning loop\" is read as permission to judge a slice on a targeted one-seed run, so a gain that is sampling noise is accepted and the full suites stop being run."
+    severity: high
+    status: adjudicated
+    adjudicated-by: "03-slice-tuning-loop.md#scope"
+    decision: "A targeted run is an inner loop only. The diff prints the sampling error and marks a change inside two errors as noise; slice gates still run the full suites on five seeds (one seed for formations, Q-I1). Tradeoff: a tuning slice still pays for one full gate run at its end."
+    po-ratified: true
+    po-answer: "po-answers.md · extend round 2 Q-X1, Q-X5"
+  - id: RIM-12
+    risk: "\"Fix the lone forward\" is read as lowering the card chance or the goal tuning, or scripting the forward never to dribble, so the red-card criterion passes while play stays unrealistic."
+    severity: high
+    status: adjudicated
+    adjudicated-by: "03-slice-lone-forward.md#scope"
+    decision: "Only two levers: the lone forward's decisions with no forward team-mate, and the won-tackle against foul odds. The card chance per foul (RIM-7), the keeper model and every limit stay fixed, and the pairings and discipline that pass now must still pass. Tradeoff: the slice may stop and return to the product owner if both levers at their bounds fall short."
+    po-ratified: true
+    po-answer: "po-answers.md · extend round 2 Q-X2, Q-X3"
 charter:
   - id: C1
     commitment: "A human manager picks a lineup and tactics, then plays a complete match against a computer-managed team."
@@ -131,37 +178,65 @@ charter:
     source: "01-intake.md#restated-request"
     status: honored
     po-ratified: true
+  - id: C7
+    commitment: "Over many matches, match statistics fall within sourced real-football bands (scorelines, cards, shots on target, passes, corners, throw-ins, goal kicks), for every shipped formation and after a sending-off."
+    source: "03-slice-realism-bands-v2.md#goal"
+    status: at-risk
+    po-ratified: true
 slices:
   - {slug: engine-core, status: complete, complexity: l, depends-on: []}
   - {slug: data-schemas-generator, status: complete, complexity: m, depends-on: [engine-core]}
   - {slug: stream-protocol, status: complete, complexity: m, depends-on: [engine-core]}
   - {slug: viewer-pitch, status: complete, complexity: m, depends-on: [stream-protocol]}
   - {slug: match-rules, status: complete, complexity: l, depends-on: [engine-core, data-schemas-generator]}
-  - {slug: tactics-and-ai, status: in-progress, complexity: l, depends-on: [match-rules, data-schemas-generator]}
-  - {slug: commentary, status: defined, complexity: s, depends-on: [match-rules]}
-  - {slug: calibration, status: defined, complexity: m, depends-on: [tactics-and-ai, data-schemas-generator]}
-  - {slug: viewer-match-day, status: defined, complexity: m, depends-on: [viewer-pitch, stream-protocol, commentary]}
-  - {slug: viewer-lineup-tactics, status: defined, complexity: l, depends-on: [viewer-match-day, tactics-and-ai]}
-  - {slug: viewer-reports-recovery, status: defined, complexity: m, depends-on: [viewer-match-day, match-rules]}
-  - {slug: integration, status: defined, complexity: m, depends-on: [calibration, commentary, viewer-lineup-tactics, viewer-reports-recovery]}
-  - {slug: extra-time-penalties, status: defined, complexity: s, depends-on: [match-rules, tactics-and-ai], deferred: true}
-  - {slug: experiment-flags, status: defined, complexity: s, depends-on: [calibration], deferred: true}
-  - {slug: scripting-runtime, status: defined, complexity: l, depends-on: [data-schemas-generator, tactics-and-ai, calibration], deferred: true}
-  - {slug: distribution, status: defined, complexity: m, depends-on: [integration], deferred: true}
+  - {slug: tactics-and-ai, status: complete, complexity: l, depends-on: [match-rules, data-schemas-generator]}
+  - {slug: commentary, status: complete, complexity: s, depends-on: [match-rules]}
+  - {slug: calibration, status: complete, complexity: m, depends-on: [tactics-and-ai, data-schemas-generator]}
+  - {slug: viewer-match-day, status: complete, complexity: m, depends-on: [viewer-pitch, stream-protocol, commentary]}
+  - {slug: viewer-lineup-tactics, status: complete, complexity: l, depends-on: [viewer-match-day, tactics-and-ai]}
+  - {slug: viewer-reports-recovery, status: complete, complexity: m, depends-on: [viewer-match-day, match-rules]}
+  - {slug: integration, status: complete, complexity: m, depends-on: [calibration, commentary, viewer-lineup-tactics, viewer-reports-recovery]}
+  - {slug: extra-time-penalties, status: complete, complexity: s, depends-on: [match-rules, tactics-and-ai], deferred: true}
+  - {slug: experiment-flags, status: complete, complexity: s, depends-on: [calibration], deferred: true}
+  - {slug: scripting-runtime, status: complete, complexity: l, depends-on: [data-schemas-generator, tactics-and-ai, calibration], deferred: true}
+  - {slug: distribution, status: complete, complexity: m, depends-on: [integration], deferred: true}
+  - {slug: realism-bands-v2, status: complete, complexity: m, depends-on: [calibration, probe-engine-core]}
+  - {slug: defending-and-discipline, status: complete, complexity: l, depends-on: [realism-bands-v2]}
+  - {slug: tuning-loop, status: complete, complexity: m, depends-on: [realism-bands-v2]}
+  - {slug: lone-forward, status: complete, complexity: l, depends-on: [tuning-loop, defending-and-discipline]}
+  - {slug: keeper-and-shots, status: complete, complexity: l, depends-on: [defending-and-discipline]}
+  - {slug: tempo-and-restarts, status: complete, complexity: m, depends-on: [keeper-and-shots]}
+  - {slug: realism-tuning, status: skipped, complexity: m, depends-on: [tempo-and-restarts]}
 augmentations:
   - {type: instrument, artifact: 04b-instrument.md, slice: match-rules, status: ready, created-at: "2026-09-22T19:29:33Z", prior: history/04b-instrument-3.md}
-  - {type: benchmark, artifact: 05c-benchmark.md, slice: match-rules, mode: baseline, status: ready, created-at: "2026-09-22T19:29:33Z", prior: history/05c-benchmark-3.md}
-  - {type: experiment, artifact: 04c-experiment.md, status: deferred-to-experiment-flags, created-at: "2026-09-21T21:57:49Z"}
+  - {type: benchmark, artifact: 05c-benchmark.md, slice: tempo-and-restarts, mode: baseline, status: ready, created-at: "2026-09-25T03:06:16Z", prior: history/05c-benchmark-8.md}
+  - {type: experiment, artifact: 04c-experiment.md, slice: experiment-flags, status: ready, created-at: "2026-09-21T21:57:49Z"}
 evidence-quality:
-  live: 2
-  headless: 5
-  n-a: 27
+  live: 16
+  headless: 40
+  emulator-or-container: 2
+  n-a: 61
 metric-acceptance-mock-rung: 0
-runtime-evidence-deferrals: []
+runtime-evidence-deferrals:
+  - slice: viewer-match-day
+    reason: "AC-7 human legibility reading only. Rungs tried: headless Microsoft Edge 153 at 1280 by 800 and 60 Hz over the DevTools protocol read the computed contrast of 201 visible text and number nodes (minimum 4.61:1, none under 4.5:1), confirmed no page scroll (scrollWidth 1280, scrollHeight 800), and tabbed through every control (8 controls plus the feed list, each :focus-visible with a 2px solid ring; screenshots ac7-focus-*.png). The pre-registered rung web-5 is a person reading the screen on the reference laptop; this run has no human operator. Probe: `grep -ciE \"legibility|read the match screen\" po-answers.md` -> `0` (no recorded reading), and the integration slice that hosts the reading is `status: defined`. Residual: the human judgement that the clock, score, and every statistics value read without zooming on the reference laptop."
+    deferred-at: "2026-09-23T09:49:45Z"
+    wall-ownership: external
+    clearing-event: "The product owner reads the match screen on the reference laptop at 1280 by 800 during the integration slice's charter-scenario run and records the reading in po-answers.md; then /wf probe football-manager-match-engine or a re-verify of viewer-match-day records it."
+    clearing-probe: "grep -ciE \"legibility|read the match screen\" .ai/workflows/football-manager-match-engine/po-answers.md"
+    cleared-by: null
+    needed-by: integration
+  - slice: distribution
+    reason: "macOS build scope row only (product owner OQ-1 = B: macOS is a pre-registered deferral). Rungs tried: (1) the platform-neutral proxy — packaging/unix/build.sh and smoke.sh ran on Linux x86_64 in WSL Ubuntu-24.04 this run, 7 of 7 checks twice, and the macOS branch of --open shares the start script; (2) cross-compile — `rustup target list --installed` -> `aarch64-linux-android armv7-linux-androideabi x86_64-linux-android x86_64-pc-windows-msvc` (no apple-darwin target), and `command -v xcrun ld64 ld64.lld zig clang` on Windows and `xcrun ld64 zig clang o64-clang` in WSL -> `not found` for every tool (no Apple SDK or linker); (3) a macOS runner — `ls .github/workflows` -> `No such file or directory` and the repository has no remote, so no CI runner exists; (4) a macOS VM — no Apple hardware, and macOS licensing binds it to Apple hardware. Residual: building, installing, and running the macOS archive on a Mac (build.sh, smoke.sh, and `open` launching the default browser)."
+    deferred-at: "2026-09-23T18:35:00Z"
+    wall-ownership: external
+    clearing-event: "An operator provides a Mac or a macOS CI runner, runs `sh packaging/unix/build.sh` then `sh packaging/unix/smoke.sh dist/SoccerManager-<v>-macos-<arch>.tar.gz .ai/workflows/football-manager-match-engine/verify-evidence/distribution/macos`, then re-runs /wf verify football-manager-match-engine distribution or /wf probe football-manager-match-engine."
+    clearing-probe: "test -f .ai/workflows/football-manager-match-engine/verify-evidence/distribution/macos/results.json"
+    cleared-by: null
 compressed-slices:
-  - {slug: probe-engine-core, slice-type: probe, created-at: "2026-09-22T06:03:50Z"}
-next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine tactics-and-ai"
+  - {slug: probe-engine-core, slice-type: probe, status: complete, created-at: "2026-09-22T06:03:50Z"}
+next-command: wf-review
+next-invocation: "/wf review football-manager-match-engine"
 workflow-files:
   - 00-index.md
   - 01-intake.md
@@ -228,6 +303,16 @@ workflow-files:
   - history/05c-benchmark-1.html.fragment
   - po-answers.md
   - 03-slice-probe-engine-core.md
+  - 03-slice-realism-bands-v2.md
+  - 03-slice-defending-and-discipline.md
+  - 03-slice-keeper-and-shots.md
+  - 03-slice-tempo-and-restarts.md
+  - 03-slice-realism-tuning.md
+  - 03-slice-tuning-loop.md
+  - 03-slice-lone-forward.md
+  - 04-plan-realism-bands-v2.md
+  - 04-plan-realism-bands-v2.yaml
+  - 04-plan-realism-bands-v2.html.fragment
   - 03-slice-probe-engine-core.01-dump-path.html.fragment
   - 05-implement-stream-protocol.md
   - 06-verify-stream-protocol.md
@@ -235,6 +320,9 @@ workflow-files:
   - 02c-craft.md
   - 02c-craft.yaml
   - 02c-craft.html.fragment
+  - history/02c-craft-0.html.fragment
+  - history/02c-craft-0.yaml
+  - history/02c-craft-0.md
   - 04-plan-viewer-pitch.md
   - 04-plan-viewer-pitch.yaml
   - 04-plan-viewer-pitch.html.fragment
@@ -283,14 +371,172 @@ workflow-files:
   - bench-baseline/tactics-and-ai/
   - 05-implement-tactics-and-ai.md
   - implement-evidence/tactics-and-ai/
+  - 06-verify-tactics-and-ai.md
+  - verify-evidence/tactics-and-ai/
+  - 05-implement-commentary.md
+  - bench-baseline/commentary/
+  - 06-verify-commentary.md
+  - verify-evidence/commentary/
+  - 05-implement-calibration.md
+  - implement-evidence/calibration/
+  - 06-verify-calibration.md
+  - history/06-verify-calibration-0.md
+  - verify-evidence/calibration/
+  - 04-plan-viewer-match-day.md
+  - 04-plan-viewer-match-day.yaml
+  - 04-plan-viewer-match-day.html.fragment
+  - history/04-plan-viewer-match-day-0.md
+  - history/04-plan-viewer-match-day-1.md
+  - 04-plan-viewer-lineup-tactics.md
+  - 04-plan-extra-time-penalties.md
+  - 04-plan-distribution.md
+  - 04-plan-probe-engine-core.md
+  - 04-plan-probe-engine-core.yaml
+  - 04-plan-probe-engine-core.html.fragment
+  - history/04-plan-probe-engine-core-0.md
+  - history/04-plan-probe-engine-core-1.md
+  - history/04-plan-probe-engine-core-2.md
+  - 05-implement-viewer-match-day.md
+  - implement-evidence/viewer-match-day/
+  - 06-verify-viewer-match-day.md
+  - verify-evidence/viewer-match-day/
+  - 05-implement-viewer-lineup-tactics.md
+  - 06-verify-viewer-lineup-tactics.md
+  - verify-evidence/viewer-lineup-tactics/
+  - 05-implement-viewer-reports-recovery.md
+  - implement-evidence/viewer-reports-recovery/
+  - 06-verify-viewer-reports-recovery.md
+  - verify-evidence/viewer-reports-recovery/
+  - 05-implement-integration.md
+  - implement-evidence/integration/
+  - bench-baseline/integration/
+  - 06-verify-integration.md
+  - verify-evidence/integration/
+  - 05-implement-extra-time-penalties.md
+  - 06-verify-extra-time-penalties.md
+  - verify-evidence/extra-time-penalties/
+  - 05-implement-experiment-flags.md
+  - 06-verify-experiment-flags.md
+  - verify-evidence/experiment-flags/
+  - 05-implement-scripting-runtime.md
+  - implement-evidence/scripting-runtime/
+  - 06-verify-scripting-runtime.md
+  - verify-evidence/scripting-runtime/
+  - 06-verify-distribution.md
+  - verify-evidence/distribution/
+  - 05-implement-distribution.md
+  - implement-evidence/distribution/
+  - 05-implement-probe-engine-core.md
+  - 05-implement-realism-bands-v2.md
+  - implement-evidence/realism-bands-v2/
+  - 06-verify-realism-bands-v2.md
+  - verify-evidence/realism-bands-v2/
+  - implement-evidence/probe-engine-core/
+  - 06-verify-probe-engine-core.md
+  - verify-evidence/probe-engine-core/
+  - 07-review.md
+  - 07-review.yaml
+  - 07-review.html.fragment
+  - 07-review-correctness.md
+  - 07-review-correctness.yaml
+  - 07-review-correctness.html.fragment
+  - 07-review-security.md
+  - 07-review-security.yaml
+  - 07-review-security.html.fragment
+  - 07-review-performance.md
+  - 07-review-performance.yaml
+  - 07-review-performance.html.fragment
+  - 07-review-architecture.md
+  - 07-review-architecture.yaml
+  - 07-review-architecture.html.fragment
+  - 07-review-intent-fidelity.md
+  - 07-review-intent-fidelity.yaml
+  - 04-plan-defending-and-discipline.md
+  - 04-plan-defending-and-discipline.yaml
+  - 04-plan-defending-and-discipline.html.fragment
+  - history/04-plan-14.md
+  - history/05c-benchmark-5.md
+  - history/05c-benchmark-5.yaml
+  - history/05c-benchmark-5.html.fragment
+  - bench-baseline/defending-and-discipline/
+  - 05-implement-defending-and-discipline.md
+  - implement-evidence/defending-and-discipline/
+  - history/05-implement-defending-and-discipline-0.md
+  - 06-verify-defending-and-discipline.md
+  - verify-evidence/defending-and-discipline/
+  - 04-plan-tuning-loop.md
+  - 04-plan-tuning-loop.yaml
+  - 04-plan-tuning-loop.html.fragment
+  - history/04-plan-15.md
+  - history/04-plan-16.md
+  - history/04-plan-tuning-loop-0.md
+  - history/04-plan-tuning-loop-0.yaml
+  - history/04-plan-tuning-loop-0.html.fragment
+  - 05-implement-tuning-loop.md
+  - implement-evidence/tuning-loop/
+  - 06-verify-tuning-loop.md
+  - verify-evidence/tuning-loop/
+  - history/05c-benchmark-6.md
+  - history/05c-benchmark-6.yaml
+  - history/05c-benchmark-6.html.fragment
+  - bench-baseline/lone-forward/
+  - 04-plan-lone-forward.md
+  - 04-plan-lone-forward.yaml
+  - 04-plan-lone-forward.html.fragment
+  - history/04-plan-17.md
+  - 05-implement-lone-forward.md
+  - implement-evidence/lone-forward/
+  - history/05-implement-lone-forward-0.md
+  - history/05-implement-lone-forward-1.md
+  - 06-verify-lone-forward.md
+  - verify-evidence/lone-forward/
+  - history/05c-benchmark-7.md
+  - history/05c-benchmark-7.yaml
+  - history/05c-benchmark-7.html.fragment
+  - bench-baseline/keeper-and-shots/
+  - 04-plan-keeper-and-shots.md
+  - 04-plan-keeper-and-shots.yaml
+  - 04-plan-keeper-and-shots.html.fragment
+  - history/04-plan-18.md
+  - 05-implement-keeper-and-shots.md
+  - implement-evidence/keeper-and-shots/
+  - 06-verify-keeper-and-shots.md
+  - verify-evidence/keeper-and-shots/
+  - verify-evidence/keeper-and-shots-run-0/
+  - 06-verify-tempo-and-restarts.md
+  - verify-evidence/tempo-and-restarts/
+  - verify-evidence/tempo-and-restarts-run-1/
+  - history/06-verify-tempo-and-restarts-0.md
+  - 04-plan-realism-tuning.md
+  - 04-plan-realism-tuning.yaml
+  - 04-plan-realism-tuning.html.fragment
+  - 04-plan-realism-tuning.01-consult.html.fragment
+  - 05-implement-realism-tuning.md
+  - skip-slice-realism-tuning.md
+  - history/04-plan-20.md
+  - history/05-implement-keeper-and-shots-0.md
+  - history/05c-benchmark-8.md
+  - history/05c-benchmark-8.yaml
+  - history/05c-benchmark-8.html.fragment
+  - bench-baseline/tempo-and-restarts/
+  - 04-plan-tempo-and-restarts.md
+  - 04-plan-tempo-and-restarts.yaml
+  - 04-plan-tempo-and-restarts.html.fragment
+  - history/04-plan-19.md
+  - 05-implement-tempo-and-restarts.md
+  - implement-evidence/tempo-and-restarts/
+  - history/05-implement-tempo-and-restarts-0.md
+  - history/05-implement-tempo-and-restarts-1.md
+  - history/05-implement-tempo-and-restarts-2.md
 progress:
   intake: complete
   shape: complete
+  design: complete
   slice: complete
   plan: in-progress
   implement: in-progress
   verify: in-progress
-  review: not-started
+  review: complete
   handoff: not-started
   ship: not-started
   retro: not-started

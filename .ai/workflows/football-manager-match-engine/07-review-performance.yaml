@@ -1,0 +1,26 @@
+schema: "sdlc/v1"
+artifact: "review-dimension"
+dimension: "performance"
+parent: "07-review.md"
+rev: 1
+verdict: "ship"
+summary: "9 findings; 8 fixed, 1 deferred."
+counts:
+  blocker: 0
+  high: 0
+  med: 0
+  low: 1
+  nit: 0
+findings:
+  - id: "PERF-5"
+    severity: "LOW"
+    file: "crates/engine/src/sim.rs"
+    line: "766"
+    confidence: "medium"
+    action: "defer"
+    msg: "step clones the whole Tuning every tick"
+    evidence: "About 0.7 KB copied ~280k times per match (1-2% of the tick budget)."
+    fix: "The fix (Arc<Tuning> or split borrows) touches every tuning reader and test that edits tuning in place; not localized."
+    status: "deferred"
+    surfaced-at: "2026-09-23T20:34:36Z"
+    pre-existing: false

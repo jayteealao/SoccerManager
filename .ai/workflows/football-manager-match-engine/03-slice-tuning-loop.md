@@ -3,10 +3,10 @@ schema: sdlc/v1
 type: slice
 slug: football-manager-match-engine
 slice-slug: tuning-loop
-status: defined
+status: complete
 stage-number: 3
 created-at: "2026-09-24T06:26:59Z"
-updated-at: "2026-09-24T06:26:59Z"
+updated-at: "2026-09-24T10:55:00Z"
 complexity: m
 depends-on: [realism-bands-v2]
 source: extension

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="plan">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · plan — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="plan">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span aria-hidden="true">/</span><span class="m-here">lone-forward</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · plan</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">lone-forward</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/04-plan-lone-forward.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">04-plan-lone-forward.md</div>
+      <h1 class="pg-title">Plan · <code>lone-forward</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="stage-badge">plan</span><span class="meta">rev 0</span><span class="meta">2026-09-24T11:53:45Z</span></div>
+    </header><div class="metric-row"><div class="metric">
+      <span class="metric-label">files to touch</span>
+      <span class="metric-value">17</span>
+      
+    </div><div class="metric">
+      <span class="metric-label">steps</span>
+      <span class="metric-value">13</span>
+      
+    </div><div class="metric is-ok">
+      <span class="metric-label">blockers</span>
+      <span class="metric-value">none</span>
+      
+    </div></div>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-plan" tabindex="-1"><a class="header-anchor" href="#the-plan"><span>The Plan</span></a></h2>
+<p><code>defending-and-discipline</code> built goal-side cover, the new press and the acting keeper at <code>f7fe35b</code>, but two criteria failed at every in-bounds setting of its five tuning values. With one player sent off, the reduced side outscores the full side in all three arms (keeper 5.82 against 2.06, centre-back 2.39 against 0.71, striker 3.84 against 0.95). 4-4-1-1 scores 5.18 and 3-4-3 scores 4.17 against 4-4-2, above the 4.0 limit. The measured cause is a carrier with no forward team-mate. His pass options all score a negative progress term (<code>decision.rs:283-292</code>), so a dribble and a shot win: 40.6 shots against 20.8 in the control and no offsides. Contact also floods fouls, because the tackle loop draws a fixed 5% win share against a 10% foul chance on every tick in reach (<code>sim.rs:1017-1018</code>).</p>
+<p>The plan uses only the two levers the product owner allowed (RIM-12). The first lever is the lone forward’s decisions. A carrier is lone when no active outfield team-mate is ahead of him. He then gets three weighted terms in the existing scored options: a lay-off bonus on passes to team-mates at or behind him, and, when he is pressed, a hold-up bonus and a dribble cost. He is never forced into a choice. Off the ball, the team’s lone forward moves toward the second-last defender’s line and stays onside, from the same line the referee uses. The second lever is the tackle odds. The 0.05 literal becomes a bounded <code>tackle_win_base</code>, and the existing <code>foul_base</code> can move inside its bounds. The card chances, the keeper model and every limit stay fixed. The five new values first land at neutral values, which give a zero-change red-card diff. Only then does the tuning loop move them, with the red-card suite and targeted pairings as the inner loop.</p>
+<p>The work is 13 steps over 17 files. No snapshot, schema or protocol change is needed, because the lone state is derived each tick. The benchmark is re-baselined on <code>a447ff1</code> at 1.5422 µs per tick (gate 1.6964 µs). When it lands, <code>keeper-and-shots</code> can plan on a red-card experiment that no longer rewards the reduced side. The top risk is that both levers at their bounds still leave an arm or a pairing failing. In that case implement stops and reports the figures, and it never raises a limit.</p></section><figure class="figure-canvas">
+  <figcaption class="figure-meta">
+    <span class="figure-title"><b>Figure 3</b> · File-change topology</span>
+    <span class="figure-legend" aria-hidden="true"><span class="legend-entry"><span class="sw modified"></span>modified</span><span class="legend-entry"><span class="sw new"></span>new</span><span class="legend-entry"><span class="sw deleted"></span>deleted</span><span class="legend-entry"><span class="sw external"></span>external</span></span>
+  </figcaption>
+  <svg viewBox="0 0 980 418" width="100%" preserveAspectRatio="xMinYMid meet" aria-label="File-change topology">
+    <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8377"/>
+    </marker>
+  </defs><rect x="20" y="30" width="301.3333333333333" height="108" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC/TUNING.RS AND CONTENT/TUNING.JSON</text><rect x="333.3333333333333" y="30" width="301.3333333333333" height="140" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC (DECISION.RS, TEAM.RS, RULES/OFFSIDE.RS)</text><rect x="646.6666666666666" y="30" width="301.3333333333333" height="108" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC (SIM.RS, RULES/FOULS.RS)</text><rect x="20" y="226" width="301.3333333333333" height="172" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="244" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/TESTS</text><rect x="333.3333333333333" y="130" width="301.3333333333333" height="76" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="148" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">DOCS/REFERENCE/DATA-FILES.MD</text><rect x="32" y="58" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tuning.rs</text>
+      <text x="40" y="80" font-size="8" fill="#8a8377">config · +40/−0</text><rect x="32" y="90" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tuning.json</text>
+      <text x="40" y="112" font-size="8" fill="#8a8377">config · +5/−0</text><rect x="658.6666666666666" y="58" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">fouls.rs</text>
+      <text x="666.6666666666666" y="80" font-size="8" fill="#8a8377">domain · +30/−0</text><rect x="658.6666666666666" y="90" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">sim.rs</text>
+      <text x="666.6666666666666" y="112" font-size="8" fill="#8a8377">domain · +1/−1</text><rect x="345.3333333333333" y="58" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">offside.rs</text>
+      <text x="353.3333333333333" y="80" font-size="8" fill="#8a8377">domain · +20/−10</text><rect x="345.3333333333333" y="90" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">team.rs</text>
+      <text x="353.3333333333333" y="112" font-size="8" fill="#8a8377">domain · +30/−0</text><rect x="345.3333333333333" y="122" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="134" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">decision.rs</text>
+      <text x="353.3333333333333" y="144" font-size="8" fill="#8a8377">domain · +60/−2</text><rect x="32" y="254" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="40" y="266" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">lone_forward.rs</text>
+      <text x="40" y="276" font-size="8" fill="#8a8377">test · +220/−0</text><rect x="32" y="286" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="298" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">content.rs</text>
+      <text x="40" y="308" font-size="8" fill="#8a8377">test · +25/−0</text><rect x="32" y="318" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="330" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tests (acting_keeper, discipline, injury, plugin_hooks, rules_cards, rules_fouls, rules_restarts, tactics_queue)</text>
+      <text x="40" y="340" font-size="8" fill="#8a8377">test · +9/−9</text><rect x="32" y="350" width="277.3333333333333" height="24" rx="3" fill="#f0ece1" stroke="#cbc4b1" stroke-width="1"/>
+      <text x="40" y="362" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">defending.rs and discipline.rs (slow criterion tests)</text>
+      <text x="40" y="372" font-size="8" fill="#8a8377">test · +0/−0</text><rect x="345.3333333333333" y="158" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="170" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">data-files.md</text>
+      <text x="353.3333333333333" y="180" font-size="8" fill="#8a8377">docs · +8/−0</text><path d="M 936 103 C 797.3333333333333 103, 797.3333333333333 71, 658.6666666666666 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 135 C 484 135, 484 103, 345.3333333333333 103" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 135 C 484 135, 484 71, 345.3333333333333 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 71 C 484 71, 484 71, 32 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 135 C 327.3333333333333 135, 327.3333333333333 71, 32 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 267 C 327.3333333333333 267, 327.3333333333333 135, 345.3333333333333 135" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/>
+  </svg>
+</figure><div class="fragment"><section class="fragment-plan" data-artifact="plan" data-slice="lone-forward" data-rev="0">
+  <!-- @include-skip files-touched rows and callouts follow the sibling plan fragments' inline markup so the page renders them identically -->
+  <table class="files-touched pl-files">
+    <thead><tr><th>File</th><th>Status</th><th>Module</th><th>Lines</th></tr></thead>
+    <tbody>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">config</span> crates/engine/src/tuning.rs, content/tuning.json</summary><div class="pl-card">Five bounded values: three decision weights for a lone carrier (hold-up, lay-off, a cost on a pressed dribble), the tackle win base, and how far the lone forward holds the offside line. Each lands at a neutral value that changes nothing, then the tuning loop moves it.</div></details></td><td>modified</td><td>tuning</td><td>+45</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/rules/fouls.rs, sim.rs</summary><div class="pl-card">The won-tackle chance becomes one function with a tuned base in place of a fixed 0.05. The foul side of the odds is the existing foul base. The card chances do not change.</div></details></td><td>modified</td><td>tackle</td><td>+31 / -1</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/decision.rs</summary><div class="pl-card">A carrier with no outfield team-mate ahead of him gets a bonus on passes back and, when pressed, on holding the ball, and a cost on a dribble. Off the ball, the team's lone forward plays on the second-last defender's line and stays onside.</div></details></td><td>modified</td><td>decide</td><td>+60 / -2</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/team.rs, rules/offside.rs</summary><div class="pl-card">The team's lone forward is read from the front line of its formation. The referee's offside line becomes one shared function, so the forward and the referee read the same line.</div></details></td><td>modified</td><td>decide</td><td>+50 / -10</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">test</span> crates/engine/tests/lone_forward.rs and nine updated test files</summary><div class="pl-card">Scenes: a pressed lone forward passes or holds on 40 seeds; the terms need a lone carrier; the lone forward stays onside; a contact draw splits into a won tackle and a foul at the tuned odds. The copied win-chance formula in eight test files calls the new function.</div></details></td><td>new</td><td>tests</td><td>+254 / -9</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">docs</span> docs/reference/data-files.md</summary><div class="pl-card">Five tuning rows and a paragraph on the lone forward and the tackle odds.</div></details></td><td>modified</td><td>docs</td><td>+8</td></tr>
+    </tbody>
+  </table>
+  <div class="pl-risks">
+    <aside class="callout callout-danger"><strong>Both levers at their bounds may fall short (high).</strong> The keeper arm is 5.82 against 2.06 today, and 4-4-1-1 scores 5.18 against a 4.0 limit. Implement stops and reports the figures. It never raises a limit.</aside>
+    <aside class="callout callout-warn"><strong>The lone terms reach other formations (medium).</strong> All ten pairings are rerun, and the eight that pass now are a criterion.</aside>
+    <aside class="callout callout-warn"><strong>Fewer fouls, fewer cards (medium).</strong> The discipline test is rerun. Band misses are recorded, not failed.</aside>
+    <aside class="callout callout-warn"><strong>Hold-up play invites contact (medium).</strong> The hold decays each second, and the tackle odds are tuned in the same loop.</aside>
+    <aside class="callout callout-warn"><strong>Every seeded result moves (medium).</strong> A neutral-value step shows no change first. Each moved expectation is then re-derived and recorded.</aside>
+  </div>
+  <details class="pl-revs">
+    <summary>Prior revisions (0)</summary>
+    <ul><li>No prior revision.</li></ul>
+  </details>
+  <style>
+    .fragment-plan .pl-files { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-plan .pl-files th, .fragment-plan .pl-files td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
+    .fragment-plan .pl-files summary { cursor: pointer; }
+    .fragment-plan .pl-chip { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; opacity: 0.8; }
+    .fragment-plan .pl-card { padding: 6px 0 4px 18px; opacity: 0.9; }
+    .fragment-plan .pl-risks { display: grid; gap: 8px; margin-top: 12px; }
+    @media (max-width: 480px) { .fragment-plan .pl-files th:nth-child(3), .fragment-plan .pl-files td:nth-child(3) { display: none; } }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-plan');
+      var files = 12, modules = 5;
+      var risks = root ? root.querySelectorAll('.pl-risks .callout').length : 0;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'plan', artifact: 'plan', counts: { files: files, modules: modules, risks: risks } } }));
+    })();
+  </script>
+</section>
+</div><div class="prose"><h1 id="plan-lone-forward" tabindex="-1"><a class="header-anchor" href="#plan-lone-forward"><span>Plan: Lone Forward</span></a></h1>
+<h2 id="current-state" tabindex="-1"><a class="header-anchor" href="#current-state"><span>Current State</span></a></h2>
+<ul>
+<li>Code: HEAD <code>a447ff1</code>. <code>git status</code> shows no change under <code>crates</code> or <code>content</code>. This run’s <code>cargo test -p engine --all-features</code> gave 266 passed, 0 failed and 6 ignored over 31 test binaries (exit 0).</li>
+<li><strong>Carrier options</strong> (<code>decision.rs:197-333</code>): shot, the best pass, dribble, clear and hold are each a weighted sum plus the plan offsets and noise. The pass score is <code>(progress + plan + role) × progress</code> with progress from −1 to 1 over 40 m (<code>:283-285</code>), so a backward pass costs up to 0.7 (plus the plan offsets). Dribble is <code>dribble_base + dribble_space × space − pressure-if-pressed + first_touch + skill</code> (<code>:303-309</code>), and “pressed” means an opponent within 2.5 m (<code>:232</code>). Hold is <code>hold + plan.hold − tempo − hold_per_s × seconds held</code> (<code>:310-311</code>). Nothing reads whether a team-mate is ahead.</li>
+<li><strong>Choice</strong> (<code>decision.rs:335-414</code>): the highest score wins. Hold sets the carrier’s target to his position (<code>:390-393</code>). Dribble runs 8 m toward goal, drifting away from the nearest opponent (<code>:394-412</code>).</li>
+<li><strong>Off the ball</strong> (<code>decision.rs:26-76</code>, <code>team.rs:351-367</code>): with a carrier, every player targets its anchor. The anchor is the formation slot moved by block depth, duty and width, plus 0.3 of the ball offset. No anchor reads the offside line.</li>
+<li><strong>Offside</strong> (<code>rules/offside.rs:15-44</code>): <code>offside_set</code> computes the second-last opponent’s depth when a team-mate plays the ball, and flags a team-mate who is past it, past the ball and in the opponents’ half.</li>
+<li><strong>Tackle</strong> (<code>sim.rs:1003-1034</code>): once the carrier’s control cooldown has passed, every opponent within <code>reach_radius</code> (1.0 m), off his foul cooldown, draws once per tick. <code>p_win = 0.05 × tackling / (tackling + dribbling)</code> (<code>:1017</code>) and <code>p_foul = foul_chance(...)</code> (<code>:1018</code>, <code>foul_base</code> 0.1 raised by aggression, lowered by tackling, times the booked factor). <code>tackle_outcome</code> splits one draw (<code>rules/fouls.rs:61-71</code>). The 0.05 literal is copied into eight test files (<code>acting_keeper.rs:151</code>, <code>discipline.rs:33</code>, <code>injury.rs:26</code>, <code>plugin_hooks.rs:158</code>, <code>rules_cards.rs:25</code>, <code>rules_fouls.rs:25</code>, <code>rules_restarts.rs:90,138</code>, <code>tactics_queue.rs:101</code>).</li>
+<li><strong>Tuning</strong> (<code>tuning.rs</code>): <code>DecisionWeights</code> (<code>:203-260</code>) and <code>Tuning</code> both use <code>deny_unknown_fields</code> with garde ranges, and the defending values use <code>#[serde(default = …)]</code> (<code>:156-161</code>). <code>foul_base</code> has bounds 0 to 1 (<code>:138-139</code>). <code>TUNING_VERSION = 2</code> (<code>data/tuning.rs:17</code>).</li>
+<li><strong>Criterion tests</strong> (from <code>defending-and-discipline</code>, unchanged): <code>a_sending_off_gives_no_advantage</code> (<code>tests/defending.rs:204-238</code>, seeds 1–120, cards off, arms 11, 13 and 21, limit 1.6 × control home), <code>every_formation_holds</code> (<code>:240-268</code>, 10 formations against 4-4-2, 120 seeds, home on odd seeds, cards on, 4.0 per side), <code>discipline_is_realistic</code> (<code>tests/discipline.rs:138-181</code>, 200 matches). They print every figure before they assert.</li>
+<li><strong>Inner loop</strong> (from <code>tuning-loop</code>): <code>engine-cli calibrate --suite red-card --seed 1 --matches 120 --baseline …</code> (about 42 s on the reference machine), <code>--suite formations --pairing &quot;4-4-1-1 v 4-4-2&quot; --seed 42 --matches 1000 --baseline …</code> (about 87 s), and the diff marks a change inside two sampling errors as noise (<code>docs/how-to/calibration.md</code>).</li>
+<li><strong>Measured at <code>f7fe35b</code></strong> (<code>05-implement-defending-and-discipline.md</code>, Criterion Results): control 0.78–2.23; keeper arm full 2.06, reduced 5.82 (limit 1.24 for the full side); centre-back 0.71 against 2.39; striker 0.95 against 3.84; 4-4-1-1 5.18–1.00; 3-4-3 4.17–1.26; the eight kept pairings pass; discipline 0.085 second yellows per match, 16.5% with a sending-off, 0 same-tick pairs.</li>
+</ul>
+<h2 id="simplicity-ladder" tabindex="-1"><a class="header-anchor" href="#simplicity-ladder"><span>Simplicity Ladder</span></a></h2>
+<ul>
+<li>Lone-carrier test → rung 3 reuse with modification — <code>decision.rs</code> → <code>options()</code> already walks the players for pressure and passes. The test is one more pass over the carrier’s team-mates with no allocation. There is no in-repo “team-mate ahead” helper.</li>
+<li>Lay-off, hold-up and dribble terms → rung 3 reuse — the scored-options layer (<code>options()</code>), with three new <code>DecisionWeights</code> fields. No new choice kind; Hold and Pass already exist.</li>
+<li>The team’s lone forward off the ball → rung 3 reuse with modification — <code>team.rs</code> → the <code>back_line()</code> band pattern (<code>BACK_LINE_BAND</code>, <code>:264-274</code>), mirrored for the front line as <code>lone_forward()</code>.</li>
+<li>Offside line → rung 3 extract into a shared utility — <code>rules/offside.rs</code> → the second-last depth loop inside <code>offside_set()</code> becomes <code>second_last_depth()</code>, so the referee and the forward read one line.</li>
+<li>Tackle win chance → rung 3 extract into a shared utility — the literal in <code>sim.rs:1017</code> and its eight test copies become <code>fouls::win_chance()</code>, next to <code>foul_chance()</code>.</li>
+<li>Bounded tuning values with defaults → rung 3 reuse — garde <code>range</code> plus serde <code>default</code>, as the five defending values did (<code>tuning.rs:156-161</code>).</li>
+<li>Measurement → rung 3 reuse — the <code>tuning-loop</code> red-card suite, <code>--pairing</code> and <code>--baseline</code>, and the three slow criterion tests.</li>
+</ul>
+<h2 id="applied-learnings" tabindex="-1"><a class="header-anchor" href="#applied-learnings"><span>Applied Learnings</span></a></h2>
+<p>No applicable learnings found. <code>.ai/solutions/INDEX.md</code> does not exist, and <code>.ai/sdlc-config.json</code> sets no global directory.</p>
+<p>Repeat-deferral tripwire: <code>00-index.md</code> holds two deferrals, the human legibility reading (viewer-match-day) and the macOS build (distribution). This slice is verified by headless engine runs with <code>cargo test</code> and <code>engine-cli calibrate</code>. It names neither wall, so the tripwire does not fire.</p>
+<h2 id="likely-files-areas-to-touch" tabindex="-1"><a class="header-anchor" href="#likely-files-areas-to-touch"><span>Likely Files / Areas to Touch</span></a></h2>
+<ul>
+<li><code>crates/engine/src/tuning.rs</code>: <code>lone_hold</code>, <code>lone_layoff</code> and <code>lone_dribble</code> in <code>DecisionWeights</code>; <code>tackle_win_base</code> and <code>lone_line_hold</code> in <code>Tuning</code>; bounds, defaults and <code>Default</code>.</li>
+<li><code>content/tuning.json</code>: the five values.</li>
+<li><code>crates/engine/src/rules/fouls.rs</code>: <code>win_chance()</code> and unit tests.</li>
+<li><code>crates/engine/src/sim.rs</code>: the tackle loop calls <code>win_chance()</code>.</li>
+<li><code>crates/engine/src/rules/offside.rs</code>: <code>second_last_depth()</code>.</li>
+<li><code>crates/engine/src/team.rs</code>: <code>lone_forward()</code> and unit tests.</li>
+<li><code>crates/engine/src/decision.rs</code>: the lone-carrier terms in <code>options()</code>, and the line hold in <code>decide()</code>.</li>
+<li><code>crates/engine/tests/lone_forward.rs</code> (new): the regression scenes.</li>
+<li><code>crates/engine/tests/content.rs</code>: pins and the older-file load.</li>
+<li><code>crates/engine/tests/acting_keeper.rs</code>, <code>discipline.rs</code>, <code>injury.rs</code>, <code>plugin_hooks.rs</code>, <code>rules_cards.rs</code>, <code>rules_fouls.rs</code>, <code>rules_restarts.rs</code>, <code>tactics_queue.rs</code>: the copied formula becomes <code>win_chance()</code>.</li>
+<li><code>docs/reference/data-files.md</code>: five tuning rows and one paragraph.</li>
+<li>Pinned tests that may move and are re-derived: <code>full_match.rs</code>, <code>strength.rs</code>, <code>mentality.rs</code>, <code>ai_trailing.rs</code>, <code>commentary.rs</code> (line floor), <code>sim.rs</code> (stoppage floor), <code>crates/engine-cli/tests/stream_cli.rs</code> (frame count).</li>
+</ul>
+<h2 id="proposed-change-strategy" tabindex="-1"><a class="header-anchor" href="#proposed-change-strategy"><span>Proposed Change Strategy</span></a></h2>
+<ul>
+<li><strong>Two levers, nothing else (RIM-12).</strong> The decision terms and the tackle odds are the only moving parts. The card chances (<code>yellow_*</code>, <code>red_base</code>), the keeper values, the five defending values, and every limit and band stay as they are.</li>
+<li><strong>Lone is literal.</strong> A carrier is lone when no active outfield team-mate has a greater depth along his attack direction. This is the slice’s words (“the carrier has no forward team-mate”), and it covers both the striker left alone after a send-off and the single forward of 4-4-1-1 and 3-4-3.</li>
+<li><strong>Weighted terms, not a script.</strong> When lone:
+<ul>
+<li><code>lone_layoff</code> is added to each pass to a team-mate at or behind him. The progress cost is unchanged, so the best lay-off still prefers the most useful one.</li>
+<li>When also pressed (the existing 2.5 m test), <code>lone_hold</code> is added to hold and <code>lone_dribble</code> to dribble.</li>
+<li>Noise still applies and hold still decays with <code>hold_per_s</code>. So a forward in space can still run at goal, and a held ball is released after a few seconds.</li>
+<li>No term is added to the shot or the clearance. Fewer dribbles into pressure means fewer shots from them.</li>
+</ul>
+</li>
+<li><strong>Off the ball, on the line.</strong> While his team holds the ball and he is not the carrier, <code>Team::lone_forward()</code> gives the team’s single front-line player. His target depth moves toward <code>second_last_depth() − 0.5 m</code> by the share <code>lone_line_hold</code>, and it is never past that line. This gives the midfield a forward option he can lay off from, and it keeps him onside.</li>
+<li><strong>Tackle odds.</strong> <code>win_chance = tackle_win_base × tackling / (tackling + dribbling)</code>. The neutral value 0.05 reproduces today’s figure exactly. <code>foul_base</code> (0 to 1) is the foul side of the same odds and may move inside its bounds. The draw order does not change.</li>
+<li><strong>Neutral first.</strong> The five values land at neutral values (0, 0, 0, 0.05, 0), and every added term is exactly zero with no extra random draw. So step 8 shows that the seams alone change nothing: the workspace tests pass as they do now, and the red-card diff against the baseline is all zero.</li>
+<li><strong>Measure with the tuning loop.</strong> The inner loop is the red-card suite and the two failing pairings through <code>--baseline</code>. The criterion runs are the three slow tests. The slice gate is the full calibrate suites: five seeds for equal and strength, and one seed for formations (<a href="http://steer.md">steer.md</a>, Q-I1).</li>
+<li><strong>No NFR is the rationale for a mechanism choice.</strong> The benchmark gate (+10% per tick) is the only performance line. The 2000 ms per-match budget (NFR-1, <code>yields-to: C2</code>) is not in tension.</li>
+</ul>
+<h2 id="step-by-step-plan" tabindex="-1"><a class="header-anchor" href="#step-by-step-plan"><span>Step-by-Step Plan</span></a></h2>
+<ol>
+<li><strong>Baselines.</strong> Build release at <code>a447ff1</code> before any code change. Run and copy into <code>implement-evidence/lone-forward/baseline/</code>:
+<ul>
+<li><code>engine-cli calibrate --suite red-card --seed 1 --matches 120 --out …/red-base</code>;</li>
+<li><code>engine-cli calibrate --suite formations --pairing &quot;4-4-1-1 v 4-4-2&quot; --pairing &quot;3-4-3 v 4-4-2&quot; --seed 42 --matches 1000 --out …/pairs-base</code>;</li>
+<li><code>engine-cli calibrate --suite equal --seed 42 --matches 1000 --out …/equal-base</code>.
+Record the command, commit and <code>fixtures.hash</code> of each (Q-X6).</li>
+</ul>
+</li>
+<li><strong>Tuning values at neutral.</strong> Add <code>lone_hold</code>, <code>lone_layoff</code> and <code>lone_dribble</code> (−5 to 5, default 0.0) to <code>DecisionWeights</code>. Add <code>tackle_win_base</code> (0 to 0.5, default 0.05) and <code>lone_line_hold</code> (0 to 1, default 0.0) to <code>Tuning</code>. Give each a garde range and <code>#[serde(default = …)]</code>, and mirror each in <code>Default</code>. Write the neutral values into <code>content/tuning.json</code>. <code>TUNING_VERSION</code> stays 2. In <code>tests/content.rs</code>, pin the values and add a test that a tuning block without them loads with the defaults.</li>
+<li><strong>Tackle odds.</strong> Add <code>pub fn win_chance(tackler: &amp;Derived, carrier: &amp;Derived, t: &amp;Tuning) -&gt; f64</code> to <code>rules/fouls.rs</code>, with unit tests: at 0.05 it equals the old formula, and it scales linearly with the base. Call it from <code>sim.rs:1017</code>. Replace the eight copied formulas in the test files listed above (<code>injury.rs:26</code> keeps its 0.5 factor).</li>
+<li><strong>One offside line.</strong> Extract <code>pub fn second_last_depth(team, players, attack_x) -&gt; f64</code> from <code>offside_set</code>, and make <code>offside_set</code> call it. The existing offside tests must pass unchanged.</li>
+<li><strong>The team’s lone forward.</strong> Add <code>Team::lone_forward() -&gt; Option&lt;usize&gt;</code>. It returns the single active slot among the front-line slots of the base formation (within <code>BACK_LINE_BAND</code> of the most advanced outfield slot), and never the acting keeper. Unit tests: 4-4-1-1 and 3-4-3 give the striker; 4-4-2 gives <code>None</code>; 4-4-2 with one striker sent off gives the other; 4-4-2 with the keeper sent off and a striker in goal gives the other striker.</li>
+<li><strong>Lone-carrier terms.</strong> In <code>options()</code>, compute <code>lone</code> in one pass over the carrier’s active outfield team-mates (none with a greater depth). When lone, add <code>w.lone_layoff</code> to each pass candidate with <code>progress &lt;= 0.0</code>. When lone and pressed, add <code>w.lone_hold</code> to hold and <code>w.lone_dribble</code> to dribble. Add no draw. A goalkeeper carrier is never lone for these terms, because he has no dribble or hold.</li>
+<li><strong>The line hold off the ball.</strong> In <code>decide()</code>, after the anchors are set and while team <code>team</code> holds the ball, find <code>teams[team].lone_forward()</code>. If he is active and not the carrier, set his target depth to <code>anchor + lone_line_hold × (line − 0.5 − anchor)</code>, where <code>line</code> is <code>second_last_depth()</code> for his team. Never set it past <code>line − 0.5</code>, and keep <code>y</code> from the anchor. Clamp with <code>pitch::clamp</code>. The step adds no draw, and at <code>lone_line_hold</code> 0 the target is the anchor.</li>
+<li><strong>Neutral check.</strong> Run <code>cargo test -p engine --all-features</code> and <code>cargo test --workspace --all-features</code>. Every test must pass with no expectation changed. Run the red-card suite with <code>--baseline …/red-base/report.json</code>. Every row must show a change of 0, with the content hash unchanged or named as the change under test. Keep the output as evidence.</li>
+<li><strong>Regression scenes (fast, not ignored)</strong> in <code>tests/lone_forward.rs</code>, with tuned values read from the content:
+<ul>
+<li><strong>Lone forward uses his team-mates.</strong> Home 4-4-1-1 striker with the ball at (30, 0). An away presser is 1.5 m in front of him. An open home midfielder is 12 m behind him with a clear lane. Everyone else is spread away (<code>common::spread</code>). Over seeds 1 to 40, after one <code>step()</code>, the carrier either passed (the carrier is <code>None</code> and the ball moves toward the midfielder) or held (still the carrier, target within 0.5 m of his position). He never dribbles toward goal.</li>
+<li><strong>The terms need a lone carrier.</strong> The same scene with a second home forward 5 m ahead: the options equal those at neutral lone weights. This is checked through <code>Simulation</code> built twice, with the lone weights set to 0 and to the tuned values, and it gives the same kick on every seed.</li>
+<li><strong>The lone forward holds the line.</strong> The home side holds the ball in midfield. The away back line is at x = 20. The home lone forward’s anchor is past it. After one <code>step()</code>, his target x is at most the second-last defender’s depth minus 0.5 m.</li>
+<li><strong>Contact scene.</strong> A defender in reach of the carrier, with <code>Scene::rolls</code>: a draw just under <code>win_chance</code> gives a won tackle (the defender’s team carries), and a draw just above it and under <code>win_chance + foul_chance</code> gives a foul event.</li>
+</ul>
+</li>
+<li><strong>Inner tuning loop.</strong> Tune only <code>lone_hold</code>, <code>lone_layoff</code>, <code>lone_dribble</code>, <code>lone_line_hold</code>, <code>tackle_win_base</code> and <code>foul_base</code>, each inside its bounds. After each change, run <code>calibrate --suite red-card --seed 1 --matches 120 --baseline …/red-base/report.json</code> and <code>calibrate --suite formations --pairing &quot;4-4-1-1 v 4-4-2&quot; --pairing &quot;3-4-3 v 4-4-2&quot; --seed 42 --matches 1000 --baseline …/pairs-base/report.json</code>. Record each setting, its diff and its verdict in a table in the implement record. Treat a change the diff marks as noise as no change.</li>
+<li><strong>Criterion runs (slow, release).</strong> <code>cargo test --release -p engine --all-features --test defending --test discipline -- --include-ignored --nocapture</code>. <code>a_sending_off_gives_no_advantage</code> and <code>every_formation_holds</code> must pass with every pairing (the two moved pairings and the eight kept ones). <code>discipline_is_realistic</code> must pass. If a criterion still fails at every in-bounds setting, stop and report the failing arm or pairing with its figures. Do not change a limit, a card chance, the keeper values or a band.</li>
+<li><strong>Re-derive moved expectations.</strong> Run <code>cargo test --workspace --all-features</code> and the other slow tests (<code>strength</code>, <code>mentality</code>, <code>ai_trailing</code>). For each assertion that moves, record the value before and after, and the reason the new value is right. Never widen a tolerance.</li>
+<li><strong>Close.</strong>
+<ol>
+<li>Add the five rows and the paragraph to <code>docs/reference/data-files.md</code>.</li>
+<li>Run <code>cargo fmt --all -- --check</code>, <code>cargo clippy --workspace --all-targets --all-features -- -D warnings</code> and <code>cargo test --workspace --all-features</code>.</li>
+<li>Run the benchmark compare from <code>05c-benchmark.md</code> (gate 1.6964 µs per tick and 8.33 MB).</li>
+<li>Run the slice gate: <code>calibrate --suite equal</code> and <code>--suite strength</code> on seeds 1, 7, 42, 99 and 2026, and <code>--suite formations --seed 42</code>, each at 1,000 matches. Record band misses against <code>…/equal-base</code> (recorded, not failed; Q-E4).</li>
+<li>Search the changed source, comments and commit text for workflow vocabulary before the commit.</li>
+</ol>
+</li>
+</ol>
+<h2 id="verification-strategy" tabindex="-1"><a class="header-anchor" href="#verification-strategy"><span>Verification Strategy</span></a></h2>
+<p>The four criteria are about match outcomes and one scripted engine scene. The engine produces them headless, so no screen is needed. The rung for each is headless runs of the real engine library or the real release binary (<code>cargo test</code> in <code>stack.testing</code>, and <code>engine-cli calibrate</code>). A unit test or static reasoning alone never counts.</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>AC</th>
+<th>Tool / method + ladder rung</th>
+<th>Environment need — satisfiable in target env?</th>
+<th>What must be BUILT to make it verifiable</th>
+<th>Fallback chain</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No advantage from a red card</td>
+<td><code>cargo test --release -p engine --all-features --test defending -- --include-ignored --nocapture a_sending_off_gives_no_advantage</code> (headless engine runs, 480 matches)</td>
+<td>Rust 1.92 and cargo on the reference machine — yes</td>
+<td>Nothing new: the slow test exists. Steps 2–7 build the levers.</td>
+<td><code>engine-cli calibrate --suite red-card --seed 1 --matches 120</code> (same seeds and arms, <code>calib.red_card</code> verdict) → pre-registered deferral (not expected: no wall)</td>
+</tr>
+<tr>
+<td>The lone-forward formations hold</td>
+<td><code>cargo test … every_formation_holds</code> (4-4-1-1 and 3-4-3 rows of 1,200 matches)</td>
+<td>yes</td>
+<td>Nothing new</td>
+<td><code>calibrate --suite formations --pairing &quot;4-4-1-1 v 4-4-2&quot; --pairing &quot;3-4-3 v 4-4-2&quot; --seed 42</code> → pre-registered deferral</td>
+</tr>
+<tr>
+<td>Nothing that passes now regresses</td>
+<td><code>every_formation_holds</code> (the eight kept rows) plus <code>cargo test … discipline_is_realistic</code> (200 matches)</td>
+<td>yes</td>
+<td>Nothing new</td>
+<td><code>calibrate --suite formations --seed 42</code> pairings with 4-4-2, and the equal suite’s sending-off share → pre-registered deferral</td>
+</tr>
+<tr>
+<td>A lone forward uses his team-mates</td>
+<td><code>cargo test -p engine --all-features --test lone_forward</code> (scripted scenes on the real engine, 40 seeds)</td>
+<td>yes</td>
+<td><code>tests/lone_forward.rs</code> (step 9); <code>Team::lone_forward()</code>; <code>offside::second_last_depth()</code></td>
+<td>a traced single match (<code>engine-cli simulate</code> events) of a 4-4-1-1 side, counting passes and holds by the lone forward under pressure → pre-registered deferral</td>
+</tr>
+</tbody>
+</table>
+<p>No criterion depends on credentials, a device, an external service or missing infrastructure. Every run is local and uses tools already in <code>stack:</code>, so no <code>constraint-resolution:</code> line is needed. No wall is named.</p>
+<h2 id="test-verification-plan" tabindex="-1"><a class="header-anchor" href="#test-verification-plan"><span>Test / Verification Plan</span></a></h2>
+<h3 id="automated-checks" tabindex="-1"><a class="header-anchor" href="#automated-checks"><span>Automated checks</span></a></h3>
+<ul>
+<li>Lint and type check: <code>cargo fmt --all -- --check</code>; <code>cargo clippy --workspace --all-targets --all-features -- -D warnings</code>.</li>
+<li>Unit: <code>rules/fouls.rs</code> (<code>win_chance</code>), <code>rules/offside.rs</code> (the existing tests through <code>second_last_depth</code>), <code>team.rs</code> (<code>lone_forward</code>).</li>
+<li>Integration (fast): <code>tests/lone_forward.rs</code>, <code>tests/content.rs</code>, and the eight test files that now call <code>win_chance</code>. The full-match validator must still read 0 violations (<code>tests/validator.rs</code>, <code>defending.rs</code> parity test).</li>
+<li>Criterion runs (slow, ignored, release): <code>a_sending_off_gives_no_advantage</code>, <code>every_formation_holds</code>, <code>discipline_is_realistic</code>, plus <code>strength</code>, <code>mentality</code> and <code>ai_trailing</code>.</li>
+<li>Calibrate: the red-card suite and the two pairings against the step-1 baselines (inner loop), and the full slice gate (step 13).</li>
+<li>Benchmark compare against <code>05c-benchmark.md</code>.</li>
+</ul>
+<h3 id="interactive-verification-human-in-the-loop" tabindex="-1"><a class="header-anchor" href="#interactive-verification-human-in-the-loop"><span>Interactive verification (human-in-the-loop)</span></a></h3>
+<p>Automated only. Every criterion is a statistic of engine runs or a scripted engine scene. The page shows no new element: the forward’s choices appear as the existing pass, hold and movement records.</p>
+<h2 id="risks-watchouts" tabindex="-1"><a class="header-anchor" href="#risks-watchouts"><span>Risks / Watchouts</span></a></h2>
+<ul>
+<li><strong>Both levers at their bounds may not pass a criterion</strong> (high). The keeper arm today is 5.82 against 2.06, and 4-4-1-1 scores 5.18 against 4.0. Step 11 stops and reports. It does not raise a limit (slice Risks; RIM-12).</li>
+<li><strong>The lone terms reach other formations</strong> (medium). Any carrier with no outfield team-mate ahead is lone, so the eight kept pairings move too. <code>every_formation_holds</code> reruns all ten, and the eight are a criterion.</li>
+<li><strong>Fewer fouls, fewer cards</strong> (medium). A higher win share lowers fouls, yellow cards and sending-offs. <code>discipline_is_realistic</code> is rerun. Band misses are recorded, not failed (Q-E4).</li>
+<li><strong>Hold-up play invites contact</strong> (medium). A holding forward stays in reach of the presser, and each tick in reach draws once. The hold decays with <code>hold_per_s</code>, and the tackle odds move in the same loop.</li>
+<li><strong>Every seeded result moves</strong> (medium). Step 8 proves the seams change nothing at neutral values. Step 12 re-derives each expectation that moves after tuning.</li>
+<li><strong>Per-tick cost</strong> (low). The lone test is one pass over at most 10 team-mates. The line hold is one more pass over the opponents, and only while a team holds the ball. The gate is 1.6964 µs per tick.</li>
+<li><strong>Offsides rise</strong> (low). A forward on the line is flagged more often than one who never stands there. The offside count has no band. It is recorded in the gate run.</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<ul>
+<li><code>tuning-loop</code> (complete, verified): the red-card suite, <code>--pairing</code>, <code>--baseline</code> and the noise mark used in steps 1, 8 and 10.</li>
+<li><code>defending-and-discipline</code> (complete, verified): goal-side cover, the press, the acting keeper, the discipline mechanisms, and the three slow criterion tests this slice reuses unchanged.</li>
+<li><code>keeper-and-shots</code> (next, not planned before this slice is complete; <a href="http://steer.md">steer.md</a> Q-X4): it owns the save model.</li>
+<li><code>realism-tuning</code> (last): it owns goals, shots and possession tuning.</li>
+</ul>
+<h2 id="assumptions" tabindex="-1"><a class="header-anchor" href="#assumptions"><span>Assumptions</span></a></h2>
+<p>Autonomous run: no product owner was present. Each discovery question the interview would have asked is answered here in the direction that meets the criteria at the least cost. None changes the scope, a public contract, a persisted data shape or a product owner answer.</p>
+<ul>
+<li>A1 (class: implementation-detail): a carrier is lone when no active outfield team-mate has a greater depth along his attack direction. This is the slice’s own wording. It is derived each tick and stored nowhere.</li>
+<li>A2 (class: implementation-detail): the decision lever is three weighted terms in the existing scored options (lay-off, hold-up, pressed-dribble cost). There is no scripted rule and no new choice kind, so the forward can still run into space. RIM-12 names scripting “never dribble” as the misreading to avoid.</li>
+<li>A3 (class: implementation-detail): no term is added to the shot or the clearance. The slice’s cause is the dribble through the defence. Fewer dribbles into pressure should give fewer shots, and the shot model belongs partly to <code>keeper-and-shots</code>.</li>
+<li>A4 (class: implementation-detail): the tackle-odds lever is a new bounded <code>tackle_win_base</code> (the 0.05 literal, 0 to 0.5) plus the existing <code>foul_base</code> inside its bounds. <code>foul_base</code> is the foul chance per contact tick, not the card chance per foul. So RIM-7 and RIM-12 are kept: the card chances stay fixed.</li>
+<li>A5 (class: implementation-detail): off the ball, the team’s lone forward is the single active front-line slot of the base formation (<code>Team::lone_forward()</code>). He moves toward <code>second_last_depth() − 0.5 m</code> by <code>lone_line_hold</code> and is never past it. The line is the one the referee uses, extracted into <code>offside.rs</code>.</li>
+<li>A6 (class: implementation-detail): the five values land at neutral values, so the seams alone change nothing (step 8). Serde defaults equal the neutral values, and an older tuning file keeps today’s behaviour. <code>TUNING_VERSION</code> stays 2, as for the defending values.</li>
+<li>A7 (class: implementation-detail): the 0.5 m onside margin is a code constant, not a tuning value. The slice names no tuned value for it, and <code>lone_line_hold</code> already sets how far he goes.</li>
+<li>A8 (class: implementation-detail): the eight test files that copy the 0.05 formula call <code>fouls::win_chance()</code>. Tests then follow the tuned value, and one formula lives in one place.</li>
+<li>A9 (class: implementation-detail; ac: “No advantage from a red card”; classification: runtime-evidence): the criterion test is <code>a_sending_off_gives_no_advantage</code> unchanged: seeds 1–120, cards off through the three card chances, arms keeper 11, centre-back 13 and striker 21, and the 1.6 × control-home limit. The calibrate red-card suite is the inner loop and the fallback, on the same seeds and arms.</li>
+<li>A10 (class: implementation-detail; ac: “The lone-forward formations hold”; classification: runtime-evidence): the criterion test is <code>every_formation_holds</code> unchanged: 120 seeds, the formation at home on odd seeds, starting 11 against 11 with cards on, as the product owner moved it with its limit unchanged (Q-I2).</li>
+<li>A11 (class: implementation-detail; ac: “Nothing that passes now regresses”; classification: runtime-evidence): the eight kept pairings are read from the same <code>every_formation_holds</code> run, and the discipline limits from <code>discipline_is_realistic</code> unchanged (200 matches).</li>
+<li>A12 (class: implementation-detail; ac: “A lone forward uses his team-mates”; classification: build-capability): a scripted scene on the real engine over 40 seeds, with noise on, proves the choice. A pass or a hold counts, and a dribble toward goal fails. A second scene shows that the terms need a lone carrier.</li>
+<li>A13 (class: implementation-detail): the tuning loop may change only the five new values and <code>foul_base</code>. It may not change the limits, the card chances, the keeper values, the defending values or any band. A criterion that cannot be met stops implement with the figures.</li>
+<li>A14 (class: implementation-detail): no snapshot version change. The lone state and the line hold are derived each tick from state the snapshot already carries.</li>
+<li>A15 (class: implementation-detail): augmentations. The benchmark is re-baselined on <code>a447ff1</code> (<code>05c-benchmark.md</code> rev 7, 1.5422 µs per tick; gate 1.6964 µs and 8.33 MB), because the slice changes per-tick code. <code>04b-instrument.md</code> is not re-authored, because no new dark path or event is added. <code>04c-experiment.md</code> is not involved, because no flag is added.</li>
+<li>A16 (class: implementation-detail): the second-opinion consult is not fired, although <code>appetite-medium-or-larger</code> holds. The product owner excluded <code>consult</code> at intake (<code>00-index.md</code> <code>stack.excluded-by-po</code>), as in earlier plans.</li>
+<li>A17 (class: implementation-detail): baselines are copied into the slice’s evidence folder, and nothing new is committed for them (Q-X6). The slice gate runs the full suites (five seeds for equal and strength, one for formations), as <a href="http://steer.md">steer.md</a> requires (Q-I1).</li>
+<li>A18 (class: implementation-detail): the design gate is settled. The product owner confirmed the interim design at 2026-09-24T11:22:17Z (<code>po-answers.md</code>), which clears Q-L1. This slice changes no page.</li>
+</ul>
+<h2 id="blockers" tabindex="-1"><a class="header-anchor" href="#blockers"><span>Blockers</span></a></h2>
+<p>None.</p>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<ul>
+<li>No dependency is added or upgraded. The slice uses std <code>f64</code> arithmetic and the crates already in the workspace (<code>garde</code> for bounds, <code>serde</code> for defaults). <code>04-plan-data-schemas-generator.md</code> § Freshness Research records the <code>serde</code> 1.0 and <code>garde</code> 0.23 behaviour. The field-level <code>default</code> with a <code>deny_unknown_fields</code> container is already proven in this repository by <code>a_tuning_block_without_the_defending_values_loads_with_the_defaults</code> (<code>crates/engine/tests/content.rs</code>).</li>
+<li>IFAB Law 11 (offside) is read in <code>04-plan-match-rules.md</code> § Freshness Research. The lone forward’s line uses the second-last opponent, as the referee’s code does.</li>
+<li>A web search for a sourced ratio of won tackles to fouls per match found statistics sites (for example <a href="https://www.fotmob.com/leagues/47/stats/season/23685/teams/fk_foul_lost_team/premier-league-teams">FotMob fouls per match</a> and <a href="https://www.statmuse.com/fc/ask/premier-league-teams-fouls-per-game">StatMuse</a>) but no single agreed figure. The slice sets no band for the ratio. The shipped bands (<code>content/realism-bands.json</code>: yellow cards 1.2–2.6 per team, sending-off share 0.08–0.22) are the only card and foul yardsticks, and <code>realism-tuning</code> owns them.</li>
+</ul>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option A (default): Implement</strong> → <code>/wf implement football-manager-match-engine lone-forward</code>. The plan has no blocker, and the benchmark is re-baselined. Compact the session first. Workflow state lives in the artifact files, and the SessionStart hook re-reads it after compaction.</li>
+<li><strong>Option C: Revisit slice</strong> → <code>/wf slice football-manager-match-engine</code>. Take this only if implement shows that both levers at their bounds cannot pass a criterion (step 11 stop).</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-24T11:53:45Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/04-plan-lone-forward.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">plan</a><span class="m-sheet-here" aria-current="page">lone-forward</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/04-plan-lone-forward.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-24T11:53:45Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

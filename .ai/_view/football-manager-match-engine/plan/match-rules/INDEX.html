@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="plan">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · plan — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="plan">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span aria-hidden="true">/</span><span class="m-here">match-rules</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · plan</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">match-rules</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/04-plan-match-rules.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">04-plan-match-rules.md</div>
+      <h1 class="pg-title">Plan · <code>match-rules</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="stage-badge">plan</span><span class="meta">rev 0</span><span class="meta">2026-09-22T19:29:33Z</span></div>
+    </header><div class="metric-row"><div class="metric">
+      <span class="metric-label">files to touch</span>
+      <span class="metric-value">54</span>
+      
+    </div><div class="metric">
+      <span class="metric-label">steps</span>
+      <span class="metric-value">23</span>
+      
+    </div><div class="metric is-ok">
+      <span class="metric-label">blockers</span>
+      <span class="metric-value">none</span>
+      
+    </div></div>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-plan" tabindex="-1"><a class="header-anchor" href="#the-plan"><span>The Plan</span></a></h2>
+<p>The engine plays a kick-about with no referee. The ball bounces off the touchlines and goal lines like walls (<code>crates/engine/src/sim.rs:272-281</code>), a tackle only decides possession, the rule pack loads and is never read, and no match state can be saved. Four research passes found every seam this slice needs: a restart flag the codec already turns into a restart keyframe, a stoppage-kind enumeration with nine kinds and no consumer, an <code>aggression</code> attribute in the shipped schema that nothing reads, and a seeded generator whose exact position can be saved through <code>get_word_pos</code> and <code>set_word_pos</code>. The tree is green at 132 Rust tests and 43 page tests, and the benchmark baseline on <code>d86996a</code> is 388 milliseconds and 384.4 milliseconds of processor time per match.</p>
+<p>Thirteen product-owner answers fixed the build. This slice announces stoppages through one hook and applies no queued change. The engine announces a maximum match length, because added time now makes a half longer than 45 minutes. Players walk to restart positions during a dead ball, and the referee plays advantage when the fouled team keeps the ball. Every tackle rolls three ways from one draw, with <code>aggression</code> now required. Added time is seconds per stoppage kind plus a seeded variance, clamped between a minimum and a cap. A card is one <code>card</code> event with a <code>card.kind</code> word. The snapshot is a binary file with a SHA-256 trailer, and a resumed match continues tick for tick. A scenario builder behind a test-only feature builds the criterion scenes. The page filters its stoppage index to events that stop play. Because added time makes a match about 9 percent longer, the benchmark gate is judged per tick.</p>
+<p>Implement touches 54 files, 16 new, in 23 steps: content first, then the pure law modules, then the referee inside the loop, then the snapshot, then the command line, the protocol, and the page. Tactics, commentary, and crash recovery build on the stoppage hook and the new events. The top risk is exact continuation: one field missing from the snapshot makes a resumed match drift, and only the byte-for-byte test catches it.</p></section><figure class="figure-canvas">
+  <figcaption class="figure-meta">
+    <span class="figure-title"><b>Figure 3</b> · File-change topology</span>
+    <span class="figure-legend" aria-hidden="true"><span class="legend-entry"><span class="sw modified"></span>modified</span><span class="legend-entry"><span class="sw new"></span>new</span><span class="legend-entry"><span class="sw deleted"></span>deleted</span><span class="legend-entry"><span class="sw external"></span>external</span></span>
+  </figcaption>
+  <svg viewBox="0 0 980 1094" width="100%" preserveAspectRatio="xMinYMid meet" aria-label="File-change topology">
+    <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8377"/>
+    </marker>
+  </defs><rect x="20" y="30" width="301.3333333333333" height="140" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CONTENT/ (SHIPPED DATA FILES)</text><rect x="333.3333333333333" y="30" width="301.3333333333333" height="108" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC/DATA</text><rect x="646.6666666666666" y="30" width="301.3333333333333" height="236" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="48" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC/RULES (NEW)</text><rect x="20" y="546" width="301.3333333333333" height="492" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="564" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC</text><rect x="333.3333333333333" y="130" width="301.3333333333333" height="76" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="148" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/SRC/OBSERVE</text><rect x="646.6666666666666" y="418" width="301.3333333333333" height="364" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="436" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE/TESTS</text><rect x="20" y="486" width="301.3333333333333" height="204" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="504" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/PROTOCOL AND DOCS/REFERENCE</text><rect x="333.3333333333333" y="742" width="301.3333333333333" height="332" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="343.3333333333333" y="760" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">CRATES/ENGINE-CLI</text><rect x="646.6666666666666" y="358" width="301.3333333333333" height="140" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="656.6666666666666" y="376" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">WEB/</text><rect x="20" y="330" width="301.3333333333333" height="76" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/>
+     <text x="30" y="348" font-size="10" font-weight="600" fill="#8a8377" letter-spacing="0.8">WORKSPACE ROOT</text><rect x="32" y="58" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">default.json</text>
+      <text x="40" y="80" font-size="8" fill="#8a8377">data · +22/−2</text><rect x="32" y="90" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tuning.json</text>
+      <text x="40" y="112" font-size="8" fill="#8a8377">data · +18/−0</text><rect x="32" y="122" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="134" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">README.md</text>
+      <text x="40" y="144" font-size="8" fill="#8a8377">docs · +40/−4</text><rect x="32" y="574" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="586" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">Cargo.toml</text>
+      <text x="40" y="596" font-size="8" fill="#8a8377">config · +6/−0</text><rect x="32" y="606" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="618" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">lib.rs</text>
+      <text x="40" y="628" font-size="8" fill="#8a8377">domain · +10/−0</text><rect x="32" y="638" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="650" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">error.rs</text>
+      <text x="40" y="660" font-size="8" fill="#8a8377">domain · +8/−0</text><rect x="345.3333333333333" y="58" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">attributes.rs</text>
+      <text x="353.3333333333333" y="80" font-size="8" fill="#8a8377">domain · +2/−1</text><rect x="345.3333333333333" y="90" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">rules.rs</text>
+      <text x="353.3333333333333" y="112" font-size="8" fill="#8a8377">domain · +60/−3</text><rect x="32" y="670" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="682" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">player.rs</text>
+      <text x="40" y="692" font-size="8" fill="#8a8377">domain · +20/−2</text><rect x="32" y="702" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="714" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">team.rs</text>
+      <text x="40" y="724" font-size="8" fill="#8a8377">domain · +45/−5</text><rect x="32" y="734" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="746" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">pitch.rs</text>
+      <text x="40" y="756" font-size="8" fill="#8a8377">domain · +70/−0</text><rect x="32" y="766" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="778" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">rng.rs</text>
+      <text x="40" y="788" font-size="8" fill="#8a8377">domain · +35/−0</text><rect x="32" y="798" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="810" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">tuning.rs</text>
+      <text x="40" y="820" font-size="8" fill="#8a8377">domain · +40/−0</text><rect x="658.6666666666666" y="58" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="70" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="666.6666666666666" y="80" font-size="8" fill="#8a8377">domain · +220/−0</text><rect x="658.6666666666666" y="90" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="102" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">clock.rs</text>
+      <text x="666.6666666666666" y="112" font-size="8" fill="#8a8377">domain · +140/−0</text><rect x="658.6666666666666" y="122" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="134" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">offside.rs</text>
+      <text x="666.6666666666666" y="144" font-size="8" fill="#8a8377">domain · +120/−0</text><rect x="658.6666666666666" y="154" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="166" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">fouls.rs</text>
+      <text x="666.6666666666666" y="176" font-size="8" fill="#8a8377">domain · +110/−0</text><rect x="658.6666666666666" y="186" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="198" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">restart.rs</text>
+      <text x="666.6666666666666" y="208" font-size="8" fill="#8a8377">domain · +200/−0</text><rect x="658.6666666666666" y="218" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="230" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">discipline.rs</text>
+      <text x="666.6666666666666" y="240" font-size="8" fill="#8a8377">domain · +110/−0</text><rect x="32" y="830" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="842" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">sim.rs</text>
+      <text x="40" y="852" font-size="8" fill="#8a8377">domain · +230/−45</text><rect x="32" y="862" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="874" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">decision.rs</text>
+      <text x="40" y="884" font-size="8" fill="#8a8377">domain · +45/−5</text><rect x="32" y="894" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="906" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">validate.rs</text>
+      <text x="40" y="916" font-size="8" fill="#8a8377">domain · +40/−5</text><rect x="32" y="926" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="938" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">record.rs</text>
+      <text x="40" y="948" font-size="8" fill="#8a8377">domain · +6/−3</text><rect x="32" y="958" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="40" y="970" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">snapshot.rs</text>
+      <text x="40" y="980" font-size="8" fill="#8a8377">domain · +330/−0</text><rect x="32" y="990" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="40" y="1002" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">scenario.rs</text>
+      <text x="40" y="1012" font-size="8" fill="#8a8377">domain · +120/−0</text><rect x="345.3333333333333" y="158" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="170" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="353.3333333333333" y="180" font-size="8" fill="#8a8377">observability · +45/−0</text><rect x="658.6666666666666" y="446" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="458" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mod.rs</text>
+      <text x="666.6666666666666" y="468" font-size="8" fill="#8a8377">test · +30/−0</text><rect x="658.6666666666666" y="478" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="490" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">rules_offside.rs</text>
+      <text x="666.6666666666666" y="500" font-size="8" fill="#8a8377">test · +120/−0</text><rect x="658.6666666666666" y="510" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="522" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">rules_fouls.rs</text>
+      <text x="666.6666666666666" y="532" font-size="8" fill="#8a8377">test · +130/−0</text><rect x="658.6666666666666" y="542" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="554" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">rules_cards.rs</text>
+      <text x="666.6666666666666" y="564" font-size="8" fill="#8a8377">test · +110/−0</text><rect x="658.6666666666666" y="574" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="586" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">rules_restarts.rs</text>
+      <text x="666.6666666666666" y="596" font-size="8" fill="#8a8377">test · +160/−0</text><rect x="658.6666666666666" y="606" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="618" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">rules_clock.rs</text>
+      <text x="666.6666666666666" y="628" font-size="8" fill="#8a8377">test · +110/−0</text><rect x="658.6666666666666" y="638" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="666.6666666666666" y="650" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">snapshot.rs</text>
+      <text x="666.6666666666666" y="660" font-size="8" fill="#8a8377">test · +150/−0</text><rect x="658.6666666666666" y="670" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="682" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">content.rs</text>
+      <text x="666.6666666666666" y="692" font-size="8" fill="#8a8377">test · +8/−4</text><rect x="658.6666666666666" y="702" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="714" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">full_match.rs</text>
+      <text x="666.6666666666666" y="724" font-size="8" fill="#8a8377">test · +20/−3</text><rect x="658.6666666666666" y="734" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="746" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">validator.rs</text>
+      <text x="666.6666666666666" y="756" font-size="8" fill="#8a8377">test · +2/−1</text><rect x="32" y="514" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="526" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">event.rs</text>
+      <text x="40" y="536" font-size="8" fill="#8a8377">contract · +45/−4</text><rect x="32" y="546" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="558" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">lib.rs</text>
+      <text x="40" y="568" font-size="8" fill="#8a8377">contract · +8/−2</text><rect x="32" y="578" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="590" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">command.rs</text>
+      <text x="40" y="600" font-size="8" fill="#8a8377">contract · +3/−3</text><rect x="32" y="610" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="622" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">message.rs</text>
+      <text x="40" y="632" font-size="8" fill="#8a8377">contract · +3/−2</text><rect x="32" y="642" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="654" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">protocol.md</text>
+      <text x="40" y="664" font-size="8" fill="#8a8377">docs · +25/−4</text><rect x="345.3333333333333" y="770" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="782" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">cli.rs</text>
+      <text x="353.3333333333333" y="792" font-size="8" fill="#8a8377">cli · +20/−0</text><rect x="345.3333333333333" y="802" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="814" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">main.rs</text>
+      <text x="353.3333333333333" y="824" font-size="8" fill="#8a8377">cli · +3/−0</text><rect x="345.3333333333333" y="834" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="846" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">resume.rs</text>
+      <text x="353.3333333333333" y="856" font-size="8" fill="#8a8377">cli · +110/−0</text><rect x="345.3333333333333" y="866" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="878" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">simulate.rs</text>
+      <text x="353.3333333333333" y="888" font-size="8" fill="#8a8377">cli · +25/−6</text><rect x="345.3333333333333" y="898" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="910" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">serve.rs</text>
+      <text x="353.3333333333333" y="920" font-size="8" fill="#8a8377">cli · +15/−3</text><rect x="345.3333333333333" y="930" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="942" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">stream_run.rs</text>
+      <text x="353.3333333333333" y="952" font-size="8" fill="#8a8377">cli · +35/−5</text><rect x="345.3333333333333" y="962" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="974" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">record.rs</text>
+      <text x="353.3333333333333" y="984" font-size="8" fill="#8a8377">cli · +2/−2</text><rect x="345.3333333333333" y="994" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="353.3333333333333" y="1006" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">bench.rs</text>
+      <text x="353.3333333333333" y="1016" font-size="8" fill="#8a8377">cli · +12/−3</text><rect x="345.3333333333333" y="1026" width="277.3333333333333" height="24" rx="3" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="353.3333333333333" y="1038" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">resume.rs</text>
+      <text x="353.3333333333333" y="1048" font-size="8" fill="#8a8377">test · +130/−0</text><rect x="658.6666666666666" y="386" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="398" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">stoppages.mjs</text>
+      <text x="666.6666666666666" y="408" font-size="8" fill="#8a8377">ui · +18/−0</text><rect x="658.6666666666666" y="418" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="430" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">main.mjs</text>
+      <text x="666.6666666666666" y="440" font-size="8" fill="#8a8377">ui · +6/−2</text><rect x="658.6666666666666" y="450" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="666.6666666666666" y="462" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">stoppages.test.mjs</text>
+      <text x="666.6666666666666" y="472" font-size="8" fill="#8a8377">test · +30/−0</text><rect x="32" y="358" width="277.3333333333333" height="24" rx="3" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="40" y="370" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">README.md</text>
+      <text x="40" y="380" font-size="8" fill="#8a8377">docs · +14/−2</text><path d="M 309.3333333333333 843 C 484 843, 484 71, 658.6666666666666 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 71 C 797.3333333333333 71, 797.3333333333333 135, 658.6666666666666 135" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 71 C 797.3333333333333 71, 797.3333333333333 167, 658.6666666666666 167" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 71 C 797.3333333333333 71, 797.3333333333333 199, 658.6666666666666 199" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 71 C 797.3333333333333 71, 797.3333333333333 103, 658.6666666666666 103" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 71 C 797.3333333333333 71, 797.3333333333333 231, 658.6666666666666 231" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 199 C 484 199, 484 747, 32 747" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 231 C 484 231, 484 715, 32 715" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 103 C 640.6666666666666 103, 640.6666666666666 103, 345.3333333333333 103" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 167 C 484 167, 484 811, 32 811" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 875 C 484 875, 484 71, 658.6666666666666 71" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 971 C 170.66666666666666 971, 170.66666666666666 843, 32 843" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 971 C 170.66666666666666 971, 170.66666666666666 779, 32 779" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 1003 C 170.66666666666666 1003, 170.66666666666666 843, 32 843" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 907 C 170.66666666666666 907, 170.66666666666666 747, 32 747" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 847 C 327.3333333333333 847, 327.3333333333333 971, 32 971" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 879 C 327.3333333333333 879, 327.3333333333333 971, 32 971" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 911 C 327.3333333333333 911, 327.3333333333333 971, 32 971" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 622.6666666666666 943 C 327.3333333333333 943, 327.3333333333333 527, 32 527" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 309.3333333333333 559 C 170.66666666666666 559, 170.66666666666666 655, 32 655" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/><path d="M 936 431 C 797.3333333333333 431, 797.3333333333333 399, 658.6666666666666 399" fill="none" stroke="#8a8377" stroke-width="1.2" marker-end="url(#arrow)"/>
+  </svg>
+</figure><div class="fragment"><section class="fragment-plan" data-artifact="plan" data-slice="match-rules" data-rev="0">
+  <table class="files-touched pl-files">
+    <thead><tr><th>File</th><th>Status</th><th>Module</th><th>Lines</th></tr></thead>
+    <tbody>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">data</span> content/rules/default.json, tuning.json, README.md</summary><div class="pl-card">Rule pack version 2 with an added_time block (seconds per stoppage kind, card seconds, variance, minimum, cap of 900 seconds) and min_players 7; the foul, card, and dead-ball tuning fields; the modder reference rewritten because the engine now enforces the pack.</div></details></td><td>modified</td><td>content/</td><td>+80 / -6</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/data/attributes.rs, data/rules.rs, player.rs, tuning.rs, error.rs</summary><div class="pl-card">aggression becomes a required attribute; AddedTime and min_players with garde ranges; Player gains status and yellow count; EngineError::Snapshot names the refusal reason.</div></details></td><td>modified</td><td>crates/engine/src</td><td>+130 / -6</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/rules/mod.rs, clock.rs, offside.rs, fouls.rs, restart.rs, discipline.rs</summary><div class="pl-card">The referee: live play, dead ball, and full time; the stoppage hook; the match clock and the added-time formula with seeded variance; the offside set computed at a pass and judged at the first touch; the three-way tackle roll and the card roll; restart spots, targets, and takers; bookings, sending-off, reshape to ten, abandonment below seven.</div></details></td><td>new</td><td>crates/engine/src/rules</td><td>+900</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/sim.rs, decision.rs, team.rs, pitch.rs, rng.rs, validate.rs, record.rs</summary><div class="pl-card">The wall bounce is replaced by exit detection and restarts; run plays to full time or the announced maximum; TickSink::on_stoppage; decisions suspended during a dead ball; team reshape and side switch; law geometry; generator state through the word position; validator exemptions and the restart-spot rule; tick-file schema 4.</div></details></td><td>modified</td><td>crates/engine/src</td><td>+471 / -63</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">domain</span> crates/engine/src/snapshot.rs, scenario.rs; Cargo.toml, lib.rs (modified)</summary><div class="pl-card">The binary snapshot: header, body with every Simulation field except scratch and drained events, trailer with body length and SHA-256; atomic replace by rename; a fail-closed reader that names bad magic, unknown version, truncation, checksum, build, and content mismatches. The scenario builder exists only under a test feature.</div></details></td><td>new</td><td>crates/engine/src</td><td>+466</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">observability</span> crates/engine/src/observe/mod.rs</summary><div class="pl-card">match-stats gains stats.fouls, stats.offsides, stats.corners, rules.pack_version, cards, added time, ticks played, snapshot writes, dead-ball ticks, offside checks; run-report gains ticks per match and processor time per tick.</div></details></td><td>modified</td><td>crates/engine/src/observe</td><td>+45</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">test</span> crates/engine/tests/rules_offside.rs, rules_fouls.rs, rules_cards.rs, rules_restarts.rs, rules_clock.rs, snapshot.rs; common/mod.rs, content.rs, full_match.rs, validator.rs (modified)</summary><div class="pl-card">One criterion file per law group, each built on a scripted scene; the continuation test compares tick records byte for byte from the snapshot tick; full_match holds a sanity band for fouls, corners, throw-ins, and offsides.</div></details></td><td>new</td><td>crates/engine/tests</td><td>+840 / -8</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">contract</span> crates/protocol/src/event.rs, lib.rs, command.rs, message.rs; docs/reference/protocol.md</summary><div class="pl-card">Nine event types and six optional fields (player.id, player.secondary_id, card.kind, foul.advantage, minute.added, added_time.s); PROTOCOL_VERSION 2 because ticks_expected now means the maximum; comments rewritten without slice names; the reference document updated so its test passes.</div></details></td><td>modified</td><td>crates/protocol and docs</td><td>+84 / -15</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">cli</span> crates/engine-cli/src/cli.rs, main.rs, resume.rs (new), simulate.rs, serve.rs, stream_run.rs, record.rs, bench.rs; tests/resume.rs (new)</summary><div class="pl-card">engine-cli resume --snapshot; snapshots at every stoppage from simulate and serve; the maximum announced everywhere; the new events mapped to the wire; bench reports ticks per match and processor time per tick with no snapshot on the timed path.</div></details></td><td>modified</td><td>crates/engine-cli</td><td>+352 / -19</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">ui</span> web/stoppages.mjs, main.mjs, tests/stoppages.test.mjs; README.md</summary><div class="pl-card">The stoppage index takes restart frames plus only the events that stop play; the scrubber maximum becomes the last tick at full time; the README names the laws, the snapshot location, and resume.</div></details></td><td>modified</td><td>web/ and root</td><td>+68 / -4</td></tr>
+    </tbody>
+  </table>
+  <div class="pl-risks">
+    <aside class="callout callout-warn"><div class="callout-hd">R1 · Processor time per tick exceeds the 10 percent tripwire</div><div class="callout-body">Offside is computed only at a pass and exit detection is two comparisons. Step 22 measures three drives before the tests are finalised; the limit is 1.566 microseconds per tick and 6.69 MB. A miss goes to the product owner; no law is removed silently.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R2 · A resumed match drifts from the uninterrupted one</div><div class="callout-body">Exact continuation fails if one field is missing from the snapshot. The continuation test compares tick records byte for byte from the snapshot tick, and a write-read-write test catches a field that does not round-trip.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R3 · Restart positioning fights the steering agents</div><div class="callout-body">Decisions are suspended during a dead ball, encroaching opponents target the 9.15 m circle, and a restart is taken at three times the delay at the latest; rules.dead_ball_ticks shows a stall.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R4 · Earlier tick files and the local fixture are refused</div><div class="callout-body">PROTOCOL_VERSION 2 and tick schema 4 refuse earlier files. None is in the repository; step 23 regenerates the local fixture, and each refusal names both versions.</div></aside>
+    <aside class="callout callout-info"><div class="callout-hd">R5 · A sent-off marker sits beside the pitch</div><div class="callout-body">The tick record holds 22 positions and no status bit, so a sent-off player parks at a fixed spot outside the play surface until viewer-match-day hides parked markers.</div></aside>
+    <aside class="callout callout-info"><div class="callout-hd">R6 · Foul, card, and added-time rates are estimates</div><div class="callout-body">full_match.rs holds a sanity band only; the calibration slice tunes the rates against real league figures.</div></aside>
+  </div>
+  <details class="pl-revs"><summary>0 prior revisions</summary><ul></ul></details>
+  <style>
+    .fragment-plan .pl-files { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-plan .pl-files th, .fragment-plan .pl-files td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
+    .fragment-plan .pl-files summary { cursor: pointer; }
+    .fragment-plan .pl-chip { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; opacity: 0.8; }
+    .fragment-plan .pl-card { padding: 6px 0 4px 18px; opacity: 0.9; }
+    .fragment-plan .pl-risks { display: grid; gap: 8px; margin-top: 12px; }
+    .fragment-plan .pl-revs { margin-top: 12px; }
+    @media (max-width: 480px) { .fragment-plan .pl-files th:nth-child(3), .fragment-plan .pl-files td:nth-child(3) { display: none; } }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-plan');
+      var files = 54, modules = 10;
+      var risks = root ? root.querySelectorAll('.pl-risks .callout').length : 0;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'plan', artifact: 'plan', counts: { files: files, modules: modules, risks: risks } } }));
+    })();
+  </script>
+</section>
+</div><div class="prose"><h1 id="plan-match-rules-and-stoppage-snapshots" tabindex="-1"><a class="header-anchor" href="#plan-match-rules-and-stoppage-snapshots"><span>Plan: Match Rules and Stoppage Snapshots</span></a></h1>
+<h2 id="current-state" tabindex="-1"><a class="header-anchor" href="#current-state"><span>Current State</span></a></h2>
+<ul>
+<li>Branch <code>feat/football-manager-match-engine</code> at <code>d86996a</code>; four slices implemented and verified. <code>cargo test --workspace</code> passes 132 tests; <code>node --test web/tests/*.test.mjs</code> passes 43. Clippy with <code>-D warnings</code> and <code>cargo fmt --check</code> are clean. On Node 24 the bare <code>node --test web/tests/</code> form fails with <code>MODULE_NOT_FOUND</code>; the glob form works.</li>
+<li><code>Simulation</code> (<code>sim.rs:106-120</code>) holds config, teams, players, ball, generator, tick, carrier, <code>control_since</code>, <code>last_touch</code>, summary, a scratch buffer, the restart flag, and an event list. No half, clock, card, or referee state exists. <code>run(ticks, sink)</code> (<code>sim.rs:171-178</code>) runs a fixed tick count.</li>
+<li>The only restart is <code>kick_off</code> (<code>sim.rs:295-319</code>), which resets every player to the formation base and sets <code>restart</code> for one tick. The only tackle is the possession roll <code>p_win = 0.05 * tackle / (tackle + dribble)</code> at <code>sim.rs:362-365</code>.</li>
+<li><code>RulePack</code> (<code>data/rules.rs:78-91</code>) carries <code>halves</code>, <code>half_minutes</code>, <code>substitutions</code>, and nine stoppage kinds with admission flags. It has no added-time formula and no minimum team size. <code>content/README.md:125</code> states that the engine does not enforce the pack.</li>
+<li>The engine requires six attributes (<code>data/attributes.rs:14-21</code>). <code>aggression</code> is in the shipped mental group (<code>content/README.md:29</code>) and nothing reads it.</li>
+<li>The restart flag rides in the high bit of the tick field (<code>record.rs:29</code>). <code>FrameSink::push</code> (<code>crates/stream/src/session.rs:196-219</code>) turns a restart tick into a <code>KIND_RESTART</code> keyframe, and the validator exempts restart ticks from the jump check (<code>validate.rs:73-85</code>). Every new restart kind needs only the flag.</li>
+<li><code>EventType</code> (<code>crates/protocol/src/event.rs:16-21</code>) has kick-off, goal, full-time, and tactics-change. <code>MatchEvent</code> has no <code>player.id</code>. The observability contract reserves <code>player.id</code>, <code>player.secondary_id</code>, <code>snapshot.tick</code>, <code>stats.fouls</code>, <code>stats.corners</code>, <code>stats.offsides</code>, and <code>rules.pack_version</code>, and names no card colour key.</li>
+<li><code>hello.ticks_expected</code> sizes the page’s rewind history (<code>web/main.mjs:66</code>) and the scrubber (<code>web/main.mjs:73</code>). The page adds every event message to the stoppage index (<code>web/main.mjs:122-126</code>), including <code>tactics-change</code>.</li>
+<li>No test outside the engine crate can place a player: <code>Simulation::new</code> always calls <code>kick_off(0)</code> and the fields are crate-private.</li>
+<li><code>rand_chacha</code> 0.10 is built without its <code>serde</code> feature (<code>Cargo.lock:744-750</code>), and it exposes <code>get_seed</code>, <code>get_stream</code>, <code>get_word_pos</code>, <code>set_stream</code>, and <code>set_word_pos</code> (<code>rand_chacha-0.10.0/src/chacha.rs:134-198</code> in the local cargo registry).</li>
+<li>Seven code comments name workflow slices: <code>sim.rs:273</code>, <code>data/rules.rs:2</code>, <code>command.rs:1-2</code>, <code>command.rs:55</code>, <code>event.rs:3</code>, <code>event.rs:12</code>, <code>message.rs:90</code>.</li>
+<li>Benchmark baseline on <code>d86996a</code> (three drives): wall 390, 388, 388 ms; processor time per match 387.6, 384.4, 384.4 ms; peak memory 5.355, 5.328, 5.363 MB; tick step 1.4336 µs. Evidence under <code>bench-baseline/match-rules/</code>.</li>
+</ul>
+<h2 id="simplicity-ladder" tabindex="-1"><a class="header-anchor" href="#simplicity-ladder"><span>Simplicity Ladder</span></a></h2>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Capability</th>
+<th>Rung</th>
+<th>Choice</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Offside detection</td>
+<td>rung 4 new code</td>
+<td>Coordinate comparisons along <code>attack_x</code> at a pass, a 22-bit set cached until the next touch; no in-repo symbol compares against the second-last defender. Geometry uses <code>DVec2</code> and <code>pitch.rs</code>.</td>
+</tr>
+<tr>
+<td>Three-way tackle roll</td>
+<td>rung 3 reuse with modification</td>
+<td><code>sim.rs:362-365</code> <code>resolve_possession</code> and <code>EngineRng::next_f64</code>: one draw split into win, foul, and miss bands; extracted into <code>rules/fouls.rs</code> as a pure function.</td>
+</tr>
+<tr>
+<td>Card logic</td>
+<td>rung 4 new code</td>
+<td>No card type exists. Copies the enum-plus-<code>ALL</code>-plus-<code>code()</code> idiom of <code>StoppageKind</code> (<code>data/rules.rs:11-53</code>) and <code>ChangeKind</code> (<code>command.rs:8-53</code>).</td>
+</tr>
+<tr>
+<td>Restart placement and dead ball</td>
+<td>rung 3 reuse with modification</td>
+<td><code>sim.rs:295-319</code> <code>kick_off</code> generalised into a restart with a kind, a spot, and a taker; steering (<code>steering::step_all</code>) moves players to restart targets. Spot geometry is rung 4 in <code>pitch.rs</code>.</td>
+</tr>
+<tr>
+<td>Stoppage-time accumulation</td>
+<td>rung 4 new code</td>
+<td>A per-kind tally and a clamp; <code>EngineRng::next_f64</code> gives the variance. No reusable accumulator exists.</td>
+</tr>
+<tr>
+<td>Half structure and side switch</td>
+<td>rung 4 new code</td>
+<td><code>Team::attack_x</code> (<code>team.rs:50-60</code>) is fixed at construction; <code>switch_ends()</code> flips it.</td>
+</tr>
+<tr>
+<td>Snapshot layout</td>
+<td>rung 3 reuse with modification</td>
+<td>The magic, version, header, body, and trailer pattern of <code>record.rs:108-145</code> and <code>record.rs:280-307</code>, with the SHA-256 digest idea of <code>crates/stream/src/record.rs</code> (<code>SMFX</code> and <code>SMFE</code>).</td>
+</tr>
+<tr>
+<td>Snapshot checksum</td>
+<td>rung 3 reuse</td>
+<td><code>sha2</code> 0.10, already a workspace dependency. The standard library has no stable data-integrity hash (<code>DefaultHasher</code> is not stable across builds).</td>
+</tr>
+<tr>
+<td>Atomic snapshot replace</td>
+<td>rung 1 stdlib</td>
+<td><code>std::fs::rename</code> over an existing file replaces it on Windows 10 1607 and later (<a href="https://doc.rust-lang.org/std/fs/fn.rename.html">std::fs::rename</a>).</td>
+</tr>
+<tr>
+<td>Generator state</td>
+<td>rung 3 reuse</td>
+<td><code>ChaCha8Rng::get_seed</code>, <code>get_stream</code>, <code>get_word_pos</code>, <code>set_stream</code>, <code>set_word_pos</code>; no <code>serde</code> feature needed.</td>
+</tr>
+<tr>
+<td>Scenario builder</td>
+<td>rung 4 new code</td>
+<td>A Cargo feature and a self dev-dependency; no test-support crate is needed for one builder.</td>
+</tr>
+<tr>
+<td>Resume command</td>
+<td>rung 3 reuse</td>
+<td><code>crates/engine-cli/src/simulate.rs</code> structure and the clap derive pattern in <code>cli.rs</code>.</td>
+</tr>
+<tr>
+<td>Page filter</td>
+<td>rung 3 reuse with modification</td>
+<td><code>web/stoppages.mjs</code> gains one exported predicate.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="applied-learnings" tabindex="-1"><a class="header-anchor" href="#applied-learnings"><span>Applied Learnings</span></a></h2>
+<p>No applicable learnings found: <code>.ai/solutions/INDEX.md</code> does not exist and <code>.ai/sdlc-config.json</code> sets no global folder. <code>runtime-evidence-deferrals</code> is empty, so the repeat-deferral tripwire does not fire.</p>
+<h2 id="likely-files-areas-to-touch" tabindex="-1"><a class="header-anchor" href="#likely-files-areas-to-touch"><span>Likely Files / Areas to Touch</span></a></h2>
+<ul>
+<li><code>content/rules/default.json</code>, <code>content/tuning.json</code>, <code>content/README.md</code>: rule pack version 2, the new tuning fields, the modder reference.</li>
+<li><code>crates/engine/Cargo.toml</code>, <code>src/lib.rs</code>, <code>src/error.rs</code>: the <code>scenario</code> feature, the new modules, <code>EngineError::Snapshot</code>.</li>
+<li><code>crates/engine/src/data/attributes.rs</code>, <code>data/rules.rs</code>: <code>aggression</code> required; <code>AddedTime</code> and <code>min_players</code>.</li>
+<li><code>crates/engine/src/player.rs</code>, <code>team.rs</code>, <code>pitch.rs</code>, <code>rng.rs</code>, <code>tuning.rs</code>: status and cards, reshape and side switch, law geometry, generator state, foul and dead-ball tuning.</li>
+<li><code>crates/engine/src/rules/mod.rs</code>, <code>clock.rs</code>, <code>offside.rs</code>, <code>fouls.rs</code>, <code>restart.rs</code>, <code>discipline.rs</code> (new): the referee.</li>
+<li><code>crates/engine/src/sim.rs</code>, <code>decision.rs</code>, <code>validate.rs</code>, <code>record.rs</code>: the loop, the dead-ball decisions, the validator, tick schema 4.</li>
+<li><code>crates/engine/src/snapshot.rs</code>, <code>scenario.rs</code> (new): the snapshot file and the test-only builder.</li>
+<li><code>crates/engine/src/observe/mod.rs</code>: statistics and benchmark fields.</li>
+<li><code>crates/engine/tests/</code>: six new criterion files; <code>common/mod.rs</code>, <code>content.rs</code>, <code>full_match.rs</code>, <code>validator.rs</code> updated.</li>
+<li><code>crates/protocol/src/event.rs</code>, <code>lib.rs</code>, <code>command.rs</code>, <code>message.rs</code>, and <code>docs/reference/protocol.md</code>: event types, fields, version 2, comments.</li>
+<li><code>crates/engine-cli/src/cli.rs</code>, <code>main.rs</code>, <code>resume.rs</code> (new), <code>simulate.rs</code>, <code>serve.rs</code>, <code>stream_run.rs</code>, <code>record.rs</code>, <code>bench.rs</code>, <code>tests/resume.rs</code> (new): the command line.</li>
+<li><code>web/stoppages.mjs</code>, <code>web/main.mjs</code>, <code>web/tests/stoppages.test.mjs</code>: the stoppage filter and the scrubber clamp.</li>
+<li><code>README.md</code>: laws, snapshots, and <code>resume</code>.</li>
+</ul>
+<p>Full topology with line estimates: <code>04-plan-match-rules.yaml</code>.</p>
+<h2 id="proposed-change-strategy" tabindex="-1"><a class="header-anchor" href="#proposed-change-strategy"><span>Proposed Change Strategy</span></a></h2>
+<p>Build the laws as pure functions first and prove each one with a unit test, then put one referee state machine inside the loop. The <strong>referee</strong> (named mechanism) owns the phase: live play, a dead ball with its kind, team, spot, and ready time, or full time. The loop asks the referee after the ball moves and after possession resolves. When the whole ball crosses a line, or a foul or offside is called, the referee opens a dead ball, sets the restart flag on the tick the ball is placed, and calls the <strong>stoppage hook</strong> (named mechanism): <code>TickSink::on_stoppage(&amp;Stoppage, &amp;Simulation)</code>, a default no-op. The command line writes a snapshot through that hook, and the next slice applies queued changes through it. This slice applies no queued change (Round 1 Q1).</p>
+<p>A dead ball suspends decisions. Every agent steers to its restart target; the taker kicks when the tuned delay has passed and the taker is within the ready radius. Opening and second-half kick-offs place players at once, because a break comes before them. Offside is computed only when a team-mate plays the ball and is judged at the next first touch, which keeps the per-tick cost at two comparisons. Fouls come from one draw split into three bands, so the number of draws per tackle stays one.</p>
+<p>Added time is a per-half tally of seconds by stoppage kind plus a seeded variance, clamped by the rule pack (Round 2 Q7). A full-length match ends at regulation plus added time; a shortened test match plays none. The announced length is the <strong>maximum</strong> (Round 1 Q2): regulation plus both caps, so <code>ticks_expected</code> and <code>expected_ticks</code> change meaning. That change raises <code>PROTOCOL_VERSION</code> to 2 and the tick-file schema to 4 under the rule at <code>crates/protocol/src/lib.rs:21-28</code>.</p>
+<p>The <strong>snapshot</strong> (named mechanism, shape “Snapshot at every stoppage”) is a binary file with a SHA-256 trailer (Round 3 Q10), written atomically as <code>SM_DATA_DIR/matches/&lt;match.id&gt;/snapshot.smsn</code> at every stoppage. It holds every field of <code>Simulation</code> except the scratch buffer and the drained event list, including the generator’s seed, stream, and word position, so a resumed match continues tick for tick (Round 3 Q9). A snapshot from another build or other content is refused with a named reason (NFR-4).</p>
+<p>Performance: NFR-1 governs the mechanism choices and <code>yields-to: C2</code> (PO-ratified). The benchmark criterion is judged per tick (Round 4 Q13); the 2-second per-match budget stays per match.</p>
+<h2 id="step-by-step-plan" tabindex="-1"><a class="header-anchor" href="#step-by-step-plan"><span>Step-by-Step Plan</span></a></h2>
+<ol>
+<li><strong>Content schema.</strong> In <code>data/attributes.rs</code>, add <code>aggression</code> to <code>REQUIRED</code>. In <code>player.rs</code>, add <code>Derived::aggression</code> scaled to 0…1, <code>Player::status</code> (<code>OnPitch</code>, <code>SentOff</code>), and <code>Player::yellow</code>. In <code>data/rules.rs</code>, set <code>RULES_VERSION</code> to 2 and add <code>AddedTime { per_kind, card_s, variance_s, min_s, max_s }</code> and <code>min_players</code> with garde ranges; keep <code>every_kind_once</code>; rewrite the module comment in product language. Update <code>content/rules/default.json</code> with the values in <code>04-plan-match-rules.yaml</code>. Update <code>crates/engine/tests/content.rs</code> (version 2 in the refusal text, the new pins, a schema without <code>aggression</code> refused naming it). Run <code>cargo test -p engine --test content</code>. All tests must pass.</li>
+<li><strong>Tuning.</strong> In <code>tuning.rs</code>, add <code>foul_base</code>, <code>foul_aggression_weight</code>, <code>foul_tackling_weight</code>, <code>foul_ball_loss</code>, <code>yellow_base</code>, <code>yellow_aggression_weight</code>, <code>red_base</code>, <code>restart_delay_s</code> (throw-in 3, corner 8, goal kick 6, free kick 8, penalty 15, kick-off 5), and <code>restart_ready_radius</code> 1.0, each with a garde range. Set <code>foul_base</code> so a default match gives about 10 fouls per team. Add the same values to <code>content/tuning.json</code>. The pinning test <code>content.tuning.engine == Tuning::default()</code> must pass.</li>
+<li><strong>Generator state.</strong> In <code>rng.rs</code>, add <code>RngState { seed, stream, word_pos }</code>, <code>EngineRng::state()</code>, and <code>EngineRng::from_state()</code>. Under the <code>scenario</code> feature, add a scripted queue of draws that <code>next_f64</code> consumes before the stream. Unit test: 500 draws, save the state, 500 more; a restored generator gives the same second 500.</li>
+<li><strong>Law geometry.</strong> In <code>pitch.rs</code>, add the law constants, <code>exit(prev, ball) -&gt; Option&lt;Exit&gt;</code> using the ball radius, the restart spot functions (throw-in point on the line, goal-area point on the exit side, corner-arc point, penalty mark), <code>in_penalty_area</code>, and <code>parking_spot(team, slot)</code> beside the pitch. Unit tests for each spot and for a ball on the line (not out) and fully over it (out).</li>
+<li><strong>Clock.</strong> Write <code>rules/clock.rs</code>: <code>MatchClock</code>, <code>added_seconds(tally, rules, draw)</code> equal to the clamp of the tally plus the variance term, the announced minute rounded up, <code>minute()</code> and <code>minute_added()</code>, and <code>max_ticks(config, rules)</code>. A match shorter than the rule pack’s regulation length plays no added time. Unit tests: the formula, the clamp at both ends, and <code>max_ticks</code> for 90 minutes (regulation 270,000 plus 2 x 900 s = 360,000 ticks).</li>
+<li><strong>Fouls and cards.</strong> Write <code>rules/fouls.rs</code>: <code>tackle_outcome(p_win, p_foul, draw)</code>, <code>foul_chance(tackler, tuning)</code>, and <code>card_outcome(aggression, yellows, draw)</code>. Unit tests over fixed draws at each band edge.</li>
+<li><strong>Offside.</strong> Write <code>rules/offside.rs</code>: <code>offside_set(passer, ball, players, teams)</code> and <code>is_offence(set, toucher)</code>. The set is empty for a throw-in, a goal kick, and a corner. Level with the second-last opponent is onside, and the own half is onside. Unit tests for each case.</li>
+<li><strong>Restarts.</strong> Write <code>rules/restart.rs</code>: <code>spot</code>, <code>targets</code>, <code>taker</code>, and <code>is_ready</code>. For a free kick and a corner, an opponent inside 9.15 m targets the nearest point on the 9.15 m circle. For a goal kick, opponents target outside the penalty area. For a penalty, all players except the taker and the defending goalkeeper target outside the area and behind the mark. Unit tests for each kind.</li>
+<li><strong>Discipline and team shape.</strong> Write <code>rules/discipline.rs</code>: <code>book</code>, <code>send_off</code>, <code>on_pitch_count</code>, and <code>abandoned</code>. In <code>team.rs</code>, add <code>active</code>, <code>reshape(slot)</code> (the line’s remaining slots spread evenly across the width), and <code>switch_ends()</code>; <code>anchor()</code> reads active slots only. Unit test: a 4-4-2 back four with one slot removed gives three evenly spread defenders inside the pitch.</li>
+<li><strong>Referee.</strong> Write <code>rules/mod.rs</code>: <code>Referee</code>, <code>Phase</code>, <code>DeadBall</code>, <code>Stoppage</code>, the pending-card list for advantage, and the added-time tally. The referee decides out of play, offside, foul, advantage (outside the penalty area only), card, restart, half-time, full time, and abandonment.</li>
+<li><strong>Loop.</strong> In <code>sim.rs</code>: replace the wall bounce at <code>sim.rs:272-281</code> with exit detection; call the referee after <code>move_ball</code> and <code>resolve_possession</code>; replace the possession roll with the three-way roll; track <code>last_touch</code> for every touch; set <code>restart</code> on the tick the ball is placed; call <code>TickSink::on_stoppage</code>; change <code>run(sink)</code> to play to full time or <code>max_ticks</code>; add the law events to <code>EngineEventKind</code> with player ids, <code>card.kind</code>, advantage, and the engine’s minute; generalise <code>kick_off</code>. Keep the tick order decide, steer, integrate players, integrate ball, possession, referee, overlaps.</li>
+<li><strong>Decisions.</strong> In <code>decision.rs</code>, during a dead ball every agent targets its restart target and no pass or tackle is decided. The taker kicks when ready: a throw-in is a short lofted throw, an indirect free kick is always a pass. Every loop skips sent-off players.</li>
+<li><strong>Validator.</strong> In <code>validate.rs</code>, exempt parking spots from <code>in_bounds</code> and <code>separation</code>, read reshaped anchors, and add <code>restart_spot</code>: on a restart tick the ball lies within 0.5 m of the spot the event names.</li>
+<li><strong>Tick file.</strong> In <code>record.rs</code>, set <code>SCHEMA_VERSION</code> to 4 and document <code>expected_ticks</code> as the maximum. The reader accepts a written count at or below it and refuses schema 3 naming both versions.</li>
+<li><strong>Snapshot.</strong> Write <code>snapshot.rs</code> with the layout in <code>04-plan-match-rules.yaml</code>: <code>Snapshot::capture(&amp;Simulation)</code>, <code>write_atomic(path)</code> (temporary file in the same folder, then <code>std::fs::rename</code>), and <code>read(path)</code>. The reader checks, in order: magic, version, length, SHA-256, build hash, content hash. Each refusal is <code>EngineError::Snapshot</code> naming the reason. Add <code>Simulation::from_snapshot(config, &amp;Snapshot)</code>, which verifies the two team-file digests. Unit test: capture, write, read, and capture again give identical bytes.</li>
+<li><strong>Scenario builder.</strong> Write <code>scenario.rs</code> behind the <code>scenario</code> feature: <code>Scene</code> with <code>place</code>, <code>ball</code>, <code>carrier</code>, <code>tick</code>, <code>rolls</code>, and <code>build</code>, with no kick-off reset. Add the feature and the self dev-dependency to <code>crates/engine/Cargo.toml</code>. Add the scene helpers to <code>tests/common/mod.rs</code>.</li>
+<li><strong>Records.</strong> In <code>observe/mod.rs</code>, add the statistics fields and the two benchmark fields listed in <code>04-plan-match-rules.yaml</code>, and fold in the signals from <code>04b-instrument.md</code> section 2. Unit test: every contract key is present in both records.</li>
+<li><strong>Protocol.</strong> In <code>crates/protocol</code>, add the nine event types and six optional fields, set <code>PROTOCOL_VERSION</code> to 2 with the reason in the comment beside it, extend the <code>MESSAGES</code> event field list, and rewrite the comments at <code>event.rs:3</code>, <code>event.rs:12</code>, <code>command.rs:1-2</code>, <code>command.rs:55</code>, and <code>message.rs:90</code> without slice names. Update <code>docs/reference/protocol.md</code>. Run <code>cargo test -p protocol</code>. The document test must pass.</li>
+<li><strong>Command line.</strong> In <code>stream_run.rs</code>, map every new engine event to <code>MatchEvent</code> and forward <code>on_stoppage</code>. In <code>simulate.rs</code> and <code>serve.rs</code>, announce <code>max_ticks</code> and attach the snapshot sink; <code>--no-snapshot</code> turns the sink off for <code>simulate</code>. In <code>record.rs</code>, announce <code>max_ticks</code>. In <code>bench.rs</code>, report <code>bench.ticks_per_match</code> and <code>bench.cpu_us_per_tick</code> and attach no snapshot sink. Add <code>resume</code> to <code>cli.rs</code> and <code>main.rs</code>, and write <code>resume.rs</code>.</li>
+<li><strong>Page.</strong> In <code>web/stoppages.mjs</code>, export <code>STOPS_PLAY</code> and <code>stopsPlay(message)</code>. In <code>web/main.mjs</code>, add an event tick only when <code>stopsPlay</code> is true, and on full time set the scrubber maximum to the last received tick. Extend <code>web/tests/stoppages.test.mjs</code>. Run <code>node --test web/tests/*.test.mjs</code>. All tests must pass.</li>
+<li><strong>Criterion tests.</strong> Write <code>rules_offside.rs</code>, <code>rules_fouls.rs</code>, <code>rules_cards.rs</code>, <code>rules_restarts.rs</code>, <code>rules_clock.rs</code>, and <code>snapshot.rs</code> in <code>crates/engine/tests</code>, and <code>resume.rs</code> in <code>crates/engine-cli/tests</code>, per <code>04-plan-match-rules.yaml</code>. Update <code>full_match.rs</code> and <code>validator.rs</code>. Run <code>cargo test --workspace</code>. All tests must pass.</li>
+<li><strong>First measurement.</strong> Run <code>cargo build --release -p engine-cli</code>, then <code>target/release/engine-cli.exe bench --seed 42 --matches 5 --json</code> three times with <code>SM_DATA_DIR</code> set to a scratch folder. Record <code>bench.cpu_us_per_tick</code>, <code>bench.ticks_per_match</code>, and <code>bench.peak_mem_mb</code> in the implement artifact. The processor time per tick must be at most 1.566 µs and the peak memory at most 6.69 MB. If either limit is exceeded, stop and report to the product owner with the levers (offside set cost, exit detection, dead-ball targets). Do not remove a law to meet the limit.</li>
+<li><strong>Fixture, documents, and gates.</strong> Regenerate the local fixture with <code>engine-cli record --seed 7 --out fixture.smfx</code>. Update <code>README.md</code> and <code>content/README.md</code>. Search <code>crates/</code>, <code>web/</code>, <code>docs/</code>, and <code>README.md</code> for workflow vocabulary (slice names, stage names, <code>.ai/</code>); the search must return nothing. Run <code>cargo fmt --all -- --check</code>, <code>cargo clippy --workspace --all-targets -- -D warnings</code>, <code>cargo test --workspace</code>, and <code>node --test web/tests/*.test.mjs</code>. Commit with a message in product language that ends with the attribution line the session requires.</li>
+</ol>
+<h2 id="verification-strategy" tabindex="-1"><a class="header-anchor" href="#verification-strategy"><span>Verification Strategy</span></a></h2>
+<table class="prose-table">
+<thead>
+<tr>
+<th>AC</th>
+<th>Tool / method + ladder rung</th>
+<th>Environment need — satisfiable in target env?</th>
+<th>What must be BUILT to make it verifiable</th>
+<th>Fallback chain</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AC-h: benchmark rerun; processor time per tick within 10 percent and peak memory within 25 percent of the baseline, per-match time reported beside it (Round 4 Q13)</td>
+<td><code>engine-cli bench --seed 42 --matches 5 --json</code>, three drives (<code>cli-direct</code>, cli adapter)</td>
+<td>Windows 11 reference machine, rustc 1.92 — yes (this machine; desktop on mains power, Ultimate Performance plan)</td>
+<td><code>bench.ticks_per_match</code> and <code>bench.cpu_us_per_tick</code> in the run report (step 19); the baseline on <code>d86996a</code> in <code>05c-benchmark.md</code>; evidence capture of stdout, stderr, and exit code</td>
+<td>rerun with <code>--matches 10</code> when <code>bench.cpu_wall_ratio</code> is below 0.9 → run from a fresh PowerShell with no other heavy process → pre-registered deferral only if the machine is unavailable, clearing event: the developer runs the same command on the reference machine</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><code>constraint-resolution: prerequisite-slice: match-rules</code> — the harness is this slice’s own step 19 and step 22; nothing outside the slice is needed. <code>wall-ownership: code-owned</code>.</li>
+</ul>
+<p>Every other criterion is automated (<code>observable: false</code> in the slice) and runs under <code>cargo test --workspace</code>. The acceptance criteria keep the slice’s wording with three recorded readings: AC-b gains the advantage branch (Round 1 Q4), AC-e is judged against the formula with its seeded variance term (Round 2 Q7), and AC-h is judged per tick (Round 4 Q13).</p>
+<h2 id="test-verification-plan" tabindex="-1"><a class="header-anchor" href="#test-verification-plan"><span>Test / Verification Plan</span></a></h2>
+<h3 id="automated-checks" tabindex="-1"><a class="header-anchor" href="#automated-checks"><span>Automated checks</span></a></h3>
+<ul>
+<li>Format: <code>cargo fmt --all -- --check</code>.</li>
+<li>Lint: <code>cargo clippy --workspace --all-targets -- -D warnings</code>.</li>
+<li>Unit and integration: <code>cargo test --workspace</code> (about 40 seconds; the full-match tests run by default).</li>
+<li>Page: <code>node --test web/tests/*.test.mjs</code> (the glob form; the bare folder form fails on Node 24).</li>
+<li>Criteria map: AC-a <code>rules_offside.rs</code>; AC-b <code>rules_fouls.rs</code>; AC-c <code>rules_cards.rs</code>; AC-d <code>rules_restarts.rs</code>; AC-e <code>rules_clock.rs</code>; AC-f <code>snapshot.rs</code> and <code>crates/engine-cli/tests/resume.rs</code>; AC-g the same two files; AC-h the benchmark drive below.</li>
+<li>Regression: <code>determinism.rs</code> keeps its byte-identical assertion; <code>validator.rs</code> asserts zero violations with the laws on.</li>
+<li>Contract check: the record test in step 17 asserts every contract key the slice emits; <code>crates/protocol/tests/document.rs</code> asserts every event field is documented.</li>
+<li>Benchmark compare: <code>/wf verify</code> loads <code>augment/benchmark.md</code> in compare mode against <code>05c-benchmark.md</code> and judges per tick.</li>
+</ul>
+<h3 id="interactive-verification-human-in-the-loop" tabindex="-1"><a class="header-anchor" href="#interactive-verification-human-in-the-loop"><span>Interactive verification (human-in-the-loop)</span></a></h3>
+<ul>
+<li><strong>AC-h (benchmark report).</strong> Platform <code>cli</code> from <code>stack.platforms</code>; driver: the binary itself (<code>cli-direct</code>); no companion skill needed.
+<ol>
+<li>Run <code>cargo build --release -p engine-cli</code>.</li>
+<li>Set <code>SM_DATA_DIR</code> to a scratch folder.</li>
+<li>From Git Bash, run <code>target/release/engine-cli.exe bench --seed 42 --matches 5 --json &gt; &lt;evidence-dir&gt;/ac-h-&lt;n&gt;.stdout.txt 2&gt; &lt;evidence-dir&gt;/ac-h-&lt;n&gt;.stderr.txt</code> for <code>n</code> = 1, 2, 3, then write <code>$?</code> to <code>&lt;evidence-dir&gt;/ac-h-&lt;n&gt;.exit-code</code>.</li>
+<li>Read each stdout file: one JSON line with <code>record.kind</code> <code>run-report</code>. Pass criteria: the median <code>bench.cpu_us_per_tick</code> is at most 1.566, the median <code>bench.peak_mem_mb</code> is at most 6.69, <code>bench.match_wall_ms</code> is at most 2000, <code>budget.pass</code> is true, <code>bench.cpu_wall_ratio</code> is at least 0.9, <code>build.hash</code> is not <code>unknown</code>, and the exit code is 0. Report <code>bench.match_wall_ms</code> and <code>bench.ticks_per_match</code> beside the per-tick figure.</li>
+<li>Evidence layout per the cli adapter: <code>&lt;evidence-dir&gt;/ac-h-&lt;n&gt;.stdout.txt</code>, <code>ac-h-&lt;n&gt;.stderr.txt</code>, <code>ac-h-&lt;n&gt;.exit-code</code>.</li>
+</ol>
+</li>
+</ul>
+<h2 id="risks-watchouts" tabindex="-1"><a class="header-anchor" href="#risks-watchouts"><span>Risks / Watchouts</span></a></h2>
+<ul>
+<li>R1 (high): processor time per tick exceeds the tripwire. Offside runs only at a pass; exit detection is two comparisons; step 22 measures before the tests are finalised. A miss goes to the product owner; no law is removed silently.</li>
+<li>R2 (high): a resumed match drifts. The snapshot covers every field except the scratch buffer and the drained events; the continuation test compares bytes from the snapshot tick onward, and the write-read-write test catches a field that does not round-trip.</li>
+<li>R3 (medium): restart positioning fights the steering agents (slice risk). Decisions are suspended during a dead ball; encroaching opponents target the 9.15 m circle; a restart is taken at three times the delay at the latest; <code>rules.dead_ball_ticks</code> shows a stall.</li>
+<li>R4 (medium): PROTOCOL_VERSION 2 and tick schema 4 refuse earlier files. No <code>.ticks</code> or <code>.smfx</code> file is in the repository; step 23 regenerates the local fixture; both refusals name the found and expected version.</li>
+<li>R5 (medium): the three-way roll changes every seeded match. <code>determinism.rs</code> still compares two runs of the new engine; <code>full_match.rs</code> and the benchmark re-pin against the new match.</li>
+<li>R6 (low): the viewer draws a sent-off player at the parking spot beside the pitch until <code>viewer-match-day</code> hides parked markers.</li>
+<li>R7 (low): foul, card, and added-time rates are estimates. <code>full_match.rs</code> holds a sanity band only; <code>calibration</code> tunes the rates.</li>
+<li>The <code>serde_json</code> <code>float_roundtrip</code> concern does not apply: the snapshot is binary and stores every float as its little-endian bytes.</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<ul>
+<li>Consumes <code>engine-core</code> (the loop, the validator, the benchmark), <code>data-schemas-generator</code> (the rule pack loader, the attribute schema), and <code>stream-protocol</code> (the restart keyframe, the event writer, the protocol document test).</li>
+<li>Touches three <code>viewer-pitch</code> files (<code>web/stoppages.mjs</code>, <code>web/main.mjs</code>, <code>web/tests/stoppages.test.mjs</code>) after that slice is verified, never in parallel.</li>
+<li>Consumers: <code>tactics-and-ai</code> applies queued changes through <code>TickSink::on_stoppage</code>; <code>commentary</code> reads the new event types and <code>player.id</code>; <code>viewer-match-day</code> shows cards and added time and hides parked markers; <code>viewer-reports-recovery</code> builds crash recovery on the snapshot and <code>resume</code>; <code>extra-time-penalties</code> extends <code>MatchClock</code>; <code>calibration</code> tunes the foul, card, and added-time defaults.</li>
+</ul>
+<h2 id="assumptions" tabindex="-1"><a class="header-anchor" href="#assumptions"><span>Assumptions</span></a></h2>
+<ul>
+<li>The advantage branch applies outside the penalty area only; inside it, a foul is a penalty (Round 1 Q4 scope line).</li>
+<li>The shipped added-time cap is 900 seconds per half, so the announced maximum for a full match is 360,000 ticks and the page reserves about 33.8 MB of history instead of 25.4 MB, under the 300 MB budget.</li>
+<li>Snapshots are written by <code>simulate</code> and <code>serve</code> only; <code>bench</code> and <code>record</code> write none, so the timed path and the fixture stay free of disk writes.</li>
+<li>The design contract <code>02c-craft.md</code> binds no step: this slice changes page logic in one module and no visual element.</li>
+<li>The <code>experiment</code> augmentation stays deferred to <code>experiment-flags</code>; <code>04c-experiment.md</code> is not authored.</li>
+<li>Consult triggers <code>appetite-medium-or-larger</code> and <code>touches-migration</code> hold; the product owner excluded <code>consult</code> at intake, so no consult ran (<code>consult-runs: []</code>).</li>
+<li>The open brainstorm <code>brainstorm-realism-additions-20260922</code> routes no thread to this slice; its claim C-01 confirms the wall bounce this slice removes.</li>
+</ul>
+<h2 id="blockers" tabindex="-1"><a class="header-anchor" href="#blockers"><span>Blockers</span></a></h2>
+<p>None.</p>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<ul>
+<li>Source: <a href="https://www.theifab.com/laws/latest/offside/">IFAB Laws of the Game, Law 11 Offside</a>
+Why it matters: defines the offside position, the moment of judgment, involvement, the exceptions, and the restart.
+Takeaway: judge at the team-mate’s pass; no offside from a goal kick, a throw-in, or a corner; indirect free kick where the player became involved.</li>
+<li>Source: <a href="https://www.theifab.com/laws/latest/fouls-and-misconduct/">IFAB Law 12 Fouls and Misconduct</a> and <a href="https://www.theifab.com/laws/latest/the-players/">Law 3 The Players</a>
+Why it matters: a second caution is a sending-off; a team below seven players cannot continue.
+Takeaway: <code>second-yellow</code> as a <code>card.kind</code>; <code>min_players: 7</code> in the rule pack.</li>
+<li>Source: <a href="https://www.theifab.com/laws/latest/free-kicks/">IFAB Law 13 Free Kicks</a> and <a href="https://www.theifab.com/laws/latest/the-penalty-kick/">Law 14 The Penalty Kick</a>
+Why it matters: 9.15 m distance; direct versus indirect; the penalty mark and player positions.
+Takeaway: restart targets keep opponents 9.15 m away; an indirect free kick is always a pass.</li>
+<li>Source: <a href="https://www.theifab.com/laws/latest/the-throw-in/">IFAB Laws 15 to 17</a>
+Why it matters: throw-in at the exit point, goal kick anywhere in the goal area with opponents outside the penalty area, corner in the arc nearest the exit.
+Takeaway: the spot functions in <code>pitch.rs</code>.</li>
+<li>Source: <a href="https://www.theifab.com/laws/latest/the-duration-of-the-match/">IFAB Law 7 Duration</a>, <a href="https://www.premierleague.com/en/news/3860720">Premier League on added time</a>
+Why it matters: allowance for time lost per half; 2024-25 added time fell by about 1 minute 51 seconds against 2023-24.
+Takeaway: per-kind seconds and a cap in the rule pack; defaults aim at about 3 to 4 minutes and 5 to 6 minutes.</li>
+<li>Source: <a href="https://www.statmuse.com/fc/ask/premier-league-fouls-team-stats-2024-2025">StatMuse, Premier League fouls 2024-25</a>, <a href="https://theanalyst.com/articles/premier-league-corners-2024-25">The Analyst, corners 2024-25</a>
+Why it matters: about 10.5 fouls per team per match and about 5 corners per team per match.
+Takeaway: the default foul rate and the sanity band in <code>full_match.rs</code>; yellow, red, offside, throw-in, and goal-kick rates are unsourced estimates for <code>calibration</code> to refine.</li>
+<li>Source: local registry <code>rand_chacha-0.10.0/Cargo.toml</code> and <code>src/chacha.rs:134-198</code>
+Why it matters: the snapshot must restore the generator exactly.
+Takeaway: save seed, stream, and word position; the <code>serde</code> feature is not needed.</li>
+<li>Source: <a href="https://doc.rust-lang.org/std/fs/fn.rename.html">std::fs::rename</a>
+Why it matters: an atomic snapshot replace on Windows.
+Takeaway: an existing file is replaced; write a temporary file in the same folder, then rename.</li>
+<li>Source: <a href="https://github.com/serde-rs/json/issues/707">serde_json issue 707</a>
+Why it matters: the default float parser is not always correctly rounded.
+Takeaway: not applicable after Round 3 Q10 chose a binary snapshot; recorded so a later JSON export enables <code>float_roundtrip</code>.</li>
+</ul>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option A (default):</strong> <code>/wf implement football-manager-match-engine match-rules</code> — the plan is complete and both augmentation artifacts are re-authored for this slice; compact the session first so the SessionStart hook re-reads the artifacts.</li>
+<li><strong>Option B:</strong> <code>/wf review football-manager-match-engine viewer-pitch</code> — four verified slices wait for the slug-wide review; this slice changes three viewer-pitch files, so a review first keeps the two diffs apart.</li>
+<li><strong>Option C:</strong> <code>/wf slice football-manager-match-engine</code> — not needed; the change-queue boundary held (Round 1 Q1).</li>
+<li><strong>Option D:</strong> <code>/wf shape football-manager-match-engine</code> — not needed; the spec held, and the three criterion readings are recorded as product-owner decisions.</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-22T19:29:33Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/04-plan-match-rules.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">plan</a><span class="m-sheet-here" aria-current="page">match-rules</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/04-plan-match-rules.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-22T19:29:33Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

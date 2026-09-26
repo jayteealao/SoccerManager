@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="slice">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · slice — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="slice">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span aria-hidden="true">/</span><span class="m-here">engine-core</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · slice</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">engine-core</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/03-slice-engine-core.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">03-slice-engine-core.md</div>
+      <h1 class="pg-title">Slice · <code>engine-core</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">defined</span><span class="stage-badge">slice</span><span class="meta">2026-09-21T19:50:41Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-slice" tabindex="-1"><a class="header-anchor" href="#the-slice"><span>The Slice</span></a></h2>
+<p>The shape fixed a native Rust engine at 50 ticks per second and left one risk open above all others: whether an agent-based engine with ball physics simulates a 90-minute match in under 2 seconds on one thread. The product owner chose to retire that risk first.</p>
+<p>This slice builds the Rust workspace, the fixed-timestep tick loop, the pitch and ball model, 22 agents with steering and a minimal possession decision, formation shape, the seedable random-number generator, a headless command line, a tick-stream validator, and the benchmark harness. It ships no laws of the game, no tactics model, and no socket; a built-in default attribute set stands in until the data-schemas slice replaces it.</p>
+<p>Every later engine slice builds on this loop, and the stream-protocol slice wraps it. The top risk is the benchmark: a miss reopens the tick rate with the product owner under NFR-1’s <code>yields-to: C2</code> rule, and never lowers the positional model silently.</p></section>
+    <section class="slice-stages">
+    <h2 class="sdlc-h2">stages</h2>
+    <div class="slice-grid"><a class="slice-card" href="../../plan/engine-core/INDEX.html"><span class="slice-slug"><code>plan</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../implement/engine-core/INDEX.html"><span class="slice-slug"><code>implement</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../verify/engine-core/INDEX.html"><span class="slice-slug"><code>verify</code></span>
+    <span class="status-badge is-ok">complete</span></a></div>
+  </section>
+    
+    <dl class="frontmatter-card"><div><dt>type</dt><dd>slice</dd></div><div><dt>slug</dt><dd>football-manager-match-engine</dd></div><div><dt>slice-slug</dt><dd>engine-core</dd></div><div><dt>status</dt><dd>defined</dd></div><div><dt>stage-number</dt><dd>3</dd></div><div><dt>created-at</dt><dd>2026-09-21T19:50:41Z</dd></div><div><dt>updated-at</dt><dd>2026-09-21T19:50:41Z</dd></div><div><dt>complexity</dt><dd>l</dd></div><div><dt>depends-on</dt><dd></dd></div><div><dt>tags</dt><dd>engine, rust, benchmark</dd></div><div><dt>refs</dt><dd>{&quot;index&quot;:&quot;00-index.md&quot;,&quot;slice-index&quot;:&quot;03-slice.md&quot;,&quot;siblings&quot;:[&quot;03-slice-data-schemas-generator.md&quot;,&quot;03-slice-stream-protocol.md&quot;,&quot;03-slice-viewer-pitch.md&quot;,&quot;03-slice-match-rules.md&quot;,&quot;03-slice-tactics-and-ai.md&quot;,&quot;03-slice-commentary.md&quot;,&quot;03-slice-calibration.md&quot;,&quot;03-slice-viewer-match-day.md&quot;,&quot;03-slice-viewer-lineup-tactics.md&quot;,&quot;03-slice-viewer-reports-recovery.md&quot;,&quot;03-slice-integration.md&quot;],&quot;plan&quot;:&quot;04-plan-engine-core.md&quot;,&quot;implement&quot;:&quot;05-implement-engine-core.md&quot;}</dd></div></dl>
+    <div class="prose"><h1 id="slice-engine-core" tabindex="-1"><a class="header-anchor" href="#slice-engine-core"><span>Slice: Engine Core</span></a></h1>
+<h2 id="goal" tabindex="-1"><a class="header-anchor" href="#goal"><span>Goal</span></a></h2>
+<p>A headless engine that simulates a plausible kick-about at 50 ticks per second, emits every tick, and measures its own speed.</p>
+<h2 id="why-this-slice-exists" tabindex="-1"><a class="header-anchor" href="#why-this-slice-exists"><span>Why This Slice Exists</span></a></h2>
+<p>Performance at 50 ticks per second is the largest unproven assumption in the shape (NFR-1). Every other slice consumes the tick loop, so its shape must exist before anything else can be planned in detail.</p>
+<h2 id="scope" tabindex="-1"><a class="header-anchor" href="#scope"><span>Scope</span></a></h2>
+<p>In:</p>
+<ul>
+<li>Cargo workspace with <code>engine</code> library and <code>engine-cli</code> binary crates.</li>
+<li>Fixed-timestep loop at 20 ms per tick (named mechanism: <strong>fixed-timestep loop</strong>, replaces a variable-step loop so tick count is a function of match time alone).</li>
+<li>Pitch model (105 m by 68 m), ball with drag, friction, and restitution; no spin yet.</li>
+<li>22 agents with steering behaviors (seek, arrive, separation) and a minimal possession decision: pass to the best-placed teammate or dribble.</li>
+<li>Formation shape as target positions relative to the ball (named mechanism: <strong>formation anchor</strong>, replaces free-roaming agents so AC-6 has something to measure).</li>
+<li>Seedable engine-owned RNG (named mechanism per the shape).</li>
+<li>Headless command line: <code>engine-cli simulate --seed N --ticks-out file</code>.</li>
+<li>Tick-stream validator: bounds, overlap, ball speed, formation tolerance.</li>
+<li>Benchmark harness: ticks per second and 90-minute wall time, single thread, with machine name and build hash.</li>
+<li>Built-in default attribute set (pace, acceleration, passing, dribbling, tackling, positioning) as a stopgap.</li>
+</ul>
+<p>Out:</p>
+<ul>
+<li>Laws of the game: <code>match-rules</code>.</li>
+<li>Attribute schema files, team data, generator: <code>data-schemas-generator</code>.</li>
+<li>Tactics, fatigue, injuries, AI manager: <code>tactics-and-ai</code>.</li>
+<li>Socket server and wire format: <code>stream-protocol</code>.</li>
+</ul>
+<h2 id="acceptance-criteria" tabindex="-1"><a class="header-anchor" href="#acceptance-criteria"><span>Acceptance Criteria</span></a></h2>
+<ul>
+<li>Given a seed and two built-in teams, When <code>engine-cli simulate</code> runs 90 minutes, Then the output holds 270,000 ticks, each with one ball position and 22 player positions.<!-- observable: false — a cargo integration test counts ticks and fields in the output file -->
+</li>
+<li>Given the same seed and build on the same machine, When two simulations run, Then the two tick outputs are byte-identical.<!-- observable: false — a cargo test compares the two files -->
+</li>
+<li>Given any tick, Then no player is outside the pitch bounds, no two players share a point within 0.1 m, and ball speed is at most 40 m/s.<!-- observable: false — the validator runs inside a cargo test over a seeded match -->
+</li>
+<li>Given open play with the ball more than 30 m from a player, Then that player’s distance to the formation anchor stays within the tolerance the tuning constants set.<!-- observable: false — validator assertion in a cargo test -->
+</li>
+<li>Given the benchmark harness on the reference laptop with one thread, When it simulates one 90-minute match, Then wall time is under 2 seconds and the report records machine name and build hash.<!-- observable: true — the benchmark output is a user-visible report the developer reads; the number is the deliverable -->
+verify: { method: cargo bench harness, env: Windows 11 reference laptop with rustc 1.92 (installed), fixture: seed 42 with built-in teams, rung: cli-direct }</li>
+<li>Given an invalid seed argument, When <code>engine-cli simulate</code> runs, Then it exits non-zero with a message naming the argument; and Given a valid seed, Then it exits zero.<!-- observable: false — cargo test drives the binary -->
+</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<p>None. This slice is the root.</p>
+<h2 id="risks" tabindex="-1"><a class="header-anchor" href="#risks"><span>Risks</span></a></h2>
+<ul>
+<li>The benchmark misses 2 seconds: reopen the tick rate with the product owner (NFR-1 yields to C2); candidate levers are spatial partitioning and fewer perception checks per tick.</li>
+<li>Steering agents oscillate around anchors: tune arrive radius; the validator’s formation tolerance catches it.</li>
+<li>Byte-identical output across two runs fails because of hash-map iteration order: use ordered collections in the simulation path.</li>
+</ul></div>
+    
+  
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-21T19:50:41Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/03-slice-engine-core.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">slice</a><span class="m-sheet-here" aria-current="page">engine-core</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/03-slice-engine-core.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-21T19:50:41Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

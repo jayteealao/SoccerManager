@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="implement">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · implement — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="implement">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">implement</a><span aria-hidden="true">/</span><span class="m-here">commentary</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · implement</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">implement</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">commentary</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/05-implement-commentary.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">05-implement-commentary.md</div>
+      <h1 class="pg-title">Implement · commentary</h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="meta">stage 5</span><span class="meta">updated 2026-09-22T23:59:19Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-implementation" tabindex="-1"><a class="header-anchor" href="#the-implementation"><span>The Implementation</span></a></h2>
+<p>The engine that this slice inherited emitted seventeen kinds of event and no text at all. A goal, a kick-off, and a restart named no player, and the engine kept player identifiers but no player names. The tactics slice had landed at <code>0e9cf6a</code>, so the commentator had to cover its injury, substitution, and AI-decision events as well as the twelve law events the plan counted.</p>
+<p>Four decisions carry the build. First, the commentator is a per-match object in the engine crate that the shared match driver calls once per event; the engine loop, the snapshot, and the random draws do not change, and the seed-42 tick records are byte-identical before and after (the only differing bytes are the match timestamp in the 64-byte header). Second, the 168 English lines in 54 template sets live in <code>content/commentary/en.json</code>, and the loader refuses a file that leaves any of the 15 commented kinds with fewer than 3 unconditional lines, or that uses a placeholder the kind cannot fill. Third, selection is deterministic: most specific set first, a seed-derived rotation, and no line repeated for a kind within ten minutes of play. Fourth, the engine now names the last kicker on a goal and the taker on every restart and kick-off, and clears the last kicker at every dead ball, so the snapshot layout is unchanged.</p>
+<p>All four criteria pass as <code>cargo test</code> properties: the workspace passes 251 tests with 0 failed and 3 ignored, the seed-42 match produces its lines with zero fallbacks, and the benchmark median moved from 1.4453 to 1.4352 µs per tick and from 6.14 to 6.30 MB peak memory, inside both limits. The match-day screen can now render the <code>commentary</code> field in its feed. The top open risk is repetition over a whole match: throw-in and goal-kick lines cycle many times over about 40 events, and the file is the place to add lines.</p></section><dl class="frontmatter-card"><div><dt>type</dt><dd>implement</dd></div><div><dt>slug</dt><dd>football-manager-match-engine</dd></div><div><dt>slice-slug</dt><dd>commentary</dd></div><div><dt>status</dt><dd>complete</dd></div><div><dt>stage-number</dt><dd>5</dd></div><div><dt>created-at</dt><dd>2026-09-22T23:59:19Z</dd></div><div><dt>updated-at</dt><dd>2026-09-22T23:59:19Z</dd></div><div><dt>metric-files-changed</dt><dd>20</dd></div><div><dt>metric-lines-added</dt><dd>2503</dd></div><div><dt>metric-lines-removed</dt><dd>17</dd></div><div><dt>metric-deviations-from-plan</dt><dd>8</dd></div><div><dt>metric-review-fixes-applied</dt><dd>0</dd></div><div><dt>commit-sha</dt><dd>a414df5fb4d4cfbf738305019be4271ed56149c6</dd></div><div><dt>steering-honored</dt><dd>No visual change: no file under web/ changed; the lines ride on the event message, and the match feed that shows them belongs to the match-day screen., A card line names the card in words: the yellow, second-yellow, and red sets say booked, second yellow, sent off, or red card; the three unconditional card lines say &#x27;shown a card&#x27; and are reached only when every card-specific line was used in the last ten minutes., Output boundary: the commit message, code comments, content/README.md, and docs/reference/protocol.md use product language; a scan of every added line for workflow vocabulary found none.</dd></div><div><dt>tags</dt><dd>engine, commentary, text, content, protocol</dd></div><div><dt>refs</dt><dd>{&quot;index&quot;:&quot;00-index.md&quot;,&quot;implement-index&quot;:&quot;05-implement.md&quot;,&quot;slice-def&quot;:&quot;03-slice-commentary.md&quot;,&quot;plan&quot;:&quot;04-plan-commentary.md&quot;,&quot;siblings&quot;:[&quot;05-implement-engine-core.md&quot;,&quot;05-implement-data-schemas-generator.md&quot;,&quot;05-implement-stream-protocol.md&quot;,&quot;05-implement-viewer-pitch.md&quot;,&quot;05-implement-match-rules.md&quot;,&quot;05-implement-tactics-and-ai.md&quot;],&quot;verify&quot;:&quot;06-verify-commentary.md&quot;}</dd></div><div><dt>next-command</dt><dd>wf-verify</dd></div><div><dt>next-invocation</dt><dd>/wf verify football-manager-match-engine commentary</dd></div></dl><div class="prose"><h1 id="implement-context-aware-commentary" tabindex="-1"><a class="header-anchor" href="#implement-context-aware-commentary"><span>Implement: Context-Aware Commentary</span></a></h1>
+<h2 id="summary-of-changes" tabindex="-1"><a class="header-anchor" href="#summary-of-changes"><span>Summary of Changes</span></a></h2>
+<ul>
+<li>New <code>content/commentary/en.json</code> (schema 1): 54 template sets, 168 lines, for the 15 commented event kinds. Context sets cover the late equaliser, the late winner, the rout, the opener, the equaliser, the go-ahead goal, extending a lead, the consolation, the own goal, hot form, advantage, a booked offender, each card, offside and throw-in streaks, corner repeats, late corners and penalties when trailing, time-wasting goal kicks, early injuries, half-time substitutions, each AI manager choice, and the half-time and full-time score states.</li>
+<li>New module <code>crates/engine/src/commentary/</code>: <code>render.rs</code> (placeholder scan and fill), <code>templates.rs</code> (file schema, garde checks, loader), <code>context.rs</code> (minute band, score state, form, repeat, own goal), <code>mod.rs</code> (<code>Commentator</code>, <code>MatchNames</code>, selection, the <code>commentary.fallback</code> signal).</li>
+<li>The engine names a player on goal, kick-off, and restart events through the new <code>last_kicker</code> field. It also gains <code>EngineEventKind::ALL</code>, <code>EngineEventKind::code()</code>, <code>Simulation::player_names()</code>, <code>seed()</code>, and <code>minutes()</code>, and <code>Team::player_names</code>.</li>
+<li><code>MatchEvent</code> gains the optional <code>commentary</code> field and builder. <code>MESSAGES</code> and <code>docs/reference/protocol.md</code> document it, and the <code>player.id</code> row names the scorer and the taker. Protocol version 2 is kept, with the reason written beside <code>PROTOCOL_VERSION</code>.</li>
+<li><code>engine-cli</code> loads the commentary with the content. <code>stream_run::drive</code> builds one commentator per match and attaches its line to every play event, so <code>serve</code>, <code>record</code>, and <code>bench</code> all carry lines.</li>
+<li><code>content/README.md</code> documents the file, its conditions, its placeholders, the loader’s refusals, and the selection order.</li>
+</ul>
+<h2 id="files-changed" tabindex="-1"><a class="header-anchor" href="#files-changed"><span>Files Changed</span></a></h2>
+<ul>
+<li><code>content/commentary/en.json</code>: new; the English lines.</li>
+<li><code>content/README.md</code>: the files table gains the commentary file; a new section covers the set shape, the conditions, the placeholders, the refusals, and the selection order.</li>
+<li><code>crates/engine/src/commentary/mod.rs</code>: new; the commentator and its selection rule.</li>
+<li><code>crates/engine/src/commentary/templates.rs</code>: new; the file schema, the commented kinds, the guaranteed and fillable placeholders, the loader checks, and <code>Commentary::load</code> / <code>load_path</code>.</li>
+<li><code>crates/engine/src/commentary/context.rs</code>: new; the situation functions and the commentator’s history.</li>
+<li><code>crates/engine/src/commentary/render.rs</code>: new; <code>placeholders</code> and <code>fill</code>.</li>
+<li><code>crates/engine/src/lib.rs</code>: <code>pub mod commentary</code> and the <code>Commentary</code> and <code>Commentator</code> re-exports.</li>
+<li><code>crates/engine/src/data/mod.rs</code>: <code>COMMENTARY_FILE</code>, outside <code>Content</code> and its digest.</li>
+<li><code>crates/engine/src/sim.rs</code>: <code>EngineEventKind::ALL</code> and <code>code()</code>, <code>last_kicker</code>, <code>player_names()</code>, <code>seed()</code>, <code>minutes()</code>, the <code>EngineEvent::player</code> doc, and two unit tests.</li>
+<li><code>crates/engine/src/rules/mod.rs</code>: <code>goal()</code> names the last kicker; <code>open_dead_ball()</code> names the taker and clears the last kicker; <code>place_kick_off()</code> picks the kicker before it pushes the event, names the kicker, and clears the last kicker.</li>
+<li><code>crates/engine/src/team.rs</code>: <code>Team::player_names</code>, filled by <code>from_file</code>.</li>
+<li><code>crates/engine/tests/commentary.rs</code>: new; the criteria tests and the loader refusals.</li>
+<li><code>crates/protocol/src/event.rs</code>: the <code>commentary</code> field and builder; the round-trip test carries the key.</li>
+<li><code>crates/protocol/src/lib.rs</code>: <code>commentary</code> in the event field list; the version-2 judgement.</li>
+<li><code>docs/reference/protocol.md</code>: the <code>commentary</code> row and the extended <code>player.id</code> row.</li>
+<li><code>crates/engine-cli/src/content.rs</code>: <code>Loaded::commentary</code>.</li>
+<li><code>crates/engine-cli/src/stream_run.rs</code>: <code>Drive::commentary</code>, one <code>Commentator</code> per driven match, the line on every event, and a unit test.</li>
+<li><code>crates/engine-cli/src/bench.rs</code>, <code>record.rs</code>, <code>serve.rs</code>: pass the loaded commentary to the driver.</li>
+</ul>
+<h2 id="shared-files-also-touched-by-sibling-slices" tabindex="-1"><a class="header-anchor" href="#shared-files-also-touched-by-sibling-slices"><span>Shared Files (also touched by sibling slices)</span></a></h2>
+<ul>
+<li><code>crates/engine/src/sim.rs</code>, <code>crates/engine/src/rules/mod.rs</code>, <code>crates/engine/src/team.rs</code>: also changed by <code>match-rules</code> and <code>tactics-and-ai</code>. This slice started from <code>e79ad61</code>, after both, so no rebase was needed.</li>
+<li><code>crates/engine-cli/src/stream_run.rs</code>: <code>calibration</code> plans to extract <code>match_event</code> into a shared function. The slice that lands second threads the line through the shared mapping, as the plan’s dependency note records.</li>
+<li><code>crates/protocol/src/event.rs</code>, <code>crates/protocol/src/lib.rs</code>, <code>docs/reference/protocol.md</code>: shared contract files.</li>
+<li><code>content/README.md</code>: every content-bearing slice adds a section.</li>
+</ul>
+<h2 id="notes-on-design-choices" tabindex="-1"><a class="header-anchor" href="#notes-on-design-choices"><span>Notes on Design Choices</span></a></h2>
+<ul>
+<li>The commentator sits outside the engine loop. <code>EngineEvent</code> stays <code>Copy</code>, the snapshot holds no commentary state, and determinism is untouched. The line is still generated in the engine crate and travels as a field on the event record, as the slice definition asks.</li>
+<li>The loader’s checks make AC-1’s placeholder half and AC-4 structural: an accepted file cannot hold a line with an unknown or unfillable placeholder, and every kind has at least three lines that always fill. The runtime keeps a second guard: a set whose lines cannot all be filled for this event is not a candidate, and when no set is left, the built-in line and <code>commentary.fallback</code> make the gap visible.</li>
+<li>The most specific set wins, and sets with the same number of conditions are tried in file order. This is why the rout set sits before extends-lead, and why the two late goal sets carry <code>own_goal: false</code>, so an own goal never reads as a scorer’s late winner.</li>
+<li><code>{minute}</code> is left out of the shipped lines, because the feed shows its own minute stamp.</li>
+<li>The <code>decision</code> condition lets each AI manager choice read differently. Without it, the four choices would share generic lines.</li>
+</ul>
+<h2 id="verification-seams-built" tabindex="-1"><a class="header-anchor" href="#verification-seams-built"><span>Verification Seams Built</span></a></h2>
+<ul>
+<li>AC-1 (every kind names its player and club) → <code>EngineEventKind::ALL</code> at <code>crates/engine/src/sim.rs:196</code> and <code>COMMENTED</code> at <code>crates/engine/src/commentary/templates.rs:24</code> let the test enumerate kinds. <code>Commentator::new</code> with <code>MatchNames</code> (<code>crates/engine/src/commentary/mod.rs:69</code>, <code>:27</code>) accepts scripted events. The players are now on the events at <code>crates/engine/src/rules/mod.rs:110</code> (kick-off), <code>:130</code> (goal), and <code>:418</code> (restart). Enables <code>cargo test -p engine --test commentary</code> (<code>every_event_kind_gets_a_line_naming_its_player_and_club</code>, <code>every_shipped_line_names_the_player_and_the_club</code>, <code>a_full_seeded_match_fills_every_placeholder_and_names_every_player</code>).</li>
+<li>AC-2 (five same-kind events give three distinct lines) → the deterministic <code>rotation</code> at <code>crates/engine/src/commentary/mod.rs:236</code> and the public <code>Length</code> at <code>crates/engine/src/commentary/context.rs:64</code> let a test build a 90-minute context with no match. Enables <code>five_events_of_one_kind_in_ten_minutes_give_three_distinct_lines</code>.</li>
+<li>AC-3 (late equaliser, rout) → <code>Commentary::sets</code> is public (<code>crates/engine/src/commentary/templates.rs</code>), so the test compares the line against the lines of sets whose <code>when</code> holds the condition, not against keywords. Enables <code>a_late_equaliser_and_a_rout_read_as_such</code>.</li>
+<li>AC-4 (no unfilled placeholder in a full seeded match) → <code>Commentator::fallbacks()</code> at <code>crates/engine/src/commentary/mod.rs:87</code> and the <code>commentary.fallback</code> signal at <code>:165</code>. Enables the full-match test to assert zero fallbacks and no brace in any line.</li>
+<li>Loader refusals → <code>Commentary::load_path</code> at <code>crates/engine/src/commentary/templates.rs:325</code> loads a temp file under a shown name. Enables the four refusal tests.</li>
+<li>The line on the wire → <code>Commentator::for_match</code> in the driver at <code>crates/engine-cli/src/stream_run.rs:54</code> and the unit test at <code>:253</code>.</li>
+<li>The snapshot invariant → the unit test <code>the_last_kicker_is_clear_whenever_play_stops</code> at <code>crates/engine/src/sim.rs:825</code>.</li>
+</ul>
+<h2 id="visual-contract-honored-only-if-02c-craftmd-was-present" tabindex="-1"><a class="header-anchor" href="#visual-contract-honored-only-if-02c-craftmd-was-present"><span>Visual Contract Honored (only if <code>02c-craft.md</code> was present)</span></a></h2>
+<p><code>02c-craft.md</code> is present, but no step of this slice binds it: no file under <code>web/</code> changed, so no mock-fidelity item applies. No contract-check pass was dispatched, because there is no built surface to check.</p>
+<h2 id="deviations-from-plan" tabindex="-1"><a class="header-anchor" href="#deviations-from-plan"><span>Deviations from Plan</span></a></h2>
+<ol>
+<li><strong>Event kinds.</strong> The plan counted twelve play kinds. At <code>e79ad61</code> the engine has seventeen, because the tactics slice added injury, substitution, AI decision, and the two change verdicts. The file covers the 15 commented kinds. The two verdicts get no line, as plan assumption 5 decided. <code>EngineEventKind::ALL</code> has 17 entries, and <code>code()</code> spells both verdicts as <code>tactics-change</code>.</li>
+<li><strong>AI-decision names a club, not a player.</strong> The engine’s <code>ai-decision</code> event carries no player (<code>crates/engine/src/ai.rs:338</code>). Its lines name the club, and the player that a substitution choice involves is named on the <code>substitution</code> event that follows. The plan’s step 2 test (“every event except half-time and full time has a player”) therefore also excludes <code>ai-decision</code> and the two verdicts.</li>
+<li><strong>Tick-file comparison.</strong> The whole-file SHA-256 of the seed-42 <code>simulate</code> output differs before and after (<code>fcd0c000…</code> against <code>1034a7fe…</code>), and it also differs between two runs of the same binary (<code>1034a7fe…</code> against <code>c49364ea…</code>). <code>cmp -l</code> shows three differing bytes, at offsets 45 to 47, inside the header’s match timestamp (<code>crates/engine/src/record.rs:36</code>). The SHA-256 of the records after the 64-byte header is equal before and after (<code>05250c2d…</code>), so no tick moved. The files are in <code>bench-baseline/commentary/</code>.</li>
+<li><strong><code>Commentator::line</code> returns <code>Option&lt;String&gt;</code>.</strong> It returns <code>None</code> for the two verdict kinds instead of a line, so the driver attaches nothing to <code>tactics-change</code>.</li>
+<li><strong>An added condition, <code>decision</code>.</strong> It was not in the plan’s condition list. It keys sets on the AI manager’s choice (the four <code>ai.decision</code> codes).</li>
+<li><strong>Line volume.</strong> The file has 168 lines in 54 sets, not about 110. The extra sets cover the five kinds added by the tactics slice.</li>
+<li><strong><code>Commentary::load_path</code></strong> was added beside <code>load</code> so that the refusal tests can load a modified copy under a shown name. No other loader changed.</li>
+<li><strong>The benchmark metric the plan names does not time the commentator.</strong> <code>bench.cpu_us_per_tick</code> and <code>bench.peak_mem_mb</code> come from <code>run_one</code> (<code>crates/engine-cli/src/bench.rs:97</code>), a bare simulation. The commentator runs only on the stream path (<code>measure_stream</code>), which <code>bench --json</code> does not run by default. The step 12 comparison was run as planned and passed. It shows that the engine change adds no cost to the simulation. It does not measure the commentator.</li>
+</ol>
+<h2 id="anything-deferred" tabindex="-1"><a class="header-anchor" href="#anything-deferred"><span>Anything Deferred</span></a></h2>
+<ul>
+<li>Languages other than English: out of scope by the slice definition. The file carries <code>language</code>, and the loader reads one fixed path.</li>
+<li>Rendering the line in the feed: <code>viewer-match-day</code>.</li>
+<li>Commentary for events written by <code>simulate</code> and <code>resume</code>: those commands route no events today. When <code>calibration</code> makes the event mapping shared, the slice that lands second threads the commentator through it.</li>
+<li>No <code>sdlc-debt</code> shortcut was taken. The history scans are linear in the number of earlier events (about 400 per match); see Known Risks.</li>
+</ul>
+<h2 id="known-risks-caveats" tabindex="-1"><a class="header-anchor" href="#known-risks-caveats"><span>Known Risks / Caveats</span></a></h2>
+<ul>
+<li>Repetition over a whole match: a match has about 40 throw-ins and 4 unconditional throw-in lines plus a 3-line streak set, so lines recur after ten minutes. The file grows without code changes.</li>
+<li>The commentator scans its history for every event (repeat count, form window, kind count). The cost is quadratic in the event count, about 400 events per match. This cost is small next to the tick work.</li>
+<li>An event could name a slot whose player changed earlier on the same tick. The commentator renames a roster slot only when it processes the substitution event, so it follows event order. This is the same rule the driver’s identifier mapping uses.</li>
+<li><code>last_kicker</code> stays out of the snapshot because a snapshot is written only when play stops. A later change that writes snapshots during open play must add the field to the snapshot.</li>
+<li>The three unconditional card lines say “shown a card” without naming the colour. They are reached only when every line of the matching card set was used in the last ten minutes, for example a seventh yellow card inside ten minutes.</li>
+</ul>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<ul>
+<li>Source: the in-repo garde idiom at <code>crates/engine/src/data/rules.rs:92</code> and <code>:122</code> (garde 0.23 per <code>Cargo.lock</code>).
+Why it matters: the loader’s whole-file check uses <code>#[garde(custom(fn))]</code> with the signature <code>fn(&amp;T, &amp;()) -&gt; garde::Result</code>.
+Takeaway: reused as is; <code>cargo build</code> and the refusal tests confirm the signature. No dependency was added.</li>
+<li>Source: <code>crates/protocol/src/lib.rs</code> <code>PROTOCOL_VERSION</code> comment.
+Why it matters: it records when an added field needs a new protocol version.
+Takeaway: an optional field with no change of meaning keeps version 2. The judgement is written beside the constant.</li>
+<li>Source: rustc 1.92.0 (the plan’s scratch repro, <code>format!</code> needs a literal format string).
+Takeaway: the placeholder fill is a hand-written scan in <code>render.rs</code>.</li>
+</ul>
+<h2 id="evidence" tabindex="-1"><a class="header-anchor" href="#evidence"><span>Evidence</span></a></h2>
+<ul>
+<li>Baseline, commit <code>e79ad61</code> (<code>bench-baseline/commentary/commit.txt</code>, measured 2026-09-22T23:43:47Z): three runs of <code>engine-cli bench --seed 42 --matches 5 --json</code>, all exit 0. <code>bench.cpu_us_per_tick</code> was 1.456, 1.4245, and 1.4453 (median 1.4453). <code>bench.peak_mem_mb</code> was 6.1406, 6.1445, and 6.1680 (median 6.1445).</li>
+<li>After the change: three runs, all exit 0 (<code>after-1..3.*</code>). <code>bench.cpu_us_per_tick</code> was 1.4245, 1.4352, and 1.4453 (median 1.4352, ratio 0.993 against the 1.10 limit). <code>bench.peak_mem_mb</code> was 6.3008, 6.3047, and 6.3242 (median 6.3047, ratio 1.026 against the 1.25 limit). <code>budget.pass</code> was true in every run.</li>
+<li>Tick records: <code>ticks-body.sha256</code> holds equal hashes for the records after the header, before and after the change.</li>
+<li><code>cargo test --workspace</code>: 38 result lines, 251 passed, 0 failed, 3 ignored. The engine’s <code>commentary</code> test file passes 9 tests, the engine unit tests pass 117, and the new <code>stream_run</code> test passes.</li>
+<li><code>cargo fmt --all -- --check</code>: exit 0. <code>cargo clippy --workspace --all-targets -- -D warnings</code>: finished with no warning. <code>node --test web/tests/*.test.mjs</code>: 47 passed, 0 failed.</li>
+<li>The scan of added lines in <code>crates/</code>, <code>content/</code>, <code>docs/reference/</code>, and <code>README.md</code> for workflow vocabulary returned one match only: <code>extend_from_slice</code>, a Rust standard-library call.</li>
+</ul>
+<h2 id="assumptions-and-decisions" tabindex="-1"><a class="header-anchor" href="#assumptions-and-decisions"><span>Assumptions and Decisions</span></a></h2>
+<p>Each entry was settled by this autonomous run. Each is stamped <code>class: implementation-detail</code>, because none touches an open or carried intent risk (all six are adjudicated), narrows a product-owner answer, assigns control authority, changes the core loop, or drops a committed capability.</p>
+<ol>
+<li><code>class: implementation-detail</code>. The two change verdicts (<code>ChangeApplied</code>, <code>ChangeRejected</code>) get no line, as plan assumption 5 decided. AC-1’s “any event kind in the rule set” is met for the 15 commented kinds, which are every kind a match produces except the verdicts on the manager’s own requests. Classification of AC-1: build-capability.</li>
+<li><code>class: implementation-detail</code>. An <code>ai-decision</code> line names the club only. The event carries no player in the engine contract, and the player that a substitution choice involves is named on the <code>substitution</code> event. No engine or contract change was made to add a player to the AI event.</li>
+<li><code>class: implementation-detail</code>. The <code>decision</code> condition was added so that the four AI choices read differently. It is additive and optional.</li>
+<li><code>class: implementation-detail</code>. The tick-file identity check compares the records after the 64-byte header, because the header stamps the match time on every run.</li>
+<li><code>class: implementation-detail</code>. <code>{minute}</code> fills with the clock minute plus one in regulation time (the first minute reads 1), and with the end-of-half minute in added time, with <code>{added_minutes}</code> carrying the added minute. No shipped line uses either placeholder.</li>
+<li><code>class: implementation-detail</code>. At half-time and full time, the score conditions read from the home club’s side, and the lines name both clubs.</li>
+<li><code>class: implementation-detail</code>. The unconditional card lines say “shown a card”, so that they read correctly for any card. The card-specific sets (6 yellow, 4 second-yellow, 4 red lines) always hold on their card and win first.</li>
+<li><code>class: implementation-detail</code>. Commit scope: code, content, and docs in one commit (<code>a414df5</code>), with a product-language message. Workflow artifacts go in a separate commit that holds only this slice’s own files. <code>00-index.md</code>, <code>03-slice.md</code>, <code>04-plan-commentary.md</code>, and the global index carry uncommitted changes from other sessions, so they are updated on disk and left out of both commits. The files that were already staged (<code>docs/design/realism/*</code>, <code>crates/engine/tests/zz_stall_probe.rs</code>) were left out through a path-limited commit.</li>
+<li><code>class: implementation-detail</code>. <code>05c-benchmark.md</code> and <code>04b-instrument.md</code> were not re-authored (plan assumptions 11 and 12). The baseline and the comparison are in <code>bench-baseline/commentary/</code>. The one new signal is <code>commentary.fallback</code>.</li>
+</ol>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option A (default):</strong> <code>/wf verify football-manager-match-engine commentary</code>. Every criterion is a <code>cargo test</code> property, so verification re-runs the suite, the tick-body comparison, and the benchmark comparison. Consider compacting the session before <code>/wf verify</code>; workflow state lives in artifact files on disk, and the SessionStart hook re-reads it after compaction.</li>
+<li><strong>Option B:</strong> <code>/wf review football-manager-match-engine commentary</code>. This skips verification. It is not recommended, because the slice changes testable engine behaviour (players on events).</li>
+<li><strong>Option C:</strong> <code>/wf plan football-manager-match-engine commentary</code>. Not needed. The plan held, apart from the recorded deviations.</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-22T23:59:19Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/05-implement-commentary.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">implement</a><span class="m-sheet-here" aria-current="page">commentary</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/05-implement-commentary.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-22T23:59:19Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

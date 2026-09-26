@@ -1,0 +1,23 @@
+artifact: benchmark
+target: "engine-cli bench --seed 42 --matches 5 --json (five 90-minute matches, one thread, reference machine), cargo bench -p engine --bench tick_step, and engine-cli bench --stream; the gate is processor time per tick, as the defending-and-discipline slice names it (+10 percent), with processor time per match and peak memory reported beside it"
+language: "rust"
+framework: "timing-fallback (engine-cli bench with std::time::Instant, GetProcessTimes, GetProcessMemoryInfo) plus criterion 0.8 for the tick step"
+mode: baseline
+measured_at: "2026-09-24T02:38:08Z"
+baseline_commit: "2089ed7"
+metrics:
+  - { name: "bench.cpu_us_per_tick", before: null, after: 1.4753, unit: "us", direction: lower-is-better, note: "Drives 1.4858, 1.4746, 1.4753. Tripwire 1.6228 us (+10 percent). This is the gate." }
+  - { name: "bench.peak_mem_mb", before: null, after: 6.617, unit: "MB", direction: lower-is-better, note: "Drives 6.617, 6.906, 6.594. Tripwire 8.27 MB (+25 percent). Gate." }
+  - { name: "bench.cpu_ms_per_match", before: null, after: 422.0, unit: "ms", direction: lower-is-better, note: "bench.cpu_ms / bench.matches; drives 425.0, 421.8, 422.0. Reported; +10 percent would be 464.2 ms." }
+  - { name: "bench.match_wall_ms", before: null, after: 424, unit: "ms", direction: lower-is-better, note: "Drives 423, 424, 424. Budget 2000 ms per match (NFR-1)." }
+  - { name: "bench.ticks_per_match", before: null, after: 286050, unit: "ticks", direction: lower-is-better, note: "Seed 42 with added time; at most 360,000. Reported." }
+  - { name: "engine.ticks_per_s", before: null, after: 674646, unit: "ticks/s", direction: higher-is-better, note: "Drives 676,241, 674,646, 674,646." }
+  - { name: "criterion.tick_step_us", before: null, after: 1.4903, unit: "us", direction: lower-is-better, note: "Interval 1.4746 to 1.5064 us; criterion found no change against its saved state (p = 0.23)." }
+  - { name: "criterion.steering_pass_22_ns", before: null, after: 888.01, unit: "ns", direction: lower-is-better, note: "Interval 886.09 to 890.20 ns; no change against its saved state (p = 0.82). Not a gate." }
+  - { name: "bench.stream_ticks_per_s", before: null, after: 460105, unit: "ticks/s", direction: higher-is-better, note: "One drive, 0 pauses. Reported." }
+  - { name: "bench.stream_peak_mem_mb", before: null, after: 8.1875, unit: "MB", direction: lower-is-better, note: "One drive. Tripwire 10.23 MB (+25 percent)." }
+regressions: []
+improvements: []
+notes: "Baseline for defending-and-discipline on 2089ed7, before the slice changes code. git status shows no change under crates, content or web; the build hash 2089ed7-dirty comes from workflow files and staged design documents. Content hash b64cecf856ec. Machine hash 74ca12fc08a4 (AMD Ryzen 7 9800X3D, Ultimate Performance plan). All five commands exited 0. The tactics-and-ai record with its comparison is kept at history/05c-benchmark-5.md."
+revisions:
+  - { rev: 6, at: "2026-09-24T02:42:52Z", trigger: new-slice, because: "defending-and-discipline plan re-baselines the engine on 2089ed7; the slice names a +10 percent processor-time-per-tick tripwire for the marking search", changed: "mode back to baseline, gate moves to processor time per tick, seven targets re-measured, new tripwires" }

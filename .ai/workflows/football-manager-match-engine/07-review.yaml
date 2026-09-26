@@ -1,0 +1,110 @@
+schema: "sdlc/v1"
+artifact: "review"
+slug: "football-manager-match-engine"
+rev: 1
+verdict: "ship"
+dimensions:
+  correctness:
+    BLOCKER: 0
+    HIGH: 0
+    MED: 0
+    LOW: 2
+    NIT: 1
+  security:
+    BLOCKER: 0
+    HIGH: 0
+    MED: 0
+    LOW: 0
+    NIT: 1
+  performance:
+    BLOCKER: 0
+    HIGH: 0
+    MED: 0
+    LOW: 1
+    NIT: 0
+  architecture:
+    BLOCKER: 0
+    HIGH: 0
+    MED: 0
+    LOW: 0
+    NIT: 1
+  intent-fidelity:
+    BLOCKER: 0
+    HIGH: 0
+    MED: 0
+    LOW: 0
+    NIT: 0
+counts:
+  blocker: 0
+  high: 0
+  med: 0
+  low: 3
+  nit: 3
+  total: 6
+findings:
+  - id: "T11"
+    severity: "LOW"
+    dimension: "correctness"
+    file: "crates/engine-cli/tests/calibrate_pair.rs"
+    line: "106"
+    message: "Paired calibration test failed once under full-suite load"
+    evidence: "a_paired_run_plays_both_arms_on_the_same_seeds_and_compares_every_band failed its exit-code assertion once during a full `cargo test --workspace` run. It passed three times on its own and in the next full run."
+    triage: "defer"
+    status: "deferred"
+    surfaced-at: "2026-09-23T20:34:36Z"
+    pre-existing: false
+  - id: "PERF-5"
+    severity: "LOW"
+    dimension: "performance"
+    file: "crates/engine/src/sim.rs"
+    line: "766"
+    message: "step clones the whole Tuning every tick"
+    evidence: "About 0.7 KB copied ~280k times per match (1-2% of the tick budget)."
+    triage: "defer"
+    status: "deferred"
+    surfaced-at: "2026-09-23T20:34:36Z"
+    pre-existing: false
+  - id: "T6"
+    severity: "LOW"
+    dimension: "correctness"
+    file: "crates/engine/tests/ai_trailing.rs"
+    line: "15"
+    message: "Four acceptance tests are #[ignore] and nothing runs them"
+    evidence: "No CI config; AC-6/7/8 and the realism bands can regress with cargo test green."
+    triage: "defer"
+    status: "deferred"
+    surfaced-at: "2026-09-23T20:34:36Z"
+    pre-existing: false
+  - id: "SEC-5"
+    severity: "NIT"
+    dimension: "security"
+    file: ".ai/workflows/football-manager-match-engine/"
+    line: "n/a"
+    message: "Workflow evidence contains absolute local paths"
+    evidence: "About 189 lines of committed evidence carry C:\\Users\\<name> paths."
+    triage: "defer"
+    status: "deferred"
+    surfaced-at: "2026-09-23T20:34:36Z"
+    pre-existing: false
+  - id: "T10"
+    severity: "NIT"
+    dimension: "correctness"
+    file: "web/main.mjs"
+    line: "1"
+    message: "Several viewer modules have no unit tests"
+    evidence: "main.mjs, lineup-editor.mjs, substitution-picker.mjs, socket.mjs, scoreboard.mjs, signal.mjs, launcher.mjs."
+    triage: "defer"
+    status: "deferred"
+    surfaced-at: "2026-09-23T20:34:36Z"
+    pre-existing: false
+  - id: "M10"
+    severity: "NIT"
+    dimension: "architecture"
+    file: "web/recovery.mjs"
+    line: "33"
+    message: "refusalReason parses the engine error prefix"
+    evidence: "Coupled to Rust Display text by a comment only."
+    triage: "defer"
+    status: "deferred"
+    surfaced-at: "2026-09-23T20:34:36Z"
+    pre-existing: false

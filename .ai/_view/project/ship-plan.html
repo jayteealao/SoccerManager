@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.171.0" data-artifact-type="ship-plan">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>__project__ · ship-plan — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="ship-plan">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">__project__</a><span aria-hidden="true">/</span><a href="../INDEX.html">project</a><span aria-hidden="true">/</span><span class="m-here">ship-plan.html</span></span></div>
+    <h1 class="m-title">__project__ · ship-plan</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">__project__</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">project</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">ship-plan.html</b></div>
+    <div class="actions"><a href="../../ship-plan.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">.ai/ship-plan.md</div>
+      <h1 class="pg-title">Ship plan</h1>
+      
+      <div class="meta-row"><span class="meta">updated 2026-09-25T23:46:20Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <dl class="frontmatter-card"><div><dt>type</dt><dd>ship-plan</dd></div><div><dt>slug</dt><dd>soccer-manager</dd></div><div><dt>plan-version</dt><dd>1</dd></div><div><dt>created-at</dt><dd>2026-09-25T23:46:20Z</dd></div><div><dt>updated-at</dt><dd>2026-09-25T23:46:20Z</dd></div><div><dt>project-name</dt><dd>SoccerManager</dd></div><div><dt>template-hint</dt><dd>none</dd></div><div><dt>ship-meaning</dt><dd>publish</dd></div><div><dt>ship-environments</dt><dd>[object Object], [object Object], [object Object]</dd></div><div><dt>ship-cadence</dt><dd>on-demand</dd></div><div><dt>version-scheme</dt><dd>semver</dd></div><div><dt>version-source-of-truth</dt><dd>[object Object]</dd></div><div><dt>version-bump-rule</dt><dd>manual</dd></div><div><dt>version-bump-cmd</dt><dd>cargo release version &lt;major|minor|patch|x.y.z-beta.N|x.y.z-rc.N&gt; --execute</dd></div><div><dt>prerelease-suffix</dt><dd>-beta.N | -rc.N</dd></div><div><dt>post-release-version</dt><dd>next-dev</dd></div><div><dt>post-release-version-cmd</dt><dd>cargo release version &lt;next x.y.z&gt;-dev --execute</dd></div><div><dt>ci-pipeline</dt><dd>{&quot;pre-merge-checks&quot;:[&quot;fmt&quot;,&quot;clippy&quot;,&quot;test-fast&quot;,&quot;coverage&quot;,&quot;commit-convention&quot;,&quot;pr-title&quot;,&quot;cargo-deny&quot;,&quot;npm-audit-e2e&quot;,&quot;gitleaks&quot;,&quot;semgrep&quot;,&quot;windows-build&quot;],&quot;release-trigger&quot;:&quot;tag-on-main&quot;,&quot;release-workflow-file&quot;:&quot;.github/workflows/release.yml&quot;,&quot;release-jobs&quot;:[&quot;version-gate&quot;,&quot;build-windows&quot;,&quot;build-linux&quot;,&quot;smoke-linux&quot;,&quot;draft-release&quot;,&quot;attest&quot;],&quot;publish-dry-run-cmd&quot;:&quot;gh workflow run release.yml -f dry-run=true&quot;,&quot;publish-cmd&quot;:&quot;git push origin v&lt;version&gt;  # the workflow uploads to a draft release; publish with: gh release edit v&lt;version&gt; --draft=false [--prerelease]&quot;,&quot;required-secrets&quot;:[{&quot;name&quot;:&quot;GITHUB_TOKEN&quot;,&quot;purpose&quot;:&quot;Built-in token; creates the draft release and uploads the assets (permissions: contents: write, id-token: write, attestations: write).&quot;}],&quot;secrets-staleness-threshold-days&quot;:90,&quot;ci-ergonomics&quot;:{&quot;dep-cache&quot;:true,&quot;matrix&quot;:{&quot;os&quot;:[&quot;windows-latest&quot;,&quot;ubuntu-22.04&quot;],&quot;versions&quot;:[&quot;rust-toolchain.toml&quot;]},&quot;release-concurrency&quot;:true,&quot;path-filters&quot;:true}}</dd></div><div><dt>post-publish-checks</dt><dd>[object Object], [object Object], [object Object], [object Object], [object Object]</dd></div><div><dt>propagation-window-min-minutes</dt><dd>0</dd></div><div><dt>propagation-window-max-minutes</dt><dd>5</dd></div><div><dt>poll-interval-seconds</dt><dd>30</dd></div><div><dt>rollout-strategy</dt><dd>staged</dd></div><div><dt>rollout-stages</dt><dd>draft, prerelease, release</dd></div><div><dt>rollback-mechanism</dt><dd>gh-release-yank</dd></div><div><dt>rollback-time-estimate-min</dt><dd>5</dd></div><div><dt>rollback-cmd</dt><dd>gh release edit v&lt;bad&gt; --prerelease &amp;&amp; gh release edit v&lt;prior&gt; --latest</dd></div><div><dt>rollback-verify-cmd</dt><dd>gh release view --json tagName --jq .tagName</dd></div><div><dt>prior-artifact-retention</dt><dd>all releases, never deleted</dd></div><div><dt>irreversible-steps</dt><dd>A downloaded copy of a bad build stays on the player&#x27;s machine; a yank cannot recall it., A pushed version tag is permanent; a fixed release takes a new version, never a re-used one.</dd></div><div><dt>db-migrations-reversible</dt><dd>n/a</dd></div><div><dt>recovery-playbooks</dt><dd>[object Object], [object Object], [object Object], [object Object]</dd></div><div><dt>announcement</dt><dd>{&quot;channels&quot;:[&quot;GitHub release notes&quot;,&quot;Discord&quot;,&quot;social post&quot;,&quot;itch.io devlog&quot;],&quot;template-path&quot;:&quot;.ai/release-announcement-template.md&quot;}</dd></div><div><dt>code-quality</dt><dd>{&quot;format-check&quot;:{&quot;tool&quot;:&quot;rustfmt&quot;,&quot;cmd&quot;:&quot;cargo fmt --all --check&quot;},&quot;lint&quot;:{&quot;tool&quot;:&quot;clippy&quot;,&quot;cmd&quot;:&quot;cargo clippy --workspace --all-targets --locked -- -D warnings&quot;},&quot;type-check&quot;:{&quot;tool&quot;:&quot;n/a&quot;,&quot;cmd&quot;:&quot;&quot;},&quot;test-coverage&quot;:{&quot;min-percent&quot;:78,&quot;cmd&quot;:&quot;cargo llvm-cov --workspace --locked --fail-under-lines 78&quot;},&quot;commit-convention&quot;:{&quot;spec&quot;:&quot;conventional&quot;,&quot;config-path&quot;:&quot;committed.toml&quot;,&quot;enforce&quot;:[&quot;local&quot;,&quot;ci&quot;]},&quot;pr-title-convention&quot;:{&quot;spec&quot;:&quot;conventional&quot;,&quot;enforce&quot;:[&quot;ci&quot;]}}</dd></div><div><dt>local-dx</dt><dd>{&quot;git-hooks&quot;:{&quot;framework&quot;:&quot;lefthook&quot;,&quot;hooks&quot;:{&quot;pre-commit&quot;:[&quot;cargo fmt --all --check&quot;,&quot;gitleaks protect --staged&quot;],&quot;commit-msg&quot;:[&quot;committed --commit-file {1}&quot;],&quot;pre-push&quot;:[]}},&quot;editorconfig&quot;:true,&quot;runtime-version-files&quot;:[&quot;rust-toolchain.toml&quot;],&quot;task-runner&quot;:{&quot;kind&quot;:&quot;none&quot;,&quot;targets&quot;:{}},&quot;bootstrap-cmd&quot;:&quot;lefthook install &amp;&amp; (cd e2e &amp;&amp; npm ci)&quot;,&quot;contributing-doc&quot;:true}</dd></div><div><dt>governance</dt><dd>{&quot;branch-protection&quot;:{&quot;base-branch&quot;:&quot;main&quot;,&quot;mechanism&quot;:&quot;branch-protection&quot;,&quot;required-checks&quot;:[&quot;fmt&quot;,&quot;clippy&quot;,&quot;test-fast&quot;,&quot;coverage&quot;,&quot;commit-convention&quot;,&quot;pr-title&quot;,&quot;cargo-deny&quot;,&quot;npm-audit-e2e&quot;,&quot;gitleaks&quot;,&quot;semgrep&quot;,&quot;windows-build&quot;],&quot;required-approvals&quot;:0,&quot;dismiss-stale-reviews&quot;:false,&quot;require-up-to-date&quot;:true,&quot;enforce-admins&quot;:false,&quot;require-code-owner-reviews&quot;:false,&quot;require-conversation-resolution&quot;:true,&quot;require-linear-history&quot;:false,&quot;allow-force-pushes&quot;:false,&quot;allow-deletions&quot;:false,&quot;apply-via&quot;:&quot;gh-api&quot;},&quot;codeowners&quot;:[{&quot;path&quot;:&quot;*&quot;,&quot;owners&quot;:[&quot;@jayteealao&quot;]}],&quot;pr-template&quot;:true,&quot;issue-templates&quot;:true,&quot;dependency-automation&quot;:{&quot;tool&quot;:&quot;none&quot;,&quot;ecosystems&quot;:[],&quot;schedule&quot;:&quot;&quot;},&quot;merge&quot;:{&quot;method&quot;:&quot;merge&quot;,&quot;auto-merge&quot;:false,&quot;merge-queue&quot;:false}}</dd></div><div><dt>security</dt><dd>{&quot;sast&quot;:{&quot;tool&quot;:&quot;semgrep&quot;,&quot;cmd&quot;:&quot;semgrep scan --config p/rust --config p/javascript --error&quot;,&quot;schedule&quot;:&quot;every PR&quot;},&quot;dependency-audit&quot;:{&quot;tool&quot;:&quot;cargo-deny + npm-audit&quot;,&quot;cmd&quot;:&quot;cargo deny check &amp;&amp; (cd e2e &amp;&amp; npm audit --audit-level=high)&quot;,&quot;fail-on&quot;:&quot;high&quot;},&quot;secret-scanning&quot;:{&quot;tool&quot;:&quot;gitleaks&quot;,&quot;cmd&quot;:&quot;gitleaks detect --redact&quot;,&quot;pre-commit&quot;:true},&quot;sbom&quot;:{&quot;tool&quot;:&quot;none&quot;,&quot;format&quot;:&quot;cyclonedx&quot;,&quot;publish-with-release&quot;:false},&quot;license-check&quot;:{&quot;tool&quot;:&quot;cargo-deny&quot;,&quot;allow&quot;:[&quot;MIT&quot;,&quot;Apache-2.0&quot;,&quot;Apache-2.0 WITH LLVM-exception&quot;,&quot;BSD-2-Clause&quot;,&quot;BSD-3-Clause&quot;,&quot;ISC&quot;,&quot;Zlib&quot;,&quot;Unicode-3.0&quot;,&quot;CC0-1.0&quot;],&quot;deny&quot;:[&quot;GPL-2.0&quot;,&quot;GPL-3.0&quot;,&quot;AGPL-3.0&quot;,&quot;LGPL-2.1&quot;,&quot;LGPL-3.0&quot;,&quot;SSPL-1.0&quot;]}}</dd></div><div><dt>additional-contracts</dt><dd>[object Object], [object Object], [object Object], [object Object], [object Object], [object Object]</dd></div></dl><div class="prose"><h1 id="ship-plan-soccermanager" tabindex="-1"><a class="header-anchor" href="#ship-plan-soccermanager"><span>Ship Plan — SoccerManager</span></a></h1>
+<h2 id="what-ship-means-here" tabindex="-1"><a class="header-anchor" href="#what-ship-means-here"><span>What “ship” means here</span></a></h2>
+<p>A release publishes the downloadable game: a Windows 11 x64 setup file (NSIS) and a Linux x86_64 archive, each with a <code>.sha256</code> file. The files go to a GitHub release on this repository. The repository is private, so only invited people can download a release until the download location changes. Discovery found the build scripts in <code>packaging/windows/build.ps1</code> and <code>packaging/unix/build.sh</code>, and built 0.1.0 files in <code>dist/</code>, but no earlier tag or release. A release moves through three stages: smoke, prerelease, and release. Releases happen on demand, when a finished piece of work is worth a build. The self-updating Tauri app from the packaging brainstorm replaces the NSIS setup later; that change is a <code>/wf ship-plan edit</code>.</p>
+<h2 id="versioning" tabindex="-1"><a class="header-anchor" href="#versioning"><span>Versioning</span></a></h2>
+<p>The version is semver, and it lives in one place: <code>[workspace.package].version</code> in <code>Cargo.toml</code>. The test <code>crates/engine-cli/tests/release_version.rs</code> keeps <code>--version</code>, the engine’s <code>hello</code> message, and every release file name equal to it. cargo-release sets the version; the owner picks the level by hand. <code>CHANGELOG.md</code> is written by hand. Prereleases carry <code>-beta.N</code> or <code>-rc.N</code>, as each release needs. After a release, main moves to the next <code>-dev</code> version, so a development build is never mistaken for a release.</p>
+<h2 id="cicd-pipeline" tabindex="-1"><a class="header-anchor" href="#cicd-pipeline"><span>CI/CD pipeline</span></a></h2>
+<p>Releases run on GitHub Actions. This reverses the earlier “hosted CI later” decision from the packaging brainstorm. A pushed <code>v*</code> tag starts <code>.github/workflows/release.yml</code>:</p>
+<ol>
+<li>The version gate fails unless the tag equals the <code>Cargo.toml</code> version.</li>
+<li><code>windows-latest</code> builds the setup file with <code>build.ps1</code>.</li>
+<li><code>ubuntu-22.04</code> builds the archive with <code>build.sh</code> (glibc 2.35 floor) and runs <code>smoke.sh</code>.</li>
+<li>The workflow uploads all four files to a draft release and attests their provenance.</li>
+</ol>
+<p>The workflow also runs by hand (<code>workflow_dispatch</code>), one run at a time, with <code>contents: write</code> as its only write permission, and with third-party actions pinned to a commit.</p>
+<p>Every PR runs the light checks on Ubuntu (format, clippy, fast tests, coverage, commit and PR-title conventions, cargo-deny, npm audit, gitleaks, semgrep) and a Windows build job. PRs that change only <code>.ai/</code> or <code>docs/</code> skip the checks. Heavy runs (slow tests, calibrate) stay on this PC or the Contabo server, and the owner is asked first. The only secret is the built-in <code>GITHUB_TOKEN</code>. Private-repository Actions minutes are metered, and Windows minutes count double.</p>
+<h2 id="post-publish-verification" tabindex="-1"><a class="header-anchor" href="#post-publish-verification"><span>Post-publish verification</span></a></h2>
+<p>The release is checked while it is still a draft:</p>
+<ol>
+<li>The owner downloads the draft setup file and runs <code>run-sandbox.ps1</code>. The check must exit 0. It is the only clean-machine check for Windows.</li>
+<li>The release lists four assets.</li>
+<li>Every downloaded file matches its <code>.sha256</code> file.</li>
+<li>The Linux program prints the tag’s version.</li>
+</ol>
+<p>The draft is then published as a prerelease. A tester installs it and plays one full match before the same files are promoted to a release. No stage rebuilds a file.</p>
+<h2 id="rollout-strategy" tabindex="-1"><a class="header-anchor" href="#rollout-strategy"><span>Rollout strategy</span></a></h2>
+<p>Draft, then prerelease, then release, with the same files at each stage. Promotion is by hand.</p>
+<h2 id="rollback-playbook" tabindex="-1"><a class="header-anchor" href="#rollback-playbook"><span>Rollback playbook</span></a></h2>
+<p>The signal is a failed post-publish check or a player report. Mark the bad release as a prerelease, and mark the prior release as latest (about 5 minutes). Then fix forward with a new patch version. Every release is kept, so any prior version can become latest again. A rollback cannot recall a copy that a player already downloaded, and it never re-uses a pushed tag.</p>
+<h2 id="recovery-playbooks" tabindex="-1"><a class="header-anchor" href="#recovery-playbooks"><span>Recovery playbooks</span></a></h2>
+<ul>
+<li><code>nsis-missing</code>: install NSIS in the Windows job and re-run it.</li>
+<li><code>version-mismatch</code>: never re-tag; bump again with cargo-release and tag the new version.</li>
+<li><code>smartscreen-glibc</code>: player guidance for the unsigned setup file and for the glibc 2.35 floor. Seeded from <code>packaging/README.md</code>.</li>
+<li><code>sandbox-unavailable</code>: exit codes 2 and 3 of <code>run-sandbox.ps1</code>, and the Hyper-V fallback. Seeded from <code>packaging/README.md</code>.</li>
+</ul>
+<h2 id="stakeholder-announcement" tabindex="-1"><a class="header-anchor" href="#stakeholder-announcement"><span>Stakeholder + announcement</span></a></h2>
+<p>The GitHub release notes carry the version’s <code>CHANGELOG.md</code> section. The owner posts by hand to Discord, a social post, and an <a href="http://itch.io">itch.io</a> devlog, from <code>.ai/release-announcement-template.md</code>.</p>
+<h2 id="code-quality-gates" tabindex="-1"><a class="header-anchor" href="#code-quality-gates"><span>Code-quality gates</span></a></h2>
+<ul>
+<li>Format: <code>cargo fmt --all --check</code> against <code>rustfmt.toml</code>.</li>
+<li>Lint: <code>cargo clippy --workspace --all-targets -- -D warnings</code>.</li>
+<li>Tests: the fast tests, meaning <code>cargo test --workspace</code> without the ignored tests, plus <code>node --test &quot;web/tests/*.test.mjs&quot;</code>.</li>
+<li>Coverage: cargo-llvm-cov fails a PR under 78% line coverage. The baseline measured on 2026-09-25 is 80.30% for lines, 82.15% for functions, and 78.89% for regions.</li>
+<li>Commits follow conventional commits, checked by <code>committed</code> in the commit-msg hook and in CI. Merge commits are left out of that check.</li>
+<li>PR titles follow conventional commits, checked in CI.</li>
+</ul>
+<p>Every gate is a pre-merge check.</p>
+<h2 id="local-developer-experience" tabindex="-1"><a class="header-anchor" href="#local-developer-experience"><span>Local developer experience</span></a></h2>
+<p>lefthook runs <code>cargo fmt --all --check</code> and a staged gitleaks scan before each commit, and the commit-message check at commit-msg. No pre-push tests run, because heavy runs stay off this PC. <code>rust-toolchain.toml</code> pins the toolchain with rustfmt and clippy, and <code>.editorconfig</code> sets the line endings (the Unix scripts stay LF). <code>CONTRIBUTING.md</code> says how to build, test, commit, and release. A new checkout runs <code>lefthook install</code>, then <code>npm ci</code> in <code>e2e/</code>. There is no task runner.</p>
+<h2 id="repo-governance" tabindex="-1"><a class="header-anchor" href="#repo-governance"><span>Repo governance</span></a></h2>
+<p>The wanted rules for <code>main</code>: every pre-merge check passes, the branch is up to date, conversations are resolved, there are no force-pushes and no deletions, 0 approvals are needed, and code-owner review is off. <code>/wf ship-plan build</code> applies them with <code>gh api</code>. Until the repository is public or on GitHub Pro, the API returns 403 and no check blocks a merge. PRs merge with a merge commit, and auto-merge is off. <code>CODEOWNERS</code> names <code>@jayteealao</code> for every path. A PR template and issue templates (bug with version and platform, feature request) are added. There is no dependency automation.</p>
+<h2 id="security-supply-chain-gates" tabindex="-1"><a class="header-anchor" href="#security-supply-chain-gates"><span>Security &amp; supply-chain gates</span></a></h2>
+<p>Every PR runs these gates:</p>
+<ul>
+<li>cargo-deny: the licence allow-list follows the product’s MIT- and Apache-compatible rule, and any RustSec advisory fails the check.</li>
+<li><code>npm audit --audit-level=high</code> for <code>e2e/</code>.</li>
+<li>gitleaks, which also runs in the pre-commit hook.</li>
+<li>semgrep, with the Rust and JavaScript rule sets.</li>
+</ul>
+<p>There is no SBOM. CodeQL and GitHub secret scanning are not free for a private repository.</p>
+<h2 id="additional-contracts" tabindex="-1"><a class="header-anchor" href="#additional-contracts"><span>Additional contracts</span></a></h2>
+<ul>
+<li><strong>windows-pr-build.</strong> Every PR builds, lints, and tests on <code>windows-latest</code>. The job also checks that <code>engine-cli.exe</code> does not import the Visual C++ runtime.</li>
+<li><strong>release-hygiene.</strong> The workflow runs a tag-to-version gate, uploads to a draft release first, never rebuilds between stages, uses least-privilege permissions, pins actions to a commit, attests provenance, and never hardcodes a version.</li>
+<li><strong>nsis-prerelease-version.</strong> <code>installer.nsi</code> strips the prerelease suffix for <code>VIProductVersion</code> (0.2.0-rc.1 becomes 0.2.0.0) and keeps the full version in <code>ProductVersion</code>.</li>
+<li><strong>replay-save-compat.</strong> Every old replay must load, including replays from older protocol versions. <code>web/tests/data/</code> holds one fixture per released version, and a fast test decodes each one.</li>
+<li><strong>content-changelog.</strong> A change to <code>content/</code> needs a Content entry in <code>CHANGELOG.md</code>. <code>schema_version</code> is a format version that the engine enforces, so a content edit never bumps it.</li>
+<li><strong>realism-gate.</strong> Before a tag, the Contabo server runs calibrate on the equal suite, 1000 matches, seed 42, and the report must sit inside every realism band. The server also runs the slow tests (<code>--include-ignored</code>). The report is attached to the ship run.</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-25T23:46:20Z</span>
+    <a href="../../ship-plan.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">__project__</a><a href="../INDEX.html">project</a><span class="m-sheet-here" aria-current="page">ship-plan.html</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../ship-plan.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-25T23:46:20Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

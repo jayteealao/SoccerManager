@@ -1,6 +1,9 @@
 artifact: design-contract
 component: match-control
 based-on: 02b-design.md
+direction-confirmed-by: in-session
+confirmed-at: "2026-09-24T11:22:17Z"
+direction-status: interim
 summary: >-
   The Touchline match screen at 1280 by 800: 36 OKLCH --tl- tokens, a 336 / 616 / 296
   grid under a 56-pixel header, a 616 by 411 pitch canvas, a 40-pixel playback strip,

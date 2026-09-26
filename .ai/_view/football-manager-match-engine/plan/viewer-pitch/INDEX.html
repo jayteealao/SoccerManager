@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="plan">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · plan — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="plan">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span aria-hidden="true">/</span><span class="m-here">viewer-pitch</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · plan</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">plan</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">viewer-pitch</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/04-plan-viewer-pitch.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">04-plan-viewer-pitch.md</div>
+      <h1 class="pg-title">Plan · <code>viewer-pitch</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="stage-badge">plan</span><span class="meta">rev 0</span><span class="meta">2026-09-22T14:41:32Z</span></div>
+    </header><div class="metric-row"><div class="metric">
+      <span class="metric-label">files to touch</span>
+      <span class="metric-value">46</span>
+      
+    </div><div class="metric">
+      <span class="metric-label">steps</span>
+      <span class="metric-value">22</span>
+      
+    </div><div class="metric is-ok">
+      <span class="metric-label">blockers</span>
+      <span class="metric-value">none</span>
+      
+    </div></div>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-plan" tabindex="-1"><a class="header-anchor" href="#the-plan"><span>The Plan</span></a></h2>
+<p>Three slices handed over an engine that delivers 634,859 ticks per second over a WebSocket, a codec crate with no input or output, a byte-exact fixture, and a replayer. They also handed over an empty frontend: the repository holds no HTML, no CSS, no JavaScript, and no <code>package.json</code>. This is the visible-milestone slice, where commitment C2 is proven or broken, and research settled the first fact before any design question: a browser blocks module scripts outright over <code>file://</code>, so the page cannot be a double-clicked file and something must serve it.</p>
+<p>Twelve product-owner answers fixed the build, and three of them closed gaps the slice definition assumed were already closed. The engine binary gains a <code>--web</code> flag and serves the page itself, which gives one program to start, an origin already on the server’s allowlist, and the two cross-origin-isolation headers the chosen memory gauge requires. The lag notice is measured in the page, not announced by the server, because <code>ReplayOpts</code> has no cap flag, <code>Replayer::serve</code> never reads the socket, no <code>ServerMessage</code> announces lag, and the browser exposes no inbound-queue depth — <code>WebSocket.bufferedAmount</code> counts outgoing bytes only; a one-flag <code>--sustain</code> cap on <code>replay</code> is the harness that makes the criterion drivable. Kit colours join <code>TeamRef</code>, because the opening message carries an identifier and a name and nothing else, while the standing steering file needs the club’s secondary colour for every marker ring.</p>
+<p>Inside the page, the numbers made the decisions easy. Drawing 22 discs, 22 shirt numbers, a ball and a trail at 616 by 411 is sub-millisecond against a 16.6-millisecond budget, so rendering stays on the main thread and the test hook stays directly readable; a worker and <code>transferControlToOffscreen()</code> would be a one-way trade for headroom nothing needs. The whole-match history decodes to absolute <code>Int16Array</code> arrays at 24.2 megabytes, twelvefold under the 300-megabyte budget, which buys an O(1) rewind instead of a 49-step keyframe walk on every scrub. The modules carry the <code>.mjs</code> extension so <code>node --test</code> runs the interpolation and scheduler proofs with nothing installed and the repository stays a pure Cargo workspace.</p>
+<p>Implement builds 30 new files and changes 16 across 22 steps, the pure modules first and the browser drive last. The top risk is not drawing and not decoding: it is that <code>requestAnimationFrame</code> fires at the display’s refresh rate, so on a 144 hertz panel a naive callback count reports 144 and the 60-frames-per-second criterion passes for the wrong reason. Every frame-rate reading carries <code>refresh_hz</code> beside it and is derived from timestamp deltas, never from a count.</p></section><figure class="figure-canvas">
+  <figcaption class="figure-meta">
+    <span class="figure-title"><b>Figure 3</b> · Data-flow lanes</span>
+    <span class="figure-legend" aria-hidden="true"><span class="legend-entry"><span class="sw modified"></span>modified</span><span class="legend-entry"><span class="sw new"></span>new</span><span class="legend-entry"><span class="sw deleted"></span>deleted</span><span class="legend-entry"><span class="sw external"></span>external</span></span>
+  </figcaption>
+  <svg viewBox="0 0 980 292" width="100%" preserveAspectRatio="xMinYMid meet" aria-label="Data-flow lanes">
+    <defs>
+    <marker id="lane-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8377"/>
+    </marker>
+  </defs><rect x="28" y="18" width="924" height="110" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/><text x="34" y="40" font-size="10" font-weight="700" letter-spacing="0.8" fill="#8a8377">RUST BINARY (ENGINE-CLI, STREAM, PROTOCOL)</text><text x="34" y="56" font-size="9" fill="#8a8377">service</text><rect x="28" y="150" width="924" height="110" rx="6" fill="none" stroke="#cbc4b1" stroke-dasharray="4 3" stroke-width="1"/><text x="34" y="172" font-size="10" font-weight="700" letter-spacing="0.8" fill="#8a8377">BROWSER PAGE (WEB/)</text><text x="34" y="188" font-size="9" fill="#8a8377">service</text><rect x="158" y="58" width="150" height="30" rx="4" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="168" y="77" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">message.rs</text><rect x="320" y="58" width="150" height="30" rx="4" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="330" y="77" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">lib.rs</text><rect x="482" y="58" width="150" height="30" rx="4" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="492" y="77" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">server.rs</text><rect x="644" y="58" width="150" height="30" rx="4" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="654" y="77" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">replay.rs</text><rect x="806" y="58" width="150" height="30" rx="4" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="816" y="77" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">lib.rs</text><rect x="968" y="58" width="150" height="30" rx="4" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="978" y="77" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">web.rs</text><rect x="1130" y="58" width="150" height="30" rx="4" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="1140" y="77" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">cli.rs</text><rect x="1292" y="58" width="150" height="30" rx="4" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="1302" y="77" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">serve.rs</text><rect x="1454" y="58" width="150" height="30" rx="4" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="1464" y="77" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">replay.rs</text><rect x="1616" y="58" width="150" height="30" rx="4" fill="#e9eef4" stroke="#4a6c8c" stroke-width="1"/>
+      <text x="1626" y="77" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">main.rs</text><rect x="158" y="190" width="150" height="30" rx="4" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="168" y="209" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">index.html</text><rect x="320" y="190" width="150" height="30" rx="4" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="330" y="209" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">socket.mjs</text><rect x="482" y="190" width="150" height="30" rx="4" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="492" y="209" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">decode.mjs</text><rect x="644" y="190" width="150" height="30" rx="4" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="654" y="209" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">interpolate.mjs</text><rect x="806" y="190" width="150" height="30" rx="4" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="816" y="209" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">schedule.mjs</text><rect x="968" y="190" width="150" height="30" rx="4" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="978" y="209" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">history.mjs</text><rect x="1130" y="190" width="150" height="30" rx="4" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="1140" y="209" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">stoppages.mjs</text><rect x="1292" y="190" width="150" height="30" rx="4" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="1302" y="209" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">playback.mjs</text><rect x="1454" y="190" width="150" height="30" rx="4" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="1464" y="209" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">pitch.mjs</text><rect x="1616" y="190" width="150" height="30" rx="4" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="1626" y="209" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">colour.mjs</text><rect x="1778" y="190" width="150" height="30" rx="4" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="1788" y="209" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">mark.mjs</text><rect x="1940" y="190" width="150" height="30" rx="4" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="1950" y="209" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">signal.mjs</text><rect x="2102" y="190" width="150" height="30" rx="4" fill="#ecf3e7" stroke="#3e7d4a" stroke-width="1"/>
+      <text x="2112" y="209" font-size="11" fill="#1f1b16" font-family="ui-monospace, monospace">main.mjs</text><path d="M 470 205 C 470 205, 482 205, 482 205" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 470 205 C 470 205, 1940 205, 1940 205" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 2252 205 C 2252 205, 320 205, 320 205" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 2252 205 C 2252 205, 806 205, 806 205" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 2252 205 C 2252 205, 1292 205, 1292 205" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 2252 205 C 2252 205, 1454 205, 1454 205" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 2252 205 C 2252 205, 968 205, 968 205" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 956 205 C 956 205, 644 205, 644 205" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 956 205 C 956 205, 968 205, 968 205" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 1442 205 C 1442 205, 1130 205, 1130 205" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 1442 205 C 1442 205, 968 205, 968 205" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 1604 205 C 1604 205, 1616 205, 1616 205" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 1604 205 C 1604 205, 1778 205, 1778 205" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 632 205 C 711.2 205, 78.8 73, 158 73" fill="none" stroke="#b5305f" stroke-width="1.4" stroke-dasharray="4 4" marker-end="url(#lane-arrow)"/>
+      <text x="395" y="133" text-anchor="middle" font-size="9" fill="#b5305f">crosses-service</text><path d="M 470 205 C 549.2 205, 402.8 73, 482 73" fill="none" stroke="#b5305f" stroke-width="1.4" stroke-dasharray="4 4" marker-end="url(#lane-arrow)"/>
+      <text x="476" y="133" text-anchor="middle" font-size="9" fill="#b5305f">crosses-service</text><path d="M 308 205 C 387.2 205, 888.8 73, 968 73" fill="none" stroke="#b5305f" stroke-width="1.4" stroke-dasharray="4 4" marker-end="url(#lane-arrow)"/>
+      <text x="638" y="133" text-anchor="middle" font-size="9" fill="#b5305f">crosses-service</text><path d="M 632 73 C 632 73, 158 73, 158 73" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 794 73 C 794 73, 158 73, 158 73" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 1442 73 C 1442 73, 968 73, 968 73" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 1604 73 C 1604 73, 968 73, 968 73" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      <path d="M 1604 73 C 1604 73, 644 73, 644 73" fill="none" stroke="#8a8377" stroke-width="1.4" marker-end="url(#lane-arrow)"/>
+      
+  </svg>
+</figure><div class="plan-lanes-legend">
+    <span class="crosses">cross-service edge</span>
+  </div><div class="fragment"><section class="fragment-plan" data-artifact="plan" data-slice="viewer-pitch" data-rev="0">
+  <table class="files-touched pl-files">
+    <thead><tr><th>File</th><th>Status</th><th>Module</th><th>Lines</th></tr></thead>
+    <tbody>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/protocol/src/message.rs, lib.rs</summary><div class="pl-card">TeamRef gains team.kit.primary and team.kit.secondary as lower-case hex strings. The opening message is the only place a page can learn a club's colours, and today it carries an identifier and a name and nothing else, while the standing steering file needs the secondary colour for every marker ring. PROTOCOL_VERSION stays 1: two fields are added, no field changes meaning, no message is removed, and both producers are updated in the same commit.</div></details></td><td>modified</td><td>crates/protocol</td><td>+18 / -4</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">service</span> crates/stream/src/server.rs, replay.rs, lib.rs</summary><div class="pl-card">The hello builder reads the kit colours from the two loaded team files. The replayer forwards the stored hello verbatim instead of synthesising one, which retires a latent fault — the current code hard-codes keyframe_interval to the default rather than reading the fixture — and carries the kit colours through replay for free. The --sustain cap paces at min(speed, sustain) while the hello still announces the requested speed, so the page receives a stream slower than it asked for. One new error variant names a fixture whose first entry is not a hello.</div></details></td><td>modified</td><td>crates/stream</td><td>+80 / -24</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">service</span> crates/engine-cli/src/web.rs</summary><div class="pl-card">A std::net::TcpListener on 127.0.0.1:0 serving the page directory over plain HTTP, GET and HEAD only, with a MIME table that types .mjs correctly and refuses any path containing two dots. Every response carries Cross-Origin-Opener-Policy: same-origin and Cross-Origin-Embedder-Policy: require-corp, which the chosen memory gauge requires and which no file:// page and no bare static server can supply. Emits web.serving with the directory, the file count, the isolation flag and the port.</div></details></td><td>new</td><td>crates/engine-cli</td><td>+220</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">cli</span> crates/engine-cli/src/cli.rs, serve.rs, replay.rs, main.rs</summary><div class="pl-card">--web &lt;DIR&gt; on both serve and replay; --sustain &lt;f32&gt; on replay alone, with help text naming it a test harness for the viewer's lag notice so no later slice promotes it to a live match. Both commands start the static server before the socket and print the page address last, because that is the line a reader copies. Every help line stays inside 80 columns.</div></details></td><td>modified</td><td>crates/engine-cli</td><td>+54 / -6</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">ui</span> web/index.html, tokens.css, layout.css, fonts/fonts.css, components/match-control.css, four woff2 faces</summary><div class="pl-card">The page shell at 1280 by 800: a 56-pixel header, then three fixed columns of 336, 616 and 296 with an 8-pixel gutter, with the header and both side columns present and empty so the pitch lands at its shipping position and viewer-match-day fills regions rather than moving the pitch. All 36 --tl- tokens in one :root block, every value OKLCH, no pure black and no pure white. Barlow Condensed 700 and IBM Plex Sans 400/500/600 as local woff2, never a font service. The match-control primitive in four heights, five states and both themes, of which this slice uses two heights.</div></details></td><td>new</td><td>web/</td><td>+450</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">domain</span> web/decode.mjs, interpolate.mjs, history.mjs, schedule.mjs, colour.mjs, stoppages.mjs, signal.mjs</summary><div class="pl-card">The seven pure modules, every one of them free of DOM, canvas and socket, so node --test proves all of them before a browser opens. The decoder reads a DataView at fixed little-endian offsets with no allocation per tick. The interpolation function clamps its fraction into zero-to-one and therefore cannot express a position outside the segment between two received ticks, which is RIM-5 as a type constraint rather than a comment. The history decodes to absolute Int16Array arrays at 24.2 MB against a 300 MB budget, twelvefold headroom bought for an O(1) rewind. The scheduler derives frame rate from timestamp deltas, never a callback count. The colour module clamps a kit hex away from the extremes before the 3:1 turf test, because a shipped team file carries pure black.</div></details></td><td>new</td><td>web/ pure modules</td><td>+820</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">ui</span> web/pitch.mjs, mark.mjs</summary><div class="pl-card">The coordinate map from the engine's centred metre space onto 616 by 411 pixels, the markings, 22 markers with rings and shirt numbers, and the ball with a falling-alpha trail drawn as one path. Backing store scaled by devicePixelRatio, alpha off, integer coordinates, one fill-style change per team, static markings pre-rendered once and blitted. The touchline mark is one function taking a tile size, a radius of size times 0.21 and three tokens; no logo is ever loaded from an image file, and club crests later call the same function with kit colours in place of the turf.</div></details></td><td>new</td><td>web/ rendering</td><td>+370</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">service</span> web/socket.mjs, playback.mjs, main.mjs</summary><div class="pl-card">The socket sets binaryType to arraybuffer, which avoids the asynchronous Blob step the default would force at 400 frames per second. Playback carries play and pause, the 1x to 8x selector, skip to the next stoppage over a merged restart-and-event index, the rewind scrubber, and the sustained-rate estimator — the browser exposes no inbound-queue depth, so measuring arrival against the requested speed is the only way the lag notice can exist at all. main.mjs exposes window.__touchline with the last rendered positions, the signal ring, the history gauge and the frame numbers; three acceptance criteria read that hook.</div></details></td><td>new</td><td>web/ transport</td><td>+560</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">test</span> web/tests/ (helpers plus six test files), crates/engine-cli/tests/web_cli.rs, and three modified Rust test files</summary><div class="pl-card">Six node --test files with nothing installed and no package.json: the interpolation proof drives a fraction of 1.5 and of -0.5 directly; the scheduler proof runs a synthetic 8x stream and asserts the cursor never passes the newest received tick; the history proof asserts exactly 25,380,000 bytes for a full match. On the Rust side: the page address is printed, a missing directory is refused naming the path, a traversal path answers 403, a .mjs response carries text/javascript, both isolation headers ride on every response, a replay's hello is byte-identical to the recorded one, and --speed 8 --sustain 3 delivers at three times real time within 5 percent.</div></details></td><td>new</td><td>tests</td><td>+900 / -0</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">docs</span> docs/reference/protocol.md, README.md, DESIGN.md</summary><div class="pl-card">The hello table gains the two kit fields and a new section documents the static server, its MIME table, and the two isolation headers with the constraint that require-corp refuses any cross-origin subresource. README gains the run instructions the shape's Documentation Plan requires. DESIGN.md gains the ten new token rows so it never disagrees with web/tokens.css. The document test parses these tables, so the reference cannot drift from the code.</div></details></td><td>modified</td><td>docs</td><td>+74 / -4</td></tr>
+    </tbody>
+  </table>
+
+  <div class="pl-risks">
+    <aside class="callout callout-error"><div class="callout-hd">R1 · The refresh-rate false pass</div><div class="callout-body">requestAnimationFrame fires at the display's refresh rate, not at 60 Hz. On a 120 or 144 Hz panel a callback count reports 120 or 144 and a naive sixty-frames-per-second assertion passes for the wrong reason while telling nobody anything true. Derive frame rate from consecutive timestamp deltas and report refresh_hz beside every reading; verify records both numbers or the drive does not count.</div></aside>
+    <aside class="callout callout-error"><div class="callout-hd">R2 · No browser has ever opened this socket</div><div class="callout-body">Three slices verified the protocol against a Rust client only, and the stream verify artifact says so at line 241. Step 12 is a deliberate ten-line page that connects, reads the hello and logs it, driven in the in-app browser before any rendering code exists to blame. Confirm there that require-corp does not refuse the four same-origin font files.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R3 · Interpolation that quietly extrapolates</div><div class="callout-body">This is RIM-5 and commitment C2: a viewer that invents movement between ticks satisfies the criterion in letter and breaks the promise in spirit. The mitigation is structural rather than a review note — the interpolation function clamps its fraction and cannot express a position outside the segment, and the scheduler moves the cursor rather than the fraction.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R4 · The sustain cap is a test harness only</div><div class="callout-body">It exists to make the lag-notice criterion drivable. Reachable from a real match it would silently throttle a live engine, so it sits on replay alone, never on serve, and its help text says what it is for.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R5 · The isolation headers restrict what the page may load later</div><div class="callout-body">require-corp refuses any cross-origin subresource. Everything this page loads is same-origin, so nothing is lost today, but a later slice wanting an external resource will hit it. web.serving reports the isolation flag so a run with the headers off is visible rather than silently ungauged.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R6 · The fixture must be re-recorded</div><div class="callout-body">From step 3 onward the stored hello is forwarded verbatim, so a fixture recorded before the kit fields exist carries no colours and the page would draw grey markers with no error anywhere. Step 7 re-records at seed 7, and the byte-identity test makes a stale fixture fail loudly rather than render wrongly.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R7 · History growth past ticks_expected</div><div class="callout-body">Stoppage time makes a match run longer than the opening message predicts, and a fixed buffer would either refuse or silently drop the closing minutes. The buffers double instead, and a test drives growth and asserts every earlier tick survives.</div></aside>
+    <aside class="callout callout-info"><div class="callout-hd">R8 · Path traversal against the static server</div><div class="callout-body">The server serves an operator-named directory on loopback to a browser the operator opened, so the exposure is small. Refuse any path containing two dots with 403 anyway, serve GET and HEAD only, and answer anything else with 405.</div></aside>
+    <aside class="callout callout-info"><div class="callout-hd">R9 · The memory gauge may never resolve</div><div class="callout-body">The browser's own memory measurement is asynchronous and may be coalesced or deferred, so the gauge can read null at the moment verify looks. Write null, never block a frame, and treat a null at verify as a failed drive rather than a pass. The exact history byte count sits beside it and is always available, which is why the product owner kept both numbers.</div></aside>
+    <aside class="callout callout-info"><div class="callout-hd">R10 · viewer-event is a fifth record kind</div><div class="callout-body">The observability contract names four record kinds and this is not one of them. Emit it as an additive extra, exactly as content.hash and change.queue_id were, and let the observability audit settle whether it is a kind of its own.</div></aside>
+  </div>
+
+  <details class="pl-revs"><summary>0 prior revisions</summary><ul></ul></details>
+
+  <style>
+    .fragment-plan .pl-files { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-plan .pl-files th, .fragment-plan .pl-files td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
+    .fragment-plan .pl-files summary { cursor: pointer; }
+    .fragment-plan .pl-chip { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; opacity: 0.8; }
+    .fragment-plan .pl-card { padding: 6px 0 4px 18px; opacity: 0.9; }
+    .fragment-plan .pl-risks { display: grid; gap: 8px; margin-top: 12px; }
+    .fragment-plan .pl-revs { margin-top: 12px; }
+    @media (max-width: 480px) { .fragment-plan .pl-files th:nth-child(3), .fragment-plan .pl-files td:nth-child(3) { display: none; } }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-plan');
+      var files = 46, modules = 10;
+      var risks = root ? root.querySelectorAll('.pl-risks .callout').length : 0;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'plan', artifact: 'plan', counts: { files: files, modules: modules, risks: risks } } }));
+    })();
+  </script>
+</section>
+</div><div class="prose"><h1 id="plan-viewer-pitch-and-playback" tabindex="-1"><a class="header-anchor" href="#plan-viewer-pitch-and-playback"><span>Plan: Viewer Pitch and Playback</span></a></h1>
+<h2 id="current-state" tabindex="-1"><a class="header-anchor" href="#current-state"><span>Current State</span></a></h2>
+<ul>
+<li>The repository holds <strong>no frontend of any kind</strong>: no HTML, no CSS, no JavaScript, no <code>package.json</code>, no <code>node_modules</code>. <code>.gitignore</code> carries <code>target/</code>, <code>.scratch/</code>, <code>*.ticks</code>, <code>*.smfx</code> only. No <code>web/</code> or <code>viewer/</code> convention is declared in <code>README.md</code>, <code>PRODUCT.md</code>, <code>DESIGN.md</code>, or <code>AGENTS.md</code>.</li>
+<li>The wire format is fixed and documented. <code>KIND_KEYFRAME = 0x01</code>, <code>KIND_DELTA = 0x02</code>, <code>KIND_RESTART = 0x03</code> (<code>crates/protocol/src/frame.rs:12-16</code>). A keyframe is 1 tag byte plus 98 payload bytes: <code>tick</code> as <code>u32</code> little-endian at 0…4, then ball x, y, height as three <code>i16</code> centimetres at 4…10, then 22 players as <code>[i16; 2]</code> centimetres at 10…98, home team first (<code>crates/protocol/src/codec.rs:10,80-87</code>). A delta is 1 tag byte plus 47: no tick field, then 3 <code>i8</code> centimetre steps for the ball and 44 for the players (<code>codec.rs:12,105-117</code>). A restart frame is keyframe-shaped with tag <code>0x03</code> (<code>frame.rs:29-38</code>).</li>
+<li>A step wider than <code>i8</code> cannot encode, and the producer falls back to a keyframe rather than failing (<code>codec.rs:114</code>, <code>crates/stream/src/session.rs:196-219</code>). The decoder therefore never sees an out-of-range delta.</li>
+<li><code>PROTOCOL_VERSION = 1</code> (<code>crates/protocol/src/lib.rs:23</code>). <code>DEFAULT_KEYFRAME_INTERVAL = 50</code> (<code>codec.rs:14</code>), but the live value rides in <code>hello.keyframe_interval</code> and comes from <code>content/tuning.json</code> <code>stream.keyframe_interval</code>.</li>
+<li>JSON keys are <strong>dotted, not camel case</strong>: <code>protocol.version</code>, <code>engine.version</code>, <code>build.hash</code>, <code>owner.id</code>, <code>match.id</code>, <code>home.score</code>, <code>change.queue_id</code> (<code>crates/protocol/src/message.rs</code>, <code>event.rs</code>, <code>command.rs</code>). Enum tag values are kebab-case. A decoder must reproduce both literally.</li>
+<li><strong><code>TeamRef</code> carries <code>team.id</code> and <code>team.name</code> and nothing else</strong> (<code>crates/protocol/src/message.rs:11-18</code>). No kit colour reaches the page.</li>
+<li><strong><code>ReplayOpts</code> carries <code>--fixture</code> and <code>--speed</code> only</strong> (<code>crates/engine-cli/src/cli.rs:106-114</code>), and <code>Replayer::serve</code> writes stored frames on an <code>Instant</code> schedule and never calls <code>socket.read()</code> (<code>crates/stream/src/replay.rs:64-105</code>), so it honours no <code>Start</code>, <code>Pause</code>, or <code>SetSpeed</code> command.</li>
+<li><strong><code>Replayer::serve</code> synthesises its own hello</strong> rather than forwarding the recorded one, and hard-codes <code>keyframe_interval</code> to <code>DEFAULT_KEYFRAME_INTERVAL</code> instead of reading the fixture. A fixture recorded under a tuned interval would therefore announce the wrong interval to the page.</li>
+<li><strong>Backpressure is a server-side log only.</strong> <code>ChannelOut::send</code> blocks the simulation thread and emits one <code>socket.backpressure</code> line (<code>session.rs:127-159</code>); nothing reaches the client, and <code>docs/reference/protocol.md:144-149</code> states this. No <code>ServerMessage</code> variant announces lag (<code>crates/protocol/src/lib.rs:85-185</code>).</li>
+<li>The Origin allowlist accepts <code>none</code>, <code>null</code>, any <code>file://</code>, and <code>http://localhost</code> or <code>http://127.0.0.1</code> with any port; <code>https://</code> loopback is refused (<code>crates/stream/src/server.rs:180-188</code>). The version guard reads <code>?v=</code> and names both versions on refusal (<code>server.rs:191-197</code>). The server keeps listening past a refusal (<code>server.rs:85-93</code>).</li>
+<li>The port lands at <code>&lt;data_dir&gt;/engine.port</code> and the address is <code>ws://127.0.0.1:&lt;port&gt;/?v=1</code> (<code>server.rs:18,56-58,78-80</code>). <code>data_dir()</code> is <code>SM_DATA_DIR</code>, else <code>%LOCALAPPDATA%\SoccerManager</code> on Windows (<code>crates/engine/src/observe/identity.rs:20-30</code>).</li>
+<li>The pitch is 105 by 68 metres <strong>centred on the origin</strong>, so x spans -52.5 to 52.5 and y spans -34 to 34, with <code>GOAL_WIDTH = 7.32</code> centred on y = 0 (<code>crates/engine/src/pitch.rs:5-15</code>). This is the space the tick stream quantises.</li>
+<li>Kit colours exist as hex strings at <code>club.kit.primary</code> and <code>club.kit.secondary</code> in <code>content/teams/*.json</code>. <code>default-a.json</code> sets the secondary to <code>#000000</code>.</li>
+<li>122 tests pass on commit <code>3570eb9</code> in about 30 seconds across 4 crates and 16 binaries. Node is v22.15.0 with <code>node:test</code>, <code>node:assert</code>, and a global <code>WebSocket</code>; there is no DOM, no <code>jsdom</code>, no <code>puppeteer</code>, and Playwright is in <code>toolchains-absent</code>.</li>
+<li><code>06-verify-stream-protocol.md:241</code> states the gap this slice closes: “The protocol is verified against one client, the scratch client built on the <code>stream</code> crate. No browser has opened the socket yet; <code>viewer-pitch</code> is the first.”</li>
+<li>One <code>sdlc-debt:</code> marker exists in the tree, at <code>crates/engine/src/sim.rs:272</code>, and it belongs to <code>match-rules</code>, not to this slice.</li>
+</ul>
+<h2 id="simplicity-ladder" tabindex="-1"><a class="header-anchor" href="#simplicity-ladder"><span>Simplicity Ladder</span></a></h2>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Capability</th>
+<th>Rung</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WebSocket client</td>
+<td>rung 2 native-platform</td>
+<td>The browser <code>WebSocket</code> API. <code>binaryType = 'arraybuffer'</code> avoids the asynchronous <code>Blob</code> step the default would force at 400 frames per second (MDN, <code>WebSocket.binaryType</code>)</td>
+</tr>
+<tr>
+<td>Binary frame decode</td>
+<td>rung 1 stdlib</td>
+<td><code>DataView.getInt16(offset, true)</code> over the delivered <code>ArrayBuffer</code>. V8 closed the DataView penalty at 6.9, so explicit little-endian reads at fixed offsets match typed-array speed (v8.dev/blog/dataview). No parser library</td>
+</tr>
+<tr>
+<td>Compact history</td>
+<td>rung 1 stdlib</td>
+<td><code>Int16Array</code> structure-of-arrays. 270,000 ticks x 47 components x 2 bytes = 25,380,000 bytes, about a thousandth of any <code>ArrayBuffer</code> ceiling</td>
+</tr>
+<tr>
+<td>Frame scheduling</td>
+<td>rung 2 native-platform</td>
+<td><code>requestAnimationFrame</code> with a fixed-timestep accumulator. The pattern is Fiedler’s, already cited in <code>02-shape.md</code> Freshness Research</td>
+</tr>
+<tr>
+<td>Tick-bounded interpolation</td>
+<td>rung 4 new-code</td>
+<td>No interpolation code exists anywhere in the repository, in Rust or otherwise. The function is about twenty lines and is the direct expression of RIM-5</td>
+</tr>
+<tr>
+<td>Canvas pitch rendering</td>
+<td>rung 2 native-platform</td>
+<td><code>CanvasRenderingContext2D</code>. MDN’s optimisation guidance applies: <code>alpha: false</code>, integer coordinates, batched paths, minimal state changes</td>
+</tr>
+<tr>
+<td>Off-main-thread rendering</td>
+<td>rung 2 native-platform, <strong>not taken</strong></td>
+<td><code>OffscreenCanvas</code> with <code>transferControlToOffscreen()</code> is Baseline since March 2023, and <code>WebSocket</code> plus a canvas-bound <code>requestAnimationFrame</code> both work in a dedicated worker. Not taken: the draw is sub-millisecond against 16.6 ms, and the transfer is one-way, which would move the test hook across a message boundary (PO Q5)</td>
+</tr>
+<tr>
+<td>Pitch geometry</td>
+<td>rung 3 reuse</td>
+<td><code>crates/engine/src/pitch.rs:5-15</code> — <code>LENGTH</code>, <code>WIDTH</code>, <code>GOAL_WIDTH</code>, and the centred-origin convention, ported as constants</td>
+</tr>
+<tr>
+<td>Wire layout constants</td>
+<td>rung 3 reuse</td>
+<td><code>crates/protocol/src/codec.rs:8-14</code> and <code>frame.rs:12-18</code>, ported as constants. <code>docs/reference/protocol.md</code> is the written source and is held to the code by <code>crates/protocol/tests/document.rs</code></td>
+</tr>
+<tr>
+<td>Stoppage index</td>
+<td>rung 3 reuse</td>
+<td>The restart tag already marks every restart tick (<code>frame.rs:83-85</code>); the event messages already carry their ticks. Merging two existing sources beats adding a third</td>
+</tr>
+<tr>
+<td>Static file server</td>
+<td>rung 4 new-code</td>
+<td>Nothing in the workspace serves a file over HTTP. <code>python -m http.server</code> is rung 2 but mis-types <code>.mjs</code> and needs a second runtime and a second process; Node has no built-in static server without a <code>package.json</code>. About a hundred lines in <code>engine-cli</code> buys one process, one origin, a correct MIME table, and the two isolation headers (PO Q1)</td>
+</tr>
+<tr>
+<td>JavaScript test runner</td>
+<td>rung 2 native-platform</td>
+<td>Node 22’s <code>node:test</code> and <code>node:assert</code>, confirmed present with <code>node -e &quot;require('node:test')&quot;</code>. No install, no <code>package.json</code>, no third-party framework</td>
+</tr>
+<tr>
+<td>Colour conversion</td>
+<td>rung 4 new-code</td>
+<td>No colour utility exists. Hex to OKLCH with a lightness clamp and a contrast ratio is about forty lines; a library would be a dependency for one file (PO Q11)</td>
+</tr>
+<tr>
+<td>Memory gauge</td>
+<td>rung 2 native-platform</td>
+<td><code>performance.measureUserAgentSpecificMemory()</code>, unlocked by the two headers the Q1 server sends. <code>performance.memory</code> is deprecated and non-standard; <code>navigator.deviceMemory</code> reports the device’s RAM tier, not the page’s use</td>
+</tr>
+</tbody>
+</table>
+<h2 id="applied-learnings" tabindex="-1"><a class="header-anchor" href="#applied-learnings"><span>Applied Learnings</span></a></h2>
+<ul>
+<li><code>.ai/solutions/INDEX.md</code> does not exist and <code>.ai/sdlc-config.json</code> does not exist. No applicable learnings found.</li>
+<li>Carry-over from <code>04-plan-stream-protocol.md</code> deviation 6: the encoder writes into a fixed-size reused buffer rather than a <code>Vec</code> per tick. The decoder mirrors the discipline — one <code>DataView</code> over the delivered buffer, positions written straight into the pre-allocated history arrays, no intermediate object per tick.</li>
+<li>Carry-over from <code>06-verify-stream-protocol.md:241</code>: no browser has opened the socket. Step 12 is the first, and it is deliberately the smallest possible page — connect, read the hello, log it — so a handshake fault is diagnosed before any rendering code exists to blame.</li>
+<li>Carry-over from <code>06-verify-stream-protocol.md</code>: a rejected <code>queue-change</code> writes no <code>change.kind</code> on its event row. Informational only here; this slice queues no change.</li>
+<li>Carry-over from <code>03-slice-probe-engine-core.md</code> finding 3: <code>thiserror</code> with an explicit <code>#[source]</code>, never <code>#[from]</code> on a type whose display repeats its source. The new <code>web.rs</code> error variants follow it.</li>
+<li><strong>Repeat-deferral tripwire.</strong> <code>00-index.md</code> <code>runtime-evidence-deferrals</code> is empty, so no wall is inherited. One new wall is named by this slice and is classified below rather than deferred: see <code>## Verification Strategy</code>.</li>
+</ul>
+<h2 id="likely-files-areas-to-touch" tabindex="-1"><a class="header-anchor" href="#likely-files-areas-to-touch"><span>Likely Files / Areas to Touch</span></a></h2>
+<ul>
+<li><code>web/</code> (new, 28 files): <code>index.html</code>; <code>tokens.css</code>, <code>layout.css</code>, <code>fonts/fonts.css</code>, <code>components/match-control.css</code>; four <code>woff2</code> faces under <code>fonts/</code>; the modules <code>signal.mjs</code>, <code>colour.mjs</code>, <code>decode.mjs</code>, <code>interpolate.mjs</code>, <code>history.mjs</code>, <code>schedule.mjs</code>, <code>stoppages.mjs</code>, <code>playback.mjs</code>, <code>socket.mjs</code>, <code>pitch.mjs</code>, <code>mark.mjs</code>, <code>main.mjs</code>; and <code>tests/</code> with <code>helpers.mjs</code> plus six <code>*.test.mjs</code> files.</li>
+<li><code>crates/engine-cli/src/web.rs</code> (new): the static server, its MIME table, and the two isolation headers.</li>
+<li><code>crates/engine-cli/tests/web_cli.rs</code> (new): the server’s own tests.</li>
+<li><code>crates/protocol/src/message.rs</code>: <code>TeamRef</code> gains the two kit fields.</li>
+<li><code>crates/protocol/src/lib.rs</code>: the <code>MESSAGES</code> field list for <code>hello</code>.</li>
+<li><code>crates/protocol/tests/document.rs</code>: the document test reads the new fields.</li>
+<li><code>crates/stream/src/server.rs</code>: the hello builder carries kit colours.</li>
+<li><code>crates/stream/src/replay.rs</code>: forward the stored hello instead of synthesising one; honour <code>--sustain</code>; <code>fixture.replayed</code> gains <code>sustain</code>.</li>
+<li><code>crates/stream/src/lib.rs</code>: one new error variant for a fixture with no stored hello.</li>
+<li><code>crates/engine-cli/src/cli.rs</code>, <code>main.rs</code>, <code>serve.rs</code>, <code>replay.rs</code>: the <code>--web</code> and <code>--sustain</code> options and their wiring.</li>
+<li><code>crates/engine-cli/tests/cli_args.rs</code>, <code>tests/stream_cli.rs</code>: flag and help coverage.</li>
+<li><code>crates/engine-cli/Cargo.toml</code>: no new dependency; the server uses <code>std::net</code> and the existing <code>tungstenite</code> handshake path is untouched.</li>
+<li><code>docs/reference/protocol.md</code>: the hello table gains two fields; a new section documents the static server and its headers.</li>
+<li><code>README.md</code>: how to run the engine and open the page (the shape’s Documentation Plan).</li>
+<li><code>DESIGN.md</code>: the ten new <code>--tl-</code> token rows, so it never disagrees with <code>web/tokens.css</code>.</li>
+</ul>
+<h2 id="proposed-change-strategy" tabindex="-1"><a class="header-anchor" href="#proposed-change-strategy"><span>Proposed Change Strategy</span></a></h2>
+<p>Build from the inside out, exactly as the stream slice did, and prove each layer before the next uses it. The pure modules — <code>colour</code>, <code>decode</code>, <code>interpolate</code>, <code>history</code>, <code>schedule</code>, <code>stoppages</code> — have no DOM, no canvas, and no socket, so <code>node --test</code> proves all six before a browser is ever opened. Then the renderer, then the socket, then the page, then the drive.</p>
+<p>NFR-2 governs the rendering decisions and <code>yields-to: C2</code> (PO-ratified): frame pacing never invents a position. The interpolation function takes two consecutive received ticks and a fraction in <code>[0, 1]</code> and cannot express a value outside that segment; the scheduler advances the tick cursor and skips, and no code path extrapolates. That is RIM-5 expressed as a type constraint rather than as a comment.</p>
+<p>NFR-3 governs the history: 24.2 megabytes against 300, which is why the decoded form wins over the wire form. NFR-6 governs the marker ring, the focus rings, and the lag notice: colour is never the only signal. NFR-9 keeps the target at Windows 11, and the static server uses <code>std::net</code> only, so no platform branch appears.</p>
+<p>The one genuinely new architectural fact is that the engine binary now speaks two protocols on two ports: the existing WebSocket on its assigned port, and plain HTTP for the page. They stay separate listeners in separate modules, because the WebSocket server’s Origin allowlist and version guard have nothing to do with serving a stylesheet, and folding them together would put the page’s MIME table inside <code>crates/stream</code>, which <code>NFR-8</code> keeps for the socket alone.</p>
+<h2 id="step-by-step-plan" tabindex="-1"><a class="header-anchor" href="#step-by-step-plan"><span>Step-by-Step Plan</span></a></h2>
+<ol>
+<li><strong>Kit colours on the wire.</strong> <code>crates/protocol/src/message.rs</code>: <code>TeamRef</code> gains <code>#[serde(rename = &quot;team.kit.primary&quot;)] pub kit_primary: String</code> and <code>team.kit.secondary</code>, both lower-case hex with a leading <code>#</code>. Update the <code>MESSAGES</code> field list for <code>hello</code> in <code>lib.rs</code> and the round-trip unit test. <code>PROTOCOL_VERSION</code> stays 1: no message is removed and no field changes meaning, and the only two producers in existence are updated in the same commit. Record that judgement in a comment beside the constant.</li>
+<li><strong>Hello builders carry the colours.</strong> <code>crates/stream/src/server.rs</code>: read <code>club.kit.primary</code> and <code>club.kit.secondary</code> from the two loaded <code>TeamFile</code> values and fill the new fields. Unit test: a hello built from the shipped defaults carries <code>#c8102e</code> for team A.</li>
+<li><strong>Replay forwards the stored hello.</strong> <code>crates/stream/src/replay.rs</code>: read the first stored text entry, confirm it is a <code>hello</code>, and write those exact bytes instead of synthesising a new message. This retires a latent fault — the current code hard-codes <code>keyframe_interval</code> to <code>DEFAULT_KEYFRAME_INTERVAL</code> rather than reading the fixture, so a fixture recorded under a tuned interval announces the wrong interval — and it carries kit colours through replay for free. Add <code>StreamError::FixtureNoHello</code> naming the path when the first entry is not a hello. Test: a replay’s hello is byte-identical to the recorded one.</li>
+<li><strong>The sustain cap.</strong> <code>crates/engine-cli/src/cli.rs</code>: <code>ReplayOpts</code> gains <code>--sustain &lt;f32&gt;</code>, optional, help text “Cap the delivered rate at this speed regardless of --speed; for testing the viewer’s lag notice.” <code>crates/stream/src/replay.rs</code>: <code>serve()</code> takes <code>Option&lt;f32&gt;</code> and paces at <code>min(speed, sustain)</code> while the hello still announces the requested speed, so the page sees a stream slower than it asked for. <code>fixture.replayed</code> gains <code>sustain</code>, <code>null</code> when absent. Test: <code>--speed 8 --sustain 3</code> delivers at three times real time within 5 percent over 10 seconds of match time.</li>
+<li><strong>The static server.</strong> <code>crates/engine-cli/src/web.rs</code> (new): a <code>std::net::TcpListener</code> on <code>127.0.0.1:0</code>, one thread, a blocking read of the request line, and a file response from the directory given by <code>--web</code>. Serve <code>GET</code> and <code>HEAD</code> only; answer anything else with 405. Refuse any path containing <code>..</code> or a leading drive letter with 403. MIME table: <code>.html</code> <code>text/html</code>, <code>.css</code> <code>text/css</code>, <code>.mjs</code> and <code>.js</code> <code>text/javascript</code>, <code>.woff2</code> <code>font/woff2</code>, <code>.json</code> <code>application/json</code>, <code>.png</code> <code>image/png</code>, <code>.svg</code> <code>image/svg+xml</code>; anything else <code>application/octet-stream</code>. Every response carries <code>Cross-Origin-Opener-Policy: same-origin</code> and <code>Cross-Origin-Embedder-Policy: require-corp</code>, which the memory gauge requires (PO Q8), plus <code>Cache-Control: no-store</code> so a reload always shows the current file. Emit <code>web.serving</code> with <code>dir</code>, <code>files</code>, <code>isolated</code>, <code>port</code> per <code>04b-instrument.md</code>.</li>
+<li><strong>Wire the flag.</strong> <code>crates/engine-cli/src/cli.rs</code>: <code>--web &lt;DIR&gt;</code> on both <code>ServeOpts</code> and <code>ReplayOpts</code>, optional. <code>serve.rs</code> and <code>replay.rs</code> start the static server before the socket and print both addresses, the page address last so it is the line a reader copies. Keep every help line inside 80 columns, the rule the second plan introduced. Tests in <code>tests/web_cli.rs</code>: the page address is printed; a missing directory is refused naming the path; <code>..</code> in a request path is refused; a <code>.mjs</code> response carries <code>text/javascript</code>; every response carries both isolation headers.</li>
+<li><strong>Re-record the fixture.</strong> Run <code>engine-cli record --seed 7 --out fixture.smfx --minutes 90</code>, then confirm the stored hello carries the kit colours and note the tick of the first goal and of the first restart, which steps 19 and 20 assert against. Fixtures stay gitignored; record the seed, the tick counts, and the two noted ticks in <code>05-implement-viewer-pitch.md</code> so any machine can rebuild the same file.</li>
+<li><strong>Signal writer.</strong> <code>web/signal.mjs</code>: one exported <code>signal(name, fields)</code> that stamps the <code>viewer-event</code> envelope, writes one JSON Lines row to <code>console.info</code>, and pushes into a 256-row ring exposed later on the test hook. Pure; no DOM. Test: the envelope carries <code>record.kind</code>, <code>schema.version</code>, <code>service</code>, <code>operation</code>, <code>signal</code>, and <code>ts</code>, and the ring never exceeds 256 rows.</li>
+<li><strong>Colour.</strong> <code>web/colour.mjs</code>: <code>hexToOklch</code>, <code>clampLightness(l)</code> into <code>0.20 … 0.88</code>, <code>contrast(a, b)</code>, and <code>safeKit({primary, secondary})</code> returning the clamped fill, the ring colour, and the shirt-number colour. The ring is the clamped secondary when it measures at least 3:1 against <code>--tl-pitch</code>, otherwise <code>--tl-pitch-line</code>; the number is white or ink, whichever contrasts more with the fill (contract section 3, item 4). Tests: <code>#000000</code> clamps to lightness 0.20 and never returns pure black; <code>#c8102e</code> survives unchanged; a secondary that fails 3:1 returns the pitch-line fallback; the chosen number colour is always the higher-contrast of the two.</li>
+<li><strong>Decoder.</strong> <code>web/decode.mjs</code>: the constants ported from <code>codec.rs</code> and <code>frame.rs</code> — <code>KIND_KEYFRAME</code> 1, <code>KIND_DELTA</code> 2, <code>KIND_RESTART</code> 3, <code>KEYFRAME_BYTES</code> 98, <code>DELTA_BYTES</code> 47, <code>PLAYER_COUNT</code> 22 — and <code>decodeInto(buffer, prev, out)</code> reading a <code>DataView</code> at fixed little-endian offsets and writing centimetres straight into the caller’s arrays. A keyframe or restart writes absolutes; a delta adds signed-byte steps to <code>prev</code>. Return the frame kind and the tick. Refuse a short frame or an unknown tag through <code>viewer.decode_refused</code> and return <code>null</code>. Tests over recorded bytes from step 7: a keyframe round-trips; a 50-frame cycle reconstructs every absolute position exactly; a restart frame is reported as a restart; a truncated frame is refused and named.</li>
+<li><strong>History.</strong> <code>web/history.mjs</code>: three <code>Int16Array</code> buffers sized from <code>hello.ticks_expected</code> — ball x/y/height, and players — plus <code>tickAt(i)</code>, <code>append(...)</code>, and <code>bytes()</code> returning the exact sum of <code>byteLength</code>. Grow by doubling if a match runs past <code>ticks_expected</code>, which stoppage time makes possible. Emit <code>viewer.history</code> with <code>ticks_stored</code>, <code>history_bytes</code>, <code>page_bytes</code>, and <code>budget_bytes</code> after each keyframe; <code>page_bytes</code> is <code>null</code> until <code>performance.measureUserAgentSpecificMemory()</code> resolves and never blocks a frame. Tests: 270,000 ticks report exactly 25,380,000 history bytes; a read at tick N returns exactly what was written at tick N; growth past <code>ticks_expected</code> preserves every earlier tick.</li>
+<li><strong>First browser contact — the smallest page.</strong> <code>web/index.html</code> with nothing but a script that opens <code>ws://127.0.0.1:&lt;port&gt;/?v=1</code>, reads the hello, and logs <code>viewer.connected</code>. Run <code>engine-cli replay --fixture fixture.smfx --web web</code> and open the printed address in the in-app browser. Capture the console and a screenshot. This is the first time any browser has opened this socket; prove the handshake, the Origin, the version query, and the two isolation headers before a single line of rendering code exists.</li>
+<li><strong>Interpolation.</strong> <code>web/interpolate.mjs</code>: <code>between(a, b, t)</code> with <code>t</code> clamped to <code>[0, 1]</code>, writing into a caller-supplied output array. The function cannot express a position outside the segment, which is RIM-5 as a constraint rather than a comment. Tests, both <code>observable: false</code> acceptance criteria in part: <code>t = 0</code> returns <code>a</code> exactly; <code>t = 1</code> returns <code>b</code> exactly; every <code>t</code> in <code>[0, 1]</code> lies on the segment within one centimetre; <code>t = 1.5</code> and <code>t = -0.5</code> clamp and never exceed <code>b</code> or precede <code>a</code>.</li>
+<li><strong>Scheduler.</strong> <code>web/schedule.mjs</code>: a fixed-timestep accumulator driven by <code>requestAnimationFrame</code> timestamps. Each frame advances simulated time by <code>elapsed x speed</code>, consumes whole ticks from the buffer, and renders at the fraction between the last two consumed ticks. When ticks owed exceed ticks available the cursor jumps and the skipped count rises; it never renders beyond the newest received tick. Derive the frame rate from consecutive timestamp deltas and report <code>refresh_hz</code> beside it. Emit <code>viewer.tick_skipped</code> once per second when the count is above zero, and <code>viewer.frame_budget</code> every five seconds. Tests over a synthetic stream with no DOM: at 8x with 50 ticks per second arriving, the scheduler consumes 400 ticks per second and the rendered cursor never passes the newest received tick; at 1x no tick is skipped; a 16-millisecond stall does not cause an extrapolation.</li>
+<li><strong>Stoppage index.</strong> <code>web/stoppages.mjs</code>: one sorted index merged from restart-flagged ticks and event-message ticks, with two entries inside 25 ticks of each other collapsed to the earlier, so a goal and its restart are one stoppage (PO Q4). <code>next(fromTick)</code> and <code>prev(fromTick)</code>. Tests: a goal at tick T and a restart at T + 12 collapse to one entry at T; a restart with no event stands alone; <code>next</code> past the last entry returns <code>null</code>.</li>
+<li><strong>The mark.</strong> <code>web/mark.mjs</code>: one exported function drawing the three zones into a canvas or an SVG from a tile size, a corner radius of size times 0.21, and the three pitch tokens, with the four variants the contract names (contract section 3, item 8). Generate the favicon from it at load; load no image file. Test: the function is deterministic for a given size and colour set.</li>
+<li><strong>Pitch renderer.</strong> <code>web/pitch.mjs</code>: the coordinate map from the engine’s centred metre space to canvas pixels — x from -52.5…52.5 and y from -34…34 onto 616 by 411 — the markings, the 22 markers with their rings and shirt numbers from <code>colour.mjs</code>, and the ball with its falling-alpha trail drawn as one path. Size the backing store by <code>devicePixelRatio</code> and scale the context. Use <code>getContext('2d', { alpha: false })</code>, integer coordinates, and one <code>fillStyle</code> change per team rather than per marker. Pre-render the static markings to an offscreen canvas once and blit them each frame. Covers contract inventory items 2, 4, and 5.</li>
+<li><strong>Page shell, tokens, fonts, and the control primitive.</strong> <code>web/tokens.css</code> as the single <code>:root</code> block with all 36 tokens from contract section 4; <code>web/layout.css</code> with the 1280 by 800 grid — 56-pixel header, columns 336 / 616 / 296, 8-pixel gutter — and the header and both side columns present and empty (PO Q10); <code>web/fonts/fonts.css</code> with <code>@font-face</code> at <code>font-display: swap</code> for Barlow Condensed 700 and IBM Plex Sans 400/500/600, all four <code>woff2</code> under <code>web/fonts/</code>, never a font service; <code>web/components/match-control.css</code> with all four heights, five states, and both themes, of which this slice uses <code>sm</code> and <code>md</code>. Add the same ten new rows to <code>DESIGN.md</code>. Covers contract inventory items 1, 6, and 7. Verify the numeric row measures at least 4.5:1 before any transition is written — the brief’s named top risk.</li>
+<li><strong>Socket client and playback.</strong> <code>web/socket.mjs</code>: <code>binaryType = 'arraybuffer'</code>, the hello decoded once, binary frames to <code>decode.mjs</code> and text frames to the message handler, and <code>viewer.connected</code> and <code>viewer.socket_drops</code> at the two ends. <code>web/playback.mjs</code>: play and pause, the 1x to 8x speed selector, skip to next stoppage, the rewind scrubber over the history, and the sustained-rate estimator that compares tick arrival against the requested speed, drops playback to the measured rate, and emits <code>viewer.lag</code>. The notice names the rate in words and digits and carries <code>--tl-warning</code>, never colour alone.</li>
+<li><strong>Wire the page and the test hook.</strong> <code>web/main.mjs</code>: build the shell, start the socket, drive the scheduler, render through <code>pitch.mjs</code>, and expose <code>window.__touchline</code> with <code>lastRendered()</code> (the exact positions of the last drawn frame), <code>signals</code> (the ring), <code>history</code> (<code>ticks_stored</code>, <code>history_bytes</code>, <code>page_bytes</code>), and <code>frame</code> (<code>fps_median</code>, <code>frame_ms_p95</code>, <code>dropped_frames</code>, <code>refresh_hz</code>). The hook is the observability seam three criteria read; it is a read-only view and exposes no setter. Add the canvas accessibility treatment: <code>role=&quot;img&quot;</code> with a label, plus a visually hidden <code>aria-live=&quot;polite&quot;</code> region mirroring clock, speed, and lag in text.</li>
+<li><strong>Documentation.</strong> <code>docs/reference/protocol.md</code>: the hello table gains <code>team.kit.primary</code> and <code>team.kit.secondary</code>, and a new section documents the static server, its MIME table, and the two isolation headers. <code>README.md</code> gains the run instructions the shape’s Documentation Plan requires: build the engine, run <code>engine-cli serve --seed 42 --web web</code>, open the printed address. Confirm <code>crates/protocol/tests/document.rs</code> still passes, since it parses these tables.</li>
+<li><strong>The full check.</strong> Run <code>cargo fmt --all -- --check</code>, <code>cargo clippy --workspace --all-targets -- -D warnings</code>, <code>cargo test --workspace</code> (122 existing plus the new Rust tests), and <code>node --test web/tests/</code>. Then the browser drives of the five user-observable criteria against the served page, per <code>## Test / Verification Plan</code>. Record the four browser benchmark targets against their budgets in <code>05c-benchmark.md</code>.</li>
+</ol>
+<h2 id="verification-strategy" tabindex="-1"><a class="header-anchor" href="#verification-strategy"><span>Verification Strategy</span></a></h2>
+<p>Eight acceptance criteria from <code>03-slice-viewer-pitch.md</code>. Six are user-observable after plan Round 3 Q9 moved AC-g’s gauge into the browser; two are pure-function unit tests.</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>AC</th>
+<th>Tool / method + ladder rung</th>
+<th>Environment need — satisfiable in target env?</th>
+<th>What must be BUILT to make it verifiable</th>
+<th>Fallback chain</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>AC-a</strong> 5 minutes at 1x holds 60 fps with zero dropped ticks</td>
+<td>in-app browser drive, console read of <code>viewer.frame_budget</code> (<code>web-2</code>)</td>
+<td>Windows 11, Node not needed, built engine, served page, <code>fixture.smfx</code> from seed 7 — <strong>yes</strong></td>
+<td>The <code>--web</code> server (step 5); the <code>viewer.frame_budget</code> signal with <code>refresh_hz</code> (step 14); the <code>window.__touchline.frame</code> hook (step 20)</td>
+<td>timestamp-delta read from the hook → <code>node --test</code> over the scheduler with a synthetic 5-minute stream → pre-registered deferral</td>
+</tr>
+<tr>
+<td><strong>AC-b</strong> a rendered marker lies on the segment between two ticks</td>
+<td><code>node --test</code> over <code>interpolate.mjs</code> (<code>web-1</code>)</td>
+<td>Node 22 — <strong>yes</strong></td>
+<td><code>interpolate.mjs</code> as a DOM-free module (step 13)</td>
+<td>none needed; no environment dependency</td>
+</tr>
+<tr>
+<td><strong>AC-c</strong> at 8x the viewer skips ticks and never passes the newest tick</td>
+<td><code>node --test</code> over <code>schedule.mjs</code> with a synthetic stream (<code>web-1</code>)</td>
+<td>Node 22 — <strong>yes</strong></td>
+<td><code>schedule.mjs</code> as a DOM-free module with an injectable clock (step 14)</td>
+<td>none needed; no environment dependency</td>
+</tr>
+<tr>
+<td><strong>AC-d</strong> at 4x the clock advances four times wall time within 2 percent</td>
+<td>in-app browser drive reading the clock at two wall times (<code>web-2</code>)</td>
+<td>as AC-a — <strong>yes</strong></td>
+<td>The clock readout in the shell (step 18); the speed selector (step 19)</td>
+<td>read <code>tick</code> from the hook at two wall times instead of the rendered clock → pre-registered deferral</td>
+</tr>
+<tr>
+<td><strong>AC-e</strong> at a sustained 3x, playback drops to 3x and a notice names 3x</td>
+<td>in-app browser drive with <code>replay --speed 8 --sustain 3</code> (<code>web-2</code>)</td>
+<td>as AC-a <strong>plus a server that can sustain less than it is asked for</strong> — <strong>needs the flag built</strong></td>
+<td><code>--sustain</code> on <code>ReplayOpts</code> and the paced <code>min(speed, sustain)</code> in <code>Replayer::serve</code> (step 4); the sustained-rate estimator and the notice (step 19); <code>viewer.lag</code> (step 14)</td>
+<td>read <code>viewer.lag</code> from the hook instead of the rendered notice → <code>node --test</code> over the estimator with a synthetic slow stream → pre-registered deferral</td>
+</tr>
+<tr>
+<td><strong>AC-f</strong> rewind to a stored tick draws exactly the stored positions</td>
+<td>in-app browser drive plus <code>window.__touchline.lastRendered()</code> (<code>web-2</code>)</td>
+<td>as AC-a — <strong>yes</strong></td>
+<td>The scrubber (step 19); the <code>lastRendered()</code> hook (step 20); a fixture with a noted goal tick (step 7)</td>
+<td>compare <code>history.tickAt(N)</code> to <code>lastRendered()</code> in the hook → pre-registered deferral</td>
+</tr>
+<tr>
+<td><strong>AC-g</strong> a full match keeps the stored history under 300 MB</td>
+<td>two-part: <code>node --test</code> for <code>history_bytes</code>, in-app browser drive for <code>page_bytes</code> (<code>web-1</code> and <code>web-2</code>)</td>
+<td>Node 22 for part one; for part two a page served with both isolation headers — <strong>yes, once step 5 sends them</strong></td>
+<td>The <code>bytes()</code> accounting (step 11); the two isolation headers on every response (step 5); <code>viewer.history</code> (step 11)</td>
+<td>if the browser never resolves its measurement, <code>history_bytes</code> alone is reported and the shortfall is named — never silently passed</td>
+</tr>
+<tr>
+<td><strong>AC-h</strong> the charter scenario steps 1, 4, 5 against the live engine</td>
+<td>in-app browser drive against <code>engine-cli serve --seed 42 --web web</code> (<code>web-2</code>)</td>
+<td>Windows 11, built engine, default teams — <strong>yes</strong></td>
+<td><code>--web</code> on <code>ServeOpts</code> (step 6); the whole page</td>
+<td>drive against the replayer instead of the live engine, and name the residual → pre-registered deferral</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Force-scope rule applied.</strong> One environment dependency sits on a user-observable criterion’s critical path: AC-e needs a server that sustains a lower rate than the manager asks for, and none exists.</p>
+<ul>
+<li><code>constraint-resolution: prerequisite-slice: viewer-pitch</code> — <code>wall-ownership: code-owned</code>.</li>
+<li><strong>Classification first, per the ladder’s triage question.</strong> Would a change to code in this repository dissolve the wall? Yes: <code>ReplayOpts</code> is in <code>crates/engine-cli/src/cli.rs:106-114</code> and <code>Replayer::serve</code> is in <code>crates/stream/src/replay.rs:64-105</code>, both in this workspace. The wall is therefore <code>code-owned</code>, and option 2, <code>proxy+deferral</code>, is unavailable to it. It is dissolved by scoping the harness or refused on the record; it is never parked behind a clearing event.</li>
+<li><strong>Cost of the wall.</strong> <code>wall-cost: retire ≈ one CLI option, one </code>min()<code> in the pacing loop, and one test — about 30 lines | carry = 1 deferred AC across 4 slices (</code>viewer-pitch<code>, </code>viewer-match-day<code>, </code>viewer-reports-recovery<code>, </code>integration<code>) riding &quot;the live engine happens to fall behind&quot;, which is not an act anyone can perform on demand</code>. Retiring it is cheaper than carrying it and the harness is in the plan as step 4.</li>
+<li>No other criterion names a credential, a device, an external service, an inbound callback, or a deploy target. No <code>runtime-evidence-deferrals</code> entry is inherited and none is created.</li>
+</ul>
+<p><strong>Tooling resolution.</strong> Two capabilities the slice’s <code>verify:</code> stubs assume were checked against <code>stack:</code>:</p>
+<ol>
+<li>The stubs name “the mock server’s rate cap flag”. It did not exist. Resolved above by scoping the harness into step 4, not by a verify-time bootstrap.</li>
+<li>The stubs assume a JavaScript test runner. <code>stack.testing</code> lists <code>cargo-test</code> only, and <code>stack.package-managers</code> lists <code>cargo</code> and <code>npm</code>. Node 22.15.0 ships <code>node:test</code> and <code>node:assert</code> with <strong>no install</strong>, confirmed by <code>node -e &quot;require('node:test')&quot;</code>. Using a runtime already in <code>toolchains-present</code>, with nothing fetched and nothing added to the repository, is not a new tool, so no route back through shape is needed. The product owner confirmed the shape at plan Round 2 Q7. Playwright stays absent and unused; the interactive driver is <code>Claude_Browser</code>, the tool shape Q29 chose.</li>
+</ol>
+<p><strong>AC-a’s measurement circularity is named, not hidden.</strong> The frame-rate criterion is evidenced by a counter the page itself computes, and no independent frame-rate instrument exists in <code>stack:</code>. Two guards make the self-report trustworthy rather than tautological: the counter is derived from consecutive <code>requestAnimationFrame</code> timestamp deltas, not from a callback count, and <code>refresh_hz</code> is reported beside it, so a 144 hertz panel reading 144 frames per second is visibly a panel fact and not a pass. A screenshot of a visibly smooth pitch accompanies every reading.</p>
+<h2 id="test-verification-plan" tabindex="-1"><a class="header-anchor" href="#test-verification-plan"><span>Test / Verification Plan</span></a></h2>
+<h3 id="automated-checks" tabindex="-1"><a class="header-anchor" href="#automated-checks"><span>Automated checks</span></a></h3>
+<ul>
+<li><code>cargo fmt --all -- --check</code> and <code>cargo clippy --workspace --all-targets -- -D warnings</code>: blocking, as in all three prior slices.</li>
+<li><code>cargo test --workspace</code>: the 122 existing tests plus the new ones. <code>crates/protocol</code>: the <code>TeamRef</code> round trip with the two kit fields, the <code>MESSAGES</code> completeness test, and <code>tests/document.rs</code> against the updated hello table. <code>crates/stream</code>: a hello built from the shipped defaults carries <code>#c8102e</code>; a replay’s hello is byte-identical to the recorded one; a fixture whose first entry is not a hello is refused naming the path; <code>--speed 8 --sustain 3</code> delivers at three times real time within 5 percent. <code>crates/engine-cli</code>: the page address is printed, a missing <code>--web</code> directory is refused naming the path, a request path containing <code>..</code> is refused with 403, a <code>.mjs</code> response carries <code>text/javascript</code>, every response carries both isolation headers, and no help line exceeds 80 columns.</li>
+<li><code>node --test web/tests/</code>: six files, no install, no <code>package.json</code>. <code>interpolate.test.mjs</code> (AC-b), <code>schedule.test.mjs</code> (AC-c), <code>history.test.mjs</code> (AC-g part one), <code>decode.test.mjs</code>, <code>colour.test.mjs</code>, <code>stoppages.test.mjs</code>.</li>
+<li>Benchmark compare: <code>/wf verify</code> loads <code>augment/benchmark.md</code> in compare mode against <code>05c-benchmark.md</code> — five engine targets with tripwires at 427 milliseconds of processor time and 7.46 megabytes, and four browser targets measured for the first time against their budgets.</li>
+<li>Instrument key check: <code>04b-instrument.md</code> section 2 against the live records — <code>web.serving</code> and the extended <code>fixture.replayed</code> on stderr; <code>viewer.connected</code>, <code>viewer.socket_drops</code>, <code>viewer.tick_skipped</code>, <code>viewer.lag</code>, <code>viewer.frame_budget</code>, <code>viewer.history</code>, <code>viewer.rewind</code>, and <code>viewer.decode_refused</code> in the browser console and in <code>window.__touchline.signals</code>.</li>
+</ul>
+<h3 id="interactive-verification-human-in-the-loop" tabindex="-1"><a class="header-anchor" href="#interactive-verification-human-in-the-loop"><span>Interactive verification (human-in-the-loop)</span></a></h3>
+<p>Platform <code>web</code> from <code>stack.platforms</code>; driver <code>Claude_Browser</code>, the in-app browser the product owner chose at shape Q29 and <code>00-index.md</code> records as “chosen interactive driver”. Playwright is in <code>toolchains-absent</code> and is not used. Evidence follows the <code>web</code> runtime adapter’s layout under <code>verify-evidence/viewer-pitch/</code>: <code>&lt;criterion&gt;-t0.png</code>, <code>-t250.png</code>, <code>-final.png</code>, <code>&lt;criterion&gt;.console.log</code>, <code>&lt;criterion&gt;.network.json</code>, and <code>video/&lt;criterion&gt;.webm</code>. Web Vitals come from the page’s own Performance API through the browser’s script tool, because no Chrome DevTools Protocol path exists through this driver; the cross-browser sweep is not available from a single Chromium-based pane and its absence is reported under <code>## Cross-Browser Delta</code> rather than left unexplained.</p>
+<p>Bootstrap, replacing the adapter’s <code>npm run dev</code> step, which does not exist here:</p>
+<pre><code class="hljs language-bash">cargo build --release -p engine-cli
+target/release/engine-cli.exe record --seed 7 --out fixture.smfx --minutes 90
+target/release/engine-cli.exe replay --fixture fixture.smfx --speed 1.0 --web web
+# then open the printed page address; for AC-h use:
+target/release/engine-cli.exe serve --seed 42 --web web
+</code></pre>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Criterion</th>
+<th>Drive</th>
+<th>Pass criteria</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AC-a</td>
+<td>Open the page at 1x against the seed-7 fixture. Sample <code>window.__touchline.frame</code> every 30 seconds for 5 minutes of match time. Screenshot at t0, mid-run, and final.</td>
+<td><code>fps_median</code> at least 60, <code>dropped_frames</code> 0, <code>viewer.tick_skipped</code> never emitted, <code>refresh_hz</code> recorded beside the reading</td>
+</tr>
+<tr>
+<td>AC-d</td>
+<td>Set 4x. Read the on-screen clock and <code>performance.now()</code> at two points about 60 wall seconds apart.</td>
+<td>Match time advances 4.00 times wall time within 2 percent</td>
+</tr>
+<tr>
+<td>AC-e</td>
+<td>Restart the replayer with <code>--speed 8 --sustain 3</code>. Select 8x in the page. Then restart with <code>--speed 8</code> alone and select 8x again.</td>
+<td>First run: playback settles at 3x, the notice reads “3x” in digits and words, <code>viewer.lag</code> carries <code>requested_speed</code> 8 and <code>sustained_speed</code> 3. Second run: no notice, no <code>viewer.lag</code> row</td>
+</tr>
+<tr>
+<td>AC-f</td>
+<td>Play past the fixture’s noted goal tick, drag the scrubber back to it, and read <code>window.__touchline.lastRendered()</code>.</td>
+<td>Every one of the 23 returned positions equals <code>history.tickAt(goalTick)</code> exactly; <code>viewer.rewind</code> reports <code>exact: true</code></td>
+</tr>
+<tr>
+<td>AC-g</td>
+<td>Load the full 90-minute fixture, then read the gauge.</td>
+<td><code>history_bytes</code> equals 25,380,000; <code>page_bytes</code> resolves and is under 314,572,800. A <code>page_bytes</code> of <code>null</code> is a failed drive, not a pass</td>
+</tr>
+<tr>
+<td>AC-h</td>
+<td>Run <code>engine-cli serve --seed 42 --web web</code>. Execute charter-scenario steps 1, 4, and 5.</td>
+<td>Step 1: the page reports the engine version from the hello. Step 4: the clock advances, 22 markers and the ball move every tick, no marker leaves the pitch bounds. Step 5: 4x advances the clock four times faster. Steps 2 and 3 use a default lineup until <code>viewer-lineup-tactics</code> ships, as the slice states</td>
+</tr>
+</tbody>
+</table>
+<p>Human-in-the-loop, not automatable: the design-contract check. A reviewer reads the numeric row at 1280 by 800 in a lit room and confirms at least 4.5:1, confirms focus rings are visible on every playback control, and confirms no anti-pattern from <code>02c-craft.md</code> section 5 appears. This is AC-29 of the shape, partially discharged here and completed at <code>integration</code>.</p>
+<h2 id="risks-watchouts" tabindex="-1"><a class="header-anchor" href="#risks-watchouts"><span>Risks / Watchouts</span></a></h2>
+<ul>
+<li><strong>R1 (high) the refresh-rate false pass.</strong> <code>requestAnimationFrame</code> fires at the display rate, so a callback count on a 120 or 144 hertz panel reports 120 or 144 and a naive assertion passes for the wrong reason. Derive frame rate from consecutive timestamp deltas and report <code>refresh_hz</code> beside every reading (step 14). Verify records both numbers or the drive does not count.</li>
+<li><strong>R2 (high) the browser has never opened this socket.</strong> Three slices verified the protocol against a Rust client only (<code>06-verify-stream-protocol.md:241</code>). Step 12 is a deliberate ten-line page that proves the handshake, the Origin, the <code>?v=1</code> query, and the two isolation headers before any rendering code exists to blame. Watch in particular that <code>Cross-Origin-Embedder-Policy: require-corp</code> does not refuse the four <code>woff2</code> files; they are same-origin, so it should not, and step 12 is where that is confirmed.</li>
+<li><strong>R3 (medium) interpolation that quietly extrapolates.</strong> This is RIM-5 and commitment C2. The mitigation is structural, not a review note: <code>between(a, b, t)</code> clamps <code>t</code> into <code>[0, 1]</code> and cannot express a position outside the segment, and the scheduler moves the cursor rather than the fraction. Two unit tests drive <code>t = 1.5</code> and <code>t = -0.5</code> directly.</li>
+<li><strong>R4 (medium) the <code>--sustain</code> cap is only a test harness.</strong> It exists to make AC-e drivable and must never be reachable from a real match. It sits on <code>replay</code> alone, never on <code>serve</code>, and the help text says “for testing the viewer’s lag notice”. Watch that a later slice does not promote it.</li>
+<li><strong>R5 (medium) the isolation headers restrict what the page may load later.</strong> <code>require-corp</code> refuses any cross-origin subresource. Everything this page loads is same-origin, so nothing is lost today, but a later slice that wants an external resource will hit it. <code>web.serving</code> reports <code>isolated</code> so a run with the headers off is visible, and the constraint is recorded in <code>docs/reference/protocol.md</code>.</li>
+<li><strong>R6 (medium) the fixture must be re-recorded.</strong> The stored hello is forwarded verbatim from step 3 onward, so a fixture recorded before step 1 carries no kit colours and the page would draw grey markers. Step 7 re-records, and step 3’s test asserts byte-identity so a stale fixture fails loudly rather than rendering wrongly.</li>
+<li><strong>R7 (medium) history growth past <code>ticks_expected</code>.</strong> Stoppage time makes a match run longer than the hello predicts. The buffers double rather than refusing, and a test drives growth and asserts every earlier tick survives.</li>
+<li><strong>R8 (low) a path-traversal request to the static server.</strong> The server serves a directory the operator names, on loopback, to a browser the operator opened. Refuse <code>..</code> and any absolute path with 403 anyway, and serve <code>GET</code> and <code>HEAD</code> only.</li>
+<li><strong>R9 (low) <code>page_bytes</code> never resolves.</strong> <code>performance.measureUserAgentSpecificMemory()</code> is asynchronous and the browser may coalesce or defer it. Write <code>null</code>, never block a frame, and treat a <code>null</code> at verify as a failed drive rather than a pass — the exact byte count is reported beside it and is always available.</li>
+<li><strong>R10 (low) the <code>viewer-event</code> record kind is outside the contract’s four.</strong> Emit it as an additive extra, exactly as <code>content.hash</code> and <code>change.queue_id</code> were, and let <code>/wf observability audit</code> settle it.</li>
+<li>Watch: JSON keys are dotted, not camel case. <code>protocol.version</code>, not <code>protocolVersion</code>. A decoder that camel-cases them reads <code>undefined</code> and draws nothing.</li>
+<li>Watch: home team is first in <code>hello.teams</code> and first in the 22 player slots. Reversing them swaps the kits on every marker with no error anywhere.</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<ul>
+<li><code>engine-core</code> (complete): the tick loop and the pitch geometry the renderer maps from.</li>
+<li><code>data-schemas-generator</code> (complete): the team files whose kit colours now ride in the hello.</li>
+<li><code>stream-protocol</code> (complete): the socket, the codec this slice mirrors in JavaScript, the fixture, and the replayer. This slice changes three of its files — <code>message.rs</code>, <code>replay.rs</code>, <code>server.rs</code> — and adds no new crate.</li>
+<li><code>viewer-match-day</code> (next viewer slice): fills the header, both side columns, and the statistics region this slice leaves empty, and inherits the tokens, the fonts, the <code>match-control</code> primitive in all four sizes, and the mark function.</li>
+<li><code>viewer-lineup-tactics</code> (later): the pending chips whose four state words <code>stream-protocol</code> already fixed.</li>
+<li><code>viewer-reports-recovery</code> (later): completes the error and recovery states this slice stubs, and owns the saved replay file format.</li>
+<li><code>match-rules</code> (later): adds the event types that make the stoppage index meaningful beyond kick-off, goal, and full time.</li>
+<li><code>/wf observability</code> (open): owns the browser transport the page-side signals do not have.</li>
+</ul>
+<h2 id="assumptions" tabindex="-1"><a class="header-anchor" href="#assumptions"><span>Assumptions</span></a></h2>
+<ul>
+<li><code>PROTOCOL_VERSION</code> stays 1. Two fields are added to a message, no field changes meaning, no message is removed, and both producers are updated in the same commit. A JavaScript client ignores an unknown field, and the Rust decoder’s <code>deny_unknown_fields</code> only matters for a Rust client built from the same commit. Step 1 records the judgement beside the constant so a later reviewer sees it was made, not missed.</li>
+<li>The <code>web/</code> folder name is this plan’s choice; no convention existed to follow. It sits at the repository root beside <code>crates/</code> and <code>content/</code>, so <code>--web web</code> is the natural invocation from the workspace root.</li>
+<li>The four <code>woff2</code> files enter the repository as binary assets. They are fonts under the SIL Open Font License, not brand images, so the product owner’s “generate assets in JavaScript” rule does not reach them; <code>steer.md</code> requires a local bundle explicitly.</li>
+<li>One client per match in version 1, unchanged from the stream slice. The static server is a separate listener and serves any number of page loads.</li>
+<li>Fixtures stay gitignored. Step 7 records the seed and the noted ticks in the implement artifact so any machine rebuilds the same file.</li>
+<li>The <code>experiment</code> augmentation stays deferred to the <code>experiment-flags</code> slice, per the shape.</li>
+<li>Consult: triggers <code>appetite-medium-or-larger</code> and <code>unknowns-present</code> hold. The product owner excluded <code>consult</code> at intake. Not fired.</li>
+</ul>
+<h2 id="blockers" tabindex="-1"><a class="header-anchor" href="#blockers"><span>Blockers</span></a></h2>
+<p>None.</p>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<ul>
+<li>Source: MDN Secure Contexts, and the WICG Local Network Access draft dated 2026-08-07. Why it matters: whether the page can reach the engine at all, and whether a permission prompt appears. Takeaway: <code>http://localhost</code>, <code>http://127.0.0.1</code>, and <code>file://</code> are potentially trustworthy origins; the LNA draft exempts requests originating from a loopback address entirely, and WebSocket is not yet gated by LNA (<a href="http://crbug.com/421156866">crbug.com/421156866</a>, still open). No prompt to design around; watch that bug before distribution.</li>
+<li>Source: WHATWG HTML issue tracker on module scripts over <code>file://</code>, reproduced in a browser. Why it matters: it decided how the page is delivered. Takeaway: a <code>file://</code> page loading a module script is blocked by CORS with origin <code>null</code>, absolutely and with no partial case. This is why the engine serves the page (PO Q1).</li>
+<li>Source: MDN <code>WebSocket.binaryType</code> and <code>WebSocket.bufferedAmount</code>. Why it matters: the receive path and the lag notice. Takeaway: <code>'arraybuffer'</code> delivers bytes synchronously in the message event while <code>'blob'</code> forces an asynchronous step per frame; <code>bufferedAmount</code> counts bytes queued by the page’s own <code>send()</code> and says nothing about inbound backlog. MDN states plainly that the API offers no receive-side backpressure, which is why the lag notice is self-measured.</li>
+<li>Source: v8.dev/blog/dataview. Why it matters: the decoder’s cost. Takeaway: V8 closed the <code>DataView</code> penalty at 6.9; explicit little-endian reads at fixed offsets now match typed-array views, so no manual overlay and no parser library is needed.</li>
+<li>Source: MDN Optimizing Canvas, and MDN <code>devicePixelRatio</code>. Why it matters: the frame budget. Takeaway: <code>alpha: false</code>, integer coordinates, batched paths, minimal state changes, and pre-rendered static content; text is the most expensive primitive, and 22 short labels is still a small fraction of 16.6 milliseconds. Backing store must be scaled by <code>devicePixelRatio</code> for crisp markings.</li>
+<li>Source: MDN <code>OffscreenCanvas</code>, <code>transferControlToOffscreen</code>, and <code>DedicatedWorkerGlobalScope.requestAnimationFrame</code>. Why it matters: the rendering topology decision. Takeaway: Baseline since March 2023; <code>WebSocket</code> works in a dedicated worker and <code>requestAnimationFrame</code> exists there only when the worker owns an <code>OffscreenCanvas</code>; the transfer is one-way and the main thread can never draw to that canvas again. Available and not needed (PO Q5).</li>
+<li>Source: MDN <code>requestAnimationFrame</code>, and Fiedler’s “Fix Your Timestep!”. Why it matters: the scheduler. Takeaway: the callback receives a <code>DOMHighResTimeStamp</code> on the <code>performance.now()</code> origin; the fixed-timestep accumulator with an interpolation fraction is the canonical shape, and clamping the accumulator rather than catching up is the standard guard. <code>rAF</code> follows the display rate and can exceed 60 hertz, which is R1.</li>
+<li>Source: MDN <code>performance.memory</code>, the WICG <code>measureUserAgentSpecificMemory</code> explainer, web.dev on COOP and COEP, MDN <code>navigator.deviceMemory</code>. Why it matters: the memory gauge. Takeaway: <code>performance.memory</code> is deprecated and non-standard; <code>measureUserAgentSpecificMemory()</code> needs <code>Cross-Origin-Opener-Policy: same-origin</code> plus <code>Cross-Origin-Embedder-Policy: require-corp</code> to make the page cross-origin isolated, which a <code>file://</code> page and a bare static server cannot supply; <code>navigator.deviceMemory</code> reports the device’s RAM tier, not the page’s use. This is why the engine’s server sends both headers (PO Q8).</li>
+<li>Source: Node 22 documentation for <code>node:test</code> and ESM resolution; confirmed on this machine at v22.15.0. Why it matters: the test seam. Takeaway: <code>node --test</code> runs ESM with no install; with no <code>package.json</code>, the <code>.mjs</code> extension is the only way to mark a file as a module; relative specifiers need explicit extensions in both Node and the browser, so one spelling works in both. Node also ships a global <code>WebSocket</code>, which is not needed here but is available.</li>
+<li>Source: Python <code>mimetypes</code> issue bpo-31715 on <code>.mjs</code>. Why it matters: it removed <code>python -m http.server</code> as a candidate. Takeaway: a static server that mis-types <code>.mjs</code> makes strict module-MIME checking refuse the script outright. The Rust server owns its own MIME table and the problem disappears.</li>
+<li>Source: SIL Open Font License; <a href="http://github.com/IBM/plex">github.com/IBM/plex</a>; the Google Fonts specimen for Barlow Condensed. Why it matters: NFR-5 and the local bundle. Takeaway: both families are OFL, so bundling and redistributing the files is permitted; <code>woff2</code> is the only format a 2026 Chrome or Edge target needs; IBM Plex Sans carries real OpenType tabular figures, so <code>font-variant-numeric: tabular-nums</code> does what the contract expects.</li>
+<li>Source: MDN <code>prefers-reduced-motion</code>, MDN <code>:focus-visible</code>, current guidance on accessible data-bearing canvas. Why it matters: NFR-6. Takeaway: <code>:focus-visible</code> is the right hook for the control strip; a canvas carrying data gets <code>role=&quot;img&quot;</code> with a label plus a visually hidden <code>aria-live=&quot;polite&quot;</code> text mirror of the changing state, rather than an attempt to expose pixels; reduced motion disables decoration, never the simulation redraw.</li>
+</ul>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option A (recommended): <code>/wf implement football-manager-match-engine viewer-pitch</code></strong> — the plan is complete, no blocker exists, the visual contract is written, and both augmentation artifacts are re-authored and ready. Compact the session first; the SessionStart hook re-reads the artifacts after compaction.</li>
+<li><strong>Option C: <code>/wf slice football-manager-match-engine</code></strong> — only if the static file server and the kit-colour protocol change are judged to belong to <code>stream-protocol</code> rather than here. This plan keeps them because neither has a consumer until a page exists, and both would otherwise ship unverified.</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-22T14:41:32Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/04-plan-viewer-pitch.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">plan</a><span class="m-sheet-here" aria-current="page">viewer-pitch</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/04-plan-viewer-pitch.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-22T14:41:32Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

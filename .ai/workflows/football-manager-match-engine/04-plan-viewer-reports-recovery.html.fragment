@@ -1,0 +1,41 @@
+<section class="fragment-plan" data-artifact="plan" data-slice="viewer-reports-recovery" data-rev="0">
+  <table class="files-touched pl-files">
+    <thead><tr><th>File</th><th>Status</th><th>Module</th><th>Lines</th></tr></thead>
+    <tbody>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">cli</span> crates/engine-cli/src/launch.rs</summary><div class="pl-card">The launcher owns the page server and one engine worker at a time. It reports starting, running, not-found, crashed, refused, finished, or abandoned; restart pre-checks the snapshot and starts a resumed worker; abandon stops the worker.</div></details></td><td>new</td><td>crates/engine-cli</td><td>+330</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">cli</span> crates/engine-cli/src/cli.rs, main.rs, serve.rs, web.rs, stream_run.rs</summary><div class="pl-card">launch subcommand; serve gains --resume, --reconnect-wait (default 0 keeps today's behaviour), and two hidden test seams; serve rebuilds from the newest retained snapshot after an abnormal drop; engine.json gains the engine state; two same-origin POST routes.</div></details></td><td>modified</td><td>crates/engine-cli</td><td>+305 / -58</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">domain</span> crates/stream/src/snapshots.rs</summary><div class="pl-card">Captures a snapshot at every stoppage into a ring of 16 and writes to snapshot.smsn only the newest one below the tick the socket has written. Same file, layout, and location.</div></details></td><td>new</td><td>crates/stream</td><td>+120</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">domain</span> crates/stream/src/session.rs, events.rs, lib.rs</summary><div class="pl-card">sent_tick on the shared match state; a session end that tells a close frame from an abnormal drop; a drop seam for tests; the event file keeps rows at or below the resume tick.</div></details></td><td>modified</td><td>crates/stream</td><td>+98 / -12</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">ui</span> web/replay-file.mjs, recovery.mjs, recovery-panel.mjs, launcher.mjs, report.mjs, components/surfaces.css</summary><div class="pl-card">The replay file writer and reader in the existing fixture layout; pure recovery and report models; the step list, first-run, error, and report surfaces from the token set.</div></details></td><td>new</td><td>web/</td><td>+830</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">ui</span> web/main.mjs, socket.mjs, history.mjs, stoppages.mjs, index.html</summary><div class="pl-card">Reconnect with backoff; truncate every page store to the resume tick; reports by rendered tick; save and open a replay; read-only hook readers for the drives.</div></details></td><td>modified</td><td>web/</td><td>+272 / -28</td></tr>
+      <tr class="is-new"><td><details><summary><span class="pl-chip">test</span> stream/tests/reconnect.rs, engine-cli/tests/launch.rs, web/tests/replay-file, recovery, report tests, one-minute golden file</summary><div class="pl-card">Kill and restart a real worker; corrupt snapshot refused with abandon only; byte-for-byte replay file round trip against a file the engine wrote; report counts equal event counts.</div></details></td><td>new</td><td>tests</td><td>+920</td></tr>
+      <tr class="is-modified"><td><details><summary><span class="pl-chip">docs</span> docs/reference/protocol.md, README.md, .gitignore, four existing test files</summary><div class="pl-card">engine.json states and routes; reconnection rule; how to launch, recover, and keep a replay. No protocol message changes.</div></details></td><td>modified</td><td>docs and tests</td><td>+206 / -9</td></tr>
+    </tbody>
+  </table>
+  <div class="pl-risks">
+    <aside class="callout callout-warn"><div class="callout-hd">R1 · A resumed match shows a different score or loses events</div><div class="callout-body">The snapshot on disk is the newest one below the tick the socket has written, so the page holds every event at or before it. A residual gap is signalled and skipped, never drawn.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R2 · Restart duplicates match state</div><div class="callout-body">The page truncates history, stoppages, events, and the frame store to the resume tick before the first resumed frame.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R3 · A launcher route is reachable from another web page</div><div class="callout-body">POST only, same origin only, no body; a foreign origin gets 403 and a test asserts it.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R4 · A clean exit is misread as a crash</div><div class="callout-body">Exit code 0 is finished, anything else during a match is crashed; a test kills a real worker.</div></aside>
+    <aside class="callout callout-warn"><div class="callout-hd">R5 · Sibling viewer slices change the page first</div><div class="callout-body">Two sibling plans await product-owner input and change main.mjs and the event list. Implement after both land, after an auto-review of this plan.</div></aside>
+  </div>
+  <details class="pl-revs"><summary>0 prior revisions</summary><ul></ul></details>
+  <style>
+    .fragment-plan .pl-files { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .fragment-plan .pl-files th, .fragment-plan .pl-files td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,0.25); vertical-align: top; }
+    .fragment-plan .pl-files summary { cursor: pointer; }
+    .fragment-plan .pl-chip { display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; opacity: 0.8; }
+    .fragment-plan .pl-card { padding: 6px 0 4px 18px; opacity: 0.9; }
+    .fragment-plan .pl-risks { display: grid; gap: 8px; margin-top: 12px; }
+    .fragment-plan .pl-revs { margin-top: 12px; }
+    @media (max-width: 480px) { .fragment-plan .pl-files th:nth-child(3), .fragment-plan .pl-files td:nth-child(3) { display: none; } }
+  </style>
+  <script>
+    (function () {
+      var root = document.currentScript.closest('.fragment-plan');
+      var files = 35, modules = 7;
+      var risks = root ? root.querySelectorAll('.pl-risks .callout').length : 0;
+      window.dispatchEvent(new CustomEvent('sdlc:fragment-ready', { detail: { name: 'plan', artifact: 'plan', counts: { files: files, modules: modules, risks: risks } } }));
+    })();
+  </script>
+</section>

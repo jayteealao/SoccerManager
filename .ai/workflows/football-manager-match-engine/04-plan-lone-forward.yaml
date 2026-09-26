@@ -1,0 +1,39 @@
+artifact: plan
+schema: sdlc/v1
+slug: football-manager-match-engine
+slice: lone-forward
+rev: 0
+modules:
+  - { id: tuning, label: "crates/engine/src/tuning.rs and content/tuning.json", role: config }
+  - { id: decide, label: "crates/engine/src (decision.rs, team.rs, rules/offside.rs)", role: domain }
+  - { id: tackle, label: "crates/engine/src (sim.rs, rules/fouls.rs)", role: domain }
+  - { id: tests, label: "crates/engine/tests", role: test }
+  - { id: docs, label: "docs/reference/data-files.md", role: docs }
+files:
+  - { path: "crates/engine/src/tuning.rs", status: modified, role: config, module: tuning, loc: 435, delta: { add: 40, rem: 0 }, planned_change: { intent: "Three new DecisionWeights fields (lone_hold, lone_layoff, lone_dribble; -5 to 5; serde default 0.0) and two new Tuning fields (tackle_win_base 0 to 0.5, serde default 0.05; lone_line_hold 0 to 1, serde default 0.0). Each is mirrored in Default. TUNING_VERSION stays 2." } }
+  - { path: "content/tuning.json", status: modified, role: config, module: tuning, loc: 0, delta: { add: 5, rem: 0 }, planned_change: { intent: "The five values, first at their neutral values (0, 0, 0, 0.05, 0), then at the values the tuning loop chooses. foul_base may also move inside its existing bounds." } }
+  - { path: "crates/engine/src/rules/fouls.rs", status: modified, role: domain, module: tackle, loc: 174, delta: { add: 30, rem: 0 }, planned_change: { intent: "pub fn win_chance(tackler, carrier, t) = tackle_win_base x tackling / (tackling + dribbling). Unit tests: the neutral value gives today's figure; the chance scales linearly with the base." } }
+  - { path: "crates/engine/src/sim.rs", status: modified, role: domain, module: tackle, loc: 1181, delta: { add: 1, rem: 1 }, planned_change: { intent: "The tackle loop calls fouls::win_chance in place of the 0.05 literal. The draw order does not change." } }
+  - { path: "crates/engine/src/rules/offside.rs", status: modified, role: domain, module: decide, loc: 0, delta: { add: 20, rem: 10 }, planned_change: { intent: "pub fn second_last_depth(team, players, attack_x): the depth of the second-last opponent, taken out of offside_set, which then calls it. The referee and the lone forward read one line." } }
+  - { path: "crates/engine/src/team.rs", status: modified, role: domain, module: decide, loc: 569, delta: { add: 30, rem: 0 }, planned_change: { intent: "Team::lone_forward() -> Option<usize>: the one active outfield slot in the front line (slots within BACK_LINE_BAND of the most advanced outfield slot of the base formation), or None when that line holds two or more active players or holds the acting keeper. Unit tests: 4-4-1-1, 3-4-3, 4-4-2 (None), 4-4-2 with a striker sent off." } }
+  - { path: "crates/engine/src/decision.rs", status: modified, role: domain, module: decide, loc: 747, delta: { add: 60, rem: 2 }, planned_change: { intent: "options(): one pass over the carrier's team-mates marks the carrier lone when no active outfield team-mate is ahead of him. When lone, lone_layoff is added to each pass to a team-mate at or behind him, and when also pressed, lone_hold is added to hold and lone_dribble to dribble. decide(): while his team holds the ball and he is not the carrier, the team's lone forward moves his target depth toward the second-last opponent's line by lone_line_hold, never past it." } }
+  - { path: "crates/engine/tests/lone_forward.rs", status: new, role: test, module: tests, loc: 0, delta: { add: 220, rem: 0 }, planned_change: { intent: "Fast scenes on the real engine: a pressed lone forward with an open team-mate behind passes or holds on each of seeds 1 to 40; with a forward team-mate ahead the lone terms do not apply; off the ball the lone forward's target is onside of the second-last defender; a contact scene where a draw just under win_chance is a won tackle and a draw just above it is a foul." } }
+  - { path: "crates/engine/tests/content.rs", status: modified, role: test, module: tests, loc: 0, delta: { add: 25, rem: 0 }, planned_change: { intent: "Pins the five values, and a tuning block without them loads with the neutral defaults." } }
+  - { path: "crates/engine/tests (acting_keeper, discipline, injury, plugin_hooks, rules_cards, rules_fouls, rules_restarts, tactics_queue)", status: modified, role: test, module: tests, loc: 0, delta: { add: 9, rem: 9 }, planned_change: { intent: "Each hand-copied 0.05 win-chance formula calls fouls::win_chance, so the tests follow the tuned value." } }
+  - { path: "crates/engine/tests/defending.rs and discipline.rs (slow criterion tests)", status: external, role: test, module: tests, loc: 0, delta: { add: 0, rem: 0 }, planned_change: { intent: "Unchanged: a_sending_off_gives_no_advantage, every_formation_holds and discipline_is_realistic are the criterion tests, with their limits." } }
+  - { path: "docs/reference/data-files.md", status: modified, role: docs, module: docs, loc: 0, delta: { add: 8, rem: 0 }, planned_change: { intent: "Five tuning rows and one paragraph on the lone forward's terms and the tackle odds." } }
+edges:
+  - { from: "crates/engine/src/sim.rs", to: "crates/engine/src/rules/fouls.rs", kind: calls }
+  - { from: "crates/engine/src/decision.rs", to: "crates/engine/src/team.rs", kind: calls }
+  - { from: "crates/engine/src/decision.rs", to: "crates/engine/src/rules/offside.rs", kind: calls }
+  - { from: "crates/engine/src/rules/fouls.rs", to: "crates/engine/src/tuning.rs", kind: import }
+  - { from: "crates/engine/src/decision.rs", to: "crates/engine/src/tuning.rs", kind: import }
+  - { from: "crates/engine/tests/lone_forward.rs", to: "crates/engine/src/decision.rs", kind: calls }
+risks:
+  - { title: "Both levers at their bounds cannot pass a criterion", severity: high, body: "The worst arm today is the keeper arm: reduced 5.82 against full 2.06 (defending-and-discipline implement record). 4-4-1-1 scores 5.18 against a 4.0 limit.", mitigation: "The tuning loop may change only the five new values and foul_base inside their bounds. A criterion that still fails stops implement with the failing arm or pairing; no limit, card chance or keeper value moves (RIM-12)." }
+  - { title: "The lone terms reach other formations", severity: medium, body: "Any carrier with no outfield team-mate ahead is lone, so the eight passing pairings and the default-teams matches move too.", mitigation: "every_formation_holds reruns all ten pairings; the eight kept pairings are a criterion; the full calibrate gate records band moves against the copied baseline." }
+  - { title: "Fewer fouls move the card figures", severity: medium, body: "A higher win share lowers fouls, so yellow cards and sending-offs fall; the bands may be missed.", mitigation: "discipline_is_realistic is rerun; band misses are recorded, not failed (Q-E4)." }
+  - { title: "Hold-up play invites contact", severity: medium, body: "A holding forward stays in reach of the presser, and each tick in reach draws a tackle.", mitigation: "The hold weight decays with hold_per_s, and the tackle odds are tuned in the same loop; the contact scene pins the draw split." }
+  - { title: "Every seeded result moves", severity: medium, body: "New weights and tackle odds change the random stream use and outcomes of pinned tests.", mitigation: "The neutral-value step shows no change first; each moved expectation is re-derived and recorded, and no tolerance is widened." }
+history: []
+revisions: []

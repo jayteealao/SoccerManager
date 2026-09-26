@@ -5,12 +5,12 @@ slug: football-manager-match-engine
 status: in-progress
 stage-number: 5
 created-at: "2026-09-21T22:35:04Z"
-updated-at: "2026-09-25T10:23:34Z"
+updated-at: "2026-09-25T20:21:36Z"
 slices-implemented: 23
 slices-total: 24
-metric-total-files-changed: 795
-metric-total-lines-added: 65366
-metric-total-lines-removed: 3003
+metric-total-files-changed: 802
+metric-total-lines-added: 65606
+metric-total-lines-removed: 3022
 tags: [engine, rust, data, protocol, socket, viewer, canvas, web, laws, snapshot, tactics, ai-manager, fatigue, commentary, calibration, schemas, panels, goal-moment, protocol-v3, lineup, substitutions, flow-control, launcher, reconnect, reports, replay-files, e2e, playwright, docs, license-audit, feature-flags, experiment, scripting, sandbox, plugin-interface, distribution, installer, packaging, release-version, error-record, help-text, realism-bands, formations]
 refs:
   index: 00-index.md
@@ -39,14 +39,16 @@ refs:
     - 05-implement-lone-forward.md
     - 05-implement-keeper-and-shots.md
     - 05-implement-tempo-and-restarts.md
-next-command: wf-verify
-next-invocation: "/wf verify football-manager-match-engine tempo-and-restarts"
+    - 05-implement-realism-tuning.md
+next-command: wf-slice
+next-invocation: "/wf slice football-manager-match-engine"
 ---
 
 # Implement Index
 
 ## Cross-Slice Integration Notes
 
+- `realism-tuning` added `clearances.wide_chance` and `clearances.wide_depth` (shipped 0.0 and 16.5, play unchanged) and stopped at the formations wall of its feasibility stage. Q-RT5: a separate formation-behaviour slice comes before the tuning resumes. No tuned value is written.
 - `engine-core` is the root slice; it is implemented, verified, and committed on `feat/football-manager-match-engine`.
 - `data-schemas-generator` is implemented and awaits verify: `MatchConfig::new(seed, minutes, &Content, [&TeamFile; 2])` replaced the built-in teams and `Tuning::default()` on the binary path; the tick-file header is schema 2; `owner.id` and `match.id` ride in `stats.json` and the header.
 - `stream-protocol` is implemented, verified, and committed. It wraps the `TickSink` trait in `crates/engine/src/record.rs` with `FrameSink`, adds `FanoutSink` beside it, and raises the tick-file header to schema 3: the restart flag now rides in bit 31 of the stored tick number, so the validator reads kick-offs instead of guessing from a two-metre ball jump. Two new crates: `crates/protocol` (messages, codec, change queue, no input or output) and `crates/stream` (server, session, recorder, replayer).

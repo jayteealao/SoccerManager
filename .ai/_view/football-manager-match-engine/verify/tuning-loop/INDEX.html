@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="verify">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · verify — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="verify">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">verify</a><span aria-hidden="true">/</span><span class="m-here">tuning-loop</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · verify</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">verify</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">tuning-loop</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/06-verify-tuning-loop.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">06-verify-tuning-loop.md</div>
+      <h1 class="pg-title">Verify · tuning-loop</h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="meta">stage 6</span><span class="meta">updated 2026-09-24T10:55:00Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-verification" tabindex="-1"><a class="header-anchor" href="#the-verification"><span>The Verification</span></a></h2>
+<p>Implement left the tuning loop at commit <code>a6dc5d2</code>: targeted <code>calibrate</code> runs, a baseline diff with a sampling error on every band, the red-card experiment as a suite, and a measured build profile that was not kept. No code changed after that commit until this run. This run drove every criterion again with the release binary on the 8-core reference machine. The results were not copied from the implement record.</p>
+<p>All 7 criteria are met from headless runs made in this run. One targeted pairing at 1,000 matches took 88.6 s with its diff, the equal suite 91.0 s, and the red-card experiment 48.1 s. The targeted pairing played 1,000 matches of that pairing only. A fresh <code>--suite all</code> run on seed 7 matched the targeted pairing, equal suite and strength suite exactly. Four wrong baselines were refused with exit 1 in 0.0 s, with no run folder and a message that names the difference. A real change (a flag that shortens the shot range) marked 6 of 15 rows as change. A rerun marked all 15 as noise. The red-card suite’s 9 figures equal the slow test’s 9 figures, which were printed in this run. Both faster build candidates gave identical figures and were not faster beyond the spread between two release runs.</p>
+<p>The first workspace test run failed once in a stream test from an earlier slice: 379 passed and 1 failed before cargo stopped. The failure showed a real gap. The server did not log <code>socket.client_gone</code> when a viewer left while a match message, not a tick, was being sent. The one fix round added that log (commit <code>a447ff1</code>). After the fix, 479 tests passed and 0 failed, and the stream test file passed 10 of 10 reruns. The slice can go to review. The top open risk is still noise: a share band with few events has a wide error, for example 0.0067 on the targeted pairing’s goalless share.</p></section><dl class="frontmatter-card"><div><dt>type</dt><dd>verify</dd></div><div><dt>slug</dt><dd>football-manager-match-engine</dd></div><div><dt>slice-slug</dt><dd>tuning-loop</dd></div><div><dt>status</dt><dd>complete</dd></div><div><dt>stage-number</dt><dd>6</dd></div><div><dt>created-at</dt><dd>2026-09-24T10:55:00Z</dd></div><div><dt>updated-at</dt><dd>2026-09-24T10:55:00Z</dd></div><div><dt>result</dt><dd>pass</dd></div><div><dt>metric-checks-run</dt><dd>6</dd></div><div><dt>metric-checks-passed</dt><dd>6</dd></div><div><dt>metric-acceptance-met</dt><dd>7</dd></div><div><dt>metric-acceptance-total</dt><dd>7</dd></div><div><dt>metric-acceptance-user-observable</dt><dd>7</dd></div><div><dt>metric-acceptance-code-only</dt><dd>0</dd></div><div><dt>metric-acceptance-mock-rung</dt><dd>0</dd></div><div><dt>metric-interactive-checks-run</dt><dd>7</dd></div><div><dt>metric-interactive-checks-passed</dt><dd>7</dd></div><div><dt>metric-issues-found</dt><dd>0</dd></div><div><dt>metric-issues-found-initial</dt><dd>1</dd></div><div><dt>metric-issues-found-final</dt><dd>0</dd></div><div><dt>fix-rounds-run</dt><dd>1</dd></div><div><dt>convergence</dt><dd>converged</dd></div><div><dt>verify-owned-fix-commit</dt><dd>a447ff1</dd></div><div><dt>regression-tests-added</dt><dd>0</dd></div><div><dt>constraint-resolution-missing</dt><dd></dd></div><div><dt>interactive-verification</dt><dd>required</dd></div><div><dt>adapters-used</dt><dd>cli</dd></div><div><dt>bootstrap-failures</dt><dd></dd></div><div><dt>evidence-dir</dt><dd>.ai/workflows/football-manager-match-engine/verify-evidence/tuning-loop/</dd></div><div><dt>evidence-run-count</dt><dd>1</dd></div><div><dt>security-scan-result</dt><dd>pass</dd></div><div><dt>metric-a11y-violations-new</dt><dd>0</dd></div><div><dt>a11y-result</dt><dd>not-automatable</dd></div><div><dt>cross-slice-regressions-found</dt><dd>0</dd></div><div><dt>metric-bundle-size-delta-pct</dt><dd>skipped</dd></div><div><dt>ac-staleness-checked</dt><dd>true</dd></div><div><dt>ac-stale-count</dt><dd>0</dd></div><div><dt>longitudinal-baseline-compared</dt><dd>true</dd></div><div><dt>stability-check-flaky-count</dt><dd>0</dd></div><div><dt>adversarial-tests-run</dt><dd>4</dd></div><div><dt>adversarial-tests-failed</dt><dd>0</dd></div><div><dt>failure-mode-probes-run</dt><dd>0</dd></div><div><dt>cross-browser-delta</dt><dd>none</dd></div><div><dt>stack-source</dt><dd>confirmed</dd></div><div><dt>debt-markers-found</dt><dd>0</dd></div><div><dt>debt-markers-malformed</dt><dd>0</dd></div><div><dt>debt-markers-unrecorded</dt><dd>0</dd></div><div><dt>skipped-gating-specs</dt><dd></dd></div><div><dt>consult-runs</dt><dd></dd></div><div><dt>prior-deferrals-rechallenged</dt><dd>[object Object], [object Object]</dd></div><div><dt>steering-honored</dt><dd>Moved criteria and slice order (2026-09-24): the red-card suite&#x27;s verdict (fail) is reported and not judged here; the criterion, its 1.6 limit and the card values belong to lone-forward and are unchanged., A targeted calibrate run is an inner loop (Q-I1): --suite all still plays equal, strength and formations only (55 pairings in the seed-7 full run), and red-card runs only when named., Output boundary: the one verify-time commit (a447ff1) uses product language and was leak-checked (no match).</dd></div><div><dt>tags</dt><dd>calibration, tooling, realism, performance</dd></div><div><dt>refs</dt><dd>{&quot;index&quot;:&quot;00-index.md&quot;,&quot;verify-index&quot;:&quot;06-verify.md&quot;,&quot;slice-def&quot;:&quot;03-slice-tuning-loop.md&quot;,&quot;plan&quot;:&quot;04-plan-tuning-loop.md&quot;,&quot;implement&quot;:&quot;05-implement-tuning-loop.md&quot;,&quot;review&quot;:&quot;07-review-tuning-loop.md&quot;,&quot;adapters&quot;:&quot;runtime-adapters.md&quot;,&quot;benchmark&quot;:&quot;05c-benchmark.md&quot;,&quot;instrument&quot;:&quot;04b-instrument.md&quot;,&quot;experiment&quot;:&quot;04c-experiment.md&quot;}</dd></div><div><dt>next-command</dt><dd>wf-review</dd></div><div><dt>next-invocation</dt><dd>/wf review football-manager-match-engine tuning-loop</dd></div></dl><div class="prose"><h1 id="verify-tuning-loop" tabindex="-1"><a class="header-anchor" href="#verify-tuning-loop"><span>Verify: Tuning loop</span></a></h1>
+<h2 id="verification-summary" tabindex="-1"><a class="header-anchor" href="#verification-summary"><span>Verification Summary</span></a></h2>
+<ul>
+<li>Criteria: 7 of 7 met. All 7 are user-observable (command output, exit codes, run folders), and all 7 have headless evidence from this run.</li>
+<li>Checks: 6 of 6 pass after the fix round. Before the fix round, the workspace tests failed once.</li>
+<li>Fix round: 1 issue found, 1 fixed, 0 left. Commit <code>a447ff1</code>.</li>
+<li>Deferrals: none. The slice needs no device, credential or external service.</li>
+</ul>
+<h2 id="automated-checks-run" tabindex="-1"><a class="header-anchor" href="#automated-checks-run"><span>Automated Checks Run</span></a></h2>
+<ul>
+<li><code>cargo fmt --check</code>: pass (<code>fmt.txt</code>, and <code>fmt-after-fix.txt</code> after the fix).</li>
+<li><code>cargo clippy --workspace --all-targets --all-features -- -D warnings</code>: pass (<code>clippy.txt</code>, <code>clippy-after-fix.txt</code>).</li>
+<li><code>cargo test --workspace --all-features</code>: FAILED on the first run. 44 test binaries ran, with 379 passed, 1 failed and 7 ignored, before cargo stopped at <code>stream_cli</code> (<code>a_viewer_that_closes_in_mid_match_ends_the_run_without_an_error</code>: “the run must name the viewer that went away”; <code>workspace-tests.txt</code>). After the fix: <code>--no-fail-fast</code>, 63 binaries, 479 passed, 0 failed, 7 ignored (the slow tests) (<code>workspace-tests-after-fix.txt</code>).</li>
+<li><code>cargo build --release -p engine-cli</code>: pass (<code>build-release.txt</code>, <code>build-release-after-fix.txt</code>).</li>
+<li><code>gitleaks git --log-opts=2b62cd3..a6dc5d2</code>: pass, no leaks found (<code>gitleaks.txt</code>).</li>
+<li>Benchmark compare (<code>engine-cli bench --seed 42 --matches 5 --json</code>, 3 drives): pass. The per-tick time and peak memory are under their tripwires (<code>bench-1.json</code> to <code>bench-3.json</code>).</li>
+<li>Extra evidence run (not counted as a check): the slow test <code>a_sending_off_gives_no_advantage</code> (<code>--release --ignored</code>), run for its printed figures (<code>slow-test.txt</code>). Its assertion fails, as it did before this slice. That criterion belongs to <code>lone-forward</code> (<a href="http://steer.md">steer.md</a>).</li>
+</ul>
+<h2 id="interactive-verification-results" tabindex="-1"><a class="header-anchor" href="#interactive-verification-results"><span>Interactive Verification Results</span></a></h2>
+<p>The adapter is <code>cli</code>, which runs the release binary headless. The drive script is <code>verify-evidence/tuning-loop/drive.sh</code>. The figures come from <code>analyse.py</code>, and its output is in <code>analysis.json</code>. Each run’s line is in <code>drives.txt</code>.</p>
+<ul>
+<li><strong>Criterion:</strong> A targeted run is fast.
+<ul>
+<li><strong>Platform and tool:</strong> Windows 11, 8 logical cores (<code>nproc</code> = 8), release <code>engine-cli.exe</code>, shell clock.</li>
+<li><strong>Steps performed:</strong> <code>drive.sh speed</code>. This made three runs, each with <code>--baseline</code>: (1) <code>--suite formations --pairing &quot;4-4-1-1 v 4-4-2&quot; --seed 42 --matches 1000</code>, (2) <code>--suite equal --seed 42 --matches 1000</code>, (3) <code>--suite red-card --seed 1 --matches 120</code>.</li>
+<li><strong>Evidence:</strong> <code>verify-evidence/tuning-loop/drives.txt</code>, <code>pair-v.*</code>, <code>equal-v.*</code>, <code>red-v.*</code>.</li>
+<li><strong>Observation:</strong> The shell wall times, including the diff, were 88.6 s, 91.0 s and 48.1 s. Later release runs took 84.5 s for the pairing and 40.6 s for the red-card experiment.</li>
+<li><strong>Result:</strong> pass. Every run is under 120 s.</li>
+</ul>
+</li>
+<li><strong>Criterion:</strong> A targeted run plays only its selection.
+<ul>
+<li><strong>Platform and tool:</strong> as above.</li>
+<li><strong>Steps performed:</strong> run (1) above.</li>
+<li><strong>Evidence:</strong> <code>pair-v.report.json</code>, <code>analysis.json</code> → <code>pair-v</code>.</li>
+<li><strong>Observation:</strong> The run folder holds 1000 <code>stats/</code> files. <code>calib.formations</code> has 1 entry. <code>calib.suites</code> names only <code>formations</code>, with <code>matches</code> 1000. <code>calib.selection</code> is <code>{suites: [formations], pairings: [&quot;4-4-2 v 4-4-1-1&quot;], bands: []}</code>.</li>
+<li><strong>Result:</strong> pass.</li>
+</ul>
+</li>
+<li><strong>Criterion:</strong> A targeted run agrees with the full run.
+<ul>
+<li><strong>Platform and tool:</strong> as above.</li>
+<li><strong>Steps performed:</strong> <code>drive.sh agree</code>. This ran a fresh <code>--suite all --seed 7 --matches 40</code> (2280 matches, 191.9 s), then the targeted pairing, the equal suite and the strength suite on the same seed and match count. At 1,000 matches, runs (1) and (2) were also compared with the seed-42 <code>--suite all</code> report that the same code made at implement (<code>implement-evidence/tuning-loop/full-42.report.json</code>). No code under <code>crates/</code>, <code>schemas/</code> or <code>Cargo.*</code> changed between <code>a6dc5d2</code> and the start of this run (<code>code-diff-since-impl.txt</code> is empty).</li>
+<li><strong>Evidence:</strong> <code>agree-*.report.json</code>, <code>analysis.json</code> → <code>agree</code>, <code>pair-v</code>, <code>equal-v</code>.</li>
+<li><strong>Observation:</strong> In the fresh seed-7 run, the pairing entry, the pairing’s band rows, the equal and strength figures (without the wall-time <code>outliers</code> count) and their band rows all equal the full run’s. All 4 reports have <code>fixtures.hash</code> <code>c4c0a247c3c9</code>. At seed 42 and 1,000 matches, <code>equals_full_entry</code>, <code>rows_equal_full</code> and <code>figures_equal_full</code> are all true.</li>
+<li><strong>Result:</strong> pass.</li>
+</ul>
+</li>
+<li><strong>Criterion:</strong> The diff separates change from noise.
+<ul>
+<li><strong>Platform and tool:</strong> as above.</li>
+<li><strong>Steps performed:</strong> <code>drive.sh change</code>, run on a copied content folder with one declared flag: <code>change-base</code> (equal suite, seed 9, 300 matches), then <code>change-rerun</code> against it, then <code>change-on</code> with <code>--flag probe_short_range=on</code> against it. The diffs from runs (1) to (3) were read as well.</li>
+<li><strong>Evidence:</strong> <code>change-*.stderr.txt</code>, <code>pair-v.stderr.txt</code>, <code>red-v.stderr.txt</code>, <code>analysis.json</code>.</li>
+<li><strong>Observation:</strong> Every row prints baseline, new, change, error, mark and verdict. The rerun gave 15 of 15 rows as noise, with every change at 0. The flag run gave 6 rows as change: goal kicks -5.27 ± 0.217, goals per xG -0.7233 ± 0.053, pass accuracy -0.314 ± 0.105, passes -12.04 ± 4.04, shots on target share +0.179 ± 0.0056, and shots -2.52 ± 0.45. It gave 9 rows as noise, with <code>content changed</code> in the header. The rule “noise when |change| ≤ 2 × error” holds on every row (<code>noise_rule_holds: true</code>).</li>
+<li><strong>Result:</strong> pass.</li>
+</ul>
+</li>
+<li><strong>Criterion:</strong> A wrong baseline is refused. The product owner restated this in Q-P1 as “a baseline with different fixtures is refused”.
+<ul>
+<li><strong>Platform and tool:</strong> as above.</li>
+<li><strong>Steps performed:</strong> <code>drive.sh refuse</code>. This ran seed 43 against a seed-42 baseline, 999 matches against a 1000-match baseline, an edited tactics formation (so the fixtures differ), and a file that is not a report.</li>
+<li><strong>Evidence:</strong> <code>refuse-*.stderr.txt</code>, <code>drives.txt</code>.</li>
+<li><strong>Observation:</strong> Each run exits with 1 in 0.0 s and leaves no run folder. The messages are: “seed 43 differs from the baseline’s 42”, “match count 999 differs from the baseline’s 1000”, “fixtures hash 75c8b55d190e differs from the baseline’s c4c0a247c3c9”, and “it is not the run report of a calibrate run”. The <code>change-on</code> run shows that a different content hash on the same fixtures is accepted.</li>
+<li><strong>Result:</strong> pass.</li>
+</ul>
+</li>
+<li><strong>Criterion:</strong> The red-card experiment is a suite.
+<ul>
+<li><strong>Platform and tool:</strong> as above, plus <code>cargo test --release -p engine --all-features --test defending a_sending_off_gives_no_advantage -- --ignored --nocapture</code>.</li>
+<li><strong>Steps performed:</strong> run (3) above, and the slow test run in this run.</li>
+<li><strong>Evidence:</strong> <code>red-v.report.json</code>, <code>slow-test.txt</code>.</li>
+<li><strong>Observation:</strong> <code>calib.red_card</code> has control 0.775 / 2.2333, keeper 2.0583 / 5.8167, centre-back 0.7083 / 2.3917, striker 0.95 / 3.8417, and limit 1.24. The slow test printed the same 9 values to 4 decimals. The suite reports each arm, the control and <code>pass: false</code>, which is the same verdict as the slow test’s failed assertion. The run has 6 band rows (2 per arm) and 0 validator violations.</li>
+<li><strong>Result:</strong> pass. The criterion asks for the figures and the verdict to be reported, and they are. The red-card criterion itself failing is the product state, and it belongs to <code>lone-forward</code>.</li>
+</ul>
+</li>
+<li><strong>Criterion:</strong> A faster profile changes no result.
+<ul>
+<li><strong>Platform and tool:</strong> as above. Two candidates were built into separate scratch target folders through environment variables, so no repository file was touched: (b) <code>CARGO_PROFILE_RELEASE_LTO=fat CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1</code> (96 s), and © (b) plus <code>RUSTFLAGS=&quot;-C target-cpu=native&quot;</code> (101 s).</li>
+<li><strong>Steps performed:</strong> <code>drive.sh profile-a2 profile-b profile-c profile-red-a2</code>. The pairing and the red-card suite were run with each build, each against the release run’s report.</li>
+<li><strong>Evidence:</strong> <code>pair-a2|b|c.*</code>, <code>red-a2|b|c.*</code>, <code>build-b.txt</code>, <code>build-c.txt</code>, <code>analysis.json</code>.</li>
+<li><strong>Observation:</strong> Both candidates give a diff of exactly 0 on every row. Their <code>calib.suites</code>, <code>calib.formations</code> and <code>calib.red_card</code> objects are equal to the release run’s. Pairing rates in matches per second: release 11.87 and 12.44, (b) 12.61, © 12.33. Red-card rates: release 10.93 and 13.14, (b) 13.27, © 13.28. The best candidate gain over the faster release run is +1.4% on the pairing and +1.1% on the red-card suite. The spread between the two release runs is 4.8% and 20%. <code>Cargo.toml</code> still has only <code>[profile.release] debug = 1</code>. The how-to records the measurement (<code>docs/how-to/calibration.md:104-108</code>).</li>
+<li><strong>Result:</strong> pass. No profile is faster, the measurement is recorded, and the current profile stays.</li>
+</ul>
+</li>
+</ul>
+<h2 id="acceptance-criteria-status" tabindex="-1"><a class="header-anchor" href="#acceptance-criteria-status"><span>Acceptance Criteria Status</span></a></h2>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Criterion</th>
+<th>kind</th>
+<th>status</th>
+<th>verification method</th>
+<th>evidence</th>
+<th>evidence-rung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A targeted run is fast</td>
+<td>user-observable</td>
+<td>met</td>
+<td>interactive (headless CLI)</td>
+<td><code>drives.txt</code>: 88.6 s / 91.0 s / 48.1 s</td>
+<td>headless</td>
+</tr>
+<tr>
+<td>A targeted run plays only its selection</td>
+<td>user-observable</td>
+<td>met</td>
+<td>interactive (headless CLI)</td>
+<td><code>pair-v.report.json</code>: 1000 stats, 1 pairing</td>
+<td>headless</td>
+</tr>
+<tr>
+<td>A targeted run agrees with the full run</td>
+<td>user-observable</td>
+<td>met</td>
+<td>interactive (headless CLI)</td>
+<td><code>analysis.json</code> → <code>agree</code> (fresh seed 7), <code>pair-v</code>/<code>equal-v</code> (seed 42)</td>
+<td>headless</td>
+</tr>
+<tr>
+<td>The diff separates change from noise</td>
+<td>user-observable</td>
+<td>met</td>
+<td>interactive (headless CLI)</td>
+<td><code>change-rerun</code>/<code>change-on</code> stderr and reports</td>
+<td>headless</td>
+</tr>
+<tr>
+<td>A wrong baseline is refused</td>
+<td>user-observable</td>
+<td>met</td>
+<td>interactive (headless CLI)</td>
+<td><code>refuse-*.stderr.txt</code>, exit 1, no run folder</td>
+<td>headless</td>
+</tr>
+<tr>
+<td>The red-card experiment is a suite</td>
+<td>user-observable</td>
+<td>met</td>
+<td>interactive (headless CLI) + slow test</td>
+<td><code>red-v.report.json</code> = <code>slow-test.txt</code>, 9 of 9</td>
+<td>headless</td>
+</tr>
+<tr>
+<td>A faster profile changes no result</td>
+<td>user-observable</td>
+<td>met</td>
+<td>interactive (headless CLI)</td>
+<td><code>pair-*</code>/<code>red-*</code> reports, diff 0, rates</td>
+<td>headless</td>
+</tr>
+</tbody>
+</table>
+<p>Evidence: headless 7.</p>
+<h2 id="issues-found" tabindex="-1"><a class="header-anchor" href="#issues-found"><span>Issues Found</span></a></h2>
+<ul>
+<li>(resolved) <code>severity: medium</code> — <code>crates/engine-cli/src/serve.rs:414</code>: when a viewer left while a match message was being sent, <code>serve</code> swallowed <code>StreamError::ClientGone</code> with no <code>socket.client_gone</code> signal. The <code>stream_cli</code> test caught this once in 11 runs. It was fixed in <code>a447ff1</code>.</li>
+</ul>
+<p>No open issues.</p>
+<h2 id="verify-owned-fixes" tabindex="-1"><a class="header-anchor" href="#verify-owned-fixes"><span>Verify-Owned Fixes</span></a></h2>
+<table class="prose-table">
+<thead>
+<tr>
+<th>ID</th>
+<th>Type</th>
+<th>Triage</th>
+<th>Sub-agent outcome</th>
+<th>Regression test</th>
+<th>Re-check result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TEST-1 (<code>stream_cli::a_viewer_that_closes_in_mid_match_ends_the_run_without_an_error</code>)</td>
+<td>check-failure</td>
+<td>Fix (autonomous)</td>
+<td>Patched</td>
+<td>exempt: a timing race between the viewer’s drop and a message send that no test can force without a fault-injection seam; the existing test already covers the signal, and it caught the gap</td>
+<td>Pass (workspace 479/0; <code>stream_cli</code> file 10 of 10)</td>
+</tr>
+</tbody>
+</table>
+<p>Commit: <code>a447ff1</code></p>
+<p>Regression tests added: 0</p>
+<p>Root cause: the failed run’s log showed <code>socket.session_closed ticks=0</code> with no <code>socket.client_gone</code> line and exit code 2. The only path that ends a started session with no log line is the <code>Err(StreamError::ClientGone) =&gt; None</code> arm in <code>Serving::play</code>. It is reached when the message route (an event or a statistics message), rather than the tick sink, finds the socket closed. The patch logs the signal in that arm with <code>written = 0</code> and the reason “the viewer disconnected while a message was sent”. This slice’s diff does not touch <code>serve.rs</code>, <code>stream/</code> or <code>stream_cli.rs</code> (<code>git diff --stat 2b62cd3 a6dc5d2</code> on those paths is empty). The gap was already in the code, and the fix does not change this slice’s figures.</p>
+<h2 id="augmentation-verification" tabindex="-1"><a class="header-anchor" href="#augmentation-verification"><span>Augmentation Verification</span></a></h2>
+<ul>
+<li>
+<p><code>benchmark</code> (baseline on <code>2089ed7</code>, in <code>05c-benchmark.md</code>), compared over three drives:</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Target</th>
+<th>Baseline</th>
+<th>This run (median)</th>
+<th>Delta</th>
+<th>Tripwire</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>processor time per tick (gate)</td>
+<td>1.4753 µs</td>
+<td>1.5422 µs (1.5524, 1.4777, 1.5422)</td>
+<td>+4.5%</td>
+<td>1.6228 µs</td>
+<td>pass</td>
+</tr>
+<tr>
+<td>peak memory (gate)</td>
+<td>6.617 MB</td>
+<td>6.672 MB (6.672, 6.773, 6.625)</td>
+<td>+0.8%</td>
+<td>8.27 MB</td>
+<td>pass</td>
+</tr>
+<tr>
+<td>processor time per match</td>
+<td>422.0 ms</td>
+<td>450.0 ms</td>
+<td>+6.6%</td>
+<td>reported</td>
+<td>291,800 ticks per match, the same as the defending re-check; under the 2000 ms budget</td>
+</tr>
+<tr>
+<td>full match wall time</td>
+<td>424 ms</td>
+<td>452 ms</td>
+<td>+6.6%</td>
+<td>reported</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>The delta equals the defending-and-discipline re-check, which is where the tick count moved. The only engine change in this slice, <code>send_off_before_kickoff</code>, runs before kick-off.</p>
+</li>
+<li>
+<p><code>instrument</code> (the match-rules signal set): every drive reports <code>validate.violations</code> 0. The run reports carry the new additive keys, and the schema tests validate them (<code>calibrate_targeted.rs</code> loads <code>RecordSchemas</code>). <code>calibrate.band_failed</code> fires once for each band that misses. The server fix adds a <code>socket.client_gone</code> line on the path that had none. No designed signal is missing.</p>
+</li>
+<li>
+<p><code>experiment</code> (experiment-flags): the <code>change-on</code> drive turned a declared flag on with <code>--flag probe_short_range=on</code>. The content hash changed while the fixtures hash stayed the same, and the diff shows the flag’s effect. The flag path works with the baseline guard.</p>
+</li>
+</ul>
+<h2 id="security-scan" tabindex="-1"><a class="header-anchor" href="#security-scan"><span>Security Scan</span></a></h2>
+<ul>
+<li>CVE scan: <code>cargo audit</code> is not installed (<code>error: no such command: audit</code>). The only dependency change is <code>sha2 = { workspace = true }</code> in <code>crates/engine-cli/Cargo.toml</code>. It adds one <code>Cargo.lock</code> dependency line and no new crate or version.</li>
+<li>Secret detection: <code>gitleaks</code> over <code>2b62cd3..a6dc5d2</code> found no leaks.</li>
+<li>SAST: none is installed. The slice adds no network, file-permission or process-spawn surface. The hidden <code>--pairing-numbers</code> worker flag is internal, and the help test keeps it hidden.</li>
+</ul>
+<h2 id="accessibility-gate" tabindex="-1"><a class="header-anchor" href="#accessibility-gate"><span>Accessibility Gate</span></a></h2>
+<p>Not applicable. The slice changes no page. Every output is a report, standard error, an exit code or a file count.</p>
+<h2 id="performance-gate" tabindex="-1"><a class="header-anchor" href="#performance-gate"><span>Performance Gate</span></a></h2>
+<p>Bundle size: skipped, because no page changed. The engine’s processor time per tick is +4.5% against a +10% tripwire. The calibrate throughput is 11.9 to 13.3 matches per second. Build time was not compared.</p>
+<h2 id="cross-slice-regression" tabindex="-1"><a class="header-anchor" href="#cross-slice-regression"><span>Cross-Slice Regression</span></a></h2>
+<p>Siblings checked: every workspace test (63 binaries, 479 passed after the fix), including the calibration, experiment-flags, probe-engine-core, realism-bands-v2 and defending-and-discipline suites. No regressions were found that this slice caused. The one failure came from <code>stream-protocol</code>/<code>integration</code> code that this slice does not touch, and it is fixed.</p>
+<h2 id="longitudinal-delta" tabindex="-1"><a class="header-anchor" href="#longitudinal-delta"><span>Longitudinal Delta</span></a></h2>
+<ul>
+<li>Targeted runs against the implement-time reports (<code>full-42</code>, <code>red-base</code>): change 0 on every row, 3 + 15 + 6 rows. This is expected, because the code is the same.</li>
+<li>Throughput: the implement run measured 12.58 matches per second on the pairing, and this run measured 11.87 and 12.44. That is within the run-to-run spread. This is expected.</li>
+</ul>
+<h2 id="friction-notes" tabindex="-1"><a class="header-anchor" href="#friction-notes"><span>Friction Notes</span></a></h2>
+<ul>
+<li>A calibrate run with a band miss exits with code 2 even when the diff is all noise. That is the documented behaviour (“The diff does not change the exit code”), but a script that tests the diff must read <code>calib.diff</code>, not the exit code.</li>
+</ul>
+<h2 id="free-exploration-notes" tabindex="-1"><a class="header-anchor" href="#free-exploration-notes"><span>Free Exploration Notes</span></a></h2>
+<ul>
+<li>The first release red-card run (10.93 matches per second) was 17% slower than the next one (13.14). The first run after a build seems to pay a warm-up cost. Anyone who compares profiles should discard the first run. Informational.</li>
+</ul>
+<h2 id="adversarial-tests" tabindex="-1"><a class="header-anchor" href="#adversarial-tests"><span>Adversarial Tests</span></a></h2>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Test</th>
+<th>Result</th>
+<th>Finding</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Baseline on another seed</td>
+<td>pass</td>
+<td>exit 1, no run folder</td>
+</tr>
+<tr>
+<td>Baseline with another match count</td>
+<td>pass</td>
+<td>exit 1, no run folder</td>
+</tr>
+<tr>
+<td>Baseline on other fixtures (edited tactics)</td>
+<td>pass</td>
+<td>exit 1, names both hashes</td>
+</tr>
+<tr>
+<td>A file that is not a calibrate report</td>
+<td>pass</td>
+<td>exit 1, “not the run report of a calibrate run”</td>
+</tr>
+</tbody>
+</table>
+<h2 id="failure-mode-probes" tabindex="-1"><a class="header-anchor" href="#failure-mode-probes"><span>Failure Mode Probes</span></a></h2>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Probe</th>
+<th>Result</th>
+<th>Finding</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Slow response / concurrent session / session expiry</td>
+<td>n-a</td>
+<td>Offline command-line tool with no session.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="gaps-unverified-areas" tabindex="-1"><a class="header-anchor" href="#gaps-unverified-areas"><span>Gaps / Unverified Areas</span></a></h2>
+<ul>
+<li><code>--minutes</code> is not part of the baseline identity (implement caveat, Q-P1 lists the inputs). A baseline at other minutes is accepted. This is not tested as a refusal, because the product owner’s answer does not require it.</li>
+<li><code>cargo audit</code> is not installed, so no CVE database was consulted. No new crate was added.</li>
+</ul>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<ul>
+<li>AC staleness: checked. No criterion names an external API or service, and the plan is from 2026-09-24. 0 criteria are stale.</li>
+<li>Cargo profile keys (<code>lto</code>, <code>codegen-units</code> through <code>CARGO_PROFILE_RELEASE_*</code>) worked on cargo 1.92.0 in this run. Both candidate builds succeeded.</li>
+</ul>
+<h2 id="assumptions" tabindex="-1"><a class="header-anchor" href="#assumptions"><span>Assumptions</span></a></h2>
+<p>Autonomous run: no product owner was present. Every decision is class-stamped.</p>
+<ul>
+<li>V1 (class: implementation-detail; ac: “A targeted run is fast”; classification: runtime-evidence): headless release runs on this machine, which is the reference machine (8 cores). The shell clock includes the diff.</li>
+<li>V2 (class: implementation-detail; ac: “A targeted run agrees with the full run”; classification: runtime-evidence): a fresh full run at 40 matches on seed 7 is the fresh agreement evidence. The 1,000-match comparison uses the implement-time full seed-42 report, which the same code made (the code diff since then is empty). A fresh 81-minute full run adds no information that the fresh seed-7 run does not already give.</li>
+<li>V3 (class: implementation-detail; ac: “The red-card experiment is a suite”; classification: runtime-evidence): the slow test’s assertion fails, and that is the moved criterion (<a href="http://steer.md">steer.md</a>, 2026-09-24). This AC is judged on figure parity and a reported verdict, not on the verdict passing.</li>
+<li>V4 (class: implementation-detail; ac: “A faster profile changes no result”; classification: runtime-evidence): “faster” means a gain beyond the spread between two release runs. The candidates were built through environment variables into scratch folders, so no repository file changed.</li>
+<li>V5 (class: implementation-detail): the failing <code>stream_cli</code> test was triaged Fix under the autonomous policy. The root cause is a missing log line in <code>serve.rs</code>. This is a one-arm patch with no behaviour change beyond the log, so it is minimal and in reach.</li>
+<li>V6 (class: implementation-detail): the fix was applied inline, not by a write-isolated sub-agent, because this run has no sub-agent tool. The patch was then checked with fmt, clippy, the full workspace tests and 10 reruns of the test file.</li>
+<li>V7 (class: implementation-detail): no regression test was added. The race cannot be forced without a fault-injection seam. The existing test covers the signal and caught the gap.</li>
+<li>V8 (class: implementation-detail): the fix commit <code>a447ff1</code> was made by path, so the staged <code>docs/design/realism/*</code> files, which belong to another session, stayed out of it.</li>
+<li>V9 (class: implementation-detail): the prompt said a prior fix round had already run, but no <code>06-verify-tuning-loop.md</code> or <code>verify-evidence/tuning-loop/</code> existed on disk. This is treated as the first verify run (<code>evidence-run-count: 1</code>, <code>fix-rounds-run: 1</code> for this run’s round).</li>
+<li>V10 (class: implementation-detail): the prior dead driver had already set <code>tuning-loop</code> to <code>status: complete</code> in <code>00-index.md</code> and in <code>03-slice.md</code> before verify. This run’s <code>result: pass</code> now supports that status. It is kept, not changed.</li>
+<li>V11 (class: implementation-detail): the prior deferrals (viewer-match-day legibility, distribution macOS) were re-probed in this run. Neither touches a command-line calibrate slice on Windows. Both walls still stand, and neither is carried into this slice.</li>
+</ul>
+<h2 id="triage-decisions" tabindex="-1"><a class="header-anchor" href="#triage-decisions"><span>Triage Decisions</span></a></h2>
+<ul>
+<li>TEST-1, the <code>stream_cli</code> intermittent failure: Fix (autonomous policy: every fixable issue is fixed). Patched, and the re-check passes. class: implementation-detail.</li>
+</ul>
+<h2 id="fix-status" tabindex="-1"><a class="header-anchor" href="#fix-status"><span>Fix Status</span></a></h2>
+<p>1 issue was triaged Fix, and 1 was patched. The re-check passed: 479 workspace tests passed and 0 failed, and the stream test file passed 10 of 10 reruns. Nothing was escalated or skipped.</p>
+<h2 id="recommendation" tabindex="-1"><a class="header-anchor" href="#recommendation"><span>Recommendation</span></a></h2>
+<p>Proceed to review. Every criterion has fresh headless evidence, the one check failure was fixed and committed, and no deferral is open for this slice.</p>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option A (default): Review</strong> → <code>/wf review football-manager-match-engine tuning-loop</code>. <code>result: pass</code>, <code>convergence: converged</code>. Consider compacting first, because verify was long.</li>
+<li><strong>Option D: Skip review</strong> → <code>/wf handoff football-manager-match-engine tuning-loop</code>. The slice is tooling, but it adds an engine function and a server fix, so review is still worthwhile.</li>
+<li><strong>Option G: Slug-wide runtime probe</strong> → <code>/wf probe football-manager-match-engine</code>. Use this if a cross-slice sweep is wanted before <code>lone-forward</code> starts.</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-24T10:55:00Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/06-verify-tuning-loop.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">verify</a><span class="m-sheet-here" aria-current="page">tuning-loop</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/06-verify-tuning-loop.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-24T10:55:00Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

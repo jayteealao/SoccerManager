@@ -5,7 +5,7 @@ slug: football-manager-match-engine
 title: "Touchline match screen visual contract"
 status: ready
 created-at: "2026-09-22T14:41:32Z"
-updated-at: "2026-09-22T14:41:32Z"
+updated-at: "2026-09-24T11:22:17Z"
 component: match-control
 based-on: 02b-design.md
 tokens: [--tl-bg, --tl-panel, --tl-fg, --tl-fg-muted, --tl-line, --tl-brand, --tl-brand-hover, --tl-brand-pressed, --tl-on-brand, --tl-pitch, --tl-pitch-line, --tl-pitchside-bg, --tl-ring, --tl-success, --tl-warning, --tl-danger, --tl-card-yellow, --tl-skeleton, --tl-radius-sm, --tl-radius-md, --tl-radius-lg, --tl-radius-xl, --tl-padx-md, --tl-pady-md, --tl-gap, --tl-font-display, --tl-font-md, --tl-font-num, --tl-ease, --tl-shadow-1, --tl-header-h, --tl-col-left, --tl-col-mid, --tl-col-right, --tl-pitch-h, --tl-controls-h]
@@ -21,6 +21,18 @@ register: product
 image-gate: pass
 north-star-mock: "Design canvas \"Match Viewer Design\" — https://claude.ai/artifact/5gcPdykgjpXMuRuGzeHEG2 (private; every constraint transcribed as text in steer.md)"
 references-loaded: [typeset, animate, colorize, layout, optimize, harden, polish, product]
+canvas: "https://claude.ai/artifact/5gcPdykgjpXMuRuGzeHEG2"
+direction-confirmed-by: in-session
+confirmed-at: "2026-09-24T11:22:17Z"
+surfaces: [match-screen, score-bug, pitch, playback-controls, statistics, match-feed, tactics-panel, lineup-screen, reports, loading-and-recovery]
+direction-status: interim
+revision-count: 1
+revisions:
+  - rev: 1
+    at: "2026-09-24T11:22:17Z"
+    trigger: design-confirmation
+    reason: "The product owner confirmed the existing direction in session as an interim design for the engine work; no drawing changed."
+    snapshot: history/02c-craft-0.md
 ---
 
 # Visual contract: Touchline match screen
@@ -34,6 +46,8 @@ The canvas is private and no sub-agent can open it, so `steer.md` carries every 
 Ten fidelity items survive into implementation, and four of them belong to `viewer-pitch`: the grid, the pitch tile, the control strip, and the marker treatment. The other six are pinned here so the three later viewer slices inherit them rather than re-deciding. The top risk is the one the brief named and the product owner ranked second in PRODUCT.md: broadcast energy on a light scene competes with 14-pixel tabular numbers, so the contrast of the numeric row is proved before any banner motion is written.
 
 ## 1. Visual direction confirmed
+
+The product owner confirmed this direction in session on 2026-09-24 as an interim design. It stays in place while the engine slices are built, and a final design replaces it later (`po-answers.md`, design confirmation). No drawing changed at confirmation, because the remaining slices change only the engine.
 
 Product register, committed colour strategy, light scene. Light panels tinted toward hue 250, one brand blue on headers and controls, and team kit colours confined to the pitch and the score. The pitch is the most saturated object on the screen and every other surface stays quieter than the turf. Energy lives in the score bug, the goal banner, and the event highlights; the panels stay calm and tabular.
 

@@ -1,0 +1,35 @@
+artifact: plan
+schema: sdlc/v1
+slug: football-manager-match-engine
+slice: probe-engine-core
+rev: 1
+modules:
+  - { id: cli, label: "crates/engine-cli/src", role: cli }
+  - { id: cli-tests, label: "crates/engine-cli/tests", role: test }
+  - { id: engine, label: "crates/engine/src", role: domain }
+  - { id: schemas, label: "schemas/observability", role: contract }
+  - { id: docs, label: "README.md", role: docs }
+files:
+  - { path: "crates/engine-cli/src/cli.rs", status: modified, role: cli, module: cli, loc: 251, delta: { add: 22, rem: 10 }, planned_change: { intent: "Finding 5 residual and finding 1. Shorten the short-help strings whose -h line exceeds 80 columns: --content-dir, replay --speed, bench --matches, --json, --stream, calibrate --seed, --jobs, --suite, --keep-events. Hide the possible values of --suite and --keep-events in the option line and name them in long_help. resume --json gets the replace-rule long_help of simulate --json." } }
+  - { path: "crates/engine-cli/tests/cli_args.rs", status: modified, role: test, module: cli-tests, loc: 198, delta: { add: 120, rem: 8 }, planned_change: { intent: "The 80-column test reads -h and --help on all 9 help surfaces (18 checks). Regression tests: the --json dump replaces the extension; an unwritable --ticks-out names the OS error once; redirected stderr carries no ESC byte." } }
+  - { path: "crates/engine/src/error.rs", status: modified, role: domain, module: engine, loc: 48, delta: { add: 40, rem: 0 }, planned_change: { intent: "Awaiting Q-2. EngineError::error_type(), error_code(), and retriable(). error_type() returns the values the calibration worker already writes (invalid-config, io, format, sink, content, snapshot). Unit test per variant." } }
+  - { path: "crates/engine-cli/src/calibrate/worker.rs", status: modified, role: cli, module: cli, loc: 200, delta: { add: 1, rem: 12 }, planned_change: { intent: "Awaiting Q-2. The private error_type() moves into the engine; the worker calls err.error_type(). Its output does not change." } }
+  - { path: "crates/engine/src/observe/mod.rs", status: modified, role: domain, module: engine, loc: 607, delta: { add: 55, rem: 0 }, planned_change: { intent: "Awaiting Q-2. FailureRecord implements Record: envelope, operation, seed, duration_ms, outcome, error.type, error.code, error.retriable, and no statistic key. Unit test on the key set." } }
+  - { path: "crates/engine-cli/src/main.rs", status: modified, role: cli, module: cli, loc: 51, delta: { add: 30, rem: 3 }, planned_change: { intent: "Awaiting Q-2. On Err from simulate or bench, print one FailureRecord on stdout (match-stats for simulate, run-report for bench), then the prose line on stderr, then exit 1. Other subcommands keep prose only." } }
+  - { path: "crates/engine-cli/src/bench.rs", status: modified, role: cli, module: cli, loc: 258, delta: { add: 2, rem: 1 }, planned_change: { intent: "Awaiting Q-2. The --matches 0 check returns EngineError::InvalidConfig in place of an untyped bail." } }
+  - { path: "schemas/observability/match-stats.schema.json", status: modified, role: contract, module: schemas, planned_change: { intent: "Awaiting Q-2 (contract). Shape depends on the answer; under option A the outcome enum gains error, the statistic keys become required only when outcome is not error, and an error record requires the three error keys." } }
+  - { path: "schemas/observability/run-report.schema.json", status: modified, role: contract, module: schemas, planned_change: { intent: "Awaiting Q-2 (contract). Same rule as match-stats for the bench.* and machine keys." } }
+  - { path: "README.md", status: modified, role: docs, module: docs, loc: 230, delta: { add: 4, rem: 0 }, planned_change: { intent: "Awaiting Q-2. The simulate and benchmark sections state what a failed run prints and that it exits 1." } }
+edges:
+  - { from: "crates/engine-cli/src/main.rs", to: "crates/engine/src/observe/mod.rs", kind: calls }
+  - { from: "crates/engine-cli/src/main.rs", to: "crates/engine/src/error.rs", kind: calls }
+  - { from: "crates/engine-cli/src/calibrate/worker.rs", to: "crates/engine/src/error.rs", kind: calls }
+  - { from: "crates/engine-cli/src/bench.rs", to: "crates/engine/src/error.rs", kind: calls }
+  - { from: "crates/engine-cli/tests/cli_args.rs", to: "schemas/observability/match-stats.schema.json", kind: import }
+  - { from: "crates/engine-cli/tests/cli_args.rs", to: "crates/engine-cli/src/main.rs", kind: calls }
+risks:
+  - { title: "Q-2: the answered record shape fails the shipped record schemas", severity: high, body: "Q-1 was answered A: outcome error and no statistic key. The record schemas that shipped with calibration accept outcome success or failure only, and require every statistic key (match-stats) and the bench and machine keys (run-report). A record built as answered fails both schemas.", mitigation: "The plan stops at awaiting-input on Q-2 and recommends option A: amend both schemas additively so a record with outcome error needs the error keys and no statistic key. Steps 1 to 4 do not depend on Q-2." }
+  - { title: "Two words for a failed outcome", severity: medium, body: "Calibration writes outcome failure. The observability contract and the Q-1 answer name error.", mitigation: "Q-2 option C unifies on error; options A and B leave the drift for the review ledger." }
+  - { title: "Help text regresses when later options are added", severity: low, body: "Short help puts each description on the option line. The existing test reads --help only, on 5 of 9 surfaces.", mitigation: "The test reads -h and --help on every surface, so a later option fails the gate." }
+history:
+  - { rev: 0, at: "2026-09-22T22:29:40Z", snapshot: "history/04-plan-probe-engine-core-0.md", summary: "First plan; stopped on Q-1 (failure record or narrowed contract)." }

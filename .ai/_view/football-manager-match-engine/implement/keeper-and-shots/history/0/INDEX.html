@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="implement">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · implement — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="implement">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../../../INDEX.html">implement</a><span aria-hidden="true">/</span><a href="../../INDEX.html">keeper-and-shots</a><span aria-hidden="true">/</span><a href="../INDEX.html">history</a><span aria-hidden="true">/</span><span class="m-here">0</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · implement</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../../INDEX.html">implement</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">keeper-and-shots</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">history</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">0</b></div>
+    <div class="actions"><a href="../../../../../../workflows/football-manager-match-engine/history/05-implement-keeper-and-shots-0.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">history/05-implement-keeper-and-shots-0.md</div>
+      <h1 class="pg-title">Implement · keeper-and-shots</h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">awaiting-input</span><span class="meta">stage 5</span><span class="meta">updated 2026-09-24T17:26:30Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    <section class="story"><h2 id="the-implementation" tabindex="-1"><a class="header-anchor" href="#the-implementation"><span>The Implementation</span></a></h2>
+<p>The slice started from the shipped lone-forward play at <code>a30313b</code>. There, 77% of shots counted as on target, goals per xG was 1.50, corners were 0.005 per team and goal kicks 5.9 per match (seed 42, 1,000 matches). A keeper held every save with one flat roll, no outfield player touched a shot, and no shot rose above 0.32 m. The red-card criterion, moved here by the product owner (Q-LF2), failed all three arms.</p>
+<p>Commit <code>8fd407b</code> (14 files, +1,070 −66) builds the planned model. The engine follows a copy of each shot with the match physics and counts it on target only when that flight crosses between the posts under the bar. A keeper tries to save only such a shot, on the sourced curve (0.891 down to 0.272), and holds one save in three or parries it. An outfield defender within 3 m can block a shot once. A parry or a block leaves the defending side as the last touch, so a corner needs a real crossing. Penalties and the shoot-out use the same save model, and the three hand-set shoot-out constants are tuning values now. The 22-run tuning loop and one xG refit give, on seed 42 over 1,000 matches: 38.7% of shots on target, goals per xG 1.10 and 13.1 goal kicks per match. 500 scripted penalties convert 79.6%, and the wide and over scenes pass. The workspace suite passes: 504 tests, 0 failed.</p>
+<p>Two criteria fail, so the run stops at plan step 14. First, the red-card criterion still fails all three arms. In the keeper arm the reduced side scores 2.10 against 1.18, and 1.18 is also above the 1.17 limit. Second, corners reach only 1.2 per team in the 200-match slow test (1.6 on seed 42), against the 3.0 floor. With every block and parry value at its bound, the planned model’s ceiling is 1.9 to 2.3. Only an experiment that turns every parry toward the goal line and holds one save in ten reached 3.2, and goal kicks then fell under 10. Q-KS1 and Q-KS2 are open for the product owner. The top risk is that corners in this engine need sources other than shots, such as clearances and crosses, which this slice does not own.</p></section><dl class="frontmatter-card"><div><dt>type</dt><dd>implement</dd></div><div><dt>slug</dt><dd>football-manager-match-engine</dd></div><div><dt>slice-slug</dt><dd>keeper-and-shots</dd></div><div><dt>status</dt><dd>awaiting-input</dd></div><div><dt>stage-number</dt><dd>5</dd></div><div><dt>created-at</dt><dd>2026-09-24T17:26:30Z</dd></div><div><dt>updated-at</dt><dd>2026-09-24T17:26:30Z</dd></div><div><dt>metric-files-changed</dt><dd>14</dd></div><div><dt>metric-lines-added</dt><dd>1070</dd></div><div><dt>metric-lines-removed</dt><dd>66</dd></div><div><dt>metric-deviations-from-plan</dt><dd>6</dd></div><div><dt>metric-review-fixes-applied</dt><dd>0</dd></div><div><dt>commit-sha</dt><dd>8fd407b4bc6c50b1751e26a74d06ef6cc5bc8013</dd></div><div><dt>commits</dt><dd>8fd407b4bc6c50b1751e26a74d06ef6cc5bc8013</dd></div><div><dt>has-blockers</dt><dd>true</dd></div><div><dt>open-questions</dt><dd>Q-KS1 The red-card criterion still fails all three arms after the save and block model — AWAITING INPUT (po-answers.md), Q-KS2 Corners per team stay under 3.0 at every in-bounds setting of the save and block model — AWAITING INPUT (po-answers.md)</dd></div><div><dt>steering-honored</dt><dd>Red-card criterion moves to keeper-and-shots (Q-LF2): measured on the balanced fixtures of Q-LF1 (seeds 1-120 in both club orders) with every limit unchanged. The save and block model does not fix it, so implement stops and reports the arms and their figures. No limit was raised, no card chance changed and no lever was added for the ten-man side., Q-I1: targeted calibrate runs (equal, seed 42, 200 matches, with a baseline) were the inner loop. The slice gate (five seeds of equal and strength, one of formations) was not run, because the slice stopped at plan step 14 before a setting was accepted., Output boundary: code comments, test names, docs and the commit message use product language; the added lines were leak-checked before the commit., Design direction: not applicable; no page changed.</dd></div><div><dt>tags</dt><dd>engine, shots, set-pieces, realism</dd></div><div><dt>refs</dt><dd>{&quot;index&quot;:&quot;00-index.md&quot;,&quot;implement-index&quot;:&quot;05-implement.md&quot;,&quot;slice-def&quot;:&quot;03-slice-keeper-and-shots.md&quot;,&quot;plan&quot;:&quot;04-plan-keeper-and-shots.md&quot;,&quot;benchmark&quot;:&quot;05c-benchmark.md&quot;,&quot;evidence&quot;:&quot;implement-evidence/keeper-and-shots/&quot;,&quot;siblings&quot;:[&quot;05-implement-lone-forward.md&quot;,&quot;05-implement-defending-and-discipline.md&quot;,&quot;05-implement-tuning-loop.md&quot;,&quot;05-implement-realism-bands-v2.md&quot;,&quot;05-implement-extra-time-penalties.md&quot;],&quot;verify&quot;:&quot;06-verify-keeper-and-shots.md&quot;}</dd></div><div><dt>next-command</dt><dd>wf-implement</dd></div><div><dt>next-invocation</dt><dd>/wf implement football-manager-match-engine keeper-and-shots</dd></div></dl><div class="prose"><h1 id="implement-keeper-and-shots" tabindex="-1"><a class="header-anchor" href="#implement-keeper-and-shots"><span>Implement: Keeper and shots</span></a></h1>
+<h2 id="summary-of-changes" tabindex="-1"><a class="header-anchor" href="#summary-of-changes"><span>Summary of Changes</span></a></h2>
+<ul>
+<li>A new pure module <code>shot.rs</code>: <code>on_target()</code> steps a copy of the ball to the goal line, <code>quality()</code> reads the fixed quality model, <code>save_chance()</code> is the clamped sourced line, and <code>deflect()</code> turns a velocity. The caller takes every random draw.</li>
+<li>On target is counted at the kick (<code>kick_ball()</code>), and the flight keeps the on-target flag and the shot quality. The count in <code>goal()</code> and in a keeper’s <code>gain()</code> is removed.</li>
+<li>A fast shot in flight is contested only by blockers and, when on target, by the acting keeper (<code>contest_shot()</code>, <code>try_block()</code>, <code>try_save()</code>, <code>parry()</code>). An off-target shot is never saved. <code>keeper_catch_chance</code> now covers only fast balls that are not shots.</li>
+<li>The shot loft is drawn from 0 to <code>shots.loft_max</code>. A penalty in play counts <code>shots.penalty_xg</code>, and its save roll reads that quality.</li>
+<li>The shoot-out keeper dives by <code>shots.keeper_dive_m</code> and <code>shots.keeper_stays</code> and saves only an on-target kick at the penalty quality: a held kick is a miss, a parried one plays on. <code>SHOOTOUT_SPREAD</code>, <code>SHOOTOUT_HOLD</code>, <code>KEEPER_DIVE_M</code>, <code>KEEPER_STAYS</code> and their known-limit comment are gone.</li>
+<li>A new optional <code>shots</code> tuning block (16 values with bounds). <code>shot_noise</code> 0.5 and refitted <code>xg</code> coefficients (−4.191, −0.0441, 6.3836). A tuning file without the block loads with the shipped values, and <code>TUNING_VERSION</code> stays 2.</li>
+<li>Test seams under the <code>scenario</code> feature: <code>Scene::penalty()</code>, <code>Simulation::last_touch()</code>, <code>shot_census()</code> and <code>shot_flight()</code>.</li>
+<li>New tests: 6 unit tests in <code>shot.rs</code>, 7 fast scenes and 3 slow tests in <code>tests/keeper_and_shots.rs</code>, and 2 content pins. Two moved expectations were re-derived.</li>
+</ul>
+<h2 id="files-changed" tabindex="-1"><a class="header-anchor" href="#files-changed"><span>Files Changed</span></a></h2>
+<ul>
+<li><code>crates/engine/src/shot.rs</code> (new): trajectory on-target check, shot quality, save chance, deflection, and unit tests.</li>
+<li><code>crates/engine/src/sim.rs</code>: flight fields, <code>kick_ball()</code> with the on-target count and the penalty xG, the shot contest, blocks, the save, the parry, <code>end_shot()</code>, the <code>ShotCensus</code> seam and three accessors under the scenario feature. The on-target count in <code>gain()</code> is removed.</li>
+<li><code>crates/engine/src/rules/mod.rs</code>: <code>goal()</code> no longer counts on target. <code>ball_out()</code> records a wide shot in the census. The penalty in <code>take_restart()</code> goes through <code>kick_ball(..., penalty = true)</code>. The shoot-out dive and save use the tuning values, and the four constants are removed.</li>
+<li><code>crates/engine/src/tuning.rs</code>: the <code>ShotTuning</code> block, its bounds and <code>Default</code>; <code>shot_noise</code>, <code>penalty_spread</code>, the block and parry values and the <code>xg</code> defaults as tuned.</li>
+<li><code>crates/engine/src/decision.rs</code>: the shot loft reads <code>shots.loft_max</code>.</li>
+<li><code>crates/engine/src/scenario.rs</code>: <code>Scene::penalty(team, taker)</code>.</li>
+<li><code>crates/engine/src/lib.rs</code>: the <code>shot</code> module line.</li>
+<li><code>content/tuning.json</code>: the <code>shots</code> block, <code>shot_noise</code> 0.5 and the refitted <code>xg</code>.</li>
+<li><code>crates/engine/tests/keeper_and_shots.rs</code> (new): the outcome scenes, the penalty scenes, and the slow set-piece, census and refit tests.</li>
+<li><code>crates/engine/tests/content.rs</code>: pins the shot values; a tuning block without <code>shots</code> loads with the defaults.</li>
+<li><code>crates/engine/tests/acting_keeper.rs</code>: the stand-in save test scripts the save and hold rolls, because saves no longer read <code>keeper_catch_chance</code>.</li>
+<li><code>crates/engine/tests/commentary.rs</code>: the seed-7 line floor, re-derived.</li>
+<li><code>docs/reference/data-files.md</code>: the <code>shots</code> rows, the new defaults and a paragraph on the model.</li>
+<li><code>docs/reference/protocol.md</code>: the meaning of <code>stats.shots_on_target</code>. The field and the message are unchanged.</li>
+</ul>
+<h2 id="shared-files-also-touched-by-sibling-slices" tabindex="-1"><a class="header-anchor" href="#shared-files-also-touched-by-sibling-slices"><span>Shared Files (also touched by sibling slices)</span></a></h2>
+<ul>
+<li><code>crates/engine/src/sim.rs</code>, <code>crates/engine/src/rules/mod.rs</code>, <code>crates/engine/src/tuning.rs</code> and <code>content/tuning.json</code>: also changed by <code>defending-and-discipline</code> and <code>lone-forward</code>. Their values and paths are unchanged. Saves use the acting keeper (<code>Simulation::keeper()</code>) from <code>defending-and-discipline</code>.</li>
+<li><code>crates/engine/tests/content.rs</code>, <code>acting_keeper.rs</code> and <code>commentary.rs</code>: also changed by <code>lone-forward</code>.</li>
+<li><code>docs/reference/data-files.md</code>: every tuning slice adds rows.</li>
+</ul>
+<h2 id="notes-on-design-choices" tabindex="-1"><a class="header-anchor" href="#notes-on-design-choices"><span>Notes on Design Choices</span></a></h2>
+<ul>
+<li>The on-target check runs the match’s own <code>Ball::integrate()</code> on a copy, with the same <code>pitch::in_goal</code> and <code>crossbar_height</code> test that decides a goal. So a shot the engine calls on target and a goal cannot disagree. It runs once per shot and stops after at most 250 steps.</li>
+<li>The save roll, the hold roll and each block roll use <code>referee_draw()</code>, so a scene can script each outcome. The deflection angles and loft use the main stream.</li>
+<li>The save curve reads a fixed quality model (<code>shots.quality</code>, the earlier xG coefficients). The refit changed the reported <code>xg</code> only. Running the refit again on the refitted build gave the same coefficients to 4 decimals, so the refit does not feed back into play.</li>
+<li>A parried ball sets <code>keeper_beaten</code>, so the keeper who parried it does not catch it on the next tick. A blocked ball is a new flight: a keeper may still catch it with <code>keeper_catch_chance</code>.</li>
+<li>A parry or a block does not reset the offside positions. A save or a deflection is not a deliberate play by a defender (IFAB Law 11).</li>
+<li><code>parry_speed</code> had to be above <code>control_speed</code> / <code>shot_speed</code> (0.44) for a parry to leave the keeper’s reach. At the planned start value 0.4 every parried ball was slower than 12 m/s, and the keeper collected it at once (no corner in 40 parry scenes).</li>
+</ul>
+<h2 id="verification-seams-built" tabindex="-1"><a class="header-anchor" href="#verification-seams-built"><span>Verification Seams Built</span></a></h2>
+<ul>
+<li>Set pieces arise naturally → <code>Simulation::last_touch()</code> at <code>crates/engine/src/sim.rs:758</code> and the slow test <code>set_pieces_arise_from_play</code> at <code>crates/engine/tests/keeper_and_shots.rs:231</code>. The test checks each corner’s origin and the corner and goal-kick rates over 200 matches.</li>
+<li>Shots are counted honestly → no new seam. <code>engine-cli calibrate --suite equal</code> already reports <code>shots_on_target_share</code> and <code>goals_per_xg</code>. The on-target count is at <code>crates/engine/src/sim.rs:987</code>.</li>
+<li>A wide shot stays wide → the wide and over scenes at <code>crates/engine/tests/keeper_and_shots.rs:63</code> and <code>:83</code>, with a scripted save roll through <code>Scene::rolls()</code>, and <code>Simulation::shot_flight()</code> at <code>crates/engine/src/sim.rs:770</code>.</li>
+<li>Penalties convert realistically → <code>Scene::penalty()</code> at <code>crates/engine/src/scenario.rs:157</code> and <code>penalties_convert_seventy_to_eighty_five_percent</code> at <code>crates/engine/tests/keeper_and_shots.rs:212</code>.</li>
+<li>No advantage from a red card → no new seam. The existing slow test <code>a_sending_off_gives_no_advantage</code> and <code>calibrate --suite red-card</code>.</li>
+<li>Tuning diagnostic → <code>ShotCensus</code> at <code>crates/engine/src/sim.rs:444</code> and <code>shot_outcome_census</code> at <code>crates/engine/tests/keeper_and_shots.rs:277</code>.</li>
+</ul>
+<h2 id="tuning-loop-step-12" tabindex="-1"><a class="header-anchor" href="#tuning-loop-step-12"><span>Tuning Loop (step 12)</span></a></h2>
+<p>Inner loop: <code>calibrate --suite equal --seed 42 --matches 200 --baseline implement-evidence/keeper-and-shots/baseline/set-base/report.json</code>, each setting in a copy of the content folder passed with <code>--content-dir</code> (<code>implement-evidence/keeper-and-shots/tune.py</code>, log <code>tuning-log.txt</code>, 22 rows). Rows t00–t11 use <code>parry_speed</code> 0.6 as the base. Rows g01–g09 use the xG coefficients from before the refit. <code>diff</code> is the number of band changes the baseline diff marks as real (not noise). Baseline (<code>set-base</code>): on target 0.772, goals per xG 1.571, corners 0.008, goal kicks 5.37, goals 2.68.</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Row</th>
+<th>Setting (changes from the start values)</th>
+<th>On target</th>
+<th>Goals/xG</th>
+<th>Corners/team</th>
+<th>Goal kicks</th>
+<th>Goals</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>t00</td>
+<td>parry_speed 0.6</td>
+<td>0.634</td>
+<td>1.669</td>
+<td>1.71</td>
+<td>8.81</td>
+<td>3.28</td>
+<td>on target too high</td>
+</tr>
+<tr>
+<td>t01</td>
+<td>shot_noise 0.4</td>
+<td>0.479</td>
+<td>1.211</td>
+<td>1.16</td>
+<td>11.71</td>
+<td>2.23</td>
+<td>noise moves on target</td>
+</tr>
+<tr>
+<td>t02</td>
+<td>+ block_reach 2.0</td>
+<td>0.470</td>
+<td>1.262</td>
+<td>1.22</td>
+<td>11.46</td>
+<td>2.33</td>
+<td>blocks barely move</td>
+</tr>
+<tr>
+<td>t03</td>
+<td>+ block_spread 2.0</td>
+<td>0.467</td>
+<td>1.217</td>
+<td>1.22</td>
+<td>11.55</td>
+<td>2.25</td>
+<td>noise</td>
+</tr>
+<tr>
+<td>t04</td>
+<td>shot_noise 0.5, loft_max 9, block_reach 2.5, block_spread 2.5</td>
+<td>0.312</td>
+<td>0.749</td>
+<td>0.95</td>
+<td>13.92</td>
+<td>1.33</td>
+<td>too many misses</td>
+</tr>
+<tr>
+<td>t05</td>
+<td>shot_noise 0.4, parry_spread 0.6</td>
+<td>0.448</td>
+<td>1.165</td>
+<td>1.12</td>
+<td>12.54</td>
+<td>2.25</td>
+<td>narrow parries go to the touchline</td>
+</tr>
+<tr>
+<td>t06</td>
+<td>t05 + block_reach 3, block_chance 1, block_spread 2.5</td>
+<td>0.444</td>
+<td>0.880</td>
+<td>1.30</td>
+<td>9.18</td>
+<td>1.66</td>
+<td>blocks cost goal kicks</td>
+</tr>
+<tr>
+<td>t07</td>
+<td>shot_noise 0.4, parry_spread 0.3, save_hold 0.2</td>
+<td>0.425</td>
+<td>1.068</td>
+<td>0.92</td>
+<td>13.04</td>
+<td>2.08</td>
+<td>narrower is worse</td>
+</tr>
+<tr>
+<td>t08</td>
+<td>t05 + keeper_reach 3.5</td>
+<td>0.438</td>
+<td>0.925</td>
+<td>1.02</td>
+<td>12.63</td>
+<td>1.70</td>
+<td>no corner gain</td>
+</tr>
+<tr>
+<td>t09</td>
+<td>shot_noise 0.4, save_hold 0.1, parry_speed 0.8</td>
+<td>0.452</td>
+<td>1.177</td>
+<td>1.65</td>
+<td>12.39</td>
+<td>2.19</td>
+<td>more parries help a little</td>
+</tr>
+<tr>
+<td>t10</td>
+<td>shot_noise 0.4, blocks at their bounds (3, 1, 3.2, 0.8)</td>
+<td>0.466</td>
+<td>0.997</td>
+<td>1.97</td>
+<td>8.41</td>
+<td>1.91</td>
+<td>goal kicks under 10</td>
+</tr>
+<tr>
+<td>t11</td>
+<td>t09 + t10</td>
+<td>0.450</td>
+<td>1.038</td>
+<td>2.33</td>
+<td>9.22</td>
+<td>2.06</td>
+<td>ceiling of the model; goal kicks under 10</td>
+</tr>
+<tr>
+<td>r01</td>
+<td>shot_noise 0.45, block_reach 2, block_chance 0.7, block_spread 2</td>
+<td>0.422</td>
+<td>1.090</td>
+<td>1.14</td>
+<td>11.69</td>
+<td>1.94</td>
+<td>red card: all three arms fail</td>
+</tr>
+<tr>
+<td>g01</td>
+<td>shot_noise 0.45, block_reach 3, block_chance 0.5, block_spread 3.2, block_speed 0.8, parry_speed 0.8</td>
+<td>0.422</td>
+<td>1.005</td>
+<td>1.51</td>
+<td>11.00</td>
+<td>1.77</td>
+<td>on target at the edge</td>
+</tr>
+<tr>
+<td>g02</td>
+<td>g01 + block_chance 1.0</td>
+<td>0.417</td>
+<td>0.909</td>
+<td>1.84</td>
+<td>9.40</td>
+<td>1.72</td>
+<td>goal kicks under 10</td>
+</tr>
+<tr>
+<td>g03</td>
+<td>g01 with shot_noise 0.5</td>
+<td>0.387</td>
+<td>0.926</td>
+<td>1.51</td>
+<td>12.23</td>
+<td>1.79</td>
+<td><strong>shipped</strong> (sourced save_hold)</td>
+</tr>
+<tr>
+<td>g04</td>
+<td>g01 with shot_noise 0.55</td>
+<td>0.346</td>
+<td>0.894</td>
+<td>1.31</td>
+<td>12.22</td>
+<td>1.64</td>
+<td>fewer corners</td>
+</tr>
+<tr>
+<td>g05</td>
+<td>g01 with shot_noise 0.4, loft_max 9</td>
+<td>0.379</td>
+<td>0.879</td>
+<td>1.42</td>
+<td>12.60</td>
+<td>1.68</td>
+<td>loft and noise trade</td>
+</tr>
+<tr>
+<td>g06</td>
+<td>g03 + save_hold 0.2</td>
+<td>0.384</td>
+<td>0.921</td>
+<td>1.70</td>
+<td>12.22</td>
+<td>1.77</td>
+<td>+0.19 corners for a non-sourced hold</td>
+</tr>
+<tr>
+<td>g07</td>
+<td>g06 + parry_spread 0.9</td>
+<td>0.371</td>
+<td>0.872</td>
+<td>1.59</td>
+<td>11.93</td>
+<td>1.61</td>
+<td>worse</td>
+</tr>
+<tr>
+<td>g08</td>
+<td>g06 + parry_spread 1.5, parry_loft 8</td>
+<td>0.377</td>
+<td>1.034</td>
+<td>1.48</td>
+<td>11.72</td>
+<td>1.91</td>
+<td>worse</td>
+</tr>
+<tr>
+<td>g09</td>
+<td>g03 + save_hold 0.0</td>
+<td>0.380</td>
+<td>0.886</td>
+<td>1.97</td>
+<td>12.10</td>
+<td>1.68</td>
+<td>every save parried: still 1.97</td>
+</tr>
+</tbody>
+</table>
+<p>Outcome census and ceiling runs (200 matches, the slow tests) are in <code>implement-evidence/keeper-and-shots/census-and-ceiling.txt</code>. At the shipped values: wide or over 51.4%, blocked 12.1%, held 9.0%, parried 18.8%, scored 6.8%, other 1.9%. With the blocks and parries at their bounds and one save in ten held, blocks reach 22.3% (a realistic block rate) and corners 1.88 per team. An experiment that turned every parry toward the goal line, not shipped, reached 2.64 corners per team at the sourced hold and 3.18 at a hold of 0.1. Goal kicks then fell to 9.4–9.6 per match.</p>
+<p>Penalty scenes: <code>penalty_spread</code> 0.5 converted 0.796 at <code>shot_noise</code> 0.25. At <code>shot_noise</code> 0.5 it converted 0.670, and 0.25 restores 0.796. The kick-from-the-mark noise is the product of the two.</p>
+<p>xG refit (step 13): <code>xg_refit</code> on seeds 1–1000 found 21,479 open-play shots and 1,346 goals, and fitted intercept −4.1910, distance −0.0441 and angle 6.3836. All three are inside their bounds. The first refit landed in band (goals per xG 1.0976), so no second refit ran.</p>
+<h2 id="criterion-results" tabindex="-1"><a class="header-anchor" href="#criterion-results"><span>Criterion Results</span></a></h2>
+<p>Release build of <code>8fd407b</code>’s tree. Logs are in <code>implement-evidence/keeper-and-shots/tuned/</code>.</p>
+<table class="prose-table">
+<thead>
+<tr>
+<th>Criterion</th>
+<th>Classification</th>
+<th>Run</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Set pieces arise naturally</td>
+<td>runtime-evidence</td>
+<td><code>set_pieces_arise_from_play</code> (200 matches)</td>
+<td><strong>FAIL</strong>: corners 1.205 per team (floor 3.0). Goal kicks 11.205 per match (floor 10) pass. Every corner followed a defending touch within one tick of the goal line (0 exceptions).</td>
+</tr>
+<tr>
+<td>Shots are counted honestly</td>
+<td>runtime-evidence</td>
+<td><code>calibrate --suite equal --seed 42 --matches 1000</code></td>
+<td>pass: on target 0.387 (0.30–0.42), goals per xG 1.0976 (0.85–1.15)</td>
+</tr>
+<tr>
+<td>A wide shot stays wide</td>
+<td>build-capability</td>
+<td>the wide and over scenes</td>
+<td>pass: not on target, no save with a scripted successful roll in reach, goal kick to the defending side</td>
+</tr>
+<tr>
+<td>Penalties convert realistically</td>
+<td>runtime-evidence</td>
+<td>500 penalty scenes</td>
+<td>pass: 398 of 500, 0.796 (0.70–0.85)</td>
+</tr>
+<tr>
+<td>No advantage from a red card</td>
+<td>runtime-evidence</td>
+<td><code>a_sending_off_gives_no_advantage</code> (240 matches per arm, balanced)</td>
+<td><strong>FAIL</strong>: control home 0.7333, limit 1.1733. Keeper: full 1.1833, reduced 2.1000 (and full above the limit). Centre-back: 0.7667 against 0.8333. Striker: 1.0083 against 1.2667. Shots 15.0 per team per match in the suite. <code>calibrate --suite red-card --seed 1 --matches 240</code> gives the same figures.</td>
+</tr>
+</tbody>
+</table>
+<p>Also recorded (step 14): <code>every_formation_holds</code> passes. The largest pairing is 3-4-3 against 4-4-2 at 2.88–0.88, and 4-4-1-1 against 4-4-2 is 2.87–0.65, so no pairing regressed. <code>discipline_is_realistic</code> passes: 0.025 second yellows per match, sending-off share 11.5%, 0 same-tick pairs.</p>
+<p>Other seed-42 bands (1,000 matches, recorded, not failed; Q-E4): goals 1.884 per match (band 2.4–3.2; <code>realism-tuning</code> owns goals), goalless share 0.22, corners 1.59 per team, throw-ins 22.8, passes 1,225 per team and yellow cards 0.935 are outside their bands. Shots per team (13.2), possession and the sending-off share are inside. Benchmark fields on that run: 1.5638 µs per tick CPU and 7.60 MB peak. That is informational only, because the <code>05c-benchmark.md</code> compare was not run.</p>
+<h2 id="checks-run" tabindex="-1"><a class="header-anchor" href="#checks-run"><span>Checks Run</span></a></h2>
+<ul>
+<li><code>cargo fmt --all -- --check</code>: pass.</li>
+<li><code>cargo clippy --workspace --all-targets --all-features -- -D warnings</code>: pass (exit 0).</li>
+<li><code>cargo test --workspace --all-features --no-fail-fast</code>: 504 passed, 0 failed, 10 ignored (<code>tuned/workspace-tests.log</code>).</li>
+<li><code>cargo test --release -p engine --all-features --test keeper_and_shots -- --include-ignored --nocapture</code>: 9 passed, 1 failed (<code>set_pieces_arise_from_play</code>) (<code>tuned/keeper_and_shots.log</code>).</li>
+<li><code>cargo test --release -p engine --all-features --test defending -- --include-ignored a_sending_off_gives_no_advantage every_formation_holds</code>: 1 passed, 1 failed (<code>a_sending_off_gives_no_advantage</code>) (<code>tuned/defending.log</code>).</li>
+<li><code>cargo test --release -p engine --all-features --test discipline -- --include-ignored</code>: 4 passed (<code>tuned/discipline.log</code>).</li>
+<li>Benchmark compare from <code>05c-benchmark.md</code>: skip. The slice stopped at step 14.</li>
+<li>Slice gate (equal and strength on five seeds, formations on one seed): skip. The slice stopped at step 14.</li>
+<li>The <code>strength</code> slow test: skip. Same reason.</li>
+</ul>
+<p>Moved expectations, re-derived (step 15.1). No tolerance was widened:</p>
+<ul>
+<li><code>acting_keeper.rs</code> <code>a_fast_shot_at_the_stand_in_is_held_with_the_catch_chance</code> → <code>..._is_saved_with_the_save_roll</code>. Before, the scene set <code>keeper_catch_chance</code> 1.0 or 0.0. Now it scripts the rolls <code>[0.0, 0.0]</code> (held) and <code>[0.99]</code> (beaten), and a beaten stand-in concedes the goal. The reason is that a shot’s save no longer reads <code>keeper_catch_chance</code>.</li>
+<li><code>commentary.rs</code> seed-7 line count: 84 before, 75 now. The floor moves from 80 to 70. The floor only guards against an empty check, and the reason is that fewer shots are saved and more go wide, so there are fewer lines.</li>
+<li>No other pinned test moved: <code>rules_shootout.rs</code>, <code>rules_extra_time.rs</code>, <code>match_stats.rs</code>, <code>full_match.rs</code>, <code>determinism.rs</code>, <code>strength.rs</code> (fast part), the <code>sim.rs</code> unit tests and <code>stream_cli.rs</code> pass unchanged.</li>
+</ul>
+<h2 id="deviations-from-plan" tabindex="-1"><a class="header-anchor" href="#deviations-from-plan"><span>Deviations from Plan</span></a></h2>
+<ol>
+<li><strong>Census seam in the engine.</strong> A11 said the census would read outcomes through <code>last_touch()</code>, <code>carrier()</code> and the stoppages. That cannot tell a parry from a block from outside. The run added <code>ShotCensus</code>, <code>shot_census()</code> and <code>shot_flight()</code> under the <code>scenario</code> feature. A release build does not contain them. No <code>Summary</code>, snapshot, report or protocol field changed. (class: implementation-detail)</li>
+<li><strong>A block has no loft.</strong> The plan names no block loft value, so a blocked ball stays on the ground (<code>deflect(..., loft 0)</code>). (class: implementation-detail)</li>
+<li><strong>No on-target recompute after a deflection.</strong> Plan steps 6 and 7 say to recompute the flag after a block or parry, and also to end the shot. The shot ends, so the flag is cleared instead. A deflected ball is not a shot, and nothing is counted again, as the plan requires. (class: implementation-detail)</li>
+<li><strong>The corner-origin check.</strong> Plan step 11 said the ball’s previous record is at or beyond the goal line. The record before the corner’s tick is still inside the pitch, because the crossing and the stoppage happen in the same tick. The test instead requires the previous record within 0.81 m of the goal line (one tick at the 40 m/s speed cap), plus the defending side as the last touch. (class: implementation-detail)</li>
+<li><strong>Step 15 not run.</strong> The benchmark compare, the slice gate and the <code>strength</code> slow test did not run, because plan step 14 stops on the red-card failure. The formations and discipline tests from step 14 ran. (class: implementation-detail)</li>
+<li><strong><code>docs/reference/protocol.md</code> edited.</strong> The file is not in the plan’s list. Its sentence on <code>stats.shots_on_target</code> described the old count. Only the description changed, not the field. (class: implementation-detail)</li>
+</ol>
+<h2 id="anything-deferred" tabindex="-1"><a class="header-anchor" href="#anything-deferred"><span>Anything Deferred</span></a></h2>
+<ul>
+<li>Corners from clearances, crosses and headers. The slice scope puts headers from corners and corner routines out, and plan A8 keeps <code>keeper_catch_chance</code> for fast balls that are not shots. This is the source that Q-KS2 option 3 names.</li>
+<li>The slice gate and the benchmark compare, until Q-KS1 and Q-KS2 are answered and a setting is accepted.</li>
+</ul>
+<h2 id="known-risks-caveats" tabindex="-1"><a class="header-anchor" href="#known-risks-caveats"><span>Known Risks / Caveats</span></a></h2>
+<ul>
+<li><code>shots.block_spread</code> 3.2 means that a blocked ball can go in any direction, including toward the defending goal. A blocked shot can therefore become an own goal, which the census counts in neither the scored nor the blocked shots. At the shipped values the census names 98.1% of shots.</li>
+<li><code>save_hold</code> stays at the sourced 0.333. A lower hold gives more corners (g06, g09), but it is not a sourced figure, so the run did not ship one.</li>
+<li>Goals per match fell to 1.88 (band 2.4–3.2). The product owner accepted goals out of band until <code>realism-tuning</code>.</li>
+</ul>
+<h2 id="blockers" tabindex="-1"><a class="header-anchor" href="#blockers"><span>Blockers</span></a></h2>
+<ul>
+<li>
+<p><strong>Q-KS1 (class: intent-bearing, AWAITING INPUT; <code>po-answers.md</code>).</strong> The save and block model does not fix “No advantage from a red card”. On the balanced fixtures (seeds 1–120 in both club orders) every arm fails with every limit unchanged:</p>
+<ul>
+<li>Keeper: the reduced side scores 2.10 against 1.18. The full side’s 1.18 is also above the limit of 1.17 (1.6 × control 0.73).</li>
+<li>Centre-back: 0.83 against 0.77.</li>
+<li>Striker: 1.27 against 1.01.</li>
+<li>Before this slice (<code>red-base</code>, <code>a30313b</code>) the figures were keeper 2.67 against 1.64, centre-back 1.08 against 0.88 and striker 1.79 against 1.21. The gaps narrowed, but none closed.</li>
+</ul>
+<p>The steer entry for Q-LF2 says to stop and report in this case, and never to raise a limit. Options for the product owner:</p>
+<ol>
+<li>Allow a lever on the side with ten men (for example less pressing, running or attacking width). This is the measured cause, and no slice owns it now.</li>
+<li>Move the criterion again, to <code>tempo-and-restarts</code> or <code>realism-tuning</code>.</li>
+<li>Judge each arm against the reduced side’s own 11-against-11 figure instead of against the full side.</li>
+</ol>
+</li>
+<li>
+<p><strong>Q-KS2 (class: intent-bearing, AWAITING INPUT; <code>po-answers.md</code>).</strong> “Corners per team at least 3.0” is not reachable with the save and block model at any in-bounds setting that keeps goal kicks at 10 or more and on target at 42% or less. The ceiling of the planned model is 1.88–2.33 per team, with every block and parry value at its bound (t11, census C). At the shipped values it is 1.21 (slow test) and 1.59 (seed 42). At the shipped values, shots give about 4.1 parries and 2.6 blocks per match, and about 36% of those deflections end in a corner (2.4 corners per match). Options:</p>
+<ol>
+<li>Lower the slice’s corner floor (for example to 1.2 per team) and leave the 3.5–6.5 band to later slices.</li>
+<li>Allow parries to be turned toward the goal line and a non-sourced hold share. The experiment reached 3.18 per team, but goal kicks fell to 9.4.</li>
+<li>Add corner sources from clearances and crosses, in this slice or in <code>tempo-and-restarts</code>. That is a scope change.</li>
+</ol>
+<p>Each option changes a criterion, a sourced value or the slice scope, so this run may not choose one.</p>
+</li>
+</ul>
+<h2 id="assumptions" tabindex="-1"><a class="header-anchor" href="#assumptions"><span>Assumptions</span></a></h2>
+<ul>
+<li>A1 (class: implementation-detail): <code>parry_speed</code> 0.8 and <code>penalty_spread</code> 0.25 are tuned values within their bounds, not deviations. The plan’s start values were 0.4 and 0.5. At 0.4 every parry stayed with the keeper. At 0.5, with <code>shot_noise</code> 0.5, penalties converted 0.670.</li>
+<li>A2 (class: implementation-detail): g03 is the setting shipped in the stopped state. Among the settings with on target at 0.42 or less and goal kicks at 10 or more, it keeps the sourced <code>save_hold</code> (0.333), and its corners (1.51) are within noise of the best such setting at the sourced hold (g01, 1.51).</li>
+<li>A3 (class: implementation-detail): the planned parry model (turned up to <code>parry_spread</code> either side of the goal-line direction) is shipped. The toward-the-line model was measured as an experiment only (census D, scene probe E) and removed from the code before the commit.</li>
+<li>A4 (class: implementation-detail): the shoot-out save rolls now use <code>referee_draw()</code>, as the open-play save rolls do. The shoot-out scenes script outcomes with <code>Scene::shootout_kicks</code>, so no shoot-out test moved.</li>
+<li>A5 (class: implementation-detail): each penalty scene uses the taker the engine picks (<code>restart::taker</code>), puts the defending acting keeper 0.5 m inside his goal line, and plays the kick on the first step. The home side takes the penalty on odd seeds and the away side on even seeds.</li>
+<li>A6 (class: implementation-detail): the code is committed with two criteria failing, as <code>lone-forward</code> did at its stops. The play is the planned model and every earlier check passes. The failing criteria are recorded here and in <code>po-answers.md</code>.</li>
+<li>A7 (class: implementation-detail; ac: “Set pieces arise naturally”; classification: runtime-evidence): measured by <code>set_pieces_arise_from_play</code> on 200 matches. It fails on corners.</li>
+<li>A8 (class: implementation-detail; ac: “Shots are counted honestly”; classification: runtime-evidence): measured by <code>calibrate --suite equal --seed 42 --matches 1000</code>. It passes.</li>
+<li>A9 (class: implementation-detail; ac: “A wide shot stays wide”; classification: build-capability): the wide and over scenes on the real engine. They pass.</li>
+<li>A10 (class: implementation-detail; ac: “Penalties convert realistically”; classification: runtime-evidence): 500 scenes. It passes at 0.796.</li>
+<li>A11 (class: implementation-detail; ac: “No advantage from a red card”; classification: runtime-evidence): the unchanged slow test on balanced fixtures. It fails, so the run stops.</li>
+</ul>
+<h2 id="freshness-research" tabindex="-1"><a class="header-anchor" href="#freshness-research"><span>Freshness Research</span></a></h2>
+<ul>
+<li>No dependency was added or upgraded. <code>glam</code>’s <code>DVec2::normalize_or_zero</code> and <code>perp_dot</code> are already in use in this crate (<code>sim.rs</code> <code>shot_xg</code>). The nested <code>#[serde(default)]</code> block with <code>garde(dive)</code> follows the proven <code>decision</code> and <code>xg</code> pattern. The new test <code>a_tuning_block_without_the_shot_values_loads_with_the_defaults</code> proves the default.</li>
+<li>Sources for the values: the save curve 0.891–0.272 and the “two in three not held” share come from <code>docs/design/realism/01-engine-realism.md:393-397</code>. The penalty xG of 0.76 is the conventional value in public xG models (plan A9).</li>
+</ul>
+<h2 id="recommended-next-stage" tabindex="-1"><a class="header-anchor" href="#recommended-next-stage"><span>Recommended Next Stage</span></a></h2>
+<ul>
+<li><strong>Option D (default): Blocked.</strong> Q-KS1 and Q-KS2 need product-owner answers. Run <code>/wf implement football-manager-match-engine keeper-and-shots</code> again after the answers are in <code>po-answers.md</code>.</li>
+<li><strong>Option C: Revisit plan.</strong> Run <code>/wf plan football-manager-match-engine keeper-and-shots</code> if an answer adds a corner source, a lever for the ten-man side, or a new parry model.</li>
+<li><strong>Option A: Verify.</strong> <code>/wf verify football-manager-match-engine keeper-and-shots</code> can check the three passing criteria now, but two criteria are not met. Workflow state lives in the artifact files, so compact the session before it if you take this route.</li>
+</ul></div>
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-24T17:26:30Z</span>
+    <a href="../../../../../../workflows/football-manager-match-engine/history/05-implement-keeper-and-shots-0.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../../../INDEX.html">football-manager-match-engine</a><a href="../../../INDEX.html">implement</a><a href="../../INDEX.html">keeper-and-shots</a><a href="../INDEX.html">history</a><span class="m-sheet-here" aria-current="page">0</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../../../workflows/football-manager-match-engine/history/05-implement-keeper-and-shots-0.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-24T17:26:30Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>

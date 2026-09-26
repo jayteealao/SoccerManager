@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en" data-sdlc-version="9.170.0" data-artifact-type="slice">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>football-manager-match-engine · slice — sdlc</title>
+  <link rel="stylesheet" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.css?v=f44838ae7bfe">
+  <script src="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/sdlc.js?v=f44838ae7bfe" defer></script>
+  <link rel="icon" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/favicon.svg" type="image/svg+xml">
+</head>
+<body class="artifact" data-artifact-type="slice">
+  <header class="m-appbar">
+    <div class="m-crumb"><a class="m-back" href="../INDEX.html" aria-label="Back">&larr;</a><span class="m-trail"><a href="../../../INDEX.html">sdlc</a><span aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span aria-hidden="true">/</span><span class="m-here">lone-forward</span></span></div>
+    <h1 class="m-title">football-manager-match-engine · slice</h1>
+  </header>
+  <div class="b-topbar">
+    <a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a>
+    <div class="crumb"><a href="../../../INDEX.html">sdlc</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../../INDEX.html">football-manager-match-engine</a><span class="crumb-sep" aria-hidden="true">/</span><a href="../INDEX.html">slice</a><span class="crumb-sep" aria-hidden="true">/</span><b aria-current="page">lone-forward</b></div>
+    <div class="actions"><a href="../../../../workflows/football-manager-match-engine/03-slice-lone-forward.md" class="src-link" title="storage source">md &#8599;</a></div>
+  </div>
+
+  <main class="content">
+    
+    
+    <header class="artifact-header">
+      <div class="sdlc-crumb">03-slice-lone-forward.md</div>
+      <h1 class="pg-title">Slice · <code>lone-forward</code></h1>
+      
+      <div class="meta-row"><span class="status-badge is-ok">complete</span><span class="stage-badge">slice</span><span class="meta">2026-09-24T06:26:59Z</span></div>
+    </header>
+    <nav class="frag-nav" aria-label="Fragments on this page"><span class="frag-nav-label">On this page</span><ul class="frag-nav-list"></ul></nav>
+    
+    <section class="slice-stages">
+    <h2 class="sdlc-h2">stages</h2>
+    <div class="slice-grid"><a class="slice-card" href="../../plan/lone-forward/INDEX.html"><span class="slice-slug"><code>plan</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../implement/lone-forward/INDEX.html"><span class="slice-slug"><code>implement</code></span>
+    <span class="status-badge is-ok">complete</span></a><a class="slice-card" href="../../verify/lone-forward/INDEX.html"><span class="slice-slug"><code>verify</code></span>
+    <span class="status-badge is-ok">complete</span></a></div>
+  </section>
+    
+    <dl class="frontmatter-card"><div><dt>type</dt><dd>slice</dd></div><div><dt>slug</dt><dd>football-manager-match-engine</dd></div><div><dt>slice-slug</dt><dd>lone-forward</dd></div><div><dt>status</dt><dd>complete</dd></div><div><dt>stage-number</dt><dd>3</dd></div><div><dt>created-at</dt><dd>2026-09-24T06:26:59Z</dd></div><div><dt>updated-at</dt><dd>2026-09-24T06:26:59Z</dd></div><div><dt>complexity</dt><dd>l</dd></div><div><dt>depends-on</dt><dd>tuning-loop, defending-and-discipline</dd></div><div><dt>source</dt><dd>extension</dd></div><div><dt>source-ref</dt><dd>po-answers.md Q-I2; user description</dd></div><div><dt>extension-round</dt><dd>2</dd></div><div><dt>tags</dt><dd>engine, tactics, rules, realism</dd></div><div><dt>refs</dt><dd>{&quot;index&quot;:&quot;00-index.md&quot;,&quot;slice-index&quot;:&quot;03-slice.md&quot;,&quot;source&quot;:&quot;05-implement-defending-and-discipline.md&quot;,&quot;plan&quot;:&quot;04-plan-lone-forward.md&quot;,&quot;implement&quot;:&quot;05-implement-lone-forward.md&quot;}</dd></div></dl>
+    <div class="prose"><h1 id="slice-lone-forward" tabindex="-1"><a class="header-anchor" href="#slice-lone-forward"><span>Slice: Lone forward</span></a></h1>
+<h2 id="goal" tabindex="-1"><a class="header-anchor" href="#goal"><span>Goal</span></a></h2>
+<p>A side with one central forward plays like a real side. The forward holds the ball up, passes and stays onside, and does not dribble through the defence at will. A red card gives the reduced side no advantage, and every formation with a lone forward holds against 4-4-2.</p>
+<h2 id="why-this-slice-exists" tabindex="-1"><a class="header-anchor" href="#why-this-slice-exists"><span>Why This Slice Exists</span></a></h2>
+<p><code>defending-and-discipline</code> built goal-side cover, the new press and the acting keeper at <code>f7fe35b</code>. Two of its criteria still failed at every in-bounds setting of its five tuning values (<code>05-implement-defending-and-discipline.md</code>):</p>
+<ul>
+<li><strong>Red card:</strong> the reduced side outscores the full side in every arm. Keeper 5.82 against 2.06, centre-back 2.39 against 0.71, striker 3.84 against 0.95.</li>
+<li><strong>Formations:</strong> 4-4-1-1 scores 5.18 and 3-4-3 scores 4.17 against 4-4-2, above the 4.0 limit.</li>
+</ul>
+<p>The measured cause is a lone central forward. Figures are for the away side, cards off, seeds 1–48:</p>
+<ul>
+<li><strong>No pass option:</strong> with no forward team-mate, the carrier’s option scores favour a dribble and a shot. The side takes 40.6 shots against 20.8 in the control.</li>
+<li><strong>Never offside:</strong> 0.0 offsides against 1.2.</li>
+<li><strong>Contact floods fouls:</strong> each tick near the ball gives about a 10% foul chance against a 2.5% win chance, so the home side fouls 35.5 times against 17.0.</li>
+</ul>
+<p>The product owner moved both criteria and both levers into this new slice, before <code>keeper-and-shots</code> (<code>po-answers.md</code>, Q-I2, Q-X2, Q-X3).</p>
+<h2 id="scope" tabindex="-1"><a class="header-anchor" href="#scope"><span>Scope</span></a></h2>
+<ul>
+<li><strong>In:</strong>
+<ul>
+<li><strong>The lone forward’s decisions:</strong> when the carrier has no forward team-mate, the pass, dribble, shoot and hold-up choices, and his position against the offside line.</li>
+<li><strong>Tackle odds:</strong> the odds of a won tackle against a foul when a defender is in contact, as bounded tuning values in <code>tuning.json</code>.</li>
+<li><strong>Discipline measured again:</strong> fewer fouls move the card figures, so the discipline criterion is measured on the new odds.</li>
+<li><strong>Tuning:</strong> through the <code>tuning-loop</code> suites, with the baseline copied into the evidence folder.</li>
+<li><strong>Tests:</strong> a regression test for each lever, including a lone-forward scene and a contact scene.</li>
+</ul>
+</li>
+<li><strong>Out:</strong>
+<ul>
+<li>The card chance per foul (RIM-7).</li>
+<li>The keeper save model. <code>keeper-and-shots</code> owns it.</li>
+<li>Goals, shots and possession band tuning. <code>realism-tuning</code> owns it.</li>
+<li>Any change to a criterion limit.</li>
+</ul>
+</li>
+</ul>
+<h2 id="acceptance-criteria" tabindex="-1"><a class="header-anchor" href="#acceptance-criteria"><span>Acceptance Criteria</span></a></h2>
+<ul>
+<li><strong>No advantage from a red card.</strong> In 120 seeds for each case, one away player is sent off at kick-off (striker, centre-back or keeper) and cards are otherwise off. In every case, the reduced side’s goals per match do not exceed the full side’s. The full side’s goals per match are at most 1.6 times the no-send-off baseline for the same seeds.</li>
+<li><strong>The lone-forward formations hold.</strong> At 11 against 11, over 120 seeds, 4-4-1-1 and 3-4-3 each play against 4-4-2. Neither side averages more than 4.0 goals per match in either pairing.</li>
+<li><strong>Nothing that passes now regresses.</strong> The eight pairings that pass in <code>defending-and-discipline</code> (4-4-2, 4-3-3, 4-2-3-1, 3-5-2, 4-1-4-1, 4-1-2-1-2, 5-3-2 and 5-4-1 against 4-4-2) still hold at most 4.0 goals per side. Over 200 matches, second yellows are at most 0.10 per match, at most 25% of matches have a sending-off, and no player is shown two cards on the same tick.</li>
+<li><strong>A lone forward uses his team-mates.</strong> Given a lone forward with the ball and an open team-mate behind him, when he is pressed, then he passes or holds the ball up instead of dribbling into the pressure.</li>
+</ul>
+<h2 id="dependencies-on-other-slices" tabindex="-1"><a class="header-anchor" href="#dependencies-on-other-slices"><span>Dependencies on Other Slices</span></a></h2>
+<ul>
+<li><code>tuning-loop</code>: targeted runs, the red-card suite and the baseline diff.</li>
+<li><code>defending-and-discipline</code>: goal-side cover, the press, the acting keeper and the discipline mechanisms this slice must keep.</li>
+</ul>
+<h2 id="risks" tabindex="-1"><a class="header-anchor" href="#risks"><span>Risks</span></a></h2>
+<ul>
+<li><strong>Every seeded result moves.</strong> New decision weights and tackle odds consume random draws. Pinned tests move again. Each moved expectation is re-derived and recorded.</li>
+<li><strong>Fewer fouls, fewer cards.</strong> A higher win share lowers fouls and so lowers yellow cards and sending-offs. The yellow-card and sending-off bands may leave their range. Band misses are recorded, not failed (Q-E4). The discipline criterion above still holds.</li>
+<li><strong>The fix does not reach the cause.</strong> If both levers at their bounds cannot pass a criterion, the slice stops and reports the failing arm or pairing. It never raises a limit.</li>
+</ul></div>
+    
+  
+  </main>
+
+  <footer class="bottom">
+    <a href="../INDEX.html">↑ up</a>
+    <span class="updated">updated 2026-09-24T06:26:59Z</span>
+    <a href="../../../../workflows/football-manager-match-engine/03-slice-lone-forward.md" class="src-link" title="storage source">md ↗</a>
+  </footer>
+  <input type="checkbox" id="m-menu" class="m-menu-toggle" aria-label="Navigation menu">
+  <label class="m-backdrop" for="m-menu" aria-hidden="true"></label>
+  <aside class="m-sheet" aria-label="Navigation">
+    <div class="m-sheet-grip" aria-hidden="true"></div>
+    <h2 class="m-sheet-head">Places</h2>
+    <nav class="m-sheet-places" aria-label="Places"><a class="brand" href="/__sdlc/assets/65b0d4e0c97c6a12d4c9d1541ae8b4f3597d851d11c44c0ac86a3da66f1730a6/../INDEX.html">.ai/workflows</a><a href="../../INDEX.html">football-manager-match-engine</a><a href="../INDEX.html">slice</a><span class="m-sheet-here" aria-current="page">lone-forward</span></nav>
+    <h2 class="m-sheet-head">Links</h2>
+    <div class="actions m-sheet-links"><a href="../INDEX.html">&uarr; up</a><a href="../../../../workflows/football-manager-match-engine/03-slice-lone-forward.md" class="src-link" title="storage source">md &#8599;</a></div>
+    <div class="m-sheet-meta">updated 2026-09-24T06:26:59Z</div>
+  </aside>
+  <nav class="m-tabbar" aria-label="Sections"><a class="m-tab" href="../../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></a><a class="m-tab is-active" href="../../INDEX.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><label class="m-tab m-tab-menu" for="m-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></label></nav>
+  
+</body>
+</html>
