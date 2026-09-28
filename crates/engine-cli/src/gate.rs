@@ -48,6 +48,9 @@ fn mode(opts: &GateOpts) -> anyhow::Result<(Mode, String)> {
         }
         return Ok((Mode::Compare, String::new()));
     };
+    if opts.debug {
+        bail!("--debug plays the compare only; leave out {flag}");
+    }
     if !opts.fixture.is_empty() {
         bail!("{flag} plays every fixture; leave out --fixture");
     }
@@ -73,6 +76,9 @@ fn mode(opts: &GateOpts) -> anyhow::Result<(Mode, String)> {
 
 pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
     let (mode, reason) = mode(opts)?;
+    if opts.debug && !engine::trace::COMPILED {
+        bail!("--debug needs a build with the debug trace (the debug-trace feature)");
+    }
     let all = gate::fixtures();
     let selected = select(&all, &opts.fixture)?;
     let path = opts
@@ -148,7 +154,17 @@ pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
     let mut code = 0;
     let mut written = Vec::new();
     for fixture in &selected {
-        let played = match gate::play_fixture(fixture, &inputs) {
+        let played = if opts.debug {
+            play_debug(fixture, &inputs).map(|(played, same)| {
+                if !same {
+                    code = 2;
+                }
+                played
+            })
+        } else {
+            gate::play_fixture(fixture, &inputs)
+        };
+        let played = match played {
             Ok(played) => played,
             Err(err) => {
                 // A NaN or an infinity in the hashed state fails the gate like a difference.
@@ -231,6 +247,19 @@ pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
         (_, None) => unreachable!("the write modes read the old file"),
     }
     Ok(code)
+}
+
+/// Plays `fixture` with debug mode on, counts its trace records, and prints the count line
+/// on standard error. Returns the result and whether the trace's draw count equals the
+/// registry's.
+fn play_debug(fixture: &Fixture, inputs: &Inputs<'_>) -> Result<(Played, bool), gate::GateError> {
+    let mut counts = engine::trace::Counts::default();
+    let (played, registry) = gate::play_traced(fixture, inputs, |records, _| counts.add(records))?;
+    eprintln!(
+        "trace: {} {} draws recorded, registry {registry}, {} decisions, {} rule outcomes",
+        fixture.id, counts.draws, counts.decisions, counts.rules
+    );
+    Ok((played, counts.draws == registry))
 }
 
 /// The fixtures `ids` names, in gate order, or all of them when `ids` is empty.

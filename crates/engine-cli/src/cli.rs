@@ -108,6 +108,17 @@ pub struct GateOpts {
                      --bootstrap."
     )]
     pub reason: Option<String>,
+    /// Play every match with debug mode on; compare only.
+    #[arg(
+        long,
+        long_help = "Play every match with debug mode on. The compare and the report\n\
+                     are unchanged; after each match, standard error gets the draws\n\
+                     the trace recorded, the registry's draw count, and the decisions\n\
+                     and rule outcomes recorded. Unequal draw counts fail the gate\n\
+                     (exit 2). The records are not written. Refused with --bootstrap,\n\
+                     --regenerate, and --add-machine-set."
+    )]
+    pub debug: bool,
 }
 
 #[derive(Debug, Args)]
@@ -193,6 +204,17 @@ pub struct SimulateOpts {
                      content/scripts/README.md."
     )]
     pub script_pack: Option<PathBuf>,
+    /// Write the match's debug trace to this file.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Play the match with debug mode on and write its debug trace to\n\
+                     this file as JSON Lines: a header line, then every random draw,\n\
+                     decision point, and rule outcome in the order the engine ran\n\
+                     them. A 90-minute match gives tens of megabytes. See\n\
+                     docs/reference/cli.md."
+    )]
+    pub debug_trace: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]

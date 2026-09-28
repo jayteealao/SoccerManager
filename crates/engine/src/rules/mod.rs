@@ -247,7 +247,10 @@ impl Simulation {
         let at = self.players[c].pos;
         let penalty = pitch::in_penalty_area(at, own_end);
         let advantage = !ball_lost && !penalty;
-        let draw = self.streams.draw(Key::player(Action::FoulCard, &offender));
+        let draw = self.streams.tested(
+            Key::player(Action::FoulCard, &offender),
+            &fouls::card_thresholds(offender.derived.aggression, t),
+        );
         let mut card = fouls::card_outcome(offender.derived.aggression, offender.yellow, t, draw);
         let mut event = self.event(EngineEventKind::Foul, Some(offender.team));
         event.player = Some(i);
@@ -755,7 +758,11 @@ impl Simulation {
             1 - first
         } else {
             self.summary.extra_time = true;
-            let team = usize::from(self.streams.draw(Key::of_match(Action::ExtraKickOff)) >= 0.5);
+            let team = usize::from(
+                self.streams
+                    .tested(Key::of_match(Action::ExtraKickOff), &[0.5])
+                    >= 0.5,
+            );
             self.referee.extra_kick_off = Some(team);
             team
         };
@@ -798,8 +805,16 @@ impl Simulation {
         let eligible = shootout::equalise(candidates);
         let keepers = [0, 1].map(|team| shootout::keeper(&eligible[team]).unwrap_or(acting[team]));
         let order = [0, 1].map(|team| shootout::order(&eligible[team], Some(keepers[team])));
-        let first = usize::from(self.streams.draw(Key::of_match(Action::ShootoutFirstTeam)) >= 0.5);
-        let end = if self.streams.draw(Key::of_match(Action::ShootoutEnd)) < 0.5 {
+        let first = usize::from(
+            self.streams
+                .tested(Key::of_match(Action::ShootoutFirstTeam), &[0.5])
+                >= 0.5,
+        );
+        let end = if self
+            .streams
+            .tested(Key::of_match(Action::ShootoutEnd), &[0.5])
+            < 0.5
+        {
             -1.0
         } else {
             1.0
@@ -957,11 +972,19 @@ impl Simulation {
             }
             let save = crate::shot::save_chance(t.shots.penalty_xg, t);
             let k = self.players[keeper];
-            if self.streams.draw(Key::player(Action::ShootoutSave, &k)) >= save {
+            if self
+                .streams
+                .tested(Key::player(Action::ShootoutSave, &k), &[save])
+                >= save
+            {
                 self.keeper_beaten = true;
                 return;
             }
-            if self.streams.draw(Key::player(Action::ShootoutSaveHold, &k)) >= t.shots.save_hold {
+            if self.streams.tested(
+                Key::player(Action::ShootoutSaveHold, &k),
+                &[t.shots.save_hold],
+            ) >= t.shots.save_hold
+            {
                 self.parry(keeper, t);
                 return;
             }

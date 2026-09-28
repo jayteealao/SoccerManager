@@ -17,6 +17,7 @@ use crate::error::EngineError;
 use crate::rules::Stoppage;
 use crate::sim::Simulation;
 use crate::team::PLAYERS_PER_TEAM;
+use crate::trace::TraceRecord;
 
 /// Players per record.
 pub const PLAYER_COUNT: usize = 2 * PLAYERS_PER_TEAM;
@@ -162,6 +163,13 @@ pub trait TickSink {
     fn on_stoppage(&mut self, _stoppage: &Stoppage, _sim: &Simulation) -> Result<(), EngineError> {
         Ok(())
     }
+
+    /// The debug trace hook: in debug mode, called after each step with the step's trace
+    /// records (and once more after full time), before the tick's record. The default does
+    /// nothing.
+    fn on_trace(&mut self, _records: &[TraceRecord]) -> Result<(), EngineError> {
+        Ok(())
+    }
 }
 
 /// Discards every record (benchmarks).
@@ -214,6 +222,11 @@ impl<A: TickSink, B: TickSink> TickSink for FanoutSink<A, B> {
         self.a.on_stoppage(stoppage, sim)?;
         self.b.on_stoppage(stoppage, sim)
     }
+
+    fn on_trace(&mut self, records: &[TraceRecord]) -> Result<(), EngineError> {
+        self.a.on_trace(records)?;
+        self.b.on_trace(records)
+    }
 }
 
 /// An absent sink discards every record, so a caller can hold an optional second sink
@@ -229,6 +242,13 @@ impl<S: TickSink> TickSink for Option<S> {
     fn on_stoppage(&mut self, stoppage: &Stoppage, sim: &Simulation) -> Result<(), EngineError> {
         match self {
             Some(sink) => sink.on_stoppage(stoppage, sim),
+            None => Ok(()),
+        }
+    }
+
+    fn on_trace(&mut self, records: &[TraceRecord]) -> Result<(), EngineError> {
+        match self {
+            Some(sink) => sink.on_trace(records),
             None => Ok(()),
         }
     }

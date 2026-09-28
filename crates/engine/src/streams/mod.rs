@@ -69,6 +69,10 @@ pub struct Streams {
     /// apart from the referee's so a law test's scripted draws never feed an injury roll.
     #[cfg(feature = "scenario")]
     injury: std::collections::VecDeque<f64>,
+    /// The debug trace, when debug mode is on. Not match state: never hashed, never in a
+    /// snapshot.
+    #[cfg(feature = "debug-trace")]
+    trace: Option<Box<crate::trace::Trace>>,
 }
 
 impl Streams {
@@ -87,6 +91,8 @@ impl Streams {
             referee: std::collections::VecDeque::new(),
             #[cfg(feature = "scenario")]
             injury: std::collections::VecDeque::new(),
+            #[cfg(feature = "debug-trace")]
+            trace: None,
         }
     }
 
@@ -109,16 +115,40 @@ impl Streams {
     /// In a debug or test build, a key the table does not hold (a player key on a match row,
     /// the match key on a player row, or a squad index of 40 or more) panics and names it.
     pub fn draw(&mut self, key: Key) -> f64 {
+        self.draw_with(key, &[])
+    }
+
+    /// A value in `[0, 1)` for `key` that the caller tests against `thresholds`: one
+    /// probability, or two cumulative thresholds for a three-way split. The caller keeps its
+    /// own comparison; the thresholds only reach the debug trace.
+    pub fn tested(&mut self, key: Key, thresholds: &[f64]) -> f64 {
+        self.draw_with(key, thresholds)
+    }
+
+    /// The registry's only draw call: every draw, scripted or not, is counted here and, in
+    /// debug mode, recorded here before it is returned.
+    #[inline]
+    fn draw_with(&mut self, key: Key, thresholds: &[f64]) -> f64 {
         #[cfg(any(debug_assertions, feature = "scenario"))]
         if !key.registered() {
             panic!("unregistered stream key {}", key.name());
         }
         self.draws += 1;
         #[cfg(feature = "scenario")]
-        if let Some(draw) = self.scripted(key) {
-            return draw;
+        let scripted = self.scripted(key);
+        #[cfg(not(feature = "scenario"))]
+        let scripted: Option<f64> = None;
+        let value = match scripted {
+            Some(draw) => draw,
+            None => self.stream(key).random::<f64>(),
+        };
+        #[cfg(feature = "debug-trace")]
+        if let Some(trace) = self.trace.as_deref_mut() {
+            record_draw(trace, key, value, thresholds, scripted.is_some());
         }
-        self.stream(key).random::<f64>()
+        #[cfg(not(feature = "debug-trace"))]
+        let _ = thresholds;
+        value
     }
 
     /// A value in `[lo, hi)` for `key`.
@@ -128,7 +158,59 @@ impl Streams {
 
     /// `true` with probability `p`, for `key`.
     pub fn chance(&mut self, key: Key, p: f64) -> bool {
-        self.draw(key) < p
+        self.tested(key, &[p]) < p
+    }
+
+    /// Switches the debug trace on; its records carry `tick` until the next stamp. Does
+    /// nothing in a build without the recorder.
+    pub fn enable_trace(&mut self, tick: u32) {
+        #[cfg(feature = "debug-trace")]
+        {
+            self.trace = Some(Box::new(crate::trace::Trace::new(tick)));
+        }
+        #[cfg(not(feature = "debug-trace"))]
+        let _ = tick;
+    }
+
+    /// `true` while the debug trace is on; always `false` in a build without the recorder.
+    #[inline(always)]
+    pub fn trace_on(&self) -> bool {
+        #[cfg(feature = "debug-trace")]
+        {
+            self.trace.is_some()
+        }
+        #[cfg(not(feature = "debug-trace"))]
+        {
+            false
+        }
+    }
+
+    /// The debug trace, while it is on.
+    pub(crate) fn trace_mut(&mut self) -> Option<&mut crate::trace::Trace> {
+        #[cfg(feature = "debug-trace")]
+        {
+            self.trace.as_deref_mut()
+        }
+        #[cfg(not(feature = "debug-trace"))]
+        {
+            None
+        }
+    }
+
+    /// Stamps the tick the next trace records carry.
+    #[inline]
+    pub(crate) fn begin_tick(&mut self, tick: u32) {
+        #[cfg(feature = "debug-trace")]
+        if let Some(trace) = self.trace.as_deref_mut() {
+            trace.stamp(tick);
+        }
+        #[cfg(not(feature = "debug-trace"))]
+        let _ = tick;
+    }
+
+    /// Takes every trace record since the last call; empty while the trace is off.
+    pub fn take_trace(&mut self) -> Vec<crate::trace::TraceRecord> {
+        self.trace_mut().map(|t| t.take()).unwrap_or_default()
     }
 
     /// The stream of `key`, created at word position 0 on first use.
@@ -237,6 +319,21 @@ impl Streams {
     }
 }
 
+/// Pushes one draw record, out of line so the draw path stays one branch while the trace is
+/// off.
+#[cfg(feature = "debug-trace")]
+#[inline(never)]
+#[cold]
+fn record_draw(
+    trace: &mut crate::trace::Trace,
+    key: Key,
+    value: f64,
+    thresholds: &[f64],
+    scripted: bool,
+) {
+    trace.push_draw(key, value, thresholds, scripted);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -325,5 +422,118 @@ mod tests {
     #[should_panic(expected = "unregistered stream key laws.tackle team 1 squad 40")]
     fn a_draw_for_squad_40_panics_and_names_it() {
         Streams::keyed(1).draw(p(Action::Tackle, 1, 40));
+    }
+
+    #[cfg(feature = "debug-trace")]
+    mod recorder {
+        use super::*;
+        use crate::trace::TraceRecord;
+
+        fn draws(records: &[TraceRecord]) -> Vec<&crate::trace::DrawRecord> {
+            records
+                .iter()
+                .filter_map(|r| match r {
+                    TraceRecord::Draw(d) => Some(d),
+                    TraceRecord::Point(_) => None,
+                })
+                .collect()
+        }
+
+        #[test]
+        fn the_trace_is_off_by_default_and_records_nothing() {
+            let mut s = Streams::keyed(3);
+            assert!(!s.trace_on());
+            for key in mixed_keys() {
+                s.draw(key);
+            }
+            assert!(s.take_trace().is_empty());
+        }
+
+        #[test]
+        fn every_draw_is_recorded_with_its_key_index_and_value() {
+            let mut s = Streams::keyed(3);
+            let mut plain = Streams::keyed(3);
+            s.enable_trace(7);
+            let keys = mixed_keys();
+            let mut values = Vec::new();
+            for i in 0..40 {
+                let key = keys[i % keys.len()];
+                let v = s.draw(key);
+                assert_eq!(
+                    v.to_bits(),
+                    plain.draw(key).to_bits(),
+                    "the trace moves no value"
+                );
+                values.push((key, v));
+                if i == 20 {
+                    s.begin_tick(8);
+                }
+            }
+            s.range(keys[0], -1.0, 1.0);
+            let records = s.take_trace();
+            let d = draws(&records);
+            assert_eq!(d.len() as u64, s.draws(), "one record per counted draw");
+            for (k, (key, v)) in values.iter().enumerate() {
+                assert_eq!(d[k].key, *key);
+                assert_eq!(d[k].value.to_bits(), v.to_bits());
+                assert_eq!(d[k].index, (k / keys.len()) as u64, "index counts per key");
+                assert_eq!(d[k].tick, if k <= 20 { 7 } else { 8 });
+                assert!(d[k].thresholds.is_empty());
+                assert!(!d[k].scripted);
+            }
+            assert_eq!(d[40].index, 8);
+            assert!(s.take_trace().is_empty(), "take drains the buffer");
+        }
+
+        #[test]
+        fn a_chance_draw_records_its_probability() {
+            let mut s = Streams::keyed(5);
+            s.enable_trace(1);
+            let key = p(Action::KeeperCatch, 0, 0);
+            let hit = s.chance(key, 0.25);
+            let split = p(Action::Tackle, 1, 3);
+            let v = s.tested(split, &[0.1, 0.3]);
+            let records = s.take_trace();
+            let d = draws(&records);
+            assert_eq!(d[0].thresholds, vec![0.25]);
+            assert_eq!(hit, d[0].value < 0.25);
+            assert_eq!(d[1].thresholds, vec![0.1, 0.3]);
+            assert_eq!(d[1].value.to_bits(), v.to_bits());
+        }
+
+        #[test]
+        #[cfg(feature = "scenario")]
+        fn a_scripted_draw_is_recorded_and_marked() {
+            let mut s = Streams::keyed(5);
+            s.enable_trace(1);
+            s.script_referee(&[0.125]);
+            let v = s.draw(p(Action::Tackle, 0, 2));
+            assert_eq!(v, 0.125);
+            s.draw(p(Action::Tackle, 0, 2));
+            let records = s.take_trace();
+            let d = draws(&records);
+            assert_eq!(d.len() as u64, s.draws());
+            assert!(d[0].scripted);
+            assert!(!d[1].scripted);
+            assert_eq!(d[1].index, 1);
+        }
+
+        #[test]
+        fn a_clone_carries_the_buffer_and_a_restore_keeps_the_count() {
+            let mut s = Streams::keyed(9);
+            s.enable_trace(1);
+            s.draw(p(Action::ShotAim, 0, 5));
+            let mut copy = s.clone();
+            copy.draw(p(Action::ShotAim, 0, 5));
+            assert_eq!(copy.take_trace().len(), 2, "the clone has its own buffer");
+            assert_eq!(s.take_trace().len(), 1, "the original keeps its own");
+            // The options audit restores a clone taken before its reference run: the restored
+            // registry's count and buffer agree.
+            let real = s.clone();
+            s.draw(p(Action::PassScore, 1, 1));
+            s = real;
+            s.draw(p(Action::PassScore, 1, 1));
+            assert_eq!(s.take_trace().len() as u64, s.draws() - 1);
+        }
     }
 }

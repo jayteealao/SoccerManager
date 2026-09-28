@@ -23,9 +23,10 @@ use crate::canon::Writer;
 use crate::data::Content;
 use crate::data::team::TeamFile;
 use crate::plugin::Plugins;
-use crate::sim::{DecidedBy, EngineEventKind, EventDetail, MatchConfig, Simulation};
+use crate::sim::{DecidedBy, EngineEvent, EngineEventKind, EventDetail, MatchConfig, Simulation};
 use crate::tactics::TacticsPatch;
 use crate::tactics::change::{Change, ChangeKind};
+use crate::trace::TraceRecord;
 
 /// The version of the gate's file layout and report.
 pub const GATE_SCHEMA: u16 = 1;
@@ -285,6 +286,42 @@ pub(crate) struct Probe<'a> {
     /// The run leaves the draws taken and the final stream state here.
     #[cfg(feature = "scenario")]
     pub streams: Option<&'a std::cell::RefCell<Option<(u64, crate::rng::StreamState)>>>,
+    /// Switches debug mode on: the run hands each step's trace records to the sink.
+    pub trace: Option<TraceProbe<'a>>,
+}
+
+/// The receiver of one tick's debug trace records and events.
+type TickTrace<'a> = dyn FnMut(&[TraceRecord], &[EngineEvent]) + 'a;
+
+/// Where a traced run hands its debug trace records and leaves the registry's draw counter.
+pub(crate) struct TraceProbe<'a> {
+    pub sink: &'a std::cell::RefCell<TickTrace<'a>>,
+    pub draws: &'a std::cell::Cell<u64>,
+}
+
+/// Plays `fixture` with debug mode on, handing each tick's trace records and events to
+/// `on_tick`, after the step (and full time on the last tick) and before the tick's state
+/// is hashed. Returns the result and the registry's draw counter. The hashed bytes are
+/// those of an untraced run.
+pub fn play_traced<'a>(
+    fixture: &Fixture,
+    inputs: &Inputs<'_>,
+    on_tick: impl FnMut(&[TraceRecord], &[EngineEvent]) + 'a,
+) -> Result<(Played, u64), GateError> {
+    let sink = std::cell::RefCell::new(on_tick);
+    let draws = std::cell::Cell::new(0);
+    let played = run(
+        fixture,
+        inputs,
+        &Probe {
+            trace: Some(TraceProbe {
+                sink: &sink,
+                draws: &draws,
+            }),
+            ..Probe::default()
+        },
+    )?;
+    Ok((played, draws.get()))
 }
 
 /// Plays `fixture` and returns the result, the random draws the match took, and its final
@@ -312,7 +349,7 @@ pub(crate) fn run(
     inputs: &Inputs<'_>,
     probe: &Probe<'_>,
 ) -> Result<Played, GateError> {
-    let mut sim = build(fixture, inputs)?;
+    let mut sim = build(fixture, inputs, probe.trace.is_some())?;
     #[cfg(feature = "scenario")]
     if let Some(audit) = probe.audit {
         sim.options_audit = Some(audit.borrow().clone());
@@ -336,6 +373,10 @@ pub(crate) fn run(
             sim.finish();
         }
         let events = sim.take_events();
+        if let Some(trace) = &probe.trace {
+            let records = sim.take_trace();
+            (trace.sink.borrow_mut())(&records, &events);
+        }
         for e in &events {
             match (e.kind, e.detail) {
                 (EngineEventKind::Substitution, _) => facts.substitutions += 1,
@@ -391,6 +432,9 @@ pub(crate) fn run(
     if let Some(out) = probe.streams {
         *out.borrow_mut() = Some((sim.streams.draws(), sim.streams.stream_state()));
     }
+    if let Some(trace) = &probe.trace {
+        trace.draws.set(sim.draws());
+    }
     let summary = sim.summary();
     facts.extra_time = summary.extra_time;
     facts.shootout = summary.shootout.is_some();
@@ -415,7 +459,7 @@ pub(crate) fn run(
     })
 }
 
-fn build(fixture: &Fixture, inputs: &Inputs<'_>) -> Result<Simulation, GateError> {
+fn build(fixture: &Fixture, inputs: &Inputs<'_>, traced: bool) -> Result<Simulation, GateError> {
     let setup = |reason: String| GateError::Setup {
         fixture: fixture.id.clone(),
         reason,
@@ -445,7 +489,12 @@ fn build(fixture: &Fixture, inputs: &Inputs<'_>) -> Result<Simulation, GateError
     if let Some(pack) = pack {
         config.fold_pack_hash(&pack.sha);
     }
-    let mut sim = Simulation::new(config).map_err(|e| setup(e.to_string()))?;
+    let sim = if traced {
+        Simulation::new_traced(config)
+    } else {
+        Simulation::new(config)
+    };
+    let mut sim = sim.map_err(|e| setup(e.to_string()))?;
     if let Some(pack) = pack {
         sim.set_plugins((pack.hooks)());
     }

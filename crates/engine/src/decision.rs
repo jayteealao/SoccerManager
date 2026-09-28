@@ -508,7 +508,10 @@ impl Simulation {
                 let c = &t.clearances;
                 let wide = c.wide_chance > 0.0
                     && carrier.pos.x * own_goal_x.signum() >= pitch::HALF_LENGTH - c.wide_depth
-                    && self.streams.draw(Key::player(Action::ClearWide, &carrier)) < c.wide_chance;
+                    && self
+                        .streams
+                        .tested(Key::player(Action::ClearWide, &carrier), &[c.wide_chance])
+                        < c.wide_chance;
                 let (line, spread) = if wide {
                     (wide_of_goal(carrier.pos, own_goal_x), WIDE_SPREAD)
                 } else {

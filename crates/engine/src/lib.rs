@@ -31,6 +31,7 @@ pub mod steering;
 pub mod streams;
 pub mod tactics;
 pub mod team;
+pub mod trace;
 pub mod tuning;
 pub mod validate;
 

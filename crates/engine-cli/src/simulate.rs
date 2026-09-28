@@ -1,19 +1,24 @@
 //! `engine-cli simulate`: run one match to a tick file, save `stats.json` and `events.jsonl`
-//! under the runtime data folder, and print one match-stats record.
+//! under the runtime data folder, and print one match-stats record. With `--debug-trace`,
+//! the match plays with debug mode on and its trace goes to a JSON Lines file.
 
-use std::path::Path;
+use std::fs::File;
+use std::io::{BufWriter, Write};
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use anyhow::Context;
+use anyhow::{Context, bail};
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id, owner_bytes};
 use engine::observe::{
     LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef, emit_line,
     write_stats,
 };
+use engine::trace::{self, Counts, TraceHeader, TraceRecord};
 use engine::{
     Commentator, FanoutSink, FileSink, MatchConfig, Simulation, SnapshotSink, TickHeader,
     Validator, read_ticks,
 };
+use engine::{EngineError, TickRecord, TickSink};
 use tracing::info_span;
 
 use stream::EventWriter;
@@ -24,6 +29,9 @@ use crate::stream_run::{Ids, rows};
 pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i32> {
     let span = info_span!("simulate", seed = opts.seed, minutes = opts.minutes);
     let _guard = span.enter();
+    if opts.debug_trace.is_some() && !trace::COMPILED {
+        bail!("--debug-trace needs a build with the debug trace (the debug-trace feature)");
+    }
     let loaded = crate::content::load(
         content_dir,
         opts.team_a.as_deref(),
@@ -62,7 +70,11 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
     let content_hash = config.content_hash.clone();
     let started = Instant::now();
     let club_ids = [teams[0].id.clone(), teams[1].id.clone()];
-    let mut sim = Simulation::new(config)?;
+    let mut sim = if opts.debug_trace.is_some() {
+        Simulation::new_traced(config)?
+    } else {
+        Simulation::new(config)?
+    };
     loaded.attach(&mut sim);
     let mut ids = Ids::new(&sim);
     let mut commentator = Commentator::for_match(&loaded.commentary, &sim);
@@ -70,8 +82,16 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
         .with_context(|| format!("cannot create {}", opts.ticks_out.display()))?;
     let snapshots = (!opts.no_snapshot)
         .then(|| SnapshotSink::new(&data, &match_id.to_string(), owner, match_id.millis));
-    let mut sink = FanoutSink::new(file, snapshots);
+    let traced = match &opts.debug_trace {
+        Some(path) => Some(TraceFile::create(path, opts.seed, &sim)?),
+        None => None,
+    };
+    let mut sink = FanoutSink::new(FanoutSink::new(file, snapshots), traced);
     sim.run(&mut sink)?;
+    let (sink, traced) = sink.into_parts();
+    if let Some(traced) = traced {
+        traced.finish(sim.draws())?;
+    }
     let (file, snapshots) = sink.into_parts();
     let written = file.finish()?;
     let snapshot_writes = snapshots.map_or(0, |s| s.writes);
@@ -128,4 +148,64 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
     write_stats(&data, &stats)?;
     emit_line(&stats)?;
     Ok(0)
+}
+
+/// Writes the debug trace of one match: the header line, then every record as the match
+/// hands it over after each step.
+struct TraceFile {
+    path: PathBuf,
+    writer: BufWriter<File>,
+    counts: Counts,
+}
+
+impl TraceFile {
+    fn create(path: &Path, seed: u64, sim: &Simulation) -> anyhow::Result<Self> {
+        let file =
+            File::create(path).with_context(|| format!("cannot create {}", path.display()))?;
+        let mut writer = BufWriter::with_capacity(1 << 20, file);
+        let header = TraceHeader {
+            seed,
+            scheme: sim.stream_scheme(),
+        };
+        trace::write_header(&mut writer, &header)?;
+        Ok(Self {
+            path: path.to_path_buf(),
+            writer,
+            counts: Counts::default(),
+        })
+    }
+
+    /// Flushes the file and reports the counts; unequal draw counts are an error.
+    fn finish(mut self, registry: u64) -> anyhow::Result<()> {
+        self.writer
+            .flush()
+            .with_context(|| format!("cannot write {}", self.path.display()))?;
+        let c = self.counts;
+        eprintln!(
+            "debug trace: {}, {} draws (registry {registry}), {} decisions, {} rule outcomes",
+            self.path.display(),
+            c.draws,
+            c.decisions,
+            c.rules
+        );
+        if c.draws != registry {
+            bail!(
+                "the debug trace recorded {} draws but the registry served {registry}",
+                c.draws
+            );
+        }
+        Ok(())
+    }
+}
+
+impl TickSink for TraceFile {
+    fn on_tick(&mut self, _record: &TickRecord) -> Result<(), EngineError> {
+        Ok(())
+    }
+
+    fn on_trace(&mut self, records: &[TraceRecord]) -> Result<(), EngineError> {
+        self.counts.add(records);
+        trace::write_records(&mut self.writer, records)?;
+        Ok(())
+    }
 }

@@ -52,8 +52,9 @@ Simulate one match and write every tick to a file.
 | `--team-b` | file | `teams/default-b.json` in the content folder | The away team file. |
 | `--no-snapshot` | none | off | Do not write a snapshot at each stoppage. |
 | `--script-pack` | folder | none | A script pack (`pack.json` and a `.rhai` script) to run. See [script packs](../../content/scripts/README.md). The first `kick-off` event and the `match-stats` record name the pack. |
+| `--debug-trace` | file | none | Play the match with debug mode on and write its debug trace to this file. See [Debug trace file](#debug-trace-file). Debug mode changes no result. |
 
-Output: one JSON line on standard output with the match statistics. Files: the tick file, and `matches/<match.id>/stats.json`, `events.jsonl`, and `snapshot.smsn` in the data folder.
+Output: one JSON line on standard output with the match statistics. With `--debug-trace`, standard error also gets one line, for example `debug trace: m.trace.jsonl, 307873 draws (registry 307873), 1204 decisions, 3981 rule outcomes`; when the draws recorded differ from the registry's draw count, the command exits 1. Files: the tick file, and `matches/<match.id>/stats.json`, `events.jsonl`, and `snapshot.smsn` in the data folder.
 
 A failed run, for example `--minutes 0` or a tick file that cannot be written, prints one `match-stats` record on standard output with `outcome` `error` and the keys `error.type`, `error.code`, and `error.retriable`, and no statistics. It saves nothing in the data folder, prints the cause on standard error, and exits 1. A bad flag (exit code 2 from the argument parser) prints no record.
 
@@ -245,6 +246,7 @@ Replay the 22 gate matches and compare their state hashes with the golden file. 
 | `--regenerate` | none | off | Play every fixture and rewrite the golden file with this build's hashes as the portable hash set. Appends one `regenerate` entry to the ledger and drops every other hash set. Needs `--reason`. |
 | `--add-machine-set` | none | off | Refused before any match is played: the portable hash set is the only set. It added one machine's hash set before the one recorded result change. |
 | `--reason` | text | none | Why the golden file is written; recorded in the new ledger entry. Needed by `--regenerate` and `--add-machine-set`; optional for `--bootstrap`. |
+| `--debug` | none | off | Play every match with debug mode on. The compare and the standard output are unchanged; the trace records are counted and not written. Refused with `--bootstrap`, `--regenerate`, and `--add-machine-set` before any file is read. |
 
 The fixtures, in gate order:
 
@@ -261,6 +263,8 @@ The ledger is append-only. Each entry has a `kind` (`bootstrap` for the first fi
 The gate refuses the file, before any match is played, when it is malformed, when a version, the checkpoint spacing, or the fixture list differs from the build's, when it has no portable hash set, when a hash set misses a match, lists one twice, or misses a checkpoint, when the ledger is empty, does not start with its only `bootstrap` entry, has an entry with no reason, or does not account for exactly the hash sets present, when a portable set has another set beside it or an `add-machine-set` entry after it, or when the `set_differences` record differs from the one the hash sets give. The message names the fault.
 
 The write modes check their flags and the reason before they read the golden file or play a match, and write through `<file>.tmp` and a rename. A refusal, or a match that fails, leaves the golden file byte-identical. [The replay-gate guide](../how-to/replay-gate.md) says when each mode is allowed.
+
+With `--debug`, standard error gets one line after each match, for example `trace: seed-42 307873 draws recorded, registry 307873, 1204 decisions, 3981 rule outcomes`. A match whose two draw counts differ fails the gate like a match that differs (exit 2).
 
 Exit codes: 0 when every selected match matches; 1 when the golden file or the content cannot be read or is refused, or a fixture id is unknown; 2 when a match differs or its hashed state holds a number that is not finite (the line names the field, for example `players[3].pos.x`).
 
@@ -289,6 +293,18 @@ A merge commit is compared with its first parent.
 Output: one line per commit on standard output, `<short commit> ok`, or one line per broken rule, for example `3f2a9c1 rule 5: hash set linux-x86_64 changes with no new regenerate entry`. Standard error ends with the commit count and the number that fail.
 
 Exit codes: 0 when every commit passes, or no commit in the range changes the file; 1 when git cannot run or a revision cannot be read; 2 when a commit breaks a rule.
+
+## Debug trace file
+
+`simulate --debug-trace <file>` writes the debug trace of one match as JSON Lines. Debug mode is switched on when the match is built, before the opening kick-off; a build without the `debug-trace` cargo feature (default on) refuses the flag.
+
+The first line is the header: `trace_version` (1), `seed`, `scheme` (the random-stream scheme id), `engine` (the build commit), `crate_version`, and `maths` (the maths library, for example `libm 0.2.16`).
+
+Every other line is one record, in the order the engine ran it. Each record has `t`, the tick the step produces (the tick of the step's events; the opening kick-off is tick 1), and `k`, the kind:
+
+- `draw`: one random draw. `subsystem` (`decision`, `kick`, `ball`, `laws`, `shootout`, or `fatigue`), `stream_id` (the 64-bit stream id in hex), `key` (the sub-stream key, for example `decision.pass_score team 0 squad 4`), `index` (the draw's number within its key, from 0), `value` (the draw in `[0, 1)`, written in the shortest form that reads back to the same bits), `scripted` (`true` when a test scene scripted it), and, at a draw tested against a probability, `p`: one probability, or two cumulative thresholds for a tackle (win, then foul) and a foul's card (red, then yellow). The draw recorder sits inside the stream registry's only draw call, so every draw the registry counts is recorded.
+
+A 90-minute match takes about 310,000 draws, so its trace file is tens of megabytes.
 
 ## Files
 

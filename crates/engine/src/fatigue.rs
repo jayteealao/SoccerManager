@@ -114,7 +114,11 @@ impl Simulation {
                 }
                 let p = self.players[i];
                 let chance = injury_chance(&p, rate);
-                if self.streams.draw(Key::player(Action::InjuryMinute, &p)) < chance {
+                if self
+                    .streams
+                    .tested(Key::player(Action::InjuryMinute, &p), &[chance])
+                    < chance
+                {
                     self.injure(i, InjurySource::Background);
                 }
             }
@@ -146,7 +150,11 @@ impl Simulation {
         }
         let p = self.players[c];
         let chance = injury_chance(&p, self.config.tuning.injury_per_tackle);
-        if self.streams.draw(Key::player(Action::InjuryTackle, &p)) < chance {
+        if self
+            .streams
+            .tested(Key::player(Action::InjuryTackle, &p), &[chance])
+            < chance
+        {
             self.injure(c, InjurySource::Tackle);
         }
     }

@@ -556,6 +556,35 @@ impl Simulation {
         Ok(sim)
     }
 
+    /// Places both teams for kick-off with debug mode on: the debug trace records every
+    /// random draw, decision point, and rule outcome from the opening kick-off on. The
+    /// records carry the tick the step produces, as events do; the opening kick-off's is 1.
+    /// In a build without the recorder the trace stays empty.
+    pub fn new_traced(config: MatchConfig) -> Result<Self, EngineError> {
+        let mut sim = Self::blank(config)?;
+        sim.streams.enable_trace(sim.tick + 1);
+        sim.place_kick_off(0);
+        Ok(sim)
+    }
+
+    /// `true` while debug mode is on.
+    pub fn debug_trace_on(&self) -> bool {
+        self.streams.trace_on()
+    }
+
+    /// Takes every debug trace record since the last call, in execution order. Empty while
+    /// debug mode is off.
+    pub fn take_trace(&mut self) -> Vec<crate::trace::TraceRecord> {
+        self.streams.take_trace()
+    }
+
+    /// `true` while debug mode is on: the guard of every trace hook, so a record is built
+    /// only in debug mode. A constant `false` in a build without the recorder.
+    #[inline(always)]
+    pub(crate) fn trace_on(&self) -> bool {
+        self.streams.trace_on()
+    }
+
     /// A match with its state as the configuration gives it and nobody placed.
     pub(crate) fn blank(config: MatchConfig) -> Result<Self, EngineError> {
         if config.players.len() != 2 * PLAYERS_PER_TEAM {
@@ -803,10 +832,15 @@ impl Simulation {
         self.streams.stream_state()
     }
 
-    /// Test seam: the random draws the match has taken since it was built or resumed.
-    #[cfg(feature = "scenario")]
+    /// The random draws the match has taken since it was built or resumed: the registry's
+    /// counter, which the debug trace's draw count is checked against. Never hashed.
     pub fn draws(&self) -> u64 {
         self.streams.draws()
+    }
+
+    /// The id of the stream scheme the match plays.
+    pub fn stream_scheme(&self) -> u8 {
+        self.streams.scheme().id()
     }
 
     /// The dead ball waiting for its restart, if play is stopped.
@@ -827,12 +861,22 @@ impl Simulation {
     pub fn run<S: TickSink>(&mut self, sink: &mut S) -> Result<(), EngineError> {
         while !self.is_over() {
             self.step();
+            self.drain_trace(sink)?;
             sink.on_tick(&self.record())?;
             if let Some(stoppage) = self.stoppage {
                 sink.on_stoppage(&stoppage, self)?;
             }
         }
         self.finish();
+        self.drain_trace(sink)
+    }
+
+    /// Hands the debug trace records of the last step to the sink, in debug mode.
+    fn drain_trace<S: TickSink>(&mut self, sink: &mut S) -> Result<(), EngineError> {
+        if self.trace_on() {
+            let records = self.streams.take_trace();
+            sink.on_trace(&records)?;
+        }
         Ok(())
     }
 
@@ -843,6 +887,7 @@ impl Simulation {
             return;
         }
         self.finished = true;
+        self.streams.begin_tick(self.tick);
         self.referee.phase = Phase::FullTime;
         let added = self
             .referee
@@ -866,6 +911,7 @@ impl Simulation {
         if self.is_over() {
             return;
         }
+        self.streams.begin_tick(self.tick + 1);
         self.restart = false;
         self.stoppage = None;
         let t = self.config.tuning.clone();
@@ -1087,7 +1133,11 @@ impl Simulation {
                 continue;
             }
             self.blockers_tried |= bit;
-            if self.streams.draw(Key::player(Action::Block, &p)) < t.shots.block_chance {
+            if self
+                .streams
+                .tested(Key::player(Action::Block, &p), &[t.shots.block_chance])
+                < t.shots.block_chance
+            {
                 let s = &t.shots;
                 let back = -DVec2::new(self.ball.vel.x, self.ball.vel.y);
                 let angle = self.streams.draw(Key::player(Action::BlockDeflect, &p));
@@ -1125,13 +1175,20 @@ impl Simulation {
             return;
         }
         let keeper = self.players[k];
-        if self.streams.draw(Key::player(Action::Save, &keeper))
-            >= shot::save_chance(self.shot_quality, t)
+        let save = shot::save_chance(self.shot_quality, t);
+        if self
+            .streams
+            .tested(Key::player(Action::Save, &keeper), &[save])
+            >= save
         {
             self.keeper_beaten = true;
             return;
         }
-        if self.streams.draw(Key::player(Action::SaveHold, &keeper)) < t.shots.save_hold {
+        if self
+            .streams
+            .tested(Key::player(Action::SaveHold, &keeper), &[t.shots.save_hold])
+            < t.shots.save_hold
+        {
             #[cfg(feature = "scenario")]
             {
                 self.census.held += 1;
@@ -1153,7 +1210,11 @@ impl Simulation {
         let s = &t.shots;
         let keeper = self.players[k];
         let side = if self.ball.pos.y == 0.0 {
-            if self.streams.draw(Key::player(Action::ParrySide, &keeper)) < 0.5 {
+            if self
+                .streams
+                .tested(Key::player(Action::ParrySide, &keeper), &[0.5])
+                < 0.5
+            {
                 1.0
             } else {
                 -1.0
@@ -1212,9 +1273,16 @@ impl Simulation {
                 continue;
             }
             self.clearers_tried |= bit;
-            if self.streams.draw(Key::player(Action::CrossClear, &p)) < c.cross_chance {
+            if self
+                .streams
+                .tested(Key::player(Action::CrossClear, &p), &[c.cross_chance])
+                < c.cross_chance
+            {
                 let wide = c.wide_chance > 0.0
-                    && self.streams.draw(Key::player(Action::CrossWide, &p)) < c.wide_chance;
+                    && self
+                        .streams
+                        .tested(Key::player(Action::CrossWide, &p), &[c.wide_chance])
+                        < c.wide_chance;
                 let (away, spread) = if wide {
                     (wide_of_goal(ball_xy, own_goal_x), WIDE_SPREAD)
                 } else {
@@ -1371,7 +1439,9 @@ impl Simulation {
                         p_win += fouls::dribble_win_chance(&p.derived, &carrier.derived, t);
                     }
                     let p_foul = fouls::foul_chance(&p.derived, p.yellow, t);
-                    let draw = self.streams.draw(Key::player(Action::Tackle, &p));
+                    let draw = self
+                        .streams
+                        .tested(Key::player(Action::Tackle, &p), &[p_win, p_win + p_foul]);
                     match fouls::tackle_outcome(p_win, p_foul, t.foul_ball_loss, draw) {
                         Tackle::Win => {
                             self.gain(i, t);
