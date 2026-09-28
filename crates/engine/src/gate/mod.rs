@@ -282,28 +282,23 @@ pub(crate) struct Probe<'a> {
     /// Switches the carrier-options audit on; the run leaves the audit's counts here.
     #[cfg(feature = "scenario")]
     pub audit: Option<&'a std::cell::RefCell<audit::OptionsAudit>>,
-    /// Plays the match in the keyed stream scheme (scheme 1).
-    #[cfg(feature = "scenario")]
-    pub keyed: bool,
     /// The run leaves the draws taken and the final stream state here.
     #[cfg(feature = "scenario")]
     pub streams: Option<&'a std::cell::RefCell<Option<(u64, crate::rng::StreamState)>>>,
 }
 
-/// Plays `fixture` in the legacy (`keyed == false`) or the keyed stream scheme and returns
-/// the result, the random draws the match took, and its final stream state.
+/// Plays `fixture` and returns the result, the random draws the match took, and its final
+/// stream state.
 #[cfg(feature = "scenario")]
 pub fn play_streams(
     fixture: &Fixture,
     inputs: &Inputs<'_>,
-    keyed: bool,
 ) -> Result<(Played, u64, crate::rng::StreamState), GateError> {
     let out = std::cell::RefCell::new(None);
     let played = run(
         fixture,
         inputs,
         &Probe {
-            keyed,
             streams: Some(&out),
             ..Probe::default()
         },
@@ -321,10 +316,6 @@ pub(crate) fn run(
     #[cfg(feature = "scenario")]
     if let Some(audit) = probe.audit {
         sim.options_audit = Some(audit.borrow().clone());
-    }
-    #[cfg(feature = "scenario")]
-    if probe.keyed {
-        sim.use_keyed_streams();
     }
     let mut hasher = Sha256::new();
     let mut w = Writer::default();

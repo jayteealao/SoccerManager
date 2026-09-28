@@ -1,79 +1,11 @@
-//! The engine maths module. No engine source outside the platform backend calls a platform
-//! transcendental function, `libm` resolves with its default features off and no
-//! dependencies, and a default build selects the platform backend.
-
-mod common;
+//! The engine maths library: `libm` resolves with its default features off and no
+//! dependencies, and only the engine depends on it. The clippy rule in
+//! `crates/engine/clippy.toml` keeps platform maths out of the engine crate.
 
 use std::path::Path;
 use std::process::Command;
 
-use engine::math::{BACKEND, Backend};
 use serde_json::Value;
-
-/// The transcendental function names the search looks for.
-const NAMES: [&str; 23] = [
-    "sin", "cos", "tan", "sin_cos", "exp", "exp2", "exp_m1", "ln", "ln_1p", "log", "log2", "log10",
-    "powi", "powf", "atan", "atan2", "asin", "acos", "hypot", "sinh", "cosh", "tanh", "cbrt",
-];
-
-/// The glam methods that call the platform maths library.
-const GLAM_ANGLE: [&str; 4] = ["from_angle(", "to_angle(", "angle_to(", "rotate_towards("];
-
-/// Every search pattern: the method form, the `f64` and `f32` path forms, and the glam
-/// angle methods.
-fn patterns() -> Vec<String> {
-    let mut out = Vec::new();
-    for name in NAMES {
-        out.push(format!(".{name}("));
-        out.push(format!("f64::{name}("));
-        out.push(format!("f32::{name}("));
-    }
-    out.extend(GLAM_ANGLE.iter().map(|p| (*p).to_owned()));
-    out
-}
-
-/// The patterns that `text` holds.
-fn hits(text: &str, patterns: &[String]) -> Vec<String> {
-    patterns
-        .iter()
-        .filter(|p| text.contains(p.as_str()))
-        .cloned()
-        .collect()
-}
-
-#[test]
-fn no_platform_maths_outside_the_platform_backend() {
-    const ALLOWED: &str = "math/platform.rs";
-    let patterns = patterns();
-    // Control 2: the pattern set flags the method and path forms and passes the libm calls.
-    assert!(!hits("let a = x.atan2(y);", &patterns).is_empty());
-    assert!(!hits("f64::exp(z)", &patterns).is_empty());
-    assert!(hits("libm::exp(z)", &patterns).is_empty());
-    assert!(hits("value.expect(\"a value\")", &patterns).is_empty());
-
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let mut offenders = Vec::new();
-    let mut control = false;
-    for file in common::sources(&root) {
-        let rel = file
-            .strip_prefix(&root)
-            .unwrap()
-            .to_string_lossy()
-            .replace('\\', "/");
-        let found = hits(&std::fs::read_to_string(&file).unwrap(), &patterns);
-        if rel == ALLOWED {
-            control = !found.is_empty();
-        } else if !found.is_empty() {
-            offenders.push(format!("{rel}: {found:?}"));
-        }
-    }
-    // Control 1: the search finds the platform calls in the platform backend.
-    assert!(control, "the search finds the platform calls in {ALLOWED}");
-    assert!(
-        offenders.is_empty(),
-        "these files call platform maths outside {ALLOWED}: {offenders:#?}"
-    );
-}
 
 /// The workspace's `cargo metadata`, resolved with each member's default features.
 fn metadata() -> Value {
@@ -153,26 +85,4 @@ fn libm_resolves_without_default_features() {
         })
         .collect();
     assert_eq!(users, ["engine"], "only the engine depends on libm");
-}
-
-#[test]
-fn the_default_build_uses_the_platform_backend() {
-    // Guard: the default build resolves the engine with the libm backend, so every CI build
-    // plays the maths of the golden file's portable set.
-    let doc = metadata();
-    let features = &node(&doc, "engine")["features"];
-    assert!(
-        features
-            .as_array()
-            .expect("a feature list")
-            .iter()
-            .any(|f| f == "libm-maths"),
-        "the default build resolves the engine with libm-maths: {features}"
-    );
-    let want = if cfg!(feature = "libm-maths") {
-        Backend::Libm
-    } else {
-        Backend::Platform
-    };
-    assert_eq!(BACKEND, want);
 }

@@ -10,6 +10,8 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 
 ### Changed
 
+- A match plays the same on Linux and Windows. The engine now uses a pure-Rust maths library and gives each part of the game its own random stream, so a match with the same seed plays differently from 0.1.0.
+
 ### Fixed
 
 ## [0.1.0] - 2026-09-26

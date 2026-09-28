@@ -1,9 +1,8 @@
-//! The keyed stream registry. In the keyed scheme, extra draws for one key leave every other
-//! key's sequence unchanged, and a substitute draws on his own key. A key outside the table
-//! fails and names itself. Each scheme's table, key derivation, and draw conversion match a
-//! committed digest, and the golden file records the scheme this build plays. The draw
-//! counter equals the draws taken, and no engine source draws around the registry. In the
-//! legacy scheme the stream state has the same bytes as the one shared stream always had.
+//! The keyed stream registry. Extra draws for one key leave every other key's sequence
+//! unchanged, and a substitute draws on his own key. A key outside the table fails and names
+//! itself. The scheme's table, key derivation, and draw conversion match a committed digest,
+//! and the golden file records the scheme this build plays. The draw counter equals the draws
+//! taken, and no engine source draws around the registry.
 
 mod common;
 
@@ -59,12 +58,16 @@ fn sample_keys() -> Vec<Key> {
 const RUN: usize = 16;
 
 /// `RUN` draws from every key of `keys` except `skip`, in order, after `extra` draws from
-/// `skip`.
-fn sequences(scheme: Scheme, keys: &[Key], skip: Option<Key>, extra: usize) -> Vec<Vec<u64>> {
-    let mut s = Streams::new(42, scheme);
+/// `skip`, with `draw` reading the key's value.
+fn sequences_with(
+    mut draw: impl FnMut(Key) -> f64,
+    keys: &[Key],
+    skip: Option<Key>,
+    extra: usize,
+) -> Vec<Vec<u64>> {
     if let Some(x) = skip {
         for _ in 0..extra {
-            s.draw(x);
+            draw(x);
         }
     }
     keys.iter()
@@ -72,10 +75,16 @@ fn sequences(scheme: Scheme, keys: &[Key], skip: Option<Key>, extra: usize) -> V
             if Some(k) == skip {
                 Vec::new()
             } else {
-                (0..RUN).map(|_| s.draw(k).to_bits()).collect()
+                (0..RUN).map(|_| draw(k).to_bits()).collect()
             }
         })
         .collect()
+}
+
+/// [`sequences_with`] on a seed-42 registry.
+fn sequences(keys: &[Key], skip: Option<Key>, extra: usize) -> Vec<Vec<u64>> {
+    let mut s = Streams::keyed(42);
+    sequences_with(|k| s.draw(k), keys, skip, extra)
 }
 
 #[test]
@@ -83,9 +92,9 @@ fn extra_draws_on_one_key_leave_every_other_key_unchanged() {
     let keys = sample_keys();
     // 5 match rows and 31 player rows.
     assert_eq!(keys.len(), 5 + 2 * 31);
-    let control = sequences(Scheme::Keyed, &keys, None, 0);
+    let control = sequences(&keys, None, 0);
     for (x, &key) in keys.iter().enumerate() {
-        let disturbed = sequences(Scheme::Keyed, &keys, Some(key), 100);
+        let disturbed = sequences(&keys, Some(key), 100);
         for (k, other) in keys.iter().enumerate().filter(|&(k, _)| k != x) {
             assert_eq!(
                 disturbed[k],
@@ -111,11 +120,17 @@ fn extra_draws_on_one_key_leave_every_other_key_unchanged() {
     );
     assert!(keys.contains(&shot) && keys.contains(&tackle_other) && keys.contains(&card));
 
-    // Negative control: in the legacy scheme the same disturbance moves the next key, so the
-    // comparison above can fail.
-    let legacy = sequences(Scheme::Legacy, &keys, None, 0);
-    let moved = sequences(Scheme::Legacy, &keys, Some(keys[0]), 100);
-    assert_ne!(moved[1], legacy[1], "the legacy scheme shares one stream");
+    // Negative control: with one shared stream for every key, the same disturbance moves the
+    // next key, so the comparison above can fail.
+    let shared = |skip, extra| {
+        let mut rng = EngineRng::from_seed(42);
+        sequences_with(|_| rng.next_f64(), &keys, skip, extra)
+    };
+    assert_ne!(
+        shared(Some(keys[0]), 100)[1],
+        shared(None, 0)[1],
+        "one shared stream moves every key"
+    );
 }
 
 #[test]
@@ -126,7 +141,6 @@ fn a_substitute_draws_on_his_own_key() {
         .with_manager(0, Manager::Human)
         .with_manager(1, Manager::Human);
     let mut sim = Simulation::new(config).unwrap();
-    sim.use_keyed_streams();
     let team = &sim.teams()[0];
     let (off, on) = (team.lineup[9], team.bench[0]);
     let mut queued = false;
@@ -214,7 +228,7 @@ fn a_squad_index_past_the_table_fails_and_names_it() {
 }
 
 #[test]
-fn each_scheme_matches_its_committed_digest() {
+fn the_scheme_matches_its_committed_digest() {
     for (scheme, committed) in SCHEME_DIGESTS {
         let scheme = Scheme::from_id(scheme).expect("a committed scheme exists");
         let now = table::digest(scheme);
@@ -226,8 +240,8 @@ fn each_scheme_matches_its_committed_digest() {
             scheme.id()
         );
     }
-    assert_ne!(SCHEME_DIGESTS[0].1, SCHEME_DIGESTS[1].1);
-    assert_eq!(SCHEME_DIGESTS[1].0, KEYED_SCHEME);
+    assert_eq!(SCHEME_DIGESTS.map(|(id, _)| id), [KEYED_SCHEME]);
+    assert_eq!(STREAM_SCHEME, KEYED_SCHEME);
 }
 
 #[test]
@@ -241,65 +255,37 @@ fn the_golden_file_records_the_scheme_this_build_plays() {
         .iter()
         .rposition(|e| e.kind != golden::EntryKind::AddMachineSet)
         .expect("the ledger starts with a bootstrap");
-    if file.ledger[base].scheme != STREAM_SCHEME {
-        // A switched-on test build before the one result change: the file still holds the
-        // shared-stream hashes, which this build does not compare against.
-        assert_ne!(
-            golden::set_key(),
-            golden::machine_key(),
-            "a build that compares against a machine set plays the file's scheme"
-        );
-        println!(
-            "note: skipping: the golden file records scheme {}",
-            file.ledger[base].scheme
-        );
-        return;
-    }
     for entry in &file.ledger[base..] {
         assert_eq!(entry.scheme, STREAM_SCHEME);
     }
 }
 
-/// The fixtures that reach every subsystem in a scheme: seed 42, and a knockout match
-/// without a script pack that goes to extra time and a shoot-out in that scheme (seed 1 in
-/// the legacy scheme, seed 11 in the keyed scheme).
-fn counter_fixtures(keyed: bool) -> [Fixture; 2] {
+/// The fixtures that reach every subsystem: seed 42, and a knockout match without a script
+/// pack that goes to extra time and a shoot-out (seed 11).
+fn counter_fixtures() -> [Fixture; 2] {
     [
         Fixture::seed(42),
         Fixture {
             pack: None,
-            ..Fixture::knockout(if keyed { 11 } else { 1 })
+            ..Fixture::knockout(11)
         },
     ]
 }
 
 #[test]
 fn the_draw_counter_equals_the_draws_taken() {
-    // A keyed-streams build plays the keyed scheme whatever the probe asks.
-    let schemes: &[bool] = if cfg!(feature = "keyed-streams") {
-        &[true]
-    } else {
-        &[false, true]
-    };
-    for &keyed in schemes {
-        for fixture in counter_fixtures(keyed) {
-            let (played, draws, state) = gate::play_streams(&fixture, &inputs(), keyed).unwrap();
-            let words: u128 = state.entries.iter().map(|&(_, w)| w).sum();
-            assert_eq!(u128::from(draws) * 2, words, "{} keyed={keyed}", fixture.id);
-            assert!(draws > 0);
-            if keyed {
-                assert_eq!(state.scheme, KEYED_SCHEME);
-                assert!(state.entries.len() >= 20, "{} keys", state.entries.len());
-            } else {
-                assert_eq!(state.scheme, 0);
-                assert_eq!(state.entries.len(), 1);
-            }
-            if fixture.knockout {
-                assert!(
-                    played.facts.shootout,
-                    "the knockout fixture reaches a shoot-out"
-                );
-            }
+    for fixture in counter_fixtures() {
+        let (played, draws, state) = gate::play_streams(&fixture, &inputs()).unwrap();
+        let words: u128 = state.entries.iter().map(|&(_, w)| w).sum();
+        assert_eq!(u128::from(draws) * 2, words, "{}", fixture.id);
+        assert!(draws > 0);
+        assert_eq!(state.scheme, KEYED_SCHEME);
+        assert!(state.entries.len() >= 20, "{} keys", state.entries.len());
+        if fixture.knockout {
+            assert!(
+                played.facts.shootout,
+                "the knockout fixture reaches a shoot-out"
+            );
         }
     }
 }
@@ -352,32 +338,6 @@ fn no_draw_bypasses_the_registry() {
 }
 
 #[test]
-#[cfg(not(feature = "keyed-streams"))]
-fn legacy_stream_bytes_equal_the_single_stream_encoding() {
-    let mut s = Streams::legacy(42);
-    s.draw(Key::of_match(Action::AddedTime));
-    s.draw(Key {
-        action: Action::PassScore,
-        player: PlayerKey::of_squad(1, 2),
-    });
-    s.draw(Key {
-        action: Action::InjuryMinute,
-        player: PlayerKey::of_squad(0, 0),
-    });
-    let mut oracle = EngineRng::from_seed(42);
-    for _ in 0..3 {
-        oracle.next_f64();
-    }
-    let bytes = s.stream_state().to_bytes();
-    assert_eq!(bytes, oracle.stream_state().to_bytes());
-    let mut literal = vec![0u8, 1, 0, 0, 0];
-    literal.extend_from_slice(&[0; 8]);
-    literal.push(6);
-    literal.extend_from_slice(&[0; 15]);
-    assert_eq!(bytes, literal);
-}
-
-#[test]
 fn scripted_draws_feed_only_their_own_class() {
     let tackle = Key {
         action: Action::Tackle,
@@ -391,19 +351,20 @@ fn scripted_draws_feed_only_their_own_class() {
         action: Action::ShotScore,
         player: PlayerKey::of_squad(0, 1),
     };
-    let mut s = Streams::legacy(42);
+    let mut s = Streams::keyed(42);
     s.script_injuries(&[0.75]);
     s.script_referee(&[0.25]);
-    let mut oracle = EngineRng::from_seed(42);
+    // The same registry with nothing scripted.
+    let mut oracle = Streams::keyed(42);
     assert_eq!(
         s.draw(shot).to_bits(),
-        oracle.next_f64().to_bits(),
+        oracle.draw(shot).to_bits(),
         "unscripted"
     );
     assert_eq!(s.draw(tackle), 0.25);
     assert_eq!(
         s.draw(tackle).to_bits(),
-        oracle.next_f64().to_bits(),
+        oracle.draw(tackle).to_bits(),
         "an empty referee queue reads the stream, not the injury queue"
     );
     assert_eq!(s.draw(injury), 0.75);

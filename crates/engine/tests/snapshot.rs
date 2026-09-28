@@ -364,7 +364,6 @@ fn hash_tick(hasher: &mut Sha256, sim: &Simulation) {
 #[test]
 fn a_keyed_snapshot_resumes_every_stream() {
     let mut whole = Simulation::new(full_match()).unwrap();
-    whole.use_keyed_streams();
     let mut snapshot: Option<Snapshot> = None;
     let mut tail = Sha256::new();
     while !whole.is_over() {
@@ -413,20 +412,15 @@ fn a_keyed_snapshot_resumes_every_stream() {
 
 #[test]
 fn the_snapshot_records_the_scheme_of_the_match() {
-    let scheme_of = |keyed: bool| {
-        let mut sim = Simulation::new(full_match()).unwrap();
-        if keyed {
-            sim.use_keyed_streams();
-        }
-        for _ in 0..500 {
-            sim.step();
-        }
-        let snapshot = Snapshot::capture(&sim, OWNER, 1);
-        Simulation::from_snapshot(full_match(), &snapshot)
-            .unwrap()
-            .stream_state()
-            .scheme
-    };
-    assert_eq!(scheme_of(false), engine::rng::STREAM_SCHEME);
-    assert_eq!(scheme_of(true), engine::streams::KEYED_SCHEME);
+    let mut sim = Simulation::new(full_match()).unwrap();
+    for _ in 0..500 {
+        sim.step();
+    }
+    let snapshot = Snapshot::capture(&sim, OWNER, 1);
+    let scheme = Simulation::from_snapshot(full_match(), &snapshot)
+        .unwrap()
+        .stream_state()
+        .scheme;
+    assert_eq!(scheme, engine::rng::STREAM_SCHEME);
+    assert_eq!(scheme, engine::streams::KEYED_SCHEME);
 }

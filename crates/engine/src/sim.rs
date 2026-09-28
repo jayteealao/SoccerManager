@@ -567,10 +567,7 @@ impl Simulation {
         }
         let teams = config.teams.clone();
         let players = config.players.clone();
-        #[cfg(feature = "keyed-streams")]
         let streams = Streams::keyed(config.seed);
-        #[cfg(not(feature = "keyed-streams"))]
-        let streams = Streams::legacy(config.seed);
         let referee = Referee::new(config.minutes, &config.rules, config.knockout);
         Ok(Self {
             timeline: vec![(0, teams.clone())],
@@ -798,13 +795,6 @@ impl Simulation {
     #[cfg(feature = "scenario")]
     pub fn shot_flight(&self) -> Option<bool> {
         self.shot_in_flight.map(|_| self.shot_on_target)
-    }
-
-    /// Test seam: switches a match that has drawn nothing yet to the keyed stream scheme
-    /// (scheme 1). Scripted draws already queued stay queued.
-    #[cfg(feature = "scenario")]
-    pub fn use_keyed_streams(&mut self) {
-        self.streams.set_scheme(crate::streams::Scheme::Keyed);
     }
 
     /// Test seam: the position of every random stream the match has used.

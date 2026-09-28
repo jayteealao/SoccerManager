@@ -1,8 +1,8 @@
 # Keep the replay gate honest
 
-This guide shows how to run the replay gate, add a machine's hash set, and regenerate the golden hashes when a change is meant to change the matches. It also lists what the pull-request check rejects.
+This guide shows how to run the replay gate and regenerate the golden hashes when a change is meant to change the matches. It also lists what the pull-request check rejects.
 
-The gate plays 22 fixed matches and compares a hash of the full match state after every tick with the hashes in `gate/golden.json`. A change that leaves the engine's results exactly as they were keeps every hash. Every flag is in [the command-line reference](../reference/cli.md#gate), and every rule of the check is in [the guard reference](../reference/cli.md#guard).
+The gate plays 22 fixed matches and compares a hash of the full match state after every tick with the hashes in `gate/golden.json`. A change that leaves the engine's results exactly as they were keeps every hash. The file holds one portable hash set, and Linux and Windows both compare against it. Every flag is in [the command-line reference](../reference/cli.md#gate), and every rule of the check is in [the guard reference](../reference/cli.md#guard).
 
 The commands use the release build. Build it first, from the repository root:
 
@@ -37,27 +37,15 @@ If the change also changes what the gate measures (the fixture list, the state i
    target/release/engine-cli gate --regenerate --reason "libm replaces the platform sin, cos, exp, and atan2"
    ```
 
-   The command refuses to run without a reason, and leaves the golden file byte-identical. On success it writes this machine's new hash set, appends one `regenerate` entry, and names the machines whose sets it dropped.
-3. Commit `gate/golden.json` in its own commit.
-4. On each dropped machine, add its set again (next section).
+   The command refuses to run without a reason, and leaves the golden file byte-identical. On success it writes the new portable hash set and appends one `regenerate` entry.
+3. Run the gate on the other operating system (Linux if you regenerated on Windows, or the reverse) before you push. It must report `none differ`. If it does not, the change brought back a platform difference: find it, and do not push the regeneration.
+4. Commit `gate/golden.json` in its own commit.
 
 The entry's `band_result` path, `gate/bands/ledger-<index>.json`, is where the realism band run for this regeneration is saved later. Never edit the entry to fill it in.
 
-## Add a machine's hash set
+## Machine hash sets (history)
 
-Each machine key (`<os>-<arch>`, for example `linux-x86_64`) has its own hash set until the engine's maths give the same results everywhere. To add the set of a machine that has none, on that machine and with unchanged code:
-
-```bash
-target/release/engine-cli gate --add-machine-set --reason "linux-x86_64 set from the pinned ubuntu-24.04 image"
-```
-
-The command refuses when the machine already has a set, and when the golden file does not fit the build. It appends one `add-machine-set` entry and updates `set_differences`, which lists the matches that differ between each pair of machines.
-
-For the Linux set that CI checks, use the set that CI made. When the gate job's Linux leg fails because the set is missing, it uploads a candidate file as the run artifact `gate-candidate-linux`. Download it, copy it over `gate/golden.json`, and commit it:
-
-```bash
-gh run download <run-id> -n gate-candidate-linux
-```
+Before the one recorded result change (ledger entry 2), each machine key (`<os>-<arch>`, for example `linux-x86_64`) had its own hash set, added with `engine-cli gate --add-machine-set`, and `set_differences` listed the matches that differed between the machines. Entry 2 replaced both sets with the portable set. The engine now plays the same bits on every supported machine, so `--add-machine-set` is refused: a portable set is the only set.
 
 ## Check the history before you push
 

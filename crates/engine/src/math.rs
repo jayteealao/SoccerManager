@@ -1,71 +1,46 @@
 //! Vector types, small helpers, and the engine maths functions. All simulation maths is
 //! `f64`. Every sine, cosine, exponent, arctangent, and integer power in the engine goes
-//! through the functions below, which forward to one backend chosen at compile time: the
-//! platform maths library (the default, today's results) or the pure-Rust `libm` crate (the
-//! `libm-maths` feature, the same bits on every machine).
+//! through the functions below, which call the pure-Rust `libm` crate: the same bits on every
+//! machine. A clippy rule (`crates/engine/clippy.toml`) refuses the platform maths methods in
+//! the engine crate.
 
 pub use glam::{DVec2, DVec3};
-
-#[cfg_attr(not(feature = "libm-maths"), allow(dead_code))]
-mod libm_backend;
-#[cfg_attr(feature = "libm-maths", allow(dead_code))]
-mod platform;
-
-#[cfg(feature = "libm-maths")]
-use libm_backend as selected;
-#[cfg(not(feature = "libm-maths"))]
-use platform as selected;
-
-/// A maths backend.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Backend {
-    /// The platform maths library.
-    Platform,
-    /// The pure-Rust `libm` crate.
-    Libm,
-}
-
-/// The backend this build selected.
-pub const BACKEND: Backend = if cfg!(feature = "libm-maths") {
-    Backend::Libm
-} else {
-    Backend::Platform
-};
 
 /// Sine of `x` radians.
 #[inline]
 pub fn sin(x: f64) -> f64 {
-    selected::sin(x)
+    libm::sin(x)
 }
 
 /// Cosine of `x` radians.
 #[inline]
 pub fn cos(x: f64) -> f64 {
-    selected::cos(x)
+    libm::cos(x)
 }
 
 /// Sine and cosine of `x` radians, in one call.
 #[inline]
 pub fn sin_cos(x: f64) -> (f64, f64) {
-    selected::sin_cos(x)
+    libm::sincos(x)
 }
 
 /// `e` to the power `x`.
 #[inline]
 pub fn exp(x: f64) -> f64 {
-    selected::exp(x)
+    libm::exp(x)
 }
 
 /// The four-quadrant arctangent of `y / x`.
 #[inline]
 pub fn atan2(y: f64, x: f64) -> f64 {
-    selected::atan2(y, x)
+    libm::atan2(y, x)
 }
 
-/// `x` to the integer power `n`.
+/// `x` to the integer power `n`. libm has no integer power function, so this is `pow` with
+/// the integer as its exponent (source: libm-0.2.16/src/math/mod.rs lists no `powi`).
 #[inline]
 pub fn powi(x: f64, n: i32) -> f64 {
-    selected::powi(x, n)
+    libm::pow(x, f64::from(n))
 }
 
 /// Clamps `v` to at most `max` in length. A zero vector stays zero. A vector whose squared
@@ -409,16 +384,9 @@ mod tests {
     }
 
     #[test]
-    fn libm_backend_equals_the_direct_libm_call() {
+    fn the_maths_functions_equal_the_direct_libm_calls() {
         let cases = same_bits(
-            (
-                libm_backend::sin,
-                libm_backend::cos,
-                libm_backend::sin_cos,
-                libm_backend::exp,
-                libm_backend::atan2,
-                libm_backend::powi,
-            ),
+            (sin, cos, sin_cos, exp, atan2, powi),
             (
                 libm::sin,
                 libm::cos,
@@ -428,36 +396,6 @@ mod tests {
                 |x, n| libm::pow(x, f64::from(n)),
             ),
         );
-        assert!(cases > 40_000, "{cases} cases");
-    }
-
-    #[test]
-    fn the_selected_backend_is_the_one_named() {
-        let module: Backends = (sin, cos, sin_cos, exp, atan2, powi);
-        let cases = match BACKEND {
-            Backend::Platform => same_bits(
-                module,
-                (
-                    platform::sin,
-                    platform::cos,
-                    platform::sin_cos,
-                    platform::exp,
-                    platform::atan2,
-                    platform::powi,
-                ),
-            ),
-            Backend::Libm => same_bits(
-                module,
-                (
-                    libm_backend::sin,
-                    libm_backend::cos,
-                    libm_backend::sin_cos,
-                    libm_backend::exp,
-                    libm_backend::atan2,
-                    libm_backend::powi,
-                ),
-            ),
-        };
         assert!(cases > 40_000, "{cases} cases");
     }
 

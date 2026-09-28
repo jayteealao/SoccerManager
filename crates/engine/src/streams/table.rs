@@ -474,16 +474,10 @@ const ACTION_SHIFT: u32 = 32;
 /// The committed digest of each scheme's table, key derivation, and draw conversion. A test
 /// fails when [`digest`] gives another value: the table, the derivation, or the conversion
 /// changed, and the change needs a new scheme id and a new line here.
-pub const SCHEME_DIGESTS: [(u8, &str); 2] = [
-    (
-        0,
-        "37ae4d5c676969695ff67e23f2943c9c9435397cad556e289d1c44ddfd0d0a7d",
-    ),
-    (
-        1,
-        "91652878ed8a8c15d99f0a6fe956e03e55b9d248e1176b67679ffd602504a384",
-    ),
-];
+pub const SCHEME_DIGESTS: [(u8, &str); 1] = [(
+    1,
+    "91652878ed8a8c15d99f0a6fe956e03e55b9d248e1176b67679ffd602504a384",
+)];
 
 /// The SHA-256, as lowercase hex, of what fixes `scheme`: the scheme id, every row (the
 /// subsystem, the action code, the name, the player kind, and the queue class), the key
@@ -503,7 +497,7 @@ pub fn digest(scheme: super::Scheme) -> String {
     h.update(ACTION_SHIFT.to_le_bytes());
     h.update(8u32.to_le_bytes());
     h.update(PlayerKey::MATCH.0.to_le_bytes());
-    let mut streams = super::Streams::new(42, scheme);
+    let mut streams = super::Streams::keyed(42);
     for key in [
         Key {
             action: Action::ShotScore,

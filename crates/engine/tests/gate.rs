@@ -306,22 +306,6 @@ fn the_fixture_list_is_fixed() {
     );
 }
 
-#[test]
-#[cfg(not(feature = "keyed-streams"))]
-fn the_stream_state_is_scheme_0_with_one_entry() {
-    let mut rng = engine::rng::EngineRng::from_seed(42);
-    rng.next_f64();
-    let state = rng.stream_state();
-    assert_eq!(state.scheme, 0);
-    assert_eq!(state.entries, vec![(0, 2)]);
-    let bytes = state.to_bytes();
-    assert_eq!(bytes[0], 0, "the scheme id");
-    assert_eq!(&bytes[1..5], &1u32.to_le_bytes(), "the entry count");
-    assert_eq!(&bytes[5..13], &0u64.to_le_bytes(), "the stream id");
-    assert_eq!(&bytes[13..29], &2u128.to_le_bytes(), "the word position");
-    assert_eq!(bytes.len(), 29);
-}
-
 /// `matches` with the final hash (and the last checkpoint) of each match in `ids` replaced.
 fn with_changed(mut matches: Vec<MatchHashes>, ids: &[&str], n: u32) -> Vec<MatchHashes> {
     for m in matches.iter_mut().filter(|m| ids.contains(&m.id.as_str())) {
@@ -629,10 +613,13 @@ fn a_portable_set_beside_a_machine_set_is_refused() {
 }
 
 #[test]
-fn the_set_key_is_portable_only_with_both_result_changes() {
-    let both = cfg!(all(feature = "libm-maths", feature = "keyed-streams"));
-    assert_eq!(golden::set_key() == golden::PORTABLE, both);
-    if !both {
-        assert_eq!(golden::set_key(), golden::machine_key());
-    }
+fn every_machine_compares_against_the_portable_set() {
+    assert_eq!(golden::set_key(), golden::PORTABLE);
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../gate/golden.json");
+    let file = golden::load(&path, &gate::fixtures()).unwrap();
+    assert_eq!(
+        file.hash_sets.keys().collect::<Vec<_>>(),
+        [golden::PORTABLE],
+        "the committed golden file holds the portable set only"
+    );
 }

@@ -3,8 +3,7 @@
 //! `ChaCha8Rng` is the generator the Rand Book names as reproducible across versions
 //! (source: https://rust-random.github.io/book/). The engine never uses a thread-local
 //! generator. Match play draws every random number through the keyed stream registry
-//! ([`crate::streams`]); `EngineRng` serves offline generation (club and player data) and is
-//! the reference the registry's scheme 0 is tested against.
+//! ([`crate::streams`]); `EngineRng` serves offline generation (club and player data).
 
 use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
@@ -17,18 +16,12 @@ pub struct RngState {
     pub word_pos: u128,
 }
 
-/// The random-stream scheme this build plays ([`crate::streams::Scheme`]): scheme 0, one
-/// shared stream, or scheme 1, one keyed stream per key, under the `keyed-streams` feature.
-/// The golden file's ledger records it with every entry.
-pub const STREAM_SCHEME: u8 = if cfg!(feature = "keyed-streams") {
-    crate::streams::KEYED_SCHEME
-} else {
-    0
-};
+/// The random-stream scheme this build plays ([`crate::streams::Scheme`]): scheme 1, one
+/// keyed stream per key. The golden file's ledger records it with every entry.
+pub const STREAM_SCHEME: u8 = crate::streams::KEYED_SCHEME;
 
 /// The position of every random stream a match draws from, as the replay gate hashes it:
-/// the stream scheme, then each stream's id and word position in stream order. Today's
-/// engine has one stream, so it reports scheme 0 with one entry.
+/// the stream scheme, then each stream's id and word position in ascending stream id.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StreamState {
     pub scheme: u8,
@@ -74,14 +67,6 @@ impl EngineRng {
             seed: self.inner.get_seed(),
             stream: self.inner.get_stream(),
             word_pos: self.inner.get_word_pos(),
-        }
-    }
-
-    /// The stream state the replay gate hashes: scheme 0, one entry.
-    pub fn stream_state(&self) -> StreamState {
-        StreamState {
-            scheme: STREAM_SCHEME,
-            entries: vec![(self.inner.get_stream(), self.inner.get_word_pos())],
         }
     }
 
@@ -151,29 +136,6 @@ mod tests {
             assert_eq!(a.next_f64().to_bits(), b.next_f64().to_bits());
         }
         assert_eq!(a.state(), b.state());
-    }
-
-    #[test]
-    #[cfg(not(feature = "keyed-streams"))]
-    fn todays_stream_state_is_scheme_0_with_one_entry_in_the_documented_bytes() {
-        let mut rng = EngineRng::from_seed(42);
-        for _ in 0..3 {
-            rng.next_f64();
-        }
-        let state = rng.stream_state();
-        assert_eq!(state.scheme, 0);
-        assert_eq!(state.entries.len(), 1);
-        let (stream, word_pos) = state.entries[0];
-        assert_eq!(stream, rng.state().stream);
-        assert_eq!(word_pos, rng.state().word_pos);
-        // Three f64 draws read six 32-bit words.
-        assert_eq!(word_pos, 6);
-        let mut expected = vec![0u8];
-        expected.extend_from_slice(&1u32.to_le_bytes());
-        expected.extend_from_slice(&stream.to_le_bytes());
-        expected.extend_from_slice(&6u128.to_le_bytes());
-        assert_eq!(state.to_bytes(), expected);
-        assert_eq!(state.to_bytes().len(), 1 + 4 + 8 + 16);
     }
 
     #[test]

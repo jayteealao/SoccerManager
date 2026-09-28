@@ -83,12 +83,6 @@ impl Scene {
         self
     }
 
-    /// Plays the scene in the keyed stream scheme (scheme 1): every key reads its own stream.
-    pub fn keyed_streams(mut self) -> Self {
-        self.sim.use_keyed_streams();
-        self
-    }
-
     /// Gives player `i` yellow cards already shown.
     pub fn yellow(mut self, i: usize, cards: u8) -> Self {
         self.sim.players[i].yellow = cards;

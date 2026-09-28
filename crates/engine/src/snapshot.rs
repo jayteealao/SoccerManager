@@ -44,7 +44,7 @@ use crate::rules::clock::Tally;
 use crate::rules::fouls::Card;
 use crate::rules::{DeadBall, PendingCard, Phase, Shootout, Stoppage};
 use crate::sim::{DecidedBy, MatchConfig, Simulation, Summary};
-use crate::streams::{KEY_COUNT, KEYED_SCHEME, Scheme, Streams};
+use crate::streams::{KEY_COUNT, Scheme, Streams};
 use crate::tactics::change::{Change, ChangeId, QueuedChange, SubLedger};
 use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
@@ -632,12 +632,6 @@ fn encode(sim: &Simulation, w: &mut Writer) {
     }
 }
 
-/// Whether this build restores a snapshot of stream scheme `scheme`: the scheme it plays,
-/// and the keyed scheme only when `keyed_allowed` (test builds).
-fn scheme_available(scheme: u8, keyed_allowed: bool) -> bool {
-    scheme == STREAM_SCHEME || (keyed_allowed && scheme == KEYED_SCHEME)
-}
-
 /// The random streams after the restart flag, checked against the match seed.
 fn decode_streams(sim: &Simulation, r: &mut Reader<'_>) -> Result<Streams, String> {
     let seed: [u8; 32] = r.take(32)?.try_into().expect("32 bytes");
@@ -645,13 +639,14 @@ fn decode_streams(sim: &Simulation, r: &mut Reader<'_>) -> Result<Streams, Strin
         return Err("stream seed mismatch: the generator seed is not the match seed's".into());
     }
     let id = r.u8()?;
-    let Some(scheme) = Scheme::from_id(id) else {
-        return Err(format!("unknown stream scheme {id}"));
-    };
-    if !scheme_available(id, cfg!(any(test, feature = "scenario"))) {
+    if id == 0 {
+        // Scheme 0, the one shared stream, was played before the one recorded result change.
         return Err(format!(
-            "stream scheme {id} is not available in this build, which plays scheme {STREAM_SCHEME}"
+            "stream scheme 0 is not available in this build, which plays scheme {STREAM_SCHEME}"
         ));
+    }
+    if Scheme::from_id(id).is_none() {
+        return Err(format!("unknown stream scheme {id}"));
     }
     let count = r.u32()? as usize;
     if count > KEY_COUNT {
@@ -662,7 +657,7 @@ fn decode_streams(sim: &Simulation, r: &mut Reader<'_>) -> Result<Streams, Strin
     let entries = (0..count)
         .map(|_| Ok((r.u64()?, r.u128()?)))
         .collect::<Decoded<Vec<_>>>()?;
-    Streams::restore(seed, scheme, &entries)
+    Streams::restore(seed, &entries)
 }
 
 fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
@@ -956,6 +951,7 @@ fn tactics_in_range(t: &Tactics, schema: &crate::data::tactics::TacticsSchema) -
 mod tests {
     use super::*;
     use crate::data::test_support::shipped_config;
+    use crate::streams::KEYED_SCHEME;
 
     fn played(ticks: u32) -> Simulation {
         let mut sim = Simulation::new(shipped_config(42, 90).unwrap()).unwrap();
@@ -1009,13 +1005,7 @@ mod tests {
     }
 
     fn keyed_snapshot() -> Snapshot {
-        let mut sim = Simulation::blank(shipped_config(42, 90).unwrap()).unwrap();
-        sim.streams = Streams::keyed(42);
-        sim.place_kick_off(0);
-        for _ in 0..2_000 {
-            sim.step();
-        }
-        Snapshot::capture(&sim, [0; 16], 1)
+        Snapshot::capture(&played(2_000), [0; 16], 1)
     }
 
     #[test]
@@ -1044,31 +1034,13 @@ mod tests {
         assert!(reason.contains("stream seed mismatch"), "{reason}");
         let reason = refusal(&keyed, |b| b[SCHEME_AT] = 9);
         assert!(reason.contains("unknown stream scheme 9"), "{reason}");
-        assert!(scheme_available(STREAM_SCHEME, false));
-        assert_eq!(
-            scheme_available(KEYED_SCHEME, false),
-            STREAM_SCHEME == KEYED_SCHEME,
-            "a release build plays its own scheme only"
+        // Scheme 0, the shared stream played before the one result change, is refused.
+        let reason = refusal(&keyed, |b| b[SCHEME_AT] = 0);
+        assert!(
+            reason.contains("stream scheme 0 is not available in this build, which plays scheme 1"),
+            "{reason}"
         );
-        assert!(scheme_available(KEYED_SCHEME, true));
-        assert!(!scheme_available(9, true));
 
-        if STREAM_SCHEME == 0 {
-            let legacy = Snapshot::capture(&played(100), [0; 16], 1);
-            // Legacy: two entries.
-            let reason = refusal(&legacy, |b| {
-                b[SCHEME_AT + 1..ENTRIES_AT].copy_from_slice(&2u32.to_le_bytes());
-                let entry = b[ENTRIES_AT..ENTRIES_AT + 24].to_vec();
-                b.splice(ENTRIES_AT..ENTRIES_AT, entry);
-            });
-            assert!(reason.contains("malformed stream entry count"), "{reason}");
-            // Legacy: another stream than the shared one.
-            let reason = refusal(&legacy, |b| b[ENTRIES_AT] = 5);
-            assert!(
-                reason.contains("malformed stream entry 0: stream 5"),
-                "{reason}"
-            );
-        }
         // A word position past the end of a stream.
         let reason = refusal(&keyed, |b| {
             b[ENTRIES_AT + 8..ENTRIES_AT + 24].copy_from_slice(&(1u128 << 68).to_le_bytes())

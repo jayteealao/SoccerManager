@@ -285,15 +285,10 @@ pub fn machine_key() -> String {
 /// The key of the one hash set every machine compares against.
 pub const PORTABLE: &str = "portable";
 
-/// The hash-set key this build reads and writes: [`PORTABLE`] when the build plays the same
-/// results on every machine (the `libm` maths backend and the keyed random streams), and
-/// [`machine_key`] otherwise. A build with only one of the two never uses the portable set.
+/// The hash-set key this build reads and writes: [`PORTABLE`], because the engine plays the
+/// same results on every machine (the `libm` maths and the keyed random streams).
 pub fn set_key() -> String {
-    if cfg!(all(feature = "libm-maths", feature = "keyed-streams")) {
-        PORTABLE.to_string()
-    } else {
-        machine_key()
-    }
+    PORTABLE.to_string()
 }
 
 /// Reads and strictly checks the golden file at `path` against `fixtures`.
