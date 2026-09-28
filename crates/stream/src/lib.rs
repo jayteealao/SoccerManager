@@ -8,6 +8,7 @@
 pub mod client;
 pub mod control;
 pub mod events;
+pub mod migrate;
 pub mod record;
 pub mod replay;
 pub mod server;
@@ -22,11 +23,13 @@ pub use control::{
     engine_change, tactics_patch,
 };
 pub use events::EventWriter;
+pub use migrate::{Chain, FORMAT_FIRST_MIGRATED, RawEntry, RawReplay, STEPS, Step};
 pub use record::{
     ChangeEntry, ChangeSource, EngineIdentity, FIXTURE_MAGIC, FORMAT_LEGACY, FORMAT_VERSION,
     Fixture, FixtureSummary, InputFile, InputInfo, LoggedChange, ManagerKind, MatchSettings,
-    Outcome, Recorder, ReplayRecord, SharedRecorder, StoredFrame, Watchdog, outcome_of,
-    parse_fixture, read_fixture, write_fixture,
+    Outcome, Recorder, ReplayRecord, SharedRecorder, StoredFrame, Watchdog, check_frame_count,
+    check_inputs, decode_frame, decode_record, decode_v4, outcome_of, parse_fixture,
+    parse_fixture_with, read_fixture, split_input, write_fixture,
 };
 pub use replay::Replayer;
 pub use server::{Connection, Server};

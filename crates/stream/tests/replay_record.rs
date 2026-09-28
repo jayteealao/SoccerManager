@@ -204,9 +204,10 @@ fn every_damaged_or_inconsistent_file_is_refused_by_name() {
     let payload = serde_json::to_vec(good.record.as_ref().unwrap()).unwrap();
     let record_at = bytes.len() - 16 - payload.len() - 9;
     assert_eq!(bytes[record_at], 3, "the record entry is last");
-    let mut doubled = bytes[..bytes.len() - 16].to_vec();
-    doubled.extend_from_slice(&bytes[record_at..bytes.len() - 16]);
-    doubled.extend_from_slice(&bytes[bytes.len() - 16..]);
+    // The trailer hash is written again over both, so the entry order is what refuses it.
+    let mut raw = stream::RawReplay::parse(&bytes).unwrap();
+    raw.entries.push(raw.entries.last().unwrap().clone());
+    let doubled = raw.to_bytes();
     let err = refused(&dir, "doubled.smfx", &doubled);
     assert!(err.contains("two record entries"), "{err}");
 
@@ -230,7 +231,7 @@ fn every_damaged_or_inconsistent_file_is_refused_by_name() {
     format[4..6].copy_from_slice(&5u16.to_le_bytes());
     let err = refused(&dir, "format.smfx", &format);
     assert!(
-        err.contains("format 5; this build reads formats 3 and 4"),
+        err.contains("format 5 is newer than this reader knows; this build reads formats 3 and 4"),
         "{err}"
     );
 

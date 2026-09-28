@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::StreamError;
+use crate::migrate::{Chain, RawEntry, RawReplay};
 use crate::session::FrameOut;
 
 /// Magic of a fixture file.
@@ -179,7 +180,9 @@ pub enum LoggedChange {
         on: usize,
     },
     Tactics {
+        #[serde(deserialize_with = "required::deserialize")]
         formation: Option<u8>,
+        #[serde(deserialize_with = "required::deserialize")]
         mentality: Option<u8>,
         /// Six levels, in the tactics file's instruction order.
         instructions: [Option<u8>; 6],
@@ -294,6 +297,7 @@ impl ChangeEntry {
 #[serde(deny_unknown_fields)]
 pub struct Watchdog {
     pub slow_calls: u32,
+    #[serde(deserialize_with = "required::deserialize")]
     pub invalid: Option<String>,
 }
 
@@ -645,72 +649,51 @@ pub fn read_fixture(path: &Path) -> Result<Fixture, StreamError> {
     parse_fixture(&bytes)
 }
 
-/// [`read_fixture`] over bytes in memory.
+/// [`read_fixture`] over bytes in memory, through the production migration chain.
 pub fn parse_fixture(bytes: &[u8]) -> Result<Fixture, StreamError> {
+    parse_fixture_with(bytes, &Chain::production())
+}
+
+/// [`parse_fixture`] through `chain`: the envelope, then the legacy decode for a version-3
+/// file, or the chain's lift and decode for any later format. A lifted file reports the
+/// chain's current format, and its hash is the hash of the bytes that were read.
+pub fn parse_fixture_with(bytes: &[u8], chain: &Chain<'_>) -> Result<Fixture, StreamError> {
+    chain.read(bytes)
+}
+
+/// Decodes a version-3 file: frames only, of protocol version 3.
+pub(crate) fn decode_legacy(raw: RawReplay) -> Result<Fixture, StreamError> {
+    decode_entries(raw, FORMAT_LEGACY)
+}
+
+/// Decodes a version-4 file: the inputs, the frames, and the record last.
+pub fn decode_v4(raw: RawReplay) -> Result<Fixture, StreamError> {
+    decode_entries(raw, FORMAT_VERSION)
+}
+
+fn decode_entries(raw: RawReplay, format: u16) -> Result<Fixture, StreamError> {
     let refuse = |reason: String| StreamError::Fixture(reason);
-    if bytes.len() < FIXTURE_HEADER_BYTES + FIXTURE_TRAILER_BYTES {
-        return Err(refuse("file shorter than header plus trailer".into()));
+    if raw.format != format {
+        return Err(refuse(format!(
+            "a version-{format} decode was given a version-{} file",
+            raw.format
+        )));
     }
-    if &bytes[0..4] != FIXTURE_MAGIC {
-        return Err(refuse("bad magic".into()));
-    }
-    let format = u16::from_le_bytes([bytes[4], bytes[5]]);
-    let protocol_version = match format {
-        FORMAT_LEGACY => FORMAT_LEGACY,
-        FORMAT_VERSION => u16::from_le_bytes([bytes[6], bytes[7]]),
-        other => {
-            return Err(refuse(format!(
-                "format {other}; this build reads formats {FORMAT_LEGACY} and {FORMAT_VERSION} \
-                 (read as a version-3 file: protocol version {other}; this build speaks \
-                 {PROTOCOL_VERSION})"
-            )));
-        }
+    let protocol_version = if format == FORMAT_LEGACY {
+        raw.format
+    } else {
+        raw.protocol
     };
     if protocol_version != PROTOCOL_VERSION {
         return Err(refuse(format!(
             "frames protocol version {protocol_version}; this build speaks {PROTOCOL_VERSION}"
         )));
     }
-    let match_millis = u64::from_le_bytes(bytes[8..16].try_into().expect("8 bytes"));
-    let declared_frames = u32::from_le_bytes(bytes[16..20].try_into().expect("4 bytes"));
-    let ticks = u32::from_le_bytes(bytes[20..24].try_into().expect("4 bytes"));
-    let seed = u64::from_le_bytes(bytes[24..32].try_into().expect("8 bytes"));
-
-    let trailer = &bytes[bytes.len() - FIXTURE_TRAILER_BYTES..];
-    if &trailer[0..4] != FIXTURE_TRAILER_MAGIC {
-        return Err(refuse("missing trailer: the fixture is incomplete".into()));
-    }
-    let trailer_frames = u32::from_le_bytes(trailer[4..8].try_into().expect("4 bytes"));
-    if trailer_frames != declared_frames {
-        return Err(refuse(format!(
-            "frame count mismatch: header says {declared_frames}, trailer says {trailer_frames}"
-        )));
-    }
-
-    let body = &bytes[FIXTURE_HEADER_BYTES..bytes.len() - FIXTURE_TRAILER_BYTES];
-    let mut hasher = Sha256::new();
-    // The header's count is not trusted for the allocation: every entry takes at least its
-    // 9-byte head, so the body cannot hold more frames than that.
-    let mut frames = Vec::with_capacity((declared_frames as usize).min(body.len() / 9));
+    let mut frames = Vec::with_capacity(raw.entries.len());
     let mut inputs: Vec<(String, Vec<u8>)> = Vec::new();
     let mut record: Option<ReplayRecord> = None;
-    let mut at = 0usize;
-    while at < body.len() {
-        if at + 9 > body.len() {
-            return Err(refuse("a frame entry is truncated".into()));
-        }
-        let kind = body[at];
-        let tick = u32::from_le_bytes(body[at + 1..at + 5].try_into().expect("4 bytes"));
-        let len = u32::from_le_bytes(body[at + 5..at + 9].try_into().expect("4 bytes")) as usize;
-        at += 9;
-        if at + len > body.len() {
-            return Err(refuse(format!(
-                "frame at tick {tick} claims {len} bytes past the end of the file"
-            )));
-        }
-        let payload = &body[at..at + len];
-        at += len;
-        hasher.update(payload);
+    for entry in &raw.entries {
+        let kind = entry.kind;
         if record.is_some() {
             return Err(refuse(match kind {
                 ENTRY_RECORD => "the file holds two record entries".into(),
@@ -722,69 +705,83 @@ pub fn parse_fixture(bytes: &[u8]) -> Result<Fixture, StreamError> {
                 "entry kind {kind} in a version-3 file, which holds frames only"
             )));
         }
-        let frame = match kind {
-            ENTRY_BINARY => Frame::Tick(TickFrame::from_bytes(payload)?),
-            ENTRY_TEXT => Frame::Text(
-                String::from_utf8(payload.to_vec())
-                    .map_err(|e| refuse(format!("a text frame is not UTF-8: {e}")))?,
-            ),
+        match kind {
             ENTRY_INPUT => {
                 if !frames.is_empty() {
                     return Err(refuse("an input entry follows the frames".into()));
                 }
-                inputs.push(split_input(payload)?);
-                continue;
+                inputs.push(split_input(&entry.payload)?);
             }
-            ENTRY_RECORD => {
-                record = Some(
-                    serde_json::from_slice(payload)
-                        .map_err(|e| refuse(format!("the record entry is not a record: {e}")))?,
-                );
-                continue;
-            }
-            other => {
-                return Err(refuse(format!("unknown entry kind {other} at tick {tick}")));
-            }
-        };
-        frames.push(StoredFrame { tick, frame });
+            ENTRY_RECORD => record = Some(decode_record(&entry.payload)?),
+            _ => frames.push(decode_frame(entry)?),
+        }
     }
-    if frames.len() != declared_frames as usize {
-        return Err(refuse(format!(
-            "frame count mismatch: the header says {declared_frames}, the body holds {}",
-            frames.len()
-        )));
-    }
-    let digest = hasher.finalize();
-    if digest[..6] != trailer[8..14] {
-        return Err(refuse(
-            "the frame bytes do not match the trailer hash".into(),
-        ));
-    }
+    let fixture = Fixture {
+        format,
+        protocol_version,
+        match_millis: raw.match_millis,
+        seed: raw.seed,
+        ticks: raw.ticks,
+        frames,
+        inputs: Vec::new(),
+        record,
+        hash: raw.hash,
+    };
+    check_frame_count(&fixture, raw.frames)?;
     let inputs = if format == FORMAT_VERSION {
-        let Some(record) = &record else {
+        let Some(record) = &fixture.record else {
             return Err(refuse(
                 "a version-4 file must end with its record entry; this one has none".into(),
             ));
         };
-        matched_inputs(record, inputs)?
+        check_inputs(record, inputs)?
     } else {
         Vec::new()
     };
-    Ok(Fixture {
-        format,
-        protocol_version,
-        match_millis,
-        seed,
-        ticks,
-        frames,
-        inputs,
-        record,
-        hash: hex12(&digest),
+    Ok(Fixture { inputs, ..fixture })
+}
+
+/// Refuses a fixture whose frames are not the `declared` count of its header.
+pub fn check_frame_count(fixture: &Fixture, declared: u32) -> Result<(), StreamError> {
+    if fixture.frames.len() != declared as usize {
+        return Err(StreamError::Fixture(format!(
+            "frame count mismatch: the header says {declared}, the body holds {}",
+            fixture.frames.len()
+        )));
+    }
+    Ok(())
+}
+
+/// One frame entry: a binary tick frame (kind 0) or a JSON text frame (kind 1).
+pub fn decode_frame(entry: &RawEntry) -> Result<StoredFrame, StreamError> {
+    let frame = match entry.kind {
+        ENTRY_BINARY => Frame::Tick(TickFrame::from_bytes(&entry.payload)?),
+        ENTRY_TEXT => Frame::Text(
+            String::from_utf8(entry.payload.clone())
+                .map_err(|e| StreamError::Fixture(format!("a text frame is not UTF-8: {e}")))?,
+        ),
+        other => {
+            return Err(StreamError::Fixture(format!(
+                "unknown entry kind {other} at tick {}",
+                entry.tick
+            )));
+        }
+    };
+    Ok(StoredFrame {
+        tick: entry.tick,
+        frame,
     })
 }
 
+/// The record entry's payload as a record. Every field must be present: a missing field is
+/// refused by name, never filled with a default.
+pub fn decode_record(payload: &[u8]) -> Result<ReplayRecord, StreamError> {
+    serde_json::from_slice(payload)
+        .map_err(|e| StreamError::Fixture(format!("the record entry is not a record: {e}")))
+}
+
 /// An input entry's name and bytes.
-fn split_input(payload: &[u8]) -> Result<(String, Vec<u8>), StreamError> {
+pub fn split_input(payload: &[u8]) -> Result<(String, Vec<u8>), StreamError> {
     let refuse = |reason: &str| StreamError::Fixture(reason.into());
     if payload.len() < 2 {
         return Err(refuse("an input entry is truncated"));
@@ -799,7 +796,7 @@ fn split_input(payload: &[u8]) -> Result<(String, Vec<u8>), StreamError> {
 }
 
 /// The inputs with their roles, when every entry is the one the record lists at its place.
-fn matched_inputs(
+pub fn check_inputs(
     record: &ReplayRecord,
     inputs: Vec<(String, Vec<u8>)>,
 ) -> Result<Vec<InputFile>, StreamError> {
@@ -839,45 +836,49 @@ fn matched_inputs(
 /// Writes `fixture` as a file, entry for entry: a fixture read and written back is the
 /// same file byte for byte. Tests use it to build patched and damaged files.
 pub fn write_fixture(path: &Path, fixture: &Fixture) -> Result<(), StreamError> {
-    let mut out = Vec::new();
-    let mut head = header(
-        fixture.format,
-        fixture.protocol_version,
-        fixture.match_millis,
-        fixture.seed,
-    );
-    head[16..20].copy_from_slice(&(fixture.frames.len() as u32).to_le_bytes());
-    head[20..24].copy_from_slice(&fixture.ticks.to_le_bytes());
-    out.extend_from_slice(&head);
-    let mut hasher = Sha256::new();
-    let mut entry = |out: &mut Vec<u8>, kind: u8, tick: u32, payload: &[u8]| {
-        out.push(kind);
-        out.extend_from_slice(&tick.to_le_bytes());
-        out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
-        out.extend_from_slice(payload);
-        hasher.update(payload);
-    };
+    let mut entries = Vec::with_capacity(fixture.inputs.len() + fixture.frames.len() + 1);
     for file in &fixture.inputs {
-        entry(&mut out, ENTRY_INPUT, 0, &input_payload(file)?);
+        entries.push(RawEntry {
+            kind: ENTRY_INPUT,
+            tick: 0,
+            payload: input_payload(file)?,
+        });
     }
     for stored in &fixture.frames {
-        let kind = if stored.frame.is_text() {
-            ENTRY_TEXT
-        } else {
-            ENTRY_BINARY
-        };
-        entry(&mut out, kind, stored.tick, stored.frame.payload());
+        entries.push(RawEntry {
+            kind: if stored.frame.is_text() {
+                ENTRY_TEXT
+            } else {
+                ENTRY_BINARY
+            },
+            tick: stored.tick,
+            payload: stored.frame.payload().to_vec(),
+        });
     }
     if let Some(record) = &fixture.record {
-        entry(&mut out, ENTRY_RECORD, 0, &record_payload(record)?);
+        entries.push(RawEntry {
+            kind: ENTRY_RECORD,
+            tick: 0,
+            payload: record_payload(record)?,
+        });
     }
-    let digest = hasher.finalize();
-    let mut trailer = [0u8; FIXTURE_TRAILER_BYTES];
-    trailer[0..4].copy_from_slice(FIXTURE_TRAILER_MAGIC);
-    trailer[4..8].copy_from_slice(&(fixture.frames.len() as u32).to_le_bytes());
-    trailer[8..14].copy_from_slice(&digest[..6]);
-    out.extend_from_slice(&trailer);
-    std::fs::write(path, out)
+    let legacy = fixture.format == FORMAT_LEGACY;
+    let raw = RawReplay {
+        // Offset 4 of a legacy file is its protocol version, which is also 3.
+        format: if legacy {
+            fixture.protocol_version
+        } else {
+            fixture.format
+        },
+        protocol: if legacy { 0 } else { fixture.protocol_version },
+        match_millis: fixture.match_millis,
+        frames: fixture.frames.len() as u32,
+        ticks: fixture.ticks,
+        seed: fixture.seed,
+        entries,
+        hash: String::new(),
+    };
+    std::fs::write(path, raw.to_bytes())
         .map_err(|e| StreamError::io(format!("cannot write {}", path.display()), e))
 }
 
@@ -898,6 +899,22 @@ mod decimal {
         String::deserialize(d)?
             .parse()
             .map_err(serde::de::Error::custom)
+    }
+}
+
+/// An `Option` field that must be present: `null` reads as `None`, and a missing field is
+/// an error. Without it, serde reads a missing `Option` field as `None` (source:
+/// serde-1.0.229/src/private/de.rs:24-49, `missing_field`); a field with `deserialize_with`
+/// returns the missing-field error instead (source: serde_derive-1.0.229/src/de.rs:791-803).
+mod required {
+    use serde::{Deserialize, Deserializer};
+
+    pub fn deserialize<'de, D, T>(d: D) -> Result<Option<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        Option::<T>::deserialize(d)
     }
 }
 
