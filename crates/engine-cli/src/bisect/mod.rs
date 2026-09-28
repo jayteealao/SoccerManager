@@ -96,10 +96,13 @@ pub fn run(content_dir: Option<&Path>, opts: &BisectOpts) -> anyhow::Result<i32>
     }
     let fixture = std::path::absolute(&opts.fixture)?;
     let limit = Duration::from_secs(opts.timeout);
-    let cache_root = opts
-        .cache
-        .clone()
-        .unwrap_or_else(|| opts.repo.join("target").join("bisect"));
+    // Absolute paths: cargo runs inside each checkout, where a relative cache path would
+    // name a folder inside that checkout.
+    let repo = std::path::absolute(&opts.repo)?;
+    let cache_root = match &opts.cache {
+        Some(cache) => std::path::absolute(cache)?,
+        None => repo.join("target").join("bisect"),
+    };
     let sides = [
         Side {
             name: "a",
@@ -115,7 +118,7 @@ pub fn run(content_dir: Option<&Path>, opts: &BisectOpts) -> anyhow::Result<i32>
     let work = WorkDir::new()?;
 
     // Resolve both sides to executables.
-    let resolved = both(&sides, |_, side| resolve(side, opts, &cache_root));
+    let resolved = both(&sides, |_, side| resolve(side, opts, &repo, &cache_root));
     let [a, b] = match resolved {
         Ok(pair) => pair,
         Err(reasons) => return Ok(incomplete(opts, &shown, &sides, &reasons, None)),
@@ -208,7 +211,12 @@ fn both<T>(
 }
 
 /// A side's executable: the cached build of its commit, or its ready binary.
-fn resolve(side: &Side, opts: &BisectOpts, cache_root: &Path) -> Result<Resolved, String> {
+fn resolve(
+    side: &Side,
+    opts: &BisectOpts,
+    repo: &Path,
+    cache_root: &Path,
+) -> Result<Resolved, String> {
     if let Some(path) = &side.binary {
         if !path.is_file() {
             return Err(format!("{} does not exist", path.display()));
@@ -220,8 +228,8 @@ fn resolve(side: &Side, opts: &BisectOpts, cache_root: &Path) -> Result<Resolved
         });
     }
     let rev = side.rev.as_deref().unwrap_or_default();
-    let commit = cache::resolve_commit(&opts.repo, rev)?;
-    let (toolchain, target) = cache::toolchain_of(&opts.repo, &commit, cache_root)?;
+    let commit = cache::resolve_commit(repo, rev)?;
+    let (toolchain, target) = cache::toolchain_of(repo, &commit, cache_root)?;
     let key = cache::CacheKey {
         commit,
         toolchain,
@@ -234,7 +242,7 @@ fn resolve(side: &Side, opts: &BisectOpts, cache_root: &Path) -> Result<Resolved
         side.name, key.commit, key.profile
     );
     let builder = cache::GitWorktreeBuilder {
-        repo: opts.repo.clone(),
+        repo: repo.to_path_buf(),
         cache: cache_root.to_path_buf(),
     };
     let cached = cache::lookup(cache_root, &key, &builder)?;
