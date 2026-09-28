@@ -306,7 +306,7 @@ fn the_committed_file_lifts_through_two_later_formats_with_every_field_kept() {
         slow_calls: 3,
         invalid: Some("slow script".into()),
     };
-    let dir = common::temp_dir("replay-migration-mark");
+    let dir = common::temp_dir("replay-file-lifted-mark");
     let path = dir.join("marked.smfx");
     write_fixture(&path, &marked).unwrap();
     let lifted = lifts_intact(&std::fs::read(&path).unwrap());
