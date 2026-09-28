@@ -18,7 +18,7 @@ use crate::decision::Kick;
 use crate::error::EngineError;
 use crate::fatigue::InjurySource;
 use crate::flags::ActiveFlags;
-use crate::math::{DVec2, DVec3, toward};
+use crate::math::{self, DVec2, DVec3, toward};
 use crate::pitch;
 use crate::player::Player;
 use crate::plugin::{Plugins, ScriptNote};
@@ -469,10 +469,10 @@ pub fn shot_xg(from: DVec2, attack_x: f64, t: &XgTuning) -> f64 {
     let half = pitch::GOAL_WIDTH / 2.0;
     let a = DVec2::new(x, half) - from;
     let b = DVec2::new(x, -half) - from;
-    let angle = a.perp_dot(b).atan2(a.dot(b)).abs();
+    let angle = math::atan2(a.perp_dot(b), a.dot(b)).abs();
     let distance = (pitch::goal_centre(attack_x) - from).length();
     let z = t.intercept + t.distance_coef * distance + t.angle_coef * angle;
-    1.0 / (1.0 + (-z).exp())
+    1.0 / (1.0 + math::exp(-z))
 }
 
 /// The decision hook's offsets for one carrier, in force until `until`.

@@ -17,6 +17,8 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 sha2 = { workspace = true }
 garde = { workspace = true }
+# The pure-Rust maths backend, selected by the libm-maths feature.
+libm = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true }
@@ -25,6 +27,9 @@ windows-sys = { workspace = true }
 # The test scene builder and scripted referee draws. Only this crate's own tests enable it,
 # so a release build never contains either.
 scenario = []
+# Selects the pure-Rust libm maths backend instead of the platform maths library. Off by
+# default, so play keeps the platform maths until the one recorded result change.
+libm-maths = []
 
 [dev-dependencies]
 criterion = { workspace = true }

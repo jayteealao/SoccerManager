@@ -9,7 +9,7 @@
 use crate::data::rules::StoppageKind;
 #[cfg(feature = "scenario")]
 use crate::gate::audit::{self, Candidate, Control};
-use crate::math::{DVec2, segment_distance, toward};
+use crate::math::{self, DVec2, segment_distance, toward};
 use crate::pitch;
 use crate::plugin::{DecisionContext, HookPoint, OptionOffsets};
 use crate::rules::offside;
@@ -807,7 +807,7 @@ fn kick_speed(d: f64, loft: f64, t: &Tuning) -> f64 {
 
 /// Rotates a unit vector by `angle` radians.
 fn rotate(v: DVec2, angle: f64) -> DVec2 {
-    let (s, c) = angle.sin_cos();
+    let (s, c) = math::sin_cos(angle);
     DVec2::new(v.x * c - v.y * s, v.x * s + v.y * c)
 }
 

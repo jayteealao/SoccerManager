@@ -1,6 +1,72 @@
-//! Vector types and small helpers. All simulation math is `f64`.
+//! Vector types, small helpers, and the engine maths functions. All simulation maths is
+//! `f64`. Every sine, cosine, exponent, arctangent, and integer power in the engine goes
+//! through the functions below, which forward to one backend chosen at compile time: the
+//! platform maths library (the default, today's results) or the pure-Rust `libm` crate (the
+//! `libm-maths` feature, the same bits on every machine).
 
 pub use glam::{DVec2, DVec3};
+
+#[cfg_attr(not(feature = "libm-maths"), allow(dead_code))]
+mod libm_backend;
+#[cfg_attr(feature = "libm-maths", allow(dead_code))]
+mod platform;
+
+#[cfg(feature = "libm-maths")]
+use libm_backend as selected;
+#[cfg(not(feature = "libm-maths"))]
+use platform as selected;
+
+/// A maths backend.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Backend {
+    /// The platform maths library.
+    Platform,
+    /// The pure-Rust `libm` crate.
+    Libm,
+}
+
+/// The backend this build selected.
+pub const BACKEND: Backend = if cfg!(feature = "libm-maths") {
+    Backend::Libm
+} else {
+    Backend::Platform
+};
+
+/// Sine of `x` radians.
+#[inline]
+pub fn sin(x: f64) -> f64 {
+    selected::sin(x)
+}
+
+/// Cosine of `x` radians.
+#[inline]
+pub fn cos(x: f64) -> f64 {
+    selected::cos(x)
+}
+
+/// Sine and cosine of `x` radians, in one call.
+#[inline]
+pub fn sin_cos(x: f64) -> (f64, f64) {
+    selected::sin_cos(x)
+}
+
+/// `e` to the power `x`.
+#[inline]
+pub fn exp(x: f64) -> f64 {
+    selected::exp(x)
+}
+
+/// The four-quadrant arctangent of `y / x`.
+#[inline]
+pub fn atan2(y: f64, x: f64) -> f64 {
+    selected::atan2(y, x)
+}
+
+/// `x` to the integer power `n`.
+#[inline]
+pub fn powi(x: f64, n: i32) -> f64 {
+    selected::powi(x, n)
+}
 
 /// Clamps `v` to at most `max` in length. A zero vector stays zero. A vector whose squared
 /// length is at or below `sq_keep_limit(max)` is returned before the square root; every
@@ -150,7 +216,7 @@ mod tests {
     fn keep_limit_matches_the_square_root_form() {
         let mut limits = radii();
         limits.extend([f64::MAX]);
-        let (sin, cos) = (30f64.to_radians().sin(), 30f64.to_radians().cos());
+        let (sin, cos) = (sin(30f64.to_radians()), cos(30f64.to_radians()));
         let (mut cases, mut at_square, mut kept, mut scaled) = (0u64, 0u64, 0u64, 0u64);
         for m in limits {
             let keep = sq_keep_limit(m);
@@ -233,6 +299,166 @@ mod tests {
             DVec2::new(0.0, 1.0)
         );
         assert_eq!(toward(DVec2::ONE, DVec2::ONE), DVec2::ZERO);
+    }
+
+    /// The fixed maths input set: signed zeros, the smallest subnormal and normal, a tiny
+    /// value, the quarter, half, and full turns and the neighbours of the quarter turn, the 22
+    /// centre-circle angles, large arguments, the edges of `exp`, the largest finite values,
+    /// the infinities, NaN, and 10,000 seeded values in [-10, 10).
+    pub(super) fn maths_inputs() -> Vec<f64> {
+        use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, PI, TAU};
+        let mut out = vec![
+            0.0,
+            -0.0,
+            f64::from_bits(1),
+            f64::MIN_POSITIVE,
+            1e-300,
+            f64::NAN,
+        ];
+        for x in [
+            FRAC_PI_4,
+            FRAC_PI_4.next_down(),
+            FRAC_PI_4.next_up(),
+            FRAC_PI_2,
+            PI,
+            TAU,
+            1e6,
+            1e22,
+            709.78,
+            745.2,
+            f64::MAX,
+            f64::INFINITY,
+        ] {
+            out.push(x);
+            out.push(-x);
+        }
+        out.extend((0..22).map(|i| TAU * f64::from(i) / 22.0));
+        let mut rng = EngineRng::from_seed(29);
+        out.extend((0..10_000).map(|_| 20.0 * rng.next_f64() - 10.0));
+        out
+    }
+
+    /// The `atan2` operand pairs: every pair of the first 64 inputs, which holds all four
+    /// signed-zero quadrants.
+    fn atan2_pairs() -> Vec<(f64, f64)> {
+        let inputs: Vec<f64> = maths_inputs().into_iter().take(64).collect();
+        let mut out = Vec::new();
+        for &y in &inputs {
+            for &x in &inputs {
+                out.push((y, x));
+            }
+        }
+        out
+    }
+
+    /// The `powi` operands: the bases with every power from -8 to 22.
+    fn powi_pairs() -> Vec<(f64, i32)> {
+        let mut out = Vec::new();
+        for x in [10.0, 2.0, -1.5, 0.0, -0.0, f64::INFINITY, f64::NAN] {
+            for n in -8..=22 {
+                out.push((x, n));
+            }
+        }
+        out
+    }
+
+    /// The six maths functions of one backend: sin, cos, sin_cos, exp, atan2, and powi.
+    pub(super) type Backends = (
+        fn(f64) -> f64,
+        fn(f64) -> f64,
+        fn(f64) -> (f64, f64),
+        fn(f64) -> f64,
+        fn(f64, f64) -> f64,
+        fn(f64, i32) -> f64,
+    );
+
+    /// Checks one maths backend, given as its six functions, against six reference functions
+    /// bit for bit over the fixed input set, and returns the number of compares.
+    pub(super) fn same_bits(got: Backends, want: Backends) -> usize {
+        let mut cases = 0;
+        for x in maths_inputs() {
+            assert_eq!(got.0(x).to_bits(), want.0(x).to_bits(), "sin({x:e})");
+            assert_eq!(got.1(x).to_bits(), want.1(x).to_bits(), "cos({x:e})");
+            let (s, c) = got.2(x);
+            let (ws, wc) = want.2(x);
+            assert_eq!(
+                (s.to_bits(), c.to_bits()),
+                (ws.to_bits(), wc.to_bits()),
+                "sin_cos({x:e})"
+            );
+            assert_eq!(got.3(x).to_bits(), want.3(x).to_bits(), "exp({x:e})");
+            cases += 4;
+        }
+        for (y, x) in atan2_pairs() {
+            assert_eq!(
+                got.4(y, x).to_bits(),
+                want.4(y, x).to_bits(),
+                "atan2({y:e}, {x:e})"
+            );
+            cases += 1;
+        }
+        for (x, n) in powi_pairs() {
+            assert_eq!(
+                got.5(x, n).to_bits(),
+                want.5(x, n).to_bits(),
+                "powi({x:e}, {n})"
+            );
+            cases += 1;
+        }
+        cases
+    }
+
+    #[test]
+    fn libm_backend_equals_the_direct_libm_call() {
+        let cases = same_bits(
+            (
+                libm_backend::sin,
+                libm_backend::cos,
+                libm_backend::sin_cos,
+                libm_backend::exp,
+                libm_backend::atan2,
+                libm_backend::powi,
+            ),
+            (
+                libm::sin,
+                libm::cos,
+                libm::sincos,
+                libm::exp,
+                libm::atan2,
+                |x, n| libm::pow(x, f64::from(n)),
+            ),
+        );
+        assert!(cases > 40_000, "{cases} cases");
+    }
+
+    #[test]
+    fn the_selected_backend_is_the_one_named() {
+        let module: Backends = (sin, cos, sin_cos, exp, atan2, powi);
+        let cases = match BACKEND {
+            Backend::Platform => same_bits(
+                module,
+                (
+                    platform::sin,
+                    platform::cos,
+                    platform::sin_cos,
+                    platform::exp,
+                    platform::atan2,
+                    platform::powi,
+                ),
+            ),
+            Backend::Libm => same_bits(
+                module,
+                (
+                    libm_backend::sin,
+                    libm_backend::cos,
+                    libm_backend::sin_cos,
+                    libm_backend::exp,
+                    libm_backend::atan2,
+                    libm_backend::powi,
+                ),
+            ),
+        };
+        assert!(cases > 40_000, "{cases} cases");
     }
 
     #[test]

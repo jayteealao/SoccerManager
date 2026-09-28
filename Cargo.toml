@@ -33,6 +33,10 @@ criterion = "0.8"
 tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
 boon = "0.6.1"
 rhai = { version = "1.26", features = ["sync"] }
+# Pure-Rust maths, so the engine can give the same bits on every machine. Default features
+# stay off here, because a member that inherits a workspace dependency cannot turn them off;
+# the default "arch" feature would select hardware sqrt and fma paths.
+libm = { version = "0.2.16", default-features = false }
 
 [profile.release]
 debug = 1

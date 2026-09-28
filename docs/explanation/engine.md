@@ -78,4 +78,6 @@ The engine promises the same match only on the same build and the same computer.
 
 The engine uses floating-point numbers for positions and velocities. Different processors, compilers, and mathematics libraries can round the last bit of a result differently. Over thousands of ticks, a different last bit can change who wins a tackle. A promise across computers would require fixed-point arithmetic or a strict floating-point library in every part of the engine, at a high cost in speed and code.
 
+Every engine sine, cosine, exponent, arctangent, and integer power goes through one maths module (`engine::math`). A build switch selects the backend of that module. The platform maths library gives today's results. The pure-Rust `libm` crate gives the same bits on every computer. The platform library stays selected until the one recorded result change, which turns on `libm` together with the keyed random streams.
+
 For this reason, the engine promises less. The tests check that two runs on one computer give identical ticks. The snapshot records the build and the content it came from, and the engine refuses a snapshot from another build or other content. A match that must play the same everywhere is a replay file: the replay file stores the ticks, not the inputs.

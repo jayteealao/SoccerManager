@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::error::EngineError;
+use crate::math;
 use crate::sim::Summary;
 
 pub mod identity;
@@ -226,7 +227,7 @@ impl MatchFigures {
 
 /// `x` rounded to `places` decimals.
 pub fn round_to(x: f64, places: i32) -> f64 {
-    let scale = 10f64.powi(places);
+    let scale = math::powi(10.0, places);
     (x * scale).round() / scale
 }
 

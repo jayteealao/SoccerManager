@@ -159,3 +159,17 @@ pub fn run_many<T: Send>(
             .collect()
     })
 }
+
+/// The `.rs` files under `dir`, recursively, for the engine source searches.
+pub fn sources(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            out.extend(sources(&path));
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            out.push(path);
+        }
+    }
+    out
+}

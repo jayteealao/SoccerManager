@@ -280,18 +280,6 @@ fn the_draw_counter_equals_the_draws_taken() {
     }
 }
 
-/// The `.rs` files under `dir`, recursively.
-fn sources(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
-    for entry in std::fs::read_dir(dir).unwrap() {
-        let path = entry.unwrap().path();
-        if path.is_dir() {
-            sources(&path, out);
-        } else if path.extension().is_some_and(|e| e == "rs") {
-            out.push(path);
-        }
-    }
-}
-
 #[test]
 fn no_draw_bypasses_the_registry() {
     const PATTERNS: [&str; 9] = [
@@ -314,8 +302,7 @@ fn no_draw_bypasses_the_registry() {
         "math.rs",
     ];
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let mut files = Vec::new();
-    sources(&root, &mut files);
+    let files = common::sources(&root);
     let mut offenders = Vec::new();
     let mut control = false;
     for file in files {

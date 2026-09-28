@@ -11,7 +11,7 @@
 //! is at the ball, and every player the law moves has moved.
 
 use crate::data::rules::StoppageKind;
-use crate::math::{DVec2, toward};
+use crate::math::{self, DVec2, toward};
 use crate::pitch::{self, HALF_LENGTH, KICK_DISTANCE, PENALTY_AREA_DEPTH};
 use crate::player::Player;
 use crate::team::{PLAYERS_PER_TEAM, Team};
@@ -268,7 +268,10 @@ pub fn shootout_target(dead: &DeadBall, i: usize, keepers: [usize; 2]) -> DVec2 
     } else {
         // Spread round the centre spot so nobody stands on anybody else.
         let angle = std::f64::consts::TAU * i as f64 / (2 * PLAYERS_PER_TEAM) as f64;
-        DVec2::new(CIRCLE_SPREAD * angle.cos(), CIRCLE_SPREAD * angle.sin())
+        DVec2::new(
+            CIRCLE_SPREAD * math::cos(angle),
+            CIRCLE_SPREAD * math::sin(angle),
+        )
     }
 }
 
