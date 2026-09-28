@@ -1,5 +1,5 @@
 //! The debug trace: every random draw of a gate match is recorded with its stream, key,
-//! index, value, and, at a chance draw, the probability it is tested against (AC-32).
+//! index, value, and, at a chance draw, the probability it is tested against.
 //! Controls prove the checker fails on a dropped draw and on a missing probability.
 #![cfg(feature = "debug-trace")]
 
@@ -59,7 +59,7 @@ fn every_draw_of_a_gate_match_is_recorded_with_its_fields() {
         .filter(|r| matches!(r, TraceRecord::Draw(_)))
         .collect();
     assert_eq!(draws.len() as u64, *registry);
-    // The file form of every draw has the fields AC-32 names.
+    // The file form of every draw has the fields a draw record names.
     let mut chance = 0;
     for r in &draws {
         let v = r.to_json();
@@ -172,7 +172,7 @@ fn the_header_names_the_maths_library_in_the_lock_file() {
     assert_eq!(header["engine"], engine::build_hash());
 }
 
-// --- Coverage list (AC-33): the anchors, the checkers' controls, and the scene-only points.
+// --- Coverage list: the anchors, the checkers' controls, and the scene-only points.
 
 use engine::math::{DVec2, DVec3};
 use engine::scenario::Scene;

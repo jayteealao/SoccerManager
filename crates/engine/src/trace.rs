@@ -494,7 +494,7 @@ impl Counts {
 }
 
 /// Checks the draw records of a whole traced match against the registry's draw counter
-/// `registry` (AC-32): one record per draw served, each on a table key with a value in
+/// `registry`: one record per draw served, each on a table key with a value in
 /// `[0, 1)`, with thresholds exactly at the chance actions ([`is_chance`]), and each key's
 /// indexes consecutive from 0. Returns the first failure in words.
 pub fn check_draws<'a>(
@@ -582,7 +582,7 @@ impl DrawCheck {
     }
 }
 
-/// Checks one tick's records against the coverage anchors (AC-33): every draw has at least
+/// Checks one tick's records against the coverage anchors: every draw has at least
 /// one of its action's points ([`points_of`]) on its tick, and every event has at least one
 /// of its kind's points ([`points_of_event`]) on its tick. `records` and `events` are what
 /// a traced run hands over for a tick. Returns the first failure in words.

@@ -1,8 +1,7 @@
 //! Debug mode over the 22 gate matches: every draw is recorded with its fields and counted
-//! against the registry (AC-32); on every tick each draw and each event has one of its
+//! against the registry; on every tick each draw and each event has one of its
 //! coverage points, and the points reached plus the scene-only points are the whole
-//! coverage list (AC-33); and every traced match keeps the committed portable hashes
-//! (AC-34).
+//! coverage list; and every traced match keeps the committed portable hashes.
 //!
 //! The test lives in this crate because the knockout fixture needs the sample script pack.
 
