@@ -23,7 +23,10 @@ pub use control::{
 };
 pub use events::EventWriter;
 pub use record::{
-    FIXTURE_MAGIC, Fixture, FixtureSummary, Recorder, SharedRecorder, StoredFrame, read_fixture,
+    ChangeEntry, ChangeSource, EngineIdentity, FIXTURE_MAGIC, FORMAT_LEGACY, FORMAT_VERSION,
+    Fixture, FixtureSummary, InputFile, InputInfo, LoggedChange, ManagerKind, MatchSettings,
+    Outcome, Recorder, ReplayRecord, SharedRecorder, StoredFrame, Watchdog, outcome_of,
+    parse_fixture, read_fixture, write_fixture,
 };
 pub use replay::Replayer;
 pub use server::{Connection, Server};

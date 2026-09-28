@@ -1,13 +1,28 @@
-//! The fixture file (`.smfx`): the wire bytes of one whole match, exactly as they were
+//! The replay file (`.smfx`): the wire bytes of one whole match, exactly as they were
 //! sent. A replay writes them back with no re-encoding, so the replayed stream is
 //! byte-identical by construction and a viewer can be verified against a fixed recording.
+//!
+//! Two formats exist. Format 3, the legacy file, holds the frames only. Format 4 also holds
+//! every match input by value (one input entry per file, before the frames) and one record
+//! entry at the end: the full engine identity, the match settings, the list of inputs with
+//! their SHA-256, the applied-change log, and the watchdog mark. A format-4 file is enough to
+//! re-simulate its match on the engine that recorded it.
+//!
+//! Layout, little-endian: a 32-byte header (magic `SMFX`, the format version u16, the
+//! frames' protocol version u16 (zero in format 3, whose format field is the protocol
+//! version), the match stamp u64, the frame count u32, the tick count u32, the seed u64);
+//! entries of kind (u8), tick (u32), length (u32), and payload; a 16-byte trailer (magic
+//! `SMFE`, the frame count u32, the first six bytes of the SHA-256 over every payload in
+//! file order, two zero bytes). The frame count counts tick and text frames only.
 
 use std::fs::File;
 use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use engine::data::hex12;
+use engine::{AppliedChange, Change, Manager, RoleDuty, Simulation, TacticsPatch};
 use protocol::{Frame, PROTOCOL_VERSION, TickFrame};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::StreamError;
@@ -21,12 +36,20 @@ pub const FIXTURE_TRAILER_MAGIC: &[u8; 4] = b"SMFE";
 pub const FIXTURE_HEADER_BYTES: usize = 32;
 /// Trailer bytes.
 pub const FIXTURE_TRAILER_BYTES: usize = 16;
+/// The legacy format: frames only, of protocol version 3. It plays and never re-simulates.
+pub const FORMAT_LEGACY: u16 = 3;
+/// The format this build writes for a recorded match: frames, inputs, and the record.
+pub const FORMAT_VERSION: u16 = 4;
 /// Header offset of the frame count.
 const FRAMES_AT: u64 = 16;
 /// A binary tick frame.
 const ENTRY_BINARY: u8 = 0;
 /// A JSON text frame.
 const ENTRY_TEXT: u8 = 1;
+/// One input file: name length (u16), the UTF-8 name, and the file's bytes.
+const ENTRY_INPUT: u8 = 2;
+/// The record: one JSON document.
+const ENTRY_RECORD: u8 = 3;
 
 /// What a finished fixture holds.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,6 +58,330 @@ pub struct FixtureSummary {
     pub ticks: u32,
     pub bytes: u64,
     pub hash: String,
+}
+
+/// One match input, stored by value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InputFile {
+    /// What the file is to the match: `attributes`, `tuning`, `rules`, `tactics`,
+    /// `commentary`, `team_a`, `team_b`, `pack_manifest`, or `pack_script`.
+    pub role: String,
+    /// The file's name as it was loaded, relative to its folder.
+    pub name: String,
+    pub bytes: Vec<u8>,
+}
+
+/// The engine that recorded a match.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EngineIdentity {
+    /// The full git commit, or `unknown`.
+    pub commit: String,
+    /// `true` when the working tree held changes at build time.
+    pub dirty: bool,
+    pub crate_version: String,
+    /// The random-stream scheme.
+    pub scheme: u8,
+    /// The maths library and its version.
+    pub maths: String,
+    /// SHA-256 of the executable file, 64 hex characters.
+    pub executable_sha256: String,
+    /// The short build hash, as the hello names it.
+    pub build: String,
+}
+
+impl EngineIdentity {
+    /// The running binary's identity. The executable is read once, to hash it.
+    pub fn current() -> Result<Self, StreamError> {
+        // nosemgrep: rust.lang.security.current-exe.current-exe -- only hashes the running program to name it in the replay file; not a security decision
+        let exe = std::env::current_exe()
+            .map_err(|e| StreamError::io("cannot find the running executable", e))?;
+        let mut file = File::open(&exe)
+            .map_err(|e| StreamError::io("cannot read the running executable", e))?;
+        let mut hasher = Sha256::new();
+        std::io::copy(&mut file, &mut hasher)
+            .map_err(|e| StreamError::io("cannot read the running executable", e))?;
+        Ok(Self {
+            commit: engine::commit().to_string(),
+            dirty: engine::dirty(),
+            crate_version: engine::version().to_string(),
+            scheme: engine::rng::STREAM_SCHEME,
+            maths: engine::trace::MATHS.to_string(),
+            executable_sha256: hex(&hasher.finalize()),
+            build: engine::build_hash().to_string(),
+        })
+    }
+}
+
+/// Who manages a team.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ManagerKind {
+    Ai,
+    Human,
+}
+
+impl ManagerKind {
+    pub fn of(manager: Manager) -> Self {
+        match manager {
+            Manager::Ai => ManagerKind::Ai,
+            Manager::Human => ManagerKind::Human,
+        }
+    }
+
+    pub fn manager(self) -> Manager {
+        match self {
+            ManagerKind::Ai => Manager::Ai,
+            ManagerKind::Human => Manager::Human,
+        }
+    }
+}
+
+/// The match settings a re-simulation needs beyond the input files.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MatchSettings {
+    /// A decimal string: a 64-bit seed does not fit a JavaScript number.
+    #[serde(with = "decimal")]
+    pub seed: u64,
+    pub minutes: u32,
+    pub knockout: bool,
+    /// Home first.
+    pub managers: [ManagerKind; 2],
+}
+
+/// One input as the record lists it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InputInfo {
+    pub role: String,
+    pub name: String,
+    pub bytes: u64,
+    /// 64 hex characters.
+    pub sha256: String,
+}
+
+/// One role and duty a tactics change sets, by squad index.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LoggedRole {
+    pub squad: usize,
+    pub role: u8,
+    pub duty: u8,
+}
+
+/// A change as the log stores it. Players are named by squad index.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum LoggedChange {
+    Substitution {
+        off: usize,
+        on: usize,
+    },
+    Tactics {
+        formation: Option<u8>,
+        mentality: Option<u8>,
+        /// Six levels, in the tactics file's instruction order.
+        instructions: [Option<u8>; 6],
+        roles: Vec<LoggedRole>,
+    },
+}
+
+impl From<&Change> for LoggedChange {
+    fn from(change: &Change) -> Self {
+        match change {
+            Change::Substitution { off, on } => LoggedChange::Substitution { off: *off, on: *on },
+            Change::Tactics(patch) => LoggedChange::Tactics {
+                formation: patch.formation,
+                mentality: patch.mentality,
+                instructions: patch.instructions,
+                roles: patch
+                    .roles
+                    .iter()
+                    .map(|&(squad, rd)| LoggedRole {
+                        squad,
+                        role: rd.role,
+                        duty: rd.duty,
+                    })
+                    .collect(),
+            },
+        }
+    }
+}
+
+impl LoggedChange {
+    /// The engine change this entry names.
+    pub fn to_change(&self) -> Change {
+        match self {
+            LoggedChange::Substitution { off, on } => Change::Substitution { off: *off, on: *on },
+            LoggedChange::Tactics {
+                formation,
+                mentality,
+                instructions,
+                roles,
+            } => Change::Tactics(TacticsPatch {
+                formation: *formation,
+                mentality: *mentality,
+                instructions: *instructions,
+                roles: roles
+                    .iter()
+                    .map(|r| {
+                        (
+                            r.squad,
+                            RoleDuty {
+                                role: r.role,
+                                duty: r.duty,
+                            },
+                        )
+                    })
+                    .collect(),
+            }),
+        }
+    }
+}
+
+/// Where an applied change came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChangeSource {
+    /// The manager of a human-managed team; re-simulation queues it again.
+    Manager,
+    /// The computer manager; re-simulation lets the engine make it again.
+    Ai,
+}
+
+/// One entry of the applied-change log.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChangeEntry {
+    /// Its place among the applied changes, from 0.
+    pub order: u32,
+    pub team: usize,
+    pub source: ChangeSource,
+    /// The tick it was queued on.
+    pub queued_tick: u32,
+    /// The queue's running number when it was queued.
+    pub queue_number: u32,
+    /// The tick it applied on.
+    pub tick: u32,
+    /// The stoppage it applied at, by the rule pack's code.
+    pub stoppage: String,
+    pub change: LoggedChange,
+}
+
+impl ChangeEntry {
+    /// The log entry for `applied`, made for a team whose manager is `manager`.
+    pub fn of(applied: &AppliedChange, manager: Manager) -> Self {
+        Self {
+            order: applied.order,
+            team: applied.team,
+            source: match manager {
+                Manager::Human => ChangeSource::Manager,
+                Manager::Ai => ChangeSource::Ai,
+            },
+            queued_tick: applied.id.tick,
+            queue_number: applied.id.n,
+            tick: applied.tick,
+            stoppage: applied.stoppage.code().to_string(),
+            change: LoggedChange::from(&applied.change),
+        }
+    }
+}
+
+/// The watchdog mark: script calls past the wall-clock limit, and the reason the match is
+/// invalid when there was one.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Watchdog {
+    pub slow_calls: u32,
+    pub invalid: Option<String>,
+}
+
+/// What only full time knows: the applied-change log and the watchdog mark.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Outcome {
+    pub changes: Vec<ChangeEntry>,
+    pub watchdog: Watchdog,
+}
+
+/// The outcome of the match `sim` played.
+pub fn outcome_of(sim: &Simulation) -> Outcome {
+    let managers = sim.managers();
+    Outcome {
+        changes: sim
+            .applied_changes()
+            .iter()
+            .map(|a| ChangeEntry::of(a, managers[a.team]))
+            .collect(),
+        watchdog: Watchdog {
+            slow_calls: sim.plugins().slow_calls(),
+            invalid: sim.plugins().invalid().map(str::to_string),
+        },
+    }
+}
+
+/// The record entry of a format-4 file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReplayRecord {
+    pub engine: EngineIdentity,
+    pub settings: MatchSettings,
+    /// One entry per input entry, in file order.
+    pub inputs: Vec<InputInfo>,
+    /// The sum of the input files' sizes.
+    pub inputs_bytes: u64,
+    /// The applied-change log, in the order the changes applied.
+    pub changes: Vec<ChangeEntry>,
+    pub watchdog: Watchdog,
+}
+
+/// The list entries of `inputs`, and their total size.
+fn listed(inputs: &[InputFile]) -> (Vec<InputInfo>, u64) {
+    let list: Vec<InputInfo> = inputs
+        .iter()
+        .map(|f| InputInfo {
+            role: f.role.clone(),
+            name: f.name.clone(),
+            bytes: f.bytes.len() as u64,
+            sha256: hex(&Sha256::digest(&f.bytes)),
+        })
+        .collect();
+    let total = list.iter().map(|i| i.bytes).sum();
+    (list, total)
+}
+
+/// The payload of an input entry.
+fn input_payload(file: &InputFile) -> Result<Vec<u8>, StreamError> {
+    let name = file.name.as_bytes();
+    let len = u16::try_from(name.len())
+        .map_err(|_| StreamError::Fixture(format!("input name {} is too long", file.name)))?;
+    let mut payload = Vec::with_capacity(2 + name.len() + file.bytes.len());
+    payload.extend_from_slice(&len.to_le_bytes());
+    payload.extend_from_slice(name);
+    payload.extend_from_slice(&file.bytes);
+    Ok(payload)
+}
+
+/// The record entry's payload.
+fn record_payload(record: &ReplayRecord) -> Result<Vec<u8>, StreamError> {
+    serde_json::to_vec(record)
+        .map_err(|e| StreamError::Fixture(format!("cannot write the record entry: {e}")))
+}
+
+/// The 32-byte header, with the counts still zero.
+fn header(format: u16, protocol: u16, match_millis: u64, seed: u64) -> [u8; FIXTURE_HEADER_BYTES] {
+    let mut header = [0u8; FIXTURE_HEADER_BYTES];
+    header[0..4].copy_from_slice(FIXTURE_MAGIC);
+    if format == FORMAT_LEGACY {
+        // Offset 4 of a legacy file is its protocol version, which is also 3.
+        header[4..6].copy_from_slice(&protocol.to_le_bytes());
+    } else {
+        header[4..6].copy_from_slice(&format.to_le_bytes());
+        header[6..8].copy_from_slice(&protocol.to_le_bytes());
+    }
+    header[8..16].copy_from_slice(&match_millis.to_le_bytes());
+    header[24..32].copy_from_slice(&seed.to_le_bytes());
+    header
 }
 
 /// Writes a fixture. It is a `FrameOut`, so the same encoder feeds it and the socket.
@@ -47,12 +394,57 @@ pub struct Recorder {
     bytes: u64,
     last_tick: u32,
     hasher: Sha256,
+    /// The record a format-4 file ends with, still without its outcome; `None` for a
+    /// format-3 file.
+    record: Option<ReplayRecord>,
 }
 
 impl Recorder {
-    /// Creates `path` and writes the header. The frame and tick counts are filled in when
-    /// the recording finishes.
+    /// Creates `path` and writes the header of a format-3 file, which holds frames only.
+    /// The frame and tick counts are filled in when the recording finishes.
     pub fn create(path: &Path, match_millis: u64, seed: u64) -> Result<Self, StreamError> {
+        Self::open(
+            path,
+            &header(FORMAT_LEGACY, PROTOCOL_VERSION, match_millis, seed),
+            None,
+        )
+    }
+
+    /// Creates `path` as a format-4 file: the header, then one input entry per file of
+    /// `inputs`, in order. [`Recorder::finish_record`] ends it with the record.
+    pub fn create_record(
+        path: &Path,
+        match_millis: u64,
+        engine: EngineIdentity,
+        settings: MatchSettings,
+        inputs: &[InputFile],
+    ) -> Result<Self, StreamError> {
+        let (list, inputs_bytes) = listed(inputs);
+        let seed = settings.seed;
+        let record = ReplayRecord {
+            engine,
+            settings,
+            inputs: list,
+            inputs_bytes,
+            changes: Vec::new(),
+            watchdog: Watchdog::default(),
+        };
+        let mut recorder = Self::open(
+            path,
+            &header(FORMAT_VERSION, PROTOCOL_VERSION, match_millis, seed),
+            Some(record),
+        )?;
+        for file in inputs {
+            recorder.entry(ENTRY_INPUT, 0, &input_payload(file)?)?;
+        }
+        Ok(recorder)
+    }
+
+    fn open(
+        path: &Path,
+        header: &[u8; FIXTURE_HEADER_BYTES],
+        record: Option<ReplayRecord>,
+    ) -> Result<Self, StreamError> {
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             std::fs::create_dir_all(parent)
                 .map_err(|e| StreamError::io("cannot create the fixture folder", e))?;
@@ -60,13 +452,8 @@ impl Recorder {
         let file = File::create(path)
             .map_err(|e| StreamError::io(format!("cannot create {}", path.display()), e))?;
         let mut writer = BufWriter::with_capacity(1 << 20, file);
-        let mut header = [0u8; FIXTURE_HEADER_BYTES];
-        header[0..4].copy_from_slice(FIXTURE_MAGIC);
-        header[4..6].copy_from_slice(&PROTOCOL_VERSION.to_le_bytes());
-        header[8..16].copy_from_slice(&match_millis.to_le_bytes());
-        header[24..32].copy_from_slice(&seed.to_le_bytes());
         writer
-            .write_all(&header)
+            .write_all(header)
             .map_err(|e| StreamError::io("cannot write the fixture header", e))?;
         Ok(Self {
             writer,
@@ -77,11 +464,51 @@ impl Recorder {
             bytes: FIXTURE_HEADER_BYTES as u64,
             last_tick: 0,
             hasher: Sha256::new(),
+            record,
         })
     }
 
-    /// Writes the trailer, fills the header counts, and reports what the fixture holds.
-    pub fn finish(mut self) -> Result<FixtureSummary, StreamError> {
+    /// Writes one entry and hashes its payload.
+    fn entry(&mut self, kind: u8, tick: u32, payload: &[u8]) -> Result<(), StreamError> {
+        let mut entry = [0u8; 9];
+        entry[0] = kind;
+        entry[1..5].copy_from_slice(&tick.to_le_bytes());
+        entry[5..9].copy_from_slice(&(payload.len() as u32).to_le_bytes());
+        self.writer
+            .write_all(&entry)
+            .and_then(|()| self.writer.write_all(payload))
+            .map_err(|e| StreamError::io("cannot write a fixture entry", e))?;
+        self.hasher.update(payload);
+        self.bytes += (entry.len() + payload.len()) as u64;
+        Ok(())
+    }
+
+    /// Writes the trailer, fills the header counts, and reports what a format-3 fixture
+    /// holds. A format-4 file ends with its record instead: see [`Recorder::finish_record`].
+    pub fn finish(self) -> Result<FixtureSummary, StreamError> {
+        if self.record.is_some() {
+            return Err(StreamError::Fixture(
+                "a version-4 replay file ends with its record; finish it with the outcome".into(),
+            ));
+        }
+        self.close()
+    }
+
+    /// Writes the record entry of a format-4 file with the match's `outcome`, then the
+    /// trailer.
+    pub fn finish_record(mut self, outcome: Outcome) -> Result<FixtureSummary, StreamError> {
+        let Some(mut record) = self.record.take() else {
+            return Err(StreamError::Fixture(
+                "a version-3 replay file holds no record".into(),
+            ));
+        };
+        record.changes = outcome.changes;
+        record.watchdog = outcome.watchdog;
+        self.entry(ENTRY_RECORD, 0, &record_payload(&record)?)?;
+        self.close()
+    }
+
+    fn close(mut self) -> Result<FixtureSummary, StreamError> {
         let digest = self.hasher.finalize_reset();
         let hash = hex12(&digest);
         let mut trailer = [0u8; FIXTURE_TRAILER_BYTES];
@@ -128,7 +555,6 @@ impl Recorder {
 
 impl FrameOut for Recorder {
     fn send(&mut self, frame: Frame) -> Result<(), StreamError> {
-        let payload = frame.payload();
         let tick = match &frame {
             Frame::Tick(tick) => {
                 self.ticks += 1;
@@ -137,21 +563,13 @@ impl FrameOut for Recorder {
             }
             Frame::Text(_) => self.last_tick,
         };
-        let mut entry = [0u8; 9];
-        entry[0] = if frame.is_text() {
+        let kind = if frame.is_text() {
             ENTRY_TEXT
         } else {
             ENTRY_BINARY
         };
-        entry[1..5].copy_from_slice(&tick.to_le_bytes());
-        entry[5..9].copy_from_slice(&(payload.len() as u32).to_le_bytes());
-        self.writer
-            .write_all(&entry)
-            .and_then(|()| self.writer.write_all(payload))
-            .map_err(|e| StreamError::io("cannot write a fixture frame", e))?;
-        self.hasher.update(payload);
+        self.entry(kind, tick, frame.payload())?;
         self.frames += 1;
-        self.bytes += (entry.len() + payload.len()) as u64;
         Ok(())
     }
 }
@@ -167,12 +585,21 @@ impl SharedRecorder {
         Self(std::rc::Rc::new(std::cell::RefCell::new(recorder)))
     }
 
-    /// Finishes the fixture. Every other handle must be dropped first.
-    pub fn finish(self) -> Result<FixtureSummary, StreamError> {
+    fn only(self) -> Result<Recorder, StreamError> {
         std::rc::Rc::try_unwrap(self.0)
-            .map_err(|_| StreamError::Fixture("the fixture is still being written".into()))?
-            .into_inner()
-            .finish()
+            .map_err(|_| StreamError::Fixture("the fixture is still being written".into()))
+            .map(std::cell::RefCell::into_inner)
+    }
+
+    /// Finishes a format-3 fixture. Every other handle must be dropped first.
+    pub fn finish(self) -> Result<FixtureSummary, StreamError> {
+        self.only()?.finish()
+    }
+
+    /// Finishes a format-4 file with the match's outcome. Every other handle must be
+    /// dropped first.
+    pub fn finish_record(self, outcome: Outcome) -> Result<FixtureSummary, StreamError> {
+        self.only()?.finish_record(outcome)
     }
 }
 
@@ -192,33 +619,56 @@ pub struct StoredFrame {
 /// A fixture read back from disk.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fixture {
+    /// The file format: [`FORMAT_LEGACY`] or [`FORMAT_VERSION`].
+    pub format: u16,
+    /// The protocol version of the frames.
     pub protocol_version: u16,
     pub match_millis: u64,
     pub seed: u64,
     pub ticks: u32,
     pub frames: Vec<StoredFrame>,
+    /// The inputs of a format-4 file, in file order, each with the role the record gives
+    /// it; empty in format 3.
+    pub inputs: Vec<InputFile>,
+    /// The record of a format-4 file; `None` in format 3.
+    pub record: Option<ReplayRecord>,
     pub hash: String,
 }
 
 /// Reads a fixture and fails closed on any layout problem, a count mismatch, a hash
-/// mismatch, or an unknown protocol version.
+/// mismatch, an unknown format or protocol version, or inputs the record does not list.
 pub fn read_fixture(path: &Path) -> Result<Fixture, StreamError> {
     let mut bytes = Vec::new();
     File::open(path)
         .and_then(|mut f| f.read_to_end(&mut bytes))
         .map_err(|e| StreamError::io(format!("cannot read {}", path.display()), e))?;
+    parse_fixture(&bytes)
+}
+
+/// [`read_fixture`] over bytes in memory.
+pub fn parse_fixture(bytes: &[u8]) -> Result<Fixture, StreamError> {
+    let refuse = |reason: String| StreamError::Fixture(reason);
     if bytes.len() < FIXTURE_HEADER_BYTES + FIXTURE_TRAILER_BYTES {
-        return Err(StreamError::Fixture(
-            "file shorter than header plus trailer".into(),
-        ));
+        return Err(refuse("file shorter than header plus trailer".into()));
     }
     if &bytes[0..4] != FIXTURE_MAGIC {
-        return Err(StreamError::Fixture("bad magic".into()));
+        return Err(refuse("bad magic".into()));
     }
-    let protocol_version = u16::from_le_bytes([bytes[4], bytes[5]]);
+    let format = u16::from_le_bytes([bytes[4], bytes[5]]);
+    let protocol_version = match format {
+        FORMAT_LEGACY => FORMAT_LEGACY,
+        FORMAT_VERSION => u16::from_le_bytes([bytes[6], bytes[7]]),
+        other => {
+            return Err(refuse(format!(
+                "format {other}; this build reads formats {FORMAT_LEGACY} and {FORMAT_VERSION} \
+                 (read as a version-3 file: protocol version {other}; this build speaks \
+                 {PROTOCOL_VERSION})"
+            )));
+        }
+    };
     if protocol_version != PROTOCOL_VERSION {
-        return Err(StreamError::Fixture(format!(
-            "protocol version {protocol_version}; this build speaks {PROTOCOL_VERSION}"
+        return Err(refuse(format!(
+            "frames protocol version {protocol_version}; this build speaks {PROTOCOL_VERSION}"
         )));
     }
     let match_millis = u64::from_le_bytes(bytes[8..16].try_into().expect("8 bytes"));
@@ -228,13 +678,11 @@ pub fn read_fixture(path: &Path) -> Result<Fixture, StreamError> {
 
     let trailer = &bytes[bytes.len() - FIXTURE_TRAILER_BYTES..];
     if &trailer[0..4] != FIXTURE_TRAILER_MAGIC {
-        return Err(StreamError::Fixture(
-            "missing trailer: the fixture is incomplete".into(),
-        ));
+        return Err(refuse("missing trailer: the fixture is incomplete".into()));
     }
     let trailer_frames = u32::from_le_bytes(trailer[4..8].try_into().expect("4 bytes"));
     if trailer_frames != declared_frames {
-        return Err(StreamError::Fixture(format!(
+        return Err(refuse(format!(
             "frame count mismatch: header says {declared_frames}, trailer says {trailer_frames}"
         )));
     }
@@ -244,57 +692,213 @@ pub fn read_fixture(path: &Path) -> Result<Fixture, StreamError> {
     // The header's count is not trusted for the allocation: every entry takes at least its
     // 9-byte head, so the body cannot hold more frames than that.
     let mut frames = Vec::with_capacity((declared_frames as usize).min(body.len() / 9));
+    let mut inputs: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut record: Option<ReplayRecord> = None;
     let mut at = 0usize;
     while at < body.len() {
         if at + 9 > body.len() {
-            return Err(StreamError::Fixture("a frame entry is truncated".into()));
+            return Err(refuse("a frame entry is truncated".into()));
         }
         let kind = body[at];
         let tick = u32::from_le_bytes(body[at + 1..at + 5].try_into().expect("4 bytes"));
         let len = u32::from_le_bytes(body[at + 5..at + 9].try_into().expect("4 bytes")) as usize;
         at += 9;
         if at + len > body.len() {
-            return Err(StreamError::Fixture(format!(
+            return Err(refuse(format!(
                 "frame at tick {tick} claims {len} bytes past the end of the file"
             )));
         }
         let payload = &body[at..at + len];
         at += len;
         hasher.update(payload);
+        if record.is_some() {
+            return Err(refuse(match kind {
+                ENTRY_RECORD => "the file holds two record entries".into(),
+                _ => format!("an entry of kind {kind} follows the record entry"),
+            }));
+        }
+        if format == FORMAT_LEGACY && (kind == ENTRY_INPUT || kind == ENTRY_RECORD) {
+            return Err(refuse(format!(
+                "entry kind {kind} in a version-3 file, which holds frames only"
+            )));
+        }
         let frame = match kind {
             ENTRY_BINARY => Frame::Tick(TickFrame::from_bytes(payload)?),
             ENTRY_TEXT => Frame::Text(
                 String::from_utf8(payload.to_vec())
-                    .map_err(|e| StreamError::Fixture(format!("a text frame is not UTF-8: {e}")))?,
+                    .map_err(|e| refuse(format!("a text frame is not UTF-8: {e}")))?,
             ),
+            ENTRY_INPUT => {
+                if !frames.is_empty() {
+                    return Err(refuse("an input entry follows the frames".into()));
+                }
+                inputs.push(split_input(payload)?);
+                continue;
+            }
+            ENTRY_RECORD => {
+                record = Some(
+                    serde_json::from_slice(payload)
+                        .map_err(|e| refuse(format!("the record entry is not a record: {e}")))?,
+                );
+                continue;
+            }
             other => {
-                return Err(StreamError::Fixture(format!(
-                    "unknown entry kind {other} at tick {tick}"
-                )));
+                return Err(refuse(format!("unknown entry kind {other} at tick {tick}")));
             }
         };
         frames.push(StoredFrame { tick, frame });
     }
     if frames.len() != declared_frames as usize {
-        return Err(StreamError::Fixture(format!(
+        return Err(refuse(format!(
             "frame count mismatch: the header says {declared_frames}, the body holds {}",
             frames.len()
         )));
     }
     let digest = hasher.finalize();
     if digest[..6] != trailer[8..14] {
-        return Err(StreamError::Fixture(
+        return Err(refuse(
             "the frame bytes do not match the trailer hash".into(),
         ));
     }
+    let inputs = if format == FORMAT_VERSION {
+        let Some(record) = &record else {
+            return Err(refuse(
+                "a version-4 file must end with its record entry; this one has none".into(),
+            ));
+        };
+        matched_inputs(record, inputs)?
+    } else {
+        Vec::new()
+    };
     Ok(Fixture {
+        format,
         protocol_version,
         match_millis,
         seed,
         ticks,
         frames,
+        inputs,
+        record,
         hash: hex12(&digest),
     })
+}
+
+/// An input entry's name and bytes.
+fn split_input(payload: &[u8]) -> Result<(String, Vec<u8>), StreamError> {
+    let refuse = |reason: &str| StreamError::Fixture(reason.into());
+    if payload.len() < 2 {
+        return Err(refuse("an input entry is truncated"));
+    }
+    let len = usize::from(u16::from_le_bytes([payload[0], payload[1]]));
+    if payload.len() < 2 + len {
+        return Err(refuse("an input entry's name is truncated"));
+    }
+    let name = std::str::from_utf8(&payload[2..2 + len])
+        .map_err(|_| refuse("an input entry's name is not UTF-8"))?;
+    Ok((name.to_string(), payload[2 + len..].to_vec()))
+}
+
+/// The inputs with their roles, when every entry is the one the record lists at its place.
+fn matched_inputs(
+    record: &ReplayRecord,
+    inputs: Vec<(String, Vec<u8>)>,
+) -> Result<Vec<InputFile>, StreamError> {
+    if inputs.len() != record.inputs.len() {
+        return Err(StreamError::Fixture(format!(
+            "the file holds {} input entries and the record lists {}",
+            inputs.len(),
+            record.inputs.len()
+        )));
+    }
+    let mut out = Vec::with_capacity(inputs.len());
+    for (listed, (name, bytes)) in record.inputs.iter().zip(inputs) {
+        let sha256 = hex(&Sha256::digest(&bytes));
+        if listed.name != name || listed.sha256 != sha256 || listed.bytes != bytes.len() as u64 {
+            return Err(StreamError::Fixture(format!(
+                "input {name} (SHA-256 {sha256}) does not match the record's {} {} \
+                 (SHA-256 {})",
+                listed.role, listed.name, listed.sha256
+            )));
+        }
+        out.push(InputFile {
+            role: listed.role.clone(),
+            name,
+            bytes,
+        });
+    }
+    let total: u64 = out.iter().map(|f| f.bytes.len() as u64).sum();
+    if total != record.inputs_bytes {
+        return Err(StreamError::Fixture(format!(
+            "the inputs hold {total} bytes and the record says {}",
+            record.inputs_bytes
+        )));
+    }
+    Ok(out)
+}
+
+/// Writes `fixture` as a file, entry for entry: a fixture read and written back is the
+/// same file byte for byte. Tests use it to build patched and damaged files.
+pub fn write_fixture(path: &Path, fixture: &Fixture) -> Result<(), StreamError> {
+    let mut out = Vec::new();
+    let mut head = header(
+        fixture.format,
+        fixture.protocol_version,
+        fixture.match_millis,
+        fixture.seed,
+    );
+    head[16..20].copy_from_slice(&(fixture.frames.len() as u32).to_le_bytes());
+    head[20..24].copy_from_slice(&fixture.ticks.to_le_bytes());
+    out.extend_from_slice(&head);
+    let mut hasher = Sha256::new();
+    let mut entry = |out: &mut Vec<u8>, kind: u8, tick: u32, payload: &[u8]| {
+        out.push(kind);
+        out.extend_from_slice(&tick.to_le_bytes());
+        out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        out.extend_from_slice(payload);
+        hasher.update(payload);
+    };
+    for file in &fixture.inputs {
+        entry(&mut out, ENTRY_INPUT, 0, &input_payload(file)?);
+    }
+    for stored in &fixture.frames {
+        let kind = if stored.frame.is_text() {
+            ENTRY_TEXT
+        } else {
+            ENTRY_BINARY
+        };
+        entry(&mut out, kind, stored.tick, stored.frame.payload());
+    }
+    if let Some(record) = &fixture.record {
+        entry(&mut out, ENTRY_RECORD, 0, &record_payload(record)?);
+    }
+    let digest = hasher.finalize();
+    let mut trailer = [0u8; FIXTURE_TRAILER_BYTES];
+    trailer[0..4].copy_from_slice(FIXTURE_TRAILER_MAGIC);
+    trailer[4..8].copy_from_slice(&(fixture.frames.len() as u32).to_le_bytes());
+    trailer[8..14].copy_from_slice(&digest[..6]);
+    out.extend_from_slice(&trailer);
+    std::fs::write(path, out)
+        .map_err(|e| StreamError::io(format!("cannot write {}", path.display()), e))
+}
+
+/// A digest as lower-case hex.
+pub fn hex(digest: &[u8]) -> String {
+    digest.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// A 64-bit number as a decimal string.
+mod decimal {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(value: &u64, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&value.to_string())
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<u64, D::Error> {
+        String::deserialize(d)?
+            .parse()
+            .map_err(serde::de::Error::custom)
+    }
 }
 
 /// The tick a keyframe carries, or `None` for a delta.
@@ -401,5 +1005,43 @@ mod tests {
         let err = read_fixture(&path).unwrap_err();
         std::fs::remove_file(&path).unwrap();
         assert!(err.to_string().contains("trailer hash"), "{err}");
+    }
+
+    #[test]
+    fn a_logged_change_round_trips_a_substitution_and_a_full_tactics_patch() {
+        let sub = Change::Substitution { off: 9, on: 14 };
+        let tactics = Change::Tactics(TacticsPatch {
+            formation: Some(2),
+            mentality: Some(4),
+            instructions: [Some(0), Some(1), Some(2), Some(1), Some(0), Some(2)],
+            roles: vec![
+                (3, RoleDuty { role: 5, duty: 1 }),
+                (7, RoleDuty { role: 2, duty: 0 }),
+            ],
+        });
+        for change in [sub, tactics] {
+            let logged = LoggedChange::from(&change);
+            let json = serde_json::to_string(&logged).unwrap();
+            let back: LoggedChange = serde_json::from_str(&json).unwrap();
+            assert_eq!(back, logged, "{json}");
+            assert_eq!(back.to_change(), change, "{json}");
+        }
+        let json =
+            serde_json::to_string(&LoggedChange::from(&Change::Substitution { off: 1, on: 2 }))
+                .unwrap();
+        assert_eq!(json, r#"{"substitution":{"off":1,"on":2}}"#);
+    }
+
+    #[test]
+    fn a_legacy_file_reads_as_format_three_with_no_record() {
+        let path = temp("legacy");
+        let mut recorder = Recorder::create(&path, 1, 5).unwrap();
+        recorder.send(Frame::Text("{}".into())).unwrap();
+        recorder.finish().unwrap();
+        let fixture = read_fixture(&path).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(fixture.format, FORMAT_LEGACY);
+        assert_eq!(fixture.protocol_version, PROTOCOL_VERSION);
+        assert!(fixture.record.is_none() && fixture.inputs.is_empty());
     }
 }

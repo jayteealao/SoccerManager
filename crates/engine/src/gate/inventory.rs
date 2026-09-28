@@ -55,6 +55,8 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         timeline,
         managers,
         queue,
+        // A record of the verdicts G11 already hashes as events; not state.
+        applied: _,
         ledgers,
         ai,
         keeper_beaten,

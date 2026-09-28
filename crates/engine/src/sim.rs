@@ -32,7 +32,9 @@ use crate::shot;
 use crate::steering;
 use crate::streams::{Action, Key, Streams};
 use crate::tactics::Tactics;
-use crate::tactics::change::{ChangeId, ChangeKind, ChangeQueue, RejectReason, SubLedger};
+use crate::tactics::change::{
+    AppliedChange, ChangeId, ChangeKind, ChangeQueue, RejectReason, SubLedger,
+};
 use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::{Tuning, XgTuning};
 
@@ -511,6 +513,10 @@ pub struct Simulation {
     pub(crate) timeline: Vec<(u32, [Team; 2])>,
     pub(crate) managers: [Manager; 2],
     pub(crate) queue: ChangeQueue,
+    /// Every change applied so far, in the order it applied: a record of the verdicts the
+    /// events already carry, kept for the replay file. It is not state: the replay gate does
+    /// not hash it and a snapshot does not store it.
+    pub(crate) applied: Vec<AppliedChange>,
     pub(crate) ledgers: [SubLedger; 2],
     pub(crate) ai: [AiState; 2],
     /// `true` once a goalkeeper failed to hold the ball in flight: the tuned catch chance is
@@ -625,6 +631,7 @@ impl Simulation {
             stoppage: None,
             managers: config.managers,
             queue: ChangeQueue::default(),
+            applied: Vec::new(),
             ledgers: [SubLedger::default(); 2],
             ai: [AiState::default(); 2],
             keeper_beaten: false,

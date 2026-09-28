@@ -1,4 +1,5 @@
-//! Embeds the git build hash into the crate as `ENGINE_BUILD_HASH`.
+//! Embeds the git build hash into the crate as `ENGINE_BUILD_HASH`, and the full commit and
+//! the dirty mark it is made from as `ENGINE_COMMIT` and `ENGINE_DIRTY`.
 
 use std::process::Command;
 
@@ -11,16 +12,25 @@ fn git(args: &[&str]) -> Option<String> {
 }
 
 fn main() {
-    let hash = match git(&["rev-parse", "--short", "HEAD"]) {
-        Some(h) if !h.is_empty() => {
+    let short = git(&["rev-parse", "--short", "HEAD"]).filter(|h| !h.is_empty());
+    let full = git(&["rev-parse", "HEAD"]).filter(|h| !h.is_empty());
+    let (hash, commit, dirty) = match (short, full) {
+        (Some(short), Some(full)) => {
             let dirty = git(&["status", "--porcelain"])
                 .map(|s| !s.is_empty())
                 .unwrap_or(false);
-            if dirty { format!("{h}-dirty") } else { h }
+            let hash = if dirty {
+                format!("{short}-dirty")
+            } else {
+                short
+            };
+            (hash, full, dirty)
         }
-        _ => "unknown".to_string(),
+        _ => ("unknown".to_string(), "unknown".to_string(), false),
     };
     println!("cargo:rustc-env=ENGINE_BUILD_HASH={hash}");
+    println!("cargo:rustc-env=ENGINE_COMMIT={commit}");
+    println!("cargo:rustc-env=ENGINE_DIRTY={dirty}");
     println!("cargo:rerun-if-changed=../../.git/HEAD");
     println!("cargo:rerun-if-changed=../../.git/refs/heads");
     println!("cargo:rerun-if-changed=../../.git/index");

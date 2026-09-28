@@ -502,17 +502,26 @@ fn build(fixture: &Fixture, inputs: &Inputs<'_>, traced: bool) -> Result<Simulat
 }
 
 fn queue(sim: &mut Simulation, planned: &PlannedChange) {
-    let change = match planned.change {
-        PlannedWhat::Substitution { slot, bench } => {
-            let team = &sim.teams[planned.team];
-            Change::Substitution {
-                off: team.lineup[slot],
-                on: team.bench.get(bench).copied().unwrap_or(usize::MAX),
-            }
-        }
-        PlannedWhat::Mentality(m) => Change::Tactics(TacticsPatch::mentality(m)),
-    };
+    let change = planned.to_change(sim);
     sim.queue_change(planned.team, change);
+}
+
+impl PlannedChange {
+    /// The engine change this planned change names in `sim` as it stands now: a lineup slot
+    /// or a bench place outside the team becomes a squad index no team holds, which the
+    /// engine rejects at the stoppage.
+    pub fn to_change(&self, sim: &Simulation) -> Change {
+        match self.change {
+            PlannedWhat::Substitution { slot, bench } => {
+                let team = &sim.teams[self.team];
+                Change::Substitution {
+                    off: team.lineup.get(slot).copied().unwrap_or(usize::MAX),
+                    on: team.bench.get(bench).copied().unwrap_or(usize::MAX),
+                }
+            }
+            PlannedWhat::Mentality(m) => Change::Tactics(TacticsPatch::mentality(m)),
+        }
+    }
 }
 
 /// Compares a played match with its golden hashes. A checkpoint pair at different ticks

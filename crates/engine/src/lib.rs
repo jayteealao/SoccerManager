@@ -52,7 +52,9 @@ pub use sim::{
     DecidedBy, EngineEvent, EngineEventKind, EventDetail, MatchConfig, Simulation, Summary,
 };
 pub use snapshot::{Snapshot, SnapshotSink};
-pub use tactics::change::{Change, ChangeId, ChangeKind, RejectReason, SubLedger, Unapplied};
+pub use tactics::change::{
+    AppliedChange, Change, ChangeId, ChangeKind, RejectReason, SubLedger, Unapplied,
+};
 pub use tactics::{RoleDuty, Tactics, TacticsPatch};
 pub use tuning::Tuning;
 pub use validate::{Validator, Violation};
@@ -68,6 +70,17 @@ pub fn ticks_for_minutes(minutes: u32) -> u32 {
 /// The git build hash embedded at build time, or `unknown`.
 pub fn build_hash() -> &'static str {
     env!("ENGINE_BUILD_HASH")
+}
+
+/// The full git commit the engine was built from, or `unknown`.
+pub fn commit() -> &'static str {
+    env!("ENGINE_COMMIT")
+}
+
+/// `true` when the working tree held changes at build time, so the build cannot be made
+/// again from its commit. [`build_hash`] ends with `-dirty` exactly then.
+pub fn dirty() -> bool {
+    env!("ENGINE_DIRTY") == "true"
 }
 
 /// The engine crate version.

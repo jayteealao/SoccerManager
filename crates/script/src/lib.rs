@@ -70,7 +70,11 @@ impl LoadedPack {
     /// [`LoadedPack::load`] with the wall-clock limit `backstop` on every call. The limit
     /// marks a slow call and never stops it; [`Backstop::Never`] reads no clock.
     pub fn load_with(dir: &Path, backstop: Backstop) -> Result<Self, ScriptError> {
-        let pack = Pack::read(dir)?;
+        Self::from_pack(Pack::read(dir)?, backstop)
+    }
+
+    /// Compiles a pack already checked, with the same refusals as [`LoadedPack::load_with`].
+    pub fn from_pack(pack: Pack, backstop: Backstop) -> Result<Self, ScriptError> {
         let shown = pack.manifest_shown();
         let identity = pack.identity();
         let sandbox = Sandbox::with_backstop(
@@ -211,5 +215,21 @@ mod tests {
             (a.join().unwrap(), b.join().unwrap())
         });
         assert_eq!((a, b), (50, 70));
+    }
+
+    #[test]
+    fn a_pack_built_from_its_bytes_is_the_pack_read_from_its_folder() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content/scripts/sample");
+        let read = LoadedPack::load(&dir).unwrap();
+        let manifest = std::fs::read(dir.join(pack::MANIFEST_FILE)).unwrap();
+        let source = std::fs::read(dir.join(&read.pack.manifest.entry)).unwrap();
+        let built = LoadedPack::from_pack(
+            Pack::from_bytes(&manifest, &source, Path::new("replay")).unwrap(),
+            Backstop::Never,
+        )
+        .unwrap();
+        assert_eq!(built.identity(), read.identity());
+        assert_eq!(built.sha(), read.sha());
+        assert_eq!(built.pack.source, read.pack.source);
     }
 }

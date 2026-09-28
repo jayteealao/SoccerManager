@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use engine::data::{hex12, load_json};
+use engine::data::{hex12, load_json_bytes};
 use engine::plugin::{DEFAULT_REFRESH_TICKS, HookPoint, PLUGIN_API_VERSION};
 use garde::Validate;
 use serde::Deserialize;
@@ -145,6 +145,13 @@ fn known_hooks(hooks: &[String], _: &()) -> garde::Result {
     Ok(())
 }
 
+/// Checks `pack.json`'s bytes; `shown` is the path refusals name.
+fn parse_manifest(bytes: &[u8], shown: &str) -> Result<Manifest, ScriptError> {
+    load_json_bytes::<Manifest>("script pack", bytes, shown, PACK_VERSION, &())
+        .map(|loaded| loaded.value)
+        .map_err(ScriptError::Manifest)
+}
+
 /// A pack read from disk and checked, with its script source and identity.
 #[derive(Debug, Clone)]
 pub struct Pack {
@@ -161,10 +168,9 @@ impl Pack {
     pub fn read(dir: &Path) -> Result<Self, ScriptError> {
         let manifest_path = dir.join(MANIFEST_FILE);
         let shown = manifest_path.display().to_string();
-        let loaded =
-            load_json::<Manifest>("script pack", &manifest_path, &shown, PACK_VERSION, &())
-                .map_err(ScriptError::Manifest)?;
-        let manifest = loaded.value;
+        let manifest_bytes =
+            engine::data::read_bytes(&manifest_path, &shown).map_err(ScriptError::Manifest)?;
+        let manifest = parse_manifest(&manifest_bytes, &shown)?;
         let entry_path = dir.join(&manifest.entry);
         // The entry name has no separator, so it cannot leave the folder; a link could.
         let folder = dir
@@ -180,16 +186,26 @@ impl Pack {
                 "resolves outside the pack folder",
             ));
         }
-        let manifest_bytes = std::fs::read(&manifest_path)
-            .map_err(|e| ScriptError::io(&shown, "schema_version", e))?;
         let source_bytes =
             std::fs::read(&resolved).map_err(|e| ScriptError::io(&shown, "entry", e))?;
-        let source = String::from_utf8(source_bytes.clone()).map_err(|_| {
+        Self::from_bytes(&manifest_bytes, &source_bytes, dir)
+    }
+
+    /// Checks a pack from the bytes of its `pack.json` and its entry file, as a replay file
+    /// stores them. `dir` only names the pack in refusals; nothing is read from it.
+    pub fn from_bytes(
+        manifest_bytes: &[u8],
+        source_bytes: &[u8],
+        dir: &Path,
+    ) -> Result<Self, ScriptError> {
+        let shown = dir.join(MANIFEST_FILE).display().to_string();
+        let manifest = parse_manifest(manifest_bytes, &shown)?;
+        let source = String::from_utf8(source_bytes.to_vec()).map_err(|_| {
             ScriptError::refused(&shown, "entry", "the script file is not UTF-8 text")
         })?;
         let mut hasher = Sha256::new();
-        hasher.update(&manifest_bytes);
-        hasher.update(&source_bytes);
+        hasher.update(manifest_bytes);
+        hasher.update(source_bytes);
         Ok(Self {
             manifest,
             source,

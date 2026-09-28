@@ -26,6 +26,9 @@ criterion = { workspace = true }
 tracing-subscriber = { workspace = true }
 engine = { path = "../engine", features = ["scenario"] }
 script = { path = ".", features = ["test-clock"] }
+# The replay file, to check that it carries the watchdog mark (the test clock is this
+# crate's own).
+stream = { path = "../stream" }
 
 [[bench]]
 name = "hook_call"
