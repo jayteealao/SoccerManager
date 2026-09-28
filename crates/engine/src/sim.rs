@@ -4,6 +4,8 @@
 //! overlap resolution. The referee (`rules`) owns the phase of play: live, a dead ball
 //! waiting for its restart, or full time.
 
+use crate::trace::Point;
+use serde_json::json;
 use sha2::{Digest, Sha256};
 
 use crate::ai::{self, AiCode, AiState, Manager};
@@ -585,6 +587,13 @@ impl Simulation {
         self.streams.trace_on()
     }
 
+    /// Records decision point or rule outcome `point`. Called only behind [`Self::trace_on`].
+    pub(crate) fn trace_point(&mut self, point: crate::trace::Point, detail: serde_json::Value) {
+        if let Some(trace) = self.streams.trace_mut() {
+            trace.push_point(point, detail);
+        }
+    }
+
     /// A match with its state as the configuration gives it and nobody placed.
     pub(crate) fn blank(config: MatchConfig) -> Result<Self, EngineError> {
         if config.players.len() != 2 * PLAYERS_PER_TEAM {
@@ -650,6 +659,12 @@ impl Simulation {
         }
         crate::rules::discipline::send_off(&mut self.players, &mut self.teams, i);
         let team = self.players[i].team;
+        if self.trace_on() {
+            self.trace_point(
+                Point::SendOff,
+                json!({"player": i, "team": team, "before_kick_off": true}),
+            );
+        }
         self.ai[team].due = true;
         self.timeline = vec![(self.tick, self.teams.clone())];
     }
@@ -899,6 +914,18 @@ impl Simulation {
         event.shootout_scores = self.summary.shootout;
         event.decided_by = self.summary.decided_by;
         self.events.push(event);
+        if self.trace_on() {
+            self.trace_point(
+                Point::FullTime,
+                json!({
+                    "score": self.summary.goals,
+                    "added_s": added,
+                    "shootout": self.summary.shootout,
+                    "decided_by": self.summary.decided_by.map(|d| d.code()),
+                    "abandoned": self.referee.abandoned,
+                }),
+            );
+        }
     }
 
     /// Takes every event recorded since the last call, in tick order.
@@ -1133,11 +1160,14 @@ impl Simulation {
                 continue;
             }
             self.blockers_tried |= bit;
-            if self
+            let blocked = self
                 .streams
                 .tested(Key::player(Action::Block, &p), &[t.shots.block_chance])
-                < t.shots.block_chance
-            {
+                < t.shots.block_chance;
+            if self.trace_on() {
+                self.trace_point(Point::ShotBlock, json!({"blocker": i, "blocked": blocked}));
+            }
+            if blocked {
                 let s = &t.shots;
                 let back = -DVec2::new(self.ball.vel.x, self.ball.vel.y);
                 let angle = self.streams.draw(Key::player(Action::BlockDeflect, &p));
@@ -1181,6 +1211,7 @@ impl Simulation {
             .tested(Key::player(Action::Save, &keeper), &[save])
             >= save
         {
+            self.trace_save(Point::ShotSave, k, "beaten");
             self.keeper_beaten = true;
             return;
         }
@@ -1193,13 +1224,23 @@ impl Simulation {
             {
                 self.census.held += 1;
             }
+            self.trace_save(Point::ShotSave, k, "held");
             self.gain(k, t);
             return;
         }
+        self.trace_save(Point::ShotSave, k, "parried");
         self.parry(k, t);
         #[cfg(feature = "scenario")]
         {
             self.census.parried += 1;
+        }
+    }
+
+    /// Records a keeper's save roll at `point`: `beaten`, `held`, `parried`, or, in the
+    /// shoot-out, `reached` for a slow ball he picks up.
+    pub(crate) fn trace_save(&mut self, point: Point, keeper: usize, outcome: &str) {
+        if self.trace_on() {
+            self.trace_point(point, json!({"keeper": keeper, "outcome": outcome}));
         }
     }
 
@@ -1273,16 +1314,25 @@ impl Simulation {
                 continue;
             }
             self.clearers_tried |= bit;
-            if self
+            let cleared = self
                 .streams
                 .tested(Key::player(Action::CrossClear, &p), &[c.cross_chance])
-                < c.cross_chance
-            {
+                < c.cross_chance;
+            if !cleared && self.trace_on() {
+                self.trace_point(Point::CrossClear, json!({"defender": i, "cleared": false}));
+            }
+            if cleared {
                 let wide = c.wide_chance > 0.0
                     && self
                         .streams
                         .tested(Key::player(Action::CrossWide, &p), &[c.wide_chance])
                         < c.wide_chance;
+                if self.trace_on() {
+                    self.trace_point(
+                        Point::CrossClear,
+                        json!({"defender": i, "cleared": true, "wide": wide}),
+                    );
+                }
                 let (away, spread) = if wide {
                     (wide_of_goal(ball_xy, own_goal_x), WIDE_SPREAD)
                 } else {
@@ -1403,16 +1453,34 @@ impl Simulation {
                         best = Some((d, i));
                     }
                 }
+                if self.trace_on() {
+                    self.trace_point(
+                        Point::LooseBall,
+                        json!({
+                            "player": best.map(|(_, i)| i),
+                            "distance": best.map(|(d, _)| d),
+                            "fast": fast,
+                            "keeper_beaten": self.keeper_beaten,
+                        }),
+                    );
+                }
                 if let Some((_, i)) = best {
                     if fast {
                         if self.keeper_beaten {
                             return;
                         }
                         let catcher = self.players[i];
-                        if !self.streams.chance(
+                        let caught = self.streams.chance(
                             Key::player(Action::KeeperCatch, &catcher),
                             t.keeper_catch_chance,
-                        ) {
+                        );
+                        if self.trace_on() {
+                            self.trace_point(
+                                Point::KeeperCatch,
+                                json!({"keeper": i, "caught": caught}),
+                            );
+                        }
+                        if !caught {
                             self.keeper_beaten = true;
                             return;
                         }
@@ -1442,7 +1510,26 @@ impl Simulation {
                     let draw = self
                         .streams
                         .tested(Key::player(Action::Tackle, &p), &[p_win, p_win + p_foul]);
-                    match fouls::tackle_outcome(p_win, p_foul, t.foul_ball_loss, draw) {
+                    let outcome = fouls::tackle_outcome(p_win, p_foul, t.foul_ball_loss, draw);
+                    if self.trace_on() {
+                        let label = match outcome {
+                            Tackle::Win => "win",
+                            Tackle::Foul { ball_lost: true } => "foul_ball_lost",
+                            Tackle::Foul { ball_lost: false } => "foul_ball_kept",
+                            Tackle::Miss => "miss",
+                        };
+                        self.trace_point(
+                            Point::Tackle,
+                            json!({
+                                "tackler": i,
+                                "carrier": c,
+                                "p_win": p_win,
+                                "p_foul": p_foul,
+                                "outcome": label,
+                            }),
+                        );
+                    }
+                    match outcome {
                         Tackle::Win => {
                             self.gain(i, t);
                             self.tackle_injury_roll(c);

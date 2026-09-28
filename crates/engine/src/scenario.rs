@@ -31,6 +31,13 @@ impl Scene {
         Self { sim }
     }
 
+    /// Switches debug mode on from the scene's next step: the trace records every draw,
+    /// decision point, and rule outcome from here on (`Simulation::take_trace`).
+    pub fn traced(mut self) -> Self {
+        self.sim.streams.enable_trace(self.sim.tick + 1);
+        self
+    }
+
     /// Puts player `i` at rest at `at`.
     pub fn place(mut self, i: usize, at: DVec2) -> Self {
         let p = &mut self.sim.players[i];

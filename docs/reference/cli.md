@@ -54,7 +54,7 @@ Simulate one match and write every tick to a file.
 | `--script-pack` | folder | none | A script pack (`pack.json` and a `.rhai` script) to run. See [script packs](../../content/scripts/README.md). The first `kick-off` event and the `match-stats` record name the pack. |
 | `--debug-trace` | file | none | Play the match with debug mode on and write its debug trace to this file. See [Debug trace file](#debug-trace-file). Debug mode changes no result. |
 
-Output: one JSON line on standard output with the match statistics. With `--debug-trace`, standard error also gets one line, for example `debug trace: m.trace.jsonl, 307873 draws (registry 307873), 1204 decisions, 3981 rule outcomes`; when the draws recorded differ from the registry's draw count, the command exits 1. Files: the tick file, and `matches/<match.id>/stats.json`, `events.jsonl`, and `snapshot.smsn` in the data folder.
+Output: one JSON line on standard output with the match statistics. With `--debug-trace`, standard error also gets one line, for example `debug trace: m.trace.jsonl, 307873 draws (registry 307873), 595706 decisions, 2435 rule outcomes`; when the draws recorded differ from the registry's draw count, the command exits 1. Files: the tick file, and `matches/<match.id>/stats.json`, `events.jsonl`, and `snapshot.smsn` in the data folder.
 
 A failed run, for example `--minutes 0` or a tick file that cannot be written, prints one `match-stats` record on standard output with `outcome` `error` and the keys `error.type`, `error.code`, and `error.retriable`, and no statistics. It saves nothing in the data folder, prints the cause on standard error, and exits 1. A bad flag (exit code 2 from the argument parser) prints no record.
 
@@ -264,7 +264,7 @@ The gate refuses the file, before any match is played, when it is malformed, whe
 
 The write modes check their flags and the reason before they read the golden file or play a match, and write through `<file>.tmp` and a rename. A refusal, or a match that fails, leaves the golden file byte-identical. [The replay-gate guide](../how-to/replay-gate.md) says when each mode is allowed.
 
-With `--debug`, standard error gets one line after each match, for example `trace: seed-42 307873 draws recorded, registry 307873, 1204 decisions, 3981 rule outcomes`. A match whose two draw counts differ fails the gate like a match that differs (exit 2).
+With `--debug`, standard error gets one line after each match, for example `trace: seed-42 307873 draws recorded, registry 307873, 595706 decisions, 2435 rule outcomes`. A match whose two draw counts differ fails the gate like a match that differs (exit 2).
 
 Exit codes: 0 when every selected match matches; 1 when the golden file or the content cannot be read or is refused, or a fixture id is unknown; 2 when a match differs or its hashed state holds a number that is not finite (the line names the field, for example `players[3].pos.x`).
 
@@ -304,7 +304,29 @@ Every other line is one record, in the order the engine ran it. Each record has 
 
 - `draw`: one random draw. `subsystem` (`decision`, `kick`, `ball`, `laws`, `shootout`, or `fatigue`), `stream_id` (the 64-bit stream id in hex), `key` (the sub-stream key, for example `decision.pass_score team 0 squad 4`), `index` (the draw's number within its key, from 0), `value` (the draw in `[0, 1)`, written in the shortest form that reads back to the same bits), `scripted` (`true` when a test scene scripted it), and, at a draw tested against a probability, `p`: one probability, or two cumulative thresholds for a tackle (win, then foul) and a foul's card (red, then yellow). The draw recorder sits inside the stream registry's only draw call, so every draw the registry counts is recorded.
 
-A 90-minute match takes about 310,000 draws, so its trace file is tens of megabytes.
+- `decision`: one decision point, with `point` (its name) and `detail`, the option scores or distances the engine chose by.
+- `rule`: one rule outcome, with `point` (its name) and `detail`, the facts the law, roll, or match-control rule settled.
+
+The decision points, with what `detail` holds:
+
+| Point | Where | Detail |
+|---|---|---|
+| `carrier` | The ball carrier's choice | `carrier`; every scored pass `candidates` (`mate`, `score`); the `shot`, best `pass`, `dribble`, `hold`, and `clear` scores after any script `offsets`; the `choice` |
+| `restart_pass` | A throw-in, corner, goal kick, or indirect free kick passed | `taker`, `kind`, every `candidates` score, the `target`, and `forward_fallback` when no team-mate was in range |
+| `press` | The defending team's pressers | `team`, `count`, `reach`, the `pressers` with their distances |
+| `cover` | Goal-side cover | `team`, the covered `attacker`, the covering `defender` and `distance`, or `null` |
+| `chase` | A loose ball | Per team, the chasing `player` and `distance`, and the `keeper` who chases |
+| `loose_ball` | Who takes a loose ball | The nearest `player` in reach and `distance`, or `null`; `fast`; `keeper_beaten` |
+| `restart_taker` | The taker of a restart | `kind`, `team`, `taker`, and `preferred` when the law or custom named him |
+| `ai_manager` | An AI manager's queued change | `team`, `change`, `code`, `minute`, `score` (own first) |
+| `script_decision` | The decision hook's offsets | `carrier`, `cached`, `offsets`, and for a fresh call `result` (`value`, `failed`, or `switched_off`) and `notes` |
+| `shootout_order` | The shoot-out kicking orders | `order` per team and the `keepers` |
+
+The rule outcomes: `kick_off`, `goal`, `ball_out`, `tackle` (`p_win`, `p_foul`, `outcome`), `foul` (`card_decided` and the `card` after the rule hook), `card` (`held` for a card held back for advantage), `offside`, `injury` (each roll with its `chance`, and the injury itself), `dead_ball`, `restart_taken`, `added_time`, `extra_time_added`, `half_time`, `extra_time_kick_off`, `full_time`, `shot_block`, `shot_save` (`beaten`, `held`, or `parried`), `cross_clear`, `keeper_catch`, `shootout_start`, `shootout_save`, `shootout_kick`, `shootout_decided`, `change_applied`, `change_rejected` (with its `reason`), `send_off`, and `abandoned`.
+
+Every draw's tick holds at least one point its kind of action is taken at, and every event's tick holds at least one point that gives it; the engine's tests check both on every tick of the 22 gate matches.
+
+A 90-minute match takes about 310,000 draws and about 600,000 decision records (the press, the cover, and the chase are decided every tick), so its trace file is about 160 MB (seed 42: 906,015 lines, 162 MB).
 
 ## Files
 

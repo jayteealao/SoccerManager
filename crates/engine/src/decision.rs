@@ -16,7 +16,9 @@ use crate::rules::offside;
 use crate::sim::{ScriptCache, Simulation, WIDE_SPREAD, wide_of_goal};
 use crate::streams::{Action, Key};
 use crate::team::PLAYERS_PER_TEAM;
+use crate::trace::Point;
 use crate::tuning::Tuning;
+use serde_json::json;
 
 /// A kick the carrier decided on this tick. A clearance is kicked away from danger to no
 /// team-mate, and is counted apart from a pass.
@@ -90,6 +92,17 @@ impl Simulation {
                         };
                     }
                 }
+                if self.trace_on() {
+                    let chosen: Vec<_> = pressers[..count]
+                        .iter()
+                        .filter(|&&(_, i)| i != usize::MAX)
+                        .map(|&(d, i)| json!({"player": i, "distance": d}))
+                        .collect();
+                    self.trace_point(
+                        Point::Press,
+                        json!({"team": def, "count": count, "reach": reach, "pressers": chosen}),
+                    );
+                }
                 self.cover(def, c, &pressers[..count], keepers[def]);
                 self.decide_carrier(c)
             }
@@ -123,6 +136,23 @@ impl Simulation {
                     {
                         self.players[gk].target = predicted;
                     }
+                }
+                if self.trace_on() {
+                    let chasers: Vec<_> = (0..2)
+                        .map(|team| {
+                            let i = nearest[team];
+                            let gk = keepers[team];
+                            let keeper = self.players[gk].active()
+                                && (self.players[gk].pos - ball_xy).length() < 16.0;
+                            json!({
+                                "team": team,
+                                "player": (i != usize::MAX).then_some(i),
+                                "distance": (i != usize::MAX).then_some(nearest_dist[team]),
+                                "keeper": keeper.then_some(gk),
+                            })
+                        })
+                        .collect();
+                    self.trace_point(Point::Chase, json!({ "chasers": chasers }));
                 }
                 None
             }
@@ -191,6 +221,9 @@ impl Simulation {
             most
         };
         let Some((reach, j)) = attacker else {
+            if let Some(trace) = self.streams.trace_mut() {
+                trace.push_point(Point::Cover, json!({"team": def, "attacker": null}));
+            }
             return;
         };
         let at = self.players[j].pos;
@@ -206,7 +239,13 @@ impl Simulation {
                 best = Some((d, i));
             }
         }
-        let Some((_, i)) = best else {
+        let Some((distance, i)) = best else {
+            if let Some(trace) = self.streams.trace_mut() {
+                trace.push_point(
+                    Point::Cover,
+                    json!({"team": def, "attacker": j, "defender": null}),
+                );
+            }
             return;
         };
         let me = self.players[i];
@@ -234,6 +273,12 @@ impl Simulation {
             spot += self.players[c].vel * (braking / me.max_speed());
         }
         self.players[i].target = pitch::clamp(spot, 0.5);
+        if let Some(trace) = self.streams.trace_mut() {
+            trace.push_point(
+                Point::Cover,
+                json!({"team": def, "attacker": j, "defender": i, "distance": distance}),
+            );
+        }
     }
 
     /// Scores every option the carrier has (named mechanism: scored-options decision layer).
@@ -383,6 +428,9 @@ impl Simulation {
                     score: score.to_bits(),
                 },
             );
+            if let Some(trace) = self.streams.trace_mut() {
+                trace.push_candidate(j, score);
+            }
             if pass.is_none_or(|(s, _)| score > s) {
                 pass = Some((score, j));
             }
@@ -456,7 +504,8 @@ impl Simulation {
         };
         #[cfg(not(feature = "scenario"))]
         let mut o = self.options(c);
-        if let Some(off) = self.script_offsets(c) {
+        let offsets = self.script_offsets(c);
+        if let Some(off) = offsets {
             o.shot = o.shot.map(|s| s + off.shoot);
             o.pass = o.pass.map(|(s, j)| (s + off.pass, j));
             o.dribble = o.dribble.map(|s| s + off.dribble);
@@ -480,6 +529,25 @@ impl Simulation {
             {
                 choice = (score, option);
             }
+        }
+        if let Some(trace) = self.streams.trace_mut() {
+            let candidates: Vec<_> = trace
+                .take_candidates()
+                .into_iter()
+                .map(|(mate, score)| json!({"mate": mate, "score": score}))
+                .collect();
+            let detail = json!({
+                "carrier": c,
+                "candidates": candidates,
+                "shot": o.shot,
+                "pass": o.pass.map(|(score, mate)| json!({"mate": mate, "score": score})),
+                "dribble": o.dribble,
+                "hold": o.hold,
+                "clear": o.clear,
+                "offsets": offsets.as_ref().map(offsets_json),
+                "choice": choice.1.name(),
+            });
+            trace.push_point(Point::Carrier, detail);
         }
         match choice.1 {
             Choice::Shot => {
@@ -566,13 +634,41 @@ impl Simulation {
             && cache.carrier == c
             && self.tick < cache.until
         {
+            if self.trace_on() {
+                self.trace_point(
+                    Point::ScriptDecision,
+                    json!({"carrier": c, "cached": true, "offsets": offsets_json(&cache.offsets)}),
+                );
+            }
             return Some(cache.offsets);
         }
         let ctx = self.decision_context(c);
         let outcome = self.plugins.decision.as_mut()?.adjust(&ctx);
         let (value, notes) = self.plugins.settle(HookPoint::Decision, outcome, self.tick);
+        let failed = value.is_none();
+        let note_count = notes.len();
+        let switched_off = self.plugins.decision.is_none();
         self.push_script_notes(notes);
         let offsets = value.unwrap_or_default();
+        if self.trace_on() {
+            let result = if !failed {
+                "value"
+            } else if switched_off {
+                "switched_off"
+            } else {
+                "failed"
+            };
+            self.trace_point(
+                Point::ScriptDecision,
+                json!({
+                    "carrier": c,
+                    "cached": false,
+                    "offsets": offsets_json(&offsets),
+                    "result": result,
+                    "notes": note_count,
+                }),
+            );
+        }
         self.script_cache = Some(ScriptCache {
             carrier: c,
             until: self.tick.saturating_add(self.plugins.refresh_ticks.max(1)),
@@ -687,6 +783,18 @@ enum Choice {
     Hold,
 }
 
+impl Choice {
+    fn name(self) -> &'static str {
+        match self {
+            Choice::Shot => "shot",
+            Choice::Pass => "pass",
+            Choice::Dribble => "dribble",
+            Choice::Clear => "clear",
+            Choice::Hold => "hold",
+        }
+    }
+}
+
 impl Simulation {
     /// The kick that takes a restart: a short lofted throw to the nearest team-mate, a cross
     /// toward the penalty mark from a corner, or a pass to an open team-mate. With no
@@ -701,6 +809,8 @@ impl Simulation {
         } else {
             4.0..=45.0
         };
+        let traced = self.streams.trace_on();
+        let mut candidates = Vec::new();
         let mut best: Option<(f64, DVec2)> = None;
         for (j, mate) in self.players.iter().enumerate() {
             if j == taker || mate.team != me.team || !mate.active() {
@@ -714,11 +824,26 @@ impl Simulation {
                 Some(mark) => -(mate.pos - mark).length(),
                 None => -d + 0.2 * (mate.pos - me.pos).dot(attack),
             };
+            if traced {
+                candidates.push(json!({"mate": j, "score": score}));
+            }
             if best.is_none_or(|(s, _)| score > s) {
                 best = Some((score, mate.pos));
             }
         }
         let to = best.map_or_else(|| pitch::clamp(me.pos + attack * 10.0, 4.0), |(_, at)| at);
+        if let Some(trace) = self.streams.trace_mut() {
+            trace.push_point(
+                Point::RestartPass,
+                json!({
+                    "taker": taker,
+                    "kind": kind.code(),
+                    "candidates": candidates,
+                    "target": [to.x, to.y],
+                    "forward_fallback": best.is_none(),
+                }),
+            );
+        }
         let d = (to - me.pos).length();
         let dir = match toward(me.pos, to) {
             v if v == DVec2::ZERO => attack,
@@ -806,6 +931,11 @@ fn kick_speed(d: f64, loft: f64, t: &Tuning) -> f64 {
         f * (-flight + (flight * flight + 2.0 * reach / f).sqrt())
     };
     speed.min(t.pass_max_speed)
+}
+
+/// The decision hook's offsets as trace detail.
+fn offsets_json(f: &OptionOffsets) -> serde_json::Value {
+    json!({"shoot": f.shoot, "pass": f.pass, "dribble": f.dribble, "clear": f.clear, "hold": f.hold})
 }
 
 /// Rotates a unit vector by `angle` radians.

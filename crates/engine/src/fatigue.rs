@@ -20,6 +20,8 @@ use crate::rules::Phase;
 use crate::rules::clock::TICKS_PER_MINUTE;
 use crate::sim::Simulation;
 use crate::streams::{Action, Key};
+use crate::trace::Point;
+use serde_json::json;
 
 /// Ticks between two recomputations of the effective values.
 pub const REFRESH_TICKS: u32 = TICKS_PER_SECOND;
@@ -114,11 +116,12 @@ impl Simulation {
                 }
                 let p = self.players[i];
                 let chance = injury_chance(&p, rate);
-                if self
+                let injured = self
                     .streams
                     .tested(Key::player(Action::InjuryMinute, &p), &[chance])
-                    < chance
-                {
+                    < chance;
+                self.trace_injury_roll(i, InjurySource::Background, chance, injured);
+                if injured {
                     self.injure(i, InjurySource::Background);
                 }
             }
@@ -150,12 +153,29 @@ impl Simulation {
         }
         let p = self.players[c];
         let chance = injury_chance(&p, self.config.tuning.injury_per_tackle);
-        if self
+        let injured = self
             .streams
             .tested(Key::player(Action::InjuryTackle, &p), &[chance])
-            < chance
-        {
+            < chance;
+        self.trace_injury_roll(c, InjurySource::Tackle, chance, injured);
+        if injured {
             self.injure(c, InjurySource::Tackle);
+        }
+    }
+
+    /// Records one injury roll of player `i`.
+    fn trace_injury_roll(&mut self, i: usize, source: InjurySource, chance: f64, injured: bool) {
+        if self.trace_on() {
+            self.trace_point(
+                Point::Injury,
+                json!({
+                    "roll": true,
+                    "player": i,
+                    "source": source.code(),
+                    "chance": chance,
+                    "injured": injured,
+                }),
+            );
         }
     }
 

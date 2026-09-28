@@ -81,15 +81,8 @@ pub fn taker(
     teams: &[Team; 2],
 ) -> usize {
     let first = team * PLAYERS_PER_TEAM;
-    let own_end = -teams[team].attack_x;
     let keeper = first + teams[team].keeper_slot();
-    let preferred = match kind {
-        StoppageKind::GoalKick => Some(keeper),
-        StoppageKind::KickOff => Some(first + PLAYERS_PER_TEAM - 1).filter(|&i| i != keeper),
-        StoppageKind::Injury if pitch::in_penalty_area(spot, own_end) => Some(keeper),
-        _ => None,
-    };
-    if let Some(i) = preferred
+    if let Some(i) = preferred_taker(kind, team, spot, teams)
         && players[i].active()
     {
         return i;
@@ -108,6 +101,26 @@ pub fn taker(
         }
     }
     best.map_or(keeper, |(_, i)| i)
+}
+
+/// The player the law or custom names for a restart before the nearest player: the
+/// keeper for a goal kick and for a dropped ball in his own penalty area, the last lineup
+/// slot for a kick-off (unless he keeps goal). `taker` uses him when he is on the pitch.
+pub fn preferred_taker(
+    kind: StoppageKind,
+    team: usize,
+    spot: DVec2,
+    teams: &[Team; 2],
+) -> Option<usize> {
+    let first = team * PLAYERS_PER_TEAM;
+    let own_end = -teams[team].attack_x;
+    let keeper = first + teams[team].keeper_slot();
+    match kind {
+        StoppageKind::GoalKick => Some(keeper),
+        StoppageKind::KickOff => Some(first + PLAYERS_PER_TEAM - 1).filter(|&i| i != keeper),
+        StoppageKind::Injury if pitch::in_penalty_area(spot, own_end) => Some(keeper),
+        _ => None,
+    }
 }
 
 /// Where a player of `team` stands for a kick-off: the formation slot, kept inside its own

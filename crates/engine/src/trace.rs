@@ -16,7 +16,7 @@ use std::io::Write;
 
 use serde_json::{Value, json};
 
-use crate::sim::EngineEventKind;
+use crate::sim::{EngineEvent, EngineEventKind};
 use crate::streams::{Action, KEY_COUNT, Key};
 
 /// The version of the trace file format.
@@ -109,6 +109,9 @@ pub struct Trace {
     records: Vec<TraceRecord>,
     /// Draws per key (by the key's dense index) since the trace was switched on.
     per_key: Vec<u64>,
+    /// The pass candidates the carrier's options scored in this call, taken by the carrier
+    /// record.
+    candidates: Vec<(usize, f64)>,
 }
 
 impl Trace {
@@ -118,6 +121,7 @@ impl Trace {
             tick,
             records: Vec::new(),
             per_key: vec![0; KEY_COUNT],
+            candidates: Vec::new(),
         }
     }
 
@@ -145,6 +149,25 @@ impl Trace {
             thresholds: thresholds.to_vec(),
             scripted,
         }));
+    }
+
+    /// Records one decision point or rule outcome.
+    pub fn push_point(&mut self, point: Point, detail: Value) {
+        self.records.push(TraceRecord::Point(PointRecord {
+            tick: self.tick,
+            point,
+            detail,
+        }));
+    }
+
+    /// Notes one scored pass candidate for the next carrier record.
+    pub fn push_candidate(&mut self, mate: usize, score: f64) {
+        self.candidates.push((mate, score));
+    }
+
+    /// Takes the pass candidates noted since the last call.
+    pub fn take_candidates(&mut self) -> Vec<(usize, f64)> {
+        std::mem::take(&mut self.candidates)
     }
 
     /// Takes every record since the last call.
@@ -478,13 +501,53 @@ pub fn check_draws<'a>(
     records: impl IntoIterator<Item = &'a TraceRecord>,
     registry: u64,
 ) -> Result<(), String> {
-    let mut next = vec![0u64; KEY_COUNT];
-    let mut n = 0u64;
+    let mut check = DrawCheck::default();
     for r in records {
+        check.one(r)?;
+    }
+    check.finish(registry)
+}
+
+/// The draw check of [`check_draws`], fed one tick at a time.
+#[derive(Debug, Clone)]
+pub struct DrawCheck {
+    next: Vec<u64>,
+    n: u64,
+}
+
+impl Default for DrawCheck {
+    fn default() -> Self {
+        Self {
+            next: vec![0; KEY_COUNT],
+            n: 0,
+        }
+    }
+}
+
+impl DrawCheck {
+    /// Checks the draws among `records`.
+    pub fn feed(&mut self, records: &[TraceRecord]) -> Result<(), String> {
+        records.iter().try_for_each(|r| self.one(r))
+    }
+
+    /// The draws checked so far.
+    pub fn count(&self) -> u64 {
+        self.n
+    }
+
+    /// Checks the count against the registry's draw counter.
+    pub fn finish(&self, registry: u64) -> Result<(), String> {
+        if self.n != registry {
+            return Err(format!("{} draws recorded, registry {registry}", self.n));
+        }
+        Ok(())
+    }
+
+    fn one(&mut self, r: &TraceRecord) -> Result<(), String> {
         let TraceRecord::Draw(d) = r else {
-            continue;
+            return Ok(());
         };
-        n += 1;
+        self.n += 1;
         let Some(slot) = d.key.index() else {
             return Err(format!("tick {}: draw on a key outside the table", d.tick));
         };
@@ -508,16 +571,97 @@ pub fn check_draws<'a>(
                 d.tick
             ));
         }
-        if d.index != next[slot] {
+        if d.index != self.next[slot] {
             return Err(format!(
                 "tick {}: {name} index {}, expected {}",
-                d.tick, d.index, next[slot]
+                d.tick, d.index, self.next[slot]
             ));
         }
-        next[slot] += 1;
+        self.next[slot] += 1;
+        Ok(())
     }
-    if n != registry {
-        return Err(format!("{n} draws recorded, registry {registry}"));
+}
+
+/// Checks one tick's records against the coverage anchors (AC-33): every draw has at least
+/// one of its action's points ([`points_of`]) on its tick, and every event has at least one
+/// of its kind's points ([`points_of_event`]) on its tick. `records` and `events` are what
+/// a traced run hands over for a tick. Returns the first failure in words.
+pub fn check_tick(records: &[TraceRecord], events: &[EngineEvent]) -> Result<(), String> {
+    use std::collections::{BTreeMap, BTreeSet};
+    let mut seen: BTreeMap<u32, BTreeSet<Point>> = BTreeMap::new();
+    for r in records {
+        if let TraceRecord::Point(p) = r {
+            seen.entry(p.tick).or_default().insert(p.point);
+        }
+    }
+    let has = |tick: u32, points: &[Point]| {
+        seen.get(&tick)
+            .is_some_and(|s| points.iter().any(|p| s.contains(p)))
+    };
+    for r in records {
+        if let TraceRecord::Draw(d) = r
+            && !has(d.tick, points_of(d.key.action))
+        {
+            return Err(format!(
+                "tick {}: draw {} has none of its points {:?}",
+                d.tick,
+                d.key.name(),
+                names(points_of(d.key.action))
+            ));
+        }
+    }
+    for e in events {
+        if !has(e.tick, points_of_event(e.kind)) {
+            return Err(format!(
+                "tick {}: event {} has none of its points {:?}",
+                e.tick,
+                e.kind.code(),
+                names(points_of_event(e.kind))
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn names(points: &[Point]) -> Vec<&'static str> {
+    points.iter().map(|p| p.name()).collect()
+}
+
+/// Adds the points `records` hold to `seen`.
+pub fn note_points(seen: &mut std::collections::BTreeSet<Point>, records: &[TraceRecord]) {
+    for r in records {
+        if let TraceRecord::Point(p) = r {
+            seen.insert(p.point);
+        }
+    }
+}
+
+/// The points the 22 gate matches never reach. Each has a scene test in
+/// `crates/engine/tests/trace.rs` that forces it and checks its record.
+pub const SCENE_ONLY: &[Point] = &[Point::CrossClear, Point::Abandoned];
+
+/// Checks the partition: the points the gate matches reached plus [`SCENE_ONLY`] are
+/// exactly [`Point::ALL`]. Returns the missing points by name, or the scene-only points the
+/// matches reached after all.
+pub fn check_partition(seen: &std::collections::BTreeSet<Point>) -> Result<(), String> {
+    let missing: Vec<_> = Point::ALL
+        .iter()
+        .filter(|p| !seen.contains(p) && !SCENE_ONLY.contains(p))
+        .map(|p| p.name())
+        .collect();
+    if !missing.is_empty() {
+        return Err(format!("no record of {}", missing.join(", ")));
+    }
+    let both: Vec<_> = SCENE_ONLY
+        .iter()
+        .filter(|p| seen.contains(p))
+        .map(|p| p.name())
+        .collect();
+    if !both.is_empty() {
+        return Err(format!(
+            "the gate matches reach the scene-only points {}",
+            both.join(", ")
+        ));
     }
     Ok(())
 }

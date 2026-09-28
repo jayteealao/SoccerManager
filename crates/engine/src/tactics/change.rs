@@ -13,6 +13,8 @@
 //! (half-time) uses no window. Every verdict becomes an engine event: `ChangeApplied` with
 //! the tick, or `ChangeRejected` with the reason.
 
+use crate::trace::Point;
+use serde_json::json;
 use std::fmt;
 
 use crate::data::rules::StoppageKind;
@@ -359,6 +361,25 @@ impl Simulation {
             reason,
         });
         self.events.push(event);
+        if self.trace_on() {
+            let (point, why) = match reason {
+                None => (Point::ChangeApplied, None),
+                Some(r) => (
+                    Point::ChangeRejected,
+                    Some(r.text(&self.teams[q.team].player_ids)),
+                ),
+            };
+            self.trace_point(
+                point,
+                json!({
+                    "team": q.team,
+                    "id": q.id.to_string(),
+                    "change": format!("{:?}", q.change),
+                    "stoppage": kind.code(),
+                    "reason": why,
+                }),
+            );
+        }
         match reason {
             None => {
                 self.summary.changes_applied += 1;

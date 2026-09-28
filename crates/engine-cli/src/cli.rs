@@ -211,7 +211,7 @@ pub struct SimulateOpts {
         long_help = "Play the match with debug mode on and write its debug trace to\n\
                      this file as JSON Lines: a header line, then every random draw,\n\
                      decision point, and rule outcome in the order the engine ran\n\
-                     them. A 90-minute match gives tens of megabytes. See\n\
+                     them. A 90-minute match gives about 160 MB. See\n\
                      docs/reference/cli.md."
     )]
     pub debug_trace: Option<PathBuf>,
