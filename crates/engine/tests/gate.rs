@@ -22,7 +22,6 @@ use engine::gate::{
     self, Checkpoint, Fixture, GateError, Inputs, MatchHashes, Played, Verdict, compare,
     report_line,
 };
-use engine::rng::EngineRng;
 
 /// The fault tick of the charter step: tick 30,000 of seed 42.
 const FAULT_TICK: u32 = 30_000;
@@ -142,8 +141,7 @@ fn two_runs_in_one_process_and_the_golden_file_agree() {
     assert_eq!(compare(&clean().hashes, &again.hashes), Verdict::Same);
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../gate/golden.json");
     let file = golden::load(&path, &gate::fixtures()).expect("the committed golden file loads");
-    let machine = golden::machine_key();
-    match file.set_for(&machine) {
+    match file.set_for(&golden::set_key()) {
         Ok(set) => {
             let stored = set.iter().find(|m| m.id == "seed-42").unwrap();
             assert_eq!(
@@ -309,8 +307,9 @@ fn the_fixture_list_is_fixed() {
 }
 
 #[test]
+#[cfg(not(feature = "keyed-streams"))]
 fn the_stream_state_is_scheme_0_with_one_entry() {
-    let mut rng = EngineRng::from_seed(42);
+    let mut rng = engine::rng::EngineRng::from_seed(42);
     rng.next_f64();
     let state = rng.stream_state();
     assert_eq!(state.scheme, 0);
@@ -359,7 +358,6 @@ fn a_regeneration_writes_the_new_hashes_and_appends_one_entry() {
         "the maths library replaces the platform sin and cos"
     );
     assert_eq!(entry.engine_version, engine::version());
-    assert_eq!(entry.scheme, 0);
     assert_eq!(entry.scheme, engine::rng::STREAM_SCHEME);
     assert_eq!(entry.machine, machine);
     assert_eq!(entry.candidate.as_deref(), Some(engine::build_hash()));
@@ -516,4 +514,125 @@ fn the_first_file_form_reads_as_a_one_entry_bootstrap_ledger() {
         refused(&v, &fixtures),
         "golden file has both a bootstrap object and a ledger; it must have one"
     );
+}
+
+/// The synthetic file regenerated from two machine sets to the one portable set.
+fn portable_from_two() -> (GoldenFile, Vec<Fixture>) {
+    let (file, fixtures) = synthetic();
+    let machine = golden::machine_key();
+    let old = file.set_for(&machine).unwrap().to_vec();
+    let two = file
+        .with_machine_set(
+            "zz-other",
+            with_changed(old.clone(), &["seed-7"], 7),
+            "second",
+        )
+        .unwrap();
+    let (portable, dropped) = two.regenerated(
+        &fixtures,
+        golden::PORTABLE,
+        with_changed(old, &["seed-42"], 9),
+        "one set for every machine",
+    );
+    assert_eq!(dropped, vec![machine, "zz-other".to_string()]);
+    (portable, fixtures)
+}
+
+#[test]
+fn a_regeneration_to_the_portable_set_from_two_machine_sets_loads() {
+    let (portable, fixtures) = portable_from_two();
+    let loaded = golden::parse(&portable.to_text(), &fixtures).unwrap();
+    assert_eq!(loaded.hash_sets.len(), 1);
+    assert!(loaded.set_for(golden::PORTABLE).is_ok());
+    assert!(loaded.set_differences.is_empty());
+    let entry = loaded.ledger.last().unwrap();
+    assert_eq!(entry.kind, golden::EntryKind::Regenerate);
+    assert_eq!(entry.machine, golden::PORTABLE);
+    // Control: a machine key finds no set, and the portable key missing names the fix.
+    let no_set = loaded
+        .set_for(&golden::machine_key())
+        .unwrap_err()
+        .to_string();
+    assert!(no_set.contains("has: portable"), "{no_set}");
+    let (file, _) = synthetic();
+    let no_portable = file.set_for(golden::PORTABLE).unwrap_err().to_string();
+    assert!(
+        no_portable.starts_with("golden file has no portable hash set;")
+            && no_portable.contains("--regenerate"),
+        "{no_portable}"
+    );
+}
+
+#[test]
+fn a_portable_set_beside_a_machine_set_is_refused() {
+    let (portable, fixtures) = portable_from_two();
+    let base: serde_json::Value = serde_json::from_str(&portable.to_text()).unwrap();
+    let machine = golden::machine_key();
+
+    // A machine set beside the portable set, with and without a ledger entry for it.
+    let mut beside = base.clone();
+    beside["hash_sets"][&machine] = beside["hash_sets"][golden::PORTABLE].clone();
+    let why = refused(&beside, &fixtures);
+    let mut keys = [machine.as_str(), golden::PORTABLE];
+    keys.sort_unstable();
+    assert_eq!(
+        why,
+        format!(
+            "golden file ledger: the hash sets are {}; a portable set is the only set",
+            keys.join(", ")
+        )
+    );
+    let mut entered = beside.clone();
+    let mut entry = entered["ledger"][0].clone();
+    entry["kind"] = "add-machine-set".into();
+    entry["machine"] = machine.clone().into();
+    entered["ledger"].as_array_mut().unwrap().push(entry);
+    let why = refused(&entered, &fixtures);
+    assert!(
+        why.starts_with(&format!(
+            "golden file ledger: entry 3 (add-machine-set) adds {machine} after the portable set of entry 2"
+        )),
+        "{why}"
+    );
+
+    // An add-machine-set entry that claims the portable set.
+    let (file, _) = synthetic();
+    let mut claim: serde_json::Value = serde_json::from_str(&file.to_text()).unwrap();
+    let mut entry = claim["ledger"][0].clone();
+    entry["kind"] = "add-machine-set".into();
+    entry["machine"] = golden::PORTABLE.into();
+    claim["ledger"].as_array_mut().unwrap().push(entry);
+    claim["hash_sets"][golden::PORTABLE] = claim["hash_sets"][&machine].clone();
+    let why = refused(&claim, &fixtures);
+    assert!(
+        why.starts_with("golden file ledger: entry 1 (add-machine-set) adds the portable set"),
+        "{why}"
+    );
+
+    // The writer refuses a machine set beside the portable set, and a portable machine set.
+    let err = portable
+        .clone()
+        .with_machine_set("zz-other", Vec::new(), "again")
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .starts_with("the golden file has a portable hash set;"),
+        "{err}"
+    );
+    let err = file
+        .with_machine_set(golden::PORTABLE, Vec::new(), "portable")
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("only a regeneration writes"),
+        "{err}"
+    );
+}
+
+#[test]
+fn the_set_key_is_portable_only_with_both_result_changes() {
+    let both = cfg!(all(feature = "libm-maths", feature = "keyed-streams"));
+    assert_eq!(golden::set_key() == golden::PORTABLE, both);
+    if !both {
+        assert_eq!(golden::set_key(), golden::machine_key());
+    }
 }

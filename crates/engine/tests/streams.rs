@@ -234,10 +234,28 @@ fn each_scheme_matches_its_committed_digest() {
 fn the_golden_file_records_the_scheme_this_build_plays() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../gate/golden.json");
     let file = golden::load_lenient(&path).unwrap();
-    assert!(!file.ledger.is_empty());
-    assert_eq!(STREAM_SCHEME, 0);
-    assert_eq!(STREAM_SCHEME, Streams::legacy(1).stream_state().scheme);
-    for entry in &file.ledger {
+    // The hashes are those of the last bootstrap or regenerate entry; the add-machine-set
+    // entries after it record the same scheme.
+    let base = file
+        .ledger
+        .iter()
+        .rposition(|e| e.kind != golden::EntryKind::AddMachineSet)
+        .expect("the ledger starts with a bootstrap");
+    if file.ledger[base].scheme != STREAM_SCHEME {
+        // A switched-on test build before the one result change: the file still holds the
+        // shared-stream hashes, which this build does not compare against.
+        assert_ne!(
+            golden::set_key(),
+            golden::machine_key(),
+            "a build that compares against a machine set plays the file's scheme"
+        );
+        println!(
+            "note: skipping: the golden file records scheme {}",
+            file.ledger[base].scheme
+        );
+        return;
+    }
+    for entry in &file.ledger[base..] {
         assert_eq!(entry.scheme, STREAM_SCHEME);
     }
 }
@@ -257,7 +275,13 @@ fn counter_fixtures(keyed: bool) -> [Fixture; 2] {
 
 #[test]
 fn the_draw_counter_equals_the_draws_taken() {
-    for keyed in [false, true] {
+    // A keyed-streams build plays the keyed scheme whatever the probe asks.
+    let schemes: &[bool] = if cfg!(feature = "keyed-streams") {
+        &[true]
+    } else {
+        &[false, true]
+    };
+    for &keyed in schemes {
         for fixture in counter_fixtures(keyed) {
             let (played, draws, state) = gate::play_streams(&fixture, &inputs(), keyed).unwrap();
             let words: u128 = state.entries.iter().map(|&(_, w)| w).sum();
@@ -328,6 +352,7 @@ fn no_draw_bypasses_the_registry() {
 }
 
 #[test]
+#[cfg(not(feature = "keyed-streams"))]
 fn legacy_stream_bytes_equal_the_single_stream_encoding() {
     let mut s = Streams::legacy(42);
     s.draw(Key::of_match(Action::AddedTime));

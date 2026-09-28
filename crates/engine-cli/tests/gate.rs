@@ -43,11 +43,14 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
-/// `true` when the committed golden file has no hash set for this machine; the caller
-/// prints a note and skips its golden-file part.
+/// `true` when the committed golden file has no hash set this build compares against (this
+/// machine's, or the portable one); the caller prints a note and skips its golden-file part.
 fn no_hash_set(out: &Output) -> bool {
     let stderr = text(&out.stderr);
-    if out.status.code() == Some(1) && stderr.contains("has no hash set for this machine") {
+    if out.status.code() == Some(1)
+        && (stderr.contains("has no hash set for this machine")
+            || stderr.contains("has no portable hash set"))
+    {
         println!("note: skipping: {stderr}");
         return true;
     }
@@ -284,6 +287,10 @@ fn the_write_modes_refuse_a_fixture_a_second_mode_and_an_existing_set() {
     // A machine that already has a set is refused before any match is played.
     let machine = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
     let file: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    if engine::gate::golden::set_key() == engine::gate::golden::PORTABLE {
+        println!("note: skipping the existing-set refusal: this build writes the portable set");
+        return;
+    }
     if file["hash_sets"].get(&machine).is_none() {
         println!("note: skipping the existing-set refusal: no {machine} set is committed");
         return;
@@ -344,4 +351,39 @@ fn a_regeneration_rewrites_a_copy_with_one_new_entry() {
     // The regenerated copy passes the gate.
     let out = gate("regenerate-check", &["--golden", path.to_str().unwrap()]);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
+}
+
+#[test]
+fn adding_a_machine_set_to_a_portable_file_is_refused_and_leaves_it_byte_identical() {
+    use engine::gate::golden;
+    // A portable copy: the committed file's first set, regenerated as the portable set.
+    let path = temp("portable").join("golden.json");
+    let file = golden::load_lenient(&golden()).unwrap();
+    let set = file.hash_sets.values().next().unwrap().clone();
+    let (portable, _) = file.regenerated(
+        &engine::gate::fixtures(),
+        golden::PORTABLE,
+        set,
+        "a portable copy for the refusal test",
+    );
+    portable.write_new(&path).unwrap();
+    let before = sha256(&path);
+    let out = gate(
+        "portable-add",
+        &[
+            "--add-machine-set",
+            "--golden",
+            path.to_str().unwrap(),
+            "--reason",
+            "a machine set beside the portable one",
+        ],
+    );
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = text(&out.stderr);
+    assert!(
+        stderr.contains("a portable hash set is the only set, so no machine set is added"),
+        "{stderr}"
+    );
+    assert!(text(&out.stdout).is_empty(), "no match is played");
+    assert_eq!(sha256(&path), before, "the file is byte-identical");
 }

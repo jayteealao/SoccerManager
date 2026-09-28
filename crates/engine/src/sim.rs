@@ -567,6 +567,9 @@ impl Simulation {
         }
         let teams = config.teams.clone();
         let players = config.players.clone();
+        #[cfg(feature = "keyed-streams")]
+        let streams = Streams::keyed(config.seed);
+        #[cfg(not(feature = "keyed-streams"))]
         let streams = Streams::legacy(config.seed);
         let referee = Referee::new(config.minutes, &config.rules, config.knockout);
         Ok(Self {

@@ -79,8 +79,7 @@ fn the_early_exit_changes_no_draw_score_or_choice() {
 
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../gate/golden.json");
     let file = golden::load(&path, &fixtures).expect("the committed golden file loads");
-    let machine = golden::machine_key();
-    let stored = match file.set_for(&machine) {
+    let stored = match file.set_for(&golden::set_key()) {
         Ok(set) => Some(set),
         Err(err) => {
             println!("note: skipping the golden-file compare: {err}");

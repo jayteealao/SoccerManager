@@ -1036,38 +1036,41 @@ mod tests {
 
     #[test]
     fn a_malformed_stream_section_is_refused_by_name() {
-        let legacy = Snapshot::capture(&played(100), [0; 16], 1);
         let keyed = keyed_snapshot();
         let entries = u32::from_le_bytes(keyed.body[SCHEME_AT + 1..ENTRIES_AT].try_into().unwrap());
         assert!(entries >= 2, "the keyed match used several streams");
 
-        let reason = refusal(&legacy, |b| b[STREAMS_AT] ^= 1);
+        let reason = refusal(&keyed, |b| b[STREAMS_AT] ^= 1);
         assert!(reason.contains("stream seed mismatch"), "{reason}");
-        let reason = refusal(&legacy, |b| b[SCHEME_AT] = 9);
+        let reason = refusal(&keyed, |b| b[SCHEME_AT] = 9);
         assert!(reason.contains("unknown stream scheme 9"), "{reason}");
         assert!(scheme_available(STREAM_SCHEME, false));
-        assert!(
-            !scheme_available(KEYED_SCHEME, false),
-            "a release build plays scheme 0 only"
+        assert_eq!(
+            scheme_available(KEYED_SCHEME, false),
+            STREAM_SCHEME == KEYED_SCHEME,
+            "a release build plays its own scheme only"
         );
         assert!(scheme_available(KEYED_SCHEME, true));
         assert!(!scheme_available(9, true));
 
-        // Legacy: two entries.
-        let reason = refusal(&legacy, |b| {
-            b[SCHEME_AT + 1..ENTRIES_AT].copy_from_slice(&2u32.to_le_bytes());
-            let entry = b[ENTRIES_AT..ENTRIES_AT + 24].to_vec();
-            b.splice(ENTRIES_AT..ENTRIES_AT, entry);
-        });
-        assert!(reason.contains("malformed stream entry count"), "{reason}");
-        // Legacy: another stream than the shared one.
-        let reason = refusal(&legacy, |b| b[ENTRIES_AT] = 5);
-        assert!(
-            reason.contains("malformed stream entry 0: stream 5"),
-            "{reason}"
-        );
+        if STREAM_SCHEME == 0 {
+            let legacy = Snapshot::capture(&played(100), [0; 16], 1);
+            // Legacy: two entries.
+            let reason = refusal(&legacy, |b| {
+                b[SCHEME_AT + 1..ENTRIES_AT].copy_from_slice(&2u32.to_le_bytes());
+                let entry = b[ENTRIES_AT..ENTRIES_AT + 24].to_vec();
+                b.splice(ENTRIES_AT..ENTRIES_AT, entry);
+            });
+            assert!(reason.contains("malformed stream entry count"), "{reason}");
+            // Legacy: another stream than the shared one.
+            let reason = refusal(&legacy, |b| b[ENTRIES_AT] = 5);
+            assert!(
+                reason.contains("malformed stream entry 0: stream 5"),
+                "{reason}"
+            );
+        }
         // A word position past the end of a stream.
-        let reason = refusal(&legacy, |b| {
+        let reason = refusal(&keyed, |b| {
             b[ENTRIES_AT + 8..ENTRIES_AT + 24].copy_from_slice(&(1u128 << 68).to_le_bytes())
         });
         assert!(

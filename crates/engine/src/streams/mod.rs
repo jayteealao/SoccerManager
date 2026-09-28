@@ -87,14 +87,15 @@ impl Streams {
         Self::with(shared.get_seed(), shared, Scheme::Legacy)
     }
 
-    /// Scheme 1 for a match on `seed` (test builds only until the scheme is switched on).
-    #[cfg(any(test, feature = "scenario"))]
+    /// Scheme 1 for a match on `seed` (test builds and `keyed-streams` builds only until the
+    /// scheme is switched on).
+    #[cfg(any(test, feature = "scenario", feature = "keyed-streams"))]
     pub fn keyed(seed: u64) -> Self {
         Self::new(seed, Scheme::Keyed)
     }
 
     /// A fresh registry for a match on `seed` in `scheme` (test builds only).
-    #[cfg(any(test, feature = "scenario"))]
+    #[cfg(any(test, feature = "scenario", feature = "keyed-streams"))]
     pub fn new(seed: u64, scheme: Scheme) -> Self {
         let mut s = Self::legacy(seed);
         s.set_scheme(scheme);
@@ -103,7 +104,7 @@ impl Streams {
 
     /// Switches a registry that has served no draw to `scheme`; scripted draws stay queued
     /// (test builds only).
-    #[cfg(any(test, feature = "scenario"))]
+    #[cfg(any(test, feature = "scenario", feature = "keyed-streams"))]
     pub fn set_scheme(&mut self, scheme: Scheme) {
         assert_eq!(self.draws, 0, "the scheme is chosen before the first draw");
         self.scheme = scheme;
@@ -315,7 +316,6 @@ impl Streams {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rng::EngineRng;
 
     fn p(action: Action, team: usize, squad: usize) -> Key {
         Key {
@@ -335,8 +335,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "keyed-streams"))]
     fn legacy_draws_equal_todays_single_stream_bit_for_bit() {
-        let mut oracle = EngineRng::from_seed(42);
+        let mut oracle = crate::rng::EngineRng::from_seed(42);
         let mut s = Streams::legacy(42);
         let keys = mixed_keys();
         for i in 0..1_000 {

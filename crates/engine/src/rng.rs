@@ -18,8 +18,13 @@ pub struct RngState {
 }
 
 /// The random-stream scheme this build plays ([`crate::streams::Scheme`]): scheme 0, one
-/// shared stream. The golden file's ledger records it with every entry.
-pub const STREAM_SCHEME: u8 = 0;
+/// shared stream, or scheme 1, one keyed stream per key, under the `keyed-streams` feature.
+/// The golden file's ledger records it with every entry.
+pub const STREAM_SCHEME: u8 = if cfg!(feature = "keyed-streams") {
+    crate::streams::KEYED_SCHEME
+} else {
+    0
+};
 
 /// The position of every random stream a match draws from, as the replay gate hashes it:
 /// the stream scheme, then each stream's id and word position in stream order. Today's
@@ -149,6 +154,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "keyed-streams"))]
     fn todays_stream_state_is_scheme_0_with_one_entry_in_the_documented_bytes() {
         let mut rng = EngineRng::from_seed(42);
         for _ in 0..3 {

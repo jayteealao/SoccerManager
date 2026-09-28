@@ -52,14 +52,23 @@ fn mode(opts: &GateOpts) -> anyhow::Result<(Mode, String)> {
         bail!("{flag} plays every fixture; leave out --fixture");
     }
     let reason = opts.reason.as_deref().map(str::trim).unwrap_or_default();
-    if !reason.is_empty() {
-        return Ok((mode, reason.to_string()));
+    let reason = if !reason.is_empty() {
+        reason.to_string()
+    } else {
+        match mode {
+            Mode::Bootstrap => golden::BOOTSTRAP_REASON.to_string(),
+            Mode::Regenerate => bail!("--regenerate needs --reason \"<why the hashes change>\""),
+            _ => bail!("--add-machine-set needs --reason \"<why this machine's set is added>\""),
+        }
+    };
+    // A build that writes the portable set never adds a machine set.
+    if mode == Mode::AddMachineSet && golden::set_key() == golden::PORTABLE {
+        return Err(golden::GoldenError::PortableOnly(
+            "this build writes the portable set, which only --regenerate writes".into(),
+        )
+        .into());
     }
-    match mode {
-        Mode::Bootstrap => Ok((mode, golden::BOOTSTRAP_REASON.to_string())),
-        Mode::Regenerate => bail!("--regenerate needs --reason \"<why the hashes change>\""),
-        _ => bail!("--add-machine-set needs --reason \"<why this machine's set is added>\""),
-    }
+    Ok((mode, reason))
 }
 
 pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
@@ -71,6 +80,8 @@ pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
         .clone()
         .unwrap_or_else(|| PathBuf::from(golden::DEFAULT_PATH));
     let machine = golden::machine_key();
+    // The key of the set this build compares and writes: this machine's, or the portable one.
+    let key = golden::set_key();
     let mut old: Option<GoldenFile> = None;
     let expected: Option<Vec<MatchHashes>> = match mode {
         Mode::Bootstrap => {
@@ -84,7 +95,7 @@ pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
         }
         Mode::Compare => {
             let file = golden::load(&path, &all)?;
-            Some(file.set_for(&machine)?.to_vec())
+            Some(file.set_for(&key)?.to_vec())
         }
         // A regeneration reads the old file without the strict checks, so a gate-schema or
         // fixture change in the code can still be regenerated.
@@ -94,6 +105,12 @@ pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
         }
         Mode::AddMachineSet => {
             let file = golden::load(&path, &all)?;
+            if file.hash_sets.contains_key(golden::PORTABLE) {
+                return Err(golden::GoldenError::PortableOnly(
+                    "the golden file has a portable hash set".into(),
+                )
+                .into());
+            }
             if file.hash_sets.contains_key(&machine) {
                 return Err(golden::GoldenError::SetExists { machine }.into());
             }
@@ -175,22 +192,27 @@ pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
             eprintln!("gate: {played} matches for {machine} in {seconds:.1} s; {failed}");
         }
         (Mode::Bootstrap, _) => {
-            GoldenFile::first(&all, &machine, written, &reason).write_new(&path)?;
+            GoldenFile::first(&all, &key, written, &reason).write_new(&path)?;
             eprintln!(
-                "wrote {}: {played} matches for {machine} in {seconds:.1} s",
+                "wrote {}: {played} matches for {key} in {seconds:.1} s",
                 path.display()
             );
         }
         (Mode::Regenerate, Some(old)) => {
-            let unchanged = old.hash_sets.get(&machine) == Some(&written);
-            let (file, dropped) = old.regenerated(&all, &machine, written, &reason);
+            let unchanged = old.hash_sets.get(&key) == Some(&written);
+            let (file, dropped) = old.regenerated(&all, &key, written, &reason);
             file.write_replace(&path)?;
             eprintln!(
-                "wrote {}: regenerated {played} matches for {machine} in {seconds:.1} s{}",
+                "wrote {}: regenerated {played} matches for {key} on {machine} in {seconds:.1} s{}",
                 path.display(),
                 if unchanged { "; hashes unchanged" } else { "" }
             );
-            if !dropped.is_empty() {
+            if !dropped.is_empty() && key == golden::PORTABLE {
+                eprintln!(
+                    "dropped the hash sets of {}; the portable set replaces them on every machine",
+                    dropped.join(", ")
+                );
+            } else if !dropped.is_empty() {
                 eprintln!(
                     "dropped the stale hash sets of {}; add each again with `engine-cli gate --add-machine-set --reason <TEXT>` on that machine",
                     dropped.join(", ")

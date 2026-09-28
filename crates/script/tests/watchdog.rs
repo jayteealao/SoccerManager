@@ -244,8 +244,8 @@ fn a_marked_gate_match_warns_and_is_still_compared() {
     // At the library level: the release command cannot force the clock.
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../gate/golden.json");
     let file = golden::load(&path, &gate::fixtures()).expect("the committed golden file loads");
-    let Ok(set) = file.set_for(&golden::machine_key()) else {
-        println!("note: skipping: no hash set for {}", golden::machine_key());
+    let Ok(set) = file.set_for(&golden::set_key()) else {
+        println!("note: skipping: no hash set for {}", golden::set_key());
         return;
     };
     let fixture = Fixture::knockout(gate::KNOCKOUT_SEED);

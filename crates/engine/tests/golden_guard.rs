@@ -262,3 +262,73 @@ fn a_bootstrap_an_added_set_and_a_regeneration_with_a_schema_increase_pass() {
         assert_eq!(faults(None, Some(&committed)), Vec::new());
     }
 }
+
+/// `two` (two machine sets) regenerated to the one portable set.
+fn to_portable(two: &GoldenFile) -> GoldenFile {
+    two.clone()
+        .regenerated(
+            &gate::fixtures(),
+            golden::PORTABLE,
+            changed_set(two, MACHINE),
+            "one set for every machine",
+        )
+        .0
+}
+
+#[test]
+fn two_machine_sets_to_the_portable_set_pass_only_with_one_regenerate_entry() {
+    let parent = first();
+    let two = parent
+        .clone()
+        .with_machine_set("zz-second", changed_set(&parent, MACHINE), "second")
+        .unwrap();
+    let portable = to_portable(&two);
+    assert_eq!(
+        faults(Some(&two.to_text()), Some(&portable.to_text())),
+        Vec::new()
+    );
+    // An identical file passes.
+    assert_eq!(
+        faults(Some(&portable.to_text()), Some(&portable.to_text())),
+        Vec::new()
+    );
+
+    // The same change with no new entry fails rule 5 for both removed sets.
+    let unrecorded = edited(&portable, |v| {
+        v["ledger"].as_array_mut().unwrap().pop();
+    });
+    let found = faults(Some(&two.to_text()), Some(&unrecorded));
+    assert!(
+        has(
+            &found,
+            5,
+            "hash set aa-machine is removed with no new regenerate entry"
+        ),
+        "{found:?}"
+    );
+    assert!(
+        has(
+            &found,
+            5,
+            "hash set zz-second is removed with no new regenerate entry"
+        ),
+        "{found:?}"
+    );
+
+    // A later add-machine-set entry beside the portable set fails.
+    let added = edited(&portable, |v| {
+        let mut entry = v["ledger"][1].clone();
+        entry["machine"] = "zz-third".into();
+        v["ledger"].as_array_mut().unwrap().push(entry);
+        v["hash_sets"]["zz-third"] = v["hash_sets"][golden::PORTABLE].clone();
+        v["set_differences"] = serde_json::to_value(golden::set_differences(
+            &serde_json::from_value(v["hash_sets"].clone()).unwrap(),
+        ))
+        .unwrap();
+    });
+    let found = faults(Some(&portable.to_text()), Some(&added));
+    assert!(
+        has(&found, 7, "adds zz-third after the portable set of entry 2"),
+        "{found:?}"
+    );
+}

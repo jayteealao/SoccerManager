@@ -30,6 +30,10 @@ scenario = []
 # Selects the pure-Rust libm maths backend instead of the platform maths library. Off by
 # default, so play keeps the platform maths until the one recorded result change.
 libm-maths = []
+# Test-only: selects the keyed random-stream scheme (scheme 1), one stream per subsystem,
+# player, and kind of action, instead of the one shared stream. Off by default; the one
+# recorded result change turns it on and then removes it.
+keyed-streams = []
 
 [dev-dependencies]
 criterion = { workspace = true }
