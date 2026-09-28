@@ -457,6 +457,42 @@ pub struct ResimulateOpts {
                      The file is never written."
     )]
     pub compare: bool,
+    /// Write the SHA-256 of the full match state after every tick.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Write the SHA-256 of the full match state after every tick\n\
+                     to this file: a JSON header line, one '<tick> <sha256>'\n\
+                     line per tick, a 'finish' line, and a closing 'end' line.\n\
+                     See docs/reference/cli.md."
+    )]
+    pub state_digests: Option<PathBuf>,
+    /// Write the named parts of the state of the tick --at-tick names.
+    #[arg(
+        long,
+        value_name = "FILE",
+        requires = "at_tick",
+        long_help = "Write the named parts of the match state after the tick\n\
+                     --at-tick names to this file as one JSON object, and stop\n\
+                     the match after that tick."
+    )]
+    pub state_fields: Option<PathBuf>,
+    /// The tick --state-fields writes; the match stops after it.
+    #[arg(
+        long,
+        value_name = "TICK",
+        requires = "state_fields",
+        value_parser = clap::value_parser!(u32).range(1..)
+    )]
+    pub at_tick: Option<u32>,
+    /// Play with debug mode on and write the debug trace to this file.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Play the match with debug mode on and write its debug trace\n\
+                     to this file as JSON Lines, as simulate --debug-trace does."
+    )]
+    pub debug_trace: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]

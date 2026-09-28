@@ -176,6 +176,10 @@ Play a recorded match again from its replay file alone, and compare it with the 
 |---|---|---|---|
 | `--fixture` | file | required | The version-4 replay file that `record` wrote. |
 | `--compare` | none | off | Comparison mode: run on any engine, and report both engine identities and both stream schemes. |
+| `--state-digests` | file | none | Write the SHA-256 of the full match state after every tick to this file. See [State digest file](#state-digest-file). |
+| `--state-fields` | file | none | Write the named parts of the match state after the tick `--at-tick` names to this file, as one JSON object, and stop the match after that tick. Needs `--at-tick`. |
+| `--at-tick` | tick | none | The tick `--state-fields` writes, from 1. Needs `--state-fields`. |
+| `--debug-trace` | file | none | Play the match with debug mode on and write its debug trace to this file, as `simulate --debug-trace` does. See [Debug trace file](#debug-trace-file). |
 
 Strict mode (the default) first compares the record's executable SHA-256 and stream scheme with this binary's. Each difference is named on standard error, for example `executable SHA-256 differs: the record has 3f2a…, this binary is 9c01…` or `scheme 2 differs from this build's 1`, and the command exits 1. A record made on a dirty build runs on the same binary with the warning `recorded on a dirty build (<build>); that version cannot be rebuilt`. The commit, the crate version, and the maths library are reported and not compared, because the executable SHA-256 covers them.
 
@@ -185,7 +189,9 @@ The match is built from the file's inputs. Each manager change of the log is que
 
 A version-3 replay file is refused: `<file> holds no inputs: it is a version-3 replay file, which plays from its frames only`.
 
-Output: one JSON line with `fixture`, `mode` (`strict` or `compare`), `verdict` (`identical` or `differs`), `tick_frames`, `stored_sha256` and `resimulated_sha256` (over the tick-frame payloads), `first_difference` (null, `{ "frame", "tick" }` for the first tick frame that differs, or `{ "change": order }` for the first log entry that differs), `changes_applied`, `inputs_bytes`, and `watchdog` (the recorded mark). In comparison mode, `engines` holds both identities.
+Output: one JSON line with `fixture`, `mode` (`strict` or `compare`), `verdict` (`identical` or `differs`), `tick_frames`, `stored_sha256` and `resimulated_sha256` (over the tick-frame payloads), `first_difference` (null, `{ "frame", "tick" }` for the first tick frame that differs, or `{ "change": order }` for the first log entry that differs), `changes_applied`, `inputs_bytes`, and `watchdog` (the recorded mark). In comparison mode, `engines` holds both identities. With `--at-tick`, `stopped_at` holds the tick; the match stops there, so the frame comparison reports the missing frames as a difference.
+
+The three state outputs are off by default, and they do not change the verdict or the exit code. `--state-fields` writes `{ "tick", "scheme", "fields", "engine" }`: `fields` lists each named part of the state in byte order, each with `name` (for example `ball.vel`, `players[3].pos`, `referee.clock`, or `streams`), `kind` (`floats`: a run of 64-bit floats; `streams`: the stream state; `bytes`: anything else), and `hex` (its canonical bytes). The parts join into the bytes whose SHA-256 is the tick's line in the state digest file. When the match ends before the tick, the command writes no fields file and exits 1.
 
 Exit codes: 0 when the frames and the change log are identical; 1 when the file is refused or cannot be read, or the engine differs in strict mode; 2 when the frames or the change log differ.
 
@@ -364,6 +370,17 @@ The rule outcomes: `kick_off`, `goal`, `ball_out`, `tackle` (`p_win`, `p_foul`, 
 Every draw's tick holds at least one point its kind of action is taken at, and every event's tick holds at least one point that gives it; the engine's tests check both on every tick of the 22 gate matches.
 
 A 90-minute match takes about 310,000 draws and about 600,000 decision records (the press, the cover, and the chase are decided every tick), so its trace file is about 160 MB (seed 42: 906,015 lines, 162 MB).
+
+## State digest file
+
+`resimulate --state-digests <file>` writes the digest of the full match state after every tick as text lines. The state is the one the replay gate hashes (state inventory version 1): exact floats, the rules and the clock, pending changes, plugin counters, every random-stream position, and the tick's events.
+
+1. The header line, a JSON object: `state_digests` (the file format, 1), `inventory` (the state inventory version, 1), `gate_schema` (1), `scheme` (the random-stream scheme id), and `engine` (the engine identity: commit, dirty mark, crate version, scheme, maths library, executable SHA-256, and build).
+2. One line per tick: the tick and the SHA-256 of that tick's state, for example `1500 9c01…`. The ticks run from 1 with no gap.
+3. `finish <sha256>`: the state after full time, with the full-time event.
+4. `end <ticks> <full_time>`: the number of tick lines and `true` when the match reached full time. It is written last, after every other line is flushed, so a file with no `end` line is from a run that did not finish.
+
+A 90-minute match gives about 283,000 lines (about 20 MB).
 
 ## Files
 

@@ -224,6 +224,7 @@ fn measure_stream(
             inbox: None,
             page_changes: None,
             planned: &[],
+            observe: None,
         },
         &mut |message: ServerMessage| session.send(&message),
     )?;

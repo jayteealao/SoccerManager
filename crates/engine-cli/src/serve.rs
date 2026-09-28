@@ -398,6 +398,7 @@ impl<'a> Serving<'a> {
                     inbox: Some(&inbox),
                     page_changes: Some(&self.page_changes),
                     planned: &[],
+                    observe: None,
                 },
                 &mut |message: ServerMessage| {
                     if let ServerMessage::Event(event) = &message {

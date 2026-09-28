@@ -12,9 +12,21 @@
 //! stream scheme is refused, naming each difference. Comparison mode never refuses on the
 //! identity; it reports both identities and both schemes, so two engine versions can be
 //! compared on one record.
+//!
+//! Three outputs let another tool compare two engine versions tick by tick, each off by
+//! default: `--state-digests` writes the SHA-256 of the full match state after every tick
+//! (the bytes the replay gate hashes), `--state-fields` with `--at-tick` writes the named
+//! parts of the state of one tick and stops there, and `--debug-trace` plays the match with
+//! debug mode on and writes its trace.
 
-use std::path::Path;
+use std::cell::RefCell;
+use std::fs::File;
+use std::io::{BufWriter, Write};
+use std::path::{Path, PathBuf};
 
+use anyhow::Context;
+use engine::gate::{GATE_SCHEMA, INVENTORY_VERSION, STATE_DIGEST_FORMAT, StateWriter};
+use engine::{EngineEvent, FanoutSink, Simulation, trace};
 use protocol::{Frame, ServerMessage};
 use script::Backstop;
 use sha2::{Digest, Sha256};
@@ -25,7 +37,8 @@ use stream::{
 
 use crate::cli::ResimulateOpts;
 use crate::replay_inputs::{Built, InputFiles, build};
-use crate::stream_run::{Drive, Planned, drive};
+use crate::stream_run::{Drive, Observe, Planned, drive};
+use crate::trace_file::TraceFile;
 
 pub fn run(content_dir: Option<&Path>, opts: &ResimulateOpts) -> anyhow::Result<i32> {
     if content_dir.is_some() {
@@ -33,6 +46,12 @@ pub fn run(content_dir: Option<&Path>, opts: &ResimulateOpts) -> anyhow::Result<
         return Ok(1);
     }
     let shown = opts.fixture.display().to_string();
+    if opts.debug_trace.is_some() && !trace::COMPILED {
+        eprintln!(
+            "error: --debug-trace needs a build with the debug trace (the debug-trace feature)"
+        );
+        return Ok(1);
+    }
     let fixture = match read_fixture(&opts.fixture) {
         Ok(fixture) => fixture,
         Err(err) => {
@@ -82,7 +101,12 @@ pub fn run(content_dir: Option<&Path>, opts: &ResimulateOpts) -> anyhow::Result<
         mut sim,
         commentary,
         keyframe_interval,
-    } = build(&inputs, &record.settings, Backstop::Never)?;
+    } = build(
+        &inputs,
+        &record.settings,
+        Backstop::Never,
+        opts.debug_trace.is_some(),
+    )?;
     let mut manager_changes: Vec<&ChangeEntry> = record
         .changes
         .iter()
@@ -104,15 +128,26 @@ pub fn run(content_dir: Option<&Path>, opts: &ResimulateOpts) -> anyhow::Result<
         .filter(|f| !f.frame.is_text())
         .map(|f| (f.tick, f.frame.payload()))
         .collect();
-    let ticks = sim.config().max_ticks();
+    let ticks = opts.at_tick.unwrap_or_else(|| sim.config().max_ticks());
     let club_ids = [
         sim.config().teams[0].club_id.clone(),
         sim.config().teams[1].club_id.clone(),
     ];
     let state = MatchState::default();
-    let mut sink = FrameSink::new(Compare::new(&stored), keyframe_interval);
+    let traced = match &opts.debug_trace {
+        Some(path) => Some(TraceFile::create(path, record.settings.seed, &sim)?),
+        None => None,
+    };
+    let mut sink = FanoutSink::new(
+        FrameSink::new(Compare::new(&stored), keyframe_interval),
+        traced,
+    );
+    let mut outputs = Outputs::new(opts, &sim, &here)?;
+    let observed = RefCell::new(|sim: &Simulation, events: &[EngineEvent], finished: bool| {
+        outputs.on_state(sim, events, finished);
+    });
     let mut text_frames = 0u64;
-    drive(
+    let driven = drive(
         &mut sim,
         &mut sink,
         &Drive {
@@ -126,13 +161,22 @@ pub fn run(content_dir: Option<&Path>, opts: &ResimulateOpts) -> anyhow::Result<
             inbox: None,
             page_changes: None,
             planned: &planned,
+            observe: outputs_wanted(opts).then_some(&observed as &Observe<'_>),
         },
         &mut |_: ServerMessage| {
             text_frames += 1;
             Ok(())
         },
     )?;
-    let compare = sink.into_inner().finish();
+    let (frames, traced) = sink.into_parts();
+    if let Some(traced) = traced {
+        traced.finish(sim.draws())?;
+    }
+    if let Err(message) = outputs.finish(driven.full_time, &here) {
+        eprintln!("error: {message:#}");
+        return Ok(1);
+    }
+    let compare = frames.into_inner().finish();
     let now = outcome_of(&sim).changes;
     let change_difference = first_change_difference(&record.changes, &now);
     let identical = compare.first.is_none() && change_difference.is_none();
@@ -156,9 +200,135 @@ pub fn run(content_dir: Option<&Path>, opts: &ResimulateOpts) -> anyhow::Result<
     if opts.compare {
         line["engines"] = serde_json::json!({ "record": record.engine, "this_binary": here });
     }
+    if let Some(tick) = opts.at_tick {
+        line["stopped_at"] = serde_json::json!(tick);
+    }
     tracing::debug!(signal = "resimulate.text_frames", count = text_frames);
     println!("{line}");
     Ok(if identical { 0 } else { 2 })
+}
+
+/// `true` when a state output is asked for, so the state is written after each tick.
+fn outputs_wanted(opts: &ResimulateOpts) -> bool {
+    opts.state_digests.is_some() || opts.state_fields.is_some()
+}
+
+/// The state outputs of a re-simulation: the digest of each tick's state, and the named
+/// parts of one tick's state.
+struct Outputs {
+    state: StateWriter,
+    digests: Option<(PathBuf, BufWriter<File>)>,
+    /// Tick lines written so far.
+    tick_lines: u64,
+    fields: Option<(PathBuf, u32)>,
+    /// The fields of the asked tick, once it has played.
+    found: Option<serde_json::Value>,
+    scheme: u8,
+    /// The first write error; the run stops reporting after it.
+    failed: Option<std::io::Error>,
+}
+
+impl Outputs {
+    /// Opens the asked outputs and writes the digest file's header line.
+    fn new(opts: &ResimulateOpts, sim: &Simulation, here: &EngineIdentity) -> anyhow::Result<Self> {
+        let scheme = sim.stream_scheme();
+        let digests = match &opts.state_digests {
+            Some(path) => {
+                let file = File::create(path)
+                    .with_context(|| format!("cannot create {}", path.display()))?;
+                let mut w = BufWriter::with_capacity(1 << 16, file);
+                let header = serde_json::json!({
+                    "state_digests": STATE_DIGEST_FORMAT,
+                    "inventory": INVENTORY_VERSION,
+                    "gate_schema": GATE_SCHEMA,
+                    "scheme": scheme,
+                    "engine": here,
+                });
+                writeln!(w, "{header}")
+                    .with_context(|| format!("cannot write {}", path.display()))?;
+                Some((path.clone(), w))
+            }
+            None => None,
+        };
+        let fields = match (&opts.state_fields, opts.at_tick) {
+            (Some(path), Some(tick)) => Some((path.clone(), tick)),
+            _ => None,
+        };
+        Ok(Self {
+            state: StateWriter::new(fields.is_some()),
+            digests,
+            tick_lines: 0,
+            fields,
+            found: None,
+            scheme,
+            failed: None,
+        })
+    }
+
+    /// Writes the state after one step, or after full time when `finished`.
+    fn on_state(&mut self, sim: &Simulation, events: &[EngineEvent], finished: bool) {
+        if self.failed.is_some() {
+            return;
+        }
+        let bytes = self.state.tick(sim, events);
+        if let Some((_, w)) = &mut self.digests {
+            let digest = stream::record::hex(&Sha256::digest(bytes));
+            let written = if finished {
+                writeln!(w, "finish {digest}")
+            } else {
+                self.tick_lines += 1;
+                writeln!(w, "{} {digest}", sim.tick())
+            };
+            if let Err(err) = written {
+                self.failed = Some(err);
+                return;
+            }
+        }
+        if let Some((_, at)) = self.fields
+            && !finished
+            && sim.tick() == at
+        {
+            let bytes = self.state.bytes();
+            let fields: Vec<serde_json::Value> = self
+                .state
+                .fields()
+                .into_iter()
+                .map(|f| {
+                    serde_json::json!({
+                        "name": f.name,
+                        "kind": f.kind.as_str(),
+                        "hex": stream::record::hex(&bytes[f.range]),
+                    })
+                })
+                .collect();
+            self.found = Some(serde_json::json!({ "tick": at, "fields": fields }));
+        }
+    }
+
+    /// Closes the digest file with its `end` line, written only after every other line is
+    /// flushed, and writes the fields file.
+    fn finish(self, full_time: bool, here: &EngineIdentity) -> anyhow::Result<()> {
+        if let Some(err) = self.failed {
+            let path = self.digests.map(|(path, _)| path).unwrap_or_default();
+            return Err(err).with_context(|| format!("cannot write {}", path.display()));
+        }
+        if let Some((path, mut w)) = self.digests {
+            let cannot = || format!("cannot write {}", path.display());
+            w.flush().with_context(cannot)?;
+            writeln!(w, "end {} {full_time}", self.tick_lines).with_context(cannot)?;
+            w.flush().with_context(cannot)?;
+        }
+        if let Some((path, at)) = self.fields {
+            let Some(mut found) = self.found else {
+                anyhow::bail!("the match ended before tick {at}; no state fields were written");
+            };
+            found["scheme"] = serde_json::json!(self.scheme);
+            found["engine"] = serde_json::json!(here);
+            std::fs::write(&path, format!("{found}\n"))
+                .with_context(|| format!("cannot write {}", path.display()))?;
+        }
+        Ok(())
+    }
 }
 
 /// Each way the running binary differs from the one that recorded the match, in words.

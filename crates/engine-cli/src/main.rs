@@ -18,6 +18,7 @@ mod resume;
 mod serve;
 mod simulate;
 mod stream_run;
+mod trace_file;
 mod web;
 
 use std::io::IsTerminal;

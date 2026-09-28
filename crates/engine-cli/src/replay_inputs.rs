@@ -133,11 +133,12 @@ pub struct Built {
 }
 
 /// Builds the match `settings` names from `inputs`, reading no file. The script pack's
-/// calls run under `backstop`.
+/// calls run under `backstop`. `traced` plays the match with debug mode on.
 pub fn build(
     inputs: &InputFiles,
     settings: &MatchSettings,
     backstop: Backstop,
+    traced: bool,
 ) -> anyhow::Result<Built> {
     let content = Content::from_files(&ContentFiles {
         attributes: inputs.role("attributes")?.bytes.clone(),
@@ -190,7 +191,11 @@ pub fn build(
         config.fold_pack_hash(pack.sha());
     }
     let keyframe_interval = content.tuning.stream.keyframe_interval;
-    let mut sim = Simulation::new(config)?;
+    let mut sim = if traced {
+        Simulation::new_traced(config)?
+    } else {
+        Simulation::new(config)?
+    };
     if let Some(pack) = &pack {
         sim.set_plugins(pack.plugins());
     }

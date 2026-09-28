@@ -566,3 +566,187 @@ fn a_changed_tick_frame_or_log_entry_is_reported_as_a_difference() {
     assert_eq!(found["stored_sha256"], found["resimulated_sha256"]);
     let _ = std::fs::remove_dir_all(&recorded.dir);
 }
+
+/// The committed version-4 replay file: one minute of seed 42, 3,000 tick frames.
+fn committed_v4() -> PathBuf {
+    repo().join("web/tests/data/one-minute-v4.smfx")
+}
+
+/// The lines of a state digest file.
+fn digest_lines(path: &Path) -> Vec<String> {
+    std::fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .map(str::to_string)
+        .collect()
+}
+
+/// The SHA-256 of the fields of a state fields file, joined in order.
+fn joined_fields_sha(path: &Path) -> String {
+    let fields: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    let mut hasher = Sha256::new();
+    for field in fields["fields"].as_array().unwrap() {
+        let text = field["hex"].as_str().unwrap();
+        let bytes: Vec<u8> = (0..text.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap())
+            .collect();
+        hasher.update(bytes);
+    }
+    hex(&hasher.finalize())
+}
+
+#[test]
+fn state_digests_give_one_line_per_tick_and_the_same_file_twice() {
+    let dir = temp("digests");
+    let (a, b) = (dir.join("a.digests"), dir.join("b.digests"));
+    for path in [&a, &b] {
+        let out = resimulate(
+            &dir,
+            &committed_v4(),
+            &["--compare", "--state-digests", path.to_str().unwrap()],
+        );
+        assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+        assert_eq!(line(&out)["verdict"], "identical");
+    }
+    assert_eq!(std::fs::read(&a).unwrap(), std::fs::read(&b).unwrap());
+    let lines = digest_lines(&a);
+    let header: serde_json::Value = serde_json::from_str(&lines[0]).unwrap();
+    assert_eq!(header["state_digests"], 1);
+    assert_eq!(header["inventory"], 1);
+    assert_eq!(header["gate_schema"], 1);
+    assert_eq!(header["scheme"], header["engine"]["scheme"]);
+    let ticks: Vec<&str> = lines[1..lines.len() - 2]
+        .iter()
+        .map(|l| l.as_str())
+        .collect();
+    assert_eq!(ticks.len(), 3_000);
+    for (i, l) in ticks.iter().enumerate() {
+        let (tick, digest) = l.split_once(' ').unwrap();
+        assert_eq!(tick.parse::<usize>().unwrap(), i + 1);
+        assert_eq!(digest.len(), 64);
+    }
+    assert!(lines[lines.len() - 2].starts_with("finish "));
+    assert_eq!(lines[lines.len() - 1], "end 3000 true");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_tick_digest_is_the_sha256_of_that_ticks_fields_and_at_tick_stops_there() {
+    let dir = temp("fields");
+    let digests = dir.join("m.digests");
+    let out = resimulate(
+        &dir,
+        &committed_v4(),
+        &["--compare", "--state-digests", digests.to_str().unwrap()],
+    );
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let lines = digest_lines(&digests);
+    for tick in [1u32, 1_500, 3_000] {
+        let fields = dir.join(format!("{tick}.json"));
+        let at = tick.to_string();
+        let out = resimulate(
+            &dir,
+            &committed_v4(),
+            &[
+                "--compare",
+                "--state-fields",
+                fields.to_str().unwrap(),
+                "--at-tick",
+                &at,
+            ],
+        );
+        let verdict = line(&out);
+        assert_eq!(verdict["stopped_at"], tick, "{}", stderr(&out));
+        let written: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&fields).unwrap()).unwrap();
+        assert_eq!(written["tick"], tick);
+        assert_eq!(written["fields"][0]["name"], "tick");
+        let expected = format!("{tick} {}", joined_fields_sha(&fields));
+        assert_eq!(lines[tick as usize], expected, "tick {tick}");
+    }
+    // A tick past the end writes no fields and fails.
+    let fields = dir.join("late.json");
+    let out = resimulate(
+        &dir,
+        &committed_v4(),
+        &[
+            "--compare",
+            "--state-fields",
+            fields.to_str().unwrap(),
+            "--at-tick",
+            "9999",
+        ],
+    );
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("before tick 9999"),
+        "{}",
+        stderr(&out)
+    );
+    assert!(!fields.exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_debug_trace_of_a_resimulation_counts_every_draw_and_stops_at_the_tick() {
+    let dir = temp("trace");
+    let (trace, fields) = (dir.join("t.jsonl"), dir.join("f.json"));
+    let out = resimulate(
+        &dir,
+        &committed_v4(),
+        &[
+            "--compare",
+            "--debug-trace",
+            trace.to_str().unwrap(),
+            "--state-fields",
+            fields.to_str().unwrap(),
+            "--at-tick",
+            "1500",
+        ],
+    );
+    let err = stderr(&out);
+    assert_eq!(out.status.code(), Some(2), "{err}");
+    assert_eq!(line(&out)["stopped_at"], 1500);
+    let counts = err
+        .lines()
+        .find(|l| l.starts_with("debug trace: "))
+        .unwrap_or_else(|| panic!("{err}"));
+    let draws = |word: &str| -> u64 {
+        let at = counts.find(word).unwrap() + word.len();
+        counts[at..]
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect::<String>()
+            .parse()
+            .unwrap()
+    };
+    let (recorded, registry) = (
+        counts
+            .split(", ")
+            .nth(1)
+            .unwrap()
+            .split(' ')
+            .next()
+            .unwrap()
+            .parse::<u64>()
+            .unwrap(),
+        draws("(registry "),
+    );
+    assert!(recorded > 0);
+    assert_eq!(recorded, registry, "{counts}");
+    let text = std::fs::read_to_string(&trace).unwrap();
+    let mut records = text.lines();
+    let header: serde_json::Value = serde_json::from_str(records.next().unwrap()).unwrap();
+    assert_eq!(header["seed"], 42);
+    let ticks: Vec<u64> = records
+        .map(|l| {
+            let r: serde_json::Value = serde_json::from_str(l).unwrap();
+            assert!(r.get("k").is_some(), "{l}");
+            r["t"].as_u64().unwrap()
+        })
+        .collect();
+    assert!(ticks.contains(&1500));
+    assert_eq!(ticks.iter().max(), Some(&1500));
+    let _ = std::fs::remove_dir_all(&dir);
+}

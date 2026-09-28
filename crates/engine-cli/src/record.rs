@@ -47,7 +47,7 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
         mut sim,
         commentary,
         keyframe_interval,
-    } = build(&inputs, &settings, Backstop::default())?;
+    } = build(&inputs, &settings, Backstop::default(), false)?;
     let owner_id = load_or_create_owner_id(&data_dir())?;
     let match_id = MatchId::now(opts.seed);
     let ticks = sim.config().max_ticks();
@@ -106,6 +106,7 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
             inbox: None,
             page_changes: None,
             planned: &planned,
+            observe: None,
         },
         &mut |message: ServerMessage| {
             let text = serde_json::to_string(&message)

@@ -30,6 +30,10 @@ const HOME: usize = 0;
 /// Where a driven match sends its messages.
 pub type MessageRoute<'a> = &'a mut dyn FnMut(ServerMessage) -> Result<(), StreamError>;
 
+/// A watcher of the match after each step: the match, the events that step recorded, and
+/// `false`; then once after full time with the full-time events and `true`.
+pub type Observe<'a> = RefCell<dyn FnMut(&Simulation, &[EngineEvent], bool) + 'a>;
+
 /// Everything the driver needs beyond the simulation itself.
 pub struct Drive<'a> {
     /// The most ticks to play. The match ends earlier at full time.
@@ -51,6 +55,8 @@ pub struct Drive<'a> {
     /// Changes queued at fixed ticks, before the step that starts on each one's tick: a
     /// recording's change file, or a replay file's manager changes.
     pub planned: &'a [Planned],
+    /// Sees the match after each step and after full time, before its events are routed.
+    pub observe: Option<&'a Observe<'a>>,
 }
 
 /// A change queued at a fixed tick.
@@ -174,6 +180,12 @@ pub fn drive<S: TickSink>(
             }
         }
         sim.step();
+        let trace = sim.take_trace();
+        if !trace.is_empty()
+            && let Err(err) = sink.on_trace(&trace)
+        {
+            return gone(err, written);
+        }
         let record = sim.record();
         opts.state.set_tick(record.tick);
         if let Err(err) = sink.on_tick(&record) {
@@ -185,12 +197,16 @@ pub fn drive<S: TickSink>(
         {
             return gone(err, written);
         }
-        for event in sim.take_events() {
+        let events = sim.take_events();
+        if let Some(observe) = opts.observe {
+            (observe.borrow_mut())(sim, &events, false);
+        }
+        for event in &events {
             opts.state.set_scores(event.scores);
             for row in rows(
                 sim,
                 &mut commentator,
-                &event,
+                event,
                 opts.owner_id,
                 opts.match_id,
                 opts.club_ids,
@@ -206,11 +222,19 @@ pub fn drive<S: TickSink>(
     }
     let full_time = sim.is_over();
     sim.finish();
-    for event in sim.take_events() {
+    let trace = sim.take_trace();
+    if !trace.is_empty() {
+        sink.on_trace(&trace)?;
+    }
+    let events = sim.take_events();
+    if let Some(observe) = opts.observe {
+        (observe.borrow_mut())(sim, &events, true);
+    }
+    for event in &events {
         for message in rows(
             sim,
             &mut commentator,
-            &event,
+            event,
             opts.owner_id,
             opts.match_id,
             opts.club_ids,
@@ -614,6 +638,7 @@ mod tests {
                 inbox: None,
                 page_changes: None,
                 planned: &[],
+                observe: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -653,6 +678,7 @@ mod tests {
                 inbox: None,
                 page_changes: None,
                 planned: &[],
+                observe: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -907,6 +933,7 @@ mod tests {
                 inbox: None,
                 page_changes: None,
                 planned: &[],
+                observe: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -993,6 +1020,7 @@ mod tests {
                 inbox: Some(&inbox),
                 page_changes: None,
                 planned: &[],
+                observe: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -1062,6 +1090,7 @@ mod tests {
                         inbox: None,
                         page_changes: None,
                         planned: &[],
+                        observe: None,
                     },
                     &mut |_: ServerMessage| Ok(()),
                 )
@@ -1119,6 +1148,7 @@ mod tests {
                         inbox: Some(&inbox),
                         page_changes: None,
                         planned: &[],
+                        observe: None,
                     },
                     &mut |m: ServerMessage| {
                         messages.push(m);
