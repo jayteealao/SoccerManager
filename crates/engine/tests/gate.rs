@@ -623,3 +623,113 @@ fn every_machine_compares_against_the_portable_set() {
         "the committed golden file holds the portable set only"
     );
 }
+
+/// The committed golden file, loaded strictly.
+fn committed() -> GoldenFile {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../gate/golden.json");
+    golden::load(&path, &gate::fixtures()).expect("the committed golden file loads")
+}
+
+/// The one recorded result change: exactly one `regenerate` entry, entry 2, whose reason
+/// names the maths change and the keyed split, whose candidate is a clean commit, and whose
+/// band result holds a verdict for each band of `content/realism-bands.json` (AC-30).
+#[test]
+fn the_one_result_change_is_one_regenerate_entry_with_its_band_result() {
+    let file = committed();
+    let regenerations: Vec<usize> = file
+        .ledger
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.kind == golden::EntryKind::Regenerate)
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(regenerations, [2], "exactly one regenerate entry, entry 2");
+    let entry = &file.ledger[2];
+    assert!(
+        entry.reason.contains("libm") && entry.reason.contains("keyed"),
+        "the reason names the maths change and the keyed split: {}",
+        entry.reason
+    );
+    assert_eq!(entry.machine, golden::PORTABLE);
+    assert_eq!(entry.scheme, engine::rng::STREAM_SCHEME);
+    let candidate = entry.candidate.as_deref().unwrap();
+    assert!(
+        !candidate.is_empty() && !candidate.ends_with("-dirty") && candidate != "unknown",
+        "a clean candidate commit: {candidate}"
+    );
+    let band_path = entry.band_result.as_deref().unwrap();
+    assert_eq!(band_path, "gate/bands/ledger-2.json");
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let read = |p: &str| -> serde_json::Value {
+        serde_json::from_str(&std::fs::read_to_string(root.join(p)).unwrap()).unwrap()
+    };
+    let report = read(band_path);
+    assert_eq!(
+        report["build.hash"], candidate,
+        "the band run played the candidate"
+    );
+    assert_eq!(report["calib.matches"], 1000);
+    for suite in ["equal", "strength", "formations"] {
+        let s = &report["calib.suites"][suite];
+        let want = if suite == "formations" { 55_000 } else { 1_000 };
+        assert_eq!(s["matches"], want, "{suite}");
+        assert_eq!(s["recorded"], want, "{suite}");
+    }
+    // Each band of the content file has a verdict. Three bands report under other names:
+    // possession as the home and away shares, the stronger team as its win rate, and the
+    // wall time per sample as `wall_ms`.
+    let judged: Vec<&str> = report["calib.bands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|b| b["pass"].is_boolean())
+        .map(|b| b["band"].as_str().unwrap())
+        .collect();
+    let bands = read("content/realism-bands.json");
+    let names: Vec<&String> = bands
+        .as_object()
+        .unwrap()
+        .keys()
+        .filter(|k| !["schema_version", "sample_size"].contains(&k.as_str()))
+        .collect();
+    assert_eq!(names.len(), 16, "the content file holds 16 bands");
+    for name in names {
+        let reported: &[&str] = match name.as_str() {
+            "possession_pct" => &["possession_home_pct", "possession_away_pct"],
+            "stronger_team" => &["stronger_team_win_rate"],
+            "wall_minutes_per_sample" => &["wall_ms"],
+            other => &[other][..],
+        };
+        for band in reported {
+            assert!(judged.contains(band), "no verdict for band {name} ({band})");
+        }
+    }
+}
+
+/// The regeneration kept what the gate measures: gate schema 1, state inventory 1, and the
+/// fixture list of the golden-file guard, by its digest at the guard's commit (AC-RC-1).
+#[test]
+fn the_regeneration_kept_the_gate_schema_and_the_fixture_list() {
+    use sha2::{Digest, Sha256};
+    let file = committed();
+    assert_eq!(file.gate_schema, 1);
+    assert_eq!(file.inventory_version, 1);
+    let list = serde_json::to_string(&file.fixtures).unwrap();
+    let hex: String = Sha256::digest(list.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    assert_eq!(
+        hex, "7978db1fc301382124ca8dc6928956131411dbbf177b90f978481dc7cd1fd5fc",
+        "the fixture list differs from the golden-guard one"
+    );
+    // Control: one changed fixture moves the digest.
+    let mut edited = file.fixtures.clone();
+    edited[0].minutes = 45;
+    let other = serde_json::to_string(&edited).unwrap();
+    assert_ne!(
+        Sha256::digest(other.as_bytes()),
+        Sha256::digest(list.as_bytes())
+    );
+}
