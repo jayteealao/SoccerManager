@@ -24,15 +24,16 @@ libm = { workspace = true }
 windows-sys = { workspace = true }
 
 [features]
+# Every match plays with the libm maths and the keyed random streams: the one recorded result
+# change. Both features are removed together with the code they switch off.
+default = ["libm-maths", "keyed-streams"]
 # The test scene builder and scripted referee draws. Only this crate's own tests enable it,
 # so a release build never contains either.
 scenario = []
-# Selects the pure-Rust libm maths backend instead of the platform maths library. Off by
-# default, so play keeps the platform maths until the one recorded result change.
+# Selects the pure-Rust libm maths backend instead of the platform maths library.
 libm-maths = []
-# Test-only: selects the keyed random-stream scheme (scheme 1), one stream per subsystem,
-# player, and kind of action, instead of the one shared stream. Off by default; the one
-# recorded result change turns it on and then removes it.
+# Selects the keyed random-stream scheme (scheme 1), one stream per subsystem, player, and
+# kind of action, instead of the one shared stream.
 keyed-streams = []
 
 [dev-dependencies]

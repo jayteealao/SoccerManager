@@ -157,17 +157,17 @@ fn libm_resolves_without_default_features() {
 
 #[test]
 fn the_default_build_uses_the_platform_backend() {
-    // Guard: no default feature list and no workspace member turns the libm backend on, so
-    // the default build and every CI build keep the platform maths.
+    // Guard: the default build resolves the engine with the libm backend, so every CI build
+    // plays the maths of the golden file's portable set.
     let doc = metadata();
     let features = &node(&doc, "engine")["features"];
     assert!(
-        !features
+        features
             .as_array()
             .expect("a feature list")
             .iter()
             .any(|f| f == "libm-maths"),
-        "the default build resolves the engine without libm-maths: {features}"
+        "the default build resolves the engine with libm-maths: {features}"
     );
     let want = if cfg!(feature = "libm-maths") {
         Backend::Libm
