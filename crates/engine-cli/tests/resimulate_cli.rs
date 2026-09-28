@@ -750,3 +750,55 @@ fn the_debug_trace_of_a_resimulation_counts_every_draw_and_stops_at_the_tick() {
     assert_eq!(ticks.iter().max(), Some(&1500));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_resimulation_stopped_at_a_tick_writes_no_full_time_record_to_its_trace() {
+    let dir = temp("stopped-trace");
+    let (stopped, whole) = (dir.join("stopped.jsonl"), dir.join("whole.jsonl"));
+    let fields = dir.join("f.json");
+    let out = resimulate(
+        &dir,
+        &committed_v4(),
+        &[
+            "--compare",
+            "--debug-trace",
+            stopped.to_str().unwrap(),
+            "--state-fields",
+            fields.to_str().unwrap(),
+            "--at-tick",
+            "2000",
+        ],
+    );
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    let out = resimulate(
+        &dir,
+        &committed_v4(),
+        &["--compare", "--debug-trace", whole.to_str().unwrap()],
+    );
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let full_time = |path: &Path| {
+        std::fs::read_to_string(path)
+            .unwrap()
+            .lines()
+            .filter(|l| l.contains("\"point\":\"full_time\""))
+            .count()
+    };
+    assert_eq!(full_time(&stopped), 0);
+    // Control: the whole match records its full time.
+    assert_eq!(full_time(&whole), 1);
+    // The records of the stopped run are the whole run's records up to its tick.
+    let upto = |path: &Path, last: u64| -> Vec<String> {
+        std::fs::read_to_string(path)
+            .unwrap()
+            .lines()
+            .skip(1)
+            .filter(|l| {
+                let r: serde_json::Value = serde_json::from_str(l).unwrap();
+                r["t"].as_u64().unwrap() <= last
+            })
+            .map(str::to_string)
+            .collect()
+    };
+    assert_eq!(upto(&stopped, 2000), upto(&whole, 2000));
+    let _ = std::fs::remove_dir_all(&dir);
+}

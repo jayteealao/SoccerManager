@@ -222,8 +222,10 @@ pub fn drive<S: TickSink>(
     }
     let full_time = sim.is_over();
     sim.finish();
+    // A match cut short by the tick cap is closed only for its closing messages: its
+    // full-time trace records describe no real full time, so they are not handed over.
     let trace = sim.take_trace();
-    if !trace.is_empty() {
+    if full_time && !trace.is_empty() {
         sink.on_trace(&trace)?;
     }
     let events = sim.take_events();
