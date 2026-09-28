@@ -11,7 +11,9 @@ mod guard;
 mod launch;
 mod record;
 mod replay;
+mod replay_inputs;
 mod report;
+mod resimulate;
 mod resume;
 mod serve;
 mod simulate;
@@ -52,6 +54,7 @@ fn main() {
         cli::Command::Launch(opts) => launch::run(content_dir, &opts),
         cli::Command::Record(opts) => record::run(content_dir, &opts),
         cli::Command::Replay(opts) => replay::run(&opts),
+        cli::Command::Resimulate(opts) => resimulate::run(content_dir, &opts),
         cli::Command::Resume(opts) => resume::run(content_dir, &opts),
         cli::Command::Calibrate(opts) => calibrate::run(content_dir, &opts),
         cli::Command::Gate(opts) => gate::run(content_dir, &opts),

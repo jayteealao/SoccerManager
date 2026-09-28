@@ -149,8 +149,45 @@ Record one whole match stream to a replay file.
 | `--team-a` | file | `teams/default-a.json` in the content folder | The home team file. |
 | `--team-b` | file | `teams/default-b.json` in the content folder | The away team file. |
 | `--script-pack` | folder | none | A script pack to run, as for `simulate`. |
+| `--changes` | file | none | A JSON file of manager changes to queue. Each team the file names is managed by hand. |
+
+The replay file is version 4. It holds every input file of the match by value, the engine identity, the applied-change log, and the watchdog mark, so `resimulate` can play the match again from the file alone. See the protocol reference, section "Replay files".
+
+The change file is a JSON array. Each change is queued before the step that starts on its `tick`. `team` is 0 (home) or 1 (away). A change is a substitution (`slot` is the lineup slot of the player who goes off, 0 to 10, and `bench` is the place on the bench of the player who comes on) or a mentality (an index into the tactics file's mentalities):
+
+```json
+[
+  { "tick": 3000, "team": 0, "change": { "substitution": { "slot": 9, "bench": 0 } } },
+  { "tick": 3000, "team": 0, "change": { "mentality": 4 } }
+]
+```
+
+A change the engine rejects, for example a bench place the team does not have, is not in the change log. Its verdict is in the text frames.
+
+Output: one JSON line with `fixture`, `frames`, `ticks`, `bytes`, `hash`, `format` (4), `inputs_bytes` (the total size of the input files), and `changes_applied`.
 
 Exit codes: 0 when the match reaches full time; 1; 2 when it does not.
+
+## resimulate
+
+Play a recorded match again from its replay file alone, and compare it with the stored frames. Every input comes from the file. The command reads no content folder: it refuses the global `--content-dir`, and it does not read `SM_CONTENT_DIR`.
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `--fixture` | file | required | The version-4 replay file that `record` wrote. |
+| `--compare` | none | off | Comparison mode: run on any engine, and report both engine identities and both stream schemes. |
+
+Strict mode (the default) first compares the record's executable SHA-256 and stream scheme with this binary's. Each difference is named on standard error, for example `executable SHA-256 differs: the record has 3f2a…, this binary is 9c01…` or `scheme 2 differs from this build's 1`, and the command exits 1. A record made on a dirty build runs on the same binary with the warning `recorded on a dirty build (<build>); that version cannot be rebuilt`. The commit, the crate version, and the maths library are reported and not compared, because the executable SHA-256 covers them.
+
+Comparison mode never refuses on the identity. It prints `engine (record)`, `engine (this binary)`, and `scheme N (record), scheme M (this binary)` on standard error. The replay file is opened to read only in both modes.
+
+The match is built from the file's inputs. Each manager change of the log is queued again at its recorded tick, and the computer manager makes its own changes again. Every regenerated tick frame is compared with the stored one, byte for byte. After full time, the applied changes must equal the log, entry by entry. Text frames are not compared. The script pack runs with no wall-clock limit, and the recorded watchdog mark is reported.
+
+A version-3 replay file is refused: `<file> holds no inputs: it is a version-3 replay file, which plays from its frames only`.
+
+Output: one JSON line with `fixture`, `mode` (`strict` or `compare`), `verdict` (`identical` or `differs`), `tick_frames`, `stored_sha256` and `resimulated_sha256` (over the tick-frame payloads), `first_difference` (null, `{ "frame", "tick" }` for the first tick frame that differs, or `{ "change": order }` for the first log entry that differs), `changes_applied`, `inputs_bytes`, and `watchdog` (the recorded mark). In comparison mode, `engines` holds both identities.
+
+Exit codes: 0 when the frames and the change log are identical; 1 when the file is refused or cannot be read, or the engine differs in strict mode; 2 when the frames or the change log differ.
 
 ## replay
 

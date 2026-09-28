@@ -43,6 +43,8 @@ pub enum Command {
     Record(RecordOpts),
     /// Replay a recorded fixture over the same socket protocol.
     Replay(ReplayOpts),
+    /// Play a recorded match again from its replay file alone.
+    Resimulate(ResimulateOpts),
     /// Continue a match from its latest snapshot to full time.
     Resume(ResumeOpts),
     /// Play many AI-managed matches and check the realism bands.
@@ -431,6 +433,30 @@ pub struct RecordOpts {
                      content/scripts/README.md."
     )]
     pub script_pack: Option<PathBuf>,
+    /// JSON file of manager changes to queue.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "JSON file of manager changes to queue, each before the\n\
+                     step that starts on its tick. Each team the file names\n\
+                     is managed by hand. See docs/reference/cli.md."
+    )]
+    pub changes: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct ResimulateOpts {
+    /// Replay file written by the record command.
+    #[arg(long, value_name = "FILE")]
+    pub fixture: PathBuf,
+    /// Run on another engine and report both.
+    #[arg(
+        long,
+        long_help = "Run even when this binary did not record the file, and\n\
+                     report both engine identities and both stream schemes.\n\
+                     The file is never written."
+    )]
+    pub compare: bool,
 }
 
 #[derive(Debug, Args)]

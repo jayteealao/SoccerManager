@@ -8,10 +8,12 @@
 //! the home team, and it names the change on its verdict event by the identifier the page
 //! was given, because the two queues number their changes independently.
 
+use engine::gate::PlannedChange;
 use engine::observe::{MatchFigures, round_to};
 use engine::record::TickSink;
 use engine::{
-    Card, ChangeId, Commentary, Commentator, EngineEvent, EngineEventKind, EventDetail, Simulation,
+    Card, Change, ChangeId, Commentary, Commentator, EngineEvent, EngineEventKind, EventDetail,
+    Simulation,
 };
 use protocol::{
     CardKind, ChangeKind, ChangeOutcome, ChangeState, Condition, EventType, MatchEvent,
@@ -46,6 +48,44 @@ pub struct Drive<'a> {
     /// Every change the page queued in this run, kept across connections so a verdict after
     /// a reconnect still carries the page's identifier. `None` when nothing reconnects.
     pub page_changes: Option<&'a RefCell<Vec<PageChange>>>,
+    /// Changes queued at fixed ticks, before the step that starts on each one's tick: a
+    /// recording's change file, or a replay file's manager changes.
+    pub planned: &'a [Planned],
+}
+
+/// A change queued at a fixed tick.
+#[derive(Debug, Clone)]
+pub enum Planned {
+    /// Named by lineup slot and bench place, and resolved to players when it is queued, as
+    /// the replay gate's change fixture queues its changes.
+    Slot(PlannedChange),
+    /// Named by squad index, as a replay file's change log holds it.
+    Exact {
+        tick: u32,
+        team: usize,
+        change: Change,
+    },
+}
+
+impl Planned {
+    fn tick(&self) -> u32 {
+        match self {
+            Planned::Slot(p) => p.tick,
+            Planned::Exact { tick, .. } => *tick,
+        }
+    }
+
+    fn queue(&self, sim: &mut Simulation) {
+        match self {
+            Planned::Slot(p) => {
+                let change = p.to_change(sim);
+                sim.queue_change(p.team, change);
+            }
+            Planned::Exact { team, change, .. } => {
+                sim.queue_change(*team, change.clone());
+            }
+        }
+    }
 }
 
 /// A change the page queued, as a run carries it across a lost connection.
@@ -114,6 +154,10 @@ pub fn drive<S: TickSink>(
                 written,
                 full_time: false,
             });
+        }
+        let now = sim.tick();
+        for planned in opts.planned.iter().filter(|p| p.tick() == now) {
+            planned.queue(sim);
         }
         // A change queued while the match was paused is queued here, on the first running
         // tick, so it waits for the next stoppage and never applies on the resume tick.
@@ -569,6 +613,7 @@ mod tests {
                 commentary: &loaded.commentary,
                 inbox: None,
                 page_changes: None,
+                planned: &[],
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -607,6 +652,7 @@ mod tests {
                 commentary: &loaded.commentary,
                 inbox: None,
                 page_changes: None,
+                planned: &[],
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -860,6 +906,7 @@ mod tests {
                 commentary: &loaded.commentary,
                 inbox: None,
                 page_changes: None,
+                planned: &[],
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -945,6 +992,7 @@ mod tests {
                 commentary: &loaded.commentary,
                 inbox: Some(&inbox),
                 page_changes: None,
+                planned: &[],
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -1013,6 +1061,7 @@ mod tests {
                         commentary: &loaded.commentary,
                         inbox: None,
                         page_changes: None,
+                        planned: &[],
                     },
                     &mut |_: ServerMessage| Ok(()),
                 )
@@ -1069,6 +1118,7 @@ mod tests {
                         commentary: &loaded.commentary,
                         inbox: Some(&inbox),
                         page_changes: None,
+                        planned: &[],
                     },
                     &mut |m: ServerMessage| {
                         messages.push(m);

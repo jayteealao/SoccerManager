@@ -223,6 +223,7 @@ fn measure_stream(
             commentary: &loaded.commentary,
             inbox: None,
             page_changes: None,
+            planned: &[],
         },
         &mut |message: ServerMessage| session.send(&message),
     )?;
