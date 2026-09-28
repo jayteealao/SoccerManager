@@ -202,6 +202,7 @@ fn no_help_line_exceeds_eighty_columns() {
         Some("calibrate"),
         Some("gate"),
         Some("guard"),
+        Some("bisect"),
     ];
     let mut checks = 0;
     for surface in surfaces {
@@ -217,7 +218,7 @@ fn no_help_line_exceeds_eighty_columns() {
             checks += 1;
         }
     }
-    assert_eq!(checks, 24);
+    assert_eq!(checks, 26);
 }
 
 #[test]

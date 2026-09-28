@@ -36,6 +36,7 @@ When `--content-dir` is absent, the engine uses `SM_CONTENT_DIR`. When `SM_CONTE
 | 0 | The command completed. |
 | 1 | An error stopped the command. Standard error names the cause: a bad flag, a refused content file, a refused snapshot, or a file that cannot be written. |
 | 2 | The command completed but a check failed, or the match did not reach full time. The command sections below name the check. |
+| 3 | `bisect` only: the comparison is incomplete. A build could not be made or run to the end, so no result was reached. |
 
 ## simulate
 
@@ -194,6 +195,40 @@ Output: one JSON line with `fixture`, `mode` (`strict` or `compare`), `verdict` 
 The three state outputs are off by default, and they do not change the verdict or the exit code. `--state-fields` writes `{ "tick", "scheme", "fields", "engine" }`: `fields` lists each named part of the state in byte order, each with `name` (for example `ball.vel`, `players[3].pos`, `referee.clock`, or `streams`), `kind` (`floats`: a run of 64-bit floats; `streams`: the stream state; `bytes`: anything else), and `hex` (its canonical bytes). The parts join into the bytes whose SHA-256 is the tick's line in the state digest file. When the match ends before the tick, the command writes no fields file and exits 1.
 
 Exit codes: 0 when the frames and the change log are identical; 1 when the file is refused or cannot be read, or the engine differs in strict mode; 2 when the frames or the change log differ.
+
+## bisect
+
+Find the first tick where two engine versions differ on one replay file. Each side is a commit, built on demand, or a ready `engine-cli` executable. Both builds re-simulate the file, and bisect compares the digest of the full match state after every tick. At the first tick whose digests differ, both builds re-simulate the file again up to that tick and write the named parts of its state and its debug trace.
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `--fixture` | file | required | The version-4 replay file that `record` wrote. |
+| `--a` | commit | one of `--a` and `--a-binary` | Build A: a commit (any name git accepts, for example `HEAD~1`), built into the bisect build cache. |
+| `--a-binary` | file | one of `--a` and `--a-binary` | Build A: a ready `engine-cli` executable. |
+| `--b` | commit | one of `--b` and `--b-binary` | Build B: a commit, built into the bisect build cache. |
+| `--b-binary` | file | one of `--b` and `--b-binary` | Build B: a ready `engine-cli` executable. |
+| `--repo` | folder | `.` | The git repository the commits are built from. |
+| `--cache` | folder | `<repo>/target/bisect` | The bisect build cache. |
+| `--profile` | name | `release` | The cargo profile the commits are built with. |
+| `--features` | list | none | The cargo features the commits are built with, comma-separated; none means the defaults. |
+| `--timeout` | seconds | 1800 | The longest one run of a build may take. A run that takes longer is stopped. |
+| `--json` | none | off | Print the report as one JSON object. |
+
+The replay file is read first. A version-3 file is refused before any build or run: `<file> holds no inputs: it is a version-3 replay file, which plays from its frames only; bisect needs the inputs to re-simulate it`. The global `--content-dir` is refused, because every input comes from the file.
+
+**The bisect build cache.** A commit is built in a detached git worktree under `<cache>/checkouts/`, with `cargo build --locked -p engine-cli`, into one cargo target folder, `<cache>/target/`, that every build shares. The worktree is removed after the build. The executable is kept in `<cache>/entries/<id>/` with `entry.json`, which holds the key and the executable's SHA-256. The key is the full commit hash, the toolchain (the `release` and `commit-hash` that `rustc -vV` reports for the channel the commit's `rust-toolchain.toml` pins), the target (the compiler's host), the profile, and the sorted features. `<id>` is the SHA-256 of the key. A cached executable is re-used only when its `entry.json` names the same key and the executable still has the recorded SHA-256; otherwise the commit is built again. The main checkout is never switched. To clear the cache, delete the folder.
+
+**Each run.** Bisect first runs `<build> resimulate --help`, which must name `--state-digests`, `--state-fields`, `--at-tick`, and `--debug-trace`. It then runs `resimulate --fixture <file> --compare --state-digests <file>` on each build (see [State digest file](#state-digest-file)), and at the first differing tick, `resimulate --fixture <file> --compare --state-fields <file> --at-tick <tick> --debug-trace <file>`. A run counts only when it exits with 0 or 2, prints its verdict line last, and writes whole files: a digest file with its `end` line, ticks from 1 with no gap, and a tick count equal to the `end` line's. The run files are written to a temporary folder, which is removed at the end.
+
+The three verdicts:
+
+- **No difference** (exit 0): the state is the same after every tick and after full time.
+- **Differs** (exit 2): the report names the first tick whose state differs. When the states agree on every tick both builds played and one build played longer, the first tick past the shorter match differs, and the report names `match length`.
+- **Incomplete** (exit 3): a build could not be made or run to the end. Each side's reason is printed on its own line, for example `the build of <commit> failed:` with the last 40 lines of cargo's output, `<path> does not exist`, `lacks the resimulate command`, `lacks the state-digest options (added with bisect)`, `crashed or failed: the run exited with code 101`, `timed out after 1800 s and was stopped`, `ends early: the state digest file stops after tick 1499 with no end line`, or `a gap in the state digests`. When the two builds hash different state inventories, the digests cannot be compared, and the result is incomplete. An incomplete result is never "no difference". Only builds that have the four re-simulate options can be compared.
+
+**The report** (text, or one JSON object with `--json`): the replay file; each build with the name it was given, its commit and dirty mark, its executable SHA-256, and `built`, `reused`, or `ready binary`; both stream schemes, with the note `the stream scheme differs (1 and 2): stream positions differ from the first draw` when they differ; the first differing tick; each differing part of the state with both values; and each build's debug trace records for that tick. Values are shown by kind: a `floats` part as its numbers, the `streams` part as the stream ids whose word positions differ or that one build lacks, and any other part as hex. The JSON object has `verdict` (`no difference`, `differs`, or `incomplete`), `fixture`, `a` and `b` (`given`, `source`, `scheme`, and `engine`, or `given` and `reason` when incomplete), `tick`, `fields` (`name`, `kind`, `a`, `b`), `trace` (`a`, `b`), and `scheme_note` when the schemes differ.
+
+Exit codes: 0 no difference; 1 the file or a flag is refused; 2 the builds differ; 3 incomplete.
 
 ## replay
 

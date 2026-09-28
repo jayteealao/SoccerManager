@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{ArgGroup, Args, Parser, Subcommand};
 use engine::FlagSetting;
 
 /// Headless command line for the football match engine.
@@ -45,6 +45,8 @@ pub enum Command {
     Replay(ReplayOpts),
     /// Play a recorded match again from its replay file alone.
     Resimulate(ResimulateOpts),
+    /// Find the first tick where two engine versions differ on a replay.
+    Bisect(BisectOpts),
     /// Continue a match from its latest snapshot to full time.
     Resume(ResumeOpts),
     /// Play many AI-managed matches and check the realism bands.
@@ -493,6 +495,54 @@ pub struct ResimulateOpts {
                      to this file as JSON Lines, as simulate --debug-trace does."
     )]
     pub debug_trace: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+#[command(group(ArgGroup::new("side_a").required(true).args(["a", "a_binary"])))]
+#[command(group(ArgGroup::new("side_b").required(true).args(["b", "b_binary"])))]
+#[command(
+    override_usage = "engine-cli bisect [OPTIONS] --fixture <FILE>\n       \
+                            <--a <REV>|--a-binary <PATH>> <--b <REV>|--b-binary <PATH>>"
+)]
+pub struct BisectOpts {
+    /// Version-4 replay file to re-simulate on both builds.
+    #[arg(long, value_name = "FILE")]
+    pub fixture: PathBuf,
+    /// Build A: a commit, built into the bisect build cache.
+    #[arg(long, value_name = "REV")]
+    pub a: Option<String>,
+    /// Build A: a ready engine-cli executable.
+    #[arg(long, value_name = "PATH")]
+    pub a_binary: Option<PathBuf>,
+    /// Build B: a commit, built into the bisect build cache.
+    #[arg(long, value_name = "REV")]
+    pub b: Option<String>,
+    /// Build B: a ready engine-cli executable.
+    #[arg(long, value_name = "PATH")]
+    pub b_binary: Option<PathBuf>,
+    /// Git repository to build commits from.
+    #[arg(long, value_name = "DIR", default_value = ".")]
+    pub repo: PathBuf,
+    /// Build cache folder; default <repo>/target/bisect.
+    #[arg(long, value_name = "DIR")]
+    pub cache: Option<PathBuf>,
+    /// Cargo profile for the builds.
+    #[arg(long, value_name = "NAME", default_value = "release")]
+    pub profile: String,
+    /// Cargo features to build commits with.
+    #[arg(
+        long,
+        value_name = "LIST",
+        default_value = "",
+        hide_default_value = true
+    )]
+    pub features: String,
+    /// Seconds before a run is stopped.
+    #[arg(long, value_name = "SECONDS", default_value_t = 1800)]
+    pub timeout: u64,
+    /// Print the report as one JSON object.
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Args)]

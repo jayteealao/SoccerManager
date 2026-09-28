@@ -2,6 +2,7 @@
 //! matches, check it against the replay gate, or generate teams.
 
 mod bench;
+mod bisect;
 mod calibrate;
 mod cli;
 mod content;
@@ -56,6 +57,7 @@ fn main() {
         cli::Command::Record(opts) => record::run(content_dir, &opts),
         cli::Command::Replay(opts) => replay::run(&opts),
         cli::Command::Resimulate(opts) => resimulate::run(content_dir, &opts),
+        cli::Command::Bisect(opts) => bisect::run(content_dir, &opts),
         cli::Command::Resume(opts) => resume::run(content_dir, &opts),
         cli::Command::Calibrate(opts) => calibrate::run(content_dir, &opts),
         cli::Command::Gate(opts) => gate::run(content_dir, &opts),
