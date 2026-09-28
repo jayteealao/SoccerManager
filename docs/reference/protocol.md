@@ -546,9 +546,45 @@ they carry the recording's match stamp and owner, and the verdict rows of reject
 which the log does not keep. The script runs with no wall-clock limit, so the recorded watchdog
 mark is reported, not made again.
 
-A reader refuses a file with the wrong magic, a format other than 3 or 4, frames of another
-protocol version, a count mismatch, a truncated entry, an input or record entry in a format-3
-file, an input entry after the frames, an entry after the record, a format-4 file with no
-record or with two, input entries whose names, sizes, or SHA-256 values differ from the
-record's list, an unknown entry kind, or a hash that does not match the bytes. Each refusal
-names its check.
+A reader refuses a file with the wrong magic, a format newer than the reader knows or older
+than 3, frames of another protocol version, a count mismatch, a truncated entry, an input or
+record entry in a format-3 file, an input entry after the frames, an entry after the record, a
+format-4 file with no record or with two, a record without one of its fields, input entries
+whose names, sizes, or SHA-256 values differ from the record's list, an unknown entry kind, or a
+hash that does not match the bytes. Each refusal names its check. A missing record field is
+never filled with a default: a field that may be null, such as `watchdog.invalid`, must still
+be present.
+
+### Migration
+
+A replay file of format 4 or later keeps loading after the format changes. Each reader, the
+engine's (`crates/stream/src/migrate.rs`) and the viewer's (`web/replay-file.mjs`), works in
+three parts:
+
+1. The envelope reads the header, the entries, and the trailer hash. It does not read the entry
+   kinds, so every format that keeps the header, the entry layout, and the trailer shares it.
+2. The chain lifts the file one format at a time, from its own format to the newest format.
+   Each step takes the file of one format and returns the file of the next format.
+3. The decode reads the newest format.
+
+Each format change adds one step to each reader and one line to
+`web/tests/data/replay-steps.json`. The engine's tests and the viewer's tests each compare their
+own steps with that list, so the two chains always hold the same formats in the same order. A
+format change that also changes the header, the entry layout, or the trailer adds a branch to
+the envelope. A change to the record adds its fields to the record types and to the viewer's
+field list.
+
+Version-3 files are never lifted: they play from their frames only. A lifted file keeps the
+hash of the bytes that were read. When the engine lifts a file, it logs one `replay.migrated`
+line with the file's format (`from`), the format it was lifted to (`to`), and the number of
+steps (`steps`). The viewer reports the same three values in the `migrated` field of what it
+read.
+
+The version-4 file `web/tests/data/one-minute-v4.smfx` is committed, and a test checks its
+SHA-256. It must never change. The migration tests lift it through two test-only later formats
+and check that every frame, input, and record field survives. A new format adds its own
+committed file beside it.
+
+A reader also refuses a chain with a missing step, a step that lifts more than one format, a
+step whose output is not the format it names, and a file whose format is newer than the last
+step reaches.
