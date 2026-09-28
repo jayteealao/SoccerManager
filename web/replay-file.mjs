@@ -4,15 +4,26 @@
 // The page never re-encodes a position. Every frame is stored exactly as the socket handed
 // it over, so a saved file is the recorded stream byte for byte, and the engine's own
 // `replay` command reads it. Layout, little-endian:
-// - Header, 32 bytes: magic `SMFX`, protocol version (u16), two zero bytes, the match stamp
-//   in milliseconds (u64), the frame count (u32), the tick count (u32), and the seed (u64).
-// - One entry per frame: kind (u8, 0 binary and 1 text), tick (u32), length (u32), then the
-//   payload. A text frame carries the tick of the tick frame before it.
+// - Header, 32 bytes: magic `SMFX`, the format version (u16), the frames' protocol version
+//   (u16; zero in format 3, whose format field is the protocol version), the match stamp in
+//   milliseconds (u64), the frame count (u32), the tick count (u32), and the seed (u64).
+// - One entry each: kind (u8), tick (u32), length (u32), then the payload. Kinds 0 (binary
+//   tick frame) and 1 (text frame) are the frames; a text frame carries the tick of the tick
+//   frame before it. Format 4 adds kind 2, one input file of the match (name length u16, the
+//   UTF-8 name, the bytes), written before the frames, and kind 3, the record (one JSON
+//   document), written last.
 // - Trailer, 16 bytes: magic `SMFE`, the frame count (u32), the first six bytes of the
-//   SHA-256 over every payload in order, and two zero bytes.
+//   SHA-256 over every payload in file order, and two zero bytes.
+//
+// The page saves format 3: it receives frames only. It reads both formats, and a format-4
+// file read and written back is the same file byte for byte.
 
-/// The protocol version this page reads.
+/// The protocol version of the frames this page reads.
 export const PROTOCOL_VERSION = 3;
+/// The file format that holds frames only; its format field is the protocol version.
+export const LEGACY_VERSION = 3;
+/// The file format that also holds the match's inputs and its record.
+export const FORMAT_VERSION = 4;
 
 const MAGIC = [0x53, 0x4d, 0x46, 0x58]; // SMFX
 const TRAILER_MAGIC = [0x53, 0x4d, 0x46, 0x45]; // SMFE
@@ -21,6 +32,8 @@ export const TRAILER_BYTES = 16;
 const ENTRY_BYTES = 9;
 const ENTRY_BINARY = 0;
 const ENTRY_TEXT = 1;
+const ENTRY_INPUT = 2;
+const ENTRY_RECORD = 3;
 const KIND_DELTA = 0x02;
 
 const encoder = new TextEncoder();
@@ -141,32 +154,74 @@ async function sha256(bytes) {
 
 const hex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 
+/// The payload of an input entry: the name's length (u16), the UTF-8 name, the bytes.
+function inputPayload({ name, bytes }) {
+  const encoded = encoder.encode(name);
+  const payload = new Uint8Array(2 + encoded.length + bytes.length);
+  new DataView(payload.buffer).setUint16(0, encoded.length, true);
+  payload.set(encoded, 2);
+  payload.set(bytes, 2 + encoded.length);
+  return payload;
+}
+
 /// The whole file for `store`. `matchId` names the seed and the stamp for the header.
-export async function writeReplay(store, { matchId, version = PROTOCOL_VERSION }) {
+/// Without `record` the file is version 3, frames only, as the page saves a match it
+/// watched. With `record` (as `readReplay` returns it) the file is version 4, in the engine's
+/// entry order: the inputs, the frames, then the record, kept as its original bytes, so a
+/// file the engine wrote is written back byte for byte.
+export async function writeReplay(store, { matchId, version = PROTOCOL_VERSION, record = null }) {
   const { seed, millis } = matchIdentity(matchId);
-  const total = HEADER_BYTES + store.count * ENTRY_BYTES + store.used + TRAILER_BYTES;
+  const inputs = record ? record.inputs.map(inputPayload) : [];
+  const tail = record ? [record.raw] : [];
+  const extra = [...inputs, ...tail];
+  const extraBytes = extra.reduce((sum, p) => sum + ENTRY_BYTES + p.length, 0);
+  const total = HEADER_BYTES + store.count * ENTRY_BYTES + store.used + extraBytes + TRAILER_BYTES;
   const out = new Uint8Array(total);
   const view = new DataView(out.buffer);
   out.set(MAGIC, 0);
-  view.setUint16(4, version, true);
+  if (record) {
+    view.setUint16(4, FORMAT_VERSION, true);
+    view.setUint16(6, version, true);
+  } else {
+    view.setUint16(4, version, true);
+  }
   view.setBigUint64(8, millis, true);
   view.setUint32(16, store.count, true);
   view.setUint32(20, store.tickFrames, true);
   view.setBigUint64(24, seed, true);
   let at = HEADER_BYTES;
-  for (let i = 0; i < store.count; i += 1) {
-    const { text, tick, payload } = store.frame(i);
-    out[at] = text ? ENTRY_TEXT : ENTRY_BINARY;
+  const entry = (kind, tick, payload) => {
+    out[at] = kind;
     view.setUint32(at + 1, tick, true);
     view.setUint32(at + 5, payload.length, true);
     out.set(payload, at + ENTRY_BYTES);
     at += ENTRY_BYTES + payload.length;
+  };
+  for (const payload of inputs) {
+    entry(ENTRY_INPUT, 0, payload);
   }
-  const digest = await sha256(store.bytes.slice(0, store.used));
+  for (let i = 0; i < store.count; i += 1) {
+    const { text, tick, payload } = store.frame(i);
+    entry(text ? ENTRY_TEXT : ENTRY_BINARY, tick, payload);
+  }
+  for (const payload of tail) {
+    entry(ENTRY_RECORD, 0, payload);
+  }
+  const digest = await sha256(concat([...inputs, store.bytes.subarray(0, store.used), ...tail]));
   out.set(TRAILER_MAGIC, at);
   view.setUint32(at + 4, store.count, true);
   out.set(digest.subarray(0, 6), at + 8);
   return { bytes: out, hash: hex(digest.subarray(0, 6)) };
+}
+
+function concat(parts) {
+  const out = new Uint8Array(parts.reduce((sum, p) => sum + p.length, 0));
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.length;
+  }
+  return out;
 }
 
 /// A refusal that names the check that failed.
@@ -181,7 +236,10 @@ export class ReplayRefused extends Error {
 const same = (bytes, at, magic) => magic.every((b, i) => bytes[at + i] === b);
 
 /// Reads a replay file into a new store. Fails closed, naming the check: the magic, the
-/// version, the trailer, the counts, a truncated entry, the hash, and a file with no hello.
+/// format and protocol versions, the trailer, the counts, a truncated entry, an entry out of
+/// place, the hash, the inputs against the record's list, and a file with no hello. A
+/// version-4 file's inputs and record stay out of the store; `record` returns them
+/// (`{ inputs: [{ role, name, bytes }], meta, raw }`), and is null for a version-3 file.
 export async function readReplay(input) {
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
   if (bytes.length < HEADER_BYTES + TRAILER_BYTES) {
@@ -192,8 +250,16 @@ export async function readReplay(input) {
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const version = view.getUint16(4, true);
-  if (version !== PROTOCOL_VERSION) {
-    throw new ReplayRefused(`protocol version ${version}; this page reads ${PROTOCOL_VERSION}`);
+  if (version !== LEGACY_VERSION && version !== FORMAT_VERSION) {
+    throw new ReplayRefused(
+      `format ${version}; this page reads formats ${LEGACY_VERSION} and ${FORMAT_VERSION} (read as a version-3 file: protocol version ${version}; this page reads ${PROTOCOL_VERSION})`
+    );
+  }
+  const protocol = version === FORMAT_VERSION ? view.getUint16(6, true) : version;
+  if (protocol !== PROTOCOL_VERSION) {
+    throw new ReplayRefused(
+      `frames protocol version ${protocol}; this page reads ${PROTOCOL_VERSION}`
+    );
   }
   const frames = view.getUint32(16, true);
   const ticks = view.getUint32(20, true);
@@ -205,6 +271,8 @@ export async function readReplay(input) {
     throw new ReplayRefused('frame count mismatch between the header and the trailer');
   }
   const store = new FrameStore(Math.max(1024, bytes.length), Math.max(16, frames));
+  const inputs = [];
+  let raw = null;
   let at = HEADER_BYTES;
   while (at < trailerAt) {
     if (at + ENTRY_BYTES > trailerAt) {
@@ -219,11 +287,39 @@ export async function readReplay(input) {
     }
     const payload = bytes.subarray(at, at + length);
     at += length;
+    if (raw) {
+      throw new ReplayRefused(
+        kind === ENTRY_RECORD
+          ? 'the file holds two record entries'
+          : `an entry of kind ${kind} follows the record entry`
+      );
+    }
+    if (version === LEGACY_VERSION && (kind === ENTRY_INPUT || kind === ENTRY_RECORD)) {
+      throw new ReplayRefused(`entry kind ${kind} in a version-3 file, which holds frames only`);
+    }
     if (kind === ENTRY_BINARY) {
       store.lastTick = tick - 1;
       store.addBinary(payload);
     } else if (kind === ENTRY_TEXT) {
       store.push(ENTRY_TEXT, tick, payload);
+    } else if (kind === ENTRY_INPUT) {
+      if (store.count > 0) {
+        throw new ReplayRefused('an input entry follows the frames');
+      }
+      if (payload.length < 2) {
+        throw new ReplayRefused('an input entry is truncated');
+      }
+      const nameLength = new DataView(payload.buffer, payload.byteOffset, 2).getUint16(0, true);
+      if (payload.length < 2 + nameLength) {
+        throw new ReplayRefused("an input entry's name is truncated");
+      }
+      inputs.push({
+        payload,
+        name: decoder.decode(payload.subarray(2, 2 + nameLength)),
+        bytes: payload.slice(2 + nameLength),
+      });
+    } else if (kind === ENTRY_RECORD) {
+      raw = payload.slice();
     } else {
       throw new ReplayRefused(`unknown entry kind ${kind} at tick ${tick}`);
     }
@@ -233,9 +329,18 @@ export async function readReplay(input) {
       `frame count mismatch: the header says ${frames} frames and ${ticks} ticks, the file holds ${store.count} and ${store.tickFrames}`
     );
   }
-  const digest = await sha256(store.bytes.slice(0, store.used));
+  const digest = await sha256(
+    concat([...inputs.map((i) => i.payload), store.bytes.subarray(0, store.used), ...(raw ? [raw] : [])])
+  );
   if (!digest.subarray(0, 6).every((b, i) => b === bytes[trailerAt + 8 + i])) {
     throw new ReplayRefused('hash mismatch: the frame bytes do not match the trailer');
+  }
+  let record = null;
+  if (version === FORMAT_VERSION) {
+    if (!raw) {
+      throw new ReplayRefused('a version-4 file must end with its record entry; this one has none');
+    }
+    record = await matchedRecord(raw, inputs);
   }
   const first = store.count > 0 ? store.frame(0) : null;
   let hello = null;
@@ -251,7 +356,37 @@ export async function readReplay(input) {
     throw new ReplayRefused('the file does not open with a hello');
   }
   store.helloStored = true;
-  return { store, hello, version, frames, ticks, hash: hex(digest.subarray(0, 6)) };
+  return { store, hello, version, frames, ticks, record, hash: hex(digest.subarray(0, 6)) };
+}
+
+/// The record of a version-4 file, when every input entry is the one its list names at its
+/// place, with the same size and SHA-256.
+async function matchedRecord(raw, inputs) {
+  let meta;
+  try {
+    meta = JSON.parse(decoder.decode(raw));
+  } catch (error) {
+    throw new ReplayRefused(`the record entry is not a record: ${error.message}`);
+  }
+  const listed = Array.isArray(meta?.inputs) ? meta.inputs : [];
+  if (listed.length !== inputs.length) {
+    throw new ReplayRefused(
+      `the file holds ${inputs.length} input entries and the record lists ${listed.length}`
+    );
+  }
+  const out = [];
+  for (let i = 0; i < inputs.length; i += 1) {
+    const { name, bytes } = inputs[i];
+    const digest = hex(await sha256(bytes));
+    const entry = listed[i];
+    if (entry.name !== name || entry.sha256 !== digest || entry.bytes !== bytes.length) {
+      throw new ReplayRefused(
+        `input ${name} (SHA-256 ${digest}) does not match the record's ${entry.role} ${entry.name} (SHA-256 ${entry.sha256})`
+      );
+    }
+    out.push({ role: entry.role, name, bytes });
+  }
+  return { inputs: out, meta, raw };
 }
 
 /// The text of a stored text frame.
