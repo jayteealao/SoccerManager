@@ -66,6 +66,7 @@ fn every_document_in_the_set_exists() {
         "docs/how-to/modding.md",
         "docs/how-to/calibration.md",
         "docs/how-to/replay-gate.md",
+        "docs/how-to/find-a-divergence.md",
         "docs/reference/cli.md",
         "docs/reference/data-files.md",
         "docs/reference/protocol.md",
@@ -101,6 +102,7 @@ fn every_command_in_the_guides_is_a_real_command() {
         "docs/how-to/modding.md",
         "docs/how-to/calibration.md",
         "docs/how-to/replay-gate.md",
+        "docs/how-to/find-a-divergence.md",
         "README.md",
     ] {
         let text = read(path);
