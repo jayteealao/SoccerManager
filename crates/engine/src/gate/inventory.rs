@@ -5,6 +5,9 @@
 //! The encoder destructures `Simulation`, `Player`, and `Referee` with no `..`, so a new
 //! field is a compile error until it is given a disposition here: hashed in a group, or
 //! excluded with the reason beside it.
+//!
+//! A mark names each part of the bytes for the per-tick state writer (`w.mark`); a mark
+//! writes no byte, so the hashed bytes do not depend on it.
 
 use crate::canon::{self, Writer};
 use crate::player::Player;
@@ -12,7 +15,7 @@ use crate::rules::{Phase, Referee};
 use crate::sim::{EngineEvent, EventDetail, Simulation};
 use crate::tactics::change::{Change, RejectReason};
 
-use super::{Fixture, GATE_SCHEMA, INVENTORY_VERSION};
+use super::{FieldKind, Fixture, GATE_SCHEMA, INVENTORY_VERSION};
 
 /// The bytes that open a fixture's running hash: the versions, the fixture, and the match
 /// identity.
@@ -82,12 +85,17 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         scratch: _,
     } = sim;
 
+    use FieldKind::{Bytes, Floats};
     // G1 tick.
+    w.mark(Bytes, || "tick".into());
     w.u32(*tick);
+    w.mark(Bytes, || "restart".into());
     w.bool(*restart);
 
     // G2 ball.
+    w.mark(Floats, || "ball.pos".into());
     w.v3_at(&|| "ball.pos".into(), ball.pos);
+    w.mark(Floats, || "ball.vel".into());
     w.v3_at(&|| "ball.vel".into(), ball.vel);
 
     // G3 players, roster order.
@@ -96,20 +104,33 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     }
 
     // G4 possession and in-play.
+    w.mark(Bytes, || "carrier".into());
     w.index(*carrier);
+    w.mark(Bytes, || "control_since".into());
     w.u32(*control_since);
+    w.mark(Bytes, || "last_touch".into());
     w.index(*last_touch);
+    w.mark(Bytes, || "last_kicker".into());
     w.index(*last_kicker);
+    w.mark(Bytes, || "keeper_beaten".into());
     w.bool(*keeper_beaten);
+    w.mark(Bytes, || "pass_in_flight".into());
     w.index(*pass_in_flight);
+    w.mark(Bytes, || "shot_in_flight".into());
     w.index(*shot_in_flight);
+    w.mark(Bytes, || "shot_on_target".into());
     w.bool(*shot_on_target);
+    w.mark(Floats, || "shot_quality".into());
     w.f64_at(|| "shot_quality".into(), *shot_quality);
+    w.mark(Bytes, || "blockers_tried".into());
     w.u32(*blockers_tried);
+    w.mark(Bytes, || "clearers_tried".into());
     w.u32(*clearers_tried);
+    w.mark(Bytes, || "restart_taker".into());
     w.index(*restart_taker);
 
     // G5 score and discipline.
+    w.mark(Bytes, || "summary".into());
     w.summary(summary);
     let Referee {
         phase,
@@ -121,10 +142,12 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         extra_kick_off,
         shootout,
     } = referee;
+    w.mark(Bytes, || "referee.tally".into());
     for count in tally.kinds {
         w.u32(count);
     }
     w.u32(tally.cards);
+    w.mark(Bytes, || "referee.pending".into());
     w.count(pending.len());
     for card in pending {
         w.index(Some(card.player));
@@ -132,6 +155,7 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     }
 
     // G6 rules, restart, clock.
+    w.mark(Bytes, || "referee.phase".into());
     match phase {
         Phase::Live => w.u8(0),
         Phase::DeadBall(d) => {
@@ -146,7 +170,9 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         }
         Phase::FullTime => w.u8(2),
     }
+    w.mark(Bytes, || "referee.offside".into());
     w.u32(*offside);
+    w.mark(Bytes, || "referee.clock".into());
     w.u32(clock.halves);
     w.u32(clock.half);
     w.u32(clock.half_start);
@@ -157,8 +183,11 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     for added in clock.added_ticks {
         w.opt_u32(added);
     }
+    w.mark(Bytes, || "referee.abandoned".into());
     w.bool(*abandoned);
+    w.mark(Bytes, || "referee.extra_kick_off".into());
     w.index(*extra_kick_off);
+    w.mark(Bytes, || "referee.shootout".into());
     match shootout {
         None => w.u8(0),
         Some(s) => {
@@ -183,6 +212,7 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
             w.opt_u32(s.live_since);
         }
     }
+    w.mark(Bytes, || "stoppage".into());
     match stoppage {
         None => w.u8(0),
         Some(s) => {
@@ -196,8 +226,10 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
 
     // G7 teams and managers.
     for (t, team) in teams.iter().enumerate() {
+        w.mark(Bytes, || format!("teams[{t}]"));
         w.team(&|| format!("teams[{t}]"), team);
     }
+    w.mark(Bytes, || "timeline".into());
     w.count(timeline.len());
     for (from, shapes) in timeline {
         w.u32(*from);
@@ -205,14 +237,17 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
             w.team(&|| format!("timeline@{from}.teams[{t}]"), team);
         }
     }
+    w.mark(Bytes, || "managers".into());
     for m in managers {
         w.u8(canon::manager_code(*m));
     }
+    w.mark(Bytes, || "ai".into());
     for state in ai {
         w.opt_pair(state.trailing_acted);
         w.opt_pair(state.leading_acted);
         w.bool(state.due);
     }
+    w.mark(Bytes, || "ledgers".into());
     for ledger in ledgers {
         w.u8(ledger.used);
         w.u8(ledger.windows);
@@ -220,6 +255,7 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     }
 
     // G8 pending changes.
+    w.mark(Bytes, || "queue.pending".into());
     w.count(queue.pending.len());
     for q in &queue.pending {
         w.index(Some(q.team));
@@ -227,7 +263,9 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         w.u32(q.id.n);
         change(w, &q.change);
     }
+    w.mark(Bytes, || "queue.next".into());
     w.u32(queue.next);
+    w.mark(Bytes, || "queue.admitted".into());
     for at in queue.admitted {
         w.opt_u32(at);
     }
@@ -236,17 +274,22 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     // pack identity is in the header; the text of `details` is a log signal and is excluded.
     // The watchdog mark (`slow_calls`) depends on the machine's speed and is excluded, so a
     // slow machine hashes the same match.
+    w.mark(Bytes, || "plugins.hooks".into());
     for present in plugins.hooks_present() {
         w.bool(present);
     }
+    w.mark(Bytes, || "plugins.failures".into());
     for failures in plugins.failures() {
         w.u32(failures);
     }
+    w.mark(Bytes, || "plugins.stats".into());
     w.u32(plugins.stats.calls);
     w.u32(plugins.stats.aborts);
     w.u32(plugins.stats.denials);
     w.u32(plugins.stats.disabled);
+    w.mark(Bytes, || "plugins.refresh_ticks".into());
     w.u32(plugins.refresh_ticks);
+    w.mark(Bytes, || "script_cache".into());
     match script_cache {
         None => w.u8(0),
         Some(c) => {
@@ -268,6 +311,7 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     // G10 streams.
     // The registry's draw counter and its scripted-draw queues are not match state: the
     // stream positions already hold every draw taken.
+    w.mark(FieldKind::Streams, || "streams".into());
     w.raw(&streams.stream_state().to_bytes());
 
     // G11 match events of this tick. A `script` event is excluded: its note points at log
@@ -276,6 +320,7 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         .iter()
         .filter(|e| !matches!(e.detail, Some(EventDetail::Script(_))))
         .collect();
+    w.mark(Bytes, || "events".into());
     w.count(kept.len());
     for e in kept {
         event(w, e);
@@ -303,17 +348,30 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
         yellow,
         foul_ready,
     } = p;
+    use FieldKind::{Bytes, Floats};
+    w.mark(Floats, || format!("players[{i}].pos"));
     w.v2_at(&|| format!("players[{i}].pos"), *pos);
+    w.mark(Floats, || format!("players[{i}].vel"));
     w.v2_at(&|| format!("players[{i}].vel"), *vel);
+    w.mark(Floats, || format!("players[{i}].target"));
     w.v2_at(&|| format!("players[{i}].target"), *target);
+    w.mark(Floats, || format!("players[{i}].facing"));
     w.v2_at(&|| format!("players[{i}].facing"), *facing);
+    w.mark(Bytes, || format!("players[{i}].status"));
     w.u8(canon::status_code(*status));
+    w.mark(Bytes, || format!("players[{i}].yellow"));
     w.u8(*yellow);
+    w.mark(Bytes, || format!("players[{i}].foul_ready"));
     w.u32(*foul_ready);
+    w.mark(Bytes, || format!("players[{i}].slot"));
     w.u8(*slot as u8);
+    w.mark(Bytes, || format!("players[{i}].squad"));
     w.u8(*squad as u8);
+    w.mark(Bytes, || format!("players[{i}].shirt"));
     w.u8(*shirt);
+    w.mark(Floats, || format!("players[{i}].energy"));
     w.f64_at(|| format!("players[{i}].energy"), *energy);
+    w.mark(Floats, || format!("players[{i}].derived"));
     w.derived(&|| format!("players[{i}].derived"), derived);
 }
 

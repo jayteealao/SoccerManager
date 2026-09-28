@@ -5,8 +5,13 @@
 //!
 //! A float that is NaN or infinite is still written, and the writer keeps the field path of
 //! the first such value. The snapshot ignores it; the gate fails the match with it.
+//!
+//! A writer can also keep field marks: the name, kind, and byte offset of each named part of
+//! the bytes. A mark writes no byte, so the bytes are the same with marks on or off. Only
+//! the per-tick state writer of the gate switches them on.
 
 use crate::ai::Manager;
+use crate::gate::FieldKind;
 use crate::math::{DVec2, DVec3};
 use crate::player::{Derived, Status};
 use crate::sim::{DecidedBy, Summary};
@@ -22,9 +27,32 @@ pub(crate) struct Writer {
     buf: Vec<u8>,
     /// The field path of the first NaN or infinite float written.
     fault: Option<String>,
+    /// The field marks, when they are on: each name, kind, and the byte offset it starts at.
+    fields: Option<Vec<(String, FieldKind, usize)>>,
 }
 
 impl Writer {
+    /// A writer that keeps a mark for each named part of its bytes.
+    pub(crate) fn with_fields() -> Self {
+        Self {
+            fields: Some(Vec::new()),
+            ..Self::default()
+        }
+    }
+
+    /// Starts the field `name()` of `kind` at the current offset. Writes no byte; when the
+    /// marks are off, it does nothing and the name is never built.
+    pub(crate) fn mark(&mut self, kind: FieldKind, name: impl FnOnce() -> String) {
+        if let Some(fields) = &mut self.fields {
+            fields.push((name(), kind, self.buf.len()));
+        }
+    }
+
+    /// The field marks in byte order, when they are on.
+    pub(crate) fn marks(&self) -> Option<&[(String, FieldKind, usize)]> {
+        self.fields.as_deref()
+    }
+
     /// The bytes written so far.
     pub(crate) fn bytes(&self) -> &[u8] {
         &self.buf
@@ -34,9 +62,12 @@ impl Writer {
         self.buf
     }
 
-    /// Empties the buffer and keeps its allocation. The fault stays.
+    /// Empties the buffer and the field marks and keeps their allocations. The fault stays.
     pub(crate) fn clear(&mut self) {
         self.buf.clear();
+        if let Some(fields) = &mut self.fields {
+            fields.clear();
+        }
     }
 
     /// The field path of the first NaN or infinite float written, if any.
@@ -247,6 +278,25 @@ mod tests {
         let mut w = Writer::default();
         w.f64_at(|| "ball.pos.z".into(), f64::NEG_INFINITY);
         assert_eq!(w.fault(), Some("ball.pos.z"));
+    }
+
+    #[test]
+    fn a_mark_writes_no_byte_and_is_kept_only_when_marks_are_on() {
+        let mut off = Writer::default();
+        let mut on = Writer::with_fields();
+        for w in [&mut off, &mut on] {
+            w.mark(FieldKind::Bytes, || "tick".into());
+            w.u32(7);
+            w.mark(FieldKind::Floats, || "ball.pos".into());
+            w.f64_at(|| "ball.pos.x".into(), 1.5);
+        }
+        assert_eq!(off.bytes(), on.bytes());
+        assert!(off.marks().is_none());
+        let marks = on.marks().expect("marks are on");
+        assert_eq!(marks.len(), 2);
+        assert_eq!(marks[1], ("ball.pos".to_string(), FieldKind::Floats, 4));
+        on.clear();
+        assert_eq!(on.marks().map(<[_]>::len), Some(0));
     }
 
     #[test]

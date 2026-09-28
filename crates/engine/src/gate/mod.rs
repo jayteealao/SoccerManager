@@ -34,6 +34,103 @@ pub const GATE_SCHEMA: u16 = 1;
 pub const INVENTORY_VERSION: u16 = 1;
 /// Ticks between two checkpoints.
 pub const CHECKPOINT_EVERY: u32 = 1_000;
+/// The version of the state digest file that `resimulate --state-digests` writes and `bisect`
+/// reads: a header line, one digest line per tick, a `finish` line, and an `end` line.
+pub const STATE_DIGEST_FORMAT: u16 = 1;
+
+/// What the bytes of one named part of the tick state hold.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FieldKind {
+    /// A run of `f64` values, each its exact little-endian bits.
+    Floats,
+    /// The stream state: the scheme (u8), the stream count (u32), then per stream its id
+    /// (u64) and its word position (u128), all little-endian.
+    Streams,
+    /// Any other canonical bytes.
+    Bytes,
+}
+
+impl FieldKind {
+    /// The kind's name in the state fields file.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FieldKind::Floats => "floats",
+            FieldKind::Streams => "streams",
+            FieldKind::Bytes => "bytes",
+        }
+    }
+
+    /// The kind a state fields file names, if any.
+    pub fn from_name(name: &str) -> Option<Self> {
+        [FieldKind::Floats, FieldKind::Streams, FieldKind::Bytes]
+            .into_iter()
+            .find(|k| k.as_str() == name)
+    }
+}
+
+/// One named part of a tick's state bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StateField {
+    pub name: String,
+    pub kind: FieldKind,
+    /// The part's place in the tick's bytes.
+    pub range: std::ops::Range<usize>,
+}
+
+/// Writes the state of a match after each tick, groups G1 to G11 of state inventory version
+/// 1: the bytes the gate hashes. With field marks on, it also names each part of the bytes.
+pub struct StateWriter {
+    w: Writer,
+}
+
+impl StateWriter {
+    /// A writer; `fields` switches the field marks on. The bytes are the same either way.
+    pub fn new(fields: bool) -> Self {
+        Self {
+            w: if fields {
+                Writer::with_fields()
+            } else {
+                Writer::default()
+            },
+        }
+    }
+
+    /// Writes the state after the tick `sim` has just played, with `events`, the events that
+    /// tick recorded, and returns the bytes.
+    pub fn tick(&mut self, sim: &Simulation, events: &[EngineEvent]) -> &[u8] {
+        self.w.clear();
+        inventory::state(&mut self.w, sim, events);
+        self.w.bytes()
+    }
+
+    /// The bytes of the last tick written.
+    pub fn bytes(&self) -> &[u8] {
+        self.w.bytes()
+    }
+
+    /// The named parts of the last tick's bytes, in byte order; empty when the marks are off.
+    /// Each part runs from its mark to the next one, and the last to the end of the bytes.
+    pub fn fields(&self) -> Vec<StateField> {
+        let Some(marks) = self.w.marks() else {
+            return Vec::new();
+        };
+        let end = self.w.bytes().len();
+        marks
+            .iter()
+            .enumerate()
+            .map(|(i, (name, kind, start))| StateField {
+                name: name.clone(),
+                kind: *kind,
+                range: *start..marks.get(i + 1).map_or(end, |next| next.2),
+            })
+            .collect()
+    }
+
+    /// The path of the first NaN or infinite value written by any tick so far.
+    pub fn non_finite(&self) -> Option<&str> {
+        self.w.fault()
+    }
+}
 
 /// The 20 seeded fixtures, in gate order: five familiar seeds, the two edge seeds, and a
 /// spread.
@@ -355,9 +452,10 @@ pub(crate) fn run(
         sim.options_audit = Some(audit.borrow().clone());
     }
     let mut hasher = Sha256::new();
-    let mut w = Writer::default();
-    inventory::header(&mut w, fixture, &sim);
-    hasher.update(w.bytes());
+    let mut header = Writer::default();
+    inventory::header(&mut header, fixture, &sim);
+    hasher.update(header.bytes());
+    let mut state = StateWriter::new(false);
     let mut checkpoints = Vec::new();
     let mut facts = Facts::default();
     let mut stopped = false;
@@ -390,16 +488,15 @@ pub(crate) fn run(
                 _ => {}
             }
         }
-        w.clear();
-        inventory::state(&mut w, &sim, &events);
-        if let Some(field) = w.fault() {
+        state.tick(&sim, &events);
+        if let Some(field) = state.non_finite() {
             return Err(GateError::NonFinite {
                 fixture: fixture.id.clone(),
                 tick: sim.tick,
                 field: field.to_string(),
             });
         }
-        hasher.update(w.bytes());
+        hasher.update(state.bytes());
         #[cfg(feature = "scenario")]
         {
             if let Some(r) = restore.take() {
