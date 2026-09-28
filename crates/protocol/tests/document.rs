@@ -36,7 +36,7 @@ fn the_document_names_the_framing_of_every_message() {
     let text = document();
     assert!(text.contains("## Framing"));
     assert!(text.contains("## Backpressure"));
-    assert!(text.contains("## Fixtures"));
+    assert!(text.contains("## Replay files"));
     let binary: Vec<&str> = MESSAGES
         .iter()
         .filter(|m| m.encoding == Encoding::Binary)

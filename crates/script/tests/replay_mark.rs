@@ -1,6 +1,6 @@
-//! AC-19, replay part: a match whose script calls ran past the wall-clock limit carries the
-//! watchdog mark in its replay file, and its twin with no clock carries none. The controlled
-//! test clock forces the hit.
+//! The watchdog mark in the replay file: a match whose script calls ran past the wall-clock
+//! limit carries the mark in its replay file, and its twin with no clock carries none. The
+//! controlled test clock forces the hit.
 
 use std::path::Path;
 

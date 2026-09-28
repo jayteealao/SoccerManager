@@ -1,10 +1,10 @@
 //! The replay file on the command line: `record` stores every input, the engine identity,
-//! and the applied changes (AC-40); `resimulate` reproduces the stored tick frames from the
-//! file alone, with the content, team, and script files deleted (AC-39); strict mode refuses
-//! another engine and names the difference (AC-41), comparison mode runs anyway and leaves
-//! the file as it was (AC-RR-1), and a version-3 file is refused (AC-43). The scheme is one
-//! number in the record, a snapshot, the golden file, and the registry (AC-26). A source
-//! guard keeps every path loader out of the re-simulation path (RIM-11).
+//! and the applied changes; `resimulate` reproduces the stored tick frames from the file
+//! alone, with the content, team, and script files deleted; strict mode refuses another
+//! engine and names the difference, comparison mode runs anyway and leaves the file as it
+//! was, and a version-3 file is refused. The scheme is one number in the record, a snapshot,
+//! the golden file, and the registry. A source guard keeps every path loader out of the
+//! re-simulation path, so a replay never reads content from the checkout.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};

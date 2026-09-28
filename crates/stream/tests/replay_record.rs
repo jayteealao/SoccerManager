@@ -1,7 +1,7 @@
 //! The version-4 replay file: its inputs, record, and frames read back as written; a file
 //! read and written back is the same file byte for byte; and every damaged or inconsistent
-//! file is refused by name. The command-line tests hold the recorded match itself (AC-39 to
-//! AC-41); these hold the format.
+//! file is refused by name. The command-line tests hold the recorded match itself (the
+//! re-simulation, the stored fields, and the identity check); these hold the format.
 
 mod common;
 
@@ -96,7 +96,7 @@ fn record(dir: &Path) -> PathBuf {
 
 #[test]
 fn a_version_four_file_reads_back_its_inputs_record_and_frames() {
-    let dir = common::temp_dir("replay-record-read");
+    let dir = common::temp_dir("replay-file-read");
     let path = record(&dir);
     let fixture = read_fixture(&path).unwrap();
     assert_eq!(fixture.format, FORMAT_VERSION);
@@ -151,7 +151,7 @@ fn sha2_of(bytes: &[u8]) -> Vec<u8> {
 
 #[test]
 fn a_file_read_and_written_back_is_byte_identical() {
-    let dir = common::temp_dir("replay-record-write-back");
+    let dir = common::temp_dir("replay-file-write-back");
     let path = record(&dir);
     let fixture = read_fixture(&path).unwrap();
     let again = dir.join("again.smfx");
@@ -175,7 +175,7 @@ fn refused(dir: &Path, name: &str, bytes: &[u8]) -> String {
 
 #[test]
 fn every_damaged_or_inconsistent_file_is_refused_by_name() {
-    let dir = common::temp_dir("replay-record-refusals");
+    let dir = common::temp_dir("replay-file-refusals");
     let path = record(&dir);
     let good = read_fixture(&path).unwrap();
     let written = |name: &str, fixture: &stream::Fixture| {
