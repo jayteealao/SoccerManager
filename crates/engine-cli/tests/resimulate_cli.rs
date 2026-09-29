@@ -9,6 +9,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use engine::record::hex;
 use sha2::{Digest, Sha256};
 use stream::{ChangeSource, Fixture, LoggedChange, read_fixture, write_fixture};
 
@@ -29,10 +30,6 @@ fn bin(data: &Path) -> Command {
     cmd.env("SM_DATA_DIR", data);
     cmd.env_remove("SM_CONTENT_DIR");
     cmd
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 fn sha256_file(path: &Path) -> String {

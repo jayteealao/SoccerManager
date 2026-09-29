@@ -517,7 +517,7 @@ pub fn digest(scheme: super::Scheme) -> String {
             h.update(streams.draw(key).to_bits().to_le_bytes());
         }
     }
-    crate::gate::hex(&h.finalize())
+    crate::record::hex(&h.finalize())
 }
 
 #[cfg(test)]

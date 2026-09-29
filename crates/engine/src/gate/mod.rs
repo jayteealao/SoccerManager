@@ -23,7 +23,6 @@ use crate::canon::Writer;
 use crate::data::Content;
 use crate::data::team::TeamFile;
 use crate::plugin::Plugins;
-pub(crate) use crate::record::hex;
 use crate::sim::{DecidedBy, EngineEvent, EngineEventKind, EventDetail, MatchConfig, Simulation};
 use crate::tactics::TacticsPatch;
 use crate::tactics::change::{Change, ChangeKind};
@@ -510,7 +509,7 @@ pub(crate) fn run(
         if sim.tick.is_multiple_of(CHECKPOINT_EVERY) || sim.is_over() {
             let checkpoint = Checkpoint {
                 tick: sim.tick,
-                hash: hex(&hasher.clone().finalize()),
+                hash: crate::record::hex(&hasher.clone().finalize()),
             };
             let differs = probe.against.is_some_and(|golden| {
                 golden.checkpoints.get(checkpoints.len()) != Some(&checkpoint)
