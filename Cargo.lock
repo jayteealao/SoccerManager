@@ -480,7 +480,7 @@ checksum = "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
 
 [[package]]
 name = "engine"
-version = "0.1.0"
+version = "0.2.0-dev"
 dependencies = [
  "criterion",
  "engine",
@@ -500,7 +500,7 @@ dependencies = [
 
 [[package]]
 name = "engine-cli"
-version = "0.1.0"
+version = "0.2.0-dev"
 dependencies = [
  "anyhow",
  "boon",
@@ -994,7 +994,7 @@ dependencies = [
 
 [[package]]
 name = "protocol"
-version = "0.1.0"
+version = "0.2.0-dev"
 dependencies = [
  "serde",
  "serde_json",
@@ -1170,7 +1170,7 @@ dependencies = [
 
 [[package]]
 name = "script"
-version = "0.1.0"
+version = "0.2.0-dev"
 dependencies = [
  "criterion",
  "engine",
@@ -1309,7 +1309,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stream"
-version = "0.1.0"
+version = "0.2.0-dev"
 dependencies = [
  "engine",
  "protocol",
