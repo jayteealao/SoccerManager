@@ -84,6 +84,30 @@ impl std::fmt::Debug for Sandbox {
     }
 }
 
+/// The standard package can wait on and read the wall clock (rhai-1.26.1
+/// src/packages/lang_core.rs `sleep`, src/packages/time_basic.rs `timestamp`). A wait is not
+/// bounded by the operation budget, and a clock read makes play differ between machines.
+/// `disable_symbol` only stops keywords and operators, not function names (a `sleep(3)`
+/// still ran for three seconds under it), so each is shadowed by a function that fails and
+/// names itself. Functions registered on the engine are found before the package's. Without
+/// `timestamp` a script has no `Instant` to give `elapsed`.
+fn refuse_the_clock(engine: &mut Engine) {
+    fn refused(name: &str) -> Box<rhai::EvalAltResult> {
+        format!("`{name}` is not available: scripts cannot wait on or read the clock").into()
+    }
+    engine.register_fn(
+        "sleep",
+        |_: rhai::INT| -> Result<(), Box<rhai::EvalAltResult>> { Err(refused("sleep")) },
+    );
+    engine.register_fn(
+        "sleep",
+        |_: rhai::FLOAT| -> Result<(), Box<rhai::EvalAltResult>> { Err(refused("sleep")) },
+    );
+    engine.register_fn("timestamp", || -> Result<(), Box<rhai::EvalAltResult>> {
+        Err(refused("timestamp"))
+    });
+}
+
 impl Sandbox {
     /// Compiles `source` and runs its top-level statements once. `shown` names the pack in
     /// messages. A script that does not compile, uses `eval`, or fails at the top level is
@@ -105,6 +129,7 @@ impl Sandbox {
         // src/module/resolvers/dummy.rs, read from the installed crate).
         engine.set_module_resolver(DummyModuleResolver::new());
         engine.disable_symbol("eval");
+        refuse_the_clock(&mut engine);
         let pack = shown.to_string();
         engine.on_print(move |text| {
             tracing::info!(signal = "script.print", pack = %pack, text);

@@ -158,3 +158,30 @@ fn a_pack_that_uses_eval_or_lacks_its_hook_function_is_refused_at_load() {
     let err = LoadedPack::load(&dir).unwrap_err().to_string();
     assert!(err.contains("hooks") && err.contains("decide"), "{err}");
 }
+
+#[test]
+fn a_script_that_waits_or_reads_the_clock_is_refused() {
+    for (call, name) in [
+        ("sleep(3)", "sleep"),
+        ("sleep(0.5)", "sleep"),
+        ("timestamp()", "timestamp"),
+    ] {
+        let src = format!("fn run() {{ {call} }}");
+        let refused = match script::Sandbox::new(&src, 1_000, "clock") {
+            Err(reason) => reason,
+            Ok(sandbox) => {
+                let started = std::time::Instant::now();
+                let outcome = sandbox.call("run", (), &engine::plugin::WatchdogMark::default());
+                assert!(
+                    started.elapsed() < std::time::Duration::from_secs(1),
+                    "{call} must not wait"
+                );
+                format!("{outcome:?}")
+            }
+        };
+        assert!(
+            refused.contains(name),
+            "{call} is refused with an error naming {name}: {refused}"
+        );
+    }
+}
