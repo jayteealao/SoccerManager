@@ -187,18 +187,12 @@ pub fn build(
     for (team, kind) in settings.managers.iter().enumerate() {
         config = config.with_manager(team, kind.manager());
     }
-    if let Some(pack) = &pack {
-        config.fold_pack_hash(pack.sha());
-    }
     let keyframe_interval = content.tuning.stream.keyframe_interval;
-    let mut sim = if traced {
-        Simulation::new_traced(config)?
-    } else {
-        Simulation::new(config)?
-    };
-    if let Some(pack) = &pack {
-        sim.set_plugins(pack.plugins());
-    }
+    let sim = Simulation::start(
+        config,
+        pack.as_ref().map(|pack| (pack.sha(), pack.plugins())),
+        traced,
+    )?;
     Ok(Built {
         sim,
         commentary,

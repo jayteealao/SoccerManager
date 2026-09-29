@@ -584,19 +584,8 @@ fn build(fixture: &Fixture, inputs: &Inputs<'_>, traced: bool) -> Result<Simulat
             }
         },
     };
-    if let Some(pack) = pack {
-        config.fold_pack_hash(&pack.sha);
-    }
-    let sim = if traced {
-        Simulation::new_traced(config)
-    } else {
-        Simulation::new(config)
-    };
-    let mut sim = sim.map_err(|e| setup(e.to_string()))?;
-    if let Some(pack) = pack {
-        sim.set_plugins((pack.hooks)());
-    }
-    Ok(sim)
+    let pack = pack.map(|pack| (&pack.sha, (pack.hooks)()));
+    Simulation::start(config, pack, traced).map_err(|e| setup(e.to_string()))
 }
 
 fn queue(sim: &mut Simulation, planned: &PlannedChange) {

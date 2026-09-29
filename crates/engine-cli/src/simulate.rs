@@ -42,7 +42,6 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
     if opts.knockout {
         config = config.with_knockout();
     }
-    loaded.fold(&mut config);
     let data = data_dir();
     let owner_id = load_or_create_owner_id(&data)?;
     let match_id = MatchId::now(opts.seed);
@@ -65,15 +64,17 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
             name: config.teams[1].name.clone(),
         },
     ];
-    let content_hash = config.content_hash.clone();
     let started = Instant::now();
     let club_ids = [teams[0].id.clone(), teams[1].id.clone()];
-    let mut sim = if opts.debug_trace.is_some() {
-        Simulation::new_traced(config)?
-    } else {
-        Simulation::new(config)?
-    };
-    loaded.attach(&mut sim);
+    let mut sim = Simulation::start(
+        config,
+        loaded
+            .script
+            .as_ref()
+            .map(|pack| (pack.sha(), pack.plugins())),
+        opts.debug_trace.is_some(),
+    )?;
+    let content_hash = sim.content_hash().to_string();
     let mut ids = Ids::new(&sim);
     let mut commentator = Commentator::for_match(&loaded.commentary, &sim);
     let file = FileSink::create(&opts.ticks_out, &header)

@@ -564,6 +564,34 @@ impl Simulation {
         Ok(sim)
     }
 
+    /// Starts a match from `config`: folds the script pack's SHA-256 into the content hash and
+    /// attaches its hooks when `pack` is given, then places both teams for kick-off, with debug
+    /// mode on when `traced` (see [`Simulation::new_traced`]). The one way to build a match
+    /// from a configuration and an optional script pack.
+    pub fn start(
+        mut config: MatchConfig,
+        pack: Option<(&[u8; 32], Plugins)>,
+        traced: bool,
+    ) -> Result<Self, EngineError> {
+        if let Some((sha, _)) = &pack {
+            config.fold_pack_hash(sha);
+        }
+        let mut sim = if traced {
+            Self::new_traced(config)?
+        } else {
+            Self::new(config)?
+        };
+        if let Some((_, plugins)) = pack {
+            sim.set_plugins(plugins);
+        }
+        Ok(sim)
+    }
+
+    /// The content hash of the match, with the script pack's hash folded in when it has one.
+    pub fn content_hash(&self) -> &str {
+        &self.config.content_hash
+    }
+
     /// Places both teams for kick-off with debug mode on: the debug trace records every
     /// random draw, decision point, and rule outcome from the opening kick-off on. The
     /// records carry the tick the step produces, as events do; the opening kick-off's is 1.
