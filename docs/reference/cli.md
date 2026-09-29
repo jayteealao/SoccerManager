@@ -34,8 +34,8 @@ When `--content-dir` is absent, the engine uses `SM_CONTENT_DIR`. When `SM_CONTE
 | Code | Meaning |
 |---|---|
 | 0 | The command completed. |
-| 1 | An error stopped the command. Standard error names the cause: a bad flag, a refused content file, a refused snapshot, or a file that cannot be written. |
-| 2 | The command completed but a check failed, or the match did not reach full time. The command sections below name the check. |
+| 1 | A usage or run error stopped the command. Standard error names the cause: a bad flag or a missing argument, a refused content file, a refused snapshot, or a file that cannot be written. |
+| 2 | The verdict of a completed command: a check failed, the frames or builds or hashes differ, or the match did not reach full time. The command sections below name the check. A usage error is never 2. |
 | 3 | `bisect` only: the comparison is incomplete. A build could not be made or run to the end, so no result was reached. |
 
 ## simulate
@@ -57,7 +57,7 @@ Simulate one match and write every tick to a file.
 
 Output: one JSON line on standard output with the match statistics. With `--debug-trace`, standard error also gets one line, for example `debug trace: m.trace.jsonl, 307873 draws (registry 307873), 595706 decisions, 2435 rule outcomes`; when the draws recorded differ from the registry's draw count, the command exits 1. Files: the tick file, and `matches/<match.id>/stats.json`, `events.jsonl`, and `snapshot.smsn` in the data folder.
 
-A failed run, for example `--minutes 0` or a tick file that cannot be written, prints one `match-stats` record on standard output with `outcome` `error` and the keys `error.type`, `error.code`, and `error.retriable`, and no statistics. It saves nothing in the data folder, prints the cause on standard error, and exits 1. A bad flag (exit code 2 from the argument parser) prints no record.
+A failed run, for example `--minutes 0` or a tick file that cannot be written, prints one `match-stats` record on standard output with `outcome` `error` and the keys `error.type`, `error.code`, and `error.retriable`, and no statistics. It saves nothing in the data folder, prints the cause on standard error, and exits 1. A bad flag exits 1 and prints no record.
 
 Exit codes: 0 or 1.
 
@@ -194,7 +194,7 @@ Output: one JSON line with `fixture`, `mode` (`strict` or `compare`), `verdict` 
 
 The three state outputs are off by default, and they do not change the verdict or the exit code. `--state-fields` writes `{ "tick", "scheme", "fields", "engine" }`: `fields` lists each named part of the state in byte order, each with `name` (for example `ball.vel`, `players[3].pos`, `referee.clock`, or `streams`), `kind` (`floats`: a run of 64-bit floats; `streams`: the stream state; `bytes`: anything else), and `hex` (its canonical bytes). The parts join into the bytes whose SHA-256 is the tick's line in the state digest file. When the match ends before the tick, the command writes no fields file and exits 1.
 
-Exit codes: 0 when the frames and the change log are identical; 1 when the file is refused or cannot be read, or the engine differs in strict mode; 2 when the frames or the change log differ.
+Exit codes: 0 when the frames and the change log are identical; 1 when a flag is refused, the file is refused or cannot be read, or the engine differs in strict mode; 2 when the frames or the change log differ.
 
 ## bisect
 
@@ -343,7 +343,7 @@ The write modes check their flags and the reason before they read the golden fil
 
 With `--debug`, standard error gets one line after each match, for example `trace: seed-42 307873 draws recorded, registry 307873, 595706 decisions, 2435 rule outcomes`. A match whose two draw counts differ fails the gate like a match that differs (exit 2).
 
-Exit codes: 0 when every selected match matches; 1 when the golden file or the content cannot be read or is refused, or a fixture id is unknown; 2 when a match differs or its hashed state holds a number that is not finite (the line names the field, for example `players[3].pos.x`).
+Exit codes: 0 when every selected match matches; 1 when a flag is refused, the golden file or the content cannot be read or is refused, or a fixture id is unknown; 2 when a match differs or its hashed state holds a number that is not finite (the line names the field, for example `players[3].pos.x`).
 
 ## guard
 
@@ -369,7 +369,7 @@ A merge commit is compared with its first parent.
 
 Output: one line per commit on standard output, `<short commit> ok`, or one line per broken rule, for example `3f2a9c1 rule 5: hash set linux-x86_64 changes with no new regenerate entry`. Standard error ends with the commit count and the number that fail.
 
-Exit codes: 0 when every commit passes, or no commit in the range changes the file; 1 when git cannot run or a revision cannot be read; 2 when a commit breaks a rule.
+Exit codes: 0 when every commit passes, or no commit in the range changes the file; 1 when a flag is refused, git cannot run, or a revision cannot be read; 2 when a commit breaks a rule.
 
 ## Debug trace file
 

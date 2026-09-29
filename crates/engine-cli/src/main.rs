@@ -27,13 +27,25 @@ use std::io::IsTerminal;
 use std::time::Instant;
 
 use clap::Parser;
+use clap::error::ErrorKind;
 use engine::EngineError;
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id};
 use engine::observe::{FailureRecord, emit_line, machine_hash, unix_millis};
 use tracing_subscriber::EnvFilter;
 
 fn main() {
-    let args = cli::Cli::parse();
+    // A usage error exits 1, like any other run error: exit 2 is only a verdict (frames
+    // differ, builds differ, hashes differ, a rule broken). `--help` and `--version` exit 0.
+    let args = match cli::Cli::try_parse() {
+        Ok(args) => args,
+        Err(err) => match err.kind() {
+            ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => err.exit(),
+            _ => {
+                let _ = err.print();
+                std::process::exit(1);
+            }
+        },
+    };
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_env("SM_LOG").unwrap_or_else(|_| EnvFilter::new("info")),
