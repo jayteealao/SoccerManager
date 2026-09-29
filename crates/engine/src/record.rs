@@ -337,7 +337,7 @@ impl TickSink for FileSink {
 }
 
 /// Lower-case hex of a byte slice.
-fn hex(bytes: &[u8]) -> String {
+pub fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 

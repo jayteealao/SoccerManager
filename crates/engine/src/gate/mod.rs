@@ -23,6 +23,7 @@ use crate::canon::Writer;
 use crate::data::Content;
 use crate::data::team::TeamFile;
 use crate::plugin::Plugins;
+pub(crate) use crate::record::hex;
 use crate::sim::{DecidedBy, EngineEvent, EngineEventKind, EventDetail, MatchConfig, Simulation};
 use crate::tactics::TacticsPatch;
 use crate::tactics::change::{Change, ChangeKind};
@@ -712,13 +713,4 @@ pub fn facts_text(fixture: &Fixture, facts: &Facts) -> String {
             facts.substitutions, facts.tactics_changes
         ),
     }
-}
-
-/// Lowercase hex of `bytes`.
-pub(crate) fn hex(bytes: &[u8]) -> String {
-    use std::fmt::Write as _;
-    bytes.iter().fold(String::with_capacity(64), |mut s, b| {
-        let _ = write!(s, "{b:02x}");
-        s
-    })
 }
