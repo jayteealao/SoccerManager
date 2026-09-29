@@ -6,7 +6,7 @@
 
 use std::ffi::OsString;
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -32,6 +32,8 @@ enum Ended {
 /// A finished run: how it ended and its two output streams.
 struct Ran {
     ended: Ended,
+    /// The file that holds the child's stderr.
+    err_path: PathBuf,
     stdout: String,
     stderr: String,
 }
@@ -77,16 +79,55 @@ fn run(
         ended,
         stdout: read(&out_path),
         stderr: read(&err_path),
+        err_path,
     })
 }
 
-/// The last non-empty line of `text`, or `(nothing)`.
-fn last_line(text: &str) -> &str {
-    text.lines()
+/// The last non-empty line of `text`, or `(nothing)`, with control characters removed.
+fn last_line(text: &str) -> String {
+    let line = text
+        .lines()
         .rev()
         .map(str::trim)
         .find(|l| !l.is_empty())
-        .unwrap_or("(nothing)")
+        .unwrap_or("(nothing)");
+    clean(line)
+}
+
+/// `text` without control characters, so a child cannot move the cursor or recolor the
+/// terminal through the reason that is printed.
+fn clean(text: &str) -> String {
+    text.chars().filter(|c| !c.is_control()).collect()
+}
+
+/// The line of a child's stderr that names why it stopped: the first line that has
+/// `panicked at` or starts with `error:`; otherwise the last three non-empty lines.
+fn stderr_reason(text: &str) -> String {
+    let lines: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect();
+    if let Some(line) = lines
+        .iter()
+        .find(|l| l.contains("panicked at") || l.starts_with("error:"))
+    {
+        return clean(line);
+    }
+    if lines.is_empty() {
+        return "(nothing)".to_string();
+    }
+    let start = lines.len().saturating_sub(3);
+    clean(&lines[start..].join(" | "))
+}
+
+/// Why a run stopped, from its stderr, and where the whole stderr is kept.
+fn stderr_note(ran: &Ran) -> String {
+    format!(
+        "{} (stderr is in {})",
+        stderr_reason(&ran.stderr),
+        ran.err_path.display()
+    )
 }
 
 /// Checks that `bin` has the re-simulate command and all four options.
@@ -114,11 +155,11 @@ pub fn probe(bin: &Path, dir: &Path, name: &str, limit: Duration) -> Result<(), 
         )),
         Ended::Code(code) => Err(format!(
             "lacks the resimulate command: resimulate --help exited with code {code}: {}",
-            last_line(&ran.stderr)
+            stderr_note(&ran)
         )),
         Ended::NoCode => Err(format!(
             "lacks the resimulate command: resimulate --help ended with no exit code: {}",
-            last_line(&ran.stderr)
+            stderr_note(&ran)
         )),
     }
 }
@@ -135,18 +176,18 @@ fn completed(ran: &Ran, limit: Duration) -> Result<(), String> {
         Ended::NoCode => {
             return Err(format!(
                 "crashed: the run ended with no exit code: {}",
-                last_line(&ran.stderr)
+                stderr_note(ran)
             ));
         }
         Ended::Code(0 | 2) => {}
         Ended::Code(code) => {
             return Err(format!(
                 "crashed or failed: the run exited with code {code}: {}",
-                last_line(&ran.stderr)
+                stderr_note(ran)
             ));
         }
     }
-    let verdict: Option<serde_json::Value> = serde_json::from_str(last_line(&ran.stdout)).ok();
+    let verdict: Option<serde_json::Value> = serde_json::from_str(&last_line(&ran.stdout)).ok();
     if verdict.as_ref().and_then(|v| v.get("verdict")).is_none() {
         return Err(format!(
             "ends early: the run printed no verdict line (last output line: {})",
@@ -219,4 +260,34 @@ pub fn tick_state(
     let fields = parse_fields(&written)?;
     let trace = crate::trace_file::tick_records(&trace_path, tick)?;
     Ok(TickState { fields, trace })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_panic_line_names_the_crash() {
+        let text =
+            "thread 'main' panicked at src/x.rs:1:1:\nboom\nnote: run with RUST_BACKTRACE=1\n";
+        assert_eq!(
+            stderr_reason(text),
+            "thread 'main' panicked at src/x.rs:1:1:"
+        );
+        assert_eq!(
+            stderr_reason("a\nerror: bad flag\nnote: x"),
+            "error: bad flag"
+        );
+    }
+
+    #[test]
+    fn without_a_marker_the_last_three_lines_are_used() {
+        assert_eq!(stderr_reason("1\n\n2\n3\n4\n"), "2 | 3 | 4");
+        assert_eq!(stderr_reason(""), "(nothing)");
+    }
+
+    #[test]
+    fn control_characters_are_stripped() {
+        assert_eq!(stderr_reason("error: \u{1b}[31mred\u{7}"), "error: [31mred");
+    }
 }

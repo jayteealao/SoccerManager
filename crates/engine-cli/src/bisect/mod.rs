@@ -12,6 +12,7 @@ mod cache;
 mod report;
 mod runs;
 
+use std::cell::Cell;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -55,9 +56,14 @@ struct Resolved {
 }
 
 /// A folder for the run's files, removed when the run ends.
-struct WorkDir(PathBuf);
+struct WorkDir(PathBuf, Cell<bool>);
 
 impl WorkDir {
+    /// Keeps the stderr files when the folder is dropped.
+    fn keep_stderr(&self) {
+        self.1.set(true);
+    }
+
     fn new() -> anyhow::Result<Self> {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -65,13 +71,24 @@ impl WorkDir {
         let dir =
             std::env::temp_dir().join(format!("engine-cli-bisect-{}-{nanos}", std::process::id()));
         std::fs::create_dir_all(&dir)?;
-        Ok(Self(dir))
+        Ok(Self(dir, Cell::new(false)))
     }
 }
 
 impl Drop for WorkDir {
     fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
+        if !self.1.get() {
+            let _ = std::fs::remove_dir_all(&self.0);
+            return;
+        }
+        // An incomplete result names the children's stderr files, so those stay.
+        if let Ok(entries) = std::fs::read_dir(&self.0) {
+            for path in entries.flatten().map(|e| e.path()) {
+                if path.extension().is_none_or(|e| e != "stderr") {
+                    let _ = std::fs::remove_file(&path).or_else(|_| std::fs::remove_dir_all(&path));
+                }
+            }
+        }
     }
 }
 
@@ -122,7 +139,7 @@ pub fn run(content_dir: Option<&Path>, opts: &BisectOpts) -> anyhow::Result<i32>
     let resolved = both(&sides, |_, side| resolve(side, opts, &repo, &cache_root));
     let [a, b] = match resolved {
         Ok(pair) => pair,
-        Err(reasons) => return Ok(incomplete(opts, &shown, &sides, &reasons, None)),
+        Err(reasons) => return Ok(incomplete(&work, opts, &shown, &sides, &reasons, None)),
     };
     let bins = [&a, &b];
 
@@ -130,18 +147,25 @@ pub fn run(content_dir: Option<&Path>, opts: &BisectOpts) -> anyhow::Result<i32>
     if let Err(reasons) = both(&sides, |i, side| {
         runs::probe(&bins[i].path, &work.0, side.name, limit)
     }) {
-        return Ok(incomplete(opts, &shown, &sides, &reasons, None));
+        return Ok(incomplete(&work, opts, &shown, &sides, &reasons, None));
     }
     let digests = both(&sides, |i, side| {
         runs::digests(&bins[i].path, &fixture, &work.0, side.name, limit)
     });
     let [da, db] = match digests {
         Ok(pair) => pair,
-        Err(reasons) => return Ok(incomplete(opts, &shown, &sides, &reasons, None)),
+        Err(reasons) => return Ok(incomplete(&work, opts, &shown, &sides, &reasons, None)),
     };
     if let Err(reason) = crate::state_files::same_inventory(&da, &db) {
         let reasons = [None, None];
-        return Ok(incomplete(opts, &shown, &sides, &reasons, Some(&reason)));
+        return Ok(incomplete(
+            &work,
+            opts,
+            &shown,
+            &sides,
+            &reasons,
+            Some(&reason),
+        ));
     }
     let builds = [build(&sides[0], &a, &da), build(&sides[1], &b, &db)];
 
@@ -169,7 +193,7 @@ pub fn run(content_dir: Option<&Path>, opts: &BisectOpts) -> anyhow::Result<i32>
             });
             let [sa, sb] = match states {
                 Ok(pair) => pair,
-                Err(reasons) => return Ok(incomplete(opts, &shown, &sides, &reasons, None)),
+                Err(reasons) => return Ok(incomplete(&work, opts, &shown, &sides, &reasons, None)),
             };
             Found::Differs {
                 tick,
@@ -304,12 +328,14 @@ fn scan(a: &Digests, b: &Digests) -> Scan {
 
 /// Prints the incomplete result: every side's reason, and a reason for the pair.
 fn incomplete(
+    work: &WorkDir,
     opts: &BisectOpts,
     shown: &str,
     sides: &[Side; 2],
     reasons: &[Option<String>; 2],
     pair: Option<&str>,
 ) -> i32 {
+    work.keep_stderr();
     if opts.json {
         let mut out = serde_json::json!({ "verdict": "incomplete", "fixture": shown });
         for (side, reason) in sides.iter().zip(reasons) {
