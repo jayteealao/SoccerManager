@@ -20,6 +20,7 @@ pub mod observe;
 pub mod pitch;
 pub mod player;
 pub mod plugin;
+pub mod possession;
 pub mod record;
 pub mod rng;
 pub mod rules;

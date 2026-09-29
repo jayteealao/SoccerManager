@@ -18,9 +18,7 @@ use serde_json::json;
 use std::fmt;
 
 use crate::data::rules::StoppageKind;
-use crate::math::DVec2;
-use crate::pitch;
-use crate::player::Status;
+use crate::modules::SubRequest;
 use crate::rules::{Phase, Stoppage};
 use crate::sim::{EngineEventKind, EventDetail, Simulation};
 use crate::tactics::TacticsPatch;
@@ -294,7 +292,11 @@ impl Simulation {
         if self.referee.shootout.is_some() {
             return;
         }
-        let (tactics_ok, subs_ok) = self.config.rules.admits(stoppage.kind);
+        let (tactics_ok, subs_ok) = self
+            .config
+            .modules
+            .changes
+            .admits(&self.view(), stoppage.kind);
         let now = self.tick + 1;
         for (admits, at) in [tactics_ok, subs_ok]
             .into_iter()
@@ -449,48 +451,30 @@ impl Simulation {
         now: u32,
         entered: &mut [usize; 2],
     ) -> Result<(), RejectReason> {
-        let (limit, windows) = self.substitution_limits();
-        let rules = &self.config.rules.substitutions;
-        let ledger = self.ledgers[team];
-        if ledger.used >= limit {
-            return Err(RejectReason::LimitReached { limit });
-        }
-        let needs_window = !rules.exempt(kind) && ledger.window_at != Some(now);
-        if needs_window && ledger.windows >= windows {
-            return Err(RejectReason::NoWindowLeft { windows });
-        }
-        let side = &self.teams[team];
-        let slot = side
-            .lineup
-            .iter()
-            .position(|&s| s == off)
-            .ok_or(RejectReason::NotOnPitch { squad: off })?;
-        let i = team * PLAYERS_PER_TEAM + slot;
-        let leaving = self.players[i];
-        if leaving.status == Status::SentOff {
-            return Err(RejectReason::SentOff { squad: off });
-        }
-        if !side.bench.contains(&on) {
-            return Err(RejectReason::NotOnBench { squad: on });
+        let request = SubRequest {
+            team,
+            off,
+            on,
+            kind,
+            now,
+            entered: entered[team],
+        };
+        let entry = self
+            .config
+            .modules
+            .changes
+            .substitution(&self.view(), &request)?;
+        if entry.from_touchline {
+            entered[team] += 1;
         }
         let ledger = &mut self.ledgers[team];
         ledger.used += 1;
-        if needs_window {
+        if entry.needs_window {
             ledger.windows += 1;
             ledger.window_at = Some(now);
         }
-        // At half-time the substitute takes the leaving player's kick-off place; otherwise it
-        // enters at the halfway line on the near touchline, on its own side.
-        let at = if kind == StoppageKind::HalfTime && leaving.active() {
-            leaving.pos
-        } else {
-            let k = entered[team] as f64;
-            entered[team] += 1;
-            DVec2::new(
-                -side.attack_x * (1.0 + 1.5 * k),
-                -(pitch::HALF_WIDTH - ENTRY_MARGIN),
-            )
-        };
+        let (slot, at) = (entry.slot, entry.at);
+        let i = team * PLAYERS_PER_TEAM + slot;
         let side = &mut self.teams[team];
         side.bench.retain(|&s| s != on);
         side.lineup[slot] = on;
@@ -520,25 +504,11 @@ impl Simulation {
         patch: &TacticsPatch,
         off_now: &[(usize, usize)],
     ) -> Result<(), RejectReason> {
-        let schema = &self.config.tactics;
-        if !patch.in_range(schema) {
-            return Err(RejectReason::OutOfRange);
-        }
-        let side = &self.teams[team];
-        for (squad, _) in &patch.roles {
-            if off_now.contains(&(team, *squad)) {
-                return Err(RejectReason::LeftThePitch { squad: *squad });
-            }
-            let on_pitch = side
-                .lineup
-                .iter()
-                .position(|s| s == squad)
-                .is_some_and(|slot| self.players[team * PLAYERS_PER_TEAM + slot].active());
-            if !on_pitch {
-                return Err(RejectReason::NotOnPitch { squad: *squad });
-            }
-        }
-        let tactics = patch.applied_to(side.tactics, &side.lineup, schema);
+        let tactics = self
+            .config
+            .modules
+            .changes
+            .tactics(&self.view(), team, patch, off_now)?;
         let tuning = self.config.tuning.clone();
         let schema = self.config.tactics.clone();
         let side = &mut self.teams[team];
@@ -555,9 +525,6 @@ impl Simulation {
         Ok(())
     }
 }
-
-/// How far inside the touchline a substitute enters, in metres.
-const ENTRY_MARGIN: f64 = 0.5;
 
 #[cfg(test)]
 mod tests {

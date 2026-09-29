@@ -146,3 +146,35 @@ fn a_required_slot_switched_off_refuses_start_up() {
         "steering@1",
     );
 }
+
+#[test]
+fn ball_switched_off_refuses_start_up() {
+    assert_refused(
+        "ball-off.json",
+        "engine.ball",
+        "off is not allowed: the slot is required",
+        "ball@1",
+    );
+}
+
+#[test]
+fn possession_switched_off_refuses_start_up() {
+    // A test build that unifies the engine's test features lists `possession-faulty@1`
+    // after `possession@1`, so only the first name is pinned.
+    assert_refused(
+        "possession-off.json",
+        "engine.possession",
+        "off is not allowed: the slot is required",
+        "possession@1 .. ",
+    );
+}
+
+#[test]
+fn decision_switched_off_refuses_start_up() {
+    assert_refused(
+        "decision-off.json",
+        "engine.decision",
+        "off is not allowed: the slot is required",
+        "decision@1",
+    );
+}

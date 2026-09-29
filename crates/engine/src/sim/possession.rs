@@ -1,12 +1,12 @@
-//! The ball and possession passes of the central loop.
+//! The ball and possession passes of the central loop. The ball module moves the ball and the
+//! possession module says who may contest it; this pass takes every draw on their keys in the
+//! order the engine always drew them, and writes every outcome.
 
 use serde_json::json;
 
-use crate::math::{DVec2, DVec3, toward};
-use crate::pitch;
+use crate::modules::{Crossing, Deflection, ParrySide};
 use crate::rules::fouls::Tackle;
-use crate::shot;
-use crate::sim::{Simulation, WIDE_SPREAD, wide_of_goal};
+use crate::sim::Simulation;
 use crate::streams::{Action, Key};
 use crate::trace::Point;
 use crate::tuning::Tuning;
@@ -17,13 +17,10 @@ impl Simulation {
     /// `false` when no shot is in flight or the ball is slow, and the ordinary contest
     /// applies.
     fn contest_shot(&mut self, t: &Tuning) -> bool {
-        let Some(shooter) = self.shot_in_flight else {
+        let Some(shooter) = self.config.modules.possession.shot_contest(&self.view()) else {
             return false;
         };
-        if self.ball.speed() <= t.control_speed {
-            return false;
-        }
-        if self.try_block(shooter, t) {
+        if self.try_block(shooter) {
             return true;
         }
         if self.shot_on_target {
@@ -32,47 +29,35 @@ impl Simulation {
         true
     }
 
-    /// Each outfield defender within `block_reach` of a shot under `reach_height` rolls once
-    /// per shot to block it. A block deflects the ball back the way it came, with the
-    /// blocker's side as the last touch, and ends the shot.
-    fn try_block(&mut self, shooter: usize, t: &Tuning) -> bool {
-        if self.ball.pos.z > t.reach_height {
-            return false;
-        }
-        let ball_xy = self.ball.xy();
-        let keeper = self.keeper(1 - shooter);
-        for i in 0..self.players.len() {
+    /// Each defender the possession module names rolls once per shot to block it. A block
+    /// deflects the ball back the way it came, with the blocker's side as the last touch, and
+    /// ends the shot.
+    fn try_block(&mut self, shooter: usize) -> bool {
+        let contest = self
+            .config
+            .modules
+            .possession
+            .blockers(&self.view(), shooter);
+        let mut mask = contest.mask;
+        while mask != 0 {
+            let i = mask.trailing_zeros() as usize;
+            mask &= mask - 1;
             let p = self.players[i];
-            let bit = 1u32 << i;
-            if p.team == shooter
-                || i == keeper
-                || !p.active()
-                || self.blockers_tried & bit != 0
-                || (p.pos - ball_xy).length() >= t.shots.block_reach
-            {
-                continue;
-            }
-            self.blockers_tried |= bit;
+            self.blockers_tried |= 1u32 << i;
             let blocked = self
                 .streams
-                .tested(Key::player(Action::Block, &p), &[t.shots.block_chance])
-                < t.shots.block_chance;
+                .tested(Key::player(Action::Block, &p), &[contest.chance])
+                < contest.chance;
             if self.trace_on() {
                 self.trace_point(Point::ShotBlock, json!({"blocker": i, "blocked": blocked}));
             }
             if blocked {
-                let s = &t.shots;
-                let back = -DVec2::new(self.ball.vel.x, self.ball.vel.y);
                 let angle = self.streams.draw(Key::player(Action::BlockDeflect, &p));
-                self.ball.vel = shot::deflect(
-                    self.ball.vel,
-                    back,
-                    s.block_speed,
-                    s.block_spread,
-                    0.0,
-                    angle,
-                    0.0,
-                );
+                self.ball.vel =
+                    self.config
+                        .modules
+                        .ball
+                        .deflect(&self.view(), Deflection::Block, angle, 0.0);
                 self.deflected_by(i);
                 self.keeper_beaten = false;
                 #[cfg(feature = "scenario")]
@@ -85,18 +70,14 @@ impl Simulation {
         false
     }
 
-    /// The acting keeper within `keeper_reach` of a shot on target under the bar rolls once
-    /// per shot to save it, with a chance that falls with the shot's quality. A save is held
-    /// with `save_hold`; otherwise it is parried.
+    /// The keeper the possession module names rolls once per shot to save it, with a chance
+    /// that falls with the shot's quality. A save is held below the save-hold threshold;
+    /// otherwise it is parried.
     fn try_save(&mut self, shooter: usize, t: &Tuning) {
-        let k = self.keeper(1 - shooter);
-        if self.keeper_beaten
-            || self.ball.pos.z >= t.crossbar_height
-            || !self.players[k].active()
-            || (self.players[k].pos - self.ball.xy()).length() >= t.keeper_reach
-        {
+        let possession = self.config.modules.possession;
+        let Some(k) = possession.save_reach(&self.view(), shooter) else {
             return;
-        }
+        };
         let keeper = self.players[k];
         let save = self
             .config
@@ -112,10 +93,11 @@ impl Simulation {
             self.keeper_beaten = true;
             return;
         }
+        let hold = possession.save_hold(&self.view());
         if self
             .streams
-            .tested(Key::player(Action::SaveHold, &keeper), &[t.shots.save_hold])
-            < t.shots.save_hold
+            .tested(Key::player(Action::SaveHold, &keeper), &[hold])
+            < hold
         {
             #[cfg(feature = "scenario")]
             {
@@ -141,113 +123,72 @@ impl Simulation {
         }
     }
 
-    /// Keeper `k` parries the ball: it keeps `parry_speed` of its speed and goes along the
-    /// goal line away from the goal centre, turned by up to `parry_spread` either way, with
-    /// a loft of up to `parry_loft`. The keeper gets no second touch of this flight.
-    pub(crate) fn parry(&mut self, k: usize, t: &Tuning) {
-        let s = &t.shots;
+    /// Keeper `k` parries the ball to the side the possession module gives, turned by the
+    /// ball module. The keeper gets no second touch of this flight.
+    pub(crate) fn parry(&mut self, k: usize, _t: &Tuning) {
+        let possession = self.config.modules.possession;
         let keeper = self.players[k];
-        let side = if self.ball.pos.y == 0.0 {
-            if self
-                .streams
-                .tested(Key::player(Action::ParrySide, &keeper), &[0.5])
-                < 0.5
-            {
-                1.0
-            } else {
-                -1.0
+        let side = match possession.parry_side(&self.view(), k) {
+            ParrySide::Fixed(side) => side,
+            ParrySide::Draw(threshold) => {
+                let draw = self
+                    .streams
+                    .tested(Key::player(Action::ParrySide, &keeper), &[threshold]);
+                possession.parry_side_from_draw(draw, threshold)
             }
-        } else {
-            self.ball.pos.y.signum()
         };
         let angle = self.streams.draw(Key::player(Action::ParryAngle, &keeper));
         let loft = self.streams.draw(Key::player(Action::ParryLoft, &keeper));
-        self.ball.vel = shot::deflect(
-            self.ball.vel,
-            DVec2::new(0.0, side),
-            s.parry_speed,
-            s.parry_spread,
-            s.parry_loft,
-            angle,
-            loft,
-        );
+        self.ball.vel =
+            self.config
+                .modules
+                .ball
+                .deflect(&self.view(), Deflection::Parry { side }, angle, loft);
         self.deflected_by(k);
         self.keeper_beaten = true;
     }
 
-    /// While an open-play pass is in flight, fast, under `reach_height` and inside the
-    /// penalty area of the side that did not play it, each active defending outfield player
-    /// within `cross_reach` rolls once per flight to clear it. A clearance deflects the ball
-    /// away from his own goal centre, or wide toward his own goal line with `wide_chance`,
-    /// with his side as the last touch; the pass is not completed. Returns `true` when the
-    /// ball was cleared.
-    fn try_clear_cross(&mut self, t: &Tuning) -> bool {
-        let Some(passer) = self.pass_in_flight else {
+    /// While an open-play pass is in flight, each defender the possession module names rolls
+    /// once per flight to clear it. A clearance deflects the ball along the line the module
+    /// gives, with his side as the last touch; the pass is not completed. Returns `true` when
+    /// the ball was cleared.
+    fn try_clear_cross(&mut self) -> bool {
+        let possession = self.config.modules.possession;
+        let Some(cross) = possession.cross_clearers(&self.view()) else {
             return false;
         };
-        let c = &t.clearances;
-        if c.cross_chance <= 0.0
-            || self.ball.speed() <= t.control_speed
-            || self.ball.pos.z > t.reach_height
-        {
-            return false;
-        }
-        let def = 1 - passer;
-        let own_goal_x = -self.teams[def].attack_x;
-        let ball_xy = self.ball.xy();
-        if !pitch::in_penalty_area(ball_xy, own_goal_x) {
-            return false;
-        }
-        let keeper = self.keeper(def);
-        for i in 0..self.players.len() {
+        let chance = cross.contest.chance;
+        let mut mask = cross.contest.mask;
+        while mask != 0 {
+            let i = mask.trailing_zeros() as usize;
+            mask &= mask - 1;
             let p = self.players[i];
-            let bit = 1u32 << i;
-            if p.team != def
-                || i == keeper
-                || !p.active()
-                || self.clearers_tried & bit != 0
-                || (p.pos - ball_xy).length() >= c.cross_reach
-            {
-                continue;
-            }
-            self.clearers_tried |= bit;
+            self.clearers_tried |= 1u32 << i;
             let cleared = self
                 .streams
-                .tested(Key::player(Action::CrossClear, &p), &[c.cross_chance])
-                < c.cross_chance;
+                .tested(Key::player(Action::CrossClear, &p), &[chance])
+                < chance;
             if !cleared && self.trace_on() {
                 self.trace_point(Point::CrossClear, json!({"defender": i, "cleared": false}));
             }
             if cleared {
-                let wide = c.wide_chance > 0.0
-                    && self
-                        .streams
-                        .tested(Key::player(Action::CrossWide, &p), &[c.wide_chance])
-                        < c.wide_chance;
+                let wide = cross.wide_chance.is_some_and(|w| {
+                    self.streams
+                        .tested(Key::player(Action::CrossWide, &p), &[w])
+                        < w
+                });
                 if self.trace_on() {
                     self.trace_point(
                         Point::CrossClear,
                         json!({"defender": i, "cleared": true, "wide": wide}),
                     );
                 }
-                let (away, spread) = if wide {
-                    (wide_of_goal(ball_xy, own_goal_x), WIDE_SPREAD)
-                } else {
-                    let goal = pitch::goal_centre(own_goal_x);
-                    let away = match toward(goal, ball_xy) {
-                        v if v == DVec2::ZERO => DVec2::new(-own_goal_x.signum(), 0.0),
-                        v => v,
-                    };
-                    (away, c.cross_spread)
-                };
+                let (away, spread) = possession.clearance_line(&self.view(), i, wide);
                 let angle = self.streams.draw(Key::player(Action::CrossAngle, &p));
                 let loft = self.streams.draw(Key::player(Action::CrossLoft, &p));
-                self.ball.vel = shot::deflect(
-                    self.ball.vel,
-                    away,
-                    c.cross_speed,
-                    spread,
-                    c.cross_loft,
+                self.ball.vel = self.config.modules.ball.deflect(
+                    &self.view(),
+                    Deflection::Clear { away, spread },
                     angle,
                     loft,
                 );
@@ -255,7 +196,7 @@ impl Simulation {
                 self.pass_in_flight = None;
                 self.clearers_tried = 0;
                 self.keeper_beaten = false;
-                self.summary.clearances[def] += 1;
+                self.summary.clearances[cross.team] += 1;
                 return true;
             }
         }
@@ -274,35 +215,32 @@ impl Simulation {
         self.end_shot();
     }
 
+    /// The ball pass: the ball module carries the ball at the carrier's feet, or moves it one
+    /// tick in flight and says which line it crossed.
     pub(crate) fn move_ball(&mut self, t: &Tuning) {
+        let ball = self.config.modules.ball;
         match self.carrier {
             Some(c) => {
-                let p = &self.players[c];
-                let at = pitch::clamp(p.pos + p.facing * 0.5, 0.1);
-                let step = crate::math::clamp_len(at - self.ball.xy(), t.carry_step);
-                let next = self.ball.xy() + step;
-                self.ball.pos = DVec3::new(next.x, next.y, 0.0);
-                self.ball.vel = DVec3::new(p.vel.x, p.vel.y, 0.0);
+                self.ball = ball.carry(&self.view(), c);
             }
             None => {
                 let prev = self.ball.xy();
-                self.ball.integrate(t);
+                self.ball = ball.integrate(&self.view(), self.ball);
                 let xy = self.ball.xy();
                 if self.referee.shootout.is_some() {
                     self.shootout_ball(prev, xy, t);
                     return;
                 }
-                for team in 0..2 {
-                    if pitch::in_goal(prev, xy, self.teams[team].attack_x)
-                        && self.ball.pos.z < t.crossbar_height
-                    {
+                match ball.crossing(&self.view(), prev, &self.ball) {
+                    Crossing::Goal(team) => {
                         self.goal(team);
                         return;
                     }
-                }
-                if let Some(exit) = pitch::exit(prev, xy) {
-                    self.ball_out(exit);
-                    return;
+                    Crossing::Out(exit) => {
+                        self.ball_out(exit);
+                        return;
+                    }
+                    Crossing::None => {}
                 }
             }
         }
@@ -315,41 +253,26 @@ impl Simulation {
         }
     }
 
+    /// The possession pass: a contested shot, a cleared cross, a loose ball, or a tackle on
+    /// the carrier, each as the possession module allows.
     pub(crate) fn resolve_possession(&mut self, t: &Tuning) {
         if self.referee.shootout.is_some() {
             self.shootout_save(t);
             return;
         }
-        let ball_xy = self.ball.xy();
+        let possession = self.config.modules.possession;
         match self.carrier {
             None => {
                 if self.contest_shot(t) {
                     return;
                 }
-                if self.try_clear_cross(t) {
+                if self.try_clear_cross() {
                     return;
                 }
-                if self.ball.pos.z > t.reach_height {
+                let Some(loose) = possession.loose_ball(&self.view()) else {
                     return;
-                }
-                let fast = self.ball.speed() > t.control_speed;
-                let keepers = [self.keeper(0), self.keeper(1)];
-                let mut best: Option<(f64, usize)> = None;
-                for (i, p) in self.players.iter().enumerate() {
-                    let keeper = i == keepers[p.team];
-                    if !p.active() || (fast && !keeper) {
-                        continue;
-                    }
-                    let reach = if keeper {
-                        t.keeper_reach
-                    } else {
-                        t.reach_radius
-                    };
-                    let d = (p.pos - ball_xy).length();
-                    if d < reach && best.is_none_or(|(bd, _)| d < bd) {
-                        best = Some((d, i));
-                    }
-                }
+                };
+                let (best, fast) = (loose.best, loose.fast);
                 if self.trace_on() {
                     self.trace_point(
                         Point::LooseBall,
@@ -369,7 +292,7 @@ impl Simulation {
                         let catcher = self.players[i];
                         let caught = self.streams.chance(
                             Key::player(Action::KeeperCatch, &catcher),
-                            t.keeper_catch_chance,
+                            loose.catch_chance,
                         );
                         if self.trace_on() {
                             self.trace_point(
@@ -386,19 +309,13 @@ impl Simulation {
                 }
             }
             Some(c) => {
-                if self.tick.saturating_sub(self.control_since) < t.control_cooldown_ticks {
+                let Some(mut mask) = possession.tacklers(&self.view(), c) else {
                     return;
-                }
-                let carrier = self.players[c];
-                for i in 0..self.players.len() {
+                };
+                while mask != 0 {
+                    let i = mask.trailing_zeros() as usize;
+                    mask &= mask - 1;
                     let p = self.players[i];
-                    if !p.active()
-                        || p.team == carrier.team
-                        || self.tick < p.foul_ready
-                        || (p.pos - ball_xy).length() > t.tackle_reach
-                    {
-                        continue;
-                    }
                     let fouls = self.config.modules.fouls;
                     let chances = fouls.tackle_chances(&self.view(), i, c);
                     let (p_win, p_foul) = (chances.p_win, chances.p_foul);
@@ -444,7 +361,7 @@ impl Simulation {
 
     /// Player `i` touches the ball first. A player in an offside position is penalised
     /// instead of gaining the ball.
-    fn gain(&mut self, i: usize, _t: &Tuning) {
+    pub(crate) fn gain(&mut self, i: usize, _t: &Tuning) {
         if self
             .config
             .modules

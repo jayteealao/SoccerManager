@@ -2,8 +2,9 @@
 //! finishes on it; a bad slot entry refuses start-up and names the slot, the bad value, and
 //! the valid names; every moved action key has exactly one owner; every module card is
 //! complete; one changed module output fails the replay gate at a named window; every
-//! modifier names its family and can be switched off; and the referee rules' required slots
-//! refuse `off` while their optional slots play a match to the end switched off.
+//! modifier names its family and can be switched off; the required slots of the core list
+//! refuse `off` while the optional slots play a match to the end switched off; and every
+//! row of the stream table has an owner.
 
 /// The four modifier slots, in registry order.
 const MODIFIER_SLOTS: [&str; 4] = [
@@ -19,8 +20,9 @@ use std::collections::BTreeMap;
 
 use engine::modules::modifier::Family;
 use engine::modules::registry::{
-    CLOCK, DISCIPLINE, FATIGUE, FOULS, INJURIES, MODIFIER_FATIGUE, MODIFIER_MOMENTUM,
-    MODIFIER_PRESSURE, MODIFIER_WEATHER, ModuleRef, OFFSIDE, PRE_MATCH, RESTARTS, SHOT, STEERING,
+    BALL, CHANGES, CLOCK, DECISION, DISCIPLINE, FATIGUE, FOULS, INJURIES, MANAGER,
+    MODIFIER_FATIGUE, MODIFIER_MOMENTUM, MODIFIER_PRESSURE, MODIFIER_WEATHER, ModuleRef, OFFSIDE,
+    POSSESSION, PRE_MATCH, RESTARTS, SHOT, STEERING,
 };
 use engine::modules::{
     CardError, MOVED_KEYS, ModuleCard, OwnershipError, REGISTRY, Registration, SlotDecl, SlotEntry,
@@ -128,6 +130,11 @@ fn default_selection_resolves_and_a_match_finishes() {
             "engine.restarts=restarts@1",
             "engine.discipline=discipline@1",
             "engine.injuries=injuries@1",
+            "engine.ball=ball@1",
+            "engine.possession=possession@1",
+            "engine.decision=decision@1",
+            "engine.manager=ai-manager@1",
+            "engine.changes=changes@1",
         ],
         "every declared slot resolves, in registry order"
     );
@@ -210,9 +217,16 @@ fn off_on_a_required_slot_is_refused() {
         text,
         "slot configuration refused: slot engine.steering: off is not allowed: the slot is required; valid: steering@1"
     );
-    // The clock and match end, and restarts, are on the core list too (AC-10). Test builds
-    // also list the faulty clock after `clock@1`.
-    for (id, first) in [(CLOCK.id, "clock@1"), (RESTARTS.id, "restarts@1")] {
+    // The clock and match end, restarts, ball physics, possession, and the decision maker
+    // are on the core list too (AC-10). Test builds also list the faulty clock after
+    // `clock@1` and the faulty possession module after `possession@1`.
+    for (id, first) in [
+        (CLOCK.id, "clock@1"),
+        (RESTARTS.id, "restarts@1"),
+        (BALL.id, "ball@1"),
+        (POSSESSION.id, "possession@1"),
+        (DECISION.id, "decision@1"),
+    ] {
         let (slot, value, valid, text) = refusal(&default_with(&[(id, "off", None)]), REGISTRY);
         assert_eq!((slot.as_str(), value.as_str()), (id, "off"));
         assert!(valid.starts_with(first), "{valid}");
@@ -235,20 +249,23 @@ fn off_on_an_optional_slot_resolves_to_its_off_version() {
         .collect();
     let mut expected = vec![FOULS.id, OFFSIDE.id, SHOT.id, FATIGUE.id, PRE_MATCH.id];
     expected.extend(MODIFIER_SLOTS);
-    expected.extend([DISCIPLINE.id, INJURIES.id]);
+    expected.extend([DISCIPLINE.id, INJURIES.id, MANAGER.id, CHANGES.id]);
     assert_eq!(optional, expected);
     let changes: Vec<(&str, &str, Option<u32>)> =
         optional.iter().map(|&slot| (slot, "off", None)).collect();
     let modules = resolve(&default_with(&changes), REGISTRY).unwrap();
     for p in modules.picked() {
-        if p.slot == STEERING.id {
-            assert_eq!((p.module, p.version), ("steering", 1));
-        } else if p.slot == CLOCK.id {
-            assert_eq!((p.module, p.version), ("clock", 1));
-        } else if p.slot == RESTARTS.id {
-            assert_eq!((p.module, p.version), ("restarts", 1));
-        } else {
-            assert_eq!((p.module, p.version), ("off", 0), "{}", p.slot);
+        let required = [
+            (STEERING.id, "steering"),
+            (CLOCK.id, "clock"),
+            (RESTARTS.id, "restarts"),
+            (BALL.id, "ball"),
+            (POSSESSION.id, "possession"),
+            (DECISION.id, "decision"),
+        ];
+        match required.iter().find(|(slot, _)| *slot == p.slot) {
+            Some(&(_, module)) => assert_eq!((p.module, p.version), (module, 1)),
+            None => assert_eq!((p.module, p.version), ("off", 0), "{}", p.slot),
         }
     }
 }
@@ -265,7 +282,8 @@ fn an_undeclared_or_missing_slot_is_refused() {
         "engine.fouls, engine.offside, engine.shot, engine.fatigue, engine.steering, \
          engine.pre-match, engine.modifier.fatigue, engine.modifier.pressure, \
          engine.modifier.momentum, engine.modifier.weather, engine.clock, engine.restarts, \
-         engine.discipline, engine.injuries"
+         engine.discipline, engine.injuries, engine.ball, engine.possession, engine.decision, \
+         engine.manager, engine.changes"
     );
     assert!(text.contains("is not a declared slot"), "{text}");
 
@@ -292,6 +310,17 @@ fn every_moved_key_has_exactly_one_owner() {
             }
         }
     }
+}
+
+/// Every row of the stream table is a moved key, so every draw of a match has one owning
+/// module.
+#[test]
+fn every_stream_row_has_an_owner() {
+    for key in Action::ALL {
+        assert!(MOVED_KEYS.contains(&key), "{key:?} has no owner");
+    }
+    assert_eq!(MOVED_KEYS.len(), Action::ALL.len());
+    check_ownership(&default_cards(), &Action::ALL).unwrap();
 }
 
 #[test]
@@ -345,9 +374,10 @@ fn every_registered_card_is_complete() {
     assert!(names.contains(&"yellow_cards_per_team"), "{names:?}");
     assert!(names.contains(&"goals_per_xg"), "{names:?}");
     let registrations = every_registration();
-    // Fouls, offside, shot, fatigue, pre-match, the four modifiers, discipline, and injuries
-    // each have version 1 and off; steering, the clock, and restarts have version 1 only.
-    assert!(registrations.len() >= 25, "{}", registrations.len());
+    // Fouls, offside, shot, fatigue, pre-match, the four modifiers, discipline, injuries,
+    // the manager, and changes each have version 1 and off; steering, the clock, restarts,
+    // ball physics, possession, and the decision maker have version 1 only.
+    assert!(registrations.len() >= 34, "{}", registrations.len());
     for reg in registrations {
         check_card(reg.card, &names)
             .unwrap_or_else(|e| panic!("{}@{}: {e}", reg.name, reg.version));
@@ -405,7 +435,17 @@ fn the_registry_declares_the_moved_slots_in_order() {
         PRE_MATCH.id,
     ];
     expected.extend(MODIFIER_SLOTS);
-    expected.extend([CLOCK.id, RESTARTS.id, DISCIPLINE.id, INJURIES.id]);
+    expected.extend([
+        CLOCK.id,
+        RESTARTS.id,
+        DISCIPLINE.id,
+        INJURIES.id,
+        BALL.id,
+        POSSESSION.id,
+        DECISION.id,
+        MANAGER.id,
+        CHANGES.id,
+    ]);
     assert_eq!(ids, expected);
     assert_eq!(REGISTRY.len(), engine::modules::SLOT_COUNT);
     let required: Vec<&str> = REGISTRY
@@ -415,8 +455,16 @@ fn the_registry_declares_the_moved_slots_in_order() {
         .collect();
     assert_eq!(
         required,
-        [STEERING.id, CLOCK.id, RESTARTS.id],
-        "steering, the clock, and restarts are required"
+        [
+            STEERING.id,
+            CLOCK.id,
+            RESTARTS.id,
+            BALL.id,
+            POSSESSION.id,
+            DECISION.id
+        ],
+        "the core list is required: steering, the clock, restarts, the ball, possession, and \
+         the decision maker"
     );
     for decl in REGISTRY {
         assert_eq!(
@@ -440,6 +488,11 @@ fn the_registry_declares_the_moved_slots_in_order() {
     assert!(matches!(default(11), ModuleRef::Restarts(_)));
     assert!(matches!(default(12), ModuleRef::Discipline(_)));
     assert!(matches!(default(13), ModuleRef::Injuries(_)));
+    assert!(matches!(default(14), ModuleRef::Ball(_)));
+    assert!(matches!(default(15), ModuleRef::Possession(_)));
+    assert!(matches!(default(16), ModuleRef::Decision(_)));
+    assert!(matches!(default(17), ModuleRef::Manager(_)));
+    assert!(matches!(default(18), ModuleRef::Changes(_)));
 }
 
 #[test]
@@ -581,7 +634,12 @@ const FOULS_OFF: &str = r#"{
     "engine.clock": { "module": "clock", "version": 1 },
     "engine.restarts": { "module": "restarts", "version": 1 },
     "engine.discipline": { "module": "discipline", "version": 1 },
-    "engine.injuries": { "module": "injuries", "version": 1 }
+    "engine.injuries": { "module": "injuries", "version": 1 },
+    "engine.ball": { "module": "ball", "version": 1 },
+    "engine.possession": { "module": "possession", "version": 1 },
+    "engine.decision": { "module": "decision", "version": 1 },
+    "engine.manager": { "module": "ai-manager", "version": 1 },
+    "engine.changes": { "module": "changes", "version": 1 }
   }
 }"#;
 
@@ -670,6 +728,48 @@ fn faulty_clock_fails_the_gate_at_a_named_window() {
     );
 }
 
+/// AC-5 for possession: an outfield player who reaches a loose ball from 1 cm further fails
+/// the gate at the first loose ball that centimetre decides (on seed 42, in the window from
+/// tick 2,000 to tick 3,000), and the report names the window.
+#[test]
+fn faulty_possession_fails_the_gate_at_a_named_window() {
+    use engine::gate::{self, Fixture, Inputs, Verdict, compare, report_line};
+
+    let content = common::content();
+    let [a, b] = common::default_teams(&content);
+    let fixture = Fixture::seed(42);
+    let play = |content: &engine::Content| {
+        gate::play_fixture(
+            &fixture,
+            &Inputs {
+                content,
+                teams: [&a, &b],
+                pack: None,
+            },
+        )
+        .unwrap()
+    };
+    let clean = play(&content);
+    let mut faulty = content.clone();
+    faulty.modules = resolve(
+        &default_with(&[(POSSESSION.id, "possession-faulty", Some(1))]),
+        REGISTRY,
+    )
+    .unwrap();
+    let played = play(&faulty);
+    let verdict = compare(&clean.hashes, &played.hashes);
+    let report = report_line(&fixture, &played, verdict);
+    println!("{report}");
+    let Verdict::Differs { from, to } = verdict else {
+        panic!("the gate did not fail: {verdict:?}\n{report}");
+    };
+    assert!(from >= 2_000, "{report}");
+    assert!(
+        report.contains(&format!("between tick {from} and tick {to}")),
+        "{report}"
+    );
+}
+
 #[test]
 fn each_new_optional_slot_switched_off_plays_a_match_to_the_end() {
     let content = common::content();
@@ -680,6 +780,8 @@ fn each_new_optional_slot_switched_off_plays_a_match_to_the_end() {
         PRE_MATCH.id,
         DISCIPLINE.id,
         INJURIES.id,
+        MANAGER.id,
+        CHANGES.id,
     ] {
         let mut off = content.clone();
         off.modules = resolve(&default_with(&[(slot, "off", None)]), REGISTRY).unwrap();

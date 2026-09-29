@@ -1,7 +1,11 @@
 //! The ball: position and velocity in three dimensions, ground friction, air drag, gravity,
 //! and bounce. Integration is semi-implicit Euler at the fixed timestep.
 
-use crate::math::{DVec2, DVec3};
+use crate::math::{DVec2, DVec3, clamp_len};
+use crate::modules::{BallModule, Crossing, Deflection, MatchView, ModuleCard};
+use crate::pitch;
+use crate::shot;
+use crate::streams::Action;
 use crate::tuning::Tuning;
 
 /// Ball state.
@@ -80,6 +84,115 @@ impl Ball {
         }
     }
 }
+
+/// Ball physics version 1: the ball carried at the carrier's feet, [`Ball::integrate`],
+/// [`Ball::kick`], the goal-line and touchline crossings, and [`shot::deflect`].
+pub struct BallV1;
+
+impl BallModule for BallV1 {
+    fn carry(&self, view: &MatchView<'_>, c: usize) -> Ball {
+        let p = view.player(c);
+        let ball = view.ball();
+        let at = pitch::clamp(p.pos + p.facing * 0.5, 0.1);
+        let step = clamp_len(at - ball.xy(), view.tuning().carry_step);
+        let next = ball.xy() + step;
+        Ball {
+            pos: DVec3::new(next.x, next.y, 0.0),
+            vel: DVec3::new(p.vel.x, p.vel.y, 0.0),
+        }
+    }
+
+    fn integrate(&self, view: &MatchView<'_>, mut ball: Ball) -> Ball {
+        ball.integrate(view.tuning());
+        ball
+    }
+
+    fn kick(
+        &self,
+        view: &MatchView<'_>,
+        mut ball: Ball,
+        dir: DVec2,
+        speed: f64,
+        loft: f64,
+    ) -> Ball {
+        ball.kick(dir, speed, loft, view.tuning());
+        ball
+    }
+
+    fn crossing(&self, view: &MatchView<'_>, prev: DVec2, ball: &Ball) -> Crossing {
+        let xy = ball.xy();
+        for team in 0..2 {
+            if pitch::in_goal(prev, xy, view.attack_x(team))
+                && ball.pos.z < view.tuning().crossbar_height
+            {
+                return Crossing::Goal(team);
+            }
+        }
+        match pitch::exit(prev, xy) {
+            Some(exit) => Crossing::Out(exit),
+            None => Crossing::None,
+        }
+    }
+
+    fn deflect(&self, view: &MatchView<'_>, how: Deflection, angle: f64, loft: f64) -> DVec3 {
+        let t = view.tuning();
+        let vel = view.ball().vel;
+        match how {
+            Deflection::Block => {
+                let s = &t.shots;
+                let back = -DVec2::new(vel.x, vel.y);
+                shot::deflect(vel, back, s.block_speed, s.block_spread, 0.0, angle, 0.0)
+            }
+            Deflection::Parry { side } => {
+                let s = &t.shots;
+                shot::deflect(
+                    vel,
+                    DVec2::new(0.0, side),
+                    s.parry_speed,
+                    s.parry_spread,
+                    s.parry_loft,
+                    angle,
+                    loft,
+                )
+            }
+            Deflection::Clear { away, spread } => {
+                let c = &t.clearances;
+                shot::deflect(vel, away, c.cross_speed, spread, c.cross_loft, angle, loft)
+            }
+        }
+    }
+}
+
+pub const BALL_V1_CARD: ModuleCard = ModuleCard {
+    purpose: "Moves the ball: carried at the carrier's feet, in flight and rolling with gravity, drag, friction, and bounce; kicks it; finds the goal-line and touchline crossings; and turns a blocked, parried, or cleared ball.",
+    inputs: "The ball, the carrier's position, facing, and velocity, each team's attack direction, and the engine tuning.",
+    outputs: "The next ball, a kicked ball, the line crossed, and a deflected ball's velocity.",
+    tuning: &[
+        "gravity",
+        "air_drag",
+        "ground_friction",
+        "restitution",
+        "ball_max_speed",
+        "carry_step",
+        "crossbar_height",
+        "dt",
+        "shots.block_speed",
+        "shots.block_spread",
+        "shots.parry_speed",
+        "shots.parry_spread",
+        "shots.parry_loft",
+        "clearances.cross_speed",
+        "clearances.cross_loft",
+    ],
+    calibration: "none: ball physics, no realism band",
+    keys: &[
+        Action::BlockDeflect,
+        Action::ParryAngle,
+        Action::ParryLoft,
+        Action::CrossAngle,
+        Action::CrossLoft,
+    ],
+};
 
 #[cfg(test)]
 mod tests {

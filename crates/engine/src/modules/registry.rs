@@ -5,11 +5,13 @@
 use super::card::ModuleCard;
 use super::modifier::{Modifier, stand_ins};
 use super::{
-    ClockModule, DisciplineModule, FatigueModule, FoulsModule, InjuriesModule, OffsideModule,
-    PreMatchModule, RestartsModule, ShotModule, Slot, SteeringModule,
+    BallModule, ChangesModule, ClockModule, DecisionModule, DisciplineModule, FatigueModule,
+    FoulsModule, InjuriesModule, ManagerModule, OffsideModule, PossessionModule, PreMatchModule,
+    RestartsModule, ShotModule, Slot, SteeringModule,
 };
 use crate::rules::{clock, discipline, fouls, injury, offside, restart};
-use crate::{ai, fatigue, shot, steering};
+use crate::tactics::verdict;
+use crate::{ai, ball, decision, fatigue, possession, shot, steering};
 
 /// A registered module, typed by the slot it fills.
 #[derive(Clone, Copy)]
@@ -25,6 +27,11 @@ pub enum ModuleRef {
     Restarts(&'static dyn RestartsModule),
     Discipline(&'static dyn DisciplineModule),
     Injuries(&'static dyn InjuriesModule),
+    Ball(&'static dyn BallModule),
+    Possession(&'static dyn PossessionModule),
+    Decision(&'static dyn DecisionModule),
+    Manager(&'static dyn ManagerModule),
+    Changes(&'static dyn ChangesModule),
 }
 
 /// One module registered for a slot.
@@ -136,9 +143,39 @@ pub const INJURIES: Slot = Slot {
     required: false,
 };
 
+/// Ball physics is on the core list, so the slot is required and has no off version.
+pub const BALL: Slot = Slot {
+    id: "engine.ball",
+    required: true,
+};
+
+/// Possession is on the core list, so the slot is required and has no off version.
+pub const POSSESSION: Slot = Slot {
+    id: "engine.possession",
+    required: true,
+};
+
+/// The decision maker is on the core list, so the slot is required and has no off version.
+pub const DECISION: Slot = Slot {
+    id: "engine.decision",
+    required: true,
+};
+
+/// The AI manager's in-match checks.
+pub const MANAGER: Slot = Slot {
+    id: "engine.manager",
+    required: false,
+};
+
+/// Tactics changes: what a stoppage admits and the verdicts on changes.
+pub const CHANGES: Slot = Slot {
+    id: "engine.changes",
+    required: false,
+};
+
 /// The number of declared slots. `ResolvedModules` holds one typed field per slot, and one
 /// `Modifiers` field for the modifier slots.
-pub const SLOT_COUNT: usize = 14;
+pub const SLOT_COUNT: usize = 19;
 
 /// The number of modifier slots.
 pub const MODIFIER_COUNT: usize = 4;
@@ -211,6 +248,29 @@ const CLOCK_REGISTRATIONS: &[Registration] = &[
         card: &clock::CLOCK_FAULTY_CARD,
     },
 ];
+
+#[cfg(not(feature = "scenario"))]
+const POSSESSION_REGISTRATIONS: &[Registration] = &[POSSESSION_V1];
+
+/// Test builds also register a faulty possession module, which the gate tests select to
+/// prove that one changed output fails the gate. A release build never contains it.
+#[cfg(feature = "scenario")]
+const POSSESSION_REGISTRATIONS: &[Registration] = &[
+    POSSESSION_V1,
+    Registration {
+        name: "possession-faulty",
+        version: 1,
+        module: ModuleRef::Possession(&possession::PossessionFaulty),
+        card: &possession::POSSESSION_FAULTY_CARD,
+    },
+];
+
+const POSSESSION_V1: Registration = Registration {
+    name: "possession",
+    version: 1,
+    module: ModuleRef::Possession(&possession::PossessionV1),
+    card: &possession::POSSESSION_V1_CARD,
+};
 
 const CLOCK_V1: Registration = Registration {
     name: "clock",
@@ -396,6 +456,61 @@ const DECLS: [SlotDecl; SLOT_COUNT] = [
             version: 0,
             module: ModuleRef::Injuries(&injury::InjuriesOff),
             card: &injury::INJURIES_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: BALL,
+        registrations: &[Registration {
+            name: "ball",
+            version: 1,
+            module: ModuleRef::Ball(&ball::BallV1),
+            card: &ball::BALL_V1_CARD,
+        }],
+        off: None,
+    },
+    SlotDecl {
+        slot: POSSESSION,
+        registrations: POSSESSION_REGISTRATIONS,
+        off: None,
+    },
+    SlotDecl {
+        slot: DECISION,
+        registrations: &[Registration {
+            name: "decision",
+            version: 1,
+            module: ModuleRef::Decision(&decision::DecisionV1),
+            card: &decision::DECISION_V1_CARD,
+        }],
+        off: None,
+    },
+    SlotDecl {
+        slot: MANAGER,
+        registrations: &[Registration {
+            name: "ai-manager",
+            version: 1,
+            module: ModuleRef::Manager(&ai::AiManagerV1),
+            card: &ai::AI_MANAGER_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::Manager(&ai::ManagerOff),
+            card: &ai::MANAGER_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: CHANGES,
+        registrations: &[Registration {
+            name: "changes",
+            version: 1,
+            module: ModuleRef::Changes(&verdict::ChangesV1),
+            card: &verdict::CHANGES_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::Changes(&verdict::ChangesOff),
+            card: &verdict::CHANGES_OFF_CARD,
         }),
     },
 ];

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "slots": {
-    "engine.fouls": { "module": "fouls", "version": 2 },
+    "engine.fouls": { "module": "fouls", "version": 1 },
     "engine.offside": { "module": "offside", "version": 1 },
     "engine.shot": { "module": "shot", "version": 1 },
     "engine.fatigue": { "module": "fatigue", "version": 1 },
@@ -16,7 +16,7 @@
     "engine.discipline": { "module": "discipline", "version": 1 },
     "engine.injuries": { "module": "injuries", "version": 1 },
     "engine.ball": { "module": "ball", "version": 1 },
-    "engine.possession": { "module": "possession", "version": 1 },
+    "engine.possession": { "module": "off" },
     "engine.decision": { "module": "decision", "version": 1 },
     "engine.manager": { "module": "ai-manager", "version": 1 },
     "engine.changes": { "module": "changes", "version": 1 }

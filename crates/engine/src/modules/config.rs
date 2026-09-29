@@ -14,8 +14,9 @@ use serde::{Deserialize, Serialize};
 use super::modifier::{Modifier, Modifiers};
 use super::registry::{MODIFIER_COUNT, ModuleRef, Registration, SLOT_COUNT, SlotDecl};
 use super::{
-    ClockModule, DisciplineModule, FatigueModule, FoulsModule, InjuriesModule, OffsideModule,
-    Picked, PreMatchModule, ResolvedModules, RestartsModule, ShotModule, SteeringModule,
+    BallModule, ChangesModule, ClockModule, DecisionModule, DisciplineModule, FatigueModule,
+    FoulsModule, InjuriesModule, ManagerModule, OffsideModule, Picked, PossessionModule,
+    PreMatchModule, ResolvedModules, RestartsModule, ShotModule, SteeringModule,
 };
 use crate::error::EngineError;
 
@@ -72,6 +73,11 @@ impl SlotFile {
                 ("engine.restarts".to_string(), entry("restarts")),
                 ("engine.discipline".to_string(), entry("discipline")),
                 ("engine.injuries".to_string(), entry("injuries")),
+                ("engine.ball".to_string(), entry("ball")),
+                ("engine.possession".to_string(), entry("possession")),
+                ("engine.decision".to_string(), entry("decision")),
+                ("engine.manager".to_string(), entry("ai-manager")),
+                ("engine.changes".to_string(), entry("changes")),
             ]),
         }
     }
@@ -149,6 +155,11 @@ struct Builder {
     restarts: Option<&'static dyn RestartsModule>,
     discipline: Option<&'static dyn DisciplineModule>,
     injuries: Option<&'static dyn InjuriesModule>,
+    ball: Option<&'static dyn BallModule>,
+    possession: Option<&'static dyn PossessionModule>,
+    decision: Option<&'static dyn DecisionModule>,
+    manager: Option<&'static dyn ManagerModule>,
+    changes: Option<&'static dyn ChangesModule>,
 }
 
 impl Builder {
@@ -173,6 +184,11 @@ impl Builder {
             ModuleRef::Restarts(m) => set(&mut self.restarts, m),
             ModuleRef::Discipline(m) => set(&mut self.discipline, m),
             ModuleRef::Injuries(m) => set(&mut self.injuries, m),
+            ModuleRef::Ball(m) => set(&mut self.ball, m),
+            ModuleRef::Possession(m) => set(&mut self.possession, m),
+            ModuleRef::Decision(m) => set(&mut self.decision, m),
+            ModuleRef::Manager(m) => set(&mut self.manager, m),
+            ModuleRef::Changes(m) => set(&mut self.changes, m),
         };
         if once { Ok(()) } else { Err(Self::defect()) }
     }
@@ -192,6 +208,11 @@ impl Builder {
             Some(restarts),
             Some(discipline),
             Some(injuries),
+            Some(ball),
+            Some(possession),
+            Some(decision),
+            Some(manager),
+            Some(changes),
         ) = (
             self.fouls,
             self.offside,
@@ -203,6 +224,11 @@ impl Builder {
             self.restarts,
             self.discipline,
             self.injuries,
+            self.ball,
+            self.possession,
+            self.decision,
+            self.manager,
+            self.changes,
         )
         else {
             return Err(Self::defect());
@@ -219,6 +245,11 @@ impl Builder {
             restarts,
             discipline,
             injuries,
+            ball,
+            possession,
+            decision,
+            manager,
+            changes,
             picked,
         })
     }

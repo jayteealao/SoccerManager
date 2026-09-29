@@ -34,7 +34,6 @@ use crate::plugin::{Plugins, ScriptNote};
 use crate::record::{TickRecord, TickSink};
 use crate::rules::fouls::Card;
 use crate::rules::{Phase, Referee, Stoppage};
-use crate::steering;
 use crate::streams::Streams;
 use crate::tactics::Tactics;
 use crate::tactics::change::{
@@ -1023,7 +1022,11 @@ impl Simulation {
             self.apply_changes(stoppage);
             self.script_cache = None;
         }
-        steering::resolve_overlaps(&mut self.players, &t);
+        if let Some(separated) = self.config.modules.steering.separate(&self.view()) {
+            for (p, &pos) in self.players.iter_mut().zip(separated.iter()) {
+                p.pos = pos;
+            }
+        }
         self.tick += 1;
     }
 
@@ -1141,7 +1144,11 @@ impl Simulation {
                 self.referee.offside = 0;
             }
         }
-        self.ball.kick(dir, speed, loft, t);
+        self.ball = self
+            .config
+            .modules
+            .ball
+            .kick(&self.view(), self.ball, dir, speed, loft);
         if let Some((team, attack_x)) = shooter
             && self
                 .config

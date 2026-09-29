@@ -4,8 +4,8 @@
 
 use crate::streams::Action;
 
-/// The action keys drawn by the parts that have moved onto the contract. Later moves grow
-/// this list until it holds every row of the stream table.
+/// The action keys drawn by the parts that have moved onto the contract: every row of the
+/// stream table.
 pub const MOVED_KEYS: &[Action] = &[
     Action::Tackle,
     Action::FoulCard,
@@ -20,6 +20,29 @@ pub const MOVED_KEYS: &[Action] = &[
     Action::ShootoutEnd,
     Action::KeeperDive,
     Action::ShootoutSaveHold,
+    Action::BlockDeflect,
+    Action::ParryAngle,
+    Action::ParryLoft,
+    Action::CrossAngle,
+    Action::CrossLoft,
+    Action::Block,
+    Action::SaveHold,
+    Action::ParrySide,
+    Action::CrossClear,
+    Action::CrossWide,
+    Action::KeeperCatch,
+    Action::ShotScore,
+    Action::PassScore,
+    Action::DribbleScore,
+    Action::HoldScore,
+    Action::ClearScore,
+    Action::PassAim,
+    Action::ClearWide,
+    Action::ClearAim,
+    Action::ShotSide,
+    Action::ShotAim,
+    Action::ShotSpread,
+    Action::ShotLoft,
 ];
 
 /// What one module is.

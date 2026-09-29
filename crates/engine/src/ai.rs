@@ -18,10 +18,13 @@
 //! uses, and emits an `AiDecision` event with a short code.
 
 use crate::data::attributes::AttributeSchema;
-use crate::data::tactics::TacticsSchema;
+use crate::data::rules::StoppageKind;
+use crate::data::tactics::{PRESSING, TIME_WASTING, TacticsSchema};
 use crate::data::team::Position;
-use crate::modules::{ModuleCard, PreMatchModule};
-use crate::tactics::Tactics;
+use crate::modules::{AiPlan, ManagerModule, MatchView, ModuleCard, PreMatchModule};
+use crate::player::Status;
+use crate::tactics::change::{Change, ChangeId, ChangeQueue, QueuedChange};
+use crate::tactics::{Tactics, TacticsPatch};
 use crate::team::{PLAYERS_PER_TEAM, SquadPlayer, Team};
 
 /// Who manages a team during the match.
@@ -214,6 +217,275 @@ pub const PRE_MATCH_OFF_CARD: ModuleCard = ModuleCard {
     outputs: "The setup in squad order with the default tactics.",
     tuning: &["tactics.ai.bench_size"],
     calibration: "none: off version, no lineup choice",
+    keys: &[],
+};
+
+/// The AI manager's in-match checks, version 1 (the rules in this file's header). It reads
+/// the view and works on a copy of the change queue: each change it proposes joins the copy
+/// before the next read, so a later rule of the same check sees it, as the queue would.
+pub struct AiManagerV1;
+
+impl ManagerModule for AiManagerV1 {
+    fn check(&self, view: &MatchView<'_>, team: usize, at_stoppage: bool) -> AiPlan {
+        let mut check = Check {
+            view,
+            team,
+            queue: view.queue().clone(),
+            changes: Vec::new(),
+        };
+        let mut memory = view.ai_memory(team);
+        let now = view.tick() + 1;
+        let minute = view.referee().clock.minute(now).0;
+        let ai = &view.tactics().ai;
+        let limit = usize::from(view.substitution_limits().0);
+        let used = usize::from(view.ledgers()[team].used);
+        let players = view.players();
+        let side = &view.teams()[team];
+        // Injuries: every injured player on the lineup without a substitute queued. The check
+        // on the injury's own stoppage always asks, so a refusal names its reason there; a
+        // later check asks again only while the team could still make a substitution.
+        let may_substitute = at_stoppage || check.substitution_possible();
+        for slot in 0..PLAYERS_PER_TEAM {
+            let i = team * PLAYERS_PER_TEAM + slot;
+            let off = side.lineup[slot];
+            if !may_substitute
+                || players[i].status != Status::Injured
+                || check.queue.has_substitution(team, off)
+            {
+                continue;
+            }
+            if let Some(on) = check.substitute_for(slot) {
+                check.propose(Change::Substitution { off, on }, AiCode::SubInjury);
+            }
+        }
+        // The goal: an outfield player keeping goal makes way for the bench keeper, unless a
+        // goalkeeper is already on the way (for an injured keeper, say).
+        let keeper_slot = side.keeper_slot();
+        let keeper_off = side.lineup[keeper_slot];
+        let keeper_coming = check
+            .queue
+            .incoming(team)
+            .iter()
+            .any(|&s| side.squad[s].position == Position::GK);
+        if side.squad[keeper_off].position != Position::GK
+            && !keeper_coming
+            && !check.queue.has_substitution(team, keeper_off)
+            && check.substitution_possible()
+            && let Some(on) = check.bench_keeper()
+        {
+            check.propose(
+                Change::Substitution {
+                    off: keeper_off,
+                    on,
+                },
+                AiCode::SubKeeper,
+            );
+        }
+        // Fatigue.
+        let windows_left = view.ledgers()[team].windows < view.substitution_limits().1;
+        if minute >= ai.fatigue_from_minute && windows_left {
+            let reserve = usize::from(minute < ai.keep_for_injury_until_minute);
+            let mut tired: Vec<(f64, usize)> = (1..PLAYERS_PER_TEAM)
+                .map(|slot| (slot, team * PLAYERS_PER_TEAM + slot))
+                .filter(|&(slot, i)| {
+                    let p = &players[i];
+                    slot != keeper_slot
+                        && p.active()
+                        && p.energy < ai.fatigue_energy
+                        && !check.queue.has_substitution(team, side.lineup[slot])
+                })
+                .map(|(slot, i)| (players[i].energy, slot))
+                .collect();
+            tired.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+            for (_, slot) in tired {
+                let left = limit.saturating_sub(used + check.queue.substitutions(team));
+                if left <= reserve {
+                    break;
+                }
+                let off = side.lineup[slot];
+                if let Some(on) = check.substitute_for(slot) {
+                    check.propose(Change::Substitution { off, on }, AiCode::SubFatigue);
+                }
+            }
+        }
+        // The score.
+        let score = view.goals();
+        let (mine, theirs) = (score[team], score[1 - team]);
+        let projected = check.projected_tactics();
+        let schema = view.tactics();
+        if mine < theirs && minute >= ai.trailing_minute && memory.trailing_acted != Some(score) {
+            memory.trailing_acted = Some(score);
+            let mut patch = TacticsPatch::default();
+            if usize::from(projected.mentality) + 1 < schema.mentalities.len() {
+                patch.mentality = Some(projected.mentality + 1);
+            }
+            let high = (schema.instructions.level_count(PRESSING) - 1) as u8;
+            if projected.instructions[PRESSING] != high {
+                patch.instructions[PRESSING] = Some(high);
+            }
+            if patch != TacticsPatch::default() {
+                check.propose(Change::Tactics(patch), AiCode::MentalityUpTrailing);
+            }
+        } else if mine > theirs
+            && minute >= ai.leading_minute
+            && memory.leading_acted != Some(score)
+        {
+            memory.leading_acted = Some(score);
+            let mut patch = TacticsPatch::default();
+            if projected.mentality > 0 {
+                patch.mentality = Some(projected.mentality - 1);
+            }
+            let on = (schema.instructions.level_count(TIME_WASTING) - 1) as u8;
+            if projected.instructions[TIME_WASTING] != on {
+                patch.instructions[TIME_WASTING] = Some(on);
+            }
+            if patch != TacticsPatch::default() {
+                check.propose(Change::Tactics(patch), AiCode::MentalityDownLeading);
+            }
+        }
+        AiPlan {
+            minute,
+            changes: check.changes,
+            memory,
+        }
+    }
+}
+
+/// One check in progress: the view, the team, the copy of the queue with the check's own
+/// proposals on it, and the proposals in order.
+struct Check<'v, 'a> {
+    view: &'v MatchView<'a>,
+    team: usize,
+    queue: ChangeQueue,
+    changes: Vec<(Change, AiCode)>,
+}
+
+impl Check<'_, '_> {
+    /// Proposes `change`: it joins the queue copy, as queuing it would.
+    fn propose(&mut self, change: Change, code: AiCode) {
+        let id = ChangeId {
+            tick: self.view.tick(),
+            n: self.queue.next,
+        };
+        self.queue.next += 1;
+        self.queue.pending.push(QueuedChange {
+            id,
+            team: self.team,
+            change: change.clone(),
+        });
+        self.changes.push((change, code));
+    }
+
+    /// `true` while a substitution for the team could still apply at some later stoppage:
+    /// the limit is not used up by substitutions made and waiting, and a window is left or a
+    /// window-exempt stoppage (half-time in the shipped pack) is still to come.
+    fn substitution_possible(&self) -> bool {
+        let rules = &self.view.rules().substitutions;
+        let (limit, windows) = self.view.substitution_limits();
+        let ledger = self.view.ledgers()[self.team];
+        let taken = usize::from(ledger.used) + self.queue.substitutions(self.team);
+        if taken >= usize::from(limit) {
+            return false;
+        }
+        let exempt_ahead = rules
+            .windows_exempt
+            .iter()
+            .any(|&kind| kind != StoppageKind::HalfTime || !self.view.referee().clock.last_half());
+        ledger.windows < windows || exempt_ahead
+    }
+
+    /// The team's tactics once every waiting tactics change has applied.
+    fn projected_tactics(&self) -> Tactics {
+        let mut t = self.view.teams()[self.team].tactics;
+        for q in self.queue.pending.iter().filter(|q| q.team == self.team) {
+            if let Change::Tactics(p) = &q.change {
+                if let Some(m) = p.mentality {
+                    t.mentality = m;
+                }
+                for (level, set) in t.instructions.iter_mut().zip(p.instructions) {
+                    if let Some(l) = set {
+                        *level = l;
+                    }
+                }
+            }
+        }
+        t
+    }
+
+    /// The best substitute on the bench for `slot`'s role, leaving out anyone already queued
+    /// to come on.
+    fn substitute_for(&self, slot: usize) -> Option<usize> {
+        let side = &self.view.teams()[self.team];
+        let incoming = self.queue.incoming(self.team);
+        let free: Vec<usize> = side
+            .bench
+            .iter()
+            .copied()
+            .filter(|s| !incoming.contains(s))
+            .collect();
+        let role = usize::from(side.tactics.roles[slot].role);
+        best_for(
+            side,
+            &free,
+            role,
+            self.view.tactics(),
+            self.view.attributes(),
+        )
+    }
+
+    /// The best goalkeeper on the bench by fit to the goalkeeper's role, leaving out anyone
+    /// already queued to come on.
+    fn bench_keeper(&self) -> Option<usize> {
+        let side = &self.view.teams()[self.team];
+        let incoming = self.queue.incoming(self.team);
+        let keepers: Vec<usize> = side
+            .bench
+            .iter()
+            .copied()
+            .filter(|s| !incoming.contains(s) && side.squad[*s].position == Position::GK)
+            .collect();
+        let schema = self.view.tactics();
+        let role = schema.default_role(Position::GK);
+        best_for(side, &keepers, role, schema, self.view.attributes())
+    }
+}
+
+pub const AI_MANAGER_V1_CARD: ModuleCard = ModuleCard {
+    purpose: "Makes the AI manager's in-match choices: substitutions for injury, for the goal, and for fatigue, and the mentality change when trailing or leading.",
+    inputs: "Each player's status, energy, and activity; the team's lineup, bench, squad, and tactics; the change queue; the substitution ledgers and limits; the score; the match clock; the manager's memory; the tactics file, the rule pack, and the attribute schema.",
+    outputs: "The changes to queue in order, each with its reason code, and the manager's memory after the check.",
+    tuning: &[
+        "tactics.ai.trailing_minute",
+        "tactics.ai.leading_minute",
+        "tactics.ai.fatigue_energy",
+        "tactics.ai.fatigue_from_minute",
+        "tactics.ai.keep_for_injury_until_minute",
+        "rules.substitutions",
+        "rules.extra_time",
+    ],
+    calibration: "none: no substitution or mentality band in realism-bands.json",
+    keys: &[],
+};
+
+/// The off version: no in-match decision; the manager's memory stays as it was.
+pub struct ManagerOff;
+
+impl ManagerModule for ManagerOff {
+    fn check(&self, view: &MatchView<'_>, team: usize, _: bool) -> AiPlan {
+        AiPlan {
+            minute: view.referee().clock.minute(view.tick() + 1).0,
+            changes: Vec::new(),
+            memory: view.ai_memory(team),
+        }
+    }
+}
+
+pub const MANAGER_OFF_CARD: ModuleCard = ModuleCard {
+    purpose: "Makes no in-match decision for an AI-managed team.",
+    inputs: "The manager's memory and the match clock.",
+    outputs: "No change, and the memory as it was.",
+    tuning: &["none"],
+    calibration: "none: off version, no in-match decision",
     keys: &[],
 };
 

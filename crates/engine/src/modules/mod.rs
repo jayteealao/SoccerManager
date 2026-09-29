@@ -17,18 +17,23 @@ pub mod view;
 
 use std::fmt;
 
-use crate::ai::Setup;
+use crate::ai::{AiCode, AiState, Setup};
 use crate::ball::Ball;
 use crate::data::attributes::AttributeSchema;
 use crate::data::rules::StoppageKind;
 use crate::data::tactics::TacticsSchema;
+use crate::decision::{Choice, Kick, MAX_PRESSERS, Options};
 use crate::fatigue::InjurySource;
-use crate::math::DVec2;
+use crate::math::{DVec2, DVec3};
+use crate::pitch::Exit;
+use crate::plugin::OptionOffsets;
 use crate::rules::DeadBall;
 use crate::rules::fouls::{Card, Tackle};
 use crate::rules::offside::OffsideSet;
 use crate::sim::DecidedBy;
-use crate::team::Team;
+use crate::tactics::change::{Change, RejectReason};
+use crate::tactics::{Tactics, TacticsPatch};
+use crate::team::{PLAYERS_PER_TEAM, Team};
 
 pub use card::{CardError, MOVED_KEYS, ModuleCard, OwnershipError, check_card, check_ownership};
 pub use config::{SLOTS_VERSION, SlotEntry, SlotFile, resolve};
@@ -108,6 +113,9 @@ pub trait FatigueModule: Send + Sync + 'static {
 pub trait SteeringModule: Send + Sync + 'static {
     /// The velocity of player `i` after one tick of steering toward its target.
     fn next_velocity(&self, view: &MatchView<'_>, i: usize) -> DVec2;
+    /// Every player's position once players closer than the minimum distance are pushed
+    /// apart, in roster order; `None` when no pair is that close, so nobody moves.
+    fn separate(&self, view: &MatchView<'_>) -> Option<[DVec2; ROSTER]>;
 }
 
 /// The pre-match setup of a team: its lineup, bench, and tactics. It runs before a match
@@ -203,6 +211,328 @@ pub trait InjuriesModule: Send + Sync + 'static {
     fn dropped_ball(&self, view: &MatchView<'_>, team: usize) -> (usize, DVec2);
 }
 
+/// The players on the pitch in a match, both teams.
+pub const ROSTER: usize = 2 * PLAYERS_PER_TEAM;
+
+/// The most team-mates a carrier can pass to.
+pub const MATES: usize = PLAYERS_PER_TEAM - 1;
+
+/// Where the ball crossed a line in open play.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Crossing {
+    /// Into the goal `team` attacks, under the bar.
+    Goal(usize),
+    /// Over a touchline or a goal line.
+    Out(Exit),
+    None,
+}
+
+/// How a ball is turned away: blocked back the way it came, parried along the goal line to
+/// `side`, or cleared along `away` with up to `spread` either way.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Deflection {
+    Block,
+    Parry { side: f64 },
+    Clear { away: DVec2, spread: f64 },
+}
+
+/// Ball physics: the carried ball, flight and roll, a kick, the lines it crosses, and the
+/// turn of a deflected ball. The loop draws the `BlockDeflect`, `ParryAngle`, `ParryLoft`,
+/// `CrossAngle`, and `CrossLoft` keys and passes each raw draw in.
+pub trait BallModule: Send + Sync + 'static {
+    /// The ball after one tick at the feet of carrier `c`.
+    fn carry(&self, view: &MatchView<'_>, c: usize) -> Ball;
+    /// `ball` after one tick of flight or roll.
+    fn integrate(&self, view: &MatchView<'_>, ball: Ball) -> Ball;
+    /// `ball` kicked along the ground unit vector `dir` at `speed` with vertical speed `loft`.
+    fn kick(&self, view: &MatchView<'_>, ball: Ball, dir: DVec2, speed: f64, loft: f64) -> Ball;
+    /// The line `ball` crossed since it was at `prev`, in open play.
+    fn crossing(&self, view: &MatchView<'_>, prev: DVec2, ball: &Ball) -> Crossing;
+    /// The velocity of the ball in the view after `how`, given the raw angle and loft draws.
+    fn deflect(&self, view: &MatchView<'_>, how: Deflection, angle: f64, loft: f64) -> DVec3;
+}
+
+/// The nearest player who can reach a loose ball.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LooseBall {
+    /// The distance and roster index of the nearest player within reach, if any.
+    pub best: Option<(f64, usize)>,
+    /// `true` when the ball is too fast to control: only a keeper may reach it.
+    pub fast: bool,
+    /// The chance a keeper holds a fast ball.
+    pub catch_chance: f64,
+}
+
+/// The defenders (one bit per roster index, read from bit 0 up) who may try to stop the
+/// ball, and each one's chance.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Contest {
+    pub mask: u32,
+    pub chance: f64,
+}
+
+/// A fast pass in the penalty area that the defending side may clear.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CrossContest {
+    /// The defending team.
+    pub team: usize,
+    pub contest: Contest,
+    /// The chance a clearance goes wide; `None` when it never does.
+    pub wide_chance: Option<f64>,
+}
+
+/// Which way a keeper parries: fixed by the ball's side of the goal, or drawn against the
+/// threshold when the ball is dead centre.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ParrySide {
+    Fixed(f64),
+    Draw(f64),
+}
+
+/// Possession: who reaches a loose ball, who may block a shot, whether the keeper reaches a
+/// shot on target and holds it, the side of a parry, who may clear a cross and along which
+/// line, and who may tackle the carrier. The loop draws the `Block`, `SaveHold`, `ParrySide`,
+/// `CrossClear`, `CrossWide`, and `KeeperCatch` keys.
+pub trait PossessionModule: Send + Sync + 'static {
+    /// The team whose shot is in flight and fast enough to be contested, or `None`.
+    fn shot_contest(&self, view: &MatchView<'_>) -> Option<usize>;
+    /// The outfield defenders who may try to block the shot of `shooter`.
+    fn blockers(&self, view: &MatchView<'_>, shooter: usize) -> Contest;
+    /// The keeper who can reach the shot of `shooter` on target, or `None`.
+    fn save_reach(&self, view: &MatchView<'_>, shooter: usize) -> Option<usize>;
+    /// The `SaveHold` threshold: a draw below it holds a save.
+    fn save_hold(&self, view: &MatchView<'_>) -> f64;
+    /// The side keeper `k` parries to.
+    fn parry_side(&self, view: &MatchView<'_>, k: usize) -> ParrySide;
+    /// The parry side for a drawn side, given the draw and the threshold.
+    fn parry_side_from_draw(&self, draw: f64, threshold: f64) -> f64;
+    /// The defenders who may try to clear the pass in flight, or `None`.
+    fn cross_clearers(&self, view: &MatchView<'_>) -> Option<CrossContest>;
+    /// The line and the spread of a clearance by player `i`, wide or not.
+    fn clearance_line(&self, view: &MatchView<'_>, i: usize, wide: bool) -> (DVec2, f64);
+    /// Who reaches the loose ball, or `None` when it is above reach height.
+    fn loose_ball(&self, view: &MatchView<'_>) -> Option<LooseBall>;
+    /// The opponents who may tackle carrier `c`, or `None` inside the control cooldown.
+    fn tacklers(&self, view: &MatchView<'_>, c: usize) -> Option<u32>;
+}
+
+/// What the goal-side cover found, for the debug trace.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CoverTrace {
+    NoAttacker,
+    NoDefender {
+        attacker: usize,
+    },
+    Covered {
+        attacker: usize,
+        defender: usize,
+        distance: f64,
+    },
+}
+
+/// What the targets pass decided, for the debug trace.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TargetsTrace {
+    /// The carrier's side attacks: the pressers of the defending side and the cover.
+    Carrier {
+        def: usize,
+        count: usize,
+        reach: f64,
+        pressers: [(f64, usize); MAX_PRESSERS],
+        cover: CoverTrace,
+    },
+    /// The ball is loose: each team's chaser and keeper.
+    Loose {
+        nearest: [usize; 2],
+        nearest_dist: [f64; 2],
+        keepers: [Option<usize>; 2],
+    },
+}
+
+/// Every player's target for this tick, in roster order.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Targets {
+    pub targets: [DVec2; ROSTER],
+    pub trace: TargetsTrace,
+}
+
+/// The carrier's option scores before their noise term.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OptionDraft {
+    /// The amplitude of each score's noise.
+    pub noise: f64,
+    pub shot: Option<f64>,
+    /// The open team-mates in roster order and their pass scores.
+    pub passes: [(usize, f64); MATES],
+    pub pass_count: usize,
+    /// The dribble and hold scores; `None` for a keeper.
+    pub dribble_hold: Option<(f64, f64)>,
+    pub clear: f64,
+    /// The carry cost subtracted from the best pass after the pick.
+    pub carry: f64,
+    pub nearest_opp_pos: DVec2,
+}
+
+/// The raw noise draws of one carrier's options, in the draft's order.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct OptionDraws {
+    pub shot: f64,
+    pub passes: [f64; MATES],
+    pub dribble_hold: (f64, f64),
+    pub clear: f64,
+}
+
+/// The scored options and every pass candidate's score, in roster order.
+#[derive(Debug, Clone, Copy)]
+pub struct Scored {
+    pub options: Options,
+    pub candidates: [(usize, f64); MATES],
+    pub count: usize,
+}
+
+/// What the carrier does with its choice.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CarrierPlan {
+    /// Shoot at `goal`, which `keeper` defends.
+    Shot { goal: DVec2, keeper: usize },
+    /// Pass to team-mate `j`.
+    Pass { j: usize },
+    /// Clear; `wide_chance` is set when the clearance may go wide.
+    Clear { wide_chance: Option<f64> },
+    /// Hold or dribble toward `target`.
+    Move { target: DVec2 },
+}
+
+/// The raw draws of a shot: the side (only when the keeper is off the pitch), the aim, the
+/// spread, and the loft.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ShotDraws {
+    pub side: Option<bool>,
+    pub aim: f64,
+    pub spread: f64,
+    pub loft: f64,
+}
+
+/// A restart kick and what the taker considered, for the debug trace.
+#[derive(Debug, Clone, Copy)]
+pub struct RestartPass {
+    pub kick: Kick,
+    pub target: DVec2,
+    pub fallback: bool,
+    pub candidates: [(usize, f64); MATES],
+    pub count: usize,
+}
+
+/// The decision maker: every player's target, the carrier's options, the choice, the kick,
+/// the shot kick, and the restart pass. The loop draws the `ShotScore`, `PassScore`,
+/// `DribbleScore`, `HoldScore`, `ClearScore`, `PassAim`, `ClearWide`, `ClearAim`, `ShotSide`,
+/// `ShotAim`, `ShotSpread`, and `ShotLoft` keys and passes each raw draw in.
+pub trait DecisionModule: Send + Sync + 'static {
+    /// Every player's target for this tick.
+    fn targets(&self, view: &MatchView<'_>) -> Targets;
+    /// Carrier `c`'s option scores before their noise.
+    fn options(&self, view: &MatchView<'_>, c: usize) -> OptionDraft;
+    /// The options once each noise draw is added.
+    fn scored(&self, draft: &OptionDraft, draws: &OptionDraws) -> Scored;
+    /// The options after the decision hook's offsets, and the choice.
+    fn choose(
+        &self,
+        view: &MatchView<'_>,
+        c: usize,
+        options: &Options,
+        offsets: Option<OptionOffsets>,
+    ) -> (Options, Choice);
+    /// What carrier `c` does with `choice`.
+    fn plan(
+        &self,
+        view: &MatchView<'_>,
+        c: usize,
+        options: &Options,
+        choice: Choice,
+    ) -> CarrierPlan;
+    /// Carrier `c`'s pass to `j`, given the aim draw.
+    fn pass_kick(&self, view: &MatchView<'_>, c: usize, j: usize, aim: f64) -> Kick;
+    /// Carrier `c`'s clearance, wide or not, given the aim draw.
+    fn clear_kick(&self, view: &MatchView<'_>, c: usize, wide: bool, aim: f64) -> Kick;
+    /// `true` when a shot at a goal `keeper` defends draws its side.
+    fn shot_draws_side(&self, view: &MatchView<'_>, keeper: usize) -> bool;
+    /// Player `c`'s shot at `goal`, which `keeper` defends, given the draws.
+    fn shot_kick(
+        &self,
+        view: &MatchView<'_>,
+        c: usize,
+        goal: DVec2,
+        keeper: usize,
+        spread_scale: f64,
+        draws: &ShotDraws,
+    ) -> Kick;
+    /// The kick that takes a restart of `kind`.
+    fn restart_pass(&self, view: &MatchView<'_>, taker: usize, kind: StoppageKind) -> RestartPass;
+}
+
+/// One check of the AI manager: the minute, the changes to queue in order, and the manager's
+/// memory after the check.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AiPlan {
+    pub minute: u32,
+    pub changes: Vec<(Change, AiCode)>,
+    pub memory: AiState,
+}
+
+/// The AI manager's in-match checks. It draws nothing.
+pub trait ManagerModule: Send + Sync + 'static {
+    /// One check for `team`; `at_stoppage` marks the check an injury or a goal asks for.
+    fn check(&self, view: &MatchView<'_>, team: usize, at_stoppage: bool) -> AiPlan;
+}
+
+/// Where a substitute enters.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SubEntry {
+    /// The lineup slot the substitute takes.
+    pub slot: usize,
+    pub at: DVec2,
+    /// `true` when the substitution uses a new window.
+    pub needs_window: bool,
+    /// `true` when the substitute enters at the touchline, one place along from the last.
+    pub from_touchline: bool,
+}
+
+/// One substitution asked for at a stoppage.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SubRequest {
+    pub team: usize,
+    /// The squad indices of the player leaving and the player coming on.
+    pub off: usize,
+    pub on: usize,
+    pub kind: StoppageKind,
+    /// The tick of the stoppage.
+    pub now: u32,
+    /// Substitutes of the team who already entered at the touchline at this stoppage.
+    pub entered: usize,
+}
+
+/// Tactics changes: which changes a stoppage admits, the substitution verdict and where the
+/// substitute enters, and the tactics verdict. It draws nothing.
+pub trait ChangesModule: Send + Sync + 'static {
+    /// Whether a stoppage of `kind` admits tactics changes and substitutions.
+    fn admits(&self, view: &MatchView<'_>, kind: StoppageKind) -> (bool, bool);
+    /// The verdict on one substitution, and where the substitute enters.
+    fn substitution(
+        &self,
+        view: &MatchView<'_>,
+        request: &SubRequest,
+    ) -> Result<SubEntry, RejectReason>;
+    /// `team`'s tactics after `patch`, or why not; `off_now` names the players the same
+    /// stoppage substituted off.
+    fn tactics(
+        &self,
+        view: &MatchView<'_>,
+        team: usize,
+        patch: &TacticsPatch,
+        off_now: &[(usize, usize)],
+    ) -> Result<Tactics, RejectReason>;
+}
+
 /// One slot's choice: the slot id, the module name, and its version (0 for `off`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Picked {
@@ -227,6 +557,11 @@ pub struct ResolvedModules {
     pub restarts: &'static dyn RestartsModule,
     pub discipline: &'static dyn DisciplineModule,
     pub injuries: &'static dyn InjuriesModule,
+    pub ball: &'static dyn BallModule,
+    pub possession: &'static dyn PossessionModule,
+    pub decision: &'static dyn DecisionModule,
+    pub manager: &'static dyn ManagerModule,
+    pub changes: &'static dyn ChangesModule,
     picked: [Picked; SLOT_COUNT],
 }
 

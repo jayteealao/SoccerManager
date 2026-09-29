@@ -1061,7 +1061,11 @@ impl Simulation {
             side * t.shots.keeper_dive_m,
         );
         let (dir, speed, loft) = kick.flight();
-        self.ball.kick(dir, speed, loft, t);
+        self.ball = self
+            .config
+            .modules
+            .ball
+            .kick(&self.view(), self.ball, dir, speed, loft);
         self.end_shot();
         self.shot_on_target = self
             .config
