@@ -81,7 +81,7 @@ fn candidate_faults(
             continue;
         };
         let bad = |why: String| Fault {
-            rule: 5,
+            rule: guard::HASH_CHANGE_RULE,
             message: format!("ledger entry {i} (regenerate): candidate {candidate} {why}"),
         };
         if candidate.ends_with("-dirty") || candidate == "unknown" {

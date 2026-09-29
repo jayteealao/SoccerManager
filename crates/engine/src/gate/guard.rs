@@ -22,6 +22,10 @@ use std::fmt;
 
 use super::golden::{self, EntryKind, GoldenFile, LedgerEntry};
 
+/// The number of the rule that a hash, schema, or toolchain change with no new `regenerate`
+/// entry breaks (rule 5). The command line adds its own faults under this rule.
+pub const HASH_CHANGE_RULE: u8 = 5;
+
 /// One broken rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fault {
@@ -183,7 +187,10 @@ fn pair(parent: &GoldenFile, child: &GoldenFile, faults: &mut Vec<Fault>) {
     }
     if !regenerate {
         for what in &changes {
-            faults.push(fault(5, format!("{what} with no new regenerate entry")));
+            faults.push(fault(
+                HASH_CHANGE_RULE,
+                format!("{what} with no new regenerate entry"),
+            ));
         }
     }
 

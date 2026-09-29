@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use anyhow::{Context, bail};
-use engine::gate::PlannedChange;
+use engine::gate::{PlannedChange, PlannedWhat};
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id};
 use protocol::{Hello, PROTOCOL_VERSION, ServerMessage};
 use script::Backstop;
@@ -136,14 +136,46 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
     Ok(if driven.full_time { 0 } else { 2 })
 }
 
-/// Reads a change file: a JSON array of changes in the replay gate's form, each queued
-/// before the step that starts on its tick.
+/// One change of a change file, queued before the step that starts on its tick.
+#[derive(serde::Deserialize)]
+struct FileChange {
+    tick: u32,
+    team: usize,
+    change: FileWhat,
+}
+
+/// What a change of a change file does.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum FileWhat {
+    /// The player in lineup `slot` off, the bench player at `bench` on.
+    Substitution { slot: usize, bench: usize },
+    /// The team's mentality set to this index of the tactics file.
+    Mentality(u8),
+}
+
+impl From<FileChange> for PlannedChange {
+    fn from(file: FileChange) -> Self {
+        Self {
+            tick: file.tick,
+            team: file.team,
+            change: match file.change {
+                FileWhat::Substitution { slot, bench } => PlannedWhat::Substitution { slot, bench },
+                FileWhat::Mentality(index) => PlannedWhat::Mentality(index),
+            },
+        }
+    }
+}
+
+/// Reads a change file: a JSON array of changes, each queued before the step that starts on
+/// its tick.
 fn read_changes(path: &Path) -> anyhow::Result<Vec<PlannedChange>> {
     let shown = path.display();
     let text = std::fs::read_to_string(path)
         .with_context(|| format!("cannot read the change file {shown}"))?;
-    let changes: Vec<PlannedChange> = serde_json::from_str(&text)
+    let changes: Vec<FileChange> = serde_json::from_str(&text)
         .with_context(|| format!("the change file {shown} is not a list of changes"))?;
+    let changes: Vec<PlannedChange> = changes.into_iter().map(PlannedChange::from).collect();
     for (i, change) in changes.iter().enumerate() {
         if change.team > 1 {
             bail!(
