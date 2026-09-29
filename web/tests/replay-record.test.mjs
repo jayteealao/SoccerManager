@@ -137,3 +137,18 @@ test('the refusals name the path and the reason', async () => {
     );
   }
 });
+
+test('a header tick count that the frames do not match is refused', async () => {
+  const bytes = fixture();
+  new DataView(bytes.buffer).setUint32(20, 2999, true);
+  await assert.rejects(readReplay(bytes), (error) => error.reason.includes('2999 ticks'));
+});
+
+test('a header seed that the record does not carry is refused', async () => {
+  const bytes = fixture();
+  new DataView(bytes.buffer).setBigUint64(24, 43n, true);
+  await assert.rejects(
+    readReplay(bytes),
+    (error) => error.reason.includes('seed mismatch: the header says 43, the record says 42')
+  );
+});

@@ -44,9 +44,9 @@ pub const FORMAT_VERSION: u16 = 4;
 /// Header offset of the frame count.
 const FRAMES_AT: u64 = 16;
 /// A binary tick frame.
-const ENTRY_BINARY: u8 = 0;
+pub(crate) const ENTRY_BINARY: u8 = 0;
 /// A JSON text frame.
-const ENTRY_TEXT: u8 = 1;
+pub(crate) const ENTRY_TEXT: u8 = 1;
 /// One input file: name length (u16), the UTF-8 name, and the file's bytes.
 const ENTRY_INPUT: u8 = 2;
 /// The record: one JSON document.
@@ -728,12 +728,19 @@ fn decode_entries(raw: RawReplay, format: u16) -> Result<Fixture, StreamError> {
         hash: raw.hash,
     };
     check_frame_count(&fixture, raw.frames)?;
+    check_tick_count(&fixture)?;
     let inputs = if format == FORMAT_VERSION {
         let Some(record) = &fixture.record else {
             return Err(refuse(
                 "a version-4 file must end with its record entry; this one has none".into(),
             ));
         };
+        if record.settings.seed != fixture.seed {
+            return Err(refuse(format!(
+                "seed mismatch: the header says {}, the record says {}",
+                fixture.seed, record.settings.seed
+            )));
+        }
         check_inputs(record, inputs)?
     } else {
         Vec::new()
@@ -747,6 +754,22 @@ pub fn check_frame_count(fixture: &Fixture, declared: u32) -> Result<(), StreamE
         return Err(StreamError::Fixture(format!(
             "frame count mismatch: the header says {declared}, the body holds {}",
             fixture.frames.len()
+        )));
+    }
+    Ok(())
+}
+
+/// Refuses a fixture whose tick frames are not the tick count of its header.
+fn check_tick_count(fixture: &Fixture) -> Result<(), StreamError> {
+    let held = fixture
+        .frames
+        .iter()
+        .filter(|f| matches!(f.frame, Frame::Tick(_)))
+        .count();
+    if held != fixture.ticks as usize {
+        return Err(StreamError::Fixture(format!(
+            "tick count mismatch: the header says {}, the body holds {held}",
+            fixture.ticks
         )));
     }
     Ok(())

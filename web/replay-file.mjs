@@ -477,6 +477,11 @@ async function decodeEntries(raw, format) {
       throw new ReplayRefused('a version-4 file must end with its record entry; this one has none');
     }
     record = await matchedRecord(recordBytes, inputs);
+    if (BigInt(record.meta.settings.seed) !== raw.seed) {
+      throw new ReplayRefused(
+        `seed mismatch: the header says ${raw.seed}, the record says ${record.meta.settings.seed}`
+      );
+    }
   }
   return { store, record };
 }

@@ -11,7 +11,7 @@ use serde_json::Value;
 use stream::record::LoggedRole;
 use stream::{
     ChangeEntry, ChangeSource, EngineIdentity, InputInfo, LoggedChange, ManagerKind, MatchSettings,
-    ReplayRecord, Watchdog, check_inputs, decode_record, parse_fixture,
+    RawReplay, ReplayRecord, Watchdog, check_inputs, decode_record, parse_fixture,
 };
 
 fn data(name: &str) -> PathBuf {
@@ -226,4 +226,58 @@ fn every_damaged_record_is_refused() {
         };
         assert!(refused, "the reader took a record with {}", case["name"]);
     }
+}
+
+fn committed() -> Vec<u8> {
+    std::fs::read(data("one-minute-v4.smfx")).unwrap()
+}
+
+#[test]
+fn a_header_tick_count_that_the_frames_do_not_match_is_refused() {
+    let mut bytes = committed();
+    bytes[20..24].copy_from_slice(&2999u32.to_le_bytes());
+    let error = parse_fixture(&bytes).unwrap_err().to_string();
+    assert!(
+        error.contains("tick count mismatch: the header says 2999, the body holds 3000"),
+        "{error}"
+    );
+}
+
+#[test]
+fn a_header_seed_that_the_record_does_not_carry_is_refused() {
+    let mut bytes = committed();
+    bytes[24..32].copy_from_slice(&43u64.to_le_bytes());
+    let error = parse_fixture(&bytes).unwrap_err().to_string();
+    assert!(
+        error.contains("seed mismatch: the header says 43, the record says 42"),
+        "{error}"
+    );
+}
+
+#[test]
+fn writing_a_raw_file_counts_its_frames_and_ticks_again() {
+    let bytes = committed();
+    let mut raw = RawReplay::parse(&bytes).unwrap();
+    raw.frames = 1;
+    raw.ticks = 1;
+    assert_eq!(raw.to_bytes(), bytes, "stale counts are not written");
+
+    // An entry dropped by a lift step leaves the counts of the entries that remain.
+    let at = raw.entries.iter().position(|e| e.kind == 0).unwrap();
+    raw.entries.remove(at);
+    let written = raw.to_bytes();
+    assert_eq!(
+        u32::from_le_bytes(written[20..24].try_into().unwrap()),
+        2999
+    );
+    let frames = u32::from_le_bytes(written[16..20].try_into().unwrap());
+    assert_eq!(
+        frames as usize,
+        parse_fixture(&bytes).unwrap().frames.len() - 1
+    );
+    let trailer = written.len() - 16;
+    assert_eq!(
+        u32::from_le_bytes(written[trailer + 4..trailer + 8].try_into().unwrap()),
+        frames
+    );
 }

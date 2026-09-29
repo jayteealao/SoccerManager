@@ -15,8 +15,8 @@ use sha2::{Digest, Sha256};
 
 use crate::StreamError;
 use crate::record::{
-    FIXTURE_HEADER_BYTES, FIXTURE_MAGIC, FIXTURE_TRAILER_BYTES, FIXTURE_TRAILER_MAGIC,
-    FORMAT_LEGACY, FORMAT_VERSION, Fixture, decode_v4,
+    ENTRY_BINARY, ENTRY_TEXT, FIXTURE_HEADER_BYTES, FIXTURE_MAGIC, FIXTURE_TRAILER_BYTES,
+    FIXTURE_TRAILER_MAGIC, FORMAT_LEGACY, FORMAT_VERSION, Fixture, decode_v4,
 };
 use protocol::PROTOCOL_VERSION;
 
@@ -125,7 +125,9 @@ impl RawReplay {
     }
 
     /// The file's bytes: the header, every entry in order, and a trailer whose hash is
-    /// computed again over the payloads.
+    /// computed again over the payloads. The header's and the trailer's counts are counted
+    /// again from the entries (frames are the entries of kind 0 and 1, ticks those of kind
+    /// 0), so a step that adds or drops an entry leaves no stale count.
     pub fn to_bytes(&self) -> Vec<u8> {
         let size = FIXTURE_HEADER_BYTES
             + self
@@ -134,13 +136,19 @@ impl RawReplay {
                 .map(|e| 9 + e.payload.len())
                 .sum::<usize>()
             + FIXTURE_TRAILER_BYTES;
+        let ticks = self
+            .entries
+            .iter()
+            .filter(|e| e.kind == ENTRY_BINARY)
+            .count() as u32;
+        let frames = ticks + self.entries.iter().filter(|e| e.kind == ENTRY_TEXT).count() as u32;
         let mut out = Vec::with_capacity(size);
         out.extend_from_slice(FIXTURE_MAGIC);
         out.extend_from_slice(&self.format.to_le_bytes());
         out.extend_from_slice(&self.protocol.to_le_bytes());
         out.extend_from_slice(&self.match_millis.to_le_bytes());
-        out.extend_from_slice(&self.frames.to_le_bytes());
-        out.extend_from_slice(&self.ticks.to_le_bytes());
+        out.extend_from_slice(&frames.to_le_bytes());
+        out.extend_from_slice(&ticks.to_le_bytes());
         out.extend_from_slice(&self.seed.to_le_bytes());
         let mut hasher = Sha256::new();
         for entry in &self.entries {
@@ -152,7 +160,7 @@ impl RawReplay {
         }
         let digest = hasher.finalize();
         out.extend_from_slice(FIXTURE_TRAILER_MAGIC);
-        out.extend_from_slice(&self.frames.to_le_bytes());
+        out.extend_from_slice(&frames.to_le_bytes());
         out.extend_from_slice(&digest[..6]);
         out.extend_from_slice(&[0, 0]);
         out
