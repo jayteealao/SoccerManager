@@ -16,7 +16,7 @@ fn main() {
     let full = git(&["rev-parse", "HEAD"]).filter(|h| !h.is_empty());
     let (hash, commit, dirty) = match (short, full) {
         (Some(short), Some(full)) => {
-            let dirty = git(&["status", "--porcelain"])
+            let dirty = git(&["status", "--porcelain", "--untracked-files=no"])
                 .map(|s| !s.is_empty())
                 .unwrap_or(false);
             let hash = if dirty {
@@ -31,7 +31,14 @@ fn main() {
     println!("cargo:rustc-env=ENGINE_BUILD_HASH={hash}");
     println!("cargo:rustc-env=ENGINE_COMMIT={commit}");
     println!("cargo:rustc-env=ENGINE_DIRTY={dirty}");
-    println!("cargo:rerun-if-changed=../../.git/HEAD");
-    println!("cargo:rerun-if-changed=../../.git/refs/heads");
-    println!("cargo:rerun-if-changed=../../.git/index");
+    // In a linked worktree `.git` is a file, so the git folders are asked for, not assumed.
+    // HEAD and the index belong to this worktree; the branch refs are shared.
+    let git_dir = git(&["rev-parse", "--git-dir"]).unwrap_or_else(|| "../../.git".to_string());
+    let common_dir = git(&["rev-parse", "--git-common-dir"]).unwrap_or_else(|| git_dir.clone());
+    println!("cargo:rerun-if-changed={git_dir}/HEAD");
+    println!("cargo:rerun-if-changed={common_dir}/refs/heads");
+    println!("cargo:rerun-if-changed={git_dir}/index");
+    // The dirty mark reads tracked files, so an edit to one must run this script again.
+    println!("cargo:rerun-if-changed=../../crates");
+    println!("cargo:rerun-if-changed=../../Cargo.lock");
 }
