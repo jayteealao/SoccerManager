@@ -421,6 +421,6 @@ fn the_snapshot_records_the_scheme_of_the_match() {
         .unwrap()
         .stream_state()
         .scheme;
-    assert_eq!(scheme, engine::rng::STREAM_SCHEME);
+    assert_eq!(scheme, engine::streams::STREAM_SCHEME);
     assert_eq!(scheme, engine::streams::KEYED_SCHEME);
 }

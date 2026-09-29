@@ -12,9 +12,11 @@ use std::sync::OnceLock;
 use engine::data::TeamFile;
 use engine::gate::golden;
 use engine::gate::{self, Fixture, Inputs};
-use engine::rng::{EngineRng, STREAM_SCHEME, StreamState};
+use engine::rng::EngineRng;
 use engine::streams::table::{self, PlayerKind, SCHEME_DIGESTS, TABLE};
-use engine::streams::{Action, KEYED_SCHEME, Key, PlayerKey, Scheme, Streams};
+use engine::streams::{
+    Action, KEYED_SCHEME, Key, PlayerKey, STREAM_SCHEME, Scheme, StreamState, Streams,
+};
 use engine::{Change, Content, EngineEventKind, Manager, MatchConfig, Simulation};
 
 fn loaded() -> &'static (Content, [TeamFile; 2]) {

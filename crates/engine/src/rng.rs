@@ -16,34 +16,8 @@ pub struct RngState {
     pub word_pos: u128,
 }
 
-/// The random-stream scheme this build plays ([`crate::streams::Scheme`]): scheme 1, one
-/// keyed stream per key. The golden file's ledger records it with every entry.
-pub const STREAM_SCHEME: u8 = crate::streams::KEYED_SCHEME;
-
-/// The position of every random stream a match draws from, as the replay gate hashes it:
-/// the stream scheme, then each stream's id and word position in ascending stream id.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StreamState {
-    pub scheme: u8,
-    /// `(stream id, word position)` per stream, in stream order.
-    pub entries: Vec<(u64, u128)>,
-}
-
-impl StreamState {
-    /// The canonical bytes: the scheme id (u8), the entry count (u32), then per entry the
-    /// stream id (u64) and the word position (u128), all little-endian.
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(5 + 24 * self.entries.len());
-        out.push(self.scheme);
-        // A match has a handful of streams, far below 4 billion.
-        out.extend_from_slice(&(self.entries.len() as u32).to_le_bytes());
-        for (stream, word_pos) in &self.entries {
-            out.extend_from_slice(&stream.to_le_bytes());
-            out.extend_from_slice(&word_pos.to_le_bytes());
-        }
-        out
-    }
-}
+// The stream registry owns these; the paths through `rng` stay for other crates.
+pub use crate::streams::{STREAM_SCHEME, StreamState};
 
 /// A seeded generator with a fixed algorithm.
 pub struct EngineRng {
