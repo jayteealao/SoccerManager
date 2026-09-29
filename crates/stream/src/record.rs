@@ -651,12 +651,13 @@ pub fn read_fixture(path: &Path) -> Result<Fixture, StreamError> {
 
 /// [`read_fixture`] over bytes in memory, through the production migration chain.
 pub fn parse_fixture(bytes: &[u8]) -> Result<Fixture, StreamError> {
-    parse_fixture_with(bytes, &Chain::production())
+    Chain::production().read(bytes)
 }
 
 /// [`parse_fixture`] through `chain`: the envelope, then the legacy decode for a version-3
 /// file, or the chain's lift and decode for any later format. A lifted file reports the
 /// chain's current format, and its hash is the hash of the bytes that were read.
+#[cfg(feature = "test-support")]
 pub fn parse_fixture_with(bytes: &[u8], chain: &Chain<'_>) -> Result<Fixture, StreamError> {
     chain.read(bytes)
 }
@@ -667,7 +668,7 @@ pub(crate) fn decode_legacy(raw: RawReplay) -> Result<Fixture, StreamError> {
 }
 
 /// Decodes a version-4 file: the inputs, the frames, and the record last.
-pub fn decode_v4(raw: RawReplay) -> Result<Fixture, StreamError> {
+pub(crate) fn decode_v4(raw: RawReplay) -> Result<Fixture, StreamError> {
     decode_entries(raw, FORMAT_VERSION)
 }
 

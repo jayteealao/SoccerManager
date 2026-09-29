@@ -16,5 +16,11 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 sha2 = { workspace = true }
 
+[features]
+# Opens the migration chain to the tests that build their own later formats. Only this
+# crate's own tests enable it, so no other build contains it.
+test-support = []
+
 [dev-dependencies]
+stream = { path = ".", features = ["test-support"] }
 tracing-subscriber = { workspace = true }

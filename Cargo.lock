@@ -1316,6 +1316,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "stream",
  "thiserror",
  "tracing",
  "tracing-subscriber",
