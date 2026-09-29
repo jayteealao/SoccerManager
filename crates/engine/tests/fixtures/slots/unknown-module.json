@@ -10,6 +10,10 @@
     "engine.modifier.fatigue": { "module": "fatigue-curve", "version": 1 },
     "engine.modifier.pressure": { "module": "pressure", "version": 1 },
     "engine.modifier.momentum": { "module": "momentum", "version": 1 },
-    "engine.modifier.weather": { "module": "weather", "version": 1 }
+    "engine.modifier.weather": { "module": "weather", "version": 1 },
+    "engine.clock": { "module": "clock", "version": 1 },
+    "engine.restarts": { "module": "restarts", "version": 1 },
+    "engine.discipline": { "module": "discipline", "version": 1 },
+    "engine.injuries": { "module": "injuries", "version": 1 }
   }
 }

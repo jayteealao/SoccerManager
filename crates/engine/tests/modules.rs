@@ -1,8 +1,9 @@
 //! The module contract: the shipped slot file resolves every declared slot and a match
 //! finishes on it; a bad slot entry refuses start-up and names the slot, the bad value, and
 //! the valid names; every moved action key has exactly one owner; every module card is
-//! complete; one changed module output fails the replay gate at a named window; and every
-//! modifier names its family and can be switched off.
+//! complete; one changed module output fails the replay gate at a named window; every
+//! modifier names its family and can be switched off; and the referee rules' required slots
+//! refuse `off` while their optional slots play a match to the end switched off.
 
 /// The four modifier slots, in registry order.
 const MODIFIER_SLOTS: [&str; 4] = [
@@ -18,8 +19,8 @@ use std::collections::BTreeMap;
 
 use engine::modules::modifier::Family;
 use engine::modules::registry::{
-    FATIGUE, FOULS, MODIFIER_FATIGUE, MODIFIER_MOMENTUM, MODIFIER_PRESSURE, MODIFIER_WEATHER,
-    ModuleRef, OFFSIDE, PRE_MATCH, SHOT, STEERING,
+    CLOCK, DISCIPLINE, FATIGUE, FOULS, INJURIES, MODIFIER_FATIGUE, MODIFIER_MOMENTUM,
+    MODIFIER_PRESSURE, MODIFIER_WEATHER, ModuleRef, OFFSIDE, PRE_MATCH, RESTARTS, SHOT, STEERING,
 };
 use engine::modules::{
     CardError, MOVED_KEYS, ModuleCard, OwnershipError, REGISTRY, Registration, SlotDecl, SlotEntry,
@@ -123,6 +124,10 @@ fn default_selection_resolves_and_a_match_finishes() {
             "engine.modifier.pressure=pressure@1",
             "engine.modifier.momentum=momentum@1",
             "engine.modifier.weather=weather@1",
+            "engine.clock=clock@1",
+            "engine.restarts=restarts@1",
+            "engine.discipline=discipline@1",
+            "engine.injuries=injuries@1",
         ],
         "every declared slot resolves, in registry order"
     );
@@ -205,6 +210,20 @@ fn off_on_a_required_slot_is_refused() {
         text,
         "slot configuration refused: slot engine.steering: off is not allowed: the slot is required; valid: steering@1"
     );
+    // The clock and match end, and restarts, are on the core list too (AC-10). Test builds
+    // also list the faulty clock after `clock@1`.
+    for (id, first) in [(CLOCK.id, "clock@1"), (RESTARTS.id, "restarts@1")] {
+        let (slot, value, valid, text) = refusal(&default_with(&[(id, "off", None)]), REGISTRY);
+        assert_eq!((slot.as_str(), value.as_str()), (id, "off"));
+        assert!(valid.starts_with(first), "{valid}");
+        assert!(!valid.contains("off"), "{valid}");
+        assert!(
+            text.contains(&format!(
+                "slot {id}: off is not allowed: the slot is required; valid: {first}"
+            )),
+            "{text}"
+        );
+    }
 }
 
 #[test]
@@ -216,6 +235,7 @@ fn off_on_an_optional_slot_resolves_to_its_off_version() {
         .collect();
     let mut expected = vec![FOULS.id, OFFSIDE.id, SHOT.id, FATIGUE.id, PRE_MATCH.id];
     expected.extend(MODIFIER_SLOTS);
+    expected.extend([DISCIPLINE.id, INJURIES.id]);
     assert_eq!(optional, expected);
     let changes: Vec<(&str, &str, Option<u32>)> =
         optional.iter().map(|&slot| (slot, "off", None)).collect();
@@ -223,6 +243,10 @@ fn off_on_an_optional_slot_resolves_to_its_off_version() {
     for p in modules.picked() {
         if p.slot == STEERING.id {
             assert_eq!((p.module, p.version), ("steering", 1));
+        } else if p.slot == CLOCK.id {
+            assert_eq!((p.module, p.version), ("clock", 1));
+        } else if p.slot == RESTARTS.id {
+            assert_eq!((p.module, p.version), ("restarts", 1));
         } else {
             assert_eq!((p.module, p.version), ("off", 0), "{}", p.slot);
         }
@@ -240,7 +264,8 @@ fn an_undeclared_or_missing_slot_is_refused() {
         valid,
         "engine.fouls, engine.offside, engine.shot, engine.fatigue, engine.steering, \
          engine.pre-match, engine.modifier.fatigue, engine.modifier.pressure, \
-         engine.modifier.momentum, engine.modifier.weather"
+         engine.modifier.momentum, engine.modifier.weather, engine.clock, engine.restarts, \
+         engine.discipline, engine.injuries"
     );
     assert!(text.contains("is not a declared slot"), "{text}");
 
@@ -320,9 +345,9 @@ fn every_registered_card_is_complete() {
     assert!(names.contains(&"yellow_cards_per_team"), "{names:?}");
     assert!(names.contains(&"goals_per_xg"), "{names:?}");
     let registrations = every_registration();
-    // Fouls, offside, shot, fatigue, pre-match, and the four modifiers each have version 1
-    // and off; steering has version 1 only.
-    assert!(registrations.len() >= 19, "{}", registrations.len());
+    // Fouls, offside, shot, fatigue, pre-match, the four modifiers, discipline, and injuries
+    // each have version 1 and off; steering, the clock, and restarts have version 1 only.
+    assert!(registrations.len() >= 25, "{}", registrations.len());
     for reg in registrations {
         check_card(reg.card, &names)
             .unwrap_or_else(|e| panic!("{}@{}: {e}", reg.name, reg.version));
@@ -380,6 +405,7 @@ fn the_registry_declares_the_moved_slots_in_order() {
         PRE_MATCH.id,
     ];
     expected.extend(MODIFIER_SLOTS);
+    expected.extend([CLOCK.id, RESTARTS.id, DISCIPLINE.id, INJURIES.id]);
     assert_eq!(ids, expected);
     assert_eq!(REGISTRY.len(), engine::modules::SLOT_COUNT);
     let required: Vec<&str> = REGISTRY
@@ -387,11 +413,19 @@ fn the_registry_declares_the_moved_slots_in_order() {
         .filter(|d| d.slot.required)
         .map(|d| d.slot.id)
         .collect();
-    assert_eq!(required, [STEERING.id], "only steering is required");
-    assert!(
-        REGISTRY[4].off.is_none(),
-        "a required slot has no off version"
+    assert_eq!(
+        required,
+        [STEERING.id, CLOCK.id, RESTARTS.id],
+        "steering, the clock, and restarts are required"
     );
+    for decl in REGISTRY {
+        assert_eq!(
+            decl.off.is_none(),
+            decl.slot.required,
+            "{}: a slot has an off version exactly when it is optional",
+            decl.slot.id
+        );
+    }
     let default = |i: usize| REGISTRY[i].registrations[0].module;
     assert!(matches!(default(0), ModuleRef::Fouls(_)));
     assert!(matches!(default(1), ModuleRef::Offside(_)));
@@ -402,6 +436,10 @@ fn the_registry_declares_the_moved_slots_in_order() {
     for i in 6..10 {
         assert!(matches!(default(i), ModuleRef::Modifier(_)), "{i}");
     }
+    assert!(matches!(default(10), ModuleRef::Clock(_)));
+    assert!(matches!(default(11), ModuleRef::Restarts(_)));
+    assert!(matches!(default(12), ModuleRef::Discipline(_)));
+    assert!(matches!(default(13), ModuleRef::Injuries(_)));
 }
 
 #[test]
@@ -539,7 +577,11 @@ const FOULS_OFF: &str = r#"{
     "engine.modifier.fatigue": { "module": "fatigue-curve", "version": 1 },
     "engine.modifier.pressure": { "module": "pressure", "version": 1 },
     "engine.modifier.momentum": { "module": "momentum", "version": 1 },
-    "engine.modifier.weather": { "module": "weather", "version": 1 }
+    "engine.modifier.weather": { "module": "weather", "version": 1 },
+    "engine.clock": { "module": "clock", "version": 1 },
+    "engine.restarts": { "module": "restarts", "version": 1 },
+    "engine.discipline": { "module": "discipline", "version": 1 },
+    "engine.injuries": { "module": "injuries", "version": 1 }
   }
 }"#;
 
@@ -586,11 +628,59 @@ fn faulty_shot_fails_the_gate_at_a_named_window() {
     );
 }
 
+/// AC-5 for the clock: one second more added time in the first half fails the gate in the
+/// window that holds tick 135,000, where the first half's own 45 minutes end and its added
+/// time is fixed, and the report names the window.
+#[test]
+fn faulty_clock_fails_the_gate_at_a_named_window() {
+    use engine::gate::{self, Fixture, Inputs, Verdict, compare, report_line};
+
+    let content = common::content();
+    let [a, b] = common::default_teams(&content);
+    let fixture = Fixture::seed(42);
+    let play = |content: &engine::Content| {
+        gate::play_fixture(
+            &fixture,
+            &Inputs {
+                content,
+                teams: [&a, &b],
+                pack: None,
+            },
+        )
+        .unwrap()
+    };
+    let clean = play(&content);
+    let mut faulty = content.clone();
+    faulty.modules = resolve(
+        &default_with(&[(CLOCK.id, "clock-faulty", Some(1))]),
+        REGISTRY,
+    )
+    .unwrap();
+    let played = play(&faulty);
+    let verdict = compare(&clean.hashes, &played.hashes);
+    let report = report_line(&fixture, &played, verdict);
+    println!("{report}");
+    let Verdict::Differs { from, to } = verdict else {
+        panic!("the gate did not fail: {verdict:?}\n{report}");
+    };
+    assert!(from < 135_000 && 135_000 <= to, "{report}");
+    assert!(
+        report.contains(&format!("between tick {from} and tick {to}")),
+        "{report}"
+    );
+}
+
 #[test]
 fn each_new_optional_slot_switched_off_plays_a_match_to_the_end() {
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    for slot in [SHOT.id, FATIGUE.id, PRE_MATCH.id] {
+    for slot in [
+        SHOT.id,
+        FATIGUE.id,
+        PRE_MATCH.id,
+        DISCIPLINE.id,
+        INJURIES.id,
+    ] {
         let mut off = content.clone();
         off.modules = resolve(&default_with(&[(slot, "off", None)]), REGISTRY).unwrap();
         assert_eq!(off.modules.picked_for(slot).unwrap().module, "off");

@@ -13,6 +13,13 @@ pub const MOVED_KEYS: &[Action] = &[
     Action::ShootoutSave,
     Action::InjuryMinute,
     Action::InjuryTackle,
+    Action::AddedTime,
+    Action::ExtraTimeAdded,
+    Action::ExtraKickOff,
+    Action::ShootoutFirstTeam,
+    Action::ShootoutEnd,
+    Action::KeeperDive,
+    Action::ShootoutSaveHold,
 ];
 
 /// What one module is.

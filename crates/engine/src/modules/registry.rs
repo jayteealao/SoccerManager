@@ -5,9 +5,10 @@
 use super::card::ModuleCard;
 use super::modifier::{Modifier, stand_ins};
 use super::{
-    FatigueModule, FoulsModule, OffsideModule, PreMatchModule, ShotModule, Slot, SteeringModule,
+    ClockModule, DisciplineModule, FatigueModule, FoulsModule, InjuriesModule, OffsideModule,
+    PreMatchModule, RestartsModule, ShotModule, Slot, SteeringModule,
 };
-use crate::rules::{fouls, offside};
+use crate::rules::{clock, discipline, fouls, injury, offside, restart};
 use crate::{ai, fatigue, shot, steering};
 
 /// A registered module, typed by the slot it fills.
@@ -20,6 +21,10 @@ pub enum ModuleRef {
     Steering(&'static dyn SteeringModule),
     PreMatch(&'static dyn PreMatchModule),
     Modifier(&'static dyn Modifier),
+    Clock(&'static dyn ClockModule),
+    Restarts(&'static dyn RestartsModule),
+    Discipline(&'static dyn DisciplineModule),
+    Injuries(&'static dyn InjuriesModule),
 }
 
 /// One module registered for a slot.
@@ -109,9 +114,31 @@ pub const MODIFIER_WEATHER: Slot = Slot {
     required: false,
 };
 
+/// The clock and match end is on the core list, so it is required and has no off version.
+pub const CLOCK: Slot = Slot {
+    id: "engine.clock",
+    required: true,
+};
+
+/// Restarts are on the core list, so the slot is required and has no off version.
+pub const RESTARTS: Slot = Slot {
+    id: "engine.restarts",
+    required: true,
+};
+
+pub const DISCIPLINE: Slot = Slot {
+    id: "engine.discipline",
+    required: false,
+};
+
+pub const INJURIES: Slot = Slot {
+    id: "engine.injuries",
+    required: false,
+};
+
 /// The number of declared slots. `ResolvedModules` holds one typed field per slot, and one
 /// `Modifiers` field for the modifier slots.
-pub const SLOT_COUNT: usize = 10;
+pub const SLOT_COUNT: usize = 14;
 
 /// The number of modifier slots.
 pub const MODIFIER_COUNT: usize = 4;
@@ -167,6 +194,29 @@ const SHOT_V1: Registration = Registration {
     version: 1,
     module: ModuleRef::Shot(&shot::ShotV1),
     card: &shot::SHOT_V1_CARD,
+};
+
+#[cfg(not(feature = "scenario"))]
+const CLOCK_REGISTRATIONS: &[Registration] = &[CLOCK_V1];
+
+/// Test builds also register a faulty clock, which the gate tests select to prove that one
+/// changed output fails the gate. A release build never contains it.
+#[cfg(feature = "scenario")]
+const CLOCK_REGISTRATIONS: &[Registration] = &[
+    CLOCK_V1,
+    Registration {
+        name: "clock-faulty",
+        version: 1,
+        module: ModuleRef::Clock(&clock::ClockFaulty),
+        card: &clock::CLOCK_FAULTY_CARD,
+    },
+];
+
+const CLOCK_V1: Registration = Registration {
+    name: "clock",
+    version: 1,
+    module: ModuleRef::Clock(&clock::ClockV1),
+    card: &clock::CLOCK_V1_CARD,
 };
 
 /// Every slot, in the fixed order the engine resolves them.
@@ -301,6 +351,51 @@ const DECLS: [SlotDecl; SLOT_COUNT] = [
             version: 0,
             module: ModuleRef::Modifier(&stand_ins::WEATHER_OFF),
             card: &stand_ins::WEATHER_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: CLOCK,
+        registrations: CLOCK_REGISTRATIONS,
+        off: None,
+    },
+    SlotDecl {
+        slot: RESTARTS,
+        registrations: &[Registration {
+            name: "restarts",
+            version: 1,
+            module: ModuleRef::Restarts(&restart::RestartsV1),
+            card: &restart::RESTARTS_V1_CARD,
+        }],
+        off: None,
+    },
+    SlotDecl {
+        slot: DISCIPLINE,
+        registrations: &[Registration {
+            name: "discipline",
+            version: 1,
+            module: ModuleRef::Discipline(&discipline::DisciplineV1),
+            card: &discipline::DISCIPLINE_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::Discipline(&discipline::DisciplineOff),
+            card: &discipline::DISCIPLINE_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: INJURIES,
+        registrations: &[Registration {
+            name: "injuries",
+            version: 1,
+            module: ModuleRef::Injuries(&injury::InjuriesV1),
+            card: &injury::INJURIES_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::Injuries(&injury::InjuriesOff),
+            card: &injury::INJURIES_OFF_CARD,
         }),
     },
 ];

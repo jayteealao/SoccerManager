@@ -21,7 +21,7 @@ use crate::data::rules::StoppageKind;
 use crate::math::DVec2;
 use crate::pitch;
 use crate::player::Status;
-use crate::rules::{Phase, Stoppage, restart};
+use crate::rules::{Phase, Stoppage};
 use crate::sim::{EngineEventKind, EventDetail, Simulation};
 use crate::tactics::TacticsPatch;
 use crate::team::PLAYERS_PER_TEAM;
@@ -356,7 +356,10 @@ impl Simulation {
         {
             // A substitute may have replaced the taker; the law's choice of taker stands.
             dead.taker =
-                restart::taker(dead.kind, dead.team, dead.spot, &self.players, &self.teams);
+                self.config
+                    .modules
+                    .restarts
+                    .taker(&self.view(), dead.kind, dead.team, dead.spot);
             self.referee.phase = Phase::DeadBall(dead);
         }
         self.timeline.push((now, self.teams.clone()));

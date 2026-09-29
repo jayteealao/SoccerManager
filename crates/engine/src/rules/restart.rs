@@ -12,6 +12,7 @@
 
 use crate::data::rules::StoppageKind;
 use crate::math::{self, DVec2, toward};
+use crate::modules::{MatchView, ModuleCard, RestartsModule};
 use crate::pitch::{self, HALF_LENGTH, KICK_DISTANCE, PENALTY_AREA_DEPTH};
 use crate::player::Player;
 use crate::team::{PLAYERS_PER_TEAM, Team};
@@ -361,6 +362,67 @@ pub fn is_ready(
         }
     })
 }
+
+/// Restarts, version 1: the Laws' takers, distances, and readiness above, the tuned delays,
+/// and a longer wait for a leading team that wastes time.
+pub struct RestartsV1;
+
+impl RestartsModule for RestartsV1 {
+    fn taker(&self, view: &MatchView<'_>, kind: StoppageKind, team: usize, spot: DVec2) -> usize {
+        taker(kind, team, spot, view.players(), view.teams())
+    }
+
+    fn delay_ticks(&self, view: &MatchView<'_>, kind: StoppageKind, team: usize) -> u32 {
+        let delay = delay_ticks(kind, view.tuning());
+        let goals = view.goals();
+        if goals[team] > goals[1 - team] {
+            // A leading team with time wasting on takes longer over its restarts.
+            let factor = view.teams()[team].plan.time_wasting;
+            // The factor is at most 20 and the delay under 3000 ticks, so the cast fits.
+            (f64::from(delay) * factor).round() as u32
+        } else {
+            delay
+        }
+    }
+
+    fn shootout_delay_ticks(&self, view: &MatchView<'_>) -> u32 {
+        delay_ticks(StoppageKind::Penalty, view.tuning())
+    }
+
+    fn target(&self, view: &MatchView<'_>, dead: &DeadBall, i: usize) -> DVec2 {
+        match view.referee().shootout.as_ref() {
+            Some(shootout) => shootout_target(dead, i, shootout.keepers),
+            None => target(dead, i, view.players(), view.teams(), view.tuning()),
+        }
+    }
+
+    fn ready(&self, view: &MatchView<'_>, dead: &DeadBall, now: u32) -> bool {
+        match view.referee().shootout.as_ref() {
+            Some(shootout) => {
+                shootout_ready(dead, now, view.players(), shootout.keepers, view.tuning())
+            }
+            None => is_ready(dead, now, view.players(), view.teams(), view.tuning()),
+        }
+    }
+
+    fn kick_off_position(&self, view: &MatchView<'_>, team: usize, slot: usize) -> DVec2 {
+        kick_off_position(&view.teams()[team], slot)
+    }
+}
+
+pub const RESTARTS_V1_CARD: ModuleCard = ModuleCard {
+    purpose: "Runs restarts and dead balls: who takes each restart, how long it waits, where every player stands while the ball is dead, when it may be taken, and the kick-off positions.",
+    inputs: "The dead ball, the players' positions and status, both teams' shapes, attack directions, and time-wasting plans, the score, the shoot-out keepers, and the engine tuning.",
+    outputs: "The taker, the delay in ticks, each player's restart target, whether the restart is ready, and each kick-off position; the loop applies them.",
+    tuning: &[
+        "restart_delay_s",
+        "dt",
+        "restart_ready_radius",
+        "plan.time_wasting",
+    ],
+    calibration: "none: restart placement and timing follow the Laws; no band measures them",
+    keys: &[],
+};
 
 #[cfg(test)]
 mod tests {

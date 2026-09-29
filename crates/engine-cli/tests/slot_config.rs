@@ -116,6 +116,28 @@ fn an_empty_module_refuses_start_up() {
 }
 
 #[test]
+fn a_clock_switched_off_refuses_start_up() {
+    // A test build that unifies the engine's test features lists `clock-faulty@1` after
+    // `clock@1`, so only the first name is pinned.
+    assert_refused(
+        "clock-off.json",
+        "engine.clock",
+        "off is not allowed: the slot is required",
+        "clock@1 .. ",
+    );
+}
+
+#[test]
+fn restarts_switched_off_refuses_start_up() {
+    assert_refused(
+        "restarts-off.json",
+        "engine.restarts",
+        "off is not allowed: the slot is required",
+        "restarts@1",
+    );
+}
+
+#[test]
 fn a_required_slot_switched_off_refuses_start_up() {
     assert_refused(
         "steering-off.json",

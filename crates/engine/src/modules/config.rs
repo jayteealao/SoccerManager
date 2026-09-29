@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 use super::modifier::{Modifier, Modifiers};
 use super::registry::{MODIFIER_COUNT, ModuleRef, Registration, SLOT_COUNT, SlotDecl};
 use super::{
-    FatigueModule, FoulsModule, OffsideModule, Picked, PreMatchModule, ResolvedModules, ShotModule,
-    SteeringModule,
+    ClockModule, DisciplineModule, FatigueModule, FoulsModule, InjuriesModule, OffsideModule,
+    Picked, PreMatchModule, ResolvedModules, RestartsModule, ShotModule, SteeringModule,
 };
 use crate::error::EngineError;
 
@@ -68,6 +68,10 @@ impl SlotFile {
                 ("engine.modifier.pressure".to_string(), entry("pressure")),
                 ("engine.modifier.momentum".to_string(), entry("momentum")),
                 ("engine.modifier.weather".to_string(), entry("weather")),
+                ("engine.clock".to_string(), entry("clock")),
+                ("engine.restarts".to_string(), entry("restarts")),
+                ("engine.discipline".to_string(), entry("discipline")),
+                ("engine.injuries".to_string(), entry("injuries")),
             ]),
         }
     }
@@ -141,6 +145,10 @@ struct Builder {
     pre_match: Option<&'static dyn PreMatchModule>,
     /// The modifier slots, in registry order.
     modifiers: Vec<&'static dyn Modifier>,
+    clock: Option<&'static dyn ClockModule>,
+    restarts: Option<&'static dyn RestartsModule>,
+    discipline: Option<&'static dyn DisciplineModule>,
+    injuries: Option<&'static dyn InjuriesModule>,
 }
 
 impl Builder {
@@ -161,6 +169,10 @@ impl Builder {
                 self.modifiers.push(m);
                 true
             }
+            ModuleRef::Clock(m) => set(&mut self.clock, m),
+            ModuleRef::Restarts(m) => set(&mut self.restarts, m),
+            ModuleRef::Discipline(m) => set(&mut self.discipline, m),
+            ModuleRef::Injuries(m) => set(&mut self.injuries, m),
         };
         if once { Ok(()) } else { Err(Self::defect()) }
     }
@@ -176,6 +188,10 @@ impl Builder {
             Some(fatigue),
             Some(steering),
             Some(pre_match),
+            Some(clock),
+            Some(restarts),
+            Some(discipline),
+            Some(injuries),
         ) = (
             self.fouls,
             self.offside,
@@ -183,6 +199,10 @@ impl Builder {
             self.fatigue,
             self.steering,
             self.pre_match,
+            self.clock,
+            self.restarts,
+            self.discipline,
+            self.injuries,
         )
         else {
             return Err(Self::defect());
@@ -195,6 +215,10 @@ impl Builder {
             steering,
             pre_match,
             modifiers: Modifiers::new(modifiers),
+            clock,
+            restarts,
+            discipline,
+            injuries,
             picked,
         })
     }

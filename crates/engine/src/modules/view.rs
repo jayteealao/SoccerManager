@@ -1,8 +1,13 @@
 //! The read-only view a module reads the match through.
 
+use crate::ball::Ball;
+use crate::data::attributes::AttributeSchema;
+use crate::data::rules::RulePack;
 use crate::data::tuning::FatigueTuning;
 use crate::player::Player;
+use crate::rules::Referee;
 use crate::sim::Simulation;
+use crate::team::Team;
 use crate::tuning::Tuning;
 
 /// A borrowed, read-only view of a match. Its one field is private, and every accessor
@@ -59,6 +64,60 @@ impl<'a> MatchView<'a> {
     #[inline]
     pub fn attack_x(&self, team: usize) -> f64 {
         self.sim.teams[team].attack_x
+    }
+
+    /// The referee's state: the phase, the clock, the tally, held cards, and the shoot-out.
+    #[inline]
+    pub fn referee(&self) -> &'a Referee {
+        &self.sim.referee
+    }
+
+    /// Both teams.
+    #[inline]
+    pub fn teams(&self) -> &'a [Team; 2] {
+        &self.sim.teams
+    }
+
+    /// The rule pack of the match.
+    #[inline]
+    pub fn rules(&self) -> &'a RulePack {
+        &self.sim.config.rules
+    }
+
+    /// `true` for a knockout match, which a level score sends to extra time and penalties.
+    #[inline]
+    pub fn knockout(&self) -> bool {
+        self.sim.config.knockout
+    }
+
+    /// Each team's goals so far.
+    #[inline]
+    pub fn goals(&self) -> [u32; 2] {
+        self.sim.summary.goals
+    }
+
+    /// The ball.
+    #[inline]
+    pub fn ball(&self) -> &'a Ball {
+        &self.sim.ball
+    }
+
+    /// The team that touched the ball last.
+    #[inline]
+    pub fn last_touch(&self) -> Option<usize> {
+        self.sim.last_touch
+    }
+
+    /// The attribute schema of the match.
+    #[inline]
+    pub fn attributes(&self) -> &'a AttributeSchema {
+        &self.sim.config.attributes
+    }
+
+    /// The roster index of the player keeping goal for `team`.
+    #[inline]
+    pub fn keeper(&self, team: usize) -> usize {
+        self.sim.keeper(team)
     }
 }
 
