@@ -11,6 +11,23 @@ fn git(args: &[&str]) -> Option<String> {
     Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+/// The `libm` version `Cargo.lock` resolves, so the trace header cannot drift from it.
+fn libm_version() -> String {
+    let lock = std::fs::read_to_string("../../Cargo.lock").expect("read ../../Cargo.lock");
+    let mut lines = lock.lines();
+    while let Some(line) = lines.next() {
+        if line.trim_end() == "name = \"libm\""
+            && let Some(version) = lines
+                .next()
+                .and_then(|l| l.strip_prefix("version = \""))
+                .and_then(|l| l.strip_suffix('"'))
+        {
+            return version.to_string();
+        }
+    }
+    panic!("no libm package in Cargo.lock");
+}
+
 fn main() {
     let short = git(&["rev-parse", "--short", "HEAD"]).filter(|h| !h.is_empty());
     let full = git(&["rev-parse", "HEAD"]).filter(|h| !h.is_empty());
@@ -41,4 +58,5 @@ fn main() {
     // The dirty mark reads tracked files, so an edit to one must run this script again.
     println!("cargo:rerun-if-changed=../../crates");
     println!("cargo:rerun-if-changed=../../Cargo.lock");
+    println!("cargo:rustc-env=ENGINE_LIBM_VERSION={}", libm_version());
 }

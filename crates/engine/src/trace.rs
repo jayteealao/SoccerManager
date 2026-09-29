@@ -16,7 +16,9 @@ use std::io::Write;
 
 use serde_json::{Value, json};
 
-use crate::sim::{EngineEvent, EngineEventKind};
+#[cfg(feature = "scenario")]
+use crate::sim::EngineEvent;
+use crate::sim::EngineEventKind;
 use crate::streams::{Action, KEY_COUNT, Key};
 
 /// The version of the trace file format.
@@ -26,8 +28,8 @@ pub const TRACE_VERSION: u32 = 1;
 pub const COMPILED: bool = cfg!(feature = "debug-trace");
 
 /// The maths library every engine sine, cosine, exponent, and arctangent uses, as the
-/// header names it. `tests/trace.rs` checks it against `Cargo.lock`.
-pub const MATHS: &str = "libm 0.2.16";
+/// header names it. The version is the one `Cargo.lock` resolves, read by the build script.
+pub const MATHS: &str = concat!("libm ", env!("ENGINE_LIBM_VERSION"));
 
 /// One random draw.
 #[derive(Debug, Clone, PartialEq)]
@@ -497,6 +499,7 @@ impl Counts {
 /// `registry`: one record per draw served, each on a table key with a value in
 /// `[0, 1)`, with thresholds exactly at the chance actions ([`is_chance`]), and each key's
 /// indexes consecutive from 0. Returns the first failure in words.
+#[cfg(feature = "scenario")]
 pub fn check_draws<'a>(
     records: impl IntoIterator<Item = &'a TraceRecord>,
     registry: u64,
@@ -509,12 +512,14 @@ pub fn check_draws<'a>(
 }
 
 /// The draw check of [`check_draws`], fed one tick at a time.
+#[cfg(feature = "scenario")]
 #[derive(Debug, Clone)]
 pub struct DrawCheck {
     next: Vec<u64>,
     n: u64,
 }
 
+#[cfg(feature = "scenario")]
 impl Default for DrawCheck {
     fn default() -> Self {
         Self {
@@ -524,6 +529,7 @@ impl Default for DrawCheck {
     }
 }
 
+#[cfg(feature = "scenario")]
 impl DrawCheck {
     /// Checks the draws among `records`.
     pub fn feed(&mut self, records: &[TraceRecord]) -> Result<(), String> {
@@ -586,6 +592,7 @@ impl DrawCheck {
 /// one of its action's points ([`points_of`]) on its tick, and every event has at least one
 /// of its kind's points ([`points_of_event`]) on its tick. `records` and `events` are what
 /// a traced run hands over for a tick. Returns the first failure in words.
+#[cfg(feature = "scenario")]
 pub fn check_tick(records: &[TraceRecord], events: &[EngineEvent]) -> Result<(), String> {
     use std::collections::{BTreeMap, BTreeSet};
     let mut seen: BTreeMap<u32, BTreeSet<Point>> = BTreeMap::new();
@@ -623,11 +630,13 @@ pub fn check_tick(records: &[TraceRecord], events: &[EngineEvent]) -> Result<(),
     Ok(())
 }
 
+#[cfg(feature = "scenario")]
 fn names(points: &[Point]) -> Vec<&'static str> {
     points.iter().map(|p| p.name()).collect()
 }
 
 /// Adds the points `records` hold to `seen`.
+#[cfg(feature = "scenario")]
 pub fn note_points(seen: &mut std::collections::BTreeSet<Point>, records: &[TraceRecord]) {
     for r in records {
         if let TraceRecord::Point(p) = r {
@@ -638,11 +647,13 @@ pub fn note_points(seen: &mut std::collections::BTreeSet<Point>, records: &[Trac
 
 /// The points the 22 gate matches never reach. Each has a scene test in
 /// `crates/engine/tests/trace.rs` that forces it and checks its record.
+#[cfg(feature = "scenario")]
 pub const SCENE_ONLY: &[Point] = &[Point::CrossClear, Point::Abandoned];
 
 /// Checks the partition: the points the gate matches reached plus [`SCENE_ONLY`] are
 /// exactly [`Point::ALL`]. Returns the missing points by name, or the scene-only points the
 /// matches reached after all.
+#[cfg(feature = "scenario")]
 pub fn check_partition(seen: &std::collections::BTreeSet<Point>) -> Result<(), String> {
     let missing: Vec<_> = Point::ALL
         .iter()
