@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "slots": {
+    "engine.fouls": { "module": "fouls", "version": 1 },
+    "engine.offside": { "module": "offside", "version": 1 }
+  }
+}

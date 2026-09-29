@@ -19,6 +19,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::EngineError;
 use crate::flags::{ActiveFlags, FlagState, FlagStates};
+use crate::modules::{REGISTRY, ResolvedModules, SLOTS_VERSION, SlotFile};
 
 pub use attributes::{ATTRIBUTES_VERSION, AttributeSchema, Group, MAX_ATTRIBUTES};
 pub use generator::generate_league;
@@ -39,6 +40,9 @@ pub const TEAM_B_FILE: &str = "teams/default-b.json";
 /// The English commentary lines. The file stays out of `Content` and its digest: editing a
 /// line changes no content hash and never makes a snapshot refuse to resume.
 pub const COMMENTARY_FILE: &str = "commentary/en.json";
+/// The slot file: which module fills each engine slot. Like the commentary, it stays out of
+/// the content digest.
+pub const SLOTS_FILE: &str = "slots.json";
 /// Environment variable that names the content folder.
 pub const CONTENT_DIR_ENV: &str = "SM_CONTENT_DIR";
 
@@ -268,16 +272,27 @@ pub struct Content {
     pub digest: [u8; 32],
     /// The flags that are on; `tuning` already holds their overrides.
     pub flags: ActiveFlags,
+    /// The module in each slot. [`Content::load`] resolves `slots.json`; content built from
+    /// the four files' bytes alone takes the built-in default selection.
+    pub modules: ResolvedModules,
     /// The tuning file as written, and the digest over the files as written.
     written_tuning: TuningFile,
     written_digest: [u8; 32],
 }
 
 impl Content {
-    /// Loads the four shipped files from `dir`. The tactics file is checked against the
-    /// attribute schema, so a role naming an unknown attribute is refused by name.
+    /// Loads the four shipped files from `dir`, then the slot file. The tactics file is
+    /// checked against the attribute schema, so a role naming an unknown attribute is
+    /// refused by name; a bad slot entry is refused with the slot, the value, and the valid
+    /// names.
     pub fn load(dir: &ContentDir) -> Result<Self, EngineError> {
-        Self::from_files(&ContentFiles::read(dir)?)
+        let content = Self::from_files(&ContentFiles::read(dir)?)?;
+        let bytes = read_bytes(&dir.path(SLOTS_FILE), SLOTS_FILE)?;
+        let slots = load_json_bytes::<SlotFile>("slots", &bytes, SLOTS_FILE, SLOTS_VERSION, &())?;
+        Ok(Self {
+            modules: crate::modules::resolve(&slots.value, REGISTRY)?,
+            ..content
+        })
     }
 
     /// The content from the four files' bytes, with the same checks, digest, and flag
@@ -328,6 +343,7 @@ impl Content {
             tactics: tactics.value,
             digest,
             flags: ActiveFlags::default(),
+            modules: ResolvedModules::builtin_default(),
             written_tuning: tuning.value,
             written_digest: digest,
         };

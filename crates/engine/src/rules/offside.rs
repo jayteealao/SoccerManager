@@ -5,6 +5,7 @@
 //! only when one of them is the next player to touch the ball. A throw-in, a goal kick, and a
 //! corner create no offside, so the caller computes no set for them.
 
+use crate::modules::{MatchView, ModuleCard, OffsideModule, Proposal};
 use crate::player::Player;
 
 /// Roster indices in an offside position, one bit per player.
@@ -55,6 +56,88 @@ pub fn second_last_depth(team: usize, players: &[Player], attack_x: f64) -> f64 
 pub fn is_offence(set: OffsideSet, toucher: usize) -> bool {
     set & (1 << toucher) != 0
 }
+
+/// The offside module, version 1: the functions above.
+pub struct OffsideV1;
+
+impl OffsideModule for OffsideV1 {
+    #[inline]
+    fn on_kick(&self, view: &MatchView<'_>, passer: usize, team: usize) -> Proposal {
+        Proposal::SetOffside(offside_set(
+            passer,
+            view.ball_x(),
+            view.players(),
+            view.attack_x(team),
+        ))
+    }
+
+    #[inline]
+    fn is_offence(&self, _view: &MatchView<'_>, set: OffsideSet, toucher: usize) -> bool {
+        is_offence(set, toucher)
+    }
+}
+
+pub const OFFSIDE_V1_CARD: ModuleCard = ModuleCard {
+    purpose: "Fixes who is in an offside position at each kick in open play and calls the offence when one of them touches the ball next.",
+    inputs: "Every player's position, team, and activity, the ball's position, and the passer's attack direction.",
+    outputs: "A proposed offside set for the loop to write, and whether a touch is an offence.",
+    tuning: &["none"],
+    calibration: "none: no offside band in realism-bands.json",
+    keys: &[],
+};
+
+/// The offside module switched off: nobody is ever offside.
+pub struct OffsideOff;
+
+impl OffsideModule for OffsideOff {
+    #[inline]
+    fn on_kick(&self, _view: &MatchView<'_>, _passer: usize, _team: usize) -> Proposal {
+        Proposal::SetOffside(0)
+    }
+
+    #[inline]
+    fn is_offence(&self, _view: &MatchView<'_>, _set: OffsideSet, _toucher: usize) -> bool {
+        false
+    }
+}
+
+pub const OFFSIDE_OFF_CARD: ModuleCard = ModuleCard {
+    purpose: "Offside switched off: no player is ever in an offside position.",
+    inputs: "Nothing.",
+    outputs: "An empty offside set.",
+    tuning: &["none"],
+    calibration: "none: off version, no offside",
+    keys: &[],
+};
+
+/// A test-only offside module with one induced change: from tick 30,000 on it clears every
+/// offside set, so the replay gate must fail from the first kick whose set differs.
+#[cfg(feature = "scenario")]
+pub struct OffsideFaulty;
+
+#[cfg(feature = "scenario")]
+impl OffsideModule for OffsideFaulty {
+    fn on_kick(&self, view: &MatchView<'_>, passer: usize, team: usize) -> Proposal {
+        if view.tick() >= 30_000 {
+            return Proposal::SetOffside(0);
+        }
+        OffsideV1.on_kick(view, passer, team)
+    }
+
+    fn is_offence(&self, view: &MatchView<'_>, set: OffsideSet, toucher: usize) -> bool {
+        OffsideV1.is_offence(view, set, toucher)
+    }
+}
+
+#[cfg(feature = "scenario")]
+pub const OFFSIDE_FAULTY_CARD: ModuleCard = ModuleCard {
+    purpose: "Test only: version 1 with every offside set cleared from tick 30,000.",
+    inputs: "As offside version 1, plus the tick.",
+    outputs: "As offside version 1.",
+    tuning: &["none"],
+    calibration: "none: test module for the replay gate",
+    keys: &[],
+};
 
 #[cfg(test)]
 mod tests {

@@ -15,6 +15,7 @@ pub mod fatigue;
 pub mod flags;
 pub mod gate;
 pub mod math;
+pub mod modules;
 pub mod observe;
 pub mod pitch;
 pub mod player;

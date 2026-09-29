@@ -21,12 +21,12 @@ use crate::error::EngineError;
 use crate::fatigue::InjurySource;
 use crate::flags::ActiveFlags;
 use crate::math::{self, DVec2, DVec3, toward};
+use crate::modules::ResolvedModules;
 use crate::pitch;
 use crate::player::Player;
 use crate::plugin::{Plugins, ScriptNote};
 use crate::record::{TickRecord, TickSink};
-use crate::rules::fouls::{self, Card, Tackle};
-use crate::rules::offside;
+use crate::rules::fouls::{Card, Tackle};
 use crate::rules::{Phase, Referee, Stoppage};
 use crate::shot;
 use crate::steering;
@@ -37,10 +37,6 @@ use crate::tactics::change::{
 };
 use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::{Tuning, XgTuning};
-
-/// Metres per second above which a carrier runs with the ball rather than shields it, for
-/// the extra tackle chance against a running carrier.
-const RUNNING_SPEED: f64 = 2.0;
 
 /// Everything a match needs to start: the seed, the length, the tuning, the rule pack, the
 /// tactics file, and the attribute schema from the content, the two teams with their
@@ -68,6 +64,8 @@ pub struct MatchConfig {
     pub knockout: bool,
     /// The flags that are on, resolved when the content loaded. Never changes in a match.
     pub flags: ActiveFlags,
+    /// The module in each slot, resolved when the content loaded. Never changes in a match.
+    pub modules: ResolvedModules,
 }
 
 impl MatchConfig {
@@ -119,6 +117,7 @@ impl MatchConfig {
             team_digests,
             knockout: false,
             flags: content.flags.clone(),
+            modules: content.modules,
         })
     }
 
@@ -1123,12 +1122,13 @@ impl Simulation {
             }
             self.last_touch = Some(team);
             self.last_kicker = Some(c);
-            self.referee.offside = if offside_counts {
+            if offside_counts {
                 self.summary.offside_checks += 1;
-                offside::offside_set(c, self.ball.pos.x, &self.players, self.teams[team].attack_x)
+                let proposal = self.config.modules.offside.on_kick(&self.view(), c, team);
+                self.apply_proposal(proposal);
             } else {
-                0
-            };
+                self.referee.offside = 0;
+            }
         }
         self.ball.kick(dir, speed, loft, t);
         if let Some((team, attack_x)) = shooter
@@ -1532,15 +1532,13 @@ impl Simulation {
                     {
                         continue;
                     }
-                    let mut p_win = fouls::win_chance(&p.derived, &carrier.derived, t);
-                    if carrier.vel.length() > RUNNING_SPEED {
-                        p_win += fouls::dribble_win_chance(&p.derived, &carrier.derived, t);
-                    }
-                    let p_foul = fouls::foul_chance(&p.derived, p.yellow, t);
+                    let fouls = self.config.modules.fouls;
+                    let chances = fouls.tackle_chances(&self.view(), i, c);
+                    let (p_win, p_foul) = (chances.p_win, chances.p_foul);
                     let draw = self
                         .streams
                         .tested(Key::player(Action::Tackle, &p), &[p_win, p_win + p_foul]);
-                    let outcome = fouls::tackle_outcome(p_win, p_foul, t.foul_ball_loss, draw);
+                    let outcome = fouls.tackle_outcome(&chances, draw);
                     if self.trace_on() {
                         let label = match outcome {
                             Tackle::Win => "win",
@@ -1580,7 +1578,12 @@ impl Simulation {
     /// Player `i` touches the ball first. A player in an offside position is penalised
     /// instead of gaining the ball.
     fn gain(&mut self, i: usize, _t: &Tuning) {
-        if offside::is_offence(self.referee.offside, i) {
+        if self
+            .config
+            .modules
+            .offside
+            .is_offence(&self.view(), self.referee.offside, i)
+        {
             self.offside_offence(i);
             return;
         }

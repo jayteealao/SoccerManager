@@ -281,11 +281,12 @@ impl Simulation {
         let at = self.players[c].pos;
         let penalty = pitch::in_penalty_area(at, own_end);
         let advantage = !ball_lost && !penalty;
-        let draw = self.streams.tested(
-            Key::player(Action::FoulCard, &offender),
-            &fouls::card_thresholds(offender.derived.aggression, t),
-        );
-        let mut card = fouls::card_outcome(offender.derived.aggression, offender.yellow, t, draw);
+        let fouls = self.config.modules.fouls;
+        let thresholds = fouls.card_thresholds(&self.view(), i);
+        let draw = self
+            .streams
+            .tested(Key::player(Action::FoulCard, &offender), &thresholds);
+        let mut card = fouls.card(&self.view(), i, draw);
         let decided = card;
         let mut event = self.event(EngineEventKind::Foul, Some(offender.team));
         event.player = Some(i);

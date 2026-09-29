@@ -5,7 +5,7 @@
 
 mod common;
 
-use engine::data::{ATTRIBUTES_FILE, RULES_FILE, TACTICS_FILE, TUNING_FILE};
+use engine::data::{ATTRIBUTES_FILE, RULES_FILE, SLOTS_FILE, TACTICS_FILE, TUNING_FILE};
 use engine::{Content, ContentDir, EngineError, FlagState, FlagStates};
 use serde_json::{Value, json};
 
@@ -16,7 +16,7 @@ fn folder(name: &str, flags: Value) -> ContentDir {
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("rules")).unwrap();
     let shipped = common::content_dir();
-    for rel in [ATTRIBUTES_FILE, RULES_FILE, TACTICS_FILE] {
+    for rel in [ATTRIBUTES_FILE, RULES_FILE, TACTICS_FILE, SLOTS_FILE] {
         std::fs::copy(shipped.path(rel), root.join(rel)).unwrap();
     }
     let mut tuning: Value =
