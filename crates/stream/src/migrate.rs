@@ -1,6 +1,20 @@
 //! Replay file migration: a file of an older format is lifted one format at a time, then
 //! decoded as the newest format.
 //!
+//! The viewer's reader (`web/replay-file.mjs`) has the same three parts and the same steps.
+//! Each format change adds one step to each reader and one line to
+//! `web/tests/data/replay-steps.json`; the engine's tests and the viewer's tests each compare
+//! their own steps with that list, so the two chains hold the same formats in the same order.
+//! A format change that also changes the header, the entry layout, or the trailer adds a
+//! branch to the envelope. A change to the record adds its fields to the record types, to
+//! `web/tests/data/record-paths.json`, and to the viewer's record shape.
+//!
+//! The version-4 file `web/tests/data/one-minute-v4.smfx` is committed and never changes. The
+//! migration tests (`tests/replay_migration.rs` and the viewer's `replay-migration.test.mjs`)
+//! lift it through two test-only later formats that exist only in those test files, and check
+//! that every frame, input, and record field survives. A new format adds its own committed
+//! file beside it.
+//!
 //! A reader works in three parts. The envelope ([`RawReplay`]) reads the header, the entry
 //! framing, and the trailer hash, and knows no entry kind. The chain ([`Chain`]) runs one
 //! [`Step`] per format change, each a pure function from one raw file to the raw file of the
