@@ -2,10 +2,10 @@
 //!
 //! Energy runs from 1.0 (fresh) down to 0.0. Every tick it drains by a base rate plus an
 //! effort term that grows with the square of the player's speed fraction, scaled by stamina.
-//! Every 50 ticks each player's effective values are recomputed from the unfatigued base:
-//! pace (maximum speed and acceleration) and the decision values (passing, finishing,
-//! decisions, composure) are multiplied by the fatigue curve, a piecewise-linear lookup that
-//! is 1.0 at and above the threshold. Half-time gives some energy back, scaled by natural
+//! Every 50 ticks each player's effective values are recomputed from the unfatigued base
+//! through the modifiers: the fatigue modifier multiplies pace (maximum speed and
+//! acceleration) and the decision values (passing, finishing, decisions, composure) by the
+//! fatigue curve, a piecewise-linear lookup that is 1.0 at and above the threshold. Half-time gives some energy back, scaled by natural
 //! fitness.
 //!
 //! Injuries roll once for the tackled player on every tackle that wins the ball or is a foul,
@@ -15,6 +15,7 @@
 
 use crate::TICKS_PER_SECOND;
 use crate::data::tuning::FatigueTuning;
+use crate::modules::modifier::{Effect, Family, Modifier, Neutral};
 use crate::modules::{FatigueModule, MatchView, ModuleCard};
 use crate::player::{Derived, Player};
 use crate::rules::Phase;
@@ -91,17 +92,13 @@ pub fn injury_chance(p: &Player, rate: f64) -> f64 {
     (rate * (1.5 - p.base.injury_resistance)).clamp(0.0, 1.0)
 }
 
-/// Fatigue version 1: the drain, the fatigue curve, and the injury chance above.
+/// Fatigue version 1: the drain and the injury chance above. The fatigue curve's effect on
+/// the effective values is the fatigue modifier, [`FatigueCurveV1`].
 pub struct FatigueV1;
 
 impl FatigueModule for FatigueV1 {
     fn drain(&self, view: &MatchView<'_>, i: usize) -> f64 {
         drain(view.player(i), view.fatigue(), view.tuning().dt)
-    }
-
-    fn effective(&self, view: &MatchView<'_>, i: usize) -> Derived {
-        let p = view.player(i);
-        effective(&p.base, p.energy, view.fatigue())
     }
 
     fn injury_chance(&self, view: &MatchView<'_>, i: usize, source: InjurySource) -> f64 {
@@ -115,12 +112,10 @@ impl FatigueModule for FatigueV1 {
 }
 
 pub const FATIGUE_V1_CARD: ModuleCard = ModuleCard {
-    purpose: "Drains each player's energy by speed and stamina, scales the effective values by the fatigue curve, and sets each injury chance.",
-    inputs: "Each player's velocity, base values, and energy, the fatigue tuning, and the engine tuning.",
-    outputs: "The energy drained per tick, the effective values, and the injury chance of a roll.",
+    purpose: "Drains each player's energy by speed and stamina and sets each injury chance.",
+    inputs: "Each player's velocity and base values, the fatigue tuning, and the engine tuning.",
+    outputs: "The energy drained per tick and the injury chance of a roll.",
     tuning: &[
-        "fatigue.threshold",
-        "fatigue.curve",
         "fatigue.drain_base_per_s",
         "fatigue.drain_effort_per_s",
         "injury_per_minute",
@@ -132,16 +127,12 @@ pub const FATIGUE_V1_CARD: ModuleCard = ModuleCard {
 };
 
 /// Fatigue switched off: nobody tires and nobody is injured. The loop still takes every
-/// injury draw on its key.
+/// injury draw on its key. Energy stays full, so the fatigue modifier has no effect either.
 pub struct FatigueOff;
 
 impl FatigueModule for FatigueOff {
     fn drain(&self, _: &MatchView<'_>, _: usize) -> f64 {
         0.0
-    }
-
-    fn effective(&self, view: &MatchView<'_>, i: usize) -> Derived {
-        view.player(i).base
     }
 
     fn injury_chance(&self, _: &MatchView<'_>, _: usize, _: InjurySource) -> f64 {
@@ -150,12 +141,47 @@ impl FatigueModule for FatigueOff {
 }
 
 pub const FATIGUE_OFF_CARD: ModuleCard = ModuleCard {
-    purpose: "Fatigue switched off: energy never drains, the effective values stay at base, and no roll injures.",
-    inputs: "Each player's base values.",
-    outputs: "A drain of 0, the base values, and an injury chance of 0.",
+    purpose: "Fatigue switched off: energy never drains and no roll injures.",
+    inputs: "Nothing.",
+    outputs: "A drain of 0 and an injury chance of 0.",
     tuning: &["none"],
     calibration: "none: off version, no fatigue",
     keys: &[Action::InjuryMinute, Action::InjuryTackle],
+};
+
+/// The fatigue modifier (body family): the fatigue curve's multiplier at the player's
+/// energy, on every value the curve scales.
+pub struct FatigueCurveV1;
+
+impl Modifier for FatigueCurveV1 {
+    fn family(&self) -> Family {
+        Family::Body
+    }
+
+    fn effect(&self, view: &MatchView<'_>, i: usize) -> Effect {
+        Effect::all(multiplier(view.player(i).energy, view.fatigue()))
+    }
+}
+
+pub const FATIGUE_CURVE_V1_CARD: ModuleCard = ModuleCard {
+    purpose: "Scales pace and the decision values by the fatigue curve at the player's energy (body family).",
+    inputs: "Each player's energy and the fatigue tuning.",
+    outputs: "One factor on max speed, max acceleration, passing, finishing, decisions, and composure.",
+    tuning: &["fatigue.threshold", "fatigue.curve"],
+    calibration: "none: no fatigue band in realism-bands.json",
+    keys: &[],
+};
+
+/// The fatigue modifier switched off: tired or not, the effective values stay at base.
+pub const FATIGUE_CURVE_OFF: Neutral = Neutral(Family::Body);
+
+pub const FATIGUE_CURVE_OFF_CARD: ModuleCard = ModuleCard {
+    purpose: "The fatigue modifier switched off (body family): no effect at any energy.",
+    inputs: "Nothing.",
+    outputs: "A factor of 1.0 on every effective value.",
+    tuning: &["none"],
+    calibration: "none: off version, no fatigue effect",
+    keys: &[],
 };
 
 impl Simulation {
@@ -199,11 +225,11 @@ impl Simulation {
         }
     }
 
-    /// Recomputes every player's effective values from its base and energy.
+    /// Recomputes every player's effective values from its base through the modifiers.
     pub(crate) fn refresh_effective(&mut self) {
-        let fatigue = self.config.modules.fatigue;
+        let modifiers = self.config.modules.modifiers;
         for i in 0..self.players.len() {
-            let derived = fatigue.effective(&self.view(), i);
+            let derived = modifiers.effective(&self.view(), i);
             self.players[i].derived = derived;
         }
     }

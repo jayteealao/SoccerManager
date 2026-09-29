@@ -1,19 +1,32 @@
 //! The module contract: the shipped slot file resolves every declared slot and a match
 //! finishes on it; a bad slot entry refuses start-up and names the slot, the bad value, and
 //! the valid names; every moved action key has exactly one owner; every module card is
-//! complete; and one changed module output fails the replay gate at a named window.
+//! complete; one changed module output fails the replay gate at a named window; and every
+//! modifier names its family and can be switched off.
+
+/// The four modifier slots, in registry order.
+const MODIFIER_SLOTS: [&str; 4] = [
+    MODIFIER_FATIGUE.id,
+    MODIFIER_PRESSURE.id,
+    MODIFIER_MOMENTUM.id,
+    MODIFIER_WEATHER.id,
+];
 
 mod common;
 
 use std::collections::BTreeMap;
 
-use engine::modules::registry::{FATIGUE, FOULS, ModuleRef, OFFSIDE, PRE_MATCH, SHOT, STEERING};
+use engine::modules::modifier::Family;
+use engine::modules::registry::{
+    FATIGUE, FOULS, MODIFIER_FATIGUE, MODIFIER_MOMENTUM, MODIFIER_PRESSURE, MODIFIER_WEATHER,
+    ModuleRef, OFFSIDE, PRE_MATCH, SHOT, STEERING,
+};
 use engine::modules::{
     CardError, MOVED_KEYS, ModuleCard, OwnershipError, REGISTRY, Registration, SlotDecl, SlotEntry,
     SlotFile, check_card, check_ownership, resolve,
 };
 use engine::streams::Action;
-use engine::{EngineError, MatchConfig, NullSink, Simulation, Snapshot};
+use engine::{EngineError, MatchConfig, NullSink, Simulation, Snapshot, Validator, VecSink};
 
 fn file(entries: &[(&str, &str, Option<u32>)]) -> SlotFile {
     SlotFile {
@@ -106,6 +119,10 @@ fn default_selection_resolves_and_a_match_finishes() {
             "engine.fatigue=fatigue@1",
             "engine.steering=steering@1",
             "engine.pre-match=pre-match@1",
+            "engine.modifier.fatigue=fatigue-curve@1",
+            "engine.modifier.pressure=pressure@1",
+            "engine.modifier.momentum=momentum@1",
+            "engine.modifier.weather=weather@1",
         ],
         "every declared slot resolves, in registry order"
     );
@@ -197,10 +214,9 @@ fn off_on_an_optional_slot_resolves_to_its_off_version() {
         .filter(|d| !d.slot.required)
         .map(|d| d.slot.id)
         .collect();
-    assert_eq!(
-        optional,
-        [FOULS.id, OFFSIDE.id, SHOT.id, FATIGUE.id, PRE_MATCH.id]
-    );
+    let mut expected = vec![FOULS.id, OFFSIDE.id, SHOT.id, FATIGUE.id, PRE_MATCH.id];
+    expected.extend(MODIFIER_SLOTS);
+    assert_eq!(optional, expected);
     let changes: Vec<(&str, &str, Option<u32>)> =
         optional.iter().map(|&slot| (slot, "off", None)).collect();
     let modules = resolve(&default_with(&changes), REGISTRY).unwrap();
@@ -222,7 +238,9 @@ fn an_undeclared_or_missing_slot_is_refused() {
     assert_eq!(slot, "engine.weather");
     assert_eq!(
         valid,
-        "engine.fouls, engine.offside, engine.shot, engine.fatigue, engine.steering, engine.pre-match"
+        "engine.fouls, engine.offside, engine.shot, engine.fatigue, engine.steering, \
+         engine.pre-match, engine.modifier.fatigue, engine.modifier.pressure, \
+         engine.modifier.momentum, engine.modifier.weather"
     );
     assert!(text.contains("is not a declared slot"), "{text}");
 
@@ -302,9 +320,9 @@ fn every_registered_card_is_complete() {
     assert!(names.contains(&"yellow_cards_per_team"), "{names:?}");
     assert!(names.contains(&"goals_per_xg"), "{names:?}");
     let registrations = every_registration();
-    // Fouls, offside, shot, fatigue, and pre-match each have version 1 and off; steering
-    // has version 1 only.
-    assert!(registrations.len() >= 11, "{}", registrations.len());
+    // Fouls, offside, shot, fatigue, pre-match, and the four modifiers each have version 1
+    // and off; steering has version 1 only.
+    assert!(registrations.len() >= 19, "{}", registrations.len());
     for reg in registrations {
         check_card(reg.card, &names)
             .unwrap_or_else(|e| panic!("{}@{}: {e}", reg.name, reg.version));
@@ -353,17 +371,16 @@ fn an_incomplete_card_fails_the_card_check() {
 #[test]
 fn the_registry_declares_the_moved_slots_in_order() {
     let ids: Vec<&str> = REGISTRY.iter().map(|d| d.slot.id).collect();
-    assert_eq!(
-        ids,
-        [
-            FOULS.id,
-            OFFSIDE.id,
-            SHOT.id,
-            FATIGUE.id,
-            STEERING.id,
-            PRE_MATCH.id
-        ]
-    );
+    let mut expected = vec![
+        FOULS.id,
+        OFFSIDE.id,
+        SHOT.id,
+        FATIGUE.id,
+        STEERING.id,
+        PRE_MATCH.id,
+    ];
+    expected.extend(MODIFIER_SLOTS);
+    assert_eq!(ids, expected);
     assert_eq!(REGISTRY.len(), engine::modules::SLOT_COUNT);
     let required: Vec<&str> = REGISTRY
         .iter()
@@ -382,6 +399,87 @@ fn the_registry_declares_the_moved_slots_in_order() {
     assert!(matches!(default(3), ModuleRef::Fatigue(_)));
     assert!(matches!(default(4), ModuleRef::Steering(_)));
     assert!(matches!(default(5), ModuleRef::PreMatch(_)));
+    for i in 6..10 {
+        assert!(matches!(default(i), ModuleRef::Modifier(_)), "{i}");
+    }
+}
+
+#[test]
+fn every_modifier_slot_names_its_family() {
+    let family = |reg: &Registration| match reg.module {
+        ModuleRef::Modifier(m) => m.family(),
+        _ => panic!("{} is not a modifier", reg.name),
+    };
+    let expected = [
+        (MODIFIER_FATIGUE.id, Family::Body),
+        (MODIFIER_PRESSURE.id, Family::Mind),
+        (MODIFIER_MOMENTUM.id, Family::Mind),
+        (MODIFIER_WEATHER.id, Family::Surroundings),
+    ];
+    for (slot, want) in expected {
+        let decl = REGISTRY.iter().find(|d| d.slot.id == slot).unwrap();
+        let off = decl.off.expect("every modifier has an off version");
+        for reg in decl.registrations.iter().chain([&off]) {
+            assert_eq!(family(reg), want, "{slot}: {}@{}", reg.name, reg.version);
+        }
+    }
+    // No modifier is in the familiarity family yet.
+    let modifiers = REGISTRY
+        .iter()
+        .flat_map(|d| d.registrations.iter().copied().chain(d.off))
+        .filter(|r| matches!(r.module, ModuleRef::Modifier(_)));
+    assert_eq!(
+        modifiers.clone().count(),
+        8,
+        "four modifiers, each with an off version"
+    );
+    assert!(
+        modifiers
+            .into_iter()
+            .all(|r| family(&r) != Family::Familiarity)
+    );
+}
+
+/// AC-6 for modifiers: each modifier switched off in turn, three full matches each; every
+/// match reaches full time and the event validator accepts every event stream.
+#[test]
+fn each_modifier_switched_off_plays_a_batch_the_validator_accepts() {
+    let content = common::content();
+    let [a, b] = common::default_teams(&content);
+    let selections: Vec<engine::Content> = MODIFIER_SLOTS
+        .iter()
+        .map(|&slot| {
+            let mut off = content.clone();
+            off.modules = resolve(&default_with(&[(slot, "off", None)]), REGISTRY).unwrap();
+            assert_eq!(off.modules.picked_for(slot).unwrap().module, "off");
+            off
+        })
+        .collect();
+    let results = common::run_many(0..=11, |k| {
+        let (slot, seed) = (MODIFIER_SLOTS[k as usize / 3], k % 3 + 1);
+        let config = MatchConfig::new(seed, 90, &selections[k as usize / 3], [&a, &b]).unwrap();
+        let mut sim = Simulation::new(config.clone()).unwrap();
+        let mut sink = VecSink::default();
+        sim.run(&mut sink).unwrap();
+        let events = sim.take_events();
+        let violations = Validator::for_match(config.tuning.clone(), sim.team_timeline(), &events)
+            .check(&sink.records);
+        (
+            slot,
+            seed,
+            sim.is_over(),
+            violations.len(),
+            format!("{:?}", violations.first()),
+        )
+    });
+    assert_eq!(results.len(), 12);
+    for (slot, seed, over, violations, first) in results {
+        assert!(over, "{slot} off, seed {seed}: the match reaches full time");
+        assert_eq!(
+            violations, 0,
+            "{slot} off, seed {seed}: first violation {first}"
+        );
+    }
 }
 
 #[test]
@@ -437,7 +535,11 @@ const FOULS_OFF: &str = r#"{
     "engine.shot": { "module": "shot", "version": 1 },
     "engine.fatigue": { "module": "fatigue", "version": 1 },
     "engine.steering": { "module": "steering", "version": 1 },
-    "engine.pre-match": { "module": "pre-match", "version": 1 }
+    "engine.pre-match": { "module": "pre-match", "version": 1 },
+    "engine.modifier.fatigue": { "module": "fatigue-curve", "version": 1 },
+    "engine.modifier.pressure": { "module": "pressure", "version": 1 },
+    "engine.modifier.momentum": { "module": "momentum", "version": 1 },
+    "engine.modifier.weather": { "module": "weather", "version": 1 }
   }
 }"#;
 

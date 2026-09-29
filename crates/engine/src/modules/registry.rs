@@ -3,6 +3,7 @@
 //! registration can never change a match, and no registration can be dropped by the linker.
 
 use super::card::ModuleCard;
+use super::modifier::{Modifier, stand_ins};
 use super::{
     FatigueModule, FoulsModule, OffsideModule, PreMatchModule, ShotModule, Slot, SteeringModule,
 };
@@ -18,6 +19,7 @@ pub enum ModuleRef {
     Fatigue(&'static dyn FatigueModule),
     Steering(&'static dyn SteeringModule),
     PreMatch(&'static dyn PreMatchModule),
+    Modifier(&'static dyn Modifier),
 }
 
 /// One module registered for a slot.
@@ -86,8 +88,33 @@ pub const PRE_MATCH: Slot = Slot {
     required: false,
 };
 
-/// The number of declared slots. `ResolvedModules` holds one typed field per slot.
-pub const SLOT_COUNT: usize = 6;
+/// The modifier slots, in family order: body, mind, then surroundings.
+pub const MODIFIER_FATIGUE: Slot = Slot {
+    id: "engine.modifier.fatigue",
+    required: false,
+};
+
+pub const MODIFIER_PRESSURE: Slot = Slot {
+    id: "engine.modifier.pressure",
+    required: false,
+};
+
+pub const MODIFIER_MOMENTUM: Slot = Slot {
+    id: "engine.modifier.momentum",
+    required: false,
+};
+
+pub const MODIFIER_WEATHER: Slot = Slot {
+    id: "engine.modifier.weather",
+    required: false,
+};
+
+/// The number of declared slots. `ResolvedModules` holds one typed field per slot, and one
+/// `Modifiers` field for the modifier slots.
+pub const SLOT_COUNT: usize = 10;
+
+/// The number of modifier slots.
+pub const MODIFIER_COUNT: usize = 4;
 
 const FOULS_REGISTRATIONS: &[Registration] = &[Registration {
     name: "fouls",
@@ -214,6 +241,66 @@ const DECLS: [SlotDecl; SLOT_COUNT] = [
             version: 0,
             module: ModuleRef::PreMatch(&ai::PreMatchOff),
             card: &ai::PRE_MATCH_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: MODIFIER_FATIGUE,
+        registrations: &[Registration {
+            name: "fatigue-curve",
+            version: 1,
+            module: ModuleRef::Modifier(&fatigue::FatigueCurveV1),
+            card: &fatigue::FATIGUE_CURVE_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::Modifier(&fatigue::FATIGUE_CURVE_OFF),
+            card: &fatigue::FATIGUE_CURVE_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: MODIFIER_PRESSURE,
+        registrations: &[Registration {
+            name: "pressure",
+            version: 1,
+            module: ModuleRef::Modifier(&stand_ins::PRESSURE_V1),
+            card: &stand_ins::PRESSURE_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::Modifier(&stand_ins::PRESSURE_OFF),
+            card: &stand_ins::PRESSURE_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: MODIFIER_MOMENTUM,
+        registrations: &[Registration {
+            name: "momentum",
+            version: 1,
+            module: ModuleRef::Modifier(&stand_ins::MOMENTUM_V1),
+            card: &stand_ins::MOMENTUM_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::Modifier(&stand_ins::MOMENTUM_OFF),
+            card: &stand_ins::MOMENTUM_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: MODIFIER_WEATHER,
+        registrations: &[Registration {
+            name: "weather",
+            version: 1,
+            module: ModuleRef::Modifier(&stand_ins::WEATHER_V1),
+            card: &stand_ins::WEATHER_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::Modifier(&stand_ins::WEATHER_OFF),
+            card: &stand_ins::WEATHER_OFF_CARD,
         }),
     },
 ];

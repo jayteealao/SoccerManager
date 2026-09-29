@@ -1,12 +1,15 @@
 //! AC-4: above the fatigue threshold a player's effective values equal the base; at energy
 //! 0.5 and 0.3 the effective top speed and decisions are the base times the curve's
 //! multiplier; a 90-minute match ends with every player's energy below 1.0 and above 0.0.
+//! The effective values reach the player through the modifiers, bit for bit as the fatigue
+//! curve gives them, and with the fatigue modifier off they stay at base.
 
 mod common;
 
 use common::{calm_match, full_match, index};
 use engine::Simulation;
-use engine::fatigue::multiplier;
+use engine::fatigue::{effective, multiplier};
+use engine::modules::{REGISTRY, SlotEntry, SlotFile, resolve};
 use engine::record::NullSink;
 use engine::scenario::Scene;
 
@@ -125,4 +128,52 @@ fn fatigue_runs_on_through_extra_time_without_a_step_at_ninety_minutes() {
         steps[ninety].abs()
     );
     assert!(sim.players()[i].energy < energy[0]);
+}
+
+#[test]
+fn effective_values_through_the_modifiers_equal_the_fatigue_curve() {
+    let f = calm_match(90).fatigue;
+    for energy in [1.0, 0.9, 0.7, 0.6, 0.5, 0.45, 0.3, 0.1, 0.0] {
+        let sim = at_energy(energy);
+        let p = sim.players()[index(0, PLAYER)];
+        let expected = effective(&p.base, energy, &f);
+        let bits = |d: &engine::player::Derived| {
+            [
+                d.max_speed,
+                d.max_accel,
+                d.passing,
+                d.dribbling,
+                d.tackling,
+                d.positioning,
+                d.aggression,
+                d.finishing,
+                d.vision,
+                d.decisions,
+                d.composure,
+                d.stamina,
+                d.natural_fitness,
+                d.injury_resistance,
+            ]
+            .map(f64::to_bits)
+        };
+        assert_eq!(bits(&p.derived), bits(&expected), "energy {energy}");
+    }
+}
+
+#[test]
+fn fatigue_modifier_off_leaves_the_base_values() {
+    let mut config = calm_match(90);
+    let mut slots = SlotFile::builtin_default();
+    slots.slots.insert(
+        "engine.modifier.fatigue".to_string(),
+        SlotEntry {
+            module: "off".to_string(),
+            version: None,
+        },
+    );
+    config.modules = resolve(&slots, REGISTRY).unwrap();
+    let sim = Scene::new(config).energy(index(0, PLAYER), 0.3).build();
+    let p = sim.players()[index(0, PLAYER)];
+    assert_eq!(p.energy, 0.3);
+    assert_eq!(p.derived, p.base);
 }

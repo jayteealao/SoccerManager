@@ -10,6 +10,7 @@
 
 pub mod card;
 pub mod config;
+pub mod modifier;
 pub mod proposal;
 pub mod registry;
 pub mod view;
@@ -22,15 +23,15 @@ use crate::data::attributes::AttributeSchema;
 use crate::data::tactics::TacticsSchema;
 use crate::fatigue::InjurySource;
 use crate::math::DVec2;
-use crate::player::Derived;
 use crate::rules::fouls::{Card, Tackle};
 use crate::rules::offside::OffsideSet;
 use crate::team::Team;
 
 pub use card::{CardError, MOVED_KEYS, ModuleCard, OwnershipError, check_card, check_ownership};
 pub use config::{SLOTS_VERSION, SlotEntry, SlotFile, resolve};
+pub use modifier::Modifiers;
 pub use proposal::Proposal;
-pub use registry::{ModuleRef, REGISTRY, Registration, SLOT_COUNT, SlotDecl};
+pub use registry::{MODIFIER_COUNT, ModuleRef, REGISTRY, Registration, SLOT_COUNT, SlotDecl};
 pub use view::MatchView;
 
 /// A slot: a place in the engine that one module fills.
@@ -89,13 +90,12 @@ pub trait ShotModule: Send + Sync + 'static {
     fn save_chance(&self, view: &MatchView<'_>, quality: f64) -> f64;
 }
 
-/// Fatigue and injury chances. The loop writes energy and the effective values, and draws
-/// the `InjuryMinute` and `InjuryTackle` keys against [`FatigueModule::injury_chance`].
+/// Fatigue and injury chances. The loop writes energy, and draws the `InjuryMinute` and
+/// `InjuryTackle` keys against [`FatigueModule::injury_chance`]. The effect of energy on the
+/// effective values is the fatigue modifier ([`modifier`]).
 pub trait FatigueModule: Send + Sync + 'static {
     /// The energy player `i` loses in one tick.
     fn drain(&self, view: &MatchView<'_>, i: usize) -> f64;
-    /// The effective values of player `i` at its current energy.
-    fn effective(&self, view: &MatchView<'_>, i: usize) -> Derived;
     /// The chance that one injury roll of `source` injures player `i`.
     fn injury_chance(&self, view: &MatchView<'_>, i: usize, source: InjurySource) -> f64;
 }
@@ -132,6 +132,8 @@ pub struct ResolvedModules {
     pub fatigue: &'static dyn FatigueModule,
     pub steering: &'static dyn SteeringModule,
     pub pre_match: &'static dyn PreMatchModule,
+    /// The four modifier slots, in registry order.
+    pub modifiers: Modifiers,
     picked: [Picked; SLOT_COUNT],
 }
 

@@ -11,7 +11,8 @@ use std::collections::BTreeMap;
 use garde::Validate;
 use serde::{Deserialize, Serialize};
 
-use super::registry::{ModuleRef, Registration, SLOT_COUNT, SlotDecl};
+use super::modifier::{Modifier, Modifiers};
+use super::registry::{MODIFIER_COUNT, ModuleRef, Registration, SLOT_COUNT, SlotDecl};
 use super::{
     FatigueModule, FoulsModule, OffsideModule, Picked, PreMatchModule, ResolvedModules, ShotModule,
     SteeringModule,
@@ -60,6 +61,13 @@ impl SlotFile {
                 ("engine.fatigue".to_string(), entry("fatigue")),
                 ("engine.steering".to_string(), entry("steering")),
                 ("engine.pre-match".to_string(), entry("pre-match")),
+                (
+                    "engine.modifier.fatigue".to_string(),
+                    entry("fatigue-curve"),
+                ),
+                ("engine.modifier.pressure".to_string(), entry("pressure")),
+                ("engine.modifier.momentum".to_string(), entry("momentum")),
+                ("engine.modifier.weather".to_string(), entry("weather")),
             ]),
         }
     }
@@ -131,10 +139,13 @@ struct Builder {
     fatigue: Option<&'static dyn FatigueModule>,
     steering: Option<&'static dyn SteeringModule>,
     pre_match: Option<&'static dyn PreMatchModule>,
+    /// The modifier slots, in registry order.
+    modifiers: Vec<&'static dyn Modifier>,
 }
 
 impl Builder {
-    /// Fills the field `module` belongs to; a field filled twice is a registry defect.
+    /// Fills the field `module` belongs to; a field filled twice is a registry defect. A
+    /// modifier joins the modifier list.
     fn fill(&mut self, module: ModuleRef) -> Result<(), EngineError> {
         fn set<T: ?Sized>(field: &mut Option<&'static T>, m: &'static T) -> bool {
             field.replace(m).is_none()
@@ -146,12 +157,18 @@ impl Builder {
             ModuleRef::Fatigue(m) => set(&mut self.fatigue, m),
             ModuleRef::Steering(m) => set(&mut self.steering, m),
             ModuleRef::PreMatch(m) => set(&mut self.pre_match, m),
+            ModuleRef::Modifier(m) => {
+                self.modifiers.push(m);
+                true
+            }
         };
         if once { Ok(()) } else { Err(Self::defect()) }
     }
 
     fn finish(self, picked: Vec<Picked>) -> Result<ResolvedModules, EngineError> {
         let picked: [Picked; SLOT_COUNT] = picked.try_into().map_err(|_| Self::defect())?;
+        let modifiers: [&'static dyn Modifier; MODIFIER_COUNT] =
+            self.modifiers.try_into().map_err(|_| Self::defect())?;
         let (
             Some(fouls),
             Some(offside),
@@ -177,6 +194,7 @@ impl Builder {
             fatigue,
             steering,
             pre_match,
+            modifiers: Modifiers::new(modifiers),
             picked,
         })
     }

@@ -6,6 +6,10 @@
     "engine.shot": { "module": "shot", "version": 1 },
     "engine.fatigue": { "module": "fatigue", "version": 1 },
     "engine.steering": { "module": "steering", "version": 1 },
-    "engine.pre-match": { "module": "pre-match", "version": 1 }
+    "engine.pre-match": { "module": "pre-match", "version": 1 },
+    "engine.modifier.fatigue": { "module": "fatigue-curve", "version": 1 },
+    "engine.modifier.pressure": { "module": "pressure", "version": 1 },
+    "engine.modifier.momentum": { "module": "momentum", "version": 1 },
+    "engine.modifier.weather": { "module": "weather", "version": 1 }
   }
 }
