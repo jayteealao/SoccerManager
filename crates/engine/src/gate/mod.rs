@@ -11,8 +11,6 @@ pub mod guard;
 mod inventory;
 
 #[cfg(feature = "scenario")]
-pub mod audit;
-#[cfg(feature = "scenario")]
 pub mod fault;
 
 use serde::{Deserialize, Serialize};
@@ -377,9 +375,6 @@ pub(crate) struct Probe<'a> {
     pub against: Option<&'a MatchHashes>,
     #[cfg(feature = "scenario")]
     pub fault: Option<fault::Fault>,
-    /// Switches the carrier-options audit on; the run leaves the audit's counts here.
-    #[cfg(feature = "scenario")]
-    pub audit: Option<&'a std::cell::RefCell<audit::OptionsAudit>>,
     /// The run leaves the draws taken and the final stream state here.
     #[cfg(feature = "scenario")]
     pub streams: Option<&'a std::cell::RefCell<Option<(u64, crate::rng::StreamState)>>>,
@@ -447,10 +442,6 @@ pub(crate) fn run(
     probe: &Probe<'_>,
 ) -> Result<Played, GateError> {
     let mut sim = build(fixture, inputs, probe.trace.is_some())?;
-    #[cfg(feature = "scenario")]
-    if let Some(audit) = probe.audit {
-        sim.options_audit = Some(audit.borrow().clone());
-    }
     let mut hasher = Sha256::new();
     let mut header = Writer::default();
     inventory::header(&mut header, fixture, &sim);
@@ -520,10 +511,6 @@ pub(crate) fn run(
                 break;
             }
         }
-    }
-    #[cfg(feature = "scenario")]
-    if let (Some(audit), Some(counts)) = (probe.audit, sim.options_audit.take()) {
-        *audit.borrow_mut() = counts;
     }
     #[cfg(feature = "scenario")]
     if let Some(out) = probe.streams {

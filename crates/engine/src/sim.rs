@@ -544,9 +544,6 @@ pub struct Simulation {
     /// Test seam: the outcomes the next shoot-out kicks are given, whatever the ball does.
     #[cfg(feature = "scenario")]
     pub(crate) forced_kicks: std::collections::VecDeque<bool>,
-    /// Test seam: the carrier-options audit, off unless a gate test switches it on.
-    #[cfg(feature = "scenario")]
-    pub(crate) options_audit: Option<crate::gate::audit::OptionsAudit>,
     /// The plugin hooks, none unless a caller attaches them.
     pub(crate) plugins: Plugins,
     /// The decision hook's offsets for the current carrier. A stoppage and a new carrier
@@ -674,8 +671,6 @@ impl Simulation {
             census: ShotCensus::default(),
             #[cfg(feature = "scenario")]
             forced_kicks: std::collections::VecDeque::new(),
-            #[cfg(feature = "scenario")]
-            options_audit: None,
             plugins: Plugins::default(),
             script_cache: None,
             finished: false,

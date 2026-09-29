@@ -596,8 +596,7 @@ mod tests {
             copy.draw(p(Action::ShotAim, 0, 5));
             assert_eq!(copy.take_trace().len(), 2, "the clone has its own buffer");
             assert_eq!(s.take_trace().len(), 1, "the original keeps its own");
-            // The options audit restores a clone taken before its reference run: the restored
-            // registry's count and buffer agree.
+            // A restored clone: the restored registry's count and buffer agree.
             let real = s.clone();
             s.draw(p(Action::PassScore, 1, 1));
             s = real;
