@@ -540,86 +540,136 @@ export async function readReplay(input, { chain = productionChain } = {}) {
   };
 }
 
-// Every field of the version-4 record, as the engine's record types name them: 1 is a field
-// that must be present and not null, 0 a field that must be present and may be null (an
-// `Option` in the engine), an object a nested record, a one-item array a list of that shape,
-// and `oneOf` an object with exactly one of the named keys.
+// Every field of the version-4 record, as the engine's record types name them (`ReplayRecord`
+// in `crates/stream/src/record.rs`, which refuses unknown fields). A leaf is a type name:
+// `str`, `bool`, `u8`, `u32`, `u64` (a whole number, no sign), or `seed` (a decimal string of
+// a 64-bit number). `opt(t)` may also be null (an `Option` in the engine), `one(...)` is one
+// of the listed strings, `list(shape, length?)` is a list, and an object is a record whose
+// keys are exactly the listed ones. `variants` is an object with exactly one of the keys.
+const opt = (of) => ({ opt: of });
+const one = (...values) => ({ one: values });
+const list = (of, length = null) => ({ list: of, length });
+const variants = (of) => ({ variants: of });
+const CHANGE_SHAPE = variants({
+  substitution: { off: 'u64', on: 'u64' },
+  tactics: {
+    formation: opt('u8'),
+    mentality: opt('u8'),
+    instructions: list(opt('u8'), 6),
+    roles: list({ squad: 'u64', role: 'u8', duty: 'u8' }),
+  },
+});
 const RECORD_SHAPE = {
   engine: {
-    commit: 1,
-    dirty: 1,
-    crate_version: 1,
-    scheme: 1,
-    maths: 1,
-    executable_sha256: 1,
-    build: 1,
+    commit: 'str',
+    dirty: 'bool',
+    crate_version: 'str',
+    scheme: 'u8',
+    maths: 'str',
+    executable_sha256: 'str',
+    build: 'str',
   },
-  settings: { seed: 1, minutes: 1, knockout: 1, managers: 1 },
-  inputs: [{ role: 1, name: 1, bytes: 1, sha256: 1 }],
-  inputs_bytes: 1,
-  changes: [
-    {
-      order: 1,
-      team: 1,
-      source: 1,
-      queued_tick: 1,
-      queue_number: 1,
-      tick: 1,
-      stoppage: 1,
-      change: {
-        oneOf: {
-          substitution: { off: 1, on: 1 },
-          tactics: { formation: 0, mentality: 0, instructions: 1, roles: [{ squad: 1, role: 1, duty: 1 }] },
-        },
-      },
-    },
-  ],
-  watchdog: { slow_calls: 1, invalid: 0 },
+  settings: {
+    seed: 'seed',
+    minutes: 'u32',
+    knockout: 'bool',
+    managers: list(one('ai', 'human'), 2),
+  },
+  inputs: list({ role: 'str', name: 'str', bytes: 'u64', sha256: 'str' }),
+  inputs_bytes: 'u64',
+  changes: list({
+    order: 'u32',
+    team: 'u64',
+    source: one('manager', 'ai'),
+    queued_tick: 'u32',
+    queue_number: 'u32',
+    tick: 'u32',
+    stoppage: 'str',
+    change: CHANGE_SHAPE,
+  }),
+  watchdog: { slow_calls: 'u32', invalid: opt('str') },
 };
 
+const LIMITS = { u8: 0xff, u32: 0xffff_ffff };
+const nameOf = (path) => path || 'record';
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+function requireLeaf(value, type, path) {
+  const bad = (what) => new ReplayRefused(`the record field ${path} is not ${what}`);
+  if (type === 'str') {
+    if (typeof value !== 'string') throw bad('a string');
+  } else if (type === 'bool') {
+    if (typeof value !== 'boolean') throw bad('true or false');
+  } else if (type === 'seed') {
+    if (typeof value !== 'string' || !/^\d+$/.test(value) || BigInt(value) >= 1n << 64n) {
+      throw bad('a decimal string of a 64-bit number');
+    }
+  } else if (!Number.isSafeInteger(value) || value < 0 || value > (LIMITS[type] ?? Infinity)) {
+    throw bad(`a whole number${LIMITS[type] ? ` up to ${LIMITS[type]}` : ''}, no sign`);
+  }
+}
+
 function requireShape(value, shape, path) {
-  if (Array.isArray(shape)) {
+  if (typeof shape === 'string') {
+    requireLeaf(value, shape, path);
+  } else if (shape.opt) {
+    if (value !== null) requireShape(value, shape.opt, path);
+  } else if (shape.one) {
+    if (!shape.one.includes(value)) {
+      throw new ReplayRefused(`the record field ${path} is not one of ${shape.one.join(', ')}`);
+    }
+  } else if (shape.list) {
     if (!Array.isArray(value)) {
       throw new ReplayRefused(`the record field ${path} is not a list`);
     }
-    value.forEach((item, i) => requireShape(item, shape[0], `${path}[${i}]`));
-    return;
-  }
-  if (typeof shape !== 'object') {
-    return;
-  }
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    throw new ReplayRefused(`the record field ${path || 'record'} is not an object`);
-  }
-  if (shape.oneOf) {
-    const keys = Object.keys(value);
-    if (keys.length !== 1 || !Object.hasOwn(shape.oneOf, keys[0])) {
+    if (shape.length !== null && value.length !== shape.length) {
       throw new ReplayRefused(
-        `the record field ${path} is not one of ${Object.keys(shape.oneOf).join(', ')}`
+        `the record field ${path} holds ${value.length} items and must hold ${shape.length}`
       );
     }
-    requireShape(value[keys[0]], shape.oneOf[keys[0]], `${path}.${keys[0]}`);
-    return;
+    value.forEach((item, i) => requireShape(item, shape.list, `${path}[${i}]`));
+  } else if (shape.variants) {
+    if (!isObject(value)) {
+      throw new ReplayRefused(`the record field ${nameOf(path)} is not an object`);
+    }
+    const keys = Object.keys(value);
+    if (keys.length !== 1 || !Object.hasOwn(shape.variants, keys[0])) {
+      throw new ReplayRefused(
+        `the record field ${path} is not one of ${Object.keys(shape.variants).join(', ')}`
+      );
+    }
+    requireShape(value[keys[0]], shape.variants[keys[0]], `${path}.${keys[0]}`);
+  } else {
+    requireObject(value, shape, path);
+  }
+}
+
+function requireObject(value, shape, path) {
+  if (!isObject(value)) {
+    throw new ReplayRefused(`the record field ${nameOf(path)} is not an object`);
+  }
+  for (const key of Object.keys(value)) {
+    if (!Object.hasOwn(shape, key)) {
+      throw new ReplayRefused(`the record has an unknown field ${path ? `${path}.` : ''}${key}`);
+    }
   }
   for (const [key, inner] of Object.entries(shape)) {
     const at = path ? `${path}.${key}` : key;
     if (!Object.hasOwn(value, key)) {
       throw new ReplayRefused(`the record has no field ${at}`);
     }
-    if (value[key] === null) {
-      if (inner === 0) {
-        continue;
-      }
+    if (value[key] === null && !inner.opt) {
       throw new ReplayRefused(`the record field ${at} is null`);
     }
     requireShape(value[key], inner, at);
   }
 }
 
-/// Refuses a record that lacks any field of the version-4 record, by its path. A missing
-/// field is never filled with a default.
+/// Refuses a record the engine's reader would refuse: a missing or unknown field, a field
+/// of the wrong type or outside its values, by its path. A missing field is never filled
+/// with a default.
 export function requireRecord(meta) {
-  requireShape(meta, RECORD_SHAPE, '');
+  requireObject(meta, RECORD_SHAPE, '');
 }
 
 /// The record of a version-4 file (`raw`, its JSON bytes), when every field is present and
@@ -650,6 +700,10 @@ export async function matchedRecord(raw, inputs) {
       );
     }
     out.push({ role: entry.role, name, bytes });
+  }
+  const total = inputs.reduce((sum, i) => sum + i.bytes.length, 0);
+  if (total !== meta.inputs_bytes) {
+    throw new ReplayRefused(`the inputs hold ${total} bytes and the record says ${meta.inputs_bytes}`);
   }
   return { inputs: out, meta, raw };
 }
