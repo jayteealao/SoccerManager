@@ -1,6 +1,8 @@
 //! Shared helpers of the record tests: the binary with a scratch data folder, and the
 //! record schema files compiled by an independent JSON Schema validator.
 
+#![allow(dead_code)]
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -84,7 +86,6 @@ pub fn record(text: &str) -> Value {
 /// `file` with `machine`'s hash set added and one `add-machine-set` entry, the way a ledger
 /// written before the portable set records a second machine. The engine no longer writes
 /// such an entry; the guard still reads it.
-#[allow(dead_code)]
 pub fn with_machine_set(
     mut file: engine::gate::golden::GoldenFile,
     machine: &str,
