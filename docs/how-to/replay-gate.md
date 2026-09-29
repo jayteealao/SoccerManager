@@ -45,7 +45,7 @@ The entry's `band_result` path, `gate/bands/ledger-<index>.json`, is where the r
 
 ## Machine hash sets (history)
 
-Before the one recorded result change (ledger entry 2), each machine key (`<os>-<arch>`, for example `linux-x86_64`) had its own hash set, added with `engine-cli gate --add-machine-set`, and `set_differences` listed the matches that differed between the machines. Entry 2 replaced both sets with the portable set. The engine now plays the same bits on every supported machine, so `--add-machine-set` is refused: a portable set is the only set.
+Before the one recorded result change (ledger entry 2), each machine key (`<os>-<arch>`, for example `linux-x86_64`) had its own hash set, added with a `gate` flag that no longer exists, and `set_differences` listed the matches that differed between the machines. Entry 2 replaced both sets with the portable set. The engine now plays the same bits on every supported machine, so a portable set is the only set and nothing adds a machine set.
 
 ## Check the history before you push
 

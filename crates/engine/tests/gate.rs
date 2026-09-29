@@ -354,9 +354,7 @@ fn a_regeneration_writes_the_new_hashes_and_appends_one_entry() {
     assert_eq!(loaded, regen);
 
     // A regeneration drops the other machines' sets, which are stale after a hash change.
-    let two = file
-        .with_machine_set("linux-other", old, "second machine")
-        .unwrap();
+    let two = common::with_machine_set(file, "linux-other", old, "second machine");
     let (regen, dropped) = two.regenerated(&fixtures, &machine, new, "a hash change");
     assert_eq!(dropped, vec!["linux-other".to_string()]);
     assert_eq!(regen.hash_sets.len(), 1);
@@ -372,9 +370,7 @@ fn two_hash_sets_record_which_matches_differ() {
     let (file, fixtures) = synthetic();
     let machine = golden::machine_key();
     let other = with_changed(file.set_for(&machine).unwrap().to_vec(), &["seed-7"], 7);
-    let two = file
-        .with_machine_set("zz-other", other, "a second machine")
-        .unwrap();
+    let two = common::with_machine_set(file, "zz-other", other, "a second machine");
     assert_eq!(two.set_differences.len(), 1);
     let d = &two.set_differences[0];
     assert_eq!((d.a.as_str(), d.b.as_str()), (machine.as_str(), "zz-other"));
@@ -397,15 +393,6 @@ fn two_hash_sets_record_which_matches_differ() {
     assert_eq!(
         refused(&edited, &fixtures),
         "golden file set_differences: the record differs from the one the hash sets give"
-    );
-
-    // A second set for the same machine is refused.
-    let again = loaded
-        .with_machine_set("zz-other", Vec::new(), "again")
-        .unwrap_err();
-    assert_eq!(
-        again.to_string(),
-        "golden file already has a hash set for this machine (zz-other)"
     );
 }
 
@@ -505,13 +492,12 @@ fn portable_from_two() -> (GoldenFile, Vec<Fixture>) {
     let (file, fixtures) = synthetic();
     let machine = golden::machine_key();
     let old = file.set_for(&machine).unwrap().to_vec();
-    let two = file
-        .with_machine_set(
-            "zz-other",
-            with_changed(old.clone(), &["seed-7"], 7),
-            "second",
-        )
-        .unwrap();
+    let two = common::with_machine_set(
+        file,
+        "zz-other",
+        with_changed(old.clone(), &["seed-7"], 7),
+        "second",
+    );
     let (portable, dropped) = two.regenerated(
         &fixtures,
         golden::PORTABLE,
@@ -591,24 +577,6 @@ fn a_portable_set_beside_a_machine_set_is_refused() {
     assert!(
         why.starts_with("golden file ledger: entry 1 (add-machine-set) adds the portable set"),
         "{why}"
-    );
-
-    // The writer refuses a machine set beside the portable set, and a portable machine set.
-    let err = portable
-        .clone()
-        .with_machine_set("zz-other", Vec::new(), "again")
-        .unwrap_err();
-    assert!(
-        err.to_string()
-            .starts_with("the golden file has a portable hash set;"),
-        "{err}"
-    );
-    let err = file
-        .with_machine_set(golden::PORTABLE, Vec::new(), "portable")
-        .unwrap_err();
-    assert!(
-        err.to_string().contains("only a regeneration writes"),
-        "{err}"
     );
 }
 

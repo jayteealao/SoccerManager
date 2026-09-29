@@ -6,9 +6,10 @@
 //! writes and which is then the file's only set.
 //!
 //! The strict load refuses a file that does not fit this build's gate or whose ledger does not
-//! account for its hash sets, and names the fault. Only three writers exist: the bootstrap
-//! (the first file), `with_machine_set` (a second machine's set for unchanged code), and
-//! `regenerated` (a hash change). Each needs a reason and appends one ledger entry.
+//! account for its hash sets, and names the fault. Only two writers exist: the bootstrap
+//! (the first file) and `regenerated` (a hash change). Each needs a reason and appends one
+//! ledger entry. A ledger may still hold an `add-machine-set` entry from before the portable
+//! set; it reads and passes the guard, and nothing writes a new one.
 //!
 //! The first file form (a top-level `bootstrap` object and no ledger) reads as a one-entry
 //! bootstrap ledger; every write uses the ledger form.
@@ -232,10 +233,7 @@ pub enum GoldenError {
     CheckpointEvery { found: u32, expected: u32 },
     #[error("golden file fixture list differs from this build's: {0}")]
     Fixtures(String),
-    #[error(
-        "golden file has no hash set for this machine ({machine}); it has: {present}. \
-         Add one with `engine-cli gate --add-machine-set --reason <TEXT>` on this machine"
-    )]
+    #[error("golden file has no hash set for {machine}; it has: {present}")]
     NoHashSet { machine: String, present: String },
     #[error(
         "golden file has no portable hash set; it has: {present}. This build compares every \
@@ -243,10 +241,6 @@ pub enum GoldenError {
          --reason <TEXT>`"
     )]
     NoPortableSet { present: String },
-    #[error("golden file already has a hash set for this machine ({machine})")]
-    SetExists { machine: String },
-    #[error("{0}; a portable hash set is the only set, so no machine set is added beside it")]
-    PortableOnly(String),
     #[error("golden file has {0}")]
     Form(String),
     #[error("golden file ledger: {0}")]
@@ -643,42 +637,10 @@ impl GoldenFile {
         }
     }
 
-    /// This file with `machine`'s hash set added by one `add-machine-set` entry. Refused when
-    /// `machine` already has a set, when `machine` is [`PORTABLE`], and when the file has a
-    /// portable set.
-    pub fn with_machine_set(
-        mut self,
-        machine: &str,
-        matches: Vec<MatchHashes>,
-        reason: &str,
-    ) -> Result<Self, GoldenError> {
-        if machine == PORTABLE {
-            return Err(GoldenError::PortableOnly(
-                "this build writes the portable set, which only a regeneration writes".into(),
-            ));
-        }
-        if self.hash_sets.contains_key(PORTABLE) {
-            return Err(GoldenError::PortableOnly(
-                "the golden file has a portable hash set".into(),
-            ));
-        }
-        if self.hash_sets.contains_key(machine) {
-            return Err(GoldenError::SetExists {
-                machine: machine.to_string(),
-            });
-        }
-        self.ledger
-            .push(LedgerEntry::now(EntryKind::AddMachineSet, reason, machine));
-        self.hash_sets.insert(machine.to_string(), matches);
-        self.set_differences = set_differences(&self.hash_sets);
-        Ok(self)
-    }
-
     /// The file a regeneration writes: this build's header and fixture list, this file's
     /// ledger plus one `regenerate` entry, and the new set keyed `machine` (a machine key or
     /// [`PORTABLE`]) as the only set. Also returns the keys whose sets were dropped: a set
-    /// made by older code is stale after a hash change, so each such machine re-adds its set
-    /// with `with_machine_set`, unless the new set is the portable one.
+    /// made by older code is stale after a hash change.
     pub fn regenerated(
         self,
         fixtures: &[Fixture],

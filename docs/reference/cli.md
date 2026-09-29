@@ -322,9 +322,8 @@ Replay the 22 gate matches and compare their state hashes with the golden file. 
 | `--json` | none | off | Print one JSON object per match instead of a text line. |
 | `--bootstrap` | none | off | Play every fixture and write the first golden file with the portable hash set. Refused when the file already exists, and with `--fixture`. |
 | `--regenerate` | none | off | Play every fixture and rewrite the golden file with this build's hashes as the portable hash set. Appends one `regenerate` entry to the ledger and drops every other hash set. Needs `--reason`. |
-| `--add-machine-set` | none | off | Refused before any match is played: the portable hash set is the only set. It added one machine's hash set before the one recorded result change. |
-| `--reason` | text | none | Why the golden file is written; recorded in the new ledger entry. Needed by `--regenerate` and `--add-machine-set`; optional for `--bootstrap`. |
-| `--debug` | none | off | Play every match with debug mode on. The compare and the standard output are unchanged; the trace records are counted and not written. Refused with `--bootstrap`, `--regenerate`, and `--add-machine-set` before any file is read. |
+| `--reason` | text | none | Why the golden file is written; recorded in the new ledger entry. Needed by `--regenerate`; optional for `--bootstrap`. |
+| `--debug` | none | off | Play every match with debug mode on. The compare and the standard output are unchanged; the trace records are counted and not written. Refused with `--bootstrap` and `--regenerate` before any file is read. |
 
 The fixtures, in gate order:
 

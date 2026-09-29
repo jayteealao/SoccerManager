@@ -237,36 +237,24 @@ fn a_regeneration_with_no_reason_exits_one_and_leaves_the_file_byte_identical() 
         !path.with_file_name("golden.json.tmp").exists(),
         "no temporary file is left"
     );
-
-    let out = gate(
-        "no-reason-add",
-        &["--add-machine-set", "--golden", golden_arg, "--reason", " "],
-    );
-    assert_eq!(out.status.code(), Some(1));
-    assert!(text(&out.stderr).contains("--add-machine-set needs --reason"));
     assert_eq!(sha256(&path), before);
 }
 
 #[test]
-fn the_write_modes_refuse_a_fixture_a_second_mode_and_an_existing_set() {
+fn the_write_modes_refuse_a_fixture_and_a_second_mode() {
     let path = golden_copy("refusals");
     let before = sha256(&path);
     let golden_arg = path.to_str().unwrap();
-    let cases: [(&str, &[&str], &str); 4] = [
+    let cases: [(&str, &[&str], &str); 3] = [
         (
             "fixture",
             &["--regenerate", "--reason", "r", "--fixture", "seed-42"],
             "--regenerate plays every fixture; leave out --fixture",
         ),
         (
-            "two-modes",
-            &["--regenerate", "--add-machine-set", "--reason", "r"],
-            "--regenerate and --add-machine-set cannot be used together",
-        ),
-        (
             "reason-alone",
             &["--reason", "r"],
-            "--reason goes with --regenerate, --add-machine-set, or --bootstrap",
+            "--reason goes with --regenerate or --bootstrap",
         ),
         (
             "bootstrap-and-regenerate",
@@ -283,35 +271,6 @@ fn the_write_modes_refuse_a_fixture_a_second_mode_and_an_existing_set() {
         assert!(stderr.contains(message), "{label}: {stderr}");
         assert_eq!(sha256(&path), before, "{label}");
     }
-
-    // A machine that already has a set is refused before any match is played.
-    let machine = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
-    let file: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    if engine::gate::golden::set_key() == engine::gate::golden::PORTABLE {
-        println!("note: skipping the existing-set refusal: this build writes the portable set");
-        return;
-    }
-    if file["hash_sets"].get(&machine).is_none() {
-        println!("note: skipping the existing-set refusal: no {machine} set is committed");
-        return;
-    }
-    let out = gate(
-        "refuse-existing",
-        &[
-            "--add-machine-set",
-            "--golden",
-            golden_arg,
-            "--reason",
-            "again",
-        ],
-    );
-    assert_eq!(out.status.code(), Some(1));
-    let stderr = text(&out.stderr);
-    assert!(
-        stderr.contains("golden file already has a hash set for this machine"),
-        "{stderr}"
-    );
-    assert!(text(&out.stdout).is_empty());
     assert_eq!(sha256(&path), before);
 }
 
@@ -351,39 +310,4 @@ fn a_regeneration_rewrites_a_copy_with_one_new_entry() {
     // The regenerated copy passes the gate.
     let out = gate("regenerate-check", &["--golden", path.to_str().unwrap()]);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
-}
-
-#[test]
-fn adding_a_machine_set_to_a_portable_file_is_refused_and_leaves_it_byte_identical() {
-    use engine::gate::golden;
-    // A portable copy: the committed file's first set, regenerated as the portable set.
-    let path = temp("portable").join("golden.json");
-    let file = golden::load_lenient(&golden()).unwrap();
-    let set = file.hash_sets.values().next().unwrap().clone();
-    let (portable, _) = file.regenerated(
-        &engine::gate::fixtures(),
-        golden::PORTABLE,
-        set,
-        "a portable copy for the refusal test",
-    );
-    portable.write_new(&path).unwrap();
-    let before = sha256(&path);
-    let out = gate(
-        "portable-add",
-        &[
-            "--add-machine-set",
-            "--golden",
-            path.to_str().unwrap(),
-            "--reason",
-            "a machine set beside the portable one",
-        ],
-    );
-    assert_eq!(out.status.code(), Some(1));
-    let stderr = text(&out.stderr);
-    assert!(
-        stderr.contains("a portable hash set is the only set, so no machine set is added"),
-        "{stderr}"
-    );
-    assert!(text(&out.stdout).is_empty(), "no match is played");
-    assert_eq!(sha256(&path), before, "the file is byte-identical");
 }

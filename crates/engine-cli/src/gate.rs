@@ -1,7 +1,7 @@
 //! `engine-cli gate`: plays the replay-gate fixtures, prints one line per match, and exits 0
 //! when every match has its golden hashes, 2 when one differs, and 1 when the golden file or
 //! the content cannot be read or is not valid. Its write modes (`--bootstrap`,
-//! `--regenerate`, `--add-machine-set`) check their flags and reason before any file is read
+//! `--regenerate`) check their flags and reason before any file is read
 //! and write through a temporary file, so a refusal or a failed match leaves the golden file
 //! byte-identical. The hashing, the compare, and the report text
 //! live in `engine::gate`, which the engine's fault tests use as well.
@@ -23,7 +23,6 @@ enum Mode {
     Compare,
     Bootstrap,
     Regenerate,
-    AddMachineSet,
 }
 
 /// The run's mode and the reason to record, checked before any file is read or match is
@@ -32,11 +31,6 @@ fn mode(opts: &GateOpts) -> anyhow::Result<(Mode, String)> {
     let modes = [
         (opts.bootstrap, "--bootstrap", Mode::Bootstrap),
         (opts.regenerate, "--regenerate", Mode::Regenerate),
-        (
-            opts.add_machine_set,
-            "--add-machine-set",
-            Mode::AddMachineSet,
-        ),
     ];
     let set: Vec<_> = modes.iter().filter(|(on, _, _)| *on).collect();
     if set.len() > 1 {
@@ -44,7 +38,7 @@ fn mode(opts: &GateOpts) -> anyhow::Result<(Mode, String)> {
     }
     let Some(&&(_, flag, mode)) = set.first() else {
         if opts.reason.is_some() {
-            bail!("--reason goes with --regenerate, --add-machine-set, or --bootstrap");
+            bail!("--reason goes with --regenerate or --bootstrap");
         }
         return Ok((Mode::Compare, String::new()));
     };
@@ -60,17 +54,9 @@ fn mode(opts: &GateOpts) -> anyhow::Result<(Mode, String)> {
     } else {
         match mode {
             Mode::Bootstrap => golden::BOOTSTRAP_REASON.to_string(),
-            Mode::Regenerate => bail!("--regenerate needs --reason \"<why the hashes change>\""),
-            _ => bail!("--add-machine-set needs --reason \"<why this machine's set is added>\""),
+            _ => bail!("--regenerate needs --reason \"<why the hashes change>\""),
         }
     };
-    // A build that writes the portable set never adds a machine set.
-    if mode == Mode::AddMachineSet && golden::set_key() == golden::PORTABLE {
-        return Err(golden::GoldenError::PortableOnly(
-            "this build writes the portable set, which only --regenerate writes".into(),
-        )
-        .into());
-    }
     Ok((mode, reason))
 }
 
@@ -86,7 +72,7 @@ pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
         .clone()
         .unwrap_or_else(|| PathBuf::from(golden::DEFAULT_PATH));
     let machine = golden::machine_key();
-    // The key of the set this build compares and writes: this machine's, or the portable one.
+    // The key of the set this build compares and writes: the portable one.
     let key = golden::set_key();
     let mut old: Option<GoldenFile> = None;
     let expected: Option<Vec<MatchHashes>> = match mode {
@@ -107,20 +93,6 @@ pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
         // fixture change in the code can still be regenerated.
         Mode::Regenerate => {
             old = Some(golden::load_lenient(&path)?);
-            None
-        }
-        Mode::AddMachineSet => {
-            let file = golden::load(&path, &all)?;
-            if file.hash_sets.contains_key(golden::PORTABLE) {
-                return Err(golden::GoldenError::PortableOnly(
-                    "the golden file has a portable hash set".into(),
-                )
-                .into());
-            }
-            if file.hash_sets.contains_key(&machine) {
-                return Err(golden::GoldenError::SetExists { machine }.into());
-            }
-            old = Some(file);
             None
         }
     };
@@ -223,26 +195,12 @@ pub fn run(content_dir: Option<&Path>, opts: &GateOpts) -> anyhow::Result<i32> {
                 path.display(),
                 if unchanged { "; hashes unchanged" } else { "" }
             );
-            if !dropped.is_empty() && key == golden::PORTABLE {
+            if !dropped.is_empty() {
                 eprintln!(
                     "dropped the hash sets of {}; the portable set replaces them on every machine",
                     dropped.join(", ")
                 );
-            } else if !dropped.is_empty() {
-                eprintln!(
-                    "dropped the stale hash sets of {}; add each again with `engine-cli gate --add-machine-set --reason <TEXT>` on that machine",
-                    dropped.join(", ")
-                );
             }
-        }
-        (Mode::AddMachineSet, Some(old)) => {
-            let file = old.with_machine_set(&machine, written, &reason)?;
-            file.write_replace(&path)?;
-            let differ: usize = file.set_differences.iter().map(|d| d.differ.len()).sum();
-            eprintln!(
-                "wrote {}: added {played} matches for {machine} in {seconds:.1} s; {differ} differ from the other sets",
-                path.display()
-            );
         }
         (_, None) => unreachable!("the write modes read the old file"),
     }

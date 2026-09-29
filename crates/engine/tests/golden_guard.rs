@@ -5,6 +5,8 @@
 //! entries; a first bootstrap, an added machine set, and a regeneration with a schema
 //! increase pass.
 
+mod common;
+
 use engine::gate::golden::{self, GoldenFile};
 use engine::gate::guard::{Fault, check};
 use engine::gate::{self, Checkpoint, MatchHashes};
@@ -152,10 +154,12 @@ fn an_inventory_version_change_with_no_schema_increase_fails() {
 #[test]
 fn an_add_machine_set_entry_that_changes_an_existing_set_fails() {
     let parent = first();
-    let mut child = parent
-        .clone()
-        .with_machine_set("zz-second", changed_set(&parent, MACHINE), "second")
-        .unwrap();
+    let mut child = common::with_machine_set(
+        parent.clone(),
+        "zz-second",
+        changed_set(&parent, MACHINE),
+        "second",
+    );
     child
         .hash_sets
         .insert(MACHINE.into(), changed_set(&parent, MACHINE));
@@ -173,10 +177,12 @@ fn an_add_machine_set_entry_that_changes_an_existing_set_fails() {
 
     // An entry that names one machine but adds another's set fails too.
     let child = edited(
-        &parent
-            .clone()
-            .with_machine_set("zz-second", changed_set(&parent, MACHINE), "second")
-            .unwrap(),
+        &common::with_machine_set(
+            parent.clone(),
+            "zz-second",
+            changed_set(&parent, MACHINE),
+            "second",
+        ),
         |v| v["ledger"][1]["machine"] = "zz-third".into(),
     );
     let found = faults(Some(&parent.to_text()), Some(&child));
@@ -193,10 +199,12 @@ fn an_add_machine_set_entry_that_changes_an_existing_set_fails() {
 #[test]
 fn a_removed_set_a_deleted_file_and_a_crowded_first_file_fail() {
     let parent = first();
-    let two = parent
-        .clone()
-        .with_machine_set("zz-second", changed_set(&parent, MACHINE), "second")
-        .unwrap();
+    let two = common::with_machine_set(
+        parent.clone(),
+        "zz-second",
+        changed_set(&parent, MACHINE),
+        "second",
+    );
     let removed = edited(&two, |v| {
         v["hash_sets"].as_object_mut().unwrap().remove("zz-second");
         v["set_differences"] = serde_json::json!([]);
@@ -237,10 +245,12 @@ fn a_bootstrap_an_added_set_and_a_regeneration_with_a_schema_increase_pass() {
     let parent = first();
     assert_eq!(faults(None, Some(&parent.to_text())), Vec::new());
 
-    let two = parent
-        .clone()
-        .with_machine_set("zz-second", changed_set(&parent, MACHINE), "second")
-        .unwrap();
+    let two = common::with_machine_set(
+        parent.clone(),
+        "zz-second",
+        changed_set(&parent, MACHINE),
+        "second",
+    );
     assert_eq!(
         faults(Some(&parent.to_text()), Some(&two.to_text())),
         Vec::new()
@@ -278,10 +288,12 @@ fn to_portable(two: &GoldenFile) -> GoldenFile {
 #[test]
 fn two_machine_sets_to_the_portable_set_pass_only_with_one_regenerate_entry() {
     let parent = first();
-    let two = parent
-        .clone()
-        .with_machine_set("zz-second", changed_set(&parent, MACHINE), "second")
-        .unwrap();
+    let two = common::with_machine_set(
+        parent.clone(),
+        "zz-second",
+        changed_set(&parent, MACHINE),
+        "second",
+    );
     let portable = to_portable(&two);
     assert_eq!(
         faults(Some(&two.to_text()), Some(&portable.to_text())),

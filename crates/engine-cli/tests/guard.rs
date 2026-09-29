@@ -3,6 +3,8 @@
 //! entry fails at its own commit even when a later commit adds the entry; an add-machine-set
 //! commit that also changes the existing set fails; a dirty regenerate candidate fails.
 
+mod common;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -124,10 +126,12 @@ fn a_clean_history_passes() {
     let (dir, base) = repo("clean");
     let one = first();
     commit_golden(&dir, &one.to_text(), "bootstrap");
-    let two = one
-        .clone()
-        .with_machine_set("zz-second", changed(&one, MACHINE, 9), "second machine")
-        .unwrap();
+    let two = common::with_machine_set(
+        one.clone(),
+        "zz-second",
+        changed(&one, MACHINE, 9),
+        "second machine",
+    );
     let c2 = commit_golden(&dir, &two.to_text(), "add a machine set");
     std::fs::write(dir.join("code.txt"), "the change\n").unwrap();
     let code = commit(&dir, "the code change");
@@ -194,10 +198,12 @@ fn an_add_machine_set_commit_that_changes_the_existing_set_fails() {
     let (dir, base) = repo("add-changes");
     let one = first();
     commit_golden(&dir, &one.to_text(), "bootstrap");
-    let mut two = one
-        .clone()
-        .with_machine_set("zz-second", changed(&one, MACHINE, 9), "second machine")
-        .unwrap();
+    let mut two = common::with_machine_set(
+        one.clone(),
+        "zz-second",
+        changed(&one, MACHINE, 9),
+        "second machine",
+    );
     two.hash_sets
         .insert(MACHINE.into(), changed(&one, MACHINE, 77));
     two.set_differences = golden::set_differences(&two.hash_sets);

@@ -81,35 +81,24 @@ pub struct GateOpts {
     /// Write the first golden file; refused when one exists.
     #[arg(
         long,
-        long_help = "Play every fixture and write the first golden file with this\n\
-                     machine's hash set. Refused when the file already exists."
+        long_help = "Play every fixture and write the first golden file with the\n\
+                     portable hash set. Refused when the file already exists."
     )]
     pub bootstrap: bool,
     /// Rewrite the hashes with this build's; needs --reason.
     #[arg(
         long,
         long_help = "Play every fixture and rewrite the golden file with this build's\n\
-                     hashes for this machine. Appends one regenerate entry to the\n\
-                     ledger and drops the other machines' sets, which each machine\n\
-                     then adds again. Needs --reason."
+                     hashes as the portable hash set. Appends one regenerate entry\n\
+                     to the ledger and drops every other hash set. Needs --reason."
     )]
     pub regenerate: bool,
-    /// Add this machine's hash set; needs --reason.
-    #[arg(
-        long,
-        long_help = "Play every fixture and add this machine's hash set to the golden\n\
-                     file, with one add-machine-set entry. Refused when this machine\n\
-                     already has a set or the file does not fit this build. Needs\n\
-                     --reason."
-    )]
-    pub add_machine_set: bool,
     /// Why the file is written; recorded in the ledger.
     #[arg(
         long,
         value_name = "TEXT",
         long_help = "Why the golden file is written. Recorded in the new ledger entry.\n\
-                     Needed by --regenerate and --add-machine-set; optional for\n\
-                     --bootstrap."
+                     Needed by --regenerate; optional for --bootstrap."
     )]
     pub reason: Option<String>,
     /// Play every match with debug mode on; compare only.
@@ -119,8 +108,8 @@ pub struct GateOpts {
                      are unchanged; after each match, standard error gets the draws\n\
                      the trace recorded, the registry's draw count, and the decisions\n\
                      and rule outcomes recorded. Unequal draw counts fail the gate\n\
-                     (exit 2). The records are not written. Refused with --bootstrap,\n\
-                     --regenerate, and --add-machine-set."
+                     (exit 2). The records are not written. Refused with --bootstrap\n\
+                     and --regenerate."
     )]
     pub debug: bool,
 }
