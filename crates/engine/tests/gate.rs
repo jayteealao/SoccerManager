@@ -2,8 +2,8 @@
 //! gate at the window of the fault, a one-tick fault still fails it, a NaN names its field,
 //! a broken golden file is refused with the fault named, the hashes repeat in one process
 //! and match the committed golden file, and the stream state has the documented bytes. The
-//! golden file ledger: a regeneration appends one entry with its reason (AC-7), two hash sets
-//! record which matches differ (AC-GG-1), a broken ledger is refused, and the first file form
+//! golden file ledger: a regeneration appends one entry with its reason, two hash sets
+//! record which matches differ, a broken ledger is refused, and the first file form
 //! reads as a one-entry bootstrap ledger.
 //!
 //! The faulted runs compare with a clean run of the same fixture in the same process, so
@@ -600,7 +600,7 @@ fn committed() -> GoldenFile {
 
 /// The one recorded result change: exactly one `regenerate` entry, entry 2, whose reason
 /// names the maths change and the keyed split, whose candidate is a clean commit, and whose
-/// band result holds a verdict for each band of `content/realism-bands.json` (AC-30).
+/// band result holds a verdict for each band of `content/realism-bands.json`.
 #[test]
 fn the_one_result_change_is_one_regenerate_entry_with_its_band_result() {
     let file = committed();
@@ -676,7 +676,7 @@ fn the_one_result_change_is_one_regenerate_entry_with_its_band_result() {
 }
 
 /// The regeneration kept what the gate measures: gate schema 1, state inventory 1, and the
-/// fixture list of the golden-file guard, by its digest at the guard's commit (AC-RC-1).
+/// fixture list of the golden-file guard, by its digest at the guard's commit.
 #[test]
 fn the_regeneration_kept_the_gate_schema_and_the_fixture_list() {
     use sha2::{Digest, Sha256};

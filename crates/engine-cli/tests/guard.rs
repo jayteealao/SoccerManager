@@ -1,4 +1,4 @@
-//! `engine-cli guard` over temporary git histories with synthetic golden files (AC-GG-3): a
+//! `engine-cli guard` over temporary git histories with synthetic golden files: a
 //! clean history (bootstrap, add-machine-set, regenerate) exits 0; a hash change with no
 //! entry fails at its own commit even when a later commit adds the entry; an add-machine-set
 //! commit that also changes the existing set fails; a dirty regenerate candidate fails.

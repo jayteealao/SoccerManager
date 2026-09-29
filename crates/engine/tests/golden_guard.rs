@@ -1,4 +1,4 @@
-//! The golden-file guard rules on prepared pairs of files (AC-9): a hash change with no new
+//! The golden-file guard rules on prepared pairs of files: a hash change with no new
 //! ledger entry, an edited old entry, and a fixture-list or state-inventory change with no
 //! gate-schema increase each fail with the rule named. So do an `add-machine-set` entry that
 //! also changes an existing set, a removed set, a deleted file, and a first file with two

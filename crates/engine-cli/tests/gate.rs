@@ -1,7 +1,7 @@
 //! `engine-cli gate`: the special fixtures show what they exist for (extra time and a
 //! shoot-out; an applied substitution and an applied tactics change), a broken golden file
 //! exits 1 naming the fault, a second bootstrap is refused, a regeneration with no reason
-//! exits 1 and leaves the golden file byte-identical (AC-8), the write modes refuse a fixture,
+//! exits 1 and leaves the golden file byte-identical, the write modes refuse a fixture,
 //! a second mode, and an existing set, and, in release, all 22 matches of the committed golden
 //! file match and a regeneration rewrites a copy with one new ledger entry.
 
