@@ -217,8 +217,6 @@ pub fn tick_state(
         .and_then(|bytes| serde_json::from_slice(&bytes).ok())
         .ok_or("ends early: the run wrote no state fields file")?;
     let fields = parse_fields(&written)?;
-    let text = std::fs::read_to_string(&trace_path)
-        .map_err(|_| "ends early: the run wrote no debug trace file".to_string())?;
-    let trace = crate::trace_file::tick_records(&text, tick);
+    let trace = crate::trace_file::tick_records(&trace_path, tick)?;
     Ok(TickState { fields, trace })
 }
