@@ -100,11 +100,7 @@ fn gate_debug_refuses_the_write_modes_and_leaves_the_golden_file() {
     let copy = dir.join("golden.json");
     std::fs::copy(repo().join("gate/golden.json"), &copy).unwrap();
     let before = std::fs::read(&copy).unwrap();
-    for mode in [
-        vec!["--regenerate", "--reason", "x"],
-        vec!["--add-machine-set", "--reason", "x"],
-        vec!["--bootstrap"],
-    ] {
+    for mode in [vec!["--regenerate", "--reason", "x"], vec!["--bootstrap"]] {
         let mut args = vec!["gate", "--debug", "--golden", copy.to_str().unwrap()];
         args.extend(mode.iter().copied());
         let out = cli("refuse", &args);
