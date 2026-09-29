@@ -8,6 +8,16 @@
 //! [`MAX_CONSECUTIVE_FAILURES`] failures in a row, the hook is switched off for the rest of
 //! the match. No hook call draws from the match's random stream, so a hook that keeps every
 //! native choice leaves the match exactly as it is without a plugin.
+//!
+//! A hook call that runs past the runtime's wall-clock limit is not a failure (named
+//! mechanism: watchdog mark). Wall-clock time differs between machines, so a slow call keeps
+//! its result, and the runtime only records the hit on the match's [`WatchdogMark`]. A match
+//! with a hit is marked invalid ([`INVALID_SLOW_SCRIPT`]) and logs one `match.invalid`
+//! signal; play, the failure counts, the events, and the snapshot stay as they would be
+//! without the hit.
+
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::rules::fouls::Card;
 
@@ -17,6 +27,27 @@ pub const PLUGIN_API_VERSION: u32 = 1;
 
 /// Failures in a row that switch a hook off for the rest of the match.
 pub const MAX_CONSECUTIVE_FAILURES: u32 = 3;
+
+/// Hook calls of one match that ran past the wall-clock limit (named mechanism: watchdog
+/// mark). Wall-clock time differs between machines, so the mark never changes play: it is
+/// not a failure, not in the snapshot, and not in the gate's state inventory.
+#[derive(Debug, Clone, Default)]
+pub struct WatchdogMark(Arc<AtomicU32>);
+
+impl WatchdogMark {
+    /// Records one call past the limit.
+    pub fn hit(&self) {
+        self.0.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Calls past the limit so far.
+    pub fn hits(&self) -> u32 {
+        self.0.load(Ordering::Relaxed)
+    }
+}
+
+/// Why a marked match is invalid.
+pub const INVALID_SLOW_SCRIPT: &str = "slow script";
 
 /// Where a hook is called.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -188,6 +219,10 @@ pub struct Plugins {
     pub details: Vec<String>,
     /// Failures in a row, per hook point.
     failures: [u32; 3],
+    /// Hook calls past the wall-clock limit. The hooks hold clones of it.
+    watchdog: WatchdogMark,
+    /// `true` once the `match.invalid` signal is logged.
+    invalid_logged: bool,
 }
 
 impl std::fmt::Debug for Plugins {
@@ -199,6 +234,7 @@ impl std::fmt::Debug for Plugins {
             .field("commentary", &self.commentary.is_some())
             .field("refresh_ticks", &self.refresh_ticks)
             .field("stats", &self.stats)
+            .field("slow_calls", &self.slow_calls())
             .finish()
     }
 }
@@ -221,6 +257,37 @@ impl Plugins {
         self.decision.is_some() || self.rule.is_some() || self.commentary.is_some()
     }
 
+    /// Which hooks are attached now: decision, rule, commentary. A hook switched off for
+    /// failing reads `false`.
+    pub fn hooks_present(&self) -> [bool; 3] {
+        [
+            self.decision.is_some(),
+            self.rule.is_some(),
+            self.commentary.is_some(),
+        ]
+    }
+
+    /// Failures in a row per hook point, in [`HookPoint::ALL`] order.
+    pub fn failures(&self) -> [u32; 3] {
+        self.failures
+    }
+
+    /// The watchdog mark of this match, for the hooks to record slow calls on. Every clone
+    /// shares one count.
+    pub fn watchdog(&self) -> WatchdogMark {
+        self.watchdog.clone()
+    }
+
+    /// Hook calls of this match that ran past the wall-clock limit.
+    pub fn slow_calls(&self) -> u32 {
+        self.watchdog.hits()
+    }
+
+    /// Why the match is invalid, or `None` when no hook call ran past the wall-clock limit.
+    pub fn invalid(&self) -> Option<&'static str> {
+        (self.slow_calls() > 0).then_some(INVALID_SLOW_SCRIPT)
+    }
+
     /// The text a note points to.
     pub fn detail(&self, note: &ScriptNote) -> &str {
         self.details
@@ -230,12 +297,25 @@ impl Plugins {
 
     /// Counts one call to `hook` and sorts its outcome. Returns the hook's value, if it gave
     /// one, and the notes to record: none on success, one for a failure, and a second when
-    /// the failure switches the hook off, which the caller must then drop.
+    /// the failure switches the hook off, which the caller must then drop. The first slow
+    /// call of the match logs `match.invalid` at `tick`; a slow call changes nothing else.
     pub(crate) fn settle<T>(
         &mut self,
         hook: HookPoint,
         outcome: HookOutcome<T>,
+        tick: u32,
     ) -> (Option<T>, Vec<ScriptNote>) {
+        if !self.invalid_logged && self.watchdog.hits() > 0 {
+            self.invalid_logged = true;
+            tracing::warn!(
+                signal = "match.invalid",
+                reason = INVALID_SLOW_SCRIPT,
+                hook = hook.code(),
+                pack = self.pack.as_deref().unwrap_or(""),
+                tick,
+                slow_calls = self.watchdog.hits()
+            );
+        }
         self.stats.calls += 1;
         let index = hook as usize;
         let (outcome, text) = match outcome {
@@ -315,14 +395,14 @@ mod tests {
     fn three_failures_in_a_row_switch_the_hook_off_and_a_success_resets_the_count() {
         let mut p = Plugins::new("x@1.0.0+000000000000");
         p.rule = Some(Box::new(Failing));
-        let (_, notes) = p.settle::<u8>(HookPoint::Rule, HookOutcome::Aborted("a".into()));
+        let (_, notes) = p.settle::<u8>(HookPoint::Rule, HookOutcome::Aborted("a".into()), 0);
         assert_eq!(notes.len(), 1);
-        p.settle::<u8>(HookPoint::Rule, HookOutcome::Denied("d".into()));
-        p.settle(HookPoint::Rule, HookOutcome::Value(1u8));
-        p.settle::<u8>(HookPoint::Rule, HookOutcome::Aborted("a".into()));
-        p.settle::<u8>(HookPoint::Rule, HookOutcome::Aborted("a".into()));
+        p.settle::<u8>(HookPoint::Rule, HookOutcome::Denied("d".into()), 0);
+        p.settle(HookPoint::Rule, HookOutcome::Value(1u8), 0);
+        p.settle::<u8>(HookPoint::Rule, HookOutcome::Aborted("a".into()), 0);
+        p.settle::<u8>(HookPoint::Rule, HookOutcome::Aborted("a".into()), 0);
         assert!(p.rule.is_some(), "two failures in a row keep the hook");
-        let (_, notes) = p.settle::<u8>(HookPoint::Rule, HookOutcome::Aborted("a".into()));
+        let (_, notes) = p.settle::<u8>(HookPoint::Rule, HookOutcome::Aborted("a".into()), 0);
         assert_eq!(notes.len(), 2);
         assert_eq!(notes[1].outcome, ScriptOutcome::Disabled);
         assert!(p.rule.is_none());
@@ -336,5 +416,119 @@ mod tests {
             }
         );
         assert_eq!(p.detail(&notes[0]), "a");
+    }
+
+    /// Plays the same `settle` calls on two plugins, one with `hits` watchdog hits before
+    /// each call, and returns both.
+    fn twin_settle(outcomes: &[HookOutcome<u8>], hits: u32) -> (Plugins, Plugins) {
+        let mut plain = Plugins::new("x@1.0.0+000000000000");
+        plain.rule = Some(Box::new(Failing));
+        let mut marked = Plugins::new("x@1.0.0+000000000000");
+        marked.rule = Some(Box::new(Failing));
+        for (tick, outcome) in outcomes.iter().enumerate() {
+            for _ in 0..hits {
+                marked.watchdog().hit();
+            }
+            let a = plain.settle(HookPoint::Rule, outcome.clone(), tick as u32);
+            let b = marked.settle(HookPoint::Rule, outcome.clone(), tick as u32);
+            assert_eq!(a, b, "a hit changes no outcome of settle ({outcome:?})");
+        }
+        (plain, marked)
+    }
+
+    #[test]
+    fn a_watchdog_hit_is_not_a_failure() {
+        let mut p = Plugins::new("x@1.0.0+000000000000");
+        p.rule = Some(Box::new(Failing));
+        for tick in 0..3 {
+            p.watchdog().hit();
+            let (value, notes) = p.settle(HookPoint::Rule, HookOutcome::Value(7u8), tick);
+            assert_eq!(value, Some(7));
+            assert!(notes.is_empty());
+        }
+        assert_eq!(p.failures(), [0, 0, 0]);
+        assert_eq!(p.stats.aborts, 0);
+        assert!(p.rule.is_some(), "the hook stays attached");
+        assert_eq!(p.slow_calls(), 3);
+        assert_eq!(p.invalid(), Some("slow script"));
+        assert_eq!(
+            Plugins::new("y").invalid(),
+            None,
+            "a fresh match starts unmarked"
+        );
+        assert_eq!(Plugins::default().slow_calls(), 0);
+    }
+
+    #[test]
+    fn a_hit_changes_no_outcome_of_settle() {
+        let each = [
+            HookOutcome::Value(1u8),
+            HookOutcome::Keep,
+            HookOutcome::Aborted("a".into()),
+            HookOutcome::Denied("d".into()),
+        ];
+        for outcome in &each {
+            let (plain, marked) = twin_settle(std::slice::from_ref(outcome), 1);
+            assert_eq!(plain.failures(), marked.failures());
+            assert_eq!(plain.stats, marked.stats);
+            assert_eq!(plain.details, marked.details);
+            assert_eq!(plain.hooks_present(), marked.hooks_present());
+            assert_eq!((plain.slow_calls(), marked.slow_calls()), (0, 1));
+        }
+        let aborts = vec![HookOutcome::Aborted("a".into()); 3];
+        let (plain, marked) = twin_settle(&aborts, 2);
+        assert!(
+            plain.rule.is_none() && marked.rule.is_none(),
+            "three aborts switch off"
+        );
+        assert_eq!(plain.stats, marked.stats);
+        assert_eq!(marked.stats.disabled, 1);
+        assert_eq!(plain.failures(), marked.failures());
+    }
+
+    /// A log writer the test can read back.
+    #[derive(Clone, Default)]
+    struct Log(Arc<std::sync::Mutex<Vec<u8>>>);
+
+    impl std::io::Write for Log {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn match_invalid_is_logged_once() {
+        let log = Log::default();
+        let writer = log.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || writer.clone())
+            .with_ansi(false)
+            .finish();
+        tracing::subscriber::with_default(subscriber, || {
+            let mut p = Plugins::new("x@1.0.0+000000000000");
+            p.rule = Some(Box::new(Failing));
+            p.settle::<u8>(HookPoint::Rule, HookOutcome::Keep, 1);
+            // The first hit comes with `Keep`.
+            p.watchdog().hit();
+            p.settle::<u8>(HookPoint::Rule, HookOutcome::Keep, 2);
+            p.watchdog().hit();
+            p.settle(HookPoint::Rule, HookOutcome::Value(1u8), 3);
+            p.watchdog().hit();
+            p.settle::<u8>(HookPoint::Rule, HookOutcome::Aborted("a".into()), 4);
+            p.watchdog().hit();
+            p.settle::<u8>(HookPoint::Rule, HookOutcome::Denied("d".into()), 5);
+        });
+        let text = String::from_utf8_lossy(&log.0.lock().unwrap()).into_owned();
+        let lines: Vec<&str> = text
+            .lines()
+            .filter(|l| l.contains("match.invalid"))
+            .collect();
+        assert_eq!(lines.len(), 1, "{text}");
+        assert!(lines[0].contains("slow script"), "{text}");
+        assert!(lines[0].contains("tick=2"), "{text}");
     }
 }

@@ -31,6 +31,13 @@ impl Scene {
         Self { sim }
     }
 
+    /// Switches debug mode on from the scene's next step: the trace records every draw,
+    /// decision point, and rule outcome from here on (`Simulation::take_trace`).
+    pub fn traced(mut self) -> Self {
+        self.sim.streams.enable_trace(self.sim.tick + 1);
+        self
+    }
+
     /// Puts player `i` at rest at `at`.
     pub fn place(mut self, i: usize, at: DVec2) -> Self {
         let p = &mut self.sim.players[i];
@@ -76,9 +83,10 @@ impl Scene {
         self
     }
 
-    /// The referee's next draws, before the seeded stream: tackles, cards, and added time.
+    /// The referee's next draws, before the seeded stream: tackles, cards, and added time
+    /// (every referee-class key of the stream table).
     pub fn rolls(mut self, draws: &[f64]) -> Self {
-        self.sim.rng.script(draws);
+        self.sim.streams.script_referee(draws);
         self
     }
 
@@ -200,7 +208,7 @@ impl Scene {
 
     /// The injury rolls' next draws, before the seeded stream.
     pub fn injury_rolls(mut self, draws: &[f64]) -> Self {
-        self.sim.rng.script_injuries(draws);
+        self.sim.streams.script_injuries(draws);
         self
     }
 

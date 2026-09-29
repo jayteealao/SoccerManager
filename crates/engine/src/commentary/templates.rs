@@ -325,9 +325,19 @@ impl Commentary {
 
     /// Loads and checks a commentary file at `path`; `shown` is the path errors name.
     pub fn load_path(path: &std::path::Path, shown: &str) -> Result<Self, EngineError> {
-        let file =
-            data::load_json::<CommentaryFile>("commentary", path, shown, COMMENTARY_VERSION, &())?
-                .value;
+        Self::from_bytes(&data::read_bytes(path, shown)?, shown)
+    }
+
+    /// Loads and checks a commentary file's bytes; `shown` is the name errors give it.
+    pub fn from_bytes(bytes: &[u8], shown: &str) -> Result<Self, EngineError> {
+        let file = data::load_json_bytes::<CommentaryFile>(
+            "commentary",
+            bytes,
+            shown,
+            COMMENTARY_VERSION,
+            &(),
+        )?
+        .value;
         Ok(Self::from_file(file))
     }
 

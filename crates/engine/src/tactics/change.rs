@@ -13,6 +13,8 @@
 //! (half-time) uses no window. Every verdict becomes an engine event: `ChangeApplied` with
 //! the tick, or `ChangeRejected` with the reason.
 
+use crate::trace::Point;
+use serde_json::json;
 use std::fmt;
 
 use crate::data::rules::StoppageKind;
@@ -85,6 +87,21 @@ impl fmt::Display for ChangeId {
 pub struct QueuedChange {
     pub id: ChangeId,
     pub team: usize,
+    pub change: Change,
+}
+
+/// One change that applied, as the replay file's change log keeps it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppliedChange {
+    /// Its place among the match's applied changes, from 0.
+    pub order: u32,
+    pub team: usize,
+    /// The identifier it was queued under: the queued tick and the queue number.
+    pub id: ChangeId,
+    /// The tick it applied on, the tick of its verdict event.
+    pub tick: u32,
+    /// The stoppage it applied at.
+    pub stoppage: StoppageKind,
     pub change: Change,
 }
 
@@ -237,6 +254,12 @@ impl Simulation {
         id
     }
 
+    /// Every change applied so far, in the order it applied. Rejected changes are not in
+    /// it; their verdicts stay in the events.
+    pub fn applied_changes(&self) -> &[AppliedChange] {
+        &self.applied
+    }
+
     /// The changes still waiting, in queue order.
     pub fn pending_changes(&self) -> &[QueuedChange] {
         &self.queue.pending
@@ -359,8 +382,35 @@ impl Simulation {
             reason,
         });
         self.events.push(event);
+        if self.trace_on() {
+            let (point, why) = match reason {
+                None => (Point::ChangeApplied, None),
+                Some(r) => (
+                    Point::ChangeRejected,
+                    Some(r.text(&self.teams[q.team].player_ids)),
+                ),
+            };
+            self.trace_point(
+                point,
+                json!({
+                    "team": q.team,
+                    "id": q.id.to_string(),
+                    "change": format!("{:?}", q.change),
+                    "stoppage": kind.code(),
+                    "reason": why,
+                }),
+            );
+        }
         match reason {
             None => {
+                self.applied.push(AppliedChange {
+                    order: u32::try_from(self.applied.len()).unwrap_or(u32::MAX),
+                    team: q.team,
+                    id: q.id,
+                    tick: now,
+                    stoppage: kind,
+                    change: q.change.clone(),
+                });
                 self.summary.changes_applied += 1;
                 tracing::debug!(
                     signal = "change.applied",
@@ -541,5 +591,45 @@ mod tests {
                 expired: 2
             }
         );
+    }
+
+    #[test]
+    fn the_applied_change_log_keeps_applied_changes_in_order_and_no_rejection() {
+        let config = crate::data::test_support::shipped_config(42, 3)
+            .unwrap()
+            .with_manager(0, crate::ai::Manager::Human)
+            .with_manager(1, crate::ai::Manager::Human);
+        let mut sim = Simulation::new(config).unwrap();
+        let home = sim.teams()[0].clone();
+        let sub = Change::Substitution {
+            off: home.lineup[9],
+            on: home.bench[0],
+        };
+        let tactics = Change::Tactics(TacticsPatch::mentality(4));
+        sim.queue_change(0, tactics.clone());
+        sim.queue_change(0, sub.clone());
+        // A bench place the away team does not have: rejected at the stoppage.
+        let away = sim.teams()[1].clone();
+        sim.queue_change(
+            1,
+            Change::Substitution {
+                off: away.lineup[9],
+                on: usize::MAX,
+            },
+        );
+        while !sim.is_over() && sim.applied_changes().len() < 2 {
+            sim.step();
+        }
+        let log = sim.applied_changes();
+        assert_eq!(log.len(), 2, "{log:?}");
+        // Substitutions apply before tactics changes at one stoppage.
+        assert_eq!(log[0].change, sub);
+        assert_eq!(log[1].change, tactics);
+        assert_eq!((log[0].order, log[1].order), (0, 1));
+        assert_eq!(log[0].tick, log[1].tick);
+        assert_eq!(log[0].stoppage, log[1].stoppage);
+        assert_eq!((log[0].id.n, log[1].id.n), (1, 0));
+        assert!(log.iter().all(|c| c.team == 0 && c.id.tick == 0));
+        assert_eq!(sim.summary().changes_rejected, 1);
     }
 }

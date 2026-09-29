@@ -325,7 +325,7 @@ fn features(from: DVec2, attack_x: f64) -> (f64, f64) {
     let half = pitch::GOAL_WIDTH / 2.0;
     let a = DVec2::new(x, half) - from;
     let b = DVec2::new(x, -half) - from;
-    let angle = a.perp_dot(b).atan2(a.dot(b)).abs();
+    let angle = engine::math::atan2(a.perp_dot(b), a.dot(b)).abs();
     let distance = (pitch::goal_centre(attack_x) - from).length();
     (distance, angle)
 }
@@ -339,7 +339,7 @@ fn fit_logistic(rows: &[(f64, f64, bool)]) -> [f64; 3] {
         for &(d, a, y) in rows {
             let x = [1.0, d, a];
             let z: f64 = (0..3).map(|k| beta[k] * x[k]).sum();
-            let p = 1.0 / (1.0 + (-z).exp());
+            let p = 1.0 / (1.0 + engine::math::exp(-z));
             let w = p * (1.0 - p);
             let r = f64::from(u8::from(y)) - p;
             for i in 0..3 {
@@ -427,7 +427,7 @@ fn xg_refit() {
     );
     let predicted: f64 = rows
         .iter()
-        .map(|&(d, a, _)| 1.0 / (1.0 + (-(beta[0] + beta[1] * d + beta[2] * a)).exp()))
+        .map(|&(d, a, _)| 1.0 / (1.0 + engine::math::exp(-(beta[0] + beta[1] * d + beta[2] * a))))
         .sum();
     eprintln!("fitted expected goals {predicted:.1} against {goals} goals");
     assert!(rows.len() > 1000);

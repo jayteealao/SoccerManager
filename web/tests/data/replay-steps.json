@@ -1,0 +1,7 @@
+{
+  "production": [],
+  "test": [
+    { "from": 4, "to": 5, "name": "engine-entry" },
+    { "from": 5, "to": 6, "name": "input-bundle" }
+  ]
+}

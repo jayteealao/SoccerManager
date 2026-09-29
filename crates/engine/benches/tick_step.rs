@@ -22,6 +22,8 @@ fn config() -> MatchConfig {
 }
 
 fn tick_step(c: &mut Criterion) {
+    // Names the build each run timed, for the recorder's cost compare.
+    eprintln!("debug-trace compiled in: {}", engine::trace::COMPILED);
     let config = config();
     let warmed = || {
         let mut sim = Simulation::new(config.clone()).unwrap();

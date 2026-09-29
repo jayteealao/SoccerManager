@@ -151,10 +151,31 @@ pub fn load_json<T>(
 where
     T: DeserializeOwned + Validate,
 {
-    let bytes = std::fs::read(path).map_err(|source| EngineError::Read {
+    let bytes = read_bytes(path, shown)?;
+    load_json_bytes(kind, &bytes, shown, expected_version, ctx)
+}
+
+/// Reads one file whole; a failure names the file as `shown`.
+pub fn read_bytes(path: &Path, shown: &str) -> Result<Vec<u8>, EngineError> {
+    std::fs::read(path).map_err(|source| EngineError::Read {
         path: shown.to_string(),
         source,
-    })?;
+    })
+}
+
+/// [`load_json`] over bytes already in memory: version-checks, deserializes, and validates
+/// them, and computes their SHA-256. A replay file's inputs load through this, so a
+/// re-simulated match reads no file on disk.
+pub fn load_json_bytes<T>(
+    kind: &'static str,
+    bytes: &[u8],
+    shown: &str,
+    expected_version: u32,
+    ctx: &T::Context,
+) -> Result<Loaded<T>, EngineError>
+where
+    T: DeserializeOwned + Validate,
+{
     let refused = |field: String, reason: String| {
         tracing::error!(signal = "content.refused", kind, path = shown, field = %field, reason = %reason);
         EngineError::Data {
@@ -164,7 +185,7 @@ where
             reason,
         }
     };
-    let peek: VersionOnly = serde_json::from_slice(&bytes)
+    let peek: VersionOnly = serde_json::from_slice(bytes)
         .map_err(|e| refused("schema_version".into(), e.to_string()))?;
     if peek.schema_version != expected_version {
         tracing::error!(
@@ -181,7 +202,7 @@ where
             expected: expected_version,
         });
     }
-    let value: T = serde_json::from_slice(&bytes).map_err(|e| {
+    let value: T = serde_json::from_slice(bytes).map_err(|e| {
         refused(
             format!("line {} column {}", e.line(), e.column()),
             e.to_string(),
@@ -195,7 +216,7 @@ where
             .unwrap_or_default();
         return Err(refused(field, reason));
     }
-    let digest: [u8; 32] = Sha256::digest(&bytes).into();
+    let digest: [u8; 32] = Sha256::digest(bytes).into();
     tracing::info!(
         signal = "content.loaded",
         kind,
@@ -210,6 +231,28 @@ where
 /// The first twelve hex characters of a digest.
 pub fn hex12(digest: &[u8]) -> String {
     digest.iter().take(6).map(|b| format!("{b:02x}")).collect()
+}
+
+/// The bytes of the four content files, as read from a content folder or a replay file.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ContentFiles {
+    pub attributes: Vec<u8>,
+    pub tuning: Vec<u8>,
+    pub rules: Vec<u8>,
+    pub tactics: Vec<u8>,
+}
+
+impl ContentFiles {
+    /// Reads the four files from `dir`, each once.
+    pub fn read(dir: &ContentDir) -> Result<Self, EngineError> {
+        let read = |rel: &str| read_bytes(&dir.path(rel), rel);
+        Ok(Self {
+            attributes: read(ATTRIBUTES_FILE)?,
+            tuning: read(TUNING_FILE)?,
+            rules: read(RULES_FILE)?,
+            tactics: read(TACTICS_FILE)?,
+        })
+    }
 }
 
 /// The four files every match needs, plus a digest over their bytes.
@@ -234,30 +277,31 @@ impl Content {
     /// Loads the four shipped files from `dir`. The tactics file is checked against the
     /// attribute schema, so a role naming an unknown attribute is refused by name.
     pub fn load(dir: &ContentDir) -> Result<Self, EngineError> {
-        let attributes = load_json::<AttributeSchema>(
+        Self::from_files(&ContentFiles::read(dir)?)
+    }
+
+    /// The content from the four files' bytes, with the same checks, digest, and flag
+    /// states as [`Content::load`].
+    pub fn from_files(files: &ContentFiles) -> Result<Self, EngineError> {
+        let attributes = load_json_bytes::<AttributeSchema>(
             "attributes",
-            &dir.path(ATTRIBUTES_FILE),
+            &files.attributes,
             ATTRIBUTES_FILE,
             ATTRIBUTES_VERSION,
             &(),
         )?;
-        let tuning = load_json::<TuningFile>(
+        let tuning = load_json_bytes::<TuningFile>(
             "tuning",
-            &dir.path(TUNING_FILE),
+            &files.tuning,
             TUNING_FILE,
             TUNING_VERSION,
             &(),
         )?;
-        let rules = load_json::<RulePack>(
-            "rules",
-            &dir.path(RULES_FILE),
-            RULES_FILE,
-            RULES_VERSION,
-            &(),
-        )?;
-        let tactics = load_json::<TacticsSchema>(
+        let rules =
+            load_json_bytes::<RulePack>("rules", &files.rules, RULES_FILE, RULES_VERSION, &())?;
+        let tactics = load_json_bytes::<TacticsSchema>(
             "tactics",
-            &dir.path(TACTICS_FILE),
+            &files.tactics,
             TACTICS_FILE,
             TACTICS_VERSION,
             &(),
@@ -336,6 +380,16 @@ impl Content {
     ) -> Result<Loaded<TeamFile>, EngineError> {
         let shown = dir.relative(path);
         load_json::<TeamFile>("team", path, &shown, TEAM_VERSION, &self.attributes)
+    }
+
+    /// Loads and validates one team file's bytes against the attribute schema of this
+    /// content; `shown` is the name errors give the file.
+    pub fn team_from_bytes(
+        &self,
+        bytes: &[u8],
+        shown: &str,
+    ) -> Result<Loaded<TeamFile>, EngineError> {
+        load_json_bytes::<TeamFile>("team", bytes, shown, TEAM_VERSION, &self.attributes)
     }
 
     /// The tuning file as written, before any flag state is applied.
@@ -465,5 +519,19 @@ mod tests {
             "teams/a.json"
         );
         assert_eq!(dir.relative(Path::new("D:\\elsewhere\\b.json")), "b.json");
+    }
+
+    #[test]
+    fn content_from_bytes_matches_content_from_the_folder() {
+        let dir = test_support::shipped_dir();
+        let from_dir = Content::load(&dir).unwrap();
+        let from_bytes = Content::from_files(&ContentFiles::read(&dir).unwrap()).unwrap();
+        assert_eq!(from_bytes.digest, from_dir.digest);
+        assert_eq!(from_bytes.hash(), from_dir.hash());
+        assert_eq!(from_bytes.flags, from_dir.flags);
+        let bytes = std::fs::read(dir.path(TEAM_A_FILE)).unwrap();
+        let team = from_bytes.team_from_bytes(&bytes, TEAM_A_FILE).unwrap();
+        let loaded = from_dir.load_team(&dir, &dir.path(TEAM_A_FILE)).unwrap();
+        assert_eq!(team.digest, loaded.digest);
     }
 }

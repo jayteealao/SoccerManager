@@ -193,7 +193,7 @@ One `match-event` row. The same object is written to
 | `commentary` | string | one English commentary line, on every event except `tactics-change` and `script`; the lines come from `content/commentary/en.json` and name the player and the club, and a script pack's commentary hook can rewrite them |
 | `script.pack` | string | on the first `kick-off` of a match that runs a script pack: the pack identity, `id@version+hash`, where the hash is the first 12 hex characters of the SHA-256 of `pack.json` followed by the script file |
 | `script.hook` | enumeration | on `script`: the hook that failed, `decision`, `rule`, or `commentary` |
-| `script.outcome` | enumeration | on `script`: `aborted` (the call ran out of its operation or time budget, or failed), `denied` (the call tried an import or a function the sandbox does not allow), or `disabled` (the hook failed three times in a row and is off for the rest of the match) |
+| `script.outcome` | enumeration | on `script`: `aborted` (the call ran out of its operation budget, or failed; a call past the 2 ms wall-clock limit is not aborted and only marks the match invalid in `match-stats`), `denied` (the call tried an import or a function the sandbox does not allow), or `disabled` (the hook failed three times in a row and is off for the rest of the match) |
 | `script.detail` | string | on `script`: why, such as `operation budget of 10000 exhausted` or `function http_get is not available` |
 
 A `script` event names no team or player and carries no `commentary`. Play goes on with the
@@ -473,18 +473,104 @@ tick it draws with `seen`, which holds a `serve` engine within `buffer_ticks` of
 sends `pause` when it holds more than a few seconds of unplayed ticks and `start` when
 playback catches up.
 
-## Fixtures
+## Replay files
 
 `engine-cli record --seed <n> --out <file>.smfx` writes every frame of one match exactly as
 it would travel on the wire. `engine-cli replay --fixture <file>.smfx --speed <x>` serves
 those bytes back over the same protocol with no re-encoding, so a viewer can be verified
-before the engine is complete.
+before the engine is complete. `engine-cli resimulate --fixture <file>.smfx` plays the match
+again from the file alone and compares it with the stored frames.
+
+Two formats exist. Format 3 holds the frames only. The viewer page saves format 3, because
+it receives only the frames. Format 4 also holds every input of the match by value and a
+record of the engine, the settings, and the applied changes. `record` writes format 4.
 
 | Part | Bytes | Contents |
 |---|---|---|
-| header | 32 | magic `SMFX`, protocol version, match start in milliseconds, frame count, tick count, seed |
-| entry | 9 + payload | entry kind (binary or text), tick index, payload length, then the payload |
-| trailer | 16 | magic `SMFE`, frame count, and the first six bytes of a SHA-256 over every payload |
+| header | 32 | magic `SMFX`; the format version (u16) at offset 4; the frames' protocol version (u16) at offset 6, zero in format 3; the match start in milliseconds; the frame count; the tick count; the seed |
+| input entries | 9 + payload each | format 4 only, before the frames: kind 2, tick 0, payload length; the payload is the name length (u16), the UTF-8 name, and the file's bytes |
+| frame entries | 9 + payload each | kind 0 (binary tick frame) or 1 (text frame), the tick index, the payload length, then the payload |
+| record entry | 9 + payload | format 4 only, last: kind 3, tick 0, payload length; the payload is one JSON document |
+| trailer | 16 | magic `SMFE`, the frame count, and the first six bytes of a SHA-256 over every payload of every kind, in file order |
 
-A reader refuses a fixture with the wrong magic, an unknown protocol version, a count
-mismatch, a truncated entry, or a hash that does not match the bytes.
+All numbers are little-endian. The frame count counts tick and text frames only. In format 3,
+offset 4 was the protocol version, which is also 3, so every older file reads as format 3.
+
+### Inputs
+
+Format 4 stores these files, in this order. The two pack files are present only when the match
+ran a script pack.
+
+| Role | File |
+|---|---|
+| `attributes` | `attributes.json` |
+| `tuning` | `tuning.json` |
+| `rules` | `rules/default.json` |
+| `tactics` | `tactics.json` |
+| `commentary` | `commentary/en.json`: the script commentary hook runs on every event, so the lines are a match input |
+| `team_a` | the home team file |
+| `team_b` | the away team file |
+| `pack_manifest` | `pack.json` of the script pack |
+| `pack_script` | the pack's entry script |
+
+With the shipped content and the sample script pack, the inputs hold 87,977 bytes. A one-minute
+match recorded with them is 314,484 bytes, against 220,901 bytes for the same length in format 3.
+The inputs are never cut to save space.
+
+### Record
+
+| Field | Contents |
+|---|---|
+| `engine` | `commit` (the full git commit, or `unknown`), `dirty` (the working tree held changes at build time), `crate_version`, `scheme` (the random-stream scheme), `maths` (the maths library and its version), `executable_sha256` (the SHA-256 of the executable file), and `build` (the short build hash the hello names) |
+| `settings` | `seed` (a decimal string), `minutes`, `knockout`, and `managers` (`ai` or `human`, home first) |
+| `inputs` | one entry per input entry, in file order: `role`, `name`, `bytes`, and `sha256` |
+| `inputs_bytes` | the total size of the input files |
+| `changes` | the applied-change log |
+| `watchdog` | `slow_calls` (script calls past the wall-clock limit) and `invalid` (`slow script`, or null) |
+
+Each entry of the change log holds `order` (from 0), `team`, `source` (`manager` for a team
+managed by hand, `ai` for the computer manager), `queued_tick` and `queue_number` (the change's
+queue identifier), `tick` (the tick it applied on), `stoppage` (the stoppage it applied at), and
+`change`: `{ "substitution": { "off", "on" } }` with squad indexes, or `{ "tactics": {
+"formation", "mentality", "instructions", "roles": [{ "squad", "role", "duty" }] } }`, where a
+null leaves that setting as it is. Only applied changes are in the log. A rejected change's
+verdict stays in the text frames.
+
+### Re-simulation
+
+Re-simulation builds the match from the stored inputs, queues each `manager` entry of the log
+again at its `queued_tick`, and lets the computer manager make its own changes again. It
+compares every regenerated tick frame with the stored one, byte for byte, and after full time
+it compares the applied changes with the log, entry by entry. Text frames are not re-simulated:
+they carry the recording's match stamp and owner, and the verdict rows of rejected changes,
+which the log does not keep. The script runs with no wall-clock limit, so the recorded watchdog
+mark is reported, not made again.
+
+A reader refuses a file with the wrong magic, a format newer than the reader knows or older
+than 3, frames of another protocol version, a count mismatch, a truncated entry, an input or
+record entry in a format-3 file, an input entry after the frames, an entry after the record, a
+format-4 file with no record or with two, a record without one of its fields or with a field
+it does not define, a field of the wrong type or outside its values, a header tick count that
+the frames do not match, a header seed that differs from the record's, input entries whose
+names, sizes, or SHA-256 values differ from the record's list, a total of input sizes that
+differs from the record's, an unknown entry kind, or a hash that does not match the bytes. Each refusal names its check. A missing record field is
+never filled with a default: a field that may be null, such as `watchdog.invalid`, must still
+be present.
+
+### Migration
+
+A replay file of format 4 or later keeps loading after the format changes. Each format change
+adds one forward step, and a reader lifts an older file through every step from its own format
+to the newest format before it reads the file. A lifted file keeps the hash of the bytes that
+were read.
+
+Version-3 files are never lifted: they play from their frames only.
+
+When the engine lifts a file, it logs one `replay.migrated` signal with the file's format
+(`from`), the format it was lifted to (`to`), and the number of steps (`steps`). The viewer
+reports the same three values as `migrated` for a file it lifted.
+
+A reader refuses a file whose format is newer than the newest step reaches, a chain with a
+missing step, a step whose output is not the format it names, a record that lacks a required
+field, and input entries that do not match the record's list (corrupted inputs). A field that
+was added by a lift is never filled with a default.

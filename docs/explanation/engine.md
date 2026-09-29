@@ -50,7 +50,7 @@ The queue also keeps the result the same for the same inputs. A change applies a
 
 ## The snapshot
 
-At each stoppage, the engine writes a snapshot of the whole match to a file: the clock, the score, each player, the change queue, and the exact position of the random-number generator. The engine replaces the file at each stoppage.
+At each stoppage, the engine writes a snapshot of the whole match to a file: the clock, the score, each player, the change queue, the stream scheme, and the exact position of every random stream the match has used. The engine replaces the file at each stoppage. Snapshot version 7 added the stream scheme and the list of streams; the engine refuses a snapshot of an older version.
 
 A snapshot lets a match continue after a crash. The launcher restarts the engine from the newest snapshot, and the match continues from that stoppage with the same score and the same clock. A resumed match plays tick for tick as the match would have played without the crash.
 
@@ -58,14 +58,26 @@ A stoppage is the right time for a snapshot because the ball is dead: no pass or
 
 ## The seedable random-number generator
 
-Every random draw in the engine comes from one generator, ChaCha8, created from the seed of the match. The engine never uses a random source that the seed does not control. The same seed, the same inputs, the same build, and the same computer give the same match, byte for byte.
+Every random draw in the engine comes from the generator ChaCha8, created from the seed of the match. The engine never uses a random source that the seed does not control. The same seed, the same inputs, and the same engine version give the same match, byte for byte, on every supported computer.
 
-The snapshot stores the exact position of the generator. This is why a resumed match continues the same random sequence.
+Every match draw goes through the stream registry. A fixed table gives each draw a key: the part of the engine the draw belongs to, the kind of action, and the player who acts (or a named match key when no one player acts). A player is named by his place in the squad, so a substitute gets his own key. Matches play stream scheme 1: each key has its own stream from the match seed, so extra draws for one key leave every other key's sequence unchanged. This does not promise that play after a different decision stays the same: a different decision moves the ball and the players, and later draws are then taken for other keys. Scheme 0, one shared stream read in draw order, was played until the one recorded result change and is gone. A committed digest fails a test when the table, the key-to-stream derivation, or the draw conversion changes without a new scheme number. In a debug or test build, a draw on a key that the table does not hold fails and names the key.
 
-## Best-effort determinism
+The snapshot stores the scheme and the exact position of every stream used. This is why a resumed match continues the same random sequences, including for a key that the match first uses after the resume. The engine refuses a snapshot of scheme 0, of an unknown scheme, or with a malformed stream entry, and names the fault.
 
-The engine promises the same match only on the same build and the same computer. It does not promise the same match on another computer.
+## The watchdog mark
 
-The engine uses floating-point numbers for positions and velocities. Different processors, compilers, and mathematics libraries can round the last bit of a result differently. Over thousands of ticks, a different last bit can change who wins a tackle. A promise across computers would require fixed-point arithmetic or a strict floating-point library in every part of the engine, at a high cost in speed and code.
+A script pack's hook call has two limits. The operation budget counts script operations; the count is the same on every machine, so the budget stops a long call in the same place everywhere. After three such stops in a row, the hook is switched off for the rest of the match.
 
-For this reason, the engine promises less. The tests check that two runs on one computer give identical ticks. The snapshot records the build and the content it came from, and the engine refuses a snapshot from another build or other content. A match that must play the same everywhere is a replay file: the replay file stores the ticks, not the inputs.
+The second limit is 2 ms of wall-clock time. A call that runs past it is not stopped: the call's result stands, and the match is marked invalid (`match.invalid: "slow script"` in the match statistics, with `script.slow_calls`, and one `match.invalid` log line). Wall-clock time differs between machines. If a slow call were stopped, a slow or busy machine would play a different match from the same seed and inputs. The mark is not a failure, writes no event, and is not in the snapshot or in the replay gate's hashed state.
+
+The replay gate plays with the real clock. It prints a warning for a marked match and still compares its hashes, so a warning never hides a difference.
+
+## Determinism across computers
+
+The engine uses floating-point numbers for positions and velocities. Addition, multiplication, division, and square roots give the same bits on every computer the engine supports, because they are correctly rounded. Sines, cosines, exponents, arctangents, and powers are not: each platform maths library can round the last bit differently, and over thousands of ticks a different last bit can change who wins a tackle.
+
+So every engine sine, cosine, exponent, arctangent, and integer power goes through one maths module (`engine::math`), which calls the pure-Rust `libm` crate. `libm` gives the same bits on every computer. A clippy rule on the engine crate (`crates/engine/clippy.toml`) refuses the platform maths methods, in both the method form (`x.sin()`) and the path form (`f64::sin(x)`), and the glam angle methods built on them, so a new platform call fails the pull-request check.
+
+The replay gate proves the result. It plays 22 fixed matches and hashes the full match state after every tick: the exact bits of every position and velocity, the rules, the pending changes, the script-hook counters, the position of every random stream, and the tick's events. Linux and Windows must both match one portable hash set in the golden file. A change that moves any of that state on either computer fails the gate at the window of ticks where the state first changed.
+
+The promise has limits. It covers the supported computers (64-bit x86 Linux and Windows) and the pinned Rust toolchain. A new toolchain or a new processor family needs a gate run before the promise extends to it. The snapshot records the build and the content it came from, and the engine refuses a snapshot from another build or other content.

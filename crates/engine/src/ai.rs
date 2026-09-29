@@ -27,6 +27,8 @@ use crate::sim::{EngineEventKind, EventDetail, Simulation};
 use crate::tactics::change::Change;
 use crate::tactics::{Tactics, TacticsPatch};
 use crate::team::{PLAYERS_PER_TEAM, SquadPlayer, Team};
+use crate::trace::Point;
+use serde_json::json;
 
 /// Who manages a team during the match.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -407,6 +409,19 @@ impl Simulation {
 
     /// Queues an AI choice and announces it.
     fn ai_queue(&mut self, team: usize, change: Change, code: AiCode, minute: u32) {
+        if self.trace_on() {
+            let score = self.summary.goals;
+            self.trace_point(
+                Point::AiManager,
+                json!({
+                    "team": team,
+                    "change": format!("{change:?}"),
+                    "code": code.code(),
+                    "minute": minute,
+                    "score": [score[team], score[1 - team]],
+                }),
+            );
+        }
         self.queue_change(team, change);
         self.summary.ai_decisions += 1;
         let mut event = self.event(EngineEventKind::AiDecision, Some(team));

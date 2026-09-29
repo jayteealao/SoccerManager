@@ -94,7 +94,8 @@ fn opponents_are_ten_yards_away_when_a_free_kick_is_taken() {
     let mut scene = spread(Scene::new(config), -30.0, 30.0);
     for (k, i) in (12..22).enumerate() {
         let angle = k as f64 * 0.6;
-        scene = scene.place(i, at + DVec2::new(angle.cos(), angle.sin()) * 3.0);
+        let (sin, cos) = engine::math::sin_cos(angle);
+        scene = scene.place(i, at + DVec2::new(cos, sin) * 3.0);
     }
     let mut sim = scene
         .place(CARRIER, at)

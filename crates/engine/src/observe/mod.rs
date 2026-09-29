@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::error::EngineError;
+use crate::math;
 use crate::sim::Summary;
 
 pub mod identity;
@@ -103,7 +104,8 @@ pub struct MatchStats {
 }
 
 /// The script pack a match ran with and its hook counters. Every key is absent from a match
-/// without a pack. The counters start at the resume tick on a resumed match.
+/// without a pack. The counters start at the resume tick on a resumed match. A match with a
+/// hook call past the wall-clock limit also carries `match.invalid` (the watchdog mark).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ScriptFigures {
@@ -117,6 +119,12 @@ pub struct ScriptFigures {
     pub denials: Option<u32>,
     #[serde(rename = "script.disabled", skip_serializing_if = "Option::is_none")]
     pub disabled: Option<u32>,
+    /// Hook calls past the wall-clock limit.
+    #[serde(rename = "script.slow_calls", skip_serializing_if = "Option::is_none")]
+    pub slow_calls: Option<u32>,
+    /// Why the match is invalid (`slow script`); absent from a match that is not marked.
+    #[serde(rename = "match.invalid", skip_serializing_if = "Option::is_none")]
+    pub invalid: Option<String>,
 }
 
 impl ScriptFigures {
@@ -132,6 +140,8 @@ impl ScriptFigures {
             aborts: Some(s.aborts),
             denials: Some(s.denials),
             disabled: Some(s.disabled),
+            slow_calls: Some(plugins.slow_calls()),
+            invalid: plugins.invalid().map(str::to_string),
         }
     }
 }
@@ -217,7 +227,7 @@ impl MatchFigures {
 
 /// `x` rounded to `places` decimals.
 pub fn round_to(x: f64, places: i32) -> f64 {
-    let scale = 10f64.powi(places);
+    let scale = math::powi(10.0, places);
     (x * scale).round() / scale
 }
 
@@ -842,5 +852,26 @@ mod tests {
         let h = machine_hash();
         assert_eq!(h.len(), 12);
         assert!(h.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn script_figures_serialize_the_mark() {
+        use crate::plugin::Plugins;
+        let json = |p: &Plugins| serde_json::to_value(ScriptFigures::new(p)).unwrap();
+        let none = json(&Plugins::default());
+        assert!(none.get("script.slow_calls").is_none() && none.get("match.invalid").is_none());
+        let plugins = Plugins::new("x@1.0.0+000000000000");
+        let unmarked = json(&plugins);
+        assert_eq!(unmarked["script.slow_calls"], 0);
+        assert!(unmarked.get("match.invalid").is_none());
+        plugins.watchdog().hit();
+        let marked = json(&plugins);
+        assert_eq!(marked["script.slow_calls"], 1);
+        assert_eq!(marked["match.invalid"], "slow script");
+        // A resumed match builds fresh plugins, so it counts from the resume tick.
+        assert_eq!(
+            json(&Plugins::new("x@1.0.0+000000000000"))["script.slow_calls"],
+            0
+        );
     }
 }

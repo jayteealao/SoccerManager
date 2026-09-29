@@ -100,11 +100,10 @@ pub fn foul_chance(tackler: &Derived, yellows: u8, t: &Tuning) -> f64 {
 /// The card, if any, for a foul by a player with `aggression` (0 to 1) who has already been
 /// shown `yellows` yellow cards.
 pub fn card_outcome(aggression: f64, yellows: u8, t: &Tuning, draw: f64) -> Option<Card> {
-    let red = t.red_base;
-    let yellow = t.yellow_base + t.yellow_aggression_weight * aggression;
+    let [red, red_or_yellow] = card_thresholds(aggression, t);
     if draw < red {
         Some(Card::Red)
-    } else if draw < red + yellow {
+    } else if draw < red_or_yellow {
         Some(if yellows >= 1 {
             Card::SecondYellow
         } else {
@@ -113,6 +112,14 @@ pub fn card_outcome(aggression: f64, yellows: u8, t: &Tuning, draw: f64) -> Opti
     } else {
         None
     }
+}
+
+/// The two cumulative thresholds a foul's card draw is tested against: below the first a
+/// red card, below the second a yellow.
+pub fn card_thresholds(aggression: f64, t: &Tuning) -> [f64; 2] {
+    let red = t.red_base;
+    let yellow = t.yellow_base + t.yellow_aggression_weight * aggression;
+    [red, red + yellow]
 }
 
 #[cfg(test)]
@@ -232,5 +239,53 @@ mod tests {
         assert_eq!(card_outcome(0.5, 0, &t, yellow_edge), None);
         assert!(Card::SecondYellow.sends_off() && Card::Red.sends_off());
         assert!(!Card::Yellow.sends_off());
+    }
+
+    /// `card_outcome` through `card_thresholds` gives the same card as the body before the
+    /// split, bit for bit, over the whole draw range.
+    #[test]
+    fn the_card_thresholds_keep_every_card() {
+        fn before(aggression: f64, yellows: u8, t: &Tuning, draw: f64) -> Option<Card> {
+            let red = t.red_base;
+            let yellow = t.yellow_base + t.yellow_aggression_weight * aggression;
+            if draw < red {
+                Some(Card::Red)
+            } else if draw < red + yellow {
+                Some(if yellows >= 1 {
+                    Card::SecondYellow
+                } else {
+                    Card::Yellow
+                })
+            } else {
+                None
+            }
+        }
+        let shipped = crate::data::test_support::shipped_config(1, 1)
+            .unwrap()
+            .tuning;
+        for t in [Tuning::default(), shipped] {
+            for a in 0..=100 {
+                let aggression = f64::from(a) / 100.0;
+                let [red, both] = card_thresholds(aggression, &t);
+                assert_eq!(red.to_bits(), t.red_base.to_bits());
+                for yellows in 0..=2 {
+                    for d in 0..=1000 {
+                        let draw = f64::from(d) / 1000.0;
+                        assert_eq!(
+                            card_outcome(aggression, yellows, &t, draw),
+                            before(aggression, yellows, &t, draw),
+                            "aggression {aggression} yellows {yellows} draw {draw}"
+                        );
+                    }
+                    // The edges themselves.
+                    for draw in [red, both] {
+                        assert_eq!(
+                            card_outcome(aggression, yellows, &t, draw),
+                            before(aggression, yellows, &t, draw)
+                        );
+                    }
+                }
+            }
+        }
     }
 }

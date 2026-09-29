@@ -10,8 +10,8 @@
 //!
 //! Injuries roll once for the tackled player on every tackle that wins the ball or is a foul,
 //! and once per simulated minute for every player on the pitch, scaled by injury resistance.
-//! The rolls use the engine's generator through `EngineRng::injury_draw`, which a test scene
-//! may script.
+//! The rolls draw through the stream registry on the rolling player's injury keys, which a
+//! test scene may script.
 
 use crate::TICKS_PER_SECOND;
 use crate::data::tuning::FatigueTuning;
@@ -19,6 +19,9 @@ use crate::player::{Derived, Player};
 use crate::rules::Phase;
 use crate::rules::clock::TICKS_PER_MINUTE;
 use crate::sim::Simulation;
+use crate::streams::{Action, Key};
+use crate::trace::Point;
+use serde_json::json;
 
 /// Ticks between two recomputations of the effective values.
 pub const REFRESH_TICKS: u32 = TICKS_PER_SECOND;
@@ -111,8 +114,14 @@ impl Simulation {
                 if !self.players[i].active() {
                     continue;
                 }
-                let chance = injury_chance(&self.players[i], rate);
-                if self.rng.injury_draw() < chance {
+                let p = self.players[i];
+                let chance = injury_chance(&p, rate);
+                let injured = self
+                    .streams
+                    .tested(Key::player(Action::InjuryMinute, &p), &[chance])
+                    < chance;
+                self.trace_injury_roll(i, InjurySource::Background, chance, injured);
+                if injured {
                     self.injure(i, InjurySource::Background);
                 }
             }
@@ -142,9 +151,31 @@ impl Simulation {
         if !self.players[c].active() {
             return;
         }
-        let chance = injury_chance(&self.players[c], self.config.tuning.injury_per_tackle);
-        if self.rng.injury_draw() < chance {
+        let p = self.players[c];
+        let chance = injury_chance(&p, self.config.tuning.injury_per_tackle);
+        let injured = self
+            .streams
+            .tested(Key::player(Action::InjuryTackle, &p), &[chance])
+            < chance;
+        self.trace_injury_roll(c, InjurySource::Tackle, chance, injured);
+        if injured {
             self.injure(c, InjurySource::Tackle);
+        }
+    }
+
+    /// Records one injury roll of player `i`.
+    fn trace_injury_roll(&mut self, i: usize, source: InjurySource, chance: f64, injured: bool) {
+        if self.trace_on() {
+            self.trace_point(
+                Point::Injury,
+                json!({
+                    "roll": true,
+                    "player": i,
+                    "source": source.code(),
+                    "chance": chance,
+                    "injured": injured,
+                }),
+            );
         }
     }
 

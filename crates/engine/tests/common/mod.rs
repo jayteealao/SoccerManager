@@ -159,3 +159,43 @@ pub fn run_many<T: Send>(
             .collect()
     })
 }
+
+/// The `.rs` files under `dir`, recursively, for the engine source searches.
+pub fn sources(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            out.extend(sources(&path));
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            out.push(path);
+        }
+    }
+    out
+}
+
+/// `file` with `machine`'s hash set added and one `add-machine-set` entry, the way a ledger
+/// written before the portable set records a second machine. The engine no longer writes
+/// such an entry; the guard and the strict load still read it.
+pub fn with_machine_set(
+    mut file: engine::gate::golden::GoldenFile,
+    machine: &str,
+    matches: Vec<engine::gate::MatchHashes>,
+    reason: &str,
+) -> engine::gate::golden::GoldenFile {
+    use engine::gate::golden;
+    file.ledger.push(golden::LedgerEntry {
+        kind: golden::EntryKind::AddMachineSet,
+        reason: reason.to_string(),
+        engine_version: engine::version().into(),
+        build: engine::build_hash().into(),
+        scheme: engine::rng::STREAM_SCHEME,
+        utc: golden::utc_now(),
+        machine: machine.to_string(),
+        candidate: None,
+        band_result: None,
+    });
+    file.hash_sets.insert(machine.to_string(), matches);
+    file.set_differences = golden::set_differences(&file.hash_sets);
+    file
+}

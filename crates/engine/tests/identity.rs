@@ -90,3 +90,18 @@ fn owner_and_match_ids_round_trip_through_the_tick_header() {
         match_id
     );
 }
+
+/// The replay file's engine identity: the short build hash in the hello is the full commit's
+/// prefix, marked dirty exactly when the full identity says so.
+#[test]
+fn the_short_build_hash_agrees_with_the_full_commit_and_the_dirty_mark() {
+    let (short, commit, dirty) = (engine::build_hash(), engine::commit(), engine::dirty());
+    if commit == "unknown" {
+        assert_eq!(short, "unknown");
+        assert!(!dirty);
+        return;
+    }
+    assert_eq!(commit.len(), 40, "{commit}");
+    assert!(commit.starts_with(&short[..7]), "{short} {commit}");
+    assert_eq!(short.ends_with("-dirty"), dirty, "{short}");
+}

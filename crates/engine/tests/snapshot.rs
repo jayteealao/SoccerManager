@@ -13,6 +13,7 @@ use engine::{
     ChangeKind, EngineError, EngineEventKind, EventDetail, Simulation, Snapshot, Stoppage,
     TickRecord, TickSink, VecSink,
 };
+use sha2::{Digest, Sha256};
 
 /// The continuation test resumes the seed-7 match from the first stoppage at or after this
 /// tick, early in the second half, before the AI manager's substitutions and tactics changes.
@@ -165,7 +166,7 @@ fn a_damaged_or_foreign_snapshot_is_refused_by_name() {
     first_format[4] = 1;
     let reason = refusal(Snapshot::from_bytes(&first_format, "s"));
     assert!(
-        reason.starts_with("unknown version 1; this build reads 6"),
+        reason.starts_with("unknown version 1; this build reads 7"),
         "{reason}"
     );
 
@@ -290,7 +291,7 @@ fn a_version_three_snapshot_is_refused_by_name() {
     bytes[4..6].copy_from_slice(&3u16.to_le_bytes());
     let reason = refusal(Snapshot::from_bytes(&bytes, "s"));
     assert!(
-        reason.starts_with("unknown version 3; this build reads 6"),
+        reason.starts_with("unknown version 3; this build reads 7"),
         "{reason}"
     );
 }
@@ -330,4 +331,96 @@ fn a_resumed_match_keeps_a_foul_cooldown_running() {
             sim.tick()
         );
     }
+}
+
+#[test]
+fn a_version_six_snapshot_is_refused_by_name() {
+    let mut sim = Simulation::new(full_match()).unwrap();
+    for _ in 0..10 {
+        sim.step();
+    }
+    let mut bytes = Snapshot::capture(&sim, OWNER, 1).to_bytes();
+    bytes[4..6].copy_from_slice(&6u16.to_le_bytes());
+    let reason = refusal(Snapshot::from_bytes(&bytes, "s"));
+    assert!(
+        reason.starts_with("unknown version 6; this build reads 7"),
+        "{reason}"
+    );
+}
+
+/// The snapshot tick of the keyed resume test: the first stoppage at or after it, once the
+/// match has used at least `MIN_KEYS` streams.
+const KEYED_FROM_TICK: u32 = 20_000;
+const MIN_KEYS: usize = 20;
+
+/// Hashes one tick: its record and the position of every stream.
+fn hash_tick(hasher: &mut Sha256, sim: &Simulation) {
+    let mut buf = [0u8; RECORD_BYTES];
+    sim.record().write_to(&mut buf);
+    hasher.update(buf);
+    hasher.update(sim.stream_state().to_bytes());
+}
+
+#[test]
+fn a_keyed_snapshot_resumes_every_stream() {
+    let mut whole = Simulation::new(full_match()).unwrap();
+    let mut snapshot: Option<Snapshot> = None;
+    let mut tail = Sha256::new();
+    while !whole.is_over() {
+        whole.step();
+        if snapshot.is_some() {
+            hash_tick(&mut tail, &whole);
+        } else if whole.stoppage().is_some()
+            && whole.tick() >= KEYED_FROM_TICK
+            && whole.stream_state().entries.len() >= MIN_KEYS
+        {
+            snapshot = Some(Snapshot::capture(&whole, OWNER, 1));
+        }
+    }
+    whole.finish();
+    let snapshot = snapshot.expect("a stoppage after tick 20,000");
+    let at_snapshot = Simulation::from_snapshot(full_match(), &snapshot)
+        .unwrap()
+        .stream_state();
+    assert_eq!(at_snapshot.scheme, engine::streams::KEYED_SCHEME);
+    assert!(at_snapshot.entries.len() >= MIN_KEYS);
+
+    // Through the file format, as a resume reads it.
+    let read = Snapshot::from_bytes(&snapshot.to_bytes(), "snapshot.smsn").unwrap();
+    let mut resumed = Simulation::from_snapshot(full_match(), &read).unwrap();
+    assert_eq!(resumed.stream_state(), at_snapshot);
+    let mut resumed_tail = Sha256::new();
+    while !resumed.is_over() {
+        resumed.step();
+        hash_tick(&mut resumed_tail, &resumed);
+    }
+    resumed.finish();
+    assert_eq!(
+        resumed_tail.finalize(),
+        tail.finalize(),
+        "the resumed match differs from the uninterrupted one"
+    );
+    assert_eq!(resumed.summary(), whole.summary());
+    let end = resumed.stream_state();
+    assert_eq!(end, whole.stream_state());
+    let known: Vec<u64> = at_snapshot.entries.iter().map(|&(id, _)| id).collect();
+    assert!(
+        end.entries.iter().any(|(id, _)| !known.contains(id)),
+        "a key first used after the restore"
+    );
+}
+
+#[test]
+fn the_snapshot_records_the_scheme_of_the_match() {
+    let mut sim = Simulation::new(full_match()).unwrap();
+    for _ in 0..500 {
+        sim.step();
+    }
+    let snapshot = Snapshot::capture(&sim, OWNER, 1);
+    let scheme = Simulation::from_snapshot(full_match(), &snapshot)
+        .unwrap()
+        .stream_state()
+        .scheme;
+    assert_eq!(scheme, engine::streams::STREAM_SCHEME);
+    assert_eq!(scheme, engine::streams::KEYED_SCHEME);
 }

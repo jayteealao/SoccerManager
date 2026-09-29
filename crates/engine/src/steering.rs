@@ -2,7 +2,7 @@
 //! Source: https://www.red3d.com/cwr/papers/1999/gdc99steer.pdf
 //! A sent-off player stands still at its parking spot and pushes nobody.
 
-use crate::math::{DVec2, clamp_len, toward};
+use crate::math::{DVec2, clamp_len, sq_skip_limit, toward};
 use crate::pitch;
 use crate::player::Player;
 use crate::tuning::Tuning;
@@ -29,15 +29,21 @@ pub fn seek(pos: DVec2, target: DVec2, max_speed: f64) -> DVec2 {
     toward(pos, target) * max_speed
 }
 
-/// Push away from every other player closer than the separation radius.
+/// Push away from every other player closer than the separation radius. A pair whose squared
+/// distance is at or above `sq_skip_limit` of the radius is outside it and skips the square
+/// root; every other pair runs the square-root form unchanged.
 pub fn separation(players: &[Player], i: usize, t: &Tuning) -> DVec2 {
     let me = players[i].pos;
     let mut push = DVec2::ZERO;
+    let skip = sq_skip_limit(t.separation_radius);
     for (j, other) in players.iter().enumerate() {
         if j == i || !other.active() {
             continue;
         }
         let d = me - other.pos;
+        if d.length_squared() >= skip {
+            continue;
+        }
         let dist = d.length();
         if dist < t.separation_radius {
             let away = if dist > 1e-6 {
@@ -84,9 +90,12 @@ pub fn step_all(players: &mut [Player], scratch: &mut Vec<DVec2>, t: &Tuning) {
     }
 }
 
-/// Pushes apart every pair of players closer than the minimum distance, in index order.
+/// Pushes apart every pair of players closer than the minimum distance, in index order. A
+/// pair whose squared distance is at or above `sq_skip_limit` of the minimum distance skips
+/// the square root; every other pair runs the square-root form unchanged.
 pub fn resolve_overlaps(players: &mut [Player], t: &Tuning) {
     let n = players.len();
+    let skip = sq_skip_limit(t.min_player_distance);
     for i in 0..n {
         if !players[i].active() {
             continue;
@@ -96,6 +105,9 @@ pub fn resolve_overlaps(players: &mut [Player], t: &Tuning) {
                 continue;
             }
             let d = players[j].pos - players[i].pos;
+            if d.length_squared() >= skip {
+                continue;
+            }
             let dist = d.length();
             if dist < t.min_player_distance {
                 let axis = if dist > 1e-9 {
@@ -155,5 +167,173 @@ mod tests {
         }
         let dist = (players[0].pos - players[1].pos).length();
         assert!(dist >= t.min_player_distance, "distance {dist}");
+    }
+
+    /// Today's separation before the squared-distance skip, for the boundary tests.
+    fn separation_before(players: &[Player], i: usize, t: &Tuning) -> DVec2 {
+        let me = players[i].pos;
+        let mut push = DVec2::ZERO;
+        for (j, other) in players.iter().enumerate() {
+            if j == i || !other.active() {
+                continue;
+            }
+            let d = me - other.pos;
+            let dist = d.length();
+            if dist < t.separation_radius {
+                let away = if dist > 1e-6 {
+                    d / dist
+                } else {
+                    DVec2::new(1.0, 0.0)
+                };
+                push += away * (1.0 - dist / t.separation_radius);
+            }
+        }
+        push * t.separation_strength
+    }
+
+    /// Today's overlap resolution before the squared-distance skip, for the boundary tests.
+    fn resolve_overlaps_before(players: &mut [Player], t: &Tuning) {
+        let n = players.len();
+        for i in 0..n {
+            if !players[i].active() {
+                continue;
+            }
+            for j in (i + 1)..n {
+                if !players[j].active() {
+                    continue;
+                }
+                let d = players[j].pos - players[i].pos;
+                let dist = d.length();
+                if dist < t.min_player_distance {
+                    let axis = if dist > 1e-9 {
+                        d / dist
+                    } else {
+                        DVec2::new(1.0, 0.0)
+                    };
+                    let push = axis * ((t.min_player_distance - dist) / 2.0);
+                    players[i].pos = pitch::clamp(players[i].pos - push, 0.2);
+                    players[j].pos = pitch::clamp(players[j].pos + push, 0.2);
+                }
+            }
+        }
+    }
+
+    /// An offset whose squared length is exactly `d2`: an x near the square root and a small
+    /// y that makes up the rest, or `None` when the search finds none.
+    pub(super) fn offset_for(d2: f64) -> Option<DVec2> {
+        let mut x = d2.sqrt();
+        for _ in 0..8 {
+            x = x.next_down();
+        }
+        for _ in 0..16 {
+            x = x.next_up();
+            let rest = d2 - x * x;
+            if rest < 0.0 {
+                continue;
+            }
+            let mut y = rest.sqrt();
+            for _ in 0..4 {
+                y = y.next_down();
+            }
+            for _ in 0..8 {
+                let v = DVec2::new(x, y);
+                if v.length_squared().to_bits() == d2.to_bits() {
+                    return Some(v);
+                }
+                y = y.next_up();
+            }
+        }
+        None
+    }
+
+    fn bits(v: DVec2) -> (u64, u64) {
+        (v.x.to_bits(), v.y.to_bits())
+    }
+
+    /// The squared distances of a boundary test at radius `r`: the skip limit, the two values
+    /// below it (the one-ulp band and the square), the value above, and one more below.
+    fn boundary(r: f64) -> [f64; 5] {
+        let skip = sq_skip_limit(r);
+        [
+            skip,
+            skip.next_down(),
+            skip.next_down().next_down(),
+            skip.next_up(),
+            (r * r).next_down(),
+        ]
+    }
+
+    #[test]
+    fn separation_at_the_skip_limit_matches_the_square_root_form() {
+        let t = Tuning::default();
+        assert_eq!(t.separation_radius, 1.5, "the shipped radius");
+        let mut tested = 0;
+        for d2 in boundary(t.separation_radius) {
+            let Some(v) = offset_for(d2) else {
+                continue;
+            };
+            let players = vec![
+                player(0, DVec2::ZERO, DVec2::ZERO),
+                player(1, v, DVec2::ZERO),
+            ];
+            let d = players[0].pos - players[1].pos;
+            assert_eq!(d.length_squared().to_bits(), d2.to_bits());
+            for i in 0..2 {
+                assert_eq!(
+                    bits(separation(&players, i, &t)),
+                    bits(separation_before(&players, i, &t)),
+                    "d2 = {d2:e}"
+                );
+            }
+            tested += 1;
+        }
+        assert_eq!(tested, 5, "every boundary squared distance is built");
+        // A coincident pair runs the unchanged zero-distance axis.
+        let players = vec![
+            player(0, DVec2::new(3.0, 3.0), DVec2::ZERO),
+            player(1, DVec2::new(3.0, 3.0), DVec2::ZERO),
+        ];
+        assert_eq!(
+            bits(separation(&players, 0, &t)),
+            bits(separation_before(&players, 0, &t))
+        );
+    }
+
+    /// Both overlap resolutions on the same pair; returns both players' positions as bits.
+    fn overlap_pair(a: DVec2, b: DVec2, t: &Tuning) -> [[(u64, u64); 2]; 2] {
+        let mut new = vec![player(0, a, a), player(1, b, b)];
+        let mut old = new.clone();
+        resolve_overlaps(&mut new, t);
+        resolve_overlaps_before(&mut old, t);
+        [
+            [bits(new[0].pos), bits(new[1].pos)],
+            [bits(old[0].pos), bits(old[1].pos)],
+        ]
+    }
+
+    #[test]
+    fn overlap_at_the_skip_limit_matches_the_square_root_form() {
+        let t = Tuning::default();
+        let r = t.min_player_distance;
+        assert_eq!(r, 0.4, "the shipped minimum distance");
+        // At 0.4 a plain squared compare picks another branch one ulp below the square.
+        let below = (r * r).next_down();
+        assert_ne!(below < r * r, below.sqrt() < r);
+        let mut tested = 0;
+        for d2 in boundary(r) {
+            let Some(v) = offset_for(d2) else {
+                continue;
+            };
+            assert_eq!(v.length_squared().to_bits(), d2.to_bits());
+            let [new, old] = overlap_pair(DVec2::ZERO, v, &t);
+            assert_eq!(new, old, "d2 = {d2:e}");
+            tested += 1;
+        }
+        assert_eq!(tested, 5, "every boundary squared distance is built");
+        // A coincident pair runs the unchanged zero-distance axis.
+        let at = DVec2::new(3.0, 3.0);
+        let [new, old] = overlap_pair(at, at, &t);
+        assert_eq!(new, old);
+        assert_ne!(new[0], new[1], "the coincident pair is pushed apart");
     }
 }

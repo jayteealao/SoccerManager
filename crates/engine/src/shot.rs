@@ -3,7 +3,7 @@
 //! caller takes the random draws and passes them in.
 
 use crate::ball::Ball;
-use crate::math::{DVec2, DVec3};
+use crate::math::{self, DVec2, DVec3};
 use crate::pitch;
 use crate::sim::shot_xg;
 use crate::tuning::Tuning;
@@ -62,7 +62,7 @@ pub fn deflect(
 ) -> DVec3 {
     let speed = speed_share * vel.length();
     let angle = (2.0 * draw_angle - 1.0) * spread;
-    let (sin, cos) = angle.sin_cos();
+    let (sin, cos) = math::sin_cos(angle);
     let dir = away.normalize_or_zero();
     let dir = DVec2::new(dir.x * cos - dir.y * sin, dir.x * sin + dir.y * cos);
     let up = (draw_loft * loft).min(speed);

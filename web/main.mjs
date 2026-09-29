@@ -58,6 +58,8 @@ let frames = new FrameStore();
 /// The match being shown, and the protocol version its hello named.
 let matchId = null;
 let helloVersion = null;
+/// The record of a loaded version-4 replay, kept so saving it writes the same kind of file.
+let loadedRecord = null;
 /// A reconnect to the same match: the stores are cut back at the first tick that arrives.
 let resuming = false;
 /// `true` while a replay file plays: there is no socket and nothing to recover.
@@ -197,6 +199,7 @@ function onHello(hello) {
   }
   matchId = hello['match.id'];
   helloVersion = hello['protocol.version'];
+  loadedRecord = null;
   setStep(2);
   start(hello);
 }
@@ -1054,6 +1057,7 @@ async function saveReplay() {
   const { bytes, hash } = await writeReplay(frames, {
     matchId,
     version: helloVersion ?? undefined,
+    record: loadedRecord,
   });
   const name = `touchline-${matchId}.smfx`;
   const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
@@ -1102,7 +1106,8 @@ async function openReplay(bytes, name = 'replay') {
   stoppages.truncate(-1);
   frames = read.store;
   matchId = read.hello['match.id'];
-  helloVersion = read.version;
+  helloVersion = read.hello['protocol.version'];
+  loadedRecord = read.record;
   previous = newFrame();
   incoming = newFrame();
   renderedTick = 0;

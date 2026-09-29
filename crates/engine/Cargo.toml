@@ -17,18 +17,27 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 sha2 = { workspace = true }
 garde = { workspace = true }
+# The pure-Rust maths library every engine sine, cosine, exponent, arctangent, and power uses.
+libm = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true }
 
 [features]
+default = ["debug-trace"]
+# The debug trace's draw recorder, switched on per match at run time. Default on; a build
+# with `--no-default-features` leaves it out, for the recorder's cost benchmark.
+debug-trace = []
 # The test scene builder and scripted referee draws. Only this crate's own tests enable it,
 # so a release build never contains either.
 scenario = []
 
 [dev-dependencies]
 criterion = { workspace = true }
-engine = { path = ".", features = ["scenario"] }
+tracing-subscriber = { workspace = true }
+# No default features, so `--no-default-features` also removes the recorder from test and
+# bench builds.
+engine = { path = ".", default-features = false, features = ["scenario"] }
 
 [[bench]]
 name = "tick_step"

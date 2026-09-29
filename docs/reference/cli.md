@@ -34,8 +34,9 @@ When `--content-dir` is absent, the engine uses `SM_CONTENT_DIR`. When `SM_CONTE
 | Code | Meaning |
 |---|---|
 | 0 | The command completed. |
-| 1 | An error stopped the command. Standard error names the cause: a bad flag, a refused content file, a refused snapshot, or a file that cannot be written. |
-| 2 | The command completed but a check failed, or the match did not reach full time. The command sections below name the check. |
+| 1 | A usage or run error stopped the command. Standard error names the cause: a bad flag or a missing argument, a refused content file, a refused snapshot, or a file that cannot be written. |
+| 2 | The verdict of a completed command: a check failed, the frames or builds or hashes differ, or the match did not reach full time. The command sections below name the check. A usage error is never 2. |
+| 3 | `bisect` only: the comparison is incomplete. A build could not be made or run to the end, so no result was reached. |
 
 ## simulate
 
@@ -52,10 +53,11 @@ Simulate one match and write every tick to a file.
 | `--team-b` | file | `teams/default-b.json` in the content folder | The away team file. |
 | `--no-snapshot` | none | off | Do not write a snapshot at each stoppage. |
 | `--script-pack` | folder | none | A script pack (`pack.json` and a `.rhai` script) to run. See [script packs](../../content/scripts/README.md). The first `kick-off` event and the `match-stats` record name the pack. |
+| `--debug-trace` | file | none | Play the match with debug mode on and write its debug trace to this file. See [Debug trace file](#debug-trace-file). Debug mode changes no result. |
 
-Output: one JSON line on standard output with the match statistics. Files: the tick file, and `matches/<match.id>/stats.json`, `events.jsonl`, and `snapshot.smsn` in the data folder.
+Output: one JSON line on standard output with the match statistics. With `--debug-trace`, standard error also gets one line, for example `debug trace: m.trace.jsonl, 307873 draws (registry 307873), 595706 decisions, 2435 rule outcomes`; when the draws recorded differ from the registry's draw count, the command exits 1. Files: the tick file, and `matches/<match.id>/stats.json`, `events.jsonl`, and `snapshot.smsn` in the data folder.
 
-A failed run, for example `--minutes 0` or a tick file that cannot be written, prints one `match-stats` record on standard output with `outcome` `error` and the keys `error.type`, `error.code`, and `error.retriable`, and no statistics. It saves nothing in the data folder, prints the cause on standard error, and exits 1. A bad flag (exit code 2 from the argument parser) prints no record.
+A failed run, for example `--minutes 0` or a tick file that cannot be written, prints one `match-stats` record on standard output with `outcome` `error` and the keys `error.type`, `error.code`, and `error.retriable`, and no statistics. It saves nothing in the data folder, prints the cause on standard error, and exits 1. A bad flag exits 1 and prints no record.
 
 Exit codes: 0 or 1.
 
@@ -148,8 +150,85 @@ Record one whole match stream to a replay file.
 | `--team-a` | file | `teams/default-a.json` in the content folder | The home team file. |
 | `--team-b` | file | `teams/default-b.json` in the content folder | The away team file. |
 | `--script-pack` | folder | none | A script pack to run, as for `simulate`. |
+| `--changes` | file | none | A JSON file of manager changes to queue. Each team the file names is managed by hand. |
+
+The replay file is version 4. It holds every input file of the match by value, the engine identity, the applied-change log, and the watchdog mark, so `resimulate` can play the match again from the file alone. See the protocol reference, section "Replay files".
+
+The change file is a JSON array. Each change is queued before the step that starts on its `tick`. `team` is 0 (home) or 1 (away). A change is a substitution (`slot` is the lineup slot of the player who goes off, 0 to 10, and `bench` is the place on the bench of the player who comes on) or a mentality (an index into the tactics file's mentalities):
+
+```json
+[
+  { "tick": 3000, "team": 0, "change": { "substitution": { "slot": 9, "bench": 0 } } },
+  { "tick": 3000, "team": 0, "change": { "mentality": 4 } }
+]
+```
+
+A change the engine rejects, for example a bench place the team does not have, is not in the change log. Its verdict is in the text frames.
+
+Output: one JSON line with `fixture`, `frames`, `ticks`, `bytes`, `hash`, `format` (4), `inputs_bytes` (the total size of the input files), and `changes_applied`.
 
 Exit codes: 0 when the match reaches full time; 1; 2 when it does not.
+
+## resimulate
+
+Play a recorded match again from its replay file alone, and compare it with the stored frames. Every input comes from the file. The command reads no content folder: it refuses the global `--content-dir`, and it does not read `SM_CONTENT_DIR`.
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `--fixture` | file | required | The version-4 replay file that `record` wrote. |
+| `--compare` | none | off | Comparison mode: run on any engine, and report both engine identities and both stream schemes. |
+| `--state-digests` | file | none | Write the SHA-256 of the full match state after every tick to this file. See [State digest file](#state-digest-file). |
+| `--state-fields` | file | none | Write the named parts of the match state after the tick `--at-tick` names to this file, as one JSON object, and stop the match after that tick. Needs `--at-tick`. |
+| `--at-tick` | tick | none | The tick `--state-fields` writes, from 1. Needs `--state-fields`. |
+| `--debug-trace` | file | none | Play the match with debug mode on and write its debug trace to this file, as `simulate --debug-trace` does. See [Debug trace file](#debug-trace-file). |
+
+Strict mode (the default) first compares the record's executable SHA-256 and stream scheme with this binary's. Each difference is named on standard error, for example `executable SHA-256 differs: the record has 3f2a…, this binary is 9c01…` or `scheme 2 differs from this build's 1`, and the command exits 1. A record made on a dirty build runs on the same binary with the warning `recorded on a dirty build (<build>); that version cannot be rebuilt`. The commit, the crate version, and the maths library are reported and not compared, because the executable SHA-256 covers them.
+
+Comparison mode never refuses on the identity. It prints `engine (record)`, `engine (this binary)`, and `scheme N (record), scheme M (this binary)` on standard error. The replay file is opened to read only in both modes.
+
+The match is built from the file's inputs. Each manager change of the log is queued again at its recorded tick, and the computer manager makes its own changes again. Every regenerated tick frame is compared with the stored one, byte for byte. After full time, the applied changes must equal the log, entry by entry. Text frames are not compared. The script pack runs with no wall-clock limit, and the recorded watchdog mark is reported.
+
+A version-3 replay file is refused: `<file> holds no inputs: it is a version-3 replay file, which plays from its frames only`.
+
+Output: one JSON line with `fixture`, `mode` (`strict` or `compare`), `verdict` (`identical` or `differs`), `tick_frames`, `stored_sha256` and `resimulated_sha256` (over the tick-frame payloads), `first_difference` (null, `{ "frame", "tick" }` for the first tick frame that differs, or `{ "change": order }` for the first log entry that differs), `changes_applied`, `inputs_bytes`, and `watchdog` (the recorded mark). In comparison mode, `engines` holds both identities. With `--at-tick`, `stopped_at` holds the tick; the match stops there, so the frame comparison reports the missing frames as a difference.
+
+The three state outputs are off by default, and they do not change the verdict or the exit code. `--state-fields` writes `{ "tick", "scheme", "fields", "engine" }`: `fields` lists each named part of the state in byte order, each with `name` (for example `ball.vel`, `players[3].pos`, `referee.clock`, or `streams`), `kind` (`floats`: a run of 64-bit floats; `streams`: the stream state; `bytes`: anything else), and `hex` (its canonical bytes). The parts join into the bytes whose SHA-256 is the tick's line in the state digest file. When the match ends before the tick, the command writes no fields file and exits 1.
+
+Exit codes: 0 when the frames and the change log are identical; 1 when a flag is refused, the file is refused or cannot be read, or the engine differs in strict mode; 2 when the frames or the change log differ.
+
+## bisect
+
+Find the first tick where two engine versions differ on one replay file. Each side is a commit, built on demand, or a ready `engine-cli` executable. Both builds re-simulate the file, and bisect compares the digest of the full match state after every tick. At the first tick whose digests differ, both builds re-simulate the file again up to that tick and write the named parts of its state and its debug trace.
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `--fixture` | file | required | The version-4 replay file that `record` wrote. |
+| `--a` | commit | one of `--a` and `--a-binary` | Build A: a commit (any name git accepts, for example `HEAD~1`), built into the bisect build cache. |
+| `--a-binary` | file | one of `--a` and `--a-binary` | Build A: a ready `engine-cli` executable. |
+| `--b` | commit | one of `--b` and `--b-binary` | Build B: a commit, built into the bisect build cache. |
+| `--b-binary` | file | one of `--b` and `--b-binary` | Build B: a ready `engine-cli` executable. |
+| `--repo` | folder | `.` | The git repository the commits are built from. |
+| `--cache` | folder | `<repo>/target/bisect` | The bisect build cache. |
+| `--profile` | name | `release` | The cargo profile the commits are built with. |
+| `--features` | list | none | The cargo features the commits are built with, comma-separated; none means the defaults. |
+| `--timeout` | seconds | 1800 | The longest one run of a build may take. A run that takes longer is stopped. |
+| `--json` | none | off | Print the report as one JSON object. |
+
+The replay file is read first. A version-3 file is refused before any build or run: `<file> holds no inputs: it is a version-3 replay file, which plays from its frames only; bisect needs the inputs to re-simulate it`. The global `--content-dir` is refused, because every input comes from the file.
+
+**The bisect build cache.** A commit is built in a detached git worktree under `<cache>/checkouts/`, with `cargo build --locked -p engine-cli`, into one cargo target folder, `<cache>/target/`, that every build shares. The worktree is removed after the build. The executable is kept in `<cache>/entries/<id>/` with `entry.json`, which holds the key and the executable's SHA-256. The key is the full commit hash, the toolchain (the `release` and `commit-hash` that `rustc -vV` reports for the channel the commit's `rust-toolchain.toml` pins), the target (the compiler's host), the profile, and the sorted features. `<id>` is the SHA-256 of the key. A cached executable is re-used only when its `entry.json` names the same key and the executable still has the recorded SHA-256; otherwise the commit is built again. The main checkout is never switched. To clear the cache, delete the folder.
+
+**Each run.** Bisect first runs `<build> resimulate --help`, which must name `--state-digests`, `--state-fields`, `--at-tick`, and `--debug-trace`. It then runs `resimulate --fixture <file> --compare --state-digests <file>` on each build (see [State digest file](#state-digest-file)), and at the first differing tick, `resimulate --fixture <file> --compare --state-fields <file> --at-tick <tick> --debug-trace <file>`. A run counts only when it exits with 0 or 2, prints its verdict line last, and writes whole files: a digest file with its `end` line, ticks from 1 with no gap, and a tick count equal to the `end` line's. The run files are written to a temporary folder, which is removed at the end.
+
+The three verdicts:
+
+- **No difference** (exit 0): the state is the same after every tick and after full time.
+- **Differs** (exit 2): the report names the first tick whose state differs. When the states agree on every tick both builds played and one build played longer, the first tick past the shorter match differs, and the report names `match length`.
+- **Incomplete** (exit 3): a build could not be made or run to the end. Each side's reason is printed on its own line, for example `the build of <commit> failed:` with the last 40 lines of cargo's output, `<path> does not exist`, `lacks the resimulate command`, `lacks the state-digest options (added with bisect)`, `crashed or failed: the run exited with code 101`, `timed out after 1800 s and was stopped`, `ends early: the state digest file stops after tick 1499 with no end line`, or `a gap in the state digests`. When the two builds hash different state inventories, the digests cannot be compared, and the result is incomplete. An incomplete result is never "no difference". Only builds that have the four re-simulate options can be compared.
+
+**The report** (text, or one JSON object with `--json`): the replay file; each build with the name it was given, its commit and dirty mark, its executable SHA-256, and `built`, `reused`, or `ready binary`; both stream schemes, with the note `the stream scheme differs (1 and 2): stream positions differ from the first draw` when they differ; the first differing tick; each differing part of the state with both values; and each build's debug trace records for that tick. Values are shown by kind: a `floats` part as its numbers, the `streams` part as the stream ids whose word positions differ or that one build lacks, and any other part as hex. The JSON object has `verdict` (`no difference`, `differs`, or `incomplete`), `fixture`, `a` and `b` (`given`, `source`, `scheme`, and `engine`, or `given` and `reason` when incomplete), `tick`, `fields` (`name`, `kind`, `a`, `b`), `trace` (`a`, `b`), and `scheme_note` when the schemes differ.
+
+Exit codes: 0 no difference; 1 the file or a flag is refused; 2 the builds differ; 3 incomplete.
 
 ## replay
 
@@ -231,6 +310,111 @@ A paired run writes each arm to its own folder: `arms/off/stats/`, `arms/off/eve
 A flag name that `tuning.json` does not declare, a state other than `on` or `off`, a `--pair` flag also given with `--flag`, an unknown pairing or band, a `--pairing` without the formations suite, and a `--band` that no selected suite checks are refused with exit code 1 before any match is played. Each message lists the valid names.
 
 Exit codes: 0 when every band passes and both dark-path counters are zero; 1; 2 otherwise. For a paired run: 0 when both arms have no missing statistics record, no change left unapplied, no validator violation, and no failed worker; 1; 2 otherwise. The verdict does not change the exit code.
+
+## gate
+
+Replay the 22 gate matches and compare their state hashes with the golden file. The gate proves that a change to the engine leaves every match exactly as it was: after every tick it hashes the full match state (positions and velocities as exact bits, stamina, cards, the rules and the restart, the clock, the teams and managers, the pending changes, the script-hook counters, the position of every random stream, and the tick's events) into a running SHA-256, and keeps a checkpoint every 1,000 ticks and at the last tick.
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `--golden` | file | `gate/golden.json` | The golden file to compare with. The default path is relative to the current folder, so run the command from the repository root. |
+| `--fixture` | fixture id | every fixture | Play only this fixture: `seed-<seed>`, `change`, or `knockout`. Repeat it for more than one fixture. |
+| `--json` | none | off | Print one JSON object per match instead of a text line. |
+| `--bootstrap` | none | off | Play every fixture and write the first golden file with the portable hash set. Refused when the file already exists, and with `--fixture`. |
+| `--regenerate` | none | off | Play every fixture and rewrite the golden file with this build's hashes as the portable hash set. Appends one `regenerate` entry to the ledger and drops every other hash set. Needs `--reason`. |
+| `--reason` | text | none | Why the golden file is written; recorded in the new ledger entry. Needed by `--regenerate`; optional for `--bootstrap`. |
+| `--debug` | none | off | Play every match with debug mode on. The compare and the standard output are unchanged; the trace records are counted and not written. Refused with `--bootstrap` and `--regenerate` before any file is read. |
+
+The fixtures, in gate order:
+
+- `seed-42`, `seed-1`, `seed-7`, `seed-99`, `seed-2026`, `seed-0`, `seed-18446744073709551615`, `seed-3`, `seed-11`, `seed-23`, `seed-57`, `seed-123`, `seed-314`, `seed-777`, `seed-1000`, `seed-4242`, `seed-9001`, `seed-31337`, `seed-65535`, `seed-1000003`: a 90-minute match between the default teams, both managed by the AI.
+- `change`: seed 42 with both managers human. A substitution for the home team is queued at tick 60,000 (the player in lineup slot 9 off, the first bench player on), and a mentality change to attacking for the away team at tick 90,000.
+- `knockout`: seed 2, a knockout match with the shipped `sample` script pack. It goes to extra time and a penalty shoot-out. The gate plays it with the real 2 ms wall-clock limit: a script hook call past the limit is not stopped, so a busy machine plays the same match, and the gate prints a warning for it; the operation budget still stops a long call.
+
+Output: one line per match on standard output: the fixture id, `match` or `differs`, the tick count, the first 12 characters of the final hash, and for `change` and `knockout` the applied substitutions and tactics changes, or whether the match went to extra time and a shoot-out. A match that differs gets a second line that names the window of ticks in which its state first changed, for example `seed-42 differs: the state first differs between tick 30000 and tick 31000`, or the two tick counts when the match lasted longer or shorter. With `--json`, each match is one JSON object with `fixture`, `verdict`, `ticks`, `final_hash`, `window` (`from` and `to`), `detail`, `extra_time`, `shootout`, `decided_by`, `substitutions_applied`, `tactics_changes_applied`, `slow_calls` (script hook calls past the wall-clock limit), and `invalid` (`slow script` when `slow_calls` is above 0, otherwise `null`). A match with a slow hook call gets a line on standard error, for example `warning: knockout is marked invalid: slow script (1 hook call ran past the wall-clock limit); its hashes were compared`; its hashes are compared as for any other match, and the warning does not change the exit code. Standard error ends with the match count, the machine key, and the run time.
+
+The golden file holds, in this order: the gate schema version, the state inventory version, the checkpoint spacing, the toolchain, the fixture list, the `ledger`, the `set_differences` record, and the hash sets. Since the one recorded result change, the file holds one hash set, keyed `portable`, which every machine compares against. Before it, each machine had its own set, keyed `<os>-<arch>`, for example `windows-x86_64`. Seeds are decimal strings and hashes are 64 lowercase hex characters.
+
+The ledger is append-only. Each entry has a `kind` (`bootstrap` for the first file, `add-machine-set` for a second machine's set of unchanged code, `regenerate` for a hash change), the `reason`, the `engine_version`, the `build` commit, the random-stream `scheme`, the `utc` time, and the `machine`: the key of the hash set the entry writes, `portable` for the portable set. A `regenerate` entry also has the `candidate` commit and a `band_result` path, `gate/bands/ledger-<index>.json`, fixed when the entry is written. The `set_differences` record has one item per pair of machines: `a`, `b`, the ids of the matches that `differ`, and the count of matches that are the `same`. A file written before the ledger existed, with a top-level `bootstrap` object, reads as a ledger of one `bootstrap` entry.
+
+The gate refuses the file, before any match is played, when it is malformed, when a version, the checkpoint spacing, or the fixture list differs from the build's, when it has no portable hash set, when a hash set misses a match, lists one twice, or misses a checkpoint, when the ledger is empty, does not start with its only `bootstrap` entry, has an entry with no reason, or does not account for exactly the hash sets present, when a portable set has another set beside it or an `add-machine-set` entry after it, or when the `set_differences` record differs from the one the hash sets give. The message names the fault.
+
+The write modes check their flags and the reason before they read the golden file or play a match, and write through `<file>.tmp` and a rename. A refusal, or a match that fails, leaves the golden file byte-identical. [The replay-gate guide](../how-to/replay-gate.md) says when each mode is allowed.
+
+With `--debug`, standard error gets one line after each match, for example `trace: seed-42 307873 draws recorded, registry 307873, 595706 decisions, 2435 rule outcomes`. A match whose two draw counts differ fails the gate like a match that differs (exit 2).
+
+Exit codes: 0 when every selected match matches; 1 when a flag is refused, the golden file or the content cannot be read or is refused, or a fixture id is unknown; 2 when a match differs or its hashed state holds a number that is not finite (the line names the field, for example `players[3].pos.x`).
+
+## guard
+
+Check every commit that changes the golden file against the ledger rules. The command lists the commits in `<base>..<head>` that change the file, oldest first, and compares each one's file with its first parent's. It plays no match and reads no content. Run it from the repository root; CI runs it on every pull request.
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `--base` | revision | required | The base revision, such as `main` or the pull request's base commit. |
+| `--head` | revision | `HEAD` | The last revision of the range. |
+| `--golden` | path | `gate/golden.json` | The golden file's path from the repository root, with forward slashes. |
+
+The rules each change must keep:
+
+1. The golden file is not deleted.
+2. A new golden file holds exactly one ledger entry, a `bootstrap`, and exactly one hash set, keyed by that entry's machine.
+3. The old ledger entries stay, unchanged and in order. One commit adds at most one entry, and never a second `bootstrap`.
+4. A change to the fixture list, the state inventory version, or the checkpoint spacing needs a higher gate schema version and a new `regenerate` entry. The gate schema never decreases.
+5. A change to the gate schema, the toolchain, or a hash set in both files, or a removed hash set, needs a new `regenerate` entry. The entry's `candidate` must be a clean build (no `-dirty` mark, not `unknown`) of a commit that is an ancestor of the commit.
+6. A new `add-machine-set` entry adds exactly one hash set, keyed by its machine, and changes nothing else.
+7. A new hash set needs a new entry, and a new entry needs a change that it records. The file also keeps the ledger rules of the gate's strict load.
+
+A merge commit is compared with its first parent.
+
+Output: one line per commit on standard output, `<short commit> ok`, or one line per broken rule, for example `3f2a9c1 rule 5: hash set linux-x86_64 changes with no new regenerate entry`. Standard error ends with the commit count and the number that fail.
+
+Exit codes: 0 when every commit passes, or no commit in the range changes the file; 1 when a flag is refused, git cannot run, or a revision cannot be read; 2 when a commit breaks a rule.
+
+## Debug trace file
+
+`simulate --debug-trace <file>` writes the debug trace of one match as JSON Lines. Debug mode is switched on when the match is built, before the opening kick-off; a build without the `debug-trace` cargo feature (default on) refuses the flag.
+
+The first line is the header: `trace_version` (1), `seed`, `scheme` (the random-stream scheme id), `engine` (the build commit), `crate_version`, and `maths` (the maths library, for example `libm 0.2.16`).
+
+Every other line is one record, in the order the engine ran it. Each record has `t`, the tick the step produces (the tick of the step's events; the opening kick-off is tick 1), and `k`, the kind:
+
+- `draw`: one random draw. `subsystem` (`decision`, `kick`, `ball`, `laws`, `shootout`, or `fatigue`), `stream_id` (the 64-bit stream id in hex), `key` (the sub-stream key, for example `decision.pass_score team 0 squad 4`), `index` (the draw's number within its key, from 0), `value` (the draw in `[0, 1)`, written in the shortest form that reads back to the same bits), `scripted` (`true` when a test scene scripted it), and, at a draw tested against a probability, `p`: one probability, or two cumulative thresholds for a tackle (win, then foul) and a foul's card (red, then yellow). The draw recorder sits inside the stream registry's only draw call, so every draw the registry counts is recorded.
+
+- `decision`: one decision point, with `point` (its name) and `detail`, the option scores or distances the engine chose by.
+- `rule`: one rule outcome, with `point` (its name) and `detail`, the facts the law, roll, or match-control rule settled.
+
+The decision points, with what `detail` holds:
+
+| Point | Where | Detail |
+|---|---|---|
+| `carrier` | The ball carrier's choice | `carrier`; every scored pass `candidates` (`mate`, `score`); the `shot`, best `pass`, `dribble`, `hold`, and `clear` scores after any script `offsets`; the `choice` |
+| `restart_pass` | A throw-in, corner, goal kick, or indirect free kick passed | `taker`, `kind`, every `candidates` score, the `target`, and `forward_fallback` when no team-mate was in range |
+| `press` | The defending team's pressers | `team`, `count`, `reach`, the `pressers` with their distances |
+| `cover` | Goal-side cover | `team`, the covered `attacker`, the covering `defender` and `distance`, or `null` |
+| `chase` | A loose ball | Per team, the chasing `player` and `distance`, and the `keeper` who chases |
+| `loose_ball` | Who takes a loose ball | The nearest `player` in reach and `distance`, or `null`; `fast`; `keeper_beaten` |
+| `restart_taker` | The taker of a restart | `kind`, `team`, `taker`, and `preferred` when the law or custom named him |
+| `ai_manager` | An AI manager's queued change | `team`, `change`, `code`, `minute`, `score` (own first) |
+| `script_decision` | The decision hook's offsets | `carrier`, `cached`, `offsets`, and for a fresh call `result` (`value`, `failed`, or `switched_off`) and `notes` |
+| `shootout_order` | The shoot-out kicking orders | `order` per team and the `keepers` |
+
+The rule outcomes: `kick_off`, `goal`, `ball_out`, `tackle` (`p_win`, `p_foul`, `outcome`), `foul` (`card_decided` and the `card` after the rule hook), `card` (`held` for a card held back for advantage), `offside`, `injury` (each roll with its `chance`, and the injury itself), `dead_ball`, `restart_taken`, `added_time`, `extra_time_added`, `half_time`, `extra_time_kick_off`, `full_time`, `shot_block`, `shot_save` (`beaten`, `held`, or `parried`), `cross_clear`, `keeper_catch`, `shootout_start`, `shootout_save`, `shootout_kick`, `shootout_decided`, `change_applied`, `change_rejected` (with its `reason`), `send_off`, and `abandoned`.
+
+Every draw's tick holds at least one point its kind of action is taken at, and every event's tick holds at least one point that gives it; the engine's tests check both on every tick of the 22 gate matches.
+
+A 90-minute match takes about 310,000 draws and about 600,000 decision records (the press, the cover, and the chase are decided every tick), so its trace file is about 160 MB (seed 42: 906,015 lines, 162 MB).
+
+## State digest file
+
+`resimulate --state-digests <file>` writes the digest of the full match state after every tick as text lines. The state is the one the replay gate hashes (state inventory version 1): exact floats, the rules and the clock, pending changes, plugin counters, every random-stream position, and the tick's events.
+
+1. The header line, a JSON object: `state_digests` (the file format, 1), `inventory` (the state inventory version, 1), `gate_schema` (1), `scheme` (the random-stream scheme id), and `engine` (the engine identity: commit, dirty mark, crate version, scheme, maths library, executable SHA-256, and build).
+2. One line per tick: the tick and the SHA-256 of that tick's state, for example `1500 9c01…`. The ticks run from 1 with no gap.
+3. `finish <sha256>`: the state after full time, with the full-time event.
+4. `end <ticks> <full_time>`: the number of tick lines and `true` when the match reached full time. It is written last, after every other line is flushed, so a file with no `end` line is from a run that did not finish.
+
+A 90-minute match gives about 283,000 lines (about 20 MB).
 
 ## Files
 

@@ -1,6 +1,8 @@
 //! Shared helpers of the record tests: the binary with a scratch data folder, and the
 //! record schema files compiled by an independent JSON Schema validator.
 
+#![allow(dead_code)]
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -79,4 +81,30 @@ impl RecordSchemas {
 /// The JSON object in `text`, as written: one record per line.
 pub fn record(text: &str) -> Value {
     serde_json::from_str(text.trim()).unwrap()
+}
+
+/// `file` with `machine`'s hash set added and one `add-machine-set` entry, the way a ledger
+/// written before the portable set records a second machine. The engine no longer writes
+/// such an entry; the guard still reads it.
+pub fn with_machine_set(
+    mut file: engine::gate::golden::GoldenFile,
+    machine: &str,
+    matches: Vec<engine::gate::MatchHashes>,
+    reason: &str,
+) -> engine::gate::golden::GoldenFile {
+    use engine::gate::golden;
+    file.ledger.push(golden::LedgerEntry {
+        kind: golden::EntryKind::AddMachineSet,
+        reason: reason.to_string(),
+        engine_version: engine::version().into(),
+        build: engine::build_hash().into(),
+        scheme: engine::rng::STREAM_SCHEME,
+        utc: golden::utc_now(),
+        machine: machine.to_string(),
+        candidate: None,
+        band_result: None,
+    });
+    file.hash_sets.insert(machine.to_string(), matches);
+    file.set_differences = golden::set_differences(&file.hash_sets);
+    file
 }

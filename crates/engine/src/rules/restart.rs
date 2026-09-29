@@ -11,7 +11,7 @@
 //! is at the ball, and every player the law moves has moved.
 
 use crate::data::rules::StoppageKind;
-use crate::math::{DVec2, toward};
+use crate::math::{self, DVec2, toward};
 use crate::pitch::{self, HALF_LENGTH, KICK_DISTANCE, PENALTY_AREA_DEPTH};
 use crate::player::Player;
 use crate::team::{PLAYERS_PER_TEAM, Team};
@@ -81,15 +81,8 @@ pub fn taker(
     teams: &[Team; 2],
 ) -> usize {
     let first = team * PLAYERS_PER_TEAM;
-    let own_end = -teams[team].attack_x;
     let keeper = first + teams[team].keeper_slot();
-    let preferred = match kind {
-        StoppageKind::GoalKick => Some(keeper),
-        StoppageKind::KickOff => Some(first + PLAYERS_PER_TEAM - 1).filter(|&i| i != keeper),
-        StoppageKind::Injury if pitch::in_penalty_area(spot, own_end) => Some(keeper),
-        _ => None,
-    };
-    if let Some(i) = preferred
+    if let Some(i) = preferred_taker(kind, team, spot, teams)
         && players[i].active()
     {
         return i;
@@ -108,6 +101,26 @@ pub fn taker(
         }
     }
     best.map_or(keeper, |(_, i)| i)
+}
+
+/// The player the law or custom names for a restart before the nearest player: the
+/// keeper for a goal kick and for a dropped ball in his own penalty area, the last lineup
+/// slot for a kick-off (unless he keeps goal). `taker` uses him when he is on the pitch.
+pub fn preferred_taker(
+    kind: StoppageKind,
+    team: usize,
+    spot: DVec2,
+    teams: &[Team; 2],
+) -> Option<usize> {
+    let first = team * PLAYERS_PER_TEAM;
+    let own_end = -teams[team].attack_x;
+    let keeper = first + teams[team].keeper_slot();
+    match kind {
+        StoppageKind::GoalKick => Some(keeper),
+        StoppageKind::KickOff => Some(first + PLAYERS_PER_TEAM - 1).filter(|&i| i != keeper),
+        StoppageKind::Injury if pitch::in_penalty_area(spot, own_end) => Some(keeper),
+        _ => None,
+    }
 }
 
 /// Where a player of `team` stands for a kick-off: the formation slot, kept inside its own
@@ -268,7 +281,10 @@ pub fn shootout_target(dead: &DeadBall, i: usize, keepers: [usize; 2]) -> DVec2 
     } else {
         // Spread round the centre spot so nobody stands on anybody else.
         let angle = std::f64::consts::TAU * i as f64 / (2 * PLAYERS_PER_TEAM) as f64;
-        DVec2::new(CIRCLE_SPREAD * angle.cos(), CIRCLE_SPREAD * angle.sin())
+        DVec2::new(
+            CIRCLE_SPREAD * math::cos(angle),
+            CIRCLE_SPREAD * math::sin(angle),
+        )
     }
 }
 

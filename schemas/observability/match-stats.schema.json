@@ -327,6 +327,17 @@
       "description": "Hooks switched off after three failures in a row.",
       "type": "integer",
       "minimum": 0
+    },
+    "script.slow_calls": {
+      "description": "Script hook calls that ran past the 2 ms wall-clock limit. A slow call is not stopped and keeps its result; counted from the resume tick on a resumed match. Absent without a pack.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "match.invalid": {
+      "description": "Why the match is marked invalid: 'slow script' when a script hook call ran past the wall-clock limit. Wall-clock time differs between machines, so the mark never changes play. Absent when the match is not marked.",
+      "enum": [
+        "slow script"
+      ]
     }
   },
   "allOf": [

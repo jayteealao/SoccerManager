@@ -1,32 +1,51 @@
 //! `engine-cli`: simulate a match headless, benchmark the engine, calibrate it over many
-//! matches, or generate teams.
+//! matches, check it against the replay gate, or generate teams.
 
 mod bench;
+mod bisect;
 mod calibrate;
 mod cli;
 mod content;
+mod gate;
 mod generate;
+mod guard;
 mod launch;
 mod record;
 mod replay;
+mod replay_inputs;
 mod report;
+mod resimulate;
 mod resume;
 mod serve;
 mod simulate;
+mod state_files;
 mod stream_run;
+mod trace_file;
 mod web;
 
 use std::io::IsTerminal;
 use std::time::Instant;
 
 use clap::Parser;
+use clap::error::ErrorKind;
 use engine::EngineError;
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id};
 use engine::observe::{FailureRecord, emit_line, machine_hash, unix_millis};
 use tracing_subscriber::EnvFilter;
 
 fn main() {
-    let args = cli::Cli::parse();
+    // A usage error exits 1, like any other run error: exit 2 is only a verdict (frames
+    // differ, builds differ, hashes differ, a rule broken). `--help` and `--version` exit 0.
+    let args = match cli::Cli::try_parse() {
+        Ok(args) => args,
+        Err(err) => match err.kind() {
+            ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => err.exit(),
+            _ => {
+                let _ = err.print();
+                std::process::exit(1);
+            }
+        },
+    };
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_env("SM_LOG").unwrap_or_else(|_| EnvFilter::new("info")),
@@ -50,8 +69,12 @@ fn main() {
         cli::Command::Launch(opts) => launch::run(content_dir, &opts),
         cli::Command::Record(opts) => record::run(content_dir, &opts),
         cli::Command::Replay(opts) => replay::run(&opts),
+        cli::Command::Resimulate(opts) => resimulate::run(content_dir, &opts),
+        cli::Command::Bisect(opts) => bisect::run(content_dir, &opts),
         cli::Command::Resume(opts) => resume::run(content_dir, &opts),
         cli::Command::Calibrate(opts) => calibrate::run(content_dir, &opts),
+        cli::Command::Gate(opts) => gate::run(content_dir, &opts),
+        cli::Command::Guard(opts) => guard::run(&opts),
     };
     match result {
         Ok(code) => std::process::exit(code),

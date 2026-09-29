@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{ArgGroup, Args, Parser, Subcommand};
 use engine::FlagSetting;
 
 /// Headless command line for the football match engine.
@@ -43,10 +43,100 @@ pub enum Command {
     Record(RecordOpts),
     /// Replay a recorded fixture over the same socket protocol.
     Replay(ReplayOpts),
+    /// Play a recorded match again from its replay file alone.
+    Resimulate(ResimulateOpts),
+    /// Find the first tick where two engine versions differ on a replay.
+    Bisect(BisectOpts),
     /// Continue a match from its latest snapshot to full time.
     Resume(ResumeOpts),
     /// Play many AI-managed matches and check the realism bands.
     Calibrate(CalibrateOpts),
+    /// Replay the 22 gate matches and compare them with the golden file.
+    Gate(GateOpts),
+    /// Check each commit's golden-file change against the ledger rules.
+    Guard(GuardOpts),
+}
+
+#[derive(Debug, Args)]
+pub struct GateOpts {
+    /// Golden file to compare with; default gate/golden.json.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Golden file to compare with; default gate/golden.json in the\n\
+                     current folder (the repository root)."
+    )]
+    pub golden: Option<PathBuf>,
+    /// Play only this fixture; repeat for more.
+    #[arg(
+        long,
+        value_name = "ID",
+        long_help = "Play only this fixture, such as seed-42, change, or knockout.\n\
+                     Repeat the flag for more. Default: all 22 fixtures."
+    )]
+    pub fixture: Vec<String>,
+    /// Print one JSON object per match instead of text.
+    #[arg(long)]
+    pub json: bool,
+    /// Write the first golden file; refused when one exists.
+    #[arg(
+        long,
+        long_help = "Play every fixture and write the first golden file with the\n\
+                     portable hash set. Refused when the file already exists."
+    )]
+    pub bootstrap: bool,
+    /// Rewrite the hashes with this build's; needs --reason.
+    #[arg(
+        long,
+        long_help = "Play every fixture and rewrite the golden file with this build's\n\
+                     hashes as the portable hash set. Appends one regenerate entry\n\
+                     to the ledger and drops every other hash set. Needs --reason."
+    )]
+    pub regenerate: bool,
+    /// Why the file is written; recorded in the ledger.
+    #[arg(
+        long,
+        value_name = "TEXT",
+        long_help = "Why the golden file is written. Recorded in the new ledger entry.\n\
+                     Needed by --regenerate; optional for --bootstrap."
+    )]
+    pub reason: Option<String>,
+    /// Play every match with debug mode on; compare only.
+    #[arg(
+        long,
+        long_help = "Play every match with debug mode on. The compare and the report\n\
+                     are unchanged; after each match, standard error gets the draws\n\
+                     the trace recorded, the registry's draw count, and the decisions\n\
+                     and rule outcomes recorded. Unequal draw counts fail the gate\n\
+                     (exit 2). The records are not written. Refused with --bootstrap\n\
+                     and --regenerate."
+    )]
+    pub debug: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct GuardOpts {
+    /// The base revision of the range, such as main.
+    #[arg(
+        long,
+        value_name = "REV",
+        long_help = "The base revision: the commits after it that change the golden\n\
+                     file are checked, such as main or the pull request's base."
+    )]
+    pub base: String,
+    /// The last revision of the range.
+    #[arg(long, value_name = "REV", default_value = "HEAD")]
+    pub head: String,
+    /// Golden file; default gate/golden.json.
+    #[arg(
+        long,
+        value_name = "PATH",
+        default_value = "gate/golden.json",
+        hide_default_value = true,
+        long_help = "The golden file's path from the repository root, with forward\n\
+                     slashes."
+    )]
+    pub golden: String,
 }
 
 #[derive(Debug, Args)]
@@ -107,6 +197,17 @@ pub struct SimulateOpts {
                      content/scripts/README.md."
     )]
     pub script_pack: Option<PathBuf>,
+    /// Write the match's debug trace to this file.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Play the match with debug mode on and write its debug trace to\n\
+                     this file as JSON Lines: a header line, then every random draw,\n\
+                     decision point, and rule outcome in the order the engine ran\n\
+                     them. A 90-minute match gives about 160 MB. See\n\
+                     docs/reference/cli.md."
+    )]
+    pub debug_trace: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -323,6 +424,114 @@ pub struct RecordOpts {
                      content/scripts/README.md."
     )]
     pub script_pack: Option<PathBuf>,
+    /// JSON file of manager changes to queue.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "JSON file of manager changes to queue, each before the\n\
+                     step that starts on its tick. Each team the file names\n\
+                     is managed by hand. See docs/reference/cli.md."
+    )]
+    pub changes: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct ResimulateOpts {
+    /// Replay file written by the record command.
+    #[arg(long, value_name = "FILE")]
+    pub fixture: PathBuf,
+    /// Run on another engine and report both.
+    #[arg(
+        long,
+        long_help = "Run even when this binary did not record the file, and\n\
+                     report both engine identities and both stream schemes.\n\
+                     The file is never written."
+    )]
+    pub compare: bool,
+    /// Write the SHA-256 of the full match state after every tick.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Write the SHA-256 of the full match state after every tick\n\
+                     to this file: a JSON header line, one '<tick> <sha256>'\n\
+                     line per tick, a 'finish' line, and a closing 'end' line.\n\
+                     See docs/reference/cli.md."
+    )]
+    pub state_digests: Option<PathBuf>,
+    /// Write the named parts of the state of the tick --at-tick names.
+    #[arg(
+        long,
+        value_name = "FILE",
+        requires = "at_tick",
+        long_help = "Write the named parts of the match state after the tick\n\
+                     --at-tick names to this file as one JSON object, and stop\n\
+                     the match after that tick."
+    )]
+    pub state_fields: Option<PathBuf>,
+    /// The tick --state-fields writes; the match stops after it.
+    #[arg(
+        long,
+        value_name = "TICK",
+        requires = "state_fields",
+        value_parser = clap::value_parser!(u32).range(1..)
+    )]
+    pub at_tick: Option<u32>,
+    /// Play with debug mode on and write the debug trace to this file.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Play the match with debug mode on and write its debug trace\n\
+                     to this file as JSON Lines, as simulate --debug-trace does."
+    )]
+    pub debug_trace: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+#[command(group(ArgGroup::new("side_a").required(true).args(["a", "a_binary"])))]
+#[command(group(ArgGroup::new("side_b").required(true).args(["b", "b_binary"])))]
+#[command(
+    override_usage = "engine-cli bisect [OPTIONS] --fixture <FILE>\n       \
+                            <--a <REV>|--a-binary <PATH>> <--b <REV>|--b-binary <PATH>>"
+)]
+pub struct BisectOpts {
+    /// Version-4 replay file to re-simulate on both builds.
+    #[arg(long, value_name = "FILE")]
+    pub fixture: PathBuf,
+    /// Build A: a commit, built into the bisect build cache.
+    #[arg(long, value_name = "REV")]
+    pub a: Option<String>,
+    /// Build A: a ready engine-cli executable.
+    #[arg(long, value_name = "PATH")]
+    pub a_binary: Option<PathBuf>,
+    /// Build B: a commit, built into the bisect build cache.
+    #[arg(long, value_name = "REV")]
+    pub b: Option<String>,
+    /// Build B: a ready engine-cli executable.
+    #[arg(long, value_name = "PATH")]
+    pub b_binary: Option<PathBuf>,
+    /// Git repository to build commits from.
+    #[arg(long, value_name = "DIR", default_value = ".")]
+    pub repo: PathBuf,
+    /// Build cache folder; default <repo>/target/bisect.
+    #[arg(long, value_name = "DIR")]
+    pub cache: Option<PathBuf>,
+    /// Cargo profile for the builds.
+    #[arg(long, value_name = "NAME", default_value = "release")]
+    pub profile: String,
+    /// Cargo features to build commits with.
+    #[arg(
+        long,
+        value_name = "LIST",
+        default_value = "",
+        hide_default_value = true
+    )]
+    pub features: String,
+    /// Seconds before a run is stopped.
+    #[arg(long, value_name = "SECONDS", default_value_t = 1800)]
+    pub timeout: u64,
+    /// Print the report as one JSON object.
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Args)]

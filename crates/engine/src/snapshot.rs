@@ -15,7 +15,12 @@
 //!   time, the team that kicked off extra time, and the shoot-out: the kickers in order,
 //!   the keepers, both order cursors, the team that kicks first, the end, the scores, the
 //!   kicks taken, and the kick in progress. Version 5 added each player's foul cooldown (the
-//!   first tick the player may tackle again), after the yellow cards.
+//!   first tick the player may tackle again), after the yellow cards. Version 7 stores the
+//!   random streams after the restart flag: the generator seed (32 bytes), then the stream
+//!   state as the replay gate hashes it: the scheme id (u8), the entry count (u32), and per
+//!   stream used its id (u64) and word position (u128), in ascending stream id. A snapshot
+//!   of an unknown scheme, of a scheme this build does not play, or with a malformed stream
+//!   entry is refused by name.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -28,22 +33,23 @@ use std::path::{Path, PathBuf};
 use sha2::{Digest, Sha256};
 
 use crate::ai::{AiState, Manager};
+use crate::canon::{self, NONE, Writer};
 use crate::data::rules::StoppageKind;
 use crate::error::EngineError;
 use crate::math::{DVec2, DVec3};
 use crate::player::{Derived, Status};
 use crate::record::TickSink;
-use crate::rng::{EngineRng, RngState};
 use crate::rules::clock::Tally;
 use crate::rules::fouls::Card;
 use crate::rules::{DeadBall, PendingCard, Phase, Shootout, Stoppage};
 use crate::sim::{DecidedBy, MatchConfig, Simulation, Summary};
+use crate::streams::{KEY_COUNT, STREAM_SCHEME, Scheme, Streams};
 use crate::tactics::change::{Change, ChangeId, QueuedChange, SubLedger};
 use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 6;
+pub const VERSION: u16 = 7;
 /// The file name of a match's latest snapshot inside its match folder.
 pub const FILE_NAME: &str = "snapshot.smsn";
 
@@ -57,8 +63,6 @@ const CONTENT_AT: usize = 24;
 const CONTENT_BYTES: usize = 12;
 const OWNER_AT: usize = 36;
 const MILLIS_AT: usize = 52;
-/// An absent roster index.
-const NONE: u8 = u8::MAX;
 
 /// One snapshot: the match identity in the header and the encoded match state.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,7 +84,7 @@ impl Snapshot {
             content_hash: sim.config.content_hash.clone(),
             owner_id,
             match_millis,
-            body: w.0,
+            body: w.into_bytes(),
         }
     }
 
@@ -245,7 +249,7 @@ impl Simulation {
         }
         let mut sim = Simulation::blank(config)?;
         let mut r = Reader::new(&snapshot.body);
-        decode(&mut sim, &mut r).map_err(|reason| refuse(reason.to_string()))?;
+        decode(&mut sim, &mut r).map_err(refuse)?;
         sim.timeline = vec![(sim.tick, sim.teams.clone())];
         Ok(sim)
     }
@@ -367,83 +371,6 @@ fn fit(text: &str, len: usize) -> &str {
     &text[..end]
 }
 
-#[derive(Default)]
-struct Writer(Vec<u8>);
-
-impl Writer {
-    fn u8(&mut self, v: u8) {
-        self.0.push(v);
-    }
-    fn u32(&mut self, v: u32) {
-        self.0.extend_from_slice(&v.to_le_bytes());
-    }
-    fn u64(&mut self, v: u64) {
-        self.0.extend_from_slice(&v.to_le_bytes());
-    }
-    fn u128(&mut self, v: u128) {
-        self.0.extend_from_slice(&v.to_le_bytes());
-    }
-    fn f64(&mut self, v: f64) {
-        self.0.extend_from_slice(&v.to_bits().to_le_bytes());
-    }
-    fn v2(&mut self, v: DVec2) {
-        self.f64(v.x);
-        self.f64(v.y);
-    }
-    fn v3(&mut self, v: DVec3) {
-        self.f64(v.x);
-        self.f64(v.y);
-        self.f64(v.z);
-    }
-    fn index(&mut self, v: Option<usize>) {
-        // Roster indices are below 22 and team indices below 2.
-        self.u8(v.map_or(NONE, |i| i as u8));
-    }
-    fn pair(&mut self, v: [u32; 2]) {
-        self.u32(v[0]);
-        self.u32(v[1]);
-    }
-    fn opt_pair(&mut self, v: Option<[u32; 2]>) {
-        self.u8(u8::from(v.is_some()));
-        self.pair(v.unwrap_or([0, 0]));
-    }
-    fn opt_u8(&mut self, v: Option<u8>) {
-        self.u8(u8::from(v.is_some()));
-        self.u8(v.unwrap_or(0));
-    }
-    fn tactics(&mut self, t: &Tactics) {
-        self.u8(t.formation);
-        self.u8(t.mentality);
-        for level in t.instructions {
-            self.u8(level);
-        }
-        for rd in &t.roles {
-            self.u8(rd.role);
-            self.u8(rd.duty);
-        }
-    }
-    fn derived(&mut self, d: &Derived) {
-        for v in [
-            d.max_speed,
-            d.max_accel,
-            d.passing,
-            d.dribbling,
-            d.tackling,
-            d.positioning,
-            d.aggression,
-            d.finishing,
-            d.vision,
-            d.decisions,
-            d.composure,
-            d.stamina,
-            d.natural_fitness,
-            d.injury_resistance,
-        ] {
-            self.f64(v);
-        }
-    }
-}
-
 struct Reader<'a> {
     buf: &'a [u8],
     at: usize,
@@ -558,82 +485,51 @@ impl<'a> Reader<'a> {
     }
 }
 
-fn status_code(s: Status) -> u8 {
-    match s {
-        Status::OnPitch => 0,
-        Status::SentOff => 1,
-        Status::Injured => 2,
-    }
-}
-
-fn manager_code(m: Manager) -> u8 {
-    match m {
-        Manager::Ai => 0,
-        Manager::Human => 1,
-    }
-}
-
 const PLAYERS: usize = 2 * PLAYERS_PER_TEAM;
 
 fn encode(sim: &Simulation, w: &mut Writer) {
     w.u64(sim.config.seed);
     w.u32(sim.config.minutes);
     for digest in &sim.config.team_digests {
-        w.0.extend_from_slice(digest);
+        w.raw(digest);
     }
     w.u32(sim.tick);
     w.u8(u8::from(sim.config.knockout));
     w.u8(u8::from(sim.restart));
-    let rng = sim.rng.state();
-    w.0.extend_from_slice(&rng.seed);
-    w.u64(rng.stream);
-    w.u128(rng.word_pos);
-    w.v3(sim.ball.pos);
-    w.v3(sim.ball.vel);
+    w.raw(&sim.streams.seed());
+    w.raw(&sim.streams.stream_state().to_bytes());
+    w.v3_at(&String::new, sim.ball.pos);
+    w.v3_at(&String::new, sim.ball.vel);
     w.index(sim.carrier);
     w.u32(sim.control_since);
     w.index(sim.last_touch);
     w.u8(u8::from(sim.keeper_beaten));
     w.index(sim.restart_taker);
-    encode_summary(&sim.summary, w);
+    w.summary(&sim.summary);
     for (t, team) in sim.teams.iter().enumerate() {
-        w.f64(team.attack_x);
-        for (active, (x, y)) in team.active.iter().zip(team.formation.iter()) {
-            w.u8(u8::from(*active));
-            w.f64(*x);
-            w.f64(*y);
-        }
-        w.tactics(&team.tactics);
-        // Squad indices are below 40, the team file's limit.
-        for s in team.lineup {
-            w.u8(s as u8);
-        }
-        w.u8(team.bench.len() as u8);
-        for s in &team.bench {
-            w.u8(*s as u8);
-        }
+        w.team(&String::new, team);
         let ledger = &sim.ledgers[t];
         w.u8(ledger.used);
         w.u8(ledger.windows);
         w.u8(u8::from(ledger.window_at.is_some()));
         w.u32(ledger.window_at.unwrap_or(0));
-        w.u8(manager_code(sim.managers[t]));
+        w.u8(canon::manager_code(sim.managers[t]));
         let ai = &sim.ai[t];
         w.opt_pair(ai.trailing_acted);
         w.opt_pair(ai.leading_acted);
         w.u8(u8::from(ai.due));
     }
     for p in &sim.players {
-        w.v2(p.pos);
-        w.v2(p.vel);
-        w.v2(p.target);
-        w.v2(p.facing);
-        w.u8(status_code(p.status));
+        w.v2_at(&String::new, p.pos);
+        w.v2_at(&String::new, p.vel);
+        w.v2_at(&String::new, p.target);
+        w.v2_at(&String::new, p.facing);
+        w.u8(canon::status_code(p.status));
         w.u8(p.yellow);
         w.u32(p.foul_ready);
         w.u8(p.squad as u8);
-        w.f64(p.energy);
-        w.derived(&p.derived);
+        w.f64_at(String::new, p.energy);
+        w.derived(&String::new, &p.derived);
     }
     w.u32(sim.queue.next);
     // A queue holds far fewer than 4 billion changes.
@@ -676,7 +572,7 @@ fn encode(sim: &Simulation, w: &mut Writer) {
             // Kind and card indices are below 9.
             w.u8(d.kind.index() as u8);
             w.index(Some(d.team));
-            w.v2(d.spot);
+            w.v2_at(&String::new, d.spot);
             w.u8(u8::from(d.direct));
             w.u32(d.since);
             w.u32(d.ready_at);
@@ -735,76 +631,53 @@ fn encode(sim: &Simulation, w: &mut Writer) {
     }
 }
 
-fn encode_summary(s: &Summary, w: &mut Writer) {
-    w.u32(s.possession_changes);
-    w.f64(s.ball_max_speed);
-    w.u32(s.ball_idle_ticks);
-    for pair in [
-        s.goals,
-        s.fouls,
-        s.offsides,
-        s.corners,
-        s.throw_ins,
-        s.goal_kicks,
-        s.free_kicks,
-        s.penalties,
-        s.yellow,
-        s.red,
-        s.added_s,
-    ] {
-        w.pair(pair);
+/// The random streams after the restart flag, checked against the match seed.
+fn decode_streams(sim: &Simulation, r: &mut Reader<'_>) -> Result<Streams, String> {
+    let seed: [u8; 32] = r.take(32)?.try_into().expect("32 bytes");
+    if seed != sim.streams.seed() {
+        return Err("stream seed mismatch: the generator seed is not the match seed's".into());
     }
-    w.u32(s.stoppages);
-    w.u32(s.dead_ball_ticks);
-    w.u32(s.offside_checks);
-    w.pair(s.shots);
-    w.pair(s.substitutions);
-    w.pair(s.injuries);
-    w.u32(s.changes_queued);
-    w.u32(s.changes_applied);
-    w.u32(s.changes_rejected);
-    w.u32(s.ai_decisions);
-    w.pair(s.shots_on_target);
-    w.f64(s.xg[0]);
-    w.f64(s.xg[1]);
-    w.pair(s.passes);
-    w.pair(s.passes_completed);
-    w.pair(s.clearances);
-    w.pair(s.restart_kicks);
-    w.u32(s.live_ticks);
-    w.pair(s.possession_ticks);
-    w.pair(s.extra_added_s);
-    w.u8(u8::from(s.extra_time));
-    w.opt_pair(s.shootout);
-    w.u32(s.shootout_kicks);
-    w.u8(s
-        .decided_by
-        .and_then(|d| DecidedBy::ALL.iter().position(|x| *x == d))
-        .map_or(0, |k| k as u8 + 1));
+    let id = r.u8()?;
+    if id == 0 {
+        // Scheme 0, the one shared stream, was played before the one recorded result change.
+        return Err(format!(
+            "stream scheme 0 is not available in this build, which plays scheme {STREAM_SCHEME}"
+        ));
+    }
+    if Scheme::from_id(id).is_none() {
+        return Err(format!("unknown stream scheme {id}"));
+    }
+    let count = r.u32()? as usize;
+    if count > KEY_COUNT {
+        return Err(format!(
+            "malformed stream entry count: {count} entries, more than the {KEY_COUNT} keys"
+        ));
+    }
+    let entries = (0..count)
+        .map(|_| Ok((r.u64()?, r.u128()?)))
+        .collect::<Decoded<Vec<_>>>()?;
+    Streams::restore(seed, &entries)
 }
 
-fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
+fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
     let seed = r.u64()?;
     let minutes = r.u32()?;
     if seed != sim.config.seed || minutes != sim.config.minutes {
-        return Err("configuration mismatch: another seed or match length");
+        return Err("configuration mismatch: another seed or match length".into());
     }
     for digest in sim.config.team_digests {
         if r.take(32)? != digest {
-            return Err("team file mismatch: the team files differ from the ones the match used");
+            return Err(
+                "team file mismatch: the team files differ from the ones the match used".into(),
+            );
         }
     }
     sim.tick = r.u32()?;
     if r.bool()? != sim.config.knockout {
-        return Err("configuration mismatch: a knockout match and a regular match");
+        return Err("configuration mismatch: a knockout match and a regular match".into());
     }
     sim.restart = r.bool()?;
-    let rng_seed: [u8; 32] = r.take(32)?.try_into().expect("32 bytes");
-    sim.rng = EngineRng::from_state(RngState {
-        seed: rng_seed,
-        stream: r.u64()?,
-        word_pos: r.u128()?,
-    });
+    sim.streams = decode_streams(sim, r)?;
     sim.ball.pos = r.v3()?;
     sim.ball.vel = r.v3()?;
     sim.carrier = r.index(PLAYERS)?;
@@ -825,7 +698,7 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
         }
         let tactics = r.tactics()?;
         if !tactics_in_range(&tactics, &schema) {
-            return Err("malformed body: the tactics name an index the tactics file lacks");
+            return Err("malformed body: the tactics name an index the tactics file lacks".into());
         }
         team.set_tactics(tactics, &schema, &tuning);
         team.formation = formation;
@@ -849,7 +722,7 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
         sim.managers[t] = match r.u8()? {
             0 => Manager::Ai,
             1 => Manager::Human,
-            _ => return Err("malformed body: an unknown manager"),
+            _ => return Err("malformed body: an unknown manager".into()),
         };
         sim.ai[t] = AiState {
             trailing_acted: r.opt_pair()?,
@@ -866,7 +739,7 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
             0 => Status::OnPitch,
             1 => Status::SentOff,
             2 => Status::Injured,
-            _ => return Err("malformed body: an unknown player status"),
+            _ => return Err("malformed body: an unknown player status".into()),
         };
         p.yellow = r.u8()?;
         p.foul_ready = r.u32()?;
@@ -917,7 +790,7 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
                 }
                 Change::Tactics(patch)
             }
-            _ => return Err("malformed body: an unknown change kind"),
+            _ => return Err("malformed body: an unknown change kind".into()),
         };
         sim.queue.pending.push(QueuedChange { id, team, change });
     }
@@ -943,7 +816,7 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
             })
         }
         2 => Phase::FullTime,
-        _ => return Err("malformed body: an unknown phase"),
+        _ => return Err("malformed body: an unknown phase".into()),
     };
     referee.offside = r.u32()?;
     let pending = r.u8()?;
@@ -1003,10 +876,10 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Decoded<()> {
                 live_since: live.then_some(live_at),
             })
         }
-        _ => return Err("malformed body: an unknown shoot-out state"),
+        _ => return Err("malformed body: an unknown shoot-out state".into()),
     };
     if r.at != r.buf.len() {
-        return Err("malformed body: bytes left over");
+        return Err("malformed body: bytes left over".into());
     }
     Ok(())
 }
@@ -1077,6 +950,7 @@ fn tactics_in_range(t: &Tactics, schema: &crate::data::tactics::TacticsSchema) -
 mod tests {
     use super::*;
     use crate::data::test_support::shipped_config;
+    use crate::streams::KEYED_SCHEME;
 
     fn played(ticks: u32) -> Simulation {
         let mut sim = Simulation::new(shipped_config(42, 90).unwrap()).unwrap();
@@ -1108,9 +982,94 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 6"),
+                .contains("unknown version 1; this build reads 7"),
             "{err}"
         );
+    }
+
+    /// Where the stream seed starts in the body: after the seed, the length, the two team
+    /// digests, the tick, the knockout flag, and the restart flag.
+    const STREAMS_AT: usize = 8 + 4 + 2 * 32 + 4 + 1 + 1;
+    const SCHEME_AT: usize = STREAMS_AT + 32;
+    const ENTRIES_AT: usize = SCHEME_AT + 1 + 4;
+
+    /// The refusal `from_snapshot` gives for `snapshot`'s body after `edit`.
+    fn refusal(snapshot: &Snapshot, edit: impl Fn(&mut Vec<u8>)) -> String {
+        let mut edited = snapshot.clone();
+        edit(&mut edited.body);
+        Simulation::from_snapshot(shipped_config(42, 90).unwrap(), &edited)
+            .err()
+            .expect("the edited snapshot is refused")
+            .to_string()
+    }
+
+    fn keyed_snapshot() -> Snapshot {
+        Snapshot::capture(&played(2_000), [0; 16], 1)
+    }
+
+    #[test]
+    fn version_7_stores_the_seed_and_the_stream_state_after_the_restart_flag() {
+        let sim = played(100);
+        let snapshot = Snapshot::capture(&sim, [0; 16], 1);
+        let body = &snapshot.body;
+        assert_eq!(&body[STREAMS_AT..SCHEME_AT], &sim.streams.seed());
+        let state = sim.streams.stream_state().to_bytes();
+        assert_eq!(&body[SCHEME_AT..SCHEME_AT + state.len()], &state[..]);
+        assert_eq!(body[SCHEME_AT], STREAM_SCHEME);
+        let keyed = keyed_snapshot();
+        assert_eq!(keyed.body[SCHEME_AT], KEYED_SCHEME);
+        let rebuilt = Simulation::from_snapshot(shipped_config(42, 90).unwrap(), &keyed).unwrap();
+        assert_eq!(rebuilt.streams.scheme(), Scheme::Keyed);
+        assert_eq!(Snapshot::capture(&rebuilt, [0; 16], 1), keyed);
+    }
+
+    #[test]
+    fn a_malformed_stream_section_is_refused_by_name() {
+        let keyed = keyed_snapshot();
+        let entries = u32::from_le_bytes(keyed.body[SCHEME_AT + 1..ENTRIES_AT].try_into().unwrap());
+        assert!(entries >= 2, "the keyed match used several streams");
+
+        let reason = refusal(&keyed, |b| b[STREAMS_AT] ^= 1);
+        assert!(reason.contains("stream seed mismatch"), "{reason}");
+        let reason = refusal(&keyed, |b| b[SCHEME_AT] = 9);
+        assert!(reason.contains("unknown stream scheme 9"), "{reason}");
+        // Scheme 0, the shared stream played before the one result change, is refused.
+        let reason = refusal(&keyed, |b| b[SCHEME_AT] = 0);
+        assert!(
+            reason.contains("stream scheme 0 is not available in this build, which plays scheme 1"),
+            "{reason}"
+        );
+
+        // A word position past the end of a stream.
+        let reason = refusal(&keyed, |b| {
+            b[ENTRIES_AT + 8..ENTRIES_AT + 24].copy_from_slice(&(1u128 << 68).to_le_bytes())
+        });
+        assert!(
+            reason.contains("malformed stream entry 0: word position"),
+            "{reason}"
+        );
+        // Keyed: the first two entries swapped.
+        let reason = refusal(&keyed, |b| {
+            let first = b[ENTRIES_AT..ENTRIES_AT + 24].to_vec();
+            let second = b[ENTRIES_AT + 24..ENTRIES_AT + 48].to_vec();
+            b[ENTRIES_AT..ENTRIES_AT + 24].copy_from_slice(&second);
+            b[ENTRIES_AT + 24..ENTRIES_AT + 48].copy_from_slice(&first);
+        });
+        assert!(
+            reason.contains("malformed stream entry 1: the stream ids are not in ascending order"),
+            "{reason}"
+        );
+        // Keyed: an id that no table key derives (the last entry, so the order still holds).
+        let reason = refusal(&keyed, |b| {
+            let last = ENTRIES_AT + 24 * (entries as usize - 1);
+            b[last..last + 8].copy_from_slice(&u64::MAX.to_le_bytes());
+        });
+        assert!(reason.contains("no table key derives"), "{reason}");
+        // An entry count past the table.
+        let reason = refusal(&keyed, |b| {
+            b[SCHEME_AT + 1..ENTRIES_AT].copy_from_slice(&(KEY_COUNT as u32 + 1).to_le_bytes())
+        });
+        assert!(reason.contains("malformed stream entry count"), "{reason}");
     }
 
     #[test]

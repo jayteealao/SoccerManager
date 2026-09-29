@@ -1,0 +1,626 @@
+[
+ {
+  "name": "an unknown top-level field",
+  "edits": [
+   {
+    "path": [
+     "extra"
+    ],
+    "op": "set",
+    "value": 1
+   }
+  ]
+ },
+ {
+  "name": "an unknown engine field",
+  "edits": [
+   {
+    "path": [
+     "engine",
+     "extra"
+    ],
+    "op": "set",
+    "value": 1
+   }
+  ]
+ },
+ {
+  "name": "an unknown settings field",
+  "edits": [
+   {
+    "path": [
+     "settings",
+     "extra"
+    ],
+    "op": "set",
+    "value": 1
+   }
+  ]
+ },
+ {
+  "name": "an unknown input field",
+  "edits": [
+   {
+    "path": [
+     "inputs",
+     0,
+     "extra"
+    ],
+    "op": "set",
+    "value": 1
+   }
+  ]
+ },
+ {
+  "name": "an unknown change field",
+  "edits": [
+   {
+    "path": [
+     "changes",
+     0,
+     "extra"
+    ],
+    "op": "set",
+    "value": 1
+   }
+  ]
+ },
+ {
+  "name": "an unknown substitution field",
+  "edits": [
+   {
+    "path": [
+     "changes",
+     0,
+     "change",
+     "substitution",
+     "extra"
+    ],
+    "op": "set",
+    "value": 1
+   }
+  ]
+ },
+ {
+  "name": "an unknown tactics field",
+  "edits": [
+   {
+    "path": [
+     "changes",
+     1,
+     "change",
+     "tactics",
+     "extra"
+    ],
+    "op": "set",
+    "value": 1
+   }
+  ]
+ },
+ {
+  "name": "an unknown watchdog field",
+  "edits": [
+   {
+    "path": [
+     "watchdog",
+     "extra"
+    ],
+    "op": "set",
+    "value": 1
+   }
+  ]
+ },
+ {
+  "name": "an unknown role field",
+  "edits": [
+   {
+    "path": [
+     "changes",
+     1,
+     "change",
+     "tactics",
+     "roles"
+    ],
+    "op": "set",
+    "value": [
+     {
+      "squad": 1,
+      "role": 2,
+      "duty": 3,
+      "extra": 1
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "name": "a role with no duty",
+  "edits": [
+   {
+    "path": [
+     "changes",
+     1,
+     "change",
+     "tactics",
+     "roles"
+    ],
+    "op": "set",
+    "value": [
+     {
+      "squad": 1,
+      "role": 2
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "name": "a dirty flag that is text",
+  "edits": [
+   {
+    "path": [
+     "engine",
+     "dirty"
+    ],
+    "op": "set",
+    "value": "yes"
+   }
+  ]
+ },
+ {
+  "name": "a commit that is a number",
+  "edits": [
+   {
+    "path": [
+     "engine",
+     "commit"
+    ],
+    "op": "set",
+    "value": 5
+   }
+  ]
+ },
+ {
+  "name": "a scheme past 255",
+  "edits": [
+   {
+    "path": [
+     "engine",
+     "scheme"
+    ],
+    "op": "set",
+    "value": 300
+   }
+  ]
+ },
+ {
+  "name": "a negative scheme",
+  "edits": [
+   {
+    "path": [
+     "engine",
+     "scheme"
+    ],
+    "op": "set",
+    "value": -1
+   }
+  ]
+ },
+ {
+  "name": "a seed that is not a number",
+  "edits": [
+   {
+    "path": [
+     "settings",
+     "seed"
+    ],
+    "op": "set",
+    "value": "abc"
+   }
+  ]
+ },
+ {
+  "name": "a seed that is a JSON number",
+  "edits": [
+   {
+    "path": [
+     "settings",
+     "seed"
+    ],
+    "op": "set",
+    "value": 42
+   }
+  ]
+ },
+ {
+  "name": "a seed past 64 bits",
+  "edits": [
+   {
+    "path": [
+     "settings",
+     "seed"
+    ],
+    "op": "set",
+    "value": "18446744073709551616"
+   }
+  ]
+ },
+ {
+  "name": "minutes as text",
+  "edits": [
+   {
+    "path": [
+     "settings",
+     "minutes"
+    ],
+    "op": "set",
+    "value": "1"
+   }
+  ]
+ },
+ {
+  "name": "minutes with a fraction",
+  "edits": [
+   {
+    "path": [
+     "settings",
+     "minutes"
+    ],
+    "op": "set",
+    "value": 1.5
+   }
+  ]
+ },
+ {
+  "name": "negative minutes",
+  "edits": [
+   {
+    "path": [
+     "settings",
+     "minutes"
+    ],
+    "op": "set",
+    "value": -1
+   }
+  ]
+ },
+ {
+  "name": "a knockout flag that is a number",
+  "edits": [
+   {
+    "path": [
+     "settings",
+     "knockout"
+    ],
+    "op": "set",
+    "value": 0
+   }
+  ]
+ },
+ {
+  "name": "a manager kind that does not exist",
+  "edits": [
+   {
+    "path": [
+     "settings",
+     "managers",
+     0
+    ],
+    "op": "set",
+    "value": "cyborg"
+   }
+  ]
+ },
+ {
+  "name": "three managers",
+  "edits": [
+   {
+    "path": [
+     "settings",
+     "managers"
+    ],
+    "op": "set",
+    "value": [
+     "human",
+     "ai",
+     "ai"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "managers that is not a list",
+  "edits": [
+   {
+    "path": [
+     "settings",
+     "managers"
+    ],
+    "op": "set",
+    "value": "human"
+   }
+  ]
+ },
+ {
+  "name": "a change source that does not exist",
+  "edits": [
+   {
+    "path": [
+     "changes",
+     0,
+     "source"
+    ],
+    "op": "set",
+    "value": "robot"
+   }
+  ]
+ },
+ {
+  "name": "a negative change order",
+  "edits": [
+   {
+    "path": [
+     "changes",
+     0,
+     "order"
+    ],
+    "op": "set",
+    "value": -1
+   }
+  ]
+ },
+ {
+  "name": "a change tick as text",
+  "edits": [
+   {
+    "path": [
+     "changes",
+     0,
+     "tick"
+    ],
+    "op": "set",
+    "value": "5"
+   }
+  ]
+ },
+ {
+  "name": "a change kind that does not exist",
+  "edits": [
+   {
+    "path": [
+     "changes",
+     0,
+     "change"
+    ],
+    "op": "set",
+    "value": {
+     "trade": {}
+    }
+   }
+  ]
+ },
+ {
+  "name": "a change with two kinds",
+  "edits": [
+   {
+    "path": [
+     "changes",
+     0,
+     "change"
+    ],
+    "op": "set",
+    "value": {
+     "substitution": {
+      "off": 1,
+      "on": 2
+     },
+     "tactics": {}
+    }
+   }
+  ]
+ },
+ {
+  "name": "a substitution player as text",
+  "edits": [
+   {
+    "path": [
+     "changes",
+     0,
+     "change",
+     "substitution",
+     "off"
+    ],
+    "op": "set",
+    "value": "20"
+   }
+  ]
+ },
+ {
+  "name": "five instruction levels",
+  "edits": [
+   {
+    "path": [
+     "changes",
+     1,
+     "change",
+     "tactics",
+     "instructions"
+    ],
+    "op": "set",
+    "value": [
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   }
+  ]
+ },
+ {
+  "name": "an instruction level past 255",
+  "edits": [
+   {
+    "path": [
+     "changes",
+     1,
+     "change",
+     "tactics",
+     "instructions"
+    ],
+    "op": "set",
+    "value": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     256
+    ]
+   }
+  ]
+ },
+ {
+  "name": "a mentality past 255",
+  "edits": [
+   {
+    "path": [
+     "changes",
+     1,
+     "change",
+     "tactics",
+     "mentality"
+    ],
+    "op": "set",
+    "value": 256
+   }
+  ]
+ },
+ {
+  "name": "a formation as text",
+  "edits": [
+   {
+    "path": [
+     "changes",
+     1,
+     "change",
+     "tactics",
+     "formation"
+    ],
+    "op": "set",
+    "value": "4"
+   }
+  ]
+ },
+ {
+  "name": "a watchdog reason that is a number",
+  "edits": [
+   {
+    "path": [
+     "watchdog",
+     "invalid"
+    ],
+    "op": "set",
+    "value": 5
+   }
+  ]
+ },
+ {
+  "name": "slow calls that are null",
+  "edits": [
+   {
+    "path": [
+     "watchdog",
+     "slow_calls"
+    ],
+    "op": "set",
+    "value": null
+   }
+  ]
+ },
+ {
+  "name": "an input size as text",
+  "edits": [
+   {
+    "path": [
+     "inputs",
+     0,
+     "bytes"
+    ],
+    "op": "set",
+    "value": "1884"
+   }
+  ]
+ },
+ {
+  "name": "inputs that is not a list",
+  "edits": [
+   {
+    "path": [
+     "inputs"
+    ],
+    "op": "set",
+    "value": {}
+   }
+  ]
+ },
+ {
+  "name": "changes that is null",
+  "edits": [
+   {
+    "path": [
+     "changes"
+    ],
+    "op": "set",
+    "value": null
+   }
+  ]
+ },
+ {
+  "name": "a watchdog that is a list",
+  "edits": [
+   {
+    "path": [
+     "watchdog"
+    ],
+    "op": "set",
+    "value": []
+   }
+  ]
+ },
+ {
+  "name": "a wrong total of input bytes",
+  "edits": [
+   {
+    "path": [
+     "inputs_bytes"
+    ],
+    "op": "set",
+    "value": 1
+   }
+  ]
+ },
+ {
+  "name": "a total of input bytes one too many",
+  "edits": [
+   {
+    "path": [
+     "inputs_bytes"
+    ],
+    "op": "set",
+    "value": 87978
+   }
+  ]
+ },
+ {
+  "name": "no total of input bytes",
+  "edits": [
+   {
+    "path": [
+     "inputs_bytes"
+    ],
+    "op": "delete"
+   }
+  ]
+ }
+]

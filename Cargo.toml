@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0-beta.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.87"
@@ -33,6 +33,16 @@ criterion = "0.8"
 tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
 boon = "0.6.1"
 rhai = { version = "1.26", features = ["sync"] }
+# Pure-Rust maths, so the engine can give the same bits on every machine. Default features
+# stay off here, because a member that inherits a workspace dependency cannot turn them off;
+# the default "arch" feature would select hardware sqrt and fma paths.
+libm = { version = "0.2.16", default-features = false }
 
 [profile.release]
 debug = 1
+
+# The replay gate hashes the full match state after every tick. An optimized SHA-256 keeps
+# the gate tests fast in debug builds; it cannot change a result, because the hash is not
+# part of play.
+[profile.dev.package.sha2]
+opt-level = 3

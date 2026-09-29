@@ -1,15 +1,17 @@
 //! `engine-cli simulate`: run one match to a tick file, save `stats.json` and `events.jsonl`
-//! under the runtime data folder, and print one match-stats record.
+//! under the runtime data folder, and print one match-stats record. With `--debug-trace`,
+//! the match plays with debug mode on and its trace goes to a JSON Lines file.
 
 use std::path::Path;
 use std::time::Instant;
 
-use anyhow::Context;
+use anyhow::{Context, bail};
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id, owner_bytes};
 use engine::observe::{
     LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef, emit_line,
     write_stats,
 };
+use engine::trace;
 use engine::{
     Commentator, FanoutSink, FileSink, MatchConfig, Simulation, SnapshotSink, TickHeader,
     Validator, read_ticks,
@@ -20,10 +22,14 @@ use stream::EventWriter;
 
 use crate::cli::SimulateOpts;
 use crate::stream_run::{Ids, rows};
+use crate::trace_file::TraceFile;
 
 pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i32> {
     let span = info_span!("simulate", seed = opts.seed, minutes = opts.minutes);
     let _guard = span.enter();
+    if opts.debug_trace.is_some() && !trace::COMPILED {
+        bail!("--debug-trace needs a build with the debug trace (the debug-trace feature)");
+    }
     let loaded = crate::content::load(
         content_dir,
         opts.team_a.as_deref(),
@@ -36,7 +42,6 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
     if opts.knockout {
         config = config.with_knockout();
     }
-    loaded.fold(&mut config);
     let data = data_dir();
     let owner_id = load_or_create_owner_id(&data)?;
     let match_id = MatchId::now(opts.seed);
@@ -59,19 +64,33 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
             name: config.teams[1].name.clone(),
         },
     ];
-    let content_hash = config.content_hash.clone();
     let started = Instant::now();
     let club_ids = [teams[0].id.clone(), teams[1].id.clone()];
-    let mut sim = Simulation::new(config)?;
-    loaded.attach(&mut sim);
+    let mut sim = Simulation::start(
+        config,
+        loaded
+            .script
+            .as_ref()
+            .map(|pack| (pack.sha(), pack.plugins())),
+        opts.debug_trace.is_some(),
+    )?;
+    let content_hash = sim.content_hash().to_string();
     let mut ids = Ids::new(&sim);
     let mut commentator = Commentator::for_match(&loaded.commentary, &sim);
     let file = FileSink::create(&opts.ticks_out, &header)
         .with_context(|| format!("cannot create {}", opts.ticks_out.display()))?;
     let snapshots = (!opts.no_snapshot)
         .then(|| SnapshotSink::new(&data, &match_id.to_string(), owner, match_id.millis));
-    let mut sink = FanoutSink::new(file, snapshots);
+    let traced = match &opts.debug_trace {
+        Some(path) => Some(TraceFile::create(path, opts.seed, &sim)?),
+        None => None,
+    };
+    let mut sink = FanoutSink::new(FanoutSink::new(file, snapshots), traced);
     sim.run(&mut sink)?;
+    let (sink, traced) = sink.into_parts();
+    if let Some(traced) = traced {
+        traced.finish(sim.draws())?;
+    }
     let (file, snapshots) = sink.into_parts();
     let written = file.finish()?;
     let snapshot_writes = snapshots.map_or(0, |s| s.writes);

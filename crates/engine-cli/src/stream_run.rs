@@ -8,10 +8,12 @@
 //! the home team, and it names the change on its verdict event by the identifier the page
 //! was given, because the two queues number their changes independently.
 
+use engine::gate::PlannedChange;
 use engine::observe::{MatchFigures, round_to};
 use engine::record::TickSink;
 use engine::{
-    Card, ChangeId, Commentary, Commentator, EngineEvent, EngineEventKind, EventDetail, Simulation,
+    Card, Change, ChangeId, Commentary, Commentator, EngineEvent, EngineEventKind, EventDetail,
+    Simulation,
 };
 use protocol::{
     CardKind, ChangeKind, ChangeOutcome, ChangeState, Condition, EventType, MatchEvent,
@@ -27,6 +29,10 @@ const HOME: usize = 0;
 
 /// Where a driven match sends its messages.
 pub type MessageRoute<'a> = &'a mut dyn FnMut(ServerMessage) -> Result<(), StreamError>;
+
+/// A watcher of the match after each step: the match, the events that step recorded, and
+/// `false`; then once after full time with the full-time events and `true`.
+pub type Observe<'a> = RefCell<dyn FnMut(&Simulation, &[EngineEvent], bool) + 'a>;
 
 /// Everything the driver needs beyond the simulation itself.
 pub struct Drive<'a> {
@@ -46,6 +52,46 @@ pub struct Drive<'a> {
     /// Every change the page queued in this run, kept across connections so a verdict after
     /// a reconnect still carries the page's identifier. `None` when nothing reconnects.
     pub page_changes: Option<&'a RefCell<Vec<PageChange>>>,
+    /// Changes queued at fixed ticks, before the step that starts on each one's tick: a
+    /// recording's change file, or a replay file's manager changes.
+    pub planned: &'a [Planned],
+    /// Sees the match after each step and after full time, before its events are routed.
+    pub observe: Option<&'a Observe<'a>>,
+}
+
+/// A change queued at a fixed tick.
+#[derive(Debug, Clone)]
+pub enum Planned {
+    /// Named by lineup slot and bench place, and resolved to players when it is queued, as
+    /// the replay gate's change fixture queues its changes.
+    Slot(PlannedChange),
+    /// Named by squad index, as a replay file's change log holds it.
+    Exact {
+        tick: u32,
+        team: usize,
+        change: Change,
+    },
+}
+
+impl Planned {
+    fn tick(&self) -> u32 {
+        match self {
+            Planned::Slot(p) => p.tick,
+            Planned::Exact { tick, .. } => *tick,
+        }
+    }
+
+    fn queue(&self, sim: &mut Simulation) {
+        match self {
+            Planned::Slot(p) => {
+                let change = p.to_change(sim);
+                sim.queue_change(p.team, change);
+            }
+            Planned::Exact { team, change, .. } => {
+                sim.queue_change(*team, change.clone());
+            }
+        }
+    }
 }
 
 /// A change the page queued, as a run carries it across a lost connection.
@@ -115,6 +161,10 @@ pub fn drive<S: TickSink>(
                 full_time: false,
             });
         }
+        let now = sim.tick();
+        for planned in opts.planned.iter().filter(|p| p.tick() == now) {
+            planned.queue(sim);
+        }
         // A change queued while the match was paused is queued here, on the first running
         // tick, so it waits for the next stoppage and never applies on the resume tick.
         if let Some(inbox) = opts.inbox {
@@ -130,6 +180,12 @@ pub fn drive<S: TickSink>(
             }
         }
         sim.step();
+        let trace = sim.take_trace();
+        if !trace.is_empty()
+            && let Err(err) = sink.on_trace(&trace)
+        {
+            return gone(err, written);
+        }
         let record = sim.record();
         opts.state.set_tick(record.tick);
         if let Err(err) = sink.on_tick(&record) {
@@ -141,12 +197,16 @@ pub fn drive<S: TickSink>(
         {
             return gone(err, written);
         }
-        for event in sim.take_events() {
+        let events = sim.take_events();
+        if let Some(observe) = opts.observe {
+            (observe.borrow_mut())(sim, &events, false);
+        }
+        for event in &events {
             opts.state.set_scores(event.scores);
             for row in rows(
                 sim,
                 &mut commentator,
-                &event,
+                event,
                 opts.owner_id,
                 opts.match_id,
                 opts.club_ids,
@@ -162,11 +222,21 @@ pub fn drive<S: TickSink>(
     }
     let full_time = sim.is_over();
     sim.finish();
-    for event in sim.take_events() {
+    // A match cut short by the tick cap is closed only for its closing messages: its
+    // full-time trace records describe no real full time, so they are not handed over.
+    let trace = sim.take_trace();
+    if full_time && !trace.is_empty() {
+        sink.on_trace(&trace)?;
+    }
+    let events = sim.take_events();
+    if let Some(observe) = opts.observe {
+        (observe.borrow_mut())(sim, &events, true);
+    }
+    for event in &events {
         for message in rows(
             sim,
             &mut commentator,
-            &event,
+            event,
             opts.owner_id,
             opts.match_id,
             opts.club_ids,
@@ -569,6 +639,8 @@ mod tests {
                 commentary: &loaded.commentary,
                 inbox: None,
                 page_changes: None,
+                planned: &[],
+                observe: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -607,6 +679,8 @@ mod tests {
                 commentary: &loaded.commentary,
                 inbox: None,
                 page_changes: None,
+                planned: &[],
+                observe: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -860,6 +934,8 @@ mod tests {
                 commentary: &loaded.commentary,
                 inbox: None,
                 page_changes: None,
+                planned: &[],
+                observe: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -945,6 +1021,8 @@ mod tests {
                 commentary: &loaded.commentary,
                 inbox: Some(&inbox),
                 page_changes: None,
+                planned: &[],
+                observe: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -1013,6 +1091,8 @@ mod tests {
                         commentary: &loaded.commentary,
                         inbox: None,
                         page_changes: None,
+                        planned: &[],
+                        observe: None,
                     },
                     &mut |_: ServerMessage| Ok(()),
                 )
@@ -1069,6 +1149,8 @@ mod tests {
                         commentary: &loaded.commentary,
                         inbox: Some(&inbox),
                         page_changes: None,
+                        planned: &[],
+                        observe: None,
                     },
                     &mut |m: ServerMessage| {
                         messages.push(m);

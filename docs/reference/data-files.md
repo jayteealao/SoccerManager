@@ -459,4 +459,4 @@ The engine writes a record at each stoppage snapshot and at the end of the match
 
 ### The replay file
 
-A replay file (`.smfx`) holds every frame of one match, starting with the `hello`, in the same bytes the socket sends. `record --out <FILE>` writes one. The viewer page saves one at full time as `touchline-<match.id>.smfx`. `replay --fixture <FILE>` plays one over the socket, and the page opens one with no engine running. The frame layout is in [the protocol reference](protocol.md#fixtures).
+A replay file (`.smfx`) holds every frame of one match, starting with the `hello`, in the same bytes the socket sends. `record --out <FILE>` writes one. The viewer page saves one at full time as `touchline-<match.id>.smfx`. `replay --fixture <FILE>` plays one over the socket, and the page opens one with no engine running. The layout of both formats (version 3, frames only, and version 4, which also holds the inputs and the record that `resimulate` reads) is in [the protocol reference](protocol.md#replay-files).

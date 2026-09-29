@@ -43,6 +43,33 @@ fn invalid_seed_exits_non_zero_and_names_the_argument() {
 }
 
 #[test]
+fn a_usage_error_exits_one_and_help_and_version_exit_zero() {
+    // Exit 2 is a verdict, so a bad flag or a missing command must not use it.
+    for args in [
+        vec!["simulate", "--no-such-flag"],
+        vec!["gate", "--no-such-flag"],
+        vec!["no-such-command"],
+        vec![],
+    ] {
+        let out = bin().args(&args).output().unwrap();
+        assert_eq!(out.status.code(), Some(1), "{args:?}");
+        assert!(
+            out.stdout.is_empty(),
+            "{args:?}: nothing on standard output"
+        );
+        assert!(
+            !out.stderr.is_empty(),
+            "{args:?}: the message is on standard error"
+        );
+    }
+    for flag in ["--help", "--version"] {
+        let out = bin().arg(flag).output().unwrap();
+        assert_eq!(out.status.code(), Some(0), "{flag}");
+        assert!(!out.stdout.is_empty(), "{flag}: printed on standard output");
+    }
+}
+
+#[test]
 fn valid_seed_exits_zero() {
     let path = temp("valid.ticks");
     let out = bin()
@@ -200,6 +227,9 @@ fn no_help_line_exceeds_eighty_columns() {
         Some("replay"),
         Some("resume"),
         Some("calibrate"),
+        Some("gate"),
+        Some("guard"),
+        Some("bisect"),
     ];
     let mut checks = 0;
     for surface in surfaces {
@@ -215,7 +245,7 @@ fn no_help_line_exceeds_eighty_columns() {
             checks += 1;
         }
     }
-    assert_eq!(checks, 20);
+    assert_eq!(checks, 26);
 }
 
 #[test]

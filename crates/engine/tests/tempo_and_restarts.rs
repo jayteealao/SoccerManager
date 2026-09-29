@@ -314,8 +314,9 @@ fn a_failed_clearance_roll_lets_the_pass_go_on() {
 
 #[test]
 fn a_cleared_pass_along_the_goal_line_can_give_a_corner() {
+    // A corner is rare here: 10 of these 200 seeds give one.
     let mut corners = 0;
-    for seed in 1..=40 {
+    for seed in 1..=200 {
         let mut sim = pass_scene(seed, DVec2::new(50.0, -15.0))
             .place(DEFENDER, DVec2::new(51.0, 10.0))
             // The keeper stands off the pass's path, so only the defender can touch it.
@@ -351,7 +352,7 @@ fn a_cleared_pass_along_the_goal_line_can_give_a_corner() {
         );
     }
     assert!(corners >= 1, "no clearance went behind for a corner");
-    eprintln!("clearances that gave a corner: {corners} of 40");
+    eprintln!("clearances that gave a corner: {corners} of 200");
 }
 
 fn full(seed: u64) -> MatchConfig {
