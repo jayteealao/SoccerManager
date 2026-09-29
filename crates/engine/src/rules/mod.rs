@@ -1120,7 +1120,11 @@ impl Simulation {
         let (dir, speed, loft) = kick.flight();
         self.ball.kick(dir, speed, loft, t);
         self.end_shot();
-        self.shot_on_target = crate::shot::on_target(self.ball, end, t);
+        self.shot_on_target = self
+            .config
+            .modules
+            .shot
+            .on_target(&self.view(), self.ball, end);
         self.carrier = None;
         self.keeper_beaten = false;
         self.last_touch = Some(dead.team);
@@ -1160,7 +1164,11 @@ impl Simulation {
             if self.keeper_beaten || !self.shot_on_target {
                 return;
             }
-            let save = crate::shot::save_chance(t.shots.penalty_xg, t);
+            let save = self
+                .config
+                .modules
+                .shot
+                .save_chance(&self.view(), t.shots.penalty_xg);
             let k = self.players[keeper];
             if self
                 .streams

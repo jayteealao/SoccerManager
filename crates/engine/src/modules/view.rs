@@ -1,5 +1,6 @@
 //! The read-only view a module reads the match through.
 
+use crate::data::tuning::FatigueTuning;
 use crate::player::Player;
 use crate::sim::Simulation;
 use crate::tuning::Tuning;
@@ -40,6 +41,12 @@ impl<'a> MatchView<'a> {
     #[inline]
     pub fn tuning(&self) -> &'a Tuning {
         &self.sim.config.tuning
+    }
+
+    /// The fatigue tuning of the match.
+    #[inline]
+    pub fn fatigue(&self) -> &'a FatigueTuning {
+        &self.sim.config.fatigue
     }
 
     /// The ball's position along the length of the pitch.

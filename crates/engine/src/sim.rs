@@ -8,7 +8,7 @@ use crate::trace::Point;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
-use crate::ai::{self, AiCode, AiState, Manager};
+use crate::ai::{AiCode, AiState, Manager};
 use crate::ball::Ball;
 use crate::data::attributes::AttributeSchema;
 use crate::data::rules::{RulePack, StoppageKind};
@@ -87,7 +87,11 @@ impl MatchConfig {
         let (mut home, _) = Team::from_file(0, files[0], &content.attributes, &tuning)?;
         let (mut away, _) = Team::from_file(1, files[1], &content.attributes, &tuning)?;
         for team in [&mut home, &mut away] {
-            let setup = ai::pre_match(team, &content.tactics, &content.attributes);
+            let setup =
+                content
+                    .modules
+                    .pre_match
+                    .setup(team, &content.tactics, &content.attributes);
             team.lineup = setup.lineup;
             team.bench = setup.bench;
             team.set_tactics(setup.tactics, &content.tactics, &tuning);
@@ -992,7 +996,7 @@ impl Simulation {
             }
             Phase::FullTime => {}
         }
-        steering::step_all(&mut self.players, &mut self.scratch, &t);
+        self.steer_players(&t);
         if self.referee.phase == Phase::Live {
             self.move_ball(&t);
         }
@@ -1103,9 +1107,11 @@ impl Simulation {
                 let (xg, quality) = if penalty {
                     (t.shots.penalty_xg, t.shots.penalty_xg)
                 } else {
+                    let shots = self.config.modules.shot;
+                    let view = self.view();
                     (
-                        shot_xg(from, attack_x, &t.xg),
-                        shot::quality(from, attack_x, t),
+                        shots.xg(&view, from, attack_x),
+                        shots.quality(&view, from, attack_x),
                     )
                 };
                 self.summary.xg[team] += xg;
@@ -1132,7 +1138,11 @@ impl Simulation {
         }
         self.ball.kick(dir, speed, loft, t);
         if let Some((team, attack_x)) = shooter
-            && shot::on_target(self.ball, attack_x, t)
+            && self
+                .config
+                .modules
+                .shot
+                .on_target(&self.view(), self.ball, attack_x)
         {
             self.shot_on_target = true;
             self.summary.shots_on_target[team] += 1;
@@ -1235,7 +1245,11 @@ impl Simulation {
             return;
         }
         let keeper = self.players[k];
-        let save = shot::save_chance(self.shot_quality, t);
+        let save = self
+            .config
+            .modules
+            .shot
+            .save_chance(&self.view(), self.shot_quality);
         if self
             .streams
             .tested(Key::player(Action::Save, &keeper), &[save])

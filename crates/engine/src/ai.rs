@@ -22,6 +22,7 @@ use crate::data::attributes::AttributeSchema;
 use crate::data::rules::StoppageKind;
 use crate::data::tactics::{PRESSING, TIME_WASTING, TacticsSchema};
 use crate::data::team::Position;
+use crate::modules::{ModuleCard, PreMatchModule};
 use crate::player::Status;
 use crate::sim::{EngineEventKind, EventDetail, Simulation};
 use crate::tactics::change::Change;
@@ -175,6 +176,53 @@ pub fn pre_match(team: &Team, schema: &TacticsSchema, attrs: &AttributeSchema) -
         bench,
     }
 }
+
+/// The pre-match setup version 1: the AI manager's [`pre_match`].
+pub struct PreMatchV1;
+
+impl PreMatchModule for PreMatchV1 {
+    fn setup(&self, team: &Team, tactics: &TacticsSchema, attrs: &AttributeSchema) -> Setup {
+        pre_match(team, tactics, attrs)
+    }
+}
+
+pub const PRE_MATCH_V1_CARD: ModuleCard = ModuleCard {
+    purpose: "Picks each team's lineup by role fit, a bench with the best spare goalkeeper first, and the tactics file's default tactics.",
+    inputs: "The team's squad with positions and attributes, the tactics schema's roles and AI bench size, and the attribute schema.",
+    outputs: "The setup: the tactics, the squad index of each slot, and the bench.",
+    tuning: &["tactics.roles", "tactics.ai.bench_size"],
+    calibration: "none: lineup choice, no realism band",
+    keys: &[],
+};
+
+/// The pre-match setup switched off: the squad in its file order, the first eleven start,
+/// the next `bench_size` sit on the bench, and the tactics file's default tactics.
+pub struct PreMatchOff;
+
+impl PreMatchModule for PreMatchOff {
+    fn setup(&self, team: &Team, tactics: &TacticsSchema, _: &AttributeSchema) -> Setup {
+        let mut lineup = [0usize; PLAYERS_PER_TEAM];
+        for (slot, place) in lineup.iter_mut().enumerate() {
+            *place = slot;
+        }
+        let size = usize::from(tactics.ai.bench_size);
+        let bench = (PLAYERS_PER_TEAM..team.squad.len()).take(size).collect();
+        Setup {
+            tactics: Tactics::defaults(tactics),
+            lineup,
+            bench,
+        }
+    }
+}
+
+pub const PRE_MATCH_OFF_CARD: ModuleCard = ModuleCard {
+    purpose: "The pre-match setup switched off: the squad in file order fills the eleven slots and then the bench, with the default tactics.",
+    inputs: "The team's squad size and the tactics schema's AI bench size.",
+    outputs: "The setup in squad order with the default tactics.",
+    tuning: &["tactics.ai.bench_size"],
+    calibration: "none: off version, no lineup choice",
+    keys: &[],
+};
 
 impl Simulation {
     /// Runs the AI manager for every AI-managed team whose check is due on this tick.
@@ -462,6 +510,27 @@ mod tests {
         assert_eq!(all.len(), n, "a player is named twice");
         for slot in 1..PLAYERS_PER_TEAM {
             assert_ne!(team.squad[setup.lineup[slot]].position, Position::GK);
+        }
+    }
+
+    #[test]
+    fn the_pre_match_module_gives_the_ai_setup_and_its_off_version_squad_order() {
+        let content = shipped_content();
+        for (i, file) in default_teams(&content).iter().enumerate() {
+            let (team, _) =
+                Team::from_file(i, file, &content.attributes, &content.tuning.engine).unwrap();
+            assert_eq!(
+                PreMatchV1.setup(&team, &content.tactics, &content.attributes),
+                pre_match(&team, &content.tactics, &content.attributes)
+            );
+            let off = PreMatchOff.setup(&team, &content.tactics, &content.attributes);
+            let mut starters = off.lineup.to_vec();
+            starters.sort_unstable();
+            starters.dedup();
+            assert_eq!(starters.len(), PLAYERS_PER_TEAM, "eleven distinct starters");
+            assert_eq!(off.lineup, core::array::from_fn(|slot| slot));
+            assert!(off.bench.iter().all(|s| !off.lineup.contains(s)));
+            assert_eq!(off.tactics, Tactics::defaults(&content.tactics));
         }
     }
 

@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "slots": {
-    "engine.fouls": { "module": "", "version": 1 },
+    "engine.fouls": { "module": "fouls", "version": 1 },
     "engine.offside": { "module": "offside", "version": 1 },
     "engine.shot": { "module": "shot", "version": 1 },
     "engine.fatigue": { "module": "fatigue", "version": 1 },
-    "engine.steering": { "module": "steering", "version": 1 },
+    "engine.steering": { "module": "off" },
     "engine.pre-match": { "module": "pre-match", "version": 1 }
   }
 }

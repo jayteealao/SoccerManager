@@ -3,8 +3,10 @@
 //! A sent-off player stands still at its parking spot and pushes nobody.
 
 use crate::math::{DVec2, clamp_len, sq_skip_limit, toward};
+use crate::modules::{MatchView, ModuleCard, SteeringModule};
 use crate::pitch;
 use crate::player::Player;
+use crate::sim::Simulation;
 use crate::tuning::Tuning;
 
 /// Desired velocity that moves `pos` toward `target` at `max_speed` and slows inside the
@@ -78,7 +80,13 @@ pub fn step_all(players: &mut [Player], scratch: &mut Vec<DVec2>, t: &Tuning) {
             DVec2::ZERO
         });
     }
-    for (p, &v) in players.iter_mut().zip(scratch.iter()) {
+    apply_velocities(players, scratch, t);
+}
+
+/// Moves every player on the pitch one tick at its new velocity `velocities[i]`, and turns it
+/// to face where it goes.
+pub fn apply_velocities(players: &mut [Player], velocities: &[DVec2], t: &Tuning) {
+    for (p, &v) in players.iter_mut().zip(velocities.iter()) {
         if !p.active() {
             continue;
         }
@@ -87,6 +95,49 @@ pub fn step_all(players: &mut [Player], scratch: &mut Vec<DVec2>, t: &Tuning) {
         if v.length_squared() > 1e-6 {
             p.facing = v.normalize();
         }
+    }
+}
+
+/// Steering version 1: arrive plus separation, as [`next_velocity`].
+pub struct SteeringV1;
+
+impl SteeringModule for SteeringV1 {
+    fn next_velocity(&self, view: &MatchView<'_>, i: usize) -> DVec2 {
+        next_velocity(view.players(), i, view.tuning())
+    }
+}
+
+pub const STEERING_V1_CARD: ModuleCard = ModuleCard {
+    purpose: "Steers each player toward its target: arrive with braking, plus separation from close players, within its speed and acceleration.",
+    inputs: "Every player's position, velocity, target, activity, and effective pace, and the engine tuning.",
+    outputs: "The next velocity of one player.",
+    tuning: &[
+        "arrive_radius",
+        "separation_radius",
+        "separation_strength",
+        "dt",
+    ],
+    calibration: "none: movement maths, no realism band",
+    keys: &[],
+};
+
+impl Simulation {
+    /// The movement pass: the steering module sets every player's new velocity from the old
+    /// state, then every player moves. The same two halves as [`step_all`].
+    pub(crate) fn steer_players(&mut self, t: &Tuning) {
+        let steering = self.config.modules.steering;
+        let mut velocities = std::mem::take(&mut self.scratch);
+        velocities.clear();
+        let view = self.view();
+        for i in 0..self.players.len() {
+            velocities.push(if self.players[i].active() {
+                steering.next_velocity(&view, i)
+            } else {
+                DVec2::ZERO
+            });
+        }
+        apply_velocities(&mut self.players, &velocities, t);
+        self.scratch = velocities;
     }
 }
 

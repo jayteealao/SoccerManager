@@ -4,8 +4,10 @@
 
 use crate::ball::Ball;
 use crate::math::{self, DVec2, DVec3};
+use crate::modules::{MatchView, ModuleCard, ShotModule};
 use crate::pitch;
 use crate::sim::shot_xg;
+use crate::streams::Action;
 use crate::tuning::Tuning;
 
 /// The most ticks the flight of a shot is followed: five seconds.
@@ -69,6 +71,111 @@ pub fn deflect(
     let ground = (speed * speed - up * up).max(0.0).sqrt();
     DVec3::new(dir.x * ground, dir.y * ground, up)
 }
+
+/// Shot model version 1: the logistic expected-goals and quality models, the flight check,
+/// and the linear save chance above.
+pub struct ShotV1;
+
+impl ShotModule for ShotV1 {
+    fn xg(&self, view: &MatchView<'_>, from: DVec2, attack_x: f64) -> f64 {
+        shot_xg(from, attack_x, &view.tuning().xg)
+    }
+
+    fn quality(&self, view: &MatchView<'_>, from: DVec2, attack_x: f64) -> f64 {
+        quality(from, attack_x, view.tuning())
+    }
+
+    fn on_target(&self, view: &MatchView<'_>, ball: Ball, attack_x: f64) -> bool {
+        on_target(ball, attack_x, view.tuning())
+    }
+
+    fn save_chance(&self, view: &MatchView<'_>, quality: f64) -> f64 {
+        save_chance(quality, view.tuning())
+    }
+}
+
+pub const SHOT_V1_CARD: ModuleCard = ModuleCard {
+    purpose: "Rates each shot: its expected goals, its quality, whether its flight goes in under the bar, and the keeper's save chance.",
+    inputs: "The shot's position and attack direction, a copy of the kicked ball, and the engine tuning.",
+    outputs: "The expected goals, the quality, the on-target result, and the save chance.",
+    tuning: &[
+        "xg.intercept",
+        "xg.distance_coef",
+        "xg.angle_coef",
+        "shots.quality",
+        "shots.save_high",
+        "shots.save_low",
+        "crossbar_height",
+    ],
+    calibration: "goals_per_xg",
+    keys: &[Action::Save, Action::ShootoutSave],
+};
+
+/// The shot model switched off: every shot is worth nothing, never on target, and never
+/// saved. The loop still takes every draw on its key.
+pub struct ShotOff;
+
+impl ShotModule for ShotOff {
+    fn xg(&self, _: &MatchView<'_>, _: DVec2, _: f64) -> f64 {
+        0.0
+    }
+
+    fn quality(&self, _: &MatchView<'_>, _: DVec2, _: f64) -> f64 {
+        0.0
+    }
+
+    fn on_target(&self, _: &MatchView<'_>, _: Ball, _: f64) -> bool {
+        false
+    }
+
+    fn save_chance(&self, _: &MatchView<'_>, _: f64) -> f64 {
+        0.0
+    }
+}
+
+pub const SHOT_OFF_CARD: ModuleCard = ModuleCard {
+    purpose: "The shot model switched off: shots carry no expected goals or quality, none is on target, and none is saved.",
+    inputs: "Nothing.",
+    outputs: "Expected goals 0, quality 0, never on target, and a save chance of 0.",
+    tuning: &["none"],
+    calibration: "none: off version, no shot model",
+    keys: &[Action::Save, Action::ShootoutSave],
+};
+
+/// Test only: version 1 with every shot's quality raised by 0.125 from tick 30,000. The
+/// gate tests select it to prove that one changed output fails the gate.
+#[cfg(feature = "scenario")]
+pub struct ShotFaulty;
+
+#[cfg(feature = "scenario")]
+impl ShotModule for ShotFaulty {
+    fn xg(&self, view: &MatchView<'_>, from: DVec2, attack_x: f64) -> f64 {
+        ShotV1.xg(view, from, attack_x)
+    }
+
+    fn quality(&self, view: &MatchView<'_>, from: DVec2, attack_x: f64) -> f64 {
+        let q = ShotV1.quality(view, from, attack_x);
+        if view.tick() >= 30_000 { q + 0.125 } else { q }
+    }
+
+    fn on_target(&self, view: &MatchView<'_>, ball: Ball, attack_x: f64) -> bool {
+        ShotV1.on_target(view, ball, attack_x)
+    }
+
+    fn save_chance(&self, view: &MatchView<'_>, quality: f64) -> f64 {
+        ShotV1.save_chance(view, quality)
+    }
+}
+
+#[cfg(feature = "scenario")]
+pub const SHOT_FAULTY_CARD: ModuleCard = ModuleCard {
+    purpose: "Test only: shot model version 1 with every shot's quality raised by 0.125 from tick 30,000.",
+    inputs: "As shot model version 1, plus the tick.",
+    outputs: "As shot model version 1.",
+    tuning: &["none"],
+    calibration: "none: test module for the replay gate",
+    keys: &[Action::Save, Action::ShootoutSave],
+};
 
 #[cfg(test)]
 mod tests {

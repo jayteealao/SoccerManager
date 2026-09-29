@@ -1,6 +1,6 @@
 //! A bad slot file refuses `simulate` at start-up: for an unknown module, an unbuilt
-//! version, and an empty module name, the program exits 1 and names the slot, the bad
-//! value, and the valid names.
+//! version, an empty module name, and a required slot switched off, the program exits 1 and
+//! names the slot, the bad value, and the valid names.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -112,5 +112,15 @@ fn an_empty_module_refuses_start_up() {
         "engine.fouls",
         "the module name \"\" is empty",
         "fouls@1 .. off",
+    );
+}
+
+#[test]
+fn a_required_slot_switched_off_refuses_start_up() {
+    assert_refused(
+        "steering-off.json",
+        "engine.steering",
+        "off is not allowed: the slot is required",
+        "steering@1",
     );
 }

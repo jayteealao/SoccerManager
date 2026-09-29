@@ -15,6 +15,7 @@
 
 use crate::TICKS_PER_SECOND;
 use crate::data::tuning::FatigueTuning;
+use crate::modules::{FatigueModule, MatchView, ModuleCard};
 use crate::player::{Derived, Player};
 use crate::rules::Phase;
 use crate::rules::clock::TICKS_PER_MINUTE;
@@ -90,15 +91,86 @@ pub fn injury_chance(p: &Player, rate: f64) -> f64 {
     (rate * (1.5 - p.base.injury_resistance)).clamp(0.0, 1.0)
 }
 
+/// Fatigue version 1: the drain, the fatigue curve, and the injury chance above.
+pub struct FatigueV1;
+
+impl FatigueModule for FatigueV1 {
+    fn drain(&self, view: &MatchView<'_>, i: usize) -> f64 {
+        drain(view.player(i), view.fatigue(), view.tuning().dt)
+    }
+
+    fn effective(&self, view: &MatchView<'_>, i: usize) -> Derived {
+        let p = view.player(i);
+        effective(&p.base, p.energy, view.fatigue())
+    }
+
+    fn injury_chance(&self, view: &MatchView<'_>, i: usize, source: InjurySource) -> f64 {
+        let t = view.tuning();
+        let rate = match source {
+            InjurySource::Tackle => t.injury_per_tackle,
+            InjurySource::Background => t.injury_per_minute,
+        };
+        injury_chance(view.player(i), rate)
+    }
+}
+
+pub const FATIGUE_V1_CARD: ModuleCard = ModuleCard {
+    purpose: "Drains each player's energy by speed and stamina, scales the effective values by the fatigue curve, and sets each injury chance.",
+    inputs: "Each player's velocity, base values, and energy, the fatigue tuning, and the engine tuning.",
+    outputs: "The energy drained per tick, the effective values, and the injury chance of a roll.",
+    tuning: &[
+        "fatigue.threshold",
+        "fatigue.curve",
+        "fatigue.drain_base_per_s",
+        "fatigue.drain_effort_per_s",
+        "injury_per_minute",
+        "injury_per_tackle",
+        "dt",
+    ],
+    calibration: "none: no fatigue or injury band in realism-bands.json",
+    keys: &[Action::InjuryMinute, Action::InjuryTackle],
+};
+
+/// Fatigue switched off: nobody tires and nobody is injured. The loop still takes every
+/// injury draw on its key.
+pub struct FatigueOff;
+
+impl FatigueModule for FatigueOff {
+    fn drain(&self, _: &MatchView<'_>, _: usize) -> f64 {
+        0.0
+    }
+
+    fn effective(&self, view: &MatchView<'_>, i: usize) -> Derived {
+        view.player(i).base
+    }
+
+    fn injury_chance(&self, _: &MatchView<'_>, _: usize, _: InjurySource) -> f64 {
+        0.0
+    }
+}
+
+pub const FATIGUE_OFF_CARD: ModuleCard = ModuleCard {
+    purpose: "Fatigue switched off: energy never drains, the effective values stay at base, and no roll injures.",
+    inputs: "Each player's base values.",
+    outputs: "A drain of 0, the base values, and an injury chance of 0.",
+    tuning: &["none"],
+    calibration: "none: off version, no fatigue",
+    keys: &[Action::InjuryMinute, Action::InjuryTackle],
+};
+
 impl Simulation {
     /// One tick of fatigue: every player on the pitch drains; every 50 ticks the effective
     /// values follow the energy; once per simulated minute of open play each player on the
     /// pitch rolls for an injury.
     pub(crate) fn fatigue_tick(&mut self) {
-        let f = &self.config.fatigue;
-        let dt = self.config.tuning.dt;
-        for p in self.players.iter_mut().filter(|p| p.active()) {
-            p.energy = (p.energy - drain(p, f, dt)).max(0.0);
+        let fatigue = self.config.modules.fatigue;
+        for i in 0..self.players.len() {
+            if !self.players[i].active() {
+                continue;
+            }
+            let d = fatigue.drain(&self.view(), i);
+            let p = &mut self.players[i];
+            p.energy = (p.energy - d).max(0.0);
         }
         let now = self.tick + 1;
         if now.is_multiple_of(REFRESH_TICKS) {
@@ -109,13 +181,12 @@ impl Simulation {
             && self.referee.phase == Phase::Live
             && self.referee.shootout.is_none()
         {
-            let rate = self.config.tuning.injury_per_minute;
             for i in 0..self.players.len() {
                 if !self.players[i].active() {
                     continue;
                 }
                 let p = self.players[i];
-                let chance = injury_chance(&p, rate);
+                let chance = fatigue.injury_chance(&self.view(), i, InjurySource::Background);
                 let injured = self
                     .streams
                     .tested(Key::player(Action::InjuryMinute, &p), &[chance])
@@ -130,9 +201,10 @@ impl Simulation {
 
     /// Recomputes every player's effective values from its base and energy.
     pub(crate) fn refresh_effective(&mut self) {
-        let f = &self.config.fatigue;
-        for p in &mut self.players {
-            p.derived = effective(&p.base, p.energy, f);
+        let fatigue = self.config.modules.fatigue;
+        for i in 0..self.players.len() {
+            let derived = fatigue.effective(&self.view(), i);
+            self.players[i].derived = derived;
         }
     }
 
@@ -152,7 +224,11 @@ impl Simulation {
             return;
         }
         let p = self.players[c];
-        let chance = injury_chance(&p, self.config.tuning.injury_per_tackle);
+        let chance =
+            self.config
+                .modules
+                .fatigue
+                .injury_chance(&self.view(), c, InjurySource::Tackle);
         let injured = self
             .streams
             .tested(Key::player(Action::InjuryTackle, &p), &[chance])

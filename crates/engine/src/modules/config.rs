@@ -11,8 +11,11 @@ use std::collections::BTreeMap;
 use garde::Validate;
 use serde::{Deserialize, Serialize};
 
-use super::registry::{ModuleRef, Registration, SlotDecl};
-use super::{Picked, ResolvedModules};
+use super::registry::{ModuleRef, Registration, SLOT_COUNT, SlotDecl};
+use super::{
+    FatigueModule, FoulsModule, OffsideModule, Picked, PreMatchModule, ResolvedModules, ShotModule,
+    SteeringModule,
+};
 use crate::error::EngineError;
 
 /// The slot file version this build reads.
@@ -53,6 +56,10 @@ impl SlotFile {
             slots: BTreeMap::from([
                 ("engine.fouls".to_string(), entry("fouls")),
                 ("engine.offside".to_string(), entry("offside")),
+                ("engine.shot".to_string(), entry("shot")),
+                ("engine.fatigue".to_string(), entry("fatigue")),
+                ("engine.steering".to_string(), entry("steering")),
+                ("engine.pre-match".to_string(), entry("pre-match")),
             ]),
         }
     }
@@ -102,30 +109,81 @@ pub fn resolve(file: &SlotFile, registry: &[SlotDecl]) -> Result<ResolvedModules
         };
         chosen.push((decl, pick(decl, entry)?));
     }
-    let mut fouls = None;
-    let mut offside = None;
+    let mut built = Builder::default();
     let mut picked = Vec::with_capacity(chosen.len());
     for (decl, reg) in &chosen {
-        match reg.module {
-            ModuleRef::Fouls(m) => fouls = Some(m),
-            ModuleRef::Offside(m) => offside = Some(m),
-        }
+        built.fill(reg.module)?;
         picked.push(Picked {
             slot: decl.slot.id,
             module: reg.name,
             version: reg.version,
         });
     }
-    let (Some(fouls), Some(offside), Ok(picked)) = (fouls, offside, picked.try_into()) else {
-        return Err(EngineError::InvalidConfig(
-            "the slot registry does not declare the fouls and offside slots once each".into(),
-        ));
-    };
-    Ok(ResolvedModules {
-        fouls,
-        offside,
-        picked,
-    })
+    built.finish(picked)
+}
+
+/// The typed modules of one resolution, filled once per slot.
+#[derive(Default)]
+struct Builder {
+    fouls: Option<&'static dyn FoulsModule>,
+    offside: Option<&'static dyn OffsideModule>,
+    shot: Option<&'static dyn ShotModule>,
+    fatigue: Option<&'static dyn FatigueModule>,
+    steering: Option<&'static dyn SteeringModule>,
+    pre_match: Option<&'static dyn PreMatchModule>,
+}
+
+impl Builder {
+    /// Fills the field `module` belongs to; a field filled twice is a registry defect.
+    fn fill(&mut self, module: ModuleRef) -> Result<(), EngineError> {
+        fn set<T: ?Sized>(field: &mut Option<&'static T>, m: &'static T) -> bool {
+            field.replace(m).is_none()
+        }
+        let once = match module {
+            ModuleRef::Fouls(m) => set(&mut self.fouls, m),
+            ModuleRef::Offside(m) => set(&mut self.offside, m),
+            ModuleRef::Shot(m) => set(&mut self.shot, m),
+            ModuleRef::Fatigue(m) => set(&mut self.fatigue, m),
+            ModuleRef::Steering(m) => set(&mut self.steering, m),
+            ModuleRef::PreMatch(m) => set(&mut self.pre_match, m),
+        };
+        if once { Ok(()) } else { Err(Self::defect()) }
+    }
+
+    fn finish(self, picked: Vec<Picked>) -> Result<ResolvedModules, EngineError> {
+        let picked: [Picked; SLOT_COUNT] = picked.try_into().map_err(|_| Self::defect())?;
+        let (
+            Some(fouls),
+            Some(offside),
+            Some(shot),
+            Some(fatigue),
+            Some(steering),
+            Some(pre_match),
+        ) = (
+            self.fouls,
+            self.offside,
+            self.shot,
+            self.fatigue,
+            self.steering,
+            self.pre_match,
+        )
+        else {
+            return Err(Self::defect());
+        };
+        Ok(ResolvedModules {
+            fouls,
+            offside,
+            shot,
+            fatigue,
+            steering,
+            pre_match,
+            picked,
+        })
+    }
+
+    fn defect() -> EngineError {
+        EngineError::InvalidConfig("the slot registry does not declare every slot once".into())
+    }
 }
 
 /// The registration `entry` names for `decl`, or the refusal.

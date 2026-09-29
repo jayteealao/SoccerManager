@@ -7,7 +7,7 @@ mod common;
 
 use std::collections::BTreeMap;
 
-use engine::modules::registry::{FOULS, ModuleRef, OFFSIDE};
+use engine::modules::registry::{FATIGUE, FOULS, ModuleRef, OFFSIDE, PRE_MATCH, SHOT, STEERING};
 use engine::modules::{
     CardError, MOVED_KEYS, ModuleCard, OwnershipError, REGISTRY, Registration, SlotDecl, SlotEntry,
     SlotFile, check_card, check_ownership, resolve,
@@ -31,6 +31,21 @@ fn file(entries: &[(&str, &str, Option<u32>)]) -> SlotFile {
             })
             .collect::<BTreeMap<_, _>>(),
     }
+}
+
+/// The built-in default selection with each `(slot, module, version)` of `changes` put in.
+fn default_with(changes: &[(&str, &str, Option<u32>)]) -> SlotFile {
+    let mut slots = SlotFile::builtin_default();
+    for (slot, module, version) in changes {
+        slots.slots.insert(
+            (*slot).to_string(),
+            SlotEntry {
+                module: (*module).to_string(),
+                version: *version,
+            },
+        );
+    }
+    slots
 }
 
 /// The refusal for `slots`, as its parts and its message.
@@ -84,7 +99,14 @@ fn default_selection_resolves_and_a_match_finishes() {
         .collect();
     assert_eq!(
         picked,
-        ["engine.fouls=fouls@1", "engine.offside=offside@1"],
+        [
+            "engine.fouls=fouls@1",
+            "engine.offside=offside@1",
+            "engine.shot=shot@1",
+            "engine.fatigue=fatigue@1",
+            "engine.steering=steering@1",
+            "engine.pre-match=pre-match@1",
+        ],
         "every declared slot resolves, in registry order"
     );
     assert_eq!(picked.len(), REGISTRY.len());
@@ -110,10 +132,7 @@ fn the_builtin_default_equals_the_shipped_slot_file() {
 #[test]
 fn an_unknown_module_is_refused_with_the_valid_names() {
     let (slot, value, valid, text) = refusal(
-        &file(&[
-            ("engine.fouls", "fouls", Some(1)),
-            ("engine.offside", "ofside", Some(1)),
-        ]),
+        &default_with(&[("engine.offside", "ofside", Some(1))]),
         REGISTRY,
     );
     assert_eq!(
@@ -131,10 +150,7 @@ fn an_unknown_module_is_refused_with_the_valid_names() {
 #[test]
 fn an_unbuilt_version_is_refused_with_the_valid_names() {
     let (slot, value, valid, text) = refusal(
-        &file(&[
-            ("engine.fouls", "fouls", Some(2)),
-            ("engine.offside", "offside", Some(1)),
-        ]),
+        &default_with(&[("engine.fouls", "fouls", Some(2))]),
         REGISTRY,
     );
     assert_eq!((slot.as_str(), value.as_str()), ("engine.fouls", "fouls"));
@@ -147,13 +163,8 @@ fn an_unbuilt_version_is_refused_with_the_valid_names() {
 
 #[test]
 fn an_empty_module_is_refused_with_the_valid_names() {
-    let (slot, value, valid, text) = refusal(
-        &file(&[
-            ("engine.fouls", "", Some(1)),
-            ("engine.offside", "offside", Some(1)),
-        ]),
-        REGISTRY,
-    );
+    let (slot, value, valid, text) =
+        refusal(&default_with(&[("engine.fouls", "", Some(1))]), REGISTRY);
     assert_eq!((slot.as_str(), value.as_str()), ("engine.fouls", ""));
     assert_eq!(valid, "fouls@1, off");
     assert!(text.contains("the module name \"\" is empty"), "{text}");
@@ -161,67 +172,58 @@ fn an_empty_module_is_refused_with_the_valid_names() {
 
 #[test]
 fn a_missing_version_is_refused() {
-    let (slot, _, _, text) = refusal(
-        &file(&[
-            ("engine.fouls", "fouls", None),
-            ("engine.offside", "offside", Some(1)),
-        ]),
-        REGISTRY,
-    );
+    let (slot, _, _, text) = refusal(&default_with(&[("engine.fouls", "fouls", None)]), REGISTRY);
     assert_eq!(slot, "engine.fouls");
     assert!(text.contains("has no version"), "{text}");
 }
 
 #[test]
 fn off_on_a_required_slot_is_refused() {
-    // The two slots declared so far are optional, so a fixture registry declares the fouls
-    // slot required.
-    let mut required = REGISTRY[0];
-    required.slot.required = true;
-    required.off = None;
-    let registry = [required, REGISTRY[1]];
-    let (slot, value, valid, text) = refusal(
-        &file(&[
-            ("engine.fouls", "off", None),
-            ("engine.offside", "offside", Some(1)),
-        ]),
-        &registry,
-    );
-    assert_eq!((slot.as_str(), value.as_str()), ("engine.fouls", "off"));
-    assert_eq!(valid, "fouls@1");
-    assert!(
-        text.contains("off is not allowed: the slot is required"),
-        "{text}"
+    // Movement and steering is on the core list, so its slot is required.
+    let (slot, value, valid, text) =
+        refusal(&default_with(&[("engine.steering", "off", None)]), REGISTRY);
+    assert_eq!((slot.as_str(), value.as_str()), ("engine.steering", "off"));
+    assert_eq!(valid, "steering@1");
+    assert_eq!(
+        text,
+        "slot configuration refused: slot engine.steering: off is not allowed: the slot is required; valid: steering@1"
     );
 }
 
 #[test]
 fn off_on_an_optional_slot_resolves_to_its_off_version() {
-    let modules = resolve(
-        &file(&[
-            ("engine.fouls", "off", None),
-            ("engine.offside", "off", None),
-        ]),
-        REGISTRY,
-    )
-    .unwrap();
+    let optional: Vec<&str> = REGISTRY
+        .iter()
+        .filter(|d| !d.slot.required)
+        .map(|d| d.slot.id)
+        .collect();
+    assert_eq!(
+        optional,
+        [FOULS.id, OFFSIDE.id, SHOT.id, FATIGUE.id, PRE_MATCH.id]
+    );
+    let changes: Vec<(&str, &str, Option<u32>)> =
+        optional.iter().map(|&slot| (slot, "off", None)).collect();
+    let modules = resolve(&default_with(&changes), REGISTRY).unwrap();
     for p in modules.picked() {
-        assert_eq!((p.module, p.version), ("off", 0), "{}", p.slot);
+        if p.slot == STEERING.id {
+            assert_eq!((p.module, p.version), ("steering", 1));
+        } else {
+            assert_eq!((p.module, p.version), ("off", 0), "{}", p.slot);
+        }
     }
 }
 
 #[test]
 fn an_undeclared_or_missing_slot_is_refused() {
     let (slot, _, valid, text) = refusal(
-        &file(&[
-            ("engine.fouls", "fouls", Some(1)),
-            ("engine.offside", "offside", Some(1)),
-            ("engine.weather", "sunny", Some(1)),
-        ]),
+        &default_with(&[("engine.weather", "sunny", Some(1))]),
         REGISTRY,
     );
     assert_eq!(slot, "engine.weather");
-    assert_eq!(valid, "engine.fouls, engine.offside");
+    assert_eq!(
+        valid,
+        "engine.fouls, engine.offside, engine.shot, engine.fatigue, engine.steering, engine.pre-match"
+    );
     assert!(text.contains("is not a declared slot"), "{text}");
 
     let (slot, value, valid, text) =
@@ -277,6 +279,20 @@ fn a_key_claimed_twice_or_unclaimed_fails_the_ownership_check() {
             key: Action::FoulCard
         })
     );
+    // The shot card without its save key leaves `Save` with no owner.
+    let shot = *REGISTRY[2].registrations[0].card;
+    let no_save = ModuleCard {
+        keys: &[Action::ShootoutSave],
+        ..shot
+    };
+    let cards: Vec<(&str, &ModuleCard)> = default_cards()
+        .into_iter()
+        .map(|(slot, card)| (slot, if slot == SHOT.id { &no_save } else { card }))
+        .collect();
+    assert_eq!(
+        check_ownership(&cards, MOVED_KEYS),
+        Err(OwnershipError::Unclaimed { key: Action::Save })
+    );
 }
 
 #[test]
@@ -284,8 +300,11 @@ fn every_registered_card_is_complete() {
     let names = band_names();
     let names: Vec<&str> = names.iter().map(String::as_str).collect();
     assert!(names.contains(&"yellow_cards_per_team"), "{names:?}");
+    assert!(names.contains(&"goals_per_xg"), "{names:?}");
     let registrations = every_registration();
-    assert!(registrations.len() >= 4);
+    // Fouls, offside, shot, fatigue, and pre-match each have version 1 and off; steering
+    // has version 1 only.
+    assert!(registrations.len() >= 11, "{}", registrations.len());
     for reg in registrations {
         check_card(reg.card, &names)
             .unwrap_or_else(|e| panic!("{}@{}: {e}", reg.name, reg.version));
@@ -334,15 +353,35 @@ fn an_incomplete_card_fails_the_card_check() {
 #[test]
 fn the_registry_declares_the_moved_slots_in_order() {
     let ids: Vec<&str> = REGISTRY.iter().map(|d| d.slot.id).collect();
-    assert_eq!(ids, [FOULS.id, OFFSIDE.id]);
-    assert!(matches!(
-        REGISTRY[0].registrations[0].module,
-        ModuleRef::Fouls(_)
-    ));
-    assert!(matches!(
-        REGISTRY[1].registrations[0].module,
-        ModuleRef::Offside(_)
-    ));
+    assert_eq!(
+        ids,
+        [
+            FOULS.id,
+            OFFSIDE.id,
+            SHOT.id,
+            FATIGUE.id,
+            STEERING.id,
+            PRE_MATCH.id
+        ]
+    );
+    assert_eq!(REGISTRY.len(), engine::modules::SLOT_COUNT);
+    let required: Vec<&str> = REGISTRY
+        .iter()
+        .filter(|d| d.slot.required)
+        .map(|d| d.slot.id)
+        .collect();
+    assert_eq!(required, [STEERING.id], "only steering is required");
+    assert!(
+        REGISTRY[4].off.is_none(),
+        "a required slot has no off version"
+    );
+    let default = |i: usize| REGISTRY[i].registrations[0].module;
+    assert!(matches!(default(0), ModuleRef::Fouls(_)));
+    assert!(matches!(default(1), ModuleRef::Offside(_)));
+    assert!(matches!(default(2), ModuleRef::Shot(_)));
+    assert!(matches!(default(3), ModuleRef::Fatigue(_)));
+    assert!(matches!(default(4), ModuleRef::Steering(_)));
+    assert!(matches!(default(5), ModuleRef::PreMatch(_)));
 }
 
 #[test]
@@ -363,10 +402,7 @@ fn faulty_offside_fails_the_gate_at_a_named_window() {
     .unwrap();
     let mut faulty = content.clone();
     faulty.modules = resolve(
-        &file(&[
-            ("engine.fouls", "fouls", Some(1)),
-            ("engine.offside", "offside-faulty", Some(1)),
-        ]),
+        &default_with(&[("engine.offside", "offside-faulty", Some(1))]),
         REGISTRY,
     )
     .unwrap();
@@ -397,9 +433,71 @@ const FOULS_OFF: &str = r#"{
   "schema_version": 1,
   "slots": {
     "engine.fouls": { "module": "off" },
-    "engine.offside": { "module": "offside", "version": 1 }
+    "engine.offside": { "module": "offside", "version": 1 },
+    "engine.shot": { "module": "shot", "version": 1 },
+    "engine.fatigue": { "module": "fatigue", "version": 1 },
+    "engine.steering": { "module": "steering", "version": 1 },
+    "engine.pre-match": { "module": "pre-match", "version": 1 }
   }
 }"#;
+
+#[test]
+fn faulty_shot_fails_the_gate_at_a_named_window() {
+    use engine::gate::{self, Fixture, Inputs, Verdict, compare, report_line};
+
+    let content = common::content();
+    let [a, b] = common::default_teams(&content);
+    let fixture = Fixture::seed(42);
+    let play = |content: &engine::Content| {
+        gate::play_fixture(
+            &fixture,
+            &Inputs {
+                content,
+                teams: [&a, &b],
+                pack: None,
+            },
+        )
+        .unwrap()
+    };
+    let clean = play(&content);
+    // The control: the default selection plays the same hashes again.
+    let again = play(&content);
+    assert_eq!(compare(&clean.hashes, &again.hashes), Verdict::Same);
+
+    let mut faulty = content.clone();
+    faulty.modules = resolve(
+        &default_with(&[("engine.shot", "shot-faulty", Some(1))]),
+        REGISTRY,
+    )
+    .unwrap();
+    let played = play(&faulty);
+    let verdict = compare(&clean.hashes, &played.hashes);
+    let report = report_line(&fixture, &played, verdict);
+    println!("{report}");
+    let Verdict::Differs { from, to } = verdict else {
+        panic!("the gate did not fail: {verdict:?}\n{report}");
+    };
+    assert!(from >= 30_000, "{report}");
+    assert!(
+        report.contains(&format!("between tick {from} and tick {to}")),
+        "{report}"
+    );
+}
+
+#[test]
+fn each_new_optional_slot_switched_off_plays_a_match_to_the_end() {
+    let content = common::content();
+    let [a, b] = common::default_teams(&content);
+    for slot in [SHOT.id, FATIGUE.id, PRE_MATCH.id] {
+        let mut off = content.clone();
+        off.modules = resolve(&default_with(&[(slot, "off", None)]), REGISTRY).unwrap();
+        assert_eq!(off.modules.picked_for(slot).unwrap().module, "off");
+        let config = MatchConfig::new(common::SEED, 10, &off, [&a, &b]).unwrap();
+        let mut sim = Simulation::new(config).unwrap();
+        sim.run(&mut NullSink).unwrap();
+        assert!(sim.is_over(), "{slot} off: the match reaches full time");
+    }
+}
 
 #[test]
 fn only_a_non_default_selection_changes_the_content_hash() {

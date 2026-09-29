@@ -6,7 +6,14 @@ use crate::streams::Action;
 
 /// The action keys drawn by the parts that have moved onto the contract. Later moves grow
 /// this list until it holds every row of the stream table.
-pub const MOVED_KEYS: &[Action] = &[Action::Tackle, Action::FoulCard];
+pub const MOVED_KEYS: &[Action] = &[
+    Action::Tackle,
+    Action::FoulCard,
+    Action::Save,
+    Action::ShootoutSave,
+    Action::InjuryMinute,
+    Action::InjuryTackle,
+];
 
 /// What one module is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
