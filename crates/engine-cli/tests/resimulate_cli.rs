@@ -158,7 +158,7 @@ fn a_replay_file_alone_reproduces_its_tick_frames_with_every_source_file_deleted
             .all(|c| c.team == 0 && c.source == ChangeSource::Manager)
     );
     assert_eq!(rejected_rows(&fixture), 1);
-    assert_eq!(fixture.inputs.len(), 9);
+    assert_eq!(fixture.inputs.len(), 10);
 
     // Every source file goes: the content folder with its teams and the script pack, and
     // the change file.
@@ -175,6 +175,61 @@ fn a_replay_file_alone_reproduces_its_tick_frames_with_every_source_file_deleted
     assert_eq!(line["first_difference"], serde_json::Value::Null, "{line}");
     assert_eq!(line["tick_frames"], recorded.summary["ticks"], "{line}");
     let _ = std::fs::remove_dir_all(&recorded.dir);
+}
+
+/// Copies the shipped content into `dir/content`, sets the slot file to `slots`, records
+/// `minutes` of seed 42 from that copy only, and returns the replay file.
+fn record_with_slots(dir: &Path, name: &str, slots: &str, minutes: u32) -> PathBuf {
+    let content = dir.join(format!("content-{name}"));
+    copy_dir(&repo().join("content"), &content);
+    std::fs::write(content.join("slots.json"), slots).unwrap();
+    let file = dir.join("out").join(format!("{name}.smfx"));
+    let out = bin(&dir.join("data"))
+        .arg("--content-dir")
+        .arg(&content)
+        .args(["record", "--seed", "42", "--minutes", &minutes.to_string()])
+        .arg("--out")
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "record: {}", stderr(&out));
+    std::fs::remove_dir_all(&content).unwrap();
+    file
+}
+
+#[test]
+fn a_match_recorded_with_a_module_off_replays_with_it_off() {
+    let dir = temp("slots-off");
+    let default = r#"{"schema_version":1,"slots":{"engine.fouls":{"module":"fouls","version":1},"engine.offside":{"module":"offside","version":1}}}"#;
+    let fouls_off = r#"{"schema_version":1,"slots":{"engine.fouls":{"module":"off"},"engine.offside":{"module":"offside","version":1}}}"#;
+    let off = record_with_slots(&dir, "off", fouls_off, 30);
+    let on = record_with_slots(&dir, "on", default, 30);
+
+    // The slot file is an input of the replay, byte for byte.
+    for (file, slots) in [(&off, fouls_off), (&on, default)] {
+        let fixture = read_fixture(file).unwrap();
+        let held = fixture
+            .inputs
+            .iter()
+            .find(|f| f.role == "slots")
+            .expect("the replay file holds the slot file");
+        assert_eq!(held.name, "slots.json");
+        assert_eq!(held.bytes, slots.as_bytes());
+    }
+
+    // Each replays identically from the file alone, so the off match is re-simulated with
+    // fouls off and not with the built-in default. The two matches differ, so a replay that
+    // took the default for both would fail one of them.
+    let mut stored = Vec::new();
+    for file in [&off, &on] {
+        let out = resimulate(&dir, file, &[]);
+        assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+        let line = line(&out);
+        assert_eq!(line["verdict"], "identical", "{line}");
+        stored.push(line["stored_sha256"].clone());
+    }
+    assert_ne!(stored[0], stored[1], "fouls off must change the match");
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -214,6 +269,7 @@ fn a_new_replay_file_holds_the_engine_identity_every_input_and_every_applied_cha
         ("commentary", "commentary/en.json"),
         ("team_a", "teams/default-a.json"),
         ("team_b", "teams/default-b.json"),
+        ("slots", "slots.json"),
         ("pack_manifest", "scripts/sample/pack.json"),
         ("pack_script", "scripts/sample/main.rhai"),
     ];

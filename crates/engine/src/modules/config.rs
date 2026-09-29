@@ -1,9 +1,10 @@
 //! The slot file (`content/slots.json`): which module and version fills each slot. A bad
 //! entry refuses start-up and names the slot, the bad value, and the valid names.
 //!
-//! The file stays out of the content digest: with only the default modules reachable in a
-//! release build, a match cannot differ by it, and hashing it would change every content
-//! hash the replay gate records.
+//! The built-in default selection leaves the content digest as it was, so every hash the
+//! replay gate records holds. Any other selection (an optional slot switched off, say) is
+//! folded into the digest by `Content::with_slots`, and a replay file carries the slot file
+//! as one of its inputs, so a match played with it is never taken for a default one.
 
 use std::collections::BTreeMap;
 

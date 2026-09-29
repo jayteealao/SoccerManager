@@ -40,8 +40,9 @@ pub const TEAM_B_FILE: &str = "teams/default-b.json";
 /// The English commentary lines. The file stays out of `Content` and its digest: editing a
 /// line changes no content hash and never makes a snapshot refuse to resume.
 pub const COMMENTARY_FILE: &str = "commentary/en.json";
-/// The slot file: which module fills each engine slot. Like the commentary, it stays out of
-/// the content digest.
+/// The slot file: which module fills each engine slot. It stays out of the content digest
+/// while it names the built-in default selection; any other selection is folded in (see
+/// [`Content::with_slots`]), so a match played with it is never taken for a default one.
 pub const SLOTS_FILE: &str = "slots.json";
 /// Environment variable that names the content folder.
 pub const CONTENT_DIR_ENV: &str = "SM_CONTENT_DIR";
@@ -287,12 +288,43 @@ impl Content {
     /// names.
     pub fn load(dir: &ContentDir) -> Result<Self, EngineError> {
         let content = Self::from_files(&ContentFiles::read(dir)?)?;
-        let bytes = read_bytes(&dir.path(SLOTS_FILE), SLOTS_FILE)?;
-        let slots = load_json_bytes::<SlotFile>("slots", &bytes, SLOTS_FILE, SLOTS_VERSION, &())?;
-        Ok(Self {
-            modules: crate::modules::resolve(&slots.value, REGISTRY)?,
-            ..content
-        })
+        content.with_slots(&read_bytes(&dir.path(SLOTS_FILE), SLOTS_FILE)?)
+    }
+
+    /// This content with the modules the slot file `bytes` selects. A bad entry is refused
+    /// with the slot, the value, and the valid names.
+    ///
+    /// A selection other than the built-in default is folded into the digest, the way a
+    /// changed flag state is: a match played with a module off never shares a content hash
+    /// with a default one, so a snapshot refuses to resume under another selection, and
+    /// the default selection leaves every hash as it was. Call it once, on content that
+    /// [`Content::from_files`] built.
+    pub fn with_slots(&self, bytes: &[u8]) -> Result<Self, EngineError> {
+        let slots = load_json_bytes::<SlotFile>("slots", bytes, SLOTS_FILE, SLOTS_VERSION, &())?;
+        let modules = crate::modules::resolve(&slots.value, REGISTRY)?;
+        let mut next = Self {
+            modules,
+            ..self.clone()
+        };
+        if modules.picked() != ResolvedModules::builtin_default().picked() {
+            let fold = |digest: [u8; 32]| -> [u8; 32] {
+                let mut hasher = Sha256::new();
+                hasher.update(digest);
+                hasher.update(b"slots:");
+                for p in modules.picked() {
+                    hasher.update(format!("{}={}@{},", p.slot, p.module, p.version).as_bytes());
+                }
+                hasher.finalize().into()
+            };
+            let flagged = self.digest != self.written_digest;
+            next.written_digest = fold(self.written_digest);
+            next.digest = if flagged {
+                fold(self.digest)
+            } else {
+                next.written_digest
+            };
+        }
+        Ok(next)
     }
 
     /// The content from the four files' bytes, with the same checks, digest, and flag

@@ -13,7 +13,7 @@ use engine::modules::{
     SlotFile, check_card, check_ownership, resolve,
 };
 use engine::streams::Action;
-use engine::{EngineError, MatchConfig, NullSink, Simulation};
+use engine::{EngineError, MatchConfig, NullSink, Simulation, Snapshot};
 
 fn file(entries: &[(&str, &str, Option<u32>)]) -> SlotFile {
     SlotFile {
@@ -390,4 +390,71 @@ fn faulty_offside_fails_the_gate_at_a_named_window() {
         report.contains(&format!("between tick {from} and tick {to}")),
         "{report}"
     );
+}
+
+/// The slot file that switches `engine.fouls` off and keeps every other slot on its default.
+const FOULS_OFF: &str = r#"{
+  "schema_version": 1,
+  "slots": {
+    "engine.fouls": { "module": "off" },
+    "engine.offside": { "module": "offside", "version": 1 }
+  }
+}"#;
+
+#[test]
+fn only_a_non_default_selection_changes_the_content_hash() {
+    let shipped = std::fs::read(common::content_dir().path("slots.json")).unwrap();
+    let content = common::content();
+    let default = content.with_slots(&shipped).unwrap();
+    // The shipped selection is the default: every hash stays as it was.
+    assert_eq!(default.digest, content.digest);
+    assert_eq!(default.hash(), content.hash());
+
+    let off = content.with_slots(FOULS_OFF.as_bytes()).unwrap();
+    assert_eq!(
+        off.modules.picked_for("engine.fouls").unwrap().module,
+        "off"
+    );
+    assert_ne!(off.digest, content.digest);
+    assert_ne!(off.hash(), content.hash());
+
+    // A flag state applied afterwards folds over the selection, and a match built from
+    // either content carries the difference into its own hash.
+    let flagged = off
+        .with_flags(&engine::flags::FlagStates::default())
+        .unwrap();
+    assert_eq!(flagged.digest, off.digest);
+    let [a, b] = common::default_teams(&content);
+    let hash = |c: &engine::Content| MatchConfig::new(42, 90, c, [&a, &b]).unwrap().content_hash;
+    assert_ne!(hash(&off), hash(&content));
+    assert_eq!(hash(&default), hash(&content));
+}
+
+#[test]
+fn a_bad_slot_file_is_refused_through_with_slots_too() {
+    let bad = FOULS_OFF.replace("\"off\"", "\"ofs\"");
+    let err = common::content().with_slots(bad.as_bytes()).unwrap_err();
+    assert!(matches!(err, EngineError::SlotRefused { .. }), "{err}");
+}
+
+#[test]
+fn a_snapshot_resumes_only_under_the_selection_it_was_written_with() {
+    let content = common::content();
+    let [a, b] = common::default_teams(&content);
+    let config = |c: &engine::Content| MatchConfig::new(42, 90, c, [&a, &b]).unwrap();
+    let snapshot = Snapshot::capture(
+        &Simulation::new(config(&content)).unwrap(),
+        [7; 16],
+        1_700_000_000_000,
+    );
+    Simulation::from_snapshot(config(&content), &snapshot).expect("the same selection resumes");
+
+    let off = content.with_slots(FOULS_OFF.as_bytes()).unwrap();
+    match Simulation::from_snapshot(config(&off), &snapshot) {
+        Err(EngineError::Snapshot { reason, .. }) => {
+            assert!(reason.starts_with("content mismatch"), "{reason}");
+        }
+        Err(other) => panic!("refused for another reason: {other}"),
+        Ok(_) => panic!("a snapshot resumed under another module selection"),
+    }
 }
