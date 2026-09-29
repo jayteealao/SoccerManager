@@ -172,6 +172,11 @@ function inputPayload({ name, bytes }) {
 /// entry order: the inputs, the frames, then the record, kept as its original bytes, so a
 /// file the engine wrote is written back byte for byte.
 export async function writeReplay(store, { matchId, version = PROTOCOL_VERSION, record = null }) {
+  if (version !== PROTOCOL_VERSION) {
+    throw new ReplayRefused(
+      `cannot write frames protocol version ${version}; this page writes ${PROTOCOL_VERSION}`
+    );
+  }
   const { seed, millis } = matchIdentity(matchId);
   const inputs = record ? record.inputs.map(inputPayload) : [];
   const tail = record ? [record.raw] : [];

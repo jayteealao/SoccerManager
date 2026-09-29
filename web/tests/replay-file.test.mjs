@@ -220,3 +220,29 @@ test('a changed input byte and frames of another protocol are refused by name', 
     error.reason.includes('input tuning.json') && error.reason.includes('does not match')
   );
 });
+
+test('a loaded version-4 file saved the way the viewer saves it keeps its protocol version, inputs and record', async () => {
+  const read = await readReplay(goldenV4());
+  // The viewer passes the hello's protocol version and the loaded record.
+  const saved = await writeReplay(read.store, {
+    matchId: read.hello['match.id'],
+    version: read.hello['protocol.version'],
+    record: read.record,
+  });
+  const again = await readReplay(saved.bytes);
+  assert.equal(again.version, FORMAT_VERSION);
+  assert.equal(again.hello['protocol.version'], PROTOCOL_VERSION);
+  assert.ok(read.record.inputs.length > 0);
+  assert.deepEqual(again.record.inputs, read.record.inputs);
+  assert.deepEqual(again.record.meta, read.record.meta);
+});
+
+test('writing refuses a protocol version that is not the one this page reads', async () => {
+  const read = await readReplay(golden());
+  for (const version of [FORMAT_VERSION, 0, 9]) {
+    await assert.rejects(
+      writeReplay(read.store, { matchId: read.hello['match.id'], version }),
+      (error) => error.reason.includes('protocol version')
+    );
+  }
+});
