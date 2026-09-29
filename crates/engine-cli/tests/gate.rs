@@ -2,8 +2,8 @@
 //! shoot-out; an applied substitution and an applied tactics change), a broken golden file
 //! exits 1 naming the fault, a second bootstrap is refused, a regeneration with no reason
 //! exits 1 and leaves the golden file byte-identical, the write modes refuse a fixture,
-//! a second mode, and an existing set, and, in release, all 22 matches of the committed golden
-//! file match and a regeneration rewrites a copy with one new ledger entry.
+//! and a second mode, and, in release, all 22 matches of the committed golden file match and a
+//! regeneration rewrites a copy with one new ledger entry.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
