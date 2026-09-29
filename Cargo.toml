@@ -37,6 +37,8 @@ rhai = { version = "1.26", features = ["sync"] }
 # stay off here, because a member that inherits a workspace dependency cannot turn them off;
 # the default "arch" feature would select hardware sqrt and fma paths.
 libm = { version = "0.2.16", default-features = false }
+# Compile-fail tests: the module contract refuses a module that writes match state.
+trybuild = "1.0.119"
 
 [profile.release]
 debug = 1
