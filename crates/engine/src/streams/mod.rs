@@ -58,6 +58,8 @@ pub struct Streams {
     seed: [u8; 32],
     /// The streams used so far, in first-use order, with their ids.
     used: Vec<(u64, ChaCha8Rng)>,
+    /// Places in `used`, kept in ascending stream id, so the state is read without sorting.
+    order: Vec<u16>,
     /// Per key (by [`Key::index`]), its place in `used`, or `UNUSED`.
     index: Vec<u16>,
     /// Draws served, scripted or not. Not match state: never hashed, never in a snapshot.
@@ -85,6 +87,7 @@ impl Streams {
         Self {
             seed,
             used: Vec::new(),
+            order: Vec::new(),
             index: vec![UNUSED; KEY_COUNT],
             draws: 0,
             #[cfg(feature = "scenario")]
@@ -224,6 +227,9 @@ impl Streams {
                 self.used.push((id, self.fresh(id)));
                 // At most `KEY_COUNT` (2,916) streams, below `u16::MAX`.
                 let at = (self.used.len() - 1) as u16;
+                let used = &self.used;
+                let place = self.order.partition_point(|&o| used[usize::from(o)].0 < id);
+                self.order.insert(place, at);
                 self.index[slot] = at;
                 at
             }
@@ -241,15 +247,30 @@ impl Streams {
     /// The position of every stream, as the replay gate hashes it and a snapshot stores it:
     /// scheme 1 with every used stream in ascending stream id.
     pub fn stream_state(&self) -> StreamState {
-        let mut entries: Vec<(u64, u128)> = self
-            .used
+        let entries: Vec<(u64, u128)> = self
+            .order
             .iter()
-            .map(|(id, rng)| (*id, rng.get_word_pos()))
+            .map(|&o| {
+                let (id, rng) = &self.used[usize::from(o)];
+                (*id, rng.get_word_pos())
+            })
             .collect();
-        entries.sort_unstable_by_key(|&(id, _)| id);
         StreamState {
             scheme: KEYED_SCHEME,
             entries,
+        }
+    }
+
+    /// Writes the bytes of [`Streams::stream_state`]`().to_bytes()` straight into `w`, with
+    /// no list built or sorted: the scheme id (u8), the stream count (u32), then each stream's
+    /// id (u64) and word position (u128), in ascending stream id.
+    pub(crate) fn write_state(&self, w: &mut crate::canon::Writer) {
+        w.u8(KEYED_SCHEME);
+        w.count(self.order.len());
+        for &o in &self.order {
+            let (id, rng) = &self.used[usize::from(o)];
+            w.u64(*id);
+            w.raw(&rng.get_word_pos().to_le_bytes());
         }
     }
 
@@ -291,6 +312,8 @@ impl Streams {
             let mut rng = s.fresh(id);
             rng.set_word_pos(word_pos);
             s.used.push((id, rng));
+            // The entries arrive in ascending id, so the order is the fill order.
+            s.order.push((s.used.len() - 1) as u16);
             // At most `KEY_COUNT` entries, checked above.
             s.index[key.index().expect("a derived key is registered")] = (s.used.len() - 1) as u16;
         }
@@ -370,6 +393,25 @@ mod tests {
         assert!(state.entries.windows(2).all(|w| w[0].0 < w[1].0));
         assert!(state.entries.contains(&(key.stream_id(), 4)));
         assert_eq!(s.draws(), 3);
+    }
+
+    #[test]
+    fn write_state_writes_the_bytes_of_the_stream_state() {
+        let mut s = Streams::keyed(9);
+        let mut w = crate::canon::Writer::default();
+        s.write_state(&mut w);
+        assert_eq!(w.bytes(), s.stream_state().to_bytes());
+        let keys = mixed_keys();
+        for i in 0..40 {
+            s.draw(keys[(i * 3) % keys.len()]);
+        }
+        let mut w = crate::canon::Writer::default();
+        s.write_state(&mut w);
+        assert_eq!(w.bytes(), s.stream_state().to_bytes());
+        let restored = Streams::restore(s.seed(), &s.stream_state().entries).unwrap();
+        let mut w = crate::canon::Writer::default();
+        restored.write_state(&mut w);
+        assert_eq!(w.bytes(), s.stream_state().to_bytes());
     }
 
     #[test]

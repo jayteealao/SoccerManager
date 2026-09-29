@@ -312,7 +312,7 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     // The registry's draw counter and its scripted-draw queues are not match state: the
     // stream positions already hold every draw taken.
     w.mark(FieldKind::Streams, || "streams".into());
-    w.raw(&streams.stream_state().to_bytes());
+    streams.write_state(w);
 
     // G11 match events of this tick. A `script` event is excluded: its note points at log
     // text that holds wall-clock outcomes under the real clock; G9 counts the failure.
