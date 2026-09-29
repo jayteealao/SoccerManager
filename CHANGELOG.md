@@ -4,7 +4,9 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
-### Content
+## [0.2.0-beta.1] - 2026-09-29
+
+A prerelease for testers. Matches play the same on Linux and Windows, and a match plays differently from 0.1.0 for the same seed.
 
 ### Added
 
@@ -24,7 +26,11 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 - Scripts can no longer call `sleep` or `timestamp`.
 - An argument error now exits with 1. Exit code 2 means only a verdict, such as "differs".
 
-### Fixed
+### Known issues
+
+- 130 of the 184 realism band checks are outside their target range. They are reported and not tuned in this release.
+- The replay viewer offers no way to open a replay file while no engine runs. Choose Abandon first.
+- The Windows setup file is not signed, so Windows SmartScreen asks before it runs. Choose More info, then Run anyway.
 
 ## [0.1.0] - 2026-09-26
 
