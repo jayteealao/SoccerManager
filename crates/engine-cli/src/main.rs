@@ -18,6 +18,7 @@ mod resimulate;
 mod resume;
 mod serve;
 mod simulate;
+mod state_files;
 mod stream_run;
 mod trace_file;
 mod web;

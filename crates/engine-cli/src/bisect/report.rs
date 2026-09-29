@@ -8,7 +8,7 @@ use std::fmt::Write as _;
 use engine::gate::FieldKind;
 use serde_json::{Value, json};
 
-use super::runs::Field;
+use crate::state_files::Field;
 
 /// One build as the report names it.
 #[derive(Debug, Clone)]

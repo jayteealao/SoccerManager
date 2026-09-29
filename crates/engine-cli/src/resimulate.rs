@@ -25,7 +25,7 @@ use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
-use engine::gate::{GATE_SCHEMA, INVENTORY_VERSION, STATE_DIGEST_FORMAT, StateWriter};
+use engine::gate::{FieldKind, GATE_SCHEMA, INVENTORY_VERSION, StateWriter};
 use engine::{EngineEvent, FanoutSink, Simulation, trace};
 use protocol::{Frame, ServerMessage};
 use script::Backstop;
@@ -37,6 +37,9 @@ use stream::{
 
 use crate::cli::ResimulateOpts;
 use crate::replay_inputs::{Built, InputFiles, build};
+use crate::state_files::{
+    fields_file, write_digest_end, write_digest_header, write_finish_digest, write_tick_digest,
+};
 use crate::stream_run::{Drive, Observe, Planned, drive};
 use crate::trace_file::TraceFile;
 
@@ -222,7 +225,7 @@ struct Outputs {
     tick_lines: u64,
     fields: Option<(PathBuf, u32)>,
     /// The fields of the asked tick, once it has played.
-    found: Option<serde_json::Value>,
+    found: Option<Vec<(String, FieldKind, Vec<u8>)>>,
     scheme: u8,
     /// The first write error; the run stops reporting after it.
     failed: Option<std::io::Error>,
@@ -237,14 +240,7 @@ impl Outputs {
                 let file = File::create(path)
                     .with_context(|| format!("cannot create {}", path.display()))?;
                 let mut w = BufWriter::with_capacity(1 << 16, file);
-                let header = serde_json::json!({
-                    "state_digests": STATE_DIGEST_FORMAT,
-                    "inventory": INVENTORY_VERSION,
-                    "gate_schema": GATE_SCHEMA,
-                    "scheme": scheme,
-                    "engine": here,
-                });
-                writeln!(w, "{header}")
+                write_digest_header(&mut w, INVENTORY_VERSION, GATE_SCHEMA, scheme, here)
                     .with_context(|| format!("cannot write {}", path.display()))?;
                 Some((path.clone(), w))
             }
@@ -274,10 +270,10 @@ impl Outputs {
         if let Some((_, w)) = &mut self.digests {
             let digest = stream::record::hex(&Sha256::digest(bytes));
             let written = if finished {
-                writeln!(w, "finish {digest}")
+                write_finish_digest(w, &digest)
             } else {
                 self.tick_lines += 1;
-                writeln!(w, "{} {digest}", sim.tick())
+                write_tick_digest(w, sim.tick(), &digest)
             };
             if let Err(err) = written {
                 self.failed = Some(err);
@@ -289,19 +285,13 @@ impl Outputs {
             && sim.tick() == at
         {
             let bytes = self.state.bytes();
-            let fields: Vec<serde_json::Value> = self
-                .state
-                .fields()
-                .into_iter()
-                .map(|f| {
-                    serde_json::json!({
-                        "name": f.name,
-                        "kind": f.kind.as_str(),
-                        "hex": stream::record::hex(&bytes[f.range]),
-                    })
-                })
-                .collect();
-            self.found = Some(serde_json::json!({ "tick": at, "fields": fields }));
+            self.found = Some(
+                self.state
+                    .fields()
+                    .into_iter()
+                    .map(|f| (f.name, f.kind, bytes[f.range].to_vec()))
+                    .collect(),
+            );
         }
     }
 
@@ -315,16 +305,20 @@ impl Outputs {
         if let Some((path, mut w)) = self.digests {
             let cannot = || format!("cannot write {}", path.display());
             w.flush().with_context(cannot)?;
-            writeln!(w, "end {} {full_time}", self.tick_lines).with_context(cannot)?;
+            write_digest_end(&mut w, self.tick_lines, full_time).with_context(cannot)?;
             w.flush().with_context(cannot)?;
         }
         if let Some((path, at)) = self.fields {
-            let Some(mut found) = self.found else {
+            let Some(found) = self.found else {
                 anyhow::bail!("the match ended before tick {at}; no state fields were written");
             };
-            found["scheme"] = serde_json::json!(self.scheme);
-            found["engine"] = serde_json::json!(here);
-            std::fs::write(&path, format!("{found}\n"))
+            let text = fields_file(
+                at,
+                found.iter().map(|(n, k, b)| (n.as_str(), *k, b.as_slice())),
+                self.scheme,
+                here,
+            );
+            std::fs::write(&path, text)
                 .with_context(|| format!("cannot write {}", path.display()))?;
         }
         Ok(())

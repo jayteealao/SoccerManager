@@ -68,3 +68,41 @@ impl TickSink for TraceFile {
         Ok(())
     }
 }
+
+/// The key of a trace record's tick, as `engine::trace` writes it.
+const TICK_KEY: &str = "t";
+
+/// The records of `tick` in trace file text: every line after the header whose tick is
+/// `tick`. Lines that are not JSON are skipped.
+pub fn tick_records(text: &str, tick: u32) -> Vec<serde_json::Value> {
+    text.lines()
+        .skip(1)
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .filter(|r| r[TICK_KEY].as_u64() == Some(u64::from(tick)))
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use engine::trace::{Point, PointRecord};
+
+    #[test]
+    fn written_records_are_found_by_their_tick() {
+        let header = TraceHeader { seed: 1, scheme: 1 };
+        let record = |tick| {
+            TraceRecord::Point(PointRecord {
+                tick,
+                point: Point::Carrier,
+                detail: serde_json::json!({}),
+            })
+        };
+        let mut w = Vec::new();
+        trace::write_header(&mut w, &header).unwrap();
+        trace::write_records(&mut w, &[record(2), record(3), record(3)]).unwrap();
+        let text = String::from_utf8(w).unwrap();
+        assert_eq!(tick_records(&text, 3).len(), 2);
+        assert_eq!(tick_records(&text, 2).len(), 1);
+        assert!(tick_records(&text, 4).is_empty());
+    }
+}

@@ -18,8 +18,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use stream::read_fixture;
 
 use crate::cli::BisectOpts;
+use crate::state_files::Digests;
 use report::{Build, Found, Report};
-use runs::{Digests, TickState};
+use runs::TickState;
 
 /// Exit code: no difference.
 const SAME: i32 = 0;
@@ -138,7 +139,7 @@ pub fn run(content_dir: Option<&Path>, opts: &BisectOpts) -> anyhow::Result<i32>
         Ok(pair) => pair,
         Err(reasons) => return Ok(incomplete(opts, &shown, &sides, &reasons, None)),
     };
-    if let Err(reason) = runs::same_inventory(&da, &db) {
+    if let Err(reason) = crate::state_files::same_inventory(&da, &db) {
         let reasons = [None, None];
         return Ok(incomplete(opts, &shown, &sides, &reasons, Some(&reason)));
     }
