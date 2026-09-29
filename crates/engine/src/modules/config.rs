@@ -133,7 +133,7 @@ fn pick(decl: &SlotDecl, entry: &SlotEntry) -> Result<Registration, EngineError>
     let name = entry.module.trim();
     let bad = |problem: String| refused(id, &entry.module, problem, decl.valid_names());
     if name.is_empty() {
-        return Err(bad("the module name is empty".into()));
+        return Err(bad(format!("the module name {:?} is empty", entry.module)));
     }
     if name == OFF {
         if decl.slot.required {

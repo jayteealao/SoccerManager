@@ -156,7 +156,7 @@ fn an_empty_module_is_refused_with_the_valid_names() {
     );
     assert_eq!((slot.as_str(), value.as_str()), ("engine.fouls", ""));
     assert_eq!(valid, "fouls@1, off");
-    assert!(text.contains("the module name is empty"), "{text}");
+    assert!(text.contains("the module name \"\" is empty"), "{text}");
 }
 
 #[test]
