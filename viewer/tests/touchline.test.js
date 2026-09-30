@@ -79,7 +79,7 @@ test('each pick reads as its change and its reason, and its label is the chip’
   ];
   const rows = proposalRows(picks, SQUAD, SCHEMA, new Set([pickKey(picks[0])]));
   assert.equal(rows[0].text, 'Player7 → Player18 · tired player');
-  assert.equal(rows[0].label, 'Substitution: Player7 off, Player18 on');
+  assert.equal(rows[0].label, 'Substitution: Home Player7 off, Home Player18 on', 'the chip names the players in full, as the picker does');
   assert.ok(rows[0].accepted);
   assert.ok(!rows[1].accepted);
   assert.equal(rows[1].reason, 'injured player');

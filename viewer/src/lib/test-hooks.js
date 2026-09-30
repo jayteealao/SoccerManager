@@ -38,6 +38,24 @@ export function install(session, target = globalThis) {
     }),
     events: () => session.match.events.map((e) => ({ ...e })),
     view: () => session.view,
+    advice: () => ({
+      tick: session.dugout.advice?.tick ?? null,
+      picks: session.dugout.proposals().map((p) => ({ text: p.text, code: p.pick.code, accepted: p.accepted })),
+    }),
+    sheet: () => {
+      const sheet = session.sheet();
+      return sheet
+        ? {
+            shapes: [...sheet.shapes],
+            home: sheet.home.eleven.map((r) => r.squad),
+            bench: sheet.home.bench.map((r) => r.squad),
+            away: sheet.away.eleven.map((r) => r.name),
+            dots: sheet.dots.map((side) => side.length),
+            rules: sheet.rules.live.map((r) => r.text),
+            level: sheet.rules.level,
+          }
+        : null;
+    },
     pending: () => session.dugout.pending.all(session.renderedTick),
     lineup: () => session.dugout.lineupView(),
     dugout: () => ({

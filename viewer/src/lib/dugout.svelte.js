@@ -7,12 +7,16 @@
 //
 // Edit is a withdrawal and a new change: the dugout sends `cancel-change`, and on its
 // acknowledgement queues the edited change. The engine sees two commands in order.
+//
+// The assistant's picks arrive as `advice` messages. Each shows when playback reaches its
+// tick; Accept queues the pick like any other change, and nothing is sent until then.
 
 import { LineupEditor } from './lineup-editor.js';
 import { benchModel, lineupModel } from './lineups.js';
 import { createPendingList } from './pending.js';
 import { signal } from './signal.js';
 import { pickerBlock, pickerPlayers } from './substitution-picker.js';
+import { benchRows, pickDetail, pickKey, playerStateRows, proposalRows } from './touchline.js';
 import {
   applyPatch,
   copyTactics,
@@ -54,6 +58,15 @@ export class Dugout {
   /// The engine's last refusal of a withdrawal, in its words, or null.
   cancelRefused = $state(null);
   over = $state(false);
+  /// The assistant's picks at the rendered tick: the newest `advice` message at or before it,
+  /// or null.
+  advice = $state.raw(null);
+  /// Bumped when a pick is accepted or refused, so the proposals redraw.
+  acceptedVersion = $state(0);
+  /// The Touchline's player state (the home eleven's energy and cards) and the other bench,
+  /// at the rendered tick.
+  playerState = $state.raw([]);
+  otherBench = $state.raw({ players: [], used: 0, limit: 0, text: '' });
 
   /// `send(command)` sends one client command and returns `false` when no socket takes it;
   /// `onStart(message, patch)` runs when the engine accepts the lineup.
@@ -76,6 +89,10 @@ export class Dugout {
     this.rowKey = '';
     this.tacticsKey = '';
     this.renderedTick = 0;
+    this.adviceList = [];
+    this.accepted = new Set();
+    this.stateKey = '';
+    this.benchKey = '';
   }
 
   /// The hello: the squad, the computer manager's setup, and the tactics file. A stored match
@@ -97,6 +114,13 @@ export class Dugout {
     this.chips = [];
     this.chipKey = '';
     this.rowKey = '';
+    this.adviceList = [];
+    this.advice = null;
+    this.accepted = new Set();
+    this.stateKey = '';
+    this.benchKey = '';
+    this.playerState = [];
+    this.otherBench = { players: [], used: 0, limit: this.limit, text: '' };
     if (stored || !this.setup || !this.schema || !Array.isArray(this.schema.formations)) {
       this.editor = null;
       this.over = true;
@@ -286,24 +310,32 @@ export class Dugout {
     this.refreshChips();
   }
 
-  /// Queues one change. The chip appears on the engine's acknowledgement.
-  queue(kind, detail, label) {
+  /// Queues one change. The chip appears on the engine's acknowledgement; a refusal runs
+  /// `onRefused`.
+  queue(kind, detail, label, onRefused = () => {}) {
     if (!this.live) {
-      return;
+      return false;
     }
     const sent = this.request(
       { type: 'queue-change', 'change.kind': kind, detail },
       (ack) => this.pending.queued(ack, label, kind, detail.patch ?? detail),
-      (reject) => this.pending.rejectedAtQueue(reject, label, kind)
+      (reject) => {
+        this.pending.rejectedAtQueue(reject, label, kind);
+        onRefused(reject);
+      }
     );
     if (!sent) {
       this.pending.rejectedAtQueue({ reason: 'The engine is not connected.' }, label, kind);
+      onRefused(null);
     }
     this.refreshChips();
+    return sent;
   }
 
-  /// A substitution from the picker: squad `off` for squad `on`.
-  substitute(off, on) {
+  /// A substitution from the picker: squad `off` for squad `on`. With `formation`, a new
+  /// shape queues with it: the substitution first, then the shape, so the engine, which
+  /// applies substitutions before tactics at one stoppage, takes them in that order.
+  substitute(off, on, formation = null) {
     const outgoing = this.picker.off.find((p) => p.squad === off);
     const incoming = this.picker.on.find((p) => p.squad === on);
     if (!outgoing || !incoming) {
@@ -315,6 +347,60 @@ export class Dugout {
     } else {
       this.queue('substitution', { off, on }, label);
     }
+    const current = this.tactics?.formation;
+    if (formation !== null && formation !== undefined && formation !== current && this.schema) {
+      const from = this.schema.formations[current]?.name ?? '';
+      const to = this.schema.formations[formation]?.name ?? '';
+      this.queue('tactics', { patch: { formation } }, `Shape: ${from} → ${to}`);
+    }
+  }
+
+  // ---- The assistant's picks ----------------------------------------------------------------
+
+  /// An `advice` message. It shows when playback reaches its tick.
+  onAdvice(message) {
+    const at = this.adviceList.findIndex((a) => a.tick > message.tick);
+    if (at < 0) {
+      this.adviceList.push(message);
+    } else {
+      this.adviceList.splice(at, 0, message);
+    }
+    this.refreshAdvice();
+  }
+
+  refreshAdvice() {
+    let current = null;
+    for (const a of this.adviceList) {
+      if (a.tick > this.renderedTick) {
+        break;
+      }
+      current = a;
+    }
+    if (current !== this.advice) {
+      this.advice = current;
+    }
+  }
+
+  /// The picks at the rendered tick as the Touchline lists them.
+  proposals() {
+    this.acceptedVersion;
+    return proposalRows(this.advice?.picks ?? [], this.squad, this.schema, this.accepted);
+  }
+
+  /// Accepts a pick: its change is queued like any other, with the pick's own words, and the
+  /// pick reads Queued. A pick the engine refuses can be accepted again.
+  accept(pick) {
+    const key = pickKey(pick);
+    if (!this.live || this.accepted.has(key)) {
+      return false;
+    }
+    const row = proposalRows([pick], this.squad, this.schema)[0];
+    this.accepted.add(key);
+    this.acceptedVersion += 1;
+    return this.queue(pick.kind, pickDetail(pick), row.label, () => {
+      this.accepted.delete(key);
+      this.acceptedVersion += 1;
+    });
   }
 
   /// Withdraws a queued change. The chip leaves on the acknowledgement; a refusal keeps it
@@ -384,11 +470,15 @@ export class Dugout {
   update(tick, state) {
     this.renderedTick = tick;
     this.refreshChips();
+    this.refreshAdvice();
     if (this.phase !== 'live') {
       return;
     }
-    const rows = lineupModel(this.rosters, this.teamIds, state)[0] ?? [];
-    const bench = benchModel(this.rosters, state)[0] ?? [];
+    const both = lineupModel(this.rosters, this.teamIds, state);
+    const rows = both[0] ?? [];
+    const benches = benchModel(this.rosters, state);
+    const bench = benches[0] ?? [];
+    this.refreshTouchline(rows, benches[1] ?? [], state);
     const used = state.substitutions.filter((s) => s.team === this.homeId).length;
     const key =
       rows.map((r) => `${r.squad}${r.sentOff ? 'x' : ''}`).join(',') +
@@ -407,6 +497,23 @@ export class Dugout {
     if (tacticsKey !== this.tacticsKey) {
       this.tacticsKey = tacticsKey;
       this.tactics = tactics;
+    }
+  }
+
+  /// The Touchline's player state and the other bench, redrawn only when a figure it shows
+  /// changes.
+  refreshTouchline(rows, otherBench, state) {
+    const cards = state.entries ? state.entries.filter((e) => e['event.type'] === 'card').length : 0;
+    const key = rows.map((r) => `${r.wire}:${Math.round(r.energy * 100)}:${r.condition}`).join(',') + `|${cards}`;
+    if (key !== this.stateKey) {
+      this.stateKey = key;
+      this.playerState = playerStateRows(rows, state.entries);
+    }
+    const out = benchRows(otherBench, state, this.teamIds[1], this.limit);
+    const benchKey = `${out.players.map((p) => p.id).join(',')}|${out.text}`;
+    if (benchKey !== this.benchKey) {
+      this.benchKey = benchKey;
+      this.otherBench = out;
     }
   }
 

@@ -105,11 +105,12 @@ export function surname(name) {
 }
 
 /// The kick-off pitch: both elevens at their kick-off places, each dot with the shirt and the
-/// surname. `sides` holds each team's `{ formation, eleven }`, home first. A team whose
-/// formation the tactics file does not hold, or whose eleven is short, has no dots.
+/// surname. `sides` holds each team's `{ formation, eleven }` (or its `slots` in place of the
+/// name), home first. A team whose formation the tactics file does not hold, or whose eleven
+/// is short, has no dots.
 export function kickOffSheet(schema, sides) {
-  return sides.map(({ formation, eleven }, side) => {
-    const slots = formationSlots(schema, formation);
+  return sides.map(({ formation, slots: given, eleven }, side) => {
+    const slots = given ?? formationSlots(schema, formation);
     if (!slots || eleven.length < STARTERS) {
       return [];
     }

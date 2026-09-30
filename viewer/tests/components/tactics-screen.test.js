@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The Tactics screen in its two phases, in jsdom: before kick-off the squad list fills the
-// right column and KICK OFF waits for a legal lineup, with the reason in words; during play
+// right column and CONTINUE waits for a legal lineup, with the reason in words; during play
 // the roles table, the picker and the queue show. Every live control is focusable and named,
 // and every stub is inert, hidden and holds nothing that takes focus.
 
@@ -171,7 +171,7 @@ test('before kick-off the Tactics screen opens with the squad list and eleven sl
   );
   assert.equal(root.querySelectorAll('button[data-squad]').length, 22);
   assert.equal(verdict(), 'READY');
-  assert.equal(action().textContent.trim(), 'Kick off');
+  assert.equal(action().textContent.trim(), 'Continue', 'Tactics leads on to the Pre-match line-ups');
   assert.equal(action().disabled, false);
   // The match screen stays mounted, hidden, so its canvas keeps drawing.
   assert.ok(document.querySelector('.view[hidden] canvas'));
@@ -210,6 +210,9 @@ test('Delete on a slot empties it, and the empty place gets its own row', async 
 
 test('during play the roles table, the picker and the queue show, and Cancel withdraws', async () => {
   const { s, socket } = await opened();
+  s.act();
+  assert.equal(s.view, 'prematch', 'CONTINUE opens the Pre-match line-ups');
+  assert.deepEqual(socket.sent.map((m) => m.type), [], 'CONTINUE sends nothing');
   s.act();
   socket.deliver({ type: 'ack', command: 'set-lineup' });
   await tick();

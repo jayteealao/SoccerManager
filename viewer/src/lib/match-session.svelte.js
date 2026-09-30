@@ -10,8 +10,12 @@
 // its value changes, so a component redraws at most once per rendered tick.
 //
 // The dugout (`dugout.svelte.js`) holds the lineup editor, the tactics and the substitutions:
-// the kick-off sends the lineup the manager picked, and every `ack`, `reject`, `change-state`
-// and change event goes to it. The half-time and full-time reports and saving a replay are
+// the kick-off sends the lineup the manager picked, and every `ack`, `reject`, `change-state`,
+// `advice` and change event goes to it.
+//
+// Four views share the session: Tactics, the read-only Pre-match line-ups, the match, and
+// the Touchline. Before kick-off the path is Tactics (CONTINUE), then Pre-match (KICK OFF);
+// Pre-match sends nothing until KICK OFF. The half-time and full-time reports and saving a replay are
 // later parts of the port; until they arrive playback runs through the breaks.
 
 import { COMPONENT_COUNT, decodeInto, newFrame } from './decode.js';
@@ -25,6 +29,7 @@ import { LeadControl, SeenReport } from './lead.js';
 import { KIND, MatchState } from './match-state.js';
 import { Pitch, readTokens } from './pitch.js';
 import { Playback } from './playback.js';
+import { formationName, kickOffSheet, rosterSheet, rulePackRows, squadSheet } from './prematch.js';
 import { backoff, clockAt, loadingSteps, panelModel } from './recovery.js';
 import { frameText, readReplay } from './replay-file.js';
 import { Scheduler } from './schedule.js';
@@ -100,8 +105,14 @@ export class MatchSession {
   engineVersion = $state(null);
   stored = $state(false);
   busy = $state(false);
-  /// The view the tabs show: `match` or `tactics`.
+  /// The view the tabs show: `tactics`, `prematch`, `match` or `touchline`.
   view = $state('match');
+  /// The hello of the match shown, as the Pre-match line-ups and the Touchline read it.
+  hello = $state.raw(null);
+  /// The Touchline strip's play facts at the rendered tick: whether play is stopped, the
+  /// whole seconds to the next known stoppage (or null), and each team's substitutions and
+  /// windows used.
+  play = $state.raw({ stopped: false, nextIn: null, subsUsed: [0, 0], windowsUsed: [0, 0] });
 
   /// `fetcher`, `timers`, `raf` and `now` are the browser's unless a test passes its own.
   constructor({
@@ -205,6 +216,9 @@ export class MatchSession {
     }
     if (this.screen === 'kickoff' && this.kickingOff) {
       return 'Kicking off';
+    }
+    if (this.screen === 'kickoff' && this.dugout.preMatch && this.view === 'tactics') {
+      return 'Continue';
     }
     return ACTIONS[this.screen];
   }
@@ -345,6 +359,7 @@ export class MatchSession {
   begin(hello, { stored = false } = {}) {
     this.history = new History(hello.ticks_expected);
     this.teams = hello.teams;
+    this.hello = hello;
     this.teamNames = new Map(hello.teams.map((t) => [t['team.id'], t['team.name']]));
     this.engineVersion = hello['engine.version'] ?? null;
     this.engineWord = stored ? 'Replay' : 'Engine connected';
@@ -404,9 +419,58 @@ export class MatchSession {
     return this.dugout.phase === 'kicking-off';
   }
 
-  /// Opens the Match or the Tactics view.
+  /// Opens the Match, the Tactics or the Touchline view. The Pre-match line-ups open only by
+  /// CONTINUE.
   show(view) {
-    this.view = view === 'tactics' ? 'tactics' : 'match';
+    this.view = view === 'tactics' || view === 'touchline' ? view : 'match';
+  }
+
+  /// CONTINUE on Tactics: with a legal lineup before kick-off, opens the Pre-match line-ups.
+  /// It sends nothing.
+  continue() {
+    if (this.screen !== 'kickoff' || !this.dugout.preMatch || !this.lineupReady) {
+      return false;
+    }
+    this.view = 'prematch';
+    return true;
+  }
+
+  /// "Change on Tactics": back from the Pre-match line-ups, with the lineup unchanged.
+  back() {
+    if (this.view === 'prematch' && this.dugout.preMatch) {
+      this.view = 'tactics';
+    }
+  }
+
+  /// The Pre-match line-ups: both sheets, both formations, the kick-off places and the
+  /// rule-pack checks. The home sheet is the lineup the manager set on Tactics; the other
+  /// comes from the hello. Null until a hello with a lineup to pick.
+  sheet() {
+    this.dugout.version;
+    const editor = this.dugout.editor;
+    const hello = this.hello;
+    if (!hello || !editor) {
+      return null;
+    }
+    const schema = hello.tactics;
+    const message = editor.message();
+    const home = squadSheet(this.dugout.squad, message.lineup, message.bench);
+    const away = rosterSheet(hello.teams[1]);
+    const shapes = [
+      schema?.formations?.[editor.formation]?.name ?? '',
+      formationName(hello.teams[1], schema),
+    ];
+    return {
+      teams: hello.teams,
+      home,
+      away,
+      shapes,
+      dots: kickOffSheet(schema, [
+        { slots: schema?.formations?.[editor.formation]?.slots, eleven: home.eleven },
+        { formation: shapes[1], eleven: away.eleven },
+      ]),
+      rules: rulePackRows(hello),
+    };
   }
 
   onRaw(data) {
@@ -460,6 +524,12 @@ export class MatchSession {
     if (message.type === 'change-state') {
       if (!this.stored) {
         this.dugout.onChangeState(message);
+      }
+      return;
+    }
+    if (message.type === 'advice') {
+      if (!this.stored) {
+        this.dugout.onAdvice(message);
       }
       return;
     }
@@ -550,6 +620,7 @@ export class MatchSession {
       this.stats = state.stats;
     }
     this.dugout.update(tick, state);
+    this.updatePlay(tick, state);
 
     const goals = state.goals.length;
     if (seek || tick < previous) {
@@ -572,6 +643,30 @@ export class MatchSession {
         'home.score': state.home,
         'away.score': state.away,
       });
+    }
+  }
+
+  /// The Touchline's play facts. Play reads stopped for three seconds after a stoppage mark;
+  /// the next stoppage is the next mark the engine has already sent, which is at most a few
+  /// seconds ahead of the pitch.
+  updatePlay(tick, state) {
+    const TICKS_PER_SECOND = 50;
+    const prev = this.stoppages.prev(tick + 1);
+    const next = this.stoppages.next(tick);
+    const stopped = prev !== null && tick - prev < 3 * TICKS_PER_SECOND;
+    const nextIn = next === null ? null : Math.ceil((next - tick) / TICKS_PER_SECOND);
+    const subsUsed = state.subsUsed ?? [0, 0];
+    const windowsUsed = state.windowsUsed ?? [0, 0];
+    const p = this.play;
+    if (
+      p.stopped !== stopped ||
+      p.nextIn !== nextIn ||
+      p.subsUsed[0] !== subsUsed[0] ||
+      p.subsUsed[1] !== subsUsed[1] ||
+      p.windowsUsed[0] !== windowsUsed[0] ||
+      p.windowsUsed[1] !== windowsUsed[1]
+    ) {
+      this.play = { stopped, nextIn, subsUsed: [...subsUsed], windowsUsed: [...windowsUsed] };
     }
   }
 
@@ -627,6 +722,9 @@ export class MatchSession {
   act(pickReplay = () => {}) {
     switch (this.screen) {
       case 'kickoff':
+        if (this.dugout.preMatch && this.view === 'tactics') {
+          return this.continue();
+        }
         return this.kickOff();
       case 'live':
         return this.setPlaying(false);

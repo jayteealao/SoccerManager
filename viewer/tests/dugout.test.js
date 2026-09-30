@@ -258,3 +258,73 @@ test('the picker words: the count left, and why it cannot queue', () => {
   assert.equal(pickerBlock({ live: true, left: 2, off: [], on: players.on }), 'No player to change.');
   assert.equal(pickerBlock({ live: true, left: 2, ...players }), null);
 });
+
+// ---- The Touchline: the assistant's picks and a shape queued with a substitution -----------
+
+test('no lineup is sent before KICK OFF, whatever the editor does', () => {
+  const { d, sent } = dugout();
+  d.begin(helloWith());
+  d.lineupAction((e) => e.pickRow(3));
+  d.setFormation(1);
+  d.editTactics({ mentality: 3 });
+  assert.deepEqual(sent, [], 'editing before kick-off sends nothing');
+  d.kickOff();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].type, 'set-lineup');
+});
+
+test('a pick shows once playback reaches its tick, and a newer advice replaces it', () => {
+  const { d } = live();
+  const pick = { code: 'sub-fatigue', kind: 'substitution', off: 7, on: 14 };
+  d.onAdvice({ type: 'advice', tick: 100, minute: 56, picks: [pick] });
+  assert.equal(d.advice, null, 'not before the pitch reaches tick 100');
+  d.update(100, VIEW());
+  assert.equal(d.proposals().length, 1);
+  assert.equal(d.proposals()[0].reason, 'tired player');
+  d.onAdvice({ type: 'advice', tick: 150, minute: 57, picks: [] });
+  d.update(149, VIEW());
+  assert.equal(d.proposals().length, 1);
+  d.update(150, VIEW());
+  assert.equal(d.proposals().length, 0, 'the newer advice has no pick open');
+  d.update(120, VIEW());
+  assert.equal(d.proposals().length, 1, 'a rewind shows the advice of its tick again');
+});
+
+test('Accept queues the pick’s own change and the pick reads Queued; a refusal frees it', () => {
+  const { d, sent } = live();
+  const pick = { code: 'sub-fatigue', kind: 'substitution', off: 7, on: 14 };
+  d.onAdvice({ type: 'advice', tick: 5, minute: 56, picks: [pick] });
+  d.update(10, VIEW());
+  assert.equal(d.accept(pick), true);
+  assert.deepEqual(sent, [
+    { type: 'queue-change', 'change.kind': 'substitution', detail: { off: 7, on: 14 } },
+  ]);
+  assert.equal(d.proposals()[0].accepted, true);
+  assert.equal(d.accept(pick), false, 'an accepted pick is not sent twice');
+  d.answer({ type: 'ack', command: 'queue-change', 'change.queue_id': 'q-10-0' });
+  assert.equal(d.chips[0].label, 'Substitution: Player 0-7 off, Player 0-14 on');
+  const tactics = { code: 'mentality-up-trailing', kind: 'tactics', patch: { mentality: 3 } };
+  d.onAdvice({ type: 'advice', tick: 6, minute: 70, picks: [tactics] });
+  d.update(10, VIEW());
+  sent.length = 0;
+  d.accept(tactics);
+  assert.deepEqual(sent, [
+    { type: 'queue-change', 'change.kind': 'tactics', detail: { patch: { mentality: 3 } } },
+  ]);
+  d.answer({ type: 'reject', command: 'queue-change', reason: 'no' });
+  assert.equal(d.proposals()[0].accepted, false, 'a refused pick can be accepted again');
+});
+
+test('a substitution with a new shape sends the substitution, then the shape', () => {
+  const { d, sent } = live();
+  const off = d.picker.off[3].squad;
+  const on = d.picker.on[0].squad;
+  d.substitute(off, on, 1);
+  assert.deepEqual(sent, [
+    { type: 'queue-change', 'change.kind': 'substitution', detail: { off, on } },
+    { type: 'queue-change', 'change.kind': 'tactics', detail: { patch: { formation: 1 } } },
+  ]);
+  sent.length = 0;
+  d.substitute(off, on, d.tactics.formation);
+  assert.equal(sent.length, 1, 'keeping the shape queues the substitution alone');
+});

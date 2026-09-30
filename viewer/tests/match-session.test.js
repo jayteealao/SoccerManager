@@ -150,7 +150,7 @@ test('loading, then kick-off on the hello, then live once the kick-off is sent',
   assert.equal(session.tag.live, true);
 });
 
-test('with a lineup to pick, kick-off sends it and the match starts on the engine ack', async () => {
+test('with a lineup to pick, CONTINUE opens the Pre-match line-ups, which send nothing until KICK OFF', async () => {
   const { session, socket } = await started(RUNNING);
   const squad = roster(0).map((p) => ({ ...p, 'player.natural_fitness': 60, role_fit: [] }));
   const setup = {
@@ -171,6 +171,20 @@ test('with a lineup to pick, kick-off sends it and the match starts on the engin
   message.teams[0] = { ...message.teams[0], squad, setup };
   socket.deliver(JSON.stringify(message));
   assert.equal(session.view, 'tactics', 'the Tactics screen opens before kick-off');
+  assert.equal(session.action, 'Continue');
+  session.act();
+  assert.equal(session.view, 'prematch', 'CONTINUE opens the Pre-match line-ups');
+  assert.equal(session.action, 'Kick off');
+  assert.deepEqual(socket.sent, [], 'the Pre-match line-ups send nothing');
+  const sheet = session.sheet();
+  assert.deepEqual(sheet.home.eleven.map((r) => r.squad), setup.lineup);
+  assert.equal(sheet.dots[0].length, 11, 'our eleven stand at their kick-off places');
+  session.back();
+  assert.equal(session.view, 'tactics', 'Change on Tactics goes back');
+  assert.deepEqual(session.sheet().home.eleven.map((r) => r.squad), setup.lineup, 'the lineup is unchanged');
+  session.act();
+  assert.equal(session.view, 'prematch');
+  assert.deepEqual(socket.sent, [], 'still nothing before KICK OFF');
   session.act();
   assert.deepEqual(socket.sent, [{ type: 'set-lineup', lineup: setup.lineup, bench: setup.bench }]);
   assert.equal(session.screen, 'kickoff', 'nothing starts before the engine answers');

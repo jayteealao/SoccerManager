@@ -116,12 +116,15 @@ export function proposalRows(picks, squad, schema, accepted = new Set()) {
   return (picks ?? []).map((pick, i) => {
     const reason = PICK_REASONS[pick.code] ?? pick.code;
     let what;
+    let label;
     if (pick.kind === 'substitution') {
-      const off = surname(squad?.[pick.off]?.['player.name'] ?? `Player ${pick.off}`);
-      const on = surname(squad?.[pick.on]?.['player.name'] ?? `Player ${pick.on}`);
-      what = `${off} → ${on}`;
+      const off = squad?.[pick.off]?.['player.name'] ?? `Player ${pick.off}`;
+      const on = squad?.[pick.on]?.['player.name'] ?? `Player ${pick.on}`;
+      what = `${surname(off)} → ${surname(on)}`;
+      label = `Substitution: ${off} off, ${on} on`;
     } else {
       what = patchWords(pick.patch, schema);
+      label = what;
     }
     const key = pickKey(pick);
     return {
@@ -131,10 +134,7 @@ export function proposalRows(picks, squad, schema, accepted = new Set()) {
       what,
       reason,
       text: `${what} · ${reason}`,
-      label:
-        pick.kind === 'substitution'
-          ? `Substitution: ${what.replace(' → ', ' off, ')} on`
-          : what,
+      label,
       accepted: accepted.has(key),
     };
   });
