@@ -1,26 +1,43 @@
-<!-- The pitch box (742 × 312): the canvas the pitch renderer draws the match into, the goal
-     banner over it, and the sketch's pitch overlays, which are stubs. A panel passed as the
-     body (the loading steps, an error, first run) covers the box; `dim` holds the last frame
-     at half strength while the engine reconnects. -->
+<!-- The pitch box (742 × 312 on the match screen; the replay's is 752 × 290): the canvas the
+     pitch renderer draws the match into, the goal banner over it, and the sketch's pitch
+     overlays, which are stubs. A panel passed as the body (the loading steps, an error, first
+     run) covers the box; `dim` holds the last frame at half strength while the engine
+     reconnects. The canvas names its box, which the renderer reads. -->
 <script>
   import StubSection from './StubSection.svelte';
 
-  let { attach = () => {}, drawn = false, dim = false, banner = null, overlays = true, children } = $props();
+  let {
+    attach = () => {},
+    detach = () => {},
+    width = 742,
+    height = 312,
+    drawn = false,
+    dim = false,
+    banner = null,
+    overlays = true,
+    children,
+  } = $props();
 
   let canvas = $state();
 
   $effect(() => {
     if (canvas) {
-      attach(canvas);
+      const drawnOn = canvas;
+      attach(drawnOn);
+      return () => detach(drawnOn);
     }
   });
 </script>
 
-<div class="pitchbox" class:dim class:blank={!drawn}>
+<div class="pitchbox" class:dim class:blank={!drawn} style:width="{width}px" style:height="{height}px">
   <canvas
     bind:this={canvas}
-    width="742"
-    height="312"
+    {width}
+    {height}
+    data-width={width}
+    data-height={height}
+    style:width="{width}px"
+    style:height="{height}px"
     hidden={!drawn}
     role="img"
     aria-label="The pitch: both teams and the ball at the rendered tick"
@@ -45,8 +62,6 @@
 <style>
   .pitchbox {
     position: relative;
-    width: 742px;
-    height: 312px;
     border-radius: var(--radius-md);
     overflow: hidden;
     box-shadow: 0 0 0 2px var(--pitch-deep);
@@ -64,8 +79,6 @@
   canvas {
     position: absolute;
     inset: 0;
-    width: 742px;
-    height: 312px;
     display: block;
   }
 

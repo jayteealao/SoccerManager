@@ -13,10 +13,16 @@
 // the kick-off sends the lineup the manager picked, and every `ack`, `reject`, `change-state`,
 // `advice` and change event goes to it.
 //
-// Four views share the session: Tactics, the read-only Pre-match line-ups, the match, and
-// the Touchline. Before kick-off the path is Tactics (CONTINUE), then Pre-match (KICK OFF);
-// Pre-match sends nothing until KICK OFF. The half-time and full-time reports and saving a replay are
-// later parts of the port; until they arrive playback runs through the breaks.
+// Six views share the session: Tactics, the read-only Pre-match line-ups, the match, the
+// Touchline, the report and the replay. Before kick-off the path is Tactics (CONTINUE), then
+// Pre-match (KICK OFF); Pre-match sends nothing until KICK OFF.
+//
+// A report opens when the pitch reaches a break, never while scrubbing, and never behind a
+// rewind that jumps past one. The half-time report pauses playback until CONTINUE. The
+// full-time report is loading until the engine closes the socket after full time, when every
+// frame is stored and a saved file is complete; a stored match is ready at once. Every frame
+// is kept as it arrived, so Save replay writes the stream byte for byte. A replay file and
+// Replay the whole match play in the replay view; a live stream stays on the match screen.
 
 import { COMPONENT_COUNT, decodeInto, newFrame } from './decode.js';
 import { Dugout } from './dugout.svelte.js';
@@ -31,7 +37,8 @@ import { Pitch, readTokens } from './pitch.js';
 import { Playback } from './playback.js';
 import { formationName, kickOffSheet, rosterSheet, rulePackRows, squadSheet } from './prematch.js';
 import { backoff, clockAt, loadingSteps, panelModel } from './recovery.js';
-import { frameText, readReplay } from './replay-file.js';
+import { FrameStore, frameText, readReplay, writeReplay } from './replay-file.js';
+import { ReportClock, reportModel } from './report.js';
 import { Scheduler } from './schedule.js';
 import { fixtureTitle, scorerLines } from './scoreboard.js';
 import { signal } from './signal.js';
@@ -105,8 +112,16 @@ export class MatchSession {
   engineVersion = $state(null);
   stored = $state(false);
   busy = $state(false);
-  /// The view the tabs show: `tactics`, `prematch`, `match` or `touchline`.
+  /// The view the tabs show: `tactics`, `prematch`, `match`, `touchline`, `report` or
+  /// `replay`.
   view = $state('match');
+  /// The report on show or last shown: `{ kind, tick, state, model }`, where `kind` is
+  /// `half-time` or `full-time` and `state` is `loading` or `ready`. Null before the first.
+  report = $state.raw(null);
+  /// The replay saved last: `{ name, size, hash }`, or null.
+  saved = $state.raw(null);
+  /// `true` while the frames of the match are being written to a file.
+  saving = $state(false);
   /// The hello of the match shown, as the Pre-match line-ups and the Touchline read it.
   hello = $state.raw(null);
   /// The Touchline strip's play facts at the rendered tick: whether play is stopped, the
@@ -121,12 +136,15 @@ export class MatchSession {
     raf = globalThis.requestAnimationFrame?.bind(globalThis),
     now = () => globalThis.performance.now(),
     doc = globalThis.document,
+    download = null,
   } = {}) {
     this.fetcher = fetcher;
     this.timers = timers;
     this.raf = raf;
     this.now = now;
     this.doc = doc;
+    /// Hands a saved file to the person: the browser's download unless a test passes its own.
+    this.download = download ?? ((bytes, name) => this.browserDownload(bytes, name));
 
     this.scheduler = new Scheduler();
     this.stoppages = new Stoppages();
@@ -143,6 +161,20 @@ export class MatchSession {
     this.history = null;
     this.pitch = null;
     this.canvas = null;
+    /// The pitch canvas of each view that draws one: the match screen's, and the replay's.
+    this.canvases = {};
+    /// Every frame of the match as it arrived, for the replay file.
+    this.frames = new FrameStore();
+    /// The record of a loaded version-4 replay, kept so saving it writes the same kind of file.
+    this.loadedRecord = null;
+    this.helloVersion = null;
+    this.reportClock = new ReportClock();
+    /// The view a report returns to, and the view the replay returns to.
+    this.reportFrom = 'match';
+    this.replayFrom = 'match';
+    /// `true` once the engine closed the socket after full time: every frame is stored.
+    this.streamEnded = false;
+    this.lastSaved = null;
     this.socket = null;
     this.playback = null;
     this.status = null;
@@ -280,9 +312,29 @@ export class MatchSession {
     this.showPanel(panelModel(engine) ?? panelModel(null));
   }
 
-  /// The pitch canvas, once the screen has drawn it.
-  attachCanvas(canvas) {
+  /// A view's pitch canvas, once its screen has drawn it: `match` (the match screen) or
+  /// `replay`. The pitch draws on the replay's canvas while the replay view is open, and on
+  /// the match screen's otherwise.
+  attachCanvas(canvas, where = 'match') {
+    this.canvases[where] = canvas;
+    this.selectCanvas();
+  }
+
+  /// The screen took its canvas away (the replay view closed).
+  detachCanvas(canvas, where = 'match') {
+    if (this.canvases[where] === canvas) {
+      delete this.canvases[where];
+      this.selectCanvas();
+    }
+  }
+
+  selectCanvas() {
+    const canvas = (this.view === 'replay' ? this.canvases.replay : null) ?? this.canvases.match ?? null;
+    if (canvas === this.canvas) {
+      return;
+    }
     this.canvas = canvas;
+    this.pitch = null;
     this.makePitch();
   }
 
@@ -298,7 +350,10 @@ export class MatchSession {
       primary: t['team.kit.primary'],
       secondary: t['team.kit.secondary'],
     }));
-    this.pitch = new Pitch(this.canvas, kits, readTokens(this.doc));
+    this.pitch = new Pitch(this.canvas, kits, readTokens(this.doc), {
+      width: Number(this.canvas.dataset?.width) || undefined,
+      height: Number(this.canvas.dataset?.height) || undefined,
+    });
     if (this.history && this.history.count > 0 && this.history.tickAt(this.renderedTick, this.earlier)) {
       this.pitch.draw(this.earlier);
     } else {
@@ -331,7 +386,7 @@ export class MatchSession {
       onHello: (hello) => this.onHello(hello),
       onTick: (buffer) => this.onTick(buffer),
       onMessage: (message) => this.onMessage(message),
-      onRaw: (data) => this.onRaw(data),
+      onRaw: (data, message) => this.onRaw(data, message),
     });
     this.socket.onClose = (close) => this.onClose(close);
   }
@@ -358,6 +413,10 @@ export class MatchSession {
 
   begin(hello, { stored = false } = {}) {
     this.history = new History(hello.ticks_expected);
+    this.helloVersion = hello['protocol.version'] ?? null;
+    this.reportClock.reset();
+    this.report = null;
+    this.streamEnded = false;
     this.teams = hello.teams;
     this.hello = hello;
     this.teamNames = new Map(hello.teams.map((t) => [t['team.id'], t['team.name']]));
@@ -473,12 +532,22 @@ export class MatchSession {
     };
   }
 
-  onRaw(data) {
-    if (typeof data === 'string' || !this.resuming) {
+  /// Every frame, exactly as the socket handed it over, before it is decoded. The first hello
+  /// of a match opens a new store; a reconnect's first tick cuts every store back first.
+  onRaw(data, message = null) {
+    if (typeof data === 'string') {
+      if (message?.type === 'hello' && message['match.id'] !== this.matchId) {
+        this.frames = new FrameStore();
+        this.loadedRecord = null;
+      }
+      this.frames.addText(data, message?.type);
       return;
     }
-    const first = new DataView(data).getUint32(1, true);
-    this.resumeAt(first - 1);
+    if (this.resuming) {
+      const first = new DataView(data).getUint32(1, true);
+      this.resumeAt(first - 1);
+    }
+    this.frames.addBinary(data);
   }
 
   /// One tick frame. `live` is false for a frame read from a replay file, which has no socket
@@ -554,6 +623,7 @@ export class MatchSession {
     const gap = this.history.truncate(tick);
     this.stoppages.truncate(tick);
     this.match.truncate(tick);
+    this.frames.truncate(tick);
     this.previous.tick = tick;
     if (this.renderedTick > tick) {
       this.rewind(tick);
@@ -588,8 +658,15 @@ export class MatchSession {
     this.pitch?.draw(this.rendered);
     this.renderedTick = step.from;
     this.flush(this.renderedTick, { seek: false });
+    // A report opens when the pitch reaches its break, never while scrubbing.
+    if (!this.scrubbing) {
+      const due = this.reportClock.due(this.match.events, this.renderedTick);
+      if (due) {
+        this.openReport(due.kind, due.tick);
+      }
+    }
     this.pace();
-    this.report(timestamp);
+    this.reportSeen(timestamp);
   }
 
   /// Brings every panel to `tick`. A seek never replays a goal moment: the banner belongs to
@@ -705,7 +782,7 @@ export class MatchSession {
   }
 
   /// Tells a kicked-off engine which tick the pitch shows, so it stays within its buffer.
-  report(now) {
+  reportSeen(now) {
     if (!this.kickedOff || !this.socket) {
       return;
     }
@@ -800,6 +877,10 @@ export class MatchSession {
       return;
     }
     const from = this.renderedTick;
+    // A rewind that jumps past a break opens no report behind it.
+    if (tick > from) {
+      this.reportClock.pass(this.match.events, tick);
+    }
     this.scheduler.seek(tick);
     this.pitch?.clearTrail();
     const stored = this.history.tickAt(tick, this.earlier);
@@ -850,6 +931,10 @@ export class MatchSession {
     if (this.match.fullTimeTick !== null) {
       this.engineWord = 'Engine finished';
       this.setNotice('end', 'Full time. The whole match is stored and plays back.');
+      this.streamEnded = true;
+      if (this.report?.kind === KIND.fullTime && this.report.state === 'loading') {
+        this.report = { ...this.report, state: 'ready' };
+      }
       return;
     }
     this.recover(!clean);
@@ -919,9 +1004,10 @@ export class MatchSession {
       this.socket.onClose = null;
       this.socket.close();
     }
-    // Saving a replay arrives with the reports; the abandoned panel offers opening one.
+    // The abandoned match can still be saved as far as it was received, or another opened.
     const model = panelModel({ 'engine.state': 'abandoned' });
-    this.showPanel({ ...model, actions: model.actions.filter((a) => a !== 'save-replay') });
+    const actions = this.frames.count > 0 ? model.actions : model.actions.filter((a) => a !== 'save-replay');
+    this.showPanel({ ...model, actions });
   }
 
   /// Plays a replay file with no engine: every stored frame goes through the same path live
@@ -958,6 +1044,8 @@ export class MatchSession {
     this.renderedTick = 0;
     this.begin(read.hello, { stored: true });
     const frames = read.store;
+    this.frames = frames;
+    this.loadedRecord = read.record;
     for (let i = 1; i < frames.count; i += 1) {
       const { text, payload } = frames.frame(i);
       if (text) {
@@ -976,9 +1064,140 @@ export class MatchSession {
     this.setNotice(null);
     this.setStep(3);
     this.rewind(this.history.firstTick);
+    // The rewind to kick-off passed nothing; each break opens its report as play reaches it.
+    this.reportClock.reset();
     this.setPlaying(true);
     this.screen = 'live';
+    this.replayFrom = 'match';
+    this.view = 'replay';
+    this.selectCanvas();
+    this.spoken = 'Replay loaded. Playing from kick-off.';
     signal('viewer.replay_loaded', { frames: read.frames, ticks: read.ticks, name });
+  }
+
+  // ---- The reports, saving and the replay view --------------------------------------------------
+
+  /// Opens the half-time or full-time report at `tick`. The half-time report pauses playback
+  /// until CONTINUE; the engine stays within its bounded lead meanwhile.
+  openReport(kind, tick) {
+    const model = reportModel(this.match.events, tick, this.teams ?? []);
+    if (kind === KIND.halfTime) {
+      this.setPlaying(false);
+    }
+    const ready = kind !== KIND.fullTime || this.stored || this.streamEnded;
+    if (this.view !== 'report') {
+      this.reportFrom = ['touchline', 'tactics', 'replay'].includes(this.view) ? this.view : 'match';
+    }
+    this.report = { kind, tick, state: ready ? 'ready' : 'loading', model };
+    this.view = 'report';
+    this.selectCanvas();
+    signal('viewer.report_shown', { kind, tick });
+    this.spoken = kind === KIND.halfTime ? 'Half-time. The report is open.' : 'Full time. The report is open.';
+  }
+
+  /// CONTINUE or Close on the report: back to the view it opened over. Closing the half-time
+  /// report resumes playback.
+  closeReport() {
+    if (this.view !== 'report') {
+      return;
+    }
+    if (this.report?.kind === KIND.halfTime) {
+      this.setPlaying(true);
+    }
+    this.view = this.reportFrom;
+    this.selectCanvas();
+  }
+
+  /// Replay the whole match: back to kick-off, playing, in the replay view.
+  replayWhole() {
+    if (!this.history || this.history.count === 0) {
+      return;
+    }
+    this.showReplay();
+    this.rewind(this.history.firstTick);
+    this.setPlaying(true);
+    signal('viewer.replay_whole', { from: this.replayFrom });
+  }
+
+  /// The Replay tab of the report: the replay view, where playback stands.
+  showReplay() {
+    if (!this.history || this.history.count === 0) {
+      return;
+    }
+    if (this.view !== 'replay') {
+      this.replayFrom = this.view === 'report' ? 'report' : 'match';
+    }
+    this.view = 'replay';
+    this.selectCanvas();
+  }
+
+  /// CONTINUE on the replay: back to the report it came from, or to the match screen.
+  closeReplay() {
+    if (this.view !== 'replay') {
+      return;
+    }
+    this.view = this.replayFrom === 'report' && this.report ? 'report' : 'match';
+    this.selectCanvas();
+  }
+
+  /// Moves the rendered tick by `seconds` of match time through the rewind a scrub uses:
+  /// Back 10 seconds and Forward on the replay.
+  step(seconds) {
+    if (!this.history || this.history.count === 0) {
+      return;
+    }
+    const target = this.renderedTick + seconds * 50;
+    this.rewind(Math.max(this.history.firstTick, Math.min(this.history.newestTick, target)));
+  }
+
+  /// Why Save replay cannot run yet, or null when it can.
+  get saveBlocked() {
+    if (this.frames.count === 0 || !this.matchId) {
+      return 'Nothing is stored yet.';
+    }
+    if (this.report?.kind === KIND.fullTime && this.report.state === 'loading') {
+      return 'The whole match is still being stored.';
+    }
+    return null;
+  }
+
+  /// Writes every stored frame as a replay file and hands it to the person as a download.
+  async saveReplay() {
+    if (this.frames.count === 0 || !this.matchId || this.saving) {
+      return null;
+    }
+    this.saving = true;
+    try {
+      const { bytes, hash } = await writeReplay(this.frames, {
+        matchId: this.matchId,
+        version: this.helloVersion ?? undefined,
+        record: this.loadedRecord,
+      });
+      const name = `touchline-${this.matchId}.smfx`;
+      this.download(bytes, name);
+      this.lastSaved = { name, bytes, hash, frames: this.frames.count, ticks: this.frames.tickFrames };
+      this.saved = { name, size: bytes.length, hash };
+      signal('viewer.replay_saved', {
+        bytes: bytes.length,
+        frames: this.frames.count,
+        ticks: this.frames.tickFrames,
+        hash,
+      });
+      this.spoken = `Replay saved as ${name}.`;
+      return this.lastSaved;
+    } finally {
+      this.saving = false;
+    }
+  }
+
+  /// The browser's download: a temporary link to an object URL.
+  browserDownload(bytes, name) {
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
+    const link = this.doc.createElement('a');
+    link.href = url;
+    link.download = name;
+    link.click();
+    this.timers.setTimeout(() => URL.revokeObjectURL(url), 10_000);
   }
 
   // ---- The read-only test hook --------------------------------------------------------------

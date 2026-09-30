@@ -133,6 +133,13 @@
                       <button class="btn gh" type="button" disabled={session.busy} onclick={() => session.abandonEngine()}
                         >Abandon</button
                       >
+                    {:else if action === 'save-replay'}
+                      <button
+                        class="btn gh"
+                        type="button"
+                        disabled={session.saveBlocked !== null || session.saving}
+                        onclick={() => session.saveReplay()}>Save replay</button
+                      >
                     {:else if action === 'open-replay'}
                       <button class="btn gh" type="button" onclick={pickReplay}>Open a replay</button>
                     {/if}

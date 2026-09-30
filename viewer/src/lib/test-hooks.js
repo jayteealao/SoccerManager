@@ -38,6 +38,38 @@ export function install(session, target = globalThis) {
     }),
     events: () => session.match.events.map((e) => ({ ...e })),
     view: () => session.view,
+    /// The report on show or last shown, as the former page's hook named it; `open` is true
+    /// while the report view is up, and `state` is `loading` or `ready`.
+    report: () => {
+      const report = session.report;
+      return {
+        kind: report ? report.kind : null,
+        open: session.view === 'report',
+        state: report ? report.state : null,
+        tick: report ? report.tick : null,
+        score: report ? [...report.model.score] : null,
+        counts: report ? Object.fromEntries(report.model.rows.map((r) => [r.id, [...r.counts]])) : null,
+      };
+    },
+    replay: () => ({
+      stored: session.stored,
+      frames: session.frames.count,
+      ticks: session.frames.tickFrames,
+      last_saved_name: session.lastSaved ? session.lastSaved.name : null,
+      last_saved_size: session.lastSaved ? session.lastSaved.bytes.length : null,
+      last_saved_hash: session.lastSaved ? session.lastSaved.hash : null,
+    }),
+    lastSavedBytes: () => (session.lastSaved ? Array.from(session.lastSaved.bytes) : null),
+    /// The notice on show: its kind, its word and its words, or null; and the playback speed
+    /// asked for and the one in effect.
+    notice: () => ({
+      shown: session.notice !== null,
+      kind: session.notice?.kind ?? null,
+      word: session.notice?.word ?? null,
+      message: session.notice?.message ?? null,
+      speed: session.speed,
+      effective_speed: session.effectiveSpeed,
+    }),
     advice: () => ({
       tick: session.dugout.advice?.tick ?? null,
       picks: session.dugout.proposals().map((p) => ({ text: p.text, code: p.pick.code, accepted: p.accepted })),

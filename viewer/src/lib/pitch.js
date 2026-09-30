@@ -1,7 +1,8 @@
 // The pitch renderer. Nothing else in the viewer draws to the pitch canvas.
 //
 // It owns one mapping: the engine's centred metre space, where x runs -52.5 to 52.5 and y
-// runs -34 to 34, onto the 742 by 312 box the match screen gives it. The length maps with one
+// runs -34 to 34, onto the box its canvas gives it: 742 by 312 on the match screen, 752 by
+// 290 on the replay. The length maps with one
 // uniform scale; the width maps with one fixed vertical factor, the sketch's top-down tilt.
 // Both are constants of the box, so every drawn position stays a pure function of the
 // engine's metres: the tilt projects a position, it never moves one.
@@ -20,7 +21,8 @@ export const LENGTH = 105;
 export const WIDTH = 68;
 export const GOAL_WIDTH = 7.32;
 
-/// The box the match screen draws the pitch in, in CSS pixels.
+/// The box the match screen draws the pitch in, in CSS pixels. A canvas may name another
+/// (the replay's is 752 by 290).
 export const BOX = Object.freeze({ width: 742, height: 312 });
 
 /// A sent-off player stands beside the pitch, past the touchline, at `parking_spot()` in
@@ -108,11 +110,17 @@ export function readTokens(doc = globalThis.document) {
 export class Pitch {
   /// `canvas` is sized in CSS pixels by its component; the backing store is multiplied by the
   /// device pixel ratio here so the markings stay crisp on a scaled display. `tokens` are
-  /// the active skin's values (`readTokens`); `kits` the two clubs' kit colours.
-  constructor(canvas, kits, tokens, { ratio = globalThis.devicePixelRatio || 1 } = {}) {
+  /// the active skin's values (`readTokens`); `kits` the two clubs' kit colours; `width` and
+  /// `height` the box in CSS pixels, the match screen's unless given.
+  constructor(
+    canvas,
+    kits,
+    tokens,
+    { ratio = globalThis.devicePixelRatio || 1, width = BOX.width, height = BOX.height } = {}
+  ) {
     this.canvas = canvas;
-    this.cssWidth = BOX.width;
-    this.cssHeight = BOX.height;
+    this.cssWidth = width;
+    this.cssHeight = height;
     this.ratio = Math.max(1, Math.min(3, ratio));
     canvas.width = Math.round(this.cssWidth * this.ratio);
     canvas.height = Math.round(this.cssHeight * this.ratio);

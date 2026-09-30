@@ -7,6 +7,7 @@ import { afterEach, beforeEach, test } from 'vitest';
 
 import { COMPONENT_COUNT } from '../src/lib/decode.js';
 import { ACTIONS, MatchSession, NOTICES, SCREENS } from '../src/lib/match-session.svelte.js';
+import { readReplay } from '../src/lib/replay-file.js';
 import { clearSignals } from '../src/lib/signal.js';
 import { encodeKeyframe, eventMessage, roster, statsMessage } from './helpers.js';
 
@@ -46,6 +47,14 @@ class FakeSocket {
     this.readyState = 3;
     for (const fn of this.listeners.close ?? []) {
       fn({ code: 1006, wasClean: false, reason: '' });
+    }
+  }
+
+  /// The engine's own close after full time.
+  finish() {
+    this.readyState = 3;
+    for (const fn of this.listeners.close ?? []) {
+      fn({ code: 1000, wasClean: true, reason: '' });
     }
   }
 }
@@ -97,9 +106,48 @@ const frameAt = (tick) => encodeKeyframe(tick, new Array(COMPONENT_COUNT).fill(t
 async function started(...bodies) {
   const fetcher = statusFetch(...bodies);
   const timers = { setTimeout: (fn, ms) => ({ fn, ms }), clearTimeout: () => {} };
-  const session = new MatchSession({ fetcher, timers, raf: null, now: () => 0, doc: null });
+  const downloads = [];
+  const session = new MatchSession({
+    fetcher,
+    timers,
+    raf: null,
+    now: () => 0,
+    doc: null,
+    download: (bytes, name) => downloads.push({ bytes, name }),
+  });
   await session.start();
-  return { session, fetcher, socket: FakeSocket.made.at(-1) };
+  return { session, fetcher, downloads, socket: FakeSocket.made.at(-1) };
+}
+
+/// Plays on from the rendered tick, frame by frame at 8x, until `done` holds or `limit` frames.
+function playFrames(session, done, limit = 5000) {
+  session.scheduler.setSpeed(8);
+  let ts = 0;
+  session.frame(ts);
+  for (let i = 0; i < limit && !done(); i += 1) {
+    ts += 16;
+    session.frame(ts);
+  }
+}
+
+/// A short match: kick-off, a goal, half time at 400, a card, full time at 800.
+function shortMatch(socket) {
+  const score = { 'home.score': 1, 'away.score': 0 };
+  for (let t = 1; t <= 800; t += 1) {
+    socket.deliver(frameAt(t));
+    if (t === 150) {
+      socket.deliver(JSON.stringify(eventMessage(150, 'goal', { 'team.id': 'club-a', ...score })));
+    }
+    if (t === 400) {
+      socket.deliver(JSON.stringify(eventMessage(400, 'half-time', score)));
+    }
+    if (t === 600) {
+      socket.deliver(JSON.stringify(eventMessage(600, 'card', { 'team.id': 'club-b', 'card.kind': 'yellow', ...score })));
+    }
+    if (t === 800) {
+      socket.deliver(JSON.stringify(eventMessage(800, 'full-time', score)));
+    }
+  }
 }
 
 /// Plays frames `from` to `to` into the session and draws `to`.
@@ -375,4 +423,102 @@ test('every field the screen reads is defined in every state', async () => {
   check(second.session);
   assert.deepEqual([...seen].sort(), [...SCREENS].sort());
   assert.deepEqual(Object.keys(ACTIONS).sort(), SCREENS.filter((s) => s !== 'error').sort());
+});
+
+test('the half-time report opens once when the pitch reaches the break, pauses, and CONTINUE resumes', async () => {
+  const { session, socket } = await started(RUNNING);
+  socket.deliver(hello());
+  session.act();
+  shortMatch(socket);
+  session.rewind(300);
+  assert.equal(session.report, null, 'no report before the break');
+  playFrames(session, () => session.view === 'report');
+  assert.equal(session.view, 'report');
+  assert.equal(session.report.kind, 'half-time');
+  assert.equal(session.report.state, 'ready');
+  assert.equal(session.report.tick, 400);
+  assert.deepEqual(session.report.model.score, [1, 0]);
+  assert.deepEqual(session.report.model.rows.find((r) => r.id === 'goals').counts, [1, 0]);
+  assert.equal(session.playing, false, 'half time pauses playback');
+  session.closeReport();
+  assert.equal(session.view, 'match');
+  assert.equal(session.playing, true, 'CONTINUE resumes');
+  // Play on to just before full time: the half-time report does not open again.
+  playFrames(session, () => session.renderedTick >= 700);
+  assert.equal(session.view, 'match');
+});
+
+test('a scrub past a break opens no report behind it', async () => {
+  const { session, socket } = await started(RUNNING);
+  socket.deliver(hello());
+  session.act();
+  shortMatch(socket);
+  session.rewind(100);
+  session.scrubTo(500);
+  session.scrubEnd();
+  playFrames(session, () => session.renderedTick >= 700);
+  assert.equal(session.view, 'match', 'half time was passed by the scrub');
+  assert.equal(session.report, null);
+});
+
+test('the full-time report is loading until the engine closes after full time, then ready', async () => {
+  const { session, socket } = await started(RUNNING);
+  socket.deliver(hello());
+  session.act();
+  shortMatch(socket);
+  session.rewind(700);
+  playFrames(session, () => session.view === 'report');
+  assert.equal(session.report.kind, 'full-time');
+  assert.equal(session.report.state, 'loading');
+  assert.equal(session.saveBlocked, 'The whole match is still being stored.');
+  socket.finish();
+  assert.equal(session.report.state, 'ready', 'the close after full time completes the store');
+  assert.equal(session.saveBlocked, null);
+});
+
+test('Save replay writes every frame as it arrived, and the file reads back the same', async () => {
+  const { session, socket, downloads } = await started(RUNNING);
+  socket.deliver(hello('match-7'));
+  session.act();
+  shortMatch(socket);
+  socket.finish();
+  const saved = await session.saveReplay();
+  assert.equal(downloads.length, 1);
+  assert.equal(downloads[0].name, 'touchline-match-7.smfx');
+  assert.equal(saved.ticks, 800, 'every tick frame is stored');
+  assert.equal(session.saved.size, downloads[0].bytes.length);
+  const read = await readReplay(downloads[0].bytes);
+  assert.equal(read.ticks, 800);
+  assert.equal(read.frames, saved.frames, 'the file holds the same frames as the store');
+  assert.equal(read.hello['match.id'], 'match-7');
+});
+
+test('a replay file opens in the replay view, and Replay the whole match rewinds to kick-off', async () => {
+  const { session, socket, downloads } = await started(RUNNING);
+  socket.deliver(hello('match-7'));
+  session.act();
+  shortMatch(socket);
+  socket.finish();
+  await session.saveReplay();
+  await session.openReplay(downloads[0].bytes, 'match.smfx');
+  assert.equal(session.view, 'replay');
+  assert.equal(session.stored, true);
+  assert.equal(session.renderedTick, session.history.firstTick);
+  // A stored match's full-time report is ready at once.
+  session.rewind(700);
+  playFrames(session, () => session.view === 'report');
+  assert.equal(session.report.kind, 'full-time');
+  assert.equal(session.report.state, 'ready');
+  session.replayWhole();
+  assert.equal(session.view, 'replay');
+  assert.equal(session.renderedTick, session.history.firstTick);
+  assert.equal(session.playing, true);
+  session.step(10);
+  assert.equal(session.renderedTick, session.history.firstTick + 500, 'Forward moves ten seconds');
+  session.step(-10);
+  assert.equal(session.renderedTick, session.history.firstTick, 'Back 10 seconds stops at kick-off');
+  session.closeReplay();
+  assert.equal(session.view, 'report', 'CONTINUE on the replay goes back to the report');
+  session.closeReport();
+  assert.equal(session.view, 'replay', 'and the report goes back to the replay it opened over');
 });
