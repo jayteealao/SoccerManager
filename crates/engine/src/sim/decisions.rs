@@ -8,9 +8,7 @@ use crate::data::rules::StoppageKind;
 use crate::decision::{Kick, Options, offsets_json};
 use crate::math::DVec2;
 use crate::modules::{CarrierPlan, CoverTrace, OptionDraws, ShotDraws, TargetsTrace};
-use crate::pitch;
-use crate::plugin::{DecisionContext, HookPoint, OptionOffsets};
-use crate::sim::{ScriptCache, Simulation};
+use crate::sim::Simulation;
 use crate::streams::{Action, Key};
 use crate::trace::Point;
 
@@ -165,87 +163,6 @@ impl Simulation {
 }
 
 impl Simulation {
-    /// The decision hook's offsets for carrier `c`, or `None` without a decision hook. The
-    /// hook is asked again for a new carrier, after a stoppage, and when the pack's refresh
-    /// interval has passed; in between, the cached offsets apply. A failed call gives zero
-    /// offsets until the next refresh. Nothing here draws from the random stream.
-    fn script_offsets(&mut self, c: usize) -> Option<OptionOffsets> {
-        self.plugins.decision.as_ref()?;
-        if let Some(cache) = self.script_cache
-            && cache.carrier == c
-            && self.tick < cache.until
-        {
-            if self.trace_on() {
-                self.trace_point(
-                    Point::ScriptDecision,
-                    json!({"carrier": c, "cached": true, "offsets": offsets_json(&cache.offsets)}),
-                );
-            }
-            return Some(cache.offsets);
-        }
-        let ctx = self.decision_context(c);
-        let outcome = self.plugins.decision.as_mut()?.adjust(&ctx);
-        let (value, notes) = self.plugins.settle(HookPoint::Decision, outcome, self.tick);
-        let failed = value.is_none();
-        let note_count = notes.len();
-        let switched_off = self.plugins.decision.is_none();
-        self.push_script_notes(notes);
-        let offsets = value.unwrap_or_default();
-        if self.trace_on() {
-            let result = if !failed {
-                "value"
-            } else if switched_off {
-                "switched_off"
-            } else {
-                "failed"
-            };
-            self.trace_point(
-                Point::ScriptDecision,
-                json!({
-                    "carrier": c,
-                    "cached": false,
-                    "offsets": offsets_json(&offsets),
-                    "result": result,
-                    "notes": note_count,
-                }),
-            );
-        }
-        self.script_cache = Some(ScriptCache {
-            carrier: c,
-            until: self.tick.saturating_add(self.plugins.refresh_ticks.max(1)),
-            offsets,
-        });
-        Some(offsets)
-    }
-
-    /// What the decision hook sees about carrier `c`.
-    pub(crate) fn decision_context(&self, c: usize) -> DecisionContext {
-        let carrier = self.players[c];
-        let team = carrier.team;
-        let side = &self.teams[team];
-        let nearest_opponent = self
-            .players
-            .iter()
-            .filter(|p| p.team != team && p.active())
-            .map(|p| (p.pos - carrier.pos).length())
-            .fold(f64::INFINITY, f64::min);
-        DecisionContext {
-            tick: self.tick,
-            minute: self.referee.clock.minute(self.tick).0,
-            team,
-            slot: carrier.slot,
-            goals_for: self.summary.goals[team],
-            goals_against: self.summary.goals[1 - team],
-            goal_distance: (side.target_goal() - carrier.pos).length(),
-            nearest_opponent: if nearest_opponent.is_finite() {
-                nearest_opponent
-            } else {
-                pitch::HALF_LENGTH * 2.0
-            },
-            progress: (carrier.pos.x * side.attack_x / pitch::HALF_LENGTH).clamp(-1.0, 1.0),
-        }
-    }
-
     /// Player `c` shoots at the goal centred on `goal`, which `keeper` defends; `spread_scale`
     /// scales the aim noise (1 in open play, less for a kick from the penalty mark). An
     /// open-play shot and a shoot-out kick both come from here, and the draws are taken in

@@ -289,26 +289,7 @@ impl Simulation {
         event.secondary = Some(c);
         event.advantage = Some(advantage);
         self.events.push(event);
-        if let Some(hook) = self.plugins.rule.as_mut() {
-            let ctx = crate::plugin::FoulContext {
-                tick: self.tick,
-                minute: self.referee.clock.minute(self.tick).0,
-                team: offender.team,
-                slot: offender.slot,
-                yellows: offender.yellow,
-                aggression: offender.derived.aggression,
-                advantage,
-                penalty,
-            };
-            let outcome = hook.card(&ctx, card);
-            let (value, notes) =
-                self.plugins
-                    .settle(crate::plugin::HookPoint::Rule, outcome, self.tick);
-            self.push_script_notes(notes);
-            if let Some(scripted) = value {
-                card = scripted;
-            }
-        }
+        card = self.rule_card(offender, advantage, penalty, card);
         if self.trace_on() {
             self.trace_point(
                 Point::Foul,

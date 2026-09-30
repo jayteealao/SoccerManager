@@ -6,6 +6,7 @@
 
 mod decisions;
 mod fatigue;
+mod hooks;
 mod manager;
 mod movement;
 mod possession;
@@ -725,51 +726,6 @@ impl Simulation {
     /// The attached plugin hooks, their pack, and their counters.
     pub fn plugins(&self) -> &Plugins {
         &self.plugins
-    }
-
-    /// Offers `native`, the line the commentator chose for `event`, to the commentary hook.
-    /// Returns the line to use and, when the hook failed, the `script` events to record on
-    /// the event's tick. Without a commentary hook the line comes back as it went in.
-    pub fn offer_line(
-        &mut self,
-        event: &EngineEvent,
-        native: Option<String>,
-    ) -> (Option<String>, Vec<EngineEvent>) {
-        let (Some(native), Some(hook)) = (native.as_deref(), self.plugins.commentary.as_mut())
-        else {
-            return (native, Vec::new());
-        };
-        let ctx = crate::plugin::LineContext {
-            tick: event.tick,
-            minute: event.minute,
-            kind: event.kind.code(),
-            team: event.team,
-            scores: event.scores,
-        };
-        let outcome = hook.line(&ctx, native);
-        let (line, notes) =
-            self.plugins
-                .settle(crate::plugin::HookPoint::Commentary, outcome, event.tick);
-        let events = notes
-            .into_iter()
-            .map(|note| self.script_event_at(event.tick, note))
-            .collect();
-        (Some(line.unwrap_or_else(|| native.to_string())), events)
-    }
-
-    /// Records the notes a hook call produced as `script` events on the tick this step
-    /// produces.
-    pub(crate) fn push_script_notes(&mut self, notes: Vec<ScriptNote>) {
-        for note in notes {
-            let event = self.script_event_at(self.tick + 1, note);
-            self.events.push(event);
-        }
-    }
-
-    fn script_event_at(&self, tick: u32, note: ScriptNote) -> EngineEvent {
-        let mut event = self.event_at(tick, EngineEventKind::Script, None);
-        event.detail = Some(EventDetail::Script(note));
-        event
     }
 
     pub fn config(&self) -> &MatchConfig {
