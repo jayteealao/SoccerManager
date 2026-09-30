@@ -154,6 +154,7 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
             Arc::new(crate::web::Fixed {
                 socket_port: server.port(),
                 match_id: match_id.clone(),
+                skin: loaded.content.modules.skin.skin(),
             }),
         )?),
         None => None,

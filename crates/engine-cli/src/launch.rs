@@ -78,6 +78,8 @@ pub struct Launcher {
     common: Vec<OsString>,
     snapshot: PathBuf,
     match_id: String,
+    /// The skin folder the viewer loads, from the `viewer.skin` slot.
+    skin: &'static str,
     match_millis: u64,
     seed: u64,
     minutes: u32,
@@ -87,6 +89,10 @@ pub struct Launcher {
 pub fn run(content_dir: Option<&Path>, opts: &LaunchOpts) -> anyhow::Result<i32> {
     let engine = engine_path(opts.engine.as_deref());
     let web = crate::web::resolve_web_dir(opts.web.as_deref())?;
+    // The content folder is loaded once here, the way the worker loads it, so a bad slot file
+    // (an unknown skin included) refuses the start before any page is served.
+    let content = engine::Content::load(&engine::ContentDir::resolve(content_dir)?)?;
+    let skin = content.modules.skin.skin();
     let seed = opts.seed.unwrap_or_else(|| {
         let seed = clock_seed();
         // Stdout carries the page address alone, so the chosen seed goes to stderr, where a
@@ -122,6 +128,7 @@ pub fn run(content_dir: Option<&Path>, opts: &LaunchOpts) -> anyhow::Result<i32>
         engine,
         common,
         match_id,
+        skin,
         match_millis: started.millis,
         seed,
         minutes: opts.minutes,
@@ -472,6 +479,7 @@ impl Status for Arc<Launcher> {
             "snapshot.tick": worker.snapshot_tick,
             "match.id": self.match_id,
             "launcher": true,
+            "viewer.skin": self.skin,
         })
         .to_string()
     }

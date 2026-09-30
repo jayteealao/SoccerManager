@@ -2,6 +2,7 @@
 
 use anyhow::Context;
 
+use engine::modules::ResolvedModules;
 use engine::observe::identity::data_dir;
 use stream::{Replayer, Server, read_fixture};
 
@@ -26,6 +27,9 @@ pub fn run(opts: &ReplayOpts) -> anyhow::Result<i32> {
             std::sync::Arc::new(crate::web::Fixed {
                 socket_port: server.port(),
                 match_id: replayer.hello().match_id.clone(),
+                // A recorded fixture needs no content folder, so the replay page gets the
+                // viewer's built-in default look.
+                skin: ResolvedModules::builtin_default().skin.skin(),
             }),
         )?),
         None => None,

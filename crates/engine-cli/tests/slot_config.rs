@@ -1,6 +1,7 @@
 //! A bad slot file refuses `simulate` at start-up: for an unknown module, an unbuilt
 //! version, an empty module name, and a required slot switched off, the program exits 1 and
-//! names the slot, the bad value, and the valid names.
+//! names the slot, the bad value, and the valid names. An unknown skin refuses `serve` and
+//! `launch` the same way, before any port or page address is printed.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -25,10 +26,31 @@ fn copy_tree(from: &Path, to: &Path) {
 /// Runs `simulate` on a copy of the shipped content whose slot file is `fixture`, and
 /// returns the exit code and stderr.
 fn simulate_with(fixture: &str) -> (Option<i32>, String) {
+    let (code, _, stderr) = run_with(
+        fixture,
+        &[
+            "simulate",
+            "--seed",
+            "1",
+            "--minutes",
+            "1",
+            "--no-snapshot",
+            "--ticks-out",
+            "match.ticks",
+        ],
+    );
+    (code, stderr)
+}
+
+/// Runs `engine-cli --content-dir <copy> <args>` from a scratch folder, on a copy of the
+/// shipped content whose slot file is `fixture`, and returns the exit code, stdout, and
+/// stderr.
+fn run_with(fixture: &str, args: &[&str]) -> (Option<i32>, String, String) {
     let root = std::env::temp_dir().join(format!(
-        "engine-cli-slots-{}-{}",
+        "engine-cli-slots-{}-{}-{}",
         std::process::id(),
-        fixture.trim_end_matches(".json")
+        fixture.trim_end_matches(".json"),
+        args[0]
     ));
     let _ = std::fs::remove_dir_all(&root);
     let content = root.join("content");
@@ -46,21 +68,13 @@ fn simulate_with(fixture: &str) -> (Option<i32>, String) {
         .current_dir(&root)
         .arg("--content-dir")
         .arg(&content)
-        .args([
-            "simulate",
-            "--seed",
-            "1",
-            "--minutes",
-            "1",
-            "--no-snapshot",
-            "--ticks-out",
-        ])
-        .arg(root.join("match.ticks"))
+        .args(args)
         .output()
         .unwrap();
     let _ = std::fs::remove_dir_all(&root);
     (
         out.status.code(),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
     )
 }
@@ -176,5 +190,39 @@ fn decision_switched_off_refuses_start_up() {
         "engine.decision",
         "off is not allowed: the slot is required",
         "decision@1",
+    );
+}
+
+/// AC-21: `serve` with an unknown skin refuses before it binds a port.
+#[test]
+fn an_unknown_skin_refuses_serve() {
+    let (code, stdout, stderr) = run_with("skin-unknown.json", &["serve", "--seed", "1"]);
+    assert_skin_refused(code, &stdout, &stderr);
+}
+
+/// AC-21: `launch` with an unknown skin refuses before it serves a page.
+#[test]
+fn an_unknown_skin_refuses_launch() {
+    let web = repo().join("web");
+    let web = web.to_str().unwrap();
+    let (code, stdout, stderr) = run_with(
+        "skin-unknown.json",
+        &["launch", "--seed", "1", "--web", web],
+    );
+    assert_skin_refused(code, &stdout, &stderr);
+}
+
+fn assert_skin_refused(code: Option<i32>, stdout: &str, stderr: &str) {
+    assert_eq!(code, Some(1), "stderr: {stderr}");
+    assert!(stdout.trim().is_empty(), "nothing is served: {stdout}");
+    let line = stderr
+        .lines()
+        .find(|l| l.starts_with("error: slot configuration refused"))
+        .unwrap_or_else(|| panic!("no refusal line in stderr: {stderr}"));
+    assert!(line.contains("slot viewer.skin:"), "{line}");
+    assert!(line.contains("\"nope\""), "{line}");
+    assert!(
+        line.ends_with("; valid: broadcast-blue@1, interim-light@1, off"),
+        "{line}"
     );
 }

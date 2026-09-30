@@ -72,6 +72,8 @@ pub trait Status: Send + Sync {
 pub struct Fixed {
     pub socket_port: u16,
     pub match_id: String,
+    /// The skin folder the viewer loads, from the `viewer.skin` slot.
+    pub skin: &'static str,
 }
 
 impl Status for Fixed {
@@ -86,6 +88,7 @@ impl Status for Fixed {
             "snapshot.tick": null,
             "match.id": self.match_id,
             "launcher": false,
+            "viewer.skin": self.skin,
         })
         .to_string()
     }
@@ -468,6 +471,18 @@ fn shown_dir(dir: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_page_status_names_the_skin() {
+        let status = Fixed {
+            socket_port: 4000,
+            match_id: "m".into(),
+            skin: "interim-light",
+        };
+        let json: serde_json::Value = serde_json::from_str(&status.json()).unwrap();
+        assert_eq!(json["viewer.skin"], "interim-light");
+        assert_eq!(json["socket.port"], 4000);
+    }
 
     #[test]
     fn only_a_loopback_host_on_this_port_is_answered() {
