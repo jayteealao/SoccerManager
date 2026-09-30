@@ -13,6 +13,8 @@ pub mod config;
 pub mod modifier;
 pub mod proposal;
 pub mod registry;
+#[cfg(feature = "scenario")]
+pub mod stand_in;
 pub mod view;
 
 use std::fmt;
