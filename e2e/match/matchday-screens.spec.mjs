@@ -17,7 +17,7 @@ import path from 'node:path';
 import { expect, test } from '@playwright/test';
 
 import { contrastReport } from '../support/contrast.mjs';
-import { VIEWER, contentWithSkin, startEngine } from '../support/engine.mjs';
+import { VIEWER, contentWithSkin, fastForward, startEngine } from '../support/engine.mjs';
 import { everyMessage, managerCommand, recordClientMessages } from '../support/messages.mjs';
 import { chooseIndex } from '../support/page.mjs';
 
@@ -60,9 +60,10 @@ async function open(page, url, skin = 'broadcast-blue') {
   await page.evaluate(() => document.fonts.ready);
 }
 
-async function serve(seed, skin = 'broadcast-blue') {
+/// `to`: a late tick the drive plays to; the engine sends every tick up to it at once.
+async function serve(seed, skin = 'broadcast-blue', to = undefined) {
   return startEngine({
-    args: ['--seed', String(seed), '--web', VIEWER],
+    args: ['--seed', String(seed), '--web', VIEWER, ...fastForward(to)],
     env: skin === 'broadcast-blue' ? {} : { SM_CONTENT_DIR: lightContent.dir },
   });
 }
@@ -132,7 +133,7 @@ for (const skin of SKINS) {
 
     test('the Touchline at minute 60 with a substitution and a new shape queued', async ({ page }) => {
       test.setTimeout(15 * 60_000);
-      const engine = await serve(7, skin);
+      const engine = await serve(7, skin, MINUTE_60);
       try {
         await tactics(page, engine, skin);
         await playTo(page, MINUTE_60);
@@ -274,6 +275,8 @@ test('the Touchline queue: a substitution with a new shape, a cancel and an edit
 test("the assistant's tired-player pick shows at its tick, and Accept queues it", async ({ page }, info) => {
   test.setTimeout(15 * 60_000);
   const sent = await recordClientMessages(page, managerCommand);
+  // No fast-forward here: the recorded socket passes every server message through the test
+  // runner, and a burst of 170,000 ticks ends the runner (exit 134).
   const engine = await serve(ADVICE_SEED);
   try {
     await tactics(page, engine, 'broadcast-blue');

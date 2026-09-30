@@ -15,6 +15,10 @@
 //! A viewer that reports the tick it has drawn (`seen`) bounds the engine's lead: once a lead
 //! bound is set and a first report arrives, the producer waits while it is that many ticks
 //! ahead of the drawn tick. A client that never reports is never held by it.
+//!
+//! A test seam, the fast-forward, lets a started match run flat out to a named tick: before
+//! it, neither a pause nor the lead bound holds the producer; from it on, both hold as usual.
+//! The simulation is the same either way; only when its ticks are sent changes.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -51,9 +55,20 @@ struct GateState {
     seen: Option<u32>,
     /// The most ticks the producer may run ahead of `seen`; `None` leaves the lead unbounded.
     lead_bound: Option<u32>,
+    /// A test seam: once started, the producer is not held before this tick.
+    fast_forward_to: Option<u32>,
 }
 
 impl GateState {
+    /// `true` while producing the tick after `tick` must wait: the client paused, or the
+    /// lead bound is reached. A started match inside its fast-forward never waits.
+    fn holds(&self, tick: u32) -> bool {
+        if self.started && self.fast_forward_to.is_some_and(|to| tick < to) {
+            return false;
+        }
+        !self.running || self.beyond_lead(tick)
+    }
+
     /// `true` while producing the tick after `tick` would pass the lead bound.
     fn beyond_lead(&self, tick: u32) -> bool {
         match (self.seen, self.lead_bound) {
@@ -83,6 +98,7 @@ impl Gate {
                 started: running,
                 seen: None,
                 lead_bound: None,
+                fast_forward_to: None,
             }),
             changed: Condvar::new(),
             speed_centis: AtomicU32::new(100),
@@ -106,7 +122,7 @@ impl Gate {
     /// tick after `tick` lies within the lead bound of it. `false` when the session ended.
     pub fn wait_for_room(&self, tick: u32) -> bool {
         let mut state = self.state.lock().expect("the gate lock is never poisoned");
-        while !state.stopped && (!state.running || state.beyond_lead(tick)) {
+        while !state.stopped && state.holds(tick) {
             state = self
                 .changed
                 .wait(state)
@@ -119,6 +135,14 @@ impl Gate {
     pub fn set_lead_bound(&self, ticks: u32) {
         let mut state = self.state.lock().expect("the gate lock is never poisoned");
         state.lead_bound = Some(ticks);
+        self.changed.notify_all();
+    }
+
+    /// A test seam: after the first `start`, produce every tick up to `tick` without waiting
+    /// for a pause to end or for the drawn tick to catch up. The match is unchanged.
+    pub fn set_fast_forward(&self, tick: u32) {
+        let mut state = self.state.lock().expect("the gate lock is never poisoned");
+        state.fast_forward_to = Some(tick);
         self.changed.notify_all();
     }
 
@@ -687,6 +711,52 @@ mod tests {
             !handle.join().unwrap(),
             "a stopped session releases the producer"
         );
+    }
+
+    #[test]
+    fn a_fast_forward_runs_past_a_pause_and_the_lead_bound_up_to_its_tick_only() {
+        let gate = Arc::new(Gate::held());
+        gate.set_lead_bound(500);
+        gate.set_fast_forward(9_000);
+        let waiter = Arc::clone(&gate);
+        let handle = std::thread::spawn(move || waiter.wait_for_room(10));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        assert!(
+            !handle.is_finished(),
+            "before the first start nothing is produced"
+        );
+        gate.set_running(true);
+        assert!(handle.join().unwrap());
+        gate.set_seen(0);
+        gate.set_running(false);
+        assert!(
+            gate.wait_for_room(8_999),
+            "paused and 8999 ticks ahead: still produced"
+        );
+        let waiter = Arc::clone(&gate);
+        let handle = std::thread::spawn(move || waiter.wait_for_room(9_000));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        assert!(
+            !handle.is_finished(),
+            "from the fast-forward tick the pause holds again"
+        );
+        gate.set_seen(8_600);
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        assert!(
+            !handle.is_finished(),
+            "within the bound, the pause still holds"
+        );
+        gate.set_running(true);
+        assert!(handle.join().unwrap());
+        let waiter = Arc::clone(&gate);
+        let handle = std::thread::spawn(move || waiter.wait_for_room(9_100));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        assert!(
+            !handle.is_finished(),
+            "past the fast-forward the lead bound holds again"
+        );
+        gate.stop();
+        assert!(!handle.join().unwrap());
     }
 
     #[test]

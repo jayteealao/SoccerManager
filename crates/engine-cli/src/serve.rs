@@ -238,6 +238,8 @@ struct Serving<'a> {
     ticks: u32,
     stream_tuning: engine::data::StreamTuning,
     drop_at: Option<u32>,
+    /// A test seam: the engine runs flat out to this tick (`--fast-forward-to`).
+    fast_forward_to: Option<u32>,
 }
 
 impl<'a> Serving<'a> {
@@ -319,6 +321,7 @@ impl<'a> Serving<'a> {
             ticks,
             stream_tuning: loaded.content.tuning.stream.clone(),
             drop_at: opts.drop_client_at,
+            fast_forward_to: opts.fast_forward_to,
         })
     }
 
@@ -340,6 +343,11 @@ impl<'a> Serving<'a> {
         // A page that reports the tick it draws keeps the engine within the buffer bound of
         // it, so a change the manager queues reaches the engine before the stoppage on screen.
         gate.set_lead_bound(u32::try_from(self.stream_tuning.buffer_ticks).unwrap_or(u32::MAX));
+        // A browser test skips the wait for playback to reach a late minute; the ticks are
+        // the same, only sent sooner.
+        if let Some(tick) = self.fast_forward_to {
+            gate.set_fast_forward(tick);
+        }
         let inbox = Arc::new(Inbox::default());
         let session = Session::start(
             connection,

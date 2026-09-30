@@ -99,6 +99,15 @@ export async function startEngine({ command = 'serve', args = [], env = {}, data
   };
 }
 
+/// The `serve` arguments that let a browser test skip the wait for playback to reach a late
+/// minute: the engine sends every tick up to `tick` at once, and holds for the page as usual
+/// from there. The match is the same; the page stores the ticks sooner and plays them at its
+/// own speed, so a test that waits for a stored tick and then rewinds to it sees the same
+/// screen. Empty when `tick` is not given.
+export function fastForward(tick) {
+  return tick === undefined || tick === null ? [] : ['--fast-forward-to', String(tick)];
+}
+
 /// A copy of the content folder whose slot file names `skin` for the viewer. A test passes it
 /// as SM_CONTENT_DIR, so the skin changes by configuration alone.
 export function contentWithSkin(skin) {

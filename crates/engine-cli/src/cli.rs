@@ -328,6 +328,9 @@ pub struct ServeOpts {
     /// Drop the viewer's connection once this tick is sent; a test seam.
     #[arg(long, hide = true, value_name = "TICK")]
     pub drop_client_at: Option<u32>,
+    /// Produce every tick up to this one without waiting for the viewer; a test seam.
+    #[arg(long, hide = true, value_name = "TICK")]
+    pub fast_forward_to: Option<u32>,
 }
 
 #[derive(Debug, Args)]
