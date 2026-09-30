@@ -478,5 +478,221 @@
     "bg": "--ground-2",
     "kind": "text",
     "where": "engine path in the first-run panel"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--pitch-select",
+    "kind": "text",
+    "where": "Tactics: the formation and mentality selects on the pitch panel"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--navy-700",
+    "kind": "text",
+    "where": "Tactics: the in-possession label over the pitch"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--rule",
+    "kind": "text",
+    "where": "Tactics: the out-of-possession label over the pitch"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--pitch-card",
+    "kind": "text",
+    "where": "Tactics: the TACTIC word on its bar, and card headings on the pitch panel"
+  },
+  {
+    "fg": "--pitch-card-ink",
+    "bg": "--pitch-card",
+    "kind": "text",
+    "where": "Tactics: the base-shape line on the tactic bar, card text and instruction names"
+  },
+  {
+    "fg": "--select-ink",
+    "bg": "--select-ground",
+    "kind": "text",
+    "where": "Tactics: instruction, role and picker selects"
+  },
+  {
+    "fg": "--tactic-marker-ink",
+    "bg": "--tactic-marker",
+    "kind": "text",
+    "where": "Tactics: shirt number in a slot marker"
+  },
+  {
+    "fg": "--keeper-home-ink",
+    "bg": "--keeper-home",
+    "kind": "text",
+    "where": "Tactics: shirt number in the goalkeeper marker"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--chip",
+    "kind": "text",
+    "where": "Tactics: player name under a slot marker"
+  },
+  {
+    "fg": "--duty-attack",
+    "bg": "--chip",
+    "kind": "text",
+    "where": "Tactics: attack role tag under a slot marker"
+  },
+  {
+    "fg": "--duty-support",
+    "bg": "--chip",
+    "kind": "text",
+    "where": "Tactics: support role tag under a slot marker"
+  },
+  {
+    "fg": "--duty-defend",
+    "bg": "--chip",
+    "kind": "text",
+    "where": "Tactics: defend role tag under a slot marker"
+  },
+  {
+    "fg": "--pitch-line",
+    "bg": "--pitch",
+    "kind": "boundary",
+    "where": "Tactics: the focus ring and the picked ring on a slot marker"
+  },
+  {
+    "fg": "--on-slot",
+    "bg": "--good",
+    "kind": "text",
+    "where": "Squad list: the slot chip of a player in the eleven"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Squad list: the bench chip"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Squad list: the clash chip and named twice"
+  },
+  {
+    "fg": "--position-chip-ink",
+    "bg": "--position-chip",
+    "kind": "text",
+    "where": "Squad list: position chips"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Squad list: player names"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Squad list: group headers"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Squad list: column heads, grey numbers and notes"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--picked-ground",
+    "kind": "text",
+    "where": "Squad list: the picked row and the picked hint"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--picked-ground",
+    "kind": "text",
+    "where": "Squad list: the grey words of the picked hint"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--picked-ground",
+    "kind": "boundary",
+    "where": "Squad list: the picked row ring"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--queue-ground",
+    "kind": "text",
+    "where": "Queued changes: change words"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--queue-ground",
+    "kind": "text",
+    "where": "Queued changes: the waiting note"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--queue-ground",
+    "kind": "text",
+    "where": "Queued changes: the reason under a change"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--queue-ground",
+    "kind": "text",
+    "where": "Queued changes: the section label"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--queue-ground",
+    "kind": "boundary",
+    "where": "Queued changes: the block edge"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "Queued changes: the Queued tag"
+  },
+  {
+    "fg": "--cyan-ink",
+    "bg": "--cyan",
+    "kind": "text",
+    "where": "Queued changes: the Applies now tag and Queue substitution"
+  },
+  {
+    "fg": "--on-bad",
+    "bg": "--bad",
+    "kind": "text",
+    "where": "Queued changes: the Rejected tag, and NOT READY"
+  },
+  {
+    "fg": "--on-good",
+    "bg": "--good",
+    "kind": "text",
+    "where": "Tactics: the READY tag"
+  },
+  {
+    "fg": "--ghost-ink",
+    "bg": "--queue-ground",
+    "kind": "text",
+    "where": "Queued changes: Edit, Cancel and Dismiss"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "Tactics: the grasp table rows"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground-3",
+    "kind": "text",
+    "where": "Tactics: the grasp table rows"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--select-ground",
+    "kind": "text",
+    "where": "Substitution picker: the chosen player in each select"
   }
 ]

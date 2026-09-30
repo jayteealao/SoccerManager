@@ -103,6 +103,33 @@
   --toggle-on-ground: #12303c;
   --new-goal-ground: #16252f;
 
+  /* The Tactics screen: the colours the sketch's two Tactics boards write inline, as
+   * tokens. The pitch panel, its cards and markers, the duty colours, the squad list's slot
+   * chips and picked row, and the queued-changes block. */
+  --pitch-card: #17722a;
+  --pitch-card-edge: rgba(0, 0, 0, 0.25);
+  --pitch-card-ink: #cfe8d3;
+  --pitch-label: rgba(0, 0, 0, 0.45);
+  --pitch-note: rgba(0, 0, 0, 0.5);
+  --pitch-select: #15161a;
+  --tactic-marker: #0f5c63;
+  --tactic-marker-ink: #f7f8fa;
+  --marker-shadow: rgba(0, 0, 0, 0.5);
+  --duty-attack: #f59e3b;
+  --duty-support: #4aa8ff;
+  --duty-defend: #4ad66d;
+  --weight-bar: #72f04e;
+  --select-ground: #1a1b1e;
+  --select-edge: #4a4d53;
+  --select-ink: #e9ebef;
+  --position-chip: #1a1c1e;
+  --position-chip-ink: #dfe2e6;
+  --on-slot: #0b2a14;
+  --eleven-tint: rgba(74, 214, 109, 0.06);
+  --picked-ground: #16252f;
+  --queue-ground: #16252f;
+  --queue-rule: #2a4552;
+
   /* Type */
   --fd: 'Saira Semi Condensed', 'Barlow Semi Condensed', 'Arial Narrow', system-ui, sans-serif;
   --fb: 'Saira', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
