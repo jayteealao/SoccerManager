@@ -89,7 +89,7 @@
       >
         <span class="g">{@render grip()}</span>
         <span class="chip {row.chipKind}">{row.chip}</span>
-        <b class="num g shirt">{row.shirt}</b>
+        <b class="num shirt">{row.shirt}</b>
         <span class="who">
           <b class="name">{row.name}</b>
           {#each row.positions as p (p)}<span class="pc">{p}</span>{/each}
@@ -340,9 +340,11 @@
     font: 600 8.5px var(--fd);
   }
 
+  /* The board's grey numbers take --ink-2: --ink-3 measures 4.43:1 on the eleven's tint. */
   .shirt {
     font-weight: 600;
     text-align: right;
+    color: var(--ink-2);
   }
 
   .track {

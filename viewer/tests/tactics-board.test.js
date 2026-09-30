@@ -35,7 +35,7 @@ test('a duty takes two letters and its own colour token', () => {
     ['De', 'Su', 'At']
   );
   assert.equal(dutyToken('attack'), '--duty-attack');
-  assert.equal(dutyToken('unknown'), '--ink');
+  assert.equal(dutyToken('unknown'), '--pitch-ink');
   const tag = markerTag(SCHEMA, { roles: [{ role: 1, duty: 0 }] }, 0);
   assert.deepEqual(tag, { tag: 'CD·De', duty: 'defend', token: '--duty-defend' });
 });

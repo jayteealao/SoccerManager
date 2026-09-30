@@ -135,7 +135,7 @@
     border: 0;
     padding: 0;
     font: inherit;
-    color: var(--ink);
+    color: var(--pitch-ink);
     border-radius: var(--radius-sm);
   }
 
@@ -185,7 +185,7 @@
     padding: 0 4px;
     font: 600 8.5px/13px var(--fd);
     white-space: nowrap;
-    color: var(--ink);
+    color: var(--pitch-ink);
   }
 
   .c em {

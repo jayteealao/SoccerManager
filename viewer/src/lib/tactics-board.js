@@ -38,14 +38,14 @@ export function dutyToken(name) {
   if (name === 'attack' || name === 'support' || name === 'defend') {
     return `--duty-${name}`;
   }
-  return '--ink';
+  return '--pitch-ink';
 }
 
 /// `role · duty` as a marker writes it, for slot `slot` of `tactics`.
 export function markerTag(schema, tactics, slot) {
   const r = tactics?.roles?.[slot];
   if (!r) {
-    return { tag: '', duty: '', token: '--ink' };
+    return { tag: '', duty: '', token: '--pitch-ink' };
   }
   const duty = schema.duties?.[r.duty]?.name ?? '';
   return {

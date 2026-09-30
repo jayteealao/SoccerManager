@@ -75,7 +75,7 @@
     font: 700 9.5px var(--fd);
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--ink);
+    color: var(--pitch-ink);
   }
 
   p {
@@ -96,7 +96,7 @@
   }
 
   .kv b {
-    color: var(--ink);
+    color: var(--pitch-ink);
     font-weight: 600;
   }
 

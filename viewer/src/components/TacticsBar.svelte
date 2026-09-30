@@ -81,7 +81,7 @@
     padding: 0 8px;
     border-radius: var(--radius-md);
     background: var(--pitch-card);
-    color: var(--ink);
+    color: var(--pitch-ink);
   }
 
   .word {
@@ -103,7 +103,7 @@
     background: var(--pitch-select);
     border: 1px solid var(--pitch-deep);
     border-radius: var(--radius-sm);
-    color: var(--ink);
+    color: var(--pitch-ink);
     font: 500 10px var(--fb);
   }
 
@@ -149,7 +149,7 @@
 
   .why {
     font-size: 10.5px;
-    color: var(--ink);
+    color: var(--pitch-ink);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

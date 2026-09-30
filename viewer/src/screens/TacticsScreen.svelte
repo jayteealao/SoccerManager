@@ -81,7 +81,7 @@
         name: surname(row.player?.name),
         picked: row.picked,
         label: row.label,
-        ...(row.player ? markerTag(schema, tactics, row.n) : { tag: '', token: '--ink' }),
+        ...(row.player ? markerTag(schema, tactics, row.n) : { tag: '', token: '--pitch-ink' }),
       }));
     }
     const formation = schema.formations[tactics.formation];
@@ -264,7 +264,7 @@
     font: 700 10px var(--fd);
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--ink);
+    color: var(--pitch-ink);
     padding: 2px 8px;
     border-radius: var(--radius-sm);
     white-space: nowrap;
@@ -277,7 +277,7 @@
 
   .lab.out {
     left: 322px;
-    background: var(--rule);
+    background: var(--pitch-tag);
   }
 
   .box {
@@ -299,7 +299,7 @@
     top: 502px;
     font: 600 9px var(--fd);
     letter-spacing: 0.06em;
-    color: var(--ink);
+    color: var(--pitch-ink);
   }
 
   .cards {
@@ -322,7 +322,7 @@
     font: 700 9.5px var(--fd);
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--ink);
+    color: var(--pitch-ink);
   }
 
   .tcard p {
@@ -342,7 +342,7 @@
   .more {
     font: 700 9.5px var(--fd);
     letter-spacing: 0.06em;
-    color: var(--ink);
+    color: var(--pitch-ink);
     text-transform: uppercase;
   }
 

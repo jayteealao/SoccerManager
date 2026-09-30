@@ -98,6 +98,8 @@
   /* The Tactics screen, as the light board maps it: the turf keeps its hue, the lists and
    * controls take the light grounds and the ink. */
   --pitch-card: oklch(0.56 0.12 145);
+  --pitch-ink: oklch(0.985 0.006 250);
+  --pitch-tag: oklch(0.36 0.02 250);
   --pitch-card-edge: oklch(0.24 0.02 250 / 0.2);
   --pitch-card-ink: oklch(0.985 0.006 250);
   --pitch-label: oklch(0.24 0.02 250 / 0.6);

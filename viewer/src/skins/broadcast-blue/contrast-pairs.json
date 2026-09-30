@@ -480,25 +480,25 @@
     "where": "engine path in the first-run panel"
   },
   {
-    "fg": "--ink",
+    "fg": "--pitch-ink",
     "bg": "--pitch-select",
     "kind": "text",
     "where": "Tactics: the formation and mentality selects on the pitch panel"
   },
   {
-    "fg": "--ink",
+    "fg": "--pitch-ink",
     "bg": "--navy-700",
     "kind": "text",
     "where": "Tactics: the in-possession label over the pitch"
   },
   {
-    "fg": "--ink",
-    "bg": "--rule",
+    "fg": "--pitch-ink",
+    "bg": "--pitch-tag",
     "kind": "text",
     "where": "Tactics: the out-of-possession label over the pitch"
   },
   {
-    "fg": "--ink",
+    "fg": "--pitch-ink",
     "bg": "--pitch-card",
     "kind": "text",
     "where": "Tactics: the TACTIC word on its bar, and card headings on the pitch panel"
@@ -528,7 +528,7 @@
     "where": "Tactics: shirt number in the goalkeeper marker"
   },
   {
-    "fg": "--ink",
+    "fg": "--pitch-ink",
     "bg": "--chip",
     "kind": "text",
     "where": "Tactics: player name under a slot marker"

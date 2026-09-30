@@ -107,6 +107,8 @@
    * tokens. The pitch panel, its cards and markers, the duty colours, the squad list's slot
    * chips and picked row, and the queued-changes block. */
   --pitch-card: #17722a;
+  --pitch-ink: #f7f8fa;
+  --pitch-tag: #3a3c41;
   --pitch-card-edge: rgba(0, 0, 0, 0.25);
   --pitch-card-ink: #cfe8d3;
   --pitch-label: rgba(0, 0, 0, 0.45);
