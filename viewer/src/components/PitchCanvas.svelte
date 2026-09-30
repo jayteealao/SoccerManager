@@ -27,7 +27,7 @@
   ></canvas>
   {#if drawn && overlays}
     <!-- STUB: the view's labels, the overlay legend and the ground's conditions belong to the
-         pitch overlays, which engine-modules does not build. Drawn for layout and feel only. -->
+         pitch overlays, which this version does not build. Drawn for layout and feel only. -->
     <StubSection note="pitch overlay labels">
       <span class="chips tl"><span class="tagc">TOP-DOWN · SLIGHT TILT</span><span class="btn">Attacking →</span></span>
       <span class="legend">Lanes: pass completion chance · red rings: pressing · dotted: our lines</span>

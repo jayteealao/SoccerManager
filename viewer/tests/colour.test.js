@@ -115,3 +115,11 @@ function parse(text) {
   const [, l, c, h] = /oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(text);
   return { l: Number(l), c: Number(c), h: Number(h) };
 }
+
+test('an OKLCH token reads the same in the minified notation the production build writes', () => {
+  // The build writes oklch(0.62 0.13 145) as oklch(62% .13 145); the pitch reads the token
+  // back from the page, so both spellings must give the same colour.
+  assert.equal(safeHex('oklch(62% .13 145)'), safeHex('oklch(0.62 0.13 145)'));
+  assert.equal(contrast('oklch(97% .01 145)', 'oklch(62% .13 145)'), contrast('oklch(0.97 0.01 145)', 'oklch(0.62 0.13 145)'));
+  assert.equal(safeHex('oklch(50% 25% 30deg)'), safeHex('oklch(0.5 0.1 30)'));
+});

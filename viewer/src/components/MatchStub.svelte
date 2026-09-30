@@ -1,4 +1,4 @@
-<!-- The parts of the sketch's Match live screen that engine-modules does not build, kept in
+<!-- The parts of the sketch's Match live screen that this version does not build, kept in
      place for the look: the pitch overlay toggles, the highlight modes and pause rules, the
      momentum chart, the win probability figure, and the other grounds. Each renders static
      sample content inside StubSection, so it is faded, inert, hidden from assistive
@@ -26,7 +26,7 @@
 </script>
 
 {#if part === 'overlays'}
-  <!-- STUB: pitch overlays, zoom and follow. Not built in engine-modules; drawn for layout and
+  <!-- STUB: pitch overlays, zoom and follow. Not built yet; drawn for layout and
        feel only. -->
   <StubSection note="pitch overlays, zoom and follow">
     <div class="line overlays">
@@ -43,8 +43,8 @@
     </div>
   </StubSection>
 {:else if part === 'highlights'}
-  <!-- STUB: highlight modes, dynamic mode, custom rules and pause-on events. Not built in
-       engine-modules; drawn for layout and feel only. -->
+  <!-- STUB: highlight modes, dynamic mode, custom rules and pause-on events. Not built
+       yet; drawn for layout and feel only. -->
   <StubSection note="highlight modes and pause rules">
     <div class="line">
       <span class="g w54">Highlights</span>
@@ -69,7 +69,7 @@
     </div>
   </StubSection>
 {:else if part === 'momentum'}
-  <!-- STUB: momentum chart. Not built in engine-modules; drawn for layout and feel only. -->
+  <!-- STUB: momentum chart. Not built yet; drawn for layout and feel only. -->
   <StubSection note="momentum chart">
     <div class="momentum">
       <SectionLabel label="Momentum" note="threat per 3 minutes · cyan home, orange away" />
@@ -87,7 +87,7 @@
     </div>
   </StubSection>
 {:else if part === 'win-probability'}
-  <!-- STUB: win probability model figure. Not built in engine-modules; drawn for layout and
+  <!-- STUB: win probability model figure. Not built yet; drawn for layout and
        feel only. -->
   <StubSection note="win probability">
     <div class="win">

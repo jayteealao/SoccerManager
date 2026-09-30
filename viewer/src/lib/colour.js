@@ -52,13 +52,17 @@ function parseHex(hex) {
   ];
 }
 
-/// Parses `oklch(L C H)`, with an optional `/ alpha` this page never needs.
+/// Parses `oklch(L C H)`, with an optional `/ alpha` this page never needs. Lightness and
+/// chroma may be percentages, as the production build's minifier writes them: `62%` is a
+/// lightness of 0.62, and a chroma of `100%` is 0.4.
 function parseOklch(text) {
-  const match = /^oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)/i.exec(String(text).trim());
+  const match = /^oklch\(\s*([\d.]+)(%?)\s+([\d.]+)(%?)\s+([\d.]+)(?:deg)?/i.exec(String(text).trim());
   if (!match) {
     throw new Error(`not an oklch colour: ${text}`);
   }
-  return { l: Number(match[1]), c: Number(match[2]), h: Number(match[3]) };
+  const l = Number(match[1]) / (match[2] ? 100 : 1);
+  const c = match[4] ? (Number(match[3]) / 100) * 0.4 : Number(match[3]);
+  return { l, c, h: Number(match[5]) };
 }
 
 const toLinear = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
