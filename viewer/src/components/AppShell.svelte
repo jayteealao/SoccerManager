@@ -154,8 +154,16 @@
   }
 
   .rail a.on {
+    position: relative;
     color: var(--cyan);
     border-radius: var(--radius-sm);
+  }
+
+  /* The drawn glyph is 15 px; the hit area is the rail's full 40 px width. */
+  .rail a.on::after {
+    content: '';
+    position: absolute;
+    inset: -6px -12px;
   }
 
   .rail-foot {
@@ -388,6 +396,17 @@
 
   button.tab:active:not(.on) {
     opacity: 0.8;
+  }
+
+  /* A tab is drawn at its text height; the hit area reaches 24 px. */
+  button.tab {
+    position: relative;
+  }
+
+  button.tab::after {
+    content: '';
+    position: absolute;
+    inset: -4px -7px;
   }
 
   .tab.on {
