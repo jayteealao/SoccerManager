@@ -1,6 +1,6 @@
 // Starts the release engine for one test, with its own data folder, and reads what it wrote.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 export const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const CONTENT = path.join(REPO, 'content');
 export const WEB = path.join(REPO, 'web');
+/// The built Svelte viewer, which the match suite serves with `--web`.
+export const VIEWER = path.join(REPO, 'viewer', 'dist');
 export const BINARY = path.join(
   REPO,
   'target',
@@ -95,6 +97,18 @@ export async function startEngine({ command = 'serve', args = [], env = {}, data
       }
     },
   };
+}
+
+/// A copy of the content folder whose slot file names `skin` for the viewer. A test passes it
+/// as SM_CONTENT_DIR, so the skin changes by configuration alone.
+export function contentWithSkin(skin) {
+  const dir = tempDir(`content-${skin}`);
+  cpSync(CONTENT, dir, { recursive: true });
+  const file = path.join(dir, 'slots.json');
+  const slots = JSON.parse(readFileSync(file, 'utf8'));
+  slots.slots['viewer.skin'] = { module: skin, version: 1 };
+  writeFileSync(file, `${JSON.stringify(slots, null, 2)}\n`);
+  return dir;
 }
 
 /// Runs one engine command to completion and returns its exit code and output.
