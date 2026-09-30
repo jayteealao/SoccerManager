@@ -17,9 +17,9 @@ pub use command::{Ack, ChangeKind, ChangeState, Pending, Queue, Reject, Verdict}
 pub use event::{CardKind, ChangeOutcome, EventType, MatchEvent};
 pub use frame::{Frame, TickFrame};
 pub use message::{
-    ChangeDetail, ClientCommand, Condition, Hello, PatchWire, QueueChange, RoleWire, RosterEntry,
-    Seen, ServerMessage, SetLineup, SetSpeed, SlotRole, SquadEntry, Stats, SubstitutionRules,
-    TeamRef, TeamSetup,
+    CancelChange, ChangeDetail, ChangeStateNote, ClientCommand, Condition, Hello, PatchWire,
+    QueueChange, RoleWire, RosterEntry, Seen, ServerMessage, SetLineup, SetSpeed, SlotRole,
+    SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
 };
 
 /// The protocol version a client must ask for. A client that asks for another version is
@@ -70,6 +70,14 @@ pub use message::{
 /// fields (`script.pack`, `script.hook`, `script.outcome`, `script.detail`). A match without
 /// a pack sends exactly what it sent before, no field changed meaning, the page ignores an
 /// event type it does not list, and both producers changed in the same commit.
+///
+/// Version 3 also survived withdrawing a queued change: one command (`cancel-change`), one
+/// message (`change-state`, the "applies now" word for a change the opening stoppage takes),
+/// and optional fields (`player.injury_resistance` on a squad entry, the extra-time and
+/// window-exempt substitution rules on the hello, and each team's substitutions and windows
+/// used on `condition`). No field was removed or changed meaning, a client ignores a message
+/// type or field it does not know, and a client that never sends `cancel-change` gets exactly
+/// the answers it got before.
 pub const PROTOCOL_VERSION: u16 = 3;
 
 /// Errors this crate returns.
@@ -174,6 +182,10 @@ pub const MESSAGES: &[MessageSpec] = &[
             "substitutions",
             "limit",
             "windows",
+            "extra_substitutions",
+            "extra_windows",
+            "windows_exempt",
+            "player.injury_resistance",
         ],
     },
     MessageSpec {
@@ -247,7 +259,13 @@ pub const MESSAGES: &[MessageSpec] = &[
         name: "condition",
         direction: Direction::ServerToClient,
         encoding: Encoding::JsonText,
-        fields: &["tick", "energy"],
+        fields: &["tick", "energy", "subs_used", "windows_used"],
+    },
+    MessageSpec {
+        name: "change-state",
+        direction: Direction::ServerToClient,
+        encoding: Encoding::JsonText,
+        fields: &["change.queue_id", "state", "tick"],
     },
     MessageSpec {
         name: "ack",
@@ -316,6 +334,12 @@ pub const MESSAGES: &[MessageSpec] = &[
         encoding: Encoding::JsonText,
         fields: &["tick"],
     },
+    MessageSpec {
+        name: "cancel-change",
+        direction: Direction::ClientToServer,
+        encoding: Encoding::JsonText,
+        fields: &["change.queue_id"],
+    },
 ];
 
 /// The specification of `name`, or `None`.
@@ -338,6 +362,7 @@ mod tests {
             ServerMessage::Condition(_) => "condition",
             ServerMessage::Ack(_) => "ack",
             ServerMessage::Reject(_) => "reject",
+            ServerMessage::ChangeState(_) => "change-state",
         }
     }
 
@@ -349,6 +374,7 @@ mod tests {
             ClientCommand::QueueChange(_) => "queue-change",
             ClientCommand::SetLineup(_) => "set-lineup",
             ClientCommand::Seen(_) => "seen",
+            ClientCommand::CancelChange(_) => "cancel-change",
         }
     }
 
@@ -409,6 +435,8 @@ mod tests {
             ServerMessage::Condition(Condition {
                 tick: 0,
                 energy: Vec::new(),
+                subs_used: [0; 2],
+                windows_used: [0; 2],
             }),
             ServerMessage::Ack(Ack {
                 command: String::new(),
@@ -420,6 +448,11 @@ mod tests {
             ServerMessage::Reject(Reject {
                 command: String::new(),
                 reason: String::new(),
+            }),
+            ServerMessage::ChangeState(ChangeStateNote {
+                queue_id: String::new(),
+                state: ChangeState::AppliesNow,
+                tick: 0,
             }),
         ]
     }
@@ -439,6 +472,9 @@ mod tests {
                 patch: None,
             }),
             ClientCommand::Seen(Seen { tick: 0 }),
+            ClientCommand::CancelChange(CancelChange {
+                queue_id: String::new(),
+            }),
         ]
     }
 

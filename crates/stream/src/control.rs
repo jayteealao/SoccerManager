@@ -7,6 +7,11 @@
 //! into the engine's own change type here, on the socket thread, and left in the [`Inbox`]
 //! for the simulation thread, which queues it in the engine while the match runs.
 //!
+//! `cancel-change` withdraws a change a stoppage has not settled: from the inbox at once, or
+//! from the engine's queue at the simulation thread's next hold. It is answered at once, and a
+//! change already applied or refused is refused by name. A withdrawal writes no row: the
+//! change's `queued` row stays, and no verdict row ever follows it.
+//!
 //! A viewer that reports the tick it has drawn (`seen`) bounds the engine's lead: once a lead
 //! bound is set and a first report arrives, the producer waits while it is that many ticks
 //! ahead of the drawn tick. A client that never reports is never held by it.
@@ -230,21 +235,95 @@ pub struct Admitted {
     pub tick: u32,
 }
 
-/// The changes the socket admitted and the engine has not queued yet, oldest first.
+/// The page's changes between the socket thread and the simulation thread: the changes the
+/// socket admitted and the engine has not queued yet (oldest first), the identifiers the
+/// engine holds, the withdrawals the engine has still to make, and the changes a stoppage
+/// has settled.
+///
+/// The simulation thread holds the inbox ([`Inbox::hold`]) from the moment it queues and
+/// withdraws changes until the step after it has settled, so a withdrawal the socket
+/// acknowledges can never meet a change that the same step applies.
 #[derive(Debug, Default)]
-pub struct Inbox(Mutex<Vec<Admitted>>);
+pub struct Inbox(Mutex<Mail>);
+
+#[derive(Debug, Default)]
+struct Mail {
+    waiting: Vec<Admitted>,
+    /// Identifiers the engine has queued and not settled.
+    engine: Vec<String>,
+    /// Identifiers withdrawn from the engine's queue at its next hold.
+    cancels: Vec<String>,
+    /// Identifiers a stoppage settled, with `true` for an applied change.
+    settled: Vec<(String, bool)>,
+}
+
+/// The inbox, held by the simulation thread.
+pub struct Held<'a>(std::sync::MutexGuard<'a, Mail>);
+
+impl Held<'_> {
+    /// Every waiting change, oldest first, leaving none waiting. The engine queues each one
+    /// now, so a later withdrawal goes to the engine.
+    pub fn drain(&mut self) -> Vec<Admitted> {
+        let waiting = std::mem::take(&mut self.0.waiting);
+        self.0
+            .engine
+            .extend(waiting.iter().map(|a| a.queue_id.clone()));
+        waiting
+    }
+
+    /// The identifiers to withdraw from the engine's queue now.
+    pub fn take_cancels(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.0.cancels)
+    }
+
+    /// Records that a stoppage applied (`true`) or refused the change `queue_id`.
+    pub fn settle(&mut self, queue_id: &str, applied: bool) {
+        self.0.engine.retain(|id| id != queue_id);
+        self.0.settled.push((queue_id.to_string(), applied));
+    }
+
+    /// Marks changes a resumed match already holds in its queue, so the page can withdraw
+    /// them over a new connection.
+    pub fn adopt(&mut self, queue_ids: impl IntoIterator<Item = String>) {
+        self.0.engine.extend(queue_ids);
+    }
+}
 
 impl Inbox {
     pub fn push(&self, admitted: Admitted) {
-        self.0
-            .lock()
-            .expect("the inbox lock is never poisoned")
-            .push(admitted);
+        self.hold().0.waiting.push(admitted);
     }
 
     /// Every waiting change, oldest first, leaving the inbox empty.
     pub fn drain(&self) -> Vec<Admitted> {
-        std::mem::take(&mut *self.0.lock().expect("the inbox lock is never poisoned"))
+        self.hold().drain()
+    }
+
+    /// The inbox, locked until the returned value drops.
+    pub fn hold(&self) -> Held<'_> {
+        Held(self.0.lock().expect("the inbox lock is never poisoned"))
+    }
+
+    /// Withdraws the change `queue_id`: at once when it still waits here, or at the engine's
+    /// next hold when the engine has queued it. Refused, with the reason in words, for a
+    /// change a stoppage settled or an identifier this connection never gave.
+    pub fn cancel(&self, queue_id: &str) -> Result<(), String> {
+        let mut held = self.hold();
+        let mail = &mut held.0;
+        if let Some(at) = mail.waiting.iter().position(|a| a.queue_id == queue_id) {
+            mail.waiting.remove(at);
+            return Ok(());
+        }
+        if let Some(at) = mail.engine.iter().position(|id| id == queue_id) {
+            mail.engine.remove(at);
+            mail.cancels.push(queue_id.to_string());
+            return Ok(());
+        }
+        match mail.settled.iter().find(|(id, _)| id == queue_id) {
+            Some((_, true)) => Err(format!("change {queue_id} has already applied")),
+            Some((_, false)) => Err(format!("change {queue_id} was already refused")),
+            None => Err(format!("unknown change {queue_id}")),
+        }
     }
 }
 
@@ -405,6 +484,22 @@ impl CommandContext {
                 None,
             ),
             ClientCommand::QueueChange(change) => self.queue_change(change, tick),
+            ClientCommand::CancelChange(cancel) => (
+                match self.inbox.cancel(&cancel.queue_id) {
+                    Ok(()) => ServerMessage::Ack(Ack {
+                        command: command.name().into(),
+                        queue_id: Some(cancel.queue_id.clone()),
+                        queued_tick: tick,
+                        state: None,
+                        speed: None,
+                    }),
+                    Err(reason) => ServerMessage::Reject(Reject {
+                        command: command.name().into(),
+                        reason,
+                    }),
+                },
+                None,
+            ),
         };
         if let Some(event) = &answer.1 {
             self.events
@@ -768,6 +863,89 @@ mod tests {
             Some("unknown change type formation")
         );
         assert_eq!(reason(answer), "unknown change type formation");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn cancel(id: &str) -> String {
+        serde_json::to_string(&ClientCommand::CancelChange(protocol::CancelChange {
+            queue_id: id.into(),
+        }))
+        .unwrap()
+    }
+
+    fn queue_sub(ctx: &mut CommandContext) -> String {
+        let (answer, _) = ctx
+            .handle(
+                "{\"type\":\"queue-change\",\"change.kind\":\"substitution\",\
+                 \"detail\":{\"off\":9,\"on\":14}}",
+            )
+            .unwrap();
+        let ServerMessage::Ack(ack) = answer else {
+            panic!("a readable change must be acknowledged: {answer:?}");
+        };
+        ack.queue_id.expect("a queued change has an identifier")
+    }
+
+    #[test]
+    fn a_change_still_in_the_inbox_is_withdrawn_at_once() {
+        let dir = temp("cancel-inbox");
+        let mut ctx = context(&dir, Gate::new(), PreMatch::none());
+        let id = queue_sub(&mut ctx);
+        let (answer, event) = ctx.handle(&cancel(&id)).unwrap();
+        assert!(event.is_none(), "a withdrawal writes no row");
+        let ServerMessage::Ack(ack) = answer else {
+            panic!("a waiting change must be withdrawn: {answer:?}");
+        };
+        assert_eq!(ack.command, "cancel-change");
+        assert_eq!(ack.queue_id.as_deref(), Some(id.as_str()));
+        let mut held = ctx.inbox.hold();
+        assert!(held.drain().is_empty(), "the engine never sees it");
+        assert!(
+            held.take_cancels().is_empty(),
+            "nothing is left to withdraw"
+        );
+        drop(held);
+        assert_eq!(
+            reason(ctx.handle(&cancel(&id)).unwrap().0),
+            format!("unknown change {id}")
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_change_the_engine_queued_is_withdrawn_at_its_next_hold() {
+        let dir = temp("cancel-engine");
+        let mut ctx = context(&dir, Gate::new(), PreMatch::none());
+        let id = queue_sub(&mut ctx);
+        assert_eq!(ctx.inbox.hold().drain().len(), 1, "the engine queues it");
+        let (answer, _) = ctx.handle(&cancel(&id)).unwrap();
+        assert!(matches!(answer, ServerMessage::Ack(_)), "{answer:?}");
+        assert_eq!(ctx.inbox.hold().take_cancels(), vec![id.clone()]);
+        assert!(ctx.inbox.hold().take_cancels().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_change_a_stoppage_settled_cannot_be_withdrawn() {
+        let dir = temp("cancel-settled");
+        let mut ctx = context(&dir, Gate::new(), PreMatch::none());
+        let applied = queue_sub(&mut ctx);
+        let refused = queue_sub(&mut ctx);
+        {
+            let mut held = ctx.inbox.hold();
+            held.drain();
+            held.settle(&applied, true);
+            held.settle(&refused, false);
+        }
+        assert_eq!(
+            reason(ctx.handle(&cancel(&applied)).unwrap().0),
+            format!("change {applied} has already applied")
+        );
+        assert_eq!(
+            reason(ctx.handle(&cancel(&refused)).unwrap().0),
+            format!("change {refused} was already refused")
+        );
+        assert!(ctx.inbox.hold().take_cancels().is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

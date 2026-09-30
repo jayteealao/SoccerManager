@@ -252,6 +252,29 @@ impl Simulation {
         id
     }
 
+    /// Withdraws the waiting change `id` of `team` before a stoppage takes it. `false` when
+    /// no such change waits (it applied, was refused, or never existed). A withdrawn change
+    /// never reached the match, so it leaves the queued count as well.
+    pub fn cancel_change(&mut self, team: usize, id: ChangeId) -> bool {
+        let before = self.queue.pending.len();
+        self.queue
+            .pending
+            .retain(|q| !(q.team == team && q.id == id));
+        let removed = self.queue.pending.len() < before;
+        if removed {
+            self.summary.changes_queued = self.summary.changes_queued.saturating_sub(1);
+            tracing::debug!(signal = "change.cancelled", tick = self.tick, team, queue_id = %id);
+        }
+        removed
+    }
+
+    /// The tick of the latest stoppage that admitted each kind, tactics first, then
+    /// substitutions. A value that moves during a step means a stoppage that takes that kind
+    /// opened in it.
+    pub fn changes_admitted(&self) -> [Option<u32>; 2] {
+        self.queue.admitted
+    }
+
     /// Every change applied so far, in the order it applied. Rejected changes are not in
     /// it; their verdicts stay in the events.
     pub fn applied_changes(&self) -> &[AppliedChange] {
@@ -601,5 +624,49 @@ mod tests {
         assert_eq!((log[0].id.n, log[1].id.n), (1, 0));
         assert!(log.iter().all(|c| c.team == 0 && c.id.tick == 0));
         assert_eq!(sim.summary().changes_rejected, 1);
+    }
+
+    #[test]
+    fn a_cancelled_change_never_applies_and_an_applied_one_cannot_be_cancelled() {
+        let config = crate::data::test_support::shipped_config(42, 3)
+            .unwrap()
+            .with_manager(0, crate::ai::Manager::Human)
+            .with_manager(1, crate::ai::Manager::Human);
+        let mut sim = Simulation::new(config).unwrap();
+        let home = sim.teams()[0].clone();
+        let sub = Change::Substitution {
+            off: home.lineup[9],
+            on: home.bench[0],
+        };
+        let kept = sim.queue_change(0, Change::Tactics(TacticsPatch::mentality(4)));
+        let withdrawn = sim.queue_change(0, sub);
+        assert_eq!(sim.summary().changes_queued, 2);
+        assert!(
+            !sim.cancel_change(1, withdrawn),
+            "the away team queued no such change"
+        );
+        assert!(sim.cancel_change(0, withdrawn));
+        assert!(
+            !sim.cancel_change(0, withdrawn),
+            "a change is withdrawn once"
+        );
+        assert_eq!(sim.summary().changes_queued, 1);
+        let admitted = sim.changes_admitted();
+        while !sim.is_over() && sim.applied_changes().is_empty() {
+            sim.step();
+        }
+        let log = sim.applied_changes();
+        assert_eq!(log.len(), 1, "{log:?}");
+        assert_eq!(log[0].id, kept);
+        assert_ne!(
+            sim.changes_admitted(),
+            admitted,
+            "the stoppage marked its kinds"
+        );
+        assert_eq!(sim.summary().substitutions[0], 0);
+        assert!(
+            !sim.cancel_change(0, kept),
+            "an applied change stays applied"
+        );
     }
 }

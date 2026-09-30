@@ -458,13 +458,25 @@ impl<'a> Serving<'a> {
             pauses = gauge.pauses(),
             paused_ms = gauge.paused_ms()
         );
-        // A change the socket admitted that the engine never took is still the page's.
-        self.page_changes.borrow_mut().extend(
-            inbox
-                .drain()
-                .into_iter()
-                .map(|admitted| PageChange { id: None, admitted }),
-        );
+        // A change the socket admitted that the engine never took is still the page's, and a
+        // withdrawal the engine never made is still owed.
+        let (waiting, cancels) = {
+            let mut held = inbox.hold();
+            (held.drain(), held.take_cancels())
+        };
+        let mut carried = self.page_changes.borrow_mut();
+        for change in carried
+            .iter_mut()
+            .filter(|c| cancels.contains(&c.admitted.queue_id))
+        {
+            change.cancelled = true;
+        }
+        carried.extend(waiting.into_iter().map(|admitted| PageChange {
+            id: None,
+            admitted,
+            cancelled: false,
+        }));
+        drop(carried);
         Ok(Played {
             started,
             full_time,

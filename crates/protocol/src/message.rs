@@ -52,6 +52,10 @@ pub struct SquadEntry {
     /// this is the one fitness figure the engine holds.
     #[serde(rename = "player.natural_fitness")]
     pub natural_fitness: u8,
+    /// The injury-resistance attribute, 0 to 100: how well the player stands up to knocks.
+    /// A hello from an earlier build carries none and reads as 0.
+    #[serde(rename = "player.injury_resistance", default)]
+    pub injury_resistance: u8,
     /// How well the player fits each role, 0 to 100, one value per role in the order of the
     /// hello's `tactics.roles`.
     pub role_fit: Vec<u8>,
@@ -84,13 +88,23 @@ pub struct TeamSetup {
 }
 
 /// The substitution limits of the loaded rule pack.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SubstitutionRules {
     /// Substitutions each team may make.
     pub limit: u8,
     /// Stoppages at which each team may make them; half-time uses none.
     pub windows: u8,
+    /// Substitutions each team gains once extra time starts, on top of `limit`.
+    #[serde(default)]
+    pub extra_substitutions: u8,
+    /// Windows each team gains once extra time starts, on top of `windows`.
+    #[serde(default)]
+    pub extra_windows: u8,
+    /// The stoppage kinds whose substitutions use no window, as the rule pack writes them
+    /// (`half_time` in the shipped pack).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub windows_exempt: Vec<String>,
 }
 
 /// One player a hello names. `player.squad_index` is the player's place in the team file's
@@ -190,6 +204,24 @@ pub struct Condition {
     pub tick: u32,
     /// One value per wire slot, home first, from 0.0 (spent) to 1.0 (fresh), three decimals.
     pub energy: Vec<f64>,
+    /// Substitutions each team has made, home first.
+    #[serde(default)]
+    pub subs_used: [u8; 2],
+    /// Substitution windows each team has used, home first.
+    #[serde(default)]
+    pub windows_used: [u8; 2],
+}
+
+/// A queued change that the stoppage now opening takes. It is not a match event: it is sent
+/// on the tick the stoppage opens, before the change's verdict event, and no record or
+/// replay keeps it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChangeStateNote {
+    #[serde(rename = "change.queue_id")]
+    pub queue_id: String,
+    pub state: crate::command::ChangeState,
+    pub tick: u32,
 }
 
 /// Everything the server sends as a JSON text frame.
@@ -203,6 +235,7 @@ pub enum ServerMessage {
     Condition(Condition),
     Ack(Ack),
     Reject(Reject),
+    ChangeState(ChangeStateNote),
 }
 
 /// The playback speed a client asks for.
@@ -316,6 +349,15 @@ pub struct SetLineup {
     pub patch: Option<PatchWire>,
 }
 
+/// Withdraws a queued change before a stoppage takes it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CancelChange {
+    /// The identifier the change's `queue-change` acknowledgement gave.
+    #[serde(rename = "change.queue_id")]
+    pub queue_id: String,
+}
+
 /// Everything a client sends.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -326,6 +368,7 @@ pub enum ClientCommand {
     QueueChange(QueueChange),
     SetLineup(SetLineup),
     Seen(Seen),
+    CancelChange(CancelChange),
 }
 
 impl ClientCommand {
@@ -338,6 +381,7 @@ impl ClientCommand {
             ClientCommand::QueueChange(_) => "queue-change",
             ClientCommand::SetLineup(_) => "set-lineup",
             ClientCommand::Seen(_) => "seen",
+            ClientCommand::CancelChange(_) => "cancel-change",
         }
     }
 }
@@ -378,6 +422,7 @@ mod tests {
                         shirt: 1,
                         position: "GK".into(),
                         natural_fitness: 71,
+                        injury_resistance: 64,
                         role_fit: vec![80, 12],
                     }],
                     setup: Some(TeamSetup {
@@ -403,6 +448,9 @@ mod tests {
             substitutions: SubstitutionRules {
                 limit: 5,
                 windows: 3,
+                extra_substitutions: 1,
+                extra_windows: 1,
+                windows_exempt: vec!["half_time".into()],
             },
         }
     }
@@ -537,6 +585,8 @@ mod tests {
             ServerMessage::Condition(Condition {
                 tick: 50,
                 energy: vec![0.998; 22],
+                subs_used: [2, 0],
+                windows_used: [1, 0],
             }),
             ServerMessage::Ack(Ack {
                 command: "queue-change".into(),
@@ -548,6 +598,11 @@ mod tests {
             ServerMessage::Reject(Reject {
                 command: "queue-change".into(),
                 reason: "unknown change type formation".into(),
+            }),
+            ServerMessage::ChangeState(ChangeStateNote {
+                queue_id: "q-1-0".into(),
+                state: ChangeState::AppliesNow,
+                tick: 3_000,
             }),
         ];
         for m in messages {
@@ -572,6 +627,9 @@ mod tests {
                 patch: None,
             }),
             ClientCommand::Seen(Seen { tick: 1_200 }),
+            ClientCommand::CancelChange(CancelChange {
+                queue_id: "q-1200-0".into(),
+            }),
         ];
         for c in commands {
             let json = serde_json::to_string(&c).unwrap();
@@ -636,12 +694,64 @@ mod tests {
         let json = serde_json::to_string(&ServerMessage::Condition(Condition {
             tick: 50,
             energy: vec![1.0, 0.5],
+            subs_used: [1, 0],
+            windows_used: [1, 0],
         }))
         .unwrap();
         assert_eq!(
             json,
-            "{\"type\":\"condition\",\"tick\":50,\"energy\":[1.0,0.5]}"
+            "{\"type\":\"condition\",\"tick\":50,\"energy\":[1.0,0.5],\
+             \"subs_used\":[1,0],\"windows_used\":[1,0]}"
         );
+        // A condition message from an earlier build carries no counts and reads as none.
+        let ServerMessage::Condition(bare) = serde_json::from_str::<ServerMessage>(
+            "{\"type\":\"condition\",\"tick\":50,\"energy\":[1.0]}",
+        )
+        .unwrap() else {
+            panic!("not a condition message");
+        };
+        assert_eq!((bare.subs_used, bare.windows_used), ([0, 0], [0, 0]));
+    }
+
+    #[test]
+    fn a_change_state_note_and_a_cancel_travel_under_their_own_tags() {
+        let note = serde_json::to_string(&ServerMessage::ChangeState(ChangeStateNote {
+            queue_id: "q-7-0".into(),
+            state: ChangeState::AppliesNow,
+            tick: 9,
+        }))
+        .unwrap();
+        assert_eq!(
+            note,
+            "{\"type\":\"change-state\",\"change.queue_id\":\"q-7-0\",\
+             \"state\":\"applies-now\",\"tick\":9}"
+        );
+        let cancel = serde_json::to_string(&ClientCommand::CancelChange(CancelChange {
+            queue_id: "q-7-0".into(),
+        }))
+        .unwrap();
+        assert_eq!(
+            cancel,
+            "{\"type\":\"cancel-change\",\"change.queue_id\":\"q-7-0\"}"
+        );
+    }
+
+    #[test]
+    fn a_hello_from_an_earlier_build_reads_without_the_newer_fields() {
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello())))
+            .unwrap()
+            .replace(",\"player.injury_resistance\":64", "")
+            .replace(",\"extra_substitutions\":1,\"extra_windows\":1", "")
+            .replace(",\"windows_exempt\":[\"half_time\"]", "");
+        assert!(!json.contains("injury_resistance"), "{json}");
+        assert!(!json.contains("extra_windows"), "{json}");
+        let ServerMessage::Hello(back) = serde_json::from_str::<ServerMessage>(&json).unwrap()
+        else {
+            panic!("not a hello");
+        };
+        assert_eq!(back.teams[0].squad[0].injury_resistance, 0);
+        assert_eq!(back.substitutions.extra_substitutions, 0);
+        assert!(back.substitutions.windows_exempt.is_empty());
     }
 
     #[test]

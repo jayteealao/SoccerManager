@@ -84,7 +84,7 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 | `keyframe_interval` | integer | ticks between keyframes |
 | `teams` | array of two | one entry per club, home first; see the table below |
 | `tactics` | object | the tactics file the engine loaded (`content/tactics.json`): `formations`, `mentalities`, `instructions` with their levels, `roles`, `duties`, and the computer manager's settings. Every tactics index on the wire is a place in one of its lists. Because a JSON object carries no key order, the engine adds `instruction_order`, the six instruction names in the order an instruction list indexes them |
-| `substitutions` | object | the rule pack's limits: `limit` and `windows` |
+| `substitutions` | object | the rule pack's limits: `limit`, `windows`, `extra_substitutions`, `extra_windows`, and `windows_exempt` |
 
 `substitutions`:
 
@@ -92,6 +92,9 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 |---|---|---|
 | `limit` | integer | substitutions each team may make, 5 in the shipped rule pack |
 | `windows` | integer | stoppages at which each team may make them, 3 in the shipped rule pack; half-time uses none |
+| `extra_substitutions` | integer | substitutions each team gains once extra time starts, 1 in the shipped rule pack; 0 when an earlier build sent none |
+| `extra_windows` | integer | windows each team gains once extra time starts, 1 in the shipped rule pack; 0 when an earlier build sent none |
+| `windows_exempt` | array of strings | the stoppage kinds whose substitutions use no window, as the rule pack writes them (`half_time` in the shipped pack); left out when empty |
 
 Each entry of `teams`:
 
@@ -127,6 +130,7 @@ Each entry of `squad` carries `player.id`, `player.name`, `player.shirt`, and
 | Field | Type | Meaning |
 |---|---|---|
 | `player.natural_fitness` | integer | the natural-fitness attribute, 0 to 100; every player is fresh before kick-off, so this is the fitness figure the editor shows |
+| `player.injury_resistance` | integer | the injury-resistance attribute, 0 to 100; 0 when an earlier build sent none |
 | `role_fit` | array of integers | how well the player fits each role, 0 to 100, one value per entry of `tactics.roles`, in that order |
 
 `setup`:
@@ -268,13 +272,27 @@ Sent right after each periodic `stats` message, not at full time.
 |---|---|---|
 | `tick` | integer | the tick the values were taken on |
 | `energy` | array of 22 floats | each wire slot's energy, home slots first, from 0.0 (spent) to 1.0 (fresh), three decimals. A substitute takes the slot of the player who left |
+| `subs_used` | array of two integers | substitutions each team has made, home first; `[0, 0]` when an earlier build sent none |
+| `windows_used` | array of two integers | substitution windows each team has used, home first; `[0, 0]` when an earlier build sent none |
+
+### change-state
+
+Sent on `serve` for a change the page queued, on the tick a stoppage that takes the change's
+kind opens, before the change's verdict event. It is not a match event: no events file, record,
+or replay keeps it, and it never changes the match.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `change.queue_id` | string | the identifier the change's `queue-change` acknowledgement gave |
+| `state` | enumeration | `applies-now` in this build |
+| `tick` | integer | the tick the stoppage opened on, the tick of the verdict that follows |
 
 ### ack
 
 | Field | Type | Meaning |
 |---|---|---|
-| `command` | string | `start`, `pause`, `set-speed`, `queue-change`, `set-lineup`, or `seen` |
-| `change.queue_id` | string | queued changes only |
+| `command` | string | `start`, `pause`, `set-speed`, `queue-change`, `set-lineup`, `seen`, or `cancel-change` |
+| `change.queue_id` | string | queued and withdrawn changes only |
 | `change.queued_tick` | integer | the tick the command was read on |
 | `state` | enumeration | queued changes only; `queued` in this build |
 | `speed` | float | `set-speed` only, after clamping to 0.25 to 8.0 |
@@ -373,6 +391,18 @@ On `serve`, once a client has sent one, the engine produces no tick more than `b
 past the newest reported tick and waits until the next report moves it on. A change the
 manager queues therefore reaches the engine at most `buffer_ticks` after the tick on screen.
 A client that never sends it is not held by it, and `record`, `replay`, and `bench` ignore it.
+
+### cancel-change
+
+Withdraws a queued change before a stoppage takes it. It is answered at once: an `ack` that
+names the change, or a `reject` with `unknown change <id>`, `change <id> has already applied`,
+or `change <id> was already refused`. A withdrawn change never applies and gets no verdict
+event; its `queued` row stays in the events file. To edit a change, a page withdraws it and,
+on the acknowledgement, queues the edited change.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `change.queue_id` | string | the identifier the change's `queue-change` acknowledgement gave |
 
 ## The page server
 

@@ -19,7 +19,7 @@ use thiserror::Error;
 
 pub use client::{Client, Incoming};
 pub use control::{
-    Admitted, CommandContext, Gate, Inbox, LineupRules, PageSetup, PreMatch, check_lineup,
+    Admitted, CommandContext, Gate, Held, Inbox, LineupRules, PageSetup, PreMatch, check_lineup,
     engine_change, tactics_patch,
 };
 pub use events::EventWriter;
