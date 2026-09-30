@@ -213,7 +213,7 @@ test('every stub is inert and hidden, and none of its parts takes focus', async 
     'momentum chart',
     'win probability',
     'other grounds',
-    'tab: tactics',
+    'tab: squad',
   ]) {
     assert.ok(document.querySelector(`[data-stub="${note}"]`), note);
   }

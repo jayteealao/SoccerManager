@@ -124,6 +124,8 @@ for (const skin of SKINS) {
       try {
         await open(page, engine.url, skin);
         await until(page, () => window.__touchline.screen() === 'kickoff');
+        // Before kick-off the Tactics view opens first; the board is the Match view.
+        await page.locator('nav.subnav').getByRole('button', { name: 'Match' }).click();
         await expect(page.locator('header button.cont')).toHaveText('Kick off');
         await expect(page).toHaveScreenshot(`match-kickoff-${skin}.png`);
       } finally {

@@ -4,7 +4,9 @@
      left column holds the pitch, the playback row and the timeline; the right the commentary,
      the statistics and the other grounds. Each screen state (loading, kick-off, live, paused,
      error, first run, reconnecting) draws the board's body for it. Parts the viewer does not
-     build yet are stubs (MatchStub, the stub tabs, Skip to result): drawn, faded and inert. -->
+     build yet are stubs (MatchStub, the stub tabs, Skip to result): drawn, faded and inert.
+     The Tactics tab opens the Tactics screen over it; the match screen stays mounted and
+     hidden, so the pitch keeps its canvas and the match plays on behind. -->
 <script>
   import AppShell from '../components/AppShell.svelte';
   import Commentary from '../components/Commentary.svelte';
@@ -18,16 +20,17 @@
   import ScoreStrip from '../components/ScoreStrip.svelte';
   import StepList from '../components/StepList.svelte';
   import SurfacePanel from '../components/SurfacePanel.svelte';
+  import TacticsScreen from './TacticsScreen.svelte';
   import { stripFacts } from '../lib/stats.js';
 
   let { session } = $props();
 
-  /// The sub-navigation: Match is the one view built; the others are stubs until their
-  /// screens are ported (Tactics with the lineup editor).
+  /// The sub-navigation: Match and Tactics are built; the others are stubs until their
+  /// screens are ported.
   const TABS = [
     { id: 'match', label: 'Match', active: true },
     { id: 'touchline', label: 'Touchline', stub: true },
-    { id: 'tactics', label: 'Tactics', menu: true, stub: true },
+    { id: 'tactics', label: 'Tactics', menu: true },
     { id: 'squad', label: 'Squad', menu: true, stub: true },
     { id: 'stats', label: 'Stats', menu: true, stub: true },
     { id: 'analysis', label: 'Analysis', menu: true, stub: true },
@@ -66,6 +69,11 @@
   }
 </script>
 
+{#if session.view === 'tactics'}
+  <TacticsScreen {session} />
+{/if}
+
+<div class="view" hidden={session.view === 'tactics'}>
 <AppShell
   title={session.title}
   subtitle={session.subtitle}
@@ -75,6 +83,7 @@
   onaction={() => session.act(pickReplay)}
   busy={session.actionBusy}
   tabs={TABS}
+  ontab={(id) => session.show(id)}
 >
   {#snippet crest()}
     <Crest team={session.teams?.[0] ?? null} />
@@ -215,8 +224,13 @@
     onchange={openFile}
   />
 </AppShell>
+</div>
 
 <style>
+  .view[hidden] {
+    display: none;
+  }
+
   .screen {
     display: flex;
     flex-direction: column;
