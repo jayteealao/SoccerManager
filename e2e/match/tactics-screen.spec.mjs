@@ -95,7 +95,8 @@ async function queueSubstitution(page, off, on) {
 /// Moves the viewer's mentality select one step and waits for the engine's acknowledgement.
 async function queueMentality(page) {
   const before = await hook(page, () => window.__touchline.pending().length);
-  const select = page.getByLabel('Mentality');
+  // The select alone: once the change is queued, its Edit and Cancel buttons also name Mentality.
+  const select = page.getByRole('combobox', { name: /^Mentality/ });
   const now = await select.evaluate((s) => s.selectedIndex);
   await chooseIndex(select, now > 0 ? now - 1 : now + 1);
   await until(page, (n) => window.__touchline.pending().length > n, before, 10_000);
