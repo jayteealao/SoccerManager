@@ -164,7 +164,7 @@
 
   h2 {
     margin: 0 0 8px;
-    font: 800 22px var(--fd);
+    font: 800 24px var(--fd);
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--ink);

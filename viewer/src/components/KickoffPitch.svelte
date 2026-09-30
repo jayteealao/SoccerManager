@@ -1,8 +1,9 @@
 <!-- The kick-off pitch of the broadcast line-up graphic (500 × 300): the sketch's striped turf
-     with its markings as an inline SVG, and both elevens as 17 px ringed dots at the places the
-     engine puts them for the kick-off, each with the shirt number and the surname under it.
-     Our dots take our kit colour, theirs their kit colour; the keepers take the keeper colours.
-     It is a static drawing: the canvas renderer is not needed for a pitch that never moves. -->
+     with its markings and the ball on the centre spot as an inline SVG, and both elevens as
+     17 px ringed dots at the places the engine puts them for the kick-off, each with the shirt
+     number and the surname under it. Our dots take our kit colour, theirs their kit colour;
+     the keepers take the keeper colours. It is a static drawing: the canvas renderer is not
+     needed for a pitch that never moves. -->
 <script>
   let { dots = [[], []], kits = [null, null], shapes = ['', ''], names = ['', ''], width = 500, height = 300 } = $props();
 
@@ -31,6 +32,7 @@
       />
     </g>
     <circle class="spot" cx={width / 2} cy={height / 2} r="2" />
+    <circle class="ball" cx={width / 2} cy={height / 2} r="3.5" />
   </svg>
   {#each dots as side, s (s)}
     {#each side as dot (dot.slot)}
@@ -80,6 +82,12 @@
   .spot {
     fill: var(--pitch-line);
     fill-opacity: 0.55;
+  }
+
+  .ball {
+    fill: var(--pitch-line);
+    stroke: var(--ball-ring);
+    stroke-width: 1.2;
   }
 
   .dotp {

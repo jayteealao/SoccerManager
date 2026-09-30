@@ -1,5 +1,8 @@
 // The Tactics screen on the new viewer, served by the release engine with `--web viewer/dist`.
 //
+// Before kick-off the action block reads CONTINUE: it opens the Pre-match line-ups, whose
+// KICK OFF starts the match, so every drive here kicks off through them.
+//
 // Screenshots: before kick-off and during play (paused at minute 10 with one substitution and
 // one mentality change queued), in each skin at 1280 by 800, against their baselines. The
 // light skin is chosen by configuration only: a copy of the content folder whose slot file
@@ -71,9 +74,18 @@ async function preMatch(page, engine, skin) {
   await until(page, () => window.__touchline.view() === 'tactics', undefined, 10_000);
 }
 
-/// Kicks off and plays at 8x until `tick` is stored, then pauses.
-async function playTo(page, tick) {
+/// CONTINUE on Tactics opens the Pre-match line-ups, whose action block is KICK OFF.
+async function continueToKickOff(page) {
+  await expect(action(page)).toHaveText('Continue');
+  await action(page).click();
+  await until(page, () => window.__touchline.view() === 'prematch', undefined, 5_000);
   await expect(action(page)).toHaveText('Kick off');
+}
+
+/// Kicks off through the Pre-match line-ups and plays at 8x until `tick` is stored, then
+/// pauses.
+async function playTo(page, tick) {
+  await continueToKickOff(page);
   await action(page).click();
   await until(page, () => window.__touchline.lineup().phase === 'live', undefined, 15_000);
   await page.getByRole('group', { name: 'Playback' }).getByRole('button', { name: '8x', exact: true }).click();
@@ -171,8 +183,12 @@ async function managerScript(page, kind, { plant = false } = {}) {
   const now = await mentality.evaluate((s) => s.selectedIndex);
   await chooseIndex(mentality, now + 1);
 
-  const kick = viewer ? action(page) : page.getByRole('button', { name: 'Kick off' });
-  await kick.click();
+  if (viewer) {
+    await continueToKickOff(page);
+    await action(page).click();
+  } else {
+    await page.getByRole('button', { name: 'Kick off' }).click();
+  }
   await until(page, () => window.__touchline.lineup().phase === 'live', undefined, 15_000);
   await page.getByRole('group', { name: 'Playback' }).getByRole('button', { name: '8x', exact: true }).click();
   await until(page, (t) => window.__touchline.lastRenderedTick() > t, MINUTE_3, 120_000);
@@ -324,7 +340,7 @@ test('a Tab walk through both phases never lands in a stub and reaches every con
     expect(names(before).some((n) => n.startsWith('Slot 1, GK'))).toBe(true);
     expect(names(before).some((n) => / in the eleven at /.test(n))).toBe(true);
     expect(names(before).some((n) => n.startsWith('Mentality'))).toBe(true);
-    expect(names(before)).toContain('Kick off');
+    expect(names(before)).toContain('Continue');
     expect(names(during).some((n) => n.endsWith(': role'))).toBe(true);
     expect(names(during).some((n) => n.startsWith('Coming off'))).toBe(true);
     expect(names(during)).toContain('Queue substitution');

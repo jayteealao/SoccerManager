@@ -11,6 +11,7 @@ import path from 'node:path';
 import { expect, test } from '@playwright/test';
 
 import { VIEWER, WEB, startEngine } from '../support/engine.mjs';
+import { kickOffFromPage } from '../support/page.mjs';
 
 const PLAY_MS = 60_000;
 
@@ -22,7 +23,7 @@ const evidence = (info, name) => {
   return out;
 };
 
-/// Serves `web`, kicks off with the page's own Kick off button, plays 60 s at 1x, and returns
+/// Serves `web`, kicks off with the page's own Kick off button (through CONTINUE on the viewer), plays 60 s at 1x, and returns
 /// every signal row the page wrote to its console and its final frame budget.
 async function measure(page, web) {
   const rows = [];
@@ -40,9 +41,7 @@ async function measure(page, web) {
   try {
     await page.goto(engine.url);
     await page.waitForFunction(() => Boolean(window.__touchline), undefined, { timeout: 30_000 });
-    const kickOff = page.getByRole('button', { name: 'Kick off' }).first();
-    await expect(kickOff).toBeEnabled({ timeout: 30_000 });
-    await kickOff.click();
+    await kickOffFromPage(page);
     await page.waitForFunction(() => window.__touchline.lastRenderedTick() > 0, undefined, { timeout: 30_000 });
     await page.waitForTimeout(PLAY_MS);
     const frame = await page.evaluate(() => window.__touchline.frame());

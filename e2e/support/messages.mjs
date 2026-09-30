@@ -31,3 +31,7 @@ export async function recordClientMessages(page, keep = () => true) {
 export const MANAGER_COMMANDS = new Set(['set-lineup', 'queue-change', 'cancel-change']);
 
 export const managerCommand = (message) => MANAGER_COMMANDS.has(message.type);
+
+/// Every message the page sends, `seen` and playback timing included: the Pre-match page's
+/// read-only check needs all of them.
+export const everyMessage = () => true;

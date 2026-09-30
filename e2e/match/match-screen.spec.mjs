@@ -16,6 +16,7 @@ import { expect, test } from '@playwright/test';
 
 import { contrastReport } from '../support/contrast.mjs';
 import { VIEWER, contentWithSkin, killTree, runEngine, startEngine, tempDir } from '../support/engine.mjs';
+import { kickOffFromPage } from '../support/page.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
 /// Minute 30 at 50 ticks a second.
@@ -212,7 +213,7 @@ test.describe('the match screen with a real engine', () => {
     try {
       await open(page, launcher.url, 'broadcast-blue');
       await until(page, () => window.__touchline.screen() === 'kickoff', undefined, 30_000);
-      await page.getByRole('button', { name: 'Kick off' }).click();
+      await kickOffFromPage(page);
       await page.getByRole('group', { name: 'Playback' }).getByRole('button', { name: '8x', exact: true }).click();
       let before;
       for (;;) {
@@ -271,7 +272,7 @@ test.describe('the match screen with a real engine', () => {
     try {
       await open(page, launcher.url, 'broadcast-blue');
       await until(page, () => window.__touchline.screen() === 'kickoff', undefined, 30_000);
-      await page.getByRole('button', { name: 'Kick off' }).click();
+      await kickOffFromPage(page);
       await page.getByRole('group', { name: 'Playback' }).getByRole('button', { name: '8x', exact: true }).click();
       let restartSeen = false;
       let reconnectingSeen = false;

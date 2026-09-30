@@ -39,6 +39,19 @@ export async function until(page, fn, { timeout = 60_000, arg } = {}) {
 
 export const kickOffButton = (page) => page.getByRole('button', { name: 'Kick off' });
 
+/// Kicks off from whichever page is served. Today's page has one Kick off button; the viewer
+/// opens on Tactics, whose CONTINUE leads to the Pre-match line-ups and their KICK OFF.
+export async function kickOffFromPage(page, timeout = 30_000) {
+  const next = page.getByRole('button', { name: 'Continue', exact: true });
+  const kick = page.getByRole('button', { name: 'Kick off', exact: true });
+  await expect(next.or(kick).first()).toBeVisible({ timeout });
+  if (await next.isVisible()) {
+    await next.click();
+  }
+  await expect(kick).toBeEnabled({ timeout });
+  await kick.click();
+}
+
 /// Waits for the lineup editor, then kicks off with the lineup it shows.
 export async function kickOff(page) {
   await until(page, () => window.__touchline.lineup().phase === 'pre-match', { timeout: 30_000 });
