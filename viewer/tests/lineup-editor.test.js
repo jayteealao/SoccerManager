@@ -154,3 +154,26 @@ test('each slot button names its player, role fit and fitness, on an upright pit
   assert.deepEqual(uprightPlace(spot.x, spot.y), { left: flat.top, top: 100 - flat.left });
   assert.ok(rows[0].place.top > 80, 'the goalkeeper stands at the bottom');
 });
+
+test('an emptied place keeps a row in the list, and a click or a drop fills it', () => {
+  const e = editor();
+  e.emptyPlace({ kind: 'slot', n: 3 });
+  e.emptyPlace({ kind: 'bench', n: 2 });
+  const list = e.squadList();
+  const slot = list.eleven[3];
+  assert.equal(slot.empty, true);
+  assert.equal(slot.chip, 'CB');
+  assert.equal(slot.label, 'Empty place: slot 4, CB');
+  assert.equal(list.bench[2].label, 'Empty place: substitute 3');
+  assert.deepEqual(
+    list.out.map((r) => r.index),
+    [3, 13, 18, 19, 20, 21]
+  );
+  e.pickPlace(slot.place);
+  assert.equal(e.squadList().eleven[3].picked, true);
+  e.pickRow(20);
+  assert.equal(e.slots[3], 20);
+  e.drop(3, { kind: 'bench', n: 2 });
+  assert.equal(e.bench[2], 3);
+  assert.equal(e.verdict().legal, true);
+});

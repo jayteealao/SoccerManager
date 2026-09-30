@@ -298,6 +298,51 @@ export class LineupEditor {
     return { eleven, bench, out };
   }
 
+  /// Empties one place: Delete on a slot.
+  emptyPlace(place) {
+    this.put(place, null);
+    this.selection = null;
+  }
+
+  /// The squad list as the screen draws it: the three groups of `squadRows()`, with a row for
+  /// each empty place in the eleven and on the bench, so an emptied place can be filled by a
+  /// click or a drop. An empty row is `{ empty: true, place, chip, picked, label }`.
+  squadList() {
+    const rows = this.squadRows();
+    const byIndex = new Map(
+      [...rows.eleven, ...rows.bench, ...rows.out].map((r) => [r.index, r])
+    );
+    const formation = this.schema.formations[this.formation];
+    const seen = new Set();
+    const group = (places, kind) =>
+      places.flatMap((index, n) => {
+        const place = { kind, n };
+        const chip = kind === 'slot' ? formation.slots[n].position : `S${n + 1}`;
+        if (index === null) {
+          const where = kind === 'slot' ? `slot ${n + 1}, ${chip}` : `substitute ${n + 1}`;
+          return [
+            {
+              empty: true,
+              key: `${kind}-${n}`,
+              place,
+              chip,
+              picked: samePlace(this.selection, place),
+              label: `Empty place: ${where}`,
+            },
+          ];
+        }
+        if (seen.has(index) || !byIndex.has(index)) {
+          return [];
+        }
+        seen.add(index);
+        return [byIndex.get(index)];
+      });
+    const eleven = group(this.slots, 'slot');
+    const bench = group(this.bench, 'bench');
+    const out = rows.out.filter((r) => !seen.has(r.index));
+    return { eleven, bench, out };
+  }
+
   /// The words the picked-row hint names, or null with nothing picked.
   pickedText() {
     const sel = this.selection;
