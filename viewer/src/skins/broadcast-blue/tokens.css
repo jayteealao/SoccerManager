@@ -143,6 +143,11 @@
   --reading-edge: #8a7a24;
   --reading-ink: #f5d33a;
 
+  /* The handshake page: a check's state word on the navy fact strip. The plain state
+   * colours measure under 4.5:1 on navy, so the strip carries the board's lighter pair. */
+  --strip-good: #9df0b0;
+  --strip-bad: #ffb3b5;
+
   /* Type */
   --fd: 'Saira Semi Condensed', 'Barlow Semi Condensed', 'Arial Narrow', system-ui, sans-serif;
   --fb: 'Saira', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;

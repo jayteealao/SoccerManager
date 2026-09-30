@@ -856,5 +856,23 @@
     "bg": "--cyan",
     "kind": "text",
     "where": "Touchline: Accept on a pick"
+  },
+  {
+    "fg": "--good",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "handshake log: a check that passed and the hello"
+  },
+  {
+    "fg": "--strip-good",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "handshake fact strip: a check that passed"
+  },
+  {
+    "fg": "--strip-bad",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "handshake fact strip: a check that failed, a socket error"
   }
 ]

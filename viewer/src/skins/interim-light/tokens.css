@@ -132,6 +132,11 @@
   --reading-edge: oklch(0.62 0.1 95);
   --reading-ink: oklch(0.45 0.1 95);
 
+  /* The handshake page: a check's state word on the navy fact strip. The plain state
+   * colours measure under 4.5:1 on navy, so the strip carries the board's lighter pair. */
+  --strip-good: oklch(0.93 0.09 150);
+  --strip-bad: oklch(0.92 0.07 20);
+
   /* Type */
   --fd: 'Barlow Condensed', 'Arial Narrow', sans-serif;
   --fb: 'IBM Plex Sans', system-ui, sans-serif;

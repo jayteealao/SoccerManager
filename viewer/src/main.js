@@ -1,6 +1,7 @@
 // The viewer's entry: applies the skin the `viewer.skin` slot names, then mounts the views
 // and starts their session. Until the served page switches to this viewer, the engine
 // serves the page in `web/` to players; the browser tests serve this build with `--web`.
+// The handshake page is a separate entry (`handshake.js`) with no session.
 
 import { mount } from 'svelte';
 

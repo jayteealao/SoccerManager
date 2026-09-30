@@ -1,4 +1,5 @@
-// The viewer's build and its tests. The build has two pages: `index.html`, the viewer, and
+// The viewer's build and its tests. The build has three pages: `index.html`, the viewer,
+// `handshake.html`, the diagnostic page that checks the engine's socket, and
 // `shell-test.html`, the test page the shell screenshots and the keyboard walk open. Nothing
 // is fetched from the network at run time: fonts and skins ship inside the build.
 import { fileURLToPath } from 'node:url';
@@ -15,6 +16,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: page('index.html'),
+        handshake: page('handshake.html'),
         'shell-test': page('shell-test.html'),
       },
     },

@@ -48,6 +48,7 @@ export function reportModel(events, uptoTick, teams) {
       minute: minuteStamp(e),
       kind: type(e) === KIND.goal ? 'Goal' : e['card.kind'] === 'yellow' ? 'Yellow card' : 'Red card',
       side: ids.indexOf(e['team.id']),
+      player: e['player.id'] ?? null,
       text: e.commentary ?? '',
     }));
   return {

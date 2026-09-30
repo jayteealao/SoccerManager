@@ -1,7 +1,8 @@
 <!-- The navy fact strip under the tabs: 54 px, or 62 px (`tall`) on the Pre-match line-ups.
      The facts come before the detail. The first cell is wider and reads left to right, with
      an optional lead (a crest) before it; the rest are centred. A fact with `stub` is a part
-     the engine has no model for yet: drawn faded with the LATER mark, inert and hidden. The
+     the engine has no model for yet: drawn faded with the LATER mark, inert and hidden. A
+     fact's `tone` (good or bad) colours a check's state word, which also says it. The
      66 px score strip of the match screens is a separate component. -->
 <script>
   import StubSection from './StubSection.svelte';
@@ -21,7 +22,7 @@
         </StubSection>
       {:else}
         <div class="txt">
-          <b class:num={fact.num}>{fact.value}</b>
+          <b class:num={fact.num} class:good={fact.tone === 'good'} class:bad={fact.tone === 'bad'}>{fact.value}</b>
           <span>{fact.label}</span>
         </div>
       {/if}
@@ -71,6 +72,15 @@
 
   b.num {
     font-variant-numeric: tabular-nums;
+  }
+
+  /* A check's state word (the handshake page): the word says the state, the colour repeats it. */
+  b.good {
+    color: var(--strip-good);
+  }
+
+  b.bad {
+    color: var(--strip-bad);
   }
 
   span {

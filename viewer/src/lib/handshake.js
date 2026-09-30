@@ -69,12 +69,13 @@ export function errorLine() {
   return { text: 'socket error', kind: 'bad' };
 }
 
-/// The fact strip: each fact carries a word, never a colour alone.
-export function facts({ isolated, gauge, ticks, socket }) {
+/// The fact strip: each fact carries a word, never a colour alone. `socketBad` marks a
+/// socket that closed uncleanly.
+export function facts({ isolated, gauge, ticks, socket, socketBad = false }) {
   return [
     { label: 'crossOriginIsolated', value: isolated ? 'Yes' : 'No', kind: isolated ? 'ok' : 'bad' },
     { label: 'Memory gauge', value: gauge ? 'Present' : 'Missing', kind: gauge ? 'ok' : 'bad' },
     { label: 'Tick frames', value: String(ticks), kind: 'plain' },
-    { label: 'Socket', value: socket, kind: socket === 'Error' ? 'bad' : 'plain' },
+    { label: 'Socket', value: socket, kind: socketBad || socket === 'Error' ? 'bad' : 'plain' },
   ];
 }
