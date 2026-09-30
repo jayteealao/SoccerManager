@@ -19,7 +19,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::EngineError;
 use crate::flags::{ActiveFlags, FlagState, FlagStates};
-use crate::modules::{REGISTRY, ResolvedModules, SLOTS_VERSION, SlotFile};
+use crate::modules::{Picked, REGISTRY, ResolvedModules, SLOTS_VERSION, SlotFile};
 
 pub use attributes::{ATTRIBUTES_VERSION, AttributeSchema, Group, MAX_ATTRIBUTES};
 pub use generator::generate_league;
@@ -44,6 +44,8 @@ pub const COMMENTARY_FILE: &str = "commentary/en.json";
 /// while it names the built-in default selection; any other selection is folded in (see
 /// [`Content::with_slots`]), so a match played with it is never taken for a default one.
 pub const SLOTS_FILE: &str = "slots.json";
+/// Slots whose id starts with this choose how the viewer looks; they never enter the digest.
+pub const VIEWER_SLOT_PREFIX: &str = "viewer.";
 /// Environment variable that names the content folder.
 pub const CONTENT_DIR_ENV: &str = "SM_CONTENT_DIR";
 
@@ -296,11 +298,11 @@ impl Content {
     /// This content with the modules the slot file `bytes` selects. A bad entry is refused
     /// with the slot, the value, and the valid names.
     ///
-    /// A selection other than the built-in default is folded into the digest, the way a
-    /// changed flag state is: a match played with a module off never shares a content hash
-    /// with a default one, so a snapshot refuses to resume under another selection, and
-    /// the default selection leaves every hash as it was. Call it once, on content that
-    /// [`Content::from_files`] built.
+    /// A selection other than the built-in default (`viewer.*` slots aside) is folded into
+    /// the digest, the way a changed flag state is: a match played with a module off never
+    /// shares a content hash with a default one, so a snapshot refuses to resume under
+    /// another selection, and the default selection leaves every hash as it was. Call it
+    /// once, on content that [`Content::from_files`] built.
     pub fn with_slots(&self, bytes: &[u8]) -> Result<Self, EngineError> {
         let slots = load_json_bytes::<SlotFile>("slots", bytes, SLOTS_FILE, SLOTS_VERSION, &())?;
         let modules = crate::modules::resolve(&slots.value, REGISTRY)?;
@@ -314,12 +316,22 @@ impl Content {
         if modules.picked_for(rules_slot) != self.modules.picked_for(rules_slot) {
             next.rules = modules.rule_pack.load(&self.written_rules)?.value;
         }
-        if modules.picked() != ResolvedModules::builtin_default().picked() {
+        // A `viewer.*` slot chooses how a match looks, never what happens in it, so it stays
+        // out of the digest: a save or a replay does not split on a look change.
+        let in_match = |picked: &[Picked]| -> Vec<Picked> {
+            picked
+                .iter()
+                .copied()
+                .filter(|p| !p.slot.starts_with(VIEWER_SLOT_PREFIX))
+                .collect()
+        };
+        let in_match_picked = in_match(modules.picked());
+        if in_match_picked != in_match(ResolvedModules::builtin_default().picked()) {
             let fold = |digest: [u8; 32]| -> [u8; 32] {
                 let mut hasher = Sha256::new();
                 hasher.update(digest);
                 hasher.update(b"slots:");
-                for p in modules.picked() {
+                for p in &in_match_picked {
                     hasher.update(format!("{}={}@{},", p.slot, p.module, p.version).as_bytes());
                 }
                 hasher.finalize().into()

@@ -17,6 +17,7 @@ pub mod registry;
 #[cfg(feature = "scenario")]
 pub mod stand_in;
 pub mod view;
+pub mod viewer;
 
 use std::fmt;
 
@@ -48,6 +49,7 @@ pub use modifier::Modifiers;
 pub use proposal::Proposal;
 pub use registry::{MODIFIER_COUNT, ModuleRef, REGISTRY, Registration, SLOT_COUNT, SlotDecl};
 pub use view::MatchView;
+pub use viewer::{SKIN_NAMES, SkinModule};
 
 /// A slot: a place in the engine that one module fills.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -612,6 +614,7 @@ pub struct ResolvedModules {
     pub season: &'static dyn SeasonModule,
     pub people: &'static dyn PeopleModule,
     pub presentation: &'static dyn PresentationModule,
+    pub skin: &'static dyn SkinModule,
     picked: [Picked; SLOT_COUNT],
 }
 

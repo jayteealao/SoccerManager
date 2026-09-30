@@ -18,7 +18,7 @@ use super::{
     DecisionModule, DisciplineModule, FatigueModule, FoulsModule, InjuriesModule, ManagerModule,
     OffsideModule, PeopleModule, Picked, PossessionModule, PreMatchModule, PresentationModule,
     ResolvedModules, RestartsModule, RuleHookModule, RulesModule, SeasonModule, ShotModule,
-    SteeringModule, WorldModule,
+    SkinModule, SteeringModule, WorldModule,
 };
 use crate::error::EngineError;
 
@@ -91,6 +91,7 @@ impl SlotFile {
                 ("game.season".to_string(), entry("season-stub")),
                 ("game.people".to_string(), entry("people-stub")),
                 ("game.presentation".to_string(), entry("presentation-stub")),
+                ("viewer.skin".to_string(), entry("broadcast-blue")),
             ]),
         }
     }
@@ -181,6 +182,7 @@ struct Builder {
     season: Option<&'static dyn SeasonModule>,
     people: Option<&'static dyn PeopleModule>,
     presentation: Option<&'static dyn PresentationModule>,
+    skin: Option<&'static dyn SkinModule>,
 }
 
 impl Builder {
@@ -218,6 +220,7 @@ impl Builder {
             ModuleRef::Season(m) => set(&mut self.season, m),
             ModuleRef::People(m) => set(&mut self.people, m),
             ModuleRef::Presentation(m) => set(&mut self.presentation, m),
+            ModuleRef::Skin(m) => set(&mut self.skin, m),
         };
         if once { Ok(()) } else { Err(Self::defect()) }
     }
@@ -250,6 +253,7 @@ impl Builder {
             Some(season),
             Some(people),
             Some(presentation),
+            Some(skin),
         ) = (
             self.fouls,
             self.offside,
@@ -274,6 +278,7 @@ impl Builder {
             self.season,
             self.people,
             self.presentation,
+            self.skin,
         )
         else {
             return Err(Self::defect());
@@ -303,6 +308,7 @@ impl Builder {
             season,
             people,
             presentation,
+            skin,
             picked,
         })
     }

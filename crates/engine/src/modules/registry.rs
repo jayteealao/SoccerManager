@@ -5,6 +5,7 @@
 use super::card::ModuleCard;
 use super::game::{self, PeopleModule, PresentationModule, SeasonModule, WorldModule};
 use super::modifier::{Modifier, stand_ins};
+use super::viewer::{self, SkinModule};
 use super::{
     BallModule, ChangesModule, ClockModule, CommentaryHookModule, DecisionHookModule,
     DecisionModule, DisciplineModule, FatigueModule, FoulsModule, InjuriesModule, ManagerModule,
@@ -42,6 +43,7 @@ pub enum ModuleRef {
     Season(&'static dyn SeasonModule),
     People(&'static dyn PeopleModule),
     Presentation(&'static dyn PresentationModule),
+    Skin(&'static dyn SkinModule),
 }
 
 /// One module registered for a slot.
@@ -233,9 +235,16 @@ pub const PRESENTATION: Slot = Slot {
     required: false,
 };
 
+/// The viewer's skin slot: which look the viewer loads. Optional; off shows the viewer's
+/// built-in default look. A `viewer.*` slot never enters the content digest.
+pub const SKIN: Slot = Slot {
+    id: "viewer.skin",
+    required: false,
+};
+
 /// The number of declared slots. `ResolvedModules` holds one typed field per slot, and one
 /// `Modifiers` field for the modifier slots.
-pub const SLOT_COUNT: usize = 27;
+pub const SLOT_COUNT: usize = 28;
 
 /// The number of modifier slots.
 pub const MODIFIER_COUNT: usize = 4;
@@ -691,6 +700,29 @@ const DECLS: [SlotDecl; SLOT_COUNT] = [
             version: 0,
             module: ModuleRef::Presentation(&game::PresentationOff),
             card: &game::PRESENTATION_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: SKIN,
+        registrations: &[
+            Registration {
+                name: "broadcast-blue",
+                version: 1,
+                module: ModuleRef::Skin(&viewer::BroadcastBlueV1),
+                card: &viewer::BROADCAST_BLUE_V1_CARD,
+            },
+            Registration {
+                name: "interim-light",
+                version: 1,
+                module: ModuleRef::Skin(&viewer::InterimLightV1),
+                card: &viewer::INTERIM_LIGHT_V1_CARD,
+            },
+        ],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::Skin(&viewer::SkinOff),
+            card: &viewer::SKIN_OFF_CARD,
         }),
     },
 ];

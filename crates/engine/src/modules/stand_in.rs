@@ -14,6 +14,7 @@ use super::game::{
 };
 use super::modifier::{Effect, Family, Modifier};
 use super::registry::{ModuleRef, REGISTRY, Registration, SlotDecl};
+use super::viewer::SkinModule;
 use super::{
     AiPlan, BallModule, CarrierPlan, ChangesModule, ClockModule, CommentaryHookModule, Contest,
     CrossContest, Crossing, DecisionHookModule, DecisionModule, Deflection, DisciplineModule,
@@ -122,6 +123,7 @@ fn wrap(module: ModuleRef) -> ModuleRef {
         ModuleRef::Season(m) => ModuleRef::Season(leak(StandIn(m))),
         ModuleRef::People(m) => ModuleRef::People(leak(StandIn(m))),
         ModuleRef::Presentation(m) => ModuleRef::Presentation(leak(StandIn(m))),
+        ModuleRef::Skin(m) => ModuleRef::Skin(leak(StandIn(m))),
     }
 }
 
@@ -463,6 +465,12 @@ impl PeopleModule for StandIn<dyn PeopleModule> {
 impl PresentationModule for StandIn<dyn PresentationModule> {
     fn on_day(&self, day: GameDay) -> GameChanges {
         self.0.on_day(day)
+    }
+}
+
+impl SkinModule for StandIn<dyn SkinModule> {
+    fn skin(&self) -> &'static str {
+        self.0.skin()
     }
 }
 

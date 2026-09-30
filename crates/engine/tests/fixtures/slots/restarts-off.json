@@ -27,6 +27,7 @@
     "game.world": { "module": "world-stub", "version": 1 },
     "game.season": { "module": "season-stub", "version": 1 },
     "game.people": { "module": "people-stub", "version": 1 },
-    "game.presentation": { "module": "presentation-stub", "version": 1 }
+    "game.presentation": { "module": "presentation-stub", "version": 1 },
+    "viewer.skin": { "module": "broadcast-blue", "version": 1 }
   }
 }
