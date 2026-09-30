@@ -76,6 +76,10 @@ function emptyView() {
     stats: null,
     energy: null,
     energyTick: null,
+    /// Substitutions and windows each team has used, home first, from the newest condition
+    /// message at the tick; null before the first one or from an engine that sends none.
+    subsUsed: null,
+    windowsUsed: null,
   };
 }
 
@@ -160,6 +164,8 @@ export class MatchState {
     const c = newestAtOrBefore(this.conditions, tick);
     view.energy = c < 0 ? null : this.conditions[c].energy;
     view.energyTick = c < 0 ? null : this.conditions[c].tick;
+    view.subsUsed = c < 0 ? null : (this.conditions[c].subs_used ?? null);
+    view.windowsUsed = c < 0 ? null : (this.conditions[c].windows_used ?? null);
     return view;
   }
 
