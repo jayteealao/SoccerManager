@@ -6,6 +6,11 @@
 // so a verdict usually arrives before the pitch reaches it; the chip shows the verdict only
 // once the rendered tick reaches the verdict's tick, the frame in which the manager sees the
 // dead ball. Every chip carries its state word; colour never carries a state alone.
+//
+// A chip the engine has not settled can be withdrawn: the chip leaves on the engine's
+// acknowledgement of `cancel-change`, and stays when the engine refuses the withdrawal because
+// the change already applied or was refused. "Applies now" comes from the engine's
+// `change-state` message, sent when the stoppage that takes the change opens.
 
 import { signal } from './signal.js';
 
@@ -42,6 +47,8 @@ export function createPendingList({ homeTeamId = null } = {}) {
       applied_tick: chip.applied_tick,
       verdict_tick: chip.verdictTick,
       detail: chip.detail,
+      // Edit and Cancel act on a change no stoppage has taken yet.
+      editable: state === 'queued',
     };
   };
 
@@ -60,6 +67,7 @@ export function createPendingList({ homeTeamId = null } = {}) {
         verdict: null,
         verdictTick: null,
         dismissed: false,
+        cancelled: false,
       };
       chips.push(chip);
       return chip.queue_id;
@@ -81,9 +89,39 @@ export function createPendingList({ homeTeamId = null } = {}) {
         verdict: null,
         verdictTick: null,
         dismissed: false,
+        cancelled: false,
       };
       chips.push(chip);
       return chip.queue_id;
+    },
+
+    /// A `change-state` message: the stoppage that takes the change has opened. Returns
+    /// `true` when it moved one of this list's chips.
+    onChangeState(note) {
+      if (note.state !== 'applies-now') {
+        return false;
+      }
+      const chip = find(note['change.queue_id']);
+      if (!chip || chip.cancelled || chip.verdict !== null) {
+        return false;
+      }
+      chip.state = 'applies-now';
+      return true;
+    },
+
+    /// The engine acknowledged the withdrawal of `queueId`: the chip leaves for good.
+    cancelled(queueId) {
+      const chip = find(queueId);
+      if (chip) {
+        chip.cancelled = true;
+        chip.dismissed = true;
+      }
+    },
+
+    /// The chip `queueId` as the manager sees it at `renderedTick`, or null.
+    get(queueId, renderedTick) {
+      const chip = find(queueId);
+      return chip ? view(chip, renderedTick) : null;
     },
 
     /// A `tactics-change` event. Returns `true` when it resolved one of this list's chips.
@@ -139,7 +177,11 @@ export function createPendingList({ homeTeamId = null } = {}) {
 
     /// Every chip ever queued, as the test hook reads it, at `renderedTick`.
     all(renderedTick) {
-      return chips.map((chip) => ({ ...view(chip, renderedTick), dismissed: chip.dismissed }));
+      return chips.map((chip) => ({
+        ...view(chip, renderedTick),
+        dismissed: chip.dismissed,
+        cancelled: chip.cancelled,
+      }));
     },
 
     /// The changes the engine has applied, in the order it applied them.

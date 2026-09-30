@@ -150,6 +150,37 @@ test('loading, then kick-off on the hello, then live once the kick-off is sent',
   assert.equal(session.tag.live, true);
 });
 
+test('with a lineup to pick, kick-off sends it and the match starts on the engine ack', async () => {
+  const { session, socket } = await started(RUNNING);
+  const squad = roster(0).map((p) => ({ ...p, 'player.natural_fitness': 60, role_fit: [] }));
+  const setup = {
+    lineup: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    bench: [11, 12, 13, 14, 15, 16, 17],
+    formation: 0,
+    mentality: 2,
+    instructions: [1, 1, 1, 1, 1, 0],
+    roles: Array.from({ length: 11 }, () => ({ role: 0, duty: 1 })),
+  };
+  const tactics = {
+    formations: [{ slots: squad.slice(0, 11).map((p, i) => ({ position: p['player.position'], x: i * 9, y: 0 })) }],
+    roles: [],
+    ai: { bench_size: 7 },
+  };
+  const message = JSON.parse(hello());
+  message.tactics = tactics;
+  message.teams[0] = { ...message.teams[0], squad, setup };
+  socket.deliver(JSON.stringify(message));
+  assert.equal(session.view, 'tactics', 'the Tactics screen opens before kick-off');
+  session.act();
+  assert.deepEqual(socket.sent, [{ type: 'set-lineup', lineup: setup.lineup, bench: setup.bench }]);
+  assert.equal(session.screen, 'kickoff', 'nothing starts before the engine answers');
+  assert.equal(session.action, 'Kicking off');
+  socket.deliver(JSON.stringify({ type: 'ack', command: 'set-lineup' }));
+  assert.deepEqual(socket.sent.slice(1), [{ type: 'seen', tick: 0 }, { type: 'start' }]);
+  assert.equal(session.screen, 'live');
+  assert.equal(session.view, 'match');
+});
+
 test('pause and resume follow the action block, and the date block names the state', async () => {
   const { session, socket } = await started(RUNNING);
   socket.deliver(hello());

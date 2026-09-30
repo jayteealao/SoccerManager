@@ -9,11 +9,13 @@
 // score, feed row or statistic shows before the pitch reaches it. A field changes only when
 // its value changes, so a component redraws at most once per rendered tick.
 //
-// The lineup editor, the tactics and substitutions, the half-time and full-time reports and
-// saving a replay are later parts of the port; until they arrive the kick-off sends no
-// lineup (the computer manager's lineup stands) and playback runs through the breaks.
+// The dugout (`dugout.svelte.js`) holds the lineup editor, the tactics and the substitutions:
+// the kick-off sends the lineup the manager picked, and every `ack`, `reject`, `change-state`
+// and change event goes to it. The half-time and full-time reports and saving a replay are
+// later parts of the port; until they arrive playback runs through the breaks.
 
 import { COMPONENT_COUNT, decodeInto, newFrame } from './decode.js';
+import { Dugout } from './dugout.svelte.js';
 import { FeedBatcher, feedRow, minuteStamp } from './feed.js';
 import { BANNER_TOTAL_MS, bannerText } from './goal-moment.js';
 import { History } from './history.js';
@@ -98,6 +100,8 @@ export class MatchSession {
   engineVersion = $state(null);
   stored = $state(false);
   busy = $state(false);
+  /// The view the tabs show: `match` or `tactics`.
+  view = $state('match');
 
   /// `fetcher`, `timers`, `raf` and `now` are the browser's unless a test passes its own.
   constructor({
@@ -146,6 +150,10 @@ export class MatchSession {
     this.stepShown = 0;
     this.teamNames = new Map();
     this.halfTimes = 0;
+    this.dugout = new Dugout({
+      send: (command) => (this.socket ? this.socket.send(command) : false),
+      onStart: () => this.started(),
+    });
   }
 
   // ---- What the header and the strip show -------------------------------------------------
@@ -195,13 +203,28 @@ export class MatchSession {
       }
       return this.panel?.actions.includes('open-replay') ? 'Open replay' : 'Abandon';
     }
+    if (this.screen === 'kickoff' && this.kickingOff) {
+      return 'Kicking off';
+    }
     return ACTIONS[this.screen];
   }
 
   /// `true` while the action block has nothing to do: the wait before the engine answers, a
   /// reconnect, or a restart or abandon on its way.
   get actionBusy() {
-    return this.busy || this.screen === 'loading' || this.screen === 'reconnecting';
+    return (
+      this.busy ||
+      this.screen === 'loading' ||
+      this.screen === 'reconnecting' ||
+      this.kickingOff ||
+      (this.screen === 'kickoff' && this.dugout.preMatch && !this.lineupReady)
+    );
+  }
+
+  /// `true` when the lineup the manager picked may kick off.
+  get lineupReady() {
+    this.dugout.version;
+    return this.dugout.editor ? this.dugout.editor.ready : true;
   }
 
   /// The tag under the score: its words and the state colour it sits on.
@@ -338,22 +361,52 @@ export class MatchSession {
     this.playback.select(1);
     this.pitch = null;
     this.makePitch();
+    this.dugout.begin(hello, { stored });
     this.flush(0, { seek: true });
     this.screen = stored ? 'live' : 'kickoff';
+    // Before kick-off the manager starts on the Tactics screen when there is a lineup to
+    // pick; a stored match opens on the match.
+    this.view = this.dugout.preMatch ? 'tactics' : 'match';
   }
 
-  /// The kick-off: the engine is told the pitch shows tick 0 before it starts, so it is held
-  /// near the pitch from its first tick. No lineup is sent: the computer manager's stands.
+  /// The kick-off. With a lineup to pick, the dugout sends it and the match starts on the
+  /// engine's acknowledgement; an engine that takes no lineup starts at once with the
+  /// computer manager's.
   kickOff() {
     if (this.screen !== 'kickoff' || !this.socket) {
       return;
     }
-    this.socket.send({ type: 'seen', tick: 0 });
-    this.socket.send({ type: 'start' });
+    if (this.dugout.preMatch) {
+      this.dugout.kickOff();
+      return;
+    }
+    if (this.dugout.phase === 'kicking-off') {
+      return;
+    }
+    this.started();
+    signal('viewer.kick_off', { lineup: null, bench: null, patch: null });
+  }
+
+  /// The engine accepted the lineup, or needs none: the pitch is reported at tick 0 before
+  /// the start, so the engine is held near the pitch from its first tick.
+  started() {
+    this.socket?.send({ type: 'seen', tick: 0 });
+    this.socket?.send({ type: 'start' });
     this.kickedOff = true;
     this.setPlaying(true);
     this.screen = 'live';
-    signal('viewer.kick_off', { lineup: null, bench: null, patch: null });
+    // The match opens on the pitch, as the former page's editor gave the pitch back.
+    this.view = 'match';
+  }
+
+  /// `true` while the kick-off waits for the engine's answer to the lineup.
+  get kickingOff() {
+    return this.dugout.phase === 'kicking-off';
+  }
+
+  /// Opens the Match or the Tactics view.
+  show(view) {
+    this.view = view === 'tactics' ? 'tactics' : 'match';
   }
 
   onRaw(data) {
@@ -399,7 +452,19 @@ export class MatchSession {
 
   onMessage(message) {
     if (message.type === 'ack' || message.type === 'reject') {
+      if (!this.stored) {
+        this.dugout.answer(message);
+      }
       return;
+    }
+    if (message.type === 'change-state') {
+      if (!this.stored) {
+        this.dugout.onChangeState(message);
+      }
+      return;
+    }
+    if (message.type === 'event' && message['event.type'] === KIND.tacticsChange) {
+      this.dugout.onChangeEvent(message);
     }
     this.match.add(message);
     if (stopsPlay(message)) {
@@ -484,6 +549,7 @@ export class MatchSession {
     if (state.stats !== this.stats) {
       this.stats = state.stats;
     }
+    this.dugout.update(tick, state);
 
     const goals = state.goals.length;
     if (seek || tick < previous) {

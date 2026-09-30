@@ -4,6 +4,7 @@
 
 import { COMPONENT_COUNT } from './decode.js';
 import { signals } from './signal.js';
+import { copyTactics } from './tactics-panel.js';
 
 /// Installs the hook for `session` on `target` (the window) and returns it.
 export function install(session, target = globalThis) {
@@ -36,6 +37,18 @@ export function install(session, target = globalThis) {
       step: session.stepShown,
     }),
     events: () => session.match.events.map((e) => ({ ...e })),
+    view: () => session.view,
+    pending: () => session.dugout.pending.all(session.renderedTick),
+    lineup: () => session.dugout.lineupView(),
+    dugout: () => ({
+      phase: session.dugout.phase,
+      lead_holding: session.lead.holding,
+      lead_pauses: session.lead.pauses,
+      tactics: session.dugout.tactics ? copyTactics(session.dugout.tactics) : null,
+      subs_left: session.dugout.picker.left,
+      editing: session.dugout.editing ? { ...session.dugout.editing } : null,
+      cancel_refused: session.dugout.cancelRefused,
+    }),
   });
   target.__touchline = hook;
   return hook;
