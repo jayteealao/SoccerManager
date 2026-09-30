@@ -14,6 +14,7 @@ pub mod error;
 pub mod fatigue;
 pub mod flags;
 pub mod gate;
+pub mod hook_slots;
 pub mod math;
 pub mod modules;
 pub mod observe;

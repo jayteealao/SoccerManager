@@ -5,13 +5,14 @@
 use super::card::ModuleCard;
 use super::modifier::{Modifier, stand_ins};
 use super::{
-    BallModule, ChangesModule, ClockModule, DecisionModule, DisciplineModule, FatigueModule,
-    FoulsModule, InjuriesModule, ManagerModule, OffsideModule, PossessionModule, PreMatchModule,
-    RestartsModule, ShotModule, Slot, SteeringModule,
+    BallModule, ChangesModule, ClockModule, CommentaryHookModule, DecisionHookModule,
+    DecisionModule, DisciplineModule, FatigueModule, FoulsModule, InjuriesModule, ManagerModule,
+    OffsideModule, PossessionModule, PreMatchModule, RestartsModule, RuleHookModule, ShotModule,
+    Slot, SteeringModule,
 };
 use crate::rules::{clock, discipline, fouls, injury, offside, restart};
 use crate::tactics::verdict;
-use crate::{ai, ball, decision, fatigue, possession, shot, steering};
+use crate::{ai, ball, decision, fatigue, hook_slots, possession, shot, steering};
 
 /// A registered module, typed by the slot it fills.
 #[derive(Clone, Copy)]
@@ -32,6 +33,9 @@ pub enum ModuleRef {
     Decision(&'static dyn DecisionModule),
     Manager(&'static dyn ManagerModule),
     Changes(&'static dyn ChangesModule),
+    DecisionHook(&'static dyn DecisionHookModule),
+    RuleHook(&'static dyn RuleHookModule),
+    CommentaryHook(&'static dyn CommentaryHookModule),
 }
 
 /// One module registered for a slot.
@@ -173,9 +177,28 @@ pub const CHANGES: Slot = Slot {
     required: false,
 };
 
+/// The decision hook's slot. The hooks are not on the core list, so each hook slot is
+/// optional; its off version consults no hook.
+pub const HOOK_DECISION: Slot = Slot {
+    id: "engine.hook.decision",
+    required: false,
+};
+
+/// The rule hook's slot.
+pub const HOOK_RULE: Slot = Slot {
+    id: "engine.hook.rule",
+    required: false,
+};
+
+/// The commentary hook's slot.
+pub const HOOK_COMMENTARY: Slot = Slot {
+    id: "engine.hook.commentary",
+    required: false,
+};
+
 /// The number of declared slots. `ResolvedModules` holds one typed field per slot, and one
 /// `Modifiers` field for the modifier slots.
-pub const SLOT_COUNT: usize = 19;
+pub const SLOT_COUNT: usize = 22;
 
 /// The number of modifier slots.
 pub const MODIFIER_COUNT: usize = 4;
@@ -511,6 +534,51 @@ const DECLS: [SlotDecl; SLOT_COUNT] = [
             version: 0,
             module: ModuleRef::Changes(&verdict::ChangesOff),
             card: &verdict::CHANGES_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: HOOK_DECISION,
+        registrations: &[Registration {
+            name: "decision-hook",
+            version: 1,
+            module: ModuleRef::DecisionHook(&hook_slots::DecisionHookV1),
+            card: &hook_slots::DECISION_HOOK_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::DecisionHook(&hook_slots::DecisionHookOff),
+            card: &hook_slots::DECISION_HOOK_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: HOOK_RULE,
+        registrations: &[Registration {
+            name: "rule-hook",
+            version: 1,
+            module: ModuleRef::RuleHook(&hook_slots::RuleHookV1),
+            card: &hook_slots::RULE_HOOK_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::RuleHook(&hook_slots::RuleHookOff),
+            card: &hook_slots::RULE_HOOK_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: HOOK_COMMENTARY,
+        registrations: &[Registration {
+            name: "commentary-hook",
+            version: 1,
+            module: ModuleRef::CommentaryHook(&hook_slots::CommentaryHookV1),
+            card: &hook_slots::COMMENTARY_HOOK_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::CommentaryHook(&hook_slots::CommentaryHookOff),
+            card: &hook_slots::COMMENTARY_HOOK_OFF_CARD,
         }),
     },
 ];

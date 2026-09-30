@@ -19,6 +19,9 @@
     "engine.possession": { "module": "possession", "version": 1 },
     "engine.decision": { "module": "off" },
     "engine.manager": { "module": "ai-manager", "version": 1 },
-    "engine.changes": { "module": "changes", "version": 1 }
+    "engine.changes": { "module": "changes", "version": 1 },
+    "engine.hook.decision": { "module": "decision-hook", "version": 1 },
+    "engine.hook.rule": { "module": "rule-hook", "version": 1 },
+    "engine.hook.commentary": { "module": "commentary-hook", "version": 1 }
   }
 }

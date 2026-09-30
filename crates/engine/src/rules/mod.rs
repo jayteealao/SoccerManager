@@ -289,7 +289,7 @@ impl Simulation {
         event.secondary = Some(c);
         event.advantage = Some(advantage);
         self.events.push(event);
-        card = self.rule_card(offender, advantage, penalty, card);
+        card = self.rule_card(i, advantage, penalty, card);
         if self.trace_on() {
             self.trace_point(
                 Point::Foul,

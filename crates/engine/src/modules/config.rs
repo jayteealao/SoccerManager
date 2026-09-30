@@ -14,9 +14,10 @@ use serde::{Deserialize, Serialize};
 use super::modifier::{Modifier, Modifiers};
 use super::registry::{MODIFIER_COUNT, ModuleRef, Registration, SLOT_COUNT, SlotDecl};
 use super::{
-    BallModule, ChangesModule, ClockModule, DecisionModule, DisciplineModule, FatigueModule,
-    FoulsModule, InjuriesModule, ManagerModule, OffsideModule, Picked, PossessionModule,
-    PreMatchModule, ResolvedModules, RestartsModule, ShotModule, SteeringModule,
+    BallModule, ChangesModule, ClockModule, CommentaryHookModule, DecisionHookModule,
+    DecisionModule, DisciplineModule, FatigueModule, FoulsModule, InjuriesModule, ManagerModule,
+    OffsideModule, Picked, PossessionModule, PreMatchModule, ResolvedModules, RestartsModule,
+    RuleHookModule, ShotModule, SteeringModule,
 };
 use crate::error::EngineError;
 
@@ -78,6 +79,12 @@ impl SlotFile {
                 ("engine.decision".to_string(), entry("decision")),
                 ("engine.manager".to_string(), entry("ai-manager")),
                 ("engine.changes".to_string(), entry("changes")),
+                ("engine.hook.decision".to_string(), entry("decision-hook")),
+                ("engine.hook.rule".to_string(), entry("rule-hook")),
+                (
+                    "engine.hook.commentary".to_string(),
+                    entry("commentary-hook"),
+                ),
             ]),
         }
     }
@@ -160,6 +167,9 @@ struct Builder {
     decision: Option<&'static dyn DecisionModule>,
     manager: Option<&'static dyn ManagerModule>,
     changes: Option<&'static dyn ChangesModule>,
+    decision_hook: Option<&'static dyn DecisionHookModule>,
+    rule_hook: Option<&'static dyn RuleHookModule>,
+    commentary_hook: Option<&'static dyn CommentaryHookModule>,
 }
 
 impl Builder {
@@ -189,6 +199,9 @@ impl Builder {
             ModuleRef::Decision(m) => set(&mut self.decision, m),
             ModuleRef::Manager(m) => set(&mut self.manager, m),
             ModuleRef::Changes(m) => set(&mut self.changes, m),
+            ModuleRef::DecisionHook(m) => set(&mut self.decision_hook, m),
+            ModuleRef::RuleHook(m) => set(&mut self.rule_hook, m),
+            ModuleRef::CommentaryHook(m) => set(&mut self.commentary_hook, m),
         };
         if once { Ok(()) } else { Err(Self::defect()) }
     }
@@ -213,6 +226,9 @@ impl Builder {
             Some(decision),
             Some(manager),
             Some(changes),
+            Some(decision_hook),
+            Some(rule_hook),
+            Some(commentary_hook),
         ) = (
             self.fouls,
             self.offside,
@@ -229,6 +245,9 @@ impl Builder {
             self.decision,
             self.manager,
             self.changes,
+            self.decision_hook,
+            self.rule_hook,
+            self.commentary_hook,
         )
         else {
             return Err(Self::defect());
@@ -250,6 +269,9 @@ impl Builder {
             decision,
             manager,
             changes,
+            decision_hook,
+            rule_hook,
+            commentary_hook,
             picked,
         })
     }

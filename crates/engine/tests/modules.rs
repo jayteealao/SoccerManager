@@ -3,8 +3,9 @@
 //! the valid names; every moved action key has exactly one owner; every module card is
 //! complete; one changed module output fails the replay gate at a named window; every
 //! modifier names its family and can be switched off; the required slots of the core list
-//! refuse `off` while the optional slots play a match to the end switched off; and every
-//! row of the stream table has an owner.
+//! refuse `off` while the optional slots play a match to the end switched off; every row of
+//! the stream table has an owner; and the three hook slots are optional, their adapters own
+//! no key, and a match with each switched off plays to the end.
 
 /// The four modifier slots, in registry order.
 const MODIFIER_SLOTS: [&str; 4] = [
@@ -20,9 +21,9 @@ use std::collections::BTreeMap;
 
 use engine::modules::modifier::Family;
 use engine::modules::registry::{
-    BALL, CHANGES, CLOCK, DECISION, DISCIPLINE, FATIGUE, FOULS, INJURIES, MANAGER,
-    MODIFIER_FATIGUE, MODIFIER_MOMENTUM, MODIFIER_PRESSURE, MODIFIER_WEATHER, ModuleRef, OFFSIDE,
-    POSSESSION, PRE_MATCH, RESTARTS, SHOT, STEERING,
+    BALL, CHANGES, CLOCK, DECISION, DISCIPLINE, FATIGUE, FOULS, HOOK_COMMENTARY, HOOK_DECISION,
+    HOOK_RULE, INJURIES, MANAGER, MODIFIER_FATIGUE, MODIFIER_MOMENTUM, MODIFIER_PRESSURE,
+    MODIFIER_WEATHER, ModuleRef, OFFSIDE, POSSESSION, PRE_MATCH, RESTARTS, SHOT, STEERING,
 };
 use engine::modules::{
     CardError, MOVED_KEYS, ModuleCard, OwnershipError, REGISTRY, Registration, SlotDecl, SlotEntry,
@@ -135,6 +136,9 @@ fn default_selection_resolves_and_a_match_finishes() {
             "engine.decision=decision@1",
             "engine.manager=ai-manager@1",
             "engine.changes=changes@1",
+            "engine.hook.decision=decision-hook@1",
+            "engine.hook.rule=rule-hook@1",
+            "engine.hook.commentary=commentary-hook@1",
         ],
         "every declared slot resolves, in registry order"
     );
@@ -249,7 +253,15 @@ fn off_on_an_optional_slot_resolves_to_its_off_version() {
         .collect();
     let mut expected = vec![FOULS.id, OFFSIDE.id, SHOT.id, FATIGUE.id, PRE_MATCH.id];
     expected.extend(MODIFIER_SLOTS);
-    expected.extend([DISCIPLINE.id, INJURIES.id, MANAGER.id, CHANGES.id]);
+    expected.extend([
+        DISCIPLINE.id,
+        INJURIES.id,
+        MANAGER.id,
+        CHANGES.id,
+        HOOK_DECISION.id,
+        HOOK_RULE.id,
+        HOOK_COMMENTARY.id,
+    ]);
     assert_eq!(optional, expected);
     let changes: Vec<(&str, &str, Option<u32>)> =
         optional.iter().map(|&slot| (slot, "off", None)).collect();
@@ -283,7 +295,8 @@ fn an_undeclared_or_missing_slot_is_refused() {
          engine.pre-match, engine.modifier.fatigue, engine.modifier.pressure, \
          engine.modifier.momentum, engine.modifier.weather, engine.clock, engine.restarts, \
          engine.discipline, engine.injuries, engine.ball, engine.possession, engine.decision, \
-         engine.manager, engine.changes"
+         engine.manager, engine.changes, engine.hook.decision, engine.hook.rule, \
+         engine.hook.commentary"
     );
     assert!(text.contains("is not a declared slot"), "{text}");
 
@@ -375,9 +388,10 @@ fn every_registered_card_is_complete() {
     assert!(names.contains(&"goals_per_xg"), "{names:?}");
     let registrations = every_registration();
     // Fouls, offside, shot, fatigue, pre-match, the four modifiers, discipline, injuries,
-    // the manager, and changes each have version 1 and off; steering, the clock, restarts,
-    // ball physics, possession, and the decision maker have version 1 only.
-    assert!(registrations.len() >= 34, "{}", registrations.len());
+    // the manager, changes, and the three hook slots each have version 1 and off; steering,
+    // the clock, restarts, ball physics, possession, and the decision maker have version 1
+    // only.
+    assert!(registrations.len() >= 40, "{}", registrations.len());
     for reg in registrations {
         check_card(reg.card, &names)
             .unwrap_or_else(|e| panic!("{}@{}: {e}", reg.name, reg.version));
@@ -445,6 +459,9 @@ fn the_registry_declares_the_moved_slots_in_order() {
         DECISION.id,
         MANAGER.id,
         CHANGES.id,
+        HOOK_DECISION.id,
+        HOOK_RULE.id,
+        HOOK_COMMENTARY.id,
     ]);
     assert_eq!(ids, expected);
     assert_eq!(REGISTRY.len(), engine::modules::SLOT_COUNT);
@@ -493,6 +510,15 @@ fn the_registry_declares_the_moved_slots_in_order() {
     assert!(matches!(default(16), ModuleRef::Decision(_)));
     assert!(matches!(default(17), ModuleRef::Manager(_)));
     assert!(matches!(default(18), ModuleRef::Changes(_)));
+    assert!(matches!(default(19), ModuleRef::DecisionHook(_)));
+    assert!(matches!(default(20), ModuleRef::RuleHook(_)));
+    assert!(matches!(default(21), ModuleRef::CommentaryHook(_)));
+    // The hook adapters draw nothing, so no hook card owns an action key.
+    for decl in &REGISTRY[19..] {
+        for reg in decl.registrations.iter().chain(decl.off.as_ref()) {
+            assert!(reg.card.keys.is_empty(), "{}: {}", decl.slot.id, reg.name);
+        }
+    }
 }
 
 #[test]
@@ -639,7 +665,10 @@ const FOULS_OFF: &str = r#"{
     "engine.possession": { "module": "possession", "version": 1 },
     "engine.decision": { "module": "decision", "version": 1 },
     "engine.manager": { "module": "ai-manager", "version": 1 },
-    "engine.changes": { "module": "changes", "version": 1 }
+    "engine.changes": { "module": "changes", "version": 1 },
+    "engine.hook.decision": { "module": "decision-hook", "version": 1 },
+    "engine.hook.rule": { "module": "rule-hook", "version": 1 },
+    "engine.hook.commentary": { "module": "commentary-hook", "version": 1 }
   }
 }"#;
 
@@ -782,6 +811,9 @@ fn each_new_optional_slot_switched_off_plays_a_match_to_the_end() {
         INJURIES.id,
         MANAGER.id,
         CHANGES.id,
+        HOOK_DECISION.id,
+        HOOK_RULE.id,
+        HOOK_COMMENTARY.id,
     ] {
         let mut off = content.clone();
         off.modules = resolve(&default_with(&[(slot, "off", None)]), REGISTRY).unwrap();

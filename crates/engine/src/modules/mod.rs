@@ -26,11 +26,11 @@ use crate::decision::{Choice, Kick, MAX_PRESSERS, Options};
 use crate::fatigue::InjurySource;
 use crate::math::{DVec2, DVec3};
 use crate::pitch::Exit;
-use crate::plugin::OptionOffsets;
+use crate::plugin::{DecisionContext, FoulContext, LineContext, OptionOffsets};
 use crate::rules::DeadBall;
 use crate::rules::fouls::{Card, Tackle};
 use crate::rules::offside::OffsideSet;
-use crate::sim::DecidedBy;
+use crate::sim::{DecidedBy, EngineEvent};
 use crate::tactics::change::{Change, RejectReason};
 use crate::tactics::{Tactics, TacticsPatch};
 use crate::team::{PLAYERS_PER_TEAM, Team};
@@ -533,6 +533,34 @@ pub trait ChangesModule: Send + Sync + 'static {
     ) -> Result<Tactics, RejectReason>;
 }
 
+/// The decision hook's slot: the adapter between the loop and an attached decision hook. The
+/// hook itself is per-match state the loop keeps (`Plugins`); this module only builds what
+/// the hook sees. It draws nothing.
+pub trait DecisionHookModule: Send + Sync + 'static {
+    /// What the decision hook sees about carrier `carrier`, or `None` to consult no hook.
+    fn context(&self, view: &MatchView<'_>, carrier: usize) -> Option<DecisionContext>;
+}
+
+/// The rule hook's slot: builds what an attached rule hook sees when the referee has judged
+/// a foul. It draws nothing.
+pub trait RuleHookModule: Send + Sync + 'static {
+    /// What the rule hook sees about a foul by `offender`, or `None` to consult no hook.
+    fn context(
+        &self,
+        view: &MatchView<'_>,
+        offender: usize,
+        advantage: bool,
+        penalty: bool,
+    ) -> Option<FoulContext>;
+}
+
+/// The commentary hook's slot: builds what an attached commentary hook sees for one event
+/// that has a line. It draws nothing.
+pub trait CommentaryHookModule: Send + Sync + 'static {
+    /// What the commentary hook sees for `event`, or `None` to consult no hook.
+    fn context(&self, view: &MatchView<'_>, event: &EngineEvent) -> Option<LineContext>;
+}
+
 /// One slot's choice: the slot id, the module name, and its version (0 for `off`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Picked {
@@ -562,6 +590,9 @@ pub struct ResolvedModules {
     pub decision: &'static dyn DecisionModule,
     pub manager: &'static dyn ManagerModule,
     pub changes: &'static dyn ChangesModule,
+    pub decision_hook: &'static dyn DecisionHookModule,
+    pub rule_hook: &'static dyn RuleHookModule,
+    pub commentary_hook: &'static dyn CommentaryHookModule,
     picked: [Picked; SLOT_COUNT],
 }
 
