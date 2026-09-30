@@ -79,9 +79,34 @@
   --notice-neutral: #5d6067;
   --on-neutral: #f7f8fa;
 
+  /* The match screen: the colours the sketch's Match live board writes inline, as tokens.
+   * The canvas reads the pitch ones once, when it is built (src/lib/pitch.js). */
+  --pitch-stripe: #21912f;
+  --pitch-stripe-2: #1d842c;
+  --ball-ring: #15161a;
+  --keeper-home: #e3d34a;
+  --keeper-home-ink: #111214;
+  --keeper-away: #7c56d6;
+  --keeper-away-ink: #f7f8fa;
+  --pitch-chip: rgba(14, 15, 17, 0.55);
+  --pitch-skeleton: rgba(247, 248, 250, 0.06);
+  --pitch-skeleton-2: rgba(247, 248, 250, 0.08);
+  --control-edge: #6b6e75;
+  --control-ink: #f7f8fa;
+  --button-dark: #1b1c1f;
+  --ghost-ink: #e9ebef;
+  --seg-edge: #4a4d53;
+  --seg-ink: #e9ebef;
+  --toggle-ground: #1a1b1e;
+  --toggle-edge: #4a4d53;
+  --toggle-ink: #c3c6cc;
+  --toggle-on-ground: #12303c;
+  --new-goal-ground: #16252f;
+
   /* Type */
   --fd: 'Saira Semi Condensed', 'Barlow Semi Condensed', 'Arial Narrow', system-ui, sans-serif;
   --fb: 'Saira', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --fm: ui-monospace, Consolas, monospace;
 
   /* Shape and motion */
   --radius-sm: 2px;

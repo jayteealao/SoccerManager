@@ -2,12 +2,20 @@
 // where a CSS custom property cannot reach. `tests/colour.test.js` holds CANVAS equal to
 // this skin's tokens.css through CANVAS_SOURCE.
 
-/// The four colours the canvas measures kit colours against.
+/// The colours the canvas draws with: the four it measures kit colours against, then the
+/// turf stripes, the ball's ring and the two keepers.
 export const CANVAS = {
   pitch: 'oklch(0.62 0.13 145)',
   pitchLine: 'oklch(0.97 0.01 145)',
   onBrand: 'oklch(0.985 0.006 250)',
   fg: 'oklch(0.24 0.02 250)',
+  stripe: 'oklch(0.63 0.13 145)',
+  stripe2: 'oklch(0.59 0.13 145)',
+  ballRing: 'oklch(0.24 0.02 250)',
+  keeperHome: 'oklch(0.85 0.16 95)',
+  keeperHomeInk: 'oklch(0.24 0.02 250)',
+  keeperAway: 'oklch(0.52 0.17 295)',
+  keeperAwayInk: 'oklch(0.985 0.006 250)',
 };
 
 /// The token each CANVAS entry mirrors.
@@ -16,6 +24,13 @@ export const CANVAS_SOURCE = {
   pitchLine: '--pitch-line',
   onBrand: '--cyan-ink',
   fg: '--ink',
+  stripe: '--pitch-stripe',
+  stripe2: '--pitch-stripe-2',
+  ballRing: '--ball-ring',
+  keeperHome: '--keeper-home',
+  keeperHomeInk: '--keeper-home-ink',
+  keeperAway: '--keeper-away',
+  keeperAwayInk: '--keeper-away-ink',
 };
 
 /// The touchline mark's four variants. Each is three colours: the field above the line, the

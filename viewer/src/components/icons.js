@@ -61,3 +61,9 @@ export const UP_DOWN = 'M4 6.2 8 2.6l4 3.6M4 9.8l4 3.6 4-3.6';
 export const SEARCH = 'M6.8 2.5a4.3 4.3 0 1 1 0 8.6 4.3 4.3 0 0 1 0-8.6zM9.8 9.8l4.4 4.4';
 export const GLOBE = RAIL.find((g) => g?.id === 'international').stroke;
 export const CARET = 'M4 6.2 8 10l4-3.8';
+
+// The playback row's glyphs, as the Match live board draws them.
+export const REWIND = 'M14.5 3 8 8l6.5 5zM8 3 1.5 8 8 13z';
+export const PLAY = 'M4 2.2 13.5 8 4 13.8z';
+export const PAUSE = 'M4 2.5h3v11H4zm5 0h3v11H9z';
+export const FAST_FORWARD = 'M1.5 3 8 8l-6.5 5zM8 3l6.5 5L8 13z';

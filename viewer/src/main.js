@@ -1,6 +1,20 @@
-// The viewer's entry. Until the screens are ported the engine serves the page in `web/`;
-// this entry already applies the skin the `viewer.skin` slot names.
+// The viewer's entry: applies the skin the `viewer.skin` slot names, then mounts the match
+// screen and starts its session. Until the served page switches to this viewer, the engine
+// serves the page in `web/` to players; the browser tests serve this build with `--web`.
 
+import { mount } from 'svelte';
+
+import { watchMotion } from './lib/goal-moment.js';
+import { MatchSession } from './lib/match-session.svelte.js';
+import { install } from './lib/test-hooks.js';
+import MatchScreen from './screens/MatchScreen.svelte';
 import { applySkin, engineSkin } from './skins/index.js';
 
-applySkin(await engineSkin());
+const skin = await applySkin(await engineSkin());
+watchMotion(document, globalThis);
+
+const session = new MatchSession();
+install(session);
+mount(MatchScreen, { target: document.getElementById('app'), props: { session } });
+document.documentElement.dataset.ready = skin;
+session.start();

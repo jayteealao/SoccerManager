@@ -80,20 +80,11 @@ export function projection(width = BOX.width, height = BOX.height, length = LENG
   };
 }
 
-/// The token each canvas colour mirrors, per skin: the four `safeKit` measures against come
-/// from that skin's palette; the rest share one name in every skin.
+/// The token each canvas colour mirrors, per skin: each skin's palette names them (the four
+/// `safeKit` measures against differ between skins), and `colour.test.js` holds the palette
+/// equal to that skin's tokens.css. The line and the shirt-number face share one name.
 const SOURCES = { 'broadcast-blue': BROADCAST_BLUE, 'interim-light': INTERIM_LIGHT };
-const DRAWN = {
-  stripe: '--pitch-stripe',
-  stripe2: '--pitch-stripe-2',
-  line: '--pitch-line',
-  ballRing: '--ball-ring',
-  keeperHome: '--keeper-home',
-  keeperHomeInk: '--keeper-home-ink',
-  keeperAway: '--keeper-away',
-  keeperAwayInk: '--keeper-away-ink',
-  face: '--fd',
-};
+const DRAWN = { line: '--pitch-line', face: '--fd' };
 
 /// The token values the canvas draws with, read once from the active skin: the skin that
 /// `data-theme` on the root element names.

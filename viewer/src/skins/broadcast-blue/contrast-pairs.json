@@ -346,5 +346,137 @@
     "bg": "--ground-3",
     "kind": "inert",
     "where": "LATER labels and inactive stub text"
+  },
+  {
+    "fg": "--band-ink",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "score strip names, score and fact values"
+  },
+  {
+    "fg": "--navy-sub",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "score strip scorers and fact labels"
+  },
+  {
+    "fg": "--cyan-ink",
+    "bg": "--cyan",
+    "kind": "text",
+    "where": "strip clock tag, active speed part, goal banner"
+  },
+  {
+    "fg": "--on-bad",
+    "bg": "--bad",
+    "kind": "text",
+    "where": "strip ENGINE STOPPED tag"
+  },
+  {
+    "fg": "--on-mid",
+    "bg": "--mid",
+    "kind": "text",
+    "where": "strip SETUP tag"
+  },
+  {
+    "fg": "--on-warn",
+    "bg": "--warn",
+    "kind": "text",
+    "where": "strip RECONNECTING tag"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "commentary rows and minutes"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "statistics labels"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "timeline minute labels, playback note, feed empty state"
+  },
+  {
+    "fg": "--seg-ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "speed segment parts"
+  },
+  {
+    "fg": "--control-edge",
+    "bg": "--ground",
+    "kind": "boundary",
+    "where": "playback icon button edge"
+  },
+  {
+    "fg": "--control-ink",
+    "bg": "--ground",
+    "kind": "boundary",
+    "where": "playback icon button glyph"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--button-dark",
+    "kind": "text",
+    "where": "Next stop label"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground",
+    "kind": "boundary",
+    "where": "timeline playhead"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--bar-track",
+    "kind": "boundary",
+    "where": "timeline playhead on its track"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--pitch-deep",
+    "kind": "text",
+    "where": "loading title over the pitch box"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--pitch-deep",
+    "kind": "text",
+    "where": "loading note and step words over the pitch box"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "error and first-run panel text"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "error panel word"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "first-run panel word"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--rail",
+    "kind": "large-text",
+    "where": "error and first-run panel title"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "engine path in the first-run panel"
   }
 ]
