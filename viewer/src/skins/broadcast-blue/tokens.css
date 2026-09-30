@@ -1,0 +1,103 @@
+/* Broadcast Blue: the default look. Dark grounds, navy bands, and cyan as the one action
+ * colour, with Saira Semi Condensed for display and Saira for text.
+ *
+ * The values are the visual contract's (the design stage's contract, revision 2), which
+ * overrides DESIGN.md's table in four places: --ink #f7f8fa (no pure white text),
+ * --navy-sub #c0cade, --ink-3 #8f9298 and --bad #e96a6e (each the smallest lift that passes
+ * WCAG 2.2 AA on every background it sits on). --ink-4 keeps #5d6067 and colours inactive
+ * stub text only; the token scan fails on it anywhere but StubSection.
+ *
+ * `scripts/contrast.mjs` reads this file with `contrast-pairs.json` and fails the build when
+ * a text pair drops under 4.5:1 or a boundary pair under 3:1.
+ */
+
+:root[data-theme='broadcast-blue'] {
+  color-scheme: dark;
+
+  /* Grounds */
+  --page: #141517;
+  --well: #0e0f11;
+  --ground: #232427;
+  --ground-2: #2a2b2f;
+  --ground-3: #26272a;
+  --rail: #1b1c1f;
+  --rule: #3a3c41;
+  --rule-2: #303236;
+
+  /* Ink */
+  --ink: #f7f8fa;
+  --ink-2: #c3c6cc;
+  --ink-3: #8f9298;
+  --ink-4: #5d6067;
+
+  /* Navy bands */
+  --navy-900: #082a66;
+  --navy-700: #0b3a8c;
+  --navy-600: #0d47a8;
+  --navy-500: #0f4fb8;
+  --navy-sub: #c0cade;
+
+  /* Action */
+  --cyan: #19c6f0;
+  --cyan-ink: #0a2250;
+
+  /* State: every one carries a word or a mark beside it, never colour alone. */
+  --star: #f5d33a;
+  --good: #4ad66d;
+  --mid: #e3d34a;
+  --warn: #f0923a;
+  --bad: #e96a6e;
+
+  /* The pitch: the most saturated object on the screen. The canvas draws --pitch-line at
+   * 55 percent over the turf. */
+  --pitch: #1f8a2e;
+  --pitch-deep: #0f5a1d;
+  --pitch-line: #f7f8fa;
+  --chip: #17181a;
+
+  /* Colours the sketch writes inline in the shell, as tokens. */
+  --rail-glyph: #d7d9de;
+  --rail-badge: #9a9da3;
+  --tab-ink: #e9ebef;
+  --band-ink: #f7f8fa;
+  --band-arrow: #c7d3ea;
+  --band-watermark: rgba(247, 248, 250, 0.045);
+  --header-icon: #f7f8fa;
+  --help-ground: #f7f8fa;
+  --help-ink: #111214;
+  --frame-ring: #2d2e32;
+  --club-sample: #0f5c63;
+  --skeleton: #2a2b2f;
+  --bar-track: #3a3c41;
+  --bar-away: #5d6067;
+
+  /* Text on a state colour: each passes 4.5:1 on its ground (contrast-pairs.json). */
+  --on-good: #0d1410;
+  --on-mid: #1c1a08;
+  --on-warn: #1c1206;
+  --on-bad: #1f0a0b;
+  --notice-neutral: #5d6067;
+  --on-neutral: #f7f8fa;
+
+  /* Type */
+  --fd: 'Saira Semi Condensed', 'Barlow Semi Condensed', 'Arial Narrow', system-ui, sans-serif;
+  --fb: 'Saira', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Shape and motion */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 10px;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --tab-change: 180ms;
+  --live-pulse: 1400ms;
+
+  /* The goal moment. `src/lib/goal-moment.js` times the same values and a test holds them
+   * equal. */
+  --goal-in: 250ms;
+  --goal-hold: 1050ms;
+  --goal-out: 200ms;
+  --pulse: 600ms;
+
+  /* Stubs: parts this workflow does not build render at this opacity. */
+  --stub-opacity: 0.55;
+}

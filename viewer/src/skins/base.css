@@ -1,0 +1,44 @@
+/* The base every skin shares: the fixed 1280 by 800 page, the sketch's 11 px type scale,
+ * tabular numerals, the 2 px cyan focus ring with a 2 px offset, and no motion when motion
+ * is reduced. It reads only tokens, so each skin changes it by its values alone. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--page);
+  color: var(--ink);
+  font: 400 11px/1.35 var(--fb);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

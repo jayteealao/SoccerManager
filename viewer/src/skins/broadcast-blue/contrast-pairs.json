@@ -1,0 +1,350 @@
+[
+  {
+    "fg": "--ink",
+    "bg": "--page",
+    "kind": "text",
+    "where": "primary text"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--page",
+    "kind": "text",
+    "where": "secondary text, key-value keys"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--well",
+    "kind": "text",
+    "where": "primary text"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--well",
+    "kind": "text",
+    "where": "secondary text, key-value keys"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "primary text"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "secondary text, key-value keys"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "primary text"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "secondary text, key-value keys"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground-3",
+    "kind": "text",
+    "where": "primary text"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--ground-3",
+    "kind": "text",
+    "where": "secondary text, key-value keys"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "primary text"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "secondary text, key-value keys"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--page",
+    "kind": "text",
+    "where": "labels, section notes, step words"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "labels, section notes, step words"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "labels, section notes, step words"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground-3",
+    "kind": "text",
+    "where": "labels, section notes, step words"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "labels, section notes, step words"
+  },
+  {
+    "fg": "--band-ink",
+    "bg": "--navy-700",
+    "kind": "text",
+    "where": "header title, date, fact strip values"
+  },
+  {
+    "fg": "--navy-sub",
+    "bg": "--navy-700",
+    "kind": "text",
+    "where": "header sub-line, date sub-line, fact strip labels"
+  },
+  {
+    "fg": "--band-ink",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "header title, date, fact strip values"
+  },
+  {
+    "fg": "--navy-sub",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "header sub-line, date sub-line, fact strip labels"
+  },
+  {
+    "fg": "--band-ink",
+    "bg": "--navy-500",
+    "kind": "text",
+    "where": "header title, date, fact strip values"
+  },
+  {
+    "fg": "--navy-sub",
+    "bg": "--navy-500",
+    "kind": "text",
+    "where": "header sub-line, date sub-line, fact strip labels"
+  },
+  {
+    "fg": "--band-arrow",
+    "bg": "--navy-700",
+    "kind": "boundary",
+    "where": "header club switcher glyph (stub)"
+  },
+  {
+    "fg": "--cyan-ink",
+    "bg": "--cyan",
+    "kind": "text",
+    "where": "action block label, active tab, tags"
+  },
+  {
+    "fg": "--cyan-ink",
+    "bg": "--cyan",
+    "kind": "boundary",
+    "where": "action block focus ring (inside the block)"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "section labels, current rail section"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "section labels, current rail section"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "section labels, current rail section"
+  },
+  {
+    "fg": "--tab-ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "sub-navigation tabs"
+  },
+  {
+    "fg": "--rail-glyph",
+    "bg": "--rail",
+    "kind": "boundary",
+    "where": "rail glyphs"
+  },
+  {
+    "fg": "--header-icon",
+    "bg": "--ground",
+    "kind": "boundary",
+    "where": "header icons (stub)"
+  },
+  {
+    "fg": "--help-ink",
+    "bg": "--help-ground",
+    "kind": "text",
+    "where": "help mark (stub)"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "error and refusal words, bad values"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "error and refusal words, bad values"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "error and refusal words, bad values"
+  },
+  {
+    "fg": "--good",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "state numerals and words"
+  },
+  {
+    "fg": "--good",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "state numerals and words"
+  },
+  {
+    "fg": "--mid",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "state numerals and words"
+  },
+  {
+    "fg": "--mid",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "state numerals and words"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "state numerals and words"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "state numerals and words"
+  },
+  {
+    "fg": "--good",
+    "bg": "--ground",
+    "kind": "boundary",
+    "where": "step list done mark and bar"
+  },
+  {
+    "fg": "--on-good",
+    "bg": "--good",
+    "kind": "text",
+    "where": "notice tag"
+  },
+  {
+    "fg": "--on-mid",
+    "bg": "--mid",
+    "kind": "text",
+    "where": "notice tag"
+  },
+  {
+    "fg": "--on-warn",
+    "bg": "--warn",
+    "kind": "text",
+    "where": "notice tag"
+  },
+  {
+    "fg": "--on-bad",
+    "bg": "--bad",
+    "kind": "text",
+    "where": "notice tag"
+  },
+  {
+    "fg": "--on-neutral",
+    "bg": "--notice-neutral",
+    "kind": "text",
+    "where": "notice tag"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--page",
+    "kind": "boundary",
+    "where": "2 px focus ring"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground",
+    "kind": "boundary",
+    "where": "2 px focus ring"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground-2",
+    "kind": "boundary",
+    "where": "2 px focus ring"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground-3",
+    "kind": "boundary",
+    "where": "2 px focus ring"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--rail",
+    "kind": "boundary",
+    "where": "2 px focus ring"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--navy-600",
+    "kind": "boundary",
+    "where": "2 px focus ring"
+  },
+  {
+    "fg": "--ink-4",
+    "bg": "--page",
+    "kind": "inert",
+    "where": "LATER labels and inactive stub text"
+  },
+  {
+    "fg": "--ink-4",
+    "bg": "--ground",
+    "kind": "inert",
+    "where": "LATER labels and inactive stub text"
+  },
+  {
+    "fg": "--ink-4",
+    "bg": "--ground-2",
+    "kind": "inert",
+    "where": "LATER labels and inactive stub text"
+  },
+  {
+    "fg": "--ink-4",
+    "bg": "--ground-3",
+    "kind": "inert",
+    "where": "LATER labels and inactive stub text"
+  }
+]

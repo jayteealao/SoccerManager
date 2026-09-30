@@ -6,6 +6,8 @@
 
 mod common;
 
+use std::collections::BTreeSet;
+
 use engine::modules::registry::SKIN;
 use engine::modules::{ModuleRef, REGISTRY, SKIN_NAMES, SlotDecl, SlotEntry, SlotFile, check_card};
 
@@ -141,4 +143,19 @@ fn every_skin_card_is_complete_and_owns_no_key() {
         check_card(reg.card, &names).unwrap_or_else(|e| panic!("{}: {e}", reg.name));
         assert!(reg.card.keys.is_empty(), "{}: owns no key", reg.name);
     }
+}
+
+/// A skin added on one side only (a registration with no folder, or a folder with no
+/// registration) fails here.
+#[test]
+fn the_registered_skins_are_the_viewer_skin_folders() {
+    let skins = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../viewer/src/skins");
+    let folders: BTreeSet<String> = std::fs::read_dir(&skins)
+        .unwrap_or_else(|e| panic!("{}: {e}", skins.display()))
+        .map(|entry| entry.unwrap())
+        .filter(|entry| entry.file_type().unwrap().is_dir())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    let registered: BTreeSet<String> = SKIN_NAMES.iter().map(|s| s.to_string()).collect();
+    assert_eq!(folders, registered);
 }
