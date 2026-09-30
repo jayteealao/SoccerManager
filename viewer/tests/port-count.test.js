@@ -1,6 +1,7 @@
-// The port keeps every former test: the sixteen ported files hold at least as many tests as
-// the page's own `web/tests` held for the same modules (112 when the port began), and each
-// ported module lives in the viewer project.
+// The port keeps every former test: the nineteen ported files hold at least as many tests as
+// the page's own `web/tests` held for the same modules (112 when the port began, 126 once the
+// match screen brought the feed, statistics and pitch tests), and each ported module lives in
+// the viewer project.
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -12,6 +13,7 @@ import { REPO_ROOT } from './helpers.js';
 const PORTED = [
   'colour',
   'decode',
+  'feed',
   'goal-moment',
   'history',
   'interpolate',
@@ -19,12 +21,14 @@ const PORTED = [
   'mark',
   'match-state',
   'pending',
+  'pitch',
   'playback',
   'recovery',
   'replay-file',
   'replay-migration',
   'replay-record',
   'schedule',
+  'stats',
   'stoppages',
 ];
 
@@ -46,6 +50,10 @@ const MODULES = [
   'goal-moment',
   'recovery',
   'launcher',
+  'scoreboard',
+  'feed',
+  'stats',
+  'pitch',
 ];
 
 const count = (file) => (fs.readFileSync(file, 'utf8').match(/^test\(/gm) ?? []).length;
@@ -60,8 +68,8 @@ test('the ported test files hold at least the former count', () => {
     ported += now;
     former += before;
   }
-  assert.equal(former, 112, 'the former files held 112 tests');
-  assert.ok(ported >= 112, `${ported} ported tests`);
+  assert.equal(former, 126, 'the former files held 126 tests');
+  assert.ok(ported >= 126, `${ported} ported tests`);
 });
 
 test('every ported module lives in the viewer project', () => {
