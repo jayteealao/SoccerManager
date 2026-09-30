@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "vite build",
+    "build:release": "vite build --mode release",
     "preview": "vite preview",
     "test": "vitest run",
     "scan": "node scripts/token-scan.mjs",

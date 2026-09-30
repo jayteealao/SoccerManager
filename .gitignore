@@ -36,3 +36,4 @@ dist/
 # The viewer project: its install and its build.
 viewer/node_modules/
 viewer/dist/
+viewer/dist-release/
