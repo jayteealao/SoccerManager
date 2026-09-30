@@ -22,6 +22,7 @@ use protocol::{
 };
 use std::cell::RefCell;
 
+use crate::advice::Advisor;
 use stream::session::MatchState;
 use stream::{Admitted, Gate, Inbox, StreamError};
 
@@ -151,6 +152,9 @@ pub fn drive<S: TickSink>(
         );
     }
     let mut commentator = Commentator::for_match(opts.commentary, sim);
+    // The assistant advises only a page that can queue changes; a recording, a replay and the
+    // bench get no advice.
+    let mut advisor = opts.inbox.map(|_| Advisor::default());
     // One simulated second of ticks: the cadence of the running statistics and energy.
     let ticks_per_second = ((1.0 / sim.tuning().dt).round() as u32).max(1);
     let mut written = 0u32;
@@ -282,6 +286,11 @@ pub fn drive<S: TickSink>(
             ) {
                 route(ServerMessage::Event(Box::new(row)))?;
             }
+        }
+        // After the events, so the page reads the goal or the injury before the pick it asks
+        // for. The check reads the match and writes nothing.
+        if let Some(advice) = advisor.as_mut().and_then(|a| a.after_step(sim, &events)) {
+            route(ServerMessage::Advice(advice))?;
         }
         if record.tick.is_multiple_of(ticks_per_second) {
             route(ServerMessage::Stats(stats_message(sim)))?;
@@ -460,6 +469,14 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
             roster,
             squad,
             setup,
+            // Both teams' shapes, for the page's line-up sheet.
+            formation: if page_lineup {
+                config.tactics.formations[usize::from(team.tactics.formation)]
+                    .name
+                    .clone()
+            } else {
+                String::new()
+            },
         }
     })
 }
@@ -946,6 +963,19 @@ mod tests {
         assert_eq!(setup.roles.len(), 11);
         assert_eq!(setup.instructions, home.tactics.instructions.to_vec());
         assert!(hello_teams(&sim, false)[HOME].setup.is_none());
+        // Both teams name their shape for the page; a hello with no page names none.
+        let formations = &sim.config().tactics.formations;
+        for (t, team) in sim.teams().iter().enumerate() {
+            assert_eq!(
+                teams[t].formation,
+                formations[usize::from(team.tactics.formation)].name
+            );
+        }
+        assert!(
+            hello_teams(&sim, false)
+                .iter()
+                .all(|t| t.formation.is_empty())
+        );
         let tactics = hello_tactics(&sim);
         assert_eq!(
             tactics["instruction_order"],
@@ -1177,6 +1207,69 @@ mod tests {
             .teams[HOME]
             .lineup;
         assert_ne!(home.lineup[10], starters[10], "the substitute took slot 10");
+    }
+
+    #[test]
+    fn a_page_run_carries_the_assistants_picks_and_a_run_without_a_page_none() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let config = MatchConfig::new(1, 90, &loaded.content, [a, b])
+            .unwrap()
+            .with_manager(HOME, engine::Manager::Human);
+        let ticks = config.max_ticks();
+        let run = |inbox: Option<&Inbox>| {
+            let mut sim = Simulation::new(config.clone()).unwrap();
+            let state = MatchState::default();
+            let mut messages = Vec::new();
+            drive(
+                &mut sim,
+                &mut VecSink::default(),
+                &Drive {
+                    ticks,
+                    owner_id: "0123456789abcdef0123456789abcdef",
+                    match_id: "0000000000000001-1",
+                    club_ids: ["club-a", "club-b"],
+                    state: &state,
+                    gate: None,
+                    commentary: &loaded.commentary,
+                    inbox,
+                    page_changes: None,
+                    planned: &[],
+                    observe: None,
+                },
+                &mut |m: ServerMessage| {
+                    messages.push(m);
+                    Ok(())
+                },
+            )
+            .unwrap();
+            messages
+        };
+        let inbox = Inbox::default();
+        let paged = run(Some(&inbox));
+        let advice: Vec<&protocol::Advice> = paged
+            .iter()
+            .filter_map(|m| match m {
+                ServerMessage::Advice(a) => Some(a),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            advice
+                .iter()
+                .any(|a| a.picks.iter().any(|p| p.code == "sub-fatigue")),
+            "{advice:?}"
+        );
+        // Each message differs from the one before it.
+        assert!(advice.windows(2).all(|w| w[0].picks != w[1].picks));
+        let bare = run(None);
+        assert!(!bare.iter().any(|m| matches!(m, ServerMessage::Advice(_))));
+        // Without the advice, both runs send the same messages in the same order.
+        let without: Vec<&ServerMessage> = paged
+            .iter()
+            .filter(|m| !matches!(m, ServerMessage::Advice(_)))
+            .collect();
+        assert_eq!(without, bare.iter().collect::<Vec<_>>());
     }
 
     #[test]

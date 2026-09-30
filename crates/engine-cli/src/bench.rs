@@ -172,6 +172,7 @@ fn measure_stream(
         teams: hello_teams(&sim, false),
         tactics: hello_tactics(&sim),
         substitutions: hello_substitutions(&sim),
+        knockout: false,
     };
 
     let server = Server::bind(&data, &match_id)?;

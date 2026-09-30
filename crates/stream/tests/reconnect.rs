@@ -49,6 +49,7 @@ fn serve(
                     teams: [team("a"), team("b")],
                     tactics: serde_json::Value::Null,
                     substitutions: protocol::SubstitutionRules::default(),
+                    knockout: false,
                 },
                 commands: CommandContext {
                     owner_id: "0".repeat(32),
@@ -235,5 +236,6 @@ fn team(id: &str) -> protocol::TeamRef {
         roster: Vec::new(),
         squad: Vec::new(),
         setup: None,
+        formation: String::new(),
     }
 }

@@ -85,6 +85,7 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 | `teams` | array of two | one entry per club, home first; see the table below |
 | `tactics` | object | the tactics file the engine loaded (`content/tactics.json`): `formations`, `mentalities`, `instructions` with their levels, `roles`, `duties`, and the computer manager's settings. Every tactics index on the wire is a place in one of its lists. Because a JSON object carries no key order, the engine adds `instruction_order`, the six instruction names in the order an instruction list indexes them |
 | `substitutions` | object | the rule pack's limits: `limit`, `windows`, `extra_substitutions`, `extra_windows`, and `windows_exempt` |
+| `knockout` | boolean | `true` for a knockout match: level after regulation time, it plays extra time and then a penalty shoot-out. Left out when `false`; a hello without it reads as `false` |
 
 `substitutions`:
 
@@ -105,6 +106,7 @@ Each entry of `teams`:
 | `team.kit.primary` | string | lower-case `#rrggbb`, the shirt colour |
 | `team.kit.secondary` | string | lower-case `#rrggbb`, the trim colour |
 | `roster` | array | the 11 starters in wire-slot order (home slots 0 to 10, away 11 to 21), then the named bench in bench order; see the table below. A hello without it reads as an empty list |
+| `formation` | string | on `serve` only, for both clubs: the name of the club's formation at kick-off, as `tactics.formations` names it (`4-4-2`); left out otherwise, and an empty string when an earlier build sent none |
 
 Each entry of `roster`:
 
@@ -286,6 +288,34 @@ or replay keeps it, and it never changes the match.
 | `change.queue_id` | string | the identifier the change's `queue-change` acknowledgement gave |
 | `state` | enumeration | `applies-now` in this build |
 | `tick` | integer | the tick the stoppage opened on, the tick of the verdict that follows |
+
+### advice
+
+Sent on `serve` to a page that manages the home team, after a check of the computer manager
+finds picks that differ from the last ones sent. The check runs for the page's team every
+`tactics.ai.check_interval_s` of match time (30 seconds with the shipped tactics file) and on
+a tick that holds a goal, an injury to the home team, or a sending-off of a home player; it
+does not run in a penalty shoot-out or after full time. The check is advice only: it reads the
+match, works on a copy of the change queue, draws no random number, and writes nothing, so the
+match plays exactly as it would without it. No events file, record, or replay keeps the
+message. Each message replaces the picks before it, and an empty `picks` list means no pick is
+open. A page that wants a pick sends it as an ordinary `queue-change`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `tick` | integer | the tick the check ran after |
+| `minute` | integer | the minute of play the check read |
+| `picks` | array | the picks in the order the check made them; see the table below |
+
+Each entry of `picks`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `code` | string | the reason, as `ai.decision` names it: `sub-injury`, `sub-keeper`, `sub-fatigue`, `mentality-up-trailing`, or `mentality-down-leading`. A mentality pick is offered once per score |
+| `kind` | enumeration | `substitution` or `tactics`, as `change.kind` names it |
+| `off` | integer | on a substitution: the squad index of the player coming off |
+| `on` | integer | on a substitution: the squad index of the player coming on |
+| `patch` | object | on a tactics pick: the change as `queue-change` writes it (`mentality`, `instructions`) |
 
 ### ack
 

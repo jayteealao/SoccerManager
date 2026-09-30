@@ -1,6 +1,7 @@
 //! `engine-cli`: simulate a match headless, benchmark the engine, calibrate it over many
 //! matches, check it against the replay gate, or generate teams.
 
+mod advice;
 mod bench;
 mod bisect;
 mod calibrate;

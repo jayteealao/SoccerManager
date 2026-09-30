@@ -33,6 +33,11 @@ pub struct TeamRef {
     /// exactly when `squad` is: the page starts its lineup editor from it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub setup: Option<TeamSetup>,
+    /// The name of the team's formation at kick-off, as the tactics file names it (`4-4-2`).
+    /// Sent by a session a page manages, for both teams; empty otherwise, and a hello from an
+    /// earlier build carries none.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub formation: String,
 }
 
 /// One squad player, as the lineup editor shows it.
@@ -154,6 +159,11 @@ pub struct Hello {
     pub tactics: serde_json::Value,
     #[serde(default)]
     pub substitutions: SubstitutionRules,
+    /// `true` for a knockout match: level after regulation time, it plays extra time and then
+    /// a penalty shoot-out. Written only when `true`; a hello from an earlier build reads as
+    /// `false`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub knockout: bool,
 }
 
 /// The running totals of a match, sent once every simulated second and again at full time.
@@ -224,6 +234,38 @@ pub struct ChangeStateNote {
     pub tick: u32,
 }
 
+/// One change the assistant would make for the page's team, as the computer manager's check
+/// finds it. The page may queue it with `queue-change`; nothing is queued until it does.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AdvicePick {
+    /// The reason, as the `ai.decision` codes name it: `sub-injury`, `sub-keeper`,
+    /// `sub-fatigue`, `mentality-up-trailing` or `mentality-down-leading`.
+    pub code: String,
+    /// `substitution` or `tactics`, as `change.kind` names it.
+    pub kind: String,
+    /// The squad index of the player coming off, for a substitution.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub off: Option<u16>,
+    /// The squad index of the player coming on, for a substitution.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on: Option<u16>,
+    /// The tactics change, for a tactics pick.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub patch: Option<PatchWire>,
+}
+
+/// The assistant's picks for the page's team after a check. It is not a match event: no
+/// record or replay keeps it, and it changes nothing in the match. Each message replaces the
+/// picks before it; an empty list means the assistant has no pick open.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Advice {
+    pub tick: u32,
+    pub minute: u32,
+    pub picks: Vec<AdvicePick>,
+}
+
 /// Everything the server sends as a JSON text frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -236,6 +278,7 @@ pub enum ServerMessage {
     Ack(Ack),
     Reject(Reject),
     ChangeState(ChangeStateNote),
+    Advice(Advice),
 }
 
 /// The playback speed a client asks for.
@@ -433,6 +476,7 @@ mod tests {
                         instructions: vec![1, 1, 1, 1, 1, 0],
                         roles: vec![SlotRole { role: 0, duty: 1 }; 11],
                     }),
+                    formation: "4-4-2".into(),
                 },
                 TeamRef {
                     id: "club-b".into(),
@@ -442,6 +486,7 @@ mod tests {
                     roster: Vec::new(),
                     squad: Vec::new(),
                     setup: None,
+                    formation: "4-3-3".into(),
                 },
             ],
             tactics: serde_json::json!({"roles": [{"name": "goalkeeper"}]}),
@@ -452,6 +497,7 @@ mod tests {
                 extra_windows: 1,
                 windows_exempt: vec!["half_time".into()],
             },
+            knockout: true,
         }
     }
 
@@ -604,6 +650,7 @@ mod tests {
                 state: ChangeState::AppliesNow,
                 tick: 3_000,
             }),
+            ServerMessage::Advice(advice()),
         ];
         for m in messages {
             let json = serde_json::to_string(&m).unwrap();
@@ -752,6 +799,82 @@ mod tests {
         assert_eq!(back.teams[0].squad[0].injury_resistance, 0);
         assert_eq!(back.substitutions.extra_substitutions, 0);
         assert!(back.substitutions.windows_exempt.is_empty());
+    }
+
+    fn advice() -> Advice {
+        Advice {
+            tick: 3_000,
+            minute: 58,
+            picks: vec![
+                AdvicePick {
+                    code: "sub-fatigue".into(),
+                    kind: "substitution".into(),
+                    off: Some(9),
+                    on: Some(14),
+                    patch: None,
+                },
+                AdvicePick {
+                    code: "mentality-up-trailing".into(),
+                    kind: "tactics".into(),
+                    off: None,
+                    on: None,
+                    patch: Some(PatchWire {
+                        mentality: Some(3),
+                        instructions: Some([Some(2), None, None, None, None, None]),
+                        ..PatchWire::default()
+                    }),
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn advice_travels_under_its_own_tag_and_a_pick_omits_what_its_kind_does_not_use() {
+        let json = serde_json::to_string(&ServerMessage::Advice(advice())).unwrap();
+        assert!(
+            json.starts_with("{\"type\":\"advice\",\"tick\":3000,\"minute\":58,"),
+            "{json}"
+        );
+        assert!(
+            json.contains(
+                "{\"code\":\"sub-fatigue\",\"kind\":\"substitution\",\"off\":9,\"on\":14}"
+            ),
+            "{json}"
+        );
+        assert!(
+            json.contains("\"kind\":\"tactics\",\"patch\":{\"mentality\":3"),
+            "{json}"
+        );
+        let err = serde_json::from_str::<ServerMessage>(
+            "{\"type\":\"advice\",\"tick\":1,\"minute\":0,\"picks\":[],\"gain\":2}",
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("gain"), "{err}");
+    }
+
+    #[test]
+    fn a_hello_names_both_formations_and_the_knockout_flag_and_reads_without_them() {
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello()))).unwrap();
+        assert!(json.contains("\"formation\":\"4-4-2\""), "{json}");
+        assert!(json.contains("\"formation\":\"4-3-3\""), "{json}");
+        assert!(json.ends_with("\"knockout\":true}"), "{json}");
+        let bare = json
+            .replace(",\"formation\":\"4-4-2\"", "")
+            .replace(",\"formation\":\"4-3-3\"", "")
+            .replace(",\"knockout\":true", "");
+        let ServerMessage::Hello(back) = serde_json::from_str::<ServerMessage>(&bare).unwrap()
+        else {
+            panic!("not a hello");
+        };
+        assert!(back.teams.iter().all(|t| t.formation.is_empty()));
+        assert!(!back.knockout);
+        // A hello that is not a knockout match and names no formation writes neither field.
+        let mut plain = hello();
+        plain.knockout = false;
+        plain.teams[1].formation.clear();
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(plain))).unwrap();
+        assert!(!json.contains("knockout"), "{json}");
+        assert_eq!(json.matches("\"formation\":\"").count(), 1, "{json}");
     }
 
     #[test]

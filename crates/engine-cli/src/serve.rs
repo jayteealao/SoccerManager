@@ -664,6 +664,7 @@ fn hello_for(
         teams: hello_teams(sim, true),
         tactics: hello_tactics(sim),
         substitutions: hello_substitutions(sim),
+        knockout: config.knockout,
     }
 }
 

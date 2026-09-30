@@ -145,6 +145,7 @@ fn serve(
                 roster: Vec::new(),
                 squad: Vec::new(),
                 setup: None,
+                formation: String::new(),
             },
             TeamRef {
                 id: club_ids[1].clone(),
@@ -154,10 +155,12 @@ fn serve(
                 roster: Vec::new(),
                 squad: Vec::new(),
                 setup: None,
+                formation: String::new(),
             },
         ],
         tactics: serde_json::Value::Null,
         substitutions: protocol::SubstitutionRules::default(),
+        knockout: false,
     };
 
     let server = Server::bind(&data_dir, &match_id)?;

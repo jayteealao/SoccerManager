@@ -83,6 +83,7 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
         teams: hello_teams(&sim, false),
         tactics: hello_tactics(&sim),
         substitutions: hello_substitutions(&sim),
+        knockout: false,
     };
     messages.send(protocol::Frame::Text(
         serde_json::to_string(&ServerMessage::Hello(Box::new(hello)))

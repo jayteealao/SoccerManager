@@ -17,9 +17,9 @@ pub use command::{Ack, ChangeKind, ChangeState, Pending, Queue, Reject, Verdict}
 pub use event::{CardKind, ChangeOutcome, EventType, MatchEvent};
 pub use frame::{Frame, TickFrame};
 pub use message::{
-    CancelChange, ChangeDetail, ChangeStateNote, ClientCommand, Condition, Hello, PatchWire,
-    QueueChange, RoleWire, RosterEntry, Seen, ServerMessage, SetLineup, SetSpeed, SlotRole,
-    SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
+    Advice, AdvicePick, CancelChange, ChangeDetail, ChangeStateNote, ClientCommand, Condition,
+    Hello, PatchWire, QueueChange, RoleWire, RosterEntry, Seen, ServerMessage, SetLineup, SetSpeed,
+    SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
 };
 
 /// The protocol version a client must ask for. A client that asks for another version is
@@ -78,6 +78,12 @@ pub use message::{
 /// used on `condition`). No field was removed or changed meaning, a client ignores a message
 /// type or field it does not know, and a client that never sends `cancel-change` gets exactly
 /// the answers it got before.
+///
+/// Version 3 also survived the assistant's advice: one message (`advice`, the computer
+/// manager's picks for the page's team, sent only to a page that manages a team), and two
+/// optional hello fields (`formation` on each team and `knockout`). No field was removed or
+/// changed meaning, a client ignores a message type or field it does not know, and the match
+/// itself is unchanged: the advice reads the match and writes nothing.
 pub const PROTOCOL_VERSION: u16 = 3;
 
 /// Errors this crate returns.
@@ -186,6 +192,7 @@ pub const MESSAGES: &[MessageSpec] = &[
             "extra_windows",
             "windows_exempt",
             "player.injury_resistance",
+            "knockout",
         ],
     },
     MessageSpec {
@@ -266,6 +273,14 @@ pub const MESSAGES: &[MessageSpec] = &[
         direction: Direction::ServerToClient,
         encoding: Encoding::JsonText,
         fields: &["change.queue_id", "state", "tick"],
+    },
+    MessageSpec {
+        name: "advice",
+        direction: Direction::ServerToClient,
+        encoding: Encoding::JsonText,
+        fields: &[
+            "tick", "minute", "picks", "code", "kind", "off", "on", "patch",
+        ],
     },
     MessageSpec {
         name: "ack",
@@ -363,6 +378,7 @@ mod tests {
             ServerMessage::Ack(_) => "ack",
             ServerMessage::Reject(_) => "reject",
             ServerMessage::ChangeState(_) => "change-state",
+            ServerMessage::Advice(_) => "advice",
         }
     }
 
@@ -387,6 +403,7 @@ mod tests {
             roster: Vec::new(),
             squad: Vec::new(),
             setup: None,
+            formation: String::new(),
         }
     }
 
@@ -405,6 +422,7 @@ mod tests {
                 teams: [blank_team(), blank_team()],
                 tactics: serde_json::Value::Null,
                 substitutions: SubstitutionRules::default(),
+                knockout: false,
             })),
             ServerMessage::Event(Box::new(MatchEvent::play(
                 "",
@@ -453,6 +471,11 @@ mod tests {
                 queue_id: String::new(),
                 state: ChangeState::AppliesNow,
                 tick: 0,
+            }),
+            ServerMessage::Advice(Advice {
+                tick: 0,
+                minute: 0,
+                picks: Vec::new(),
             }),
         ]
     }

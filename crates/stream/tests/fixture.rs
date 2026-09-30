@@ -39,6 +39,7 @@ fn record(path: &Path, minutes: u32) -> u32 {
                 roster: Vec::new(),
                 squad: Vec::new(),
                 setup: None,
+                formation: String::new(),
             },
             TeamRef {
                 id: config.teams[1].club_id.clone(),
@@ -48,10 +49,12 @@ fn record(path: &Path, minutes: u32) -> u32 {
                 roster: Vec::new(),
                 squad: Vec::new(),
                 setup: None,
+                formation: String::new(),
             },
         ],
         tactics: serde_json::Value::Null,
         substitutions: protocol::SubstitutionRules::default(),
+        knockout: false,
     };
     messages
         .send(Frame::Text(
