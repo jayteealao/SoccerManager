@@ -15,6 +15,11 @@
 //! with a hit is marked invalid ([`INVALID_SLOW_SCRIPT`]) and logs one `match.invalid`
 //! signal; play, the failure counts, the events, and the snapshot stay as they would be
 //! without the hit.
+//!
+//! The loop consults each hook through its hook slot (`engine.hook.decision`,
+//! `engine.hook.rule`, `engine.hook.commentary`; see [`crate::hook_slots`]): the slot's module
+//! builds what the hook sees, and a slot switched off never calls its hook. The hooks, their
+//! failure counts, and the watchdog mark stay per-match state in [`Plugins`].
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
