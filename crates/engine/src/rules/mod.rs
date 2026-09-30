@@ -12,6 +12,7 @@ pub mod discipline;
 pub mod fouls;
 pub mod injury;
 pub mod offside;
+pub mod pack;
 pub mod restart;
 pub mod shootout;
 

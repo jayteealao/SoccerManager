@@ -22,6 +22,11 @@
     "engine.changes": { "module": "changes", "version": 1 },
     "engine.hook.decision": { "module": "decision-hook", "version": 1 },
     "engine.hook.rule": { "module": "rule-hook", "version": 1 },
-    "engine.hook.commentary": { "module": "commentary-hook", "version": 1 }
+    "engine.hook.commentary": { "module": "commentary-hook", "version": 1 },
+    "game.rules": { "module": "rule-pack", "version": 1 },
+    "game.world": { "module": "world-stub", "version": 1 },
+    "game.season": { "module": "season-stub", "version": 1 },
+    "game.people": { "module": "people-stub", "version": 1 },
+    "game.presentation": { "module": "presentation-stub", "version": 1 }
   }
 }

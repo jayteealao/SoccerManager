@@ -9,6 +9,9 @@
 //! Every stand-in, its card, and that copy are leaked, which is harmless in a test process.
 
 use super::card::ModuleCard;
+use super::game::{
+    GameChanges, GameDay, PeopleModule, PresentationModule, SeasonModule, WorldModule,
+};
 use super::modifier::{Effect, Family, Modifier};
 use super::registry::{ModuleRef, REGISTRY, Registration, SlotDecl};
 use super::{
@@ -16,15 +19,18 @@ use super::{
     CrossContest, Crossing, DecisionHookModule, DecisionModule, Deflection, DisciplineModule,
     FatigueModule, FoulsModule, InjuriesModule, LooseBall, ManagerModule, MatchView, OffsideModule,
     OptionDraft, OptionDraws, ParrySide, PeriodEnd, PossessionModule, PreMatchModule, Proposal,
-    ROSTER, RestartPass, RestartsModule, RuleHookModule, Scored, ShootoutLineup, ShotDraws,
-    ShotModule, SteeringModule, SubEntry, SubRequest, TackleChances, Targets,
+    ROSTER, RestartPass, RestartsModule, RuleHookModule, RulesModule, Scored, ShootoutLineup,
+    ShotDraws, ShotModule, SteeringModule, SubEntry, SubRequest, TackleChances, Targets,
 };
 use crate::ai::Setup;
 use crate::ball::Ball;
+use crate::data::Loaded;
 use crate::data::attributes::AttributeSchema;
+use crate::data::rules::RulePack;
 use crate::data::rules::StoppageKind;
 use crate::data::tactics::TacticsSchema;
 use crate::decision::{Choice, Kick, Options};
+use crate::error::EngineError;
 use crate::fatigue::InjurySource;
 use crate::math::{DVec2, DVec3};
 use crate::plugin::{DecisionContext, FoulContext, LineContext, OptionOffsets};
@@ -111,6 +117,11 @@ fn wrap(module: ModuleRef) -> ModuleRef {
         ModuleRef::DecisionHook(m) => ModuleRef::DecisionHook(leak(StandIn(m))),
         ModuleRef::RuleHook(m) => ModuleRef::RuleHook(leak(StandIn(m))),
         ModuleRef::CommentaryHook(m) => ModuleRef::CommentaryHook(leak(StandIn(m))),
+        ModuleRef::Rules(m) => ModuleRef::Rules(leak(StandIn(m))),
+        ModuleRef::World(m) => ModuleRef::World(leak(StandIn(m))),
+        ModuleRef::Season(m) => ModuleRef::Season(leak(StandIn(m))),
+        ModuleRef::People(m) => ModuleRef::People(leak(StandIn(m))),
+        ModuleRef::Presentation(m) => ModuleRef::Presentation(leak(StandIn(m))),
     }
 }
 
@@ -422,6 +433,36 @@ impl RuleHookModule for StandIn<dyn RuleHookModule> {
 impl CommentaryHookModule for StandIn<dyn CommentaryHookModule> {
     fn context(&self, view: &MatchView<'_>, event: &EngineEvent) -> Option<LineContext> {
         self.0.context(view, event)
+    }
+}
+
+impl RulesModule for StandIn<dyn RulesModule> {
+    fn load(&self, written: &[u8]) -> Result<Loaded<RulePack>, EngineError> {
+        self.0.load(written)
+    }
+}
+
+impl WorldModule for StandIn<dyn WorldModule> {
+    fn on_day(&self, day: GameDay) -> GameChanges {
+        self.0.on_day(day)
+    }
+}
+
+impl SeasonModule for StandIn<dyn SeasonModule> {
+    fn on_day(&self, day: GameDay) -> GameChanges {
+        self.0.on_day(day)
+    }
+}
+
+impl PeopleModule for StandIn<dyn PeopleModule> {
+    fn on_day(&self, day: GameDay) -> GameChanges {
+        self.0.on_day(day)
+    }
+}
+
+impl PresentationModule for StandIn<dyn PresentationModule> {
+    fn on_day(&self, day: GameDay) -> GameChanges {
+        self.0.on_day(day)
     }
 }
 

@@ -10,6 +10,7 @@
 
 pub mod card;
 pub mod config;
+pub mod game;
 pub mod modifier;
 pub mod proposal;
 pub mod registry;
@@ -21,10 +22,13 @@ use std::fmt;
 
 use crate::ai::{AiCode, AiState, Setup};
 use crate::ball::Ball;
+use crate::data::Loaded;
 use crate::data::attributes::AttributeSchema;
+use crate::data::rules::RulePack;
 use crate::data::rules::StoppageKind;
 use crate::data::tactics::TacticsSchema;
 use crate::decision::{Choice, Kick, MAX_PRESSERS, Options};
+use crate::error::EngineError;
 use crate::fatigue::InjurySource;
 use crate::math::{DVec2, DVec3};
 use crate::pitch::Exit;
@@ -39,6 +43,7 @@ use crate::team::{PLAYERS_PER_TEAM, Team};
 
 pub use card::{CardError, MOVED_KEYS, ModuleCard, OwnershipError, check_card, check_ownership};
 pub use config::{SLOTS_VERSION, SlotEntry, SlotFile, resolve};
+pub use game::{GameChanges, GameDay, PeopleModule, PresentationModule, SeasonModule, WorldModule};
 pub use modifier::Modifiers;
 pub use proposal::Proposal;
 pub use registry::{MODIFIER_COUNT, ModuleRef, REGISTRY, Registration, SLOT_COUNT, SlotDecl};
@@ -563,6 +568,13 @@ pub trait CommentaryHookModule: Send + Sync + 'static {
     fn context(&self, view: &MatchView<'_>, event: &EngineEvent) -> Option<LineContext>;
 }
 
+/// The rule pack slot (`game.rules`): loads the rule pack a match plays under. It runs where
+/// content is built, before any match exists, and draws nothing.
+pub trait RulesModule: Send + Sync + 'static {
+    /// The rule pack, given the bytes of the content folder's rule file.
+    fn load(&self, written: &[u8]) -> Result<Loaded<RulePack>, EngineError>;
+}
+
 /// One slot's choice: the slot id, the module name, and its version (0 for `off`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Picked {
@@ -595,6 +607,11 @@ pub struct ResolvedModules {
     pub decision_hook: &'static dyn DecisionHookModule,
     pub rule_hook: &'static dyn RuleHookModule,
     pub commentary_hook: &'static dyn CommentaryHookModule,
+    pub rule_pack: &'static dyn RulesModule,
+    pub world: &'static dyn WorldModule,
+    pub season: &'static dyn SeasonModule,
+    pub people: &'static dyn PeopleModule,
+    pub presentation: &'static dyn PresentationModule,
     picked: [Picked; SLOT_COUNT],
 }
 

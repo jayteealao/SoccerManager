@@ -23,7 +23,8 @@ use engine::modules::modifier::Family;
 use engine::modules::registry::{
     BALL, CHANGES, CLOCK, DECISION, DISCIPLINE, FATIGUE, FOULS, HOOK_COMMENTARY, HOOK_DECISION,
     HOOK_RULE, INJURIES, MANAGER, MODIFIER_FATIGUE, MODIFIER_MOMENTUM, MODIFIER_PRESSURE,
-    MODIFIER_WEATHER, ModuleRef, OFFSIDE, POSSESSION, PRE_MATCH, RESTARTS, SHOT, STEERING,
+    MODIFIER_WEATHER, ModuleRef, OFFSIDE, PEOPLE, POSSESSION, PRE_MATCH, PRESENTATION, RESTARTS,
+    RULES, SEASON, SHOT, STEERING, WORLD,
 };
 use engine::modules::{
     CardError, MOVED_KEYS, ModuleCard, OwnershipError, REGISTRY, Registration, SlotDecl, SlotEntry,
@@ -139,6 +140,11 @@ fn default_selection_resolves_and_a_match_finishes() {
             "engine.hook.decision=decision-hook@1",
             "engine.hook.rule=rule-hook@1",
             "engine.hook.commentary=commentary-hook@1",
+            "game.rules=rule-pack@1",
+            "game.world=world-stub@1",
+            "game.season=season-stub@1",
+            "game.people=people-stub@1",
+            "game.presentation=presentation-stub@1",
         ],
         "every declared slot resolves, in registry order"
     );
@@ -261,6 +267,11 @@ fn off_on_an_optional_slot_resolves_to_its_off_version() {
         HOOK_DECISION.id,
         HOOK_RULE.id,
         HOOK_COMMENTARY.id,
+        RULES.id,
+        WORLD.id,
+        SEASON.id,
+        PEOPLE.id,
+        PRESENTATION.id,
     ]);
     assert_eq!(optional, expected);
     let changes: Vec<(&str, &str, Option<u32>)> =
@@ -296,7 +307,8 @@ fn an_undeclared_or_missing_slot_is_refused() {
          engine.modifier.momentum, engine.modifier.weather, engine.clock, engine.restarts, \
          engine.discipline, engine.injuries, engine.ball, engine.possession, engine.decision, \
          engine.manager, engine.changes, engine.hook.decision, engine.hook.rule, \
-         engine.hook.commentary"
+         engine.hook.commentary, game.rules, game.world, game.season, game.people, \
+         game.presentation"
     );
     assert!(text.contains("is not a declared slot"), "{text}");
 
@@ -462,6 +474,11 @@ fn the_registry_declares_the_moved_slots_in_order() {
         HOOK_DECISION.id,
         HOOK_RULE.id,
         HOOK_COMMENTARY.id,
+        RULES.id,
+        WORLD.id,
+        SEASON.id,
+        PEOPLE.id,
+        PRESENTATION.id,
     ]);
     assert_eq!(ids, expected);
     assert_eq!(REGISTRY.len(), engine::modules::SLOT_COUNT);
@@ -513,7 +530,13 @@ fn the_registry_declares_the_moved_slots_in_order() {
     assert!(matches!(default(19), ModuleRef::DecisionHook(_)));
     assert!(matches!(default(20), ModuleRef::RuleHook(_)));
     assert!(matches!(default(21), ModuleRef::CommentaryHook(_)));
-    // The hook adapters draw nothing, so no hook card owns an action key.
+    assert!(matches!(default(22), ModuleRef::Rules(_)));
+    assert!(matches!(default(23), ModuleRef::World(_)));
+    assert!(matches!(default(24), ModuleRef::Season(_)));
+    assert!(matches!(default(25), ModuleRef::People(_)));
+    assert!(matches!(default(26), ModuleRef::Presentation(_)));
+    // The hook adapters and the game-wide modules draw nothing, so none of their cards owns
+    // an action key.
     for decl in &REGISTRY[19..] {
         for reg in decl.registrations.iter().chain(decl.off.as_ref()) {
             assert!(reg.card.keys.is_empty(), "{}: {}", decl.slot.id, reg.name);
@@ -668,7 +691,12 @@ const FOULS_OFF: &str = r#"{
     "engine.changes": { "module": "changes", "version": 1 },
     "engine.hook.decision": { "module": "decision-hook", "version": 1 },
     "engine.hook.rule": { "module": "rule-hook", "version": 1 },
-    "engine.hook.commentary": { "module": "commentary-hook", "version": 1 }
+    "engine.hook.commentary": { "module": "commentary-hook", "version": 1 },
+    "game.rules": { "module": "rule-pack", "version": 1 },
+    "game.world": { "module": "world-stub", "version": 1 },
+    "game.season": { "module": "season-stub", "version": 1 },
+    "game.people": { "module": "people-stub", "version": 1 },
+    "game.presentation": { "module": "presentation-stub", "version": 1 }
   }
 }"#;
 

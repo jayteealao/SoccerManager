@@ -16,8 +16,9 @@ use super::registry::{MODIFIER_COUNT, ModuleRef, Registration, SLOT_COUNT, SlotD
 use super::{
     BallModule, ChangesModule, ClockModule, CommentaryHookModule, DecisionHookModule,
     DecisionModule, DisciplineModule, FatigueModule, FoulsModule, InjuriesModule, ManagerModule,
-    OffsideModule, Picked, PossessionModule, PreMatchModule, ResolvedModules, RestartsModule,
-    RuleHookModule, ShotModule, SteeringModule,
+    OffsideModule, PeopleModule, Picked, PossessionModule, PreMatchModule, PresentationModule,
+    ResolvedModules, RestartsModule, RuleHookModule, RulesModule, SeasonModule, ShotModule,
+    SteeringModule, WorldModule,
 };
 use crate::error::EngineError;
 
@@ -85,6 +86,11 @@ impl SlotFile {
                     "engine.hook.commentary".to_string(),
                     entry("commentary-hook"),
                 ),
+                ("game.rules".to_string(), entry("rule-pack")),
+                ("game.world".to_string(), entry("world-stub")),
+                ("game.season".to_string(), entry("season-stub")),
+                ("game.people".to_string(), entry("people-stub")),
+                ("game.presentation".to_string(), entry("presentation-stub")),
             ]),
         }
     }
@@ -170,6 +176,11 @@ struct Builder {
     decision_hook: Option<&'static dyn DecisionHookModule>,
     rule_hook: Option<&'static dyn RuleHookModule>,
     commentary_hook: Option<&'static dyn CommentaryHookModule>,
+    rule_pack: Option<&'static dyn RulesModule>,
+    world: Option<&'static dyn WorldModule>,
+    season: Option<&'static dyn SeasonModule>,
+    people: Option<&'static dyn PeopleModule>,
+    presentation: Option<&'static dyn PresentationModule>,
 }
 
 impl Builder {
@@ -202,6 +213,11 @@ impl Builder {
             ModuleRef::DecisionHook(m) => set(&mut self.decision_hook, m),
             ModuleRef::RuleHook(m) => set(&mut self.rule_hook, m),
             ModuleRef::CommentaryHook(m) => set(&mut self.commentary_hook, m),
+            ModuleRef::Rules(m) => set(&mut self.rule_pack, m),
+            ModuleRef::World(m) => set(&mut self.world, m),
+            ModuleRef::Season(m) => set(&mut self.season, m),
+            ModuleRef::People(m) => set(&mut self.people, m),
+            ModuleRef::Presentation(m) => set(&mut self.presentation, m),
         };
         if once { Ok(()) } else { Err(Self::defect()) }
     }
@@ -229,6 +245,11 @@ impl Builder {
             Some(decision_hook),
             Some(rule_hook),
             Some(commentary_hook),
+            Some(rule_pack),
+            Some(world),
+            Some(season),
+            Some(people),
+            Some(presentation),
         ) = (
             self.fouls,
             self.offside,
@@ -248,6 +269,11 @@ impl Builder {
             self.decision_hook,
             self.rule_hook,
             self.commentary_hook,
+            self.rule_pack,
+            self.world,
+            self.season,
+            self.people,
+            self.presentation,
         )
         else {
             return Err(Self::defect());
@@ -272,6 +298,11 @@ impl Builder {
             decision_hook,
             rule_hook,
             commentary_hook,
+            rule_pack,
+            world,
+            season,
+            people,
+            presentation,
             picked,
         })
     }

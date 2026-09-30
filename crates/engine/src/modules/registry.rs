@@ -3,14 +3,15 @@
 //! registration can never change a match, and no registration can be dropped by the linker.
 
 use super::card::ModuleCard;
+use super::game::{self, PeopleModule, PresentationModule, SeasonModule, WorldModule};
 use super::modifier::{Modifier, stand_ins};
 use super::{
     BallModule, ChangesModule, ClockModule, CommentaryHookModule, DecisionHookModule,
     DecisionModule, DisciplineModule, FatigueModule, FoulsModule, InjuriesModule, ManagerModule,
-    OffsideModule, PossessionModule, PreMatchModule, RestartsModule, RuleHookModule, ShotModule,
-    Slot, SteeringModule,
+    OffsideModule, PossessionModule, PreMatchModule, RestartsModule, RuleHookModule, RulesModule,
+    ShotModule, Slot, SteeringModule,
 };
-use crate::rules::{clock, discipline, fouls, injury, offside, restart};
+use crate::rules::{clock, discipline, fouls, injury, offside, pack, restart};
 use crate::tactics::verdict;
 use crate::{ai, ball, decision, fatigue, hook_slots, possession, shot, steering};
 
@@ -36,6 +37,11 @@ pub enum ModuleRef {
     DecisionHook(&'static dyn DecisionHookModule),
     RuleHook(&'static dyn RuleHookModule),
     CommentaryHook(&'static dyn CommentaryHookModule),
+    Rules(&'static dyn RulesModule),
+    World(&'static dyn WorldModule),
+    Season(&'static dyn SeasonModule),
+    People(&'static dyn PeopleModule),
+    Presentation(&'static dyn PresentationModule),
 }
 
 /// One module registered for a slot.
@@ -196,9 +202,40 @@ pub const HOOK_COMMENTARY: Slot = Slot {
     required: false,
 };
 
+/// The rule pack slot. The game-wide slots are not on the core list, so each is optional;
+/// the rules slot's off version plays under the standard Laws built into the program.
+pub const RULES: Slot = Slot {
+    id: "game.rules",
+    required: false,
+};
+
+/// The world's stub slot: nations, clubs, and grounds. No behaviour yet.
+pub const WORLD: Slot = Slot {
+    id: "game.world",
+    required: false,
+};
+
+/// The season systems' stub slot. No behaviour yet.
+pub const SEASON: Slot = Slot {
+    id: "game.season",
+    required: false,
+};
+
+/// The stub slot of the people and their minds. No behaviour yet.
+pub const PEOPLE: Slot = Slot {
+    id: "game.people",
+    required: false,
+};
+
+/// The stub slot of what the player sees. No behaviour yet.
+pub const PRESENTATION: Slot = Slot {
+    id: "game.presentation",
+    required: false,
+};
+
 /// The number of declared slots. `ResolvedModules` holds one typed field per slot, and one
 /// `Modifiers` field for the modifier slots.
-pub const SLOT_COUNT: usize = 22;
+pub const SLOT_COUNT: usize = 27;
 
 /// The number of modifier slots.
 pub const MODIFIER_COUNT: usize = 4;
@@ -579,6 +616,81 @@ const DECLS: [SlotDecl; SLOT_COUNT] = [
             version: 0,
             module: ModuleRef::CommentaryHook(&hook_slots::CommentaryHookOff),
             card: &hook_slots::COMMENTARY_HOOK_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: RULES,
+        registrations: &[Registration {
+            name: "rule-pack",
+            version: 1,
+            module: ModuleRef::Rules(&pack::RulePackV1),
+            card: &pack::RULE_PACK_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::Rules(&pack::RulePackOff),
+            card: &pack::RULE_PACK_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: WORLD,
+        registrations: &[Registration {
+            name: "world-stub",
+            version: 1,
+            module: ModuleRef::World(&game::WorldStubV1),
+            card: &game::WORLD_STUB_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::World(&game::WorldOff),
+            card: &game::WORLD_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: SEASON,
+        registrations: &[Registration {
+            name: "season-stub",
+            version: 1,
+            module: ModuleRef::Season(&game::SeasonStubV1),
+            card: &game::SEASON_STUB_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::Season(&game::SeasonOff),
+            card: &game::SEASON_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: PEOPLE,
+        registrations: &[Registration {
+            name: "people-stub",
+            version: 1,
+            module: ModuleRef::People(&game::PeopleStubV1),
+            card: &game::PEOPLE_STUB_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::People(&game::PeopleOff),
+            card: &game::PEOPLE_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: PRESENTATION,
+        registrations: &[Registration {
+            name: "presentation-stub",
+            version: 1,
+            module: ModuleRef::Presentation(&game::PresentationStubV1),
+            card: &game::PRESENTATION_STUB_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::Presentation(&game::PresentationOff),
+            card: &game::PRESENTATION_OFF_CARD,
         }),
     },
 ];

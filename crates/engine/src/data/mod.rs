@@ -279,6 +279,8 @@ pub struct Content {
     /// The tuning file as written, and the digest over the files as written.
     written_tuning: TuningFile,
     written_digest: [u8; 32],
+    /// The rule file as written. The rules slot's module turns it into `rules`.
+    written_rules: Vec<u8>,
 }
 
 impl Content {
@@ -306,6 +308,12 @@ impl Content {
             modules,
             ..self.clone()
         };
+        // The rule pack loads through the rules slot: a selection that changes the rules
+        // module reloads it from the rule file as written.
+        let rules_slot = crate::modules::registry::RULES.id;
+        if modules.picked_for(rules_slot) != self.modules.picked_for(rules_slot) {
+            next.rules = modules.rule_pack.load(&self.written_rules)?.value;
+        }
         if modules.picked() != ResolvedModules::builtin_default().picked() {
             let fold = |digest: [u8; 32]| -> [u8; 32] {
                 let mut hasher = Sha256::new();
@@ -344,8 +352,8 @@ impl Content {
             TUNING_VERSION,
             &(),
         )?;
-        let rules =
-            load_json_bytes::<RulePack>("rules", &files.rules, RULES_FILE, RULES_VERSION, &())?;
+        let modules = ResolvedModules::builtin_default();
+        let rules = modules.rule_pack.load(&files.rules)?;
         let tactics = load_json_bytes::<TacticsSchema>(
             "tactics",
             &files.tactics,
@@ -375,9 +383,10 @@ impl Content {
             tactics: tactics.value,
             digest,
             flags: ActiveFlags::default(),
-            modules: ResolvedModules::builtin_default(),
+            modules,
             written_tuning: tuning.value,
             written_digest: digest,
+            written_rules: files.rules.clone(),
         };
         written.with_flags(&FlagStates::default())
     }
