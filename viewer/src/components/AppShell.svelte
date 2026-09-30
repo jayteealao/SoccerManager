@@ -303,6 +303,7 @@
     font: 700 10.5px var(--fd);
     letter-spacing: 0.1em;
     text-transform: uppercase;
+    white-space: nowrap;
   }
 
   .help {

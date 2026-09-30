@@ -5,8 +5,8 @@
      the statistics and the other grounds. Each screen state (loading, kick-off, live, paused,
      error, first run, reconnecting) draws the board's body for it. Parts the viewer does not
      build yet are stubs (MatchStub, the stub tabs, Skip to result): drawn, faded and inert.
-     The Tactics tab opens the Tactics screen over it; the match screen stays mounted and
-     hidden, so the pitch keeps its canvas and the match plays on behind. -->
+     The Touchline and Tactics tabs open those views over it (`App.svelte`); the match screen
+     stays mounted and hidden, so the pitch keeps its canvas and the match plays on behind. -->
 <script>
   import AppShell from '../components/AppShell.svelte';
   import Commentary from '../components/Commentary.svelte';
@@ -20,16 +20,15 @@
   import ScoreStrip from '../components/ScoreStrip.svelte';
   import StepList from '../components/StepList.svelte';
   import SurfacePanel from '../components/SurfacePanel.svelte';
-  import TacticsScreen from './TacticsScreen.svelte';
   import { stripFacts } from '../lib/stats.js';
 
   let { session } = $props();
 
-  /// The sub-navigation: Match and Tactics are built; the others are stubs until their
+  /// The sub-navigation: Match, Touchline and Tactics are built; the others are stubs until their
   /// screens are ported.
   const TABS = [
     { id: 'match', label: 'Match', active: true },
-    { id: 'touchline', label: 'Touchline', stub: true },
+    { id: 'touchline', label: 'Touchline' },
     { id: 'tactics', label: 'Tactics', menu: true },
     { id: 'squad', label: 'Squad', menu: true, stub: true },
     { id: 'stats', label: 'Stats', menu: true, stub: true },
@@ -69,11 +68,6 @@
   }
 </script>
 
-{#if session.view === 'tactics'}
-  <TacticsScreen {session} />
-{/if}
-
-<div class="view" hidden={session.view === 'tactics'}>
 <AppShell
   title={session.title}
   subtitle={session.subtitle}
@@ -224,13 +218,8 @@
     onchange={openFile}
   />
 </AppShell>
-</div>
 
 <style>
-  .view[hidden] {
-    display: none;
-  }
-
   .screen {
     display: flex;
     flex-direction: column;
