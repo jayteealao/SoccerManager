@@ -8,9 +8,10 @@
 // light skin is chosen by configuration only: a copy of the content folder whose slot file
 // names it.
 //
-// Message parity: the same manager script on today's page (`--web web`) and on the viewer,
-// both against seed 42, must send the same lineup, change and withdrawal messages. A control
-// run with one bench place swapped must differ, so the comparison can fail.
+// Message parity: the manager script on the viewer, against seed 42, must send the same
+// lineup and change messages the former page sent for the same script. The former page's
+// messages were recorded once, on the former page, into `fixtures/messages-web-seed42.json`.
+// A control run with one bench place swapped must differ, so the comparison can fail.
 //
 // Also here: a withdrawn substitution never applies; a Tab walk through both phases never
 // lands in a stub; and the rendered contrast check on both phases.
@@ -20,7 +21,7 @@ import path from 'node:path';
 import { expect, test } from '@playwright/test';
 
 import { contrastReport } from '../support/contrast.mjs';
-import { VIEWER, WEB, contentWithSkin, startEngine } from '../support/engine.mjs';
+import { VIEWER, contentWithSkin, startEngine } from '../support/engine.mjs';
 import { managerCommand, recordClientMessages } from '../support/messages.mjs';
 import { chooseIndex } from '../support/page.mjs';
 
@@ -60,9 +61,9 @@ async function open(page, url, skin = 'broadcast-blue') {
   await page.evaluate(() => document.fonts.ready);
 }
 
-async function serve(seed, skin = 'broadcast-blue', web = VIEWER) {
+async function serve(seed, skin = 'broadcast-blue') {
   return startEngine({
-    args: ['--seed', String(seed), '--web', web],
+    args: ['--seed', String(seed), '--web', VIEWER],
     env: skin === 'broadcast-blue' ? {} : { SM_CONTENT_DIR: lightContent.dir },
   });
 }
@@ -154,15 +155,10 @@ for (const skin of SKINS) {
 /// The manager script both pages run: drag the first player not picked onto slot 10, move the mentality
 /// one step, kick off, play to minute 3, pause, queue one substitution, and play on until the
 /// engine rules on it. `plant` swaps two bench places first (the control run).
-async function managerScript(page, kind, { plant = false } = {}) {
+async function managerScript(page, { plant = false } = {}) {
   await until(page, () => window.__touchline.lineup().phase === 'pre-match', undefined, 30_000);
-  const viewer = kind === 'viewer';
-  const squadRow = (i) =>
-    viewer ? page.locator(`button[data-squad="${i}"]`) : page.getByTestId(`squad-${i}`);
-  const slot = (n) =>
-    viewer
-      ? page.locator(`button[data-slot="${n}"]`)
-      : page.getByRole('button', { name: new RegExp(`^Slot ${n + 1},`) });
+  const squadRow = (i) => page.locator(`button[data-squad="${i}"]`);
+  const slot = (n) => page.locator(`button[data-slot="${n}"]`);
   const free = await hook(page, () => {
     const { slots, bench } = window.__touchline.lineup();
     const placed = new Set([...slots, ...bench]);
@@ -179,40 +175,25 @@ async function managerScript(page, kind, { plant = false } = {}) {
     await squadRow(a).click();
     await squadRow(b).click();
   }
-  const mentality = viewer ? page.getByLabel('Mentality') : page.getByTestId('mentality');
+  const mentality = page.getByLabel('Mentality');
   const now = await mentality.evaluate((s) => s.selectedIndex);
   await chooseIndex(mentality, now + 1);
 
-  if (viewer) {
-    await continueToKickOff(page);
-    await action(page).click();
-  } else {
-    await page.getByRole('button', { name: 'Kick off' }).click();
-  }
+  await continueToKickOff(page);
+  await action(page).click();
   await until(page, () => window.__touchline.lineup().phase === 'live', undefined, 15_000);
   await page.getByRole('group', { name: 'Playback' }).getByRole('button', { name: '8x', exact: true }).click();
   await until(page, (t) => window.__touchline.lastRenderedTick() > t, MINUTE_3, 120_000);
 
   const before = await hook(page, () => window.__touchline.pending().length);
-  if (viewer) {
-    await action(page).click();
-    await tab(page, 'Tactics').click();
-    await chooseIndex(page.getByLabel('Coming off'), 5);
-    await chooseIndex(page.getByLabel('Coming on'), 0);
-    await page.getByRole('button', { name: 'Queue substitution' }).click();
-  } else {
-    await page.getByRole('button', { name: 'Pause' }).click();
-    await chooseIndex(page.getByLabel('Player coming off'), 5);
-    await chooseIndex(page.getByLabel('Substitute coming on'), 0);
-    await page.getByRole('button', { name: 'Queue substitution' }).click();
-  }
+  await action(page).click();
+  await tab(page, 'Tactics').click();
+  await chooseIndex(page.getByLabel('Coming off'), 5);
+  await chooseIndex(page.getByLabel('Coming on'), 0);
+  await page.getByRole('button', { name: 'Queue substitution' }).click();
   await until(page, (n) => window.__touchline.pending().length > n, before, 10_000);
   const id = await hook(page, (n) => window.__touchline.pending()[n].queue_id, before);
-  if (viewer) {
-    await action(page).click();
-  } else {
-    await page.getByRole('button', { name: 'Play' }).click();
-  }
+  await action(page).click();
   await until(
     page,
     (q) => ['applied', 'rejected'].includes(window.__touchline.pending().find((c) => c.queue_id === q)?.state),
@@ -221,36 +202,35 @@ async function managerScript(page, kind, { plant = false } = {}) {
   );
 }
 
-test.describe('the viewer sends the manager messages today\'s page sends', () => {
-  test('the same script on both pages sends the same messages, and a planted change differs', async ({
-    browser,
-  }, info) => {
+test.describe('the viewer sends the manager messages the former page sent', () => {
+  test('the script sends the recorded messages, and a planted change differs', async ({ browser }, info) => {
     test.setTimeout(25 * 60_000);
-    const run = async (kind, web, options) => {
+    const recorded = JSON.parse(
+      fs.readFileSync(new URL('./fixtures/messages-web-seed42.json', import.meta.url), 'utf8')
+    );
+    const run = async (options) => {
       const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
       const sent = await recordClientMessages(page, managerCommand);
-      const engine = await serve(42, 'broadcast-blue', web);
+      const engine = await serve(42, 'broadcast-blue');
       try {
         await page.goto(engine.url);
         await page.waitForFunction(() => Boolean(window.__touchline));
-        await managerScript(page, kind, options);
+        await managerScript(page, options);
         return sent;
       } finally {
         engine.cleanUp();
         await page.close();
       }
     };
-    const web = await run('web', WEB);
-    const viewer = await run('viewer', VIEWER);
-    fs.writeFileSync(evidence(info, 'messages-web.json'), `${JSON.stringify(web, null, 2)}\n`);
+    const viewer = await run();
     fs.writeFileSync(evidence(info, 'messages-viewer.json'), `${JSON.stringify(viewer, null, 2)}\n`);
-    expect(web.map((m) => m.type)).toEqual(['set-lineup', 'queue-change']);
-    expect(web[0].patch, 'the mentality rides the lineup').toBeTruthy();
-    expect(viewer).toEqual(web);
+    expect(recorded.map((m) => m.type)).toEqual(['set-lineup', 'queue-change']);
+    expect(recorded[0].patch, 'the mentality rides the lineup').toBeTruthy();
+    expect(viewer).toEqual(recorded);
 
-    const planted = await run('viewer', VIEWER, { plant: true });
+    const planted = await run({ plant: true });
     fs.writeFileSync(evidence(info, 'messages-control.json'), `${JSON.stringify(planted, null, 2)}\n`);
-    expect(planted, 'a swapped bench place must show in the messages').not.toEqual(web);
+    expect(planted, 'a swapped bench place must show in the messages').not.toEqual(recorded);
   });
 });
 

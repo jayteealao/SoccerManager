@@ -3,14 +3,13 @@
 // `viewer.tick_skipped` row for any second in which it skipped a tick. It passes when every
 // budget row after the first holds 59 frames a second or more, no tick is skipped, and the
 // 95th percentile frame is no longer than one and a half refresh periods, the line past which
-// the scheduler counts a frame as dropped. Today's page in `web/` is measured the same way in
-// the same run, as the figure the new screen is held to.
+// the scheduler counts a frame as dropped.
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
-import { VIEWER, WEB, startEngine } from '../support/engine.mjs';
+import { VIEWER, startEngine } from '../support/engine.mjs';
 import { kickOffFromPage } from '../support/page.mjs';
 
 const PLAY_MS = 60_000;
@@ -23,7 +22,7 @@ const evidence = (info, name) => {
   return out;
 };
 
-/// Serves `web`, kicks off with the page's own Kick off button (through CONTINUE on the viewer), plays 60 s at 1x, and returns
+/// Serves `web`, kicks off through CONTINUE and the Pre-match KICK OFF, plays 60 s at 1x, and returns
 /// every signal row the page wrote to its console and its final frame budget.
 async function measure(page, web) {
   const rows = [];
@@ -62,14 +61,11 @@ test('the match screen holds the frame budget for 60 s at 1x', async ({ browser 
   const viewerPage = await browser.newPage();
   const viewer = await measure(viewerPage, VIEWER);
   await viewerPage.close();
-  const todayPage = await browser.newPage();
-  const today = await measure(todayPage, WEB);
-  await todayPage.close();
 
   const line = (1.5 * 1000) / viewer.frame.refresh_hz;
   fs.writeFileSync(
     evidence(info, 'frame-budget.json'),
-    `${JSON.stringify({ play_ms: PLAY_MS, p95_line_ms: line, viewer, today }, null, 2)}\n`
+    `${JSON.stringify({ play_ms: PLAY_MS, p95_line_ms: line, viewer }, null, 2)}\n`
   );
 
   expect(viewer.budgets.length, 'a budget row every five seconds').toBeGreaterThanOrEqual(10);

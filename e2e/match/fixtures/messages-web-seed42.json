@@ -1,0 +1,38 @@
+[
+  {
+    "type": "set-lineup",
+    "lineup": [
+      0,
+      4,
+      12,
+      3,
+      14,
+      8,
+      16,
+      7,
+      19,
+      2,
+      21
+    ],
+    "bench": [
+      11,
+      5,
+      18,
+      10,
+      15,
+      13,
+      1
+    ],
+    "patch": {
+      "mentality": 3
+    }
+  },
+  {
+    "type": "queue-change",
+    "change.kind": "substitution",
+    "detail": {
+      "off": 8,
+      "on": 11
+    }
+  }
+]
