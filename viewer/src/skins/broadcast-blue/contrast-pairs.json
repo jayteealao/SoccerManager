@@ -694,5 +694,167 @@
     "bg": "--select-ground",
     "kind": "text",
     "where": "Substitution picker: the chosen player in each select"
+  },
+  {
+    "fg": "--band-ink",
+    "bg": "--sheet-head",
+    "kind": "text",
+    "where": "Pre-match: the team sheet heads"
+  },
+  {
+    "fg": "--navy-sub",
+    "bg": "--sheet-head",
+    "kind": "text",
+    "where": "Pre-match: the formation beside each team name"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Pre-match: the starters' names"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Pre-match: positions, column heads and the substitutes label"
+  },
+  {
+    "fg": "--good",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Pre-match: the risk word Low and the rule-pack ticks"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Pre-match: the risk word Raised"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Pre-match: the risk word High"
+  },
+  {
+    "fg": "--read-ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Pre-match: the rule-pack rows"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Pre-match: the status line"
+  },
+  {
+    "fg": "--pitch-line",
+    "bg": "--pitch-stripe",
+    "kind": "boundary",
+    "where": "Pre-match: the dot ring on the light stripe"
+  },
+  {
+    "fg": "--pitch-line",
+    "bg": "--pitch-stripe-2",
+    "kind": "boundary",
+    "where": "Pre-match: the dot ring on the dark stripe"
+  },
+  {
+    "fg": "--ball-ring",
+    "bg": "--pitch-stripe",
+    "kind": "boundary",
+    "where": "Pre-match: the other team's dot ring on the light stripe"
+  },
+  {
+    "fg": "--ball-ring",
+    "bg": "--pitch-stripe-2",
+    "kind": "boundary",
+    "where": "Pre-match: the other team's dot ring on the dark stripe"
+  },
+  {
+    "fg": "--keeper-home-ink",
+    "bg": "--keeper-home",
+    "kind": "text",
+    "where": "Pre-match: our keeper's shirt number"
+  },
+  {
+    "fg": "--keeper-away-ink",
+    "bg": "--keeper-away",
+    "kind": "text",
+    "where": "Pre-match: their keeper's shirt number"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--proposal-ground",
+    "kind": "text",
+    "where": "Touchline: a pick's heading"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--proposal-ground",
+    "kind": "text",
+    "where": "Touchline: a pick's reason"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--proposal-ground",
+    "kind": "text",
+    "where": "Touchline: Queued on an accepted pick"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Touchline: the empty proposals note and the player-state note"
+  },
+  {
+    "fg": "--good",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "Touchline: the band word Fresh on an odd row"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "Touchline: the band word Tiring on an odd row"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "Touchline: the band word Exhausted on an odd row"
+  },
+  {
+    "fg": "--good",
+    "bg": "--ground-3",
+    "kind": "text",
+    "where": "Touchline: the band word Fresh on an even row"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--ground-3",
+    "kind": "text",
+    "where": "Touchline: the band word Tiring on an even row"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--ground-3",
+    "kind": "text",
+    "where": "Touchline: the band word Exhausted on an even row"
+  },
+  {
+    "fg": "--ghost-ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Pre-match: Change on Tactics"
+  },
+  {
+    "fg": "--cyan-ink",
+    "bg": "--cyan",
+    "kind": "text",
+    "where": "Touchline: Accept on a pick"
   }
 ]

@@ -186,3 +186,31 @@ test('the strip, the label, the key-value row and the paired bar render their va
   const even = render(PairedBar, { label: 'Penalties', home: 0, away: 0 }).container;
   assert.equal(even.querySelector('.home').style.flexGrow, '50');
 });
+
+test('a tall strip leads with its crest, and a LATER fact, a LATER label and an action note are inert stubs', () => {
+  const { container } = render(InfoStrip, {
+    tall: true,
+    lead: text('<i data-testid="lead">crest</i>'),
+    facts: [
+      { value: 'Ashford Rovers v Port Varrow', label: 'Heritage Cup' },
+      { value: '12°C · dry', label: 'Weather', stub: true },
+    ],
+  });
+  const strip = container.querySelector('.strip');
+  assert.ok(strip.classList.contains('tall'));
+  assert.ok(container.querySelector('.cell:first-child [data-testid="lead"]'), 'the lead sits in the first cell');
+  const later = container.querySelector('[data-stub="strip fact: Weather"]');
+  assert.ok(later.hasAttribute('inert'));
+  assert.ok(later.textContent.includes('LATER'));
+
+  const label = render(SectionLabel, { label: 'Analyst reads', later: true }).container;
+  const mark = label.querySelector('[data-stub="LATER mark: Analyst reads"]');
+  assert.ok(mark.hasAttribute('inert'));
+  assert.equal(mark.getAttribute('aria-hidden'), 'true');
+
+  const { container: band } = shell({ actionNote: 'Team talk', navLabel: 'Matchday views' });
+  const note = band.querySelector('[data-stub="action note: Team talk"]');
+  assert.ok(note.hasAttribute('inert'));
+  assert.ok(note.textContent.includes('LATER'));
+  assert.ok(screen.getByRole('navigation', { name: 'Matchday views' }));
+});

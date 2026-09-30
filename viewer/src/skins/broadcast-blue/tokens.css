@@ -132,6 +132,17 @@
   --queue-ground: #16252f;
   --queue-rule: #2a4552;
 
+  /* The matchday screens: the colours the Pre-match line-ups and the Touchline boards write
+   * inline, as tokens. The team colours on the line-up graphic are each club's kit, made
+   * safe at run time, never a literal. */
+  --sheet-head: #0b3a8c;
+  --label-shadow: rgba(0, 0, 0, 0.9);
+  --read-ink: #dfe1e5;
+  --star-empty: #4a4c52;
+  --proposal-ground: #1f2023;
+  --reading-edge: #8a7a24;
+  --reading-ink: #f5d33a;
+
   /* Type */
   --fd: 'Saira Semi Condensed', 'Barlow Semi Condensed', 'Arial Narrow', system-ui, sans-serif;
   --fb: 'Saira', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;

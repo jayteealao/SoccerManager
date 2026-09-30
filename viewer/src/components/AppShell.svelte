@@ -1,7 +1,9 @@
 <!-- The Touchline Full Game shell: the 40 px icon rail, the 52 px slanted navy header band
      with the date block and the cyan action block, the 30 px sub-navigation tabs, and the
      body. Only the current rail section, the live tabs and the action block take focus; the
-     other rail sections, the stub tabs and the header icons are inert stubs. -->
+     other rail sections, the stub tabs and the header icons are inert stubs. An action note
+     names a later step beside the action block (TEAM TALK on the Pre-match line-ups); it is
+     a stub with the LATER mark. `navLabel` names the sub-navigation. -->
 <script>
   import Glyph from './Glyph.svelte';
   import StubSection from './StubSection.svelte';
@@ -18,6 +20,8 @@
     busy = false,
     tabs = [],
     ontab = () => {},
+    actionNote = '',
+    navLabel = 'Match views',
     crest,
     children,
   } = $props();
@@ -71,6 +75,12 @@
       </div>
       <!-- STUB: the world view and help. -->
       <div class="hicons">
+        {#if actionNote}
+          <!-- STUB: a step this workflow does not build, named beside the action block. -->
+          <StubSection note="action note: {actionNote}" inline later>
+            <span class="anote">{actionNote}</span>
+          </StubSection>
+        {/if}
         <StubSection note="world view and help" inline fade={false}>
           <Glyph glyph={{ stroke: GLOBE, width: 1.3 }} size={17} />
           <span class="help">?</span>
@@ -85,7 +95,7 @@
       </button>
     </header>
 
-    <nav class="subnav" aria-label="Match views">
+    <nav class="subnav" aria-label={navLabel}>
       {#each tabs as tab (tab.id)}
         {#if tab.stub}
           <!-- STUB: a view this workflow does not build; drawn for layout and feel only. -->
@@ -287,6 +297,12 @@
     display: inline-flex;
     align-items: center;
     gap: 11px;
+  }
+
+  .anote {
+    font: 700 10.5px var(--fd);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
   }
 
   .help {
