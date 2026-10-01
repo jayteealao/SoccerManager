@@ -29,7 +29,7 @@ test.beforeAll(() => {
 
 test('a crashed engine shows the failure and restarts from the last stoppage', async ({ page }) => {
   test.setTimeout(8 * 60_000);
-  const launcher = await startEngine({ command: 'launch', args: ['--seed', '3', '--minutes', '20', '--web', WEB] });
+  const launcher = await startEngine({ command: 'launch', args: ['--seed', '5', '--minutes', '20', '--web', WEB] });
   try {
     await openMatch(page, launcher.url);
     await kickOff(page);
@@ -49,7 +49,8 @@ test('a crashed engine shows the failure and restarts from the last stoppage', a
       if (ok) {
         break;
       }
-      // The goal comes after half time, whose report holds play until CONTINUE.
+      // Seed 5 scores just after half time (tick 31,272), whose report holds play until
+      // CONTINUE.
       const report = await page.evaluate(() => window.__touchline.report());
       if (report.open && report.kind === 'half-time') {
         await page.getByRole('button', { name: 'Continue', exact: true }).click();

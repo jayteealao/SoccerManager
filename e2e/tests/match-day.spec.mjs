@@ -7,11 +7,11 @@ import { kickOff, openMatch, playUntil, scoreBug, setSpeed, showMatch, until } f
 
 let fixture;
 
-// Seed 7 scores early in the second half of a ten-minute match.
+// Seed 14 scores early in the second half of a ten-minute match (tick 21,930).
 test.beforeAll(() => {
   const dir = tempDir('fixture');
   fixture = path.join(dir, 'match.smfx');
-  const run = runEngine(['record', '--seed', '7', '--minutes', '10', '--out', fixture], { dataDir: dir });
+  const run = runEngine(['record', '--seed', '14', '--minutes', '10', '--out', fixture], { dataDir: dir });
   expect(run.code, run.stderr).toBe(0);
 });
 
