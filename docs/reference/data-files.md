@@ -453,6 +453,23 @@ The engine writes a record at each stoppage snapshot and at the end of the match
 
 `snapshot.smsn` holds the full state of a match at one stoppage: the clock, the score, every player's position, energy, and cards, the queue of changes, the state of the random-number generator, and for a knockout match the extra-time periods and the shoot-out. The engine replaces the file at each stoppage. A snapshot resumes only on the build that wrote it, with the same content files and team files. The engine refuses any other snapshot and names the reason.
 
+The file is format 8. Its header (192 bytes; its length is stored at bytes 6 to 8) names the match without reading the rest, at fixed places, so a later build can say who saved a file it cannot read:
+
+| Bytes | Field |
+|---|---|
+| 0 to 4 | `SMSN` |
+| 4 to 6 | the format, 8 |
+| 6 to 8 | the header length, 192 |
+| 64 to 96 | the release version that saved it, such as `0.2.0`, padded with zeros |
+| 96 to 100 | the tick of the stoppage |
+| 100 to 102 | the score, home then away |
+| 104 to 148 | the home team's name, padded with zeros |
+| 148 to 192 | the away team's name, padded with zeros |
+
+The build's commit, the content files' hash, the owner and the match stamp sit in the first 64 bytes, as in formats 6 and 7. Files of format 6 and 7 carry no version; the engine names their release from the build's commit when a release shipped that build.
+
+A snapshot from the previous release finishes on that release's engine: `resume` and `launch --resume` run the program in `previous/` beside this one (the release ships it, see `packaging/README.md`). A snapshot from any other version is refused, and the refusal names the version that saved it and the versions this release finishes.
+
 ### The tick file
 
 `simulate --ticks-out <FILE>` writes one record per tick: the ball position and height, then the position of each of the 22 players. The header states the seed, the tick length, and the most ticks the match can last. The trailer states the ticks written. When a knockout match's sudden death runs past the announced length, the engine raises the header's figure to the ticks written, so the file still reads. `--json` also writes the same ticks as JSON Lines beside the tick file.

@@ -17,6 +17,7 @@ Every release holds one folder:
 - `engine-cli` (`engine-cli.exe` on Windows): the engine and the launcher.
 - `content/`: the attributes, tuning, rules, teams, commentary, and script packs.
 - `web/`: the match viewer, as the viewer's release build (`npm run build:release` in `viewer/`): the viewer page, the handshake check page, their scripts and fonts, and the font licence texts in `web/fonts/`.
+- `previous/`: the previous release's engine (`previous/engine-cli`) with that release's own `content/`. A match the previous release saved finishes on this engine, which started it; `engine-cli resume` and `engine-cli launch --resume` run it.
 - `LICENSE-MIT` and `LICENSE-APACHE`.
 - `soccermanager` (Linux and macOS only): the start script.
 
@@ -30,6 +31,20 @@ The Windows program links the C runtime statically (`.cargo/config.toml`), so it
 - Node 22.12 or later, with `npm`. Both build scripts run `npm ci` and `npm run build:release` in `viewer/` and copy `viewer/dist-release/` to `web/`.
 - Windows: NSIS 3 (`makensis` on `PATH`, or installed in `Program Files (x86)\NSIS`), and PowerShell 7 or Windows PowerShell 5.1.
 - Linux archive: a Linux shell with Rust, `tar`, `curl`, and `sha256sum`. On Windows, WSL with Ubuntu 24.04 works.
+- Git, with the previous release's tag fetched (`git fetch origin tag v0.2.0-beta.1`). The tag, its commit and its version are pinned in `packaging/previous-engine.json`.
+
+## The previous release's engine
+
+Both build scripts build the previous release's engine from its tag before they stage the release:
+
+```bash
+pwsh packaging/windows/previous-engine.ps1   # Windows
+sh packaging/unix/previous-engine.sh         # Linux and macOS
+```
+
+Each script checks that the tag names the pinned commit, builds `engine-cli` from it in a detached git worktree with `cargo build --locked`, copies the program and the tag's `content/` into `previous/` in its cache folder, removes the worktree, and checks that the program prints the pinned version. It prints the path of `previous/`. The cache is `target/previous-engine` on Windows and `~/.cache/soccermanager-previous` elsewhere; set `SM_PREVIOUS_CACHE` to change it. A cached `previous/` whose program prints the pinned version is reused without a build.
+
+To move to a new previous release, change the pin's tag, commit and version together.
 
 ## Build
 
@@ -99,7 +114,7 @@ powershell -ExecutionPolicy Bypass -File smoke.ps1 -Setup <setup file> -Evidence
 sh packaging/unix/smoke.sh dist/SoccerManager-<version>-linux-x86_64.tar.gz dist/evidence/linux/<utc>
 ```
 
-`smoke.sh` unpacks the archive into a fresh temporary home and starts `soccermanager` from an unrelated folder with only `HOME` and `PATH` set. It checks the page address, the page, that the page's module script is served as JavaScript, that `web/fonts/OFL-Saira.txt` ships, `engine.json` reporting a running engine, `engine.port` in the fresh home's data folder, and the program's version against the archive name. Then it runs the install-layout test against the unpacked folder (`SM_INSTALL_UNDER_TEST`), which reads the engine's `hello` and compares its version. It writes `results.json` in the same shape as the Windows check.
+`smoke.sh` unpacks the archive into a fresh temporary home and starts `soccermanager` from an unrelated folder with only `HOME` and `PATH` set. It checks the page address, the page, that the page's module script is served as JavaScript, that `web/fonts/OFL-Saira.txt` ships, `engine.json` reporting a running engine, `engine.port` in the fresh home's data folder, the program's version against the archive name, and that `previous/engine-cli` prints the pinned previous version with `previous/content/` beside it. Then it runs the install-layout test against the unpacked folder (`SM_INSTALL_UNDER_TEST`), which reads the engine's `hello` and compares its version. It writes `results.json` in the same shape as the Windows check.
 
 ### The browser suite against a packaged folder
 
