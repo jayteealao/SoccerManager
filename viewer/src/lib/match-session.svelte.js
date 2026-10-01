@@ -1027,6 +1027,9 @@ export class MatchSession {
         body: 'Choose another replay file.',
         actions: ['open-replay'],
       });
+      // The refusal panel is on the match screen; a file opened from Tactics, the report or
+      // the replay would otherwise be refused out of sight.
+      this.view = 'match';
       return;
     }
     if (this.socket) {

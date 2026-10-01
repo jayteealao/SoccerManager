@@ -522,3 +522,16 @@ test('a replay file opens in the replay view, and Replay the whole match rewinds
   session.closeReport();
   assert.equal(session.view, 'replay', 'and the report goes back to the replay it opened over');
 });
+
+test('a replay file that cannot be read shows its refusal on the match view, from any view', async () => {
+  const { session, socket } = await started(RUNNING);
+  socket.deliver(hello('match-7'));
+  session.act();
+  shortMatch(socket);
+  socket.finish();
+  playFrames(session, () => session.view === 'report');
+  assert.equal(session.view, 'report');
+  await session.openReplay(new TextEncoder().encode('this is not a replay file\n'), 'junk.smfx');
+  assert.equal(session.panel.kind, 'replay-refused');
+  assert.equal(session.view, 'match', 'the refusal panel lives on the match view, so the view opens');
+});

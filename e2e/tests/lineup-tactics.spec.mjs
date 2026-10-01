@@ -96,7 +96,9 @@ test('changes during play wait for a stoppage, and a sixth substitution is refus
 
     // Mentality: Queued, then Applied at a stoppage, and the feed says so.
     await showTactics(page);
-    const mentality = page.getByLabel('Mentality');
+    // The select only: once the change is queued, its Edit and Cancel buttons are labelled
+    // "Edit: Mentality: …" and "Cancel: Mentality: …" and match the label as well.
+    const mentality = page.getByLabel('Mentality').and(page.locator('select'));
     const now = await mentality.evaluate((s) => s.selectedIndex);
     const count = await mentality.locator('option').count();
     const change = await queued(page, () => chooseIndex(mentality, now + 1 < count ? now + 1 : now - 1));
