@@ -535,3 +535,62 @@ test('a replay file that cannot be read shows its refusal on the match view, fro
   assert.equal(session.panel.kind, 'replay-refused');
   assert.equal(session.view, 'match', 'the refusal panel lives on the match view, so the view opens');
 });
+
+test('a saved match of the previous release opens live, naming its engine, with no kick-off', async () => {
+  const resumed = {
+    ...RUNNING,
+    'engine.version': '0.2.0-beta.1',
+    'launcher.version': '0.3.0',
+    'match.resumed_from': 156_500,
+  };
+  const { session, socket } = await started(resumed);
+  assert.deepEqual(
+    session.steps.map((s) => s.label),
+    ['Starting the engine (0.2.0-beta.1)', 'Connecting to the match', 'Resuming at 52:10']
+  );
+  // The previous release's hello: no squad, no setup, none of the later fields.
+  socket.deliver(
+    JSON.stringify({
+      type: 'hello',
+      'match.id': 'match-old',
+      'protocol.version': 3,
+      'engine.version': '0.2.0-beta.1',
+      ticks_expected: 270000,
+      teams: TEAMS,
+    })
+  );
+  assert.equal(session.screen, 'live');
+  assert.equal(session.view, 'match');
+  assert.equal(session.subtitle, 'Engine connected · v0.2.0-beta.1');
+  for (let t = 156_501; t <= 156_560; t += 1) {
+    socket.deliver(frameAt(t));
+  }
+  assert.equal(session.screen, 'live');
+  assert.equal(session.steps.every((s) => s.state === 'done'), true);
+  assert.equal(socket.sent.some((m) => m.type === 'start'), false, 'a resumed match is not kicked off');
+});
+
+test('a save no engine can finish shows the resume screen, and New match starts a fresh one', async () => {
+  const refused = {
+    'engine.state': 'refused',
+    'engine.reason': 'this match was saved by Touchline 0.1.0, two or more versions back',
+    'engine.pid': null,
+    launcher: true,
+    resume: { kind: 'older', 'saved.version': '0.1.0', 'saved.tick': 156_500, reason: 'r' },
+  };
+  const { session, fetcher } = await started(refused, refused, { ...RUNNING, 'match.resumed_from': null });
+  assert.equal(session.view, 'resume');
+  assert.equal(session.screen, 'error');
+  assert.equal(session.resumeInfo['saved.version'], '0.1.0');
+  assert.equal(session.action, 'New match');
+  assert.equal(FakeSocket.made.length, 0, 'no engine to connect to');
+
+  await session.act();
+  assert.ok(fetcher.calls.some((c) => c.path === 'engine/new-match' && c.method === 'POST'));
+  assert.equal(session.view, 'match');
+  assert.equal(session.resumeInfo, null);
+  assert.equal(session.screen, 'loading');
+  const socket = FakeSocket.made.at(-1);
+  socket.deliver(hello('match-new'));
+  assert.equal(session.screen, 'kickoff');
+});

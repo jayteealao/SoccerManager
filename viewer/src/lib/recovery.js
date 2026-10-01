@@ -15,12 +15,33 @@ export const STEPS = Object.freeze([
 export const STEP_WORDS = Object.freeze({ done: 'Done', active: 'In progress', waiting: 'Waiting' });
 
 /// The steps with their state words, for the step that is in progress (0 to 2), or 3 once
-/// every step is done.
-export function loadingSteps(current) {
+/// every step is done. A saved match names what differs from a new one: `version` is the
+/// engine version when another release's engine plays it, and `resumeTick` the tick it
+/// continues from, which replaces the wait for kick-off.
+export function loadingSteps(current, { version = null, resumeTick = null } = {}) {
   return STEPS.map((step, i) => {
     const state = i < current ? 'done' : i === current ? 'active' : 'waiting';
-    return { ...step, state, word: STEP_WORDS[state] };
+    let label = step.label;
+    if (step.id === 'engine' && version) {
+      label = `${label} (${version})`;
+    } else if (step.id === 'kickoff' && resumeTick !== null && resumeTick !== undefined) {
+      label = `Resuming at ${clockAt(resumeTick)}`;
+    }
+    return { ...step, label, state, word: STEP_WORDS[state] };
   });
+}
+
+/// What the loading steps say for an engine status: the engine version only when the engine
+/// that plays the match is not the launcher's own (a save of the previous release), and the
+/// tick a saved match continues from.
+export function stepOptions(status) {
+  const engine = status?.['engine.version'] ?? null;
+  const own = status?.['launcher.version'] ?? null;
+  const resumeTick = status?.['match.resumed_from'];
+  return {
+    version: engine && own && engine !== own ? engine : null,
+    resumeTick: resumeTick === undefined ? null : resumeTick,
+  };
 }
 
 /// `mm:ss` of match time at `tick`.
@@ -95,6 +116,16 @@ export function panelModel(status) {
       };
     }
     case 'refused':
+      // A save no shipped engine can finish opens the Resume a saved match screen.
+      if (status.resume) {
+        return {
+          kind: 'resume',
+          word: 'Cannot resume',
+          title: `This match was saved by Touchline ${status.resume['saved.version'] ?? 'an unreleased build'}`,
+          body: status.resume.reason ?? '',
+          actions: ['new-match', 'open-replay'],
+        };
+      }
       return {
         kind: 'refused',
         word: 'Error',

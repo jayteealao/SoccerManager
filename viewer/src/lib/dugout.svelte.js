@@ -149,6 +149,19 @@ export class Dugout {
     this.version += 1;
   }
 
+  /// A saved match the launcher resumed: it is under way, so there is no lineup to pick and
+  /// changes may queue at once against the computer manager's tactics.
+  resumeLive() {
+    if (this.phase !== 'pre-match') {
+      return;
+    }
+    this.phase = 'live';
+    this.confirmed = copyTactics(this.base);
+    this.tactics = copyTactics(this.base);
+    this.refreshPicker();
+    this.bump();
+  }
+
   /// `true` while the lineup and the draft tactics can change.
   get preMatch() {
     return this.phase === 'pre-match';

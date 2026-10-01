@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
-import { abandon, fetchStatus, poll, restart } from '../src/lib/launcher.js';
+import { abandon, fetchStatus, newMatch, poll, restart } from '../src/lib/launcher.js';
 import {
   BUILD_INSTRUCTION,
   NO_LAUNCHER_HINT,
@@ -13,6 +13,7 @@ import {
   loadingSteps,
   panelModel,
   refusalReason,
+  stepOptions,
 } from '../src/lib/recovery.js';
 
 test('a corrupt snapshot names the corruption and offers abandon only', () => {
@@ -110,4 +111,53 @@ test('the launcher client posts with no body and survives a dead server', async 
   assert.equal(await fetchStatus(dead), null);
   const seen = await poll((s) => s === null, { fetcher: dead, every: 1, timeoutMs: 10 });
   assert.equal(seen, null);
+});
+
+test('a saved match names its engine version and resume point in the loading steps', () => {
+  assert.deepEqual(
+    loadingSteps(1, { version: '0.2.0-beta.1', resumeTick: 156_500 }).map((s) => s.label),
+    ['Starting the engine (0.2.0-beta.1)', 'Connecting to the match', 'Resuming at 52:10']
+  );
+  // A new match keeps the words the committed screenshots show.
+  assert.deepEqual(
+    loadingSteps(1).map((s) => s.label),
+    ['Starting the engine', 'Connecting to the match', 'Waiting for kick-off']
+  );
+});
+
+test('the engine version shows only when another release plays the match', () => {
+  const own = { 'engine.version': '0.3.0', 'launcher.version': '0.3.0', 'match.resumed_from': null };
+  assert.deepEqual(stepOptions(own), { version: null, resumeTick: null });
+  const previous = { 'engine.version': '0.2.0', 'launcher.version': '0.3.0', 'match.resumed_from': 156_500 };
+  assert.deepEqual(stepOptions(previous), { version: '0.2.0', resumeTick: 156_500 });
+  // An older launcher sends neither field.
+  assert.deepEqual(stepOptions({ 'engine.state': 'running' }), { version: null, resumeTick: null });
+  assert.deepEqual(stepOptions(null), { version: null, resumeTick: null });
+});
+
+test('a save no shipped engine can finish opens the resume screen with New match', () => {
+  const panel = panelModel({
+    'engine.state': 'refused',
+    'engine.reason': 'this match was saved by Touchline 0.1.0, two or more versions back; ...',
+    launcher: true,
+    resume: { kind: 'older', 'saved.version': '0.1.0', reason: 'saved by Touchline 0.1.0' },
+  });
+  assert.equal(panel.kind, 'resume');
+  assert.equal(panel.title, 'This match was saved by Touchline 0.1.0');
+  assert.deepEqual(panel.actions, ['new-match', 'open-replay']);
+  const unreleased = panelModel({
+    'engine.state': 'refused',
+    resume: { kind: 'unreleased', 'saved.version': null, reason: 'r' },
+  });
+  assert.equal(unreleased.title, 'This match was saved by Touchline an unreleased build');
+});
+
+test('the launcher client asks for a new match with a POST', async () => {
+  const calls = [];
+  const fetcher = async (url, init) => {
+    calls.push([url, init?.method ?? 'GET']);
+    return { ok: true, json: async () => ({ 'engine.state': 'starting' }) };
+  };
+  assert.equal((await newMatch(fetcher))['engine.state'], 'starting');
+  assert.deepEqual(calls, [['engine/new-match', 'POST']]);
 });

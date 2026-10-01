@@ -36,6 +36,28 @@ export function install(session, target = globalThis) {
       reconnecting: session.screen === 'reconnecting',
       step: session.stepShown,
     }),
+    /// The Resume a saved match screen: whether it shows, the save's version and why it
+    /// cannot continue, and whether an engine was started for it.
+    resume: () => {
+      const info = session.resumeInfo;
+      return {
+        shown: session.view === 'resume',
+        kind: info?.kind ?? null,
+        saved_version: info?.['saved.version'] ?? null,
+        saved_tick: info?.['saved.tick'] ?? null,
+        reason: info?.reason ?? null,
+        engine_pid: session.status ? (session.status['engine.pid'] ?? null) : null,
+      };
+    },
+    /// The engine that plays the match, the launcher's own version, the version the hello
+    /// named, and the loading steps' words.
+    engineVersion: () => ({
+      engine: session.status?.['engine.version'] ?? null,
+      launcher: session.status?.['launcher.version'] ?? null,
+      hello: session.engineVersion,
+      resumed_from: session.status?.['match.resumed_from'] ?? null,
+      steps: session.steps.map((s) => s.label),
+    }),
     events: () => session.match.events.map((e) => ({ ...e })),
     view: () => session.view,
     /// The report on show or last shown, as the former page's hook named it; `open` is true

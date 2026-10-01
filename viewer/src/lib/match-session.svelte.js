@@ -37,7 +37,7 @@ import { KIND, MatchState } from './match-state.js';
 import { Pitch, readTokens } from './pitch.js';
 import { Playback } from './playback.js';
 import { formationName, kickOffSheet, rosterSheet, rulePackRows, squadSheet } from './prematch.js';
-import { backoff, clockAt, loadingSteps, panelModel } from './recovery.js';
+import { backoff, clockAt, loadingSteps, panelModel, stepOptions } from './recovery.js';
 import { FrameStore, frameText, readReplay, writeReplay } from './replay-file.js';
 import { ReportClock, reportModel } from './report.js';
 import { Scheduler } from './schedule.js';
@@ -125,6 +125,9 @@ export class MatchSession {
   saving = $state(false);
   /// The hello of the match shown, as the Pre-match line-ups and the Touchline read it.
   hello = $state.raw(null);
+  /// The launcher's `resume` block while the Resume a saved match screen shows why a save
+  /// cannot continue; null otherwise.
+  resumeInfo = $state.raw(null);
   /// The Touchline strip's play facts at the rendered tick: whether play is stopped, the
   /// whole seconds to the next known stoppage (or null), and each team's substitutions and
   /// windows used.
@@ -192,6 +195,9 @@ export class MatchSession {
     this.goalShownAtTick = null;
     this.bannerTimer = null;
     this.stepShown = 0;
+    /// What the loading steps add for a saved match: the engine version when another
+    /// release's engine plays it, and the tick it continues from.
+    this.stepOpts = { version: null, resumeTick: null };
     this.teamNames = new Map();
     this.halfTimes = 0;
     this.dugout = new Dugout({
@@ -242,6 +248,9 @@ export class MatchSession {
   /// The one next action.
   get action() {
     if (this.screen === 'error') {
+      if (this.panel?.actions.includes('new-match')) {
+        return 'New match';
+      }
       if (this.panel?.actions.includes('restart')) {
         return 'Restart';
       }
@@ -305,12 +314,19 @@ export class MatchSession {
       fetcher: this.fetcher,
     });
     this.status = engine;
+    this.useStepOptions(engine);
     if (engine?.['engine.state'] === 'running' && engine['socket.port']) {
       this.setStep(1);
       this.connect(engine);
       return;
     }
     this.showPanel(panelModel(engine) ?? panelModel(null));
+  }
+
+  /// Names the engine version and the resume point in the loading steps, as `status` says.
+  useStepOptions(status) {
+    this.stepOpts = stepOptions(status);
+    this.steps = loadingSteps(this.stepShown, this.stepOpts);
   }
 
   /// A view's pitch canvas, once its screen has drawn it: `match` (the match screen) or
@@ -379,7 +395,7 @@ export class MatchSession {
       return;
     }
     this.stepShown = current;
-    this.steps = loadingSteps(current);
+    this.steps = loadingSteps(current, this.stepOpts);
   }
 
   connect(status) {
@@ -442,6 +458,15 @@ export class MatchSession {
     // Before kick-off the manager starts on the Tactics screen when there is a lineup to
     // pick; a stored match opens on the match.
     this.view = this.dugout.preMatch ? 'tactics' : 'match';
+    // A saved match the launcher resumed is already under way: the engine streams at once,
+    // with no lineup to pick and no kick-off, so the page opens on the live match.
+    if (!stored && this.status?.['match.resumed_from'] != null) {
+      this.dugout.resumeLive();
+      this.kickedOff = true;
+      this.setPlaying(true);
+      this.screen = 'live';
+      this.view = 'match';
+    }
   }
 
   /// The kick-off. With a lineup to pick, the dugout sends it and the match starts on the
@@ -811,6 +836,9 @@ export class MatchSession {
       case 'first-run':
         return pickReplay();
       case 'error':
+        if (this.panel?.actions.includes('new-match')) {
+          return this.newMatchEngine();
+        }
         if (this.panel?.actions.includes('restart')) {
           return this.restartEngine();
         }
@@ -914,6 +942,11 @@ export class MatchSession {
     this.panel = model;
     this.busy = false;
     this.screen = model.kind === 'first-run' ? 'first-run' : 'error';
+    // A save no shipped engine can finish has its own screen.
+    this.resumeInfo = model.kind === 'resume' ? (this.status?.resume ?? null) : null;
+    if (model.kind === 'resume') {
+      this.view = 'resume';
+    }
     if (model.kind !== 'first-run') {
       this.setPlaying(false);
     }
@@ -991,6 +1024,30 @@ export class MatchSession {
       this.setPlaying(true);
       this.engineWord = 'Engine reconnecting';
       this.setNotice('reconnect', 'Restarting from the last stoppage.');
+      this.connect(status);
+      return;
+    }
+    this.showPanel(panelModel(status) ?? panelModel(null));
+  }
+
+  /// After a save that could not resume: a fresh match with the launch's seed and teams.
+  async newMatchEngine() {
+    this.busy = true;
+    await launcher.newMatch(this.fetcher);
+    const status = await launcher.poll((s) => !s || s['engine.state'] !== 'starting', {
+      timeoutMs: 60_000,
+      fetcher: this.fetcher,
+    });
+    this.status = status;
+    if (status?.['engine.state'] === 'running' && status['socket.port']) {
+      this.panel = null;
+      this.resumeInfo = null;
+      this.busy = false;
+      this.screen = 'loading';
+      this.view = 'match';
+      this.stepShown = -1;
+      this.useStepOptions(status);
+      this.setStep(1);
       this.connect(status);
       return;
     }
