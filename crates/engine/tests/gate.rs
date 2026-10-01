@@ -598,11 +598,12 @@ fn committed() -> GoldenFile {
     golden::load(&path, &gate::fixtures()).expect("the committed golden file loads")
 }
 
-/// The one recorded result change: exactly one `regenerate` entry, entry 2, whose reason
-/// names the maths change and the keyed split, whose candidate is a clean commit, and whose
-/// band result holds a verdict for each band of `content/realism-bands.json`.
+/// The recorded result changes: entry 2, whose reason names the maths change and the keyed
+/// split, and entry 3, whose reason names the restart position check and the fixes it forced.
+/// Each candidate is a clean commit, and each band result holds a verdict for each band of
+/// `content/realism-bands.json`.
 #[test]
-fn the_one_result_change_is_one_regenerate_entry_with_its_band_result() {
+fn each_result_change_is_one_regenerate_entry_with_its_band_result() {
     let file = committed();
     let regenerations: Vec<usize> = file
         .ledger
@@ -611,13 +612,32 @@ fn the_one_result_change_is_one_regenerate_entry_with_its_band_result() {
         .filter(|(_, e)| e.kind == golden::EntryKind::Regenerate)
         .map(|(i, _)| i)
         .collect();
-    assert_eq!(regenerations, [2], "exactly one regenerate entry, entry 2");
-    let entry = &file.ledger[2];
-    assert!(
-        entry.reason.contains("libm") && entry.reason.contains("keyed"),
-        "the reason names the maths change and the keyed split: {}",
-        entry.reason
+    assert_eq!(
+        regenerations,
+        [2, 3],
+        "two regenerate entries, entries 2 and 3"
     );
+    let named: [(usize, &[&str]); 2] = [
+        (2, &["libm", "keyed"]),
+        (3, &["restart position check", "Law 8", "goal line"]),
+    ];
+    for (index, words) in named {
+        let entry = &file.ledger[index];
+        for word in words {
+            assert!(
+                entry.reason.contains(word),
+                "entry {index}'s reason names {word}: {}",
+                entry.reason
+            );
+        }
+        band_result_holds_every_band(entry, index);
+    }
+}
+
+/// The regenerate entry `index` of the committed ledger: the portable set, the current
+/// stream scheme, a clean candidate, and a band run of the candidate at
+/// `gate/bands/ledger-<index>.json` with a verdict for each band of the content file.
+fn band_result_holds_every_band(entry: &golden::LedgerEntry, index: usize) {
     assert_eq!(entry.machine, golden::PORTABLE);
     assert_eq!(entry.scheme, engine::rng::STREAM_SCHEME);
     let candidate = entry.candidate.as_deref().unwrap();
@@ -626,7 +646,7 @@ fn the_one_result_change_is_one_regenerate_entry_with_its_band_result() {
         "a clean candidate commit: {candidate}"
     );
     let band_path = entry.band_result.as_deref().unwrap();
-    assert_eq!(band_path, "gate/bands/ledger-2.json");
+    assert_eq!(band_path, format!("gate/bands/ledger-{index}.json"));
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let read = |p: &str| -> serde_json::Value {

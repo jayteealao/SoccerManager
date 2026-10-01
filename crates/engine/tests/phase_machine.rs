@@ -426,7 +426,7 @@ fn restarts_taken(log: &[Step]) -> u32 {
         .count() as u32
 }
 
-/// AC-27: in debug mode every restart of the batch is judged and every position stands
+/// In debug mode every restart of the batch is judged and every position stands
 /// where the Laws ask. The count of judged restarts equals the restarts the phase machine
 /// recorded, and the restart events of a match equal the judged restarts plus the dead balls
 /// a period end closed before their restart.
@@ -482,7 +482,7 @@ fn in_debug_mode_every_restart_passes_the_position_check() {
     }
 }
 
-/// AC-27, the induced fault: a penalty with a defender planted inside the penalty area is
+/// The induced fault: a penalty with a defender planted inside the penalty area is
 /// taken through the engine's own restart path, and the check fails loudly with the phase,
 /// the player, his position, and the rule.
 #[test]
@@ -528,4 +528,30 @@ fn an_illegal_position_at_a_restart_fails_naming_the_phase_the_player_and_the_po
         message.contains("Law 14: inside the penalty area"),
         "{message}"
     );
+}
+
+/// A sweep of the enforced check over many 90-minute knockout matches on the default
+/// ground: each match that stops on a restart position fault prints the fault. The seeds
+/// run from 1000 to 1000 plus `SWEEP` (default 200). Run with `--release -- --ignored
+/// --nocapture`.
+#[test]
+#[ignore = "a sweep: prints every match the restart position check stops"]
+fn restart_position_sweep() {
+    let n: u64 = std::env::var("SWEEP").map_or(200, |v| v.parse().unwrap());
+    let stopped = common::run_many(1000..=1000 + n - 1, |seed| {
+        let config = full_match(seed, 105.0, 68.0).with_knockout();
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+            play(Simulation::new(config).unwrap()).restarts_checked()
+        }))
+        .err()
+        .map(|e| {
+            let message = e.downcast_ref::<String>().cloned().unwrap_or_default();
+            format!("seed {seed}: {message}")
+        })
+    });
+    let stopped: Vec<String> = stopped.into_iter().flatten().collect();
+    for line in &stopped {
+        println!("{line}");
+    }
+    println!("{} of {n} matches stopped by the check", stopped.len());
 }

@@ -651,12 +651,16 @@ fn joined_fields_sha(path: &Path) -> String {
 
 #[test]
 fn state_digests_give_one_line_per_tick_and_the_same_file_twice() {
+    // A minute of seed 42 recorded by this build: a file recorded by an older build plays on
+    // the build that recorded it, and this build's results differ from it.
+    let recorded = record("digests-rec", 1);
+    let file = recorded.file.clone();
     let dir = temp("digests");
     let (a, b) = (dir.join("a.digests"), dir.join("b.digests"));
     for path in [&a, &b] {
         let out = resimulate(
             &dir,
-            &committed_v4(),
+            &file,
             &["--compare", "--state-digests", path.to_str().unwrap()],
         );
         assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
@@ -686,11 +690,15 @@ fn state_digests_give_one_line_per_tick_and_the_same_file_twice() {
 
 #[test]
 fn a_tick_digest_is_the_sha256_of_that_ticks_fields_and_at_tick_stops_there() {
+    // A minute of seed 42 recorded by this build: a file recorded by an older build plays on
+    // the build that recorded it, and this build's results differ from it.
+    let recorded = record("fields-rec", 1);
+    let file = recorded.file.clone();
     let dir = temp("fields");
     let digests = dir.join("m.digests");
     let out = resimulate(
         &dir,
-        &committed_v4(),
+        &file,
         &["--compare", "--state-digests", digests.to_str().unwrap()],
     );
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
@@ -700,7 +708,7 @@ fn a_tick_digest_is_the_sha256_of_that_ticks_fields_and_at_tick_stops_there() {
         let at = tick.to_string();
         let out = resimulate(
             &dir,
-            &committed_v4(),
+            &file,
             &[
                 "--compare",
                 "--state-fields",
@@ -722,7 +730,7 @@ fn a_tick_digest_is_the_sha256_of_that_ticks_fields_and_at_tick_stops_there() {
     let fields = dir.join("late.json");
     let out = resimulate(
         &dir,
-        &committed_v4(),
+        &file,
         &[
             "--compare",
             "--state-fields",
@@ -806,12 +814,16 @@ fn the_debug_trace_of_a_resimulation_counts_every_draw_and_stops_at_the_tick() {
 
 #[test]
 fn a_resimulation_stopped_at_a_tick_writes_no_full_time_record_to_its_trace() {
+    // A minute of seed 42 recorded by this build: a file recorded by an older build plays on
+    // the build that recorded it, and this build's results differ from it.
+    let recorded = record("stopped-trace-rec", 1);
+    let file = recorded.file.clone();
     let dir = temp("stopped-trace");
     let (stopped, whole) = (dir.join("stopped.jsonl"), dir.join("whole.jsonl"));
     let fields = dir.join("f.json");
     let out = resimulate(
         &dir,
-        &committed_v4(),
+        &file,
         &[
             "--compare",
             "--debug-trace",
@@ -825,7 +837,7 @@ fn a_resimulation_stopped_at_a_tick_writes_no_full_time_record_to_its_trace() {
     assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
     let out = resimulate(
         &dir,
-        &committed_v4(),
+        &file,
         &["--compare", "--debug-trace", whole.to_str().unwrap()],
     );
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
