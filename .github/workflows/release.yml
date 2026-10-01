@@ -82,6 +82,8 @@ jobs:
         run: cargo fetch --locked
       - name: Engine tests (ignored slow tests excluded)
         run: cargo test --workspace --locked
+      - name: The fast-model fit matches the golden results
+        run: cargo run --locked -p engine-cli -- fast-model stale
       - name: Fetch the previous release's tag
         run: |
           echo "SM_PREVIOUS_CACHE=$RUNNER_TEMP/previous-engine" >> "$GITHUB_ENV"

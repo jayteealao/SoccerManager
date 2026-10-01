@@ -263,3 +263,5 @@ jobs:
         run: ./target/release/engine-cli guard --base "$BASE" --head "$HEAD"
       - name: Replay gate
         run: ./target/release/engine-cli gate
+      - name: The fast-model fit matches the golden results
+        run: ./target/release/engine-cli fast-model stale
