@@ -23,6 +23,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
 | `realism-bands.json` | 2 | The accepted realism bands the calibration run checks: four from version 1 and eleven from real-match data. They are acceptance criteria, never tuning values |
+| `fast-model.json` | 1 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
 
 Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`.
 
@@ -256,6 +257,26 @@ Rules:
 - When a flag state differs from the file's, the list of flags that are on enters the content hash. A snapshot of a flagged match does not resume on content without the flag.
 
 Every statistics record carries `tuning.flags_on`, the flags that were on. To compare a candidate and remove the loser, follow [the modding how-to](../how-to/modding.md#compare-two-models-with-a-flag).
+
+## fast-model.json
+
+The fit of the fast model, written by `engine-cli fast-model fit` (see [the command-line reference](cli.md#fast-model)). The engine never reads it to play a match, and the content hash does not include it, so a new fit changes no save, replay or gate hash. The release ships it with the rest of the content folder.
+
+| Field | Holds |
+|---|---|
+| `schema_version` | 1 |
+| `model` | The module the fit is for: `fitted-scores@1` |
+| `engine_id` | The engine id of the results the fit came from: `golden-<ledger index>-<build>-<digest>` |
+| `engine` | The id's parts: `id`, `ledger_index`, `build` and `digest` |
+| `fitted_by` | The `engine_version` and `build` of the program that fitted it |
+| `fit.params` | The eight parameters: `base`, `home`, `attack`, `curve`, `defence`, `dispersion` (the shape of the match factor both scores share), `rho` and `draw` |
+| `fit.minute_shares` | 90 shares, one per minute of regulation time, summing to 1 |
+| `batch` | The fit batch: `league_seed`, the strength `levels`, `matches_per_pairing`, `minutes` and the engine `seed` |
+| `check` | The check it passed: the engine `seed`, the fast-model `draws` per match, `z`, `share_floor`, `mean_floor`, the number of `figures`, how many `failed`, and `pass` |
+
+CI fails when `engine_id` is not the id of `gate/golden.json`: a Rust test runs in every test job, and `engine-cli fast-model stale` runs in the gate job and before every release.
+
+The slot file's `engine.fast-model` entry picks the module: `{"module": "fitted-scores", "version": 1}`, or `{"module": "off"}`, which refuses to play. The slot never enters the content hash. Only the `fast-model` command reaches the module; a test fails the build when anything else does.
 
 ## Position codes
 

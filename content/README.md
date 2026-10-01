@@ -1,6 +1,6 @@
 # Content files
 
-This folder holds the content files the engine reads: the attribute schema, the tuning constants, the rule pack, the tactics file, the commentary lines, the realism bands, and the two default clubs.
+This folder holds the content files the engine reads: the attribute schema, the tuning constants, the rule pack, the tactics file, the commentary lines, the realism bands, the two default clubs, and the fast model's fit.
 
 Every field of every file, with its unit, its default, and its bound, is in [the data-file reference](../docs/reference/data-files.md). To change a value, follow [the modding how-to](../docs/how-to/modding.md).
 
@@ -45,6 +45,10 @@ Version 1 set four bands: goals per match 2.4 to 3.2, shots per team 8 to 16, po
 Shares are fractions from 0 to 1. Shots on target and goals per expected goal are pooled: the suite's total over the suite's total. Yellow cards count a second yellow, as the engine does. The `.scratch/out/` files are the local outputs behind the realism design document; they are not in the repository.
 
 The formations suite plays every pairing of the formations in `tactics.json`, a formation against itself included: ten formations give 55 pairings. Each pairing is checked against `goals_per_match`, `ten_plus_goals_share`, and `goalless_share`.
+
+## The fast model's fit
+
+`fast-model.json` is the fast model fitted from full-engine results: a results model that gives a final score and the goal events from the two teams at kick-off. It records the engine id of the results it came from, the id of `gate/golden.json`, and CI fails when the two differ. A change that regenerates the golden file must refit in the same change: run `engine-cli fast-model fit` from the repository root (about 25 minutes on 8 cores); it writes this file only when the fast model equals the full engine on its check. The engine never reads the file to play a match, so a refit changes no save, replay or gate hash. Every field is in [the data-file reference](../docs/reference/data-files.md#fast-modeljson).
 
 ## Formations
 

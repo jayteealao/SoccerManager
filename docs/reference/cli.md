@@ -380,6 +380,50 @@ Output: one line per commit on standard output, `<short commit> ok`, or one line
 
 Exit codes: 0 when every commit passes, or no commit in the range changes the file; 1 when a flag is refused, git cannot run, or a revision cannot be read; 2 when a commit breaks a rule.
 
+## fast-model
+
+Fit the fast model from full-engine results, check it against the full engine, or refuse a stale fit. The fast model is a results model: from the two teams as they kick off it gives a final score and the goal events of a 90-minute match without playing a tick. Nothing in the game plays it yet; these commands are its only users. Run the command from the repository root, where `gate/golden.json` is.
+
+```text
+engine-cli fast-model <fit|check|stale> [OPTIONS]
+```
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `fit`, `check`, `stale` | action | required | What to do; see below. |
+| `--fit` | path | `fast-model.json` in the content folder | The fit file `check` and `stale` read. |
+| `--out` | path | `fast-model.json` in the content folder | Where `fit` writes the fit file when the check passes. |
+| `--golden` | path | `gate/golden.json` | The golden file whose results the engine id names. |
+| `--matches` | 1 or more | 1000 | `fit` only: full-engine matches per strength pairing in each batch. `check` reads the count from the fit file. |
+| `--draws` | 1 or more | 20 | `fit` only: fast-model matches for each check-batch match. `check` reads the count from the fit file. |
+| `--minutes` | 1 to 200 | 90 | `fit` only: minutes of play per full-engine match. A fit for the game uses 90; a shorter match is for tests. |
+| `--jobs` | 1 or more | logical cores | Threads that play the full-engine matches. |
+| `--gate-fixture` | fixture id | all 22 | Before `fit` and `check` play, replay only this gate fixture; repeatable. |
+| `--report` | folder | none | Write `report.json` with every figure, its tolerance and the fit into this folder (`fit` and `check`). |
+
+The actions:
+
+- `fit` reads the engine id from the golden file and replays the gate fixtures; a fixture whose hashes differ stops the command, so the id the fit records is the id of the engine that played it. It then plays the fit batch and the check batch on the full engine, fits the model to the fit batch, and compares the model with the check batch. When every figure is within its tolerance it writes the fit file.
+- `check` refuses a stale fit file, replays the gate fixtures, plays the check batch again with the fit file's batch size, and compares. The batches are fixed, so the same engine gives the same figures.
+- `stale` compares the fit file's engine id with the golden file's. It plays no match. CI runs it on every pull request and before every release.
+
+**The engine id.** `golden-<ledger index>-<build>-<digest>`: the golden file's last ledger entry, the commit whose code made its hashes, and the first 12 hexadecimal characters of SHA-256 over the portable hash set's fixture ids and final hashes. The golden file changes only through a regeneration with a ledger entry, so the id changes exactly when the engine's results change. After a regeneration, run `fast-model fit` in the same change.
+
+**The batches.** Three strength levels, every attribute times 1.00, 1.075 and 1.15, give nine ordered pairings (home level, then away level). Match `k` of each pairing plays the clubs of calibration fixture `k` from the leagues generated with seed 1, each boosted by its level. The fit batch uses engine seed 1 and the check batch engine seed 2: the same clubs, other matches. With the defaults the two batches play 18,000 full matches, about 25 minutes on 8 cores.
+
+**The model.** Each side's mean goals are `exp(base + home + attack × a + curve × a² + defence × e)`: `a` is the side's attack, the mean attribute of its six most advanced starters, and `e` the other side's defence, the mean attribute of its other five starters, each as (mean − 50) / 10; `home` applies to the home side only. The two scores share one match factor, a gamma with shape `dispersion` and mean 1 that multiplies both means, so they rise and fall together as the full engine's do; each side alone is negative binomial with that dispersion. A Dixon–Coles factor `rho` adjusts the scores 0–0, 1–0, 0–1 and 1–1, and every draw is weighted by `1 + draw`. A goal's minute is drawn from 90 shares fitted from the full engine's goals. The model plays regulation time only.
+
+**The check.** For each check-batch match the fast model plays `--draws` matches from the same kick-off. The report compares 49 figures, full engine against fast model:
+
+- per pairing (45): the home win, draw and away win shares, and the home and away goals per match;
+- season (4): goals per match, the goalless share and the share of matches with ten or more goals over the three equal pairings, and the stronger side's win rate over 1.150 v 1.000 in both orders.
+
+A figure passes when the difference is at most `max(floor, 3.7 × √(se_full² + se_fast²))`, each standard error from that side's own results (`√(p(1 − p)/n)` for a share, `s/√n` for a mean). The floor is 0.01 for a share and 0.03 goals for a mean. At z = 3.7, a fast model equal to the full engine fails one of the 49 figures by chance in about one fit in a hundred. The report prints each season figure's realism band beside it, for information only: the check asks the fast model to equal the full engine, not to sit inside the bands.
+
+Output: the parameters, then one line per figure with the full-engine value, the fast-model value, the difference, the tolerance, `pass` or `FAIL`, and for a season figure its band; the last line counts the figures outside their tolerance. `stale` prints `the fast-model fit <file> matches the golden results: <id>`, or fails with `the fast-model fit is stale: the fit records <fit id>, the golden results are <golden id>; run engine-cli fast-model fit`.
+
+Exit codes: 0 when the fit is written, the check passes, or the fit matches the golden results; 1 when a flag is refused, a file cannot be read or written, a gate fixture differs, or the fit is stale; 2 when a figure is outside its tolerance (`fit` then writes no fit file).
+
 ## Debug trace file
 
 `simulate --debug-trace <file>` writes the debug trace of one match as JSON Lines. Debug mode is switched on when the match is built, before the opening kick-off; a build without the `debug-trace` cargo feature (default on) refuses the flag.
