@@ -273,6 +273,7 @@ Every statistics record carries `tuning.flags_on`, the flags that were on. To co
 | stoppages | one entry per kind | see file | every kind exactly once |
 | added_time.per_kind | seconds each stoppage of a kind adds | see file | 0 to 600; every kind present |
 | added_time.card_s | seconds each card adds | 15 | 0 to 120 |
+| added_time.video_review_s | seconds each video review adds; optional, and the shipped file leaves it out. No match event counts a review yet, so the price adds no time | 60 | 0 to 600 |
 | added_time.variance_s | the most seconds the seeded variance adds or removes | 30 | 0 to 300 |
 | added_time.min_s | the least added time of a half | 60 | 0 to 900 |
 | added_time.max_s | the most added time of a half | 900 | `min_s` to 1800 |
