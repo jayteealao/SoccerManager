@@ -1,4 +1,4 @@
-// Shared test helpers for the ported logic tests. The fixtures stay in `web/tests/data/`,
+// Shared test helpers for the ported logic tests. The fixtures live in `viewer/tests/data/`,
 // which a Rust test reads too.
 
 import fs from 'node:fs';

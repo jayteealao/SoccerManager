@@ -18,7 +18,7 @@
 // The page saves format 3: it receives frames only. It reads both formats, and a format-4
 // file read and written back is the same file byte for byte. A file of a later format is
 // lifted to the newest format through the same steps as the engine's reader
-// (`web/tests/data/replay-steps.json` lists both); version-3 files are never lifted.
+// (`viewer/tests/data/replay-steps.json` lists both); version-3 files are never lifted.
 
 /// The protocol version of the frames this page reads.
 export const PROTOCOL_VERSION = 3;

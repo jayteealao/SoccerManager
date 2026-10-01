@@ -101,26 +101,26 @@ impl Status for Fixed {
 /// Environment variable that names the page folder.
 pub const WEB_DIR_ENV: &str = "SM_WEB_DIR";
 
+/// The built viewer in a repository checkout, relative to the working folder: `npm run build`
+/// in `viewer/` writes it.
+pub const BUILT_VIEWER: &str = "viewer/dist";
+
 /// Finds the page folder the way the engine finds its content folder. When `flag` is given,
 /// only that folder is used. Otherwise, when `SM_WEB_DIR` is set, only that folder is used.
-/// Only when neither is set does the search fall through to `./web`, then the `web` folder
-/// beside the running binary, which is where an installed game keeps it. A folder counts
-/// only when it holds `index.html`; the refusal lists every folder tried.
+/// Only when neither is set does the search fall through to the default folders (see
+/// [`default_web_dirs`]). A folder counts only when it holds `index.html`; the refusal lists
+/// every folder tried.
 pub fn resolve_web_dir(flag: Option<&Path>) -> anyhow::Result<PathBuf> {
     let tried: Vec<PathBuf> = if let Some(dir) = flag {
         vec![dir.to_path_buf()]
     } else if let Some(dir) = std::env::var_os(WEB_DIR_ENV).filter(|d| !d.is_empty()) {
         vec![PathBuf::from(dir)]
     } else {
-        let mut tried = vec![PathBuf::from("web")];
         // nosemgrep: rust.lang.security.current-exe.current-exe -- only finds the page folder next to the program; not a security decision
-        if let Some(dir) = std::env::current_exe()
+        let beside = std::env::current_exe()
             .ok()
-            .and_then(|exe| exe.parent().map(Path::to_path_buf))
-        {
-            tried.push(dir.join("web"));
-        }
-        tried
+            .and_then(|exe| exe.parent().map(Path::to_path_buf));
+        default_web_dirs(beside.as_deref())
     };
     if let Some(found) = tried.iter().find(|dir| dir.join("index.html").is_file()) {
         return Ok(found.clone());
@@ -130,6 +130,17 @@ pub fn resolve_web_dir(flag: Option<&Path>) -> anyhow::Result<PathBuf> {
         "cannot read page folder (tried {}): no folder holds index.html",
         list.join(", ")
     )
+}
+
+/// The default page folders, in the order they are tried: the built viewer in a repository
+/// checkout (`viewer/dist` under the working folder), then the `web` folder beside the
+/// program, which is where an installed game keeps the same build.
+pub fn default_web_dirs(beside_program: Option<&Path>) -> Vec<PathBuf> {
+    let mut dirs = vec![PathBuf::from(BUILT_VIEWER)];
+    if let Some(dir) = beside_program {
+        dirs.push(dir.join("web"));
+    }
+    dirs
 }
 
 /// Serves `dir` on a loopback port the operating system chooses. `status` answers
@@ -498,6 +509,16 @@ mod tests {
             assert!(!host_allowed(Some(host), 8123), "{host} must be refused");
         }
         assert!(!host_allowed(None, 8123));
+    }
+
+    #[test]
+    fn the_built_viewer_is_tried_before_the_folder_beside_the_program() {
+        let beside = Path::new("install");
+        assert_eq!(
+            default_web_dirs(Some(beside)),
+            vec![PathBuf::from("viewer/dist"), beside.join("web")]
+        );
+        assert_eq!(default_web_dirs(None), vec![PathBuf::from("viewer/dist")]);
     }
 
     #[test]

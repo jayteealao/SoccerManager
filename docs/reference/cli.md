@@ -131,7 +131,7 @@ Serve the viewer page and run the engine as a separate process. Restart the engi
 | `--open` | none | off | Open the page in the default browser. When the browser does not open, `launch` logs `launch.open_failed` and keeps running. |
 | `--engine` | file | `SM_ENGINE_PATH`, then this program | The engine program to run. When the file does not exist, the page shows the path and how to build the engine. |
 
-When `--web` is absent, `launch` uses `SM_WEB_DIR`. When `SM_WEB_DIR` is not set, `launch` uses `./web`, then the `web` folder beside the binary. A folder counts only when it holds `index.html`. An installed game keeps `content` and `web` beside the binary, so it starts with no flag.
+When `--web` is absent, `launch` uses `SM_WEB_DIR`. When `SM_WEB_DIR` is not set, `launch` uses `./viewer/dist` (the built viewer in a repository checkout, after `npm --prefix viewer run build`), then the `web` folder beside the binary (an installed game). A folder counts only when it holds `index.html`. An installed game keeps `content` and `web` beside the binary, so it starts with no flag.
 
 Output: the page address. The page reads the engine state from `engine.json` at the same address.
 

@@ -28,7 +28,7 @@ Each pull request runs these checks. Run the fast ones before you push:
 | Format | `cargo fmt --all --check` |
 | Lint | `cargo clippy --workspace --all-targets --locked -- -D warnings` |
 | Engine tests | `cargo test --workspace --locked` |
-| Page tests | `node --test "web/tests/*.test.mjs"` |
+| Viewer tests | `npm --prefix viewer test` |
 | Coverage | `cargo llvm-cov --workspace --locked --fail-under-lines 78` |
 | Licences and advisories | `cargo deny check` |
 

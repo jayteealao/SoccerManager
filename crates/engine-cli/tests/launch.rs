@@ -36,8 +36,21 @@ fn temp(name: &str) -> PathBuf {
     dir
 }
 
-fn web() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web")
+/// A page folder shaped like the built viewer, written inside `dir`, so the tests need no
+/// viewer build: an `index.html` that loads one module.
+fn web(dir: &Path) -> PathBuf {
+    let web = dir.join("page");
+    std::fs::create_dir_all(web.join("assets")).expect("the page folder is created");
+    std::fs::write(
+        web.join("index.html"),
+        "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    \
+         <script type=\"module\" src=\"/assets/index-test.js\"></script>\n  </head>\n  \
+         <body><div id=\"app\"></div></body>\n</html>\n",
+    )
+    .expect("the page is written");
+    std::fs::write(web.join("assets").join("index-test.js"), "export {};\n")
+        .expect("the module is written");
+    web
 }
 
 /// Starts `engine-cli launch` with `args` and reads the page address it prints.
@@ -51,7 +64,7 @@ fn launch(dir: &Path, args: &[&str]) -> Launched {
         )
         .arg("launch")
         .arg("--web")
-        .arg(web())
+        .arg(web(dir))
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

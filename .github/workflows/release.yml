@@ -80,13 +80,17 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
       - name: Fetch every crate
         run: cargo fetch --locked
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: e2e/package.json
       - name: Engine tests (ignored slow tests excluded)
         run: cargo test --workspace --locked
-      - name: Page tests
-        run: node --test "web/tests/*.test.mjs"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: viewer/package.json
+      - name: Install the viewer
+        working-directory: viewer
+        run: npm ci
+      - name: Viewer tests
+        working-directory: viewer
+        run: npx vitest run
 
   build-windows:
     needs: version-gate

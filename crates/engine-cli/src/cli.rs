@@ -362,9 +362,10 @@ pub struct LaunchOpts {
     #[arg(
         long,
         value_name = "DIR",
-        long_help = "Folder holding the viewer page; default SM_WEB_DIR, ./web, then web/.\n\n\
+        long_help = "Folder holding the viewer page; default SM_WEB_DIR, viewer/dist, web/.\n\n\
                      Without the flag, SM_WEB_DIR is used alone when it is set.\n\
-                     Otherwise ./web, then the web folder beside this program.\n\
+                     Otherwise ./viewer/dist (the built viewer in a checkout),\n\
+                     then the web folder beside this program (an installed game).\n\
                      A folder counts only when it holds index.html."
     )]
     pub web: Option<PathBuf>,

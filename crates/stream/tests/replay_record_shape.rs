@@ -1,6 +1,6 @@
 //! The record entry of a format-4 file, checked against the lists the viewer's reader is
-//! checked against too: `web/tests/data/record-paths.json` names every leaf of a full record,
-//! and `web/tests/data/damaged-records.json` lists edits to the committed file's record that
+//! checked against too: `viewer/tests/data/record-paths.json` names every leaf of a full record,
+//! and `viewer/tests/data/damaged-records.json` lists edits to the committed file's record that
 //! both readers must refuse. A field added to or removed from the record types fails here
 //! until the list is updated, and the viewer's test then fails until its reader follows.
 
@@ -16,7 +16,7 @@ use stream::{
 
 fn data(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../web/tests/data")
+        .join("../../viewer/tests/data")
         .join(name)
 }
 
@@ -151,7 +151,7 @@ fn the_record_types_serialise_to_exactly_the_listed_leaves() {
     );
     assert_eq!(
         found, listed,
-        "the record's leaves differ from web/tests/data/record-paths.json: update the list \
+        "the record's leaves differ from viewer/tests/data/record-paths.json: update the list \
          and the viewer's reader together"
     );
 }

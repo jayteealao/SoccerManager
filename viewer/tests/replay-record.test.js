@@ -11,7 +11,7 @@ import { test } from 'vitest';
 import { matchedRecord, readReplay, requireRecord } from '../src/lib/replay-file.js';
 import { REPO_ROOT } from './helpers.js';
 
-const data = (name) => path.join(REPO_ROOT, 'web/tests/data', name);
+const data = (name) => path.join(REPO_ROOT, 'viewer/tests/data', name);
 const load = (name) => JSON.parse(fs.readFileSync(data(name), 'utf8'));
 const fixture = () => new Uint8Array(fs.readFileSync(data('one-minute-v4.smfx')));
 const clone = (value) => JSON.parse(JSON.stringify(value));

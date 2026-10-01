@@ -12,7 +12,7 @@ import { REPO_ROOT } from './helpers.js';
 /// The engine's own parking spots: a Rust test in `crates/engine/src/pitch.rs` fails when
 /// this file and `parking_spot` disagree, so the viewer is tested against the engine.
 const { spots } = JSON.parse(
-  readFileSync(path.join(REPO_ROOT, 'web/tests/data/parking-spots.json'), 'utf8'),
+  readFileSync(path.join(REPO_ROOT, 'viewer/tests/data/parking-spots.json'), 'utf8'),
 );
 
 test('every one of the 22 parking spots is hidden', () => {

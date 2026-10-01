@@ -22,9 +22,9 @@ import { createHash } from 'node:crypto';
 import { REPO_ROOT, encodeDelta, encodeKeyframe } from './helpers.js';
 
 const golden = () =>
-  new Uint8Array(fs.readFileSync(path.join(REPO_ROOT, 'web/tests/data/one-minute.smfx')));
+  new Uint8Array(fs.readFileSync(path.join(REPO_ROOT, 'viewer/tests/data/one-minute.smfx')));
 const goldenV4 = () =>
-  new Uint8Array(fs.readFileSync(path.join(REPO_ROOT, 'web/tests/data/one-minute-v4.smfx')));
+  new Uint8Array(fs.readFileSync(path.join(REPO_ROOT, 'viewer/tests/data/one-minute-v4.smfx')));
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 test('the golden file reads and writes back byte for byte', async () => {

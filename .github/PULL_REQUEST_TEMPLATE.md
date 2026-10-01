@@ -13,6 +13,6 @@
 ## Checklist
 
 - [ ] `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings` pass
-- [ ] `cargo test --workspace` and `node --test "web/tests/*.test.mjs"` pass
+- [ ] `cargo test --workspace` and `npm --prefix viewer test` pass
 - [ ] Commits and the title follow Conventional Commits
 - [ ] `CHANGELOG.md` has an entry when the change reaches players

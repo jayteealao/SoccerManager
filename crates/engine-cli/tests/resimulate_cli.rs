@@ -484,7 +484,7 @@ fn comparison_mode_runs_on_another_identity_reports_both_and_leaves_the_file_as_
 #[test]
 fn a_version_three_file_is_refused_because_it_holds_no_inputs() {
     let dir = temp("ac43");
-    let legacy = repo().join("web/tests/data/one-minute.smfx");
+    let legacy = repo().join("viewer/tests/data/one-minute.smfx");
     let out = resimulate(&dir, &legacy, &[]);
     assert_eq!(out.status.code(), Some(1));
     let err = stderr(&out);
@@ -622,7 +622,7 @@ fn a_changed_tick_frame_or_log_entry_is_reported_as_a_difference() {
 
 /// The committed version-4 replay file: one minute of seed 42, 3,000 tick frames.
 fn committed_v4() -> PathBuf {
-    repo().join("web/tests/data/one-minute-v4.smfx")
+    repo().join("viewer/tests/data/one-minute-v4.smfx")
 }
 
 /// The lines of a state digest file.

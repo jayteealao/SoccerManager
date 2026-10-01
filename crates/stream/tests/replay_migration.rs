@@ -34,7 +34,7 @@ const ENTRY_INPUTS: u8 = 5;
 
 fn data(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../web/tests/data")
+        .join("../../viewer/tests/data")
         .join(name)
 }
 
@@ -493,7 +493,7 @@ fn the_committed_version_4_file_is_byte_identical_to_its_committed_form() {
     let sha = stream::record::hex(&Sha256::digest(fixture_bytes()));
     assert_eq!(
         sha, FIXTURE_SHA256,
-        "web/tests/data/one-minute-v4.smfx changed. It must never change: a new format adds \
+        "viewer/tests/data/one-minute-v4.smfx changed. It must never change: a new format adds \
          its own committed file beside it."
     );
 }

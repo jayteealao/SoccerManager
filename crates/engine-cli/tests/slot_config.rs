@@ -203,12 +203,21 @@ fn an_unknown_skin_refuses_serve() {
 /// AC-21: `launch` with an unknown skin refuses before it serves a page.
 #[test]
 fn an_unknown_skin_refuses_launch() {
-    let web = repo().join("web");
-    let web = web.to_str().unwrap();
+    // A temporary page folder: the refusal comes before any page is served.
+    let page = std::env::temp_dir().join(format!("engine-cli-slot-page-{}", std::process::id()));
+    std::fs::create_dir_all(&page).unwrap();
+    std::fs::write(
+        page.join("index.html"),
+        "<!doctype html><title>page</title>
+",
+    )
+    .unwrap();
+    let web = page.to_str().unwrap();
     let (code, stdout, stderr) = run_with(
         "skin-unknown.json",
         &["launch", "--seed", "1", "--web", web],
     );
+    let _ = std::fs::remove_dir_all(&page);
     assert_skin_refused(code, &stdout, &stderr);
 }
 

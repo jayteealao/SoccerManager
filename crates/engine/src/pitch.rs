@@ -200,7 +200,7 @@ mod tests {
     #[test]
     fn the_viewer_parking_spot_file_matches_the_engine() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../web/tests/data/parking-spots.json");
+            .join("../../viewer/tests/data/parking-spots.json");
         let text = std::fs::read_to_string(&path).expect("the shared parking-spot file");
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
         let spots = doc["spots"].as_array().unwrap();

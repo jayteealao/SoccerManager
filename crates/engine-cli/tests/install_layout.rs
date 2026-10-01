@@ -3,9 +3,11 @@
 //! the engine finds its content, both beside the program, and the engine's `hello` names
 //! the version the program prints.
 //!
-//! By default the layout is copied from the built program and the repository folders. When
-//! `SM_INSTALL_UNDER_TEST` names a folder, that folder is the layout instead, so the same
-//! check runs against an unpacked release archive.
+//! By default the layout is the built program, the repository's content folder and a small
+//! generated page folder (an `index.html` and one module), so the test needs no viewer
+//! build. When `SM_INSTALL_UNDER_TEST` names a folder, that folder is the layout instead, so
+//! the same check runs against an unpacked release archive or a staged package, and one more
+//! test checks that its `web/` is the built viewer the release carries.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
@@ -64,8 +66,22 @@ fn layout(name: &str) -> PathBuf {
     std::fs::create_dir_all(&install).unwrap();
     std::fs::copy(env!("CARGO_BIN_EXE_engine-cli"), program(&install)).unwrap();
     copy_dir(&repo().join("content"), &install.join("content"), &[]);
-    copy_dir(&repo().join("web"), &install.join("web"), &["tests"]);
+    write_page(&install.join("web"));
     install
+}
+
+/// A page folder shaped like the built viewer: an `index.html` that loads one module from
+/// `assets/`.
+fn write_page(web: &Path) {
+    std::fs::create_dir_all(web.join("assets")).unwrap();
+    std::fs::write(
+        web.join("index.html"),
+        "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    \
+         <title>Touchline</title>\n    <script type=\"module\" src=\"/assets/index-test.js\"></script>\n  \
+         </head>\n  <body><div id=\"app\"></div></body>\n</html>\n",
+    )
+    .unwrap();
+    std::fs::write(web.join("assets").join("index-test.js"), "export {};\n").unwrap();
 }
 
 /// The installed program with no path configuration, run from `cwd`.
@@ -107,12 +123,18 @@ fn kill(pid: u64) {
 
 /// One HTTP GET; the status code and the body.
 fn get(port: u16, target: &str) -> (u16, String) {
+    let (code, _, body) = get_with_headers(port, target);
+    (code, body)
+}
+
+/// One HTTP GET; the status code, the header block and the body.
+fn get_with_headers(port: u16, target: &str) -> (u16, String, String) {
     let Ok(mut socket) = TcpStream::connect(("127.0.0.1", port)) else {
-        return (0, String::new());
+        return (0, String::new(), String::new());
     };
     let request = format!("GET {target} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
     if socket.write_all(request.as_bytes()).is_err() {
-        return (0, String::new());
+        return (0, String::new(), String::new());
     }
     let mut response = Vec::new();
     let _ = socket.read_to_end(&mut response);
@@ -122,11 +144,8 @@ fn get(port: u16, target: &str) -> (u16, String) {
         .nth(1)
         .and_then(|c| c.parse().ok())
         .unwrap_or(0);
-    let body = text
-        .split_once("\r\n\r\n")
-        .map_or("", |(_, b)| b)
-        .to_string();
-    (code, body)
+    let (head, body) = text.split_once("\r\n\r\n").unwrap_or((&text, ""));
+    (code, head.to_string(), body.to_string())
 }
 
 fn status(port: u16) -> Value {
@@ -233,8 +252,8 @@ fn a_layout_without_the_page_folder_is_refused_naming_both_folders_tried() {
     assert!(out.stdout.is_empty(), "no address is printed");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stderr.contains("tried web, "),
-        "the refusal names ./web: {stderr}"
+        stderr.contains("tried viewer/dist, "),
+        "the refusal names the built viewer in a checkout: {stderr}"
     );
     assert!(
         stderr.contains(&install.join("web").display().to_string()),
@@ -242,4 +261,127 @@ fn a_layout_without_the_page_folder_is_refused_naming_both_folders_tried() {
     );
     let _ = std::fs::remove_dir_all(install.parent().unwrap());
     let _ = std::fs::remove_dir_all(&scratch);
+}
+
+/// The licence texts the release carries beside the fonts, one per typeface family.
+const LICENCES: [&str; 4] = [
+    "OFL-Saira.txt",
+    "OFL-Saira-Semi-Condensed.txt",
+    "OFL-Barlow.txt",
+    "OFL-IBM-Plex.txt",
+];
+
+/// What a packaged `web/` must be: the built viewer. Every failure is listed.
+fn packaged_page_faults(install: &Path, port: u16) -> Vec<String> {
+    let web = install.join("web");
+    let mut faults = Vec::new();
+    let index = std::fs::read_to_string(web.join("index.html")).unwrap_or_default();
+    let module = index
+        .split("<script type=\"module\"")
+        .nth(1)
+        .and_then(|rest| rest.split("src=\"").nth(1))
+        .and_then(|rest| rest.split('"').next())
+        .map(str::to_string);
+    match module {
+        Some(src) if src.trim_start_matches('/').starts_with("assets/") => {
+            let (code, head, _) =
+                get_with_headers(port, &format!("/{}", src.trim_start_matches('/')));
+            if code != 200 {
+                faults.push(format!("GET {src} answers {code}"));
+            }
+            if !head
+                .to_ascii_lowercase()
+                .contains("content-type: text/javascript")
+            {
+                faults.push(format!("{src} is not served as JavaScript: {head}"));
+            }
+        }
+        Some(src) => faults.push(format!(
+            "index.html loads its module from {src}, not assets/"
+        )),
+        None => faults.push("index.html loads no module script".to_string()),
+    }
+    for licence in LICENCES {
+        if !web.join("fonts").join(licence).is_file() {
+            faults.push(format!("web/fonts/{licence} is missing"));
+        }
+    }
+    for left_out in ["src", "tests", "node_modules", "shell-test.html"] {
+        if web.join(left_out).exists() {
+            faults.push(format!("web/{left_out} is in the package"));
+        }
+    }
+    faults
+}
+
+/// Starts the installed launcher from an unrelated folder and returns it with its port.
+fn launch(install: &Path, scratch: &Path) -> Running {
+    let (data, cwd) = (scratch.join("data"), scratch.join("elsewhere"));
+    std::fs::create_dir_all(&cwd).unwrap();
+    let mut child = installed(install, &data, &cwd)
+        .args(["launch", "--minutes", "1"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut line = String::new();
+    BufReader::new(child.stdout.take().expect("the launcher prints"))
+        .read_line(&mut line)
+        .unwrap();
+    let port: u16 = line
+        .trim()
+        .trim_start_matches("http://127.0.0.1:")
+        .trim_end_matches('/')
+        .parse()
+        .unwrap_or_else(|e| panic!("launch must print the page address, printed {line:?}: {e}"));
+    Running { child, port }
+}
+
+#[test]
+fn a_packaged_layout_carries_the_built_viewer_and_its_font_licences() {
+    let Some(dir) = std::env::var_os("SM_INSTALL_UNDER_TEST").filter(|d| !d.is_empty()) else {
+        // Only a packaged folder carries the release build.
+        return;
+    };
+    let install = PathBuf::from(dir);
+    let scratch = temp("packaged-run");
+    let running = launch(&install, &scratch);
+    let faults = packaged_page_faults(&install, running.port);
+    drop(running);
+    let _ = std::fs::remove_dir_all(&scratch);
+    assert!(
+        faults.is_empty(),
+        "the packaged web/ is not the built viewer: {faults:#?}"
+    );
+}
+
+#[test]
+fn the_packaged_check_fails_on_a_page_folder_that_is_not_the_build() {
+    if std::env::var_os("SM_INSTALL_UNDER_TEST").is_some_and(|d| !d.is_empty()) {
+        // A packaged folder is never changed by a test.
+        return;
+    }
+    // The control: a layout whose web/ holds only an index.html with no module.
+    let install = layout("not-the-build");
+    std::fs::remove_dir_all(install.join("web")).unwrap();
+    std::fs::create_dir_all(install.join("web")).unwrap();
+    std::fs::write(
+        install.join("web").join("index.html"),
+        "<!doctype html><title>x</title>\n",
+    )
+    .unwrap();
+    let scratch = temp("not-the-build-run");
+    let running = launch(&install, &scratch);
+    let faults = packaged_page_faults(&install, running.port);
+    drop(running);
+    let _ = std::fs::remove_dir_all(install.parent().unwrap());
+    let _ = std::fs::remove_dir_all(&scratch);
+    assert!(
+        faults.iter().any(|f| f.contains("no module script")),
+        "the check must fail on a page folder with no module: {faults:#?}"
+    );
+    assert!(
+        faults.iter().any(|f| f.contains("OFL-Saira.txt")),
+        "the check must fail on a page folder with no licence texts: {faults:#?}"
+    );
 }

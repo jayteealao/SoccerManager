@@ -35,7 +35,7 @@ const ENTRY_INPUTS = 5;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
-const data = (name) => path.join(REPO_ROOT, 'web/tests/data', name);
+const data = (name) => path.join(REPO_ROOT, 'viewer/tests/data', name);
 const fixture = () => new Uint8Array(fs.readFileSync(data('one-minute-v4.smfx')));
 const json = (payload) => JSON.parse(decoder.decode(payload));
 const bytesOf = (value) => encoder.encode(JSON.stringify(value));
