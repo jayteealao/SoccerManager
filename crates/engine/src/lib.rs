@@ -54,7 +54,7 @@ pub use rules::{DeadBall, Stoppage};
 pub use sim::{
     DecidedBy, EngineEvent, EngineEventKind, EventDetail, MatchConfig, Simulation, Summary,
 };
-pub use snapshot::{Snapshot, SnapshotSink};
+pub use snapshot::{Snapshot, SnapshotIdentity, SnapshotSink};
 pub use tactics::change::{
     AppliedChange, Change, ChangeId, ChangeKind, RejectReason, SubLedger, Unapplied,
 };
