@@ -143,6 +143,18 @@ try {
     $installedVersion = ((& $program --version) -split '\s+')[1]
     Add-Fact 'installed-version' "engine-cli --version: $installedVersion"
 
+    # The previous release's engine ships beside this one, with its own content, so a match
+    # that release saved finishes on its engine. The pinned version comes from the pin file
+    # build.ps1 copies beside this script; without it, any version but this one passes.
+    $previousProgram = Join-Path $installDir 'previous\engine-cli.exe'
+    $previousVersion = if (Test-Path $previousProgram) { ((& $previousProgram --version) -split '\s+')[1] } else { $null }
+    $pinFile = Join-Path $PSScriptRoot 'previous-engine.json'
+    $pinned = if (Test-Path $pinFile) { [string](Get-Content -Raw $pinFile | ConvertFrom-Json).version } else { $null }
+    $previousOk = $previousVersion -and $previousVersion -ne $installedVersion -and (-not $pinned -or $previousVersion -eq $pinned)
+    Add-Check 'previous-engine' $previousOk "previous\engine-cli.exe --version '$previousVersion', pinned '$pinned', installed '$installedVersion'"
+    $previousContent = Join-Path $installDir 'previous\content\attributes.json'
+    Add-Check 'previous-content' (Test-Path $previousContent) "previous\content\attributes.json present: $(Test-Path $previousContent)"
+
     # (d) The Start-menu shortcut: the launcher starts, runs the engine, and opens the page.
     $shortcutStart = Get-Date
     Start-Process -FilePath $shortcut

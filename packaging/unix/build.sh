@@ -1,7 +1,8 @@
 #!/bin/sh
 # Builds the Linux (or macOS) release archive: the engine, the content, the built viewer, the
-# licences, and the `soccermanager` start script, in one versioned folder. It needs Rust and
-# Node 22.12 or later with npm.
+# licences, the `soccermanager` start script, and the previous release's engine in
+# `previous/`, in one versioned folder. It needs Rust, Node 22.12 or later with npm, and git
+# with the previous release's tag fetched (the previous engine is built from it).
 #
 # Run from the repository folder:  sh packaging/unix/build.sh
 # On Windows, inside WSL:          wsl -d Ubuntu-24.04 -- sh packaging/unix/build.sh
@@ -35,6 +36,14 @@ fi
 # page, with the font licence texts, and no test page.
 (cd "$repo/viewer" && npm ci --no-audit --no-fund && npm run build:release)
 
+# The previous release's engine, built from its tag (or reused from the cache), ships beside
+# this one, so a match that release saved finishes on the engine that started it.
+previous=$(sh "$repo/packaging/unix/previous-engine.sh" | tail -n 1)
+if [ ! -x "$previous/engine-cli" ]; then
+    echo "error: the previous release's engine was not built (the script printed '$previous')" >&2
+    exit 1
+fi
+
 program="$CARGO_TARGET_DIR/release/engine-cli"
 version=$("$program" --version | awk '{ print $2 }')
 if [ -z "$version" ]; then
@@ -56,9 +65,10 @@ mkdir -p "$stage/$name"
 cp "$program" "$stage/$name/engine-cli"
 cp -R "$repo/content" "$stage/$name/content"
 cp -R "$repo/viewer/dist-release" "$stage/$name/web"
+cp -R "$previous" "$stage/$name/previous"
 cp "$repo/LICENSE-MIT" "$repo/LICENSE-APACHE" "$stage/$name/"
 cp "$repo/packaging/unix/soccermanager" "$stage/$name/soccermanager"
-chmod 755 "$stage/$name/engine-cli" "$stage/$name/soccermanager"
+chmod 755 "$stage/$name/engine-cli" "$stage/$name/soccermanager" "$stage/$name/previous/engine-cli"
 
 archive="$dist/$name.tar.gz"
 tar -czf "$archive" -C "$stage" "$name"

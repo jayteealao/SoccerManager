@@ -6,8 +6,9 @@
 //! By default the layout is the built program, the repository's content folder and a small
 //! generated page folder (an `index.html` and one module), so the test needs no viewer
 //! build. When `SM_INSTALL_UNDER_TEST` names a folder, that folder is the layout instead, so
-//! the same check runs against an unpacked release archive or a staged package, and one more
-//! test checks that its `web/` is the built viewer the release carries.
+//! the same check runs against an unpacked release archive or a staged package, and two more
+//! tests check that its `web/` is the built viewer the release carries and that the previous
+//! release's engine ships beside this one in `previous/`, with its own content.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
@@ -314,6 +315,44 @@ fn packaged_page_faults(install: &Path, port: u16) -> Vec<String> {
     faults
 }
 
+/// The previous release the package carries, from the pin the build scripts read.
+fn pinned_previous_version() -> String {
+    let pin: Value = serde_json::from_str(include_str!("../../../packaging/previous-engine.json"))
+        .expect("the pin is JSON");
+    pin["version"]
+        .as_str()
+        .expect("the pin names a version")
+        .to_string()
+}
+
+/// What a packaged `previous/` must be: the pinned release's program, which prints its
+/// version, with that release's content folder beside it. Every failure is listed.
+fn previous_engine_faults(install: &Path) -> Vec<String> {
+    let previous = install.join("previous");
+    let program = previous.join(program(install).file_name().unwrap());
+    let mut faults = Vec::new();
+    if !program.is_file() {
+        faults.push(format!("{} is missing", program.display()));
+    } else {
+        let pinned = pinned_previous_version();
+        let printed = version_of(&program);
+        if printed != pinned {
+            faults.push(format!(
+                "previous/ holds version {printed}, not the pinned {pinned}"
+            ));
+        }
+        if printed == version_of(&self::program(install)) {
+            faults.push(format!(
+                "previous/ holds this release's own program ({printed})"
+            ));
+        }
+    }
+    if !previous.join("content").join("attributes.json").is_file() {
+        faults.push("previous/content/attributes.json is missing".to_string());
+    }
+    faults
+}
+
 /// Starts the installed launcher from an unrelated folder and returns it with its port.
 fn launch(install: &Path, scratch: &Path) -> Running {
     let (data, cwd) = (scratch.join("data"), scratch.join("elsewhere"));
@@ -383,5 +422,50 @@ fn the_packaged_check_fails_on_a_page_folder_that_is_not_the_build() {
     assert!(
         faults.iter().any(|f| f.contains("OFL-Saira.txt")),
         "the check must fail on a page folder with no licence texts: {faults:#?}"
+    );
+}
+
+#[test]
+fn a_packaged_layout_carries_the_previous_release_engine() {
+    let Some(dir) = std::env::var_os("SM_INSTALL_UNDER_TEST").filter(|d| !d.is_empty()) else {
+        // Only a packaged folder carries the previous release's engine.
+        return;
+    };
+    let faults = previous_engine_faults(&PathBuf::from(dir));
+    assert!(
+        faults.is_empty(),
+        "the package does not carry the previous release's engine: {faults:#?}"
+    );
+}
+
+#[test]
+fn the_previous_engine_check_fails_on_a_layout_without_it() {
+    if std::env::var_os("SM_INSTALL_UNDER_TEST").is_some_and(|d| !d.is_empty()) {
+        // A packaged folder is never changed by a test.
+        return;
+    }
+    // The control: a layout with no previous/, then one whose previous/ holds this program.
+    let install = layout("no-previous");
+    let missing = previous_engine_faults(&install);
+    let previous = install.join("previous");
+    std::fs::create_dir_all(&previous).unwrap();
+    std::fs::copy(
+        program(&install),
+        previous.join(program(&install).file_name().unwrap()),
+    )
+    .unwrap();
+    let own = previous_engine_faults(&install);
+    let _ = std::fs::remove_dir_all(install.parent().unwrap());
+    assert!(
+        missing.iter().any(|f| f.contains("is missing")),
+        "the check must fail on a layout with no previous/: {missing:#?}"
+    );
+    assert!(
+        own.iter().any(|f| f.contains("not the pinned")),
+        "the check must fail on a previous/ that is not the pinned release: {own:#?}"
+    );
+    assert!(
+        own.iter().any(|f| f.contains("content")),
+        "the check must fail on a previous/ with no content: {own:#?}"
     );
 }

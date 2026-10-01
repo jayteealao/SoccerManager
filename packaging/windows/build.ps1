@@ -1,11 +1,13 @@
 # Builds the Windows release: the engine, the built viewer, a staged folder, the setup file,
-# and its hash. It needs Rust, Node 22.12 or later with npm, and NSIS 3.
+# and its hash. It needs Rust, Node 22.12 or later with npm, NSIS 3, and git with the previous
+# release's tag fetched (the previous engine, shipped as previous\, is built from it).
 #
 # Run from anywhere:  pwsh packaging/windows/build.ps1
 #                     pwsh packaging/windows/build.ps1 -StageOnly   (stops after dist/stage)
 # Writes:             dist/SoccerManager-<version>-windows-x64-setup.exe
 #                     dist/SoccerManager-<version>-windows-x64-setup.exe.sha256
 #                     dist/smoke.ps1 (the clean-machine check, for run-sandbox.ps1)
+#                     dist/previous-engine.json (the pin smoke.ps1 checks previous\ against)
 #
 # The version is read from the built program's --version, so the setup file, the installed
 # program, and the engine's hello message always name the same version.
@@ -47,6 +49,13 @@ try {
     Pop-Location
 }
 
+# The previous release's engine, built from its tag (or reused from the cache), ships beside
+# this one as previous\, so a match that release saved finishes on the engine that started it.
+$previous = & (Join-Path $PSScriptRoot 'previous-engine.ps1') | Select-Object -Last 1
+if (-not $previous -or -not (Test-Path (Join-Path $previous 'engine-cli.exe'))) {
+    throw "the previous release's engine was not built (the script printed '$previous')"
+}
+
 $exe = Join-Path $repo 'target\release\engine-cli.exe'
 $printed = (& $exe --version) -join ' '
 $version = ($printed -split '\s+')[1]
@@ -61,6 +70,7 @@ New-Item -ItemType Directory -Force -Path $stage | Out-Null
 Copy-Item $exe $stage
 Copy-Item -Recurse (Join-Path $repo 'content') (Join-Path $stage 'content')
 Copy-Item -Recurse (Join-Path $repo 'viewer\dist-release') (Join-Path $stage 'web')
+Copy-Item -Recurse $previous (Join-Path $stage 'previous')
 Copy-Item (Join-Path $repo 'LICENSE-MIT') $stage
 Copy-Item (Join-Path $repo 'LICENSE-APACHE') $stage
 if ($StageOnly) {
@@ -90,5 +100,6 @@ if ($LASTEXITCODE -ne 0) { throw "makensis failed with exit code $LASTEXITCODE" 
 $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
 Set-Content -NoNewline -Encoding ascii -Path "$setup.sha256" -Value "$hash  $setupName`n"
 Copy-Item (Join-Path $PSScriptRoot 'smoke.ps1') $dist -Force
+Copy-Item (Join-Path $repo 'packaging\previous-engine.json') $dist -Force
 
 Write-Output $setup

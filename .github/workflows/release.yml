@@ -82,6 +82,21 @@ jobs:
         run: cargo fetch --locked
       - name: Engine tests (ignored slow tests excluded)
         run: cargo test --workspace --locked
+      - name: Fetch the previous release's tag
+        run: |
+          echo "SM_PREVIOUS_CACHE=$RUNNER_TEMP/previous-engine" >> "$GITHUB_ENV"
+          tag=$(jq -r .tag packaging/previous-engine.json)
+          git fetch --no-tags --depth=1 origin "refs/tags/$tag:refs/tags/$tag"
+      - name: Restore the previous engine
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/previous-engine/previous
+          key: previous-engine-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml') }}
+      - name: A previous release's save finishes on its engine
+        run: |
+          sh packaging/unix/previous-engine.sh
+          export SM_PREVIOUS_ENGINE_PATH="$SM_PREVIOUS_CACHE/previous/engine-cli"
+          cargo test --locked -p engine-cli --test previous_engine -- --ignored
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: viewer/package.json
@@ -104,6 +119,18 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: viewer/package.json
+      - name: Fetch the previous release's tag
+        shell: pwsh
+        run: |
+          "SM_PREVIOUS_CACHE=$env:RUNNER_TEMP\previous-engine" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          $tag = (Get-Content -Raw packaging/previous-engine.json | ConvertFrom-Json).tag
+          git fetch --no-tags --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Restore the previous engine
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/previous-engine/previous
+          key: previous-engine-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml') }}
       - name: Install NSIS when the runner lacks it
         shell: pwsh
         run: |
@@ -155,6 +182,16 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: viewer/package.json
+      - name: Fetch the previous release's tag
+        run: |
+          echo "SM_PREVIOUS_CACHE=$RUNNER_TEMP/previous-engine" >> "$GITHUB_ENV"
+          tag=$(jq -r .tag packaging/previous-engine.json)
+          git fetch --no-tags --depth=1 origin "refs/tags/$tag:refs/tags/$tag"
+      - name: Restore the previous engine
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/previous-engine/previous
+          key: previous-engine-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml') }}
       - name: Build the archive
         run: sh packaging/unix/build.sh
       - name: The archive names the gated version
@@ -251,6 +288,18 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: viewer/package.json
+      - name: Fetch the previous release's tag
+        shell: pwsh
+        run: |
+          "SM_PREVIOUS_CACHE=$env:RUNNER_TEMP\previous-engine" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          $tag = (Get-Content -Raw packaging/previous-engine.json | ConvertFrom-Json).tag
+          git fetch --no-tags --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Restore the previous engine
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/previous-engine/previous
+          key: previous-engine-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml') }}
       - name: Stage the installed layout
         shell: pwsh
         run: pwsh packaging/windows/build.ps1 -StageOnly
@@ -273,6 +322,10 @@ jobs:
         run: |
           $env:SM_E2E_INSTALL = (Resolve-Path ../dist/stage).Path
           npx playwright test --project=viewer
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:SM_PREVIOUS_ENGINE_PATH = Join-Path $env:SM_E2E_INSTALL 'previous\engine-cli.exe'
+          # The drives only: the screenshots are compared on the machine that made them.
+          npx playwright test -c match.config.mjs resume -g "before any engine starts|previous release"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
@@ -326,6 +379,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          sparse-checkout: packaging
       - name: Assets, hashes, and version of the draft
         env:
           GH_TOKEN: ${{ github.token }}
@@ -349,6 +406,12 @@ jobs:
           printed=$("./SoccerManager-$VERSION-linux-x86_64/engine-cli" --version | awk '{ print $2 }')
           if [ "$printed" != "$VERSION" ]; then
             echo "::error::engine-cli --version prints $printed, expected $VERSION"
+            exit 1
+          fi
+          pinned=$(jq -r .version ../source/packaging/previous-engine.json)
+          previous=$("./SoccerManager-$VERSION-linux-x86_64/previous/engine-cli" --version | awk '{ print $2 }')
+          if [ "$previous" != "$pinned" ] || [ ! -f "./SoccerManager-$VERSION-linux-x86_64/previous/content/attributes.json" ]; then
+            echo "::error::previous/engine-cli prints '$previous', expected $pinned with previous/content beside it"
             exit 1
           fi
           echo "Draft $TAG verified. Next: run the Windows Sandbox check on the draft setup file, then publish."

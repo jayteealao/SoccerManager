@@ -140,6 +140,24 @@ else
     check version false "engine-cli --version '$program_version', archive name '$archive_version'"
 fi
 
+# The previous release's engine ships beside this one, with its own content, so a match that
+# release saved finishes on its engine; its version is the pinned one.
+pinned=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$repo/packaging/previous-engine.json")
+previous_version=""
+if [ -x "$installed/previous/engine-cli" ]; then
+    previous_version=$("$installed/previous/engine-cli" --version | awk '{ print $2 }')
+fi
+if [ -n "$previous_version" ] && [ "$previous_version" = "$pinned" ]; then
+    check previous-engine true "previous/engine-cli --version $previous_version is the pinned release"
+else
+    check previous-engine false "previous/engine-cli --version '$previous_version', pinned '$pinned'"
+fi
+if [ -f "$installed/previous/content/attributes.json" ]; then
+    check previous-content true "previous/content ships beside the previous engine"
+else
+    check previous-content false "previous/content/attributes.json is missing"
+fi
+
 # (f) Stop the game, then read the engine's hello from the packaged program.
 kill "$launcher" 2>/dev/null
 pkill -f "$installed/engine-cli" 2>/dev/null
