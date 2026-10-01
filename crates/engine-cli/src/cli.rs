@@ -391,6 +391,25 @@ pub struct LaunchOpts {
                      for and how to build the engine."
     )]
     pub engine: Option<PathBuf>,
+    /// Continue the saved match in this snapshot file.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Continue the saved match in this snapshot file instead of starting\n\
+                     one. The engine that wrote the save finishes it: this program, or\n\
+                     the previous release's program. A save from any other version is\n\
+                     refused, and the page shows its version."
+    )]
+    pub resume: Option<PathBuf>,
+    /// The previous release's engine program.
+    #[arg(
+        long = "previous",
+        value_name = "FILE",
+        long_help = "Previous release's engine program, which finishes the matches that\n\
+                     release saved; default SM_PREVIOUS_ENGINE_PATH, then\n\
+                     previous/engine-cli beside this program."
+    )]
+    pub previous: Option<PathBuf>,
     /// Drop the viewer's connection once this tick is sent; a test seam.
     #[arg(long, hide = true, value_name = "TICK")]
     pub drop_client_at: Option<u32>,

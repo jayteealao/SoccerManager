@@ -45,9 +45,10 @@ impl WebServer {
 /// on another, and the operating system chooses both at every run, so the server answers
 /// for itself rather than making a person paste a number into a query string.
 const ENGINE_JSON: &str = "/engine.json";
-/// The two actions a page may ask of the launcher. Both change state, so both are POST.
+/// The actions a page may ask of the launcher. Each changes state, so each is a POST.
 const RESTART: &str = "/engine/restart";
 const ABANDON: &str = "/engine/abandon";
+const NEW_MATCH: &str = "/engine/new-match";
 
 /// What a page asks the process that serves it to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,9 +57,11 @@ pub enum Action {
     Restart,
     /// Stop the engine and give the match up.
     Abandon,
+    /// Start a fresh match with the launch's seed and teams, after a stopped or refused one.
+    NewMatch,
 }
 
-/// Where `/engine.json` comes from, and who answers the two actions.
+/// Where `/engine.json` comes from, and who answers the actions.
 pub trait Status: Send + Sync {
     /// The `/engine.json` body.
     fn json(&self) -> String;
@@ -232,7 +235,7 @@ fn answer(
     let method = parts.next().unwrap_or_default().to_string();
     let target = parts.next().unwrap_or_default().to_string();
     let path = target.split(['?', '#']).next().unwrap_or_default();
-    if method == "POST" && (path == RESTART || path == ABANDON) {
+    if method == "POST" && (path == RESTART || path == ABANDON || path == NEW_MATCH) {
         // Only the page this server serves may ask. A page on any other site sends its own
         // origin, or none, and is refused before anything happens.
         let own = format!("http://127.0.0.1:{page_port}");
@@ -244,10 +247,10 @@ fn answer(
             );
             return write_response(&mut stream, 403, "text/plain", b"refused origin", false);
         }
-        let action = if path == RESTART {
-            Action::Restart
-        } else {
-            Action::Abandon
+        let action = match path {
+            RESTART => Action::Restart,
+            ABANDON => Action::Abandon,
+            _ => Action::NewMatch,
         };
         return match status.act(action) {
             Some(body) => write_response(

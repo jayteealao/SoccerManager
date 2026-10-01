@@ -278,6 +278,8 @@ mod tests {
             format: 8,
             build_hash: "abc1234".into(),
             engine_version: version.map(str::to_string),
+            seed: Some(42),
+            match_millis: 1,
             tick: Some(156_500),
             teams: None,
             score: None,

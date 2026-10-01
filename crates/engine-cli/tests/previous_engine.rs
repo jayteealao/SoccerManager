@@ -155,3 +155,84 @@ fn a_previous_release_save_finishes_on_its_engine_with_the_same_result() {
     );
     let _ = std::fs::remove_dir_all(&data);
 }
+
+fn engine_json(port: u16) -> serde_json::Value {
+    use std::io::{Read, Write};
+    let Ok(mut socket) = std::net::TcpStream::connect(("127.0.0.1", port)) else {
+        return serde_json::Value::Null;
+    };
+    let _ = socket
+        .write_all(b"GET /engine.json HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+    let mut text = String::new();
+    let _ = socket.read_to_string(&mut text);
+    let body = text.split("\r\n\r\n").nth(1).unwrap_or_default();
+    serde_json::from_str(body).unwrap_or(serde_json::Value::Null)
+}
+
+/// The launcher resumes a previous release's save on that release's program: no question,
+/// and `/engine.json` names the engine version for the page.
+#[test]
+#[ignore = "needs SM_PREVIOUS_ENGINE_PATH, the previous release's engine built from its tag"]
+fn the_launcher_resumes_a_previous_release_save_on_its_engine() {
+    use std::io::BufRead;
+    let (program, content) = previous();
+    let data = temp("launch");
+    let whole = play_whole(&program, &content, &data, 42);
+    let page = data.join("page");
+    std::fs::create_dir_all(&page).unwrap();
+    std::fs::write(page.join("index.html"), "<!doctype html><title>t</title>\n").unwrap();
+
+    let mut launcher = Command::new(env!("CARGO_BIN_EXE_engine-cli"))
+        .env("SM_DATA_DIR", &data)
+        .env(
+            "SM_CONTENT_DIR",
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content"),
+        )
+        .arg("launch")
+        .arg("--web")
+        .arg(&page)
+        .arg("--resume")
+        .arg(&whole.snapshot)
+        .arg("--previous")
+        .arg(&program)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut line = String::new();
+    std::io::BufReader::new(launcher.stdout.take().unwrap())
+        .read_line(&mut line)
+        .unwrap();
+    let port: u16 = line
+        .trim()
+        .trim_start_matches("http://127.0.0.1:")
+        .trim_end_matches('/')
+        .parse()
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let running = loop {
+        let now = engine_json(port);
+        if now["engine.state"] == "running" || std::time::Instant::now() > deadline {
+            break now;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
+    if let Some(pid) = running["engine.pid"].as_u64() {
+        let pid = pid.to_string();
+        let _ = if cfg!(windows) {
+            Command::new("taskkill").args(["/F", "/PID", &pid]).output()
+        } else {
+            Command::new("kill").args(["-9", &pid]).output()
+        };
+    }
+    let _ = launcher.kill();
+    let _ = launcher.wait();
+    let _ = std::fs::remove_dir_all(&data);
+
+    assert_eq!(running["engine.state"], "running", "{running}");
+    assert_eq!(running["engine.version"], "0.2.0-beta.1");
+    assert_eq!(running["launcher.version"], engine::version());
+    assert_eq!(running["match.id"], whole.stats["match.id"]);
+    assert!(running["match.resumed_from"].as_u64().is_some());
+    assert!(running["resume"].is_null());
+}

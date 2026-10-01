@@ -619,6 +619,8 @@ fn the_refused_save_fixture_names_release_0_1_0() {
         Some([config.teams[0].name.clone(), config.teams[1].name.clone()])
     );
     assert_eq!(&bytes[36..52], &[0u8; 16], "the owner id is zeros");
+    assert_eq!(id.seed, Some(42));
+    assert_eq!(id.match_millis, 1_700_000_000_000);
     let reason = refusal(Snapshot::from_bytes(&bytes, "saved-0.1.0.smsn"));
     assert!(
         reason.starts_with("build mismatch: written by Touchline 0.1.0 (build 3ba8fed)"),

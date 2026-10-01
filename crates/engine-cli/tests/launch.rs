@@ -341,3 +341,74 @@ fn an_action_from_another_origin_is_refused() {
     assert_eq!(code, 403);
     assert_eq!(status(launched.page_port)["engine.state"], "running");
 }
+
+/// The committed save stamped as written by release 0.1.0 (format 8, build 3ba8fed).
+fn saved_0_1_0() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../e2e/match/fixtures/saved-0.1.0.smsn")
+}
+
+#[test]
+fn a_save_two_or_more_versions_back_is_refused_naming_its_version() {
+    let dir = temp("older");
+    let fixture = saved_0_1_0();
+    let launched = launch(
+        &dir,
+        &["--seed", "42", "--resume", fixture.to_str().unwrap()],
+    );
+    let refused = wait_for(launched.page_port, 10, |s| s["engine.state"] == "refused");
+    assert!(
+        refused["engine.pid"].is_null(),
+        "no worker started: {refused}"
+    );
+    let reason = refused["engine.reason"].as_str().unwrap();
+    assert!(
+        reason.starts_with("this match was saved by Touchline 0.1.0, two or more versions back"),
+        "{reason}"
+    );
+    let resume = &refused["resume"];
+    assert_eq!(resume["kind"], "older");
+    assert_eq!(resume["saved.version"], "0.1.0");
+    assert_eq!(resume["saved.build"], "3ba8fed");
+    assert_eq!(resume["saved.tick"], (52 * 60 + 10) * 50);
+    assert_eq!(resume["saved.teams"].as_array().map(Vec::len), Some(2));
+    assert_eq!(resume["engines"][1], "0.2.0-beta.1");
+    assert_eq!(resume["engines"][0], refused["launcher.version"]);
+    assert_eq!(refused["engine.version"], refused["launcher.version"]);
+    // The save stays on disk.
+    assert!(fixture.is_file());
+
+    // NEW MATCH starts a fresh match on this program.
+    let (code, after) = post(&launched, "/engine/new-match");
+    assert_eq!(code, 202);
+    assert!(after["resume"].is_null(), "{after}");
+    let running = wait_for(launched.page_port, 30, |s| s["engine.state"] == "running");
+    assert!(running["match.resumed_from"].is_null());
+    assert_ne!(running["match.id"], refused["match.id"]);
+}
+
+#[test]
+fn a_save_of_this_version_resumes_on_this_program() {
+    let dir = temp("same-version");
+    let out = Command::new(env!("CARGO_BIN_EXE_engine-cli"))
+        .env("SM_DATA_DIR", &dir)
+        .env(
+            "SM_CONTENT_DIR",
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content"),
+        )
+        .args(["simulate", "--seed", "42", "--minutes", "20", "--ticks-out"])
+        .arg(dir.join("m.ticks"))
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stats: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let match_id = stats["match.id"].as_str().unwrap().to_string();
+    let snapshot = dir.join("matches").join(&match_id).join("snapshot.smsn");
+    let tick = engine::Snapshot::read(&snapshot, "s").unwrap().tick();
+
+    let launched = launch(&dir, &["--resume", snapshot.to_str().unwrap()]);
+    let running = wait_for(launched.page_port, 30, |s| s["engine.state"] == "running");
+    assert_eq!(running["match.id"], match_id.as_str());
+    assert_eq!(running["match.resumed_from"], tick);
+    assert_eq!(running["engine.version"], running["launcher.version"]);
+    assert!(running["resume"].is_null());
+}

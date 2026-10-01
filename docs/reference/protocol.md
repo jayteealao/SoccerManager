@@ -485,6 +485,10 @@ guess the WebSocket port on another and the operating system chooses both at eve
 | `snapshot.tick` | int or null | the tick of the latest snapshot on disk (launcher only) |
 | `match.id` | string | the match being served |
 | `launcher` | bool | `true` when `engine-cli launch` serves the page and can restart the engine |
+| `engine.version` | string | the release version of the program that plays the match: the launcher's own, or the previous release's for a save of that release (launcher only) |
+| `launcher.version` | string | the release version of the launcher (launcher only) |
+| `match.resumed_from` | int or null | the tick a saved match continued from (`launch --resume`; launcher only) |
+| `resume` | object or null | why a saved match cannot resume: `kind`, `saved.version`, `saved.build`, `saved.tick`, `saved.teams`, `saved.score`, `engines` and `reason` (launcher only; see `launch --resume` in the CLI reference) |
 
 `serve --web` and `replay --web` always answer `running`, because the page's server is the
 engine process itself. Under `launch` the page's server is a separate process that runs the
@@ -494,11 +498,12 @@ engine as a worker, so it can report `crashed` and act on it:
 |---|---|---|
 | `POST /engine/restart` | after a crash, starts the engine again from the match's latest snapshot; a snapshot that does not read is `refused` with the reason | `202` with the new `/engine.json` body |
 | `POST /engine/abandon` | stops the engine and gives the match up | `202` with the new `/engine.json` body |
+| `POST /engine/new-match` | once no match is running (a refused save, full time, or an abandon), starts a fresh match with the launch's seed and teams | `202` with the new `/engine.json` body |
 
-Both ignore any body. Both require an `Origin` header equal to the page's own origin,
+Each ignores any body. Each requires an `Origin` header equal to the page's own origin,
 `http://127.0.0.1:<page port>`; any other origin, or none, is `403`, so a page on another
 site cannot restart or stop the engine. Served by `serve --web` or `replay --web`, where
-nothing would survive to carry them out, both are `405`.
+nothing would survive to carry them out, each is `405`.
 
 ## Reconnection
 

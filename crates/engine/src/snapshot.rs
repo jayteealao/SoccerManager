@@ -122,6 +122,9 @@ pub struct SnapshotIdentity {
     /// The release version of the writer: recorded from version 8 on, named through
     /// [`RELEASED_BUILDS`] before it, and `None` for a build no release shipped.
     pub engine_version: Option<String>,
+    /// The seed and the match stamp of the saved match, which name its match folder.
+    pub seed: Option<u64>,
+    pub match_millis: u64,
     /// The tick the snapshot was taken on, when the body holds it.
     pub tick: Option<u32>,
     /// The team names, home first, and the score, from version 8 on.
@@ -209,11 +212,21 @@ impl Snapshot {
         let body_tick = body
             .get(BODY_TICK_AT..BODY_TICK_AT + 4)
             .map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")));
+        let seed = body
+            .get(0..8)
+            .map(|b| u64::from_le_bytes(b.try_into().expect("8 bytes")));
+        let match_millis = u64::from_le_bytes(
+            header[MILLIS_AT..MILLIS_AT + 8]
+                .try_into()
+                .expect("8 bytes"),
+        );
         if format < 8 {
             return Ok(SnapshotIdentity {
                 format,
                 engine_version: released_version(&build_hash).map(str::to_string),
                 build_hash,
+                seed,
+                match_millis,
                 tick: body_tick,
                 teams: None,
                 score: None,
@@ -225,6 +238,8 @@ impl Snapshot {
             format,
             engine_version: (!version.is_empty()).then_some(version),
             build_hash,
+            seed,
+            match_millis,
             tick: Some(u32::from_le_bytes(
                 header[TICK_AT..TICK_AT + 4].try_into().expect("4 bytes"),
             )),

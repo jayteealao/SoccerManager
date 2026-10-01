@@ -130,10 +130,12 @@ Serve the viewer page and run the engine as a separate process. Restart the engi
 | `--web` | folder | see below | The folder that holds the viewer page. |
 | `--open` | none | off | Open the page in the default browser. When the browser does not open, `launch` logs `launch.open_failed` and keeps running. |
 | `--engine` | file | `SM_ENGINE_PATH`, then this program | The engine program to run. When the file does not exist, the page shows the path and how to build the engine. |
+| `--resume` | file | not set | Continue the saved match in this snapshot file instead of starting one. The engine that wrote the save finishes it, as for `resume`. A save from any other version starts no engine: the page shows the Resume a saved match screen, which names the save's version and offers a new match. |
+| `--previous` | file | `SM_PREVIOUS_ENGINE_PATH`, then `previous/engine-cli` beside this program | The previous release's engine program. |
 
 When `--web` is absent, `launch` uses `SM_WEB_DIR`. When `SM_WEB_DIR` is not set, `launch` uses `./viewer/dist` (the built viewer in a repository checkout, after `npm --prefix viewer run build`), then the `web` folder beside the binary (an installed game). A folder counts only when it holds `index.html`. An installed game keeps `content` and `web` beside the binary, so it starts with no flag.
 
-Output: the page address. The page reads the engine state from `engine.json` at the same address.
+Output: the page address. The page reads the engine state from `engine.json` at the same address. Its fields include `engine.version` (the release version of the program that plays the match), `launcher.version`, `match.resumed_from` (the tick a saved match continued from), and, when a save cannot resume, a `resume` block: `kind` (`older`, `newer`, `other`, `unreleased` or `previous-missing`), `saved.version`, `saved.build`, `saved.tick`, `saved.teams`, `saved.score`, `engines` (the two versions this program finishes) and `reason`. A POST to `/engine/new-match` from the page starts a fresh match with the launch's seed and teams once no match is running.
 
 Exit codes: the launcher runs until you stop it; 1 on an error.
 

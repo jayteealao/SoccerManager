@@ -6,6 +6,12 @@
 //! it, and reports its state in `/engine.json`. After a crash the page asks for a restart
 //! with a POST, and the launcher starts the worker again from the match's latest snapshot.
 //! The page sends no match state: the snapshot on disk is the only copy the engine needs.
+//!
+//! With `--resume <file>` the launcher continues a saved match instead of starting one. It
+//! picks the program by the release version the save records ([`crate::engines`]): this
+//! program, the previous release's program with its own content folder, or none, in which
+//! case no worker starts and `/engine.json` carries a `resume` block that names the save's
+//! version for the Resume a saved match screen.
 
 use std::ffi::OsString;
 use std::io::{BufRead, BufReader};
@@ -19,6 +25,7 @@ use engine::Snapshot;
 use engine::observe::identity::{MatchId, data_dir};
 
 use crate::cli::LaunchOpts;
+use crate::engines::{Choice, PreviousEngine, Refusal};
 use crate::web::{Action, Status};
 
 /// Seconds a worker waits for a page that lost its connection.
@@ -68,22 +75,62 @@ struct Worker {
     generation: u64,
     /// The newest snapshot tick read from disk.
     snapshot_tick: Option<u32>,
+    /// The match the worker plays: its id and the snapshot file its worker writes.
+    match_id: String,
+    snapshot: PathBuf,
+    /// The stamp of a fresh match.
+    match_millis: u64,
+    /// The program that plays the match.
+    program: Program,
+    /// The tick a saved match was resumed from, for the page.
+    resumed_from: Option<u32>,
+    /// Why a saved match cannot resume, for the Resume a saved match screen.
+    refusal: Option<Refusal>,
+}
+
+/// The program that plays the match: this program, or the previous release's program with
+/// its own content folder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Program {
+    Current,
+    Previous {
+        engine: PreviousEngine,
+        version: String,
+    },
+}
+
+impl Program {
+    fn version(&self) -> &str {
+        match self {
+            Program::Current => engine::version(),
+            Program::Previous { version, .. } => version,
+        }
+    }
 }
 
 /// The launcher: its configuration and the one worker it supervises.
 pub struct Launcher {
     worker: Mutex<Worker>,
     engine: PathBuf,
-    /// Arguments every worker receives: the content folder and the team files.
-    common: Vec<OsString>,
-    snapshot: PathBuf,
-    match_id: String,
+    /// The previous release's program, for saves of that release.
+    previous: PreviousEngine,
+    /// The content folder this program's workers receive, when one was named.
+    content_dir: Option<OsString>,
+    /// The team files every worker receives.
+    teams: Vec<OsString>,
     /// The skin folder the viewer loads, from the `viewer.skin` slot.
     skin: &'static str,
-    match_millis: u64,
     seed: u64,
     minutes: u32,
     drop_client_at: Mutex<Option<u32>>,
+}
+
+/// The snapshot file of a match in the data folder.
+fn snapshot_of(match_id: &str) -> PathBuf {
+    data_dir()
+        .join("matches")
+        .join(match_id)
+        .join(engine::snapshot::FILE_NAME)
 }
 
 pub fn run(content_dir: Option<&Path>, opts: &LaunchOpts) -> anyhow::Result<i32> {
@@ -102,15 +149,11 @@ pub fn run(content_dir: Option<&Path>, opts: &LaunchOpts) -> anyhow::Result<i32>
     });
     let started = MatchId::now(seed);
     let match_id = started.to_string();
-    let mut common = Vec::new();
-    if let Some(dir) = content_dir {
-        common.push(OsString::from("--content-dir"));
-        common.push(dir.as_os_str().to_os_string());
-    }
+    let mut teams = Vec::new();
     for (flag, file) in [("--team-a", &opts.team_a), ("--team-b", &opts.team_b)] {
         if let Some(file) = file {
-            common.push(OsString::from(flag));
-            common.push(file.as_os_str().to_os_string());
+            teams.push(OsString::from(flag));
+            teams.push(file.as_os_str().to_os_string());
         }
     }
     let launcher = Arc::new(Launcher {
@@ -120,16 +163,18 @@ pub fn run(content_dir: Option<&Path>, opts: &LaunchOpts) -> anyhow::Result<i32>
             pid: None,
             generation: 0,
             snapshot_tick: None,
+            snapshot: snapshot_of(&match_id),
+            match_id,
+            match_millis: started.millis,
+            program: Program::Current,
+            resumed_from: None,
+            refusal: None,
         }),
-        snapshot: data_dir()
-            .join("matches")
-            .join(&match_id)
-            .join(engine::snapshot::FILE_NAME),
         engine,
-        common,
-        match_id,
+        previous: PreviousEngine::locate(opts.previous.as_deref()),
+        content_dir: content_dir.map(|dir| dir.as_os_str().to_os_string()),
+        teams,
         skin,
-        match_millis: started.millis,
         seed,
         minutes: opts.minutes,
         drop_client_at: Mutex::new(opts.drop_client_at),
@@ -137,7 +182,10 @@ pub fn run(content_dir: Option<&Path>, opts: &LaunchOpts) -> anyhow::Result<i32>
 
     let page = crate::web::start(&web, Arc::new(Arc::clone(&launcher)))?;
     if launcher.engine.is_file() {
-        launcher.start(None);
+        match opts.resume.as_deref() {
+            Some(file) => launcher.resume_saved(file),
+            None => launcher.start(None),
+        }
     } else {
         // The page still loads: it is where the manager reads the path and what to do.
         launcher.lock().state = State::NotFound;
@@ -230,19 +278,77 @@ impl Launcher {
             .expect("the worker lock is never poisoned")
     }
 
-    /// Starts a worker: a new match, or the match in `resume` continued from its snapshot.
-    fn start(self: &Arc<Self>, resume: Option<u32>) {
+    /// Continues the saved match in `file` on the program its version names, or refuses it
+    /// with the reason and the `resume` block the page shows. No worker starts on a refusal.
+    fn resume_saved(self: &Arc<Self>, file: &Path) {
+        let (choice, identity) = crate::engines::resolve(file, &self.previous);
+        {
+            let mut worker = self.lock();
+            if let Some(id) = &identity {
+                if let Some(seed) = id.seed {
+                    let match_id = MatchId {
+                        seed,
+                        millis: id.match_millis,
+                    }
+                    .to_string();
+                    worker.snapshot = snapshot_of(&match_id);
+                    worker.match_id = match_id;
+                }
+                worker.snapshot_tick = id.tick;
+                worker.resumed_from = id.tick;
+            }
+            match choice {
+                Choice::Refused(refusal) => {
+                    tracing::warn!(
+                        signal = "launch.refused",
+                        kind = refusal.kind.word(),
+                        saved.version = refusal.identity.engine_version.as_deref().unwrap_or(""),
+                        saved.build = %refusal.identity.build_hash
+                    );
+                    worker.state = State::Refused {
+                        reason: refusal.reason.clone(),
+                    };
+                    worker.refusal = Some(refusal);
+                    return;
+                }
+                Choice::Current => worker.program = Program::Current,
+                Choice::Previous { engine, version } => {
+                    worker.program = Program::Previous { engine, version };
+                }
+            }
+        }
+        self.start(Some(file.to_path_buf()));
+    }
+
+    /// Starts a worker: a new match, or the saved match in `resume` continued from it.
+    fn start(self: &Arc<Self>, resume: Option<PathBuf>) {
+        let (program, version, content, fresh_millis) = {
+            let worker = self.lock();
+            let (program, content) = match &worker.program {
+                Program::Current => (self.engine.clone(), self.content_dir.clone()),
+                Program::Previous { engine, .. } => (
+                    engine.program.clone(),
+                    Some(engine.content.as_os_str().to_os_string()),
+                ),
+            };
+            (
+                program,
+                worker.program.version().to_string(),
+                content,
+                worker.match_millis,
+            )
+        };
         let mut args: Vec<OsString> = vec!["serve".into()];
-        match resume {
-            Some(_) => {
+        match &resume {
+            Some(file) => {
                 args.push("--resume".into());
-                args.push(self.snapshot.as_os_str().to_os_string());
+                args.push(file.as_os_str().to_os_string());
             }
             None => {
                 for (flag, value) in [
                     ("--seed", self.seed.to_string()),
                     ("--minutes", self.minutes.to_string()),
-                    ("--match-millis", self.match_millis.to_string()),
+                    ("--match-millis", fresh_millis.to_string()),
                 ] {
                     args.push(flag.into());
                     args.push(value.into());
@@ -251,18 +357,24 @@ impl Launcher {
         }
         args.push("--reconnect-wait".into());
         args.push(RECONNECT_WAIT_S.into());
-        if let Some(tick) = self
-            .drop_client_at
-            .lock()
-            .expect("the drop seam lock is never poisoned")
-            .take()
+        // The test seam is this program's own; the previous program does not take it.
+        if program == self.engine
+            && let Some(tick) = self
+                .drop_client_at
+                .lock()
+                .expect("the drop seam lock is never poisoned")
+                .take()
         {
             args.push("--drop-client-at".into());
             args.push(tick.to_string().into());
         }
-        args.extend(self.common.iter().cloned());
+        if let Some(dir) = content {
+            args.push("--content-dir".into());
+            args.push(dir);
+        }
+        args.extend(self.teams.iter().cloned());
 
-        let spawned = Command::new(&self.engine)
+        let spawned = Command::new(&program)
             .args(&args)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -274,7 +386,7 @@ impl Launcher {
         let mut child = match spawned {
             Ok(child) => child,
             Err(err) => {
-                let reason = format!("cannot start {}: {err}", self.engine.display());
+                let reason = format!("cannot start {}: {err}", program.display());
                 tracing::error!(signal = "launch.refused", reason = %reason);
                 worker.state = State::Refused { reason };
                 return;
@@ -291,7 +403,7 @@ impl Launcher {
             signal = "launch.worker_started",
             pid,
             resume = resume.is_some(),
-            snapshot.tick = resume.unwrap_or(0)
+            engine.version = %version
         );
 
         // The first stdout line is the socket port.
@@ -391,11 +503,12 @@ impl Launcher {
         );
     }
 
-    /// The tick of the snapshot on disk, when it reads cleanly.
+    /// The tick of the snapshot on disk, when it reads cleanly. The file may be the previous
+    /// program's, so it is identified rather than read with this build's check.
     fn read_snapshot_tick(&self) -> Option<u32> {
-        Snapshot::read(&self.snapshot, engine::snapshot::FILE_NAME)
-            .ok()
-            .map(|s| s.tick())
+        let path = self.lock().snapshot.clone();
+        let bytes = std::fs::read(path).ok()?;
+        Snapshot::identify(&bytes).ok()?.tick
     }
 
     /// Restarts a stopped match from its snapshot. A snapshot that does not read is refused
@@ -408,7 +521,8 @@ impl Launcher {
             }
         }
         tracing::info!(signal = "launch.restart");
-        if !self.snapshot.is_file() {
+        let snapshot = self.lock().snapshot.clone();
+        if !snapshot.is_file() {
             let reason =
                 "no stoppage was saved before the engine stopped, so there is nothing to restart from"
                     .to_string();
@@ -416,11 +530,20 @@ impl Launcher {
             self.lock().state = State::Refused { reason };
             return;
         }
-        let shown = self.snapshot.display().to_string();
-        match Snapshot::read(&self.snapshot, &shown) {
-            Ok(snapshot) => {
-                self.lock().snapshot_tick = Some(snapshot.tick());
-                self.start(Some(snapshot.tick()));
+        // A save of the previous release is that program's to check.
+        if let Program::Previous { .. } = self.lock().program {
+            let tick = self.read_snapshot_tick();
+            if tick.is_some() {
+                self.lock().snapshot_tick = tick;
+                self.start(Some(snapshot));
+                return;
+            }
+        }
+        let shown = snapshot.display().to_string();
+        match Snapshot::read(&snapshot, &shown) {
+            Ok(read) => {
+                self.lock().snapshot_tick = Some(read.tick());
+                self.start(Some(snapshot));
             }
             Err(err) => {
                 let reason = err.to_string();
@@ -446,6 +569,29 @@ impl Launcher {
         worker.pid = None;
         tracing::info!(signal = "launch.abandoned");
     }
+
+    /// Starts a fresh match with the launch's seed and teams on this program, once the match
+    /// before it is no longer running: after a refused save, a full time, or an abandon.
+    fn new_match(self: &Arc<Self>) {
+        {
+            let mut worker = self.lock();
+            if matches!(worker.state, State::Running { .. } | State::Starting)
+                && worker.child.is_some()
+            {
+                return;
+            }
+            let fresh = MatchId::now(self.seed);
+            worker.match_id = fresh.to_string();
+            worker.snapshot = snapshot_of(&worker.match_id);
+            worker.match_millis = fresh.millis;
+            worker.program = Program::Current;
+            worker.snapshot_tick = None;
+            worker.resumed_from = None;
+            worker.refusal = None;
+        }
+        tracing::info!(signal = "launch.new_match");
+        self.start(None);
+    }
 }
 
 impl Status for Arc<Launcher> {
@@ -468,6 +614,19 @@ impl Status for Arc<Launcher> {
             State::Crashed { code } => (None, None, *code),
             _ => (None, None, None),
         };
+        let resume = worker.refusal.as_ref().map(|refusal| {
+            let id = &refusal.identity;
+            serde_json::json!({
+                "kind": refusal.kind.word(),
+                "saved.version": id.engine_version,
+                "saved.build": id.build_hash,
+                "saved.tick": id.tick,
+                "saved.teams": id.teams,
+                "saved.score": id.score,
+                "engines": [engine::version(), crate::engines::previous_version()],
+                "reason": refusal.reason,
+            })
+        });
         serde_json::json!({
             "engine.state": worker.state.word(),
             "socket.port": port,
@@ -476,8 +635,12 @@ impl Status for Arc<Launcher> {
             "engine.path": self.engine.display().to_string(),
             "engine.reason": reason,
             "engine.code": code,
+            "engine.version": worker.program.version(),
+            "launcher.version": engine::version(),
             "snapshot.tick": worker.snapshot_tick,
-            "match.id": self.match_id,
+            "match.id": worker.match_id,
+            "match.resumed_from": worker.resumed_from,
+            "resume": resume,
             "launcher": true,
             "viewer.skin": self.skin,
         })
@@ -488,6 +651,7 @@ impl Status for Arc<Launcher> {
         match action {
             Action::Restart => self.restart(),
             Action::Abandon => self.abandon(),
+            Action::NewMatch => self.new_match(),
         }
         Some(self.json())
     }
