@@ -138,6 +138,11 @@
   --strip-bad: oklch(0.92 0.07 20);
   --strip-warn: oklch(0.92 0.07 70);
 
+  /* Skip to the result: the hatch after a skip and the NOT LIVE tag's ground. */
+  --hatch-1: oklch(0.8 0.01 250);
+  --hatch-2: oklch(0.92 0.008 250);
+  --not-live-ground: oklch(0.92 0.008 250);
+
   /* Type */
   --fd: 'Barlow Condensed', 'Arial Narrow', sans-serif;
   --fb: 'IBM Plex Sans', system-ui, sans-serif;

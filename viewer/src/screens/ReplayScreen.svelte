@@ -5,7 +5,9 @@
      stored tick, and the playback row: Back 10 seconds, play or pause, Forward 10 seconds and
      today's 1× to 8× speeds. The view toggles, 0.25× and 0.5×, Clip this moment, Add to video
      session, "Your screen" and the whole right column (the catalogue, the xG box, analyst
-     depth and the traced figure) are stubs. -->
+     depth and the traced figure) are stubs. After Skip to result the timeline is hatched
+     from the skip point to the end, and inside that part the pitch tag adds NOT WATCHED
+     LIVE; with no skip both are as before. -->
 <script>
   import AppShell from '../components/AppShell.svelte';
   import Crest from '../components/Crest.svelte';
@@ -59,6 +61,9 @@
   let names = $derived(session.teams ? session.teams.map((t) => t['team.name']) : ['Home', 'Away']);
   let empty = $derived(!session.history || session.history.count === 0);
   let source = $derived(session.stored ? 'from the replay file' : 'from the match record');
+  /// The skip point of the match on show, once the engine has played the rest; null with no skip.
+  let skippedFrom = $derived(session.skip?.state === 'ready' ? session.skip.from : null);
+  let unseen = $derived(skippedFrom !== null && session.tick > skippedFrom);
 </script>
 
 <AppShell
@@ -96,13 +101,16 @@
           drawn={!empty}
           overlays={false}
         >
-          <span class="tagpos"><span class="tagc">REPLAY · {session.clockText}</span></span>
+          <span class="tagpos"
+            ><span class="tagc">REPLAY · {session.clockText}{unseen ? ' · NOT WATCHED LIVE' : ''}</span></span
+          >
         </PitchCanvas>
 
         <MatchTimeline
           tick={session.tick}
           max={session.scrubMax}
           disabled={empty}
+          {skippedFrom}
           onscrub={(t) => session.scrubTo(t)}
           onrelease={() => session.scrubEnd()}
         />

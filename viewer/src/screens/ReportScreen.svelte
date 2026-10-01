@@ -6,7 +6,14 @@
      one by one. Other grounds, Highlights, "What each change did" and "What it means" are
      stubs. At full time the last column holds Replay the whole match, Save replay, Open a
      replay and Close. While the whole match is still being stored the report is loading:
-     the steps and skeleton blocks of the Report loading board, and Save replay waits. -->
+     the steps and skeleton blocks of the Report loading board, and Save replay waits.
+
+     After Skip to result the report first shows the engine playing the rest (the Report
+     loading board for a skip): the scores hidden, the skip point and the newest minute in
+     the strip, and four steps; then, ready, the base report with the skip marks of the
+     Report after a skip board: "skipped from" in the header, the skip cell, the timeline
+     hatched after the skip point, and NOT LIVE on every later goal and card. A report with
+     no skip renders as before. -->
 <script>
   import AppShell from '../components/AppShell.svelte';
   import Crest from '../components/Crest.svelte';
@@ -23,6 +30,7 @@
   import { clockAt } from '../lib/recovery.js';
   import { TICKS_PER_SECOND } from '../lib/schedule.js';
   import { fixtureTitle, initials } from '../lib/scoreboard.js';
+  import { minuteOf, notLive, skippedWord, skipSteps, totalMinutes } from '../lib/skip.js';
   import { stripFacts } from '../lib/stats.js';
 
   let { session } = $props();
@@ -39,6 +47,19 @@
   let names = $derived(session.teams ? session.teams.map((t) => t['team.name']) : ['Home', 'Away']);
   let breakWord = $derived(full ? 'Full time' : 'Half-time');
 
+  /// The skip point after Skip to result, or null; `playingRest` while the engine plays the
+  /// rest and the whole match is stored.
+  let skippedFrom = $derived(report?.skippedFrom ?? null);
+  let skipped = $derived(skippedFrom !== null);
+  let playingRest = $derived(skipped && (report?.state === 'playing-rest' || report?.state === 'storing'));
+  let skipClock = $derived(skipped ? clockAt(skippedFrom) : '');
+  let total = $derived(totalMinutes(session.hello?.ticks_expected, session.hello?.knockout === true));
+  let newestMinute = $derived(Math.min(total, minuteOf(session.skip?.newest ?? skippedFrom ?? 0)));
+  let skipStage = $derived(report?.state === 'storing' ? 'storing' : 'playing');
+  let restSteps = $derived(
+    playingRest ? skipSteps(skippedFrom, session.skip?.newest ?? skippedFrom, total, skipStage) : []
+  );
+
   /// The sub-navigation: Report is this view; Replay opens the replay at full time. The rest
   /// are stubs until their screens are built.
   let tabs = $derived([
@@ -48,10 +69,27 @@
     { id: 'highlights', label: 'Highlights', menu: true, stub: true },
     { id: 'stats', label: 'Stats', menu: true, stub: true },
     { id: 'press', label: 'Press conference', menu: true, stub: true },
-    { id: 'replay', label: 'Replay', menu: true, stub: !full },
+    { id: 'replay', label: 'Replay', menu: true, stub: !full || playingRest },
   ]);
 
-  let facts = $derived(stripFacts(session.stats));
+  let facts = $derived.by(() => {
+    const base = stripFacts(session.stats);
+    if (playingRest) {
+      return [
+        { value: skipClock, label: 'Skipped at' },
+        { value: `${newestMinute}' of ${total}`, label: 'Engine at full speed' },
+      ];
+    }
+    if (skipped) {
+      return [
+        base[0],
+        { value: `Skipped at ${skipClock}`, label: 'The engine played the rest', flex: 0.95 },
+        // STUB: the other grounds' results belong to the background matchday.
+        { value: '—', label: 'Other grounds', stub: true, flex: 0.85 },
+      ];
+    }
+    return base;
+  });
 
   /// The timeline spans the whole match: 90 minutes, or longer when the match ran on.
   let span = $derived(Math.max(90 * MINUTE, report?.tick ?? 0));
@@ -60,13 +98,16 @@
   let markers = $derived(
     model.moments.map((m) => ({
       x: at(m.tick),
+      hollow: notLive(m, skippedFrom),
       letter: m.kind === 'Goal' ? 'G' : m.kind === 'Yellow card' ? 'Y' : 'R',
       tone: m.kind === 'Goal' ? (m.side === 1 ? 'away' : 'home') : m.kind === 'Yellow card' ? 'yellow' : 'red',
       key: `${m.tick}-${m.kind}-${m.side}`,
     }))
   );
   let timelineLabel = $derived.by(() => {
-    const seen = `Timeline: you watched 0 to ${clockAt(report?.tick ?? 0)} live`;
+    const seen = skipped
+      ? `Timeline: you watched 0 to ${skipClock} live; the engine played ${skipClock} to full time after you skipped`
+      : `Timeline: you watched 0 to ${clockAt(report?.tick ?? 0)} live`;
     if (model.moments.length === 0) {
       return `${seen}, with no goals or cards.`;
     }
@@ -102,12 +143,17 @@
 </script>
 
 <AppShell
-  title={fixtureTitle(names, model.score)}
-  subtitle="{breakWord} · report"
-  date={breakWord.toUpperCase()}
-  dateSub={clockAt(report?.tick ?? 0)}
-  action="Continue"
-  onaction={() => session.closeReport()}
+  title={playingRest ? 'Skip to result' : fixtureTitle(names, model.score)}
+  subtitle={playingRest
+    ? `${fixtureTitle(names)} · the engine plays the rest`
+    : skipped
+      ? `${breakWord} · ${skippedWord(skippedFrom)}`
+      : `${breakWord} · report`}
+  date={playingRest ? 'PLAYING THE REST' : breakWord.toUpperCase()}
+  dateSub={playingRest ? `from ${skipClock}` : clockAt(report?.tick ?? 0)}
+  action={playingRest ? 'Please wait' : 'Continue'}
+  busy={playingRest}
+  onaction={() => (playingRest ? null : session.closeReport())}
   {tabs}
   ontab={tab}
   navLabel="Report views"
@@ -116,16 +162,56 @@
     <Crest team={session.teams?.[0] ?? null} />
   {/snippet}
 
-  <div class="screen" data-screen="report" data-kind={report?.kind} data-state={report?.state}>
+  <div
+    class="screen"
+    data-screen="report"
+    data-kind={report?.kind}
+    data-state={report?.state}
+    data-skipped={skipped ? skippedFrom : undefined}
+  >
     <ScoreStrip
       teams={session.teams}
       score={model.score}
-      scorers={session.scorers}
-      tag={{ text: loading ? 'FULL TIME · STORING' : breakWord.toUpperCase(), tone: 'cyan', live: false }}
+      scorers={playingRest ? ['Scores hidden until full time', 'Scores hidden until full time'] : session.scorers}
+      hidden={playingRest}
+      tag={{
+        text:
+          playingRest && skipStage === 'playing'
+            ? `PLAYING THE REST · ${newestMinute}'`
+            : loading || playingRest
+              ? 'FULL TIME · STORING'
+              : breakWord.toUpperCase(),
+        tone: 'cyan',
+        live: false,
+      }}
       {facts}
     />
 
-    {#if loading}
+    {#if playingRest}
+      <div class="cols loading">
+        <div>
+          <SectionLabel
+            label="Playing the rest of the match"
+            note={session.engineVersion ? `engine ${session.engineVersion}` : ''}
+          />
+          <StepList steps={restSteps} />
+          <p class="g">No cancel: the match ends the same way either way, and the replay keeps all of it.</p>
+        </div>
+        <div class="skels" aria-hidden="true">
+          <div class="skel" style:height="50px" style:margin-bottom="10px"></div>
+          <div class="skelcols">
+            {#each [0, 1, 2, 3] as c (c)}
+              <div>
+                <div class="skel" style:height="12px" style:width="60%" style:margin-bottom="10px"></div>
+                {#each [0, 1, 2, 3, 4, 5, 6] as r (r)}
+                  <div class="skel" style:height="14px" style:margin-bottom="8px"></div>
+                {/each}
+              </div>
+            {/each}
+          </div>
+        </div>
+      </div>
+    {:else if loading}
       <div class="cols loading">
         <div>
           <SectionLabel label="Storing the whole match" note={session.engineWord} />
@@ -152,20 +238,49 @@
       </div>
     {:else}
       <div class="saw">
-        <SectionLabel label="How you saw it" note="0' to {clockAt(report?.tick ?? 0)} live" />
+        {#if skipped}
+          <SectionLabel
+            label="How you saw it"
+            note="0' to {skipClock} live · the rest played by the engine from the exact moment you skipped"
+          />
+        {:else}
+          <SectionLabel label="How you saw it" note="0' to {clockAt(report?.tick ?? 0)} live" />
+        {/if}
       </div>
-      <svg class="timeline" width="1160" height="44" role="img" aria-label={timelineLabel}>
-        <rect class="track" x={TRACK.x} y="18" width={TRACK.width} height="7" rx="3"></rect>
-        <rect class="seen" x={TRACK.x} y="18" width={at(report?.tick ?? 0) - TRACK.x} height="7" rx="3"></rect>
-        <line class="head" x1={at(report?.tick ?? 0)} y1="10" x2={at(report?.tick ?? 0)} y2="32"></line>
-        {#each markers as m (m.key)}
-          <circle class="mk {m.tone}" cx={m.x} cy="9" r="6.5"></circle>
-          <text class="mt {m.tone}" x={m.x} y="12" text-anchor="middle">{m.letter}</text>
-        {/each}
-        {#each marks as mark (mark.m)}
-          <text class="min" x={mark.x} y="40" text-anchor="middle">{mark.m}'</text>
-        {/each}
-      </svg>
+      {#if skipped}
+        <svg class="timeline" width="1160" height="44" role="img" aria-label={timelineLabel}>
+          <defs>
+            <pattern id="skip-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <rect class="h1" width="4" height="8"></rect>
+              <rect class="h2" x="4" width="4" height="8"></rect>
+            </pattern>
+          </defs>
+          <rect class="hatched" x={TRACK.x} y="18" width={TRACK.width} height="7" rx="3"></rect>
+          <rect class="seen" x={TRACK.x} y="18" width={at(skippedFrom) - TRACK.x} height="7" rx="3"></rect>
+          <line class="head" x1={at(skippedFrom)} y1="10" x2={at(skippedFrom)} y2="32"></line>
+          <text class="unseen" x={at(skippedFrom) + 6} y="40">SKIPPED AT {skipClock} · NOT WATCHED LIVE →</text>
+          {#each markers as m (m.key)}
+            <circle class="mk {m.tone}" class:hollow={m.hollow} cx={m.x} cy="9" r="6.5"></circle>
+            <text class="mt {m.tone}" class:hollow={m.hollow} x={m.x} y="12" text-anchor="middle">{m.letter}</text>
+          {/each}
+          {#each marks as mark (mark.m)}
+            <text class="min" x={mark.x} y="40" text-anchor="middle">{mark.m}'</text>
+          {/each}
+        </svg>
+      {:else}
+        <svg class="timeline" width="1160" height="44" role="img" aria-label={timelineLabel}>
+          <rect class="track" x={TRACK.x} y="18" width={TRACK.width} height="7" rx="3"></rect>
+          <rect class="seen" x={TRACK.x} y="18" width={at(report?.tick ?? 0) - TRACK.x} height="7" rx="3"></rect>
+          <line class="head" x1={at(report?.tick ?? 0)} y1="10" x2={at(report?.tick ?? 0)} y2="32"></line>
+          {#each markers as m (m.key)}
+            <circle class="mk {m.tone}" cx={m.x} cy="9" r="6.5"></circle>
+            <text class="mt {m.tone}" x={m.x} y="12" text-anchor="middle">{m.letter}</text>
+          {/each}
+          {#each marks as mark (mark.m)}
+            <text class="min" x={mark.x} y="40" text-anchor="middle">{mark.m}'</text>
+          {/each}
+        </svg>
+      {/if}
 
       <div class="cols ready">
         <div>
@@ -177,7 +292,7 @@
 
         <div>
           <SectionLabel label="Goals and cards" />
-          <ReportMoments moments={model.moments} teams={session.teams} />
+          <ReportMoments moments={model.moments} teams={session.teams} {skippedFrom} />
           <div class="hr"></div>
           <MatchStub part="other-grounds" />
         </div>
@@ -313,6 +428,57 @@
   .min {
     fill: var(--ink-3);
     font: 400 9px var(--fb);
+  }
+
+  /* After a skip: the board's hatch under the track, the skip words, and hollow markers for
+   * the goals and cards nobody watched live (the state colour as the ring and the letter). */
+  .h1 {
+    fill: var(--hatch-1);
+  }
+
+  .h2 {
+    fill: var(--hatch-2);
+  }
+
+  .hatched {
+    fill: url(#skip-hatch);
+  }
+
+  .unseen {
+    fill: var(--ink-2);
+    font: 700 9.5px var(--fd);
+    letter-spacing: 0.06em;
+  }
+
+  .mk.hollow {
+    fill: var(--ground);
+    stroke-width: 2;
+  }
+
+  .mk.hollow.home {
+    stroke: var(--cyan);
+  }
+
+  .mk.hollow.away,
+  .mk.hollow.red {
+    stroke: var(--bad);
+  }
+
+  .mk.hollow.yellow {
+    stroke: var(--mid);
+  }
+
+  .mt.hollow.home {
+    fill: var(--cyan);
+  }
+
+  .mt.hollow.away,
+  .mt.hollow.red {
+    fill: var(--bad);
+  }
+
+  .mt.hollow.yellow {
+    fill: var(--mid);
   }
 
   .cols {

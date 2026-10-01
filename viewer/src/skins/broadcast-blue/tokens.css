@@ -150,6 +150,13 @@
   /* A warning word on the navy strip: the board's light warning tone, which reads 4.5:1 there. */
   --strip-warn: #ffc58f;
 
+  /* Skip to the result: the hatch over the part of a match the engine played after a skip,
+   * as the report and replay boards draw it, and the ground of the NOT LIVE tag, whose word
+   * is --ink-2. A marker after the skip is hollow: --ground inside its state colour. */
+  --hatch-1: #5d6067;
+  --hatch-2: #3a3c41;
+  --not-live-ground: #34363b;
+
   /* Type */
   --fd: 'Saira Semi Condensed', 'Barlow Semi Condensed', 'Arial Narrow', system-ui, sans-serif;
   --fb: 'Saira', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;

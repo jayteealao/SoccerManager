@@ -1,6 +1,6 @@
 <!-- The viewer's views over one session: Tactics, the Pre-match line-ups, the match, the
-     Touchline, the half-time and full-time report, the replay, and Resume a saved match for a
-     save no engine of this version can finish. The match screen stays
+     Touchline, the Skip decision, the half-time and full-time report, the replay, and Resume
+     a saved match for a save no engine of this version can finish. The match screen stays
      mounted, hidden behind the others, so its pitch keeps its canvas and the match plays on
      behind whichever view is open; the replay draws the same match on its own canvas. -->
 <script>
@@ -9,6 +9,7 @@
   import ReplayScreen from './screens/ReplayScreen.svelte';
   import ReportScreen from './screens/ReportScreen.svelte';
   import ResumeScreen from './screens/ResumeScreen.svelte';
+  import SkipScreen from './screens/SkipScreen.svelte';
   import TacticsScreen from './screens/TacticsScreen.svelte';
   import TouchlineScreen from './screens/TouchlineScreen.svelte';
 
@@ -21,6 +22,8 @@
   <PrematchScreen {session} />
 {:else if session.view === 'touchline'}
   <TouchlineScreen {session} />
+{:else if session.view === 'skip'}
+  <SkipScreen {session} />
 {:else if session.view === 'report' && session.report}
   <ReportScreen {session} />
 {:else if session.view === 'replay'}

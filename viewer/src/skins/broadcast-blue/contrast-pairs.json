@@ -886,5 +886,83 @@
     "bg": "--rail",
     "kind": "text",
     "where": "resume screen alert: the Cannot resume word"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--not-live-ground",
+    "kind": "text",
+    "where": "skip report: the NOT LIVE tag on a moment after the skip"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--page",
+    "kind": "text",
+    "where": "skip report and replay: SKIPPED AT and NOT WATCHED LIVE on the timeline"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "skip decision: an option's title"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "skip decision: an option's sub-line"
+  },
+  {
+    "fg": "--cyan-ink",
+    "bg": "--cyan",
+    "kind": "text",
+    "where": "skip decision: the selected option and Confirm"
+  },
+  {
+    "fg": "--read-ink",
+    "bg": "--page",
+    "kind": "text",
+    "where": "skip decision: what the engine does, what happens next"
+  },
+  {
+    "fg": "--read-ink",
+    "bg": "--proposal-ground",
+    "kind": "text",
+    "where": "skip decision: what you give up"
+  },
+  {
+    "fg": "--band-ink",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "skip strip: the skip cell's clock and minute"
+  },
+  {
+    "fg": "--navy-sub",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "skip strip: Scores hidden until full time, Skipped at"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground-2",
+    "kind": "boundary",
+    "where": "skip decision: the ring of an option not chosen"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground-2",
+    "kind": "boundary",
+    "where": "skip decision: the focus ring on an option"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--page",
+    "kind": "boundary",
+    "where": "skip decision: the selected option's edge on the page"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--hatch-2",
+    "kind": "boundary",
+    "where": "skip timeline: the watched part against the hatch"
   }
 ]

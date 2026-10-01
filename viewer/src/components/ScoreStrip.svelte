@@ -1,12 +1,16 @@
 <!-- The navy score strip of the match screens (66 px): each club's crest, name and scorers,
      the score at 28 px with the clock tag under it, and the xG, possession and shots facts.
      The tag's word always names the state; its colour only repeats it. The LIVE dot pulses
-     over 1.4 s, and not at all under reduced motion. -->
+     over 1.4 s, and not at all under reduced motion. While the engine plays the rest of a
+     skipped match the score is `hidden` ("– –") until full time. A fact with `stub` is a
+     part the viewer does not build yet: faded, inert and hidden; `flex` widens a cell as the
+     board draws it. -->
 <script>
   import Crest from './Crest.svelte';
+  import StubSection from './StubSection.svelte';
   import { scoreText } from '../lib/scoreboard.js';
 
-  let { teams = null, score = [0, 0], scorers = ['', ''], tag, facts = [] } = $props();
+  let { teams = null, score = [0, 0], scorers = ['', ''], tag, facts = [], hidden = false } = $props();
 
   let names = $derived(teams ? teams.map((t) => t['team.name']) : ['Home', 'Away']);
 </script>
@@ -20,7 +24,11 @@
     </div>
   </div>
   <div class="centre">
-    <b class="score num" aria-label="Score {scoreText(score[0], score[1])}">{scoreText(score[0], score[1])}</b>
+    {#if hidden}
+      <b class="score num" aria-label="Score hidden until full time">– –</b>
+    {:else}
+      <b class="score num" aria-label="Score {scoreText(score[0], score[1])}">{scoreText(score[0], score[1])}</b>
+    {/if}
     <span class="tag {tag.tone}">
       {#if tag.live}<span class="dot" aria-hidden="true"></span>{/if}{tag.text}
     </span>
@@ -33,9 +41,17 @@
     </div>
   </div>
   {#each facts as fact (fact.label)}
-    <div class="fact">
-      <b class="num">{fact.value}</b>
-      <span>{fact.label}</span>
+    <div class="fact" style:flex={fact.flex}>
+      {#if fact.stub}
+        <!-- STUB: a fact the viewer does not build yet. -->
+        <StubSection note="strip fact: {fact.label}">
+          <b class="num">{fact.value}</b>
+          <span>{fact.label}</span>
+        </StubSection>
+      {:else}
+        <b class="num">{fact.value}</b>
+        <span>{fact.label}</span>
+      {/if}
     </div>
   {/each}
 </div>

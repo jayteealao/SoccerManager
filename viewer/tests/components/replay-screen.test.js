@@ -2,7 +2,8 @@
 // The replay, in jsdom: it draws the stored match on its own 752 × 290 canvas; its playback
 // controls have names and call the session (Back 10 seconds, play and pause, Forward 10
 // seconds, the speeds); CONTINUE goes back to the view it came from; every stub is inert and
-// hidden, and a planted focusable stub fails the check.
+// hidden, and a planted focusable stub fails the check. After a skip the timeline is hatched
+// and the tag says NOT WATCHED LIVE inside the skipped part.
 
 import assert from 'node:assert/strict';
 import { tick } from 'svelte';
@@ -77,4 +78,24 @@ test('every replay stub is inert and hidden, and a planted focusable stub fails 
   assert.deepEqual(stubFaults(root), []);
   root.querySelector('[data-stub="catalogue"]').append(document.createElement('button'));
   assert.deepEqual(stubFaults(root), ['catalogue: button takes focus']);
+});
+
+test('after a skip the timeline is hatched and the tag reads NOT WATCHED LIVE only past the skip tick', async () => {
+  const { s } = await replay();
+  const root = page();
+  assert.equal(root.querySelector('.hatch'), null, 'no hatch with no skip');
+  assert.ok(!/NOT WATCHED LIVE/.test(root.textContent));
+
+  s.skip = { state: 'ready', from: 500, newest: 1000 };
+  s.rewind(400);
+  await tick();
+  assert.ok(root.querySelector('.timeline .hatch'), 'hatched from the skip point');
+  assert.match(root.querySelector('.timeline .marks').textContent, /NOT WATCHED LIVE/);
+  assert.ok(!/NOT WATCHED LIVE/.test(root.querySelector('.tagc').textContent), 'watched live before the skip');
+  assert.ok(!/not watched live/.test(root.querySelector('input[type="range"]').getAttribute('aria-valuetext')));
+
+  s.rewind(700);
+  await tick();
+  assert.match(root.querySelector('.tagc').textContent, /^REPLAY · .* · NOT WATCHED LIVE$/);
+  assert.match(root.querySelector('input[type="range"]').getAttribute('aria-valuetext'), /, not watched live$/);
 });

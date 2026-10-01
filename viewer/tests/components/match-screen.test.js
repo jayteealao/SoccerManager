@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // The match screen in each of its states, in jsdom: the action block names the state's one
 // next action, each state draws its panel, every stub is inert and takes no focus, and the
-// other-grounds block shows the same static content whatever the match does.
+// other-grounds block shows the same static content whatever the match does. Skip to result
+// is a real button, live only once the match has kicked off.
 
 import assert from 'node:assert/strict';
 import { render, screen } from '@testing-library/svelte';
@@ -207,7 +208,6 @@ test('every stub is inert and hidden, and none of its parts takes focus', async 
   const stubs = document.querySelectorAll('[data-stub]');
   assert.ok(stubs.length >= 30, `${stubs.length} stubs`);
   for (const note of [
-    'skip to result',
     'pitch overlays, zoom and follow',
     'highlight modes and pause rules',
     'momentum chart',
@@ -218,6 +218,25 @@ test('every stub is inert and hidden, and none of its parts takes focus', async 
     assert.ok(document.querySelector(`[data-stub="${note}"]`), note);
   }
   assert.deepEqual(stubFaults(document.body), []);
+});
+
+test('Skip to result is a real button: disabled before kick-off, live on a live match, and it opens the decision', async () => {
+  const { s, socket } = await session(RUNNING);
+  socket.deliver(HELLO);
+  await tick();
+  const skip = () => screen.getByRole('button', { name: 'Skip to result' });
+  assert.equal(skip().disabled, true, 'nothing to skip before kick-off');
+  assert.equal(document.querySelector('[data-stub="skip to result"]'), null, 'no longer a stub');
+  s.act();
+  socket.deliver(encodeKeyframe(1, new Array(COMPONENT_COUNT).fill(0)));
+  s.rewind(1);
+  await tick();
+  assert.equal(s.canSkip, true);
+  assert.equal(skip().disabled, false);
+  let opened = 0;
+  s.openSkip = () => (opened += 1);
+  skip().click();
+  assert.equal(opened, 1, 'the click calls openSkip');
 });
 
 test('the stub check fails when a stub holds something that takes focus', async () => {

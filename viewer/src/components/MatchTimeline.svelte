@@ -1,11 +1,20 @@
 <!-- The match timeline: a range over every tick received, named "Rewind to a tick", with
      the cyan playhead at the rendered tick and the minute marks under it. Dragging rewinds and
-     holds the frame; letting go resumes whatever was playing. The skip flow later hatches the
-     part a skip plays without watching. -->
+     holds the frame; letting go resumes whatever was playing. After a skip (`skippedFrom`) the
+     track from the skip point to the end is hatched, marked NOT WATCHED LIVE, and the
+     slider's value text says when the tick is inside that part. With no skip the markup is
+     as before. -->
 <script>
   import { TICKS_PER_SECOND } from '../lib/schedule.js';
 
-  let { tick = 0, max = 1, disabled = false, onscrub = () => {}, onrelease = () => {} } = $props();
+  let {
+    tick = 0,
+    max = 1,
+    disabled = false,
+    skippedFrom = null,
+    onscrub = () => {},
+    onrelease = () => {},
+  } = $props();
 
   const MINUTE = TICKS_PER_SECOND * 60;
   const MARKS = [0, 15, 30, 45, 60, 75, 90];
@@ -14,10 +23,19 @@
   let marks = $derived(
     MARKS.filter((m) => m * MINUTE <= max).map((m) => ({ m, at: (m * MINUTE) / max }))
   );
+  let skipAt = $derived(
+    skippedFrom === null || !(max > 0) ? null : Math.min(1, Math.max(0, skippedFrom / max))
+  );
+  let valueText = $derived(
+    `Minute ${Math.floor(tick / MINUTE)}${skippedFrom !== null && tick > skippedFrom ? ', not watched live' : ''}`
+  );
 </script>
 
 <div class="timeline">
   <div class="track" role="presentation">
+    {#if skipAt !== null}
+      <i class="hatch" style:left="{skipAt * 100}%"></i>
+    {/if}
     <i class="played" style:width="{share * 100}%"></i>
     <i class="head" style:left="{share * 100}%"></i>
   </div>
@@ -29,7 +47,7 @@
     value={tick}
     {disabled}
     aria-label="Rewind to a tick"
-    aria-valuetext="Minute {Math.floor(tick / MINUTE)}"
+    aria-valuetext={valueText}
     oninput={(e) => onscrub(Number(e.currentTarget.value))}
     onchange={() => onrelease()}
   />
@@ -37,6 +55,9 @@
     {#each marks as mark (mark.m)}
       <span style:left="{mark.at * 100}%">{mark.m}'</span>
     {/each}
+    {#if skipAt !== null}
+      <b class="unseen" style:left="{skipAt * 100}%">NOT WATCHED LIVE</b>
+    {/if}
   </div>
 </div>
 
@@ -64,6 +85,19 @@
     top: 0;
     bottom: 0;
     background: var(--navy-500);
+  }
+
+  /* The part played after a skip: the board's 45° stripes, 4 px of each hatch colour. */
+  .hatch {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(
+      45deg,
+      var(--hatch-1) 0 2.83px,
+      var(--hatch-2) 2.83px 5.66px
+    );
   }
 
   .head {
@@ -119,5 +153,14 @@
 
   .marks span:first-child {
     transform: none;
+  }
+
+  .unseen {
+    position: absolute;
+    margin-left: 14px;
+    font: 700 8.5px/11px var(--fd);
+    letter-spacing: 0.06em;
+    color: var(--ink-2);
+    white-space: nowrap;
   }
 </style>

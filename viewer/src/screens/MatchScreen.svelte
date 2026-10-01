@@ -4,7 +4,8 @@
      left column holds the pitch, the playback row and the timeline; the right the commentary,
      the statistics and the other grounds. Each screen state (loading, kick-off, live, paused,
      error, first run, reconnecting) draws the board's body for it. Parts the viewer does not
-     build yet are stubs (MatchStub, the stub tabs, Skip to result): drawn, faded and inert.
+     build yet are stubs (MatchStub, the stub tabs): drawn, faded and inert. Skip to result in
+     the playback row opens the Skip decision (`App.svelte`).
      The Touchline and Tactics tabs open those views over it (`App.svelte`); the match screen
      stays mounted and hidden, so the pitch keeps its canvas and the match plays on behind. -->
 <script>
@@ -167,6 +168,8 @@
             onlive={() => session.toNewest()}
             onnext={() => session.nextStop()}
             onspeed={(s) => session.selectSpeed(s)}
+            canSkip={session.canSkip}
+            onskip={() => session.openSkip()}
           />
           {#if session.notice && playing}
             <div class="notice">
@@ -178,6 +181,7 @@
               tick={session.tick}
               max={session.scrubMax}
               disabled={screen === 'kickoff'}
+              skippedFrom={session.skip?.state === 'ready' ? session.skip.from : null}
               onscrub={(t) => session.scrubTo(t)}
               onrelease={() => session.scrubEnd()}
             />

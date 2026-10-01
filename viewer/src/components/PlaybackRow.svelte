@@ -1,10 +1,10 @@
 <!-- The playback row under the pitch: round 24 px icon buttons (the one in effect filled
      cyan) with 40 px hit areas, Next stop, the speed segment 1× to 8×, and the ghost Skip to
-     result, which is a stub until the skip flow is built. The row is one group named
-     "Playback"; every control is disabled while there is nothing to play. -->
+     result, which opens the Skip decision. Skip to result is live only on a kicked-off live
+     engine match before full time; otherwise it is disabled and faded. The row is one group
+     named "Playback"; every control is disabled while there is nothing to play. -->
 <script>
   import Glyph from './Glyph.svelte';
-  import StubSection from './StubSection.svelte';
   import { FAST_FORWARD, PAUSE, PLAY, REWIND } from './icons.js';
   import { SPEEDS } from '../lib/playback.js';
 
@@ -17,6 +17,8 @@
     onlive = () => {},
     onnext = () => {},
     onspeed = () => {},
+    canSkip = false,
+    onskip = () => {},
   } = $props();
 </script>
 
@@ -52,11 +54,9 @@
       >
     {/each}
   </span>
-  <!-- STUB: Skip to result opens the skip decision screen, built with the skip flow. Drawn
-       for layout and feel only. -->
-  <StubSection note="skip to result" inline>
-    <span class="btn gh"><Glyph glyph={{ d: FAST_FORWARD }} size={10} /> Skip to result</span>
-  </StubSection>
+  <button class="btn gh skip" type="button" aria-label="Skip to result" disabled={disabled || !canSkip} onclick={onskip}>
+    <Glyph glyph={{ d: FAST_FORWARD }} size={10} /> Skip to result
+  </button>
   <span class="gap"></span>
   <span class="note">Rewind works while paused · back to live</span>
 </div>
@@ -192,6 +192,17 @@
 
   button:disabled {
     cursor: default;
+  }
+
+  /* Skip to result has nothing to do before kick-off, after full time or on a replay: it
+   * keeps the faded look the row drew before the skip flow was built. */
+  .skip:disabled {
+    opacity: var(--stub-opacity);
+  }
+
+  /* The drawn button is 22 px; the hit area is 40 px tall. */
+  .skip::after {
+    inset: -9px 0;
   }
 
   .gap {
