@@ -147,6 +147,8 @@
    * colours measure under 4.5:1 on navy, so the strip carries the board's lighter pair. */
   --strip-good: #9df0b0;
   --strip-bad: #ffb3b5;
+  /* A warning word on the navy strip: the board's light warning tone, which reads 4.5:1 there. */
+  --strip-warn: #ffc58f;
 
   /* Type */
   --fd: 'Saira Semi Condensed', 'Barlow Semi Condensed', 'Arial Narrow', system-ui, sans-serif;

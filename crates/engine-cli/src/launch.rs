@@ -623,6 +623,7 @@ impl Status for Arc<Launcher> {
                 "saved.tick": id.tick,
                 "saved.teams": id.teams,
                 "saved.score": id.score,
+                "saved.millis": id.match_millis,
                 "engines": [engine::version(), crate::engines::previous_version()],
                 "reason": refusal.reason,
             })

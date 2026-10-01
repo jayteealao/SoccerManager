@@ -40,9 +40,14 @@
     text-transform: uppercase;
   }
 
-  .error .wd,
-  .refusal .wd {
+  .error .wd {
     color: var(--bad);
+  }
+
+  /* A save that cannot resume is a warning, not a fault: the board draws its word in the
+     warning colour, with the word itself saying it. */
+  .refusal .wd {
+    color: var(--warn);
   }
 
   .setup .wd {

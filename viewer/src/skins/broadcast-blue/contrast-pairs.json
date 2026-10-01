@@ -874,5 +874,17 @@
     "bg": "--navy-600",
     "kind": "text",
     "where": "handshake fact strip: a check that failed, a socket error"
+  },
+  {
+    "fg": "--strip-warn",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "resume screen fact strip: Cannot resume"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "resume screen alert: the Cannot resume word"
   }
 ]

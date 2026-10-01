@@ -488,7 +488,7 @@ guess the WebSocket port on another and the operating system chooses both at eve
 | `engine.version` | string | the release version of the program that plays the match: the launcher's own, or the previous release's for a save of that release (launcher only) |
 | `launcher.version` | string | the release version of the launcher (launcher only) |
 | `match.resumed_from` | int or null | the tick a saved match continued from (`launch --resume`; launcher only) |
-| `resume` | object or null | why a saved match cannot resume: `kind`, `saved.version`, `saved.build`, `saved.tick`, `saved.teams`, `saved.score`, `engines` and `reason` (launcher only; see `launch --resume` in the CLI reference) |
+| `resume` | object or null | why a saved match cannot resume: `kind`, `saved.version`, `saved.build`, `saved.tick`, `saved.teams`, `saved.score`, `saved.millis`, `engines` and `reason` (launcher only; see `launch --resume` in the CLI reference) |
 
 `serve --web` and `replay --web` always answer `running`, because the page's server is the
 engine process itself. Under `launch` the page's server is a separate process that runs the

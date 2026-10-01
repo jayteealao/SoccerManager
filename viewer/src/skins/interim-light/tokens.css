@@ -136,6 +136,7 @@
    * colours measure under 4.5:1 on navy, so the strip carries the board's lighter pair. */
   --strip-good: oklch(0.93 0.09 150);
   --strip-bad: oklch(0.92 0.07 20);
+  --strip-warn: oklch(0.92 0.07 70);
 
   /* Type */
   --fd: 'Barlow Condensed', 'Arial Narrow', sans-serif;
