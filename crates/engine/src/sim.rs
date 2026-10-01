@@ -563,6 +563,9 @@ pub struct Simulation {
     /// Test seam: every change of phase, in order (the phase machine).
     #[cfg(feature = "scenario")]
     pub(crate) phase_log: Vec<crate::rules::phases::Step>,
+    /// Test seam: every restart position fault so far, one line each.
+    #[cfg(feature = "scenario")]
+    pub(crate) position_faults: Vec<String>,
     /// The plugin hooks, none unless a caller attaches them.
     pub(crate) plugins: Plugins,
     /// The decision hook's offsets for the current carrier. A stoppage and a new carrier
@@ -692,6 +695,8 @@ impl Simulation {
             forced_kicks: std::collections::VecDeque::new(),
             #[cfg(feature = "scenario")]
             phase_log: Vec::new(),
+            #[cfg(feature = "scenario")]
+            position_faults: Vec::new(),
             plugins: Plugins::default(),
             script_cache: None,
             finished: false,
@@ -851,6 +856,12 @@ impl Simulation {
     #[cfg(feature = "scenario")]
     pub fn phase_log(&self) -> &[crate::rules::phases::Step] {
         &self.phase_log
+    }
+
+    /// Test seam: every restart position fault so far, one line each.
+    #[cfg(feature = "scenario")]
+    pub fn position_faults(&self) -> &[String] {
+        &self.position_faults
     }
 
     /// The phase's name in the phase machine.

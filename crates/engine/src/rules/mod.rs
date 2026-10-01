@@ -14,6 +14,7 @@ pub mod injury;
 pub mod offside;
 pub mod pack;
 pub mod phases;
+pub mod positions;
 pub mod restart;
 pub mod shootout;
 
@@ -153,8 +154,61 @@ impl Simulation {
     /// When the checks are on and no row of `phases::TRANSITIONS` allows the change.
     pub(crate) fn enter_phase(&mut self, next: Phase, cause: Cause) {
         let to = phases::derive(next, self.referee.shootout.is_some());
+        #[cfg(feature = "scenario")]
+        let phase = self.referee.named;
         self.note_phase(to, cause);
+        #[cfg(feature = "scenario")]
+        if let Some(restart) = self.restart_taken(cause) {
+            let faults = self.restart_faults(&restart);
+            self.position_faults.extend(faults.into_iter().map(|f| {
+                format!(
+                    "tick {}: {} ({}): {f}",
+                    self.tick + 1,
+                    phase,
+                    restart.name()
+                )
+            }));
+        }
         self.referee.phase = next;
+    }
+
+    /// The restart that `cause` takes, read before the phase changes: the kick-off that starts
+    /// a period (its taker already holds the ball), a dead ball's restart, or a shoot-out
+    /// kick. `None` for every other cause.
+    #[cfg_attr(not(feature = "scenario"), allow(dead_code))]
+    fn restart_taken(&self, cause: Cause) -> Option<positions::Restart> {
+        let dead = match self.referee.phase {
+            Phase::DeadBall(dead) => Some(dead),
+            _ => None,
+        };
+        match cause {
+            Cause::KickOffTaken => {
+                let taker = self.carrier?;
+                Some(positions::Restart::KickOff {
+                    team: self.players[taker].team,
+                    taker,
+                })
+            }
+            Cause::RestartTaken => dead.map(positions::Restart::Dead),
+            Cause::ShootoutKickTaken => Some(positions::Restart::ShootoutKick {
+                dead: dead?,
+                keepers: self.referee.shootout.as_ref()?.keepers,
+            }),
+            _ => None,
+        }
+    }
+
+    /// Every position against the Laws as `restart` is taken (`positions::check`).
+    #[cfg_attr(not(feature = "scenario"), allow(dead_code))]
+    fn restart_faults(&self, restart: &positions::Restart) -> Vec<positions::Fault> {
+        positions::check(
+            &self.config.pitch,
+            restart,
+            self.ball.xy(),
+            &self.players,
+            &self.teams,
+            self.config.tuning.restart_ready_radius,
+        )
     }
 
     /// Moves the named phase to `to` for `cause` without a change of the stored phase: the

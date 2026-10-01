@@ -77,6 +77,8 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
             forced_kicks: _,
         #[cfg(feature = "scenario")]
             phase_log: _,
+        #[cfg(feature = "scenario")]
+            position_faults: _,
         plugins,
         script_cache,
         // End-of-match idempotency only; the phase in G6 says the match is over.

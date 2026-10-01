@@ -35,8 +35,8 @@ fn full_match(seed: u64, length: f64, width: f64) -> MatchConfig {
 }
 
 /// Steps `sim` to full time, checking after every tick that the named phase equals the stored
-/// phase's name, then finishes it and returns its phase log.
-fn play_logged(mut sim: Simulation) -> Vec<Step> {
+/// phase's name, then finishes it.
+fn play(mut sim: Simulation) -> Simulation {
     for _ in 0..1_000_000 {
         if sim.is_over() {
             break;
@@ -50,41 +50,46 @@ fn play_logged(mut sim: Simulation) -> Vec<Step> {
     }
     assert!(sim.is_over(), "the match never ended");
     sim.finish();
-    sim.phase_log().to_vec()
+    sim
+}
+
+/// [`play`], returning the phase log.
+fn play_logged(sim: Simulation) -> Vec<Step> {
+    play(sim).phase_log().to_vec()
 }
 
 /// The batch: five seeds at 90 minutes on the default ground, seed 42 on a 100 by 64 and a
 /// 120 by 90 ground, a level knockout match that goes to the shoot-out, a match abandoned
 /// below the minimum, and a dead ball whose taker is injured.
-fn batch() -> Vec<(String, Vec<Step>)> {
+fn batch() -> Vec<(String, Simulation)> {
     let mut out = Vec::new();
     for seed in [42, 1, 7, 99, 2026] {
         let sim = Simulation::new(full_match(seed, 105.0, 68.0)).unwrap();
-        out.push((format!("seed {seed}"), play_logged(sim)));
+        out.push((format!("seed {seed}"), play(sim)));
     }
     for (length, width) in [(100.0, 64.0), (120.0, 90.0)] {
         let sim = Simulation::new(full_match(42, length, width)).unwrap();
-        out.push((format!("seed 42 on {length} by {width}"), play_logged(sim)));
+        out.push((format!("seed 42 on {length} by {width}"), play(sim)));
     }
     let shootout = Scene::new(calm_match(5).with_knockout())
         .manager(0, engine::Manager::Human)
         .manager(1, engine::Manager::Human)
         .build();
-    out.push(("shoot-out".into(), play_logged(shootout)));
-    out.push(("abandoned".into(), play_logged(abandoned())));
-    out.push(("renamed taker".into(), play_logged(renamed_taker())));
+    out.push(("shoot-out".into(), play(shootout)));
+    out.push(("abandoned".into(), play(abandoned())));
+    out.push(("renamed taker".into(), play(renamed_taker())));
     let half = TICKS_PER_MINUTE * 5;
     let at_half_time = Scene::new(calm_match(10))
         .tick(half - 2)
         .injure(index(0, 2))
         .build();
-    out.push(("dead at half-time".into(), play_logged(at_half_time)));
+    out.push(("dead at half-time".into(), play(at_half_time)));
     let at_full_time = Scene::new(calm_match(10))
         .at_minute(9)
         .tick(2 * half - 2)
         .injure(index(0, 2))
         .build();
-    out.push(("dead at full time".into(), play_logged(at_full_time)));
+    out.push(("dead at full time".into(), play(at_full_time)));
     let at_shootout = Scene::new(calm_match(5).with_knockout())
         .manager(0, engine::Manager::Human)
         .manager(1, engine::Manager::Human)
@@ -92,13 +97,13 @@ fn batch() -> Vec<(String, Vec<Step>)> {
         .tick(half - 2)
         .injure(index(0, 2))
         .build();
-    out.push(("dead at the shoot-out".into(), play_logged(at_shootout)));
+    out.push(("dead at the shoot-out".into(), play(at_shootout)));
     let round_limit = Scene::new(calm_match(5).with_knockout())
         .manager(0, engine::Manager::Human)
         .manager(1, engine::Manager::Human)
         .shootout_kicks(&[true; 2 * SAFETY_ROUNDS as usize])
         .build();
-    out.push(("shoot-out round limit".into(), play_logged(round_limit)));
+    out.push(("shoot-out round limit".into(), play(round_limit)));
     out
 }
 
@@ -141,7 +146,8 @@ const UNREACHED: &[(usize, &str)] = &[
 fn every_change_of_phase_in_the_batch_is_declared_and_every_row_is_reached() {
     let mut reached = BTreeSet::new();
     let mut faults = Vec::new();
-    for (name, log) in batch() {
+    for (name, sim) in batch() {
+        let log = sim.phase_log().to_vec();
         assert!(!log.is_empty(), "{name}: no change of phase recorded");
         assert_eq!(
             log[0].cause,
@@ -373,4 +379,36 @@ fn priced_content_config() -> MatchConfig {
     let mut config = MatchConfig::new(42, 90, &content, [&a, &b]).unwrap();
     config.tuning.decision_interval_ticks = u32::MAX;
     config
+}
+
+/// The restart position check over the batch, reported and not enforced: every restart
+/// whose positions break a Law, one line each. Run with `-- --ignored --nocapture`.
+#[test]
+#[ignore = "a report: prints every restart position fault in the batch"]
+fn restart_position_report() {
+    let mut total = 0;
+    for (name, sim) in batch() {
+        for fault in sim.position_faults() {
+            println!("{name}: {fault}");
+            total += 1;
+        }
+    }
+    println!("{total} restart position faults");
+}
+
+/// [`restart_position_report`] over forty more seeds at 90 minutes on the default ground,
+/// with the knockout switch on so level matches play extra time and a shoot-out. Run with
+/// `--release -- --ignored --nocapture`.
+#[test]
+#[ignore = "a report: prints every restart position fault in forty knockout matches"]
+fn restart_position_report_wide() {
+    let mut total = 0;
+    for seed in 100..140 {
+        let sim = play(Simulation::new(full_match(seed, 105.0, 68.0).with_knockout()).unwrap());
+        for fault in sim.position_faults() {
+            println!("seed {seed} knockout: {fault}");
+            total += 1;
+        }
+    }
+    println!("{total} restart position faults");
 }

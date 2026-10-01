@@ -19,12 +19,14 @@ use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::Tuning;
 
 /// Distance opponents keep from a throw-in (IFAB Law 15).
-const THROW_IN_DISTANCE: f64 = 2.0;
+pub(crate) const THROW_IN_DISTANCE: f64 = 2.0;
 /// Distance every other player keeps from a dropped ball (IFAB Law 8).
-const DROP_BALL_DISTANCE: f64 = 4.0;
+pub(crate) const DROP_BALL_DISTANCE: f64 = 4.0;
 /// Slack between where a player is sent and where the law is judged, in metres.
 const TARGET_MARGIN: f64 = 0.5;
-const JUDGE_MARGIN: f64 = 0.25;
+/// Slack the referee allows when judging a distance the law asks for, in metres: readiness
+/// and the restart position check both use it.
+pub(crate) const JUDGE_MARGIN: f64 = 0.25;
 
 /// A dead ball waiting for its restart.
 #[derive(Debug, Clone, Copy, PartialEq)]
