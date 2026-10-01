@@ -125,6 +125,19 @@ export function contentWithSkin(skin) {
   return dir;
 }
 
+/// A copy of the content folder whose home team file (teams/default-a.json) names a home
+/// ground of `length` by `width` metres. A test passes it as SM_CONTENT_DIR, so the ground
+/// changes by configuration alone.
+export function contentWithGround(length, width) {
+  const dir = tempDir(`content-ground-${length}x${width}`);
+  cpSync(CONTENT, dir, { recursive: true });
+  const file = path.join(dir, 'teams', 'default-a.json');
+  const team = JSON.parse(readFileSync(file, 'utf8'));
+  team.club.ground = { length, width };
+  writeFileSync(file, `${JSON.stringify(team, null, 2)}\n`);
+  return dir;
+}
+
 /// Runs one engine command to completion and returns its exit code and output.
 export function runEngine(args, { env = {}, dataDir } = {}) {
   requireBinary();
