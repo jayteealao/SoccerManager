@@ -27,9 +27,9 @@ const MINUTE_60 = 180_000;
 /// Minute 3: far enough into play for a change to wait for a stoppage.
 const MINUTE_3 = 9_000;
 /// The seed whose home team gets a tired-player pick after minute 55 (the engine's advice
-/// test finds it: minute 55, tick 171000).
+/// test finds it: minute 58, tick 178500).
 const ADVICE_SEED = 1;
-const ADVICE_TICK = 171_000;
+const ADVICE_TICK = 178_500;
 
 const evidence = (info, name) => {
   const out = process.env.MATCH_EVIDENCE_DIR
@@ -84,15 +84,17 @@ async function continueToPrematch(page) {
 }
 
 /// From Tactics: CONTINUE, KICK OFF, play at 8x until `tick` is stored, then pause. The
-/// half-time report pauses play, so CONTINUE on it resumes.
-async function playTo(page, tick) {
+/// half-time report pauses play, so CONTINUE on it resumes. `wait`
+/// bounds the play; a drive that records the socket plays slower, because every server
+/// message passes through the test runner.
+async function playTo(page, tick, wait = 12 * 60_000) {
   await continueToPrematch(page);
   await action(page).click();
   await until(page, () => window.__touchline.lineup().phase === 'live', undefined, 15_000);
   await page.getByRole('group', { name: 'Playback' }).getByRole('button', { name: '8x', exact: true }).click();
   await playUntil(page, (t) => window.__touchline.history().newest_tick >= t, {
     arg: tick,
-    timeout: 12 * 60_000,
+    timeout: wait,
   });
   await action(page).click();
   await expect(action(page)).toHaveText('Resume');
@@ -277,14 +279,15 @@ test('the Touchline queue: a substitution with a new shape, a cancel and an edit
 });
 
 test("the assistant's tired-player pick shows at its tick, and Accept queues it", async ({ page }, info) => {
-  test.setTimeout(15 * 60_000);
+  // The recorded socket slows playback to between 4x and 8x: up to 20 minutes to the pick.
+  test.setTimeout(25 * 60_000);
   const sent = await recordClientMessages(page, managerCommand);
   // No fast-forward here: the recorded socket passes every server message through the test
   // runner, and a burst of 170,000 ticks ends the runner (exit 134).
   const engine = await serve(ADVICE_SEED);
   try {
     await tactics(page, engine, 'broadcast-blue');
-    await playTo(page, ADVICE_TICK + 500);
+    await playTo(page, ADVICE_TICK + 500, 20 * 60_000);
     await rewindTo(page, ADVICE_TICK - 50);
     const early = await hook(page, () => window.__touchline.advice());
     await rewindTo(page, ADVICE_TICK + 50);
