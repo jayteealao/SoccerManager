@@ -79,7 +79,7 @@ fn golden_ledger_index() -> usize {
     golden["ledger"].as_array().unwrap().len() - 1
 }
 
-/// AC-29 (mechanics): the fit confirms the engine, plays both batches, and reports 49
+/// The fit confirms the engine, plays both batches, and reports 49
 /// figures; the fit it reports records the golden results' id.
 #[test]
 fn a_small_fit_runs_and_records_the_golden_results_id() {
@@ -98,7 +98,7 @@ fn a_small_fit_runs_and_records_the_golden_results_id() {
     assert_eq!(shares.len(), 90);
 }
 
-/// AC-30: a fit whose engine id differs from the golden results' id fails and names both;
+/// A fit whose engine id differs from the golden results' id fails and names both;
 /// the unchanged fit passes.
 #[test]
 fn a_stale_fit_fails_and_names_both_ids() {
@@ -224,7 +224,7 @@ fn rust_files(dir: &Path, root: &Path, out: &mut Vec<(String, String)>) {
     }
 }
 
-/// AC-31, second half (RIM-6): no runtime path outside the fit and check commands resolves
+/// No runtime path outside the fit and check commands resolves
 /// the fast-model slot. The scan reads every crate's `src/`; a planted call in the serve
 /// command's text proves it fails.
 #[test]
@@ -267,7 +267,7 @@ fn no_runtime_path_resolves_the_fast_model() {
     );
 }
 
-/// AC-30 in every test job: the fit the content folder ships records the engine id of the
+/// In every test job: the fit the content folder ships records the engine id of the
 /// committed golden results, so a change that regenerates the golden file without a refit
 /// fails here as well as in the CI step.
 #[test]

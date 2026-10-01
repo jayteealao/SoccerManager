@@ -149,7 +149,7 @@ fn the_kick_off_strength_is_the_starting_elevens_mean_attribute() {
     assert!((1.10..1.16).contains(&ratio), "{ratio}");
     assert!((boosted.strength[1] - ko.strength[1]).abs() < 1e-12);
 }
-/// AC-31, first half: 2 000 seeded matches across strengths keep every event-stream rule,
+/// 2 000 seeded matches across strengths keep every event-stream rule,
 /// and the final score equals the goal events.
 #[test]
 fn the_fast_models_event_stream_keeps_the_rules() {

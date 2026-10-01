@@ -305,13 +305,15 @@ fn no_draw_bypasses_the_registry() {
         "next_u32",
         "next_u64",
     ];
-    // Offline generation and a maths test's input sampler keep their own generator.
-    const ALLOWED: [&str; 5] = [
+    // Offline generation, a maths test's input sampler, and the fast model, which plays no
+    // match stream, keep their own generator.
+    const ALLOWED: [&str; 6] = [
         "streams/",
         "rng.rs",
         "data/generator.rs",
         "data/names.rs",
         "math.rs",
+        "modules/fast_model.rs",
     ];
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let files = common::sources(&root);
