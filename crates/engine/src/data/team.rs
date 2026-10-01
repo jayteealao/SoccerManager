@@ -8,6 +8,7 @@ use garde::Validate;
 use serde::{Deserialize, Serialize};
 
 use crate::data::attributes::AttributeSchema;
+use crate::pitch::Pitch;
 
 /// Schema version this build reads.
 pub const TEAM_VERSION: u32 = 1;
@@ -69,8 +70,34 @@ pub struct Kit {
     pub secondary: String,
 }
 
+/// The club's home ground: its touchline (`length`) and goal line (`width`) in metres. A
+/// team file that gives none plays on 105 by 68. The default is never written back, so a
+/// file that gives it and one that gives none hash the same.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Ground {
+    pub length: f64,
+    pub width: f64,
+}
+
+impl Default for Ground {
+    fn default() -> Self {
+        Self {
+            length: Pitch::DEFAULT.length(),
+            width: Pitch::DEFAULT.width(),
+        }
+    }
+}
+
+impl Ground {
+    /// `true` for 105 by 68.
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 /// The club a team file describes.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct Club {
     #[garde(length(min = 3, max = 64))]
@@ -81,6 +108,17 @@ pub struct Club {
     pub short_name: String,
     #[garde(dive)]
     pub kit: Kit,
+    /// The home ground; a match plays on the home team's.
+    #[serde(default, skip_serializing_if = "Ground::is_default")]
+    #[garde(custom(check_ground(&self.name)))]
+    pub ground: Ground,
+}
+
+impl Club {
+    /// The pitch of the club's ground. A validated file always has one the Laws allow.
+    pub fn pitch(&self) -> Result<Pitch, crate::pitch::GroundError> {
+        Pitch::new(self.ground.length, self.ground.width)
+    }
 }
 
 /// One player in a team file.
@@ -101,7 +139,7 @@ pub struct PlayerEntry {
 }
 
 /// The team data file.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 #[garde(context(AttributeSchema))]
 pub struct TeamFile {
@@ -123,6 +161,15 @@ fn hex_colour(value: &str, _ctx: &()) -> garde::Result {
         Err(garde::Error::new(format!(
             "{value} is not a #RRGGBB colour"
         )))
+    }
+}
+
+/// Refuses a ground outside the Laws, naming the club's ground, the value, and the limit.
+fn check_ground(club: &str) -> impl FnOnce(&Ground, &()) -> garde::Result + '_ {
+    move |ground, _| {
+        Pitch::new(ground.length, ground.width)
+            .map(|_| ())
+            .map_err(|e| garde::Error::new(format!("{club}: {e}")))
     }
 }
 

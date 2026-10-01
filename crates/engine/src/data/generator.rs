@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use sha2::{Digest, Sha256};
 
-use crate::data::team::{Club, Kit, PlayerEntry, TEAM_VERSION, TeamFile};
+use crate::data::team::{Club, Ground, Kit, PlayerEntry, TEAM_VERSION, TeamFile};
 use crate::data::{Content, hex12, names};
 use crate::rng::EngineRng;
 
@@ -56,6 +56,7 @@ pub fn generate_league(seed: u64, clubs: u32, content: &Content) -> Vec<TeamFile
                 name,
                 short_name,
                 kit: Kit { primary, secondary },
+                ground: Ground::default(),
             },
             players,
         });

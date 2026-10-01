@@ -14,7 +14,7 @@ use crate::data::tactics::TacticsSchema;
 use crate::data::team::{Kit, Position, TeamFile};
 use crate::error::EngineError;
 use crate::math::DVec2;
-use crate::pitch;
+use crate::pitch::{self, Pitch};
 use crate::player::{Attributes, Derived, Player, Status};
 use crate::tactics::{RoleDuty, Tactics, TeamPlan};
 use crate::tuning::Tuning;
@@ -87,6 +87,9 @@ pub struct Team {
     pub plan: TeamPlan,
     /// `false` for a slot whose player left play (sent off, or injured and not replaced).
     pub active: [bool; PLAYERS_PER_TEAM],
+    /// The ground of the match: the home team's. The formation, drawn for 105 by 68, scales
+    /// to it.
+    pub pitch: Pitch,
 }
 
 impl Team {
@@ -115,6 +118,7 @@ impl Team {
             },
             plan: TeamPlan::neutral(&t),
             active: [true; PLAYERS_PER_TEAM],
+            pitch: Pitch::DEFAULT,
         };
         team.relayout();
         team

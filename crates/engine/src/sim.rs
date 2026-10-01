@@ -29,7 +29,7 @@ use crate::fatigue::InjurySource;
 use crate::flags::ActiveFlags;
 use crate::math::{self, DVec2};
 use crate::modules::ResolvedModules;
-use crate::pitch;
+use crate::pitch::{self, Pitch};
 use crate::player::Player;
 use crate::plugin::{Plugins, ScriptNote};
 use crate::record::{TickRecord, TickSink};
@@ -71,6 +71,8 @@ pub struct MatchConfig {
     pub flags: ActiveFlags,
     /// The module in each slot, resolved when the content loaded. Never changes in a match.
     pub modules: ResolvedModules,
+    /// The home team's ground. Never changes in a match.
+    pub pitch: Pitch,
 }
 
 impl MatchConfig {
@@ -89,9 +91,14 @@ impl MatchConfig {
             )));
         }
         let tuning = content.tuning.engine.clone();
+        let pitch = files[0]
+            .club
+            .pitch()
+            .map_err(|e| EngineError::InvalidConfig(format!("club {}: {e}", files[0].club.id)))?;
         let (mut home, _) = Team::from_file(0, files[0], &content.attributes, &tuning)?;
         let (mut away, _) = Team::from_file(1, files[1], &content.attributes, &tuning)?;
         for team in [&mut home, &mut away] {
+            team.pitch = pitch;
             let setup =
                 content
                     .modules
@@ -127,6 +134,7 @@ impl MatchConfig {
             knockout: false,
             flags: content.flags.clone(),
             modules: content.modules,
+            pitch,
         })
     }
 
