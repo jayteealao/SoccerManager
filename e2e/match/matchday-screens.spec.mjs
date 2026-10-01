@@ -19,7 +19,7 @@ import { expect, test } from '@playwright/test';
 import { contrastReport } from '../support/contrast.mjs';
 import { VIEWER, contentWithSkin, fastForward, startEngine } from '../support/engine.mjs';
 import { everyMessage, managerCommand, recordClientMessages } from '../support/messages.mjs';
-import { chooseIndex } from '../support/page.mjs';
+import { chooseIndex, playUntil } from '../support/page.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
 /// Minute 60 at 50 ticks a second: the Touchline fixture.
@@ -83,13 +83,17 @@ async function continueToPrematch(page) {
   await expect(action(page)).toHaveText('Kick off');
 }
 
-/// From Tactics: CONTINUE, KICK OFF, play at 8x until `tick` is stored, then pause.
+/// From Tactics: CONTINUE, KICK OFF, play at 8x until `tick` is stored, then pause. The
+/// half-time report pauses play, so CONTINUE on it resumes.
 async function playTo(page, tick) {
   await continueToPrematch(page);
   await action(page).click();
   await until(page, () => window.__touchline.lineup().phase === 'live', undefined, 15_000);
   await page.getByRole('group', { name: 'Playback' }).getByRole('button', { name: '8x', exact: true }).click();
-  await until(page, (t) => window.__touchline.history().newest_tick >= t, tick, 12 * 60_000);
+  await playUntil(page, (t) => window.__touchline.history().newest_tick >= t, {
+    arg: tick,
+    timeout: 12 * 60_000,
+  });
   await action(page).click();
   await expect(action(page)).toHaveText('Resume');
 }
