@@ -385,7 +385,10 @@ impl Simulation {
                     .modules
                     .restarts
                     .taker(&self.view(), dead.kind, dead.team, dead.spot);
-            self.referee.phase = Phase::DeadBall(dead);
+            self.enter_phase(
+                Phase::DeadBall(dead),
+                crate::rules::phases::Cause::TakerRenamed,
+            );
         }
         self.timeline.push((now, self.teams.clone()));
     }

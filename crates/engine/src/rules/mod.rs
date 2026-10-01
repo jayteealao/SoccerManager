@@ -13,6 +13,7 @@ pub mod fouls;
 pub mod injury;
 pub mod offside;
 pub mod pack;
+pub mod phases;
 pub mod restart;
 pub mod shootout;
 
@@ -32,6 +33,7 @@ use crate::tuning::Tuning;
 use clock::{KICK_LIVE_TICKS, MatchClock, Tally};
 use fouls::Card;
 use offside::OffsideSet;
+use phases::{Cause, PhaseName};
 pub use restart::DeadBall;
 use serde_json::json;
 
@@ -97,7 +99,13 @@ impl Shootout {
 /// The referee's state.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Referee {
+    /// The stored phase: the gate hashes it and the snapshot saves it. Only
+    /// `Simulation::enter_phase` writes it.
     pub phase: Phase,
+    /// The phase's name in the phase machine: derived state that equals
+    /// `phases::derive(phase, shootout)` at every tick boundary, so it is neither hashed nor
+    /// saved.
+    pub named: PhaseName,
     /// Players in an offside position since the last kick in open play.
     pub offside: OffsideSet,
     pub pending: Vec<PendingCard>,
@@ -115,6 +123,7 @@ impl Referee {
     pub fn new(minutes: u32, rules: &RulePack, knockout: bool) -> Self {
         Self {
             phase: Phase::Live,
+            named: PhaseName::PreMatch,
             offside: 0,
             pending: Vec::new(),
             tally: Tally::default(),
@@ -127,6 +136,44 @@ impl Referee {
 }
 
 impl Simulation {
+    /// `true` when the phase machine checks every change of phase: in debug builds, in the
+    /// engine's tests, and in debug mode (`trace_on`). A release match without debug mode
+    /// checks nothing.
+    #[inline(always)]
+    pub(crate) fn checks_on(&self) -> bool {
+        cfg!(any(debug_assertions, feature = "scenario")) || self.trace_on()
+    }
+
+    /// The one writer of the phase (the phase machine): names the target, checks that the
+    /// table declares the change when the checks are on, records it in the engine's tests,
+    /// and writes the stored and the named phase.
+    ///
+    /// # Panics
+    ///
+    /// When the checks are on and no row of `phases::TRANSITIONS` allows the change.
+    pub(crate) fn enter_phase(&mut self, next: Phase, cause: Cause) {
+        let to = phases::derive(next, self.referee.shootout.is_some());
+        self.note_phase(to, cause);
+        self.referee.phase = next;
+    }
+
+    /// Moves the named phase to `to` for `cause` without a change of the stored phase: the
+    /// break inside `half_time`, which places the next kick-off on the same tick.
+    pub(crate) fn note_phase(&mut self, to: PhaseName, cause: Cause) {
+        let from = self.referee.named;
+        if self.checks_on() && phases::declared(from, to, cause).is_none() {
+            panic!("undeclared phase transition: {from} -> {to} ({cause})");
+        }
+        #[cfg(feature = "scenario")]
+        self.phase_log.push(phases::Step {
+            tick: self.tick + 1,
+            from,
+            to,
+            cause,
+        });
+        self.referee.named = to;
+    }
+
     /// Places every player for a kick-off by `team` at once, as at the start of a half, and
     /// gives the centre-forward the ball.
     pub(crate) fn place_kick_off(&mut self, team: usize) {
@@ -167,7 +214,7 @@ impl Simulation {
         self.last_touch = Some(team);
         self.restart_taker = Some(kicker);
         self.referee.offside = 0;
-        self.referee.phase = crate::rules::Phase::Live;
+        self.enter_phase(Phase::Live, Cause::KickOffTaken);
     }
 
     /// `team` scored. The event names the player who kicked the ball last; a player of the
@@ -432,7 +479,7 @@ impl Simulation {
             );
             self.trace_abandoned(short);
             self.referee.abandoned = true;
-            self.referee.phase = Phase::FullTime;
+            self.enter_phase(Phase::FullTime, Cause::Abandoned);
         }
     }
 
@@ -526,7 +573,7 @@ impl Simulation {
                         dead.team,
                         dead.spot,
                     );
-                    self.referee.phase = Phase::DeadBall(dead);
+                    self.enter_phase(Phase::DeadBall(dead), Cause::TakerRenamed);
                 }
             }
             Phase::FullTime => {}
@@ -540,7 +587,7 @@ impl Simulation {
             );
             self.trace_abandoned(short);
             self.referee.abandoned = true;
-            self.referee.phase = Phase::FullTime;
+            self.enter_phase(Phase::FullTime, Cause::Abandoned);
         }
     }
 
@@ -602,15 +649,18 @@ impl Simulation {
             );
         }
         let ready_at = since + restarts.delay_ticks(&self.view(), kind, team);
-        self.referee.phase = Phase::DeadBall(DeadBall {
-            kind,
-            team,
-            spot,
-            direct,
-            since,
-            ready_at,
-            taker,
-        });
+        self.enter_phase(
+            Phase::DeadBall(DeadBall {
+                kind,
+                team,
+                spot,
+                direct,
+                since,
+                ready_at,
+                taker,
+            }),
+            Cause::BallDead(cause),
+        );
         self.referee.tally.add(cause);
         self.summary.stoppages += 1;
         let count = match kind {
@@ -673,7 +723,7 @@ impl Simulation {
             self.take_shootout_kick(dead, t);
             return;
         }
-        self.referee.phase = Phase::Live;
+        self.enter_phase(Phase::Live, Cause::RestartTaken);
         self.carrier = Some(dead.taker);
         self.control_since = self.tick;
         self.last_touch = Some(dead.team);
@@ -820,7 +870,7 @@ impl Simulation {
                     if decided_by.is_some() {
                         self.summary.decided_by = decided_by;
                     }
-                    self.referee.phase = Phase::FullTime;
+                    self.enter_phase(Phase::FullTime, Cause::MatchEnd);
                 }
             }
         }
@@ -851,6 +901,7 @@ impl Simulation {
                 json!({"period": half, "next": next, "extra_time": extra, "recover": recover}),
             );
         }
+        self.note_phase(PhaseName::HalfTime, Cause::PeriodEnd);
         self.show_pending_cards();
         if self.referee.abandoned {
             return;
@@ -939,12 +990,12 @@ impl Simulation {
             kicker: None,
             live_since: None,
         });
-        self.shootout_next_kick();
+        self.shootout_next_kick(Cause::ShootoutStart);
     }
 
     /// Sets up the next shoot-out kick: the kicking team's next player on the pitch in its
     /// order, at the penalty mark of the shoot-out end, after the unscaled penalty delay.
-    fn shootout_next_kick(&mut self) {
+    fn shootout_next_kick(&mut self, cause: Cause) {
         let Some(state) = self.referee.shootout.as_mut() else {
             return;
         };
@@ -983,15 +1034,18 @@ impl Simulation {
             .modules
             .restarts
             .shootout_delay_ticks(&self.view());
-        self.referee.phase = Phase::DeadBall(DeadBall {
-            kind: StoppageKind::Penalty,
-            team,
-            spot,
-            direct: true,
-            since,
-            ready_at: since + delay,
-            taker: kicker,
-        });
+        self.enter_phase(
+            Phase::DeadBall(DeadBall {
+                kind: StoppageKind::Penalty,
+                team,
+                spot,
+                direct: true,
+                since,
+                ready_at: since + delay,
+                taker: kicker,
+            }),
+            cause,
+        );
         self.summary.stoppages += 1;
         let mut event = self.event(EngineEventKind::Penalty, Some(team));
         event.spot = Some(spot);
@@ -1018,7 +1072,7 @@ impl Simulation {
         let keeper = state.keepers[1 - dead.team];
         let end = state.end;
         let goal = self.config.pitch.goal_centre(end);
-        self.referee.phase = Phase::Live;
+        self.enter_phase(Phase::Live, Cause::ShootoutKickTaken);
         let kick = self.shot_kick(dead.taker, goal, keeper, t.shots.penalty_spread);
         let diver = self.players[keeper];
         let dive = self
@@ -1209,7 +1263,7 @@ impl Simulation {
                 kicks = taken[0] + taken[1]
             );
             self.summary.decided_by = Some(DecidedBy::Shootout);
-            self.referee.phase = Phase::FullTime;
+            self.enter_phase(Phase::FullTime, Cause::ShootoutDecided);
         } else if taken[0].min(taken[1]) >= shootout::SAFETY_ROUNDS {
             tracing::error!(
                 signal = "rules.shootout_round_limit",
@@ -1225,9 +1279,9 @@ impl Simulation {
                 );
             }
             self.referee.abandoned = true;
-            self.referee.phase = Phase::FullTime;
+            self.enter_phase(Phase::FullTime, Cause::Abandoned);
         } else {
-            self.shootout_next_kick();
+            self.shootout_next_kick(Cause::NextShootoutKick);
         }
     }
 }
@@ -1262,6 +1316,18 @@ mod tests {
         assert_eq!(sim.summary.yellow[team], 2);
     }
 
+    /// The phase machine refuses a change its table does not declare: a kick-off after full
+    /// time fails loudly, naming both phases and the cause.
+    #[test]
+    #[should_panic(
+        expected = "undeclared phase transition: full time -> open play (kick-off taken)"
+    )]
+    fn a_kick_off_after_full_time_is_an_undeclared_transition() {
+        let mut sim = Simulation::new(shipped_config(1, 90).unwrap()).unwrap();
+        sim.enter_phase(Phase::FullTime, Cause::MatchEnd);
+        sim.place_kick_off(0);
+    }
+
     /// A penalty in play is a direct kick at goal from the mark (IFAB Law 14): the taker
     /// shoots at once and never keeps the ball to pass, dribble, or hold.
     #[test]
@@ -1282,6 +1348,10 @@ mod tests {
             ready_at: sim.tick,
             taker,
         };
+        sim.enter_phase(
+            Phase::DeadBall(dead),
+            Cause::BallDead(StoppageKind::Penalty),
+        );
         let shots = sim.summary.shots[team];
         let t = sim.config.tuning.clone();
         sim.take_restart(&dead, &t);

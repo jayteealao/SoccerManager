@@ -75,6 +75,8 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
             census: _,
         #[cfg(feature = "scenario")]
             forced_kicks: _,
+        #[cfg(feature = "scenario")]
+            phase_log: _,
         plugins,
         script_cache,
         // End-of-match idempotency only; the phase in G6 says the match is over.
@@ -132,6 +134,9 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     w.summary(summary);
     let Referee {
         phase,
+        // Derived state: it equals `phases::derive(phase, shootout)` at every tick boundary,
+        // and both are hashed.
+        named: _,
         offside,
         pending,
         tally,

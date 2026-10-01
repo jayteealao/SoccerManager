@@ -1072,6 +1072,8 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
         }
         _ => return Err("malformed body: an unknown shoot-out state".into()),
     };
+    // The phase machine's name is derived state: it follows from the phase and the shoot-out.
+    referee.named = crate::rules::phases::derive(referee.phase, referee.shootout.is_some());
     if r.at != r.buf.len() {
         return Err("malformed body: bytes left over".into());
     }

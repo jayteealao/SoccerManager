@@ -201,6 +201,7 @@ impl Scene {
             ready_at: sim.tick,
             taker,
         });
+        sim.referee.named = crate::rules::phases::PhaseName::DeadBall(StoppageKind::Penalty);
         self
     }
 
@@ -236,6 +237,8 @@ impl Scene {
             for team in &mut self.sim.teams {
                 team.switch_ends();
             }
+            // The scene skips to the break, so the kick-off starts the period from it.
+            self.sim.referee.named = crate::rules::phases::PhaseName::HalfTime;
             self.sim.place_kick_off(1);
             self.sim.events.clear();
         }
@@ -282,6 +285,8 @@ impl Scene {
             usize::from(period % 2 == 1)
         };
         self.sim.tick = start;
+        // The scene skips to the break, so the kick-off starts the period from it.
+        self.sim.referee.named = crate::rules::phases::PhaseName::HalfTime;
         self.sim.place_kick_off(kick_off);
         self.sim.events.clear();
         self.sim.control_since = self.sim.tick;

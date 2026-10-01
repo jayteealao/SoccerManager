@@ -560,6 +560,9 @@ pub struct Simulation {
     /// Test seam: the outcomes the next shoot-out kicks are given, whatever the ball does.
     #[cfg(feature = "scenario")]
     pub(crate) forced_kicks: std::collections::VecDeque<bool>,
+    /// Test seam: every change of phase, in order (the phase machine).
+    #[cfg(feature = "scenario")]
+    pub(crate) phase_log: Vec<crate::rules::phases::Step>,
     /// The plugin hooks, none unless a caller attaches them.
     pub(crate) plugins: Plugins,
     /// The decision hook's offsets for the current carrier. A stoppage and a new carrier
@@ -687,6 +690,8 @@ impl Simulation {
             census: ShotCensus::default(),
             #[cfg(feature = "scenario")]
             forced_kicks: std::collections::VecDeque::new(),
+            #[cfg(feature = "scenario")]
+            phase_log: Vec::new(),
             plugins: Plugins::default(),
             script_cache: None,
             finished: false,
@@ -842,6 +847,23 @@ impl Simulation {
         self.shot_in_flight.map(|_| self.shot_on_target)
     }
 
+    /// Test seam: every change of phase so far, in order.
+    #[cfg(feature = "scenario")]
+    pub fn phase_log(&self) -> &[crate::rules::phases::Step] {
+        &self.phase_log
+    }
+
+    /// The phase's name in the phase machine.
+    pub fn phase_name(&self) -> crate::rules::phases::PhaseName {
+        self.referee.named
+    }
+
+    /// The phase machine's name of the stored phase: equal to [`Self::phase_name`] at every
+    /// tick boundary.
+    pub fn derived_phase_name(&self) -> crate::rules::phases::PhaseName {
+        crate::rules::phases::derive(self.referee.phase, self.referee.shootout.is_some())
+    }
+
     /// Test seam: the position of every random stream the match has used.
     #[cfg(feature = "scenario")]
     pub fn stream_state(&self) -> crate::rng::StreamState {
@@ -904,7 +926,7 @@ impl Simulation {
         }
         self.finished = true;
         self.streams.begin_tick(self.tick);
-        self.referee.phase = Phase::FullTime;
+        self.enter_phase(Phase::FullTime, crate::rules::phases::Cause::MatchEnd);
         let added = self
             .referee
             .clock
