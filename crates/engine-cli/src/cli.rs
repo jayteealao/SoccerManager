@@ -212,9 +212,19 @@ pub struct SimulateOpts {
 
 #[derive(Debug, Args)]
 pub struct ResumeOpts {
-    /// Snapshot file written during a match (snapshot.smsn).
+    /// Snapshot file of a match (snapshot.smsn).
     #[arg(long, value_name = "FILE")]
     pub snapshot: PathBuf,
+    /// The previous release's engine program.
+    #[arg(
+        long = "previous",
+        value_name = "FILE",
+        long_help = "Previous release's engine program, which finishes the matches that\n\
+                     release saved; default SM_PREVIOUS_ENGINE_PATH, then\n\
+                     previous/engine-cli beside this program. It plays with the\n\
+                     content folder beside it."
+    )]
+    pub previous_engine: Option<PathBuf>,
     /// Also write the resumed ticks to this file.
     #[arg(long, value_name = "FILE")]
     pub ticks_out: Option<PathBuf>,

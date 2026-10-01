@@ -7,6 +7,7 @@ mod bisect;
 mod calibrate;
 mod cli;
 mod content;
+mod engines;
 mod gate;
 mod generate;
 mod guard;

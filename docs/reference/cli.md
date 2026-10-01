@@ -249,9 +249,16 @@ Exit codes: 0 when every frame was sent; 1; 2 when the viewer left early.
 
 Continue a match from its newest snapshot to full time. A knockout match resumes as a knockout match: the snapshot records it.
 
+A snapshot resumes only on the build that wrote it. The snapshot records the release version of that build, and `resume` picks the program by that version:
+
+- A snapshot from this version: this program continues it.
+- A snapshot from the previous release (0.2.0-beta.1): the previous release's program, shipped as `previous/engine-cli` beside this program, continues it with its own `previous/content` folder. `resume` passes that program's output and exit code through, and logs `resume.delegated`.
+- Any other snapshot: refused, with a message that names the version that saved it, for example `snapshot refused: this match was saved by Touchline 0.1.0, two or more versions back; ...`. The file stays on disk.
+
 | Flag | Value | Default | Meaning |
 |---|---|---|---|
 | `--snapshot` | file | required | The snapshot file, `matches/<match.id>/snapshot.smsn` in the data folder. |
+| `--previous` | file | `SM_PREVIOUS_ENGINE_PATH`, then `previous/engine-cli` beside this program | The previous release's engine program. It plays with the `content` folder beside it. |
 | `--ticks-out` | file | not set | Also write the resumed ticks to this file. |
 | `--json` | none | off | Also write the ticks as JSON Lines. Requires `--ticks-out`. |
 | `--team-a` | file | as for `simulate` | The home team file the match started with. |
@@ -260,7 +267,7 @@ Continue a match from its newest snapshot to full time. A knockout match resumes
 
 Output: one JSON line with the match statistics.
 
-Exit codes: 0; 1 when the snapshot is refused: a damaged file, a file from another build, or a file from other content.
+Exit codes: 0; 1 when the snapshot is refused: a damaged file, a file from a version this program does not carry, a file from another build of this version, or a file from other content.
 
 ## calibrate
 

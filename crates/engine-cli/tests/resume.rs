@@ -128,3 +128,80 @@ fn a_damaged_snapshot_is_refused_by_name_and_the_valid_one_resumes() {
     let _ = std::fs::remove_dir_all(&data);
     assert_eq!(out.status.code(), Some(0));
 }
+
+/// The committed save stamped as written by release 0.1.0 (format 8, build 3ba8fed).
+fn saved_0_1_0() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../e2e/match/fixtures/saved-0.1.0.smsn")
+}
+
+/// A file in the layout release 0.2.0-beta.1 wrote (format 7, a 64-byte header) whose
+/// build hash is `build`. Its body is not a match: the resolver reads only the header.
+fn old_save(dir: &Path, build: &str) -> PathBuf {
+    use sha2::{Digest, Sha256};
+    let mut bytes = vec![0u8; 64];
+    bytes[0..4].copy_from_slice(b"SMSN");
+    bytes[4..6].copy_from_slice(&7u16.to_le_bytes());
+    bytes[8..8 + build.len()].copy_from_slice(build.as_bytes());
+    bytes.extend_from_slice(&[0u8; 120]);
+    let digest: [u8; 32] = Sha256::digest(&bytes).into();
+    bytes.extend_from_slice(b"SMSE");
+    bytes.extend_from_slice(&120u32.to_le_bytes());
+    bytes.extend_from_slice(&digest);
+    std::fs::create_dir_all(dir).unwrap();
+    let path = dir.join(format!("old-{build}.smsn"));
+    std::fs::write(&path, bytes).unwrap();
+    path
+}
+
+fn refused(data: &Path, snapshot: &Path, previous: &Path) -> String {
+    let out = bin(data)
+        .arg("resume")
+        .arg("--snapshot")
+        .arg(snapshot)
+        .arg("--previous")
+        .arg(previous)
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    assert!(out.stdout.is_empty(), "no match was played");
+    stderr
+}
+
+#[test]
+fn a_save_from_two_or_more_versions_back_is_refused_naming_its_version() {
+    let data = temp("older");
+    let stderr = refused(&data, &saved_0_1_0(), &data.join("no-previous"));
+    let _ = std::fs::remove_dir_all(&data);
+    assert!(
+        stderr.contains(
+            "error: snapshot refused: this match was saved by Touchline 0.1.0, two or more \
+             versions back"
+        ),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_previous_release_save_is_refused_when_its_engine_is_missing() {
+    let data = temp("missing");
+    let save = old_save(&data, "669f68b");
+    let stderr = refused(&data, &save, &data.join("no-previous"));
+    let unreleased = refused(
+        &data,
+        &old_save(&data, "1234567"),
+        &data.join("no-previous"),
+    );
+    let _ = std::fs::remove_dir_all(&data);
+    assert!(
+        stderr.contains(
+            "this match was saved by Touchline 0.2.0-beta.1, and the engine of 0.2.0-beta.1 is \
+             missing from this copy of the game"
+        ),
+        "{stderr}"
+    );
+    assert!(
+        unreleased.contains("saved by an unreleased build 1234567"),
+        "{unreleased}"
+    );
+}
