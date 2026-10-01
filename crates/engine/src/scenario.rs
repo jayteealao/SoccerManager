@@ -125,6 +125,12 @@ impl Scene {
         self
     }
 
+    /// Counts `n` video reviews in the current half, as the video referee would.
+    pub fn reviews(mut self, n: u32) -> Self {
+        self.sim.referee.tally.reviews += n;
+        self
+    }
+
     /// Counts `n` cards in the current half.
     pub fn cards(mut self, n: u32) -> Self {
         self.sim.referee.tally.cards += n;

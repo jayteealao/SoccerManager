@@ -146,10 +146,20 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         shootout,
     } = referee;
     w.mark(Bytes, || "referee.tally".into());
-    for count in tally.kinds {
-        w.u32(count);
+    let crate::rules::clock::Tally {
+        kinds,
+        cards,
+        // Not hashed while no event counts a review; hashing it is a result change.
+        reviews,
+    } = tally;
+    debug_assert_eq!(
+        *reviews, 0,
+        "a video review was counted; hash it with its own result change"
+    );
+    for count in kinds {
+        w.u32(*count);
     }
-    w.u32(tally.cards);
+    w.u32(*cards);
     w.mark(Bytes, || "referee.pending".into());
     w.count(pending.len());
     for card in pending {

@@ -21,11 +21,17 @@ pub const TICKS_PER_MINUTE: u32 = 60 * TICKS_PER_SECOND;
 /// Ticks a shoot-out kick may stay live before it counts as missed (5 s).
 pub const KICK_LIVE_TICKS: u32 = 5 * TICKS_PER_SECOND;
 
-/// Stoppages counted in the current half, by kind, and the cards shown in it.
+/// Stoppages counted in the current half, by kind, the cards shown in it, and its video
+/// reviews.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Tally {
     pub kinds: [u32; StoppageKind::ALL.len()],
     pub cards: u32,
+    /// Video reviews in the current half. No match event counts one yet (the video referee
+    /// comes later), so it stays 0: the replay gate and the snapshot do not carry it, and
+    /// both assert in debug builds that it is 0, so the day an event counts one it must be
+    /// hashed and saved with its own result change.
+    pub reviews: u32,
 }
 
 impl Tally {
@@ -39,7 +45,7 @@ impl Tally {
             .iter()
             .map(|k| self.kinds[k.index()] * added.seconds(*k))
             .sum();
-        stoppages + self.cards * added.card_s
+        stoppages + self.cards * added.card_s + self.reviews * added.video_review_s
     }
 }
 
@@ -455,6 +461,21 @@ mod tests {
         let extra = extra_time_allowance(&rules);
         assert_eq!(added_seconds(&busy, &extra, 0.9), 300);
         assert_eq!(added_seconds(&tally, &extra, 0.5), 190);
+    }
+
+    /// A video review adds its price; with none counted, the price changes nothing.
+    #[test]
+    fn a_video_review_adds_its_price_and_none_adds_nothing() {
+        let mut added = shipped_content().rules.added_time;
+        assert_eq!(added.video_review_s, 60, "the default price");
+        let mut tally = Tally::default();
+        tally.add(StoppageKind::Goal);
+        tally.cards = 1;
+        let without = tally.seconds(&added);
+        added.video_review_s = 90;
+        assert_eq!(tally.seconds(&added), without, "no review, no time");
+        tally.reviews = 2;
+        assert_eq!(tally.seconds(&added), without + 180);
     }
 
     #[test]

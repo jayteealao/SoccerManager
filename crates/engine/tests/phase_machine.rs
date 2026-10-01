@@ -256,3 +256,121 @@ fn only_the_phase_machine_writes_the_phase() {
         ["sim/fatigue.rs: self.referee.phase = Phase::FullTime;"]
     );
 }
+
+/// One played match: its summary, its events, and its last tick record.
+fn played(
+    config: MatchConfig,
+) -> (
+    engine::Summary,
+    Vec<engine::EngineEvent>,
+    engine::TickRecord,
+) {
+    let mut sim = Simulation::new(config).unwrap();
+    let mut events = Vec::new();
+    while !sim.is_over() {
+        sim.step();
+        events.extend(sim.take_events());
+    }
+    sim.finish();
+    events.extend(sim.take_events());
+    (sim.summary(), events, sim.record())
+}
+
+/// The shipped rule pack with video reviews priced at 90 s, read from a copy of the rule file
+/// that writes the field.
+fn priced_content() -> engine::Content {
+    let shipped = std::fs::read_to_string(common::content_dir().path("rules/default.json"))
+        .expect("the shipped rule pack reads");
+    assert!(
+        !shipped.contains("video_review_s"),
+        "the shipped pack names no price"
+    );
+    let priced = shipped.replacen("\"card_s\":", "\"video_review_s\": 90,\n    \"card_s\":", 1);
+    assert_ne!(priced, shipped);
+    let rules = engine::data::load_json_bytes::<engine::data::RulePack>(
+        "rules",
+        priced.as_bytes(),
+        "rules/priced.json",
+        engine::data::RULES_VERSION,
+        &(),
+    )
+    .expect("a rule pack that prices video reviews loads")
+    .value;
+    assert_eq!(rules.added_time.video_review_s, 90);
+    let mut content = common::content();
+    assert_eq!(
+        content.rules.added_time.video_review_s, 60,
+        "the default price"
+    );
+    content.rules = rules;
+    content
+}
+
+/// Pricing video reviews changes no added time and no event, because no event counts a
+/// review: seed 42, seed 7, and a level knockout match with extra time and a shoot-out.
+#[test]
+fn pricing_video_reviews_changes_no_added_time() {
+    let shipped = common::content();
+    let priced = priced_content();
+    for (name, seed, knockout) in [
+        ("seed-42", 42, false),
+        ("seed-7", 7, false),
+        ("knockout", 42, true),
+    ] {
+        let config = |content: &engine::Content| {
+            let [a, b] = default_teams(content);
+            let mut config = MatchConfig::new(seed, 90, content, [&a, &b]).unwrap();
+            if knockout {
+                // Nobody decides, so the match stays level into extra time and the shoot-out.
+                config.tuning.decision_interval_ticks = u32::MAX;
+                config = config.with_knockout();
+            }
+            config
+        };
+        let (s0, e0, r0) = played(config(&shipped));
+        let (s1, e1, r1) = played(config(&priced));
+        assert!(
+            s0.added_s.iter().all(|&s| s > 0),
+            "{name}: added time is played"
+        );
+        assert_eq!(s0.added_s, s1.added_s, "{name}");
+        assert_eq!(s0.extra_added_s, s1.extra_added_s, "{name}");
+        assert_eq!(s0, s1, "{name}");
+        assert_eq!(e0, e1, "{name}");
+        assert_eq!(r0, r1, "{name}");
+        if knockout {
+            assert!(
+                s0.extra_time && s0.shootout.is_some(),
+                "{name}: extra time and a shoot-out"
+            );
+        }
+    }
+}
+
+/// The control: two reviews counted in the first half add twice their price to it, so the
+/// comparison above can fail.
+#[test]
+fn counted_video_reviews_add_their_price() {
+    let first_half_added = |reviews: u32| {
+        let mut sim = Scene::new(priced_content_config())
+            .tick(45 * TICKS_PER_MINUTE - 10)
+            // Three goals' worth of stoppages keep the half clear of the minimum.
+            .tally(engine::StoppageKind::Goal, 3)
+            .reviews(reviews)
+            .build();
+        while sim.summary().added_s[0] == 0 {
+            sim.step();
+        }
+        sim.summary().added_s[0]
+    };
+    assert_eq!(first_half_added(2), first_half_added(0) + 2 * 90);
+}
+
+/// Seed 42 over 90 minutes with the priced rule pack and nobody deciding.
+fn priced_content_config() -> MatchConfig {
+    let content = priced_content();
+    let [a, b] = default_teams(&content);
+    let mut config = MatchConfig::new(42, 90, &content, [&a, &b]).unwrap();
+    config.tuning.decision_interval_ticks = u32::MAX;
+    config
+}

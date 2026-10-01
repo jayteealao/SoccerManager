@@ -788,6 +788,11 @@ fn encode(sim: &Simulation, w: &mut Writer) {
         w.u32(count);
     }
     w.u32(referee.tally.cards);
+    // Not saved while no event counts a review; saving it is a format change.
+    debug_assert_eq!(
+        referee.tally.reviews, 0,
+        "a video review was counted; save it with a new snapshot format"
+    );
     w.u32(referee.clock.half);
     w.u32(referee.clock.half_start);
     for added in referee.clock.added_ticks {
