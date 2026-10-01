@@ -23,6 +23,14 @@
 // frame is stored and a saved file is complete; a stored match is ready at once. Every frame
 // is kept as it arrived, so Save replay writes the stream byte for byte. A replay file and
 // Replay the whole match play in the replay view; a live stream stays on the match screen.
+//
+// Skip to result pauses playback and opens the Skip decision. Keep watching goes back to the
+// paused match at the same tick. Confirm sends `skip`: the engine plays the rest of the same
+// match at full speed, and the session stores every frame as usual but sends no pause, start
+// or seen and draws none of it, so no report opens at a break. The report shows "the engine
+// plays the rest" until the full-time whistle, then stores, and is ready at the engine's clean
+// close, marked with the skip point; the match behind it moves to full time. The skip mark
+// lives in the session only: a saved replay keeps the stream's bytes.
 
 import { COMPONENT_COUNT, decodeInto, newFrame } from './decode.js';
 import { Dugout } from './dugout.svelte.js';
@@ -43,6 +51,7 @@ import { ReportClock, reportModel } from './report.js';
 import { Scheduler } from './schedule.js';
 import { fixtureTitle, scorerLines } from './scoreboard.js';
 import { signal } from './signal.js';
+import { TICKS_PER_MINUTE } from './skip.js';
 import { MatchSocket, socketAddress } from './socket.js';
 import { Stoppages, stopsPlay } from './stoppages.js';
 
@@ -64,6 +73,7 @@ export const NOTICES = Object.freeze({
   lag: { kind: 'mid', word: 'LAG' },
   end: { kind: 'neutral', word: 'FULL TIME' },
   error: { kind: 'bad', word: 'STREAM ENDED' },
+  skip: { kind: 'warn', word: 'NO SKIP' },
 });
 
 /// The one next action per screen, as the cyan action block names it.
@@ -134,6 +144,11 @@ export class MatchSession {
   /// whole seconds to the next known stoppage (or null), and each team's substitutions and
   /// windows used.
   play = $state.raw({ stopped: false, nextIn: null, subsUsed: [0, 0], windowsUsed: [0, 0] });
+  /// The skip to the result: `{ state, from, newest }` while it is decided or plays, where
+  /// `state` is `deciding`, `playing`, `storing` or `ready`, `from` the tick the player
+  /// skipped at, and `newest` the newest tick received while the engine plays the rest
+  /// (moved once a minute). Null with no skip.
+  skip = $state.raw(null);
 
   /// `fetcher`, `timers`, `raf` and `now` are the browser's unless a test passes its own.
   constructor({
@@ -202,8 +217,15 @@ export class MatchSession {
     this.stepOpts = { version: null, resumeTick: null };
     this.teamNames = new Map();
     this.halfTimes = 0;
+    /// The type of every command sent, in order, for the browser drives.
+    this.sent = [];
+    /// The wall time the skip was sent, and whether a reconnect owes the engine the skip.
+    this.skipSentAt = 0;
+    this.skipOwed = false;
+    /// The report on show before the skip, put back when the engine refuses the skip.
+    this.reportBeforeSkip = null;
     this.dugout = new Dugout({
-      send: (command) => (this.socket ? this.socket.send(command) : false),
+      send: (command) => this.command(command),
       onStart: () => this.started(),
     });
   }
@@ -348,7 +370,9 @@ export class MatchSession {
   }
 
   selectCanvas() {
-    const canvas = (this.view === 'replay' ? this.canvases.replay : null) ?? this.canvases.match ?? null;
+    // The replay and the Skip decision draw on their own canvas while they are open.
+    const own = this.view === 'replay' || this.view === 'skip' ? this.canvases[this.view] : null;
+    const canvas = own ?? this.canvases.match ?? null;
     if (canvas === this.canvas) {
       return;
     }
@@ -419,6 +443,9 @@ export class MatchSession {
       // The same match, after a reconnect or a restart. The stores are kept, and the first
       // tick frame, a keyframe one tick past the stoppage it resumes from, says where to cut.
       this.resuming = true;
+      // A skip the engine was playing when the connection dropped is sent again once the
+      // resumed match's first tick arrives: each connection starts on a new gate.
+      this.skipOwed = this.skip?.state === 'playing';
       this.engineWord = 'Engine connected';
       this.panel = null;
       this.busy = false;
@@ -436,6 +463,8 @@ export class MatchSession {
     this.helloVersion = hello['protocol.version'] ?? null;
     this.reportClock.reset();
     this.report = null;
+    this.skip = null;
+    this.skipOwed = false;
     this.streamEnded = false;
     this.teams = hello.teams;
     this.hello = hello;
@@ -494,8 +523,8 @@ export class MatchSession {
   /// The engine accepted the lineup, or needs none: the pitch is reported at tick 0 before
   /// the start, so the engine is held near the pitch from its first tick.
   started() {
-    this.socket?.send({ type: 'seen', tick: 0 });
-    this.socket?.send({ type: 'start' });
+    this.command({ type: 'seen', tick: 0 });
+    this.command({ type: 'start' });
     this.kickedOff = true;
     this.setPlaying(true);
     this.screen = 'live';
@@ -593,6 +622,9 @@ export class MatchSession {
       this.socket?.noteTick(this.incoming.tick);
       this.playback.noteArrival(this.now(), this.incoming.tick, this.incoming.tick - this.renderedTick);
       this.pace();
+      if (this.skip?.state === 'playing') {
+        this.skipProgress(this.incoming.tick);
+      }
     }
     if (result.kind !== 'delta' && live) {
       history.report();
@@ -614,6 +646,10 @@ export class MatchSession {
   }
 
   onMessage(message) {
+    if ((message.type === 'ack' || message.type === 'reject') && message.command === 'skip') {
+      this.onSkipAnswer(message);
+      return;
+    }
     if (message.type === 'ack' || message.type === 'reject') {
       if (!this.stored) {
         this.dugout.answer(message);
@@ -642,6 +678,14 @@ export class MatchSession {
     // Full time marks the real end, so the timeline stops at the last tick that arrived.
     if (message.type === 'event' && message['event.type'] === KIND.fullTime && this.history) {
       this.scrubMax = Math.max(1, this.history.newestTick);
+      // The engine reached full time while it played the rest: the report is written and
+      // the whole match is being stored.
+      if (this.skip?.state === 'playing') {
+        this.skip = { ...this.skip, state: 'storing', newest: message.tick };
+        if (this.report?.skippedFrom !== undefined) {
+          this.report = { ...this.report, state: 'storing', tick: message.tick };
+        }
+      }
     }
   }
 
@@ -665,8 +709,8 @@ export class MatchSession {
     if (gap > 0) {
       signal('viewer.resume_gap', { ticks: gap });
     }
-    if (this.kickedOff && this.socket) {
-      this.socket.send({ type: 'seen', tick: Math.min(this.renderedTick, tick) });
+    if (this.kickedOff && this.socket && !this.skipRunning) {
+      this.command({ type: 'seen', tick: Math.min(this.renderedTick, tick) });
     }
   }
 
@@ -798,7 +842,7 @@ export class MatchSession {
 
   /// Keeps a kicked-off engine a few seconds ahead of playback.
   pace() {
-    if (!this.kickedOff || !this.socket || !this.history) {
+    if (!this.kickedOff || !this.socket || !this.history || this.skipRunning) {
       return;
     }
     const command = this.lead.next(
@@ -807,18 +851,18 @@ export class MatchSession {
       this.match.fullTimeTick !== null
     );
     if (command) {
-      this.socket.send({ type: command });
+      this.command({ type: command });
     }
   }
 
   /// Tells a kicked-off engine which tick the pitch shows, so it stays within its buffer.
   reportSeen(now) {
-    if (!this.kickedOff || !this.socket) {
+    if (!this.kickedOff || !this.socket || this.skipRunning) {
       return;
     }
     const seen = this.seen.next(this.renderedTick, now);
     if (seen !== null) {
-      this.socket.send({ type: 'seen', tick: seen });
+      this.command({ type: 'seen', tick: seen });
     }
   }
 
@@ -943,6 +987,10 @@ export class MatchSession {
   }
 
   showPanel(model) {
+    // A skip the engine could not finish ends with it; the panel shows on the match screen.
+    if (this.skip) {
+      this.clearSkip();
+    }
     this.panel = model;
     this.busy = false;
     this.screen = model.kind === 'first-run' ? 'first-run' : 'error';
@@ -970,6 +1018,10 @@ export class MatchSession {
       this.engineWord = 'Engine finished';
       this.setNotice('end', 'Full time. The whole match is stored and plays back.');
       this.streamEnded = true;
+      if (this.skipRunning) {
+        this.finishSkip();
+        return;
+      }
       if (this.report?.kind === KIND.fullTime && this.report.state === 'loading') {
         this.report = { ...this.report, state: 'ready' };
       }
@@ -1006,6 +1058,9 @@ export class MatchSession {
         this.setNotice(null);
         this.showPanel(model);
       } else {
+        if (this.skip) {
+          this.clearSkip();
+        }
         this.screen = this.playing ? 'live' : 'paused';
         this.setNotice('error', 'The match is no longer live. Start the engine again to watch another.');
       }
@@ -1099,6 +1154,8 @@ export class MatchSession {
       this.socket = null;
     }
     this.kickedOff = false;
+    this.skip = null;
+    this.skipOwed = false;
     this.match.clear();
     this.stoppages.truncate(-1);
     this.batcher = new FeedBatcher();
@@ -1138,6 +1195,168 @@ export class MatchSession {
     this.selectCanvas();
     this.spoken = 'Replay loaded. Playing from kick-off.';
     signal('viewer.replay_loaded', { frames: read.frames, ticks: read.ticks, name });
+  }
+
+  // ---- Skip to the result -------------------------------------------------------------------
+
+  /// Sends one command to the engine and records its type. `false` when no socket is open.
+  command(command) {
+    if (!this.socket) {
+      return false;
+    }
+    this.sent.push(command.type);
+    return this.socket.send(command);
+  }
+
+  /// `true` while the engine plays the rest of a skipped match and the session waits for it.
+  get skipRunning() {
+    return this.skip?.state === 'playing' || this.skip?.state === 'storing';
+  }
+
+  /// Skip to result is offered on a kicked-off live engine match before its full time: a
+  /// replay file ignores commands, and a match that has finished has nothing left to play.
+  get canSkip() {
+    // Read for the screens: the full-time whistle arrives with the ticks, never on its own.
+    void this.tick;
+    return (
+      (this.screen === 'live' || this.screen === 'paused') &&
+      this.kickedOff &&
+      this.socket !== null &&
+      !this.stored &&
+      this.skip === null &&
+      this.match.fullTimeTick === null
+    );
+  }
+
+  /// Skip to result: pauses playback, as the pause control does, and opens the Skip decision
+  /// at the tick the pitch shows. Nothing is sent yet.
+  openSkip() {
+    if (!this.canSkip) {
+      return false;
+    }
+    this.setPlaying(false);
+    this.skip = { state: 'deciding', from: this.renderedTick, newest: this.renderedTick };
+    this.view = 'skip';
+    this.selectCanvas();
+    signal('viewer.skip_opened', { from_tick: this.renderedTick });
+    return true;
+  }
+
+  /// Keep watching: back to the match at the same tick, still paused; with `play` (RESUME in
+  /// the header), playing.
+  keepWatching(play = false) {
+    if (this.skip?.state !== 'deciding') {
+      return;
+    }
+    this.skip = null;
+    this.view = 'match';
+    this.selectCanvas();
+    if (play) {
+      this.setPlaying(true);
+    }
+  }
+
+  /// Confirm: skip to result. The engine plays the rest at full speed; the report shows it
+  /// playing until full time.
+  confirmSkip() {
+    if (this.skip?.state !== 'deciding' || !this.socket) {
+      return false;
+    }
+    const from = this.skip.from;
+    this.command({ type: 'skip' });
+    this.skipSentAt = this.now();
+    this.skip = { state: 'playing', from, newest: Math.max(from, this.history?.newestTick ?? from) };
+    this.reportBeforeSkip = this.report;
+    this.reportFrom = 'match';
+    this.report = {
+      kind: KIND.fullTime,
+      tick: null,
+      state: 'playing-rest',
+      model: reportModel(this.match.events, from, this.teams ?? []),
+      skippedFrom: from,
+    };
+    this.view = 'report';
+    this.selectCanvas();
+    signal('viewer.skip_confirmed', { from_tick: from });
+    this.spoken = 'Skipping to the result. The engine plays the rest of the match.';
+    return true;
+  }
+
+  /// The engine's answer to `skip`. A refusal (an engine that cannot skip, or an older engine
+  /// program that does not know the command) returns to the paused match with a notice.
+  onSkipAnswer(message) {
+    if (message.type === 'ack' || !this.skip) {
+      return;
+    }
+    const from = this.skip.from;
+    this.clearSkip();
+    this.view = 'match';
+    this.selectCanvas();
+    if (this.history && this.renderedTick !== from) {
+      this.rewind(from);
+    }
+    this.setNotice('skip', `The engine cannot skip to the result: ${message.reason}`);
+    signal('viewer.skip_refused', { from_tick: from, reason: message.reason });
+  }
+
+  /// Moves the playing step's minute once a minute of the rest has arrived, and sends a skip
+  /// a reconnect owes the engine.
+  skipProgress(tick) {
+    if (this.skipOwed) {
+      this.skipOwed = false;
+      this.command({ type: 'skip' });
+    }
+    if (Math.floor(tick / TICKS_PER_MINUTE) !== Math.floor(this.skip.newest / TICKS_PER_MINUTE)) {
+      this.skip = { ...this.skip, newest: tick };
+    }
+  }
+
+  /// The engine closed the socket after full time: every frame is stored. The report is
+  /// ready with the skip point marked, and the match behind it moves to full time, with no
+  /// goal banner and no report opening at the breaks it passes.
+  finishSkip() {
+    const from = this.skip.from;
+    const tick = this.match.fullTimeTick ?? this.history.newestTick;
+    this.skip = { state: 'ready', from, newest: tick };
+    this.reportBeforeSkip = null;
+    this.rewind(tick);
+    this.setPlaying(false);
+    this.report = {
+      kind: KIND.fullTime,
+      tick,
+      state: 'ready',
+      model: reportModel(this.match.events, tick, this.teams ?? []),
+      skippedFrom: from,
+    };
+    if (this.view !== 'report') {
+      this.reportFrom = 'match';
+      this.view = 'report';
+      this.selectCanvas();
+    }
+    signal('viewer.skip_done', {
+      from_tick: from,
+      full_time_tick: tick,
+      wall_ms: Math.round(this.now() - this.skipSentAt),
+    });
+    this.spoken = 'Full time. The report is open.';
+  }
+
+  /// Ends a skip that did not finish: the report on show before it comes back.
+  clearSkip() {
+    const playing = this.skipRunning;
+    this.skip = null;
+    this.skipOwed = false;
+    if (playing) {
+      this.report = this.reportBeforeSkip;
+      if (this.view === 'report') {
+        this.view = 'match';
+        this.selectCanvas();
+      }
+    } else if (this.view === 'skip') {
+      this.view = 'match';
+      this.selectCanvas();
+    }
+    this.reportBeforeSkip = null;
   }
 
   // ---- The reports, saving and the replay view --------------------------------------------------
@@ -1220,7 +1439,7 @@ export class MatchSession {
     if (this.frames.count === 0 || !this.matchId) {
       return 'Nothing is stored yet.';
     }
-    if (this.report?.kind === KIND.fullTime && this.report.state === 'loading') {
+    if (this.report?.kind === KIND.fullTime && this.report.state !== 'ready') {
       return 'The whole match is still being stored.';
     }
     return null;

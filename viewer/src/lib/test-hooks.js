@@ -113,6 +113,33 @@ export function install(session, target = globalThis) {
           }
         : null;
     },
+    /// The skip to the result: its state and the tick it was skipped at, or null.
+    skip: () => (session.skip ? { state: session.skip.state, from: session.skip.from } : null),
+    canSkip: () => session.canSkip,
+    /// SHA-256 in hex over every stored binary tick frame, in order. Text frames carry wall
+    /// stamps and are left out; the tick frames are what a saved replay holds of the match.
+    tickFrameDigest: async () => {
+      const store = session.frames;
+      const parts = [];
+      let size = 0;
+      for (let i = 0; i < store.count; i += 1) {
+        const { text, payload } = store.frame(i);
+        if (!text) {
+          parts.push(payload);
+          size += payload.length;
+        }
+      }
+      const all = new Uint8Array(size);
+      let at = 0;
+      for (const part of parts) {
+        all.set(part, at);
+        at += part.length;
+      }
+      const digest = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', all));
+      return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
+    },
+    /// The type of every command the page sent, in order.
+    sentCommands: () => [...session.sent],
     pending: () => session.dugout.pending.all(session.renderedTick),
     lineup: () => session.dugout.lineupView(),
     dugout: () => ({

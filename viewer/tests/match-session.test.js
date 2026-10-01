@@ -605,3 +605,202 @@ test('the session plays on the ground its hello names, and on 105 by 68 when it 
   other.socket.deliver(hello('match-default'));
   assert.deepEqual({ ...other.session.ground }, { length: 105, width: 68 });
 });
+
+// ---- Skip to the result ---------------------------------------------------------------------
+
+/// A kicked-off session drawn at tick `at`, with frames up to `received` stored.
+async function skippable(at = 200, received = 300) {
+  const { session, socket, downloads } = await started(RUNNING);
+  socket.deliver(hello('match-7'));
+  session.act();
+  for (let t = 1; t <= received; t += 1) {
+    socket.deliver(frameAt(t));
+  }
+  session.rewind(at);
+  socket.sent.length = 0;
+  return { session, socket, downloads };
+}
+
+test('Skip to result is offered only on a kicked-off live engine match before full time', async () => {
+  const { session, socket } = await started(RUNNING);
+  socket.deliver(hello());
+  assert.equal(session.canSkip, false, 'not before kick-off');
+  session.act();
+  playTo(session, socket, 1, 100);
+  assert.equal(session.canSkip, true, 'a live match can skip');
+  session.act();
+  assert.equal(session.canSkip, true, 'a paused match can skip');
+  shortMatch(socket);
+  assert.equal(session.canSkip, false, 'after the full-time whistle there is nothing left to play');
+
+  const stored = await skippable();
+  stored.socket.deliver(JSON.stringify(eventMessage(300, 'full-time')));
+  stored.socket.finish();
+  await stored.session.saveReplay();
+  await stored.session.openReplay(stored.downloads[0].bytes);
+  assert.equal(stored.session.canSkip, false, 'a replay file ignores commands');
+  assert.equal(stored.session.openSkip(), false);
+});
+
+test('Skip to result pauses at the drawn tick and opens the decision; Keep watching sends nothing', async () => {
+  const { session, socket } = await skippable(200, 300);
+  assert.equal(session.openSkip(), true);
+  assert.equal(session.view, 'skip');
+  assert.equal(session.playing, false, 'the match is paused as the pause control pauses it');
+  assert.equal(session.screen, 'paused');
+  assert.deepEqual(session.skip, { state: 'deciding', from: 200, newest: 200 });
+  assert.ok(!socket.sent.some((c) => c.type === 'skip'), 'deciding sends no skip');
+  session.frame(0);
+  session.frame(500);
+  assert.equal(session.renderedTick, 200, 'the paused match does not move');
+
+  session.keepWatching();
+  assert.equal(session.view, 'match');
+  assert.equal(session.skip, null);
+  assert.equal(session.renderedTick, 200, 'back at the same tick');
+  assert.equal(session.playing, false, 'still paused');
+  assert.ok(!socket.sent.some((c) => c.type === 'skip'));
+
+  session.openSkip();
+  session.keepWatching(true);
+  assert.equal(session.playing, true, 'RESUME in the header plays on');
+  assert.equal(session.screen, 'live');
+});
+
+test('Confirm sends one skip; while the engine plays the rest nothing paces it and no break report opens', async () => {
+  const { session, socket } = await skippable(200, 300);
+  session.openSkip();
+  assert.equal(session.confirmSkip(), true);
+  assert.deepEqual(
+    socket.sent.filter((c) => c.type === 'skip'),
+    [{ type: 'skip' }]
+  );
+  assert.equal(session.view, 'report');
+  assert.equal(session.report.state, 'playing-rest');
+  assert.equal(session.report.skippedFrom, 200);
+  assert.equal(session.saveBlocked, 'The whole match is still being stored.');
+  socket.deliver(JSON.stringify({ type: 'ack', command: 'skip', 'change.queued_tick': 300 }));
+  assert.equal(session.skip.state, 'playing', 'the ack keeps the skip playing');
+
+  const sentBefore = socket.sent.length;
+  const score = { 'home.score': 1, 'away.score': 0 };
+  for (let t = 301; t <= 800; t += 1) {
+    socket.deliver(frameAt(t));
+    if (t === 400) {
+      socket.deliver(JSON.stringify(eventMessage(400, 'half-time')));
+    }
+    if (t === 500) {
+      socket.deliver(JSON.stringify(eventMessage(500, 'goal', { 'team.id': 'club-a', ...score })));
+    }
+  }
+  for (let ts = 0; ts < 2000; ts += 16) {
+    session.frame(ts);
+  }
+  assert.equal(session.renderedTick, 200, 'none of the rest is drawn');
+  assert.equal(session.view, 'report', 'no half-time report opens');
+  assert.equal(session.report.state, 'playing-rest');
+  assert.deepEqual(socket.sent.slice(sentBefore), [], 'no pause, start or seen while it plays');
+
+  socket.deliver(JSON.stringify(eventMessage(800, 'full-time', score)));
+  assert.equal(session.skip.state, 'storing');
+  assert.equal(session.report.state, 'storing');
+  assert.equal(session.report.tick, 800);
+
+  socket.finish();
+  assert.equal(session.skip.state, 'ready');
+  assert.equal(session.report.state, 'ready');
+  assert.equal(session.report.skippedFrom, 200);
+  assert.equal(session.report.tick, 800);
+  assert.deepEqual(session.report.model.score, [1, 0], 'the report counts every event');
+  assert.equal(session.report.model.rows.find((r) => r.id === 'goals').counts[0], 1);
+  assert.equal(session.renderedTick, 800, 'the match behind the report is at full time');
+  assert.equal(session.banner, null, 'with no goal banner');
+  assert.equal(session.saveBlocked, null);
+  session.closeReport();
+  assert.equal(session.view, 'match');
+  for (let ts = 3000; ts < 3200; ts += 16) {
+    session.frame(ts);
+  }
+  assert.equal(session.view, 'match', 'no report opens behind the skip');
+  assert.equal(session.canSkip, false);
+  const done = (await import('../src/lib/signal.js')).signals().find((s) => s.signal === 'viewer.skip_done');
+  assert.equal(done.from_tick, 200);
+  assert.equal(done.full_time_tick, 800);
+});
+
+test('a refused skip returns to the paused match with a notice naming the reason', async () => {
+  const { session, socket } = await skippable(200, 300);
+  session.openSkip();
+  session.confirmSkip();
+  socket.deliver(
+    JSON.stringify({ type: 'reject', command: 'skip', reason: 'cannot read the command: unknown variant `skip`' })
+  );
+  assert.equal(session.skip, null);
+  assert.equal(session.view, 'match');
+  assert.equal(session.screen, 'paused');
+  assert.equal(session.renderedTick, 200);
+  assert.equal(session.report, null, 'the playing report goes');
+  assert.equal(session.notice.word, NOTICES.skip.word);
+  assert.match(session.notice.message, /^The engine cannot skip to the result: cannot read the command/);
+  assert.equal(session.canSkip, true, 'the player may try again');
+});
+
+test('a reconnect while the engine plays the rest sends the skip again after the first tick', async () => {
+  const { session, socket } = await skippable(200, 300);
+  session.openSkip();
+  session.confirmSkip();
+  for (let t = 301; t <= 400; t += 1) {
+    socket.deliver(frameAt(t));
+  }
+  socket.drop();
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const again = FakeSocket.made.at(-1);
+  assert.notEqual(again, socket);
+  again.deliver(hello('match-7'));
+  assert.deepEqual(again.sent, [], 'nothing before the resumed match streams');
+  again.deliver(frameAt(301));
+  assert.deepEqual(
+    again.sent.map((c) => c.type),
+    ['skip'],
+    'the skip goes again, and no seen'
+  );
+  assert.equal(session.skip.state, 'playing');
+});
+
+test('a crash while the engine plays the rest clears the skip and shows the error panel', async () => {
+  const crashed = { 'engine.state': 'crashed', 'engine.code': 3, 'snapshot.tick': 300, launcher: true };
+  const { session, socket } = await started(RUNNING, crashed);
+  socket.deliver(hello());
+  session.act();
+  playTo(session, socket, 1, 300);
+  session.rewind(200);
+  session.openSkip();
+  session.confirmSkip();
+  socket.drop();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(session.screen, 'error');
+  assert.equal(session.skip, null);
+  assert.equal(session.view, 'match');
+});
+
+test('a replay saved after a skip has the bytes of one saved after the match played through', async () => {
+  const play = async (skip) => {
+    const { session, socket, downloads } = await skippable(200, 300);
+    if (skip) {
+      session.openSkip();
+      session.confirmSkip();
+      socket.deliver(JSON.stringify({ type: 'ack', command: 'skip', 'change.queued_tick': 300 }));
+    }
+    for (let t = 301; t <= 800; t += 1) {
+      socket.deliver(frameAt(t));
+    }
+    socket.deliver(JSON.stringify(eventMessage(800, 'full-time')));
+    socket.finish();
+    await session.saveReplay();
+    return downloads[0].bytes;
+  };
+  const skipped = await play(true);
+  const watched = await play(false);
+  assert.deepEqual(Array.from(skipped), Array.from(watched), 'the skip mark is not written');
+});
