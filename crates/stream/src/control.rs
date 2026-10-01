@@ -19,6 +19,11 @@
 //! A test seam, the fast-forward, lets a started match run flat out to a named tick: before
 //! it, neither a pause nor the lead bound holds the producer; from it on, both hold as usual.
 //! The simulation is the same either way; only when its ticks are sent changes.
+//!
+//! A skip (`skip`) plays the rest of a started match at full speed: from it on, neither a
+//! pause nor the lead bound holds the producer, so the same simulation steps on from its
+//! exact state to full time and every tick and message streams as usual. Nothing is saved,
+//! restored or rebuilt. A skip before kick-off is refused, and a second skip is answered again.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -57,12 +62,18 @@ struct GateState {
     lead_bound: Option<u32>,
     /// A test seam: once started, the producer is not held before this tick.
     fast_forward_to: Option<u32>,
+    /// `true` once the client skipped to the result: the producer never waits again.
+    skipping: bool,
 }
 
 impl GateState {
     /// `true` while producing the tick after `tick` must wait: the client paused, or the
-    /// lead bound is reached. A started match inside its fast-forward never waits.
+    /// lead bound is reached. A started match that skipped, or is inside its fast-forward,
+    /// never waits.
     fn holds(&self, tick: u32) -> bool {
+        if self.started && self.skipping {
+            return false;
+        }
         if self.started && self.fast_forward_to.is_some_and(|to| tick < to) {
             return false;
         }
@@ -99,6 +110,7 @@ impl Gate {
                 seen: None,
                 lead_bound: None,
                 fast_forward_to: None,
+                skipping: false,
             }),
             changed: Condvar::new(),
             speed_centis: AtomicU32::new(100),
@@ -144,6 +156,27 @@ impl Gate {
         let mut state = self.state.lock().expect("the gate lock is never poisoned");
         state.fast_forward_to = Some(tick);
         self.changed.notify_all();
+    }
+
+    /// Skips a started match to its result: from now on neither a pause nor the lead bound
+    /// holds the producer, so the match plays to full time at full speed. Refused (`false`,
+    /// the gate unchanged) before the first `start`. The simulation is untouched.
+    pub fn skip(&self) -> bool {
+        let mut state = self.state.lock().expect("the gate lock is never poisoned");
+        if !state.started {
+            return false;
+        }
+        state.skipping = true;
+        self.changed.notify_all();
+        true
+    }
+
+    /// `true` once the client skipped to the result.
+    pub fn skipping(&self) -> bool {
+        self.state
+            .lock()
+            .expect("the gate lock is never poisoned")
+            .skipping
     }
 
     /// The newest tick the client has drawn. A rewind reports a lower tick, and the bound
@@ -524,6 +557,18 @@ impl CommandContext {
                 },
                 None,
             ),
+            ClientCommand::Skip => (
+                if self.gate.skip() {
+                    tracing::info!(signal = "socket.skip", tick);
+                    ack(&command, None)
+                } else {
+                    ServerMessage::Reject(Reject {
+                        command: command.name().into(),
+                        reason: "the match has not kicked off; there is nothing to skip".into(),
+                    })
+                },
+                None,
+            ),
         };
         if let Some(event) = &answer.1 {
             self.events
@@ -757,6 +802,84 @@ mod tests {
         );
         gate.stop();
         assert!(!handle.join().unwrap());
+    }
+
+    #[test]
+    fn a_skip_runs_past_a_pause_and_the_lead_bound_to_the_end() {
+        let gate = Arc::new(Gate::held());
+        gate.set_lead_bound(1);
+        gate.set_running(true);
+        gate.set_seen(1_000);
+        gate.set_running(false);
+        let waiter = Arc::clone(&gate);
+        let handle = std::thread::spawn(move || waiter.wait_for_room(1_001));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        assert!(
+            !handle.is_finished(),
+            "paused at the bound: the producer waits"
+        );
+        assert!(!gate.skipping());
+        assert!(gate.skip());
+        assert!(handle.join().unwrap(), "the skip releases the producer");
+        assert!(gate.skipping());
+        for tick in [1_002, 50_000, 269_999] {
+            assert!(gate.wait_for_room(tick), "tick {tick} never waits");
+        }
+        gate.set_seen(0);
+        gate.set_running(false);
+        assert!(
+            gate.wait_for_room(200_000),
+            "a later pause or seen has no effect"
+        );
+        assert!(gate.skip(), "a second skip is answered again");
+        gate.stop();
+        assert!(!gate.wait_for_room(200_001), "a stopped session still ends");
+    }
+
+    #[test]
+    fn a_skip_before_kick_off_is_refused_and_the_gate_still_holds() {
+        let dir = temp("skip-early");
+        let mut ctx = context(&dir, Gate::held(), PreMatch::none());
+        let (answer, event) = ctx.handle("{\"type\":\"skip\"}").unwrap();
+        assert!(event.is_none());
+        let ServerMessage::Reject(reject) = answer else {
+            panic!("a skip before kick-off must be refused: {answer:?}");
+        };
+        assert_eq!(reject.command, "skip");
+        assert_eq!(
+            reject.reason,
+            "the match has not kicked off; there is nothing to skip"
+        );
+        assert!(!ctx.gate.skipping());
+        let waiter = Arc::clone(&ctx.gate);
+        let handle = std::thread::spawn(move || waiter.wait_for_room(0));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        assert!(
+            !handle.is_finished(),
+            "the gate still holds before kick-off"
+        );
+        ctx.gate.stop();
+        assert!(!handle.join().unwrap());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_skip_after_kick_off_is_acknowledged_through_handle() {
+        let dir = temp("skip");
+        let mut ctx = context(&dir, Gate::held(), PreMatch::none());
+        ctx.handle("{\"type\":\"start\"}").unwrap();
+        ctx.state.set_tick(90_000);
+        for _ in 0..2 {
+            let (answer, event) = ctx.handle("{\"type\":\"skip\"}").unwrap();
+            assert!(event.is_none(), "a skip writes no row");
+            let ServerMessage::Ack(ack) = answer else {
+                panic!("a skip after kick-off must be acknowledged: {answer:?}");
+            };
+            assert_eq!(ack.command, "skip");
+            assert_eq!(ack.queued_tick, 90_000);
+        }
+        assert!(ctx.gate.skipping());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

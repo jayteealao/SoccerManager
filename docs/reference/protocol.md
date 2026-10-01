@@ -329,7 +329,7 @@ Each entry of `picks`:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `command` | string | `start`, `pause`, `set-speed`, `queue-change`, `set-lineup`, `seen`, or `cancel-change` |
+| `command` | string | `start`, `pause`, `set-speed`, `queue-change`, `set-lineup`, `seen`, `cancel-change`, or `skip` |
 | `change.queue_id` | string | queued and withdrawn changes only |
 | `change.queued_tick` | integer | the tick the command was read on |
 | `state` | enumeration | queued changes only; `queued` in this build |
@@ -441,6 +441,21 @@ on the acknowledgement, queues the edited change.
 | Field | Type | Meaning |
 |---|---|---|
 | `change.queue_id` | string | the identifier the change's `queue-change` acknowledgement gave |
+
+### skip
+
+Skips to the result. No fields. After kick-off the engine plays the rest of the match from
+its exact state at full speed: it stops waiting for `start`, `pause` and the `seen` lead
+bound, and streams every remaining tick and message as usual, up to the final `full-time`
+event and the clean close. Nothing is saved or restored; it is the same match, so every tick
+frame and event after a skip is the one the match played through would send. A change
+queued before or after the skip still applies at the next stoppage that admits it.
+
+It is acknowledged with an `ack` whose `change.queued_tick` is the tick it was read on. A
+second `skip` is acknowledged again. Before the first `start` it is refused with `the match
+has not kicked off; there is nothing to skip`. After a skip, `pause`, `start` and `seen`
+are acknowledged and have no effect on production. `record`, `replay`, and `bench` ignore
+it. The protocol version is unchanged: a client that never sends it is unaffected.
 
 ## The page server
 

@@ -85,6 +85,11 @@ pub use message::{
 /// optional hello fields (`formation` on each team and `knockout`). No field was removed or
 /// changed meaning, a client ignores a message type or field it does not know, and the match
 /// itself is unchanged: the advice reads the match and writes nothing.
+///
+/// Version 3 also survived skipping to the result: one command (`skip`, no fields), answered
+/// with the existing `ack` or `reject`. The match it plays on is the same match, so every
+/// tick and message after it is what the match played through would send, and a client that
+/// never sends it gets exactly the answers it got before.
 pub const PROTOCOL_VERSION: u16 = 3;
 
 /// Errors this crate returns.
@@ -358,6 +363,12 @@ pub const MESSAGES: &[MessageSpec] = &[
         encoding: Encoding::JsonText,
         fields: &["change.queue_id"],
     },
+    MessageSpec {
+        name: "skip",
+        direction: Direction::ClientToServer,
+        encoding: Encoding::JsonText,
+        fields: &[],
+    },
 ];
 
 /// The specification of `name`, or `None`.
@@ -394,6 +405,7 @@ mod tests {
             ClientCommand::SetLineup(_) => "set-lineup",
             ClientCommand::Seen(_) => "seen",
             ClientCommand::CancelChange(_) => "cancel-change",
+            ClientCommand::Skip => "skip",
         }
     }
 
@@ -503,6 +515,7 @@ mod tests {
             ClientCommand::CancelChange(CancelChange {
                 queue_id: String::new(),
             }),
+            ClientCommand::Skip,
         ]
     }
 

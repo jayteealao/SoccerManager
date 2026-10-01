@@ -449,6 +449,10 @@ pub enum ClientCommand {
     SetLineup(SetLineup),
     Seen(Seen),
     CancelChange(CancelChange),
+    /// After kick-off, plays the rest of the match from its exact state at full speed: the
+    /// engine stops waiting for `start`, `pause` and the `seen` lead bound and streams every
+    /// remaining tick and message as usual. Refused before kick-off.
+    Skip,
 }
 
 impl ClientCommand {
@@ -462,6 +466,7 @@ impl ClientCommand {
             ClientCommand::SetLineup(_) => "set-lineup",
             ClientCommand::Seen(_) => "seen",
             ClientCommand::CancelChange(_) => "cancel-change",
+            ClientCommand::Skip => "skip",
         }
     }
 }
@@ -716,6 +721,7 @@ mod tests {
             ClientCommand::CancelChange(CancelChange {
                 queue_id: "q-1200-0".into(),
             }),
+            ClientCommand::Skip,
         ];
         for c in commands {
             let json = serde_json::to_string(&c).unwrap();
@@ -819,6 +825,29 @@ mod tests {
         assert_eq!(
             cancel,
             "{\"type\":\"cancel-change\",\"change.queue_id\":\"q-7-0\"}"
+        );
+    }
+
+    #[test]
+    fn a_skip_carries_no_fields_and_its_ack_names_it() {
+        let text = serde_json::to_string(&ClientCommand::Skip).unwrap();
+        assert_eq!(text, "{\"type\":\"skip\"}");
+        assert_eq!(
+            serde_json::from_str::<ClientCommand>(&text).unwrap(),
+            ClientCommand::Skip
+        );
+        assert_eq!(ClientCommand::Skip.name(), "skip");
+        let ack = serde_json::to_string(&ServerMessage::Ack(crate::Ack {
+            command: ClientCommand::Skip.name().into(),
+            queue_id: None,
+            queued_tick: 90_000,
+            state: None,
+            speed: None,
+        }))
+        .unwrap();
+        assert_eq!(
+            ack,
+            "{\"type\":\"ack\",\"command\":\"skip\",\"change.queued_tick\":90000}"
         );
     }
 
