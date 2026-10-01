@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use garde::Validate;
 use serde::{Deserialize, Serialize};
 
+use super::fast_model::FastModel;
 use super::modifier::{Modifier, Modifiers};
 use super::registry::{MODIFIER_COUNT, ModuleRef, Registration, SLOT_COUNT, SlotDecl};
 use super::{
@@ -92,6 +93,7 @@ impl SlotFile {
                 ("game.people".to_string(), entry("people-stub")),
                 ("game.presentation".to_string(), entry("presentation-stub")),
                 ("viewer.skin".to_string(), entry("broadcast-blue")),
+                ("engine.fast-model".to_string(), entry("fitted-scores")),
             ]),
         }
     }
@@ -183,6 +185,7 @@ struct Builder {
     people: Option<&'static dyn PeopleModule>,
     presentation: Option<&'static dyn PresentationModule>,
     skin: Option<&'static dyn SkinModule>,
+    fast_model: Option<&'static dyn FastModel>,
 }
 
 impl Builder {
@@ -221,6 +224,7 @@ impl Builder {
             ModuleRef::People(m) => set(&mut self.people, m),
             ModuleRef::Presentation(m) => set(&mut self.presentation, m),
             ModuleRef::Skin(m) => set(&mut self.skin, m),
+            ModuleRef::FastModel(m) => set(&mut self.fast_model, m),
         };
         if once { Ok(()) } else { Err(Self::defect()) }
     }
@@ -254,6 +258,7 @@ impl Builder {
             Some(people),
             Some(presentation),
             Some(skin),
+            Some(fast_model),
         ) = (
             self.fouls,
             self.offside,
@@ -279,6 +284,7 @@ impl Builder {
             self.people,
             self.presentation,
             self.skin,
+            self.fast_model,
         )
         else {
             return Err(Self::defect());
@@ -309,6 +315,7 @@ impl Builder {
             people,
             presentation,
             skin,
+            fast_model,
             picked,
         })
     }

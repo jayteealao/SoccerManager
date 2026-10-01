@@ -28,6 +28,7 @@
     "game.season": { "module": "season-stub", "version": 1 },
     "game.people": { "module": "people-stub", "version": 1 },
     "game.presentation": { "module": "presentation-stub", "version": 1 },
-    "viewer.skin": { "module": "broadcast-blue", "version": 1 }
+    "viewer.skin": { "module": "broadcast-blue", "version": 1 },
+    "engine.fast-model": { "module": "fitted-scores", "version": 1 }
   }
 }

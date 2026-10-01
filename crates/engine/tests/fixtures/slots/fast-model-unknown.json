@@ -15,7 +15,7 @@
     "engine.restarts": { "module": "restarts", "version": 1 },
     "engine.discipline": { "module": "discipline", "version": 1 },
     "engine.injuries": { "module": "injuries", "version": 1 },
-    "engine.ball": { "module": "off" },
+    "engine.ball": { "module": "ball", "version": 1 },
     "engine.possession": { "module": "possession", "version": 1 },
     "engine.decision": { "module": "decision", "version": 1 },
     "engine.manager": { "module": "ai-manager", "version": 1 },
@@ -29,6 +29,6 @@
     "game.people": { "module": "people-stub", "version": 1 },
     "game.presentation": { "module": "presentation-stub", "version": 1 },
     "viewer.skin": { "module": "broadcast-blue", "version": 1 },
-    "engine.fast-model": { "module": "fitted-scores", "version": 1 }
+    "engine.fast-model": { "module": "nope", "version": 1 }
   }
 }

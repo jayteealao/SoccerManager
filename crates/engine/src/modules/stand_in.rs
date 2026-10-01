@@ -9,6 +9,7 @@
 //! Every stand-in, its card, and that copy are leaked, which is harmless in a test process.
 
 use super::card::ModuleCard;
+use super::fast_model::{FastFit, FastMatch, FastModel, KickOff};
 use super::game::{
     GameChanges, GameDay, PeopleModule, PresentationModule, SeasonModule, WorldModule,
 };
@@ -124,6 +125,7 @@ fn wrap(module: ModuleRef) -> ModuleRef {
         ModuleRef::People(m) => ModuleRef::People(leak(StandIn(m))),
         ModuleRef::Presentation(m) => ModuleRef::Presentation(leak(StandIn(m))),
         ModuleRef::Skin(m) => ModuleRef::Skin(leak(StandIn(m))),
+        ModuleRef::FastModel(m) => ModuleRef::FastModel(leak(StandIn(m))),
     }
 }
 
@@ -477,6 +479,12 @@ impl PresentationModule for StandIn<dyn PresentationModule> {
 impl SkinModule for StandIn<dyn SkinModule> {
     fn skin(&self) -> &'static str {
         self.0.skin()
+    }
+}
+
+impl FastModel for StandIn<dyn FastModel> {
+    fn play(&self, fit: &FastFit, kick_off: &KickOff, seed: u64) -> Result<FastMatch, EngineError> {
+        self.0.play(fit, kick_off, seed)
     }
 }
 

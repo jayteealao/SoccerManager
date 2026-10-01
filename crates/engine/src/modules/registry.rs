@@ -3,6 +3,7 @@
 //! registration can never change a match, and no registration can be dropped by the linker.
 
 use super::card::ModuleCard;
+use super::fast_model::{self, FastModel};
 use super::game::{self, PeopleModule, PresentationModule, SeasonModule, WorldModule};
 use super::modifier::{Modifier, stand_ins};
 use super::viewer::{self, SkinModule};
@@ -44,6 +45,7 @@ pub enum ModuleRef {
     People(&'static dyn PeopleModule),
     Presentation(&'static dyn PresentationModule),
     Skin(&'static dyn SkinModule),
+    FastModel(&'static dyn FastModel),
 }
 
 /// One module registered for a slot.
@@ -242,9 +244,17 @@ pub const SKIN: Slot = Slot {
     required: false,
 };
 
+/// The fast-model slot: a results model fitted from full-engine results. Optional; off
+/// refuses to play. Only the fit and check commands reach it (`fast_model::resolve`), and it
+/// never enters the content digest, because it never plays a full-engine match.
+pub const FAST_MODEL: Slot = Slot {
+    id: "engine.fast-model",
+    required: false,
+};
+
 /// The number of declared slots. `ResolvedModules` holds one typed field per slot, and one
 /// `Modifiers` field for the modifier slots.
-pub const SLOT_COUNT: usize = 28;
+pub const SLOT_COUNT: usize = 29;
 
 /// The number of modifier slots.
 pub const MODIFIER_COUNT: usize = 4;
@@ -723,6 +733,21 @@ const DECLS: [SlotDecl; SLOT_COUNT] = [
             version: 0,
             module: ModuleRef::Skin(&viewer::SkinOff),
             card: &viewer::SKIN_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: FAST_MODEL,
+        registrations: &[Registration {
+            name: fast_model::FITTED_SCORES,
+            version: 1,
+            module: ModuleRef::FastModel(&fast_model::FittedScoresV1),
+            card: &fast_model::FITTED_SCORES_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::FastModel(&fast_model::FastModelOff),
+            card: &fast_model::FAST_MODEL_OFF_CARD,
         }),
     },
 ];

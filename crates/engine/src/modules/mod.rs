@@ -10,6 +10,7 @@
 
 pub mod card;
 pub mod config;
+pub mod fast_model;
 pub mod game;
 pub mod modifier;
 pub mod proposal;
@@ -621,6 +622,8 @@ pub struct ResolvedModules {
     pub people: &'static dyn PeopleModule,
     pub presentation: &'static dyn PresentationModule,
     pub skin: &'static dyn SkinModule,
+    /// Private: only `fast_model::resolve` reaches it, for the fit and check commands.
+    fast_model: &'static dyn fast_model::FastModel,
     picked: [Picked; SLOT_COUNT],
 }
 

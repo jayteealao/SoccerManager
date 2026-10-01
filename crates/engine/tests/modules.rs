@@ -21,10 +21,10 @@ use std::collections::BTreeMap;
 
 use engine::modules::modifier::Family;
 use engine::modules::registry::{
-    BALL, CHANGES, CLOCK, DECISION, DISCIPLINE, FATIGUE, FOULS, HOOK_COMMENTARY, HOOK_DECISION,
-    HOOK_RULE, INJURIES, MANAGER, MODIFIER_FATIGUE, MODIFIER_MOMENTUM, MODIFIER_PRESSURE,
-    MODIFIER_WEATHER, ModuleRef, OFFSIDE, PEOPLE, POSSESSION, PRE_MATCH, PRESENTATION, RESTARTS,
-    RULES, SEASON, SHOT, SKIN, STEERING, WORLD,
+    BALL, CHANGES, CLOCK, DECISION, DISCIPLINE, FAST_MODEL, FATIGUE, FOULS, HOOK_COMMENTARY,
+    HOOK_DECISION, HOOK_RULE, INJURIES, MANAGER, MODIFIER_FATIGUE, MODIFIER_MOMENTUM,
+    MODIFIER_PRESSURE, MODIFIER_WEATHER, ModuleRef, OFFSIDE, PEOPLE, POSSESSION, PRE_MATCH,
+    PRESENTATION, RESTARTS, RULES, SEASON, SHOT, SKIN, STEERING, WORLD,
 };
 use engine::modules::{
     CardError, MOVED_KEYS, ModuleCard, OwnershipError, REGISTRY, Registration, SlotDecl, SlotEntry,
@@ -146,6 +146,7 @@ fn default_selection_resolves_and_a_match_finishes() {
             "game.people=people-stub@1",
             "game.presentation=presentation-stub@1",
             "viewer.skin=broadcast-blue@1",
+            "engine.fast-model=fitted-scores@1",
         ],
         "every declared slot resolves, in registry order"
     );
@@ -274,6 +275,7 @@ fn off_on_an_optional_slot_resolves_to_its_off_version() {
         PEOPLE.id,
         PRESENTATION.id,
         SKIN.id,
+        FAST_MODEL.id,
     ]);
     assert_eq!(optional, expected);
     let changes: Vec<(&str, &str, Option<u32>)> =
@@ -310,7 +312,7 @@ fn an_undeclared_or_missing_slot_is_refused() {
          engine.discipline, engine.injuries, engine.ball, engine.possession, engine.decision, \
          engine.manager, engine.changes, engine.hook.decision, engine.hook.rule, \
          engine.hook.commentary, game.rules, game.world, game.season, game.people, \
-         game.presentation, viewer.skin"
+         game.presentation, viewer.skin, engine.fast-model"
     );
     assert!(text.contains("is not a declared slot"), "{text}");
 
@@ -482,6 +484,7 @@ fn the_registry_declares_the_moved_slots_in_order() {
         PEOPLE.id,
         PRESENTATION.id,
         SKIN.id,
+        FAST_MODEL.id,
     ]);
     assert_eq!(ids, expected);
     assert_eq!(REGISTRY.len(), engine::modules::SLOT_COUNT);
@@ -539,8 +542,9 @@ fn the_registry_declares_the_moved_slots_in_order() {
     assert!(matches!(default(25), ModuleRef::People(_)));
     assert!(matches!(default(26), ModuleRef::Presentation(_)));
     assert!(matches!(default(27), ModuleRef::Skin(_)));
-    // The hook adapters, the game-wide modules, and the skins draw nothing, so none of their
-    // cards owns an action key.
+    assert!(matches!(default(28), ModuleRef::FastModel(_)));
+    // The hook adapters, the game-wide modules, the skins, and the fast model draw nothing on
+    // a match stream, so none of their cards owns an action key.
     for decl in &REGISTRY[19..] {
         for reg in decl.registrations.iter().chain(decl.off.as_ref()) {
             assert!(reg.card.keys.is_empty(), "{}: {}", decl.slot.id, reg.name);
@@ -701,7 +705,8 @@ const FOULS_OFF: &str = r#"{
     "game.season": { "module": "season-stub", "version": 1 },
     "game.people": { "module": "people-stub", "version": 1 },
     "game.presentation": { "module": "presentation-stub", "version": 1 },
-    "viewer.skin": { "module": "broadcast-blue", "version": 1 }
+    "viewer.skin": { "module": "broadcast-blue", "version": 1 },
+    "engine.fast-model": { "module": "fitted-scores", "version": 1 }
   }
 }"#;
 
