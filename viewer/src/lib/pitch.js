@@ -1,11 +1,12 @@
 // The pitch renderer. Nothing else in the viewer draws to the pitch canvas.
 //
-// It owns one mapping: the engine's centred metre space, where x runs -52.5 to 52.5 and y
-// runs -34 to 34, onto the box its canvas gives it: 742 by 312 on the match screen, 752 by
-// 290 on the replay. The length maps with one
-// uniform scale; the width maps with one fixed vertical factor, the sketch's top-down tilt.
-// Both are constants of the box, so every drawn position stays a pure function of the
-// engine's metres: the tilt projects a position, it never moves one.
+// It owns one mapping: the engine's centred metre space, where x runs along the ground's
+// length and y across its width (-52.5 to 52.5 and -34 to 34 on the default 105 by 68
+// ground), onto the box its canvas gives it: 742 by 312 on the match screen, 752 by 290 on
+// the replay. The length maps with one uniform scale; the width maps with one fixed vertical
+// factor, the sketch's top-down tilt. Both come from the default ground in the box, so a
+// smaller ground draws smaller and centred, at the same tilt, and every drawn position stays
+// a pure function of the engine's metres: the tilt projects a position, it never moves one.
 //
 // Every colour and the shirt-number face are read once, from the active skin's custom
 // properties, when the renderer is built; `draw()` never reads a style.
@@ -15,10 +16,20 @@ import { safeKit } from './colour.js';
 import { CANVAS_SOURCE as BROADCAST_BLUE } from '../skins/broadcast-blue/palette.js';
 import { CANVAS_SOURCE as INTERIM_LIGHT } from '../skins/interim-light/palette.js';
 
-/// Pitch dimensions in metres, ported from `crates/engine/src/pitch.rs`. The ground-size
-/// work later gives each ground its own; until then every match is played on 105 by 68.
+/// The default ground in metres, as `crates/engine/src/pitch.rs` gives it. A match plays on
+/// the home team's ground, which the hello names when it is not 105 by 68.
 export const LENGTH = 105;
 export const WIDTH = 68;
+export const DEFAULT_GROUND = Object.freeze({ length: LENGTH, width: WIDTH });
+
+/// The ground a hello names: its `ground.length` and `ground.width`, each 105 or 68 when the
+/// hello leaves it out.
+export function groundOf(hello) {
+  return Object.freeze({
+    length: hello?.['ground.length'] ?? LENGTH,
+    width: hello?.['ground.width'] ?? WIDTH,
+  });
+}
 export const GOAL_WIDTH = 7.32;
 
 /// The box the match screen draws the pitch in, in CSS pixels. A canvas may name another
@@ -29,12 +40,12 @@ export const BOX = Object.freeze({ width: 742, height: 312 });
 /// `crates/engine/src/pitch.rs`. This constant and the test below are ported from there.
 const PARKING_OFFSET = 3;
 
-/// `true` when a position in metres is a parking spot, to the precision of the wire's
-/// centimetres. A port of `is_parking_spot()` in `crates/engine/src/pitch.rs`: a sent-off
-/// player is not on the pitch and is not drawn.
-export function isParkingSpot(x, y) {
+/// `true` when a position in metres is a parking spot beside a ground `width` metres wide, to
+/// the precision of the wire's centimetres. A port of `is_parking_spot()` in
+/// `crates/engine/src/pitch.rs`: a sent-off player is not on the pitch and is not drawn.
+export function isParkingSpot(x, y, width = WIDTH) {
   const ax = Math.abs(x);
-  return Math.abs(y + WIDTH / 2 + PARKING_OFFSET) < 0.01 && ax >= 9.99 && ax <= 20.01;
+  return Math.abs(y + width / 2 + PARKING_OFFSET) < 0.01 && ax >= 9.99 && ax <= 20.01;
 }
 
 /// Markings, in metres, from the laws of the game.
@@ -69,16 +80,29 @@ const TRAIL_TICKS = 12;
 export const KEEPERS = Object.freeze([0, 11]);
 
 /// The mapping from metres to box pixels for a box of `width` by `height` and a ground of
-/// `length` by `breadth` metres. `tilt` is the vertical factor against the horizontal scale.
+/// `length` by `breadth` metres. The scale and the tilt are those that make the default
+/// ground fill the box, so every ground keeps the sketch's top-down tilt and a smaller ground
+/// draws smaller; a ground too large for the box at that scale shrinks to fit, its tilt
+/// kept. The drawn ground is centred in the box; `rect` is where it lies, in box pixels.
+/// `tilt` is the vertical factor against the horizontal scale.
 export function projection(width = BOX.width, height = BOX.height, length = LENGTH, breadth = WIDTH) {
-  const sx = (width - PAD * 2) / length;
-  const sy = (height - PAD * 2) / breadth;
+  const inner = { width: width - PAD * 2, height: height - PAD * 2 };
+  const fit = Math.min(1, LENGTH / length, WIDTH / breadth);
+  const sx = (inner.width / LENGTH) * fit;
+  const sy = (inner.height / WIDTH) * fit;
+  const rect = Object.freeze({
+    left: PAD + (inner.width - length * sx) / 2,
+    top: PAD + (inner.height - breadth * sy) / 2,
+    width: length * sx,
+    height: breadth * sy,
+  });
   return {
     sx,
     sy,
     tilt: sy / sx,
-    x: (metres) => PAD + (metres + length / 2) * sx,
-    y: (metres) => PAD + (metres + breadth / 2) * sy,
+    rect,
+    x: (metres) => rect.left + (metres + length / 2) * sx,
+    y: (metres) => rect.top + (metres + breadth / 2) * sy,
   };
 }
 
@@ -111,12 +135,18 @@ export class Pitch {
   /// `canvas` is sized in CSS pixels by its component; the backing store is multiplied by the
   /// device pixel ratio here so the markings stay crisp on a scaled display. `tokens` are
   /// the active skin's values (`readTokens`); `kits` the two clubs' kit colours; `width` and
-  /// `height` the box in CSS pixels, the match screen's unless given.
+  /// `height` the box in CSS pixels, the match screen's unless given; `ground` the match's
+  /// ground in metres (`groundOf`), 105 by 68 unless given.
   constructor(
     canvas,
     kits,
     tokens,
-    { ratio = globalThis.devicePixelRatio || 1, width = BOX.width, height = BOX.height } = {}
+    {
+      ratio = globalThis.devicePixelRatio || 1,
+      width = BOX.width,
+      height = BOX.height,
+      ground = DEFAULT_GROUND,
+    } = {}
   ) {
     this.canvas = canvas;
     this.cssWidth = width;
@@ -129,7 +159,8 @@ export class Pitch {
     this.ctx = canvas.getContext('2d', { alpha: false });
     this.ctx.scale(this.ratio, this.ratio);
 
-    this.map = projection(this.cssWidth, this.cssHeight);
+    this.ground = ground;
+    this.map = projection(this.cssWidth, this.cssHeight, ground.length, ground.width);
     this.tokens = tokens;
     this.kits = [safeKit(kits[0], tokens), safeKit(kits[1], tokens)];
     this.trail = [];
@@ -145,7 +176,22 @@ export class Pitch {
     return this.map.y(metres);
   }
 
-  /// The turf and the markings, drawn once into their own canvas and blitted each frame.
+  /// Where the ground is drawn: the ground in metres, the box, the drawn rectangle in box
+  /// pixels, the two scales and the tilt. The browser tests read it through the test hook.
+  geometry() {
+    const { sx, sy, tilt, rect } = this.map;
+    return {
+      ground: { length: this.ground.length, width: this.ground.width },
+      box: { width: this.cssWidth, height: this.cssHeight },
+      rect: { ...rect },
+      sx,
+      sy,
+      tilt,
+    };
+  }
+
+  /// The turf and the markings, drawn once into their own canvas and blitted each frame. The
+  /// turf fills the box; the lines are the ground's.
   renderMarkings() {
     const off = this.canvas.ownerDocument.createElement('canvas');
     off.width = this.canvas.width;
@@ -165,10 +211,11 @@ export class Pitch {
     ctx.strokeStyle = line;
     ctx.fillStyle = line;
     ctx.lineWidth = LINE_WIDTH;
-    const half = { l: LENGTH / 2, w: WIDTH / 2 };
+    const { length, width } = this.ground;
+    const half = { l: length / 2, w: width / 2 };
     ctx.beginPath();
     // Touchlines and goal lines, then the halfway line.
-    ctx.rect(this.x(-half.l), this.y(-half.w), LENGTH * sx, WIDTH * sy);
+    ctx.rect(this.x(-half.l), this.y(-half.w), length * sx, width * sy);
     ctx.moveTo(this.x(0), this.y(-half.w));
     ctx.lineTo(this.x(0), this.y(half.w));
     ctx.stroke();
@@ -236,7 +283,7 @@ export class Pitch {
     // whole team's outfield discs; the keeper takes the skin's keeper colour. The shirt
     // numbers follow in a second pass. A sent-off player parked beside the pitch is skipped.
     const onPitch = (i) =>
-      !isParkingSpot(components[3 + i * 2] / 100, components[4 + i * 2] / 100);
+      !isParkingSpot(components[3 + i * 2] / 100, components[4 + i * 2] / 100, this.ground.width);
     const at = (i) => [this.x(components[3 + i * 2] / 100), this.y(components[4 + i * 2] / 100)];
     const t = this.tokens;
     ctx.font = `700 ${SHIRT_PX}px ${t.face}`;

@@ -594,3 +594,14 @@ test('a save no engine can finish shows the resume screen, and New match starts 
   socket.deliver(hello('match-new'));
   assert.equal(session.screen, 'kickoff');
 });
+
+test('the session plays on the ground its hello names, and on 105 by 68 when it names none', async () => {
+  const { session, socket } = await started(RUNNING);
+  socket.deliver(
+    JSON.stringify({ ...JSON.parse(hello('match-ground')), 'ground.length': 100, 'ground.width': 64 })
+  );
+  assert.deepEqual({ ...session.ground }, { length: 100, width: 64 });
+  const other = await started(RUNNING);
+  other.socket.deliver(hello('match-default'));
+  assert.deepEqual({ ...other.session.ground }, { length: 105, width: 68 });
+});

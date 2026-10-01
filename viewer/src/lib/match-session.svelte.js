@@ -34,7 +34,7 @@ import * as launcher from './launcher.js';
 import { LeadControl, SeenReport } from './lead.js';
 import { lineupModel } from './lineups.js';
 import { KIND, MatchState } from './match-state.js';
-import { Pitch, readTokens } from './pitch.js';
+import { DEFAULT_GROUND, Pitch, groundOf, readTokens } from './pitch.js';
 import { Playback } from './playback.js';
 import { formationName, kickOffSheet, rosterSheet, rulePackRows, squadSheet } from './prematch.js';
 import { backoff, clockAt, loadingSteps, panelModel, stepOptions } from './recovery.js';
@@ -125,6 +125,8 @@ export class MatchSession {
   saving = $state(false);
   /// The hello of the match shown, as the Pre-match line-ups and the Touchline read it.
   hello = $state.raw(null);
+  /// The ground the match shown is played on, in metres, from its hello: the pitch draws it.
+  ground = DEFAULT_GROUND;
   /// The launcher's `resume` block while the Resume a saved match screen shows why a save
   /// cannot continue; null otherwise.
   resumeInfo = $state.raw(null);
@@ -370,6 +372,7 @@ export class MatchSession {
     this.pitch = new Pitch(this.canvas, kits, readTokens(this.doc), {
       width: Number(this.canvas.dataset?.width) || undefined,
       height: Number(this.canvas.dataset?.height) || undefined,
+      ground: this.ground,
     });
     if (this.history && this.history.count > 0 && this.history.tickAt(this.renderedTick, this.earlier)) {
       this.pitch.draw(this.earlier);
@@ -436,6 +439,7 @@ export class MatchSession {
     this.streamEnded = false;
     this.teams = hello.teams;
     this.hello = hello;
+    this.ground = groundOf(hello);
     this.teamNames = new Map(hello.teams.map((t) => [t['team.id'], t['team.name']]));
     this.engineVersion = hello['engine.version'] ?? null;
     this.engineWord = stored ? 'Replay' : 'Engine connected';

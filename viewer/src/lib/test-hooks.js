@@ -58,6 +58,9 @@ export function install(session, target = globalThis) {
       resumed_from: session.status?.['match.resumed_from'] ?? null,
       steps: session.steps.map((s) => s.label),
     }),
+    /// The ground the match is played on and where the pitch canvas draws it: the ground in
+    /// metres, the box, and the drawn rectangle in CSS pixels; null before a canvas has a pitch.
+    pitchGeometry: () => (session.pitch ? session.pitch.geometry() : null),
     events: () => session.match.events.map((e) => ({ ...e })),
     view: () => session.view,
     /// The report on show or last shown, as the former page's hook named it; `open` is true
