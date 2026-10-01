@@ -84,6 +84,8 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
         tactics: hello_tactics(&sim),
         substitutions: hello_substitutions(&sim),
         knockout: false,
+        ground_length: sim.config().pitch.length(),
+        ground_width: sim.config().pitch.width(),
     };
     messages.send(protocol::Frame::Text(
         serde_json::to_string(&ServerMessage::Hello(Box::new(hello)))

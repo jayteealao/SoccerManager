@@ -173,6 +173,8 @@ fn measure_stream(
         tactics: hello_tactics(&sim),
         substitutions: hello_substitutions(&sim),
         knockout: false,
+        ground_length: config.pitch.length(),
+        ground_width: config.pitch.width(),
     };
 
     let server = Server::bind(&data, &match_id)?;

@@ -164,6 +164,43 @@ pub struct Hello {
     /// `false`.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub knockout: bool,
+    /// The length of the home team's ground, the pitch of the match, in metres. Written
+    /// only when it is not 105; a hello without it, as from an earlier build, reads as 105.
+    #[serde(
+        rename = "ground.length",
+        default = "default_ground_length",
+        skip_serializing_if = "is_default_ground_length"
+    )]
+    pub ground_length: f64,
+    /// The width of the home team's ground in metres. Written only when it is not 68; a
+    /// hello without it reads as 68.
+    #[serde(
+        rename = "ground.width",
+        default = "default_ground_width",
+        skip_serializing_if = "is_default_ground_width"
+    )]
+    pub ground_width: f64,
+}
+
+/// The length of a ground that a hello does not name, in metres.
+pub const DEFAULT_GROUND_LENGTH: f64 = 105.0;
+/// The width of a ground that a hello does not name, in metres.
+pub const DEFAULT_GROUND_WIDTH: f64 = 68.0;
+
+fn default_ground_length() -> f64 {
+    DEFAULT_GROUND_LENGTH
+}
+
+fn default_ground_width() -> f64 {
+    DEFAULT_GROUND_WIDTH
+}
+
+fn is_default_ground_length(v: &f64) -> bool {
+    *v == DEFAULT_GROUND_LENGTH
+}
+
+fn is_default_ground_width(v: &f64) -> bool {
+    *v == DEFAULT_GROUND_WIDTH
 }
 
 /// The running totals of a match, sent once every simulated second and again at full time.
@@ -498,6 +535,8 @@ mod tests {
                 windows_exempt: vec!["half_time".into()],
             },
             knockout: true,
+            ground_length: DEFAULT_GROUND_LENGTH,
+            ground_width: DEFAULT_GROUND_WIDTH,
         }
     }
 
@@ -875,6 +914,30 @@ mod tests {
         let json = serde_json::to_string(&ServerMessage::Hello(Box::new(plain))).unwrap();
         assert!(!json.contains("knockout"), "{json}");
         assert_eq!(json.matches("\"formation\":\"").count(), 1, "{json}");
+    }
+
+    #[test]
+    fn a_hello_names_a_ground_only_off_105_by_68_and_reads_without_it() {
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello()))).unwrap();
+        assert!(!json.contains("ground."), "{json}");
+        let ServerMessage::Hello(back) = serde_json::from_str::<ServerMessage>(&json).unwrap()
+        else {
+            panic!("not a hello");
+        };
+        assert_eq!((back.ground_length, back.ground_width), (105.0, 68.0));
+        let mut smaller = hello();
+        smaller.ground_length = 100.0;
+        smaller.ground_width = 64.0;
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(smaller.clone()))).unwrap();
+        assert!(
+            json.ends_with("\"knockout\":true,\"ground.length\":100.0,\"ground.width\":64.0}"),
+            "{json}"
+        );
+        let ServerMessage::Hello(back) = serde_json::from_str::<ServerMessage>(&json).unwrap()
+        else {
+            panic!("not a hello");
+        };
+        assert_eq!(*back, smaller);
     }
 
     #[test]

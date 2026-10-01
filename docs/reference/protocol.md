@@ -30,6 +30,12 @@ meaning for a match that is not a knockout match. For a knockout match, `ticks_e
 covers extra time and the rule pack's allowance of shoot-out rounds; a sudden death longer
 than the allowance plays on past it, and a client grows its history to hold it.
 
+Version 3 also carries the home ground's size without a new version. The `hello` gained two
+optional fields, `ground.length` and `ground.width`, written only for a ground that is not
+105 by 68 metres, so every hello of a match on the default ground is unchanged. Positions on
+the wire keep their units and their origin, the centre spot; on another ground they run to
+that ground's lines.
+
 Version 3 also carries script packs (`--script-pack`) without a new version. The event message
 gained one event type (`script`) and four optional fields (`script.pack`, `script.hook`,
 `script.outcome`, and `script.detail`). A match without a pack sends exactly what it sent
@@ -86,6 +92,8 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 | `tactics` | object | the tactics file the engine loaded (`content/tactics.json`): `formations`, `mentalities`, `instructions` with their levels, `roles`, `duties`, and the computer manager's settings. Every tactics index on the wire is a place in one of its lists. Because a JSON object carries no key order, the engine adds `instruction_order`, the six instruction names in the order an instruction list indexes them |
 | `substitutions` | object | the rule pack's limits: `limit`, `windows`, `extra_substitutions`, `extra_windows`, and `windows_exempt` |
 | `knockout` | boolean | `true` for a knockout match: level after regulation time, it plays extra time and then a penalty shoot-out. Left out when `false`; a hello without it reads as `false` |
+| `ground.length` | number | the length of the home team's ground, where the match is played, in metres (90 to 120). Left out when it is 105; a hello without it reads as 105 |
+| `ground.width` | number | the width of the home team's ground in metres (45 to 90). Left out when it is 68; a hello without it reads as 68 |
 
 `substitutions`:
 

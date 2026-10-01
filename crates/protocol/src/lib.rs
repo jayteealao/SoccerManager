@@ -18,8 +18,9 @@ pub use event::{CardKind, ChangeOutcome, EventType, MatchEvent};
 pub use frame::{Frame, TickFrame};
 pub use message::{
     Advice, AdvicePick, CancelChange, ChangeDetail, ChangeStateNote, ClientCommand, Condition,
-    Hello, PatchWire, QueueChange, RoleWire, RosterEntry, Seen, ServerMessage, SetLineup, SetSpeed,
-    SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
+    DEFAULT_GROUND_LENGTH, DEFAULT_GROUND_WIDTH, Hello, PatchWire, QueueChange, RoleWire,
+    RosterEntry, Seen, ServerMessage, SetLineup, SetSpeed, SlotRole, SquadEntry, Stats,
+    SubstitutionRules, TeamRef, TeamSetup,
 };
 
 /// The protocol version a client must ask for. A client that asks for another version is
@@ -193,6 +194,8 @@ pub const MESSAGES: &[MessageSpec] = &[
             "windows_exempt",
             "player.injury_resistance",
             "knockout",
+            "ground.length",
+            "ground.width",
         ],
     },
     MessageSpec {
@@ -423,6 +426,8 @@ mod tests {
                 tactics: serde_json::Value::Null,
                 substitutions: SubstitutionRules::default(),
                 knockout: false,
+                ground_length: DEFAULT_GROUND_LENGTH,
+                ground_width: DEFAULT_GROUND_WIDTH,
             })),
             ServerMessage::Event(Box::new(MatchEvent::play(
                 "",

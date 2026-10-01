@@ -673,6 +673,8 @@ fn hello_for(
         tactics: hello_tactics(sim),
         substitutions: hello_substitutions(sim),
         knockout: config.knockout,
+        ground_length: config.pitch.length(),
+        ground_width: config.pitch.width(),
     }
 }
 
