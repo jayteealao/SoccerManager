@@ -6,6 +6,7 @@ mod common;
 use common::{calm_match, index, spread};
 use engine::math::{DVec2, DVec3};
 use engine::observe::MatchFigures;
+use engine::pitch::Pitch;
 use engine::record::NullSink;
 use engine::scenario::Scene;
 use engine::sim::shot_xg;
@@ -40,13 +41,13 @@ fn a_scripted_shot_counts_once_with_an_expected_goal_between_zero_and_one() {
 #[test]
 fn expected_goals_fall_with_distance_and_rise_with_the_angle() {
     let t = Tuning::default().xg;
-    let near = shot_xg(DVec2::new(40.0, 0.0), 1.0, &t);
-    let far = shot_xg(DVec2::new(10.0, 0.0), 1.0, &t);
-    let wide = shot_xg(DVec2::new(40.0, 25.0), 1.0, &t);
+    let near = shot_xg(DVec2::new(40.0, 0.0), 1.0, &t, &Pitch::DEFAULT);
+    let far = shot_xg(DVec2::new(10.0, 0.0), 1.0, &t, &Pitch::DEFAULT);
+    let wide = shot_xg(DVec2::new(40.0, 25.0), 1.0, &t, &Pitch::DEFAULT);
     assert!(near > far, "{near} <= {far}");
     assert!(near > wide, "{near} <= {wide}");
     // Mirrored ends give the same figure.
-    let mirrored = shot_xg(DVec2::new(-40.0, 0.0), -1.0, &t);
+    let mirrored = shot_xg(DVec2::new(-40.0, 0.0), -1.0, &t, &Pitch::DEFAULT);
     assert!((near - mirrored).abs() < 1e-12);
 }
 

@@ -23,7 +23,7 @@ use std::sync::OnceLock;
 use common::{calm_match, content, default_teams, index, run_many, short_match, spread};
 use engine::math::{DVec2, DVec3};
 use engine::observe::MatchFigures;
-use engine::pitch;
+use engine::pitch::Pitch;
 use engine::record::NullSink;
 use engine::rules::restart;
 use engine::scenario::Scene;
@@ -333,7 +333,7 @@ fn a_cleared_pass_along_the_goal_line_can_give_a_corner() {
                     corners += 1;
                     assert_eq!(touch, Some(1), "seed {seed}: a defender touched it last");
                     assert!(
-                        before.ball[0] >= (pitch::HALF_LENGTH - 0.81) as f32,
+                        before.ball[0] >= (Pitch::DEFAULT.half_length() - 0.81) as f32,
                         "seed {seed}: the ball was at {:?} before the corner",
                         before.ball
                     );
@@ -410,7 +410,7 @@ fn play_full(seed: u64) -> MatchRun {
         {
             corners.push(origin);
             let attacking = stoppage.team.expect("a corner has a team");
-            let near_line = f64::from(before.ball[0].abs()) >= pitch::HALF_LENGTH - 0.81;
+            let near_line = f64::from(before.ball[0].abs()) >= Pitch::DEFAULT.half_length() - 0.81;
             if !near_line || touch != Some(1 - attacking) {
                 bad.push(format!(
                     "seed {seed} tick {}: ball {:?}, last touch {touch:?}",

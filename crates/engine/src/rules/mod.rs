@@ -23,7 +23,7 @@ use crate::decision::Kick;
 use crate::fatigue::InjurySource;
 use crate::math::DVec2;
 use crate::modules::{PeriodEnd, ShootoutLineup};
-use crate::pitch::{self, Exit, Line};
+use crate::pitch::{Exit, Line};
 use crate::player::Status;
 use crate::sim::{DecidedBy, EngineEventKind, EventDetail, Simulation};
 use crate::streams::{Action, Key};
@@ -235,7 +235,7 @@ impl Simulation {
                 StoppageKind::ThrowIn,
                 StoppageKind::ThrowIn,
                 1 - last,
-                pitch::throw_in_spot(exit.point, side),
+                self.config.pitch.throw_in_spot(exit.point, side),
                 false,
             ),
             Line::Goal { side } => {
@@ -249,7 +249,7 @@ impl Simulation {
                         StoppageKind::GoalKick,
                         StoppageKind::GoalKick,
                         1 - attacking,
-                        pitch::goal_kick_spot(side, exit.point.y),
+                        self.config.pitch.goal_kick_spot(side, exit.point.y),
                         true,
                     );
                 } else {
@@ -257,7 +257,7 @@ impl Simulation {
                         StoppageKind::Corner,
                         StoppageKind::Corner,
                         attacking,
-                        pitch::corner_spot(side, exit.point.y),
+                        self.config.pitch.corner_spot(side, exit.point.y),
                         true,
                     );
                 }
@@ -276,7 +276,7 @@ impl Simulation {
         self.players[i].foul_ready = self.tick.saturating_add(t.foul_cooldown_ticks);
         let own_end = -self.teams[offender.team].attack_x;
         let at = self.players[c].pos;
-        let penalty = pitch::in_penalty_area(at, own_end);
+        let penalty = self.config.pitch.in_penalty_area(at, own_end);
         let advantage = !ball_lost && !penalty;
         let fouls = self.config.modules.fouls;
         let thresholds = fouls.card_thresholds(&self.view(), i);
@@ -331,7 +331,7 @@ impl Simulation {
                 StoppageKind::Penalty,
                 StoppageKind::Penalty,
                 fouled_team,
-                pitch::penalty_spot(own_end),
+                self.config.pitch.penalty_spot(own_end),
                 true,
             );
         } else {
@@ -339,7 +339,7 @@ impl Simulation {
                 StoppageKind::FreeKick,
                 StoppageKind::FreeKick,
                 fouled_team,
-                pitch::clamp(at, 0.5),
+                self.config.pitch.clamp(at, 0.5),
                 true,
             );
         }
@@ -368,7 +368,7 @@ impl Simulation {
         if self.trace_on() {
             self.trace_point(Point::Offside, json!({"player": i, "team": team}));
         }
-        let spot = pitch::clamp(self.players[i].pos, 0.5);
+        let spot = self.config.pitch.clamp(self.players[i].pos, 0.5);
         self.open_dead_ball(
             StoppageKind::FreeKick,
             StoppageKind::FreeKick,
@@ -476,7 +476,7 @@ impl Simulation {
         {
             let p = &mut self.players[i];
             p.status = Status::Injured;
-            p.pos = pitch::parking_spot(p.team, p.slot);
+            p.pos = self.config.pitch.parking_spot(p.team, p.slot);
             p.vel = DVec2::ZERO;
             p.target = p.pos;
         }
@@ -962,7 +962,7 @@ impl Simulation {
         state.kicker = Some(kicker);
         state.live_since = None;
         let round = state.taken[team] + 1;
-        let spot = pitch::penalty_spot(state.end);
+        let spot = self.config.pitch.penalty_spot(state.end);
         self.show_pending_cards();
         if self.referee.abandoned {
             return;
@@ -1017,7 +1017,7 @@ impl Simulation {
         state.live_since = Some(self.tick + 1);
         let keeper = state.keepers[1 - dead.team];
         let end = state.end;
-        let goal = pitch::goal_centre(end);
+        let goal = self.config.pitch.goal_centre(end);
         self.referee.phase = Phase::Live;
         let kick = self.shot_kick(dead.taker, goal, keeper, t.shots.penalty_spread);
         let diver = self.players[keeper];
@@ -1039,7 +1039,7 @@ impl Simulation {
             );
         }
         self.players[keeper].target = DVec2::new(
-            end * (pitch::HALF_LENGTH - 0.3),
+            end * (self.config.pitch.half_length() - 0.3),
             side * t.shots.keeper_dive_m,
         );
         let (dir, speed, loft) = kick.flight();
@@ -1067,9 +1067,9 @@ impl Simulation {
         let Some(end) = self.referee.shootout.as_ref().map(|s| s.end) else {
             return;
         };
-        if pitch::in_goal(prev, xy, end) && self.ball.pos.z < t.crossbar_height {
+        if self.config.pitch.in_goal(prev, xy, end) && self.ball.pos.z < t.crossbar_height {
             self.shootout_outcome(true, "goal");
-        } else if pitch::exit(prev, xy).is_some() {
+        } else if self.config.pitch.exit(prev, xy).is_some() {
             self.shootout_outcome(false, "off_target");
         }
     }
@@ -1270,7 +1270,7 @@ mod tests {
         let team = 0;
         let taker = 9;
         let attack_x = sim.teams[team].attack_x;
-        let spot = pitch::penalty_spot(attack_x);
+        let spot = sim.config.pitch.penalty_spot(attack_x);
         sim.players[taker].pos = spot;
         sim.ball = Ball::at(spot);
         let dead = DeadBall {

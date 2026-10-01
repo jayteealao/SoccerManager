@@ -299,64 +299,6 @@ impl Pitch {
     }
 }
 
-/// Pitch length of the default ground in metres.
-pub const LENGTH: f64 = DEFAULT_LENGTH;
-/// Pitch width of the default ground in metres.
-pub const WIDTH: f64 = DEFAULT_WIDTH;
-/// Half the default pitch length.
-pub const HALF_LENGTH: f64 = LENGTH / 2.0;
-/// Half the default pitch width.
-pub const HALF_WIDTH: f64 = WIDTH / 2.0;
-
-/// [`Pitch::contains`] on the default ground.
-pub fn contains(p: DVec2) -> bool {
-    Pitch::DEFAULT.contains(p)
-}
-/// [`Pitch::clamp`] on the default ground.
-pub fn clamp(p: DVec2, margin: f64) -> DVec2 {
-    Pitch::DEFAULT.clamp(p, margin)
-}
-/// [`Pitch::goal_centre`] on the default ground.
-pub fn goal_centre(attack_x: f64) -> DVec2 {
-    Pitch::DEFAULT.goal_centre(attack_x)
-}
-/// [`Pitch::in_goal`] on the default ground.
-pub fn in_goal(prev: DVec2, p: DVec2, attack_x: f64) -> bool {
-    Pitch::DEFAULT.in_goal(prev, p, attack_x)
-}
-/// [`Pitch::exit`] on the default ground.
-pub fn exit(prev: DVec2, ball: DVec2) -> Option<Exit> {
-    Pitch::DEFAULT.exit(prev, ball)
-}
-/// [`Pitch::throw_in_spot`] on the default ground.
-pub fn throw_in_spot(point: DVec2, side: f64) -> DVec2 {
-    Pitch::DEFAULT.throw_in_spot(point, side)
-}
-/// [`Pitch::goal_kick_spot`] on the default ground.
-pub fn goal_kick_spot(side: f64, exit_y: f64) -> DVec2 {
-    Pitch::DEFAULT.goal_kick_spot(side, exit_y)
-}
-/// [`Pitch::corner_spot`] on the default ground.
-pub fn corner_spot(side: f64, exit_y: f64) -> DVec2 {
-    Pitch::DEFAULT.corner_spot(side, exit_y)
-}
-/// [`Pitch::penalty_spot`] on the default ground.
-pub fn penalty_spot(side: f64) -> DVec2 {
-    Pitch::DEFAULT.penalty_spot(side)
-}
-/// [`Pitch::in_penalty_area`] on the default ground.
-pub fn in_penalty_area(p: DVec2, side: f64) -> bool {
-    Pitch::DEFAULT.in_penalty_area(p, side)
-}
-/// [`Pitch::parking_spot`] on the default ground.
-pub fn parking_spot(team: usize, slot: usize) -> DVec2 {
-    Pitch::DEFAULT.parking_spot(team, slot)
-}
-/// [`Pitch::is_parking_spot`] on the default ground.
-pub fn is_parking_spot(p: DVec2) -> bool {
-    Pitch::DEFAULT.is_parking_spot(p)
-}
-
 /// +1 for zero and a positive value, -1 for a negative value.
 fn sign(v: f64) -> f64 {
     if v < 0.0 { -1.0 } else { 1.0 }
@@ -485,7 +427,7 @@ mod tests {
         assert_eq!(Pitch::new(121.0, 68.0), Err(GroundError::Length(121.0)));
         assert_eq!(Pitch::new(105.0, 44.0), Err(GroundError::Width(44.0)));
         assert_eq!(Pitch::new(105.0, 91.0), Err(GroundError::Width(91.0)));
-        assert_eq!(Pitch::new(f64::NAN, 68.0).map(|_| ()).is_err(), true);
+        assert!(Pitch::new(f64::NAN, 68.0).is_err());
         assert_eq!(
             Pitch::new(90.0, 90.0),
             Err(GroundError::NotLonger {

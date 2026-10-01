@@ -6,7 +6,6 @@
 
 use crate::math::DVec2;
 use crate::modules::{DisciplineModule, MatchView, ModuleCard};
-use crate::pitch;
 use crate::player::{Player, Status};
 use crate::rules::fouls::Card;
 use crate::team::Team;
@@ -23,7 +22,7 @@ pub fn book(player: &mut Player, card: Card) -> bool {
 pub fn send_off(players: &mut [Player], teams: &mut [Team; 2], i: usize) {
     let p = &mut players[i];
     p.status = Status::SentOff;
-    p.pos = pitch::parking_spot(p.team, p.slot);
+    p.pos = teams[p.team].pitch.parking_spot(p.team, p.slot);
     p.vel = DVec2::ZERO;
     p.target = p.pos;
     teams[p.team].reshape(p.slot);
@@ -127,7 +126,7 @@ mod tests {
         let mut teams = config.teams.clone();
         send_off(&mut players, &mut teams, 2);
         assert_eq!(on_pitch_count(&players, 0), 10);
-        assert!(!pitch::contains(players[2].pos));
+        assert!(!config.pitch.contains(players[2].pos));
         assert!(!players[2].active());
         assert_eq!(abandoned(&players, 7), None);
         for i in [3, 4, 5, 6] {

@@ -6,6 +6,7 @@ use crate::data::attributes::AttributeSchema;
 use crate::data::rules::RulePack;
 use crate::data::tactics::TacticsSchema;
 use crate::data::tuning::FatigueTuning;
+use crate::pitch::Pitch;
 use crate::player::Player;
 use crate::rules::Referee;
 use crate::sim::{Simulation, Summary};
@@ -49,6 +50,12 @@ impl<'a> MatchView<'a> {
     #[inline]
     pub fn tuning(&self) -> &'a Tuning {
         &self.sim.config.tuning
+    }
+
+    /// The ground of the match: the home team's. Never changes in a match.
+    #[inline]
+    pub fn pitch(&self) -> &'a Pitch {
+        &self.sim.config.pitch
     }
 
     /// The fatigue tuning of the match.

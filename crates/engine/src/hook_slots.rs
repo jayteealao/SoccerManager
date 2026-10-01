@@ -11,7 +11,6 @@
 use crate::modules::{
     CommentaryHookModule, DecisionHookModule, MatchView, ModuleCard, RuleHookModule,
 };
-use crate::pitch;
 use crate::plugin::{DecisionContext, FoulContext, LineContext};
 use crate::sim::EngineEvent;
 
@@ -42,9 +41,9 @@ impl DecisionHookModule for DecisionHookV1 {
             nearest_opponent: if nearest_opponent.is_finite() {
                 nearest_opponent
             } else {
-                pitch::HALF_LENGTH * 2.0
+                view.pitch().half_length() * 2.0
             },
-            progress: (carrier.pos.x * side.attack_x / pitch::HALF_LENGTH).clamp(-1.0, 1.0),
+            progress: (carrier.pos.x * side.attack_x / view.pitch().half_length()).clamp(-1.0, 1.0),
         })
     }
 }

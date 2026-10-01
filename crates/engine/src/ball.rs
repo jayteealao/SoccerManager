@@ -3,7 +3,6 @@
 
 use crate::math::{DVec2, DVec3, clamp_len};
 use crate::modules::{BallModule, Crossing, Deflection, MatchView, ModuleCard};
-use crate::pitch;
 use crate::shot;
 use crate::streams::Action;
 use crate::tuning::Tuning;
@@ -93,7 +92,7 @@ impl BallModule for BallV1 {
     fn carry(&self, view: &MatchView<'_>, c: usize) -> Ball {
         let p = view.player(c);
         let ball = view.ball();
-        let at = pitch::clamp(p.pos + p.facing * 0.5, 0.1);
+        let at = view.pitch().clamp(p.pos + p.facing * 0.5, 0.1);
         let step = clamp_len(at - ball.xy(), view.tuning().carry_step);
         let next = ball.xy() + step;
         Ball {
@@ -122,13 +121,13 @@ impl BallModule for BallV1 {
     fn crossing(&self, view: &MatchView<'_>, prev: DVec2, ball: &Ball) -> Crossing {
         let xy = ball.xy();
         for team in 0..2 {
-            if pitch::in_goal(prev, xy, view.attack_x(team))
+            if view.pitch().in_goal(prev, xy, view.attack_x(team))
                 && ball.pos.z < view.tuning().crossbar_height
             {
                 return Crossing::Goal(team);
             }
         }
-        match pitch::exit(prev, xy) {
+        match view.pitch().exit(prev, xy) {
             Some(exit) => Crossing::Out(exit),
             None => Crossing::None,
         }

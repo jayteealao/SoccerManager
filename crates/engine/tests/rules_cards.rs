@@ -58,7 +58,11 @@ fn a_second_yellow_sends_the_player_off_and_the_line_spreads() {
 
     let player = sim.players()[TACKLER];
     assert_eq!(player.status, Status::SentOff);
-    assert!(engine::pitch::is_parking_spot(player.pos), "{}", player.pos);
+    assert!(
+        engine::pitch::Pitch::DEFAULT.is_parking_spot(player.pos),
+        "{}",
+        player.pos
+    );
     assert_eq!(on_pitch_count(sim.players(), 1), 10);
     assert_eq!(sim.summary().red, [0, 1]);
 
@@ -98,7 +102,7 @@ fn a_second_yellow_sends_the_player_off_and_the_line_spreads() {
     for _ in 0..2_000 {
         sim.step();
     }
-    assert!(engine::pitch::is_parking_spot(sim.players()[TACKLER].pos));
+    assert!(engine::pitch::Pitch::DEFAULT.is_parking_spot(sim.players()[TACKLER].pos));
 }
 
 #[test]

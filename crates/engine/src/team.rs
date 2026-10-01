@@ -14,7 +14,7 @@ use crate::data::tactics::TacticsSchema;
 use crate::data::team::{Kit, Position, TeamFile};
 use crate::error::EngineError;
 use crate::math::DVec2;
-use crate::pitch::{self, Pitch};
+use crate::pitch::Pitch;
 use crate::player::{Attributes, Derived, Player, Status};
 use crate::tactics::{RoleDuty, Tactics, TeamPlan};
 use crate::tuning::Tuning;
@@ -338,18 +338,24 @@ impl Team {
 
     /// The goal this team attacks.
     pub fn target_goal(&self) -> DVec2 {
-        pitch::goal_centre(self.attack_x)
+        self.pitch.goal_centre(self.attack_x)
     }
 
     /// The goal this team defends.
     pub fn own_goal(&self) -> DVec2 {
-        pitch::goal_centre(-self.attack_x)
+        self.pitch.goal_centre(-self.attack_x)
     }
 
-    /// A slot position in pitch coordinates with the ball at the centre.
+    /// A slot position in pitch coordinates with the ball at the centre. The formation is
+    /// drawn for 105 by 68 and scales to the ground: along the touchline by its length over
+    /// 105, across by its width over 68.
     pub fn slot_base(&self, slot: usize) -> DVec2 {
         let (fx, fy) = self.formation[slot];
-        DVec2::new((fx - pitch::HALF_LENGTH) * self.attack_x, fy)
+        let (sx, sy) = self.pitch.scale();
+        DVec2::new(
+            (fx * sx - self.pitch.half_length()) * self.attack_x,
+            fy * sy,
+        )
     }
 
     /// Removes `slot` from the formation, as when its player leaves play: every line is laid
@@ -379,16 +385,17 @@ impl Team {
             let goal = self.own_goal();
             let out = crate::math::toward(goal, ball) * t.keeper_depth;
             let at = DVec2::new(goal.x + out.x, out.y.clamp(-3.0, 3.0));
-            return pitch::clamp(at, 0.5);
+            return self.pitch.clamp(at, 0.5);
         }
         let (fx, fy) = self.formation[slot];
-        let depth = fx + self.plan.block_depth + self.plan.slots[slot].depth;
+        let (sx, sy) = self.pitch.scale();
+        let depth = (fx + self.plan.block_depth + self.plan.slots[slot].depth) * sx;
         let base = DVec2::new(
-            (depth - pitch::HALF_LENGTH) * self.attack_x,
-            fy * self.plan.width,
+            (depth - self.pitch.half_length()) * self.attack_x,
+            fy * self.plan.width * sy,
         );
         let shift = DVec2::new(ball.x * t.compactness_x, ball.y * t.compactness_y);
-        pitch::clamp(base + shift, 0.5)
+        self.pitch.clamp(base + shift, 0.5)
     }
 }
 
@@ -428,7 +435,7 @@ mod tests {
                 DVec2::new(-52.5, -34.0),
             ] {
                 for slot in 0..PLAYERS_PER_TEAM {
-                    assert!(pitch::contains(team.anchor(slot, ball, &t)));
+                    assert!(Pitch::DEFAULT.contains(team.anchor(slot, ball, &t)));
                 }
             }
         }
@@ -460,7 +467,7 @@ mod tests {
                                 DVec2::ZERO,
                             ] {
                                 for slot in 0..PLAYERS_PER_TEAM {
-                                    assert!(pitch::contains(team.anchor(slot, ball, t)));
+                                    assert!(Pitch::DEFAULT.contains(team.anchor(slot, ball, t)));
                                 }
                             }
                         }
@@ -489,7 +496,7 @@ mod tests {
         assert!(!team.active[2]);
         let t = Tuning::default();
         for slot in [1, 3, 4] {
-            assert!(pitch::contains(team.anchor(slot, DVec2::ZERO, &t)));
+            assert!(Pitch::DEFAULT.contains(team.anchor(slot, DVec2::ZERO, &t)));
         }
         team.reshape(9);
         assert_eq!(

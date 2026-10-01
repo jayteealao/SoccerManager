@@ -218,7 +218,8 @@ impl DecisionModule for DecisionV1 {
                         targets[i] = if (p.pos - ball_xy).length() < engage {
                             ball_xy
                         } else {
-                            pitch::clamp(intercept(p.pos, p.max_speed(), ball_xy, run), 0.5)
+                            view.pitch()
+                                .clamp(intercept(p.pos, p.max_speed(), ball_xy, run), 0.5)
                         };
                     }
                 }
@@ -237,8 +238,9 @@ impl DecisionModule for DecisionV1 {
             None => {
                 // The nearest player of each team chases; a goalkeeper chases a ball near its
                 // goal.
-                let predicted =
-                    pitch::clamp(ball_xy + DVec2::new(ball.vel.x, ball.vel.y) * 0.3, 0.3);
+                let predicted = view
+                    .pitch()
+                    .clamp(ball_xy + DVec2::new(ball.vel.x, ball.vel.y) * 0.3, 0.3);
                 let mut nearest = [usize::MAX; 2];
                 let mut nearest_dist = [f64::INFINITY; 2];
                 for i in 0..n {
@@ -424,7 +426,7 @@ impl DecisionModule for DecisionV1 {
             let hold = w.hold + plan.hold - plan.tempo - w.hold_per_s * held_s + lone_hold;
             Some((dribble, hold))
         };
-        let own_third = carrier.pos.x * attack.x < -pitch::HALF_LENGTH / 3.0;
+        let own_third = carrier.pos.x * attack.x < -view.pitch().half_length() / 3.0;
         let clear = if keeper {
             w.keeper_clear
         } else {
@@ -542,7 +544,8 @@ impl DecisionModule for DecisionV1 {
                 let own_goal_x = -side.attack_x;
                 let c = &t.clearances;
                 let wide = c.wide_chance > 0.0
-                    && carrier.pos.x * own_goal_x.signum() >= pitch::HALF_LENGTH - c.wide_depth;
+                    && carrier.pos.x * own_goal_x.signum()
+                        >= view.pitch().half_length() - c.wide_depth;
                 CarrierPlan::Clear {
                     wide_chance: wide.then_some(c.wide_chance),
                 }
@@ -567,7 +570,7 @@ impl DecisionModule for DecisionV1 {
                 };
                 let target = carrier.pos + dir_goal * 8.0 + perp * (4.0 * side);
                 CarrierPlan::Move {
-                    target: pitch::clamp(target, 1.0),
+                    target: view.pitch().clamp(target, 1.0),
                 }
             }
         }
@@ -654,7 +657,7 @@ impl DecisionModule for DecisionV1 {
         let players = view.players();
         let me = players[taker];
         let attack = DVec2::new(view.teams()[me.team].attack_x, 0.0);
-        let cross_at = (kind == StoppageKind::Corner).then(|| pitch::penalty_spot(attack.x));
+        let cross_at = (kind == StoppageKind::Corner).then(|| view.pitch().penalty_spot(attack.x));
         let range = if kind == StoppageKind::ThrowIn {
             3.0..=THROW_RANGE
         } else {
@@ -681,7 +684,10 @@ impl DecisionModule for DecisionV1 {
                 best = Some((score, mate.pos));
             }
         }
-        let to = best.map_or_else(|| pitch::clamp(me.pos + attack * 10.0, 4.0), |(_, at)| at);
+        let to = best.map_or_else(
+            || view.pitch().clamp(me.pos + attack * 10.0, 4.0),
+            |(_, at)| at,
+        );
         let d = (to - me.pos).length();
         let dir = match toward(me.pos, to) {
             v if v == DVec2::ZERO => attack,
@@ -732,7 +738,9 @@ fn hold_the_line(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usiz
     let anchor = targets[i];
     let depth = anchor.x * attack_x;
     let held = (depth + share * (line - depth)).min(line);
-    targets[i] = pitch::clamp(DVec2::new(held * attack_x, anchor.y), 0.5);
+    targets[i] = view
+        .pitch()
+        .clamp(DVec2::new(held * attack_x, anchor.y), 0.5);
 }
 
 /// Goal-side cover (named mechanism) while team `def` defends against carrier `c`. The
@@ -758,9 +766,9 @@ fn cover(
     let first = def * PLAYERS_PER_TEAM;
     let goal = side.own_goal();
     // Distance from `def`'s goal line toward the halfway line.
-    let depth = |at: DVec2| at.x * side.attack_x + pitch::HALF_LENGTH;
+    let depth = |at: DVec2| at.x * side.attack_x + view.pitch().half_length();
     let covered = |p: &crate::player::Player| {
-        p.active() && p.pos.y.abs() <= t.cover_channel && depth(p.pos) < pitch::HALF_LENGTH
+        p.active() && p.pos.y.abs() <= t.cover_channel && depth(p.pos) < view.pitch().half_length()
     };
     let attacker = if covered(&players[c]) {
         Some((depth(players[c].pos), c))
@@ -820,7 +828,7 @@ fn cover(
             (me.max_speed() * me.max_speed() / (2.0 * me.max_accel())).max(t.arrive_radius);
         spot += players[c].vel * (braking / me.max_speed());
     }
-    targets[i] = pitch::clamp(spot, 0.5);
+    targets[i] = view.pitch().clamp(spot, 0.5);
     CoverTrace::Covered {
         attacker: j,
         defender: i,

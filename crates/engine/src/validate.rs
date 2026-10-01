@@ -11,7 +11,6 @@
 //! rule no longer applies.
 
 use crate::math::DVec2;
-use crate::pitch;
 use crate::record::{PLAYER_COUNT, TickRecord};
 use crate::sim::EngineEvent;
 use crate::team::{PLAYERS_PER_TEAM, Team};
@@ -92,16 +91,17 @@ impl Validator {
                 shape += 1;
             }
             let teams = &self.timeline[shape].1;
+            let pitch = &teams[0].pitch;
             let ball = DVec2::new(f64::from(r.ball[0]), f64::from(r.ball[1]));
             // Fixed-size, so a whole match of records allocates nothing per tick.
             let pos: [DVec2; PLAYER_COUNT] = std::array::from_fn(|i| {
                 DVec2::new(f64::from(r.players[i][0]), f64::from(r.players[i][1]))
             });
             let parked: [bool; PLAYER_COUNT] =
-                std::array::from_fn(|i| pitch::is_parking_spot(pos[i]));
+                std::array::from_fn(|i| pitch.is_parking_spot(pos[i]));
 
             for (i, p) in pos.iter().enumerate() {
-                if !parked[i] && !pitch::contains(*p) {
+                if !parked[i] && !pitch.contains(*p) {
                     out.push(Violation {
                         tick: r.tick,
                         rule: "in_bounds",
@@ -248,7 +248,7 @@ mod tests {
     fn a_parked_player_breaks_no_rule() {
         let v = Validator::new(Tuning::default(), [bare(0), bare(1)]);
         let mut r = record(2);
-        let spot = pitch::parking_spot(0, 3);
+        let spot = crate::pitch::Pitch::DEFAULT.parking_spot(0, 3);
         r.players[3] = [spot.x as f32, spot.y as f32];
         assert!(v.check(&[record(1), r]).is_empty());
     }

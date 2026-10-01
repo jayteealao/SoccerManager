@@ -20,7 +20,7 @@ impl Simulation {
                 DVec2::ZERO
             });
         }
-        apply_velocities(&mut self.players, &velocities, t);
+        apply_velocities(&mut self.players, &velocities, t, &self.config.pitch);
         self.scratch = velocities;
     }
 }

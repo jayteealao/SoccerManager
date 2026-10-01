@@ -13,7 +13,7 @@
 use crate::data::rules::StoppageKind;
 use crate::math::{self, DVec2, toward};
 use crate::modules::{MatchView, ModuleCard, RestartsModule};
-use crate::pitch::{self, HALF_LENGTH, KICK_DISTANCE, PENALTY_AREA_DEPTH};
+use crate::pitch::{KICK_DISTANCE, PENALTY_AREA_DEPTH, PENALTY_AREA_WIDTH, Pitch};
 use crate::player::Player;
 use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::Tuning;
@@ -119,7 +119,7 @@ pub fn preferred_taker(
     match kind {
         StoppageKind::GoalKick => Some(keeper),
         StoppageKind::KickOff => Some(first + PLAYERS_PER_TEAM - 1).filter(|&i| i != keeper),
-        StoppageKind::Injury if pitch::in_penalty_area(spot, own_end) => Some(keeper),
+        StoppageKind::Injury if teams[team].pitch.in_penalty_area(spot, own_end) => Some(keeper),
         _ => None,
     }
 }
@@ -137,7 +137,7 @@ fn taker_target(dead: &DeadBall, teams: &[Team; 2]) -> DVec2 {
     if dead.kind == StoppageKind::KickOff {
         dead.spot - DVec2::new(0.5 * teams[dead.team].attack_x, 0.0)
     } else {
-        pitch::clamp(dead.spot, 0.2)
+        teams[dead.team].pitch.clamp(dead.spot, 0.2)
     }
 }
 
@@ -170,11 +170,18 @@ fn outside(p: DVec2, centre: DVec2, radius: f64, away: DVec2) -> DVec2 {
 /// point falls back to sliding straight toward the centre of the pitch, which the circle always
 /// reaches without spilling off since `radius` is well under both the pitch's half-length and
 /// half-width.
-fn outside_on_pitch(p: DVec2, centre: DVec2, radius: f64, away: DVec2, margin: f64) -> DVec2 {
+fn outside_on_pitch(
+    pitch: &Pitch,
+    p: DVec2,
+    centre: DVec2,
+    radius: f64,
+    away: DVec2,
+    margin: f64,
+) -> DVec2 {
     let clear_of_circle = |q: DVec2| (q - centre).length() >= radius - 1e-9;
 
     let raw = outside(p, centre, radius, away);
-    let primary = pitch::clamp(raw, margin);
+    let primary = pitch.clamp(raw, margin);
     if clear_of_circle(primary) {
         return primary;
     }
@@ -189,7 +196,7 @@ fn outside_on_pitch(p: DVec2, centre: DVec2, radius: f64, away: DVec2, margin: f
     if primary.y != raw.y {
         dir.y = -dir.y;
     }
-    let mirrored = pitch::clamp(centre + dir * radius, margin);
+    let mirrored = pitch.clamp(centre + dir * radius, margin);
     if clear_of_circle(mirrored) {
         return mirrored;
     }
@@ -198,13 +205,13 @@ fn outside_on_pitch(p: DVec2, centre: DVec2, radius: f64, away: DVec2, margin: f
     if inward == DVec2::ZERO {
         inward = away;
     }
-    pitch::clamp(centre + inward * radius, margin)
+    pitch.clamp(centre + inward * radius, margin)
 }
 
 /// `p` moved out of the penalty area at the `side` end.
-fn out_of_area(p: DVec2, side: f64) -> DVec2 {
-    if pitch::in_penalty_area(p, side) {
-        DVec2::new(side * (HALF_LENGTH - PENALTY_AREA_DEPTH - 1.0), p.y)
+fn out_of_area(pitch: &Pitch, p: DVec2, side: f64) -> DVec2 {
+    if pitch.in_penalty_area(p, side) {
+        DVec2::new(side * (pitch.half_length() - PENALTY_AREA_DEPTH - 1.0), p.y)
     } else {
         p
     }
@@ -223,6 +230,7 @@ pub fn target(
     }
     let p = &players[i];
     let team = &teams[p.team];
+    let pitch = &team.pitch;
     let opponent = p.team != dead.team;
     // An opponent pushed off a spot backs toward its own goal.
     let away = DVec2::new(-team.attack_x, 0.0);
@@ -233,17 +241,19 @@ pub fn target(
     let keep = KICK_DISTANCE + TARGET_MARGIN;
     let at = match dead.kind {
         StoppageKind::KickOff | StoppageKind::FreeKick | StoppageKind::Corner if opponent => {
-            outside_on_pitch(base, dead.spot, keep, away, 0.5)
+            outside_on_pitch(pitch, base, dead.spot, keep, away, 0.5)
         }
         StoppageKind::ThrowIn if opponent => outside_on_pitch(
+            pitch,
             base,
             dead.spot,
             THROW_IN_DISTANCE + TARGET_MARGIN,
             away,
             0.5,
         ),
-        StoppageKind::GoalKick if opponent => out_of_area(base, end_of(dead.spot)),
+        StoppageKind::GoalKick if opponent => out_of_area(pitch, base, end_of(dead.spot)),
         StoppageKind::Injury => outside_on_pitch(
+            pitch,
             base,
             dead.spot,
             DROP_BALL_DISTANCE + TARGET_MARGIN,
@@ -253,31 +263,38 @@ pub fn target(
         StoppageKind::Penalty => {
             let side = end_of(dead.spot);
             if opponent && team.keeper_slot() == p.slot {
-                DVec2::new(side * (HALF_LENGTH - 0.3), 0.0)
+                DVec2::new(side * (pitch.half_length() - 0.3), 0.0)
             } else {
                 let behind = DVec2::new(-side, 0.0);
-                outside_on_pitch(out_of_area(base, side), dead.spot, keep, behind, 0.5)
+                outside_on_pitch(
+                    pitch,
+                    out_of_area(pitch, base, side),
+                    dead.spot,
+                    keep,
+                    behind,
+                    0.5,
+                )
             }
         }
         _ => base,
     };
-    pitch::clamp(at, 0.5)
+    pitch.clamp(at, 0.5)
 }
 
 /// Where player `i` stands for a kick of the penalty shoot-out (IFAB Law 10): the kicker at
 /// the mark, the defending keeper `keepers[1 - dead.team]` on the goal line, the kicking
 /// team's keeper on the goal line where it meets the penalty-area line, and every other
 /// player inside the centre circle.
-pub fn shootout_target(dead: &DeadBall, i: usize, keepers: [usize; 2]) -> DVec2 {
+pub fn shootout_target(pitch: &Pitch, dead: &DeadBall, i: usize, keepers: [usize; 2]) -> DVec2 {
     let end = end_of(dead.spot);
     if i == dead.taker {
-        pitch::clamp(dead.spot, 0.2)
+        pitch.clamp(dead.spot, 0.2)
     } else if i == keepers[1 - dead.team] {
-        DVec2::new(end * (HALF_LENGTH - 0.3), 0.0)
+        DVec2::new(end * (pitch.half_length() - 0.3), 0.0)
     } else if i == keepers[dead.team] {
         DVec2::new(
-            end * (HALF_LENGTH - 0.5),
-            pitch::PENALTY_AREA_WIDTH / 2.0 + 1.0,
+            end * (pitch.half_length() - 0.5),
+            PENALTY_AREA_WIDTH / 2.0 + 1.0,
         )
     } else {
         // Spread round the centre spot so nobody stands on anybody else.
@@ -296,6 +313,7 @@ const CIRCLE_SPREAD: f64 = 5.0;
 /// the mark, the defending keeper is on the goal line, and every other player is outside the
 /// penalty area and 9.15 m from the mark.
 pub fn shootout_ready(
+    pitch: &Pitch,
     dead: &DeadBall,
     tick: u32,
     players: &[Player],
@@ -311,10 +329,10 @@ pub fn shootout_ready(
             return true;
         }
         if i == dead.taker || i == keepers[1 - dead.team] {
-            let at = shootout_target(dead, i, keepers);
+            let at = shootout_target(pitch, dead, i, keepers);
             return (p.pos - at).length() <= t.restart_ready_radius;
         }
-        !pitch::in_penalty_area(p.pos, side)
+        !pitch.in_penalty_area(p.pos, side)
             && (p.pos - dead.spot).length() >= KICK_DISTANCE - JUDGE_MARGIN
     })
 }
@@ -336,6 +354,7 @@ pub fn is_ready(
         return false;
     }
     let side = end_of(dead.spot);
+    let pitch = &teams[0].pitch;
     players.iter().enumerate().all(|(i, p)| {
         if i == dead.taker || !p.active() {
             return true;
@@ -348,14 +367,14 @@ pub fn is_ready(
             }
             StoppageKind::ThrowIn => !opponent || distance >= THROW_IN_DISTANCE - JUDGE_MARGIN,
             StoppageKind::Injury => distance >= DROP_BALL_DISTANCE - JUDGE_MARGIN,
-            StoppageKind::GoalKick => !opponent || !pitch::in_penalty_area(p.pos, side),
+            StoppageKind::GoalKick => !opponent || !pitch.in_penalty_area(p.pos, side),
             StoppageKind::KickOff => {
                 let own_half = p.pos.x * teams[p.team].attack_x <= JUDGE_MARGIN;
                 own_half && (!opponent || distance >= KICK_DISTANCE - JUDGE_MARGIN)
             }
             StoppageKind::Penalty => {
                 (opponent && teams[p.team].keeper_slot() == p.slot)
-                    || (!pitch::in_penalty_area(p.pos, side)
+                    || (!pitch.in_penalty_area(p.pos, side)
                         && distance >= KICK_DISTANCE - JUDGE_MARGIN)
             }
             _ => true,
@@ -391,16 +410,21 @@ impl RestartsModule for RestartsV1 {
 
     fn target(&self, view: &MatchView<'_>, dead: &DeadBall, i: usize) -> DVec2 {
         match view.referee().shootout.as_ref() {
-            Some(shootout) => shootout_target(dead, i, shootout.keepers),
+            Some(shootout) => shootout_target(view.pitch(), dead, i, shootout.keepers),
             None => target(dead, i, view.players(), view.teams(), view.tuning()),
         }
     }
 
     fn ready(&self, view: &MatchView<'_>, dead: &DeadBall, now: u32) -> bool {
         match view.referee().shootout.as_ref() {
-            Some(shootout) => {
-                shootout_ready(dead, now, view.players(), shootout.keepers, view.tuning())
-            }
+            Some(shootout) => shootout_ready(
+                view.pitch(),
+                dead,
+                now,
+                view.players(),
+                shootout.keepers,
+                view.tuning(),
+            ),
             None => is_ready(dead, now, view.players(), view.teams(), view.tuning()),
         }
     }
@@ -463,7 +487,7 @@ mod tests {
     #[test]
     fn opponents_leave_the_area_at_a_goal_kick() {
         let config = shipped_config(1, 90).unwrap();
-        let spot = pitch::goal_kick_spot(-1.0, 3.0);
+        let spot = Pitch::DEFAULT.goal_kick_spot(-1.0, 3.0);
         let taker = taker(
             StoppageKind::GoalKick,
             0,
@@ -475,14 +499,17 @@ mod tests {
         let d = dead(StoppageKind::GoalKick, 0, spot, taker);
         for i in 11..22 {
             let at = target(&d, i, &config.players, &config.teams, &config.tuning);
-            assert!(!pitch::in_penalty_area(at, -1.0), "player {i} at {at}");
+            assert!(
+                !Pitch::DEFAULT.in_penalty_area(at, -1.0),
+                "player {i} at {at}"
+            );
         }
     }
 
     #[test]
     fn only_the_taker_and_the_goalkeeper_stay_in_the_area_at_a_penalty() {
         let config = shipped_config(1, 90).unwrap();
-        let spot = pitch::penalty_spot(1.0);
+        let spot = Pitch::DEFAULT.penalty_spot(1.0);
         let taker = taker(
             StoppageKind::Penalty,
             0,
@@ -498,7 +525,10 @@ mod tests {
             } else if i == 11 {
                 assert!(at.x >= 52.0 && at.y == 0.0, "keeper at {at}");
             } else {
-                assert!(!pitch::in_penalty_area(at, 1.0), "player {i} at {at}");
+                assert!(
+                    !Pitch::DEFAULT.in_penalty_area(at, 1.0),
+                    "player {i} at {at}"
+                );
                 assert!((at - spot).length() >= KICK_DISTANCE);
             }
         }

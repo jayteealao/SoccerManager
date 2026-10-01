@@ -7,7 +7,6 @@ use crate::math::{DVec2, toward};
 use crate::modules::{
     Contest, CrossContest, LooseBall, MatchView, ModuleCard, ParrySide, PossessionModule,
 };
-use crate::pitch;
 use crate::sim::{WIDE_SPREAD, wide_of_goal};
 use crate::streams::Action;
 
@@ -137,7 +136,7 @@ fn cross_clearers(view: &MatchView<'_>) -> Option<CrossContest> {
     let def = 1 - passer;
     let own_goal_x = -view.attack_x(def);
     let ball_xy = ball.xy();
-    if !pitch::in_penalty_area(ball_xy, own_goal_x) {
+    if !view.pitch().in_penalty_area(ball_xy, own_goal_x) {
         return None;
     }
     let keeper = view.keeper(def);
@@ -173,7 +172,7 @@ fn clearance_line(view: &MatchView<'_>, i: usize, wide: bool) -> (DVec2, f64) {
     if wide {
         (wide_of_goal(ball_xy, own_goal_x), WIDE_SPREAD)
     } else {
-        let goal = pitch::goal_centre(own_goal_x);
+        let goal = view.pitch().goal_centre(own_goal_x);
         let away = match toward(goal, ball_xy) {
             v if v == DVec2::ZERO => DVec2::new(-own_goal_x.signum(), 0.0),
             v => v,

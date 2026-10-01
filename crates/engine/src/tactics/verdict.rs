@@ -5,7 +5,6 @@
 use crate::data::rules::StoppageKind;
 use crate::math::DVec2;
 use crate::modules::{ChangesModule, MatchView, ModuleCard, SubEntry, SubRequest};
-use crate::pitch;
 use crate::player::Status;
 use crate::tactics::change::RejectReason;
 use crate::tactics::{Tactics, TacticsPatch};
@@ -55,7 +54,7 @@ impl ChangesModule for ChangesV1 {
             (
                 DVec2::new(
                     -side.attack_x * (1.0 + 1.5 * k),
-                    -(pitch::HALF_WIDTH - ENTRY_MARGIN),
+                    -(view.pitch().half_width() - ENTRY_MARGIN),
                 ),
                 true,
             )

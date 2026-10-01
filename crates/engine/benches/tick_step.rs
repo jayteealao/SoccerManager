@@ -52,7 +52,12 @@ fn steering_pass(c: &mut Criterion) {
     let mut scratch = Vec::new();
     c.bench_function("steering_pass_22", |b| {
         b.iter(|| {
-            engine::steering::step_all(&mut players, &mut scratch, &tuning);
+            engine::steering::step_all(
+                &mut players,
+                &mut scratch,
+                &tuning,
+                &engine::pitch::Pitch::DEFAULT,
+            );
             black_box(players[0].pos)
         })
     });

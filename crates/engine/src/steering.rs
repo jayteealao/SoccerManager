@@ -4,7 +4,7 @@
 
 use crate::math::{DVec2, clamp_len, sq_skip_limit, toward};
 use crate::modules::{MatchView, ModuleCard, ROSTER, SteeringModule};
-use crate::pitch;
+use crate::pitch::Pitch;
 use crate::player::Player;
 use crate::tuning::Tuning;
 
@@ -70,7 +70,7 @@ pub fn next_velocity(players: &[Player], i: usize, t: &Tuning) -> DVec2 {
 }
 
 /// Steers every player one tick: new velocities are computed from the old state, then applied.
-pub fn step_all(players: &mut [Player], scratch: &mut Vec<DVec2>, t: &Tuning) {
+pub fn step_all(players: &mut [Player], scratch: &mut Vec<DVec2>, t: &Tuning, pitch: &Pitch) {
     scratch.clear();
     for i in 0..players.len() {
         scratch.push(if players[i].active() {
@@ -79,18 +79,18 @@ pub fn step_all(players: &mut [Player], scratch: &mut Vec<DVec2>, t: &Tuning) {
             DVec2::ZERO
         });
     }
-    apply_velocities(players, scratch, t);
+    apply_velocities(players, scratch, t, pitch);
 }
 
 /// Moves every player on the pitch one tick at its new velocity `velocities[i]`, and turns it
 /// to face where it goes.
-pub fn apply_velocities(players: &mut [Player], velocities: &[DVec2], t: &Tuning) {
+pub fn apply_velocities(players: &mut [Player], velocities: &[DVec2], t: &Tuning, pitch: &Pitch) {
     for (p, &v) in players.iter_mut().zip(velocities.iter()) {
         if !p.active() {
             continue;
         }
         p.vel = v;
-        p.pos = pitch::clamp(p.pos + v * t.dt, 0.2);
+        p.pos = pitch.clamp(p.pos + v * t.dt, 0.2);
         if v.length_squared() > 1e-6 {
             p.facing = v.normalize();
         }
@@ -107,7 +107,7 @@ impl SteeringModule for SteeringV1 {
 
     /// [`resolve_overlaps`] on a copy of the positions, made at the first overlap.
     fn separate(&self, view: &MatchView<'_>) -> Option<[DVec2; ROSTER]> {
-        separated(view.players(), view.tuning())
+        separated(view.players(), view.tuning(), view.pitch())
     }
 }
 
@@ -130,7 +130,7 @@ pub const STEERING_V1_CARD: ModuleCard = ModuleCard {
 /// pair whose squared distance is at or above `sq_skip_limit` of the minimum distance skips
 /// the square root; every other pair runs the square-root form unchanged.
 #[inline(never)]
-pub fn resolve_overlaps(players: &mut [Player], t: &Tuning) {
+pub fn resolve_overlaps(players: &mut [Player], t: &Tuning, pitch: &Pitch) {
     let n = players.len();
     let skip = sq_skip_limit(t.min_player_distance);
     for i in 0..n {
@@ -153,8 +153,8 @@ pub fn resolve_overlaps(players: &mut [Player], t: &Tuning) {
                     DVec2::new(1.0, 0.0)
                 };
                 let push = axis * ((t.min_player_distance - dist) / 2.0);
-                players[i].pos = pitch::clamp(players[i].pos - push, 0.2);
-                players[j].pos = pitch::clamp(players[j].pos + push, 0.2);
+                players[i].pos = pitch.clamp(players[i].pos - push, 0.2);
+                players[j].pos = pitch.clamp(players[j].pos + push, 0.2);
             }
         }
     }
@@ -164,7 +164,7 @@ pub fn resolve_overlaps(players: &mut [Player], t: &Tuning) {
 /// positions the earlier pairs moved. `None` when no pair overlaps, so nobody moves. The
 /// pairs before the first overlap move nobody, so the scan reads the players as they stand
 /// until then, and copies the positions only from the first overlap on.
-fn separated(players: &[Player], t: &Tuning) -> Option<[DVec2; ROSTER]> {
+fn separated(players: &[Player], t: &Tuning, pitch: &Pitch) -> Option<[DVec2; ROSTER]> {
     let n = players.len().min(ROSTER);
     let skip = sq_skip_limit(t.min_player_distance);
     let overlaps = |d: DVec2| d.length_squared() < skip && d.length() < t.min_player_distance;
@@ -208,8 +208,8 @@ fn separated(players: &[Player], t: &Tuning) -> Option<[DVec2; ROSTER]> {
                     DVec2::new(1.0, 0.0)
                 };
                 let push = axis * ((t.min_player_distance - dist) / 2.0);
-                pos[i] = pitch::clamp(pos[i] - push, 0.2);
-                pos[j] = pitch::clamp(pos[j] + push, 0.2);
+                pos[i] = pitch.clamp(pos[i] - push, 0.2);
+                pos[j] = pitch.clamp(pos[j] + push, 0.2);
             }
         }
     }
@@ -235,7 +235,7 @@ mod tests {
         let mut scratch = Vec::new();
         let mut max_x: f64 = 0.0;
         for _ in 0..400 {
-            step_all(&mut players, &mut scratch, &t);
+            step_all(&mut players, &mut scratch, &t, &Pitch::DEFAULT);
             max_x = max_x.max(players[0].pos.x);
         }
         assert!(
@@ -255,8 +255,8 @@ mod tests {
         ];
         let mut scratch = Vec::new();
         for _ in 0..100 {
-            step_all(&mut players, &mut scratch, &t);
-            resolve_overlaps(&mut players, &t);
+            step_all(&mut players, &mut scratch, &t, &Pitch::DEFAULT);
+            resolve_overlaps(&mut players, &t, &Pitch::DEFAULT);
         }
         let dist = (players[0].pos - players[1].pos).length();
         assert!(dist >= t.min_player_distance, "distance {dist}");
@@ -304,8 +304,8 @@ mod tests {
                         DVec2::new(1.0, 0.0)
                     };
                     let push = axis * ((t.min_player_distance - dist) / 2.0);
-                    players[i].pos = pitch::clamp(players[i].pos - push, 0.2);
-                    players[j].pos = pitch::clamp(players[j].pos + push, 0.2);
+                    players[i].pos = Pitch::DEFAULT.clamp(players[i].pos - push, 0.2);
+                    players[j].pos = Pitch::DEFAULT.clamp(players[j].pos + push, 0.2);
                 }
             }
         }
@@ -396,7 +396,7 @@ mod tests {
     fn overlap_pair(a: DVec2, b: DVec2, t: &Tuning) -> [[(u64, u64); 2]; 2] {
         let mut new = vec![player(0, a, a), player(1, b, b)];
         let mut old = new.clone();
-        resolve_overlaps(&mut new, t);
+        resolve_overlaps(&mut new, t, &Pitch::DEFAULT);
         resolve_overlaps_before(&mut old, t);
         [
             [bits(new[0].pos), bits(new[1].pos)],
@@ -445,8 +445,8 @@ mod tests {
             .collect();
         crowd[7].status = crate::player::Status::SentOff;
         let mut expected = crowd.clone();
-        resolve_overlaps(&mut expected, &t);
-        let got = separated(&crowd, &t).expect("the crowd overlaps");
+        resolve_overlaps(&mut expected, &t, &Pitch::DEFAULT);
+        let got = separated(&crowd, &t, &Pitch::DEFAULT).expect("the crowd overlaps");
         for (p, at) in expected.iter().zip(got) {
             assert_eq!(bits(p.pos), bits(at));
         }
@@ -456,6 +456,6 @@ mod tests {
                 player(i, at, at)
             })
             .collect();
-        assert!(separated(&apart, &t).is_none());
+        assert!(separated(&apart, &t, &Pitch::DEFAULT).is_none());
     }
 }

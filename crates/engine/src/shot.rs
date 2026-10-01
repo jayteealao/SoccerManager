@@ -5,7 +5,7 @@
 use crate::ball::Ball;
 use crate::math::{self, DVec2, DVec3};
 use crate::modules::{MatchView, ModuleCard, ShotModule};
-use crate::pitch;
+use crate::pitch::Pitch;
 use crate::sim::shot_xg;
 use crate::streams::Action;
 use crate::tuning::Tuning;
@@ -21,15 +21,15 @@ const QUALITY_HIGH: f64 = 0.40;
 /// between the posts and under the bar. A copy of the ball is moved with the same physics
 /// as the match, so the prediction and the flight agree; it stops at rest, when the ball
 /// leaves play anywhere else, or after `FLIGHT_TICKS`.
-pub fn on_target(mut ball: Ball, attack_x: f64, t: &Tuning) -> bool {
+pub fn on_target(mut ball: Ball, attack_x: f64, t: &Tuning, pitch: &Pitch) -> bool {
     for _ in 0..FLIGHT_TICKS {
         let prev = ball.xy();
         ball.integrate(t);
         let xy = ball.xy();
-        if pitch::in_goal(prev, xy, attack_x) {
+        if pitch.in_goal(prev, xy, attack_x) {
             return ball.pos.z < t.crossbar_height;
         }
-        if pitch::exit(prev, xy).is_some() || ball.speed() == 0.0 {
+        if pitch.exit(prev, xy).is_some() || ball.speed() == 0.0 {
             return false;
         }
     }
@@ -38,8 +38,8 @@ pub fn on_target(mut ball: Ball, attack_x: f64, t: &Tuning) -> bool {
 
 /// The quality of a shot from `from` at the goal a team attacking `attack_x` aims at: the
 /// expected goals of the fixed quality model.
-pub fn quality(from: DVec2, attack_x: f64, t: &Tuning) -> f64 {
-    shot_xg(from, attack_x, &t.shots.quality)
+pub fn quality(from: DVec2, attack_x: f64, t: &Tuning, pitch: &Pitch) -> f64 {
+    shot_xg(from, attack_x, &t.shots.quality, pitch)
 }
 
 /// The chance that a keeper saves a shot of `quality` heading on target: `save_high` up to
@@ -78,15 +78,15 @@ pub struct ShotV1;
 
 impl ShotModule for ShotV1 {
     fn xg(&self, view: &MatchView<'_>, from: DVec2, attack_x: f64) -> f64 {
-        shot_xg(from, attack_x, &view.tuning().xg)
+        shot_xg(from, attack_x, &view.tuning().xg, view.pitch())
     }
 
     fn quality(&self, view: &MatchView<'_>, from: DVec2, attack_x: f64) -> f64 {
-        quality(from, attack_x, view.tuning())
+        quality(from, attack_x, view.tuning(), view.pitch())
     }
 
     fn on_target(&self, view: &MatchView<'_>, ball: Ball, attack_x: f64) -> bool {
-        on_target(ball, attack_x, view.tuning())
+        on_target(ball, attack_x, view.tuning(), view.pitch())
     }
 
     fn save_chance(&self, view: &MatchView<'_>, quality: f64) -> f64 {
@@ -192,29 +192,29 @@ mod tests {
     fn a_shot_at_the_centre_from_sixteen_metres_is_on_target() {
         let t = Tuning::default();
         let ball = shot(DVec2::new(36.5, 0.0), DVec2::new(52.5, 0.0), 0.0, &t);
-        assert!(on_target(ball, 1.0, &t));
+        assert!(on_target(ball, 1.0, &t, &Pitch::DEFAULT));
     }
 
     #[test]
     fn a_shot_aimed_a_metre_outside_a_post_is_not_on_target() {
         let t = Tuning::default();
-        let post = pitch::GOAL_WIDTH / 2.0;
+        let post = crate::pitch::GOAL_WIDTH / 2.0;
         let ball = shot(DVec2::new(36.5, 0.0), DVec2::new(52.5, post + 1.0), 0.0, &t);
-        assert!(!on_target(ball, 1.0, &t));
+        assert!(!on_target(ball, 1.0, &t, &Pitch::DEFAULT));
     }
 
     #[test]
     fn a_shot_lofted_at_nine_metres_per_second_from_eighteen_metres_goes_over_the_bar() {
         let t = Tuning::default();
         let ball = shot(DVec2::new(34.5, 0.0), DVec2::new(52.5, 0.0), 9.0, &t);
-        assert!(!on_target(ball, 1.0, &t));
+        assert!(!on_target(ball, 1.0, &t, &Pitch::DEFAULT));
     }
 
     #[test]
     fn a_shot_at_the_other_goal_is_not_on_target() {
         let t = Tuning::default();
         let ball = shot(DVec2::new(36.5, 0.0), DVec2::new(52.5, 0.0), 0.0, &t);
-        assert!(!on_target(ball, -1.0, &t));
+        assert!(!on_target(ball, -1.0, &t, &Pitch::DEFAULT));
     }
 
     #[test]

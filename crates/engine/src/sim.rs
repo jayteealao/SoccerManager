@@ -29,7 +29,7 @@ use crate::fatigue::InjurySource;
 use crate::flags::ActiveFlags;
 use crate::math::{self, DVec2};
 use crate::modules::ResolvedModules;
-use crate::pitch::{self, Pitch};
+use crate::pitch::{GOAL_WIDTH, Pitch};
 use crate::player::Player;
 use crate::plugin::{Plugins, ScriptNote};
 use crate::record::{TickRecord, TickSink};
@@ -482,15 +482,15 @@ pub struct ShotCensus {
 }
 
 /// The expected goals of a shot from `from` at the goal a team attacking `attack_x` aims
-/// at: a logistic function of the distance to the goal centre and of the angle the goal
+/// at on `pitch`: a logistic function of the distance to the goal centre and of the angle the goal
 /// mouth subtends, with the coefficients from the tuning file.
-pub fn shot_xg(from: DVec2, attack_x: f64, t: &XgTuning) -> f64 {
-    let x = pitch::HALF_LENGTH * attack_x;
-    let half = pitch::GOAL_WIDTH / 2.0;
+pub fn shot_xg(from: DVec2, attack_x: f64, t: &XgTuning, pitch: &Pitch) -> f64 {
+    let x = pitch.half_length() * attack_x;
+    let half = GOAL_WIDTH / 2.0;
     let a = DVec2::new(x, half) - from;
     let b = DVec2::new(x, -half) - from;
     let angle = math::atan2(a.perp_dot(b), a.dot(b)).abs();
-    let distance = (pitch::goal_centre(attack_x) - from).length();
+    let distance = (pitch.goal_centre(attack_x) - from).length();
     let z = t.intercept + t.distance_coef * distance + t.angle_coef * angle;
     1.0 / (1.0 + math::exp(-z))
 }

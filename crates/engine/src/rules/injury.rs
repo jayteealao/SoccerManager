@@ -5,7 +5,6 @@
 use crate::fatigue::InjurySource;
 use crate::math::DVec2;
 use crate::modules::{InjuriesModule, MatchView, ModuleCard};
-use crate::pitch;
 
 /// Injuries, version 1: an injured player on the pitch leaves at once, and in open play the
 /// ball is dropped at its spot for the team that touched it last (the injured player's team
@@ -20,7 +19,7 @@ impl InjuriesModule for InjuriesV1 {
     fn dropped_ball(&self, view: &MatchView<'_>, team: usize) -> (usize, DVec2) {
         (
             view.last_touch().unwrap_or(team),
-            pitch::clamp(view.ball().xy(), 0.5),
+            view.pitch().clamp(view.ball().xy(), 0.5),
         )
     }
 }

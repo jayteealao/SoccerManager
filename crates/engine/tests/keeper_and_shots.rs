@@ -19,7 +19,7 @@ mod common;
 use common::{calm_match, content, default_teams, index, run_many, spread};
 use engine::data::StoppageKind;
 use engine::math::{DVec2, DVec3};
-use engine::pitch;
+use engine::pitch::{self, Pitch};
 use engine::rules::restart;
 use engine::scenario::Scene;
 use engine::{MatchConfig, Simulation};
@@ -48,7 +48,7 @@ fn shot_scene(seed: u64, keeper: DVec2) -> Scene {
 
 /// The direction from the shooter at `(30, 0)` to `aim` on the goal line.
 fn toward(aim_y: f64) -> DVec2 {
-    DVec2::new(pitch::HALF_LENGTH - 30.0, aim_y)
+    DVec2::new(Pitch::DEFAULT.half_length() - 30.0, aim_y)
 }
 
 /// Steps `sim` until play stops, the keeper holds the ball, or `ticks` pass.
@@ -156,7 +156,7 @@ fn a_parried_shot_leaves_the_defending_side_last_and_can_give_a_corner() {
                     corners += 1;
                     assert_eq!(touch, Some(1), "seed {seed}: a defender touched it last");
                     assert!(
-                        before.ball[0] >= (pitch::HALF_LENGTH - 0.81) as f32,
+                        before.ball[0] >= (Pitch::DEFAULT.half_length() - 0.81) as f32,
                         "seed {seed}: the ball was at {:?} before the corner",
                         before.ball
                     );
@@ -194,7 +194,7 @@ fn penalty(seed: u64) -> bool {
     config.seed = seed;
     let team = usize::from(seed.is_multiple_of(2));
     let probe = Scene::new(config.clone()).build();
-    let spot = pitch::penalty_spot(probe.teams()[team].attack_x);
+    let spot = Pitch::DEFAULT.penalty_spot(probe.teams()[team].attack_x);
     let teams = probe.teams();
     let taker = restart::taker(StoppageKind::Penalty, team, spot, probe.players(), &teams);
     let mut sim = Scene::new(config).tick(1_001).penalty(team, taker).build();
@@ -244,7 +244,8 @@ fn set_pieces_arise_from_play() {
                 && stoppage.kind == StoppageKind::Corner
             {
                 let attacking = stoppage.team.expect("a corner has a team");
-                let near_line = f64::from(before.ball[0].abs()) >= pitch::HALF_LENGTH - 0.81;
+                let near_line =
+                    f64::from(before.ball[0].abs()) >= Pitch::DEFAULT.half_length() - 0.81;
                 if !near_line || touch != Some(1 - attacking) {
                     bad.push(format!(
                         "seed {seed} tick {}: ball {:?}, last touch {touch:?}",
@@ -321,12 +322,12 @@ fn shot_outcome_census() {
 /// The distance to the goal centre and the angle the goal mouth subtends, as the
 /// expected-goals model reads them.
 fn features(from: DVec2, attack_x: f64) -> (f64, f64) {
-    let x = pitch::HALF_LENGTH * attack_x;
+    let x = Pitch::DEFAULT.half_length() * attack_x;
     let half = pitch::GOAL_WIDTH / 2.0;
     let a = DVec2::new(x, half) - from;
     let b = DVec2::new(x, -half) - from;
     let angle = engine::math::atan2(a.perp_dot(b), a.dot(b)).abs();
-    let distance = (pitch::goal_centre(attack_x) - from).length();
+    let distance = (Pitch::DEFAULT.goal_centre(attack_x) - from).length();
     (distance, angle)
 }
 
