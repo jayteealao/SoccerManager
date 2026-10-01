@@ -297,7 +297,8 @@ The added time of a half is the sum of `per_kind` over the half's stoppages, plu
 {
   "schema_version": 1,
   "club": { "id": "club-00000001-00", "name": "Oakmere Rangers", "short_name": "OAK",
-            "kit": { "primary": "#c8102e", "secondary": "#000000" } },
+            "kit": { "primary": "#c8102e", "secondary": "#000000" },
+            "ground": { "length": 100, "width": 64 } },
   "players": [
     { "id": "p-club-00000001-00-01", "name": "Peton Tavwood", "shirt": 1, "position": "GK",
       "attributes": { "acceleration": 56, "...": 0 } }
@@ -311,6 +312,8 @@ The added time of a half is the sum of `per_kind` over the half's stoppages, plu
 | club.name | 2 to 48 characters |
 | club.short_name | 2 to 4 characters |
 | club.kit.primary, secondary | `#RRGGBB` |
+| club.ground.length | the home ground's touchline in metres: 90 to 120, and longer than the width; default 105 |
+| club.ground.width | the home ground's goal line in metres: 45 to 90; default 68 |
 | players | 11 to 40 entries; ids and shirts unique |
 | players[].id | 1 to 64 characters |
 | players[].name | 2 to 48 characters |
@@ -320,11 +323,13 @@ The added time of a half is the sum of `per_kind` over the half's stoppages, plu
 
 Before kick-off the AI manager picks the best-fitting player for each formation slot in slot order, by the slot role's attribute weights in `tactics.json`, and names a bench of up to `ai.bench_size` from the rest, the best remaining goalkeeper first. File order breaks ties. A bad value is refused by player and attribute: `content refused: team teams/x.json: players: player p-club-00000001-00-03: attribute pace is 120; allowed 1 to 100`.
 
+A match is played on the home team's ground. `club.ground` is optional: a file without it plays on 105 by 68 metres, and the default is never written back, so a file that gives 105 by 68 and one that gives no ground hash the same. The touchlines, the goal lines, the halfway line and every spot measured from them follow the ground; the goal, the goal and penalty areas, the penalty mark, the centre circle, the corner arcs and the 9.15 m kick distance keep their sizes from the Laws. The formation slots in `tactics.json` are drawn for 105 by 68 and scale with the ground: along the touchline by its length over 105, across by its width over 68. A ground outside the Laws is refused by club: `content refused: team teams/x.json: club.ground: Oakmere Rangers: the ground is 121 m long; the Laws allow 90 to 120 m`. A touchline that is not longer than the goal line is refused the same way.
+
 ## tactics.json
 
 | Field | Holds | Bound |
 |---|---|---|
-| formations | `{ "name", "slots" }`; eleven slots `{ "x", "y", "position" }` in metres from the own goal line (1 to 100) and from the centre line (-33 to 33) | 1 to 16; slot 0 is the only `GK` |
+| formations | `{ "name", "slots" }`; eleven slots `{ "x", "y", "position" }` in metres from the own goal line (1 to 100) and from the centre line (-33 to 33) on a 105 by 68 ground; the slots scale with the home ground | 1 to 16; slot 0 is the only `GK` |
 | mentalities | `{ "name", "block_depth", "shoot", "progress", "hold" }`: metres the block moves up (-20 to 20), and offsets on shots, forward passes, and holding the ball (-2 to 2) | 1 to 9 |
 | instructions | the six team instructions, each `{ "default", "levels" }` with 2 to 5 levels | see below |
 | roles | `{ "name", "positions", "attributes", "shoot", "dribble", "progress" }`: the positions it suits, attribute weights (0 to 10, each a name in `attributes.json`) the AI manager uses to pick players, and option offsets (-2 to 2) | 1 to 64; a role for every position a formation uses |

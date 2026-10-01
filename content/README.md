@@ -6,6 +6,10 @@ Every field of every file, with its unit, its default, and its bound, is in [the
 
 To change behaviour with code rather than values, write a script pack: see [script packs](scripts/README.md) and the sample in `scripts/sample/`.
 
+## Home grounds
+
+A team file may name its club's home ground: `"ground": { "length": 100, "width": 64 }` inside `club`, in metres. A match is played on the home team's ground; a file without one plays on 105 by 68. The Laws allow a length of 90 to 120 metres and a width of 45 to 90 metres, with the touchline longer than the goal line, and the engine refuses any other ground by the club's name. The two default clubs name no ground. [The data-file reference](../docs/reference/data-files.md#teamsjson) says which distances follow the ground and which keep their sizes from the Laws.
+
 ## Feature flags
 
 The `flags` block of `tuning.json` declares switches between the current model and a candidate. It ships empty. Each flag has five fields:
