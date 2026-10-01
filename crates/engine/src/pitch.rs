@@ -61,7 +61,7 @@ impl fmt::Display for GroundError {
             ),
             GroundError::NotLonger { length, width } => write!(
                 f,
-                "the ground is {length} m long and {width} m wide; the Laws need the touchline                  longer than the goal line"
+                "the ground is {length} m long and {width} m wide; the Laws need the touchline longer than the goal line"
             ),
         }
     }
@@ -442,6 +442,14 @@ mod tests {
         assert_eq!(
             GroundError::Width(44.0).to_string(),
             "the ground is 44 m wide; the Laws allow 45 to 90 m"
+        );
+        assert_eq!(
+            GroundError::NotLonger {
+                length: 90.0,
+                width: 90.0
+            }
+            .to_string(),
+            "the ground is 90 m long and 90 m wide; the Laws need the touchline longer than the goal line"
         );
     }
 
