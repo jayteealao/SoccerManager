@@ -1,7 +1,8 @@
 //! `engine-cli fast-model`: a small fit runs end to end and records the golden results' id;
 //! a stale fit, or a golden file whose results changed, fails and names both ids, with the
-//! unchanged fit as the control; and no runtime path outside the fit and check commands
-//! resolves the fast-model slot (a source scan, with a planted call as its control).
+//! unchanged fit as the control; the shipped fit matches the golden results; and no runtime
+//! path outside the fit and check commands resolves the fast-model slot (a source scan, with
+//! a planted call as its control).
 
 mod common;
 
@@ -263,5 +264,32 @@ fn no_runtime_path_resolves_the_fast_model() {
     assert_eq!(
         reaches(&planted),
         ["crates/engine-cli/src/serve.rs: fast_model::resolve"]
+    );
+}
+
+/// AC-30 in every test job: the fit the content folder ships records the engine id of the
+/// committed golden results, so a change that regenerates the golden file without a refit
+/// fails here as well as in the CI step.
+#[test]
+fn the_shipped_fit_records_the_golden_results_id() {
+    let dir = common::temp("fast-model", "shipped");
+    let done = run(&dir, &["fast-model", "stale"]);
+    let stderr = String::from_utf8_lossy(&done.stderr);
+    assert_eq!(done.status.code(), Some(0), "{stderr}");
+    let stdout = String::from_utf8_lossy(&done.stdout);
+    let fit: Value = serde_json::from_str(
+        &std::fs::read_to_string(repo().join("content/fast-model.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        fit["check"]["pass"].as_bool().unwrap(),
+        "the shipped fit passed its check"
+    );
+    assert_eq!(fit["check"]["figures"], 49);
+    assert_eq!(fit["batch"]["matches_per_pairing"], 1000);
+    assert_eq!(fit["batch"]["minutes"], 90);
+    assert!(
+        stdout.contains(fit["engine_id"].as_str().unwrap()),
+        "{stdout}"
     );
 }
