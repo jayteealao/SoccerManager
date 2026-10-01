@@ -9,10 +9,13 @@
 //! substitute replaces the injured player, and a tactics change moves every anchor. From the
 //! first kick of a penalty shoot-out on, the players wait in the centre circle and the anchor
 //! rule no longer applies.
+//!
+//! [`Validator::check_events`] judges a match's event stream on its own rules, whatever
+//! produced it: the full engine or the fast model, which has no ticks to check.
 
 use crate::math::DVec2;
 use crate::record::{PLAYER_COUNT, TickRecord};
-use crate::sim::EngineEvent;
+use crate::sim::{EngineEvent, EngineEventKind};
 use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::Tuning;
 
@@ -184,6 +187,79 @@ impl Validator {
         for v in &out {
             tracing::warn!(signal = "validate.violation", tick = v.tick, rule = v.rule, player = ?v.player, value = v.value);
         }
+        out
+    }
+
+    /// Returns every violation of the event-stream rules in `events`, in stream order. The
+    /// rules hold for any producer of a match's events, the full engine or the fast model:
+    ///
+    /// - `event_order`: no event is stamped before the one before it;
+    /// - `kick_off_first`: the first event is a kick-off with the score 0-0 (the full engine
+    ///   kicks off on tick 1, the fast model on tick 0);
+    /// - `full_time_last`: exactly one full time, and it is the last event;
+    /// - `goal_score`: a goal names a team and adds one to that team's score, the other
+    ///   score unchanged (a shoot-out kick keeps the score of play);
+    /// - `score_kept`: every other event keeps the score;
+    /// - `period_end_team`: half-time and full time name no team.
+    ///
+    /// `value` holds the event's index in the stream.
+    pub fn check_events(events: &[EngineEvent]) -> Vec<Violation> {
+        let mut out = Vec::new();
+        let mut bad = |i: usize, rule: &'static str| {
+            out.push(Violation {
+                tick: events[i].tick,
+                rule,
+                player: None,
+                value: i as f64,
+            });
+        };
+        match events.first() {
+            Some(first) if first.kind == EngineEventKind::KickOff && first.scores == [0, 0] => {}
+            Some(_) => bad(0, "kick_off_first"),
+            None => return Vec::new(),
+        }
+        let full_times: Vec<usize> = (0..events.len())
+            .filter(|&i| events[i].kind == EngineEventKind::FullTime)
+            .collect();
+        if full_times != [events.len() - 1] {
+            bad(
+                full_times.first().copied().unwrap_or(events.len() - 1),
+                "full_time_last",
+            );
+        }
+        let mut shootout = false;
+        for (i, e) in events.iter().enumerate() {
+            shootout |= e.shootout_round.is_some();
+            if matches!(
+                e.kind,
+                EngineEventKind::HalfTime | EngineEventKind::FullTime
+            ) && e.team.is_some()
+            {
+                bad(i, "period_end_team");
+            }
+            let Some(prev) = i.checked_sub(1).map(|p| &events[p]) else {
+                continue;
+            };
+            if e.tick < prev.tick {
+                bad(i, "event_order");
+            }
+            if e.kind == EngineEventKind::Goal && !shootout {
+                let mut expected = prev.scores;
+                match e.team {
+                    Some(team) if team < 2 => expected[team] += 1,
+                    _ => {
+                        bad(i, "goal_score");
+                        continue;
+                    }
+                }
+                if e.scores != expected {
+                    bad(i, "goal_score");
+                }
+            } else if e.scores != prev.scores {
+                bad(i, "score_kept");
+            }
+        }
+        out.sort_by_key(|v| v.value as usize);
         out
     }
 }

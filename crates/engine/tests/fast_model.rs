@@ -1,14 +1,15 @@
 //! The fast-model slot (`engine.fast-model`): the shipped slot file picks
 //! `fitted-scores@1`, which only `fast_model::resolve` reaches; `off` refuses to play; the
 //! slot never changes the content hash; an unknown module is refused with the valid names;
-//! and a team's strength is the mean attribute of the eleven it kicks off with.
+//! a team's strength is the mean attribute of the eleven it kicks off with; and the fast
+//! model's event stream keeps the event-stream rules.
 
 mod common;
 
-use engine::MatchConfig;
 use engine::modules::fast_model::{self, FastFit, FastParams, KickOff, MINUTES};
 use engine::modules::registry::{FAST_MODEL, FOULS};
 use engine::modules::{REGISTRY, SlotDecl, SlotEntry, SlotFile, check_card};
+use engine::{EngineEventKind, MatchConfig, Validator};
 
 fn slot_bytes(changes: &[(&str, &str, Option<u32>)]) -> Vec<u8> {
     let mut slots = SlotFile::builtin_default();
@@ -147,4 +148,28 @@ fn the_kick_off_strength_is_the_starting_elevens_mean_attribute() {
     let ratio = boosted.strength[0] / ko.strength[0];
     assert!((1.10..1.16).contains(&ratio), "{ratio}");
     assert!((boosted.strength[1] - ko.strength[1]).abs() < 1e-12);
+}
+/// AC-31, first half: 2 000 seeded matches across strengths keep every event-stream rule,
+/// and the final score equals the goal events.
+#[test]
+fn the_fast_models_event_stream_keeps_the_rules() {
+    let content = common::content();
+    let model = fast_model::resolve(&content.modules);
+    let fit = test_fit();
+    for seed in 0..2_000u64 {
+        let gap = (seed % 21) as f64 - 10.0;
+        let ko = KickOff {
+            strength: [50.0 + gap / 2.0, 50.0 - gap / 2.0],
+        };
+        let m = model.play(&fit, &ko, seed).unwrap();
+        let violations = Validator::check_events(&m.events);
+        assert!(violations.is_empty(), "seed {seed}: {violations:?}");
+        let goals = |team: usize| {
+            m.events
+                .iter()
+                .filter(|e| e.kind == EngineEventKind::Goal && e.team == Some(team))
+                .count() as u32
+        };
+        assert_eq!([goals(0), goals(1)], m.scores, "seed {seed}");
+    }
 }
