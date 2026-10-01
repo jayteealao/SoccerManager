@@ -1,5 +1,5 @@
 //! `engine-cli`: simulate a match headless, benchmark the engine, calibrate it over many
-//! matches, check it against the replay gate, or generate teams.
+//! matches, check it against the replay gate, fit the fast model, or generate teams.
 
 mod advice;
 mod bench;
@@ -8,6 +8,7 @@ mod calibrate;
 mod cli;
 mod content;
 mod engines;
+mod fast_model;
 mod gate;
 mod generate;
 mod guard;
@@ -77,6 +78,7 @@ fn main() {
         cli::Command::Calibrate(opts) => calibrate::run(content_dir, &opts),
         cli::Command::Gate(opts) => gate::run(content_dir, &opts),
         cli::Command::Guard(opts) => guard::run(&opts),
+        cli::Command::FastModel(opts) => fast_model::run(content_dir, &opts),
     };
     match result {
         Ok(code) => std::process::exit(code),

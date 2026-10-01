@@ -55,6 +55,105 @@ pub enum Command {
     Gate(GateOpts),
     /// Check each commit's golden-file change against the ledger rules.
     Guard(GuardOpts),
+    /// Fit the fast model from full-engine results, check it, or refuse a stale fit.
+    FastModel(FastModelOpts),
+}
+
+#[derive(Debug, Args)]
+pub struct FastModelOpts {
+    /// What to do: fit, check, or stale.
+    #[arg(
+        value_enum,
+        long_help = "What to do.
+
+                     fit: confirm the engine reproduces the golden results, play the
+                     fit batch and the check batch on the full engine, fit the model,
+                     check it, and write the fit file when every figure is within its
+                     tolerance.
+                     check: play the check batch again for the fit file and compare.
+                     stale: refuse a fit whose engine id is not the golden results' id."
+    )]
+    pub action: FastModelAction,
+    /// Fit file to read; default fast-model.json in the content folder.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "The fit file check and stale read. Default: fast-model.json in
+                     the content folder."
+    )]
+    pub fit: Option<PathBuf>,
+    /// Where fit writes the fit file; default fast-model.json in the content folder.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Where fit writes the fit file when the check passes. Default:
+                     fast-model.json in the content folder."
+    )]
+    pub out: Option<PathBuf>,
+    /// Golden file the engine id comes from; default gate/golden.json.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "The golden file whose results the engine id names; default
+                     gate/golden.json in the current folder (the repository root)."
+    )]
+    pub golden: Option<PathBuf>,
+    /// Full matches per strength pairing (fit only).
+    #[arg(
+        long,
+        default_value_t = 1000,
+        long_help = "Full-engine matches per strength pairing in each batch (fit only;
+                     check reads the count from the fit file). Nine pairings."
+    )]
+    pub matches: u32,
+    /// Fast-model draws per check match (fit only).
+    #[arg(
+        long,
+        default_value_t = 20,
+        long_help = "Fast-model matches played for each check-batch match (fit only;
+                     check reads the count from the fit file)."
+    )]
+    pub draws: u32,
+    /// Minutes of play per full match (fit only).
+    #[arg(
+        long,
+        default_value_t = 90,
+        long_help = "Minutes of play per full-engine match (fit only). A fit for the
+                     game uses 90; a shorter match is for tests."
+    )]
+    pub minutes: u32,
+    /// Threads that play full matches; default one per core.
+    #[arg(
+        long,
+        long_help = "Threads that play the full-engine matches; default the number of
+                     logical cores."
+    )]
+    pub jobs: Option<u32>,
+    /// Confirm only this gate fixture; repeatable.
+    #[arg(
+        long = "gate-fixture",
+        value_name = "ID",
+        long_help = "Before fit and check play, the engine replays the gate fixtures
+                     and stops when a hash differs from the golden file. Name a
+                     fixture to replay only it; repeatable. Default: all 22."
+    )]
+    pub gate_fixtures: Vec<String>,
+    /// Folder for report.json.
+    #[arg(
+        long,
+        value_name = "DIR",
+        long_help = "Write report.json with every figure, its tolerance and the fit
+                     into this folder (fit and check)."
+    )]
+    pub report: Option<PathBuf>,
+}
+
+/// What `fast-model` does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum FastModelAction {
+    Fit,
+    Check,
+    Stale,
 }
 
 #[derive(Debug, Args)]
