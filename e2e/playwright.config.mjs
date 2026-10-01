@@ -1,5 +1,6 @@
-// The browser suite. Every test starts its own engine (see support/engine.mjs), so the
-// tests run one at a time: one engine serves one viewer per match.
+// The browser suite. Every test starts its own engine serving the built viewer (see
+// support/engine.mjs), so the tests run one at a time: one engine serves one viewer per
+// match. Build the viewer first (`npm --prefix ../viewer run build`).
 import { defineConfig } from '@playwright/test';
 
 // Unset: the Chromium build Playwright ships. `msedge`: the installed Microsoft Edge.

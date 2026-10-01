@@ -2,8 +2,17 @@
 // the stream cannot keep up, and a rewind that draws the stored tick.
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
-import { runEngine, startEngine, tempDir } from '../support/engine.mjs';
-import { openMatch, renderedTick, scrubTo, setSpeed, until } from '../support/page.mjs';
+import { WEB, runEngine, startEngine, tempDir } from '../support/engine.mjs';
+import {
+  matchClock,
+  openMatch,
+  pause,
+  renderedTick,
+  scrubTo,
+  setSpeed,
+  speedPressed,
+  until,
+} from '../support/page.mjs';
 
 let fixture;
 
@@ -17,7 +26,7 @@ test.beforeAll(() => {
 });
 
 async function replay(page, args) {
-  const engine = await startEngine({ command: 'replay', args: ['--fixture', fixture, '--web', 'web', ...args] });
+  const engine = await startEngine({ command: 'replay', args: ['--fixture', fixture, '--web', WEB, ...args] });
   await openMatch(page, engine.url);
   await until(page, () => window.__touchline.lastRenderedTick() > 0, { timeout: 30_000 });
   return engine;
@@ -71,7 +80,8 @@ test('at 4x the clock runs four times faster than the wall clock', async ({ page
     const t1 = await renderedTick(page);
     const rate = (t1 - t0) / ((Date.now() - w0) / 1000) / 50;
     expect(Math.abs(rate - 4) / 4).toBeLessThanOrEqual(0.02);
-    await expect(page.getByLabel('Playback speed')).toHaveText('4x');
+    // The speed button in effect is named for the speed asked for.
+    await expect(speedPressed(page)).toHaveAttribute('aria-label', '4x');
   } finally {
     engine.cleanUp();
   }
@@ -83,15 +93,18 @@ for (const [sustain, lag] of [[3, true], [8, false]]) {
     try {
       await setSpeed(page, 8);
       await page.waitForTimeout(8000);
-      const notice = page.locator('#notice');
+      // The notice under the playback row: its LAG word and its words; the speed in effect
+      // is the hook's.
+      const notice = page.getByRole('status').filter({ hasText: 'LAG' });
+      const effective = async () => `${(await page.evaluate(() => window.__touchline.notice())).effective_speed}x`;
       if (lag) {
-        await expect(notice).toHaveAttribute('data-shown', 'true');
-        await expect(notice).toContainText('Lag');
+        expect((await page.evaluate(() => window.__touchline.notice())).shown).toBe(true);
+        await expect(notice).toContainText(/lag/i);
         await expect(notice).toContainText('3x');
-        await expect(page.locator('#speed-effective')).toHaveText('3x');
+        expect(await effective()).toBe('3x');
       } else {
-        await expect(notice).toHaveAttribute('data-shown', 'false');
-        await expect(page.locator('#speed-effective')).toHaveText('8x');
+        expect((await page.evaluate(() => window.__touchline.notice())).shown).toBe(false);
+        expect(await effective()).toBe('8x');
       }
     } finally {
       engine.cleanUp();
@@ -105,7 +118,7 @@ test('a rewind draws the stored positions of the tick', async ({ page }) => {
     await setSpeed(page, 8);
     await until(page, () => window.__touchline.lastRenderedTick() > 3000, { timeout: 60_000 });
     // Paused, so the clock stays on the tick the rewind drew.
-    await page.getByRole('button', { name: 'Pause' }).click();
+    await pause(page);
     for (const tick of [1234, 2500, 51]) {
       await scrubTo(page, tick);
       const rewind = await until(page, (t) => {
@@ -115,7 +128,7 @@ test('a rewind draws the stored positions of the tick', async ({ page }) => {
       expect(rewind.exact).toBe(true);
       const stored = await page.evaluate((t) => window.__touchline.tickAt(t), tick);
       expect(rewind.drawn).toEqual(stored);
-      await expect(page.getByLabel('Match clock')).toHaveText(
+      await expect(matchClock(page)).toHaveText(
         `${String(Math.floor(tick / 50 / 60)).padStart(2, '0')}:${String(Math.floor(tick / 50) % 60).padStart(2, '0')}`
       );
     }

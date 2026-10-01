@@ -7,19 +7,24 @@ import { fileURLToPath } from 'node:url';
 
 export const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const CONTENT = path.join(REPO, 'content');
-export const WEB = path.join(REPO, 'web');
-/// The built Svelte viewer, which the match suite serves with `--web`.
-export const VIEWER = path.join(REPO, 'viewer', 'dist');
-export const BINARY = path.join(
-  REPO,
-  'target',
-  'release',
-  process.platform === 'win32' ? 'engine-cli.exe' : 'engine-cli'
-);
+const EXE = process.platform === 'win32' ? 'engine-cli.exe' : 'engine-cli';
+/// An installed game's folder to test instead of the repository build: with SM_E2E_INSTALL
+/// set, every test runs that folder's engine-cli and serves its `web/`, the page the release
+/// carries.
+export const INSTALL = process.env.SM_E2E_INSTALL ? path.resolve(process.env.SM_E2E_INSTALL) : null;
+/// The page folder every test serves with `--web`: the built viewer (`npm run build` in
+/// viewer/), or the installed game's `web/`.
+export const VIEWER = INSTALL ? path.join(INSTALL, 'web') : path.join(REPO, 'viewer', 'dist');
+export const WEB = VIEWER;
+export const BINARY = INSTALL ? path.join(INSTALL, EXE) : path.join(REPO, 'target', 'release', EXE);
 
 function requireBinary() {
   if (!existsSync(BINARY)) {
-    throw new Error(`The engine is not built: ${BINARY} is missing. Run "cargo build --release".`);
+    throw new Error(
+      INSTALL
+        ? `No engine in the installed game: ${BINARY} is missing.`
+        : `The engine is not built: ${BINARY} is missing. Run "cargo build --release".`
+    );
   }
 }
 

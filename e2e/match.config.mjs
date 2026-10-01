@@ -1,7 +1,7 @@
-// The match screen's screenshots, contrast, keyboard walk and frame time, on the new viewer.
-// Separate from the engine suite, which drives the page in web/: every test here starts the
-// release engine with `--web ../viewer/dist` (see support/engine.mjs), so the viewer must be
-// built first.
+// The viewer's screenshots, contrast, keyboard walks, drives and frame time. Separate from
+// the engine suite (playwright.config.mjs), which drives the same viewer through whole
+// matches: every test here starts the release engine with `--web ../viewer/dist` (see
+// support/engine.mjs), so the viewer must be built first.
 //
 // Run: `npm --prefix ../viewer run build`, then `npx playwright test -c match.config.mjs`.
 // The baselines are Windows baselines from the reference desktop; font rendering differs on

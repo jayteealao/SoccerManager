@@ -32,6 +32,7 @@ import { History } from './history.js';
 import { between } from './interpolate.js';
 import * as launcher from './launcher.js';
 import { LeadControl, SeenReport } from './lead.js';
+import { lineupModel } from './lineups.js';
 import { KIND, MatchState } from './match-state.js';
 import { Pitch, readTokens } from './pitch.js';
 import { Playback } from './playback.js';
@@ -1219,6 +1220,22 @@ export class MatchSession {
       notice: this.notice ? { ...this.notice } : null,
       speed: this.speed,
       playing: this.playing,
+      ...this.lineupSnapshot(),
+    };
+  }
+
+  /// The commentary's empty text is on show, the tick of the newest condition message at the
+  /// rendered tick, and each of the 22 players with the condition word the page gives them.
+  lineupSnapshot() {
+    const state = this.lastFlushTick >= 0 ? this.match.at(this.lastFlushTick) : null;
+    const rows =
+      state && this.dugout.rosters.every((r) => r.length > 0)
+        ? lineupModel(this.dugout.rosters, this.dugout.teamIds, state).flat()
+        : [];
+    return {
+      emptyStateShown: this.feedRows.length === 0 && ['kickoff', 'live', 'paused', 'reconnecting'].includes(this.screen),
+      energyTick: state?.energyTick ?? null,
+      lineupLabels: rows.map((r) => ({ name: r.name, shirt: r.shirt, condition: r.condition, card: r.cardWord })),
     };
   }
 }

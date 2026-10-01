@@ -1,13 +1,15 @@
 # Browser suite
 
-These tests drive the match page in a real browser against the release engine. Each test starts its own `engine-cli` process with a new, temporary data folder, so a test can drive the page and then read the files the engine wrote. No test reads or changes your own data folder.
+These tests drive the match viewer in a real browser against the release engine. Each test starts its own `engine-cli` process with a new, temporary data folder and serves the built viewer (`viewer/dist`) with `--web`, so a test can drive the page and then read the files the engine wrote. No test reads or changes your own data folder.
 
 ## Run the suite
 
-1. Build the engine from the repository root:
+1. Build the engine and the viewer from the repository root:
 
    ```bash
    cargo build --release
+   npm --prefix viewer ci
+   npm --prefix viewer run build
    ```
 
 2. Install the suite and its browser, once:
@@ -29,11 +31,13 @@ These tests drive the match page in a real browser against the release engine. E
 
 To run the tests in the installed Microsoft Edge instead of the bundled Chromium, set `PW_CHANNEL=msedge`.
 
+To test an installed game instead of the repository build, set `SM_E2E_INSTALL` to its folder: every test then runs that folder's `engine-cli` and serves its `web/`, the page the release carries.
+
 The HTML report is in `playwright-report/`. A failed test keeps its screenshot and trace in `test-results/`.
 
 ## How the tests find things
 
-A test finds a control by its role and its accessible name, as a screen reader does, and reads the state of the page through the read-only hook `window.__touchline`. A test uses a `data-testid` only where a control has no unique accessible name. A test never uses a CSS class to find a control.
+A test finds a control by its role and its accessible name, as a screen reader does, and reads the state of the page through the read-only hook `window.__touchline`. The viewer shows one screen at a time (Tactics, the Pre-match line-ups, the match, the Touchline, the report, the replay) and keeps the match screen mounted behind the others, so a control is looked for on the screen on show; `support/page.mjs` opens the right one first. Where a control has no unique accessible name, a test finds it by the data attribute or the region that holds it.
 
 ## Which test covers each behaviour
 
@@ -41,17 +45,17 @@ A test finds a control by its role and its accessible name, as a screen reader d
 |---|---|
 | The whole first match, lineup to full-time report, in twelve steps | `first-match.spec.mjs` › a manager plays a whole match, lineup to full-time report |
 | At 1x, 60 frames per second for five match minutes with no skipped tick | `pitch.spec.mjs` › at 1x the page holds 60 frames per second for five match minutes and skips no tick |
-| Each drawn frame lies between two stored ticks, never past the newest | `pitch.spec.mjs` › every drawn frame lies between two stored ticks, never past the newest; page test `interpolate.test.mjs` |
-| At 8x the page skips ticks and never extrapolates | `pitch.spec.mjs` › every drawn frame lies between two stored ticks, never past the newest; page test `schedule.test.mjs` › at eight times speed ticks are skipped and counted |
+| Each drawn frame lies between two stored ticks, never past the newest | `pitch.spec.mjs` › every drawn frame lies between two stored ticks, never past the newest; viewer test `interpolate.test.js` |
+| At 8x the page skips ticks and never extrapolates | `pitch.spec.mjs` › every drawn frame lies between two stored ticks, never past the newest; viewer test `schedule.test.js` › at eight times speed ticks are skipped and counted |
 | At 4x the clock runs four times faster, within 2 percent | `pitch.spec.mjs` › at 4x the clock runs four times faster than the wall clock |
 | A stream that sustains 3x shows a notice naming 3x; one that sustains 8x shows none | `pitch.spec.mjs` › a stream sustained at 3x shows lag notice at 8x; a stream sustained at 8x shows no lag notice at 8x |
 | A rewind draws the stored positions | `pitch.spec.mjs` › a rewind draws the stored positions of the tick |
-| The stored history of a whole match stays under 300 MB | page test `history.test.mjs` › a whole match holds exactly 25,380,000 bytes |
+| The stored history of a whole match stays under 300 MB | viewer test `history.test.js` › a whole match holds exactly 25,380,000 bytes |
 | The goal moment shows in the frame that draws the goal | `match-day.spec.mjs` › the goal moment shows in the frame that draws the goal |
 | Before play, the feed shows its empty text and the score is 0–0 | `match-day.spec.mjs` › before play the feed shows its empty text and the score is 0–0 |
 | Each player's condition carries a word, not only a colour | `match-day.spec.mjs` › every player on the pitch carries a condition word |
-| The statistics panel shows every field with the stream's value | page test `stats.test.mjs` › every field of a stats line captured from a recorded match appears with an equal value |
-| At 8x the feed shows every event, none dropped | page test `feed.test.mjs` › a burst of 40 events inside one simulated second at 8x all appear, in order, none twice |
+| The statistics panel shows every field with the stream's value | viewer test `stats.test.js` › every field of a stats line captured from a recorded match appears with an equal value |
+| At 8x the feed shows every event, none dropped | viewer test `feed.test.js` › a burst of 40 events inside one simulated second at 8x all appear, in order, none twice |
 | With reduced motion, the banner does not animate and the score does not pulse | `match-day.spec.mjs` › with reduced motion the goal banner does not animate and the score does not pulse |
 | Each illegal lineup keeps kick-off disabled and names its reason | `lineup-tactics.spec.mjs` › each illegal lineup keeps kick-off disabled and names its reason |
 | A mentality change is queued, applies at the next dead ball, and the feed says so | `lineup-tactics.spec.mjs` › changes during play wait for a stoppage, and a sixth substitution is refused |
@@ -72,5 +76,5 @@ A test finds a control by its role and its accessible name, as a screen reader d
 Three behaviours need a person. Record each result with the date, the machine, and the name of the person.
 
 1. **Legibility and focus.** On the reference laptop at 1280 by 800, in a lit room, read the clock, the score, and every statistics value without zooming. Tab through the page and see a focus ring on every control.
-2. **The goal moment.** Watch a goal at 1x. The banner shows over the pitch, holds, and leaves; the score bug pulses once; the goal row in the feed is highlighted. The motion is smooth and does not hide the pitch for longer than the banner holds.
+2. **The goal moment.** Watch a goal at 1x. The banner shows over the pitch, holds, and leaves; the score changes in the same frame; the goal row in the commentary is highlighted. The motion is smooth and does not hide the pitch for longer than the banner holds.
 3. **The first-match tutorial.** Clone the repository into a new folder, and follow `docs/tutorials/first-match.md` from the top. Each step does what the tutorial says.

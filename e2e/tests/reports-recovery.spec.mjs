@@ -4,8 +4,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
-import { killTree, runEngine, startEngine, tempDir } from '../support/engine.mjs';
-import { kickOff, openMatch, playUntil, setSpeed, until } from '../support/page.mjs';
+import { WEB, killTree, runEngine, startEngine, tempDir } from '../support/engine.mjs';
+import { kickOff, openMatch, play, playUntil, setSpeed, until } from '../support/page.mjs';
 
 const MISSING = path.join(tempDir('missing'), 'engine-cli.exe');
 const clockText = (tick) => {
@@ -13,7 +13,10 @@ const clockText = (tick) => {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 };
 const status = (url) => fetch(`${url}engine.json`).then((r) => r.json());
-const surface = (page) => page.locator('#surface');
+// The recovery panel over the pitch: its title, its words and its actions.
+const surface = (page) => page.locator('.surface:visible');
+const surfaceTitle = (page) => surface(page).locator('h2');
+const surfaceButton = (page, name) => surface(page).getByRole('button', { name });
 
 let fixture;
 
@@ -26,7 +29,7 @@ test.beforeAll(() => {
 
 test('a crashed engine shows the failure and restarts from the last stoppage', async ({ page }) => {
   test.setTimeout(8 * 60_000);
-  const launcher = await startEngine({ command: 'launch', args: ['--seed', '3', '--minutes', '20', '--web', 'web'] });
+  const launcher = await startEngine({ command: 'launch', args: ['--seed', '3', '--minutes', '20', '--web', WEB] });
   try {
     await openMatch(page, launcher.url);
     await kickOff(page);
@@ -46,6 +49,11 @@ test('a crashed engine shows the failure and restarts from the last stoppage', a
       if (ok) {
         break;
       }
+      // The goal comes after half time, whose report holds play until CONTINUE.
+      const report = await page.evaluate(() => window.__touchline.report());
+      if (report.open && report.kind === 'half-time') {
+        await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      }
       await page.waitForTimeout(200);
     }
     const events = await page.evaluate(() => window.__touchline.events());
@@ -53,25 +61,26 @@ test('a crashed engine shows the failure and restarts from the last stoppage', a
 
     await until(page, () => window.__touchline.recovery().kind === 'crashed', { timeout: 30_000 });
     await expect(surface(page)).toBeVisible();
-    await expect(page.locator('#surface-title')).toContainText('The engine stopped');
-    await expect(page.locator('#surface-abandon')).toBeVisible();
-    await expect(page.locator('#surface-restart')).toBeVisible();
-    await expect(page.locator('header')).toContainText('Engine stopped');
+    await expect(surfaceTitle(page)).toContainText('The engine stopped');
+    await expect(surfaceButton(page, 'Abandon')).toBeVisible();
+    await expect(surfaceButton(page, /^Restart/)).toBeVisible();
+    await expect(page.locator('header:visible')).toContainText('Engine stopped');
     const snapTick = (await status(launcher.url))['snapshot.tick'];
 
-    // Paused, so the page holds the tick it resumes at.
-    await page.getByRole('button', { name: 'Pause' }).click();
-    await page.locator('#surface-restart').click();
-    // Read the page once the resume lands: the clock and the score it shows.
+    await surfaceButton(page, /^Restart/).click();
+    // Read the page in the frame the resume lands: the clock and the score it shows. The
+    // viewer plays on from the stoppage by itself once it has resumed.
     const at = await (
       await page.waitForFunction(
         () => {
           const resumed = window.__touchline.signals().find((s) => s.signal === 'viewer.resumed');
+          const shown = (sel) => [...document.querySelectorAll(sel)].find((e) => e.checkVisibility());
+          const score = shown('.strip .score')?.getAttribute('aria-label') ?? '';
           return resumed
             ? {
                 resumed,
-                clock: document.getElementById('clock').textContent,
-                score: [document.getElementById('score-home').textContent, document.getElementById('score-away').textContent],
+                clock: shown('header .date span').textContent,
+                score: score.replace(/^Score /, '').split(' – '),
               }
             : null;
         },
@@ -85,9 +94,11 @@ test('a crashed engine shows the failure and restarts from the last stoppage', a
     expect(at.clock).toBe(clockText(at.resumed.to_tick));
     expect(at.score).toEqual([String(last['home.score']), String(last['away.score'])]);
     await expect(surface(page)).toBeHidden();
-    await expect(page.locator('header')).toContainText('Engine connected');
+    await expect(page.locator('header:visible')).toContainText('Engine connected');
     // Play goes on from there.
-    await page.getByRole('button', { name: 'Play' }).click();
+    if (!(await page.evaluate(() => window.__touchline.matchDay().playing))) {
+      await play(page);
+    }
     await until(page, (t) => window.__touchline.lastRenderedTick() > t + 100, { arg: at.resumed.to_tick });
     const after = await status(launcher.url);
     expect(after['engine.state']).toBe('running');
@@ -99,7 +110,7 @@ test('a crashed engine shows the failure and restarts from the last stoppage', a
 
 test('a damaged snapshot is named on restart, and only abandon is offered', async ({ page }) => {
   test.setTimeout(6 * 60_000);
-  const launcher = await startEngine({ command: 'launch', args: ['--seed', '42', '--minutes', '20', '--web', 'web'] });
+  const launcher = await startEngine({ command: 'launch', args: ['--seed', '42', '--minutes', '20', '--web', WEB] });
   try {
     await openMatch(page, launcher.url);
     await kickOff(page);
@@ -120,12 +131,12 @@ test('a damaged snapshot is named on restart, and only abandon is offered', asyn
       bytes[i] ^= 0xff;
     }
     writeFileSync(snapshot, bytes);
-    await page.locator('#surface-restart').click();
+    await surfaceButton(page, /^Restart/).click();
     await until(page, () => window.__touchline.recovery().kind === 'refused', { timeout: 30_000 });
-    await expect(page.locator('#surface-title')).toContainText('The saved match could not be read:');
-    await expect(page.locator('#surface-abandon')).toBeVisible();
-    await expect(page.locator('#surface-restart')).toBeHidden();
-    await expect(page.locator('#surface-save')).toBeHidden();
+    await expect(surfaceTitle(page)).toContainText('The saved match could not be read:');
+    await expect(surfaceButton(page, 'Abandon')).toBeVisible();
+    await expect(surfaceButton(page, /^Restart/)).toBeHidden();
+    await expect(surfaceButton(page, 'Save replay')).toBeHidden();
   } finally {
     launcher.cleanUp();
   }
@@ -135,7 +146,7 @@ test('a dropped connection reconnects by itself, with no restart prompt', async 
   test.setTimeout(6 * 60_000);
   const launcher = await startEngine({
     command: 'launch',
-    args: ['--seed', '42', '--minutes', '20', '--web', 'web', '--drop-client-at', '3000'],
+    args: ['--seed', '42', '--minutes', '20', '--web', WEB, '--drop-client-at', '3000'],
   });
   try {
     await openMatch(page, launcher.url);
@@ -149,7 +160,7 @@ test('a dropped connection reconnects by itself, with no restart prompt', async 
         kind: window.__touchline.recovery().kind,
         resumed: window.__touchline.signals().find((s) => s.signal === 'viewer.resumed') ?? null,
       }));
-      if (state.kind === 'crashed' || state.kind === 'refused' || (await page.locator('#surface-restart').isVisible())) {
+      if (state.kind === 'crashed' || state.kind === 'refused' || (await surfaceButton(page, /^Restart/).isVisible())) {
         restartSeen = true;
       }
       resumed = state.resumed;
@@ -172,7 +183,7 @@ test('a dropped connection reconnects by itself, with no restart prompt', async 
 
 test('the half-time report counts equal the feed, and a saved replay plays with no engine', async ({ page }) => {
   test.setTimeout(8 * 60_000);
-  const engine = await startEngine({ command: 'replay', args: ['--fixture', fixture, '--speed', '8', '--web', 'web'] });
+  const engine = await startEngine({ command: 'replay', args: ['--fixture', fixture, '--speed', '8', '--web', WEB] });
   let saved;
   try {
     await openMatch(page, engine.url);
@@ -182,7 +193,9 @@ test('the half-time report counts equal the feed, and a saved replay plays with 
       return r.open && r.kind === 'half-time' ? r : null;
     }, { timeout: 120_000 });
     const feed = await page.evaluate((t) =>
-      [...document.querySelectorAll('#feed li')].filter((li) => Number(li.dataset.tick) <= t).map((li) => li.dataset.kind),
+      [...document.querySelectorAll('section[aria-label="Commentary"] li')]
+        .filter((li) => Number(li.dataset.tick) <= t)
+        .map((li) => li.dataset.kind),
     report.tick);
     const kinds = { goals: 'goal', fouls: 'foul', corners: 'corner', offsides: 'offside', 'throw-ins': 'throw-in',
       'goal-kicks': 'goal-kick', 'free-kicks': 'free-kick', penalties: 'penalty' };
@@ -192,7 +205,7 @@ test('the half-time report counts equal the feed, and a saved replay plays with 
     }
     const cards = report.counts.yellow[0] + report.counts.yellow[1] + report.counts.red[0] + report.counts.red[1];
     expect(cards).toBe(feed.filter((k) => k === 'card').length);
-    await page.getByRole('button', { name: 'Continue' }).click();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
     await playUntil(page, () => {
       const r = window.__touchline.report();
@@ -209,18 +222,18 @@ test('the half-time report counts equal the feed, and a saved replay plays with 
   }
 
   // No engine: a launcher pointed at a program that does not exist.
-  const launcher = await startEngine({ command: 'launch', args: ['--seed', '3', '--web', 'web', '--engine', MISSING] });
+  const launcher = await startEngine({ command: 'launch', args: ['--seed', '3', '--web', WEB, '--engine', MISSING] });
   try {
     await page.goto(launcher.url);
     await until(page, () => window.__touchline.recovery().kind === 'first-run', { timeout: 30_000 });
-    await page.locator('#replay-input').setInputFiles(saved);
+    await page.locator('input[type="file"]').first().setInputFiles(saved);
     await until(page, () => window.__touchline.replay().stored, { timeout: 60_000 });
     await setSpeed(page, 8);
     const a = await page.evaluate(() => window.__touchline.lastRenderedTick());
     await page.waitForTimeout(3000);
     const b = await page.evaluate(() => window.__touchline.lastRenderedTick());
     expect(b).toBeGreaterThan(a);
-    await expect(page.locator('header')).toContainText('Replay');
+    await expect(page.locator('header:visible')).toContainText('Replay');
     for (const tick of [2000, 51]) {
       await page.getByRole('slider', { name: 'Rewind to a tick' }).evaluate((s, v) => {
         s.value = String(v);
@@ -240,13 +253,13 @@ test('the half-time report counts equal the feed, and a saved replay plays with 
 });
 
 test('a missing engine shows the path it looked for and how to build it', async ({ page }) => {
-  const launcher = await startEngine({ command: 'launch', args: ['--seed', '3', '--web', 'web', '--engine', MISSING] });
+  const launcher = await startEngine({ command: 'launch', args: ['--seed', '3', '--web', WEB, '--engine', MISSING] });
   try {
     await page.goto(launcher.url);
     await until(page, () => window.__touchline.recovery().kind === 'first-run', { timeout: 30_000 });
     await expect(surface(page)).toBeVisible();
-    await expect(page.locator('#surface-path')).toHaveText(MISSING);
-    await expect(page.locator('#surface-hint')).toContainText('cargo build --release -p engine-cli');
+    await expect(surface(page).locator('code')).toHaveText(MISSING);
+    await expect(surface(page).locator('p').last()).toContainText('cargo build --release -p engine-cli');
     await expect(page.getByRole('button', { name: 'Open a replay' })).toBeVisible();
   } finally {
     launcher.cleanUp();

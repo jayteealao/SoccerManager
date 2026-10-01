@@ -4,6 +4,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import {
+  WEB,
   generateLeague,
   readRecords,
   runEngine,
@@ -12,17 +13,25 @@ import {
 } from '../support/engine.mjs';
 import {
   changeReaches,
+  chipList,
+  comingOff,
+  comingOn,
   feedRows,
   hook,
   kickOff,
   kickOffButton,
+  matchClock,
   openMatch,
   playUntil,
   queueSubstitution,
   queued,
   renderedTick,
+  scoreBug,
   scrubTo,
   setSpeed,
+  showMatch,
+  showTactics,
+  speedPressed,
   until,
 } from '../support/page.mjs';
 
@@ -56,6 +65,9 @@ function countsFrom(events, teamIds, uptoTick) {
   );
 }
 
+/// The picker's option text is "shirt name · position"; the name is between.
+const optionName = (text) => text.replace(/^\d+\s*/, '').replace(/\s*·.*$/, '');
+
 async function shot(page, testInfo, step) {
   const name = `step-${String(step).padStart(2, '0')}.png`;
   await testInfo.attach(name, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
@@ -65,7 +77,7 @@ test('a manager plays a whole match, lineup to full-time report', async ({ page 
   const [teamA, teamB] = generateLeague(2026);
   const engine = await startEngine({
     command: 'serve',
-    args: ['--seed', '42', '--web', 'web', '--team-a', teamA, '--team-b', teamB],
+    args: ['--seed', '42', '--web', WEB, '--team-a', teamA, '--team-b', teamB],
   });
   let chosenMentality = null;
   try {
@@ -75,8 +87,11 @@ test('a manager plays a whole match, lineup to full-time report', async ({ page 
       await until(page, () => window.__touchline.lineup().phase === 'pre-match', { timeout: 30_000 });
       expect(seen.hello).not.toBeNull();
       const version = seen.hello['engine.version'];
-      await expect(page.locator('header')).toContainText(`Engine connected · v${version}`);
+      // The viewer opens on Tactics; the match screen's header names the engine.
+      await showMatch(page);
+      await expect(page.locator('header:visible')).toContainText(`Engine connected · v${version}`);
       await shot(page, testInfo, 1);
+      await showTactics(page);
     });
 
     await test.step('2. an illegal lineup keeps kick-off disabled and says why', async () => {
@@ -84,17 +99,18 @@ test('a manager plays a whole match, lineup to full-time report', async ({ page 
       expect(legal.legal).toBe(true);
       await page.getByRole('button', { name: /^Slot 4,/ }).click();
       await page.getByRole('button', { name: 'Empty the picked slot' }).click();
-      const reason = page.getByTestId('lineup-reason');
+      // The verdict beside the shape: its reason, or the sentence a legal lineup reads.
+      const reason = page.locator('.verdict .why');
       await expect(kickOffButton(page)).toBeDisabled();
-      await expect(reason).not.toHaveText('The lineup is ready.');
+      await expect(reason).not.toHaveText('The lineup is legal.');
       await expect(reason).not.toHaveText('');
       const illegal = await hook(page, () => window.__touchline.lineup());
       expect(illegal.legal).toBe(false);
       await shot(page, testInfo, 2);
       // Put the same player back: pick him in the squad, then the empty slot.
-      await page.getByTestId(`squad-${legal.slots[3]}`).click();
+      await page.locator(`button[data-squad="${legal.slots[3]}"]`).click();
       await page.getByRole('button', { name: /^Slot 4,/ }).click();
-      await expect(reason).toHaveText('The lineup is ready.');
+      await expect(reason).toHaveText('The lineup is legal.');
       await expect(kickOffButton(page)).toBeEnabled();
     });
 
@@ -119,11 +135,11 @@ test('a manager plays a whole match, lineup to full-time report', async ({ page 
       await kickOff(page);
       const kickedOff = await hook(page, () => window.__touchline.dugout().tactics);
       await until(page, () => window.__touchline.lastRenderedTick() > 500, { timeout: 60_000 });
-      const clockA = await page.getByLabel('Match clock').textContent();
+      const clockA = await matchClock(page).textContent();
       const a = await hook(page, () => window.__touchline.lastRendered());
       await page.waitForTimeout(3000);
       const b = await hook(page, () => window.__touchline.lastRendered());
-      const clockB = await page.getByLabel('Match clock').textContent();
+      const clockB = await matchClock(page).textContent();
       expect(clockB).not.toBe(clockA);
       expect(a).toHaveLength(47);
       expect(a[0] !== b[0] || a[1] !== b[1]).toBe(true);
@@ -158,8 +174,10 @@ test('a manager plays a whole match, lineup to full-time report', async ({ page 
       const t1 = await renderedTick(page);
       const seconds = (Date.now() - w0) / 1000;
       const rate = (t1 - t0) / seconds / 50;
-      const notice = (await page.locator('#notice').textContent()).trim();
-      const noticeShown = (await page.locator('#notice').getAttribute('data-shown')) === 'true';
+      // The notice under the playback row, as the hook reads it.
+      const read = await hook(page, () => window.__touchline.notice());
+      const notice = (read.message ?? '').trim();
+      const noticeShown = read.shown;
       await shot(page, testInfo, 5);
       // Never faster than asked, whichever way the step goes.
       expect(rate).toBeLessThan(4 * 1.05);
@@ -176,10 +194,11 @@ test('a manager plays a whole match, lineup to full-time report', async ({ page 
         // Playing at the speed asked for: no lag notice names a lower one.
         expect(noticeShown && /Playing at/.test(notice), `notice: ${notice}`).toBe(false);
       }
-      await expect(page.getByLabel('Playback speed')).toHaveText('4x');
+      await expect(speedPressed(page)).toHaveAttribute('aria-label', '4x');
     });
 
     await test.step('6. a mentality change is queued, applies at the next dead ball, and the feed says so', async () => {
+      await showTactics(page);
       const mentality = page.getByLabel('Mentality');
       const current = await mentality.evaluate((s) => s.selectedIndex);
       const count = await mentality.locator('option').count();
@@ -187,7 +206,7 @@ test('a manager plays a whole match, lineup to full-time report', async ({ page 
         mentality.selectOption({ index: current + 1 < count ? current + 1 : current - 1 })
       );
       expect(change.kind).toBe('tactics');
-      await expect(page.locator('#chips .chip').filter({ hasText: 'Queued' })).toHaveCount(1);
+      await expect(chipList(page).filter({ hasText: 'Queued' })).toHaveCount(1);
       await shot(page, testInfo, 6);
       const applied = await changeReaches(page, change.queue_id, ['applied', 'rejected']);
       expect(applied.state).toBe('applied');
@@ -195,26 +214,29 @@ test('a manager plays a whole match, lineup to full-time report', async ({ page 
       const stop = await hook(page, (t) => window.__touchline.stoppageAt(t), applied.queued_tick);
       expect(applied.applied_tick).toBeGreaterThanOrEqual(stop);
       await until(page, () =>
-        [...document.querySelectorAll('#feed li')].some((li) => li.textContent.includes('Tactical change applied'))
+        [...document.querySelectorAll('section[aria-label="Commentary"] li')].some((li) =>
+          li.textContent.includes('Tactical change applied')
+        )
       );
       // The chip clears once the change has applied.
       await until(page, (id) => !window.__touchline.pending().some((c) => c.queue_id === id && c.state !== 'applied'), {
         arg: change.queue_id,
       });
-      await expect(page.locator('#chips .chip').filter({ hasText: 'Queued' })).toHaveCount(0, { timeout: 60_000 });
+      await expect(chipList(page).filter({ hasText: 'Queued' })).toHaveCount(0, { timeout: 60_000 });
     });
 
     await test.step('7. a substitution applies at a dead ball, the players swap, and the count drops', async () => {
       const left = await hook(page, () => window.__touchline.dugout().subs_left);
-      const offName = await page.getByLabel('Player coming off').evaluate((s) => s.options[5].text);
-      const onName = await page.getByLabel('Substitute coming on').evaluate((s) => s.options[0].text);
+      await showTactics(page);
+      const offName = await comingOff(page).evaluate((s) => s.options[5].text);
+      const onName = await comingOn(page).evaluate((s) => s.options[0].text);
       const change = await queueSubstitution(page, 5, 0);
       const applied = await changeReaches(page, change.queue_id, ['applied', 'rejected']);
       expect(applied.state).toBe('applied');
       await until(page, (n) => window.__touchline.dugout().subs_left === n, { arg: left - 1 });
-      await expect(page.getByTestId('subs-left')).toContainText(String(left - 1));
+      await expect(page.getByText(/substitutions left$/).first()).toContainText(String(left - 1));
       const labels = await hook(page, () => window.__touchline.matchDay().lineupLabels.map((r) => r.name));
-      const surname = (text) => text.replace(/^\d+\s*/, '').split(/\s+/).pop();
+      const surname = (text) => optionName(text).split(/\s+/).pop();
       expect(labels.join(' | ')).toContain(surname(onName));
       await shot(page, testInfo, 7);
       testInfo.annotations.push({ type: 'substitution', description: `${offName} off, ${onName} on` });
@@ -223,17 +245,21 @@ test('a manager plays a whole match, lineup to full-time report', async ({ page 
     let goal = null;
     await test.step('8. a goal updates the score, shows the banner, and the feed names scorer, minute, and score', async () => {
       await setSpeed(page, 8);
-      goal = await playUntil(
+      // The banner's words are read in the same poll that sees the goal: the banner leaves
+      // after a second and a half.
+      let bannerSeen = null;
+      ({ goal, banner: bannerSeen } = await playUntil(
         page,
         () => {
           const day = window.__touchline.matchDay();
           if (day.goalShownAtTick === null) {
             return null;
           }
-          return window.__touchline.events().find((e) => e['event.type'] === 'goal') ?? null;
+          const found = window.__touchline.events().find((e) => e['event.type'] === 'goal') ?? null;
+          return found ? { goal: found, banner: day.bannerText } : null;
         },
         { timeout: 20 * 60_000 }
-      );
+      ));
       const moment = await hook(page, () =>
         window.__touchline.signals().find((s) => s.signal === 'viewer.goal_moment') ?? null
       );
@@ -241,9 +267,10 @@ test('a manager plays a whole match, lineup to full-time report', async ({ page 
       expect(moment.frame_delta).toBe(0);
       const day = await hook(page, () => window.__touchline.matchDay());
       expect(day.score[0] + day.score[1]).toBeGreaterThanOrEqual(1);
-      const scoreText = await page.locator('#score-bug').getAttribute('aria-label');
+      await showMatch(page);
+      const scoreText = await scoreBug(page).getAttribute('aria-label');
       expect(scoreText).toMatch(/Score \d+ – \d+/);
-      const banner = await hook(page, () => document.getElementById('goal-banner-text').textContent);
+      const banner = bannerSeen ?? '';
       expect(banner.length).toBeGreaterThan(0);
       const rows = await feedRows(page);
       const row = rows.find((r) => r.kind === 'goal' && r.tick === goal.tick);
@@ -287,18 +314,19 @@ test('a manager plays a whole match, lineup to full-time report', async ({ page 
       const records = readRecords(engine.dataDir, seen.hello['match.id']);
       expect(records.events).not.toBeNull();
       expect(countsFrom(records.events, teamIds, report.tick)).toEqual(report.counts);
-      const cells = await page.locator('#report-table tbody tr').evaluateAll((rows) =>
-        rows.map((tr) => [
-          tr.dataset.row,
-          Number(tr.querySelector('td[data-side="home"]').textContent),
-          Number(tr.querySelector('td[data-side="away"]').textContent),
-        ])
+      // The report's match figures, one paired bar per row in the report's order.
+      const ids = Object.keys(report.counts);
+      const cells = await page.locator('[data-screen="report"] .pair .row').evaluateAll(
+        (rows, order) =>
+          rows.map((row, i) => [order[i], Number(row.children[0].textContent), Number(row.children[2].textContent)]),
+        ids
       );
+      expect(cells).toHaveLength(ids.length);
       for (const [id, home, away] of cells) {
         expect([home, away]).toEqual(report.counts[id]);
       }
       await shot(page, testInfo, 10);
-      await page.getByRole('button', { name: 'Continue' }).click();
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
     });
 
     await test.step('11. the full-time report shows, the replay saves, and the records are written', async () => {
@@ -306,7 +334,9 @@ test('a manager plays a whole match, lineup to full-time report', async ({ page 
         const r = window.__touchline.report();
         return r.open && r.kind === 'full-time';
       }, { timeout: 25 * 60_000 });
-      await expect(page.getByRole('dialog')).toBeVisible();
+      await expect(page.locator('[data-screen="report"]')).toBeVisible();
+      // Save replay waits until the engine has closed the match and every frame is stored.
+      await expect(page.getByRole('button', { name: 'Save replay' })).toBeEnabled({ timeout: 60_000 });
       const download = page.waitForEvent('download');
       await page.getByRole('button', { name: 'Save replay' }).click();
       const file = await download;
