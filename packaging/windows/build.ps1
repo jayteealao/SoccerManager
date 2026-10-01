@@ -1,6 +1,8 @@
-# Builds the Windows release: the engine, a staged folder, the setup file, and its hash.
+# Builds the Windows release: the engine, the built viewer, a staged folder, the setup file,
+# and its hash. It needs Rust, Node 22.12 or later with npm, and NSIS 3.
 #
 # Run from anywhere:  pwsh packaging/windows/build.ps1
+#                     pwsh packaging/windows/build.ps1 -StageOnly   (stops after dist/stage)
 # Writes:             dist/SoccerManager-<version>-windows-x64-setup.exe
 #                     dist/SoccerManager-<version>-windows-x64-setup.exe.sha256
 #                     dist/smoke.ps1 (the clean-machine check, for run-sandbox.ps1)
@@ -8,16 +10,39 @@
 # The version is read from the built program's --version, so the setup file, the installed
 # program, and the engine's hello message always name the same version.
 
+param(
+    # Stop once dist/stage holds the installed layout, before the setup file: for the browser
+    # checks against the packaged folder, which need no NSIS.
+    [switch]$StageOnly
+)
+
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $dist = Join-Path $repo 'dist'
 
+# The viewer build needs Node; say so before the long engine build.
+if (-not (Get-Command node -ErrorAction SilentlyContinue) -or -not (Get-Command npm -ErrorAction SilentlyContinue)) {
+    throw 'node or npm is not on PATH; Node 22.12 or later is needed to build the viewer'
+}
+
 Push-Location $repo
 try {
     cargo build --release --locked -p engine-cli
     if ($LASTEXITCODE -ne 0) { throw "cargo build failed with exit code $LASTEXITCODE" }
+} finally {
+    Pop-Location
+}
+
+# The page the release carries is the viewer's release build: the viewer and the handshake
+# page, with the font licence texts, and no test page.
+Push-Location (Join-Path $repo 'viewer')
+try {
+    npm ci --no-audit --no-fund
+    if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE" }
+    npm run build:release
+    if ($LASTEXITCODE -ne 0) { throw "the viewer build failed with exit code $LASTEXITCODE" }
 } finally {
     Pop-Location
 }
@@ -35,11 +60,13 @@ if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 Copy-Item $exe $stage
 Copy-Item -Recurse (Join-Path $repo 'content') (Join-Path $stage 'content')
-Copy-Item -Recurse (Join-Path $repo 'web') (Join-Path $stage 'web')
-# The page's own tests are not part of the game.
-Remove-Item -Recurse -Force (Join-Path $stage 'web\tests')
+Copy-Item -Recurse (Join-Path $repo 'viewer\dist-release') (Join-Path $stage 'web')
 Copy-Item (Join-Path $repo 'LICENSE-MIT') $stage
 Copy-Item (Join-Path $repo 'LICENSE-APACHE') $stage
+if ($StageOnly) {
+    Write-Output $stage
+    return
+}
 
 $makensis = $null
 $found = Get-Command makensis -ErrorAction SilentlyContinue

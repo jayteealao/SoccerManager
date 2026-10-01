@@ -16,7 +16,7 @@ Every release holds one folder:
 
 - `engine-cli` (`engine-cli.exe` on Windows): the engine and the launcher.
 - `content/`: the attributes, tuning, rules, teams, commentary, and script packs.
-- `web/`: the match page, without its tests.
+- `web/`: the match viewer, as the viewer's release build (`npm run build:release` in `viewer/`): the viewer page, the handshake check page, their scripts and fonts, and the font licence texts in `web/fonts/`.
 - `LICENSE-MIT` and `LICENSE-APACHE`.
 - `soccermanager` (Linux and macOS only): the start script.
 
@@ -27,6 +27,7 @@ The Windows program links the C runtime statically (`.cargo/config.toml`), so it
 ## Prerequisites
 
 - Rust 1.87 or later.
+- Node 22.12 or later, with `npm`. Both build scripts run `npm ci` and `npm run build:release` in `viewer/` and copy `viewer/dist-release/` to `web/`.
 - Windows: NSIS 3 (`makensis` on `PATH`, or installed in `Program Files (x86)\NSIS`), and PowerShell 7 or Windows PowerShell 5.1.
 - Linux archive: a Linux shell with Rust, `tar`, `curl`, and `sha256sum`. On Windows, WSL with Ubuntu 24.04 works.
 
@@ -36,6 +37,12 @@ Windows setup file:
 
 ```powershell
 pwsh packaging/windows/build.ps1
+```
+
+To build only the installed layout, in `dist/stage`, without the setup file (no NSIS needed):
+
+```powershell
+pwsh packaging/windows/build.ps1 -StageOnly
 ```
 
 Linux archive (from the repository folder, in a Linux shell or WSL):
@@ -70,9 +77,9 @@ pwsh packaging/windows/run-sandbox.ps1
 `run-sandbox.ps1` starts Windows Sandbox, a fresh Windows 11 image, with networking off. It maps `dist/` read-only and a new evidence folder `dist/evidence/windows/<utc>/` writable. Inside the sandbox, `smoke.ps1`:
 
 1. records whether the Visual C++ runtime is present, as a fact;
-2. installs silently and checks the installed files and the Start-menu entry;
+2. installs silently and checks the installed files (with the font licence texts) and the Start-menu entry;
 3. starts the Start-menu entry, checks that the engine runs, and takes `desktop.png`;
-4. runs `engine-cli launch` from the install folder and takes `page.png` with headless Microsoft Edge at 1280 by 800;
+4. runs `engine-cli launch` from the install folder, checks that the page's module script is served as JavaScript, and takes `page.png` with headless Microsoft Edge at 1280 by 800;
 5. runs a third launch, reads the engine's `hello` over the socket, compares its version with `engine-cli --version`, starts the match, and waits for the kick-off record in `events.jsonl`;
 6. uninstalls silently and checks that the program is gone and the matches stay.
 
@@ -92,7 +99,18 @@ powershell -ExecutionPolicy Bypass -File smoke.ps1 -Setup <setup file> -Evidence
 sh packaging/unix/smoke.sh dist/SoccerManager-<version>-linux-x86_64.tar.gz dist/evidence/linux/<utc>
 ```
 
-`smoke.sh` unpacks the archive into a fresh temporary home and starts `soccermanager` from an unrelated folder with only `HOME` and `PATH` set. It checks the page address, the page, `engine.json` reporting a running engine, `engine.port` in the fresh home's data folder, and the program's version against the archive name. Then it runs the install-layout test against the unpacked folder (`SM_INSTALL_UNDER_TEST`), which reads the engine's `hello` and compares its version. It writes `results.json` in the same shape as the Windows check.
+`smoke.sh` unpacks the archive into a fresh temporary home and starts `soccermanager` from an unrelated folder with only `HOME` and `PATH` set. It checks the page address, the page, that the page's module script is served as JavaScript, that `web/fonts/OFL-Saira.txt` ships, `engine.json` reporting a running engine, `engine.port` in the fresh home's data folder, and the program's version against the archive name. Then it runs the install-layout test against the unpacked folder (`SM_INSTALL_UNDER_TEST`), which reads the engine's `hello` and compares its version. It writes `results.json` in the same shape as the Windows check.
+
+### The browser suite against a packaged folder
+
+The browser suite in `e2e/` can drive the packaged program and its `web/` instead of the repository build. Point `SM_E2E_INSTALL` at the unpacked or staged folder:
+
+```bash
+SM_INSTALL_UNDER_TEST=<folder> cargo test --release --locked -p engine-cli --test install_layout
+cd e2e && SM_E2E_INSTALL=<folder> npx playwright test --project=viewer
+```
+
+The release workflow runs both against the Linux archive and the Windows staged folder before it drafts a release.
 
 ## macOS
 

@@ -1,7 +1,8 @@
 #!/bin/sh
 # The clean-user check for the Linux (or macOS) archive. It unpacks the archive into a fresh
 # home folder, starts the game with a cleared environment from an unrelated folder, and
-# checks that the page and the engine are served with no configuration.
+# checks that the page and the engine are served with no configuration, and that the page is
+# the built viewer: its module script is served as JavaScript, and the font licences ship.
 #
 # Run from the repository folder:  sh packaging/unix/smoke.sh <archive> <evidence-dir>
 #
@@ -89,6 +90,14 @@ if [ -n "$address" ]; then
     else
         check page false "GET / did not return the packaged index.html"
     fi
+    module=$(sed -n 's/.*<script type="module"[^>]*src="\/\{0,1\}\(assets\/[^"]*\)".*/\1/p' "$installed/web/index.html" | head -n 1)
+    if [ -n "$module" ] &&
+        curl -sf -D "$evidence/module.headers.txt" -o /dev/null "$address$module" &&
+        grep -qi '^content-type: text/javascript' "$evidence/module.headers.txt"; then
+        check viewer-module true "GET /$module is served as JavaScript"
+    else
+        check viewer-module false "index.html loads no module from assets/, or it is not served as JavaScript: '$module'"
+    fi
     state=""
     i=0
     while [ $i -lt 240 ]; do
@@ -111,6 +120,11 @@ if [ -n "$address" ]; then
     else
         check data-folder false "no engine.port in ~/.local/share/SoccerManager in the fresh home"
     fi
+fi
+if [ -f "$installed/web/fonts/OFL-Saira.txt" ]; then
+    check font-licences true "web/fonts/OFL-Saira.txt ships with the page"
+else
+    check font-licences false "web/fonts/OFL-Saira.txt is missing from the page"
 fi
 if grep -q 'launch.open_failed' "$evidence/launch.err.txt" 2>/dev/null; then
     fact browser "no browser opened (launch.open_failed logged); the game kept running"

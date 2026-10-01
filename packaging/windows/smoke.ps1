@@ -134,11 +134,12 @@ try {
     # (c) The installed files and the shortcut.
     $missing = @()
     foreach ($path in @($program, (Join-Path $installDir 'content\attributes.json'),
-            (Join-Path $installDir 'web\index.html'), (Join-Path $installDir 'Uninstall.exe'),
+            (Join-Path $installDir 'web\index.html'), (Join-Path $installDir 'web\fonts\OFL-Saira.txt'),
+            (Join-Path $installDir 'Uninstall.exe'),
             $shortcut)) {
         if (-not (Test-Path $path)) { $missing += $path }
     }
-    Add-Check 'installed-files' ($missing.Count -eq 0) ($(if ($missing.Count) { "missing: $($missing -join '; ')" } else { 'program, content, page, uninstaller, and shortcut present' }))
+    Add-Check 'installed-files' ($missing.Count -eq 0) ($(if ($missing.Count) { "missing: $($missing -join '; ')" } else { 'program, content, page, font licences, uninstaller, and shortcut present' }))
     $installedVersion = ((& $program --version) -split '\s+')[1]
     Add-Fact 'installed-version' "engine-cli --version: $installedVersion"
 
@@ -187,6 +188,21 @@ try {
     if ($second.address) {
         $status = Wait-Running $second.address 60
         Add-Check 'launch-engine-running' ($status -and $status.'engine.state' -eq 'running') "engine.state: $($status.'engine.state')"
+        # The page is the built viewer: its module script comes from assets/ as JavaScript.
+        $index = Get-Content -Raw (Join-Path $installDir 'web\index.html')
+        $moduleType = $null
+        $module = $null
+        if ($index -match '<script type="module"[^>]*src="/?(assets/[^"]+)"') {
+            $module = $Matches[1]
+            try {
+                $request = [System.Net.WebRequest]::Create($second.address + $module)
+                $request.Timeout = 5000
+                $response = $request.GetResponse()
+                $moduleType = $response.ContentType
+                $response.Close()
+            } catch { $moduleType = "error: $($_.Exception.Message)" }
+        }
+        Add-Check 'viewer-module' ([bool]$module -and "$moduleType" -match '^text/javascript') "module '$module' served as '$moduleType'"
         $edge = Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'
         if (Test-Path $edge) {
             $edgeProfile = Join-Path $env:TEMP 'smoke-edge-profile'

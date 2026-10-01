@@ -1,6 +1,7 @@
 #!/bin/sh
-# Builds the Linux (or macOS) release archive: the engine, the content, the page, the
-# licences, and the `soccermanager` start script, in one versioned folder.
+# Builds the Linux (or macOS) release archive: the engine, the content, the built viewer, the
+# licences, and the `soccermanager` start script, in one versioned folder. It needs Rust and
+# Node 22.12 or later with npm.
 #
 # Run from the repository folder:  sh packaging/unix/build.sh
 # On Windows, inside WSL:          wsl -d Ubuntu-24.04 -- sh packaging/unix/build.sh
@@ -22,7 +23,17 @@ dist="$repo/dist"
 CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-"$HOME/.cache/soccermanager-target"}
 export CARGO_TARGET_DIR
 
+# The viewer build needs Node; say so before the long engine build.
+if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+    echo "error: node or npm is not on PATH; Node 22.12 or later is needed to build the viewer" >&2
+    exit 1
+fi
+
 (cd "$repo" && cargo build --release --locked -p engine-cli)
+
+# The page the release carries is the viewer's release build: the viewer and the handshake
+# page, with the font licence texts, and no test page.
+(cd "$repo/viewer" && npm ci --no-audit --no-fund && npm run build:release)
 
 program="$CARGO_TARGET_DIR/release/engine-cli"
 version=$("$program" --version | awk '{ print $2 }')
@@ -44,9 +55,7 @@ rm -rf "$stage"
 mkdir -p "$stage/$name"
 cp "$program" "$stage/$name/engine-cli"
 cp -R "$repo/content" "$stage/$name/content"
-cp -R "$repo/web" "$stage/$name/web"
-# The page's own tests are not part of the game.
-rm -rf "$stage/$name/web/tests"
+cp -R "$repo/viewer/dist-release" "$stage/$name/web"
 cp "$repo/LICENSE-MIT" "$repo/LICENSE-APACHE" "$stage/$name/"
 cp "$repo/packaging/unix/soccermanager" "$stage/$name/soccermanager"
 chmod 755 "$stage/$name/engine-cli" "$stage/$name/soccermanager"
