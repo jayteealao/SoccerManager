@@ -412,3 +412,120 @@ fn restart_position_report_wide() {
     }
     println!("{total} restart position faults");
 }
+
+/// The phase steps that take a restart: a kick-off that starts a period, a dead ball's
+/// restart, or a shoot-out kick.
+fn restarts_taken(log: &[Step]) -> u32 {
+    log.iter()
+        .filter(|s| {
+            matches!(
+                s.cause,
+                Cause::KickOffTaken | Cause::RestartTaken | Cause::ShootoutKickTaken
+            )
+        })
+        .count() as u32
+}
+
+/// AC-27: in debug mode every restart of the batch is judged and every position stands
+/// where the Laws ask. The count of judged restarts equals the restarts the phase machine
+/// recorded, and the restart events of a match equal the judged restarts plus the dead balls
+/// a period end closed before their restart.
+#[test]
+fn in_debug_mode_every_restart_passes_the_position_check() {
+    let mut matches: Vec<(String, Simulation)> = Vec::new();
+    for seed in [42, 1, 7, 99, 2026] {
+        let sim = Simulation::new_traced(full_match(seed, 105.0, 68.0)).unwrap();
+        assert!(sim.debug_trace_on());
+        matches.push((format!("seed {seed}"), sim));
+    }
+    for (length, width) in [(100.0, 64.0), (120.0, 90.0)] {
+        let sim = Simulation::new_traced(full_match(42, length, width)).unwrap();
+        matches.push((format!("seed 42 on {length} by {width}"), sim));
+    }
+    for (name, sim) in matches {
+        let mut sim = sim;
+        let mut events = Vec::new();
+        while !sim.is_over() {
+            sim.step();
+            let _ = sim.take_trace();
+            events.extend(sim.take_events());
+        }
+        sim.finish();
+        events.extend(sim.take_events());
+        assert!(
+            sim.position_faults().is_empty(),
+            "{name}: {:?}",
+            sim.position_faults()
+        );
+        let log = sim.phase_log();
+        let checked = sim.restarts_checked();
+        assert_eq!(checked, restarts_taken(log), "{name}");
+        assert!(checked > 40, "{name}: {checked} restarts");
+        let restart_events = events
+            .iter()
+            .filter(|e| {
+                use engine::EngineEventKind as K;
+                matches!(
+                    e.kind,
+                    K::KickOff | K::ThrowIn | K::Corner | K::GoalKick | K::FreeKick | K::Penalty
+                ) || (e.kind == K::Injury && e.spot.is_some())
+            })
+            .count() as u32;
+        let closed = log
+            .iter()
+            .filter(|s| {
+                matches!(s.from, PhaseName::DeadBall(_))
+                    && matches!(s.to, PhaseName::HalfTime | PhaseName::FullTime)
+            })
+            .count() as u32;
+        assert_eq!(restart_events, checked + closed, "{name}");
+    }
+}
+
+/// AC-27, the induced fault: a penalty with a defender planted inside the penalty area is
+/// taken through the engine's own restart path, and the check fails loudly with the phase,
+/// the player, his position, and the rule.
+#[test]
+fn an_illegal_position_at_a_restart_fails_naming_the_phase_the_player_and_the_position() {
+    let config = calm_match(5);
+    let attack_x = config.teams[0].attack_x;
+    let half_length = config.pitch.half_length();
+    let defender = index(1, 4);
+    // The legal scene first: it takes the penalty without a fault.
+    let legal = Scene::new(config.clone()).penalty(0, index(0, 10)).build();
+    let legal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+        let mut sim = legal;
+        let before = sim.restarts_checked();
+        sim.step();
+        sim.restarts_checked() - before
+    }));
+    assert_eq!(
+        legal.ok(),
+        Some(1),
+        "the legal penalty is judged and passes"
+    );
+    let at = engine::math::DVec2::new(attack_x * (half_length - 8.0), 6.0);
+    let mut sim = Scene::new(config)
+        .penalty(0, index(0, 10))
+        .place(defender, at)
+        .build();
+    let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || sim.step()))
+        .expect_err("the check fails loudly");
+    let message = caught.downcast_ref::<String>().cloned().unwrap_or_default();
+    assert!(
+        message.starts_with("restart position fault at tick 1: dead ball (penalty) (penalty): "),
+        "{message}"
+    );
+    assert!(
+        message.contains(&format!("player {defender} (team 1, slot 4)")),
+        "{message}"
+    );
+    assert!(
+        message.contains(&format!("at ({:.2}, 6.00)", at.x)),
+        "{message}"
+    );
+    assert!(
+        message.contains("Law 14: inside the penalty area"),
+        "{message}"
+    );
+}

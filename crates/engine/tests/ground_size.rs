@@ -25,12 +25,14 @@ fn on_ground(file: &TeamFile, length: f64, width: f64) -> TeamFile {
     out
 }
 
-/// A played match: its configuration, its events, its tick records, and its team shapes.
+/// A played match: its configuration, its events, its tick records, its team shapes, and the
+/// restarts the engine's restart position check judged.
 struct Played {
     config: MatchConfig,
     events: Vec<EngineEvent>,
     records: Vec<TickRecord>,
     timeline: Vec<(u32, [engine::team::Team; 2])>,
+    restarts_checked: u32,
 }
 
 /// Plays `minutes` of the seed-42 match with `home` at home on its ground against `away`.
@@ -45,17 +47,15 @@ fn play(home: &TeamFile, away: &TeamFile, minutes: u32) -> Played {
         events: sim.take_events(),
         records: sink.records,
         timeline: sim.team_timeline().to_vec(),
+        restarts_checked: sim.restarts_checked(),
     }
 }
 
-/// The restart position check: every restart spot lies on `pitch`, each line restart on its
-/// line of that ground, and at each restart every player stands on the ground or at its
-/// parking spot. One line per failure, naming the tick, the restart, and the position.
-fn restart_position_faults(
-    pitch: &Pitch,
-    events: &[EngineEvent],
-    records: &[TickRecord],
-) -> Vec<String> {
+/// The restart spot check: every restart spot lies on `pitch`, and each line restart on its
+/// line of that ground. One line per failure, naming the tick, the restart, and the position.
+/// Where the players stand at each restart is the engine's own restart position check, which
+/// judges every restart of every match in these tests and fails loudly on a fault.
+fn restart_position_faults(pitch: &Pitch, events: &[EngineEvent]) -> Vec<String> {
     let (hl, hw) = (pitch.half_length(), pitch.half_width());
     let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
     let mut faults = Vec::new();
@@ -80,19 +80,6 @@ fn restart_position_faults(
                 pitch.length(),
                 pitch.width()
             ));
-        }
-        if let Some(r) = records.iter().find(|r| r.tick == e.tick) {
-            for (i, p) in r.players.iter().enumerate() {
-                let at = DVec2::new(f64::from(p[0]), f64::from(p[1]));
-                if !pitch.contains(at) && !pitch.is_parking_spot(at) {
-                    faults.push(format!(
-                        "tick {}: {kind:?}, player {i} at {at} is off the {} by {} ground",
-                        e.tick,
-                        pitch.length(),
-                        pitch.width()
-                    ));
-                }
-            }
         }
     }
     faults
@@ -121,8 +108,15 @@ fn full_match_on(length: f64, width: f64, home_index: usize) {
     for e in &throw_ins {
         assert_eq!(e.spot.unwrap().y.abs(), width / 2.0, "tick {}", e.tick);
     }
-    let faults = restart_position_faults(&pitch, &played.events, &played.records);
+    let faults = restart_position_faults(&pitch, &played.events);
     assert!(faults.is_empty(), "{}", faults.join("\n"));
+    // The engine judged every restart on this ground and found every player where the Laws
+    // ask; a fault would have stopped the match.
+    assert!(
+        played.restarts_checked > 10,
+        "{} restarts",
+        played.restarts_checked
+    );
     let validator = Validator::for_match(
         played.config.tuning.clone(),
         &played.timeline,
@@ -187,12 +181,13 @@ fn the_four_edge_grounds_play_and_keep_their_restarts_on_their_lines() {
         let played = play(&on_ground(&a, length, width), &b, 20);
         let pitch = played.config.pitch;
         assert_eq!((pitch.length(), pitch.width()), (length, width));
-        let faults = restart_position_faults(&pitch, &played.events, &played.records);
+        let faults = restart_position_faults(&pitch, &played.events);
         assert!(
             faults.is_empty(),
             "{length} by {width}: {}",
             faults.join("\n")
         );
+        assert!(played.restarts_checked > 0, "{length} by {width}");
         let validator = Validator::for_match(
             played.config.tuning.clone(),
             &played.timeline,
@@ -214,7 +209,7 @@ fn the_restart_position_check_refuses_a_spot_one_metre_off_the_ground() {
     let [a, b] = common::default_teams(&content);
     let played = play(&on_ground(&a, 100.0, 64.0), &b, 20);
     let pitch = played.config.pitch;
-    assert!(restart_position_faults(&pitch, &played.events, &played.records).is_empty());
+    assert!(restart_position_faults(&pitch, &played.events).is_empty());
     let mut events = played.events.clone();
     let throw_in = events
         .iter_mut()
@@ -222,7 +217,7 @@ fn the_restart_position_check_refuses_a_spot_one_metre_off_the_ground() {
         .expect("a throw-in in 20 minutes");
     let spot = throw_in.spot.unwrap();
     throw_in.spot = Some(DVec2::new(spot.x, spot.y + spot.y.signum()));
-    let faults = restart_position_faults(&pitch, &events, &played.records);
+    let faults = restart_position_faults(&pitch, &events);
     assert_eq!(faults.len(), 1, "{faults:?}");
     assert!(
         faults[0].contains("ThrowIn") && faults[0].contains("100 by 64"),
@@ -231,7 +226,7 @@ fn the_restart_position_check_refuses_a_spot_one_metre_off_the_ground() {
     );
     // The same check on the default ground refuses the 100 by 64 match's throw-ins: the
     // check reads the ground it is given.
-    assert!(!restart_position_faults(&Pitch::DEFAULT, &played.events, &played.records).is_empty());
+    assert!(!restart_position_faults(&Pitch::DEFAULT, &played.events).is_empty());
 }
 
 #[test]

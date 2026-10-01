@@ -256,8 +256,14 @@ impl RestartsModule for StandIn<dyn RestartsModule> {
     fn ready(&self, view: &MatchView<'_>, dead: &DeadBall, now: u32) -> bool {
         self.0.ready(view, dead, now)
     }
-    fn kick_off_position(&self, view: &MatchView<'_>, team: usize, slot: usize) -> DVec2 {
-        self.0.kick_off_position(view, team, slot)
+    fn kick_off_position(
+        &self,
+        view: &MatchView<'_>,
+        team: usize,
+        slot: usize,
+        kicking: usize,
+    ) -> DVec2 {
+        self.0.kick_off_position(view, team, slot, kicking)
     }
 }
 

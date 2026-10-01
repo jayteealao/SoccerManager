@@ -566,6 +566,9 @@ pub struct Simulation {
     /// Test seam: every restart position fault so far, one line each.
     #[cfg(feature = "scenario")]
     pub(crate) position_faults: Vec<String>,
+    /// Test seam: the restarts the position check judged.
+    #[cfg(feature = "scenario")]
+    pub(crate) restarts_checked: u32,
     /// The plugin hooks, none unless a caller attaches them.
     pub(crate) plugins: Plugins,
     /// The decision hook's offsets for the current carrier. A stoppage and a new carrier
@@ -697,6 +700,8 @@ impl Simulation {
             phase_log: Vec::new(),
             #[cfg(feature = "scenario")]
             position_faults: Vec::new(),
+            #[cfg(feature = "scenario")]
+            restarts_checked: 0,
             plugins: Plugins::default(),
             script_cache: None,
             finished: false,
@@ -862,6 +867,12 @@ impl Simulation {
     #[cfg(feature = "scenario")]
     pub fn position_faults(&self) -> &[String] {
         &self.position_faults
+    }
+
+    /// Test seam: the restarts the position check judged so far.
+    #[cfg(feature = "scenario")]
+    pub fn restarts_checked(&self) -> u32 {
+        self.restarts_checked
     }
 
     /// The phase's name in the phase machine.

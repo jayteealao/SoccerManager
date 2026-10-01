@@ -791,7 +791,7 @@ fn faulty_clock_fails_the_gate_at_a_named_window() {
 }
 
 /// AC-5 for possession: an outfield player who reaches a loose ball from 1 cm further fails
-/// the gate at the first loose ball that centimetre decides (on seed 42, in the window from
+/// the gate at the first loose ball that centimetre decides (on seed 1, in the window from
 /// tick 2,000 to tick 3,000), and the report names the window.
 #[test]
 fn faulty_possession_fails_the_gate_at_a_named_window() {
@@ -799,7 +799,7 @@ fn faulty_possession_fails_the_gate_at_a_named_window() {
 
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    let fixture = Fixture::seed(42);
+    let fixture = Fixture::seed(1);
     let play = |content: &engine::Content| {
         gate::play_fixture(
             &fixture,

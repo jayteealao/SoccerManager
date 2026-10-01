@@ -18,6 +18,8 @@ use crate::player::Player;
 use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::Tuning;
 
+use super::positions::on_goal_line;
+
 /// Distance opponents keep from a throw-in (IFAB Law 15).
 pub(crate) const THROW_IN_DISTANCE: f64 = 2.0;
 /// Distance every other player keeps from a dropped ball (IFAB Law 8).
@@ -132,6 +134,26 @@ pub fn kick_off_position(team: &Team, slot: usize) -> DVec2 {
     let base = team.slot_base(slot);
     let depth = base.x * team.attack_x;
     DVec2::new(if depth > -1.0 { -team.attack_x } else { base.x }, base.y)
+}
+
+/// Where a player of `team` stands for a kick-off by his own team or by the other team
+/// (`opponent`): the formation slot in his own half, and for the other team outside the
+/// centre circle, 9.15 m from the ball and the target margin more (IFAB Law 8). The same
+/// rule places the other team at a kick-off after a goal, so both kick-offs agree.
+pub fn kick_off_spot(team: &Team, slot: usize, opponent: bool) -> DVec2 {
+    let base = kick_off_position(team, slot);
+    if !opponent {
+        return base;
+    }
+    let away = DVec2::new(-team.attack_x, 0.0);
+    outside_on_pitch(
+        &team.pitch,
+        base,
+        DVec2::ZERO,
+        KICK_DISTANCE + TARGET_MARGIN,
+        away,
+        0.5,
+    )
 }
 
 /// Where the taker stands: at the ball, or just behind it at a kick-off.
@@ -330,9 +352,13 @@ pub fn shootout_ready(
         if !p.active() {
             return true;
         }
-        if i == dead.taker || i == keepers[1 - dead.team] {
+        if i == dead.taker {
             let at = shootout_target(pitch, dead, i, keepers);
             return (p.pos - at).length() <= t.restart_ready_radius;
+        }
+        if i == keepers[1 - dead.team] {
+            // Law 10: the defending keeper on his goal line between the posts.
+            return on_goal_line(pitch, p.pos, side, t.restart_ready_radius);
         }
         !pitch.in_penalty_area(p.pos, side)
             && (p.pos - dead.spot).length() >= KICK_DISTANCE - JUDGE_MARGIN
@@ -375,9 +401,12 @@ pub fn is_ready(
                 own_half && (!opponent || distance >= KICK_DISTANCE - JUDGE_MARGIN)
             }
             StoppageKind::Penalty => {
-                (opponent && teams[p.team].keeper_slot() == p.slot)
-                    || (!pitch.in_penalty_area(p.pos, side)
-                        && distance >= KICK_DISTANCE - JUDGE_MARGIN)
+                if opponent && teams[p.team].keeper_slot() == p.slot {
+                    // Law 14: the defending keeper on his goal line between the posts.
+                    on_goal_line(pitch, p.pos, side, t.restart_ready_radius)
+                } else {
+                    !pitch.in_penalty_area(p.pos, side) && distance >= KICK_DISTANCE - JUDGE_MARGIN
+                }
             }
             _ => true,
         }
@@ -431,8 +460,14 @@ impl RestartsModule for RestartsV1 {
         }
     }
 
-    fn kick_off_position(&self, view: &MatchView<'_>, team: usize, slot: usize) -> DVec2 {
-        kick_off_position(&view.teams()[team], slot)
+    fn kick_off_position(
+        &self,
+        view: &MatchView<'_>,
+        team: usize,
+        slot: usize,
+        kicking: usize,
+    ) -> DVec2 {
+        kick_off_spot(&view.teams()[team], slot, team != kicking)
     }
 }
 
@@ -542,6 +577,36 @@ mod tests {
         for team in &config.teams {
             for slot in 0..PLAYERS_PER_TEAM {
                 assert!(kick_off_position(team, slot).x * team.attack_x < 0.0);
+            }
+        }
+    }
+
+    /// Law 8: at a kick-off the team that does not kick off stands in its own half and
+    /// outside the centre circle, on the default ground and on the smallest ground the Laws
+    /// allow.
+    #[test]
+    fn the_other_team_stands_outside_the_centre_circle_at_a_kick_off() {
+        for (length, width) in [(105.0, 68.0), (90.0, 45.0)] {
+            let mut config = shipped_config(1, 90).unwrap();
+            let pitch = Pitch::new(length, width).unwrap();
+            for team in &mut config.teams {
+                team.pitch = pitch;
+            }
+            for team in &config.teams {
+                for slot in 0..PLAYERS_PER_TEAM {
+                    let own = kick_off_spot(team, slot, false);
+                    assert_eq!(own, kick_off_position(team, slot));
+                    let other = kick_off_spot(team, slot, true);
+                    assert!(
+                        other.x * team.attack_x < 0.0,
+                        "{length} by {width}: slot {slot} at {other}"
+                    );
+                    assert!(
+                        other.length() >= KICK_DISTANCE + TARGET_MARGIN - 1e-9,
+                        "{length} by {width}: slot {slot} at {other}"
+                    );
+                    assert!(pitch.contains(other));
+                }
             }
         }
     }

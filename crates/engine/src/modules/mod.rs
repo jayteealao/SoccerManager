@@ -195,8 +195,14 @@ pub trait RestartsModule: Send + Sync + 'static {
     fn target(&self, view: &MatchView<'_>, dead: &DeadBall, i: usize) -> DVec2;
     /// `true` when `dead` may be taken at tick `now`.
     fn ready(&self, view: &MatchView<'_>, dead: &DeadBall, now: u32) -> bool;
-    /// Where the player in `slot` of `team` stands for a kick-off.
-    fn kick_off_position(&self, view: &MatchView<'_>, team: usize, slot: usize) -> DVec2;
+    /// Where the player in `slot` of `team` stands for a kick-off by `kicking`.
+    fn kick_off_position(
+        &self,
+        view: &MatchView<'_>,
+        team: usize,
+        slot: usize,
+        kicking: usize,
+    ) -> DVec2;
 }
 
 /// Discipline: which card a player is shown, whether it sends the player off, and the more

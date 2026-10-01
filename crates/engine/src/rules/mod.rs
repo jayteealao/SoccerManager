@@ -137,9 +137,9 @@ impl Referee {
 }
 
 impl Simulation {
-    /// `true` when the phase machine checks every change of phase: in debug builds, in the
-    /// engine's tests, and in debug mode (`trace_on`). A release match without debug mode
-    /// checks nothing.
+    /// `true` when the phase machine checks every change of phase, and the restart position
+    /// check judges every restart: in debug builds, in the engine's tests, and in debug mode
+    /// (`trace_on`). A release match without debug mode checks and corrects nothing.
     #[inline(always)]
     pub(crate) fn checks_on(&self) -> bool {
         cfg!(any(debug_assertions, feature = "scenario")) || self.trace_on()
@@ -151,23 +151,29 @@ impl Simulation {
     ///
     /// # Panics
     ///
-    /// When the checks are on and no row of `phases::TRANSITIONS` allows the change.
+    /// When the checks are on and no row of `phases::TRANSITIONS` allows the change, or a
+    /// restart is taken with a position against the Laws (`positions::check`): the message
+    /// names the tick, the phase, the restart, the player, his position, and the rule.
     pub(crate) fn enter_phase(&mut self, next: Phase, cause: Cause) {
         let to = phases::derive(next, self.referee.shootout.is_some());
-        #[cfg(feature = "scenario")]
         let phase = self.referee.named;
         self.note_phase(to, cause);
-        #[cfg(feature = "scenario")]
-        if let Some(restart) = self.restart_taken(cause) {
+        if self.checks_on()
+            && let Some(restart) = self.restart_taken(cause)
+        {
             let faults = self.restart_faults(&restart);
-            self.position_faults.extend(faults.into_iter().map(|f| {
-                format!(
-                    "tick {}: {} ({}): {f}",
-                    self.tick + 1,
-                    phase,
-                    restart.name()
-                )
-            }));
+            let lines: Vec<String> = faults
+                .iter()
+                .map(|f| format!("tick {}: {phase} ({}): {f}", self.tick + 1, restart.name()))
+                .collect();
+            #[cfg(feature = "scenario")]
+            {
+                self.restarts_checked += 1;
+                self.position_faults.extend(lines.iter().cloned());
+            }
+            if let Some(first) = lines.first() {
+                panic!("restart position fault at {first}");
+            }
         }
         self.referee.phase = next;
     }
@@ -175,7 +181,6 @@ impl Simulation {
     /// The restart that `cause` takes, read before the phase changes: the kick-off that starts
     /// a period (its taker already holds the ball), a dead ball's restart, or a shoot-out
     /// kick. `None` for every other cause.
-    #[cfg_attr(not(feature = "scenario"), allow(dead_code))]
     fn restart_taken(&self, cause: Cause) -> Option<positions::Restart> {
         let dead = match self.referee.phase {
             Phase::DeadBall(dead) => Some(dead),
@@ -199,7 +204,6 @@ impl Simulation {
     }
 
     /// Every position against the Laws as `restart` is taken (`positions::check`).
-    #[cfg_attr(not(feature = "scenario"), allow(dead_code))]
     fn restart_faults(&self, restart: &positions::Restart) -> Vec<positions::Fault> {
         positions::check(
             &self.config.pitch,
@@ -243,7 +247,7 @@ impl Simulation {
             if !p.active() {
                 continue;
             }
-            let pos = restarts.kick_off_position(&self.view(), p.team, p.slot);
+            let pos = restarts.kick_off_position(&self.view(), p.team, p.slot, team);
             let facing = DVec2::new(self.teams[p.team].attack_x, 0.0);
             let p = &mut self.players[i];
             p.pos = pos;
@@ -1392,6 +1396,10 @@ mod tests {
         let attack_x = sim.teams[team].attack_x;
         let spot = sim.config.pitch.penalty_spot(attack_x);
         sim.players[taker].pos = spot;
+        // The defending keeper on his goal line (IFAB Law 14).
+        let keeper = sim.keeper(1 - team);
+        sim.players[keeper].pos =
+            DVec2::new(attack_x * (sim.config.pitch.half_length() - 0.3), 0.0);
         sim.ball = Ball::at(spot);
         let dead = DeadBall {
             kind: StoppageKind::Penalty,
