@@ -1,10 +1,14 @@
 # Content files
 
-This folder holds the content files the engine reads: the attribute schema, the tuning constants, the rule pack, the tactics file, the commentary lines, the realism bands, the two default clubs, and the fast model's fit.
+This folder holds the content files the engine reads: the attribute schema, the tuning constants, the rule pack, the tactics file, the commentary lines, the realism bands, ten sample clubs, and the fast model's fit.
 
 Every field of every file, with its unit, its default, and its bound, is in [the data-file reference](../docs/reference/data-files.md). To change a value, follow [the modding how-to](../docs/how-to/modding.md).
 
 To change behaviour with code rather than values, write a script pack: see [script packs](scripts/README.md) and the sample in `scripts/sample/`.
+
+## Sample clubs
+
+`teams/` holds ten sample clubs. A served match plays the home and away files (`default-a.json` and `default-b.json` unless a flag names others); every other club file in the folder plays in the background round of that matchday, paired into fixtures from the match seed and played on the full engine beside the match. The eight `club-000007ea-*.json` files were written once by `engine-cli generate --seed 2026 --clubs 8`. A club file added to the folder joins the round; a file that does not load is left out with a warning. No file in `teams/` other than the two a match plays changes that match, its save or its replay.
 
 ## Home grounds
 
