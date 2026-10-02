@@ -34,7 +34,7 @@ The match is live and the player is in charge. In the first five seconds the pit
 4. Motion conveys state: a goal, a card, a substitution applied. Product transitions run under 300 ms; the goal banner leaves within 1.5 s. The reduced-motion preference disables all of it.
 
 ## Constraints
-- Frontend: plain HTML, CSS, and JavaScript. No UI framework and no component library is chosen.
+- Frontend: Svelte 5, built with Vite; no component library.
 - Brand assets: none exist. Generate the logo, the palette, and any illustration programmatically in JavaScript as part of the product. Do not source them from image files.
 - Clubs and competitions are facsimiles of real ones where public sources are rich: a near name, the real city, and the real club's size, standing, trophies, and rivalries. Crests and kits echo the real club's colours and shape, never the real badge. Clubs where sources are thin are generated. Players are invented and generated. Real names, badges, and likenesses do not ship.
 - Licenses: MIT-compatible or Apache-2.0-compatible dependencies only. Do not copy from GPL code.

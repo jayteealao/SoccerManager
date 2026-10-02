@@ -19,6 +19,15 @@ This guide tells you how to set up a checkout, run the checks, write commits, an
    cd e2e && npm ci
    ```
 
+6. Build the match viewer, a Svelte 5 app built with Vite. The engine serves `viewer/dist`, and the browser suite needs it:
+
+   ```bash
+   npm --prefix viewer ci
+   npm --prefix viewer run build
+   ```
+
+   Rebuild it after every change under `viewer/`. `npm --prefix viewer test` runs the viewer's own tests.
+
 ## Check your change
 
 Each pull request runs these checks. Run the fast ones before you push:

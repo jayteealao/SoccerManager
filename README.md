@@ -22,7 +22,7 @@ npm --prefix viewer ci
 npm --prefix viewer run build
 ```
 
-The second pair builds the match viewer into `viewer/dist`, the page the engine serves.
+The second pair builds the match viewer into `viewer/dist`, the page the engine serves. The viewer is a Svelte 5 app built with Vite.
 
 ## Play a match
 
@@ -60,9 +60,9 @@ To compare a candidate model with the current one, declare a flag in the `flags`
 ## Documentation
 
 - Tutorial: [Play your first match](docs/tutorials/first-match.md)
-- How-to: [Tune the engine and add a rule pack](docs/how-to/modding.md)
-- Reference: [Command line](docs/reference/cli.md), [Data files](docs/reference/data-files.md), [Socket protocol](docs/reference/protocol.md)
-- Explanation: [How the engine works](docs/explanation/engine.md)
+- How-to: [Tune the engine and add a rule pack](docs/how-to/modding.md), [Write and register an engine module](docs/how-to/engine-modules.md)
+- Reference: [Command line](docs/reference/cli.md), [Data files](docs/reference/data-files.md), [Socket protocol](docs/reference/protocol.md), [Engine modules and slot configuration](docs/reference/engine-modules.md)
+- Explanation: [How the engine works](docs/explanation/engine.md), [The plugin contract](docs/explanation/plugin-contract.md)
 
 ## Test
 
