@@ -11,11 +11,13 @@
   import AppShell from '../components/AppShell.svelte';
   import Crest from '../components/Crest.svelte';
   import DecisionOption from '../components/DecisionOption.svelte';
+  import Glyph from '../components/Glyph.svelte';
   import InfoStrip from '../components/InfoStrip.svelte';
   import KvRow from '../components/KvRow.svelte';
   import PitchCanvas from '../components/PitchCanvas.svelte';
   import SectionLabel from '../components/SectionLabel.svelte';
   import StubSection from '../components/StubSection.svelte';
+  import { PAUSE } from '../components/icons.js';
   import { mentalityWord } from '../lib/prematch.js';
   import { clockAt } from '../lib/recovery.js';
   import { fixtureTitle } from '../lib/scoreboard.js';
@@ -128,7 +130,11 @@
   {/snippet}
 
   <div class="screen" data-screen="skip">
-    <InfoStrip facts={facts.strip} />
+    <InfoStrip facts={facts.strip}>
+      {#snippet lead()}
+        <span class="lead" aria-hidden="true"><Glyph glyph={{ d: PAUSE }} size={14} /></span>
+      {/snippet}
+    </InfoStrip>
 
     <div class="cols">
       <div>
@@ -213,6 +219,12 @@
     display: flex;
     flex-direction: column;
     height: 100%;
+  }
+
+  .lead {
+    display: inline-grid;
+    place-items: center;
+    color: var(--band-ink);
   }
 
   .cols {
