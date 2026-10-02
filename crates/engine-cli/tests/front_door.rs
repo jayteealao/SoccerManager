@@ -404,6 +404,16 @@ fn return_to_start_keeps_the_save_and_resume_finishes_the_same_match() {
         Some(22),
         "{stopped}"
     );
+    // The places are measured from the pitch's corner, so the page draws them as they are.
+    let pitch = &stopped["saved"]["positions"]["pitch"];
+    let (length, width) = (pitch[0].as_f64().unwrap(), pitch[1].as_f64().unwrap());
+    for player in stopped["saved"]["positions"]["players"].as_array().unwrap() {
+        let (x, y) = (player[1].as_f64().unwrap(), player[2].as_f64().unwrap());
+        assert!(
+            (-5.0..=length + 5.0).contains(&x) && (-5.0..=width + 5.0).contains(&y),
+            "a player stands at {x}, {y} on a {length} by {width} pitch"
+        );
+    }
 
     let (code, body) = post(&launched, "/engine/resume", "");
     assert_eq!(code, 202, "{body}");

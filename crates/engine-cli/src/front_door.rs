@@ -223,7 +223,14 @@ fn positions(
         players: sim
             .players()
             .iter()
-            .map(|p| (p.team, p.pos.x, p.pos.y))
+            // The simulation measures from the centre spot; the page draws from the corner.
+            .map(|p| {
+                (
+                    p.team,
+                    p.pos.x + ground.length / 2.0,
+                    p.pos.y + ground.width / 2.0,
+                )
+            })
             .collect(),
     })
 }
