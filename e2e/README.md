@@ -70,6 +70,8 @@ A test finds a control by its role and its accessible name, as a screen reader d
 | A saved replay plays and rewinds with no engine | `reports-recovery.spec.mjs` › the half-time report counts equal the feed, and a saved replay plays with no engine |
 | A missing engine shows the path and how to build it | `reports-recovery.spec.mjs` › a missing engine shows the path it looked for and how to build it |
 | The records of a match reach the data folder in time | `observability.spec.mjs` › the records of a browser-driven match reach the data folder in time |
+| The charter scenario, steps 1 to 5: the other grounds, a skip at minute 30, the report and the replay equal to the match played through | `match/charter.spec.mjs` › the charter scenario to the replay of a skipped match (`npx playwright test -c match.config.mjs charter`) |
+| The charter scenario, step 6: a previous-release save finishes on the previous engine with that build's result | `match/charter.spec.mjs` › charter step 6: a previous-release save finishes on the previous engine (needs `SM_PREVIOUS_ENGINE_PATH`, or `SM_E2E_INSTALL` with `previous/`) |
 
 ## Human checks
 

@@ -1,4 +1,4 @@
-// The charter scenario, steps 1 to 5, on the served viewer: one served match of seed 7 with its
+// The charter scenario, steps 1 to 6, on the served viewer: one served match of seed 7 with its
 // matchday, fast-forwarded to 30:00 so the page holds the first half hour at once.
 //
 // 1. The match screen opens in Broadcast Blue, and the other fixtures show 0-0 KO.
@@ -10,13 +10,19 @@
 //    and the stored tick frames equal those of the same match played through with no skip.
 // 5. Replay the whole match starts at kick-off and plays into the skipped part, drawing each
 //    stored tick exactly as it arrived.
+// 6. A match saved mid-match by the previous release resumes on the previous release's engine
+//    program, which finishes it with the previous build's result. Needs that program:
+//    SM_PREVIOUS_ENGINE_PATH, or the installed game's previous/ folder with SM_E2E_INSTALL.
+//    The page plays the rest at 8x only when the save leaves at most three match minutes;
+//    the Rust test previous_engine compares every tick after the save either way.
 // Run with `--trace on` to keep the trace as evidence; each step also saves a screenshot.
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
-import { VIEWER, fastForward, startEngine, waitForGrounds } from '../support/engine.mjs';
+import { INSTALL, VIEWER, fastForward, startEngine, tempDir, waitForGrounds } from '../support/engine.mjs';
 import { playUntil } from '../support/page.mjs';
 
 const SEED = 7;
@@ -25,6 +31,15 @@ const MINUTE_30 = 90_000;
 /// Past the end of any match: a served match with this fast-forward plays straight through.
 const PAST_THE_END = 1_000_000;
 const MINUTE = 3_000;
+/// The previous release's engine program, for step 6.
+const PREVIOUS = process.env.SM_PREVIOUS_ENGINE_PATH
+  ? path.resolve(process.env.SM_PREVIOUS_ENGINE_PATH)
+  : INSTALL
+    ? path.join(INSTALL, 'previous', process.platform === 'win32' ? 'engine-cli.exe' : 'engine-cli')
+    : null;
+/// Step 6 plays the resumed match to full time on the page only when the save leaves at most
+/// this many ticks (three match minutes, about 23 s at 8x).
+const PLAY_TO_FULL_TIME = 3 * MINUTE;
 
 const evidence = (info, name) => {
   const out = process.env.MATCH_EVIDENCE_DIR
@@ -203,5 +218,59 @@ test('the charter scenario to the replay of a skipped match', async ({ page }, i
     expect(digests.skipped.score).toEqual(digests.watched.score);
   } finally {
     engine.cleanUp();
+  }
+});
+
+test('charter step 6: a previous-release save finishes on the previous engine', async ({ page }, info) => {
+  test.skip(
+    !PREVIOUS || !fs.existsSync(PREVIOUS),
+    'needs the previous release engine: SM_PREVIOUS_ENGINE_PATH, or SM_E2E_INSTALL with previous/'
+  );
+  test.setTimeout(5 * 60_000);
+  const content = path.join(path.dirname(PREVIOUS), 'content');
+  const data = tempDir('charter-previous');
+  // The previous program plays the whole match of seed 42 and leaves its last mid-match save.
+  const run = spawnSync(PREVIOUS, ['--content-dir', content, 'simulate', '--seed', '42', '--ticks-out', path.join(data, 'whole.ticks')], {
+    env: { ...process.env, SM_DATA_DIR: data },
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  expect(run.status, run.stderr).toBe(0);
+  const whole = JSON.parse(run.stdout);
+  const save = path.join(data, 'matches', whole['match.id'], 'snapshot.smsn');
+  const launcher = await startEngine({ command: 'launch', args: ['--resume', save, '--previous', PREVIOUS, '--web', VIEWER] });
+  try {
+    await open(page, launcher.url);
+    await until(page, () => window.__touchline.view() === 'match' && window.__touchline.screen() === 'live', undefined, 60_000);
+    await until(page, () => window.__touchline.lastRenderedTick() > 0, undefined, 30_000);
+    const version = await hook(page, () => window.__touchline.engineVersion());
+    expect(version.engine).toBe(whole.version);
+    expect(version.resumed_from).not.toBeNull();
+    const savedAt = version.resumed_from;
+    expect(savedAt).toBeLessThan(whole['ticks.played']);
+    const record = {
+      version: version.engine,
+      steps: version.steps,
+      saved_at_tick: savedAt,
+      previous_whole_match: { ticks: whole['ticks.played'], goals: whole.goals, build: whole['build.hash'] },
+    };
+    await until(page, (t) => window.__touchline.lastRenderedTick() > t, savedAt, 30_000);
+    await page.screenshot({ path: evidence(info, 'charter-6-resumed.png') });
+    const left = whole['ticks.played'] - savedAt;
+    if (left <= PLAY_TO_FULL_TIME) {
+      await playback(page).getByRole('button', { name: '8x', exact: true }).click();
+      await until(page, () => window.__touchline.events().some((e) => e['event.type'] === 'full-time'), undefined, 3 * 60_000);
+      const fullTime = (await hook(page, () => window.__touchline.events())).find((e) => e['event.type'] === 'full-time');
+      record.full_time = { tick: fullTime.tick, score: [fullTime['home.score'], fullTime['away.score']] };
+      expect(fullTime.tick).toBe(whole['ticks.played']);
+      expect(record.full_time.score).toEqual(whole.goals);
+      await page.screenshot({ path: evidence(info, 'charter-6-full-time.png') });
+    } else {
+      record.full_time = `not played on the page: ${left} ticks left after the save`;
+    }
+    fs.writeFileSync(evidence(info, 'charter-6-previous-engine.json'), `${JSON.stringify(record, null, 2)}\n`);
+  } finally {
+    launcher.cleanUp();
+    fs.rmSync(data, { recursive: true, force: true });
   }
 });
