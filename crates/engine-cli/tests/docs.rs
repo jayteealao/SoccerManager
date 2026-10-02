@@ -73,6 +73,7 @@ fn every_document_in_the_set_exists() {
         "docs/reference/protocol.md",
         "docs/explanation/engine.md",
         "docs/reference/engine-modules.md",
+        "docs/how-to/engine-modules.md",
     ] {
         assert!(read(path).trim().len() > 200, "{path} is empty or missing");
     }
@@ -105,6 +106,7 @@ fn every_command_in_the_guides_is_a_real_command() {
         "docs/how-to/calibration.md",
         "docs/how-to/replay-gate.md",
         "docs/how-to/find-a-divergence.md",
+        "docs/how-to/engine-modules.md",
         "README.md",
     ] {
         let text = read(path);
@@ -211,4 +213,49 @@ fn the_module_reference_names_every_slot() {
         expected,
         "a planted row went unnoticed"
     );
+}
+
+#[test]
+fn the_module_how_to_runs_real_commands() {
+    let doc = read("docs/how-to/engine-modules.md");
+    // Every test target the guide runs is a test file of the engine crate.
+    let targets: Vec<&str> = doc
+        .split("cargo test -p engine --test ")
+        .skip(1)
+        .filter_map(|rest| rest.split_whitespace().next())
+        .collect();
+    assert!(targets.len() >= 2, "the how-to runs no engine test");
+    for target in targets {
+        let file = format!("crates/engine/tests/{target}.rs");
+        assert!(
+            repo().join(&file).is_file(),
+            "the how-to runs {file}, which does not exist"
+        );
+    }
+    // The files it edits exist, and the test whose count it raises is in the file it names.
+    for file in [
+        "crates/engine/src/modules/modifier/mod.rs",
+        "crates/engine/src/modules/registry.rs",
+        "crates/engine/tests/modules.rs",
+    ] {
+        assert!(
+            doc.contains(&format!("`{file}`")),
+            "the how-to does not name {file}"
+        );
+        assert!(repo().join(file).is_file(), "{file} does not exist");
+    }
+    assert!(
+        read("crates/engine/tests/modules.rs")
+            .contains("fn every_modifier_slot_names_its_family()")
+    );
+    // The slot it extends is declared, optional, and holds a modifier.
+    let weather = engine::modules::REGISTRY
+        .iter()
+        .find(|d| d.slot.id == "engine.modifier.weather")
+        .expect("the how-to's slot is declared");
+    assert!(!weather.slot.required && weather.off.is_some());
+    assert!(matches!(
+        weather.registrations[0].module,
+        engine::modules::ModuleRef::Modifier(_)
+    ));
 }
