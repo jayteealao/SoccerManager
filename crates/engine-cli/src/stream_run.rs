@@ -59,6 +59,9 @@ pub struct Drive<'a> {
     pub planned: &'a [Planned],
     /// Sees the match after each step and after full time, before its events are routed.
     pub observe: Option<&'a Observe<'a>>,
+    /// The other matches of the matchday, revealed on this match's clock. `None` for every
+    /// run but a served match's.
+    pub matchday: Option<&'a crate::matchday::Matchday>,
 }
 
 /// A change queued at a fixed tick.
@@ -292,9 +295,19 @@ pub fn drive<S: TickSink>(
         if let Some(advice) = advisor.as_mut().and_then(|a| a.after_step(sim, &events)) {
             route(ServerMessage::Advice(advice))?;
         }
+        // The other grounds' events this match's tick has reached. The pool is only
+        // drained, never waited for. A skip plays on unpaced, so nothing is late in it.
+        if let Some(matchday) = opts.matchday {
+            for message in matchday.due(record.tick, paced(opts)) {
+                route(message)?;
+            }
+        }
         if record.tick.is_multiple_of(ticks_per_second) {
             route(ServerMessage::Stats(stats_message(sim)))?;
             route(ServerMessage::Condition(condition_message(sim)))?;
+            if let Some(progress) = opts.matchday.and_then(|m| m.progress(record.tick)) {
+                route(progress)?;
+            }
         }
     }
     let full_time = sim.is_over();
@@ -324,10 +337,26 @@ pub fn drive<S: TickSink>(
             }
         }
     }
+    // The other grounds end before the closing statistics, so the report the page shows
+    // after them has every ground final, or marked with no result.
+    if full_time && let Some(matchday) = opts.matchday {
+        let rest = matchday.finish(sim.tick(), paced(opts), crate::matchday::FINISH_WAIT);
+        for message in rest {
+            if let Err(err) = route(message) {
+                return closing_or_fail(err, written).map(|written| Driven { written, full_time });
+            }
+        }
+    }
     if let Err(err) = route(ServerMessage::Stats(stats_message(sim))) {
         return closing_or_fail(err, written).map(|written| Driven { written, full_time });
     }
     Ok(Driven { written, full_time })
+}
+
+/// `true` while the page sets the pace: a ground event that arrives after the match passed
+/// its moment is late then, and never during a skip, which plays at full speed.
+fn paced(opts: &Drive<'_>) -> bool {
+    opts.gate.is_some_and(|gate| !gate.skipping())
 }
 
 /// The page's changes the engine still holds: the engine identifier, the kind's index, and
@@ -770,6 +799,7 @@ mod tests {
                 page_changes: None,
                 planned: &[],
                 observe: None,
+                matchday: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -810,6 +840,7 @@ mod tests {
                 page_changes: None,
                 planned: &[],
                 observe: None,
+                matchday: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -1086,6 +1117,7 @@ mod tests {
                 page_changes: None,
                 planned: &[],
                 observe: None,
+                matchday: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -1182,6 +1214,7 @@ mod tests {
                 page_changes: None,
                 planned: &[],
                 observe: None,
+                matchday: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -1236,6 +1269,7 @@ mod tests {
                     page_changes: None,
                     planned: &[],
                     observe: None,
+                    matchday: None,
                 },
                 &mut |m: ServerMessage| {
                     messages.push(m);
@@ -1309,6 +1343,7 @@ mod tests {
                         page_changes: None,
                         planned: &[],
                         observe: None,
+                        matchday: None,
                     },
                     &mut |m: ServerMessage| {
                         messages.push(m);
@@ -1414,6 +1449,7 @@ mod tests {
                         page_changes: None,
                         planned: &[],
                         observe: None,
+                        matchday: None,
                     },
                     &mut |_: ServerMessage| Ok(()),
                 )
@@ -1472,6 +1508,7 @@ mod tests {
                         page_changes: None,
                         planned: &[],
                         observe: None,
+                        matchday: None,
                     },
                     &mut |m: ServerMessage| {
                         messages.push(m);

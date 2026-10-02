@@ -57,6 +57,32 @@ pub enum Command {
     Guard(GuardOpts),
     /// Fit the fast model, check it, or refuse a stale fit.
     FastModel(FastModelOpts),
+    /// Time a whole matchday on a limited number of cores; a test seam.
+    #[command(hide = true)]
+    MatchdayTiming(TimingOpts),
+}
+
+/// The hidden timing run of a matchday.
+#[derive(Debug, Args)]
+pub struct TimingOpts {
+    /// Seed of the player's match; the round derives from it.
+    #[arg(long, default_value_t = 42)]
+    pub seed: u64,
+    /// Minutes of play of every match.
+    #[arg(long, default_value_t = 90)]
+    pub minutes: u32,
+    /// Limit the process to its first N logical cores before anything starts.
+    #[arg(long, value_name = "N")]
+    pub cores: Option<usize>,
+    /// Background worker threads; default usable cores minus one.
+    #[arg(long, value_name = "N")]
+    pub threads: Option<usize>,
+    /// Playback speed of the reveal schedule; 8 is the fastest the viewer offers.
+    #[arg(long, default_value_t = 8.0)]
+    pub speed: f64,
+    /// Where the timing record goes.
+    #[arg(long, value_name = "FILE")]
+    pub out: PathBuf,
 }
 
 #[derive(Debug, Args)]
@@ -439,6 +465,15 @@ pub struct ServeOpts {
     /// Produce every tick up to this one without waiting for the viewer; a test seam.
     #[arg(long, hide = true, value_name = "TICK")]
     pub fast_forward_to: Option<u32>,
+    /// Play no other match of the matchday; a test seam.
+    #[arg(long, hide = true)]
+    pub no_matchday: bool,
+    /// Background worker threads of the matchday; a test seam.
+    #[arg(long, hide = true, value_name = "N")]
+    pub matchday_threads: Option<usize>,
+    /// Make one background match fail at a tick (FIXTURE@TICK); a test seam.
+    #[arg(long, hide = true, value_name = "FIXTURE@TICK")]
+    pub matchday_fault: Option<crate::matchday::Fault>,
 }
 
 #[derive(Debug, Args)]

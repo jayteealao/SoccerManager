@@ -110,6 +110,7 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
             page_changes: None,
             planned: &planned,
             observe: None,
+            matchday: None,
         },
         &mut |message: ServerMessage| {
             let text = serde_json::to_string(&message)

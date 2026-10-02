@@ -165,6 +165,7 @@ pub fn run(content_dir: Option<&Path>, opts: &ResimulateOpts) -> anyhow::Result<
             page_changes: None,
             planned: &planned,
             observe: outputs_wanted(opts).then_some(&observed as &Observe<'_>),
+            matchday: None,
         },
         &mut |_: ServerMessage| {
             text_frames += 1;

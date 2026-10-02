@@ -228,6 +228,7 @@ fn measure_stream(
             page_changes: None,
             planned: &[],
             observe: None,
+            matchday: None,
         },
         &mut |message: ServerMessage| session.send(&message),
     )?;

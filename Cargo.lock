@@ -508,6 +508,7 @@ dependencies = [
  "clap",
  "engine",
  "garde",
+ "libc",
  "protocol",
  "script",
  "serde",
@@ -516,6 +517,7 @@ dependencies = [
  "stream",
  "tracing",
  "tracing-subscriber",
+ "windows-sys",
 ]
 
 [[package]]

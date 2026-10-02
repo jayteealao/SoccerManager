@@ -24,6 +24,14 @@ serde = { workspace = true }
 garde = { workspace = true }
 sha2 = { workspace = true }
 
+# Below-normal priority for the background matchday's threads and the process affinity mask
+# (std counts every core on Windows under an affinity mask and sets no thread priority).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 # JSON Schema validation of the records in tests only; the release binary does not link it.
 boon = { workspace = true }
