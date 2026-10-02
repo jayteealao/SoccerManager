@@ -523,7 +523,7 @@ on `127.0.0.1`, on its own port, serving the named folder over plain HTTP. It is
 WebSocket server on purpose: the socket's origin allowlist and version guard have nothing
 to do with serving a stylesheet.
 
-It answers `GET` and `HEAD`, and `POST` on the two action paths below; anything else is
+It answers `GET` and `HEAD`, and `POST` on the action paths below; anything else is
 `405`. A request path that contains `..`,
 a drive letter, a backslash, or a leading `//` is `403`, and the resolved path is compared
 against the resolved folder, so a symbolic link cannot lead out of it either.
@@ -557,7 +557,7 @@ guess the WebSocket port on another and the operating system chooses both at eve
 
 | Key | Type | Meaning |
 |---|---|---|
-| `engine.state` | string | `starting`, `running`, `finished`, `crashed`, `refused`, `abandoned`, or `not-found` |
+| `engine.state` | string | `idle` (the start screen, no match running), `starting`, `running`, `finished`, `crashed`, `refused`, `abandoned`, `not-found`, or `closed` (the player quit; launcher only) |
 | `socket.port` | int or null | the WebSocket port; present only while `running` |
 | `protocol.version` | int | the protocol version the engine speaks, `3` |
 | `engine.pid` | int or null | the process identifier of the engine serving the match |
@@ -570,6 +570,12 @@ guess the WebSocket port on another and the operating system chooses both at eve
 | `engine.version` | string | the release version of the program that plays the match: the launcher's own, or the previous release's for a save of that release (launcher only) |
 | `launcher.version` | string | the release version of the launcher (launcher only) |
 | `match.resumed_from` | int or null | the tick a saved match continued from (`launch --resume`; launcher only) |
+| `previous.version` | string | the release version of the previous engine this launcher can finish a save with (launcher only) |
+| `settings` | object | the player's settings: `schema_version`, `speed`, `motion` and `commentary` (launcher only; see `settings.json` in the data-files reference) |
+| `front-door` | bool | `true` when the launch opened on the start screen; absent under `launch --no-start-screen` |
+| `teams` | array | the sample teams match setup offers, by club id: `id`, `name`, `short_name`, `kit` (two colours), `ground` (length and width in metres) and `strength` (the mean attribute of the first eleven, 0 to 100); start screen only |
+| `saved` | object or null | the newest unfinished saved match: `kind` (`current`, `previous` or `other`), `version`, `tick`, `teams`, `score`, `millis` (when the match was created, not the match clock) and `positions` (`pitch` and each player as `[team, x, y]` in metres from the corner, or null for a save of another release); start screen only |
+| `closed` | object | in the answer to `quit` only: `match` (whether a match was running) and `saved` (that match's save, as `saved`, or null) |
 | `resume` | object or null | why a saved match cannot resume: `kind`, `saved.version`, `saved.build`, `saved.tick`, `saved.teams`, `saved.score`, `saved.millis`, `engines` and `reason` (launcher only; see `launch --resume` in the CLI reference) |
 
 `serve --web` and `replay --web` always answer `running`, because the page's server is the
@@ -580,9 +586,17 @@ engine as a worker, so it can report `crashed` and act on it:
 |---|---|---|
 | `POST /engine/restart` | after a crash, starts the engine again from the match's latest snapshot; a snapshot that does not read is `refused` with the reason | `202` with the new `/engine.json` body |
 | `POST /engine/abandon` | stops the engine and gives the match up | `202` with the new `/engine.json` body |
-| `POST /engine/new-match` | once no match is running (a refused save, full time, or an abandon), starts a fresh match with the launch's seed and teams | `202` with the new `/engine.json` body |
+| `POST /engine/new-match` | once no match is running, starts a fresh match: with no body, with the launch's seed and teams; with `{"home": <club id>, "away": <club id>}`, that fixture on the home club's ground | `202` with the new `/engine.json` body |
+| `POST /engine/resume` | once no match is running, continues the newest unfinished saved match with the engine that saved it | `202` with the new `/engine.json` body |
+| `POST /engine/stop` | stops the running match, keeps its snapshot for Resume and goes back to `idle` | `202` with the new `/engine.json` body |
+| `POST /engine/quit` | stops the running match, keeps its snapshot, and ends `launch` shortly after the answer | `202` with the `/engine.json` body in state `closed`, plus `closed` |
+| `POST /engine/settings` | checks and saves the settings in the body (`schema_version` 1, `speed` 1, 2, 4 or 8, `motion` `follow`, `reduce` or `full`, `commentary` true or false) to `settings.json` | `202` with the new `/engine.json` body |
 
-Each ignores any body. Each requires an `Origin` header equal to the page's own origin,
+A body is at most 4 KiB; a longer one is `413`, and one that is not UTF-8 text is `400`. An action that cannot be carried out is `400` with the reason as plain text, for example `a match is already running`, `no saved match yet`, `<club> cannot play itself; choose another team` or `speed 3 is not one of 1, 2, 4 or 8`. `restart`, `abandon`, `resume`, `stop` and `quit` ignore any body.
+
+`GET /engine/round?home=<club id>&away=<club id>` answers the other fixtures of the round that match would meet, as `{"fixtures": [{"home": <team>, "away": <team>}]}` with each team as in `teams`; an unknown club or the same club twice is `400` with the reason. It is `404` when the launch did not open on the start screen.
+
+Each action requires an `Origin` header equal to the page's own origin,
 `http://127.0.0.1:<page port>`; any other origin, or none, is `403`, so a page on another
 site cannot restart or stop the engine. Served by `serve --web` or `replay --web`, where
 nothing would survive to carry them out, each is `405`.

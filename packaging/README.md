@@ -16,12 +16,12 @@ Every release holds one folder:
 
 - `engine-cli` (`engine-cli.exe` on Windows): the engine and the launcher.
 - `content/`: the attributes, tuning, rules, teams, commentary, and script packs.
-- `web/`: the match viewer, as the viewer's release build (`npm run build:release` in `viewer/`): the viewer page, the handshake check page, their scripts and fonts, and the font licence texts in `web/fonts/`.
+- `web/`: the match viewer, as the viewer's release build (`npm run build:release` in `viewer/`): the viewer page, the handshake check page, their scripts and fonts, the font licence texts in `web/fonts/`, and `web/notices.json`, the licence notices of every shipped crate, npm package and font, which the Licences screen shows.
 - `previous/`: the previous release's engine (`previous/engine-cli`) with that release's own `content/`. A match the previous release saved finishes on this engine, which started it; `engine-cli resume` and `engine-cli launch --resume` run it.
 - `LICENSE-MIT` and `LICENSE-APACHE`.
 - `soccermanager` (Linux and macOS only): the start script.
 
-The program finds `content/` and `web/` beside itself, so an installed game needs no path, no flag, and no environment variable. The start entry runs `engine-cli launch --open`. The launcher picks a seed from the clock, starts the engine, serves the page, and opens it in the default browser. Each start plays one match. To play again, start the game again.
+The program finds `content/` and `web/` beside itself, so an installed game needs no path, no flag, and no environment variable. The start entry runs `engine-cli launch --open`. The launcher picks a seed from the clock, starts the engine, serves the page, and opens it in the default browser. The page opens on the start screen, where the player starts a new match, resumes a saved one, or quits; Quit ends the engine and the launcher.
 
 The Windows program links the C runtime statically (`.cargo/config.toml`), so it runs on a machine without the Visual C++ redistributable.
 
@@ -93,7 +93,7 @@ pwsh packaging/windows/run-sandbox.ps1
 
 1. records whether the Visual C++ runtime is present, as a fact;
 2. installs silently and checks the installed files (with the font licence texts) and the Start-menu entry;
-3. starts the Start-menu entry, checks that the engine runs, and takes `desktop.png`;
+3. starts the Start-menu entry, checks that `engine.json` reads the start screen (`front-door` true, state `idle`), asks for a new match as the page does, checks that the engine runs, and takes `desktop.png`;
 4. runs `engine-cli launch` from the install folder, checks that the page's module script is served as JavaScript, and takes `page.png` with headless Microsoft Edge at 1280 by 800;
 5. runs a third launch, reads the engine's `hello` over the socket, compares its version with `engine-cli --version`, starts the match, and waits for the kick-off record in `events.jsonl`;
 6. uninstalls silently and checks that the program is gone and the matches stay.
@@ -114,7 +114,7 @@ powershell -ExecutionPolicy Bypass -File smoke.ps1 -Setup <setup file> -Evidence
 sh packaging/unix/smoke.sh dist/SoccerManager-<version>-linux-x86_64.tar.gz dist/evidence/linux/<utc>
 ```
 
-`smoke.sh` unpacks the archive into a fresh temporary home and starts `soccermanager` from an unrelated folder with only `HOME` and `PATH` set. It checks the page address, the page, that the page's module script is served as JavaScript, that `web/fonts/OFL-Saira.txt` ships, `engine.json` reporting a running engine, `engine.port` in the fresh home's data folder, the program's version against the archive name, and that `previous/engine-cli` prints the pinned previous version with `previous/content/` beside it. Then it runs the install-layout test against the unpacked folder (`SM_INSTALL_UNDER_TEST`), which reads the engine's `hello` and compares its version. It writes `results.json` in the same shape as the Windows check.
+`smoke.sh` unpacks the archive into a fresh temporary home and starts `soccermanager` from an unrelated folder with only `HOME` and `PATH` set. It checks the page address, the page, that the page's module script is served as JavaScript, that `web/fonts/OFL-Saira.txt` ships, `engine.json` reading the start screen (`front-door` true, state `idle`), then, after a new match asked for as the page does, reporting a running engine, `engine.port` in the fresh home's data folder, the program's version against the archive name, and that `previous/engine-cli` prints the pinned previous version with `previous/content/` beside it. Then it runs the install-layout test against the unpacked folder (`SM_INSTALL_UNDER_TEST`), which reads the engine's `hello` and compares its version. It writes `results.json` in the same shape as the Windows check.
 
 ### The browser suite against a packaged folder
 

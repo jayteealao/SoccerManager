@@ -10,7 +10,7 @@ On Windows 11, run `SoccerManager-<version>-windows-x64-setup.exe`. It installs 
 
 On Linux x86_64 (glibc 2.39 or later), unpack `SoccerManager-<version>-linux-x86_64.tar.gz` and run `./soccermanager` in the unpacked folder.
 
-Each start plays one match. Your matches stay in `%LOCALAPPDATA%\SoccerManager` on Windows and `~/.local/share/SoccerManager` on Linux, also after an uninstall. To build the setup file and the archive yourself, see [packaging/README.md](packaging/README.md).
+Each start opens on the start screen: start a new match with two clubs you pick, resume the match you left, open a replay, change the settings, read the licences, or quit. `engine-cli launch --no-start-screen` skips it and starts a match at once. Your matches stay in `%LOCALAPPDATA%\SoccerManager` on Windows and `~/.local/share/SoccerManager` on Linux, also after an uninstall. To build the setup file and the archive yourself, see [packaging/README.md](packaging/README.md).
 
 ## Build
 

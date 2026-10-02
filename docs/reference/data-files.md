@@ -457,6 +457,7 @@ The engine writes these files to the data folder. The data folder is `SM_DATA_DI
 |---|---|---|
 | `owner.id` | every command, once | 32 hexadecimal characters that name the owner of every match on this machine |
 | `engine.port` | `serve`, while it serves a match | the socket port, as one line |
+| `settings.json` | `launch`, when the player saves the settings | the player's three settings; see below |
 | `matches/<match.id>/events.jsonl` | `simulate`, `serve`, `resume` | one match event per line, as the `match-event` record |
 | `matches/<match.id>/stats.json` | `simulate`, `serve`, `resume` | the statistics of the match, as the `match-stats` record |
 | `matches/<match.id>/snapshot.smsn` | `simulate`, `serve` | the newest snapshot of the match; `resume` and `serve --resume` read it |
@@ -502,6 +503,23 @@ Format 9 appends the matchday mark after byte 192: the mark's length after its f
 
 A snapshot from the previous release finishes on that release's engine: `resume` and `launch --resume` run the program in `previous/` beside this one (the release ships it, see `packaging/README.md`). A snapshot from any other version is refused, and the refusal names the version that saved it and the versions this release finishes.
 
+### The saved match
+
+The start screen's Resume continues the newest match folder that holds a `snapshot.smsn` and no `stats.json`: the engine writes `stats.json` only at full time, so a match without it was stopped before the end. Return to start and Quit both keep the snapshot. A save of the previous release resumes on the program in `previous/`; a save of any other version shows why it cannot resume.
+
+### The settings file
+
+`settings.json` holds the settings the start screen's Settings page saves. The launcher keeps them in the data folder rather than in the browser, because the page's port, and with it the browser's storage, changes at every launch.
+
+| Field | Values | Default |
+|---|---|---|
+| `schema_version` | 1 | 1 |
+| `speed` | the playback speed a match starts at: 1, 2, 4 or 8 | 1 |
+| `motion` | `follow` (as the operating system asks), `reduce` or `full` | `follow` |
+| `commentary` | whether the match screen shows the commentary column | `true` |
+
+A missing file gives the defaults. A file that does not read, has another field, or holds a value outside the table gives the defaults and logs the `launch.settings_refused` signal; the launcher refuses the same values from the page with the reason. The launcher writes the file through a temporary file, so a crash never leaves half of one.
+
 ### The matchday bug report
 
 A background match should never fail. When a defect makes one fail anyway, the player's match plays on, the fixture shows "result unavailable", and `serve` writes `matches/<match.id>/matchday-bug-<fixture>.json`, one JSON object, so the match can be played again:
@@ -525,3 +543,14 @@ A background match should never fail. When a defect makes one fail anyway, the p
 ### The replay file
 
 A replay file (`.smfx`) holds every frame of one match, starting with the `hello`, in the same bytes the socket sends. `record --out <FILE>` writes one. The viewer page saves one at full time as `touchline-<match.id>.smfx`. `replay --fixture <FILE>` plays one over the socket, and the page opens one with no engine running. The layout of both formats (version 3, frames only, and version 4, which also holds the inputs and the record that `resimulate` reads) is in [the protocol reference](protocol.md#replay-files).
+
+## notices.json
+
+`notices.json` sits in the folder the page is served from (`viewer/dist/`, and `web/` in a release). The Licences and about screen reads it. The viewer build writes it and fails when a shipped package has no licence text or a licence outside the allow list in `deny.toml` (and OFL-1.1, for fonts only).
+
+| Field | Holds |
+|---|---|
+| `version` | the release version the build belongs to |
+| `packages` | one entry per shipped package: `kind` (`crate`, `npm` or `font`), `name`, `version` (null for a font), `licence` (an SPDX expression), `description` (the package's own description) and `text` (its licence text) |
+
+The crates are the normal dependencies of `engine-cli` for the build's platform, without the workspace's own crates, together with those of the previous engine the release ships in `previous/`. The npm packages are those bundled into the page. A crate that ships no licence file needs a reviewed entry in `packaging/notices/clarify.json`, which names its licence, the standard text its notice takes (with the crate's authors) and why. `npm --prefix viewer run notices:verify -- <file>` checks a built file against `cargo metadata` and the page's imports.
