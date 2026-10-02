@@ -32,9 +32,9 @@ const IDLE_SLEEP: Duration = Duration::from_micros(100);
 /// held, paused, or lead-bound match does not wake the thread ten thousand times a second,
 /// and the first frame after a quiet spell waits at most this long.
 const IDLE_SLEEP_MAX: Duration = Duration::from_millis(1);
-/// The longest the close waits for the client's own close answer. A client reading a
-/// backlog answers once it has read every frame before the close, which at the end of a
-/// skipped match on a slow machine takes a few seconds.
+/// The longest the close waits for the client's own close answer after the client's last
+/// message. A client reading a backlog answers once it has read every frame before the close,
+/// which at the end of a skipped match on a slow machine takes a few seconds.
 const CLOSE_ANSWER_WAIT: Duration = Duration::from_secs(10);
 
 /// The tick and the score, shared between the simulation thread and the socket thread.
@@ -541,13 +541,15 @@ fn dropped(commands: &CommandContext) -> SessionEnd {
 /// dropped. A client can still be reading a backlog of frames when the match ends (the rest
 /// of a skipped match arrives at once), and it keeps sending `seen` as it draws them; a
 /// socket closed with those unread answers with a reset, which throws away the frames the
-/// client had not read yet, the end of the match with them.
+/// client had not read yet, the end of the match with them. The wait counts from the
+/// client's last message, so a client still reading and answering on a busy machine is never
+/// cut off; a client that has gone quiet is closed `CLOSE_ANSWER_WAIT` after its last word.
 fn finish_socket(socket: &mut WebSocket<TcpStream>) -> Result<(), StreamError> {
     let _ = socket.close(None);
-    let deadline = Instant::now() + CLOSE_ANSWER_WAIT;
+    let mut deadline = Instant::now() + CLOSE_ANSWER_WAIT;
     while Instant::now() < deadline {
         match socket.read() {
-            Ok(_) => {}
+            Ok(_) => deadline = Instant::now() + CLOSE_ANSWER_WAIT,
             Err(tungstenite::Error::Io(e)) if would_block(&e) => {
                 std::thread::sleep(IDLE_SLEEP_MAX);
             }
