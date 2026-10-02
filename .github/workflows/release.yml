@@ -93,7 +93,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/previous-engine/previous
-          key: previous-engine-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml') }}
+          key: previous-engine-notices-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml', 'viewer/scripts/notices.mjs', 'packaging/notices/clarify.json') }}
       - name: A previous release's save finishes on its engine
         run: |
           sh packaging/unix/previous-engine.sh
@@ -132,7 +132,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/previous-engine/previous
-          key: previous-engine-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml') }}
+          key: previous-engine-notices-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml', 'viewer/scripts/notices.mjs', 'packaging/notices/clarify.json') }}
       - name: Install NSIS when the runner lacks it
         shell: pwsh
         run: |
@@ -193,7 +193,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/previous-engine/previous
-          key: previous-engine-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml') }}
+          key: previous-engine-notices-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml', 'viewer/scripts/notices.mjs', 'packaging/notices/clarify.json') }}
       - name: Build the archive
         run: sh packaging/unix/build.sh
       - name: The archive names the gated version
@@ -301,7 +301,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/previous-engine/previous
-          key: previous-engine-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml') }}
+          key: previous-engine-notices-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml', 'viewer/scripts/notices.mjs', 'packaging/notices/clarify.json') }}
       - name: Stage the installed layout
         shell: pwsh
         run: pwsh packaging/windows/build.ps1 -StageOnly

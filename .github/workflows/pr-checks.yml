@@ -67,7 +67,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/previous-engine/previous
-          key: previous-engine-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml') }}
+          key: previous-engine-notices-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml', 'viewer/scripts/notices.mjs', 'packaging/notices/clarify.json') }}
       - name: Build the previous engine from its tag
         run: sh packaging/unix/previous-engine.sh
       - name: A previous release's save finishes on its engine
@@ -86,10 +86,20 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: viewer/package.json
+      # The build writes the open-source notices, which read the engine's crates from
+      # `cargo metadata`; every crate is fetched first.
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        with:
+          cache: false
+      - name: Fetch every crate
+        working-directory: .
+        run: cargo fetch --locked
       - name: Install
         run: npm ci
       - name: Build
         run: npm run build
+      - name: The notices list every shipped package with an allowed licence and its text
+        run: npm run notices:verify -- dist/notices.json
       - name: Logic and component tests
         run: npx vitest run
       - name: Token scan
