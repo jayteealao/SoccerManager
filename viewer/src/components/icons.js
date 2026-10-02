@@ -67,3 +67,13 @@ export const REWIND = 'M14.5 3 8 8l6.5 5zM8 3 1.5 8 8 13z';
 export const PLAY = 'M4 2.2 13.5 8 4 13.8z';
 export const PAUSE = 'M4 2.5h3v11H4zm5 0h3v11H9z';
 export const FAST_FORWARD = 'M1.5 3 8 8l-6.5 5zM8 3l6.5 5L8 13z';
+
+// The front door's glyphs: the start options, the in-match menu and the locked career rows.
+export const PLUS = 'M7 2h2v5h5v2H9v5H7V9H2V7h5z';
+export const SCREEN = 'M1.5 2.5h13v8.5h-13zM3 4v5.5h10V4zM5.5 12.5h5V14h-5z';
+export const SLIDERS = 'M2 3.2h7v1.6H2zm9.5 0H14v1.6h-2.5zM2 7.2h2.5v1.6H2zm5 0h7v1.6H7zM2 11.2h7v1.6H2zm9.5 0H14v1.6h-2.5zM9 2h2.5v4H9zM4.5 6h2.5v4H4.5zM9 10h2.5v4H9z';
+export const DOCUMENT = 'M3 1.5h7l3 3v10H3zM5 7v1.2h6V7zm0 2.5v1.2h6V9.5zM5 12v1.2h4V12z';
+export const LEAVE = 'M2 2h7v2H4v8h5v2H2zm8.5 2.5L14 8l-3.5 3.5V9H6.5V7h4z';
+export const HOME = 'M8 1.8 1.2 7.6h2.3V14h3.6v-4h1.8v4h3.6V7.6h2.3z';
+export const LOCK = 'M4 7V5a4 4 0 0 1 8 0v2h1v7.5H3V7zm2 0h4V5a2 2 0 0 0-4 0z';
+export const MENU = 'M2 3h12v1.8H2zm0 4.1h12v1.8H2zm0 4.1h12v1.8H2z';

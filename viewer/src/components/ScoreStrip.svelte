@@ -192,9 +192,8 @@
     }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .dot {
+  /* The reduced-motion setting, or the system's preference when it follows Windows. */
+  :global(:root[data-motion='reduce']) .dot {
       animation: none;
-    }
   }
 </style>

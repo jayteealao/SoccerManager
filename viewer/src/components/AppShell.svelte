@@ -3,11 +3,13 @@
      body. Only the current rail section, the live tabs and the action block take focus; the
      other rail sections, the stub tabs and the header icons are inert stubs. An action note
      names a later step beside the action block (TEAM TALK on the Pre-match line-ups); it is
-     a stub with the LATER mark. `navLabel` names the sub-navigation. -->
+     a stub with the LATER mark. `navLabel` names the sub-navigation. `menu`, when given, draws
+     the Menu button before the header icons (the in-match menu of the front door); without it
+     the shell draws no button, as before. `menuOpen` says whether that menu is open. -->
 <script>
   import Glyph from './Glyph.svelte';
   import StubSection from './StubSection.svelte';
-  import { BACK, CARET, FORWARD, GLOBE, RAIL, SEARCH, UP_DOWN } from './icons.js';
+  import { BACK, CARET, FORWARD, GLOBE, MENU, RAIL, SEARCH, UP_DOWN } from './icons.js';
 
   let {
     section = 'match',
@@ -23,6 +25,8 @@
     actionNote = '',
     navLabel = 'Match views',
     crest,
+    menu = null,
+    menuOpen = false,
     children,
   } = $props();
 </script>
@@ -75,6 +79,20 @@
       </div>
       <!-- STUB: the world view and help. -->
       <div class="hicons">
+        {#if menu}
+          <button
+            class="menu"
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            data-menu-button
+            onclick={() => menu()}
+          >
+            <Glyph glyph={{ d: MENU }} size={12} />
+            Menu
+            <span class="esc">Esc</span>
+          </button>
+        {/if}
         {#if actionNote}
           <!-- STUB: a step this workflow does not build, named beside the action block. -->
           <StubSection note="action note: {actionNote}" inline later>
@@ -297,6 +315,35 @@
     display: inline-flex;
     align-items: center;
     gap: 11px;
+  }
+
+  .menu {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--control-edge);
+    color: var(--ghost-ink);
+    font: 600 10px var(--fb);
+    cursor: pointer;
+    transition: filter var(--tab-change) var(--ease);
+  }
+
+  .menu:hover {
+    filter: brightness(1.12);
+  }
+
+  .menu:active {
+    filter: brightness(0.92);
+  }
+
+  .menu .esc {
+    font-weight: 400;
+    color: var(--ink-3);
   }
 
   .anote {

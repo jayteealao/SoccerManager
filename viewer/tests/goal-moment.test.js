@@ -15,6 +15,7 @@ import {
   PULSE_MS,
   bannerText,
   reducedMotion,
+  setMotion,
   watchMotion,
 } from '../src/lib/goal-moment.js';
 import { REPO_ROOT } from './helpers.js';
@@ -142,4 +143,23 @@ test('the operating-system preference and ?motion=reduce set the same attribute'
   assert.equal(doc.documentElement.dataset.motion, 'reduce');
   watchMotion(doc, { location: { search: '' }, matchMedia: () => query });
   assert.equal(doc.documentElement.dataset.motion, 'full');
+});
+
+test('the motion setting overrides the system preference, now and when it changes', () => {
+  const doc = { documentElement: { dataset: {} } };
+  const query = { matches: true, addEventListener() {} };
+  watchMotion(doc, { location: { search: '' }, matchMedia: () => query }, 'full');
+  assert.equal(doc.documentElement.dataset.motion, 'full', 'Full keeps motion on a system that asks for less');
+  assert.equal(setMotion('reduce'), 'reduce');
+  assert.equal(doc.documentElement.dataset.motion, 'reduce');
+  assert.equal(setMotion('follow'), 'reduce', 'follow takes the system preference');
+  query.matches = false;
+  assert.equal(setMotion('follow'), 'full');
+});
+
+test('?motion=reduce wins over the Full setting', () => {
+  const doc = { documentElement: { dataset: {} } };
+  const query = { matches: false, addEventListener() {} };
+  watchMotion(doc, { location: { search: '?motion=reduce' }, matchMedia: () => query }, 'full');
+  assert.equal(doc.documentElement.dataset.motion, 'reduce');
 });

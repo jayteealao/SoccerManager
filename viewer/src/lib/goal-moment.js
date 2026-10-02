@@ -5,6 +5,8 @@
 // person can read it; at eight times speed a match-time timer would flash it for 190 ms.
 // Only one banner shows at a time, and a later goal replaces an earlier one.
 
+import { motionWord } from './settings.js';
+
 /// The motion, in milliseconds. `viewer/tests/goal-moment.test.js` holds these to the
 /// `--goal-*` and `--pulse` tokens in every skin's `tokens.css`, which the styles animate with.
 export const GOAL_IN_MS = 250;
@@ -31,16 +33,34 @@ export function reducedMotion(doc = globalThis.document) {
 
 /// Mirrors the reduced-motion preference onto `<html data-motion>`, now and whenever it
 /// changes. `?motion=reduce` forces it, for a browser tool that cannot emulate the query.
-export function watchMotion(doc = globalThis.document, win = globalThis) {
+/// `setting` is the player's motion setting: `follow` (the system's preference), `reduce` or
+/// `full`. The returned object's `set(motion)` applies a new setting at once.
+export function watchMotion(doc = globalThis.document, win = globalThis, setting = 'follow') {
   const root = doc.documentElement;
   const forced = new URLSearchParams(win.location?.search ?? '').get('motion') === 'reduce';
   const query = win.matchMedia ? win.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  let motion = setting;
   const apply = () => {
-    root.dataset.motion = forced || (query && query.matches) ? 'reduce' : 'full';
+    root.dataset.motion = forced ? 'reduce' : motionWord(motion, Boolean(query && query.matches));
   };
   apply();
   query?.addEventListener?.('change', apply);
+  watching = {
+    set(next) {
+      motion = next;
+      apply();
+      return root.dataset.motion;
+    },
+  };
   return root.dataset.motion;
+}
+
+/// The watcher `watchMotion` started last, so a settings change applies to the page at once.
+let watching = null;
+
+/// Applies the player's motion setting to the watched page; a no-op before `watchMotion`.
+export function setMotion(motion) {
+  return watching?.set(motion) ?? null;
 }
 
 export class GoalMoment {

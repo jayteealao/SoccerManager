@@ -894,3 +894,53 @@ test('a ground message is never stored with the frames, so a saved replay has no
     }
   }
 });
+
+test('a match starts at the speed the settings name, and at 1x with none', async () => {
+  const fetcher = statusFetch(RUNNING);
+  const timers = { setTimeout: (fn, ms) => ({ fn, ms }), clearTimeout: () => {} };
+  const session = new MatchSession({ fetcher, timers, raf: null, now: () => 0, doc: null, settings: { speed: 4, commentary: false } });
+  await session.start();
+  FakeSocket.made.at(-1).deliver(hello());
+  assert.equal(session.speed, 4);
+  assert.equal(session.commentary, false);
+
+  const plain = await started(RUNNING);
+  plain.socket.deliver(hello());
+  assert.equal(plain.session.speed, 1);
+  assert.equal(plain.session.commentary, true);
+});
+
+test('dispose closes the socket with no recovery and stops the frame loop', async () => {
+  const fetcher = statusFetch(RUNNING);
+  const frames = [];
+  const timers = { setTimeout: (fn, ms) => ({ fn, ms }), clearTimeout: () => {} };
+  const session = new MatchSession({ fetcher, timers, raf: (fn) => frames.push(fn), now: () => 0, doc: null });
+  await session.start();
+  const socket = FakeSocket.made.at(-1);
+  socket.deliver(hello());
+  session.dispose();
+  assert.equal(session.disposed, true);
+  assert.equal(socket.readyState, 3, 'the socket is closed');
+  assert.notEqual(session.screen, 'reconnecting', 'a disposed session does not reconnect');
+  for (const fn of frames.splice(0)) {
+    fn(16);
+  }
+  assert.equal(frames.length, 0, 'the loop asks for no frame after dispose');
+});
+
+test('the menu pauses the match and Resume match plays on only if it played before', async () => {
+  const { session, socket } = await started(RUNNING);
+  socket.deliver(hello());
+  session.act();
+  assert.equal(session.playing, true);
+  session.pauseForMenu();
+  assert.equal(session.playing, false);
+  session.resumeFromMenu();
+  assert.equal(session.playing, true);
+
+  session.act();
+  assert.equal(session.playing, false);
+  session.pauseForMenu();
+  session.resumeFromMenu();
+  assert.equal(session.playing, false, 'a paused match stays paused');
+});

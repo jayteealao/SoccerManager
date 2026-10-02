@@ -124,9 +124,8 @@
     font-weight: 500;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .opt {
+  /* The reduced-motion setting, or the system's preference when it follows Windows. */
+  :global(:root[data-motion='reduce']) .opt {
       transition: none;
-    }
   }
 </style>

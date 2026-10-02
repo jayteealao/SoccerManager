@@ -135,7 +135,7 @@ test('rows sit on the board grid with 12 px crests, and nothing in the list take
 test('the outline appears in 200 ms and has no animation under reduced motion', () => {
   const source = fs.readFileSync(path.join(REPO_ROOT, 'viewer/src/components/OtherGrounds.svelte'), 'utf8');
   assert.match(source, /animation: arrive 200ms var\(--ease\) both;/);
-  assert.match(source, /@media \(prefers-reduced-motion: reduce\) \{\s*\.block \{\s*animation: none;/);
+  assert.match(source, /:global\(:root\[data-motion='reduce'\]\) \.block \{\s*animation: none;/);
 });
 
 test('the skeleton draws three rows and the label while loading', () => {

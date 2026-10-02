@@ -80,6 +80,8 @@
   busy={session.actionBusy}
   tabs={TABS}
   ontab={(id) => session.show(id)}
+  menu={session.onMenu}
+  menuOpen={session.menuOpen}
 >
   {#snippet crest()}
     <Crest team={session.teams?.[0] ?? null} />
@@ -199,17 +201,21 @@
           <MatchStub part="win-probability" />
           <div class="hr"></div>
         {/if}
-        <Commentary
-          rows={session.feedRows}
-          spoken={session.spoken}
-          state={screen === 'loading' || screen === 'error'
-            ? 'skeleton'
-            : screen === 'first-run'
-              ? 'idle'
-              : 'rows'}
-        />
+        <!-- Commentary Off in Settings hides the column; goals and cards still show on the
+             pitch and in the score strip. -->
+        {#if session.commentary}
+          <Commentary
+            rows={session.feedRows}
+            spoken={session.spoken}
+            state={screen === 'loading' || screen === 'error'
+              ? 'skeleton'
+              : screen === 'first-run'
+                ? 'idle'
+                : 'rows'}
+          />
+        {/if}
         {#if screen !== 'first-run'}
-          <div class="hr"></div>
+          {#if session.commentary}<div class="hr"></div>{/if}
           <OtherGrounds
             grounds={session.grounds}
             round={session.matchday?.round ?? 1}

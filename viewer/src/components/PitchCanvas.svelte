@@ -178,9 +178,8 @@
     }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .banner {
+  /* The reduced-motion setting, or the system's preference when it follows Windows. */
+  :global(:root[data-motion='reduce']) .banner {
       animation: none;
-    }
   }
 </style>

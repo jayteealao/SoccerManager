@@ -164,8 +164,19 @@ export class MatchSession {
   matchday = $state.raw(null);
   /// What the other-grounds list shows at the rendered tick (`groundsAt`).
   grounds = $state.raw(groundsAt(null, 0));
+  /// `false` when the player switched the commentary off in Settings; the match screen then
+  /// hides the commentary column.
+  commentary = $state(true);
+  /// The front door's Menu: called by the Menu button and Esc on the match views; null when
+  /// the page has no start screen to return to, so the shell draws no Menu button.
+  onMenu = $state.raw(null);
+  /// `true` while the in-match menu is open over this session's views.
+  menuOpen = $state(false);
 
   /// `fetcher`, `timers`, `raf` and `now` are the browser's unless a test passes its own.
+  /// `settings` (`{ speed, commentary }`) are the player's from the start screen: the speed a
+  /// match starts at and whether the commentary shows; with none, 1x and on. `onLeave` is the
+  /// start screen's way back, called when a replay opened from it closes or cannot be read.
   constructor({
     fetcher,
     timers = globalThis,
@@ -173,12 +184,22 @@ export class MatchSession {
     now = () => globalThis.performance.now(),
     doc = globalThis.document,
     download = null,
+    settings = null,
+    onLeave = null,
   } = {}) {
     this.fetcher = fetcher;
     this.timers = timers;
     this.raf = raf;
     this.now = now;
     this.doc = doc;
+    this.startSpeed = settings?.speed ?? 1;
+    /// `false` when the player switched the commentary off in Settings.
+    this.commentary = settings?.commentary ?? true;
+    this.onLeave = onLeave;
+    /// `true` once the session is disposed: its frame loop stops and its socket is closed.
+    this.disposed = false;
+    /// Whether the match played when the in-match menu paused it.
+    this.playingBeforeMenu = null;
     /// Hands a saved file to the person: the browser's download unless a test passes its own.
     this.download = download ?? ((bytes, name) => this.browserDownload(bytes, name));
 
@@ -431,10 +452,42 @@ export class MatchSession {
     }
     this.looping = true;
     const step = (timestamp) => {
+      if (this.disposed) {
+        return;
+      }
       this.raf(step);
       this.frame(timestamp);
     };
     this.raf(step);
+  }
+
+  /// Ends the session: the frame loop stops, the banner timer is cleared, and the socket is
+  /// closed without a recovery. The front door makes a new session for the next match.
+  dispose() {
+    this.disposed = true;
+    this.clearBanner();
+    if (this.socket) {
+      this.socket.onClose = null;
+      this.socket.close();
+      this.socket = null;
+    }
+  }
+
+  /// The in-match menu opened: the match pauses, and the state it had is kept.
+  pauseForMenu() {
+    if (this.playingBeforeMenu === null) {
+      this.playingBeforeMenu = this.playing;
+    }
+    this.setPlaying(false);
+  }
+
+  /// The in-match menu closed with Resume match: the match plays on if it played before.
+  resumeFromMenu() {
+    const before = this.playingBeforeMenu;
+    this.playingBeforeMenu = null;
+    if (before) {
+      this.setPlaying(true);
+    }
   }
 
   setStep(current) {
@@ -504,7 +557,7 @@ export class MatchSession {
       },
       onNotice: (text) => this.setNotice(text ? 'lag' : null, text),
     });
-    this.playback.select(1);
+    this.playback.select(this.startSpeed);
     this.pitch = null;
     this.makePitch();
     this.dugout.begin(hello, { stored });
@@ -1208,13 +1261,19 @@ export class MatchSession {
 
   /// Plays a replay file with no engine: every stored frame goes through the same path live
   /// frames take, so playback and rewind are the same code as a live match.
-  async openReplay(bytes, name = 'replay') {
+  /// With `leave`, the replay was opened from the start screen: closing it, or a file that
+  /// cannot be read, goes back there.
+  async openReplay(bytes, name = 'replay', { leave = false } = {}) {
     let read;
     try {
       read = await readReplay(bytes);
     } catch (error) {
       const reason = error.reason ?? error.message;
       signal('viewer.replay_refused', { reason });
+      if (leave && this.onLeave) {
+        this.onLeave({ refused: reason });
+        return;
+      }
       this.showPanel({
         kind: 'replay-refused',
         word: 'Error',
@@ -1269,7 +1328,7 @@ export class MatchSession {
     this.reportClock.reset();
     this.setPlaying(true);
     this.screen = 'live';
-    this.replayFrom = 'match';
+    this.replayFrom = leave ? 'start' : 'match';
     this.view = 'replay';
     this.selectCanvas();
     this.spoken = 'Replay loaded. Playing from kick-off.';
@@ -1497,6 +1556,10 @@ export class MatchSession {
   /// CONTINUE on the replay: back to the report it came from, or to the match screen.
   closeReplay() {
     if (this.view !== 'replay') {
+      return;
+    }
+    if (this.replayFrom === 'start' && this.onLeave) {
+      this.onLeave({});
       return;
     }
     this.view = this.replayFrom === 'report' && this.report ? 'report' : 'match';

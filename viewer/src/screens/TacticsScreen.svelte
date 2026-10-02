@@ -146,6 +146,8 @@
   busy={session.actionBusy}
   tabs={TABS}
   ontab={(id) => session.show(id === 'match' ? 'match' : 'tactics')}
+  menu={session.onMenu}
+  menuOpen={session.menuOpen}
 >
   {#snippet crest()}
     <Crest team={session.teams?.[0] ?? null} />
