@@ -39,6 +39,8 @@
   const MARKS = [0, 15, 30, 45, 60, 75, 90];
   // The timeline's drawn width and its inset, as the board draws them.
   const TRACK = { x: 10, width: 1140 };
+  // The width the skip words take after the skip point, "SKIPPED AT 00:00 · NOT WATCHED LIVE →".
+  const SKIP_WORDS_WIDTH = 230;
 
   let report = $derived(session.report);
   let full = $derived(report?.kind === KIND.fullTime);
@@ -94,7 +96,13 @@
   /// The timeline spans the whole match: 90 minutes, or longer when the match ran on.
   let span = $derived(Math.max(90 * MINUTE, report?.tick ?? 0));
   const at = (tick) => TRACK.x + (Math.min(tick, span) / span) * TRACK.width;
-  let marks = $derived(MARKS.map((m) => ({ m, x: at(m * MINUTE) })));
+  /// The minute marks; after a skip, the marks under the skip words are left out, so the
+  /// words never sit on a number.
+  let marks = $derived(
+    MARKS.map((m) => ({ m, x: at(m * MINUTE) })).filter(
+      (mark) => skippedFrom === null || mark.x < at(skippedFrom) - 14 || mark.x > at(skippedFrom) + SKIP_WORDS_WIDTH
+    )
+  );
   let markers = $derived(
     model.moments.map((m) => ({
       x: at(m.tick),

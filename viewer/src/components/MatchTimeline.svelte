@@ -20,8 +20,21 @@
   const MARKS = [0, 15, 30, 45, 60, 75, 90];
 
   let share = $derived(max > 0 ? Math.min(1, Math.max(0, tick / max)) : 0);
+  // The track's drawn width, and the width the NOT WATCHED LIVE words take after the skip
+  // point: the minute marks under the words are left out.
+  const WIDTH = 742;
+  const UNSEEN_WIDTH = 100;
+
   let marks = $derived(
-    MARKS.filter((m) => m * MINUTE <= max).map((m) => ({ m, at: (m * MINUTE) / max }))
+    MARKS.filter((m) => m * MINUTE <= max)
+      .map((m) => ({ m, at: (m * MINUTE) / max }))
+      .filter(
+        (mark) =>
+          skippedFrom === null ||
+          !(max > 0) ||
+          mark.at * WIDTH < (skippedFrom / max) * WIDTH ||
+          mark.at * WIDTH > (skippedFrom / max) * WIDTH + UNSEEN_WIDTH
+      )
   );
   let skipAt = $derived(
     skippedFrom === null || !(max > 0) ? null : Math.min(1, Math.max(0, skippedFrom / max))
