@@ -1,0 +1,1205 @@
+{
+  "about": "Forced other-grounds states for the screenshots: each state holds the served match of seed 7 at `hold`, sends `messages` to the page, then `then` (after the hold), and either plays to `play_to` or rewinds to `rewind_to`. The clubs are the sample clubs of content/teams.",
+  "states": {
+    "none": {
+      "words": "No other matches",
+      "hold": 201600,
+      "messages": [
+        {
+          "type": "matchday",
+          "round": 1,
+          "fixtures": []
+        }
+      ]
+    },
+    "not-started": {
+      "words": "Not started",
+      "hold": 0,
+      "messages": [
+        {
+          "type": "matchday",
+          "round": 1,
+          "fixtures": [
+            {
+              "fixture": 0,
+              "home": {
+                "team.id": "club-000007ea-00",
+                "team.name": "Belfield Athletic",
+                "team.kit.primary": "#000000",
+                "team.kit.secondary": "#c8102e",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-01",
+                "team.name": "Lanworth Albion",
+                "team.kit.primary": "#6a0dad",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 1,
+              "home": {
+                "team.id": "club-000007ea-02",
+                "team.name": "Velton City",
+                "team.kit.primary": "#f5f5dc",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-03",
+                "team.name": "Salhaven Rangers",
+                "team.kit.primary": "#800000",
+                "team.kit.secondary": "#003087",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 2,
+              "home": {
+                "team.id": "club-000007ea-04",
+                "team.name": "Farwick Rangers",
+                "team.kit.primary": "#ffd100",
+                "team.kit.secondary": "#6a0dad",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-05",
+                "team.name": "Salmere Town",
+                "team.kit.primary": "#ff6a13",
+                "team.kit.secondary": "#ffd100",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 3,
+              "home": {
+                "team.id": "club-000007ea-06",
+                "team.name": "Ulhaven United",
+                "team.kit.primary": "#87ceeb",
+                "team.kit.secondary": "#ffffff",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-07",
+                "team.name": "Penmere Athletic",
+                "team.kit.primary": "#c8102e",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "goal": {
+      "words": "Live, new goal",
+      "hold": 201300,
+      "messages": [
+        {
+          "type": "matchday",
+          "round": 1,
+          "fixtures": [
+            {
+              "fixture": 0,
+              "home": {
+                "team.id": "club-000007ea-00",
+                "team.name": "Belfield Athletic",
+                "team.kit.primary": "#000000",
+                "team.kit.secondary": "#c8102e",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-01",
+                "team.name": "Lanworth Albion",
+                "team.kit.primary": "#6a0dad",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 1,
+              "home": {
+                "team.id": "club-000007ea-02",
+                "team.name": "Velton City",
+                "team.kit.primary": "#f5f5dc",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-03",
+                "team.name": "Salhaven Rangers",
+                "team.kit.primary": "#800000",
+                "team.kit.secondary": "#003087",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 2,
+              "home": {
+                "team.id": "club-000007ea-04",
+                "team.name": "Farwick Rangers",
+                "team.kit.primary": "#ffd100",
+                "team.kit.secondary": "#6a0dad",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-05",
+                "team.name": "Salmere Town",
+                "team.kit.primary": "#ff6a13",
+                "team.kit.secondary": "#ffd100",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 3,
+              "home": {
+                "team.id": "club-000007ea-06",
+                "team.name": "Ulhaven United",
+                "team.kit.primary": "#87ceeb",
+                "team.kit.secondary": "#ffffff",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-07",
+                "team.name": "Penmere Athletic",
+                "team.kit.primary": "#c8102e",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              }
+            }
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 36100,
+          "kind": "goal",
+          "minute": 12,
+          "score": [
+            1,
+            0
+          ],
+          "side": "home",
+          "scorer": "Ranis Ivker"
+        },
+        {
+          "type": "ground-event",
+          "fixture": 2,
+          "tick": 90200,
+          "kind": "goal",
+          "minute": 30,
+          "score": [
+            0,
+            1
+          ],
+          "side": "away",
+          "scorer": "Vivin Palker"
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            1,
+            0
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            1,
+            0
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 1,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 1,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 2,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            0,
+            1
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 2,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            0,
+            1
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 3,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 3,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 201400,
+          "kind": "goal",
+          "minute": 65,
+          "score": [
+            2,
+            0
+          ],
+          "side": "home",
+          "scorer": "Ranis Ivker"
+        },
+        {
+          "type": "ground-progress",
+          "tick": 201300,
+          "reached": [
+            202000,
+            202000,
+            202000,
+            202000
+          ]
+        }
+      ],
+      "play_to": 201500
+    },
+    "late": {
+      "words": "Event shown late",
+      "hold": 201600,
+      "messages": [
+        {
+          "type": "matchday",
+          "round": 1,
+          "fixtures": [
+            {
+              "fixture": 0,
+              "home": {
+                "team.id": "club-000007ea-00",
+                "team.name": "Belfield Athletic",
+                "team.kit.primary": "#000000",
+                "team.kit.secondary": "#c8102e",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-01",
+                "team.name": "Lanworth Albion",
+                "team.kit.primary": "#6a0dad",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 1,
+              "home": {
+                "team.id": "club-000007ea-02",
+                "team.name": "Velton City",
+                "team.kit.primary": "#f5f5dc",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-03",
+                "team.name": "Salhaven Rangers",
+                "team.kit.primary": "#800000",
+                "team.kit.secondary": "#003087",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 2,
+              "home": {
+                "team.id": "club-000007ea-04",
+                "team.name": "Farwick Rangers",
+                "team.kit.primary": "#ffd100",
+                "team.kit.secondary": "#6a0dad",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-05",
+                "team.name": "Salmere Town",
+                "team.kit.primary": "#ff6a13",
+                "team.kit.secondary": "#ffd100",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 3,
+              "home": {
+                "team.id": "club-000007ea-06",
+                "team.name": "Ulhaven United",
+                "team.kit.primary": "#87ceeb",
+                "team.kit.secondary": "#ffffff",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-07",
+                "team.name": "Penmere Athletic",
+                "team.kit.primary": "#c8102e",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              }
+            }
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 36100,
+          "kind": "goal",
+          "minute": 12,
+          "score": [
+            1,
+            0
+          ],
+          "side": "home",
+          "scorer": "Ranis Ivker"
+        },
+        {
+          "type": "ground-event",
+          "fixture": 2,
+          "tick": 90200,
+          "kind": "goal",
+          "minute": 30,
+          "score": [
+            0,
+            1
+          ],
+          "side": "away",
+          "scorer": "Vivin Palker"
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            1,
+            0
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            1,
+            0
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 1,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 1,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 2,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            0,
+            1
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 2,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            0,
+            1
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 3,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 3,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ]
+        },
+        {
+          "type": "ground-progress",
+          "tick": 201600,
+          "reached": [
+            201600,
+            174000,
+            201600,
+            201600
+          ]
+        }
+      ],
+      "then": [
+        {
+          "type": "ground-event",
+          "fixture": 1,
+          "tick": 171000,
+          "kind": "goal",
+          "minute": 55,
+          "score": [
+            1,
+            0
+          ],
+          "side": "home",
+          "scorer": "Telan Paldine",
+          "late": true
+        }
+      ]
+    },
+    "unavailable": {
+      "words": "Result unavailable",
+      "hold": 201600,
+      "messages": [
+        {
+          "type": "matchday",
+          "round": 1,
+          "fixtures": [
+            {
+              "fixture": 0,
+              "home": {
+                "team.id": "club-000007ea-00",
+                "team.name": "Belfield Athletic",
+                "team.kit.primary": "#000000",
+                "team.kit.secondary": "#c8102e",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-01",
+                "team.name": "Lanworth Albion",
+                "team.kit.primary": "#6a0dad",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 1,
+              "home": {
+                "team.id": "club-000007ea-02",
+                "team.name": "Velton City",
+                "team.kit.primary": "#f5f5dc",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-03",
+                "team.name": "Salhaven Rangers",
+                "team.kit.primary": "#800000",
+                "team.kit.secondary": "#003087",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 2,
+              "home": {
+                "team.id": "club-000007ea-04",
+                "team.name": "Farwick Rangers",
+                "team.kit.primary": "#ffd100",
+                "team.kit.secondary": "#6a0dad",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-05",
+                "team.name": "Salmere Town",
+                "team.kit.primary": "#ff6a13",
+                "team.kit.secondary": "#ffd100",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 3,
+              "home": {
+                "team.id": "club-000007ea-06",
+                "team.name": "Ulhaven United",
+                "team.kit.primary": "#87ceeb",
+                "team.kit.secondary": "#ffffff",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-07",
+                "team.name": "Penmere Athletic",
+                "team.kit.primary": "#c8102e",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              }
+            }
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 36100,
+          "kind": "goal",
+          "minute": 12,
+          "score": [
+            1,
+            0
+          ],
+          "side": "home",
+          "scorer": "Ranis Ivker"
+        },
+        {
+          "type": "ground-event",
+          "fixture": 2,
+          "tick": 90200,
+          "kind": "goal",
+          "minute": 30,
+          "score": [
+            0,
+            1
+          ],
+          "side": "away",
+          "scorer": "Vivin Palker"
+        },
+        {
+          "type": "ground-event",
+          "fixture": 2,
+          "tick": 102060,
+          "kind": "unavailable",
+          "minute": 34,
+          "score": [
+            0,
+            1
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            1,
+            0
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            1,
+            0
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 1,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 1,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 3,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 3,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ]
+        },
+        {
+          "type": "ground-progress",
+          "tick": 201600,
+          "reached": [
+            201600,
+            201600,
+            102060,
+            201600
+          ]
+        }
+      ]
+    },
+    "full-time": {
+      "words": "Full time elsewhere",
+      "hold": 276000,
+      "messages": [
+        {
+          "type": "matchday",
+          "round": 1,
+          "fixtures": [
+            {
+              "fixture": 0,
+              "home": {
+                "team.id": "club-000007ea-00",
+                "team.name": "Belfield Athletic",
+                "team.kit.primary": "#000000",
+                "team.kit.secondary": "#c8102e",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-01",
+                "team.name": "Lanworth Albion",
+                "team.kit.primary": "#6a0dad",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 1,
+              "home": {
+                "team.id": "club-000007ea-02",
+                "team.name": "Velton City",
+                "team.kit.primary": "#f5f5dc",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-03",
+                "team.name": "Salhaven Rangers",
+                "team.kit.primary": "#800000",
+                "team.kit.secondary": "#003087",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 2,
+              "home": {
+                "team.id": "club-000007ea-04",
+                "team.name": "Farwick Rangers",
+                "team.kit.primary": "#ffd100",
+                "team.kit.secondary": "#6a0dad",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-05",
+                "team.name": "Salmere Town",
+                "team.kit.primary": "#ff6a13",
+                "team.kit.secondary": "#ffd100",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 3,
+              "home": {
+                "team.id": "club-000007ea-06",
+                "team.name": "Ulhaven United",
+                "team.kit.primary": "#87ceeb",
+                "team.kit.secondary": "#ffffff",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-07",
+                "team.name": "Penmere Athletic",
+                "team.kit.primary": "#c8102e",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              }
+            }
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 36100,
+          "kind": "goal",
+          "minute": 12,
+          "score": [
+            1,
+            0
+          ],
+          "side": "home",
+          "scorer": "Ranis Ivker"
+        },
+        {
+          "type": "ground-event",
+          "fixture": 2,
+          "tick": 90200,
+          "kind": "goal",
+          "minute": 30,
+          "score": [
+            0,
+            1
+          ],
+          "side": "away",
+          "scorer": "Vivin Palker"
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            1,
+            0
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            1,
+            0
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 1,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 1,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 2,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            0,
+            1
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 2,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            0,
+            1
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 3,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 3,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 274500,
+          "kind": "full-time",
+          "minute": 90,
+          "score": [
+            1,
+            0
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 2,
+          "tick": 276000,
+          "kind": "full-time",
+          "minute": 90,
+          "score": [
+            0,
+            1
+          ],
+          "added": 2
+        },
+        {
+          "type": "ground-progress",
+          "tick": 276000,
+          "reached": [
+            274500,
+            276000,
+            276000,
+            276000
+          ]
+        }
+      ]
+    },
+    "rewind": {
+      "words": "After a rewind",
+      "hold": 201600,
+      "messages": [
+        {
+          "type": "matchday",
+          "round": 1,
+          "fixtures": [
+            {
+              "fixture": 0,
+              "home": {
+                "team.id": "club-000007ea-00",
+                "team.name": "Belfield Athletic",
+                "team.kit.primary": "#000000",
+                "team.kit.secondary": "#c8102e",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-01",
+                "team.name": "Lanworth Albion",
+                "team.kit.primary": "#6a0dad",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 1,
+              "home": {
+                "team.id": "club-000007ea-02",
+                "team.name": "Velton City",
+                "team.kit.primary": "#f5f5dc",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-03",
+                "team.name": "Salhaven Rangers",
+                "team.kit.primary": "#800000",
+                "team.kit.secondary": "#003087",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 2,
+              "home": {
+                "team.id": "club-000007ea-04",
+                "team.name": "Farwick Rangers",
+                "team.kit.primary": "#ffd100",
+                "team.kit.secondary": "#6a0dad",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-05",
+                "team.name": "Salmere Town",
+                "team.kit.primary": "#ff6a13",
+                "team.kit.secondary": "#ffd100",
+                "roster": []
+              }
+            },
+            {
+              "fixture": 3,
+              "home": {
+                "team.id": "club-000007ea-06",
+                "team.name": "Ulhaven United",
+                "team.kit.primary": "#87ceeb",
+                "team.kit.secondary": "#ffffff",
+                "roster": []
+              },
+              "away": {
+                "team.id": "club-000007ea-07",
+                "team.name": "Penmere Athletic",
+                "team.kit.primary": "#c8102e",
+                "team.kit.secondary": "#000000",
+                "roster": []
+              }
+            }
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 36100,
+          "kind": "goal",
+          "minute": 12,
+          "score": [
+            1,
+            0
+          ],
+          "side": "home",
+          "scorer": "Ranis Ivker"
+        },
+        {
+          "type": "ground-event",
+          "fixture": 2,
+          "tick": 90200,
+          "kind": "goal",
+          "minute": 30,
+          "score": [
+            0,
+            1
+          ],
+          "side": "away",
+          "scorer": "Vivin Palker"
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            1,
+            0
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 0,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            1,
+            0
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 1,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 1,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 2,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            0,
+            1
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 2,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            0,
+            1
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 3,
+          "tick": 138000,
+          "kind": "half-time",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ],
+          "added": 1
+        },
+        {
+          "type": "ground-event",
+          "fixture": 3,
+          "tick": 141000,
+          "kind": "second-half",
+          "minute": 45,
+          "score": [
+            0,
+            0
+          ]
+        },
+        {
+          "type": "ground-event",
+          "fixture": 1,
+          "tick": 171000,
+          "kind": "goal",
+          "minute": 55,
+          "score": [
+            1,
+            0
+          ],
+          "side": "home",
+          "scorer": "Telan Paldine"
+        },
+        {
+          "type": "ground-event",
+          "fixture": 3,
+          "tick": 186000,
+          "kind": "goal",
+          "minute": 60,
+          "score": [
+            0,
+            1
+          ],
+          "side": "away",
+          "scorer": "Pemon Daldine"
+        },
+        {
+          "type": "ground-progress",
+          "tick": 201600,
+          "reached": [
+            201600,
+            201600,
+            201600,
+            201600
+          ]
+        }
+      ],
+      "rewind_to": 120000
+    }
+  }
+}

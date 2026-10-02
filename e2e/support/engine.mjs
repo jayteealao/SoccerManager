@@ -188,3 +188,20 @@ export function readRecords(dataDir, matchId) {
     : null;
   return { folder, stats, events };
 }
+
+/// The hidden `serve` arguments of the background matchday: `matchday: false` plays no other
+/// match and sends no ground message (a test that forces the other grounds itself), `threads`
+/// sets the worker count, and `fault` makes one fixture fail at a tick (`FIXTURE@TICK`).
+export function matchdayArgs({ matchday = true, threads = null, fault = null } = {}) {
+  return [
+    ...(matchday ? [] : ['--no-matchday']),
+    ...(threads === null ? [] : ['--matchday-threads', String(threads)]),
+    ...(fault === null ? [] : ['--matchday-fault', fault]),
+  ];
+}
+
+/// Waits until every other ground has reached `tick` or ended, so a screenshot of the list
+/// shows settled rows, never a ground behind the clock.
+export async function waitForGrounds(page, tick, timeout = 60_000) {
+  await page.waitForFunction((t) => window.__touchline.groundsReady(t), tick, { timeout, polling: 100 });
+}

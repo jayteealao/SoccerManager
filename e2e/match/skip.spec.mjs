@@ -22,7 +22,7 @@ import path from 'node:path';
 import { expect, test } from '@playwright/test';
 
 import { contrastReport } from '../support/contrast.mjs';
-import { VIEWER, contentWithSkin, fastForward, startEngine } from '../support/engine.mjs';
+import { VIEWER, contentWithSkin, fastForward, startEngine, waitForGrounds } from '../support/engine.mjs';
 import { playUntil } from '../support/page.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
@@ -239,6 +239,8 @@ for (const skin of SKINS) {
         await open(page, engine.url, skin);
         await decision(page);
         await expect(page.locator('[data-screen="skip"]')).toBeVisible();
+        // The decision names the other grounds once the matchday's fixtures are in.
+        await until(page, () => window.__touchline.matchday().fixtures.length === 4, undefined, 10_000);
         await expect(page).toHaveScreenshot(`skip-decision-${skin}.png`);
 
         await button(page, 'Confirm: skip to result').click();
@@ -250,6 +252,9 @@ for (const skin of SKINS) {
         gate.release();
         await until(page, () => window.__touchline.report().state === 'ready', undefined, 5 * 60_000);
         await expect(page.locator('[data-screen="report"]')).toHaveAttribute('data-skipped', String(SKIP_TICK));
+        // The report lists every other ground final.
+        await waitForGrounds(page, Number.MAX_SAFE_INTEGER, 180_000);
+        await expect(page.locator('[data-screen="report"]')).toContainText('Matchday 1 · final');
         await expect(page).toHaveScreenshot(`report-skipped-${skin}.png`);
 
         await button(page, 'Replay the whole match').click();

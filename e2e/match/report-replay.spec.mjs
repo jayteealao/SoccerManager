@@ -24,7 +24,7 @@ import path from 'node:path';
 import { expect, test } from '@playwright/test';
 
 import { contrastReport } from '../support/contrast.mjs';
-import { VIEWER, contentWithSkin, runEngine, startEngine, tempDir } from '../support/engine.mjs';
+import { VIEWER, contentWithSkin, runEngine, startEngine, tempDir, waitForGrounds } from '../support/engine.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
 /// The replay screenshot's tick: minute 30.
@@ -168,6 +168,8 @@ for (const skin of SKINS) {
       try {
         await open(page, engine.url, skin);
         await liveToFullTime(page);
+        // Every other ground has ended, so the list in the report is the same every run.
+        await waitForGrounds(page, Number.MAX_SAFE_INTEGER, 180_000);
         expect(await hook(page, () => window.__touchline.report().state)).toBe('loading');
         await expect(button(page, 'Save replay')).toBeDisabled();
         await expect(page).toHaveScreenshot(`report-loading-${skin}.png`);

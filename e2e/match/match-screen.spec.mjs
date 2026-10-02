@@ -8,6 +8,10 @@
 // behaviour without comparing pixels. The light skin is chosen by configuration only: a copy
 // of the content folder whose slot file names it, or the skin named in the status body.
 //
+// The live and reconnect states play a recording, which has no matchday: the list reads "No
+// other matches this matchday." The kick-off state is served, so it lists the matchday's
+// fixtures before kick-off.
+//
 // Also here: a Tab walk that never lands in a stub, and the rendered contrast check.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,7 +19,7 @@ import path from 'node:path';
 import { expect, test } from '@playwright/test';
 
 import { contrastReport } from '../support/contrast.mjs';
-import { VIEWER, contentWithSkin, killTree, runEngine, startEngine, tempDir } from '../support/engine.mjs';
+import { VIEWER, contentWithSkin, killTree, runEngine, startEngine, tempDir, waitForGrounds } from '../support/engine.mjs';
 import { kickOffFromPage } from '../support/page.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
@@ -128,6 +132,8 @@ for (const skin of SKINS) {
         // Before kick-off the Tactics view opens first; the board is the Match view.
         await page.locator('nav.subnav').getByRole('button', { name: 'Match' }).click();
         await expect(page.locator('header button.cont')).toHaveText('Kick off');
+        // The matchday's fixtures at 0-0 before kick-off, so the list is complete.
+        await waitForGrounds(page, 0);
         await expect(page).toHaveScreenshot(`match-kickoff-${skin}.png`);
       } finally {
         engine.cleanUp();
