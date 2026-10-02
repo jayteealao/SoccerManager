@@ -1,5 +1,8 @@
-// The charter scenario, steps 1 to 6, on the served viewer: one served match of seed 7 with its
-// matchday, fast-forwarded to 30:00 so the page holds the first half hour at once.
+// The charter scenario, steps 1 to 6, on the built viewer. It starts where a player starts: the
+// launcher opens on the start screen, and New match picks Oakmere Rangers at home to Eldstead
+// City (the two default teams) for a match of seed 7 with its matchday, fast-forwarded to
+// 30:00 so the page holds the first half hour at once. Step 4 compares it with the same seed
+// served straight through, so the start screen's match is the served match.
 //
 // 1. The match screen opens in Broadcast Blue, and the other fixtures show 0-0 KO.
 // 2. To minute 30 by seeks: at each of ten drawn ticks, every ground event shown is at or
@@ -22,7 +25,7 @@ import path from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
-import { INSTALL, VIEWER, fastForward, startEngine, tempDir, waitForGrounds } from '../support/engine.mjs';
+import { INSTALL, VIEWER, fastForward, frontDoor, startEngine, tempDir, waitForGrounds } from '../support/engine.mjs';
 import { playUntil } from '../support/page.mjs';
 
 const SEED = 7;
@@ -108,11 +111,25 @@ const revealAt = (page) =>
 
 test('the charter scenario to the replay of a skipped match', async ({ page }, info) => {
   test.setTimeout(20 * 60_000);
-  let engine = await startEngine({ args: ['--seed', String(SEED), '--web', VIEWER, ...fastForward(MINUTE_30)] });
+  let engine = await frontDoor({ args: ['--seed', String(SEED)], fastForwardTo: MINUTE_30 });
   const digests = {};
   try {
-    // 1. Broadcast Blue, and the other fixtures at 0-0 KO before kick-off.
+    // The start screen: New match, Oakmere Rangers at home to Eldstead City, Kick off.
     await open(page, engine.url);
+    await until(page, () => window.__touchline.frontDoor().answered === true, undefined, 30_000);
+    await page.keyboard.press('Enter');
+    await until(page, () => window.__touchline.frontDoor().view === 'start', undefined, 10_000);
+    await page.screenshot({ path: evidence(info, 'charter-0-start.png') });
+    await page.locator('[data-choice="new"]').click();
+    await until(page, () => window.__touchline.frontDoor().round !== null, undefined, 10_000);
+    const picks = await hook(page, () => window.__touchline.frontDoor().picks);
+    expect(picks).toEqual({ home: 'club-00000001-00', away: 'club-00000002-00' });
+    await expect(page.locator('[data-column="kickoff"]')).toContainText('Oakmere Rangers');
+    await expect(page.locator('[data-column="kickoff"]')).toContainText('Eldstead City');
+    await page.screenshot({ path: evidence(info, 'charter-0-setup.png') });
+    await page.locator('[data-kickoff]').click();
+
+    // 1. Broadcast Blue, and the other fixtures at 0-0 KO before kick-off.
     await until(page, () => window.__touchline.screen() === 'kickoff', undefined, 30_000);
     await page.locator('nav.subnav:visible').getByRole('button', { name: 'Match', exact: true }).click();
     await waitForGrounds(page, 0);
