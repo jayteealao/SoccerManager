@@ -121,9 +121,11 @@ Exit codes: 0 at full time; 1 when the snapshot of `--resume` is refused; 2 when
 
 Serve the viewer page and run the engine as a separate process. Restart the engine after a crash.
 
+By default the page opens on the start screen and no match runs: the player starts a new match with two chosen teams, resumes the saved match, opens replays, changes the settings, reads the licences, or quits. `--no-start-screen` starts a match at once instead.
+
 | Flag | Value | Default | Meaning |
 |---|---|---|---|
-| `--seed` | integer | from the clock | The seed of the random-number generator. When absent, `launch` picks one from the clock and prints `seed <n>` on standard error. |
+| `--seed` | integer | from the clock | The seed of the random-number generator, used for every match started from match setup. When absent, each match takes a seed from the clock; with `--no-start-screen`, `launch` prints that seed as `seed <n>` on standard error. |
 | `--minutes` | integer | 90 | Minutes of play. |
 | `--team-a` | file | `teams/default-a.json` in the content folder | The home team file. |
 | `--team-b` | file | `teams/default-b.json` in the content folder | The away team file. |
@@ -132,12 +134,13 @@ Serve the viewer page and run the engine as a separate process. Restart the engi
 | `--engine` | file | `SM_ENGINE_PATH`, then this program | The engine program to run. When the file does not exist, the page shows the path and how to build the engine. |
 | `--resume` | file | not set | Continue the saved match in this snapshot file instead of starting one. The engine that wrote the save finishes it, as for `resume`. A save from any other version starts no engine: the page shows the Resume a saved match screen, which names the save's version and offers a new match. |
 | `--previous` | file | `SM_PREVIOUS_ENGINE_PATH`, then `previous/engine-cli` beside this program | The previous release's engine program. |
+| `--no-start-screen` | none | off | Start a match at once with `--seed`, `--team-a` and `--team-b`, instead of opening the start screen. Do not use it with `--resume`. |
 
 When `--web` is absent, `launch` uses `SM_WEB_DIR`. When `SM_WEB_DIR` is not set, `launch` uses `./viewer/dist` (the built viewer in a repository checkout, after `npm --prefix viewer run build`), then the `web` folder beside the binary (an installed game). A folder counts only when it holds `index.html`. An installed game keeps `content` and `web` beside the binary, so it starts with no flag.
 
-Output: the page address. The page reads the engine state from `engine.json` at the same address. Its fields include `engine.version` (the release version of the program that plays the match), `launcher.version`, `match.resumed_from` (the tick a saved match continued from), and, when a save cannot resume, a `resume` block: `kind` (`older`, `newer`, `other`, `unreleased` or `previous-missing`), `saved.version`, `saved.build`, `saved.tick`, `saved.teams`, `saved.score`, `saved.millis` (the match stamp), `engines` (the two versions this program finishes) and `reason`. A POST to `/engine/new-match` from the page starts a fresh match with the launch's seed and teams once no match is running.
+Output: the page address. The page reads the engine state from `engine.json` at the same address. Its fields include `engine.version` (the release version of the program that plays the match), `launcher.version`, `match.resumed_from` (the tick a saved match continued from), and, when a save cannot resume, a `resume` block: `kind` (`older`, `newer`, `other`, `unreleased` or `previous-missing`), `saved.version`, `saved.build`, `saved.tick`, `saved.teams`, `saved.score`, `saved.millis` (the match stamp), `engines` (the two versions this program finishes) and `reason`. On the start screen the state is `idle`, and `engine.json` also carries `front-door` (true), `teams` (the sample teams match setup offers), `saved` (the newest unfinished match, or null), `settings` and `previous.version`. The page asks for actions with a POST from its own origin, each with a body of at most 4 KiB: `/engine/new-match` (with no body, a fresh match with the launch's seed and teams; with `{"home": <club id>, "away": <club id>}`, that fixture), `/engine/resume` (the saved match), `/engine/stop` (stop the match and keep its save), `/engine/quit` (stop the match, keep its save and end `launch`), and `/engine/settings` (save the three settings). A GET of `/engine/round?home=<club id>&away=<club id>` answers the other fixtures of the round that match would meet. See the protocol reference for the fields and the answers.
 
-Exit codes: the launcher runs until you stop it; 1 on an error.
+Exit codes: the launcher runs until you stop it or the player quits (0); 1 on an error.
 
 ## record
 

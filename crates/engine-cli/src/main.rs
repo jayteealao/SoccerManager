@@ -9,6 +9,7 @@ mod cli;
 mod content;
 mod engines;
 mod fast_model;
+mod front_door;
 mod gate;
 mod generate;
 mod guard;

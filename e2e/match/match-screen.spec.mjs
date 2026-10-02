@@ -213,7 +213,7 @@ test.describe('the match screen with a real engine', () => {
     test.setTimeout(8 * 60_000);
     const launcher = await startEngine({
       command: 'launch',
-      args: ['--seed', '3', '--minutes', '20', '--web', VIEWER],
+      args: ['--no-start-screen', '--seed', '3', '--minutes', '20', '--web', VIEWER],
     });
     const status = () => fetch(`${launcher.url}engine.json`).then((r) => r.json());
     try {
@@ -255,7 +255,7 @@ test.describe('the match screen with a real engine', () => {
     const missing = path.join(tempDir('missing'), 'engine-cli.exe');
     const launcher = await startEngine({
       command: 'launch',
-      args: ['--seed', '3', '--web', VIEWER, '--engine', missing],
+      args: ['--no-start-screen', '--seed', '3', '--web', VIEWER, '--engine', missing],
     });
     try {
       await open(page, launcher.url, 'broadcast-blue');
@@ -273,7 +273,7 @@ test.describe('the match screen with a real engine', () => {
     test.setTimeout(6 * 60_000);
     const launcher = await startEngine({
       command: 'launch',
-      args: ['--seed', '42', '--minutes', '20', '--web', VIEWER, '--drop-client-at', '3000'],
+      args: ['--no-start-screen', '--seed', '42', '--minutes', '20', '--web', VIEWER, '--drop-client-at', '3000'],
     });
     try {
       await open(page, launcher.url, 'broadcast-blue');

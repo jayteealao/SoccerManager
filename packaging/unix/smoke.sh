@@ -98,6 +98,17 @@ if [ -n "$address" ]; then
     else
         check viewer-module false "index.html loads no module from assets/, or it is not served as JavaScript: '$module'"
     fi
+    # The game opens on the start screen: no match runs until the page asks for one.
+    curl -sf "${address}engine.json" -o "$evidence/engine-idle.json" 2>/dev/null || true
+    if grep -q '"front-door":true' "$evidence/engine-idle.json" 2>/dev/null &&
+        grep -q '"engine.state":"idle"' "$evidence/engine-idle.json" 2>/dev/null; then
+        check front-door true "engine.json reads front-door true and engine.state idle"
+    else
+        check front-door false "engine.json at start: $(cat "$evidence/engine-idle.json" 2>/dev/null)"
+    fi
+    # New match from the start screen, as the page asks for it.
+    curl -sf -X POST -H "Origin: ${address%/}" -H 'Content-Length: 0' \
+        "${address}engine/new-match" -o /dev/null 2>/dev/null || true
     state=""
     i=0
     while [ $i -lt 240 ]; do

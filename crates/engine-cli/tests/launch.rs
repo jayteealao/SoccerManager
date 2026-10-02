@@ -222,7 +222,13 @@ fn a_missing_engine_is_reported_with_its_path() {
     let missing = dir.join("absent").join("engine-cli.exe");
     let launched = launch(
         &dir,
-        &["--seed", "42", "--engine", missing.to_str().unwrap()],
+        &[
+            "--no-start-screen",
+            "--seed",
+            "42",
+            "--engine",
+            missing.to_str().unwrap(),
+        ],
     );
     let now = status(launched.page_port);
     assert_eq!(now["engine.state"], "not-found", "{now}");
@@ -237,7 +243,7 @@ fn a_missing_engine_is_reported_with_its_path() {
 #[test]
 fn a_killed_engine_restarts_from_its_snapshot_with_the_same_score() {
     let dir = temp("kill-restart");
-    let launched = launch(&dir, &["--seed", "42"]);
+    let launched = launch(&dir, &["--no-start-screen", "--seed", "42"]);
     let (crashed, seen, match_id) = crash(&launched);
     let snapshot_tick = u32::try_from(crashed["snapshot.tick"].as_u64().unwrap()).unwrap();
     assert!(snapshot_tick > 0);
@@ -295,7 +301,7 @@ fn a_killed_engine_restarts_from_its_snapshot_with_the_same_score() {
 #[test]
 fn a_corrupt_snapshot_is_refused_by_name() {
     let dir = temp("corrupt");
-    let launched = launch(&dir, &["--seed", "42"]);
+    let launched = launch(&dir, &["--no-start-screen", "--seed", "42"]);
     let (_, _, match_id) = crash(&launched);
     let snapshot = dir.join("matches").join(&match_id).join("snapshot.smsn");
     let mut bytes = std::fs::read(&snapshot).unwrap();
@@ -313,7 +319,7 @@ fn a_corrupt_snapshot_is_refused_by_name() {
 #[test]
 fn abandon_stops_the_worker() {
     let dir = temp("abandon");
-    let launched = launch(&dir, &["--seed", "42"]);
+    let launched = launch(&dir, &["--no-start-screen", "--seed", "42"]);
     let running = wait_for(launched.page_port, 30, |s| s["engine.state"] == "running");
     let pid = running["engine.pid"].as_u64().unwrap();
     let (code, after) = post(&launched, "/engine/abandon");
@@ -328,7 +334,7 @@ fn abandon_stops_the_worker() {
 #[test]
 fn an_action_from_another_origin_is_refused() {
     let dir = temp("origin");
-    let launched = launch(&dir, &["--seed", "42"]);
+    let launched = launch(&dir, &["--no-start-screen", "--seed", "42"]);
     wait_for(launched.page_port, 30, |s| s["engine.state"] == "running");
     let (code, _) = http(
         launched.page_port,

@@ -25,6 +25,8 @@ pub struct Club {
     pub file: TeamFile,
     /// The SHA-256 of the file's bytes, saved in a snapshot's matchday mark.
     pub digest: [u8; 32],
+    /// The file the club was loaded from.
+    pub path: PathBuf,
 }
 
 /// One background match.
@@ -149,9 +151,18 @@ fn fixture_seed(round_seed: u64, index: u32) -> u64 {
     splitmix64(round_seed.wrapping_add(u64::from(index)))
 }
 
-/// Every club file in `teams/` that loads, keyed by club id. A file that does not load is
-/// left out with a warning naming it by its path inside the content folder.
+/// Every club file in `teams/` that loads, keyed by club id; the first file wins a shared id.
 fn load_clubs(dir: &ContentDir, content: &Content) -> BTreeMap<String, Club> {
+    let mut clubs = BTreeMap::new();
+    for club in club_files(dir, content) {
+        clubs.entry(club.file.club.id.clone()).or_insert(club);
+    }
+    clubs
+}
+
+/// Every club file in `teams/` that loads, in file-name order. A file that does not load is
+/// left out with a warning naming it by its path inside the content folder.
+pub(crate) fn club_files(dir: &ContentDir, content: &Content) -> Vec<Club> {
     let mut paths: Vec<PathBuf> = match std::fs::read_dir(dir.path(TEAMS_DIR)) {
         Ok(entries) => entries
             .filter_map(Result::ok)
@@ -161,15 +172,14 @@ fn load_clubs(dir: &ContentDir, content: &Content) -> BTreeMap<String, Club> {
         Err(_) => Vec::new(),
     };
     paths.sort();
-    let mut clubs = BTreeMap::new();
+    let mut clubs = Vec::new();
     for path in paths {
         match content.load_team(dir, &path) {
-            Ok(loaded) => {
-                clubs.entry(loaded.value.club.id.clone()).or_insert(Club {
-                    file: loaded.value,
-                    digest: loaded.digest,
-                });
-            }
+            Ok(loaded) => clubs.push(Club {
+                file: loaded.value,
+                digest: loaded.digest,
+                path,
+            }),
             Err(err) => {
                 tracing::warn!(
                     signal = "matchday.team_refused",

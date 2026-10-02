@@ -172,7 +172,7 @@ fn the_installed_program_serves_the_page_and_the_engine_without_configuration() 
     std::fs::create_dir_all(&cwd).unwrap();
 
     let mut child = installed(&install, &data, &cwd)
-        .args(["launch", "--minutes", "1"])
+        .args(["launch", "--no-start-screen", "--minutes", "1"])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
@@ -242,7 +242,7 @@ fn a_layout_without_the_page_folder_is_refused_naming_both_folders_tried() {
     std::fs::create_dir_all(&cwd).unwrap();
 
     let out = installed(&install, &data, &cwd)
-        .args(["launch", "--minutes", "1"])
+        .args(["launch", "--no-start-screen", "--minutes", "1"])
         .output()
         .unwrap();
     assert_eq!(
@@ -358,7 +358,7 @@ fn launch(install: &Path, scratch: &Path) -> Running {
     let (data, cwd) = (scratch.join("data"), scratch.join("elsewhere"));
     std::fs::create_dir_all(&cwd).unwrap();
     let mut child = installed(install, &data, &cwd)
-        .args(["launch", "--minutes", "1"])
+        .args(["launch", "--no-start-screen", "--minutes", "1"])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()

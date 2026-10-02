@@ -22,6 +22,9 @@ use anyhow::Context;
 /// The longest request line and header block this server reads. A browser's request for a
 /// local file is far below it; anything larger is cut off rather than buffered.
 const MAX_REQUEST_BYTES: u64 = 8 * 1024;
+/// The largest POST body an action may carry. The bodies are a team pair or three settings;
+/// a larger one is refused before any of it is read.
+pub const MAX_BODY_BYTES: usize = 4 * 1024;
 /// The most connections served at once. A page load asks for about twenty files; a client
 /// that opens many more and sends nothing must not pile up threads in the process.
 const MAX_CONNECTIONS: usize = 64;
@@ -49,25 +52,45 @@ const ENGINE_JSON: &str = "/engine.json";
 const RESTART: &str = "/engine/restart";
 const ABANDON: &str = "/engine/abandon";
 const NEW_MATCH: &str = "/engine/new-match";
+const RESUME: &str = "/engine/resume";
+const STOP: &str = "/engine/stop";
+const QUIT: &str = "/engine/quit";
+const SETTINGS: &str = "/engine/settings";
+/// The one read-only question besides `/engine.json`: the round match setup would form.
+const ROUND: &str = "/engine/round";
 
 /// What a page asks the process that serves it to do.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     /// Start the engine again from the match's latest snapshot.
     Restart,
     /// Stop the engine and give the match up.
     Abandon,
-    /// Start a fresh match with the launch's seed and teams, after a stopped or refused one.
-    NewMatch,
+    /// Start a fresh match: with the launch's seed and teams when the body is empty, or with
+    /// the two clubs the body names (`{"home": <club id>, "away": <club id>}`).
+    NewMatch(Option<String>),
+    /// Continue the newest unfinished saved match.
+    Resume,
+    /// Stop the match and keep its snapshot, so Resume can finish it.
+    Stop,
+    /// Stop the match, keep its snapshot, and end the launcher.
+    Quit,
+    /// Save the player's settings (the body).
+    Settings(String),
 }
 
 /// Where `/engine.json` comes from, and who answers the actions.
 pub trait Status: Send + Sync {
     /// The `/engine.json` body.
     fn json(&self) -> String;
-    /// Carries out one action and returns the new `/engine.json` body, or `None` when this
-    /// server takes no actions.
-    fn act(&self, action: Action) -> Option<String>;
+    /// Carries out one action and returns the new `/engine.json` body, the reason the action
+    /// was refused, or `None` when this server takes no actions.
+    fn act(&self, action: Action) -> Option<Result<String, String>>;
+    /// The fixtures of the round a match between `home` and `away` would meet, or the reason
+    /// the pair is refused; `None` when this server starts no matches.
+    fn round(&self, _home: &str, _away: &str) -> Option<Result<String, String>> {
+        None
+    }
 }
 
 /// The status of a page served by the engine itself: always running on one socket port, and
@@ -96,7 +119,7 @@ impl Status for Fixed {
         .to_string()
     }
 
-    fn act(&self, _action: Action) -> Option<String> {
+    fn act(&self, _action: Action) -> Option<Result<String, String>> {
         None
     }
 }
@@ -235,7 +258,8 @@ fn answer(
     let method = parts.next().unwrap_or_default().to_string();
     let target = parts.next().unwrap_or_default().to_string();
     let path = target.split(['?', '#']).next().unwrap_or_default();
-    if method == "POST" && (path == RESTART || path == ABANDON || path == NEW_MATCH) {
+    let posts = [RESTART, ABANDON, NEW_MATCH, RESUME, STOP, QUIT, SETTINGS];
+    if method == "POST" && posts.contains(&path) {
         // Only the page this server serves may ask. A page on any other site sends its own
         // origin, or none, and is refused before anything happens.
         let own = format!("http://127.0.0.1:{page_port}");
@@ -247,19 +271,36 @@ fn answer(
             );
             return write_response(&mut stream, 403, "text/plain", b"refused origin", false);
         }
+        let body = match request.body {
+            Body::TooLarge => {
+                return write_response(&mut stream, 413, "text/plain", b"body too large", false);
+            }
+            Body::Unreadable => {
+                return write_response(&mut stream, 400, "text/plain", b"bad body", false);
+            }
+            Body::Read(body) => body,
+        };
+        let text = (!body.trim().is_empty()).then_some(body);
         let action = match path {
             RESTART => Action::Restart,
             ABANDON => Action::Abandon,
-            _ => Action::NewMatch,
+            RESUME => Action::Resume,
+            STOP => Action::Stop,
+            QUIT => Action::Quit,
+            SETTINGS => Action::Settings(text.unwrap_or_default()),
+            _ => Action::NewMatch(text),
         };
         return match status.act(action) {
-            Some(body) => write_response(
+            Some(Ok(body)) => write_response(
                 &mut stream,
                 202,
                 "application/json; charset=utf-8",
                 body.as_bytes(),
                 false,
             ),
+            Some(Err(reason)) => {
+                write_response(&mut stream, 400, "text/plain", reason.as_bytes(), false)
+            }
             None => write_response(
                 &mut stream,
                 405,
@@ -279,6 +320,31 @@ fn answer(
         );
     }
     let head_only = method == "HEAD";
+
+    if path == ROUND {
+        let query = target.split_once('?').map_or("", |(_, q)| q);
+        let value = |key: &str| {
+            query
+                .split('&')
+                .filter_map(|pair| pair.split_once('='))
+                .find(|(k, _)| *k == key)
+                .map(|(_, v)| percent_decode(v))
+                .unwrap_or_default()
+        };
+        return match status.round(&value("home"), &value("away")) {
+            Some(Ok(body)) => write_response(
+                &mut stream,
+                200,
+                "application/json; charset=utf-8",
+                body.as_bytes(),
+                head_only,
+            ),
+            Some(Err(reason)) => {
+                write_response(&mut stream, 400, "text/plain", reason.as_bytes(), head_only)
+            }
+            None => write_response(&mut stream, 404, "text/plain", b"not found", head_only),
+        };
+    }
 
     if path == ENGINE_JSON {
         let body = status.json();
@@ -308,11 +374,22 @@ fn answer(
     write_response(&mut stream, 200, mime_for(&resolved), &body, head_only)
 }
 
-/// The request line and the two headers this server reads.
+/// The request line, the two headers this server reads, and a POST body.
 struct Request {
     line: String,
     origin: Option<String>,
     host: Option<String>,
+    body: Body,
+}
+
+/// The body a request carried.
+enum Body {
+    /// Read whole: empty when the request carried none.
+    Read(String),
+    /// Longer than [`MAX_BODY_BYTES`]; nothing of it was read.
+    TooLarge,
+    /// Shorter than its `Content-Length`, or not UTF-8.
+    Unreadable,
 }
 
 /// `true` for a `Host` of `127.0.0.1` or `localhost`, with no port or this server's own.
@@ -328,19 +405,26 @@ fn host_allowed(host: Option<&str>, page_port: u16) -> bool {
     local && port.is_none_or(|p| p.parse::<u16>().ok() == Some(page_port))
 }
 
-/// Reads the request line, then drains the header block, keeping `Origin`.
+/// Reads the request line, then drains the header block, keeping `Origin`, `Host` and
+/// `Content-Length`, then reads a body of at most [`MAX_BODY_BYTES`].
 fn read_request(stream: &TcpStream) -> Option<Request> {
-    let mut reader = BufReader::new(stream.try_clone().ok()?.take(MAX_REQUEST_BYTES));
+    let limit = MAX_REQUEST_BYTES + MAX_BODY_BYTES as u64;
+    let mut reader = BufReader::new(stream.try_clone().ok()?.take(limit));
     let mut line = String::new();
-    reader.read_line(&mut line).ok()?;
+    let mut head_bytes = reader.read_line(&mut line).ok()? as u64;
     let line = line.trim_end().to_string();
     if line.is_empty() {
         return None;
     }
     let mut origin = None;
     let mut host = None;
+    let mut length = 0usize;
     let mut header = String::new();
-    while reader.read_line(&mut header).ok()? > 0 {
+    while let Some(read) = reader.read_line(&mut header).ok().filter(|n| *n > 0) {
+        head_bytes += read as u64;
+        if head_bytes > MAX_REQUEST_BYTES {
+            return None;
+        }
         let text = header.trim_end();
         if text.is_empty() {
             break;
@@ -350,11 +434,27 @@ fn read_request(stream: &TcpStream) -> Option<Request> {
                 origin = Some(value.trim().to_string());
             } else if name.trim().eq_ignore_ascii_case("host") {
                 host = Some(value.trim().to_string());
+            } else if name.trim().eq_ignore_ascii_case("content-length") {
+                length = value.trim().parse().ok()?;
             }
         }
         header.clear();
     }
-    Some(Request { line, origin, host })
+    let body = if length > MAX_BODY_BYTES {
+        Body::TooLarge
+    } else {
+        let mut bytes = vec![0u8; length];
+        match reader.read_exact(&mut bytes) {
+            Ok(()) => String::from_utf8(bytes).map_or(Body::Unreadable, Body::Read),
+            Err(_) => Body::Unreadable,
+        }
+    };
+    Some(Request {
+        line,
+        origin,
+        host,
+        body,
+    })
 }
 
 /// Turns a request target into a relative path inside the served folder, or refuses it.
@@ -438,6 +538,7 @@ fn write_response(
         400 => "Bad Request",
         403 => "Forbidden",
         404 => "Not Found",
+        413 => "Content Too Large",
         _ => "Method Not Allowed",
     };
     let mut head = String::new();

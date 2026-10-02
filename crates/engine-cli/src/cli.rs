@@ -481,7 +481,9 @@ pub struct LaunchOpts {
     /// Random-number seed; default from the clock.
     #[arg(
         long,
-        long_help = "Seed for the engine's random-number generator; default from the clock."
+        long_help = "Seed for the engine's random-number generator; default from the clock.\n\n\
+                     Every match started from match setup uses it.\n\
+                     Without it, each match takes a seed from the clock."
     )]
     pub seed: Option<u64>,
     /// Minutes of play to simulate.
@@ -543,9 +545,20 @@ pub struct LaunchOpts {
                      previous/engine-cli beside this program."
     )]
     pub previous: Option<PathBuf>,
+    /// Start a match at once; no start screen.
+    #[arg(
+        long,
+        conflicts_with = "resume",
+        long_help = "Start a match at once with the seed and the team\n\
+                     files given, instead of opening the start screen."
+    )]
+    pub no_start_screen: bool,
     /// Drop the viewer's connection once this tick is sent; a test seam.
     #[arg(long, hide = true, value_name = "TICK")]
     pub drop_client_at: Option<u32>,
+    /// Make every match's worker produce ticks up to this one at once; a test seam.
+    #[arg(long, hide = true, value_name = "TICK")]
+    pub fast_forward_to: Option<u32>,
 }
 
 #[derive(Debug, Args)]

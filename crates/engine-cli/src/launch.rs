@@ -7,6 +7,12 @@
 //! with a POST, and the launcher starts the worker again from the match's latest snapshot.
 //! The page sends no match state: the snapshot on disk is the only copy the engine needs.
 //!
+//! By default the launcher opens on the start screen: no worker runs (`engine.state` is
+//! `idle`) until the page asks for a match with two chosen clubs, or for the saved match.
+//! The page can also stop a match and keep its snapshot, quit (the launcher ends itself),
+//! and save the player's settings. `--no-start-screen` starts a match at once, as the
+//! launcher did before the start screen existed.
+//!
 //! With `--resume <file>` the launcher continues a saved match instead of starting one. It
 //! picks the program by the release version the save records ([`crate::engines`]): this
 //! program, the previous release's program with its own content folder, or none, in which
@@ -21,21 +27,28 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use engine::Snapshot;
 use engine::observe::identity::{MatchId, data_dir};
+use engine::{Content, ContentDir, Snapshot};
 
 use crate::cli::LaunchOpts;
 use crate::engines::{Choice, PreviousEngine, Refusal};
+use crate::front_door::{SampleTeam, SavedMatch, Settings};
+use crate::matchday::round::Round;
 use crate::web::{Action, Status};
 
 /// Seconds a worker waits for a page that lost its connection.
 const RECONNECT_WAIT_S: &str = "120";
 /// How often the watcher looks at the worker.
 const WATCH_EVERY: Duration = Duration::from_millis(50);
+/// How long the launcher keeps running after it answered a quit, so the answer reaches the
+/// page before the process ends.
+const QUIT_AFTER: Duration = Duration::from_millis(500);
 
 /// Where the worker stands, as `/engine.json` names it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum State {
+    /// The start screen: no match is running.
+    Idle,
     /// Started, and its socket is not open yet.
     Starting,
     /// Serving the match on this socket port.
@@ -50,11 +63,14 @@ enum State {
     Abandoned,
     /// No engine program at the configured path.
     NotFound,
+    /// The player quit: the launcher is ending.
+    Closed,
 }
 
 impl State {
     fn word(&self) -> &'static str {
         match self {
+            State::Idle => "idle",
             State::Starting => "starting",
             State::Running { .. } => "running",
             State::Finished => "finished",
@@ -62,6 +78,7 @@ impl State {
             State::Refused { .. } => "refused",
             State::Abandoned => "abandoned",
             State::NotFound => "not-found",
+            State::Closed => "closed",
         }
     }
 }
@@ -86,6 +103,14 @@ struct Worker {
     resumed_from: Option<u32>,
     /// Why a saved match cannot resume, for the Resume a saved match screen.
     refusal: Option<Refusal>,
+    /// The seed of the next fresh match, and of the round match setup previews.
+    seed: u64,
+    /// The team-file flags every worker of this program receives.
+    teams: Vec<OsString>,
+    /// The unfinished match the start screen offers to resume.
+    saved: Option<SavedMatch>,
+    /// The player's settings.
+    settings: Settings,
 }
 
 /// The program that plays the match: this program, or the previous release's program with
@@ -108,6 +133,14 @@ impl Program {
     }
 }
 
+/// What the start screen needs: the content the round preview and the saved match's pitch
+/// read, and the sample teams match setup offers.
+struct FrontDoor {
+    dir: ContentDir,
+    content: Content,
+    teams: Vec<SampleTeam>,
+}
+
 /// The launcher: its configuration and the one worker it supervises.
 pub struct Launcher {
     worker: Mutex<Worker>,
@@ -116,13 +149,17 @@ pub struct Launcher {
     previous: PreviousEngine,
     /// The content folder this program's workers receive, when one was named.
     content_dir: Option<OsString>,
-    /// The team files every worker receives.
-    teams: Vec<OsString>,
     /// The skin folder the viewer loads, from the `viewer.skin` slot.
     skin: &'static str,
-    seed: u64,
+    /// The seed every match takes when the launch names one.
+    fixed_seed: Option<u64>,
     minutes: u32,
+    /// The data folder: saves, settings.
+    data: PathBuf,
+    /// The start screen, unless the launch starts a match at once or resumes a save.
+    front_door: Option<FrontDoor>,
     drop_client_at: Mutex<Option<u32>>,
+    fast_forward_to: Option<u32>,
 }
 
 /// The snapshot file of a match in the data folder.
@@ -138,15 +175,16 @@ pub fn run(content_dir: Option<&Path>, opts: &LaunchOpts) -> anyhow::Result<i32>
     let web = crate::web::resolve_web_dir(opts.web.as_deref())?;
     // The content folder is loaded once here, the way the worker loads it, so a bad slot file
     // (an unknown skin included) refuses the start before any page is served.
-    let content = engine::Content::load(&engine::ContentDir::resolve(content_dir)?)?;
+    let dir = ContentDir::resolve(content_dir)?;
+    let content = Content::load(&dir)?;
     let skin = content.modules.skin.skin();
-    let seed = opts.seed.unwrap_or_else(|| {
-        let seed = clock_seed();
+    let door = opts.resume.is_none() && !opts.no_start_screen;
+    let seed = opts.seed.unwrap_or_else(clock_seed);
+    if opts.seed.is_none() && !door {
         // Stdout carries the page address alone, so the chosen seed goes to stderr, where a
         // person can read it back to play the same match again.
         eprintln!("seed {seed}");
-        seed
-    });
+    }
     let started = MatchId::now(seed);
     let match_id = started.to_string();
     let mut teams = Vec::new();
@@ -156,9 +194,23 @@ pub fn run(content_dir: Option<&Path>, opts: &LaunchOpts) -> anyhow::Result<i32>
             teams.push(file.as_os_str().to_os_string());
         }
     }
+    let data = data_dir();
+    let front_door = if door {
+        let teams = crate::front_door::sample_teams(&dir, &content)?;
+        Some(FrontDoor {
+            dir,
+            content,
+            teams,
+        })
+    } else {
+        None
+    };
+    let saved = front_door.as_ref().and_then(|door| {
+        SavedMatch::newest(&data).and_then(|p| SavedMatch::read(&p, &door.teams, &door.content))
+    });
     let launcher = Arc::new(Launcher {
         worker: Mutex::new(Worker {
-            state: State::Starting,
+            state: if door { State::Idle } else { State::Starting },
             child: None,
             pid: None,
             generation: 0,
@@ -169,30 +221,42 @@ pub fn run(content_dir: Option<&Path>, opts: &LaunchOpts) -> anyhow::Result<i32>
             program: Program::Current,
             resumed_from: None,
             refusal: None,
+            seed,
+            teams,
+            saved,
+            settings: Settings::load(&data),
         }),
         engine,
         previous: PreviousEngine::locate(opts.previous.as_deref()),
         content_dir: content_dir.map(|dir| dir.as_os_str().to_os_string()),
-        teams,
         skin,
-        seed,
+        fixed_seed: opts.seed,
         minutes: opts.minutes,
+        data,
+        front_door,
         drop_client_at: Mutex::new(opts.drop_client_at),
+        fast_forward_to: opts.fast_forward_to,
     });
 
     let page = crate::web::start(&web, Arc::new(Arc::clone(&launcher)))?;
-    if launcher.engine.is_file() {
-        match opts.resume.as_deref() {
-            Some(file) => launcher.resume_saved(file),
-            None => launcher.start(None),
-        }
-    } else {
+    if !launcher.engine.is_file() {
         // The page still loads: it is where the manager reads the path and what to do.
         launcher.lock().state = State::NotFound;
         tracing::warn!(
             signal = "launch.not_found",
             path = %shown_file(&launcher.engine)
         );
+    } else if let Some(file) = opts.resume.as_deref() {
+        launcher.resume_saved(file);
+    } else if launcher.front_door.is_some() {
+        let worker = launcher.lock();
+        tracing::info!(
+            signal = "launch.idle",
+            teams = launcher.front_door.as_ref().map_or(0, |d| d.teams.len()),
+            saved = worker.saved.is_some()
+        );
+    } else {
+        launcher.start(None);
     }
     // The page address is the one line on stdout, because it is the line a person copies.
     println!("{}", page.address());
@@ -271,11 +335,47 @@ fn shown_file(path: &Path) -> String {
         .unwrap_or_else(|| path.display().to_string())
 }
 
+/// The two clubs a new-match body names: `{"home": <club id>, "away": <club id>}`.
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Pair {
+    home: String,
+    away: String,
+}
+
 impl Launcher {
     fn lock(&self) -> std::sync::MutexGuard<'_, Worker> {
         self.worker
             .lock()
             .expect("the worker lock is never poisoned")
+    }
+
+    /// `true` while a worker plays a match.
+    fn busy(worker: &Worker) -> bool {
+        matches!(worker.state, State::Running { .. } | State::Starting) && worker.child.is_some()
+    }
+
+    /// The two sample teams `home` and `away` name, home first, or the reason the pair is
+    /// refused.
+    fn pair(&self, home: &str, away: &str) -> Result<[&SampleTeam; 2], String> {
+        let door = self
+            .front_door
+            .as_ref()
+            .ok_or("this launch started its match at once; it has no match setup")?;
+        let find = |id: &str| {
+            door.teams
+                .iter()
+                .find(|t| t.id() == id)
+                .ok_or_else(|| format!("no sample team has the club id {id:?}"))
+        };
+        let (a, b) = (find(home)?, find(away)?);
+        if a.id() == b.id() {
+            return Err(format!(
+                "{} cannot play itself; choose another team",
+                a.name()
+            ));
+        }
+        Ok([a, b])
     }
 
     /// Continues the saved match in `file` on the program its version names, or refuses it
@@ -284,6 +384,8 @@ impl Launcher {
         let (choice, identity) = crate::engines::resolve(file, &self.previous);
         {
             let mut worker = self.lock();
+            worker.refusal = None;
+            worker.resumed_from = None;
             if let Some(id) = &identity {
                 if let Some(seed) = id.seed {
                     let match_id = MatchId {
@@ -322,7 +424,7 @@ impl Launcher {
 
     /// Starts a worker: a new match, or the saved match in `resume` continued from it.
     fn start(self: &Arc<Self>, resume: Option<PathBuf>) {
-        let (program, version, content, fresh_millis) = {
+        let (program, version, content, fresh_millis, seed, teams) = {
             let worker = self.lock();
             let (program, content) = match &worker.program {
                 Program::Current => (self.engine.clone(), self.content_dir.clone()),
@@ -336,6 +438,8 @@ impl Launcher {
                 worker.program.version().to_string(),
                 content,
                 worker.match_millis,
+                worker.seed,
+                worker.teams.clone(),
             )
         };
         let mut args: Vec<OsString> = vec!["serve".into()];
@@ -346,7 +450,7 @@ impl Launcher {
             }
             None => {
                 for (flag, value) in [
-                    ("--seed", self.seed.to_string()),
+                    ("--seed", seed.to_string()),
                     ("--minutes", self.minutes.to_string()),
                     ("--match-millis", fresh_millis.to_string()),
                 ] {
@@ -357,22 +461,27 @@ impl Launcher {
         }
         args.push("--reconnect-wait".into());
         args.push(RECONNECT_WAIT_S.into());
-        // The test seam is this program's own; the previous program does not take it.
-        if program == self.engine
-            && let Some(tick) = self
+        // The test seams are this program's own; the previous program does not take them.
+        if program == self.engine {
+            if let Some(tick) = self
                 .drop_client_at
                 .lock()
                 .expect("the drop seam lock is never poisoned")
                 .take()
-        {
-            args.push("--drop-client-at".into());
-            args.push(tick.to_string().into());
+            {
+                args.push("--drop-client-at".into());
+                args.push(tick.to_string().into());
+            }
+            if let Some(tick) = self.fast_forward_to {
+                args.push("--fast-forward-to".into());
+                args.push(tick.to_string().into());
+            }
         }
         if let Some(dir) = content {
             args.push("--content-dir".into());
             args.push(dir);
         }
-        args.extend(self.teams.iter().cloned());
+        args.extend(teams);
 
         let spawned = Command::new(&program)
             .args(&args)
@@ -501,6 +610,20 @@ impl Launcher {
             code = code.unwrap_or(-1),
             state = worker.state.word()
         );
+        if worker.state == State::Finished {
+            self.after_match(&mut worker);
+        }
+    }
+
+    /// After a match ends or stops: the next match takes a new seed (unless the launch named
+    /// one), and the start screen reads the saves again.
+    fn after_match(&self, worker: &mut Worker) {
+        let Some(door) = &self.front_door else {
+            return;
+        };
+        worker.seed = self.fixed_seed.unwrap_or_else(clock_seed);
+        worker.saved = SavedMatch::newest(&self.data)
+            .and_then(|p| SavedMatch::read(&p, &door.teams, &door.content));
     }
 
     /// The tick of the snapshot on disk, when it reads cleanly. The file may be the previous
@@ -570,17 +693,38 @@ impl Launcher {
         tracing::info!(signal = "launch.abandoned");
     }
 
-    /// Starts a fresh match with the launch's seed and teams on this program, once the match
-    /// before it is no longer running: after a refused save, a full time, or an abandon.
-    fn new_match(self: &Arc<Self>) {
+    /// Starts a fresh match on this program, once the match before it is no longer running:
+    /// with the launch's seed and teams, or with the two clubs `body` names.
+    fn new_match(self: &Arc<Self>, body: Option<&str>) -> Result<(), String> {
+        let chosen = match body {
+            Some(text) => {
+                let pair: Pair = serde_json::from_str(text)
+                    .map_err(|e| format!("the new-match body does not read: {e}"))?;
+                let [home, away] = self.pair(&pair.home, &pair.away)?;
+                Some((home, away))
+            }
+            None => None,
+        };
         {
             let mut worker = self.lock();
-            if matches!(worker.state, State::Running { .. } | State::Starting)
-                && worker.child.is_some()
-            {
-                return;
+            if Self::busy(&worker) {
+                return Err("a match is already running".into());
             }
-            let fresh = MatchId::now(self.seed);
+            if let Some((home, away)) = chosen {
+                worker.teams = vec![
+                    "--team-a".into(),
+                    home.path.as_os_str().to_os_string(),
+                    "--team-b".into(),
+                    away.path.as_os_str().to_os_string(),
+                ];
+                tracing::info!(
+                    signal = "launch.fixture_chosen",
+                    home = home.id(),
+                    away = away.id(),
+                    seed = worker.seed
+                );
+            }
+            let fresh = MatchId::now(worker.seed);
             worker.match_id = fresh.to_string();
             worker.snapshot = snapshot_of(&worker.match_id);
             worker.match_millis = fresh.millis;
@@ -591,23 +735,106 @@ impl Launcher {
         }
         tracing::info!(signal = "launch.new_match");
         self.start(None);
+        Ok(())
     }
-}
 
-impl Status for Arc<Launcher> {
-    fn json(&self) -> String {
-        // Only while a worker runs does the snapshot move, and it is read before the lock
-        // because a read touches the disk. A stopped match keeps the tick read at its end.
-        let running = matches!(self.lock().state, State::Running { .. });
-        let tick = if running {
-            self.read_snapshot_tick()
-        } else {
-            None
+    /// Continues the newest unfinished saved match, with the team files its club names name.
+    fn resume(self: &Arc<Self>) -> Result<(), String> {
+        let (path, files) = {
+            let mut worker = self.lock();
+            if Self::busy(&worker) {
+                return Err("a match is already running".into());
+            }
+            let door = self
+                .front_door
+                .as_ref()
+                .ok_or("this launch started its match at once; it has no saved match to offer")?;
+            worker.saved = SavedMatch::newest(&self.data)
+                .and_then(|p| SavedMatch::read(&p, &door.teams, &door.content));
+            let saved = worker.saved.as_ref().ok_or("no saved match yet")?;
+            let files = if saved.kind() == "current" {
+                saved.team_files(&door.teams)
+            } else {
+                None
+            };
+            (saved.path.clone(), files)
         };
+        self.lock().teams = files.map_or_else(Vec::new, |[a, b]| {
+            vec![
+                "--team-a".into(),
+                a.into_os_string(),
+                "--team-b".into(),
+                b.into_os_string(),
+            ]
+        });
+        tracing::info!(signal = "launch.resume_saved");
+        self.resume_saved(&path);
+        Ok(())
+    }
+
+    /// Ends a running worker and keeps the snapshot it wrote, so Resume can finish the match.
+    /// The launcher goes back to the start screen.
+    fn stop(&self) {
         let mut worker = self.lock();
-        if tick.is_some() {
-            worker.snapshot_tick = tick;
+        // A newer generation tells the watcher of this worker to leave the state alone.
+        worker.generation += 1;
+        if let Some(mut child) = worker.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
         }
+        worker.pid = None;
+        worker.state = State::Idle;
+        worker.refusal = None;
+        self.after_match(&mut worker);
+        tracing::info!(
+            signal = "launch.stopped",
+            saved.tick = worker.saved.as_ref().and_then(|s| s.identity.tick)
+        );
+    }
+
+    /// Stops the match and keeps its snapshot, then ends the launcher once the answer has
+    /// reached the page. The answer names what the closed page shows.
+    fn quit(&self) -> String {
+        let played = matches!(self.lock().state, State::Running { .. } | State::Starting);
+        self.stop();
+        let body = {
+            let mut worker = self.lock();
+            worker.state = State::Closed;
+            let saved = worker
+                .saved
+                .as_ref()
+                .filter(|_| played)
+                .map(SavedMatch::json);
+            tracing::info!(signal = "launch.quit", saved = saved.is_some());
+            let mut status: serde_json::Value =
+                serde_json::from_str(&self.json_locked(&mut worker)).expect("the status is JSON");
+            status["closed"] = serde_json::json!({ "match": played, "saved": saved });
+            status.to_string()
+        };
+        std::thread::spawn(|| {
+            std::thread::sleep(QUIT_AFTER);
+            std::process::exit(0);
+        });
+        body
+    }
+
+    /// Saves the player's settings from `body`.
+    fn save_settings(&self, body: &str) -> Result<(), String> {
+        let settings = Settings::parse(body)?;
+        settings
+            .save(&self.data)
+            .map_err(|e| format!("cannot save the settings: {e}"))?;
+        self.lock().settings = settings;
+        tracing::info!(
+            signal = "launch.settings_saved",
+            speed = settings.speed,
+            commentary = settings.commentary
+        );
+        Ok(())
+    }
+
+    /// The `/engine.json` body, under the lock the caller holds.
+    fn json_locked(&self, worker: &mut Worker) -> String {
         let (port, reason, code) = match &worker.state {
             State::Running { port } => (Some(*port), None, None),
             State::Refused { reason } => (None, Some(reason.clone()), None),
@@ -628,7 +855,7 @@ impl Status for Arc<Launcher> {
                 "reason": refusal.reason,
             })
         });
-        serde_json::json!({
+        let mut status = serde_json::json!({
             "engine.state": worker.state.word(),
             "socket.port": port,
             "protocol.version": protocol::PROTOCOL_VERSION,
@@ -638,22 +865,89 @@ impl Status for Arc<Launcher> {
             "engine.code": code,
             "engine.version": worker.program.version(),
             "launcher.version": engine::version(),
+            "previous.version": crate::engines::previous_version(),
             "snapshot.tick": worker.snapshot_tick,
             "match.id": worker.match_id,
             "match.resumed_from": worker.resumed_from,
             "resume": resume,
             "launcher": true,
             "viewer.skin": self.skin,
-        })
-        .to_string()
+            "settings": worker.settings.json(),
+        });
+        if let Some(door) = &self.front_door {
+            status["front-door"] = true.into();
+            status["teams"] = door.teams.iter().map(SampleTeam::json).collect();
+            status["saved"] = worker
+                .saved
+                .as_ref()
+                .map_or(serde_json::Value::Null, SavedMatch::json);
+        }
+        status.to_string()
+    }
+}
+
+impl Status for Arc<Launcher> {
+    fn json(&self) -> String {
+        // Only while a worker runs does the snapshot move, and it is read before the lock
+        // because a read touches the disk. A stopped match keeps the tick read at its end.
+        let running = matches!(self.lock().state, State::Running { .. });
+        let tick = if running {
+            self.read_snapshot_tick()
+        } else {
+            None
+        };
+        let mut worker = self.lock();
+        if tick.is_some() {
+            worker.snapshot_tick = tick;
+        }
+        self.json_locked(&mut worker)
     }
 
-    fn act(&self, action: Action) -> Option<String> {
-        match action {
-            Action::Restart => self.restart(),
-            Action::Abandon => self.abandon(),
-            Action::NewMatch => self.new_match(),
-        }
-        Some(self.json())
+    fn act(&self, action: Action) -> Option<Result<String, String>> {
+        let done = match action {
+            Action::Restart => {
+                self.restart();
+                Ok(())
+            }
+            Action::Abandon => {
+                self.abandon();
+                Ok(())
+            }
+            Action::NewMatch(body) => self.new_match(body.as_deref()),
+            Action::Resume => self.resume(),
+            Action::Stop => {
+                self.stop();
+                Ok(())
+            }
+            Action::Quit => return Some(Ok(self.quit())),
+            Action::Settings(body) => self.save_settings(&body),
+        };
+        Some(done.map(|()| self.json()))
+    }
+
+    fn round(&self, home: &str, away: &str) -> Option<Result<String, String>> {
+        let door = self.front_door.as_ref()?;
+        let answer = self.pair(home, away).map(|_| {
+            let seed = self.lock().seed;
+            let round = Round::for_match(&door.dir, &door.content, [home, away], seed);
+            let club = |id: &str| {
+                door.teams
+                    .iter()
+                    .find(|t| t.id() == id)
+                    .map_or(serde_json::Value::Null, SampleTeam::json)
+            };
+            serde_json::json!({
+                "fixtures": round
+                    .fixtures
+                    .iter()
+                    .map(|f| serde_json::json!({
+                        "home": club(&f.club_ids[0]),
+                        "away": club(&f.club_ids[1]),
+                    }))
+                    .collect::<Vec<_>>(),
+            })
+            .to_string()
+        });
+        Some(answer)
     }
 }

@@ -29,7 +29,7 @@ test.beforeAll(() => {
 
 test('a crashed engine shows the failure and restarts from the last stoppage', async ({ page }) => {
   test.setTimeout(8 * 60_000);
-  const launcher = await startEngine({ command: 'launch', args: ['--seed', '5', '--minutes', '20', '--web', WEB] });
+  const launcher = await startEngine({ command: 'launch', args: ['--no-start-screen', '--seed', '5', '--minutes', '20', '--web', WEB] });
   try {
     await openMatch(page, launcher.url);
     await kickOff(page);
@@ -111,7 +111,7 @@ test('a crashed engine shows the failure and restarts from the last stoppage', a
 
 test('a damaged snapshot is named on restart, and only abandon is offered', async ({ page }) => {
   test.setTimeout(6 * 60_000);
-  const launcher = await startEngine({ command: 'launch', args: ['--seed', '42', '--minutes', '20', '--web', WEB] });
+  const launcher = await startEngine({ command: 'launch', args: ['--no-start-screen', '--seed', '42', '--minutes', '20', '--web', WEB] });
   try {
     await openMatch(page, launcher.url);
     await kickOff(page);
@@ -147,7 +147,7 @@ test('a dropped connection reconnects by itself, with no restart prompt', async 
   test.setTimeout(6 * 60_000);
   const launcher = await startEngine({
     command: 'launch',
-    args: ['--seed', '42', '--minutes', '20', '--web', WEB, '--drop-client-at', '3000'],
+    args: ['--no-start-screen', '--seed', '42', '--minutes', '20', '--web', WEB, '--drop-client-at', '3000'],
   });
   try {
     await openMatch(page, launcher.url);
@@ -223,7 +223,7 @@ test('the half-time report counts equal the feed, and a saved replay plays with 
   }
 
   // No engine: a launcher pointed at a program that does not exist.
-  const launcher = await startEngine({ command: 'launch', args: ['--seed', '3', '--web', WEB, '--engine', MISSING] });
+  const launcher = await startEngine({ command: 'launch', args: ['--no-start-screen', '--seed', '3', '--web', WEB, '--engine', MISSING] });
   try {
     await page.goto(launcher.url);
     await until(page, () => window.__touchline.recovery().kind === 'first-run', { timeout: 30_000 });
@@ -254,7 +254,7 @@ test('the half-time report counts equal the feed, and a saved replay plays with 
 });
 
 test('a missing engine shows the path it looked for and how to build it', async ({ page }) => {
-  const launcher = await startEngine({ command: 'launch', args: ['--seed', '3', '--web', WEB, '--engine', MISSING] });
+  const launcher = await startEngine({ command: 'launch', args: ['--no-start-screen', '--seed', '3', '--web', WEB, '--engine', MISSING] });
   try {
     await page.goto(launcher.url);
     await until(page, () => window.__touchline.recovery().kind === 'first-run', { timeout: 30_000 });
