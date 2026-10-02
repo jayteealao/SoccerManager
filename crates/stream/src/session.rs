@@ -32,6 +32,10 @@ const IDLE_SLEEP: Duration = Duration::from_micros(100);
 /// held, paused, or lead-bound match does not wake the thread ten thousand times a second,
 /// and the first frame after a quiet spell waits at most this long.
 const IDLE_SLEEP_MAX: Duration = Duration::from_millis(1);
+/// The longest the close waits for the client's own close answer. A client reading a
+/// backlog answers once it has read every frame before the close, which at the end of a
+/// skipped match on a slow machine takes a few seconds.
+const CLOSE_ANSWER_WAIT: Duration = Duration::from_secs(10);
 
 /// The tick and the score, shared between the simulation thread and the socket thread.
 #[derive(Debug, Default)]
@@ -532,20 +536,30 @@ fn dropped(commands: &CommandContext) -> SessionEnd {
     SessionEnd::Dropped
 }
 
-/// Sends the close frame and drives the close handshake to its end.
+/// Sends the close frame and drives the close handshake to its end: the client's own close
+/// answer, or `CLOSE_ANSWER_WAIT`. Until then every message the client sends is read and
+/// dropped. A client can still be reading a backlog of frames when the match ends (the rest
+/// of a skipped match arrives at once), and it keeps sending `seen` as it draws them; a
+/// socket closed with those unread answers with a reset, which throws away the frames the
+/// client had not read yet, the end of the match with them.
 fn finish_socket(socket: &mut WebSocket<TcpStream>) -> Result<(), StreamError> {
     let _ = socket.close(None);
-    let deadline = Instant::now() + Duration::from_secs(2);
+    let deadline = Instant::now() + CLOSE_ANSWER_WAIT;
     while Instant::now() < deadline {
-        match socket.flush() {
-            Ok(()) => return Ok(()),
+        match socket.read() {
+            Ok(_) => {}
             Err(tungstenite::Error::Io(e)) if would_block(&e) => {
-                std::thread::sleep(IDLE_SLEEP);
+                std::thread::sleep(IDLE_SLEEP_MAX);
             }
+            // The client's close answer ends the handshake; a client already gone ends it too.
             Err(e) if peer_gone(&e) => return Ok(()),
             Err(e) => return Err(e.into()),
         }
     }
+    tracing::warn!(
+        signal = "socket.close_unanswered",
+        wait_ms = CLOSE_ANSWER_WAIT.as_millis() as u64
+    );
     Ok(())
 }
 
