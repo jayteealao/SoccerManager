@@ -37,13 +37,18 @@ export function newMatchday(message) {
 /// `matchday` with `event` added, or the same object when the event is a repeat a catch-up
 /// sent again (the same fixture, tick and kind) or names no fixture of the round.
 /// `renderedTick` is the tick the page drew when the event arrived: a late event shows from
-/// there.
-export function addEvent(matchday, event, renderedTick) {
+/// there. `seekCount` is how many seeks the page had made by then: only a later seek can
+/// take a late event's outline away.
+export function addEvent(matchday, event, renderedTick, seekCount = 0) {
   const list = matchday.events[event.fixture];
   if (!list || list.some((e) => e.tick === event.tick && e.kind === event.kind)) {
     return matchday;
   }
-  const entry = { ...event, shownAt: event.late ? Math.max(event.tick, renderedTick) : event.tick };
+  const entry = {
+    ...event,
+    shownAt: event.late ? Math.max(event.tick, renderedTick) : event.tick,
+    seeksBefore: event.late ? seekCount : 0,
+  };
   const next = [...list, entry].sort((a, b) => a.tick - b.tick);
   const events = matchday.events.slice();
   events[event.fixture] = next;
@@ -106,8 +111,9 @@ function standing(score, home, away) {
 /// What the list shows at `renderedTick`.
 ///
 /// `skip` is the session's skip; while it is decided or plays the list stays at its tick.
-/// `fence` is the furthest tick the page has reached by a seek: a goal at or before it was
-/// reached by a seek or seen already, so it shows with no outline. `total` is the regulation
+/// `seeks` lists every seek the page made, `{ lo, hi, n }`: the ticks it jumped across and
+/// its number from 1. A goal whose moment lies in a seek's span was jumped over or shown
+/// already, so it shows with no outline when the clock reaches it. `total` is the regulation
 /// length of the match. `final` draws the report's list: no outline, every event that
 /// arrived up to `renderedTick`. `stored` is a replay or a stored match, which keeps no
 /// other grounds.
@@ -116,7 +122,7 @@ function standing(score, home, away) {
 /// rows }` with one row per fixture: `home`, `away`, `score` (null when the result is
 /// unavailable), `minute` (`KO`, a minute, `HT`, `FT` or `!`), `started`, `ended`, `behind`,
 /// `unavailable`, and `flag` (`new`, `late` or null) with its `tag` and `words`.
-export function groundsAt(matchday, renderedTick, { skip = null, fence = 0, total = 90, final = false, stored = false } = {}) {
+export function groundsAt(matchday, renderedTick, { skip = null, seeks = [], total = 90, final = false, stored = false } = {}) {
   if (stored) {
     return {
       state: 'none',
@@ -162,10 +168,11 @@ export function groundsAt(matchday, renderedTick, { skip = null, fence = 0, tota
     const goal = shown.findLast((e) => e.kind === 'goal') ?? null;
     if (goal && !final && !failed) {
       const at = goal.shownAt ?? goal.tick;
-      // A late goal arrives after any seek that led to its moment, so it counts from the tick
-      // it arrived at even when that is where the seek landed.
-      const fresh = goal.late ? at >= fence : at > fence;
-      if (fresh && tick >= at && tick - at < HIGHLIGHT_TICKS) {
+      // A late goal counts from the tick it arrived at, and only a seek after its arrival
+      // can take its outline away.
+      const after = goal.seeksBefore ?? 0;
+      const spoiled = seeks.some((s) => s.n > after && at > s.lo && at <= s.hi);
+      if (!spoiled && tick >= at && tick - at < HIGHLIGHT_TICKS) {
         const who = `${surname(goal.scorer)} ${eventStamp(goal)}`;
         if (goal.late) {
           flag = 'late';

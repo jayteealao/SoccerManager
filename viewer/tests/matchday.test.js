@@ -160,17 +160,20 @@ test('a new goal is outlined for 8 seconds of the clock with its words, then set
 
 test('a rewind from 67 to 40 hides later goals; forward again they show with no outline', () => {
   const day = recorded();
-  const fence = 67 * M + 600;
-  const back = groundsAt(day, 40 * M, { fence });
+  const seeks = [{ lo: 40 * M, hi: 67 * M + 600, n: 1 }];
+  const back = groundsAt(day, 40 * M, { seeks });
   assert.deepEqual(back.rows[0].score, [1, 0]);
   assert.deepEqual(back.rows[1].score, [0, 0], 'the 55th-minute goal is hidden');
   assert.equal(back.rows[0].minute, "40'");
-  const again = groundsAt(day, 55 * M + 150, { fence });
+  const again = groundsAt(day, 55 * M + 150, { seeks });
   assert.deepEqual(again.rows[1].score, [1, 0]);
   assert.equal(again.rows[1].flag, null, 'no outline on a goal shown before');
   // A seek forward over a goal never outlines it.
-  const over = groundsAt(day, 55 * M + 200, { fence: 55 * M + 200 });
+  const over = groundsAt(day, 55 * M + 200, { seeks: [{ lo: 50 * M, hi: 55 * M + 200, n: 1 }] });
   assert.equal(over.rows[1].flag, null);
+  // A short rewind that leaves the goal shown keeps its outline.
+  const short = groundsAt(day, 55 * M + 200, { seeks: [{ lo: 55 * M + 200, hi: 55 * M + 300, n: 1 }] });
+  assert.equal(short.rows[1].flag, 'new');
 });
 
 test('a skip holds the rows at the skip point while it is decided and plays; the report shows all final', () => {

@@ -112,7 +112,7 @@ test('full time elsewhere: FT on a ground with less added time, the minute on th
 
 test('after a rewind: later goals are hidden and no row is outlined', () => {
   const d = day([event(0, 30 * M, 'goal', 30, [1, 0], { side: 'home', scorer: 'Tomas Okafor' }), event(1, 55 * M, 'goal', 55, [1, 0], { side: 'home', scorer: 'Ade Harrow' })]);
-  const root = draw(groundsAt(d, 40 * M, { fence: 67 * M }));
+  const root = draw(groundsAt(d, 40 * M, { seeks: [{ lo: 40 * M, hi: 67 * M, n: 1 }] }));
   assert.match(text(rows(root)[0]), /1 – 0 .*40'$/);
   assert.match(text(rows(root)[1]), /0 – 0 .*40'$/);
   assert.equal(root.querySelectorAll('li.new, li.late').length, 0);

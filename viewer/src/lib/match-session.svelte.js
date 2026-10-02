@@ -224,9 +224,9 @@ export class MatchSession {
     this.lastRewind = null;
     this.goalsShown = 0;
     this.lastFlushTick = -1;
-    /// The furthest tick a seek has reached: a ground's goal at or before it shows with no
-    /// outline, so a rewind never replays one.
-    this.groundFence = 0;
+    /// Every seek the page made, as the ticks it jumped across: a ground's goal inside one
+    /// shows with no outline, so a rewind never replays one and a jump never shows one.
+    this.groundSeeks = [];
     /// The simulated second the other-grounds list was last worked out for.
     this.groundSecond = -1;
     this.goalShownAtTick = null;
@@ -487,7 +487,7 @@ export class MatchSession {
     this.skipOwed = false;
     this.streamEnded = false;
     this.matchday = null;
-    this.groundFence = 0;
+    this.groundSeeks = [];
     this.teams = hello.teams;
     this.hello = hello;
     this.ground = groundOf(hello);
@@ -730,7 +730,7 @@ export class MatchSession {
       return;
     } else if (message.type === 'ground-event') {
       const before = this.matchday;
-      this.matchday = addEvent(before, message, this.renderedTick);
+      this.matchday = addEvent(before, message, this.renderedTick, this.groundSeeks.length);
       if (message.late && this.matchday !== before) {
         signal('viewer.ground_late', {
           fixture: message.fixture,
@@ -754,7 +754,7 @@ export class MatchSession {
     this.groundSecond = second;
     this.grounds = groundsAt(this.matchday, this.renderedTick, {
       skip: this.skip,
-      fence: this.groundFence,
+      seeks: this.groundSeeks,
       total: totalMinutes(this.hello?.ticks_expected),
       stored: this.stored,
     });
@@ -820,8 +820,12 @@ export class MatchSession {
     const previous = this.lastFlushTick;
     const state = this.match.at(tick);
     this.lastFlushTick = tick;
-    if (seek) {
-      this.groundFence = Math.max(this.groundFence, previous, tick);
+    if (seek && previous >= 0 && previous !== tick) {
+      this.groundSeeks.push({
+        lo: Math.min(previous, tick),
+        hi: Math.max(previous, tick),
+        n: this.groundSeeks.length + 1,
+      });
     }
     this.updateGrounds(seek);
     this.tick = tick;
