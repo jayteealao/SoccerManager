@@ -1,6 +1,6 @@
 # How the engine works
 
-This page explains how the match engine is built and why. It is for people who maintain the engine. For the commands, see [the command-line reference](../reference/cli.md). For the data files, see [the data-file reference](../reference/data-files.md).
+This page explains how the match engine is built and why. It is for people who maintain the engine. For the commands, see [the command-line reference](../reference/cli.md). For the data files, see [the data-file reference](../reference/data-files.md). For why every part of the engine is a module in a slot, see [The plugin contract](plugin-contract.md).
 
 ## Positions, not probabilities
 

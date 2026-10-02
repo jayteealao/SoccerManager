@@ -74,6 +74,7 @@ fn every_document_in_the_set_exists() {
         "docs/explanation/engine.md",
         "docs/reference/engine-modules.md",
         "docs/how-to/engine-modules.md",
+        "docs/explanation/plugin-contract.md",
     ] {
         assert!(read(path).trim().len() > 200, "{path} is empty or missing");
     }
