@@ -1,5 +1,6 @@
 //! The documentation set exists, the command-line reference names every flag of every
-//! command, and every command the tutorial and the how-to run is a real command.
+//! command, every command the tutorial and the how-to guides run is a real command, and the
+//! engine module reference lists every slot of the registry as the program declares it.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -71,6 +72,7 @@ fn every_document_in_the_set_exists() {
         "docs/reference/data-files.md",
         "docs/reference/protocol.md",
         "docs/explanation/engine.md",
+        "docs/reference/engine-modules.md",
     ] {
         assert!(read(path).trim().len() > 200, "{path} is empty or missing");
     }
@@ -123,4 +125,90 @@ fn every_command_in_the_guides_is_a_real_command() {
             );
         }
     }
+}
+
+/// One row of the module reference's slot table: the slot id, whether it is required, the
+/// default module as `name@version`, the other versions, and whether it has an off version.
+#[derive(Debug, PartialEq)]
+struct SlotRow {
+    slot: String,
+    required: bool,
+    default: String,
+    others: Vec<String>,
+    off: bool,
+}
+
+/// The rows of the `## Slots` table of the module reference.
+fn slot_rows(doc: &str) -> Vec<SlotRow> {
+    let table = section(doc, "Slots").expect("a Slots section");
+    let code = |cell: &str| cell.trim().trim_matches('`').to_owned();
+    table
+        .lines()
+        .filter(|line| line.starts_with("| `"))
+        .map(|line| {
+            let cells: Vec<&str> = line.trim_matches('|').split('|').collect();
+            assert!(cells.len() >= 5, "a short slot row: {line}");
+            let others = match cells[3].trim() {
+                "none" => Vec::new(),
+                list => list.split(',').map(code).collect(),
+            };
+            SlotRow {
+                slot: code(cells[0]),
+                required: cells[1].trim() == "yes",
+                default: code(cells[2]),
+                others,
+                off: cells[4].trim() != "none",
+            }
+        })
+        .collect()
+}
+
+/// The rows the registry declares, in its order, as a release program declares them: a test
+/// build of the whole workspace also registers the faulty modules the gate tests select
+/// (`<name>-faulty`), which no release program contains and the reference does not list.
+fn registry_rows() -> Vec<SlotRow> {
+    engine::modules::REGISTRY
+        .iter()
+        .map(|decl| {
+            let named = |r: &engine::modules::Registration| format!("{}@{}", r.name, r.version);
+            SlotRow {
+                slot: decl.slot.id.to_owned(),
+                required: decl.slot.required,
+                default: named(&decl.registrations[0]),
+                others: decl.registrations[1..]
+                    .iter()
+                    .filter(|r| !r.name.ends_with("-faulty"))
+                    .map(named)
+                    .collect(),
+                off: decl.off.is_some(),
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn the_module_reference_names_every_slot() {
+    let doc = read("docs/reference/engine-modules.md");
+    let expected = registry_rows();
+    assert_eq!(expected.len(), engine::modules::SLOT_COUNT);
+    assert_eq!(
+        slot_rows(&doc),
+        expected,
+        "the slot table differs from the registry"
+    );
+
+    // Control: a planted row for a slot the registry does not declare must fail the same
+    // comparison, so the check cannot pass on a table it does not read.
+    let planted = doc.replacen(
+        "| `engine.fouls` |",
+        "| `engine.planted` | no | `planted@1` | none | `off` | none | none: control |
+| `engine.fouls` |",
+        1,
+    );
+    assert_ne!(planted, doc, "the control row was not planted");
+    assert_ne!(
+        slot_rows(&planted),
+        expected,
+        "a planted row went unnoticed"
+    );
 }
