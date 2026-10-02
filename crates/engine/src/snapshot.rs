@@ -12,7 +12,12 @@
 //!   names (44 bytes each, zero-padded). These offsets are fixed for every later version, so
 //!   [`Snapshot::identify`] names the writer of a file of any version from 8 on, and a later
 //!   version may only append to the header. Versions 6 and 7 had a 64-byte header and no
-//!   engine version; `identify` names their writer through [`RELEASED_BUILDS`].
+//!   engine version; `identify` names their writer through [`RELEASED_BUILDS`]. Version 9
+//!   appends the matchday mark after the 192 bytes, and the header length covers it: the
+//!   block length (u16, the bytes after it), the round seed (u64), the reveal tick (u32), the
+//!   fixture count (u8), and per fixture each club's id (u8 length, then at most 64 bytes)
+//!   and the SHA-256 of its team file (32 bytes), home first. A count of 0 is a match with no
+//!   round. The reader also reads a version 8 file, which has no mark.
 //! - Body: the seed, the length in minutes, the team-file digests, and every field of the
 //!   running match except the scratch buffer and the events already handed out: the lineups,
 //!   benches, tactics, substitutions used, and managers of both teams, each player's squad
@@ -57,7 +62,9 @@ use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 8;
+pub const VERSION: u16 = 9;
+/// The earliest layout version the strict reader still reads: version 8 has no matchday mark.
+const FIRST_READ: u16 = 8;
 /// The released builds from before the snapshot recorded its engine version: the full commit
 /// of each release tag and the release version. A version 6 or 7 file names its writer
 /// through this table.
@@ -94,6 +101,91 @@ pub const AWAY_AT: usize = 148;
 pub const TEAM_BYTES: usize = 44;
 /// Where the tick sits in the body: after the seed, the length and the two team digests.
 const BODY_TICK_AT: usize = 12 + 64;
+/// The longest club id a matchday mark keeps.
+const MARK_ID_BYTES: usize = 64;
+
+/// The matchday a served match belongs to, saved with each of its snapshots so a resumed
+/// match meets the same round and reveals the other grounds from the same point.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct MatchdayMark {
+    /// The seed the round was paired with; each fixture's seed derives from it.
+    pub round_seed: u64,
+    /// The player's tick up to which the other grounds' events were revealed: the tick the
+    /// snapshot was taken on.
+    pub reveal_tick: u32,
+    pub fixtures: Vec<MarkFixture>,
+}
+
+/// One fixture of a matchday mark.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MarkFixture {
+    /// The two club ids, home first.
+    pub clubs: [String; 2],
+    /// The SHA-256 of each club's team file as the round read it, home first.
+    pub digests: [[u8; 32]; 2],
+}
+
+impl MatchdayMark {
+    /// The mark as the header block stores it, after the 192 bytes of version 8.
+    fn to_block(&self) -> Vec<u8> {
+        let mut out = vec![0u8; 2];
+        out.extend_from_slice(&self.round_seed.to_le_bytes());
+        out.extend_from_slice(&self.reveal_tick.to_le_bytes());
+        // A round holds the clubs of one content folder, far fewer than 255 fixtures.
+        let count = self.fixtures.len().min(usize::from(u8::MAX));
+        out.push(count as u8);
+        for fixture in &self.fixtures[..count] {
+            for side in 0..2 {
+                let id = fit(&fixture.clubs[side], MARK_ID_BYTES);
+                out.push(id.len() as u8);
+                out.extend_from_slice(id.as_bytes());
+                out.extend_from_slice(&fixture.digests[side]);
+            }
+        }
+        let len = u16::try_from(out.len() - 2).expect("a mark is a few kilobytes at most");
+        out[0..2].copy_from_slice(&len.to_le_bytes());
+        out
+    }
+
+    /// Reads the block after the 192 bytes of a version 9 header. `None` for a mark with no
+    /// fixture; a malformed block is an error.
+    fn from_block(block: &[u8]) -> Result<Option<Self>, String> {
+        let malformed = |_| "malformed header: the matchday mark is damaged".to_string();
+        let mut r = Reader::new(block);
+        let len = usize::from(u16::from_le_bytes(
+            r.take(2).map_err(malformed)?.try_into().expect("2 bytes"),
+        ));
+        if len + 2 != block.len() {
+            return Err(malformed(""));
+        }
+        let round_seed = r.u64().map_err(malformed)?;
+        let reveal_tick = r.u32().map_err(malformed)?;
+        let count = r.u8().map_err(malformed)?;
+        let mut fixtures = Vec::with_capacity(usize::from(count));
+        for _ in 0..count {
+            let mut clubs = [String::new(), String::new()];
+            let mut digests = [[0u8; 32]; 2];
+            for side in 0..2 {
+                let n = usize::from(r.u8().map_err(malformed)?);
+                if n > MARK_ID_BYTES {
+                    return Err(malformed(""));
+                }
+                clubs[side] = String::from_utf8(r.take(n).map_err(malformed)?.to_vec())
+                    .map_err(|_| malformed(""))?;
+                digests[side] = r.take(32).map_err(malformed)?.try_into().expect("32 bytes");
+            }
+            fixtures.push(MarkFixture { clubs, digests });
+        }
+        if r.at != block.len() {
+            return Err(malformed(""));
+        }
+        Ok((count > 0).then_some(Self {
+            round_seed,
+            reveal_tick,
+            fixtures,
+        }))
+    }
+}
 
 /// One snapshot: the match identity in the header and the encoded match state.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,6 +200,8 @@ pub struct Snapshot {
     /// only, never read back into the match.
     pub teams: [String; 2],
     pub score: [u8; 2],
+    /// The matchday the match belongs to; `None` for a match with no round.
+    pub matchday: Option<MatchdayMark>,
     body: Vec<u8>,
 }
 
@@ -176,8 +270,16 @@ impl Snapshot {
                 sim.config.teams[1].name.clone(),
             ],
             score: goals.map(|g| u8::try_from(g).unwrap_or(u8::MAX)),
+            matchday: None,
             body: w.into_bytes(),
         }
+    }
+
+    /// The snapshot with the matchday mark of its match. A mark with no fixture is a match
+    /// with no round.
+    pub fn with_matchday(mut self, mark: MatchdayMark) -> Self {
+        self.matchday = (!mark.fixtures.is_empty()).then_some(mark);
+        self
     }
 
     /// Names the engine that wrote a snapshot file of version 6 or later, after the magic,
@@ -275,12 +377,17 @@ impl Snapshot {
 
     /// The whole file.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(HEADER_BYTES + self.body.len() + TRAILER_BYTES);
+        let mark = self.matchday.clone().unwrap_or_default().to_block();
+        let header_len = HEADER_BYTES + mark.len();
+        let mut out = Vec::with_capacity(header_len + self.body.len() + TRAILER_BYTES);
         let mut header = [0u8; HEADER_BYTES];
         header[0..4].copy_from_slice(MAGIC);
         header[4..6].copy_from_slice(&VERSION.to_le_bytes());
-        header[HEADER_LEN_AT..HEADER_LEN_AT + 2]
-            .copy_from_slice(&(HEADER_BYTES as u16).to_le_bytes());
+        header[HEADER_LEN_AT..HEADER_LEN_AT + 2].copy_from_slice(
+            &u16::try_from(header_len)
+                .expect("the header is a few kilobytes at most")
+                .to_le_bytes(),
+        );
         put_text(
             &mut header[BUILD_AT..BUILD_AT + BUILD_BYTES],
             &self.build_hash,
@@ -300,6 +407,7 @@ impl Snapshot {
         put_text(&mut header[HOME_AT..HOME_AT + TEAM_BYTES], &self.teams[0]);
         put_text(&mut header[AWAY_AT..AWAY_AT + TEAM_BYTES], &self.teams[1]);
         out.extend_from_slice(&header);
+        out.extend_from_slice(&mark);
         out.extend_from_slice(&self.body);
         let digest: [u8; 32] = Sha256::digest(&out).into();
         out.extend_from_slice(TRAILER_MAGIC);
@@ -331,7 +439,7 @@ impl Snapshot {
             return Err(refuse(format!("truncated: {} bytes", bytes.len())));
         }
         let version = u16::from_le_bytes([bytes[4], bytes[5]]);
-        if version != VERSION {
+        if !(FIRST_READ..=VERSION).contains(&version) {
             // Name the writer when the file is whole enough to say who it was.
             let writer = Self::identify(bytes)
                 .map(|id| format!(" (written by {})", id.writer()))
@@ -343,7 +451,20 @@ impl Snapshot {
         if bytes.len() < HEADER_BYTES + TRAILER_BYTES {
             return Err(refuse(format!("truncated: {} bytes", bytes.len())));
         }
-        let body_len = check_trailer(bytes, HEADER_BYTES).map_err(refuse)?;
+        let header_len = match version {
+            FIRST_READ => HEADER_BYTES,
+            _ => usize::from(u16::from_le_bytes([
+                bytes[HEADER_LEN_AT],
+                bytes[HEADER_LEN_AT + 1],
+            ])),
+        };
+        if header_len < HEADER_BYTES {
+            return Err(refuse(format!("malformed header: {header_len} bytes")));
+        }
+        if bytes.len() < header_len + TRAILER_BYTES {
+            return Err(refuse(format!("truncated: {} bytes", bytes.len())));
+        }
+        let body_len = check_trailer(bytes, header_len).map_err(refuse)?;
         let header = &bytes[..HEADER_BYTES];
         let build_hash = get_text(&header[BUILD_AT..BUILD_AT + BUILD_BYTES]);
         let engine_version =
@@ -356,7 +477,11 @@ impl Snapshot {
                 crate::version()
             )));
         }
-        let body = bytes[HEADER_BYTES..HEADER_BYTES + body_len].to_vec();
+        let matchday = match version {
+            FIRST_READ => None,
+            _ => MatchdayMark::from_block(&bytes[HEADER_BYTES..header_len]).map_err(refuse)?,
+        };
+        let body = bytes[header_len..header_len + body_len].to_vec();
         if body.len() < BODY_TICK_AT + 4 {
             return Err(refuse("malformed body: too short".into()));
         }
@@ -368,6 +493,7 @@ impl Snapshot {
                 get_text(&header[AWAY_AT..AWAY_AT + TEAM_BYTES]),
             ],
             score: [header[SCORE_AT], header[SCORE_AT + 1]],
+            matchday,
             content_hash: get_text(&header[CONTENT_AT..CONTENT_AT + CONTENT_BYTES]),
             owner_id: header[OWNER_AT..OWNER_AT + 16]
                 .try_into()
@@ -1183,7 +1309,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 8"),
+                .contains("unknown version 1; this build reads 9"),
             "{err}"
         );
     }

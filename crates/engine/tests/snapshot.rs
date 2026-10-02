@@ -9,6 +9,7 @@ mod common;
 use common::{full_match, scoring_match};
 use engine::record::RECORD_BYTES;
 use engine::rules::clock::TICKS_PER_MINUTE;
+use engine::snapshot::{MarkFixture, MatchdayMark};
 use engine::{
     ChangeKind, EngineError, EngineEventKind, EventDetail, Simulation, Snapshot, Stoppage,
     TickRecord, TickSink, VecSink,
@@ -166,7 +167,7 @@ fn a_damaged_or_foreign_snapshot_is_refused_by_name() {
     first_format[4] = 1;
     let reason = refusal(Snapshot::from_bytes(&first_format, "s"));
     assert!(
-        reason.starts_with("unknown version 1; this build reads 8"),
+        reason.starts_with("unknown version 1; this build reads 9"),
         "{reason}"
     );
 
@@ -291,7 +292,7 @@ fn a_version_three_snapshot_is_refused_by_name() {
     bytes[4..6].copy_from_slice(&3u16.to_le_bytes());
     let reason = refusal(Snapshot::from_bytes(&bytes, "s"));
     assert!(
-        reason.starts_with("unknown version 3; this build reads 8"),
+        reason.starts_with("unknown version 3; this build reads 9"),
         "{reason}"
     );
 }
@@ -343,7 +344,7 @@ fn a_version_six_snapshot_is_refused_by_name() {
     bytes[4..6].copy_from_slice(&6u16.to_le_bytes());
     let reason = refusal(Snapshot::from_bytes(&bytes, "s"));
     assert!(
-        reason.starts_with("unknown version 6; this build reads 8"),
+        reason.starts_with("unknown version 6; this build reads 9"),
         "{reason}"
     );
 }
@@ -450,7 +451,7 @@ fn a_snapshot_records_the_engine_version_and_a_display_summary() {
     assert_eq!(read, snapshot);
     let id = Snapshot::identify(&bytes).unwrap();
     assert_eq!(id.format, engine::snapshot::VERSION);
-    assert_eq!(id.format, 8);
+    assert_eq!(id.format, 9);
     assert_eq!(id.engine_version.as_deref(), Some(engine::version()));
     assert_eq!(id.build_hash, engine::build_hash());
     assert_eq!(id.tick, Some(sim.tick()));
@@ -486,10 +487,10 @@ fn the_identity_offsets_are_fixed() {
 
     // A later version with 16 more header bytes: the identity still reads.
     let header_len = u16::from_le_bytes([bytes[6], bytes[7]]) as usize;
-    assert_eq!(header_len, 192);
+    assert_eq!(header_len, 192 + EMPTY_MARK_BYTES);
     let body_len = bytes.len() - header_len - 40;
     let mut later = bytes[..header_len].to_vec();
-    later[4..6].copy_from_slice(&9u16.to_le_bytes());
+    later[4..6].copy_from_slice(&10u16.to_le_bytes());
     later[6..8].copy_from_slice(&((header_len + 16) as u16).to_le_bytes());
     later.extend_from_slice(&[0u8; 16]);
     later.extend_from_slice(&bytes[header_len..header_len + body_len]);
@@ -498,14 +499,156 @@ fn the_identity_offsets_are_fixed() {
     later.extend_from_slice(&(body_len as u32).to_le_bytes());
     later.extend_from_slice(&digest);
     let id = Snapshot::identify(&later).unwrap();
-    assert_eq!(id.format, 9);
+    assert_eq!(id.format, 10);
     assert_eq!(id.engine_version.as_deref(), Some("0.3.0"));
     assert_eq!(id.tick, Some(300));
     let reason = refusal(Snapshot::from_bytes(&later, "s"));
     assert!(
-        reason.starts_with("unknown version 9; this build reads 8 (written by Touchline 0.3.0"),
+        reason.starts_with("unknown version 10; this build reads 9 (written by Touchline 0.3.0"),
         "{reason}"
     );
+}
+
+/// The header block of a snapshot with no round: its length, the round seed, the reveal tick
+/// and a fixture count of 0.
+const EMPTY_MARK_BYTES: usize = 2 + 8 + 4 + 1;
+
+fn mark() -> MatchdayMark {
+    MatchdayMark {
+        round_seed: 0x1234_5678_9abc_def0,
+        reveal_tick: 300,
+        fixtures: (0..4u8)
+            .map(|i| MarkFixture {
+                clubs: [
+                    format!("club-000007ea-0{i}"),
+                    format!("club-000007ea-0{}", i + 4),
+                ],
+                digests: [[i; 32], [i + 10; 32]],
+            })
+            .collect(),
+    }
+}
+
+#[test]
+fn a_matchday_mark_round_trips() {
+    let mut sim = Simulation::new(full_match()).unwrap();
+    for _ in 0..300 {
+        sim.step();
+    }
+    let snapshot = Snapshot::capture(&sim, OWNER, 1).with_matchday(mark());
+    let bytes = snapshot.to_bytes();
+    let read = Snapshot::from_bytes(&bytes, "s").unwrap();
+    assert_eq!(read.matchday, Some(mark()));
+    assert_eq!(read, snapshot);
+    assert_eq!(read.to_bytes(), bytes, "written again, the same bytes");
+    // The match itself is untouched by the mark.
+    let rebuilt = Simulation::from_snapshot(full_match(), &read).unwrap();
+    assert_eq!(rebuilt.tick(), 300);
+    let header_len = u16::from_le_bytes([bytes[6], bytes[7]]) as usize;
+    let per_fixture = 2 * (1 + 16 + 32);
+    assert_eq!(header_len, 192 + EMPTY_MARK_BYTES + 4 * per_fixture);
+}
+
+#[test]
+fn a_snapshot_with_no_round_writes_an_empty_mark() {
+    let mut sim = Simulation::new(full_match()).unwrap();
+    for _ in 0..50 {
+        sim.step();
+    }
+    let plain = Snapshot::capture(&sim, OWNER, 1);
+    let empty = plain.clone().with_matchday(MatchdayMark::default());
+    assert_eq!(empty.matchday, None, "a mark with no fixture is no round");
+    let bytes = plain.to_bytes();
+    let header_len = u16::from_le_bytes([bytes[6], bytes[7]]) as usize;
+    assert_eq!(header_len, 192 + EMPTY_MARK_BYTES);
+    assert_eq!(
+        &bytes[192..194],
+        &((EMPTY_MARK_BYTES - 2) as u16).to_le_bytes()
+    );
+    assert_eq!(
+        bytes[192 + EMPTY_MARK_BYTES - 1],
+        0,
+        "the fixture count is 0"
+    );
+    assert_eq!(Snapshot::from_bytes(&bytes, "s").unwrap().matchday, None);
+}
+
+/// Version 9 only appends: the engine version, the tick, the score and the names stay where
+/// version 8 put them, so the version resolver reads both alike.
+#[test]
+fn the_version_8_offsets_hold_in_version_9() {
+    use engine::snapshot::{AWAY_AT, ENGINE_VERSION_AT, HOME_AT, SCORE_AT, TICK_AT};
+    assert_eq!(
+        (ENGINE_VERSION_AT, TICK_AT, SCORE_AT, HOME_AT, AWAY_AT),
+        (64, 96, 100, 104, 148)
+    );
+    let mut sim = Simulation::new(full_match()).unwrap();
+    for _ in 0..300 {
+        sim.step();
+    }
+    let bytes = stamped(&sim, "0.3.0", "abcdef0")
+        .with_matchday(mark())
+        .to_bytes();
+    assert_eq!(u16::from_le_bytes([bytes[4], bytes[5]]), 9);
+    assert_eq!(&bytes[ENGINE_VERSION_AT..ENGINE_VERSION_AT + 5], b"0.3.0");
+    assert_eq!(&bytes[TICK_AT..TICK_AT + 4], &300u32.to_le_bytes());
+    let id = Snapshot::identify(&bytes).unwrap();
+    assert_eq!(id.format, 9);
+    assert_eq!(id.engine_version.as_deref(), Some("0.3.0"));
+    assert_eq!(id.tick, Some(300));
+    assert_eq!(id.seed, Some(sim.seed()));
+    assert_eq!(id.writer(), "Touchline 0.3.0 (build abcdef0)");
+}
+
+/// A version 8 file, written before the matchday mark, still reads: it has no round.
+#[test]
+fn a_version_8_snapshot_still_reads_with_no_round() {
+    let mut sim = Simulation::new(full_match()).unwrap();
+    for _ in 0..300 {
+        sim.step();
+    }
+    let bytes = Snapshot::capture(&sim, OWNER, 1).to_bytes();
+    // The same file in the layout of version 8: the fixed 192 bytes, then the body.
+    let header_len = u16::from_le_bytes([bytes[6], bytes[7]]) as usize;
+    let body_len = bytes.len() - header_len - 40;
+    let mut v8 = bytes[..192].to_vec();
+    v8[4..6].copy_from_slice(&8u16.to_le_bytes());
+    v8[6..8].copy_from_slice(&192u16.to_le_bytes());
+    v8.extend_from_slice(&bytes[header_len..header_len + body_len]);
+    let digest: [u8; 32] = Sha256::digest(&v8).into();
+    v8.extend_from_slice(b"SMSE");
+    v8.extend_from_slice(&(body_len as u32).to_le_bytes());
+    v8.extend_from_slice(&digest);
+    let read = Snapshot::from_bytes(&v8, "s").unwrap();
+    assert_eq!(read.matchday, None);
+    assert_eq!(read.tick(), 300);
+    assert_eq!(Snapshot::identify(&v8).unwrap().format, 8);
+}
+
+#[test]
+fn a_damaged_matchday_mark_is_refused() {
+    let mut sim = Simulation::new(full_match()).unwrap();
+    for _ in 0..300 {
+        sim.step();
+    }
+    let bytes = Snapshot::capture(&sim, OWNER, 1)
+        .with_matchday(mark())
+        .to_bytes();
+    // One flipped byte inside a club id: the checksum refuses it.
+    let mut flipped = bytes.clone();
+    flipped[192 + EMPTY_MARK_BYTES + 3] ^= 1;
+    assert!(refusal(Snapshot::from_bytes(&flipped, "s")).starts_with("checksum mismatch"));
+    // A block whose length disagrees with the header, with a checksum that matches.
+    let header_len = u16::from_le_bytes([bytes[6], bytes[7]]) as usize;
+    let mut short = bytes[..bytes.len() - 40].to_vec();
+    short[192] = short[192].wrapping_sub(1);
+    let body_len = bytes.len() - header_len - 40;
+    let digest: [u8; 32] = Sha256::digest(&short).into();
+    short.extend_from_slice(b"SMSE");
+    short.extend_from_slice(&(body_len as u32).to_le_bytes());
+    short.extend_from_slice(&digest);
+    let reason = refusal(Snapshot::from_bytes(&short, "s"));
+    assert!(reason.starts_with("malformed header"), "{reason}");
 }
 
 /// A file in the layout of versions 6 and 7: a 64-byte header, then the body.
@@ -549,7 +692,7 @@ fn older_files_are_named_through_the_released_builds() {
     let reason = refusal(Snapshot::from_bytes(&old_layout(7, "669f68b", &body), "s"));
     assert_eq!(
         reason,
-        "unknown version 7; this build reads 8 (written by Touchline 0.2.0-beta.1 (build 669f68b))"
+        "unknown version 7; this build reads 9 (written by Touchline 0.2.0-beta.1 (build 669f68b))"
     );
 
     // A damaged or too old file is not identified.

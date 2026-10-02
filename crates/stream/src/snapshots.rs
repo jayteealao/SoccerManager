@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use engine::record::{TickRecord, TickSink};
-use engine::snapshot::FILE_NAME;
+use engine::snapshot::{FILE_NAME, MatchdayMark};
 use engine::{EngineError, Simulation, Snapshot, Stoppage};
 
 use crate::session::MatchState;
@@ -35,6 +35,8 @@ pub struct GatedSnapshots {
     match_millis: u64,
     state: Arc<MatchState>,
     ring: VecDeque<Held>,
+    /// The matchday of the match, saved with every capture at the capture's tick.
+    matchday: Option<MatchdayMark>,
     /// Snapshots written.
     pub writes: u32,
 }
@@ -55,6 +57,7 @@ impl GatedSnapshots {
             match_millis,
             state,
             ring: VecDeque::with_capacity(RING),
+            matchday: None,
             writes: 0,
         }
     }
@@ -79,14 +82,28 @@ impl GatedSnapshots {
         self.ring.len()
     }
 
+    /// Saves the round of the match's matchday with every later capture. Each capture
+    /// records its own tick as the reveal tick: the other grounds are revealed up to the
+    /// player's engine tick, which a pause, a speed change and a skip all move.
+    pub fn set_matchday(&mut self, mark: MatchdayMark) {
+        self.matchday = Some(mark);
+    }
+
     /// Captures `sim` as it stands. Every stoppage does; the match does once more at
     /// kick-off, so a crash before the first stoppage still has a point to restart from.
     pub fn capture(&mut self, sim: &Simulation) {
         if self.ring.len() == RING {
             self.ring.pop_front();
         }
+        let mut snapshot = Snapshot::capture(sim, self.owner_id, self.match_millis);
+        if let Some(mark) = &self.matchday {
+            snapshot = snapshot.with_matchday(MatchdayMark {
+                reveal_tick: sim.tick(),
+                ..mark.clone()
+            });
+        }
         self.ring.push_back(Held {
-            snapshot: Snapshot::capture(sim, self.owner_id, self.match_millis),
+            snapshot,
             written: false,
         });
     }

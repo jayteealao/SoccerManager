@@ -241,3 +241,42 @@ fn team(id: &str) -> protocol::TeamRef {
         formation: String::new(),
     }
 }
+
+#[test]
+fn every_capture_saves_the_matchday_mark_at_its_own_tick() {
+    use engine::snapshot::{MarkFixture, MatchdayMark};
+    let data = common::temp_dir("reconnect-matchday");
+    let state = Arc::new(MatchState::default());
+    let mut gated = GatedSnapshots::new(&data, "m", [7; 16], 1, Arc::clone(&state));
+    let mark = MatchdayMark {
+        round_seed: 99,
+        reveal_tick: 0,
+        fixtures: vec![MarkFixture {
+            clubs: ["club-a".into(), "club-b".into()],
+            digests: [[1; 32], [2; 32]],
+        }],
+    };
+    let mut sim = Simulation::new(common::match_config(3)).unwrap();
+    gated.capture(&sim);
+    assert_eq!(
+        gated.newest_before(1).unwrap().matchday,
+        None,
+        "no round yet"
+    );
+    gated.set_matchday(mark.clone());
+    for _ in 0..250 {
+        sim.step();
+    }
+    gated.capture(&sim);
+    let saved = gated.newest_before(251).unwrap().matchday.clone().unwrap();
+    assert_eq!(
+        saved.reveal_tick, 250,
+        "the reveal tick is the capture's tick"
+    );
+    assert_eq!((saved.round_seed, &saved.fixtures), (99, &mark.fixtures));
+    // Written and read back, the mark survives.
+    state.set_sent_tick(251);
+    gated.on_tick(&sim.record()).unwrap();
+    let read = Snapshot::read(gated.path(), "snapshot").unwrap();
+    assert_eq!(read.matchday.map(|m| m.reveal_tick), Some(250));
+}
