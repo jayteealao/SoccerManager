@@ -157,6 +157,11 @@
   --hatch-2: #3a3c41;
   --not-live-ground: #34363b;
 
+  /* The front door: the dim layer behind the return and quit dialogs (--well at 72 percent),
+   * and the one shadow inside the shell, under the in-match menu and the dialogs. */
+  --scrim: rgba(14, 15, 17, 0.72);
+  --popover-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+
   /* Type */
   --fd: 'Saira Semi Condensed', 'Barlow Semi Condensed', 'Arial Narrow', system-ui, sans-serif;
   --fb: 'Saira', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;

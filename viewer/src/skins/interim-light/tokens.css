@@ -126,6 +126,10 @@
   /* The matchday screens, as the light board maps them. */
   --sheet-head: oklch(0.49 0.17 250);
   --label-shadow: oklch(0.24 0.02 250 / 0.8);
+
+  /* The front door: the dim layer behind the dialogs, and the popover shadow. */
+  --scrim: oklch(0.24 0.02 250 / 0.45);
+  --popover-shadow: 0 10px 24px oklch(0.24 0.02 250 / 0.25);
   --read-ink: oklch(0.36 0.02 250);
   --star-empty: oklch(0.9 0.008 250);
   --proposal-ground: oklch(0.97 0.006 250);

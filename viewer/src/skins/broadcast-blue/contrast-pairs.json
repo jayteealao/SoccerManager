@@ -1024,5 +1024,29 @@
     "bg": "--ground",
     "kind": "text",
     "where": "other grounds: club names, a score, FT"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--well",
+    "kind": "text",
+    "where": "In-match menu: the Match paused header"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--picked-ground",
+    "kind": "text",
+    "where": "Licences and about: the selected package used for"
+  },
+  {
+    "fg": "--toggle-ink",
+    "bg": "--toggle-ground",
+    "kind": "text",
+    "where": "Settings: a segmented option not chosen"
+  },
+  {
+    "fg": "--star",
+    "bg": "--ground",
+    "kind": "boundary",
+    "where": "Match setup: a strength star"
   }
 ]

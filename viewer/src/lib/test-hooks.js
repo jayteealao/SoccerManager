@@ -6,9 +6,14 @@ import { COMPONENT_COUNT } from './decode.js';
 import { signals } from './signal.js';
 import { copyTactics } from './tactics-panel.js';
 
-/// Installs the hook for `session` on `target` (the window) and returns it.
-export function install(session, target = globalThis) {
+/// Installs the hook for `session` on `target` (the window) and returns it. `door` returns
+/// the front door, whose state `frontDoor()` reads; the page installs the hook again for each
+/// new session.
+export function install(session, target = globalThis, door = () => null) {
   const hook = Object.freeze({
+    /// The front door: the screen on show, what sits over the match, the splash's phase, the
+    /// picks and the round preview, the settings, the saved match and the closed page's facts.
+    frontDoor: () => door()?.snapshot() ?? null,
     screen: () => session.screen,
     lastRendered: () => Array.from(session.rendered),
     lastRenderedTick: () => session.renderedTick,
