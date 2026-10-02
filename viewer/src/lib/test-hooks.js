@@ -116,6 +116,29 @@ export function install(session, target = globalThis) {
     /// The skip to the result: its state and the tick it was skipped at, or null.
     skip: () => (session.skip ? { state: session.skip.state, from: session.skip.from } : null),
     canSkip: () => session.canSkip,
+    /// The other grounds: the round's fixtures, every ground event that arrived per fixture,
+    /// the tick each ground has reached, and what the list shows at the rendered tick.
+    matchday: () => {
+      const day = session.matchday;
+      return {
+        fixtures: day ? day.fixtures.map((f) => ({ fixture: f.fixture, home: f.home['team.name'], away: f.away['team.name'] })) : [],
+        events: day ? day.events.map((list) => list.map((e) => ({ ...e }))) : [],
+        reached: day ? [...day.reached] : [],
+        grounds: structuredClone(session.grounds),
+      };
+    },
+    /// `true` once every ground has reached `tick` or ended, so a screenshot shows settled rows.
+    groundsReady: (tick) => {
+      const day = session.matchday;
+      if (!day) {
+        return false;
+      }
+      return day.fixtures.every(
+        (_, i) =>
+          (day.reached[i] ?? 0) >= tick ||
+          day.events[i].some((e) => e.kind === 'full-time' || e.kind === 'unavailable')
+      );
+    },
     /// SHA-256 in hex over every stored binary tick frame, in order. Text frames carry wall
     /// stamps and are left out; the tick frames are what a saved replay holds of the match.
     tickFrameDigest: async () => {

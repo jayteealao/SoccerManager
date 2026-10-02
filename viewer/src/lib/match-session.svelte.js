@@ -31,6 +31,12 @@
 // plays the rest" until the full-time whistle, then stores, and is ready at the engine's clean
 // close, marked with the skip point; the match behind it moves to full time. The skip mark
 // lives in the session only: a saved replay keeps the stream's bytes.
+//
+// The other grounds of the matchday (`matchday.js`) arrive as `matchday`, `ground-event` and
+// `ground-progress` messages. The list follows the rendered tick like every other panel, and
+// is worked out again only when the rendered tick crosses a simulated second or a ground
+// message arrives, so the frame loop does no new work per frame. They are not part of the
+// match: no saved replay keeps them, and a replay shows none.
 
 import { COMPONENT_COUNT, decodeInto, newFrame } from './decode.js';
 import { Dugout } from './dugout.svelte.js';
@@ -42,16 +48,17 @@ import * as launcher from './launcher.js';
 import { LeadControl, SeenReport } from './lead.js';
 import { lineupModel } from './lineups.js';
 import { KIND, MatchState } from './match-state.js';
+import { addEvent, addProgress, groundsAt, newMatchday } from './matchday.js';
 import { DEFAULT_GROUND, Pitch, groundOf, readTokens } from './pitch.js';
 import { Playback } from './playback.js';
 import { formationName, kickOffSheet, rosterSheet, rulePackRows, squadSheet } from './prematch.js';
 import { backoff, clockAt, loadingSteps, panelModel, stepOptions } from './recovery.js';
 import { FrameStore, frameText, readReplay, writeReplay } from './replay-file.js';
 import { ReportClock, reportModel } from './report.js';
-import { Scheduler } from './schedule.js';
+import { Scheduler, TICKS_PER_SECOND } from './schedule.js';
 import { fixtureTitle, scorerLines } from './scoreboard.js';
 import { signal } from './signal.js';
-import { TICKS_PER_MINUTE } from './skip.js';
+import { TICKS_PER_MINUTE, totalMinutes } from './skip.js';
 import { MatchSocket, socketAddress } from './socket.js';
 import { Stoppages, stopsPlay } from './stoppages.js';
 
@@ -96,6 +103,9 @@ const DATE_WORDS = Object.freeze({
   'first-run': 'NOT CONNECTED',
   reconnecting: 'RECONNECTING',
 });
+
+/// The messages of the other grounds; none is part of the match.
+const GROUND_MESSAGES = new Set(['matchday', 'ground-event', 'ground-progress']);
 
 const MS = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -149,6 +159,11 @@ export class MatchSession {
   /// skipped at, and `newest` the newest tick received while the engine plays the rest
   /// (moved once a minute). Null with no skip.
   skip = $state.raw(null);
+  /// The other grounds: the round, every ground event that arrived and how far each ground
+  /// has played (`matchday.js`), or null before the `matchday` message and for a replay.
+  matchday = $state.raw(null);
+  /// What the other-grounds list shows at the rendered tick (`groundsAt`).
+  grounds = $state.raw(groundsAt(null, 0));
 
   /// `fetcher`, `timers`, `raf` and `now` are the browser's unless a test passes its own.
   constructor({
@@ -209,6 +224,11 @@ export class MatchSession {
     this.lastRewind = null;
     this.goalsShown = 0;
     this.lastFlushTick = -1;
+    /// The furthest tick a seek has reached: a ground's goal at or before it shows with no
+    /// outline, so a rewind never replays one.
+    this.groundFence = 0;
+    /// The simulated second the other-grounds list was last worked out for.
+    this.groundSecond = -1;
     this.goalShownAtTick = null;
     this.bannerTimer = null;
     this.stepShown = 0;
@@ -466,6 +486,8 @@ export class MatchSession {
     this.skip = null;
     this.skipOwed = false;
     this.streamEnded = false;
+    this.matchday = null;
+    this.groundFence = 0;
     this.teams = hello.teams;
     this.hello = hello;
     this.ground = groundOf(hello);
@@ -599,7 +621,9 @@ export class MatchSession {
         this.frames = new FrameStore();
         this.loadedRecord = null;
       }
-      this.frames.addText(data, message?.type);
+      if (!GROUND_MESSAGES.has(message?.type)) {
+        this.frames.addText(data, message?.type);
+      }
       return;
     }
     if (this.resuming) {
@@ -646,6 +670,10 @@ export class MatchSession {
   }
 
   onMessage(message) {
+    if (GROUND_MESSAGES.has(message.type)) {
+      this.onGround(message);
+      return;
+    }
     if ((message.type === 'ack' || message.type === 'reject') && message.command === 'skip') {
       this.onSkipAnswer(message);
       return;
@@ -687,6 +715,49 @@ export class MatchSession {
         }
       }
     }
+  }
+
+  /// One message of the other grounds. A `matchday` on a reconnect replaces the round, and
+  /// the engine sends every event up to its tick again; an exact repeat is dropped.
+  onGround(message) {
+    if (this.stored) {
+      return;
+    }
+    if (message.type === 'matchday') {
+      this.matchday = newMatchday(message);
+      signal('viewer.matchday', { fixtures: this.matchday.fixtures.length, round: this.matchday.round });
+    } else if (!this.matchday) {
+      return;
+    } else if (message.type === 'ground-event') {
+      const before = this.matchday;
+      this.matchday = addEvent(before, message, this.renderedTick);
+      if (message.late && this.matchday !== before) {
+        signal('viewer.ground_late', {
+          fixture: message.fixture,
+          tick: message.tick,
+          rendered_tick: this.renderedTick,
+        });
+      }
+    } else {
+      this.matchday = addProgress(this.matchday, message);
+    }
+    this.updateGrounds(true);
+  }
+
+  /// Works the other-grounds list out again when the rendered tick has crossed a simulated
+  /// second since the last time, or at once when `force` is set.
+  updateGrounds(force = false) {
+    const second = Math.floor(this.renderedTick / TICKS_PER_SECOND);
+    if (!force && second === this.groundSecond) {
+      return;
+    }
+    this.groundSecond = second;
+    this.grounds = groundsAt(this.matchday, this.renderedTick, {
+      skip: this.skip,
+      fence: this.groundFence,
+      total: totalMinutes(this.hello?.ticks_expected),
+      stored: this.stored,
+    });
   }
 
   /// Cuts every store back to `tick`, where the resumed match continues. The engine plays the
@@ -749,6 +820,10 @@ export class MatchSession {
     const previous = this.lastFlushTick;
     const state = this.match.at(tick);
     this.lastFlushTick = tick;
+    if (seek) {
+      this.groundFence = Math.max(this.groundFence, previous, tick);
+    }
+    this.updateGrounds(seek);
     this.tick = tick;
     this.clockText = clockAt(tick);
     if (state.home !== this.score[0] || state.away !== this.score[1]) {

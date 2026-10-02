@@ -804,3 +804,93 @@ test('a replay saved after a skip has the bytes of one saved after the match pla
   const watched = await play(false);
   assert.deepEqual(Array.from(skipped), Array.from(watched), 'the skip mark is not written');
 });
+
+// ---- The other grounds ------------------------------------------------------------------------
+
+const ground = (team) => ({ 'team.id': team, 'team.name': `${team} Town`, 'team.kit.primary': '#0f5c63', 'team.kit.secondary': '#ffffff', roster: [] });
+const matchdayMessage = () =>
+  JSON.stringify({
+    type: 'matchday',
+    round: 1,
+    fixtures: [
+      { fixture: 0, home: ground('Castlemere'), away: ground('Greywater') },
+      { fixture: 1, home: ground('Kelder'), away: ground('Millbridge') },
+    ],
+  });
+const groundGoal = (fixture, tick, score, extra = {}) =>
+  JSON.stringify({ type: 'ground-event', fixture, tick, kind: 'goal', minute: 0, side: 'home', scorer: 'Tomas Okafor', score, ...extra });
+
+test('the session keeps the round, shows a ground goal only at its tick, and drops a catch-up repeat', async () => {
+  const { session, socket } = await started(RUNNING);
+  socket.deliver(hello());
+  socket.deliver(matchdayMessage());
+  assert.equal(session.matchday.fixtures.length, 2);
+  assert.equal(session.grounds.state, 'rows');
+  assert.equal(session.grounds.rows[0].minute, 'KO');
+  session.act();
+  playTo(session, socket, 1, 100);
+  socket.deliver(groundGoal(0, 150, [1, 0]));
+  socket.deliver(JSON.stringify({ type: 'ground-progress', tick: 100, reached: [200, 200] }));
+  assert.deepEqual(session.grounds.rows[0].score, [0, 0], 'not before the rendered tick reaches 150');
+  assert.deepEqual(session.matchday.reached, [200, 200]);
+  playTo(session, socket, 101, 200);
+  assert.deepEqual(session.grounds.rows[0].score, [1, 0]);
+  socket.deliver(groundGoal(0, 150, [1, 0]));
+  assert.equal(session.matchday.events[0].length, 1, 'the repeat is dropped');
+  const kept = (await import('../src/lib/signal.js')).signals().find((s) => s.signal === 'viewer.matchday');
+  assert.equal(kept.fixtures, 2);
+});
+
+test('the list is worked out again only on a new simulated second or a ground message', async () => {
+  const { session, socket } = await started(RUNNING);
+  socket.deliver(hello());
+  socket.deliver(matchdayMessage());
+  session.act();
+  playTo(session, socket, 1, 120);
+  const first = session.grounds;
+  session.renderedTick = 121;
+  session.flush(121, { seek: false });
+  assert.equal(session.grounds, first, 'the same second: the same object');
+  session.renderedTick = 150;
+  session.flush(150, { seek: false });
+  assert.notEqual(session.grounds, first, 'a new second');
+  const second = session.grounds;
+  socket.deliver(JSON.stringify({ type: 'ground-progress', tick: 150, reached: [150, 150] }));
+  assert.notEqual(session.grounds, second, 'a message');
+});
+
+test('a late ground goal is signalled and shown at once; a reconnect keeps a new copy of the round', async () => {
+  const { session, socket } = await started(RUNNING);
+  socket.deliver(hello());
+  socket.deliver(matchdayMessage());
+  session.act();
+  playTo(session, socket, 1, 400);
+  socket.deliver(groundGoal(1, 300, [1, 0], { late: true }));
+  assert.equal(session.grounds.rows[1].flag, 'late');
+  const late = (await import('../src/lib/signal.js')).signals().find((s) => s.signal === 'viewer.ground_late');
+  assert.deepEqual([late.fixture, late.tick, late.rendered_tick], [1, 300, 400]);
+  socket.drop();
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const again = FakeSocket.made.at(-1);
+  again.deliver(hello());
+  again.deliver(matchdayMessage());
+  assert.equal(session.matchday.events[1].length, 0, 'the round starts again; the engine sends its events again');
+  again.deliver(groundGoal(1, 300, [1, 0]));
+  assert.equal(session.matchday.events[1].length, 1);
+});
+
+test('a ground message is never stored with the frames, so a saved replay has none', async () => {
+  const { session, socket } = await started(RUNNING);
+  socket.deliver(hello());
+  socket.deliver(matchdayMessage());
+  session.act();
+  playTo(session, socket, 1, 100);
+  socket.deliver(groundGoal(0, 50, [1, 0]));
+  socket.deliver(JSON.stringify({ type: 'ground-progress', tick: 100, reached: [100, 100] }));
+  for (let i = 0; i < session.frames.count; i += 1) {
+    const { text, payload } = session.frames.frame(i);
+    if (text) {
+      assert.doesNotMatch(new TextDecoder().decode(payload), /matchday|ground-/);
+    }
+  }
+});
