@@ -325,6 +325,65 @@ Each entry of `picks`:
 | `on` | integer | on a substitution: the squad index of the player coming on |
 | `patch` | object | on a tactics pick: the change as `queue-change` writes it (`mentality`, `instructions`) |
 
+### matchday
+
+Sent on `serve` right after the `hello`, on every connection, before kick-off as well. It
+lists the other matches of the player's matchday: every club file in the content folder's
+`teams/` except the two of the player's match, paired into fixtures from a seed derived from
+the match seed, so one served match always meets the same round. Every fixture shows 0-0
+until its `ground-event` messages say otherwise. A content folder with no other club sends an
+empty `fixtures` list. It is not a match event: no events file, record, or replay keeps it.
+`serve --no-matchday` sends none and plays no other match.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `round` | integer | the matchday's number; 1 while the generated round is the only matchday |
+| `fixtures` | array | one entry per other match, in fixture order; see the table below |
+
+Each entry of `fixtures`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `fixture` | integer | the fixture's place in the round, from 0; every ground message names it |
+| `home` | object | the home club as the `hello` names a team (`team.id`, `team.name`, `team.kit.primary`, `team.kit.secondary`), with an empty roster |
+| `away` | object | the away club, the same way |
+
+### ground-event
+
+One event at another ground. Every other match kicks off with the player's match and plays
+on the full engine in the background, so an event's `tick` is also a moment on the player's
+match clock. The engine sends the event once its own tick of the player's match reaches
+`tick`: a pause, a speed change, and a skip move that tick, and nothing is sent before it. A
+page shows the event once the tick it draws reaches `tick`. On a new connection, after a
+reconnect or a resume, every event up to the player's tick is sent again, none marked late;
+a page drops an exact repeat (the same `fixture`, `tick`, and `kind`). After the player's
+full time the engine waits, at most 120 seconds, until every other match has ended, sends
+their remaining events, and then closes. It is not a match event: no events file, record, or
+replay keeps it.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `fixture` | integer | the fixture, as `matchday` numbers it |
+| `tick` | integer | the tick of the event in its own match, which is also its moment on the player's clock |
+| `kind` | enumeration | `goal`, `half-time`, `second-half`, `extra-time` (a period of extra time starts), `full-time`, or `unavailable` (a fault stopped the match; it has no result and a bug report names its seed and engine) |
+| `minute` | integer | the minute of play, counted from 0 |
+| `added` | integer | in added time only: the added minute |
+| `side` | enumeration | on a goal only: `home` or `away`, the side that scored |
+| `scorer` | string | on a goal only: the name of the player who kicked the ball last |
+| `score` | array of two integers | the score after the event, home first |
+| `late` | boolean | present and `true` when the event was computed more than one simulated second after the player's match had passed its tick on a paced run (not during a skip or a test fast-forward), so it reaches the page late |
+
+### ground-progress
+
+Sent on `serve` with the running statistics, once every simulated second while other matches
+play: how far each one has played. A fixture whose tick is behind the player's clock shows
+its next events late.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `tick` | integer | the player's tick when the progress was sent |
+| `reached` | array of integers | the tick each fixture has reached, in fixture order; a fixture that ended keeps its last tick |
+
 ### ack
 
 | Field | Type | Meaning |
@@ -546,7 +605,11 @@ the match again from kick-off with the same seed and lineup.
 A restart after a crash works the same way on the page's side: the launcher starts
 `serve --resume <snapshot>`, which sends the same `hello` and continues at the snapshot's
 tick plus one. No message and no field changed for either path, so `PROTOCOL_VERSION`
-stays 3.
+stays 3. On both paths the `matchday` message follows the `hello` again, then every
+`ground-event` up to the player's tick; a resumed match rebuilds its round from the
+snapshot's matchday mark and plays each other match again from kick-off. The `matchday`,
+`ground-event`, and `ground-progress` messages were added beside the others, as `advice` was,
+so `PROTOCOL_VERSION` stays 3 for them too.
 
 ## Backpressure
 

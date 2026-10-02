@@ -303,6 +303,88 @@ pub struct Advice {
     pub picks: Vec<AdvicePick>,
 }
 
+/// One other match of the player's matchday.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MatchdayFixture {
+    /// The fixture's place in the round, from 0; every ground message names it.
+    pub fixture: u32,
+    /// The two clubs, with no roster.
+    pub home: TeamRef,
+    pub away: TeamRef,
+}
+
+/// The other matches of the player's matchday. It is not a match event: no record or replay
+/// keeps it. Sent after the hello on every connection, every fixture at 0-0 until its
+/// ground events say otherwise; an empty list means the match has no other grounds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Matchday {
+    /// The matchday's number; 1 while the generated round is the only matchday.
+    pub round: u32,
+    pub fixtures: Vec<MatchdayFixture>,
+}
+
+/// What happened at another ground.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GroundKind {
+    Goal,
+    HalfTime,
+    SecondHalf,
+    /// A period of extra time starts.
+    ExtraTime,
+    FullTime,
+    /// A fault stopped the match; it has no result.
+    Unavailable,
+}
+
+/// The side of a fixture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Side {
+    Home,
+    Away,
+}
+
+/// One event at another ground, revealed on the player's match clock: the engine sends it
+/// once its own tick of the player's match reaches `tick`, and a new connection receives
+/// every one up to that tick again. Every ground kicks off with the player's match, so
+/// `tick` is a moment on the player's clock too.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GroundEvent {
+    pub fixture: u32,
+    pub tick: u32,
+    pub kind: GroundKind,
+    /// The minute of play, counted from 0, and the added minute in added time.
+    pub minute: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added: Option<u32>,
+    /// The scoring side, on a goal only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub side: Option<Side>,
+    /// The scorer's name, on a goal only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scorer: Option<String>,
+    /// The score after the event, home first.
+    pub score: [u32; 2],
+    /// `true` when the event was computed more than a simulated second after the player's
+    /// match passed its tick, so it reaches the page late.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub late: bool,
+}
+
+/// How far each other ground has played, once every simulated second: the tick each fixture
+/// has reached, in fixture order. A fixture behind the player's clock shows its events late.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GroundProgress {
+    /// The player's tick when the progress was sent.
+    pub tick: u32,
+    pub reached: Vec<u32>,
+}
+
 /// Everything the server sends as a JSON text frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -316,6 +398,9 @@ pub enum ServerMessage {
     Reject(Reject),
     ChangeState(ChangeStateNote),
     Advice(Advice),
+    Matchday(Matchday),
+    GroundEvent(GroundEvent),
+    GroundProgress(GroundProgress),
 }
 
 /// The playback speed a client asks for.
@@ -695,6 +780,12 @@ mod tests {
                 tick: 3_000,
             }),
             ServerMessage::Advice(advice()),
+            ServerMessage::Matchday(matchday()),
+            ServerMessage::GroundEvent(goal()),
+            ServerMessage::GroundProgress(GroundProgress {
+                tick: 6_000,
+                reached: vec![6_150, 6_100, 6_200, 5_900],
+            }),
         ];
         for m in messages {
             let json = serde_json::to_string(&m).unwrap();
@@ -867,6 +958,97 @@ mod tests {
         assert_eq!(back.teams[0].squad[0].injury_resistance, 0);
         assert_eq!(back.substitutions.extra_substitutions, 0);
         assert!(back.substitutions.windows_exempt.is_empty());
+    }
+
+    fn bare_team(id: &str, name: &str) -> TeamRef {
+        TeamRef {
+            id: id.into(),
+            name: name.into(),
+            kit_primary: "#c8102e".into(),
+            kit_secondary: "#000000".into(),
+            roster: Vec::new(),
+            squad: Vec::new(),
+            setup: None,
+            formation: String::new(),
+        }
+    }
+
+    fn matchday() -> Matchday {
+        Matchday {
+            round: 1,
+            fixtures: vec![MatchdayFixture {
+                fixture: 0,
+                home: bare_team("club-000007ea-00", "Belfield Athletic"),
+                away: bare_team("club-000007ea-03", "Harrow Vale"),
+            }],
+        }
+    }
+
+    fn goal() -> GroundEvent {
+        GroundEvent {
+            fixture: 2,
+            tick: 201_000,
+            kind: GroundKind::Goal,
+            minute: 66,
+            added: None,
+            side: Some(Side::Home),
+            scorer: Some("Ade Okafor".into()),
+            score: [1, 0],
+            late: false,
+        }
+    }
+
+    #[test]
+    fn the_matchday_messages_travel_under_their_own_tags() {
+        let json = serde_json::to_string(&ServerMessage::Matchday(matchday())).unwrap();
+        assert!(
+            json.starts_with(r#"{"type":"matchday","round":1,"fixtures":[{"fixture":0,"#),
+            "{json}"
+        );
+        assert!(json.contains(r#""team.id":"club-000007ea-00""#), "{json}");
+        let text = serde_json::to_string(&ServerMessage::GroundEvent(goal())).unwrap();
+        assert_eq!(
+            text,
+            r#"{"type":"ground-event","fixture":2,"tick":201000,"kind":"goal","minute":66,"side":"home","scorer":"Ade Okafor","score":[1,0]}"#
+        );
+        // A late event says so; a half-time names no side or scorer.
+        let late = GroundEvent {
+            kind: GroundKind::HalfTime,
+            minute: 45,
+            added: Some(2),
+            side: None,
+            scorer: None,
+            late: true,
+            ..goal()
+        };
+        let json = serde_json::to_string(&ServerMessage::GroundEvent(late.clone())).unwrap();
+        assert!(
+            json.contains(r#""kind":"half-time","minute":45,"added":2,"#),
+            "{json}"
+        );
+        assert!(json.ends_with(r#""score":[1,0],"late":true}"#), "{json}");
+        assert_eq!(
+            serde_json::from_str::<ServerMessage>(&json).unwrap(),
+            ServerMessage::GroundEvent(late)
+        );
+        assert_eq!(
+            serde_json::to_string(&GroundKind::Unavailable).unwrap(),
+            r#""unavailable""#
+        );
+        let progress = serde_json::to_string(&ServerMessage::GroundProgress(GroundProgress {
+            tick: 50,
+            reached: vec![50, 0],
+        }))
+        .unwrap();
+        assert_eq!(
+            progress,
+            r#"{"type":"ground-progress","tick":50,"reached":[50,0]}"#
+        );
+        let err = serde_json::from_str::<ServerMessage>(
+            r#"{"type":"ground-progress","tick":1,"reached":[],"fast":true}"#,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("fast"), "{err}");
     }
 
     fn advice() -> Advice {

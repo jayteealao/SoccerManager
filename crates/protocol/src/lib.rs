@@ -18,9 +18,9 @@ pub use event::{CardKind, ChangeOutcome, EventType, MatchEvent};
 pub use frame::{Frame, TickFrame};
 pub use message::{
     Advice, AdvicePick, CancelChange, ChangeDetail, ChangeStateNote, ClientCommand, Condition,
-    DEFAULT_GROUND_LENGTH, DEFAULT_GROUND_WIDTH, Hello, PatchWire, QueueChange, RoleWire,
-    RosterEntry, Seen, ServerMessage, SetLineup, SetSpeed, SlotRole, SquadEntry, Stats,
-    SubstitutionRules, TeamRef, TeamSetup,
+    DEFAULT_GROUND_LENGTH, DEFAULT_GROUND_WIDTH, GroundEvent, GroundKind, GroundProgress, Hello,
+    Matchday, MatchdayFixture, PatchWire, QueueChange, RoleWire, RosterEntry, Seen, ServerMessage,
+    SetLineup, SetSpeed, Side, SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
 };
 
 /// The protocol version a client must ask for. A client that asks for another version is
@@ -291,6 +291,36 @@ pub const MESSAGES: &[MessageSpec] = &[
         ],
     },
     MessageSpec {
+        name: "matchday",
+        direction: Direction::ServerToClient,
+        encoding: Encoding::JsonText,
+        fields: &[
+            "round",
+            "fixtures",
+            "fixture",
+            "home",
+            "away",
+            "team.id",
+            "team.name",
+            "team.kit.primary",
+            "team.kit.secondary",
+        ],
+    },
+    MessageSpec {
+        name: "ground-event",
+        direction: Direction::ServerToClient,
+        encoding: Encoding::JsonText,
+        fields: &[
+            "fixture", "tick", "kind", "minute", "added", "side", "scorer", "score", "late",
+        ],
+    },
+    MessageSpec {
+        name: "ground-progress",
+        direction: Direction::ServerToClient,
+        encoding: Encoding::JsonText,
+        fields: &["tick", "reached"],
+    },
+    MessageSpec {
         name: "ack",
         direction: Direction::ServerToClient,
         encoding: Encoding::JsonText,
@@ -393,6 +423,9 @@ mod tests {
             ServerMessage::Reject(_) => "reject",
             ServerMessage::ChangeState(_) => "change-state",
             ServerMessage::Advice(_) => "advice",
+            ServerMessage::Matchday(_) => "matchday",
+            ServerMessage::GroundEvent(_) => "ground-event",
+            ServerMessage::GroundProgress(_) => "ground-progress",
         }
     }
 
@@ -493,6 +526,25 @@ mod tests {
                 tick: 0,
                 minute: 0,
                 picks: Vec::new(),
+            }),
+            ServerMessage::Matchday(Matchday {
+                round: 1,
+                fixtures: Vec::new(),
+            }),
+            ServerMessage::GroundEvent(GroundEvent {
+                fixture: 0,
+                tick: 0,
+                kind: GroundKind::FullTime,
+                minute: 0,
+                added: None,
+                side: None,
+                scorer: None,
+                score: [0, 0],
+                late: false,
+            }),
+            ServerMessage::GroundProgress(GroundProgress {
+                tick: 0,
+                reached: Vec::new(),
             }),
         ]
     }
