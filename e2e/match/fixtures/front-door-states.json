@@ -1,0 +1,845 @@
+{
+  "about": "Fixed bodies for the front-door screenshots, so a dependency update or a new build moves no pixel: the launcher idle on the start screen (ten sample teams, the settings), a saved match of this release with the players where they stood, the round previewed for Oakmere Rangers at home to Eldstead City, the answer to quit during that match, and fourteen packages of the notices file. The licence texts are cut at 2,400 characters; the drive on the built page compares the full file.",
+  "idle": {
+    "engine.code": null,
+    "engine.pid": null,
+    "engine.reason": null,
+    "engine.state": "idle",
+    "engine.version": "0.2.0-dev",
+    "front-door": true,
+    "launcher": true,
+    "launcher.version": "0.2.0-dev",
+    "match.id": null,
+    "match.resumed_from": null,
+    "previous.version": "0.2.0-beta.1",
+    "protocol.version": 3,
+    "resume": null,
+    "saved": null,
+    "settings": {
+      "commentary": true,
+      "motion": "follow",
+      "schema_version": 1,
+      "speed": 1
+    },
+    "snapshot.tick": null,
+    "socket.port": null,
+    "teams": [
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-00000001-00",
+        "kit": [
+          "#c8102e",
+          "#000000"
+        ],
+        "name": "Oakmere Rangers",
+        "short_name": "OAK",
+        "strength": 47
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-00000002-00",
+        "kit": [
+          "#6a0dad",
+          "#ff6a13"
+        ],
+        "name": "Eldstead City",
+        "short_name": "ELD",
+        "strength": 46.7
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-000007ea-00",
+        "kit": [
+          "#000000",
+          "#c8102e"
+        ],
+        "name": "Belfield Athletic",
+        "short_name": "BEL",
+        "strength": 46.8
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-000007ea-01",
+        "kit": [
+          "#6a0dad",
+          "#000000"
+        ],
+        "name": "Lanworth Albion",
+        "short_name": "LAN",
+        "strength": 47.3
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-000007ea-02",
+        "kit": [
+          "#f5f5dc",
+          "#000000"
+        ],
+        "name": "Velton City",
+        "short_name": "VEL",
+        "strength": 47.7
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-000007ea-03",
+        "kit": [
+          "#800000",
+          "#003087"
+        ],
+        "name": "Salhaven Rangers",
+        "short_name": "SAL",
+        "strength": 46.2
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-000007ea-04",
+        "kit": [
+          "#ffd100",
+          "#6a0dad"
+        ],
+        "name": "Farwick Rangers",
+        "short_name": "FAR",
+        "strength": 46.9
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-000007ea-05",
+        "kit": [
+          "#ff6a13",
+          "#ffd100"
+        ],
+        "name": "Salmere Town",
+        "short_name": "SAL",
+        "strength": 46.9
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-000007ea-06",
+        "kit": [
+          "#87ceeb",
+          "#ffffff"
+        ],
+        "name": "Ulhaven United",
+        "short_name": "ULH",
+        "strength": 47
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-000007ea-07",
+        "kit": [
+          "#c8102e",
+          "#000000"
+        ],
+        "name": "Penmere Athletic",
+        "short_name": "PEN",
+        "strength": 46.5
+      }
+    ],
+    "viewer.skin": "broadcast-blue"
+  },
+  "saved": {
+    "kind": "current",
+    "version": "0.2.0-dev",
+    "tick": 156500,
+    "teams": [
+      "Oakmere Rangers",
+      "Eldstead City"
+    ],
+    "score": [
+      1,
+      1
+    ],
+    "millis": 1790000000000,
+    "positions": {
+      "pitch": [
+        105,
+        68
+      ],
+      "players": [
+        [
+          0,
+          13,
+          31
+        ],
+        [
+          0,
+          34,
+          15
+        ],
+        [
+          0,
+          35,
+          29
+        ],
+        [
+          0,
+          33,
+          43
+        ],
+        [
+          0,
+          34,
+          49
+        ],
+        [
+          0,
+          55,
+          9
+        ],
+        [
+          0,
+          53,
+          27
+        ],
+        [
+          0,
+          54,
+          45
+        ],
+        [
+          0,
+          55,
+          55
+        ],
+        [
+          0,
+          59.5,
+          25
+        ],
+        [
+          0,
+          61,
+          35
+        ],
+        [
+          1,
+          98,
+          37
+        ],
+        [
+          1,
+          76,
+          13
+        ],
+        [
+          1,
+          77,
+          27
+        ],
+        [
+          1,
+          78,
+          41
+        ],
+        [
+          1,
+          76,
+          55
+        ],
+        [
+          1,
+          57,
+          7
+        ],
+        [
+          1,
+          58,
+          25
+        ],
+        [
+          1,
+          56,
+          43
+        ],
+        [
+          1,
+          57,
+          61
+        ],
+        [
+          1,
+          51.7,
+          21.4
+        ],
+        [
+          1,
+          49.7,
+          42.6
+        ]
+      ]
+    }
+  },
+  "round": {
+    "fixtures": [
+      {
+        "away": {
+          "ground": [
+            105,
+            68
+          ],
+          "id": "club-000007ea-04",
+          "kit": [
+            "#ffd100",
+            "#6a0dad"
+          ],
+          "name": "Farwick Rangers",
+          "short_name": "FAR",
+          "strength": 46.9
+        },
+        "home": {
+          "ground": [
+            105,
+            68
+          ],
+          "id": "club-000007ea-03",
+          "kit": [
+            "#800000",
+            "#003087"
+          ],
+          "name": "Salhaven Rangers",
+          "short_name": "SAL",
+          "strength": 46.2
+        }
+      },
+      {
+        "away": {
+          "ground": [
+            105,
+            68
+          ],
+          "id": "club-000007ea-05",
+          "kit": [
+            "#ff6a13",
+            "#ffd100"
+          ],
+          "name": "Salmere Town",
+          "short_name": "SAL",
+          "strength": 46.9
+        },
+        "home": {
+          "ground": [
+            105,
+            68
+          ],
+          "id": "club-000007ea-00",
+          "kit": [
+            "#000000",
+            "#c8102e"
+          ],
+          "name": "Belfield Athletic",
+          "short_name": "BEL",
+          "strength": 46.8
+        }
+      },
+      {
+        "away": {
+          "ground": [
+            105,
+            68
+          ],
+          "id": "club-000007ea-01",
+          "kit": [
+            "#6a0dad",
+            "#000000"
+          ],
+          "name": "Lanworth Albion",
+          "short_name": "LAN",
+          "strength": 47.3
+        },
+        "home": {
+          "ground": [
+            105,
+            68
+          ],
+          "id": "club-000007ea-06",
+          "kit": [
+            "#87ceeb",
+            "#ffffff"
+          ],
+          "name": "Ulhaven United",
+          "short_name": "ULH",
+          "strength": 47
+        }
+      },
+      {
+        "away": {
+          "ground": [
+            105,
+            68
+          ],
+          "id": "club-000007ea-02",
+          "kit": [
+            "#f5f5dc",
+            "#000000"
+          ],
+          "name": "Velton City",
+          "short_name": "VEL",
+          "strength": 47.7
+        },
+        "home": {
+          "ground": [
+            105,
+            68
+          ],
+          "id": "club-000007ea-07",
+          "kit": [
+            "#c8102e",
+            "#000000"
+          ],
+          "name": "Penmere Athletic",
+          "short_name": "PEN",
+          "strength": 46.5
+        }
+      }
+    ]
+  },
+  "quit": {
+    "engine.code": null,
+    "engine.pid": null,
+    "engine.reason": null,
+    "engine.state": "closed",
+    "engine.version": "0.2.0-dev",
+    "front-door": true,
+    "launcher": true,
+    "launcher.version": "0.2.0-dev",
+    "match.id": null,
+    "match.resumed_from": null,
+    "previous.version": "0.2.0-beta.1",
+    "protocol.version": 3,
+    "resume": null,
+    "saved": null,
+    "settings": {
+      "commentary": true,
+      "motion": "follow",
+      "schema_version": 1,
+      "speed": 1
+    },
+    "snapshot.tick": null,
+    "socket.port": null,
+    "teams": [
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-00000001-00",
+        "kit": [
+          "#c8102e",
+          "#000000"
+        ],
+        "name": "Oakmere Rangers",
+        "short_name": "OAK",
+        "strength": 47
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-00000002-00",
+        "kit": [
+          "#6a0dad",
+          "#ff6a13"
+        ],
+        "name": "Eldstead City",
+        "short_name": "ELD",
+        "strength": 46.7
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-000007ea-00",
+        "kit": [
+          "#000000",
+          "#c8102e"
+        ],
+        "name": "Belfield Athletic",
+        "short_name": "BEL",
+        "strength": 46.8
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-000007ea-01",
+        "kit": [
+          "#6a0dad",
+          "#000000"
+        ],
+        "name": "Lanworth Albion",
+        "short_name": "LAN",
+        "strength": 47.3
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-000007ea-02",
+        "kit": [
+          "#f5f5dc",
+          "#000000"
+        ],
+        "name": "Velton City",
+        "short_name": "VEL",
+        "strength": 47.7
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-000007ea-03",
+        "kit": [
+          "#800000",
+          "#003087"
+        ],
+        "name": "Salhaven Rangers",
+        "short_name": "SAL",
+        "strength": 46.2
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-000007ea-04",
+        "kit": [
+          "#ffd100",
+          "#6a0dad"
+        ],
+        "name": "Farwick Rangers",
+        "short_name": "FAR",
+        "strength": 46.9
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-000007ea-05",
+        "kit": [
+          "#ff6a13",
+          "#ffd100"
+        ],
+        "name": "Salmere Town",
+        "short_name": "SAL",
+        "strength": 46.9
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-000007ea-06",
+        "kit": [
+          "#87ceeb",
+          "#ffffff"
+        ],
+        "name": "Ulhaven United",
+        "short_name": "ULH",
+        "strength": 47
+      },
+      {
+        "ground": [
+          105,
+          68
+        ],
+        "id": "club-000007ea-07",
+        "kit": [
+          "#c8102e",
+          "#000000"
+        ],
+        "name": "Penmere Athletic",
+        "short_name": "PEN",
+        "strength": 46.5
+      }
+    ],
+    "viewer.skin": "broadcast-blue",
+    "closed": {
+      "match": true,
+      "saved": {
+        "kind": "current",
+        "version": "0.2.0-dev",
+        "tick": 156500,
+        "teams": [
+          "Oakmere Rangers",
+          "Eldstead City"
+        ],
+        "score": [
+          1,
+          1
+        ],
+        "millis": 1790000000000,
+        "positions": {
+          "pitch": [
+            105,
+            68
+          ],
+          "players": [
+            [
+              0,
+              13,
+              31
+            ],
+            [
+              0,
+              34,
+              15
+            ],
+            [
+              0,
+              35,
+              29
+            ],
+            [
+              0,
+              33,
+              43
+            ],
+            [
+              0,
+              34,
+              49
+            ],
+            [
+              0,
+              55,
+              9
+            ],
+            [
+              0,
+              53,
+              27
+            ],
+            [
+              0,
+              54,
+              45
+            ],
+            [
+              0,
+              55,
+              55
+            ],
+            [
+              0,
+              59.5,
+              25
+            ],
+            [
+              0,
+              61,
+              35
+            ],
+            [
+              1,
+              98,
+              37
+            ],
+            [
+              1,
+              76,
+              13
+            ],
+            [
+              1,
+              77,
+              27
+            ],
+            [
+              1,
+              78,
+              41
+            ],
+            [
+              1,
+              76,
+              55
+            ],
+            [
+              1,
+              57,
+              7
+            ],
+            [
+              1,
+              58,
+              25
+            ],
+            [
+              1,
+              56,
+              43
+            ],
+            [
+              1,
+              57,
+              61
+            ],
+            [
+              1,
+              51.7,
+              21.4
+            ],
+            [
+              1,
+              49.7,
+              42.6
+            ]
+          ]
+        }
+      }
+    }
+  },
+  "notices": {
+    "version": "0.2.0-dev",
+    "packages": [
+      {
+        "kind": "font",
+        "name": "Saira",
+        "version": null,
+        "licence": "OFL-1.1",
+        "description": "Screen text (broadcast-blue skin)",
+        "text": "Copyright 2020 The Saira Project Authors (https://github.com/Omnibus-Type/Saira) Saira-Italic[wdth,wght].ttf: Copyright 2020 The Saira Project Authors (https://github.com/Omnibus-Type/Saira)\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttp://scripts.sil.org/OFL\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------\n\nPREAMBLE\nThe goals of the Open Font License (OFL) are to stimulate worldwide\ndevelopment of collaborative font projects, to support the font creation\nefforts of academic and linguistic communities, and to provide a free and\nopen framework in which fonts may be shared and improved in partnership\nwith others.\n\nThe OFL allows the licensed fonts to be used, studied, modified and\nredistributed freely as long as they are not sold by themselves. The\nfonts, including any derivative works, can be bundled, embedded,\nredistributed and/or sold with any software provided that any reserved\nnames are not used by derivative works. The fonts and derivatives,\nhowever, cannot be released under any other type of license. The\nrequirement for fonts to remain under this license does not apply\nto any document created using the fonts or their derivatives.\n\nDEFINITIONS\n\"Font Software\" refers to the set of files released by the Copyright\nHolder(s) under this license and clearly marked as such. This may\ninclude source files, build scripts and documentation.\n\n\"Reserved Font Name\" refers to any names specified as such after the\ncopyright statement(s).\n\n\"Original Version\" refers to the collection of Font Software components as\ndistributed by the Copyright Holder(s).\n\n\"Modified Version\" refers to any derivative made by adding to, deleting,\nor substituting -- in part or in whole -- any of the components of the\nOriginal Version, by changing formats or by porting the Font Software to a\nnew environment.\n\n\"Author\" refers to any designer, engineer, programmer, technical\nwriter or other person who contributed to the Font Software.\n\nPERMISSION & CONDITIONS\nPermission is hereby granted, free of charge, to any person obtaining\na copy of the Font Software, to use, study, copy, merge, embed, modify,\nredistribute, and sell modified and unmodified copies of the Font\n\n[… the full text is in the notices file the build writes]"
+      },
+      {
+        "kind": "font",
+        "name": "Saira Semi Condensed",
+        "version": null,
+        "licence": "OFL-1.1",
+        "description": "Screen text (broadcast-blue skin)",
+        "text": "Copyright 2016 The Saira Project Authors (omnibus.type@gmail.com), with reserved font name \"Saira\". SairaSemiCondensed-ExtraLight.ttf: Copyright 2016 The Saira Project Authors (omnibus.type@gmail.com), with reserved font name \"Saira\". SairaSemiCondensed-Light.ttf: Copyright 2016 The Saira Project Authors (omnibus.type@gmail.com), with reserved font name \"Saira\". SairaSemiCondensed-Regular.ttf: Copyright 2016 The Saira Project Authors (omnibus.type@gmail.com), with reserved font name \"Saira\". SairaSemiCondensed-Medium.ttf: Copyright 2016 The Saira Project Authors (omnibus.type@gmail.com), with reserved font name \"Saira\". SairaSemiCondensed-SemiBold.ttf: Copyright 2016 The Saira Project Authors (omnibus.type@gmail.com), with reserved font name \"Saira\". SairaSemiCondensed-Bold.ttf: Copyright 2016 The Saira Project Authors (omnibus.type@gmail.com), with reserved font name \"Saira\". SairaSemiCondensed-ExtraBold.ttf: Copyright 2016 The Saira Project Authors (omnibus.type@gmail.com), with reserved font name \"Saira\". SairaSemiCondensed-Black.ttf: Copyright 2016 The Saira Project Authors (omnibus.type@gmail.com), with reserved font name \"Saira\".\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttp://scripts.sil.org/OFL\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------\n\nPREAMBLE\nThe goals of the Open Font License (OFL) are to stimulate worldwide\ndevelopment of collaborative font projects, to support the font creation\nefforts of academic and linguistic communities, and to provide a free and\nopen framework in which fonts may be shared and improved in partnership\nwith others.\n\nThe OFL allows the licensed fonts to be used, studied, modified and\nredistributed freely as long as they are not sold by themselves. The\nfonts, including any derivative works, can be bundled, embedded,\nredistributed and/or sold with any software provided that any reserved\nnames are not used by derivative works. The fonts and derivatives,\nhowever, cannot be released under any other type of license. The\nrequirement for fonts to remain under this license does not apply\nto any document created using the fonts or their derivatives.\n\nDEFINITIONS\n\"Font Software\" refers to the set of\n\n[… the full text is in the notices file the build writes]"
+      },
+      {
+        "kind": "npm",
+        "name": "svelte",
+        "version": "5.57.1",
+        "licence": "MIT",
+        "description": "Cybernetically enhanced web apps",
+        "text": "Copyright (c) 2016-2025 [Svelte Contributors](https://github.com/sveltejs/svelte/graphs/contributors)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE."
+      },
+      {
+        "kind": "npm",
+        "name": "clsx",
+        "version": "2.1.1",
+        "licence": "MIT",
+        "description": "A tiny (239B) utility for constructing className strings conditionally.",
+        "text": "MIT License\n\nCopyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE."
+      },
+      {
+        "kind": "crate",
+        "name": "rhai",
+        "version": "1.26.1",
+        "licence": "MIT OR Apache-2.0",
+        "description": "Embedded scripting for Rust",
+        "text": "LICENSE-APACHE.txt\n\nApache License\n                           Version 2.0, January 2004\n                        http://www.apache.org/licenses/\n\n   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n   1. Definitions.\n\n      \"License\" shall mean the terms and conditions for use, reproduction,\n      and distribution as defined by Sections 1 through 9 of this document.\n\n      \"Licensor\" shall mean the copyright owner or entity authorized by\n      the copyright owner that is granting the License.\n\n      \"Legal Entity\" shall mean the union of the acting entity and all\n      other entities that control, are controlled by, or are under common\n      control with that entity. For the purposes of this definition,\n      \"control\" means (i) the power, direct or indirect, to cause the\n      direction or management of such entity, whether by contract or\n      otherwise, or (ii) ownership of fifty percent (50%) or more of the\n      outstanding shares, or (iii) beneficial ownership of such entity.\n\n      \"You\" (or \"Your\") shall mean an individual or Legal Entity\n      exercising permissions granted by this License.\n\n      \"Source\" form shall mean the preferred form for making modifications,\n      including but not limited to software source code, documentation\n      source, and configuration files.\n\n      \"Object\" form shall mean any form resulting from mechanical\n      transformation or translation of a Source form, including but\n      not limited to compiled object code, generated documentation,\n      and conversions to other media types.\n\n      \"Work\" shall mean the work of authorship, whether in Source or\n      Object form, made available under the License, as indicated by a\n      copyright notice that is included in or attached to the work\n      (an example is provided in the Appendix below).\n\n      \"Derivative Works\" shall mean any work, whether in Source or Object\n      form, that is based on (or derived from) the Work and for which the\n      editorial revisions, annotations, elaborations, or other modifications\n      represent, as a whole, an original work of authorship. For the purposes\n      of this License, Derivative Works shall not include works that remain\n      separable from, or merely link (or bind by name) to the interfaces of,\n      the Work and Derivative Works thereof.\n\n      \"Contribution\" shall mean any work of authorship, including\n\n[… the full text is in the notices file the build writes]"
+      },
+      {
+        "kind": "crate",
+        "name": "tungstenite",
+        "version": "0.30.0",
+        "licence": "MIT OR Apache-2.0",
+        "description": "Lightweight stream-based WebSocket implementation",
+        "text": "LICENSE-APACHE\n\nApache License\n                        Version 2.0, January 2004\n                     http://www.apache.org/licenses/\n\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n1. Definitions.\n\n   \"License\" shall mean the terms and conditions for use, reproduction,\n   and distribution as defined by Sections 1 through 9 of this document.\n\n   \"Licensor\" shall mean the copyright owner or entity authorized by\n   the copyright owner that is granting the License.\n\n   \"Legal Entity\" shall mean the union of the acting entity and all\n   other entities that control, are controlled by, or are under common\n   control with that entity. For the purposes of this definition,\n   \"control\" means (i) the power, direct or indirect, to cause the\n   direction or management of such entity, whether by contract or\n   otherwise, or (ii) ownership of fifty percent (50%) or more of the\n   outstanding shares, or (iii) beneficial ownership of such entity.\n\n   \"You\" (or \"Your\") shall mean an individual or Legal Entity\n   exercising permissions granted by this License.\n\n   \"Source\" form shall mean the preferred form for making modifications,\n   including but not limited to software source code, documentation\n   source, and configuration files.\n\n   \"Object\" form shall mean any form resulting from mechanical\n   transformation or translation of a Source form, including but\n   not limited to compiled object code, generated documentation,\n   and conversions to other media types.\n\n   \"Work\" shall mean the work of authorship, whether in Source or\n   Object form, made available under the License, as indicated by a\n   copyright notice that is included in or attached to the work\n   (an example is provided in the Appendix below).\n\n   \"Derivative Works\" shall mean any work, whether in Source or Object\n   form, that is based on (or derived from) the Work and for which the\n   editorial revisions, annotations, elaborations, or other modifications\n   represent, as a whole, an original work of authorship. For the purposes\n   of this License, Derivative Works shall not include works that remain\n   separable from, or merely link (or bind by name) to the interfaces of,\n   the Work and Derivative Works thereof.\n\n   \"Contribution\" shall mean any work of authorship, including\n   the original version of the Work and any modifications or additions\n   to that Work or Derivative Works thereof,\n\n[… the full text is in the notices file the build writes]"
+      },
+      {
+        "kind": "crate",
+        "name": "rand_chacha",
+        "version": "0.10.0",
+        "licence": "MIT OR Apache-2.0",
+        "description": "ChaCha random number generator",
+        "text": "COPYRIGHT\n\nCopyrights in the Rand project are retained by their contributors. No\ncopyright assignment is required to contribute to the Rand project.\n\nFor full authorship information, see the version control history.\n\nExcept as otherwise noted (below and/or in individual files), Rand is\nlicensed under the Apache License, Version 2.0 <LICENSE-APACHE> or\n<http://www.apache.org/licenses/LICENSE-2.0> or the MIT license\n<LICENSE-MIT> or <http://opensource.org/licenses/MIT>, at your option.\n\nThe Rand project includes code from the Rust project\npublished under these same licenses.\n\nLICENSE-APACHE\n\nApache License\n                        Version 2.0, January 2004\n                     https://www.apache.org/licenses/\n\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n1. Definitions.\n\n   \"License\" shall mean the terms and conditions for use, reproduction,\n   and distribution as defined by Sections 1 through 9 of this document.\n\n   \"Licensor\" shall mean the copyright owner or entity authorized by\n   the copyright owner that is granting the License.\n\n   \"Legal Entity\" shall mean the union of the acting entity and all\n   other entities that control, are controlled by, or are under common\n   control with that entity. For the purposes of this definition,\n   \"control\" means (i) the power, direct or indirect, to cause the\n   direction or management of such entity, whether by contract or\n   otherwise, or (ii) ownership of fifty percent (50%) or more of the\n   outstanding shares, or (iii) beneficial ownership of such entity.\n\n   \"You\" (or \"Your\") shall mean an individual or Legal Entity\n   exercising permissions granted by this License.\n\n   \"Source\" form shall mean the preferred form for making modifications,\n   including but not limited to software source code, documentation\n   source, and configuration files.\n\n   \"Object\" form shall mean any form resulting from mechanical\n   transformation or translation of a Source form, including but\n   not limited to compiled object code, generated documentation,\n   and conversions to other media types.\n\n   \"Work\" shall mean the work of authorship, whether in Source or\n   Object form, made available under the License, as indicated by a\n   copyright notice that is included in or attached to the work\n   (an example is provided in the Appendix below).\n\n   \"Derivative Works\" shall mean any work, whether in Source or Object\n   form,\n\n[… the full text is in the notices file the build writes]"
+      },
+      {
+        "kind": "crate",
+        "name": "glam",
+        "version": "0.33.8",
+        "licence": "MIT OR Apache-2.0",
+        "description": "A simple and fast 3D math library for games and graphics",
+        "text": "LICENSE-APACHE\n\nApache License\n                        Version 2.0, January 2004\n                     http://www.apache.org/licenses/\n\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n1. Definitions.\n\n   \"License\" shall mean the terms and conditions for use, reproduction,\n   and distribution as defined by Sections 1 through 9 of this document.\n\n   \"Licensor\" shall mean the copyright owner or entity authorized by\n   the copyright owner that is granting the License.\n\n   \"Legal Entity\" shall mean the union of the acting entity and all\n   other entities that control, are controlled by, or are under common\n   control with that entity. For the purposes of this definition,\n   \"control\" means (i) the power, direct or indirect, to cause the\n   direction or management of such entity, whether by contract or\n   otherwise, or (ii) ownership of fifty percent (50%) or more of the\n   outstanding shares, or (iii) beneficial ownership of such entity.\n\n   \"You\" (or \"Your\") shall mean an individual or Legal Entity\n   exercising permissions granted by this License.\n\n   \"Source\" form shall mean the preferred form for making modifications,\n   including but not limited to software source code, documentation\n   source, and configuration files.\n\n   \"Object\" form shall mean any form resulting from mechanical\n   transformation or translation of a Source form, including but\n   not limited to compiled object code, generated documentation,\n   and conversions to other media types.\n\n   \"Work\" shall mean the work of authorship, whether in Source or\n   Object form, made available under the License, as indicated by a\n   copyright notice that is included in or attached to the work\n   (an example is provided in the Appendix below).\n\n   \"Derivative Works\" shall mean any work, whether in Source or Object\n   form, that is based on (or derived from) the Work and for which the\n   editorial revisions, annotations, elaborations, or other modifications\n   represent, as a whole, an original work of authorship. For the purposes\n   of this License, Derivative Works shall not include works that remain\n   separable from, or merely link (or bind by name) to the interfaces of,\n   the Work and Derivative Works thereof.\n\n   \"Contribution\" shall mean any work of authorship, including\n   the original version of the Work and any modifications or additions\n   to that Work or Derivative Works thereof,\n\n[… the full text is in the notices file the build writes]"
+      },
+      {
+        "kind": "crate",
+        "name": "libm",
+        "version": "0.2.16",
+        "licence": "MIT",
+        "description": "libm in pure Rust",
+        "text": "rust-lang/libm as a whole is available for use under the MIT license:\n\n------------------------------------------------------------------------------\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n------------------------------------------------------------------------------\n\nAs a contributor, you agree that your code can be used under either the MIT\nlicense or the Apache-2.0 license:\n\n------------------------------------------------------------------------------\n                                 Apache License\n                           Version 2.0, January 2004\n                        http://www.apache.org/licenses/\n\n   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n   1. Definitions.\n\n      \"License\" shall mean the terms and conditions for use, reproduction,\n      and distribution as defined by Sections 1 through 9 of this document.\n\n      \"Licensor\" shall mean the copyright owner or entity authorized by\n      the copyright owner that is granting the License.\n\n      \"Legal Entity\" shall mean the union of the acting entity and all\n      other entities that control, are controlled by, or are under common\n      control with that entity. For the purposes of this definition,\n      \"control\" means (i) the power, direct or indirect, to cause the\n      direction or management of such entity, whether by contract or\n      otherwise, or (ii) ownership of fifty percent (50%) or more of the\n\n[… the full text is in the notices file the build writes]"
+      },
+      {
+        "kind": "crate",
+        "name": "serde",
+        "version": "1.0.229",
+        "licence": "MIT OR Apache-2.0",
+        "description": "A generic serialization/deserialization framework",
+        "text": "LICENSE-APACHE\n\nApache License\n                        Version 2.0, January 2004\n                     http://www.apache.org/licenses/\n\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n1. Definitions.\n\n   \"License\" shall mean the terms and conditions for use, reproduction,\n   and distribution as defined by Sections 1 through 9 of this document.\n\n   \"Licensor\" shall mean the copyright owner or entity authorized by\n   the copyright owner that is granting the License.\n\n   \"Legal Entity\" shall mean the union of the acting entity and all\n   other entities that control, are controlled by, or are under common\n   control with that entity. For the purposes of this definition,\n   \"control\" means (i) the power, direct or indirect, to cause the\n   direction or management of such entity, whether by contract or\n   otherwise, or (ii) ownership of fifty percent (50%) or more of the\n   outstanding shares, or (iii) beneficial ownership of such entity.\n\n   \"You\" (or \"Your\") shall mean an individual or Legal Entity\n   exercising permissions granted by this License.\n\n   \"Source\" form shall mean the preferred form for making modifications,\n   including but not limited to software source code, documentation\n   source, and configuration files.\n\n   \"Object\" form shall mean any form resulting from mechanical\n   transformation or translation of a Source form, including but\n   not limited to compiled object code, generated documentation,\n   and conversions to other media types.\n\n   \"Work\" shall mean the work of authorship, whether in Source or\n   Object form, made available under the License, as indicated by a\n   copyright notice that is included in or attached to the work\n   (an example is provided in the Appendix below).\n\n   \"Derivative Works\" shall mean any work, whether in Source or Object\n   form, that is based on (or derived from) the Work and for which the\n   editorial revisions, annotations, elaborations, or other modifications\n   represent, as a whole, an original work of authorship. For the purposes\n   of this License, Derivative Works shall not include works that remain\n   separable from, or merely link (or bind by name) to the interfaces of,\n   the Work and Derivative Works thereof.\n\n   \"Contribution\" shall mean any work of authorship, including\n   the original version of the Work and any modifications or additions\n   to that Work or Derivative Works thereof,\n\n[… the full text is in the notices file the build writes]"
+      },
+      {
+        "kind": "crate",
+        "name": "serde_json",
+        "version": "1.0.151",
+        "licence": "MIT OR Apache-2.0",
+        "description": "A JSON serialization file format",
+        "text": "LICENSE-APACHE\n\nApache License\n                        Version 2.0, January 2004\n                     http://www.apache.org/licenses/\n\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n1. Definitions.\n\n   \"License\" shall mean the terms and conditions for use, reproduction,\n   and distribution as defined by Sections 1 through 9 of this document.\n\n   \"Licensor\" shall mean the copyright owner or entity authorized by\n   the copyright owner that is granting the License.\n\n   \"Legal Entity\" shall mean the union of the acting entity and all\n   other entities that control, are controlled by, or are under common\n   control with that entity. For the purposes of this definition,\n   \"control\" means (i) the power, direct or indirect, to cause the\n   direction or management of such entity, whether by contract or\n   otherwise, or (ii) ownership of fifty percent (50%) or more of the\n   outstanding shares, or (iii) beneficial ownership of such entity.\n\n   \"You\" (or \"Your\") shall mean an individual or Legal Entity\n   exercising permissions granted by this License.\n\n   \"Source\" form shall mean the preferred form for making modifications,\n   including but not limited to software source code, documentation\n   source, and configuration files.\n\n   \"Object\" form shall mean any form resulting from mechanical\n   transformation or translation of a Source form, including but\n   not limited to compiled object code, generated documentation,\n   and conversions to other media types.\n\n   \"Work\" shall mean the work of authorship, whether in Source or\n   Object form, made available under the License, as indicated by a\n   copyright notice that is included in or attached to the work\n   (an example is provided in the Appendix below).\n\n   \"Derivative Works\" shall mean any work, whether in Source or Object\n   form, that is based on (or derived from) the Work and for which the\n   editorial revisions, annotations, elaborations, or other modifications\n   represent, as a whole, an original work of authorship. For the purposes\n   of this License, Derivative Works shall not include works that remain\n   separable from, or merely link (or bind by name) to the interfaces of,\n   the Work and Derivative Works thereof.\n\n   \"Contribution\" shall mean any work of authorship, including\n   the original version of the Work and any modifications or additions\n   to that Work or Derivative Works thereof,\n\n[… the full text is in the notices file the build writes]"
+      },
+      {
+        "kind": "crate",
+        "name": "sha2",
+        "version": "0.10.9",
+        "licence": "MIT OR Apache-2.0",
+        "description": "Pure Rust implementation of the SHA-2 hash function family including SHA-224, SHA-256, SHA-384, and SHA-512.",
+        "text": "LICENSE-APACHE\n\nApache License\n                        Version 2.0, January 2004\n                     http://www.apache.org/licenses/\n\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n1. Definitions.\n\n   \"License\" shall mean the terms and conditions for use, reproduction,\n   and distribution as defined by Sections 1 through 9 of this document.\n\n   \"Licensor\" shall mean the copyright owner or entity authorized by\n   the copyright owner that is granting the License.\n\n   \"Legal Entity\" shall mean the union of the acting entity and all\n   other entities that control, are controlled by, or are under common\n   control with that entity. For the purposes of this definition,\n   \"control\" means (i) the power, direct or indirect, to cause the\n   direction or management of such entity, whether by contract or\n   otherwise, or (ii) ownership of fifty percent (50%) or more of the\n   outstanding shares, or (iii) beneficial ownership of such entity.\n\n   \"You\" (or \"Your\") shall mean an individual or Legal Entity\n   exercising permissions granted by this License.\n\n   \"Source\" form shall mean the preferred form for making modifications,\n   including but not limited to software source code, documentation\n   source, and configuration files.\n\n   \"Object\" form shall mean any form resulting from mechanical\n   transformation or translation of a Source form, including but\n   not limited to compiled object code, generated documentation,\n   and conversions to other media types.\n\n   \"Work\" shall mean the work of authorship, whether in Source or\n   Object form, made available under the License, as indicated by a\n   copyright notice that is included in or attached to the work\n   (an example is provided in the Appendix below).\n\n   \"Derivative Works\" shall mean any work, whether in Source or Object\n   form, that is based on (or derived from) the Work and for which the\n   editorial revisions, annotations, elaborations, or other modifications\n   represent, as a whole, an original work of authorship. For the purposes\n   of this License, Derivative Works shall not include works that remain\n   separable from, or merely link (or bind by name) to the interfaces of,\n   the Work and Derivative Works thereof.\n\n   \"Contribution\" shall mean any work of authorship, including\n   the original version of the Work and any modifications or additions\n   to that Work or Derivative Works thereof,\n\n[… the full text is in the notices file the build writes]"
+      },
+      {
+        "kind": "crate",
+        "name": "clap",
+        "version": "4.6.7",
+        "licence": "MIT OR Apache-2.0",
+        "description": "A simple to use, efficient, and full-featured Command Line Argument Parser",
+        "text": "LICENSE-APACHE\n\nApache License\n                           Version 2.0, January 2004\n                        http://www.apache.org/licenses/\n\n   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n   1. Definitions.\n\n      \"License\" shall mean the terms and conditions for use, reproduction,\n      and distribution as defined by Sections 1 through 9 of this document.\n\n      \"Licensor\" shall mean the copyright owner or entity authorized by\n      the copyright owner that is granting the License.\n\n      \"Legal Entity\" shall mean the union of the acting entity and all\n      other entities that control, are controlled by, or are under common\n      control with that entity. For the purposes of this definition,\n      \"control\" means (i) the power, direct or indirect, to cause the\n      direction or management of such entity, whether by contract or\n      otherwise, or (ii) ownership of fifty percent (50%) or more of the\n      outstanding shares, or (iii) beneficial ownership of such entity.\n\n      \"You\" (or \"Your\") shall mean an individual or Legal Entity\n      exercising permissions granted by this License.\n\n      \"Source\" form shall mean the preferred form for making modifications,\n      including but not limited to software source code, documentation\n      source, and configuration files.\n\n      \"Object\" form shall mean any form resulting from mechanical\n      transformation or translation of a Source form, including but\n      not limited to compiled object code, generated documentation,\n      and conversions to other media types.\n\n      \"Work\" shall mean the work of authorship, whether in Source or\n      Object form, made available under the License, as indicated by a\n      copyright notice that is included in or attached to the work\n      (an example is provided in the Appendix below).\n\n      \"Derivative Works\" shall mean any work, whether in Source or Object\n      form, that is based on (or derived from) the Work and for which the\n      editorial revisions, annotations, elaborations, or other modifications\n      represent, as a whole, an original work of authorship. For the purposes\n      of this License, Derivative Works shall not include works that remain\n      separable from, or merely link (or bind by name) to the interfaces of,\n      the Work and Derivative Works thereof.\n\n      \"Contribution\" shall mean any work of authorship, including\n      the\n\n[… the full text is in the notices file the build writes]"
+      },
+      {
+        "kind": "crate",
+        "name": "tracing",
+        "version": "0.1.44",
+        "licence": "MIT",
+        "description": "Application-level tracing for Rust.",
+        "text": "Copyright (c) 2019 Tokio Contributors\n\nPermission is hereby granted, free of charge, to any\nperson obtaining a copy of this software and associated\ndocumentation files (the \"Software\"), to deal in the\nSoftware without restriction, including without\nlimitation the rights to use, copy, modify, merge,\npublish, distribute, sublicense, and/or sell copies of\nthe Software, and to permit persons to whom the Software\nis furnished to do so, subject to the following\nconditions:\n\nThe above copyright notice and this permission notice\nshall be included in all copies or substantial portions\nof the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF\nANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED\nTO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A\nPARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT\nSHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR\nIN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER\nDEALINGS IN THE SOFTWARE."
+      }
+    ]
+  }
+}

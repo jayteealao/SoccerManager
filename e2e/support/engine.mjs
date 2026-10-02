@@ -205,3 +205,39 @@ export function matchdayArgs({ matchday = true, threads = null, fault = null } =
 export async function waitForGrounds(page, tick, timeout = 60_000) {
   await page.waitForFunction((t) => window.__touchline.groundsReady(t), tick, { timeout, polling: 100 });
 }
+
+/// Starts `launch` on the start screen, serving the built viewer, with its own data folder (or
+/// `dataDir`, to start again on the same one). `fastForwardTo` passes the launcher's hidden
+/// `--fast-forward-to` on to each match it starts, so a drive never waits for real-time play.
+export function frontDoor({ args = [], dataDir, fastForwardTo, env = {} } = {}) {
+  const more = fastForwardTo === undefined ? [] : ['--fast-forward-to', String(fastForwardTo)];
+  return startEngine({ command: 'launch', args: [...args, ...more, '--web', VIEWER], dataDir, env });
+}
+
+/// Whether a process with this id is running.
+export function processAlive(pid) {
+  if (!pid) {
+    return false;
+  }
+  if (process.platform === 'win32') {
+    const out = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH', '/FO', 'CSV'], { encoding: 'utf8' });
+    return out.stdout.includes(`"${pid}"`);
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/// The match folders under a data folder that hold a snapshot.
+export function savedSnapshots(dataDir) {
+  const matches = path.join(dataDir, 'matches');
+  if (!existsSync(matches)) {
+    return [];
+  }
+  return readdirSync(matches)
+    .map((id) => path.join(matches, id, 'snapshot.smsn'))
+    .filter((file) => existsSync(file));
+}
