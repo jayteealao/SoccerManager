@@ -76,6 +76,10 @@ pub struct Pitch {
     width: f64,
     half_length: f64,
     half_width: f64,
+    /// `length / 105` and `width / 68`, divided once here instead of at every formation
+    /// anchor: the same division of the same values, so the same bits.
+    scale_x: f64,
+    scale_y: f64,
 }
 
 impl Default for Pitch {
@@ -94,6 +98,8 @@ impl Pitch {
             width,
             half_length: length / 2.0,
             half_width: width / 2.0,
+            scale_x: length / DEFAULT_LENGTH,
+            scale_y: width / DEFAULT_WIDTH,
         }
     }
 
@@ -141,8 +147,25 @@ impl Pitch {
     /// The factors that carry a position drawn for the default ground onto this one: along
     /// the touchline and across it. Both are exactly 1.0 on the default ground.
     pub fn scale(&self) -> (f64, f64) {
-        (self.length / DEFAULT_LENGTH, self.width / DEFAULT_WIDTH)
+        (self.scale_x, self.scale_y)
     }
+}
+
+/// `v` clamped to `lo..=hi` with `f64::clamp`'s comparisons in its order (a NaN stays NaN),
+/// without its `lo <= hi` check: every margin the engine passes is far smaller than half the
+/// narrowest ground the Laws allow, so the bounds never cross, and the check cost a branch at
+/// every clamp of the tick path once the bounds came from the ground instead of constants.
+#[inline]
+fn within(v: f64, lo: f64, hi: f64) -> f64 {
+    debug_assert!(lo <= hi, "clamp bounds crossed: {lo} > {hi}");
+    let mut v = v;
+    if v < lo {
+        v = lo;
+    }
+    if v > hi {
+        v = hi;
+    }
+    v
 }
 
 /// The line the whole ball crossed.
@@ -171,8 +194,8 @@ impl Pitch {
     /// Clamps `p` inside the pitch, `margin` metres away from every line.
     pub fn clamp(&self, p: DVec2, margin: f64) -> DVec2 {
         DVec2::new(
-            p.x.clamp(-self.half_length + margin, self.half_length - margin),
-            p.y.clamp(-self.half_width + margin, self.half_width - margin),
+            within(p.x, -self.half_length + margin, self.half_length - margin),
+            within(p.y, -self.half_width + margin, self.half_width - margin),
         )
     }
 
