@@ -151,8 +151,9 @@ test('while the engine plays the rest the scores are hidden and four steps show 
   assert.match(root.querySelector('.hd').textContent, /Ashford Rovers v Port Varrow · the engine plays the rest/);
   assert.equal(root.querySelector('.cont').disabled, true, 'Please wait is busy');
   const strip = root.querySelector('.strip');
-  assert.equal(strip.querySelector('.score').textContent.trim(), '– –');
-  assert.equal(strip.querySelector('.score').getAttribute('aria-label'), 'Score hidden until full time');
+  assert.equal(strip.querySelector('.score [aria-hidden="true"]').textContent.trim(), '– –');
+  assert.equal(strip.querySelector('.score .vh').textContent, 'Score hidden until full time');
+  assert.equal(strip.querySelector('.score').getAttribute('aria-label'), null);
   assert.equal((strip.textContent.match(/Scores hidden until full time/g) ?? []).length, 2);
   assert.ok(!/1 – 1/.test(strip.textContent), 'no score leaks');
   assert.match(strip.textContent, /PLAYING THE REST · 0'/);

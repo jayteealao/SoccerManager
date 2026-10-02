@@ -104,7 +104,7 @@
       <div>
         <SectionLabel label="Start" note="↑ ↓ to move · Enter to choose" />
         <MenuList {items} onchoose={choose} />
-        {#if door.message}<p class="message" role="status">{door.message}</p>{/if}
+        {#if door.message}<p class="message" role="alert">{door.message}</p>{/if}
       </div>
 
       <div>

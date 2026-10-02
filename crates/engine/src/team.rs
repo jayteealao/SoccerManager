@@ -88,8 +88,9 @@ pub struct Team {
     /// `false` for a slot whose player left play (sent off, or injured and not replaced).
     pub active: [bool; PLAYERS_PER_TEAM],
     /// The ground of the match: the home team's. The formation, drawn for 105 by 68, scales
-    /// to it.
-    pub pitch: Pitch,
+    /// to it. Private, so the ground is written only with the match's own copy
+    /// (`MatchConfig::set_pitch`), and one match never holds two grounds.
+    pitch: Pitch,
 }
 
 impl Team {
@@ -122,6 +123,17 @@ impl Team {
         };
         team.relayout();
         team
+    }
+
+    /// The ground of the match.
+    pub fn pitch(&self) -> &Pitch {
+        &self.pitch
+    }
+
+    /// Sets the ground. `MatchConfig` is the one caller, so the match and both teams always
+    /// hold the same ground.
+    pub(crate) fn set_pitch(&mut self, pitch: Pitch) {
+        self.pitch = pitch;
     }
 
     /// Builds the team and its eleven starters from a validated team file: the first eleven

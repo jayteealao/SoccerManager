@@ -14,9 +14,38 @@
   import SplashScreen from './screens/SplashScreen.svelte';
   import StartScreen from './screens/StartScreen.svelte';
 
+  import { screenName } from './lib/screen-name.js';
+
   let { door, systemReduces = () => false } = $props();
 
   let fileInput = $state();
+
+  // The page is drawn for a 1280 by 800 stage. A smaller window (a laptop at 1366 by 768, or
+  // a display scaled to 125 percent) shows the whole stage scaled down to fit, so the
+  // controls at the foot are never cut off; a larger window shows it at its own size.
+  const STAGE_WIDTH = 1280;
+  const STAGE_HEIGHT = 800;
+  let viewWidth = $state(STAGE_WIDTH);
+  let viewHeight = $state(STAGE_HEIGHT);
+  const fit = $derived(Math.min(1, viewWidth / STAGE_WIDTH, viewHeight / STAGE_HEIGHT));
+
+  // Every screen names itself in the tab title and, once the page has shown a first screen,
+  // in a polite announcement, so a screen-reader user hears that the screen changed (WCAG
+  // 2.4.2 and 4.1.3). Focus stays where the player put it.
+  const name = $derived(screenName(door.view, door.session?.view));
+  let announced = $state('');
+  let first = true;
+  $effect(() => {
+    const title = name ? `${name} · Touchline` : 'Touchline';
+    if (globalThis.document) {
+      globalThis.document.title = title;
+    }
+    if (first) {
+      first = false;
+      return;
+    }
+    announced = name;
+  });
 
   function pickReplay() {
     fileInput?.click();
@@ -58,9 +87,15 @@
   }
 </script>
 
-<svelte:window onkeydown={keydown} onpointerdown={() => door.view === 'splash' && door.press()} />
+<svelte:window
+  bind:innerWidth={viewWidth}
+  bind:innerHeight={viewHeight}
+  onkeydown={keydown}
+  onpointerdown={() => door.view === 'splash' && door.press()}
+/>
 
-<div class="stage" data-view={door.view} data-overlay={door.overlay ?? 'none'}>
+<div class="fit" class:scaled={fit < 1} style:width={fit < 1 ? `${STAGE_WIDTH * fit}px` : null} style:height={fit < 1 ? `${STAGE_HEIGHT * fit}px` : null}>
+<div class="stage" data-view={door.view} data-overlay={door.overlay ?? 'none'} style:transform={fit < 1 ? `scale(${fit})` : null}>
   {#if door.view === 'splash'}
     <SplashScreen {door} />
   {:else if door.view === 'start'}
@@ -114,13 +149,20 @@
   {/if}
 
   <input class="file" type="file" accept=".smfx" tabindex="-1" aria-hidden="true" bind:this={fileInput} onchange={openFile} />
+  <p class="vh" role="status" data-screen-announcer>{announced}</p>
+</div>
 </div>
 
 <style>
+  .fit.scaled {
+    overflow: hidden;
+  }
+
   .stage {
     position: relative;
     width: 1280px;
     height: 800px;
+    transform-origin: 0 0;
   }
 
   .match[hidden] {
@@ -129,5 +171,16 @@
 
   .file {
     display: none;
+  }
+
+  /* Read by a screen reader, never drawn. */
+  .vh {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 </style>

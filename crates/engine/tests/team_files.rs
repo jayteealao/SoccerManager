@@ -71,7 +71,7 @@ fn a_file_with_no_ground_and_one_with_105_by_68_hash_the_same_and_100_by_64_diff
         (
             config.team_digests[0],
             config.content_hash.clone(),
-            config.pitch,
+            *config.pitch(),
         )
     };
     let (d_none, h_none, p_none) = digest(&none);

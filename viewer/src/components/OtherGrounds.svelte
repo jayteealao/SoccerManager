@@ -199,7 +199,7 @@
     }
   }
 
-  /* The reduced-motion setting, or the system's preference when it follows Windows. */
+  /* The reduced-motion setting, or the system's preference when it follows the system. */
   :global(:root[data-motion='reduce']) .block {
       animation: none;
   }

@@ -25,9 +25,9 @@
   </div>
   <div class="centre">
     {#if hidden}
-      <b class="score num" aria-label="Score hidden until full time">– –</b>
+      <b class="score num"><span aria-hidden="true">– –</span><span class="vh">Score hidden until full time</span></b>
     {:else}
-      <b class="score num" aria-label="Score {scoreText(score[0], score[1])}">{scoreText(score[0], score[1])}</b>
+      <b class="score num">{scoreText(score[0], score[1])}</b>
     {/if}
     <span class="tag {tag.tone}">
       {#if tag.live}<span class="dot" aria-hidden="true"></span>{/if}{tag.text}
@@ -192,8 +192,18 @@
     }
   }
 
-  /* The reduced-motion setting, or the system's preference when it follows Windows. */
+  /* The reduced-motion setting, or the system's preference when it follows the system. */
   :global(:root[data-motion='reduce']) .dot {
       animation: none;
+  }
+
+  /* Read by a screen reader, never drawn. */
+  .vh {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 </style>

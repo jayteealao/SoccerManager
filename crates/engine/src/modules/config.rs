@@ -13,7 +13,9 @@ use serde::{Deserialize, Serialize};
 
 use super::fast_model::FastModel;
 use super::modifier::{Modifier, Modifiers};
-use super::registry::{MODIFIER_COUNT, ModuleRef, Registration, SLOT_COUNT, SlotDecl};
+use super::registry::{
+    MODIFIER_COUNT, ModuleRef, Registration, SLOT_COUNT, SlotDecl, for_each_slot_kind,
+};
 use super::{
     BallModule, ChangesModule, ClockModule, CommentaryHookModule, DecisionHookModule,
     DecisionModule, DisciplineModule, FatigueModule, FoulsModule, InjuriesModule, ManagerModule,
@@ -49,52 +51,23 @@ pub struct SlotEntry {
 }
 
 impl SlotFile {
-    /// The selection the engine uses when no slot file is read (a replay's inputs). It
-    /// equals the shipped `content/slots.json`.
+    /// The selection the engine uses when no slot file is read (a replay's inputs): the
+    /// first registration of every slot, in registry order. It equals the shipped
+    /// `content/slots.json`, which a test holds.
     pub fn builtin_default() -> Self {
-        let entry = |module: &str| SlotEntry {
-            module: module.to_string(),
-            version: Some(1),
-        };
         Self {
             schema_version: SLOTS_VERSION,
-            slots: BTreeMap::from([
-                ("engine.fouls".to_string(), entry("fouls")),
-                ("engine.offside".to_string(), entry("offside")),
-                ("engine.shot".to_string(), entry("shot")),
-                ("engine.fatigue".to_string(), entry("fatigue")),
-                ("engine.steering".to_string(), entry("steering")),
-                ("engine.pre-match".to_string(), entry("pre-match")),
-                (
-                    "engine.modifier.fatigue".to_string(),
-                    entry("fatigue-curve"),
-                ),
-                ("engine.modifier.pressure".to_string(), entry("pressure")),
-                ("engine.modifier.momentum".to_string(), entry("momentum")),
-                ("engine.modifier.weather".to_string(), entry("weather")),
-                ("engine.clock".to_string(), entry("clock")),
-                ("engine.restarts".to_string(), entry("restarts")),
-                ("engine.discipline".to_string(), entry("discipline")),
-                ("engine.injuries".to_string(), entry("injuries")),
-                ("engine.ball".to_string(), entry("ball")),
-                ("engine.possession".to_string(), entry("possession")),
-                ("engine.decision".to_string(), entry("decision")),
-                ("engine.manager".to_string(), entry("ai-manager")),
-                ("engine.changes".to_string(), entry("changes")),
-                ("engine.hook.decision".to_string(), entry("decision-hook")),
-                ("engine.hook.rule".to_string(), entry("rule-hook")),
-                (
-                    "engine.hook.commentary".to_string(),
-                    entry("commentary-hook"),
-                ),
-                ("game.rules".to_string(), entry("rule-pack")),
-                ("game.world".to_string(), entry("world-stub")),
-                ("game.season".to_string(), entry("season-stub")),
-                ("game.people".to_string(), entry("people-stub")),
-                ("game.presentation".to_string(), entry("presentation-stub")),
-                ("viewer.skin".to_string(), entry("broadcast-blue")),
-                ("engine.fast-model".to_string(), entry("fitted-scores")),
-            ]),
+            slots: super::REGISTRY
+                .iter()
+                .map(|decl| {
+                    let default = &decl.registrations[0];
+                    let entry = SlotEntry {
+                        module: default.name.to_string(),
+                        version: Some(default.version),
+                    };
+                    (decl.slot.id.to_string(), entry)
+                })
+                .collect(),
         }
     }
 }
@@ -156,170 +129,47 @@ pub fn resolve(file: &SlotFile, registry: &[SlotDecl]) -> Result<ResolvedModules
     built.finish(picked)
 }
 
-/// The typed modules of one resolution, filled once per slot.
-#[derive(Default)]
-struct Builder {
-    fouls: Option<&'static dyn FoulsModule>,
-    offside: Option<&'static dyn OffsideModule>,
-    shot: Option<&'static dyn ShotModule>,
-    fatigue: Option<&'static dyn FatigueModule>,
-    steering: Option<&'static dyn SteeringModule>,
-    pre_match: Option<&'static dyn PreMatchModule>,
-    /// The modifier slots, in registry order.
-    modifiers: Vec<&'static dyn Modifier>,
-    clock: Option<&'static dyn ClockModule>,
-    restarts: Option<&'static dyn RestartsModule>,
-    discipline: Option<&'static dyn DisciplineModule>,
-    injuries: Option<&'static dyn InjuriesModule>,
-    ball: Option<&'static dyn BallModule>,
-    possession: Option<&'static dyn PossessionModule>,
-    decision: Option<&'static dyn DecisionModule>,
-    manager: Option<&'static dyn ManagerModule>,
-    changes: Option<&'static dyn ChangesModule>,
-    decision_hook: Option<&'static dyn DecisionHookModule>,
-    rule_hook: Option<&'static dyn RuleHookModule>,
-    commentary_hook: Option<&'static dyn CommentaryHookModule>,
-    rule_pack: Option<&'static dyn RulesModule>,
-    world: Option<&'static dyn WorldModule>,
-    season: Option<&'static dyn SeasonModule>,
-    people: Option<&'static dyn PeopleModule>,
-    presentation: Option<&'static dyn PresentationModule>,
-    skin: Option<&'static dyn SkinModule>,
-    fast_model: Option<&'static dyn FastModel>,
+macro_rules! builder {
+    ($($variant:ident $field:ident $kind:ident,)*) => {
+        /// The typed modules of one resolution, filled once per slot.
+        #[derive(Default)]
+        struct Builder {
+            $($field: Option<&'static dyn $kind>,)*
+            /// The modifier slots, in registry order.
+            modifiers: Vec<&'static dyn Modifier>,
+        }
+
+        impl Builder {
+            /// Fills the field `module` belongs to; a field filled twice is a registry
+            /// defect. A modifier joins the modifier list.
+            fn fill(&mut self, module: ModuleRef) -> Result<(), EngineError> {
+                let once = match module {
+                    $(ModuleRef::$variant(m) => self.$field.replace(m).is_none(),)*
+                    ModuleRef::Modifier(m) => {
+                        self.modifiers.push(m);
+                        true
+                    }
+                };
+                if once { Ok(()) } else { Err(Self::defect()) }
+            }
+
+            fn finish(self, picked: Vec<Picked>) -> Result<ResolvedModules, EngineError> {
+                let picked: [Picked; SLOT_COUNT] =
+                    picked.try_into().map_err(|_| Self::defect())?;
+                let modifiers: [&'static dyn Modifier; MODIFIER_COUNT] =
+                    self.modifiers.try_into().map_err(|_| Self::defect())?;
+                Ok(ResolvedModules {
+                    $($field: self.$field.ok_or_else(Self::defect)?,)*
+                    modifiers: Modifiers::new(modifiers),
+                    picked,
+                })
+            }
+        }
+    };
 }
+for_each_slot_kind!(builder);
 
 impl Builder {
-    /// Fills the field `module` belongs to; a field filled twice is a registry defect. A
-    /// modifier joins the modifier list.
-    fn fill(&mut self, module: ModuleRef) -> Result<(), EngineError> {
-        fn set<T: ?Sized>(field: &mut Option<&'static T>, m: &'static T) -> bool {
-            field.replace(m).is_none()
-        }
-        let once = match module {
-            ModuleRef::Fouls(m) => set(&mut self.fouls, m),
-            ModuleRef::Offside(m) => set(&mut self.offside, m),
-            ModuleRef::Shot(m) => set(&mut self.shot, m),
-            ModuleRef::Fatigue(m) => set(&mut self.fatigue, m),
-            ModuleRef::Steering(m) => set(&mut self.steering, m),
-            ModuleRef::PreMatch(m) => set(&mut self.pre_match, m),
-            ModuleRef::Modifier(m) => {
-                self.modifiers.push(m);
-                true
-            }
-            ModuleRef::Clock(m) => set(&mut self.clock, m),
-            ModuleRef::Restarts(m) => set(&mut self.restarts, m),
-            ModuleRef::Discipline(m) => set(&mut self.discipline, m),
-            ModuleRef::Injuries(m) => set(&mut self.injuries, m),
-            ModuleRef::Ball(m) => set(&mut self.ball, m),
-            ModuleRef::Possession(m) => set(&mut self.possession, m),
-            ModuleRef::Decision(m) => set(&mut self.decision, m),
-            ModuleRef::Manager(m) => set(&mut self.manager, m),
-            ModuleRef::Changes(m) => set(&mut self.changes, m),
-            ModuleRef::DecisionHook(m) => set(&mut self.decision_hook, m),
-            ModuleRef::RuleHook(m) => set(&mut self.rule_hook, m),
-            ModuleRef::CommentaryHook(m) => set(&mut self.commentary_hook, m),
-            ModuleRef::Rules(m) => set(&mut self.rule_pack, m),
-            ModuleRef::World(m) => set(&mut self.world, m),
-            ModuleRef::Season(m) => set(&mut self.season, m),
-            ModuleRef::People(m) => set(&mut self.people, m),
-            ModuleRef::Presentation(m) => set(&mut self.presentation, m),
-            ModuleRef::Skin(m) => set(&mut self.skin, m),
-            ModuleRef::FastModel(m) => set(&mut self.fast_model, m),
-        };
-        if once { Ok(()) } else { Err(Self::defect()) }
-    }
-
-    fn finish(self, picked: Vec<Picked>) -> Result<ResolvedModules, EngineError> {
-        let picked: [Picked; SLOT_COUNT] = picked.try_into().map_err(|_| Self::defect())?;
-        let modifiers: [&'static dyn Modifier; MODIFIER_COUNT] =
-            self.modifiers.try_into().map_err(|_| Self::defect())?;
-        let (
-            Some(fouls),
-            Some(offside),
-            Some(shot),
-            Some(fatigue),
-            Some(steering),
-            Some(pre_match),
-            Some(clock),
-            Some(restarts),
-            Some(discipline),
-            Some(injuries),
-            Some(ball),
-            Some(possession),
-            Some(decision),
-            Some(manager),
-            Some(changes),
-            Some(decision_hook),
-            Some(rule_hook),
-            Some(commentary_hook),
-            Some(rule_pack),
-            Some(world),
-            Some(season),
-            Some(people),
-            Some(presentation),
-            Some(skin),
-            Some(fast_model),
-        ) = (
-            self.fouls,
-            self.offside,
-            self.shot,
-            self.fatigue,
-            self.steering,
-            self.pre_match,
-            self.clock,
-            self.restarts,
-            self.discipline,
-            self.injuries,
-            self.ball,
-            self.possession,
-            self.decision,
-            self.manager,
-            self.changes,
-            self.decision_hook,
-            self.rule_hook,
-            self.commentary_hook,
-            self.rule_pack,
-            self.world,
-            self.season,
-            self.people,
-            self.presentation,
-            self.skin,
-            self.fast_model,
-        )
-        else {
-            return Err(Self::defect());
-        };
-        Ok(ResolvedModules {
-            fouls,
-            offside,
-            shot,
-            fatigue,
-            steering,
-            pre_match,
-            modifiers: Modifiers::new(modifiers),
-            clock,
-            restarts,
-            discipline,
-            injuries,
-            ball,
-            possession,
-            decision,
-            manager,
-            changes,
-            decision_hook,
-            rule_hook,
-            commentary_hook,
-            rule_pack,
-            world,
-            season,
-            people,
-            presentation,
-            skin,
-            fast_model,
-            picked,
-        })
-    }
-
     fn defect() -> EngineError {
         EngineError::InvalidConfig("the slot registry does not declare every slot once".into())
     }

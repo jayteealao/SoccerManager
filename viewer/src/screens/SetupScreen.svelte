@@ -49,6 +49,7 @@
   {tabs}
   ontab={tab}
   navLabel="Match setup steps"
+  current="step"
 >
   {#snippet crest()}
     <TouchlineMark size={30} />
@@ -118,7 +119,7 @@
           {/if}
         </div>
         <p class="note">The other matches play in the background and show their events at their minute on your clock.</p>
-        {#if door.message}<p class="message" role="status">{door.message}</p>{/if}
+        {#if door.message}<p class="message" role="alert">{door.message}</p>{/if}
         <div class="actions">
           <button class="btn cy" type="button" disabled={Boolean(problem) || door.busy} data-kickoff onclick={() => door.kickOff()}>
             <Glyph glyph={{ d: PLAY }} size={10} /> Kick off

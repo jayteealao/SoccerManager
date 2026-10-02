@@ -114,6 +114,14 @@ pub trait ShotModule: Send + Sync + 'static {
 pub trait FatigueModule: Send + Sync + 'static {
     /// The energy player `i` loses in one tick.
     fn drain(&self, view: &MatchView<'_>, i: usize) -> f64;
+    /// The energy every player on the pitch loses in one tick, in roster order, into `out`
+    /// (zero for a player off the pitch). The default asks [`Self::drain`] once per player,
+    /// so the loop makes one call through the slot per tick, not one per player.
+    fn drains(&self, view: &MatchView<'_>, out: &mut [f64; ROSTER]) {
+        for (i, p) in view.players().iter().enumerate().take(ROSTER) {
+            out[i] = if p.active() { self.drain(view, i) } else { 0.0 };
+        }
+    }
     /// The chance that one injury roll of `source` injures player `i`.
     fn injury_chance(&self, view: &MatchView<'_>, i: usize, source: InjurySource) -> f64;
 }
@@ -123,6 +131,19 @@ pub trait FatigueModule: Send + Sync + 'static {
 pub trait SteeringModule: Send + Sync + 'static {
     /// The velocity of player `i` after one tick of steering toward its target.
     fn next_velocity(&self, view: &MatchView<'_>, i: usize) -> DVec2;
+    /// Every player's velocity after one tick, in roster order, into `out` (zero for a player
+    /// off the pitch). The default asks [`Self::next_velocity`] once per player, so the loop
+    /// makes one call through the slot per tick, not one per player.
+    fn next_velocities(&self, view: &MatchView<'_>, out: &mut Vec<DVec2>) {
+        out.clear();
+        for (i, p) in view.players().iter().enumerate() {
+            out.push(if p.active() {
+                self.next_velocity(view, i)
+            } else {
+                DVec2::ZERO
+            });
+        }
+    }
     /// Every player's position once players closer than the minimum distance are pushed
     /// apart, in roster order; `None` when no pair is that close, so nobody moves.
     fn separate(&self, view: &MatchView<'_>) -> Option<[DVec2; ROSTER]>;

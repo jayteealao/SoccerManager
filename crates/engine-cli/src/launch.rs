@@ -29,6 +29,7 @@ use std::time::Duration;
 
 use engine::observe::identity::{MatchId, data_dir};
 use engine::{Content, ContentDir, Snapshot};
+use stream::events::EVENTS_FILE;
 
 use crate::cli::LaunchOpts;
 use crate::engines::{Choice, PreviousEngine, Refusal};
@@ -163,6 +164,23 @@ pub struct Launcher {
 }
 
 /// The snapshot file of a match in the data folder.
+/// The rows of the events file `path` at or before `tick`, in file order: the events a match
+/// resumed from `tick` played before its save, written by whichever engine played them. A
+/// missing file, or a row that does not read, gives nothing for it.
+fn earlier_events(path: &Path, tick: u32) -> Vec<serde_json::Value> {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    text.lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|row| {
+            row.get("tick")
+                .and_then(serde_json::Value::as_u64)
+                .is_some_and(|t| t <= u64::from(tick))
+        })
+        .collect()
+}
+
 fn snapshot_of(match_id: &str) -> PathBuf {
     data_dir()
         .join("matches")
@@ -925,6 +943,21 @@ impl Status for Arc<Launcher> {
         Some(done.map(|()| self.json()))
     }
 
+    fn earlier_events(&self) -> Option<String> {
+        let (resumed_from, folder) = {
+            let worker = self.lock();
+            (
+                worker.resumed_from,
+                worker.snapshot.parent().map(Path::to_path_buf),
+            )
+        };
+        let rows = match (resumed_from, folder) {
+            (Some(tick), Some(folder)) => earlier_events(&folder.join(EVENTS_FILE), tick),
+            _ => Vec::new(),
+        };
+        Some(serde_json::Value::Array(rows).to_string())
+    }
+
     fn round(&self, home: &str, away: &str) -> Option<Result<String, String>> {
         let door = self.front_door.as_ref()?;
         let answer = self.pair(home, away).map(|_| {
@@ -949,5 +982,34 @@ impl Status for Arc<Launcher> {
             .to_string()
         });
         Some(answer)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A resumed match's earlier events are the rows at or before the save's tick; later
+    /// rows, a row that does not read, and a missing file give nothing.
+    #[test]
+    fn earlier_events_are_the_rows_up_to_the_save() {
+        let dir = std::env::temp_dir().join(format!("earlier_events_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(EVENTS_FILE);
+        std::fs::write(
+            &path,
+            concat!(
+                "{\"tick\":0,\"event.type\":\"kick-off\"}\n",
+                "{\"tick\":900,\"event.type\":\"goal\",\"home.score\":1}\n",
+                "not json\n",
+                "{\"tick\":1200,\"event.type\":\"goal\",\"home.score\":2}\n",
+            ),
+        )
+        .unwrap();
+        let rows = earlier_events(&path, 1000);
+        let ticks: Vec<u64> = rows.iter().map(|r| r["tick"].as_u64().unwrap()).collect();
+        assert_eq!(ticks, [0, 900]);
+        assert!(earlier_events(&dir.join("missing.jsonl"), 1000).is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

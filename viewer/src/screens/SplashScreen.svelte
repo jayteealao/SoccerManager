@@ -53,6 +53,7 @@
         <em>{ready ? 'Everything is loaded' : 'This takes a few seconds'}</em>
       </h2>
       <StepList {steps} />
+      <p class="vh" role="status">{ready ? 'Ready. Everything is loaded: continue with any key or a click.' : ''}</p>
       {#if ready}
         <p class="ready"><span class="tag">ANY KEY</span>Press any key or click to continue</p>
       {:else}
@@ -179,5 +180,16 @@
     to {
       opacity: 1;
     }
+  }
+
+  /* Read by a screen reader, never drawn. */
+  .vh {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 </style>

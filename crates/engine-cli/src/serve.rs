@@ -760,8 +760,8 @@ fn hello_for(
         tactics: hello_tactics(sim),
         substitutions: hello_substitutions(sim),
         knockout: config.knockout,
-        ground_length: config.pitch.length(),
-        ground_width: config.pitch.width(),
+        ground_length: config.pitch().length(),
+        ground_width: config.pitch().width(),
     }
 }
 
@@ -791,7 +791,7 @@ pub fn admitted_kinds(rules: &engine::data::RulePack) -> Vec<ChangeKind> {
     kinds
 }
 
-/// A skip is the same match playing on (AC-32): a served match held at a skip point and then
+/// A skip is the same match playing on: a served match held at a skip point and then
 /// skipped plays exactly the match a page that never held it receives. Each match is built
 /// by serve's own builder and played by serve's own driver; only the gate differs. Every
 /// tick's gate state bytes and tick record, every event, and the rolling hash over the state

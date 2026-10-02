@@ -135,40 +135,6 @@ impl Group {
     }
 }
 
-/// The kind of a cause, without its detail.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CauseKind {
-    KickOffTaken,
-    BallDead,
-    RestartTaken,
-    TakerRenamed,
-    PeriodEnd,
-    MatchEnd,
-    Abandoned,
-    ShootoutStart,
-    ShootoutKickTaken,
-    NextShootoutKick,
-    ShootoutDecided,
-}
-
-impl Cause {
-    pub fn kind(self) -> CauseKind {
-        match self {
-            Cause::KickOffTaken => CauseKind::KickOffTaken,
-            Cause::BallDead(_) => CauseKind::BallDead,
-            Cause::RestartTaken => CauseKind::RestartTaken,
-            Cause::TakerRenamed => CauseKind::TakerRenamed,
-            Cause::PeriodEnd => CauseKind::PeriodEnd,
-            Cause::MatchEnd => CauseKind::MatchEnd,
-            Cause::Abandoned => CauseKind::Abandoned,
-            Cause::ShootoutStart => CauseKind::ShootoutStart,
-            Cause::ShootoutKickTaken => CauseKind::ShootoutKickTaken,
-            Cause::NextShootoutKick => CauseKind::NextShootoutKick,
-            Cause::ShootoutDecided => CauseKind::ShootoutDecided,
-        }
-    }
-}
-
 /// The restart kinds a dead ball waits for (IFAB Laws 8 and 13 to 17): a goal and half-time
 /// are causes, never restarts.
 const RESTARTS: [StoppageKind; 7] = [
@@ -200,16 +166,28 @@ fn restart_after(cause: StoppageKind) -> &'static [StoppageKind] {
 }
 
 /// One declared transition.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct Row {
     pub from: Group,
     pub to: Group,
-    pub cause: CauseKind,
+    /// Whether a cause is the one the row allows; a `BallDead` row allows every kind, which
+    /// `declared` then checks against the restart.
+    pub cause: fn(Cause) -> bool,
     /// The Law or engine rule that allows it.
     pub rule: &'static str,
 }
 
-const fn row(from: Group, to: Group, cause: CauseKind, rule: &'static str) -> Row {
+impl fmt::Debug for Row {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Row")
+            .field("from", &self.from)
+            .field("to", &self.to)
+            .field("rule", &self.rule)
+            .finish_non_exhaustive()
+    }
+}
+
+const fn row(from: Group, to: Group, cause: fn(Cause) -> bool, rule: &'static str) -> Row {
     Row {
         from,
         to,
@@ -218,7 +196,13 @@ const fn row(from: Group, to: Group, cause: CauseKind, rule: &'static str) -> Ro
     }
 }
 
-use CauseKind as C;
+/// The matcher a row holds for a cause, written as the cause's pattern.
+macro_rules! on {
+    ($($cause:tt)+) => {
+        |cause| matches!(cause, Cause::$($cause)+)
+    };
+}
+
 use Group::{AnyDeadBall, Is, SameDeadBall};
 use PhaseName as P;
 
@@ -229,115 +213,115 @@ pub const TRANSITIONS: &[Row] = &[
     row(
         Is(P::PreMatch),
         Is(P::OpenPlay),
-        C::KickOffTaken,
+        on!(KickOffTaken),
         "Law 8: the kick-off starts the match",
     ),
     row(
         Is(P::HalfTime),
         Is(P::OpenPlay),
-        C::KickOffTaken,
+        on!(KickOffTaken),
         "Law 8: a kick-off starts each period",
     ),
     row(
         Is(P::OpenPlay),
         AnyDeadBall,
-        C::BallDead,
+        on!(BallDead(_)),
         "Laws 8 to 17: the ball goes dead and a restart waits",
     ),
     row(
         AnyDeadBall,
         Is(P::OpenPlay),
-        C::RestartTaken,
+        on!(RestartTaken),
         "Laws 8 to 17: the restart puts the ball in play",
     ),
     row(
         AnyDeadBall,
         SameDeadBall,
-        C::TakerRenamed,
+        on!(TakerRenamed),
         "engine rule: an injured or substituted taker is replaced",
     ),
     row(
         Is(P::OpenPlay),
         Is(P::HalfTime),
-        C::PeriodEnd,
+        on!(PeriodEnd),
         "Law 7: the period ends",
     ),
     row(
         AnyDeadBall,
         Is(P::HalfTime),
-        C::PeriodEnd,
+        on!(PeriodEnd),
         "Law 7: the period ends while the ball is dead",
     ),
     row(
         Is(P::OpenPlay),
         Is(P::FullTime),
-        C::MatchEnd,
+        on!(MatchEnd),
         "Law 7: the match ends",
     ),
     row(
         AnyDeadBall,
         Is(P::FullTime),
-        C::MatchEnd,
+        on!(MatchEnd),
         "Law 7: the match ends while the ball is dead",
     ),
     row(
         Is(P::FullTime),
         Is(P::FullTime),
-        C::MatchEnd,
+        on!(MatchEnd),
         "engine rule: full time is recorded after the last period ends",
     ),
     row(
         Is(P::OpenPlay),
         Is(P::FullTime),
-        C::Abandoned,
+        on!(Abandoned),
         "Law 3: a team below the minimum cannot continue",
     ),
     row(
         AnyDeadBall,
         Is(P::FullTime),
-        C::Abandoned,
+        on!(Abandoned),
         "Law 3: a team below the minimum cannot continue",
     ),
     row(
         Is(P::HalfTime),
         Is(P::FullTime),
-        C::Abandoned,
+        on!(Abandoned),
         "Law 3: a card held for the break leaves a team below the minimum",
     ),
     row(
         Is(P::OpenPlay),
         Is(P::ShootoutKick),
-        C::ShootoutStart,
+        on!(ShootoutStart),
         "Law 10: a level knockout match goes to kicks from the penalty mark",
     ),
     row(
         AnyDeadBall,
         Is(P::ShootoutKick),
-        C::ShootoutStart,
+        on!(ShootoutStart),
         "Law 10: a level knockout match goes to kicks from the penalty mark",
     ),
     row(
         Is(P::ShootoutKick),
         Is(P::ShootoutLive),
-        C::ShootoutKickTaken,
+        on!(ShootoutKickTaken),
         "Law 10: the kicker strikes the ball",
     ),
     row(
         Is(P::ShootoutLive),
         Is(P::ShootoutKick),
-        C::NextShootoutKick,
+        on!(NextShootoutKick),
         "Law 10: the next kick is set",
     ),
     row(
         Is(P::ShootoutLive),
         Is(P::FullTime),
-        C::ShootoutDecided,
+        on!(ShootoutDecided),
         "Law 10: the shoot-out is decided",
     ),
     row(
         Is(P::ShootoutLive),
         Is(P::FullTime),
-        C::Abandoned,
+        on!(Abandoned),
         "engine rule: the shoot-out passed its round limit, or a held card left a team below the minimum",
     ),
 ];
@@ -352,7 +336,7 @@ pub fn declared(from: PhaseName, to: PhaseName, cause: Cause) -> Option<usize> {
     }
     TRANSITIONS
         .iter()
-        .position(|r| r.cause == cause.kind() && r.from.holds(from, from) && r.to.holds(to, from))
+        .position(|r| (r.cause)(cause) && r.from.holds(from, from) && r.to.holds(to, from))
 }
 
 /// The name of the stored phase `phase` while a shoot-out is (`shootout`) or is not in

@@ -188,9 +188,9 @@ impl Scene {
     /// line, and the kick due on the next step.
     pub fn penalty(mut self, team: usize, taker: usize) -> Self {
         let attack_x = self.sim.teams[team].attack_x;
-        let spot = self.sim.config.pitch.penalty_spot(attack_x);
+        let spot = self.sim.config.pitch().penalty_spot(attack_x);
         let keeper = self.sim.keeper(1 - team);
-        let line_x = attack_x * (self.sim.config.pitch.half_length() - 0.5);
+        let line_x = attack_x * (self.sim.config.pitch().half_length() - 0.5);
         self = self
             .place(taker, spot)
             .place(keeper, DVec2::new(line_x, 0.0))
@@ -198,7 +198,7 @@ impl Scene {
             .carrier(None);
         let sim = &mut self.sim;
         sim.last_touch = Some(team);
-        sim.referee.phase = crate::rules::Phase::DeadBall(crate::rules::DeadBall {
+        sim.seat_phase(crate::rules::Phase::DeadBall(crate::rules::DeadBall {
             kind: StoppageKind::Penalty,
             team,
             spot,
@@ -206,8 +206,7 @@ impl Scene {
             since: sim.tick,
             ready_at: sim.tick,
             taker,
-        });
-        sim.referee.named = crate::rules::phases::PhaseName::DeadBall(StoppageKind::Penalty);
+        }));
         self
     }
 
@@ -244,7 +243,7 @@ impl Scene {
                 team.switch_ends();
             }
             // The scene skips to the break, so the kick-off starts the period from it.
-            self.sim.referee.named = crate::rules::phases::PhaseName::HalfTime;
+            self.sim.seat_break();
             self.sim.place_kick_off(1);
             self.sim.events.clear();
         }
@@ -292,7 +291,7 @@ impl Scene {
         };
         self.sim.tick = start;
         // The scene skips to the break, so the kick-off starts the period from it.
-        self.sim.referee.named = crate::rules::phases::PhaseName::HalfTime;
+        self.sim.seat_break();
         self.sim.place_kick_off(kick_off);
         self.sim.events.clear();
         self.sim.control_since = self.sim.tick;

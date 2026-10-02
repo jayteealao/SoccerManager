@@ -499,6 +499,11 @@ export class MatchSession {
   }
 
   connect(status) {
+    // A session ended while it waited for the launcher opens no socket: the engine takes one
+    // connection, and a stray one would take the next match's.
+    if (this.disposed) {
+      return;
+    }
     this.socket = new MatchSocket(socketAddress(status['socket.port'], status['protocol.version']), {
       onHello: (hello) => this.onHello(hello),
       onTick: (buffer) => this.onTick(buffer),
@@ -574,7 +579,23 @@ export class MatchSession {
       this.setPlaying(true);
       this.screen = 'live';
       this.view = 'match';
+      this.loadEarlierEvents();
     }
+  }
+
+  /// The events a resumed match played before its save. The engine streams only what follows
+  /// the save, so the score, the half, the scorers and the feed start from these, read from
+  /// the match's own events file through the launcher.
+  async loadEarlierEvents() {
+    const matchId = this.matchId;
+    const rows = await launcher.fetchEarlierEvents(this.fetcher);
+    if (this.matchId !== matchId || this.stored) {
+      return;
+    }
+    for (const row of rows) {
+      this.match.add({ ...row, type: 'event' });
+    }
+    signal('viewer.earlier_events', { 'match.id': matchId, rows: rows.length });
   }
 
   /// The kick-off. With a lineup to pick, the dugout sends it and the match starts on the
@@ -1170,6 +1191,9 @@ export class MatchSession {
     this.setNotice('reconnect', 'The connection to the engine dropped. Reconnecting.');
     for (;;) {
       const status = await launcher.fetchStatus(this.fetcher);
+      if (this.disposed) {
+        return;
+      }
       this.status = status;
       const state = status?.['engine.state'];
       if (state === 'running' && status['socket.port']) {

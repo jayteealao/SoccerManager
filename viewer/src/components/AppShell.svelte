@@ -3,7 +3,8 @@
      body. Only the current rail section, the live tabs and the action block take focus; the
      other rail sections, the stub tabs and the header icons are inert stubs. An action note
      names a later step beside the action block (TEAM TALK on the Pre-match line-ups); it is
-     a stub with the LATER mark. `navLabel` names the sub-navigation. `menu`, when given, draws
+     a stub with the LATER mark. `navLabel` names the sub-navigation, and `current` is the
+     `aria-current` value of its active tab: `page` for views, `step` for a stepper. `menu`, when given, draws
      the Menu button before the header icons (the in-match menu of the front door); without it
      the shell draws no button, as before. `menuOpen` says whether that menu is open. -->
 <script>
@@ -24,6 +25,7 @@
     ontab = () => {},
     actionNote = '',
     navLabel = 'Match views',
+    current = 'page',
     crest,
     menu = null,
     menuOpen = false,
@@ -127,7 +129,7 @@
             class="tab"
             class:on={tab.active}
             type="button"
-            aria-current={tab.active ? 'page' : undefined}
+            aria-current={tab.active ? current : undefined}
             onclick={() => ontab(tab.id)}
           >
             {tab.label}{#if tab.menu}<Glyph glyph={{ stroke: CARET, width: 1.8 }} size={8} />{/if}

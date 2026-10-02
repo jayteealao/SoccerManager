@@ -92,11 +92,11 @@ fn full_match_on(length: f64, width: f64, home_index: usize) {
     let home = on_ground(&teams[home_index], length, width);
     let away = &teams[1 - home_index];
     let played = play(&home, away, 90);
-    let pitch = played.config.pitch;
+    let pitch = *played.config.pitch();
     // The engine reads the size from the ground data.
     assert_eq!((pitch.length(), pitch.width()), (length, width));
     for team in &played.config.teams {
-        assert_eq!(team.pitch, pitch);
+        assert_eq!(*team.pitch(), pitch);
     }
     // The throw-ins sit on this ground's touchlines, not on 34 m.
     let throw_ins: Vec<_> = played
@@ -179,7 +179,7 @@ fn the_four_edge_grounds_play_and_keep_their_restarts_on_their_lines() {
     let [a, b] = common::default_teams(&content);
     for (length, width) in [(90.0, 68.0), (120.0, 68.0), (105.0, 45.0), (105.0, 90.0)] {
         let played = play(&on_ground(&a, length, width), &b, 20);
-        let pitch = played.config.pitch;
+        let pitch = *played.config.pitch();
         assert_eq!((pitch.length(), pitch.width()), (length, width));
         let faults = restart_position_faults(&pitch, &played.events);
         assert!(
@@ -208,7 +208,7 @@ fn the_restart_position_check_refuses_a_spot_one_metre_off_the_ground() {
     let content = common::content();
     let [a, b] = common::default_teams(&content);
     let played = play(&on_ground(&a, 100.0, 64.0), &b, 20);
-    let pitch = played.config.pitch;
+    let pitch = *played.config.pitch();
     assert!(restart_position_faults(&pitch, &played.events).is_empty());
     let mut events = played.events.clone();
     let throw_in = events
@@ -241,7 +241,7 @@ fn a_match_refuses_a_home_ground_outside_the_laws() {
     }
     // The away team's ground does not matter: the match plays on the home ground.
     let config = MatchConfig::new(1, 90, &content, [&a, &on_ground(&b, 100.0, 64.0)]).unwrap();
-    assert_eq!(config.pitch, Pitch::DEFAULT);
+    assert_eq!(*config.pitch(), Pitch::DEFAULT);
 }
 
 /// Source files the scan allows to name the default ground: the pitch itself, the team

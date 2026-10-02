@@ -71,11 +71,26 @@ pub struct MatchConfig {
     pub flags: ActiveFlags,
     /// The module in each slot, resolved when the content loaded. Never changes in a match.
     pub modules: ResolvedModules,
-    /// The home team's ground. Never changes in a match.
-    pub pitch: Pitch,
+    /// The home team's ground. Never changes in a match. Private: `set_pitch` writes it and
+    /// the teams' copies together.
+    pitch: Pitch,
 }
 
 impl MatchConfig {
+    /// The home team's ground, which the whole match plays on.
+    pub fn pitch(&self) -> &Pitch {
+        &self.pitch
+    }
+
+    /// Sets the ground of the match and of both teams in one write, so a match never holds
+    /// two grounds.
+    pub fn set_pitch(&mut self, pitch: Pitch) {
+        self.pitch = pitch;
+        for team in &mut self.teams {
+            team.set_pitch(pitch);
+        }
+    }
+
     /// Builds a match from loaded content and two validated team files. `minutes` must be
     /// 1 to 200; the home team is `files[0]`. The AI manager's pre-match setup picks each
     /// team's lineup, bench, and tactics.
@@ -98,7 +113,7 @@ impl MatchConfig {
         let (mut home, _) = Team::from_file(0, files[0], &content.attributes, &tuning)?;
         let (mut away, _) = Team::from_file(1, files[1], &content.attributes, &tuning)?;
         for team in [&mut home, &mut away] {
-            team.pitch = pitch;
+            team.set_pitch(pitch);
             let setup =
                 content
                     .modules
@@ -1036,6 +1051,7 @@ impl Simulation {
             }
         }
         self.tick += 1;
+        self.check_phase_name();
     }
 
     /// The current tick as a record with 32-bit positions.

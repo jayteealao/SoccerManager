@@ -76,12 +76,12 @@ test('a crashed engine shows the failure and restarts from the last stoppage', a
         () => {
           const resumed = window.__touchline.signals().find((s) => s.signal === 'viewer.resumed');
           const shown = (sel) => [...document.querySelectorAll(sel)].find((e) => e.checkVisibility());
-          const score = shown('.strip .score')?.getAttribute('aria-label') ?? '';
+          const score = shown('.strip .score')?.textContent ?? '';
           return resumed
             ? {
                 resumed,
                 clock: shown('header .date span').textContent,
-                score: score.replace(/^Score /, '').split(' – '),
+                score: score.trim().split(' – '),
               }
             : null;
         },

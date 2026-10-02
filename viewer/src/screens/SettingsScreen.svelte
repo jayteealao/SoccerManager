@@ -106,7 +106,7 @@
         </div>
         <p class="note">
           Reduce removes the LIVE pulse, the goal banner, the new-goal outline fade and the splash animation. Follow
-          Windows uses your system setting, which is {systemReduces ? 'reduced motion' : 'full motion'} now.
+          system uses your operating system's setting, which is {systemReduces ? 'reduced motion' : 'full motion'} now.
         </p>
         <div class="hr" role="presentation"></div>
         <SectionLabel label="Versions" note="read only" />

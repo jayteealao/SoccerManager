@@ -5,7 +5,22 @@
   const WORDS = { done: 'Done', current: 'In progress', pending: 'Waiting' };
 
   let { steps = [] } = $props();
+
+  // The step in progress, or the end, in words a screen reader announces as it changes.
+  const summary = $derived.by(() => {
+    if (steps.length === 0) {
+      return '';
+    }
+    const at = steps.findIndex((step) => step.state !== 'done');
+    if (at < 0) {
+      return `All ${steps.length} steps done`;
+    }
+    const step = steps[at];
+    return `Step ${at + 1} of ${steps.length}: ${step.label}, ${step.word ?? WORDS[step.state]}`;
+  });
 </script>
+
+<p class="vh" role="status">{summary}</p>
 
 <ol class="steps">
   {#each steps as step, i (i)}
@@ -77,5 +92,16 @@
 
   .done .bar i {
     background: var(--good);
+  }
+
+  /* Read by a screen reader, never drawn. */
+  .vh {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 </style>

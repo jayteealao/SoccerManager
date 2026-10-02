@@ -22,7 +22,7 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use std::sync::mpsc::{Receiver, channel};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -336,7 +336,10 @@ impl Matchday {
                 .recv_timeout((deadline - now).min(Duration::from_millis(50)))
             {
                 Ok(note) => self.take(&mut inner, note, player_tick, paced),
-                Err(_) => self.drain(&mut inner, player_tick, paced),
+                Err(RecvTimeoutError::Timeout) => self.drain(&mut inner, player_tick, paced),
+                // Every worker is gone, so no ground can still end: the grounds with no end
+                // fail now rather than at the deadline.
+                Err(RecvTimeoutError::Disconnected) => break,
             }
         }
         self.drain(&mut inner, player_tick, paced);

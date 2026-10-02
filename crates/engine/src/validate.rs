@@ -94,7 +94,7 @@ impl Validator {
                 shape += 1;
             }
             let teams = &self.timeline[shape].1;
-            let pitch = &teams[0].pitch;
+            let pitch = teams[0].pitch();
             let ball = DVec2::new(f64::from(r.ball[0]), f64::from(r.ball[1]));
             // Fixed-size, so a whole match of records allocates nothing per tick.
             let pos: [DVec2; PLAYER_COUNT] = std::array::from_fn(|i| {

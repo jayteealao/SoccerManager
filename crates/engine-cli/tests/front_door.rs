@@ -349,7 +349,7 @@ fn the_chosen_fixture_plays_with_the_two_chosen_clubs() {
     assert!(done["engine.pid"].is_null());
 }
 
-/// AC-6, the result half: a match stopped from the start screen and resumed later ends with
+/// The result of a resumed match: a match stopped from the start screen and resumed later ends with
 /// every tick after the save equal to the same fixture and seed played through.
 #[test]
 fn return_to_start_keeps_the_save_and_resume_finishes_the_same_match() {
@@ -437,7 +437,7 @@ fn return_to_start_keeps_the_save_and_resume_finishes_the_same_match() {
     );
 }
 
-/// AC-7, the process half: quit answers, the launcher exits 0 and the worker is gone.
+/// Quit ends the processes: quit answers, the launcher exits 0 and the worker is gone.
 #[test]
 fn quit_saves_the_match_and_ends_both_processes() {
     let data = temp("quit");
@@ -484,7 +484,7 @@ fn quit_saves_the_match_and_ends_both_processes() {
     assert!(saved, "the snapshot stays on disk");
 }
 
-/// AC-5, the storage half: the settings hold across a relaunch on the same data folder.
+/// The settings are stored: they hold across a relaunch on the same data folder.
 #[test]
 fn the_settings_hold_across_launches() {
     let data = temp("settings");

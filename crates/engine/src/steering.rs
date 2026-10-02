@@ -70,6 +70,9 @@ pub fn next_velocity(players: &[Player], i: usize, t: &Tuning) -> DVec2 {
 }
 
 /// Steers every player one tick: new velocities are computed from the old state, then applied.
+/// The loop's movement pass does the same through the steering module; this free form is a
+/// test helper.
+#[cfg(test)]
 pub fn step_all(players: &mut [Player], scratch: &mut Vec<DVec2>, t: &Tuning, pitch: &Pitch) {
     scratch.clear();
     for i in 0..players.len() {
@@ -105,7 +108,7 @@ impl SteeringModule for SteeringV1 {
         next_velocity(view.players(), i, view.tuning())
     }
 
-    /// [`resolve_overlaps`] on a copy of the positions, made at the first overlap.
+    /// [`separated`]: the overlap pass on a copy of the positions, made at the first overlap.
     fn separate(&self, view: &MatchView<'_>) -> Option<[DVec2; ROSTER]> {
         separated(view.players(), view.tuning(), view.pitch())
     }
@@ -126,42 +129,21 @@ pub const STEERING_V1_CARD: ModuleCard = ModuleCard {
     keys: &[],
 };
 
-/// Pushes apart every pair of players closer than the minimum distance, in index order. A
-/// pair whose squared distance is at or above `sq_skip_limit` of the minimum distance skips
-/// the square root; every other pair runs the square-root form unchanged.
-#[inline(never)]
+/// Pushes apart every pair of players closer than the minimum distance, in index order: the
+/// positions [`separated`] gives, written back. The movement module's pass is the only
+/// implementation; this in-place form is for callers that hold the players mutably.
 pub fn resolve_overlaps(players: &mut [Player], t: &Tuning, pitch: &Pitch) {
-    let n = players.len();
-    let skip = sq_skip_limit(t.min_player_distance);
-    for i in 0..n {
-        if !players[i].active() {
-            continue;
-        }
-        for j in (i + 1)..n {
-            if !players[j].active() {
-                continue;
-            }
-            let d = players[j].pos - players[i].pos;
-            if d.length_squared() >= skip {
-                continue;
-            }
-            let dist = d.length();
-            if dist < t.min_player_distance {
-                let axis = if dist > 1e-9 {
-                    d / dist
-                } else {
-                    DVec2::new(1.0, 0.0)
-                };
-                let push = axis * ((t.min_player_distance - dist) / 2.0);
-                players[i].pos = pitch.clamp(players[i].pos - push, 0.2);
-                players[j].pos = pitch.clamp(players[j].pos + push, 0.2);
-            }
+    if let Some(pos) = separated(players, t, pitch) {
+        for (p, at) in players.iter_mut().zip(pos) {
+            p.pos = at;
         }
     }
 }
 
-/// [`resolve_overlaps`] without writing: the same pairs in the same order, each reading the
-/// positions the earlier pairs moved. `None` when no pair overlaps, so nobody moves. The
+/// Every pair of players closer than the minimum distance pushed apart, in index order,
+/// without writing: each pair reads the positions the earlier pairs moved. A pair whose
+/// squared distance is at or above `sq_skip_limit` of the minimum distance skips the square
+/// root; every other pair runs the square-root form. `None` when no pair overlaps, so nobody moves. The
 /// pairs before the first overlap move nobody, so the scan reads the players as they stand
 /// until then, and copies the positions only from the first overlap on.
 fn separated(players: &[Player], t: &Tuning, pitch: &Pitch) -> Option<[DVec2; ROSTER]> {
@@ -430,9 +412,9 @@ mod tests {
         assert_ne!(new[0], new[1], "the coincident pair is pushed apart");
     }
 
-    /// The movement module's overlap pass gives, bit for bit, the positions the loop's
-    /// in-place pass writes, on a crowded scene where pushes cascade, and moves nobody when no
-    /// pair overlaps.
+    /// The movement module's overlap pass gives, bit for bit, the positions the in-place pass
+    /// before the squared-distance skip writes, on a crowded scene where pushes cascade, and
+    /// moves nobody when no pair overlaps.
     #[test]
     fn separated_matches_the_in_place_overlap_pass() {
         let t = Tuning::default();
@@ -445,7 +427,7 @@ mod tests {
             .collect();
         crowd[7].status = crate::player::Status::SentOff;
         let mut expected = crowd.clone();
-        resolve_overlaps(&mut expected, &t, &Pitch::DEFAULT);
+        resolve_overlaps_before(&mut expected, &t);
         let got = separated(&crowd, &t, &Pitch::DEFAULT).expect("the crowd overlaps");
         for (p, at) in expected.iter().zip(got) {
             assert_eq!(bits(p.pos), bits(at));

@@ -34,11 +34,22 @@ button {
   outline-offset: 2px;
 }
 
-/* The reduced-motion setting, or the system's preference when the setting follows Windows:
+/* The reduced-motion setting, or the system's preference when the setting follows the system:
    `watchMotion` writes the word on <html data-motion>. */
 :root[data-motion='reduce'] *,
 :root[data-motion='reduce'] *::before,
 :root[data-motion='reduce'] *::after {
   animation: none !important;
   transition: none !important;
+}
+
+/* Windows' forced colours replace every background, so a toggle drawn as pressed by its
+   background alone would lose its state: there it also carries an outline in the system's
+   highlight colour (WCAG 1.4.1). */
+@media (forced-colors: active) {
+  [aria-pressed='true'],
+  [aria-current]:not([aria-current='false']) {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
 }

@@ -928,6 +928,26 @@ test('dispose closes the socket with no recovery and stops the frame loop', asyn
   assert.equal(frames.length, 0, 'the loop asks for no frame after dispose');
 });
 
+test('a session disposed while it waits for the launcher opens no socket', async () => {
+  let answer;
+  const pending = new Promise((resolve) => {
+    answer = resolve;
+  });
+  const fetcher = async () => {
+    await pending;
+    return { ok: true, json: async () => RUNNING };
+  };
+  const timers = { setTimeout: (fn, ms) => ({ fn, ms }), clearTimeout: () => {} };
+  const session = new MatchSession({ fetcher, timers, raf: null, now: () => 0, doc: null });
+  const before = FakeSocket.made.length;
+  const starting = session.start();
+  session.dispose();
+  answer();
+  await starting;
+  assert.equal(FakeSocket.made.length, before, 'no socket after dispose');
+  assert.equal(session.socket, null);
+});
+
 test('the menu pauses the match and Resume match plays on only if it played before', async () => {
   const { session, socket } = await started(RUNNING);
   socket.deliver(hello());

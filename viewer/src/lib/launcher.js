@@ -20,7 +20,8 @@ export async function fetchStatus(fetcher = defaultFetch) {
 }
 
 /// A POST: the new `engine.json` body, or null when the launcher refused or nothing answers.
-async function act(path, fetcher, body = undefined) {
+/// On a refusal `onRefused` receives the launcher's plain-text reason.
+async function act(path, fetcher, body = undefined, onRefused = undefined) {
   try {
     const init = { method: 'POST', cache: 'no-store' };
     if (body !== undefined) {
@@ -29,6 +30,8 @@ async function act(path, fetcher, body = undefined) {
     }
     const response = await fetcher(path, init);
     if (!response.ok) {
+      const reason = typeof response.text === 'function' ? await response.text().catch(() => '') : '';
+      onRefused?.(reason.trim());
       return null;
     }
     return await response.json();
@@ -44,12 +47,30 @@ export const restart = (fetcher = defaultFetch) => act('engine/restart', fetcher
 export const abandon = (fetcher = defaultFetch) => act('engine/abandon', fetcher);
 
 /// Asks the launcher for a fresh match once none is running: with the launch's seed and
-/// teams, or, with `fixture` (`{ home, away }`, club ids), that fixture.
-export const newMatch = (fetcher = defaultFetch, fixture = undefined) =>
-  act('engine/new-match', fetcher, fixture);
+/// teams, or, with `fixture` (`{ home, away }`, club ids), that fixture. On a refusal
+/// `onRefused` receives the reason.
+export const newMatch = (fetcher = defaultFetch, fixture = undefined, onRefused = undefined) =>
+  act('engine/new-match', fetcher, fixture, onRefused);
 
-/// Asks the launcher to continue the newest unfinished saved match.
-export const resume = (fetcher = defaultFetch) => act('engine/resume', fetcher);
+/// Asks the launcher to continue the newest unfinished saved match. On a refusal `onRefused`
+/// receives the reason.
+export const resume = (fetcher = defaultFetch, onRefused = undefined) =>
+  act('engine/resume', fetcher, undefined, onRefused);
+
+/// The events a resumed match played before its save, in tick order; empty when the match
+/// was not resumed or nothing answers.
+export async function fetchEarlierEvents(fetcher = defaultFetch) {
+  try {
+    const response = await fetcher('engine/earlier-events', { cache: 'no-store' });
+    if (!response.ok) {
+      return [];
+    }
+    const rows = await response.json();
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
 
 /// Asks the launcher to stop the match and keep its snapshot, for the start screen.
 export const stop = (fetcher = defaultFetch) => act('engine/stop', fetcher);

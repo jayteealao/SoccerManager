@@ -2,13 +2,18 @@
      its title, its lines, the primary action and Keep playing. The primary action takes focus
      when it opens; Tab stays inside; Esc is Keep playing (the page's Esc handler). -->
 <script>
+  import { restoreFocus } from '../lib/focus.js';
+
   let { word, title, lines = [], primary, busy = false, onconfirm = () => {}, oncancel = () => {} } = $props();
 
   const uid = $props.id();
   let box = $state();
 
   $effect(() => {
+    // Focus goes back where it came from when the dialog closes (WCAG 2.4.3).
+    const before = globalThis.document?.activeElement;
     box?.querySelector('button')?.focus();
+    return () => restoreFocus(before);
   });
 
   function trap(event) {

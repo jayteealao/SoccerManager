@@ -189,7 +189,7 @@ test('settings show the three values pressed and save a change at once', async (
   assert.equal(within(speed).getByRole('button', { pressed: true }).textContent.trim(), '1×');
   assert.equal(
     within(screen.getByRole('group', { name: 'Animation' })).getByRole('button', { pressed: true }).textContent.trim(),
-    'Follow Windows'
+    'Follow system'
   );
   assert.equal(
     within(screen.getByRole('group', { name: 'Commentary' })).getByRole('button', { pressed: true }).textContent.trim(),

@@ -131,7 +131,12 @@ test('loading shows the steps and skeletons, with a busy action block', async ()
   assert.equal(action().textContent.trim(), 'Please wait');
   assert.equal(action().disabled, true);
   assert.ok(screen.getByRole('heading', { name: 'Getting the match ready' }));
-  assert.ok(screen.getByText(/Connecting to the match/));
+  assert.ok(screen.getAllByText(/Connecting to the match/).length > 0);
+  const announced = [...document.querySelectorAll('[role="status"]')].map((el) => el.textContent);
+  assert.ok(
+    announced.some((text) => /Step 2 of 3: Connecting to the match/.test(text)),
+    'the step in progress is announced',
+  );
   assert.ok(document.querySelector('.skels'));
   assert.equal(document.querySelector('.spinner'), null, 'no spinner');
   assert.equal(document.querySelector('[data-screen]').dataset.screen, 'loading');

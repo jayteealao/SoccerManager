@@ -5,7 +5,7 @@ This guide tells you how to set up a checkout, run the checks, write commits, an
 ## Set up a checkout
 
 1. Install Rust with rustup. `rust-toolchain.toml` selects the toolchain (1.92.0, with rustfmt and clippy) on the first build.
-2. Install Node 22 or later for the page tests and the browser suite.
+2. Install Node 22.12 or later to build the viewer and to run the viewer tests and the browser suite.
 3. Install the hook tools: [lefthook](https://github.com/evilmartians/lefthook), [committed](https://github.com/crate-ci/committed) (`cargo install committed`), and [gitleaks](https://github.com/gitleaks/gitleaks).
 4. Install the hooks:
 
@@ -38,8 +38,18 @@ Each pull request runs these checks. Run the fast ones before you push:
 | Lint | `cargo clippy --workspace --all-targets --locked -- -D warnings` |
 | Engine tests | `cargo test --workspace --locked` |
 | Viewer tests | `npm --prefix viewer test` |
+| Token scan (no literal colour or font outside the skins) | `npm --prefix viewer run scan` |
+| Contrast of the default skin | `npm --prefix viewer run contrast` |
+| Licence notices (after `npm --prefix viewer run build`) | `npm --prefix viewer run notices:verify -- dist/notices.json` |
+| Replay gate | `target/release/engine-cli gate` |
+| Golden-file history | `target/release/engine-cli guard --base main` |
+| Fast-model fit matches the golden results | `target/release/engine-cli fast-model stale` |
 | Coverage | `cargo llvm-cov --workspace --locked --fail-under-lines 78` |
 | Licences and advisories | `cargo deny check` |
+
+The gate, the history check and the fast-model check need the release build (`cargo build --release`). [The replay gate guide](docs/how-to/replay-gate.md) says what to do when the gate reports `differs`.
+
+A pull request also builds the previous release's engine from its tag and finishes one of its saved matches on it. To run that check locally, fetch the tag that `packaging/previous-engine.json` names, run `sh packaging/unix/previous-engine.sh`, then run `cargo test -p engine-cli --test previous_engine -- --ignored` with `SM_PREVIOUS_ENGINE_PATH` set to the built program.
 
 The pull request also checks the commit messages, the title, secrets (gitleaks), code patterns (semgrep), the browser suite's dependencies (`npm audit`), and a Windows build that must link the C runtime statically.
 

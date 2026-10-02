@@ -3,6 +3,7 @@
      start screen, Settings, Licences and about, a rule, and Quit Touchline. The first item
      takes focus when it opens; ↑ and ↓ move, Tab stays inside. -->
 <script>
+  import { restoreFocus } from '../lib/focus.js';
   import Glyph from './Glyph.svelte';
   import { DOCUMENT, HOME, LEAVE, PLAY, SLIDERS } from './icons.js';
 
@@ -19,7 +20,10 @@
   let menu = $state();
 
   $effect(() => {
+    // Focus goes back where it came from when the menu closes (WCAG 2.4.3).
+    const before = globalThis.document?.activeElement;
     menu?.querySelector('button')?.focus();
+    return () => restoreFocus(before);
   });
 
   function keys(event) {

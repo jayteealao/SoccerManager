@@ -55,7 +55,7 @@ impl<'a> MatchView<'a> {
     /// The ground of the match: the home team's. Never changes in a match.
     #[inline]
     pub fn pitch(&self) -> &'a Pitch {
-        &self.sim.config.pitch
+        self.sim.config.pitch()
     }
 
     /// The fatigue tuning of the match.

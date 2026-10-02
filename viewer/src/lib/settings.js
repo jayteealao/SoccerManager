@@ -6,10 +6,10 @@
 /// The speeds a match may start at.
 export const SPEEDS = Object.freeze([1, 2, 4, 8]);
 
-/// How the viewer moves: as Windows asks, always reduced, or always full.
+/// How the viewer moves: as the operating system asks, always reduced, or always full.
 export const MOTIONS = Object.freeze(['follow', 'reduce', 'full']);
 
-/// The settings with no file: 1x, follow Windows, commentary on. A match with these plays as
+/// The settings with no file: 1x, follow the system, commentary on. A match with these plays as
 /// a match played before the settings existed.
 export const DEFAULTS = Object.freeze({ speed: 1, motion: 'follow', commentary: true });
 

@@ -616,7 +616,7 @@ fn no_matchday_sends_no_matchday_message() {
     let _ = std::fs::remove_dir_all(&data);
 }
 
-/// AC-37: a fault in one background match makes it unavailable with a bug report; the
+/// A fault in one background match makes it unavailable with a bug report; the
 /// player's match and the other grounds play on to full time.
 #[test]
 fn a_failed_background_match_shows_unavailable_and_the_rest_play_on() {

@@ -17,36 +17,54 @@ use crate::rules::{clock, discipline, fouls, injury, offside, pack, restart};
 use crate::tactics::verdict;
 use crate::{ai, ball, decision, fatigue, hook_slots, possession, shot, steering};
 
-/// A registered module, typed by the slot it fills.
-#[derive(Clone, Copy)]
-pub enum ModuleRef {
-    Fouls(&'static dyn FoulsModule),
-    Offside(&'static dyn OffsideModule),
-    Shot(&'static dyn ShotModule),
-    Fatigue(&'static dyn FatigueModule),
-    Steering(&'static dyn SteeringModule),
-    PreMatch(&'static dyn PreMatchModule),
-    Modifier(&'static dyn Modifier),
-    Clock(&'static dyn ClockModule),
-    Restarts(&'static dyn RestartsModule),
-    Discipline(&'static dyn DisciplineModule),
-    Injuries(&'static dyn InjuriesModule),
-    Ball(&'static dyn BallModule),
-    Possession(&'static dyn PossessionModule),
-    Decision(&'static dyn DecisionModule),
-    Manager(&'static dyn ManagerModule),
-    Changes(&'static dyn ChangesModule),
-    DecisionHook(&'static dyn DecisionHookModule),
-    RuleHook(&'static dyn RuleHookModule),
-    CommentaryHook(&'static dyn CommentaryHookModule),
-    Rules(&'static dyn RulesModule),
-    World(&'static dyn WorldModule),
-    Season(&'static dyn SeasonModule),
-    People(&'static dyn PeopleModule),
-    Presentation(&'static dyn PresentationModule),
-    Skin(&'static dyn SkinModule),
-    FastModel(&'static dyn FastModel),
+/// Every typed slot kind once: its `ModuleRef` variant, its `ResolvedModules` field, and its
+/// slot trait. `ModuleRef` and the resolver's builder are both generated from this one list,
+/// so a new kind is written here once, and the compiler then checks the `ResolvedModules`
+/// struct against it. The modifier kind is not listed: its four slots share one list.
+macro_rules! for_each_slot_kind {
+    ($callback:ident) => {
+        $callback! {
+            Fouls fouls FoulsModule,
+            Offside offside OffsideModule,
+            Shot shot ShotModule,
+            Fatigue fatigue FatigueModule,
+            Steering steering SteeringModule,
+            PreMatch pre_match PreMatchModule,
+            Clock clock ClockModule,
+            Restarts restarts RestartsModule,
+            Discipline discipline DisciplineModule,
+            Injuries injuries InjuriesModule,
+            Ball ball BallModule,
+            Possession possession PossessionModule,
+            Decision decision DecisionModule,
+            Manager manager ManagerModule,
+            Changes changes ChangesModule,
+            DecisionHook decision_hook DecisionHookModule,
+            RuleHook rule_hook RuleHookModule,
+            CommentaryHook commentary_hook CommentaryHookModule,
+            Rules rule_pack RulesModule,
+            World world WorldModule,
+            Season season SeasonModule,
+            People people PeopleModule,
+            Presentation presentation PresentationModule,
+            Skin skin SkinModule,
+            FastModel fast_model FastModel,
+        }
+    };
 }
+pub(crate) use for_each_slot_kind;
+
+macro_rules! module_ref_enum {
+    ($($variant:ident $field:ident $kind:ident,)*) => {
+        /// A registered module, typed by the slot it fills.
+        #[derive(Clone, Copy)]
+        pub enum ModuleRef {
+            $($variant(&'static dyn $kind),)*
+            Modifier(&'static dyn Modifier),
+        }
+    };
+}
+for_each_slot_kind!(module_ref_enum);
 
 /// One module registered for a slot.
 #[derive(Clone, Copy)]
@@ -252,9 +270,9 @@ pub const FAST_MODEL: Slot = Slot {
     required: false,
 };
 
-/// The number of declared slots. `ResolvedModules` holds one typed field per slot, and one
-/// `Modifiers` field for the modifier slots.
-pub const SLOT_COUNT: usize = 29;
+/// The number of declared slots, counted from the registry table. `ResolvedModules` holds
+/// one typed field per slot, and one `Modifiers` field for the modifier slots.
+pub const SLOT_COUNT: usize = DECLS.len();
 
 /// The number of modifier slots.
 pub const MODIFIER_COUNT: usize = 4;
@@ -359,9 +377,9 @@ const CLOCK_V1: Registration = Registration {
 };
 
 /// Every slot, in the fixed order the engine resolves them.
-pub static REGISTRY: &[SlotDecl] = &DECLS;
+pub static REGISTRY: &[SlotDecl] = DECLS;
 
-const DECLS: [SlotDecl; SLOT_COUNT] = [
+const DECLS: &[SlotDecl] = &[
     SlotDecl {
         slot: FOULS,
         registrations: FOULS_REGISTRATIONS,

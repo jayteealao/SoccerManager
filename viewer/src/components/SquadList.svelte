@@ -116,12 +116,15 @@
   <span>Cannot play</span>
 </div>
 
-<div class="hint" role="status">
-  {#if pickedText}
-    <span><b>{pickedText}</b> <span class="g">Click another row to swap, or</span></span>
-  {:else}
-    <span class="g">Click a row, then another row or a pitch slot, to swap.</span>
-  {/if}
+<div class="hint">
+  <!-- Only the hint is announced as the pick changes; the button stays out of the region. -->
+  <span role="status">
+    {#if pickedText}
+      <span><b>{pickedText}</b> <span class="g">Click another row to swap, or</span></span>
+    {:else}
+      <span class="g">Click a row, then another row or a pitch slot, to swap.</span>
+    {/if}
+  </span>
   <button class="btn gh" type="button" disabled={!canEmpty} onclick={onempty}>Empty the picked slot</button>
 </div>
 

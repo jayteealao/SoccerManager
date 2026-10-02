@@ -163,10 +163,12 @@ impl SavedMatch {
     /// not among the sample teams.
     pub fn team_files(&self, teams: &[SampleTeam]) -> Option<[PathBuf; 2]> {
         let names = self.identity.teams.as_ref()?;
+        // The snapshot header keeps a name to its first 44 bytes, so a club is compared by
+        // its name cut the same way.
         let find = |name: &str| {
             teams
                 .iter()
-                .find(|t| t.name() == name)
+                .find(|t| as_saved(t.name()) == name)
                 .map(|t| t.path.clone())
         };
         Some([find(&names[0])?, find(&names[1])?])
@@ -320,9 +322,30 @@ impl Settings {
     }
 }
 
+/// `name` as a snapshot header keeps it: cut to the header's width at a character boundary.
+fn as_saved(name: &str) -> &str {
+    let mut end = name.len().min(engine::snapshot::TEAM_BYTES);
+    while !name.is_char_boundary(end) {
+        end -= 1;
+    }
+    &name[..end]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A long club name is matched as the header keeps it: its first 44 bytes, never cut
+    /// inside a character.
+    #[test]
+    fn a_long_club_name_is_matched_as_the_header_keeps_it() {
+        let long = "Sporting Club of the Very Long Name Hills Athletic";
+        assert_eq!(as_saved(long).len(), engine::snapshot::TEAM_BYTES);
+        assert!(long.starts_with(as_saved(long)));
+        assert_eq!(as_saved("Rovers"), "Rovers");
+        let accented = "é".repeat(30);
+        assert_eq!(as_saved(&accented).len(), 44);
+    }
 
     fn shipped() -> ContentDir {
         ContentDir::at(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content"))

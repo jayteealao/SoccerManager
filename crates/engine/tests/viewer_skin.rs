@@ -109,7 +109,7 @@ fn a_skin_never_changes_the_content_hash() {
     assert_eq!(fouls_off_light.digest, fouls_off.digest);
 }
 
-/// AC-21: an unknown skin is refused with the slot, the bad value, and the valid names.
+/// An unknown skin is refused with the slot, the bad value, and the valid names.
 #[test]
 fn an_unknown_skin_is_refused_with_the_valid_names() {
     let content = common::content();

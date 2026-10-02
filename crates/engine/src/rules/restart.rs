@@ -123,7 +123,7 @@ pub fn preferred_taker(
     match kind {
         StoppageKind::GoalKick => Some(keeper),
         StoppageKind::KickOff => Some(first + PLAYERS_PER_TEAM - 1).filter(|&i| i != keeper),
-        StoppageKind::Injury if teams[team].pitch.in_penalty_area(spot, own_end) => Some(keeper),
+        StoppageKind::Injury if teams[team].pitch().in_penalty_area(spot, own_end) => Some(keeper),
         _ => None,
     }
 }
@@ -147,7 +147,7 @@ pub fn kick_off_spot(team: &Team, slot: usize, opponent: bool) -> DVec2 {
     }
     let away = DVec2::new(-team.attack_x, 0.0);
     outside_on_pitch(
-        &team.pitch,
+        team.pitch(),
         base,
         DVec2::ZERO,
         KICK_DISTANCE + TARGET_MARGIN,
@@ -161,7 +161,7 @@ fn taker_target(dead: &DeadBall, teams: &[Team; 2]) -> DVec2 {
     if dead.kind == StoppageKind::KickOff {
         dead.spot - DVec2::new(0.5 * teams[dead.team].attack_x, 0.0)
     } else {
-        teams[dead.team].pitch.clamp(dead.spot, 0.2)
+        teams[dead.team].pitch().clamp(dead.spot, 0.2)
     }
 }
 
@@ -254,7 +254,7 @@ pub fn target(
     }
     let p = &players[i];
     let team = &teams[p.team];
-    let pitch = &team.pitch;
+    let pitch = team.pitch();
     let opponent = p.team != dead.team;
     // An opponent pushed off a spot backs toward its own goal.
     let away = DVec2::new(-team.attack_x, 0.0);
@@ -382,7 +382,7 @@ pub fn is_ready(
         return false;
     }
     let side = end_of(dead.spot);
-    let pitch = &teams[0].pitch;
+    let pitch = teams[0].pitch();
     players.iter().enumerate().all(|(i, p)| {
         if i == dead.taker || !p.active() {
             return true;
@@ -589,9 +589,7 @@ mod tests {
         for (length, width) in [(105.0, 68.0), (90.0, 45.0)] {
             let mut config = shipped_config(1, 90).unwrap();
             let pitch = Pitch::new(length, width).unwrap();
-            for team in &mut config.teams {
-                team.pitch = pitch;
-            }
+            config.set_pitch(pitch);
             for team in &config.teams {
                 for slot in 0..PLAYERS_PER_TEAM {
                     let own = kick_off_spot(team, slot, false);

@@ -230,7 +230,7 @@ fn off_on_a_required_slot_is_refused() {
         "slot configuration refused: slot engine.steering: off is not allowed: the slot is required; valid: steering@1"
     );
     // The clock and match end, restarts, ball physics, possession, and the decision maker
-    // are on the core list too (AC-10). Test builds also list the faulty clock after
+    // are on the core list too, so none can be switched off. Test builds also list the faulty clock after
     // `clock@1` and the faulty possession module after `possession@1`.
     for (id, first) in [
         (CLOCK.id, "clock@1"),
@@ -588,7 +588,7 @@ fn every_modifier_slot_names_its_family() {
     );
 }
 
-/// AC-6 for modifiers: each modifier switched off in turn, three full matches each; every
+/// The off switch for modifiers: each modifier switched off in turn, three full matches each; every
 /// match reaches full time and the event validator accepts every event stream.
 #[test]
 fn each_modifier_switched_off_plays_a_batch_the_validator_accepts() {
@@ -753,7 +753,7 @@ fn faulty_shot_fails_the_gate_at_a_named_window() {
     );
 }
 
-/// AC-5 for the clock: one second more added time in the first half fails the gate in the
+/// A changed clock fails the gate: one second more added time in the first half fails the gate in the
 /// window that holds tick 135,000, where the first half's own 45 minutes end and its added
 /// time is fixed, and the report names the window.
 #[test]
@@ -795,7 +795,7 @@ fn faulty_clock_fails_the_gate_at_a_named_window() {
     );
 }
 
-/// AC-5 for possession: an outfield player who reaches a loose ball from 1 cm further fails
+/// A changed possession module fails the gate: an outfield player who reaches a loose ball from 1 cm further fails
 /// the gate at the first loose ball that centimetre decides (on seed 1, in the window from
 /// tick 2,000 to tick 3,000), and the report names the window.
 #[test]

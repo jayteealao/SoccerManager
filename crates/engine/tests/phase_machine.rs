@@ -204,10 +204,12 @@ fn a_planted_undeclared_step_fails_the_validator() {
 
 /// Every write of the stored phase in the engine's source, as `path: line`, outside the
 /// files allowed to write it: the machine's one writer in the referee, the snapshot reader
-/// that restores it, and the scene builder.
+/// that restores it, the scene builder, and the scene builder's one seat in the referee
+/// (`seat_phase`, compiled only for test scenes).
 fn phase_writes(files: &[(String, String)]) -> Vec<String> {
     let mut found = Vec::new();
     let mut in_machine = 0;
+    let mut seats = 0;
     for (path, text) in files {
         for line in text.lines() {
             let code = line.trim_start();
@@ -217,9 +219,13 @@ fn phase_writes(files: &[(String, String)]) -> Vec<String> {
             match path.as_str() {
                 "snapshot.rs" | "scenario.rs" => {}
                 "rules/mod.rs" if code == "self.referee.phase = next;" => in_machine += 1,
+                "rules/mod.rs" if code == "self.referee.phase = phase;" => seats += 1,
                 _ => found.push(format!("{path}: {code}")),
             }
         }
+    }
+    if seats > 1 {
+        found.push(format!("rules/mod.rs: {seats} scene seats, not 1"));
     }
     if in_machine != 1 {
         found.push(format!(
@@ -489,7 +495,7 @@ fn in_debug_mode_every_restart_passes_the_position_check() {
 fn an_illegal_position_at_a_restart_fails_naming_the_phase_the_player_and_the_position() {
     let config = calm_match(5);
     let attack_x = config.teams[0].attack_x;
-    let half_length = config.pitch.half_length();
+    let half_length = config.pitch().half_length();
     let defender = index(1, 4);
     // The legal scene first: it takes the penalty without a fault.
     let legal = Scene::new(config.clone()).penalty(0, index(0, 10)).build();

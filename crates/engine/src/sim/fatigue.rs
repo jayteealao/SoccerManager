@@ -3,6 +3,7 @@
 use serde_json::json;
 
 use crate::fatigue::{InjurySource, REFRESH_TICKS};
+use crate::modules::ROSTER;
 use crate::rules::Phase;
 use crate::rules::clock::TICKS_PER_MINUTE;
 use crate::sim::Simulation;
@@ -15,13 +16,14 @@ impl Simulation {
     /// pitch rolls for an injury.
     pub(crate) fn fatigue_tick(&mut self) {
         let fatigue = self.config.modules.fatigue;
-        for i in 0..self.players.len() {
-            if !self.players[i].active() {
-                continue;
+        // A player's drain reads only that player, so every drain is taken from the old
+        // state first, then applied.
+        let mut drains = [0.0; ROSTER];
+        fatigue.drains(&self.view(), &mut drains);
+        for (p, d) in self.players.iter_mut().zip(drains) {
+            if p.active() {
+                p.energy = (p.energy - d).max(0.0);
             }
-            let d = fatigue.drain(&self.view(), i);
-            let p = &mut self.players[i];
-            p.energy = (p.energy - d).max(0.0);
         }
         let now = self.tick + 1;
         if now.is_multiple_of(REFRESH_TICKS) {

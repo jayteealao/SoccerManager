@@ -124,7 +124,7 @@
     font-weight: 500;
   }
 
-  /* The reduced-motion setting, or the system's preference when it follows Windows. */
+  /* The reduced-motion setting, or the system's preference when it follows the system. */
   :global(:root[data-motion='reduce']) .opt {
       transition: none;
   }

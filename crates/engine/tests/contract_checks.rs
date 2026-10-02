@@ -100,7 +100,7 @@ fn assert_batch_accepted(selections: &[(String, engine::Content)]) {
     }
 }
 
-/// AC-6: each optional slot switched off in turn, three full matches each.
+/// Each optional slot switched off in turn, three full matches each.
 #[test]
 fn every_optional_slot_switched_off_plays_a_batch_the_validator_accepts() {
     let content = common::content();
@@ -118,7 +118,7 @@ fn every_optional_slot_switched_off_plays_a_batch_the_validator_accepts() {
     assert_batch_accepted(&selections);
 }
 
-/// AC-6, the edge case: every optional slot switched off at once still plays to the end.
+/// The edge case of the off-switch check: every optional slot switched off at once still plays to the end.
 #[test]
 fn every_optional_slot_off_at_once_plays_a_batch_the_validator_accepts() {
     let optional = optional_slots();
@@ -213,7 +213,7 @@ fn first_difference(
     })
 }
 
-/// AC-7: a stand-in in each slot in turn; the match plays to the end, every key the stand-in
+/// A stand-in in each slot in turn; the match plays to the end, every key the stand-in
 /// does not own draws the same sequence as with the default module, and the events match.
 #[test]
 fn a_stand_in_in_each_slot_keeps_every_other_key_and_the_events() {
@@ -240,7 +240,7 @@ fn a_stand_in_in_each_slot_keeps_every_other_key_and_the_events() {
     }
 }
 
-/// The control of AC-7: the same comparison finds the faulty possession module, which
+/// The control of the stand-in check: the same comparison finds the faulty possession module, which
 /// changes one output, so the stand-in passes above are not empty.
 #[test]
 fn the_swap_comparison_finds_a_changed_module() {
@@ -264,7 +264,7 @@ fn the_swap_comparison_finds_a_changed_module() {
     assert_ne!(events, default_events);
 }
 
-/// AC-8 with stand-ins: each stand-in card in place of its slot's default keeps exactly one
+/// Key ownership with stand-ins: each stand-in card in place of its slot's default keeps exactly one
 /// owner for every key, and every stand-in card is complete.
 #[test]
 fn every_stand_in_keeps_one_owner_per_key_and_a_complete_card() {

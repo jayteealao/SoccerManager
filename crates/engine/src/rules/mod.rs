@@ -105,7 +105,9 @@ pub struct Referee {
     pub phase: Phase,
     /// The phase's name in the phase machine: derived state that equals
     /// `phases::derive(phase, shootout)` at every tick boundary, so it is neither hashed nor
-    /// saved.
+    /// saved. Its writers are `enter_phase` and `note_phase`, the snapshot restore (which
+    /// derives it), and the test scenes' `seat_phase` and `seat_break`. A step checks the
+    /// equality whenever the checks are on (`check_phase_name`).
     pub named: PhaseName,
     /// Players in an offside position since the last kick in open play.
     pub offside: OffsideSet,
@@ -206,7 +208,7 @@ impl Simulation {
     /// Every position against the Laws as `restart` is taken (`positions::check`).
     fn restart_faults(&self, restart: &positions::Restart) -> Vec<positions::Fault> {
         positions::check(
-            &self.config.pitch,
+            self.config.pitch(),
             restart,
             self.ball.xy(),
             &self.players,
@@ -230,6 +232,39 @@ impl Simulation {
             cause,
         });
         self.referee.named = to;
+    }
+
+    /// Fails when the named phase differs from the name of the stored phase at a tick
+    /// boundary, with the checks on.
+    ///
+    /// # Panics
+    ///
+    /// When the two names differ: a writer bypassed the phase machine.
+    pub(crate) fn check_phase_name(&self) {
+        if !self.checks_on() {
+            return;
+        }
+        let derived = phases::derive(self.referee.phase, self.referee.shootout.is_some());
+        assert_eq!(
+            self.referee.named, derived,
+            "tick {}: the named phase differs from the stored phase",
+            self.tick
+        );
+    }
+
+    /// Test scenes only: seats a stored phase the scene builds without a transition, with its
+    /// derived name.
+    #[cfg(feature = "scenario")]
+    pub(crate) fn seat_phase(&mut self, phase: Phase) {
+        self.referee.phase = phase;
+        self.referee.named = phases::derive(phase, self.referee.shootout.is_some());
+    }
+
+    /// Test scenes only: seats the half-time break, so the kick-off the scene places starts
+    /// the next period from it.
+    #[cfg(feature = "scenario")]
+    pub(crate) fn seat_break(&mut self) {
+        self.referee.named = PhaseName::HalfTime;
     }
 
     /// Places every player for a kick-off by `team` at once, as at the start of a half, and
@@ -340,7 +375,7 @@ impl Simulation {
                 StoppageKind::ThrowIn,
                 StoppageKind::ThrowIn,
                 1 - last,
-                self.config.pitch.throw_in_spot(exit.point, side),
+                self.config.pitch().throw_in_spot(exit.point, side),
                 false,
             ),
             Line::Goal { side } => {
@@ -354,7 +389,7 @@ impl Simulation {
                         StoppageKind::GoalKick,
                         StoppageKind::GoalKick,
                         1 - attacking,
-                        self.config.pitch.goal_kick_spot(side, exit.point.y),
+                        self.config.pitch().goal_kick_spot(side, exit.point.y),
                         true,
                     );
                 } else {
@@ -362,7 +397,7 @@ impl Simulation {
                         StoppageKind::Corner,
                         StoppageKind::Corner,
                         attacking,
-                        self.config.pitch.corner_spot(side, exit.point.y),
+                        self.config.pitch().corner_spot(side, exit.point.y),
                         true,
                     );
                 }
@@ -381,7 +416,7 @@ impl Simulation {
         self.players[i].foul_ready = self.tick.saturating_add(t.foul_cooldown_ticks);
         let own_end = -self.teams[offender.team].attack_x;
         let at = self.players[c].pos;
-        let penalty = self.config.pitch.in_penalty_area(at, own_end);
+        let penalty = self.config.pitch().in_penalty_area(at, own_end);
         let advantage = !ball_lost && !penalty;
         let fouls = self.config.modules.fouls;
         let thresholds = fouls.card_thresholds(&self.view(), i);
@@ -436,7 +471,7 @@ impl Simulation {
                 StoppageKind::Penalty,
                 StoppageKind::Penalty,
                 fouled_team,
-                self.config.pitch.penalty_spot(own_end),
+                self.config.pitch().penalty_spot(own_end),
                 true,
             );
         } else {
@@ -444,7 +479,7 @@ impl Simulation {
                 StoppageKind::FreeKick,
                 StoppageKind::FreeKick,
                 fouled_team,
-                self.config.pitch.clamp(at, 0.5),
+                self.config.pitch().clamp(at, 0.5),
                 true,
             );
         }
@@ -473,7 +508,7 @@ impl Simulation {
         if self.trace_on() {
             self.trace_point(Point::Offside, json!({"player": i, "team": team}));
         }
-        let spot = self.config.pitch.clamp(self.players[i].pos, 0.5);
+        let spot = self.config.pitch().clamp(self.players[i].pos, 0.5);
         self.open_dead_ball(
             StoppageKind::FreeKick,
             StoppageKind::FreeKick,
@@ -581,7 +616,7 @@ impl Simulation {
         {
             let p = &mut self.players[i];
             p.status = Status::Injured;
-            p.pos = self.config.pitch.parking_spot(p.team, p.slot);
+            p.pos = self.config.pitch().parking_spot(p.team, p.slot);
             p.vel = DVec2::ZERO;
             p.target = p.pos;
         }
@@ -1071,7 +1106,7 @@ impl Simulation {
         state.kicker = Some(kicker);
         state.live_since = None;
         let round = state.taken[team] + 1;
-        let spot = self.config.pitch.penalty_spot(state.end);
+        let spot = self.config.pitch().penalty_spot(state.end);
         self.show_pending_cards();
         if self.referee.abandoned {
             return;
@@ -1129,7 +1164,7 @@ impl Simulation {
         state.live_since = Some(self.tick + 1);
         let keeper = state.keepers[1 - dead.team];
         let end = state.end;
-        let goal = self.config.pitch.goal_centre(end);
+        let goal = self.config.pitch().goal_centre(end);
         self.enter_phase(Phase::Live, Cause::ShootoutKickTaken);
         let kick = self.shot_kick(dead.taker, goal, keeper, t.shots.penalty_spread);
         let diver = self.players[keeper];
@@ -1151,7 +1186,7 @@ impl Simulation {
             );
         }
         self.players[keeper].target = DVec2::new(
-            end * (self.config.pitch.half_length() - 0.3),
+            end * (self.config.pitch().half_length() - 0.3),
             side * t.shots.keeper_dive_m,
         );
         let (dir, speed, loft) = kick.flight();
@@ -1179,9 +1214,9 @@ impl Simulation {
         let Some(end) = self.referee.shootout.as_ref().map(|s| s.end) else {
             return;
         };
-        if self.config.pitch.in_goal(prev, xy, end) && self.ball.pos.z < t.crossbar_height {
+        if self.config.pitch().in_goal(prev, xy, end) && self.ball.pos.z < t.crossbar_height {
             self.shootout_outcome(true, "goal");
-        } else if self.config.pitch.exit(prev, xy).is_some() {
+        } else if self.config.pitch().exit(prev, xy).is_some() {
             self.shootout_outcome(false, "off_target");
         }
     }
@@ -1394,12 +1429,12 @@ mod tests {
         let team = 0;
         let taker = 9;
         let attack_x = sim.teams[team].attack_x;
-        let spot = sim.config.pitch.penalty_spot(attack_x);
+        let spot = sim.config.pitch().penalty_spot(attack_x);
         sim.players[taker].pos = spot;
         // The defending keeper on his goal line (IFAB Law 14).
         let keeper = sim.keeper(1 - team);
         sim.players[keeper].pos =
-            DVec2::new(attack_x * (sim.config.pitch.half_length() - 0.3), 0.0);
+            DVec2::new(attack_x * (sim.config.pitch().half_length() - 0.3), 0.0);
         sim.ball = Ball::at(spot);
         let dead = DeadBall {
             kind: StoppageKind::Penalty,

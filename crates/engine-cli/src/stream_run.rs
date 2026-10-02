@@ -8,9 +8,9 @@
 //! the home team, and it names the change on its verdict event by the identifier the page
 //! was given, because the two queues number their changes independently.
 
-use engine::gate::PlannedChange;
 use engine::observe::{MatchFigures, round_to};
 use engine::record::TickSink;
+use engine::tactics::planned::PlannedChange;
 use engine::{
     Card, Change, ChangeId, Commentary, Commentator, EngineEvent, EngineEventKind, EventDetail,
     Simulation,

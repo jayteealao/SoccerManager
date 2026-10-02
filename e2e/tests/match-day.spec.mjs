@@ -32,10 +32,7 @@ test('the goal moment shows in the frame that draws the goal', async ({ page }) 
     expect(moment.prev_rendered_tick).toBeLessThan(moment.goal_tick);
     expect(moment.rendered_tick).toBeGreaterThanOrEqual(moment.goal_tick);
     expect(day.goalShownAtTick).toBe(moment.rendered_tick);
-    await expect(scoreBug(page)).toHaveAttribute(
-      'aria-label',
-      `Score ${moment['home.score']} – ${moment['away.score']}`
-    );
+    await expect(scoreBug(page)).toHaveText(`${moment['home.score']} – ${moment['away.score']}`);
     expect(day.bannerText.length).toBeGreaterThan(0);
     expect(await page.locator('section[aria-label="Commentary"] li[data-kind="goal"]').count()).toBeGreaterThanOrEqual(1);
   } finally {
@@ -51,7 +48,7 @@ test('before play the feed shows its empty text and the score is 0–0', async (
     // The viewer opens on Tactics before kick-off; the feed is on the match screen.
     await showMatch(page);
     await expect(page.getByText('No events yet. The feed fills as the match plays.')).toBeVisible();
-    await expect(scoreBug(page)).toHaveAttribute('aria-label', 'Score 0 – 0');
+    await expect(scoreBug(page)).toHaveText('0 – 0');
     const day = await page.evaluate(() => window.__touchline.matchDay());
     expect(day.emptyStateShown).toBe(true);
     expect(day.feedCount).toBe(0);

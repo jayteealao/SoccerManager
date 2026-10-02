@@ -12,7 +12,7 @@ The same shape serves parts outside the match engine: the rule pack, four declar
 
 ## Three tiers
 
-The contract has three tiers, and this work builds only the first.
+The contract has three tiers, and only the first is built.
 
 1. **Compiled modules.** A module is Rust code compiled into the program and registered in the engine's registry. Every slot today is in this tier. The compiler checks the interface, and a module costs no more than a direct call.
 2. **Sandboxed modules for modders.** A later tier would load modules from outside the program in a sandbox, for example WebAssembly. Nothing in this tier is built: no slot accepts an outside module. The Rhai script packs reach the engine through the three hook slots, whose adapters are compiled modules; a pack itself is not a module.
@@ -32,7 +32,7 @@ The loop also takes every random draw. A module that needs randomness says which
 
 Every random draw has a key: the part of the engine, the kind of action and the player. Each key has its own stream from the match seed. The contract keeps every key exactly as it was, and gives each key to one module, which lists it on its card.
 
-Keeping the keys is what let the engine move onto the contract without changing a single match. Every refactor step left the replay gate hashes unchanged, so the gate proved that each move was a move and nothing else. New keys per module would have changed every match at once and hidden any real mistake inside that change.
+Keeping the keys means that moving a part of the engine into a module changes no match: the replay gate hashes stay the same, so the gate proves that a move is a move and nothing else. New keys per module would have changed every match at once and hidden any real mistake inside that change.
 
 Owning keys gives a second promise: a module that takes more or fewer draws changes only its own streams. The swap check proves it. A stand-in module in each slot in turn keeps every other module's draws and the events unchanged, and a control run with a changed module must find a difference.
 
@@ -44,7 +44,7 @@ Every module carries a card: its purpose, what it reads, what it returns, the tu
 
 ## Modifiers
 
-Effects on a player, such as fatigue, are modifiers. Each modifier belongs to a family (body, mind, familiarity, surroundings) and returns a factor for each effective value. Factors multiply within a family. Across families a soft combine makes each further effect in one direction count for less than the one before, so four small effects do not stack into an absurd one. Fatigue is the one modifier with an effect today; pressure, momentum and weather are stand-ins with none, waiting for their own work.
+Effects on a player, such as fatigue, are modifiers. Each modifier belongs to a family (body, mind, familiarity, surroundings) and returns a factor for each effective value. Factors multiply within a family. Across families a soft combine makes each further effect in one direction count for less than the one before, so four small effects do not stack into an absurd one. Fatigue is the one modifier with an effect today; pressure, momentum and weather are stand-ins with none.
 
 ## Stubs
 

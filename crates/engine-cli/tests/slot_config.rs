@@ -193,14 +193,14 @@ fn decision_switched_off_refuses_start_up() {
     );
 }
 
-/// AC-21: `serve` with an unknown skin refuses before it binds a port.
+/// `serve` with an unknown skin refuses before it binds a port.
 #[test]
 fn an_unknown_skin_refuses_serve() {
     let (code, stdout, stderr) = run_with("skin-unknown.json", &["serve", "--seed", "1"]);
     assert_skin_refused(code, &stdout, &stderr);
 }
 
-/// AC-21: `launch` with an unknown skin refuses before it serves a page.
+/// `launch` with an unknown skin refuses before it serves a page.
 #[test]
 fn an_unknown_skin_refuses_launch() {
     // A temporary page folder: the refusal comes before any page is served.

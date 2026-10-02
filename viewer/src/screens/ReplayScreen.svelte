@@ -82,6 +82,9 @@
   {/snippet}
 
   <div class="screen" data-screen="replay">
+    <!-- Goals and cards are read out as the replay reaches them, as on the match screen: the
+         canvas alone carries no text. -->
+    <p class="vh" aria-live="polite" data-replay-spoken>{session.spoken}</p>
     <div class="cols">
       <div class="left">
         <div class="head">
@@ -556,5 +559,16 @@
 
   .num {
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Read by a screen reader, never drawn. */
+  .vh {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 </style>

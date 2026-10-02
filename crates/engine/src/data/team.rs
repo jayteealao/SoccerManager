@@ -13,6 +13,10 @@ use crate::pitch::Pitch;
 /// Schema version this build reads.
 pub const TEAM_VERSION: u32 = 1;
 
+/// The largest squad a team file may hold. The random streams size their dense key index
+/// from it (`streams::table::SQUAD_MAX`), so the two can never disagree.
+pub const MAX_SQUAD: usize = 40;
+
 /// The ten position codes (product-owner choice, plan Q9).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Position {
@@ -147,7 +151,7 @@ pub struct TeamFile {
     pub schema_version: u32,
     #[garde(dive(()))]
     pub club: Club,
-    #[garde(length(min = 11, max = 40), dive(()), custom(check_squad))]
+    #[garde(length(min = 11, max = MAX_SQUAD), dive(()), custom(check_squad))]
     pub players: Vec<PlayerEntry>,
 }
 

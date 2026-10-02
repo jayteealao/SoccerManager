@@ -15,7 +15,7 @@ use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Context;
 
@@ -56,8 +56,11 @@ const RESUME: &str = "/engine/resume";
 const STOP: &str = "/engine/stop";
 const QUIT: &str = "/engine/quit";
 const SETTINGS: &str = "/engine/settings";
-/// The one read-only question besides `/engine.json`: the round match setup would form.
+/// A read-only question besides `/engine.json`: the round match setup would form.
 const ROUND: &str = "/engine/round";
+/// A read-only question besides `/engine.json`: the events a resumed match played before
+/// its save, which the engine does not stream again.
+const EARLIER_EVENTS: &str = "/engine/earlier-events";
 
 /// What a page asks the process that serves it to do.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,6 +92,11 @@ pub trait Status: Send + Sync {
     /// The fixtures of the round a match between `home` and `away` would meet, or the reason
     /// the pair is refused; `None` when this server starts no matches.
     fn round(&self, _home: &str, _away: &str) -> Option<Result<String, String>> {
+        None
+    }
+    /// The events a resumed match played up to its save, as a JSON array in tick order (empty
+    /// for a match that was not resumed); `None` when this server resumes no matches.
+    fn earlier_events(&self) -> Option<String> {
         None
     }
 }
@@ -346,6 +354,19 @@ fn answer(
         };
     }
 
+    if path == EARLIER_EVENTS {
+        return match status.earlier_events() {
+            Some(body) => write_response(
+                &mut stream,
+                200,
+                "application/json; charset=utf-8",
+                body.as_bytes(),
+                head_only,
+            ),
+            None => write_response(&mut stream, 404, "text/plain", b"not found", head_only),
+        };
+    }
+
     if path == ENGINE_JSON {
         let body = status.json();
         return write_response(
@@ -409,7 +430,11 @@ fn host_allowed(host: Option<&str>, page_port: u16) -> bool {
 /// `Content-Length`, then reads a body of at most [`MAX_BODY_BYTES`].
 fn read_request(stream: &TcpStream) -> Option<Request> {
     let limit = MAX_REQUEST_BYTES + MAX_BODY_BYTES as u64;
-    let mut reader = BufReader::new(stream.try_clone().ok()?.take(limit));
+    let deadline = Deadline {
+        stream: stream.try_clone().ok()?,
+        until: Instant::now() + IO_TIMEOUT,
+    };
+    let mut reader = BufReader::new(deadline.take(limit));
     let mut line = String::new();
     let mut head_bytes = reader.read_line(&mut line).ok()? as u64;
     let line = line.trim_end().to_string();
@@ -455,6 +480,28 @@ fn read_request(stream: &TcpStream) -> Option<Request> {
         host,
         body,
     })
+}
+
+/// The connection as the request reads it: the whole request has one deadline, and each
+/// read waits at most the time left, so a client that sends a byte now and then cannot hold
+/// a connection, and its thread, past `IO_TIMEOUT`.
+struct Deadline {
+    stream: TcpStream,
+    until: Instant,
+}
+
+impl Read for Deadline {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let left = self.until.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "the request took longer than its deadline",
+            ));
+        }
+        self.stream.set_read_timeout(Some(left))?;
+        self.stream.read(buf)
+    }
 }
 
 /// Turns a request target into a relative path inside the served folder, or refuses it.

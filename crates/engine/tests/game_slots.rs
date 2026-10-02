@@ -59,7 +59,7 @@ fn files_with_rules(edit: impl Fn(&str) -> String) -> ContentFiles {
     files
 }
 
-/// AC-15: the content folder's rule file reaches the match only through the rules slot. The
+/// The content folder's rule file reaches the match only through the rules slot. The
 /// default module reads a changed file; the off version does not, and the selection changes
 /// the content hash. A bad rule file is refused through the slot with the loader's message.
 #[test]
@@ -105,7 +105,7 @@ fn the_rule_pack_loads_through_the_rules_slot() {
     assert!(field.contains("halves"), "{field}");
 }
 
-/// AC-15: the Laws built into the program are the shipped rule pack.
+/// The Laws built into the program are the shipped rule pack.
 #[test]
 fn the_built_in_laws_equal_the_shipped_rule_pack() {
     let content = common::content();
@@ -113,7 +113,7 @@ fn the_built_in_laws_equal_the_shipped_rule_pack() {
     assert_eq!(off.rules, content.rules);
 }
 
-/// AC-6 for the rules slot: switched off through the slot file, a full match on seed 1
+/// The off switch for the rules slot: switched off through the slot file, a full match on seed 1
 /// reaches full time and the event validator accepts its stream.
 #[test]
 fn the_rules_slot_switched_off_plays_a_match_the_validator_accepts() {
@@ -141,7 +141,7 @@ fn on_day(reg: &Registration, day: GameDay) -> GameChanges {
     }
 }
 
-/// AC-15: each stub slot resolves from the shipped slot file to `<name>-stub@1`, whose card
+/// Each stub slot resolves from the shipped slot file to `<name>-stub@1`, whose card
 /// is complete and owns no key, and which proposes no change; `off` resolves to its off
 /// version, which proposes no change either.
 #[test]
@@ -191,7 +191,7 @@ fn each_stub_slot_resolves_to_its_no_op_default_with_a_complete_card() {
     }
 }
 
-/// AC-15: both rules cards are complete and own no key.
+/// Both rules cards are complete and own no key.
 #[test]
 fn the_rules_slot_card_is_complete() {
     let names = band_names();

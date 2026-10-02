@@ -268,8 +268,8 @@ test('a manager plays a whole match, lineup to full-time report', async ({ page 
       const day = await hook(page, () => window.__touchline.matchDay());
       expect(day.score[0] + day.score[1]).toBeGreaterThanOrEqual(1);
       await showMatch(page);
-      const scoreText = await scoreBug(page).getAttribute('aria-label');
-      expect(scoreText).toMatch(/Score \d+ – \d+/);
+      const scoreText = await scoreBug(page).textContent();
+      expect(scoreText).toMatch(/^\d+ – \d+$/);
       const banner = bannerSeen ?? '';
       expect(banner.length).toBeGreaterThan(0);
       const rows = await feedRows(page);

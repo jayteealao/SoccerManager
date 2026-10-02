@@ -82,28 +82,61 @@ impl BugReport<'_> {
 }
 
 /// `text` with every absolute path cut to its file name, so a user name in a home folder
-/// never reaches a report or a log.
+/// never reaches a report or a log. A path may hold spaces (`C:\Users\Jo Smith\x.json`): a
+/// quoted path runs to its closing quote, and an unquoted one takes in each following word
+/// that still holds a path separator.
 pub fn without_paths(text: &str) -> String {
-    text.split(' ')
-        .map(|word| {
-            let bare = word.trim_matches(|c| matches!(c, '\'' | '"' | '(' | ')' | ',' | '`'));
-            let absolute = Path::new(bare).is_absolute()
-                || bare.starts_with('/')
-                || bare.get(1..3) == Some(":\\")
-                || bare.get(1..3) == Some(":/");
-            if absolute && !bare.is_empty() {
-                let name = bare
-                    .rsplit(['/', '\\'])
-                    .next()
-                    .filter(|n| !n.is_empty())
-                    .unwrap_or("");
-                word.replace(bare, name)
-            } else {
-                word.to_string()
+    const QUOTES: [char; 3] = ['\'', '"', '`'];
+    let words: Vec<&str> = text.split(' ').collect();
+    let mut out: Vec<String> = Vec::with_capacity(words.len());
+    let mut i = 0;
+    while i < words.len() {
+        let word = words[i];
+        let bare = word.trim_matches(|c| matches!(c, '\'' | '"' | '(' | ')' | ',' | '`'));
+        if bare.is_empty() || !is_absolute(bare) {
+            out.push(word.to_string());
+            i += 1;
+            continue;
+        }
+        let quote = word.chars().find(|c| QUOTES.contains(c));
+        let mut j = i;
+        match quote {
+            // A quoted path ends at the word that closes the quote.
+            Some(q) if word.matches(q).count() < 2 => {
+                while j + 1 < words.len() && !words[j].ends_with(q) && !words[j + 1].is_empty() {
+                    j += 1;
+                    if words[j].contains(q) {
+                        break;
+                    }
+                }
             }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
+            Some(_) => {}
+            None => {
+                while j + 1 < words.len() && words[j + 1].contains(['\\', '/']) {
+                    j += 1;
+                }
+            }
+        }
+        let span = words[i..=j].join(" ");
+        let path = span.trim_matches(|c| matches!(c, '\'' | '"' | '(' | ')' | ',' | '`'));
+        let name = path
+            .rsplit(['/', '\\'])
+            .next()
+            .filter(|n| !n.is_empty())
+            .unwrap_or("");
+        out.push(span.replace(path, name));
+        i = j + 1;
+    }
+    out.join(" ")
+}
+
+/// Whether `word` starts an absolute path: a root, a drive, or a share.
+fn is_absolute(word: &str) -> bool {
+    Path::new(word).is_absolute()
+        || word.starts_with('/')
+        || word.starts_with("\\\\")
+        || word.get(1..3) == Some(":\\")
+        || word.get(1..3) == Some(":/")
 }
 
 /// The words of a panic payload.
@@ -132,6 +165,19 @@ mod tests {
         assert_eq!(
             without_paths("induced fault at tick 102000"),
             "induced fault at tick 102000"
+        );
+        // A home folder with a space in its name: no part of the user name is left.
+        assert_eq!(
+            without_paths(r"cannot read C:\Users\Jo Smith\content\x.json: denied"),
+            "cannot read x.json: denied"
+        );
+        assert_eq!(
+            without_paths(r"panicked at 'C:\Users\Jo Smith\src\sim.rs' line 3"),
+            "panicked at 'sim.rs' line 3"
+        );
+        assert_eq!(
+            without_paths("panicked at \"/home/jo smith/src/sim.rs\" line 3"),
+            "panicked at \"sim.rs\" line 3"
         );
     }
 

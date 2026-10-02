@@ -246,10 +246,7 @@ mod tests {
     fn on(length: f64, width: f64) -> MatchConfig {
         let mut config = shipped_config(1, 90).unwrap();
         let pitch = Pitch::new(length, width).unwrap();
-        config.pitch = pitch;
-        for team in &mut config.teams {
-            team.pitch = pitch;
-        }
+        config.set_pitch(pitch);
         for (i, p) in config.players.iter_mut().enumerate() {
             let k = (i % 11) as f64;
             p.pos =
@@ -272,7 +269,7 @@ mod tests {
 
     fn faults(config: &MatchConfig, restart: Restart, ball: DVec2) -> Vec<Fault> {
         check(
-            &config.pitch,
+            config.pitch(),
             &restart,
             ball,
             &config.players,
@@ -286,7 +283,7 @@ mod tests {
     fn each_law_passes_a_legal_position_and_fails_an_illegal_one() {
         for (length, width) in [(105.0, 68.0), (100.0, 64.0)] {
             let mut config = on(length, width);
-            let pitch = config.pitch;
+            let pitch = *config.pitch();
             let hl = pitch.half_length();
             let attack0 = config.teams[0].attack_x;
             // Kick-off by the home team: everyone in his own half, the away side 9.15 m away.

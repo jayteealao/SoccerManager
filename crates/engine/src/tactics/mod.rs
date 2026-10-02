@@ -4,6 +4,7 @@
 //! each time the tactics change, never per tick.
 
 pub mod change;
+pub mod planned;
 pub mod verdict;
 
 use crate::data::tactics::{

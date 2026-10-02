@@ -168,7 +168,7 @@ export class FrontDoor {
       return;
     }
     if (this.reduced() && !this.revealDone) {
-      // The Reduce setting (or the system, under Follow Windows) drops the reveal.
+      // The Reduce setting (or the system, under Follow system) drops the reveal.
       this.clearTimer();
       this.finishReveal();
       return;
@@ -324,10 +324,17 @@ export class FrontDoor {
       return;
     }
     this.busy = true;
-    const answer = await launcher.resume(this.fetcher);
+    let reason = '';
+    const answer = await launcher.resume(this.fetcher, (text) => {
+      reason = text;
+    });
     this.busy = false;
     if (!answer) {
-      this.message = 'The saved match could not be resumed.';
+      this.message = failure(
+        'The saved match could not be resumed',
+        reason,
+        'Choose Resume again, or start a new match.',
+      );
       await this.refresh();
       return;
     }
@@ -364,10 +371,17 @@ export class FrontDoor {
       return;
     }
     this.busy = true;
-    const answer = await launcher.newMatch(this.fetcher, { ...this.picks });
+    let reason = '';
+    const answer = await launcher.newMatch(this.fetcher, { ...this.picks }, (text) => {
+      reason = text;
+    });
     this.busy = false;
     if (!answer) {
-      this.message = 'The engine did not start the match.';
+      this.message = failure(
+        'The engine did not start the match',
+        reason,
+        'Choose KICK OFF again, or pick other teams.',
+      );
       return;
     }
     this.status = answer;
@@ -489,4 +503,10 @@ export class FrontDoor {
     }
     this.view = 'closed';
   }
+}
+
+/// A failure line: what failed, the launcher's reason when it gave one, and what to do next.
+export function failure(what, reason, next) {
+  const cause = reason ? `: ${reason.replace(/[.\s]+$/, '')}` : '';
+  return `${what}${cause}. ${next}`;
 }

@@ -128,7 +128,7 @@ export function setupFacts(home, away, round) {
 
 export const SPEED_OPTIONS = Object.freeze([1, 2, 4, 8].map((s) => ({ value: s, label: `${s}×` })));
 export const MOTION_OPTIONS = Object.freeze([
-  { value: 'follow', label: 'Follow Windows' },
+  { value: 'follow', label: 'Follow system' },
   { value: 'reduce', label: 'Reduce' },
   { value: 'full', label: 'Full' },
 ]);
@@ -145,7 +145,7 @@ export function motionNow(motion, systemReduces) {
   if (motion === 'full') {
     return 'Full';
   }
-  return 'Follows Windows';
+  return 'Follow system';
 }
 
 /// The settings screen's fact strip.
