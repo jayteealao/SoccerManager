@@ -3,7 +3,8 @@
 // actions; the full-time report is loading, with Save replay disabled and its reason, until
 // the whole match is stored; then its figures equal the report model, its goals and cards
 // are listed with their words, and its actions call the session; every stub is inert and
-// hidden, and a planted focusable stub fails the check. After a skip the report first hides
+// hidden, and a planted focusable stub fails the check; the other grounds list the
+// matchday's results, final once every ground has ended. After a skip the report first hides
 // the scores while the engine plays the rest, then carries the skip marks; a report with no
 // skip has none of them.
 
@@ -117,7 +118,7 @@ test('every report stub is inert and hidden, and a planted focusable stub fails 
   s.openReport('full-time', 800);
   await tick();
   const root = page();
-  for (const note of ['highlights', 'what each change did', 'what it means', 'other grounds', 'tab: ratings', 'tab: press']) {
+  for (const note of ['highlights', 'what each change did', 'what it means', 'tab: ratings', 'tab: press']) {
     assert.ok(root.querySelector(`[data-stub="${note}"]`), note);
   }
   assert.equal(root.querySelector('[data-stub="tab: replay"]'), null, 'Replay is live at full time');
@@ -172,7 +173,8 @@ test('the ready report after a skip carries the skip marks, and NOT LIVE only af
   assert.equal(root.querySelector('[data-screen="report"]').dataset.skipped, '500');
   assert.match(root.querySelector('.hd').textContent, /Full time · skipped from 00:10/);
   assert.match(root.querySelector('.strip').textContent, /Skipped at 00:10\s*The engine played the rest/);
-  assert.ok(root.querySelector('[data-stub="strip fact: Other grounds"]'));
+  assert.equal(root.querySelector('[data-stub="strip fact: Other grounds"]'), null, 'the strip cell is live');
+  assert.match(root.querySelector('.strip').textContent, /No other matches/);
   assert.match(root.textContent, /the rest played by the engine from the exact moment you skipped/);
   const timeline = root.querySelector('.timeline');
   assert.ok(timeline.querySelector('pattern#skip-hatch'));
@@ -201,4 +203,55 @@ test('a report with no skip has none of the skip marks', async () => {
   assert.equal(root.querySelector('.hollow'), null);
   assert.ok(!/NOT LIVE|skipped from|Skipped at/.test(root.textContent));
   assert.match(root.querySelector('.strip').textContent, /Possession/);
+});
+
+const club = (id, name) => ({ 'team.id': id, 'team.name': name, 'team.kit.primary': '#0f5c63', 'team.kit.secondary': '#ffffff', roster: [] });
+const MATCHDAY = {
+  type: 'matchday',
+  round: 1,
+  fixtures: [
+    { fixture: 0, home: club('cu', 'Castlemere United'), away: club('gw', 'Greywater') },
+    { fixture: 1, home: club('ka', 'Kelder Athletic'), away: club('mt', 'Millbridge Town') },
+  ],
+};
+const groundEvent = (fixture, tick, kind, score, extra = {}) => ({ type: 'ground-event', fixture, tick, kind, minute: 0, score, ...extra });
+
+test('the report lists the other grounds, final with the strip summary once every ground has ended', async () => {
+  const run = await played();
+  run.socket.deliver(MATCHDAY);
+  run.socket.deliver(groundEvent(0, 300, 'goal', [1, 0], { side: 'home', scorer: 'Tomas Okafor' }));
+  run.socket.deliver(groundEvent(0, 820, 'full-time', [1, 0]));
+  run.socket.deliver(groundEvent(1, 790, 'full-time', [0, 0]));
+  run.s.skip = { state: 'ready', from: 500, newest: 800 };
+  run.s.report = {
+    kind: 'full-time',
+    tick: 800,
+    state: 'ready',
+    model: reportModel(run.s.match.events, 800, run.s.teams),
+    skippedFrom: 500,
+  };
+  run.s.view = 'report';
+  await tick();
+  const root = page();
+  const list = root.querySelector('section[aria-label="Other grounds"]');
+  assert.match(list.textContent, /Matchday 1 · final/);
+  const rows = [...list.querySelectorAll('li')].map((li) => li.textContent.replace(/\s+/g, ' ').trim());
+  assert.equal(rows.length, 2);
+  assert.match(rows[0], /Castlemere United .*1 – 0 .*Greywater FT/, 'an event after the player\'s full time still shows');
+  assert.match(rows[1], /0 – 0 .*FT/);
+  assert.match(root.querySelector('.strip').textContent, /Castlemere 1–0\s*Other grounds: 2 of 2 final/);
+  assert.equal(list.querySelector('[data-stub]'), null);
+});
+
+test('a ground still running at full time shows its minute, and the note is not final', async () => {
+  const run = await played();
+  run.socket.deliver(MATCHDAY);
+  run.socket.deliver(groundEvent(1, 790, 'full-time', [0, 0]));
+  run.s.streamEnded = true;
+  run.s.openReport('full-time', 800);
+  await tick();
+  const list = page().querySelector('section[aria-label="Other grounds"]');
+  assert.doesNotMatch(list.textContent, /· final/);
+  assert.match(list.querySelector('li').textContent, /0 – 0/);
+  assert.doesNotMatch(list.querySelector('li').textContent, /FT/);
 });

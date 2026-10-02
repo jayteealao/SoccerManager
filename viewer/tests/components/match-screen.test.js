@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The match screen in each of its states, in jsdom: the action block names the state's one
 // next action, each state draws its panel, every stub is inert and takes no focus, and the
-// other-grounds block shows the same static content whatever the match does. Skip to result
+// other grounds of the matchday show in the right column at the rendered tick. Skip to result
 // is a real button, live only once the match has kicked off.
 
 import assert from 'node:assert/strict';
@@ -9,7 +9,6 @@ import { render, screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, test } from 'vitest';
 
-import MatchStub from '../../src/components/MatchStub.svelte';
 import { COMPONENT_COUNT } from '../../src/lib/decode.js';
 import { MatchSession } from '../../src/lib/match-session.svelte.js';
 import { clearSignals } from '../../src/lib/signal.js';
@@ -212,8 +211,8 @@ test('every stub is inert and hidden, and none of its parts takes focus', async 
     'highlight modes and pause rules',
     'momentum chart',
     'win probability',
-    'other grounds',
     'tab: squad',
+    'tab: other-grounds',
   ]) {
     assert.ok(document.querySelector(`[data-stub="${note}"]`), note);
   }
@@ -251,16 +250,47 @@ test('the stub check fails when a stub holds something that takes focus', async 
   assert.deepEqual(stubFaults(document.body), ['win probability: span takes focus']);
 });
 
-test('the other-grounds block shows the same static content whatever the match does', async () => {
+const crest = (id, name) => ({ 'team.id': id, 'team.name': name, 'team.kit.primary': '#0f5c63', 'team.kit.secondary': '#ffffff', roster: [] });
+const MATCHDAY = JSON.stringify({
+  type: 'matchday',
+  round: 1,
+  fixtures: [
+    { fixture: 0, home: crest('cu', 'Castlemere United'), away: crest('gw', 'Greywater') },
+    { fixture: 1, home: crest('ka', 'Kelder Athletic'), away: crest('mt', 'Millbridge Town') },
+  ],
+});
+
+test('the right column lists the other grounds at the rendered tick; the menu tab is still a stub', async () => {
   const { s, socket } = await session(RUNNING);
   socket.deliver(HELLO);
-  s.act();
+  socket.deliver(MATCHDAY);
   await tick();
-  const inScreen = document.querySelector('[data-stub="other grounds"]').innerHTML;
-  assert.ok(!inScreen.includes('Ashford Rovers'), 'no club of this match');
-  assert.ok(!inScreen.includes('Port Varrow'));
-  const alone = document.createElement('div');
-  document.body.append(alone);
-  render(MatchStub, { target: alone, props: { part: 'other-grounds' } });
-  assert.equal(alone.querySelector('[data-stub="other grounds"]').innerHTML, inScreen);
+  const list = () => document.querySelector('section[aria-label="Other grounds"]');
+  assert.match(list().textContent, /Matchday 1 · on your clock/);
+  assert.equal(list().querySelectorAll('li').length, 2);
+  assert.match(list().querySelector('li').textContent, /Castlemere United.*0 – 0.*Greywater\s*KO/);
+  assert.equal(list().querySelector('[data-stub]'), null, 'no longer a stub');
+  assert.ok(document.querySelector('[data-stub="tab: other-grounds"]'), 'the tab stays a stub');
+  s.act();
+  for (let t = 1; t <= 200; t += 1) {
+    socket.deliver(encodeKeyframe(t, new Array(COMPONENT_COUNT).fill(0)));
+  }
+  socket.deliver(
+    JSON.stringify({ type: 'ground-event', fixture: 0, tick: 150, kind: 'goal', minute: 0, side: 'home', scorer: 'Tomas Okafor', score: [1, 0] })
+  );
+  s.rewind(100);
+  await tick();
+  assert.match(list().querySelector('li').textContent, /0 – 0/, 'not before the pitch reaches it');
+  s.rewind(200);
+  await tick();
+  assert.match(list().querySelector('li').textContent, /1 – 0/);
+  assert.equal(list().querySelector('[tabindex], button, a[href]'), null, 'the list takes no focus');
+});
+
+test('the other grounds show skeleton rows while loading and in an error', async () => {
+  await session(RUNNING);
+  await tick();
+  const list = document.querySelector('section[aria-label="Other grounds"]');
+  assert.equal(list.querySelectorAll('.skel').length, 3);
+  assert.equal(list.querySelectorAll('li').length, 0);
 });

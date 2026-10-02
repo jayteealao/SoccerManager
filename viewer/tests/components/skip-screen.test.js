@@ -114,10 +114,31 @@ test('Escape is Keep watching, and RESUME goes back playing', async () => {
 test('every decision stub is inert and hidden, and a planted focusable stub fails the check', async () => {
   await deciding();
   const root = page();
-  for (const note of ['other grounds finish', 'tab: squad', 'tab: other-grounds']) {
+  for (const note of ['tab: squad', 'tab: other-grounds']) {
     assert.ok(root.querySelector(`[data-stub="${note}"]`), note);
   }
   assert.deepEqual(stubFaults(root), []);
-  root.querySelector('[data-stub="other grounds finish"]').append(document.createElement('button'));
-  assert.deepEqual(stubFaults(root), ['other grounds finish: button takes focus']);
+  assert.equal(root.querySelector('[data-stub="other grounds finish"]'), null, 'the line is live');
+  root.querySelector('[data-stub="tab: squad"]').append(document.createElement('button'));
+  assert.deepEqual(stubFaults(root), ['tab: squad: button takes focus']);
+});
+
+test('the Other grounds step shows with fixtures and is left out with none', async () => {
+  const run = await deciding();
+  assert.doesNotMatch(page().textContent, /They finish too/, 'no other match: no line');
+  run.socket.deliver({
+    type: 'matchday',
+    round: 1,
+    fixtures: [
+      {
+        fixture: 0,
+        home: { 'team.id': 'cu', 'team.name': 'Castlemere United', 'team.kit.primary': '#0f5c63', 'team.kit.secondary': '#ffffff', roster: [] },
+        away: { 'team.id': 'gw', 'team.name': 'Greywater', 'team.kit.primary': '#0f5c63', 'team.kit.secondary': '#ffffff', roster: [] },
+      },
+    ],
+  });
+  await tick();
+  const step = [...page().querySelectorAll('.next .step')].find((s) => /Other grounds/.test(s.textContent));
+  assert.match(step.textContent, /They finish too, and their results show in the report\./);
+  assert.equal(step.closest('[data-stub]'), null);
 });

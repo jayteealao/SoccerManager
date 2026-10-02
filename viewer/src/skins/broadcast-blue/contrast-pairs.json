@@ -964,5 +964,65 @@
     "bg": "--hatch-2",
     "kind": "boundary",
     "where": "skip timeline: the watched part against the hatch"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--new-goal-ground",
+    "kind": "text",
+    "where": "other grounds: a new goal's row, its minute and its words"
+  },
+  {
+    "fg": "--cyan-ink",
+    "bg": "--cyan",
+    "kind": "text",
+    "where": "other grounds: the GOAL tag"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--new-goal-ground",
+    "kind": "boundary",
+    "where": "other grounds: the new goal's outline inside its block"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground",
+    "kind": "boundary",
+    "where": "other grounds: the new goal's outline on the column"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "other grounds: a late goal's row"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "other grounds: a late goal's words, shown at your minute"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--not-live-ground",
+    "kind": "text",
+    "where": "other grounds: the GOAL · LATE tag"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "other grounds: the ! mark and Result unavailable"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "other grounds: a minute, KO, a score before kick-off, the fault's words"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "other grounds: club names, a score, FT"
   }
 ]

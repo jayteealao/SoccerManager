@@ -2,7 +2,7 @@
      with the fixture in the header, the clock state in the date block and the one next action
      in the cyan block; the 66 px score strip; then two body columns of 760 px and 1fr. The
      left column holds the pitch, the playback row and the timeline; the right the commentary,
-     the statistics and the other grounds. Each screen state (loading, kick-off, live, paused,
+     the statistics and the other grounds of the matchday on the player's clock. Each screen state (loading, kick-off, live, paused,
      error, first run, reconnecting) draws the board's body for it. Parts the viewer does not
      build yet are stubs (MatchStub, the stub tabs): drawn, faded and inert. Skip to result in
      the playback row opens the Skip decision (`App.svelte`).
@@ -16,6 +16,7 @@
   import MatchStub from '../components/MatchStub.svelte';
   import MatchTimeline from '../components/MatchTimeline.svelte';
   import Notice from '../components/Notice.svelte';
+  import OtherGrounds from '../components/OtherGrounds.svelte';
   import PitchCanvas from '../components/PitchCanvas.svelte';
   import PlaybackRow from '../components/PlaybackRow.svelte';
   import ScoreStrip from '../components/ScoreStrip.svelte';
@@ -209,7 +210,11 @@
         />
         {#if screen !== 'first-run'}
           <div class="hr"></div>
-          <MatchStub part="other-grounds" skeleton={screen === 'loading' || screen === 'error'} />
+          <OtherGrounds
+            grounds={session.grounds}
+            round={session.matchday?.round ?? 1}
+            skeleton={screen === 'loading' || screen === 'error'}
+          />
         {/if}
         {#if playing || screen === 'reconnecting'}
           <div class="hr"></div>

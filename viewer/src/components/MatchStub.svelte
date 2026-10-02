@@ -1,13 +1,13 @@
 <!-- The parts of the sketch's Match live screen that this version does not build, kept in
      place for the look: the pitch overlay toggles, the highlight modes and pause rules, the
-     momentum chart, the win probability figure, and the other grounds. Each renders static
+     momentum chart and the win probability figure. Each renders static
      sample content inside StubSection, so it is faded, inert, hidden from assistive
      technology, and takes no prop from the match: it can never look live. -->
 <script>
   import SectionLabel from './SectionLabel.svelte';
   import StubSection from './StubSection.svelte';
 
-  let { part, skeleton = false } = $props();
+  let { part } = $props();
 
   // The momentum chart's sample spells: threat per three minutes, home above the line and
   // away below it, as the board draws them.
@@ -17,12 +17,6 @@
     [11, 4], [7, 6],
   ];
   const WIN = '0,34 40,33 80,30 120,18 160,16 200,20 240,31 280,36 320,33 384,34';
-  const FIXTURES = [
-    ['Castlemere United', 'Greywater'],
-    ['Kelder Athletic', 'Millbridge Town'],
-    ['Dunmore FC', 'Oldfield City'],
-    ['Harlow Vale', 'Sporting Veira'],
-  ];
 </script>
 
 {#if part === 'overlays'}
@@ -102,27 +96,6 @@
         <line class="mid" x1="0" y1="30" x2="384" y2="30" />
         <polyline class="curve" points={WIN} />
       </svg>
-    </div>
-  </StubSection>
-{:else if part === 'other-grounds'}
-  <!-- STUB: the other grounds of the matchday, on the player's clock. Their rows arrive with
-       the background matchday; drawn for layout and feel only. -->
-  <StubSection note="other grounds" later={skeleton}>
-    <div class="grounds">
-      <SectionLabel label="Other grounds" note="Matchday 12 · on your clock" />
-      {#if skeleton}
-        {#each [0, 1, 2] as i (i)}<div class="skel"></div>{/each}
-      {:else}
-        {#each FIXTURES as [home, away] (home)}
-          <div class="fixture">
-            <span class="r">{home}</span>
-            <b class="num">0 – 0</b>
-            <span>{away}</span>
-            <span class="g num r">KO</span>
-          </div>
-        {/each}
-        <div class="g note">Each event shows when your clock reaches its minute.</div>
-      {/if}
     </div>
   </StubSection>
 {/if}
@@ -282,42 +255,5 @@
   .bar .a {
     background: var(--warn);
     color: var(--on-warn);
-  }
-
-  .fixture {
-    display: grid;
-    grid-template-columns: 1fr 44px 1fr 30px;
-    gap: 6px;
-    align-items: center;
-    height: 20px;
-    font-size: 10px;
-    border-bottom: 1px solid var(--rule-2);
-  }
-
-  .fixture b {
-    text-align: center;
-    font: 700 10px var(--fd);
-    font-variant-numeric: tabular-nums;
-    color: var(--ink-3);
-  }
-
-  .fixture span {
-    white-space: nowrap;
-    overflow: hidden;
-  }
-
-  .r {
-    text-align: right;
-  }
-
-  .note {
-    margin-top: 4px;
-  }
-
-  .skel {
-    height: 14px;
-    margin-bottom: 8px;
-    background: var(--skeleton);
-    border-radius: var(--radius-sm);
   }
 </style>

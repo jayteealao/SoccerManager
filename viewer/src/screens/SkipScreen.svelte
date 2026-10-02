@@ -6,7 +6,8 @@
      queued change and mentality. The middle says what the engine does and what the player
      gives up. The right holds the decision: two options, Confirm and Keep watching, and what
      happens next. Nothing is sent until Confirm; Keep watching and Escape go back to the
-     paused match at the same tick. The other grounds' line is a stub. -->
+     paused match at the same tick. The other grounds' line shows when the matchday has
+     other fixtures. -->
 <script>
   import AppShell from '../components/AppShell.svelte';
   import Crest from '../components/Crest.svelte';
@@ -16,7 +17,6 @@
   import KvRow from '../components/KvRow.svelte';
   import PitchCanvas from '../components/PitchCanvas.svelte';
   import SectionLabel from '../components/SectionLabel.svelte';
-  import StubSection from '../components/StubSection.svelte';
   import { PAUSE } from '../components/icons.js';
   import { mentalityWord } from '../lib/prematch.js';
   import { clockAt } from '../lib/recovery.js';
@@ -204,10 +204,9 @@
           {#each next as [when, what] (when)}
             <div class="step"><b class="when">{when}</b><span class="what">{what}</span></div>
           {/each}
-          <!-- STUB: the other grounds finishing with the match belong to the background matchday. -->
-          <StubSection note="other grounds finish">
+          {#if session.matchday?.fixtures.length}
             <div class="step"><b class="when">Other grounds</b><span class="what">They finish too, and their results show in the report.</span></div>
-          </StubSection>
+          {/if}
         </div>
       </div>
     </div>

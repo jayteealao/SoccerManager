@@ -3,8 +3,9 @@
      "How you saw it" with the match timeline and its goals and cards; then four columns of
      270, 330, 1fr and 290 px. The match figures are paired bars counted from the page's one
      event list, so the report never disagrees with the feed; the goals and cards list them
-     one by one. Other grounds, Highlights, "What each change did" and "What it means" are
-     stubs. At full time the last column holds Replay the whole match, Save replay, Open a
+     one by one. The other grounds list the matchday's other results, final once every
+     ground has ended; a ground still running shows its minute, and its later events appear
+     as they arrive. Highlights, "What each change did" and "What it means" are stubs. At full time the last column holds Replay the whole match, Save replay, Open a
      replay and Close. While the whole match is still being stored the report is loading:
      the steps and skeleton blocks of the Report loading board, and Save replay waits.
 
@@ -18,7 +19,7 @@
   import AppShell from '../components/AppShell.svelte';
   import Crest from '../components/Crest.svelte';
   import Glyph from '../components/Glyph.svelte';
-  import MatchStub from '../components/MatchStub.svelte';
+  import OtherGrounds from '../components/OtherGrounds.svelte';
   import PairedBar from '../components/PairedBar.svelte';
   import ReportMoments from '../components/ReportMoments.svelte';
   import ScoreStrip from '../components/ScoreStrip.svelte';
@@ -27,6 +28,7 @@
   import StubSection from '../components/StubSection.svelte';
   import { PLAY } from '../components/icons.js';
   import { KIND } from '../lib/match-state.js';
+  import { allEnded, finalSummary, groundsAt, headline } from '../lib/matchday.js';
   import { clockAt } from '../lib/recovery.js';
   import { TICKS_PER_SECOND } from '../lib/schedule.js';
   import { fixtureTitle, initials } from '../lib/scoreboard.js';
@@ -86,12 +88,25 @@
       return [
         base[0],
         { value: `Skipped at ${skipClock}`, label: 'The engine played the rest', flex: 0.95 },
-        // STUB: the other grounds' results belong to the background matchday.
-        { value: '—', label: 'Other grounds', stub: true, flex: 0.85 },
+        {
+          value: headline(session.matchday),
+          label: session.matchday?.fixtures.length ? `Other grounds: ${finalSummary(session.matchday)}` : 'No other matches',
+          flex: 0.85,
+        },
       ];
     }
     return base;
   });
+
+  /// The other grounds on the report: at the break for half time; at full time every event
+  /// that has arrived, since the player's match is over and the others finish after it.
+  let grounds = $derived(
+    groundsAt(session.matchday, full ? Number.MAX_SAFE_INTEGER : (report?.tick ?? 0), {
+      final: true,
+      total: totalMinutes(session.hello?.ticks_expected),
+      stored: session.stored,
+    })
+  );
 
   /// The timeline spans the whole match: 90 minutes, or longer when the match ran on.
   let span = $derived(Math.max(90 * MINUTE, report?.tick ?? 0));
@@ -302,7 +317,12 @@
           <SectionLabel label="Goals and cards" />
           <ReportMoments moments={model.moments} teams={session.teams} {skippedFrom} />
           <div class="hr"></div>
-          <MatchStub part="other-grounds" />
+          <OtherGrounds
+            {grounds}
+            round={session.matchday?.round ?? 1}
+            report
+            final={full && allEnded(session.matchday)}
+          />
         </div>
 
         <div>
