@@ -9,7 +9,10 @@
 # finished `previous/` folder and reuses it while its program prints the pinned version.
 #
 # The tag is built in a detached git worktree with `cargo build --locked`, and the worktree
-# is removed in every case; the checkout this script runs from is not touched.
+# is removed in every case; the checkout this script runs from is not touched. Before it goes,
+# the open-source notices of the crates that program is built from are written to
+# `previous/notices-crates.json` (Node is needed), which the viewer build adds to the notices
+# the release ships.
 set -eu
 
 if ! command -v cargo >/dev/null 2>&1 && [ -x "$HOME/.cargo/bin/cargo" ]; then
@@ -33,12 +36,13 @@ fi
 cache=${SM_PREVIOUS_CACHE:-"$HOME/.cache/soccermanager-previous"}
 out="$cache/previous"
 program="$out/engine-cli"
+crate_list="$out/notices-crates.json"
 
 printed_version() {
     "$1" --version 2>/dev/null | awk '{ print $2 }'
 }
 
-if [ -x "$program" ] && [ -d "$out/content" ] && [ "$(printed_version "$program")" = "$version" ]; then
+if [ -x "$program" ] && [ -d "$out/content" ] && [ -f "$crate_list" ] && [ "$(printed_version "$program")" = "$version" ]; then
     echo "$out"
     exit 0
 fi
@@ -80,6 +84,10 @@ mkdir -p "$out"
 cp "$cache/target/release/engine-cli" "$program"
 cp -R "$checkout/content" "$out/content"
 chmod 755 "$program"
+
+# The crate list of the tag's program, with each licence text, read while the worktree (and
+# its Cargo.lock) is still here; the viewer build adds it to the notices the release ships.
+node "$repo/viewer/scripts/notices.mjs" crates --manifest-path "$checkout/Cargo.toml" --out "$crate_list" >/dev/null
 
 got=$(printed_version "$program")
 if [ "$got" != "$version" ]; then

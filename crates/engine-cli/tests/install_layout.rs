@@ -307,6 +307,33 @@ fn packaged_page_faults(install: &Path, port: u16) -> Vec<String> {
             faults.push(format!("web/fonts/{licence} is missing"));
         }
     }
+    // The open-source notices the licences screen reads: every package with its licence text.
+    match std::fs::read_to_string(web.join("notices.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+    {
+        Some(notices) => {
+            let packages = notices["packages"].as_array().cloned().unwrap_or_default();
+            let kinds = |kind: &str| packages.iter().filter(|p| p["kind"] == kind).count();
+            if kinds("crate") == 0 || kinds("npm") == 0 || kinds("font") == 0 {
+                faults.push(format!(
+                    "web/notices.json lists {} crates, {} npm packages and {} fonts",
+                    kinds("crate"),
+                    kinds("npm"),
+                    kinds("font")
+                ));
+            }
+            for package in &packages {
+                if package["text"].as_str().is_none_or(|t| t.trim().is_empty()) {
+                    faults.push(format!(
+                        "web/notices.json has no licence text for {}",
+                        package["name"]
+                    ));
+                }
+            }
+        }
+        None => faults.push("web/notices.json is missing or not JSON".to_string()),
+    }
     for left_out in ["src", "tests", "node_modules", "shell-test.html"] {
         if web.join(left_out).exists() {
             faults.push(format!("web/{left_out} is in the package"));

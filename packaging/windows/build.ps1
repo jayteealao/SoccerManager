@@ -37,23 +37,29 @@ try {
     Pop-Location
 }
 
+# The previous release's engine, built from its tag (or reused from the cache), ships beside
+# this one as previous\, so a match that release saved finishes on the engine that started it.
+$previous = & (Join-Path $PSScriptRoot 'previous-engine.ps1') | Select-Object -Last 1
+if (-not $previous -or -not (Test-Path (Join-Path $previous 'engine-cli.exe'))) {
+    throw "the previous release's engine was not built (the script printed '$previous')"
+}
+
 # The page the release carries is the viewer's release build: the viewer and the handshake
-# page, with the font licence texts, and no test page.
+# page, with the font licence texts, the open-source notices (this program's crates, the
+# previous engine's crates, the viewer's packages and the fonts), and no test page. The build
+# fails when a shipped package has no licence text or no allowed licence; the check then reads
+# the written file again from the sources.
+$env:SM_PREVIOUS_NOTICES = Join-Path $previous 'notices-crates.json'
 Push-Location (Join-Path $repo 'viewer')
 try {
     npm ci --no-audit --no-fund
     if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE" }
     npm run build:release
     if ($LASTEXITCODE -ne 0) { throw "the viewer build failed with exit code $LASTEXITCODE" }
+    npm run notices:verify -- dist-release/notices.json
+    if ($LASTEXITCODE -ne 0) { throw "the open-source notices check failed with exit code $LASTEXITCODE" }
 } finally {
     Pop-Location
-}
-
-# The previous release's engine, built from its tag (or reused from the cache), ships beside
-# this one as previous\, so a match that release saved finishes on the engine that started it.
-$previous = & (Join-Path $PSScriptRoot 'previous-engine.ps1') | Select-Object -Last 1
-if (-not $previous -or -not (Test-Path (Join-Path $previous 'engine-cli.exe'))) {
-    throw "the previous release's engine was not built (the script printed '$previous')"
 }
 
 $exe = Join-Path $repo 'target\release\engine-cli.exe'

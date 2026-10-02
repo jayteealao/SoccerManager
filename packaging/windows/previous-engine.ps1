@@ -9,7 +9,10 @@
 # version.
 #
 # The tag is built in a detached git worktree with `cargo build --locked`, and the worktree
-# is removed in every case; the checkout this script runs from is not touched.
+# is removed in every case; the checkout this script runs from is not touched. Before it goes,
+# the open-source notices of the crates that program is built from are written to
+# `previous\notices-crates.json` (Node is needed), which the viewer build adds to the notices
+# the release ships.
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -27,6 +30,7 @@ if (-not $tag -or -not $commit -or -not $version) {
 $cache = if ($env:SM_PREVIOUS_CACHE) { $env:SM_PREVIOUS_CACHE } else { Join-Path $repo 'target\previous-engine' }
 $out = Join-Path $cache 'previous'
 $program = Join-Path $out 'engine-cli.exe'
+$crateList = Join-Path $out 'notices-crates.json'
 
 function Get-PrintedVersion([string]$exe) {
     try {
@@ -37,7 +41,7 @@ function Get-PrintedVersion([string]$exe) {
     return ($printed -split '\s+')[1]
 }
 
-if ((Test-Path $program) -and (Test-Path (Join-Path $out 'content')) -and ((Get-PrintedVersion $program) -eq $version)) {
+if ((Test-Path $program) -and (Test-Path (Join-Path $out 'content')) -and (Test-Path $crateList) -and ((Get-PrintedVersion $program) -eq $version)) {
     Write-Output $out
     return
 }
@@ -82,6 +86,11 @@ try {
     New-Item -ItemType Directory -Force -Path $out | Out-Null
     Copy-Item (Join-Path $cache 'target\release\engine-cli.exe') $program
     Copy-Item -Recurse (Join-Path $checkout 'content') (Join-Path $out 'content')
+
+    # The crate list of the tag's program, with each licence text, read while the worktree
+    # (and its Cargo.lock) is still here.
+    node (Join-Path $repo 'viewer\scripts\notices.mjs') crates --manifest-path (Join-Path $checkout 'Cargo.toml') --out $crateList | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "the notices of $tag's crates could not be written (exit code $LASTEXITCODE)" }
 } finally {
     Remove-Checkout
 }

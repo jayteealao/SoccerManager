@@ -14,7 +14,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "scan": "node scripts/token-scan.mjs",
-    "contrast": "node scripts/contrast.mjs"
+    "contrast": "node scripts/contrast.mjs",
+    "notices:crates": "node scripts/notices.mjs crates",
+    "notices:verify": "node scripts/notices.mjs verify"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "7.3.1",

@@ -32,10 +32,6 @@ fi
 
 (cd "$repo" && cargo build --release --locked -p engine-cli)
 
-# The page the release carries is the viewer's release build: the viewer and the handshake
-# page, with the font licence texts, and no test page.
-(cd "$repo/viewer" && npm ci --no-audit --no-fund && npm run build:release)
-
 # The previous release's engine, built from its tag (or reused from the cache), ships beside
 # this one, so a match that release saved finishes on the engine that started it.
 previous=$(sh "$repo/packaging/unix/previous-engine.sh" | tail -n 1)
@@ -43,6 +39,16 @@ if [ ! -x "$previous/engine-cli" ]; then
     echo "error: the previous release's engine was not built (the script printed '$previous')" >&2
     exit 1
 fi
+
+# The page the release carries is the viewer's release build: the viewer and the handshake
+# page, with the font licence texts, the open-source notices (this program's crates, the
+# previous engine's crates, the viewer's packages and the fonts), and no test page. The build
+# fails when a shipped package has no licence text or no allowed licence; the check then reads
+# the written file again from the sources.
+SM_PREVIOUS_NOTICES="$previous/notices-crates.json"
+export SM_PREVIOUS_NOTICES
+(cd "$repo/viewer" && npm ci --no-audit --no-fund && npm run build:release \
+    && npm run notices:verify -- dist-release/notices.json)
 
 program="$CARGO_TARGET_DIR/release/engine-cli"
 version=$("$program" --version | awk '{ print $2 }')
