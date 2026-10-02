@@ -12,7 +12,9 @@ use anyhow::{Context, bail};
 use engine::data::TeamFile;
 use engine::modules::fast_model::{self, KickOff, MINUTES};
 use engine::record::NullSink;
-use engine::{Content, EngineEvent, EngineEventKind, MatchConfig, Simulation, Validator};
+use engine::{
+    Content, EngineEvent, EngineEventKind, MatchConfig, Simulation, StreamRules, Validator,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::calibrate::fixtures::{Leagues, boosted, fixtures, splitmix64};
@@ -136,10 +138,11 @@ fn play_one(
     let seed = match_seed(spec.seed, index);
     let config = MatchConfig::new(seed, spec.minutes, content, [&home, &away])?;
     let kick_off = fast_model::kick_off(&config);
+    let rules = StreamRules::for_config(&config);
     let mut sim = Simulation::new(config)?;
     sim.run(&mut NullSink)?;
     let events = sim.take_events();
-    let violations = Validator::check_events(&events);
+    let violations = Validator::check_events(&events, &rules);
     if let Some(v) = violations.first() {
         bail!(
             "match {index} (seed {seed}, {}) broke the event rule {} at tick {}",

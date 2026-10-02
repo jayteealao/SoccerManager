@@ -13,9 +13,12 @@
 //! [`Validator::check_events`] judges a match's event stream on its own rules, whatever
 //! produced it: the full engine or the fast model, which has no ticks to check.
 
+use crate::data::rules::StoppageKind;
 use crate::math::DVec2;
 use crate::record::{PLAYER_COUNT, TickRecord};
-use crate::sim::{EngineEvent, EngineEventKind};
+use crate::rules::clock::plays_added_time;
+use crate::rules::fouls::Card;
+use crate::sim::{EngineEvent, EngineEventKind, EventDetail, MatchConfig};
 use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::Tuning;
 
@@ -33,6 +36,56 @@ pub struct Violation {
     pub rule: &'static str,
     pub player: Option<usize>,
     pub value: f64,
+}
+
+/// What the event-stream rules read beside the events: the rule pack's substitution limits
+/// and added time, and each side's line-up at kick-off.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamRules {
+    /// Substitutions a side may make in the match.
+    pub substitutions: u32,
+    /// Stoppages at which a side may substitute, half-time aside when it is exempt.
+    pub windows: u32,
+    /// `true` when a substitution at half-time uses no window.
+    pub half_time_exempt: bool,
+    /// The seconds a period may add, `(min, max)`, or `None` when the match is shorter than
+    /// regulation and adds no time.
+    pub added_s: Option<(u32, u32)>,
+    /// The squad index in each roster slot at kick-off, home first.
+    pub lineups: [[usize; PLAYERS_PER_TEAM]; 2],
+}
+
+impl StreamRules {
+    /// The rules of the match `config` describes. A knockout match may also use the extra
+    /// time's substitution and window, and its extra-time periods add at most the extra
+    /// time's cap.
+    pub fn for_config(config: &MatchConfig) -> Self {
+        let rules = &config.rules;
+        let extra = &rules.extra_time;
+        let (more, more_windows) = if config.knockout {
+            (
+                u32::from(extra.extra_substitutions),
+                u32::from(extra.extra_windows),
+            )
+        } else {
+            (0, 0)
+        };
+        Self {
+            substitutions: u32::from(rules.substitutions.limit) + more,
+            windows: u32::from(rules.substitutions.windows) + more_windows,
+            half_time_exempt: rules.substitutions.exempt(StoppageKind::HalfTime),
+            added_s: plays_added_time(config.minutes, rules).then(|| {
+                let added = &rules.added_time;
+                let lo = if config.knockout {
+                    added.min_s.min(extra.added_max_s)
+                } else {
+                    added.min_s
+                };
+                (lo, added.max_s)
+            }),
+            lineups: [config.teams[0].lineup, config.teams[1].lineup],
+        }
+    }
 }
 
 /// Validates a stream of records against the tuning and the team formations.
@@ -200,16 +253,27 @@ impl Validator {
     /// - `goal_score`: a goal names a team and adds one to that team's score, the other
     ///   score unchanged (a shoot-out kick keeps the score of play);
     /// - `score_kept`: every other event keeps the score;
-    /// - `period_end_team`: half-time and full time name no team.
+    /// - `period_end_team`: half-time and full time name no team;
+    /// - `player_side`: a named player is in a roster slot of the event's team, and a fouled
+    ///   player in one of the other team (a goal's scorer may be either: an own goal);
+    /// - `card_kind`: a card event carries its card and a player, and a second yellow follows
+    ///   a yellow to the player in that roster slot;
+    /// - `sent_off_silent`: a player sent off is named by no later event;
+    /// - `substitution_squad`: a substitution takes off the squad player in that roster slot
+    ///   and brings on a squad player who has not played;
+    /// - `substitution_limits`: a side makes at most `rules.substitutions` substitutions, at
+    ///   most `rules.windows` stoppages, half-time aside when it is exempt;
+    /// - `added_time`: only half-time and full time carry added seconds, within the rule
+    ///   pack's range (none in a match shorter than regulation).
     ///
     /// `value` holds the event's index in the stream.
-    pub fn check_events(events: &[EngineEvent]) -> Vec<Violation> {
+    pub fn check_events(events: &[EngineEvent], rules: &StreamRules) -> Vec<Violation> {
         let mut out = Vec::new();
         let mut bad = |i: usize, rule: &'static str| {
             out.push(Violation {
                 tick: events[i].tick,
                 rule,
-                player: None,
+                player: events[i].player,
                 value: i as f64,
             });
         };
@@ -227,6 +291,20 @@ impl Validator {
                 "full_time_last",
             );
         }
+        let half_times: Vec<u32> = events
+            .iter()
+            .filter(|e| e.kind == EngineEventKind::HalfTime)
+            .map(|e| e.tick)
+            .collect();
+        let side_of = |index: usize| index / PLAYERS_PER_TEAM;
+        // The squad player in each roster slot now, every squad player who has played, the
+        // booked and the sent-off roster slots, and each side's substitutions and windows.
+        let mut lineup = rules.lineups;
+        let mut played: [Vec<usize>; 2] = rules.lineups.map(|l| l.to_vec());
+        let mut booked = [false; PLAYER_COUNT];
+        let mut sent_off = [false; PLAYER_COUNT];
+        let mut used = [0u32; 2];
+        let mut windows: [Vec<u32>; 2] = [Vec::new(), Vec::new()];
         let mut shootout = false;
         for (i, e) in events.iter().enumerate() {
             shootout |= e.shootout_round.is_some();
@@ -236,6 +314,77 @@ impl Validator {
             ) && e.team.is_some()
             {
                 bad(i, "period_end_team");
+            }
+            if [e.player, e.secondary]
+                .iter()
+                .flatten()
+                .any(|&p| p < PLAYER_COUNT && sent_off[p])
+            {
+                bad(i, "sent_off_silent");
+            }
+            if let Some(team) = e.team {
+                let own = |p: usize| p < PLAYER_COUNT && side_of(p) == team;
+                let other = |p: usize| p < PLAYER_COUNT && side_of(p) != team;
+                let player_ok = e.player.is_none_or(|p| {
+                    own(p) || (e.kind == EngineEventKind::Goal && p < PLAYER_COUNT)
+                });
+                if team > 1 || !player_ok || !e.secondary.is_none_or(other) {
+                    bad(i, "player_side");
+                }
+            }
+            match (e.kind, e.added_time_s) {
+                (_, None) => {}
+                (EngineEventKind::HalfTime | EngineEventKind::FullTime, Some(s)) => {
+                    let ok = match rules.added_s {
+                        Some((lo, hi)) => (lo..=hi).contains(&s),
+                        None => s == 0,
+                    };
+                    if !ok {
+                        bad(i, "added_time");
+                    }
+                }
+                (_, Some(_)) => bad(i, "added_time"),
+            }
+            if e.kind == EngineEventKind::Card {
+                match (e.card, e.player) {
+                    (Some(card), Some(p)) if p < PLAYER_COUNT => {
+                        if card == Card::SecondYellow && !booked[p] {
+                            bad(i, "card_kind");
+                        }
+                        if card == Card::Yellow {
+                            booked[p] = true;
+                        } else {
+                            sent_off[p] = true;
+                        }
+                    }
+                    _ => bad(i, "card_kind"),
+                }
+            }
+            if e.kind == EngineEventKind::Substitution {
+                match (e.detail, e.team, e.player) {
+                    (Some(EventDetail::Substitution { off, on }), Some(team), Some(p))
+                        if team < 2 && p < PLAYER_COUNT && side_of(p) == team =>
+                    {
+                        let slot = p % PLAYERS_PER_TEAM;
+                        if lineup[team][slot] != off || played[team].contains(&on) {
+                            bad(i, "substitution_squad");
+                        }
+                        lineup[team][slot] = on;
+                        played[team].push(on);
+                        booked[p] = false;
+                        used[team] += 1;
+                        let exempt = rules.half_time_exempt && half_times.contains(&e.tick);
+                        if !exempt && !windows[team].contains(&e.tick) {
+                            windows[team].push(e.tick);
+                        }
+                        if used[team] > rules.substitutions
+                            || windows[team].len() as u32 > rules.windows
+                        {
+                            bad(i, "substitution_limits");
+                        }
+                    }
+                    _ => bad(i, "substitution_squad"),
+                }
             }
             let Some(prev) = i.checked_sub(1).map(|p| &events[p]) else {
                 continue;

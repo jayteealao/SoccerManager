@@ -9,7 +9,7 @@ mod common;
 use engine::modules::fast_model::{self, FastFit, FastParams, KickOff, MINUTES};
 use engine::modules::registry::{FAST_MODEL, FOULS};
 use engine::modules::{REGISTRY, SlotDecl, SlotEntry, SlotFile, check_card};
-use engine::{EngineEventKind, MatchConfig, Validator};
+use engine::{EngineEventKind, MatchConfig, StreamRules, Validator};
 
 fn slot_bytes(changes: &[(&str, &str, Option<u32>)]) -> Vec<u8> {
     let mut slots = SlotFile::builtin_default();
@@ -156,11 +156,18 @@ fn the_fast_models_event_stream_keeps_the_rules() {
     let content = common::content();
     let model = fast_model::resolve(&content.modules);
     let fit = test_fit();
+    let rules = StreamRules {
+        substitutions: 5,
+        windows: 3,
+        half_time_exempt: true,
+        added_s: Some((60, 900)),
+        lineups: [std::array::from_fn(|s| s), std::array::from_fn(|s| s)],
+    };
     for seed in 0..2_000u64 {
         let gap = (seed % 21) as f64 - 10.0;
         let ko = KickOff::even([50.0 + gap / 2.0, 50.0 - gap / 2.0]);
         let m = model.play(&fit, &ko, seed).unwrap();
-        let violations = Validator::check_events(&m.events);
+        let violations = Validator::check_events(&m.events, &rules);
         assert!(violations.is_empty(), "seed {seed}: {violations:?}");
         let goals = |team: usize| {
             m.events
