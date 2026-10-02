@@ -347,6 +347,8 @@ Before kick-off the AI manager picks the best-fitting player for each formation 
 
 A match is played on the home team's ground. `club.ground` is optional: a file without it plays on 105 by 68 metres, and the default is never written back, so a file that gives 105 by 68 and one that gives no ground hash the same. The touchlines, the goal lines, the halfway line and every spot measured from them follow the ground; the goal, the goal and penalty areas, the penalty mark, the centre circle, the corner arcs and the 9.15 m kick distance keep their sizes from the Laws. The formation slots in `tactics.json` are drawn for 105 by 68 and scale with the ground: along the touchline by its length over 105, across by its width over 68. A ground outside the Laws is refused by club: `content refused: team teams/x.json: club.ground: Oakmere Rangers: the ground is 121 m long; the Laws allow 90 to 120 m`. A touchline that is not longer than the goal line is refused the same way.
 
+Every other club file in `teams/` plays in the background round of a served match's matchday: `serve` pairs every club except the two of the player's match into fixtures, with a round seed derived from the match seed, and plays each on the full engine beside the match. The shipped folder holds ten clubs, so a matchday has four other fixtures. A file that does not load is left out of the round, with a `matchday.team_refused` warning that names it. No club file other than the two a match plays enters that match's content hash, save or replay.
+
 ## tactics.json
 
 | Field | Holds | Bound |
@@ -458,6 +460,7 @@ The engine writes these files to the data folder. The data folder is `SM_DATA_DI
 | `matches/<match.id>/events.jsonl` | `simulate`, `serve`, `resume` | one match event per line, as the `match-event` record |
 | `matches/<match.id>/stats.json` | `simulate`, `serve`, `resume` | the statistics of the match, as the `match-stats` record |
 | `matches/<match.id>/snapshot.smsn` | `simulate`, `serve` | the newest snapshot of the match; `resume` and `serve --resume` read it |
+| `matches/<match.id>/matchday-bug-<fixture>.json` | `serve` | the bug report of a background match that failed; see below |
 | `runs/<run.id>/report.json` | `calibrate` | the run report, as the `run-report` record |
 | `runs/<run.id>/stats/<match.id>.json` | `calibrate` | the statistics record of each match in the run |
 | `runs/<run.id>/events/<match.id>.jsonl` | `calibrate` | the event rows of each match the run keeps |
@@ -480,13 +483,13 @@ The engine writes a record at each stoppage snapshot and at the end of the match
 
 `snapshot.smsn` holds the full state of a match at one stoppage: the clock, the score, every player's position, energy, and cards, the queue of changes, the state of the random-number generator, and for a knockout match the extra-time periods and the shoot-out. The engine replaces the file at each stoppage. A snapshot resumes only on the build that wrote it, with the same content files and team files. The engine refuses any other snapshot and names the reason.
 
-The file is format 8. Its header (192 bytes; its length is stored at bytes 6 to 8) names the match without reading the rest, at fixed places, so a later build can say who saved a file it cannot read:
+The file is format 9. Its header (at least 192 bytes; its length is stored at bytes 6 to 8) names the match without reading the rest, at fixed places, so a later build can say who saved a file it cannot read:
 
 | Bytes | Field |
 |---|---|
 | 0 to 4 | `SMSN` |
-| 4 to 6 | the format, 8 |
-| 6 to 8 | the header length, 192 |
+| 4 to 6 | the format, 9 |
+| 6 to 8 | the header length: 192 plus the matchday mark |
 | 64 to 96 | the release version that saved it, such as `0.2.0`, padded with zeros |
 | 96 to 100 | the tick of the stoppage |
 | 100 to 102 | the score, home then away |
@@ -495,7 +498,25 @@ The file is format 8. Its header (192 bytes; its length is stored at bytes 6 to 
 
 The build's commit, the content files' hash, the owner and the match stamp sit in the first 64 bytes, as in formats 6 and 7. Files of format 6 and 7 carry no version; the engine names their release from the build's commit when a release shipped that build.
 
+Format 9 appends the matchday mark after byte 192: the mark's length after its first two bytes (u16), the round seed (u64), the reveal tick (u32: the tick the snapshot was taken on, up to which the other grounds' events were revealed), the fixture count (one byte), and for each fixture, home first, each club's id (one length byte, then at most 64 bytes) and the SHA-256 of its team file (32 bytes). A count of 0 is a match with no round. A match resumed from the snapshot rebuilds the same round from the mark and plays each other match again from kick-off; a club whose file is missing or changed since the save makes its fixture unavailable. Format 8 is the same file without the mark, and the engine still reads it.
+
 A snapshot from the previous release finishes on that release's engine: `resume` and `launch --resume` run the program in `previous/` beside this one (the release ships it, see `packaging/README.md`). A snapshot from any other version is refused, and the refusal names the version that saved it and the versions this release finishes.
+
+### The matchday bug report
+
+A background match should never fail. When a defect makes one fail anyway, the player's match plays on, the fixture shows "result unavailable", and `serve` writes `matches/<match.id>/matchday-bug-<fixture>.json`, one JSON object, so the match can be played again:
+
+| Field | Holds |
+|---|---|
+| `schema.version` | 1 |
+| `match.id` | the player's match |
+| `fixture` | the fixture's place in the round, from 0 |
+| `seed` | the background match's seed |
+| `engine.version`, `build.hash` | the engine that played it |
+| `home.team.id`, `away.team.id` | the two clubs |
+| `tick` | the tick the match reached |
+| `error.type` | `panic`, `did-not-finish` (still running 120 seconds after the player's full time), or `team-file` (a club file missing or changed since a save) |
+| `error.message` | what stopped it, with every absolute path cut to its file name |
 
 ### The tick file
 

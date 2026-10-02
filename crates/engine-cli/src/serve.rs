@@ -9,6 +9,11 @@
 //! off before the snapshot was taken. With `--reconnect-wait` a connection lost without a
 //! close frame does not end the run: the match goes back to the newest stoppage the viewer
 //! received in full and waits for the viewer on the same port.
+//!
+//! The other matches of the player's matchday play beside the match on background threads
+//! from kick-off (`crate::matchday`). The page learns the fixtures right after the hello and
+//! receives each ground's events as the match's own tick reaches them; a resumed match
+//! rebuilds its round from the snapshot's matchday mark.
 
 use std::cell::RefCell;
 use std::path::Path;
@@ -23,7 +28,10 @@ use engine::observe::identity::{
 use engine::observe::{
     LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef, write_stats,
 };
-use engine::{EngineError, FanoutSink, FileSink, Manager, MatchConfig, Simulation, Snapshot};
+use engine::snapshot::MatchdayMark;
+use engine::{
+    ContentDir, EngineError, FanoutSink, FileSink, Manager, MatchConfig, Simulation, Snapshot,
+};
 use engine::{TickHeader, snapshot::shorten_for_log};
 use protocol::{ChangeKind, Hello, PROTOCOL_VERSION, Queue, ServerMessage};
 use stream::events::EventWriter;
@@ -35,6 +43,7 @@ use stream::{
 };
 
 use crate::cli::ServeOpts;
+use crate::matchday::{self, Matchday, Round};
 use crate::stream_run::{
     Drive, PageChange, carry_page_changes, drive, hello_substitutions, hello_tactics, hello_teams,
 };
@@ -105,6 +114,8 @@ struct Opened {
     sim: Option<Simulation>,
     /// The tick a resumed match continues from.
     resume_tick: Option<u32>,
+    /// The matchday mark of a resumed match's snapshot.
+    mark: Option<MatchdayMark>,
     hello: Hello,
 }
 
@@ -145,6 +156,24 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
         None => open_fresh(&loaded, opts, &data)?,
     };
     let match_id = opened.identity.match_id.clone();
+    // The other matches of the matchday: every other club in the content folder, or, for a
+    // resumed match, the round its snapshot recorded.
+    let round = if opts.no_matchday {
+        None
+    } else {
+        let dir = ContentDir::resolve(content_dir)?;
+        match (&opened.mark, opened.sim.is_some()) {
+            (Some(mark), _) => Some(Round::from_mark(mark, &dir, &loaded.content)),
+            // A resumed match saved with no round keeps none.
+            (None, true) => None,
+            (None, false) => Some(Round::for_match(
+                &dir,
+                &loaded.content,
+                opened.config.club_ids(),
+                opened.identity.seed,
+            )),
+        }
+    };
     let server = Server::bind(&data, &match_id)?;
     println!("{}", server.port());
     // The page address is printed after the port, because it is the line a reader copies.
@@ -163,7 +192,7 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
         println!("{}", page.address());
     }
 
-    let mut serving = Serving::new(&loaded, opened, opts, data)?;
+    let mut serving = Serving::new(&loaded, opened, opts, data, round)?;
     let wait = Duration::from_secs(opts.reconnect_wait);
     let mut connection = server.accept(&match_id)?;
     loop {
@@ -240,6 +269,13 @@ struct Serving<'a> {
     drop_at: Option<u32>,
     /// A test seam: the engine runs flat out to this tick (`--fast-forward-to`).
     fast_forward_to: Option<u32>,
+    /// The other matches of the matchday; `None` with `--no-matchday`.
+    round: Option<Round>,
+    /// The round playing, from the match's kick-off on.
+    matchday: Option<Matchday>,
+    /// Test seams: the worker count and a planted fault.
+    matchday_threads: Option<usize>,
+    matchday_fault: Option<matchday::Fault>,
 }
 
 impl<'a> Serving<'a> {
@@ -248,12 +284,14 @@ impl<'a> Serving<'a> {
         opened: Opened,
         opts: &ServeOpts,
         data: std::path::PathBuf,
+        round: Option<Round>,
     ) -> anyhow::Result<Self> {
         let Opened {
             identity,
             config,
             sim,
             resume_tick,
+            mark: _,
             hello,
         } = opened;
         let ticks = config.max_ticks();
@@ -271,13 +309,16 @@ impl<'a> Serving<'a> {
             tactics: config.tactics.clone(),
         }));
         let state = Arc::new(MatchState::default());
-        let gated = GatedSnapshots::new(
+        let mut gated = GatedSnapshots::new(
             &data,
             &identity.match_id,
             identity.owner,
             identity.match_millis,
             Arc::clone(&state),
         );
+        if let Some(round) = round.as_ref().filter(|r| !r.fixtures.is_empty()) {
+            gated.set_matchday(round.mark(0));
+        }
         // The events file: a resumed match keeps the rows up to its snapshot.
         let writer = Some(match resume_tick {
             Some(tick) => EventWriter::resume(&data, &identity.match_id, tick)?,
@@ -303,7 +344,7 @@ impl<'a> Serving<'a> {
             ),
             None => None,
         };
-        Ok(Self {
+        let mut serving = Self {
             loaded,
             identity,
             config,
@@ -322,7 +363,37 @@ impl<'a> Serving<'a> {
             stream_tuning: loaded.content.tuning.stream.clone(),
             drop_at: opts.drop_client_at,
             fast_forward_to: opts.fast_forward_to,
-        })
+            round,
+            matchday: None,
+            matchday_threads: opts.matchday_threads,
+            matchday_fault: opts.matchday_fault,
+        };
+        // A resumed match kicked off long ago: its matchday plays again from kick-off now,
+        // and nothing up to the resume tick is late.
+        if let Some(tick) = resume_tick {
+            serving.start_matchday(tick);
+        }
+        Ok(serving)
+    }
+
+    /// Starts the other matches of the matchday at the match's kick-off. No event at or
+    /// before `not_late_through` is late.
+    fn start_matchday(&mut self, not_late_through: u32) {
+        let Some(round) = self.round.as_ref().filter(|r| !r.fixtures.is_empty()) else {
+            return;
+        };
+        self.matchday = Some(Matchday::start(
+            round,
+            self.loaded,
+            &self.config,
+            matchday::Options {
+                data_dir: self.data.clone(),
+                match_id: self.identity.match_id.clone(),
+                threads: self.matchday_threads,
+                fault: self.matchday_fault,
+                not_late_through: not_late_through.max(self.fast_forward_to.unwrap_or(0)),
+            },
+        ));
     }
 
     /// Serves one connection: holds for kick-off when the match has not started, plays until
@@ -372,6 +443,17 @@ impl<'a> Serving<'a> {
                 drop_at: self.drop_at.take(),
             },
         )?;
+        // The fixtures right after the hello, then every ground event up to where this
+        // connection starts: kick-off, the resume tick, or the tick a reconnect went back to.
+        if let Some(round) = &self.round {
+            session.send(&matchday::message(round))?;
+        }
+        if let Some(matchday) = &self.matchday {
+            let cursor = self.sim.as_ref().map_or(0, Simulation::tick);
+            for message in matchday.catch_up(cursor) {
+                session.send(&message)?;
+            }
+        }
 
         let mut full_time = false;
         let mut written = 0;
@@ -386,6 +468,8 @@ impl<'a> Serving<'a> {
             // stoppage.
             self.gated.capture(&kicked_off);
             self.sim = Some(kicked_off);
+            // Every other ground kicks off with this match.
+            self.start_matchday(0);
         }
         if let Some(sim) = self.sim.as_mut().filter(|_| started) {
             let played_from = Instant::now();
@@ -408,6 +492,7 @@ impl<'a> Serving<'a> {
                     page_changes: Some(&self.page_changes),
                     planned: &[],
                     observe: None,
+                    matchday: self.matchday.as_ref(),
                 },
                 &mut |message: ServerMessage| {
                     if let ServerMessage::Event(event) = &message {
@@ -594,6 +679,7 @@ fn open_fresh(
         config,
         sim: None,
         resume_tick: None,
+        mark: None,
         hello,
     })
 }
@@ -646,6 +732,7 @@ fn open_resumed(loaded: &crate::content::Loaded, path: &Path) -> Result<Opened, 
         identity,
         resume_tick: Some(sim.tick()),
         sim: Some(sim),
+        mark: snapshot.matchday.clone(),
         config,
         hello,
     })
@@ -825,6 +912,9 @@ mod skip_equality {
             match_millis: Some(1),
             drop_client_at: None,
             fast_forward_to: None,
+            no_matchday: true,
+            matchday_threads: None,
+            matchday_fault: None,
         }
     }
 
@@ -893,6 +983,7 @@ mod skip_equality {
                         page_changes: None,
                         planned: &[],
                         observe: Some(&observed as &Observe<'_>),
+                        matchday: None,
                     },
                     &mut |_| Ok(()),
                 )
