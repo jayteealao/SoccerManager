@@ -111,6 +111,19 @@ async function kickOffFromStart(page) {
   await until(page, () => window.__touchline.lineup().phase === 'live', undefined, 15_000);
 }
 
+/// Waits until every finite animation on the page has finished, so an overlay is captured
+/// settled rather than part way through its fade.
+async function settled(page) {
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity)
+        .map((a) => a.finished.catch(() => null))
+    )
+  );
+}
+
 /// A real match of seed 7 from the start screen, held paused at 30:00 with the other grounds
 /// settled, as the menu's boards draw it.
 async function matchAt30(page, skin) {
@@ -259,18 +272,21 @@ for (const skin of SKINS) {
         await page.keyboard.press('Escape');
         await until(page, () => window.__touchline.frontDoor().overlay === 'menu', undefined, 5_000);
         await expect(page.getByRole('menu', { name: 'Match menu' })).toContainText('Match paused · 30:00');
+        await settled(page);
         await expect(page).toHaveScreenshot(`front-menu-${skin}.png`);
 
         await page.locator('[data-item="return"]').click();
         await expect(page.getByRole('dialog', { name: 'Return to the start screen?' })).toContainText(
           'The match saves at 30:00'
         );
+        await settled(page);
         await expect(page).toHaveScreenshot(`front-return-${skin}.png`);
         await page.getByRole('button', { name: 'Keep playing' }).click();
 
         await page.keyboard.press('Escape');
         await page.locator('[data-item="quit"]').click();
         await expect(page.getByRole('dialog', { name: 'Quit Touchline?' })).toContainText('The match saves at 30:00');
+        await settled(page);
         await expect(page).toHaveScreenshot(`front-quit-${skin}.png`);
 
         // The quit answer is the fixed one, so the closed page names the board's save.
