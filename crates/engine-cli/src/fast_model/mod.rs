@@ -12,6 +12,7 @@ pub mod id;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, bail};
+use engine::modules::fast_events::FitRules;
 use engine::modules::fast_model::{self, FIT_FILE, FIT_VERSION, FITTED_SCORES, FastFit};
 use engine::{Content, ContentDir};
 use serde::{Deserialize, Serialize};
@@ -68,7 +69,10 @@ pub struct BatchRecord {
 pub struct CheckRecord {
     pub seed: u64,
     pub draws: u32,
+    /// The z of the score figures.
     pub z: f64,
+    /// The z of the event figures.
+    pub event_z: f64,
     pub share_floor: f64,
     pub mean_floor: f64,
     pub figures: u32,
@@ -80,15 +84,20 @@ impl FitFile {
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         let text = std::fs::read_to_string(path)
             .with_context(|| format!("cannot read the fit file {}", path.display()))?;
-        let file: Self = serde_json::from_str(&text)
+        let value: serde_json::Value = serde_json::from_str(&text)
             .with_context(|| format!("the fit file {} is malformed", path.display()))?;
-        if file.schema_version != FIT_VERSION {
+        let version = value
+            .get("schema_version")
+            .and_then(serde_json::Value::as_u64);
+        if version != Some(u64::from(FIT_VERSION)) {
             bail!(
-                "the fit file {} has schema_version {}; this build reads {FIT_VERSION}",
+                "the fit file {} has schema_version {}; this build reads {FIT_VERSION};                  run engine-cli fast-model fit",
                 path.display(),
-                file.schema_version
+                version.map_or_else(|| "none".to_string(), |v| v.to_string())
             );
         }
+        let file: Self = serde_json::from_value(value)
+            .with_context(|| format!("the fit file {} is malformed", path.display()))?;
         file.fit.check()?;
         Ok(file)
     }
@@ -175,6 +184,26 @@ fn band_ranges(dir: &ContentDir) -> check::Bands {
             "stronger_team_win_rate",
             range(&|b| (b.stronger_team.min_win_rate, 1.0)),
         ),
+        (
+            "sending_off_share",
+            range(&|b| (b.sending_off_share.lo, b.sending_off_share.hi)),
+        ),
+        (
+            "yellow_cards_per_team",
+            range(&|b| (b.yellow_cards_per_team.lo, b.yellow_cards_per_team.hi)),
+        ),
+        (
+            "corners_per_team",
+            range(&|b| (b.corners_per_team.lo, b.corners_per_team.hi)),
+        ),
+        (
+            "throw_ins_per_match",
+            range(&|b| (b.throw_ins_per_match.lo, b.throw_ins_per_match.hi)),
+        ),
+        (
+            "goal_kicks_per_match",
+            range(&|b| (b.goal_kicks_per_match.lo, b.goal_kicks_per_match.hi)),
+        ),
     ]
 }
 
@@ -206,7 +235,7 @@ fn fit_action(
         ..fit_spec
     };
     let fit_rows = batch::play(&content, &fit_spec, jobs)?;
-    let fitted = fit::fit(&fit_rows);
+    let fitted = fit::fit(&fit_rows, FitRules::of(&content.rules));
     let check_rows = batch::play(&content, &check_spec, jobs)?;
     let model = fast_model::resolve(&content.modules);
     let fast = check::play_fast(model, &fitted, &check_rows, opts.draws, CHECK_SEED)?;
@@ -233,6 +262,7 @@ fn fit_action(
             seed: CHECK_SEED,
             draws: opts.draws,
             z: check::Z,
+            event_z: check::EVENT_Z,
             share_floor: check::SHARE_FLOOR,
             mean_floor: check::MEAN_FLOOR,
             figures: figures.len() as u32,
@@ -304,23 +334,28 @@ fn print_report(file: &FitFile, figures: &[Figure]) {
         p.base, p.home, p.attack, p.curve, p.defence, p.dispersion, p.rho, p.draw
     );
     println!(
-        "{:<14} {:<24} {:>9} {:>9} {:>9} {:>9}  verdict  band",
-        "group", "figure", "full", "fast", "diff", "tol"
+        "{:<14} {:<30} {:>9} {:>9} {:>9} {:>9} {:>5}  verdict  band",
+        "group", "figure", "full", "fast", "diff", "tol", "z"
     );
     for f in figures {
         let band = f
             .band
             .map(|b| format!("{:.3}-{:.3} (information)", b.lo, b.hi))
             .unwrap_or_default();
+        let verdict = match (f.pass, f.no_events) {
+            (true, true) => "no events",
+            (true, false) => "pass",
+            (false, _) => "FAIL",
+        };
         println!(
-            "{:<14} {:<24} {:>9.4} {:>9.4} {:>+9.4} {:>9.4}  {:<7}  {band}",
+            "{:<14} {:<30} {:>9.4} {:>9.4} {:>+9.4} {:>9.4} {:>5.2}  {verdict:<7}  {band}",
             f.group,
             f.name,
             f.full,
             f.fast,
             f.fast - f.full,
             f.tolerance,
-            if f.pass { "pass" } else { "FAIL" }
+            f.z,
         );
     }
     let failed = figures.iter().filter(|f| !f.pass).count();

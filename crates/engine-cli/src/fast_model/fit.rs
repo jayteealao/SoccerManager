@@ -8,14 +8,13 @@
 //! golden-section search at a time. No statistics crate is in the workspace, and eight
 //! parameters do not need one.
 
-use engine::modules::fast_model::{
-    FastFit, FastParams, MAX_GOALS, MINUTES, covariates, score_table,
-};
+use engine::modules::fast_events::{BINS, CountFit, EventFit, FitRules, covariates, level};
+use engine::modules::fast_model::{self, FastFit, FastParams, MAX_GOALS, MINUTES, score_table};
 
-use super::batch::Row;
+use super::batch::{Counts, Row, Timed};
 
-/// Fits the model to `rows`.
-pub fn fit(rows: &[Row]) -> FastFit {
+/// Fits the model to `rows`, played under `rules`.
+pub fn fit(rows: &[Row], rules: FitRules) -> FastFit {
     let [base, home, attack, curve, defence] = mean_params(rows);
     let params = FastParams {
         base,
@@ -31,6 +30,7 @@ pub fn fit(rows: &[Row]) -> FastFit {
     FastFit {
         params,
         minute_shares: minute_shares(rows),
+        events: event_fit(rows, rules),
     }
 }
 
@@ -51,7 +51,7 @@ fn mean_params(rows: &[Row]) -> [f64; BETAS] {
         let mut info = [[0.0; BETAS]; BETAS];
         for r in rows {
             for (side, &y) in r.goals.iter().enumerate() {
-                let x = covariates(&r.kick_off, side);
+                let x = fast_model::covariates(&r.kick_off, side);
                 let mu = dot(&beta, &x).exp();
                 for i in 0..BETAS {
                     grad[i] += (f64::from(y) - mu) * x[i];
@@ -209,10 +209,166 @@ fn minute_shares(rows: &[Row]) -> Vec<f64> {
     shares
 }
 
+/// The event fit from the full-engine rows: each count's log-linear mean by Newton steps on
+/// its Poisson likelihood and its dispersion by the method of moments, each foul share and
+/// share table by its frequency in the batch, and each kind's minute shares from its
+/// minutes.
+pub fn event_fit(rows: &[Row], rules: FitRules) -> EventFit {
+    let sum = |f: &dyn Fn(&Counts) -> u32| -> f64 {
+        rows.iter()
+            .flat_map(|r| r.tally.counts.iter())
+            .map(|c| f64::from(f(c)))
+            .sum()
+    };
+    let ratio = |a: f64, b: f64| if b > 0.0 { a / b } else { 0.0 };
+    let fouls = sum(&|c| c.fouls);
+    let advantage = sum(&|c| c.advantage);
+    let limit = usize::from(rules.substitutions.limit);
+    let mut tables = [
+        vec![0.0; limit + 1],
+        vec![0.0; limit + 1],
+        vec![0.0; limit + 1],
+    ];
+    let mut pooled = vec![0.0; limit + 1];
+    for r in rows {
+        for (side, c) in r.tally.counts.iter().enumerate() {
+            let n = ((c.substitutions - c.injury_substitutions) as usize).min(limit);
+            tables[level(&r.kick_off, side)][n] += 1.0;
+            pooled[n] += 1.0;
+        }
+    }
+    let pooled = normalised(pooled);
+    let substitutions = tables.map(|t| {
+        if t.iter().sum::<f64>() > 0.0 {
+            normalised(t)
+        } else {
+            pooled.clone()
+        }
+    });
+    EventFit {
+        fouls: count_fit(rows, &|c| c.fouls, Timed::Foul, true),
+        offsides: count_fit(rows, &|c| c.offsides, Timed::Offside, true),
+        corners: count_fit(rows, &|c| c.corners, Timed::Corner, true),
+        throw_ins: count_fit(rows, &|c| c.throw_ins, Timed::ThrowIn, true),
+        goal_kicks: count_fit(rows, &|c| c.goal_kicks, Timed::GoalKick, true),
+        injuries: count_fit(rows, &|c| c.injuries, Timed::Injury, false),
+        advantage: ratio(advantage, fouls),
+        penalty: ratio(sum(&|c| c.penalties), fouls - advantage),
+        yellow: ratio(sum(&|c| c.yellow), fouls),
+        red: ratio(sum(&|c| c.red), fouls),
+        substitutions,
+        substitution_minute_shares: bin_shares(rows, Timed::Substitution),
+        rules,
+    }
+}
+
+/// `values` scaled to sum to 1; equal shares when they sum to 0. The last non-empty value
+/// takes the rounding.
+fn normalised(mut values: Vec<f64>) -> Vec<f64> {
+    let total: f64 = values.iter().sum();
+    if total <= 0.0 {
+        let n = values.len() as f64;
+        return values.iter().map(|_| 1.0 / n).collect();
+    }
+    for v in values.iter_mut() {
+        *v /= total;
+    }
+    let sum: f64 = values.iter().sum();
+    if let Some(last) = values.iter_mut().rev().find(|v| **v > 0.0) {
+        *last += 1.0 - sum;
+    }
+    values
+}
+
+/// The share of a timed kind's events in each minute bin.
+fn bin_shares(rows: &[Row], kind: Timed) -> Vec<f64> {
+    let mut counts = vec![0.0; BINS];
+    for r in rows {
+        for &(t, b) in &r.tally.bins {
+            if t == kind {
+                counts[usize::from(b).min(BINS - 1)] += 1.0;
+            }
+        }
+    }
+    normalised(counts)
+}
+
+/// One count's fit: Newton steps on the Poisson likelihood of every side's count for the
+/// intercept, the home term and the strength term, then the negative binomial's shape by the
+/// method of moments (none, a Poisson count, when `dispersed` is false or the counts are not
+/// overdispersed).
+fn count_fit(
+    rows: &[Row],
+    count: &dyn Fn(&Counts) -> u32,
+    kind: Timed,
+    dispersed: bool,
+) -> CountFit {
+    let samples: Vec<([f64; 3], f64)> = rows
+        .iter()
+        .flat_map(|r| {
+            (0..2).map(move |side| {
+                (
+                    covariates(&r.kick_off, side),
+                    f64::from(count(&r.tally.counts[side])),
+                )
+            })
+        })
+        .collect();
+    let n = samples.len().max(1) as f64;
+    let total: f64 = samples.iter().map(|(_, y)| y).sum();
+    let mut beta: [f64; 3] = [(total / n).max(1e-6).ln(), 0.0, 0.0];
+    if total > 0.0 {
+        for _ in 0..100 {
+            let mut grad = [0.0; 3];
+            let mut info = [[0.0; 3]; 3];
+            for (x, y) in &samples {
+                let mu = dot(&beta, x).exp();
+                for i in 0..3 {
+                    grad[i] += (y - mu) * x[i];
+                    for j in 0..3 {
+                        info[i][j] += mu * x[i] * x[j];
+                    }
+                }
+            }
+            let Some(step) = solve(info, grad) else {
+                break;
+            };
+            let next = [0, 1, 2].map(|i| beta[i] + step[i]);
+            if next.iter().any(|v| !v.is_finite()) {
+                break;
+            }
+            beta = next;
+            if step.iter().all(|s| s.abs() < 1e-12) {
+                break;
+            }
+        }
+    }
+    let dispersion = dispersed
+        .then(|| {
+            let (mut num, mut den) = (0.0, 0.0);
+            for (x, y) in &samples {
+                let mu = dot(&beta, x).exp();
+                num += mu * mu;
+                den += (y - mu).powi(2) - mu;
+            }
+            (den > 0.0 && num > 0.0).then(|| num / den)
+        })
+        .flatten();
+    CountFit {
+        base: beta[0],
+        home: beta[1],
+        strength: beta[2],
+        dispersion,
+        minute_shares: bin_shares(rows, kind),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use engine::modules::fast_model::{FastModel, FittedScoresV1, KickOff};
+
+    use crate::fast_model::batch::tally;
 
     /// 6 000 rows drawn from a known model across strengths: the fit recovers it.
     #[test]
@@ -231,6 +387,7 @@ mod tests {
             minute_shares: (0..MINUTES)
                 .map(|m| (1.0 + m as f64 / 90.0) / 135.5)
                 .collect(),
+            events: EventFit::plain(FitRules::standard()),
         };
         let total: f64 = truth.minute_shares.iter().sum();
         let truth = FastFit {
@@ -241,15 +398,16 @@ mod tests {
             .map(|i| {
                 let level = |n: u64| 40.0 + (n % 21) as f64;
                 let kick_off = KickOff {
-                    strength: [50.0; 2],
                     attack: [level(i), level(i / 21)],
                     defence: [level(i / 441), level(i / 11)],
+                    ..KickOff::even([50.0; 2])
                 };
                 let m = FittedScoresV1.play(&truth, &kick_off, i).unwrap();
                 Row {
                     pairing: 0,
                     kick_off,
                     goals: m.scores,
+                    tally: tally(&m.events),
                     goal_minutes: m
                         .events
                         .iter()
@@ -259,7 +417,7 @@ mod tests {
                 }
             })
             .collect();
-        let got = fit(&rows);
+        let got = fit(&rows, FitRules::standard());
         let (t, g) = (truth.params, got.params);
         for (name, a, b) in [
             ("base", t.base, g.base),
@@ -276,6 +434,68 @@ mod tests {
         let sum: f64 = got.minute_shares.iter().sum();
         assert!((sum - 1.0).abs() < 1e-9);
         assert!(got.minute_shares[89] > got.minute_shares[0]);
+    }
+
+    /// 20 000 fast matches drawn from known event rates across strengths: the event fit
+    /// recovers every count's three terms and every foul share within 0.05.
+    #[test]
+    fn the_event_fit_recovers_known_rates() {
+        let mut truth = FastFit {
+            params: FastParams {
+                base: 0.1,
+                home: 0.0,
+                attack: 1.0,
+                curve: 0.0,
+                defence: 0.0,
+                dispersion: 5.0,
+                rho: 0.0,
+                draw: 0.0,
+            },
+            minute_shares: vec![1.0 / MINUTES as f64; MINUTES],
+            events: EventFit::plain(FitRules::standard()),
+        };
+        let e = &mut truth.events;
+        e.fouls.home = -0.08;
+        e.fouls.strength = -0.3;
+        e.corners.strength = 0.25;
+        e.goal_kicks.strength = -0.4;
+        e.throw_ins.home = 0.05;
+        e.injuries.base = 0.4f64.ln();
+        e.offsides.strength = 0.2;
+        let rows: Vec<Row> = (0..20_000u64)
+            .map(|i| {
+                let gap = (i % 17) as f64 - 8.0;
+                let kick_off = KickOff::even([55.0 + gap, 55.0 - gap]);
+                let m = FittedScoresV1.play(&truth, &kick_off, i).unwrap();
+                Row {
+                    pairing: 0,
+                    kick_off,
+                    goals: m.scores,
+                    goal_minutes: Vec::new(),
+                    tally: tally(&m.events),
+                }
+            })
+            .collect();
+        let got = event_fit(&rows, FitRules::standard());
+        let t = &truth.events;
+        for ((name, a), (_, b)) in t.counts().into_iter().zip(got.counts()) {
+            for (term, x, y) in [
+                ("base", a.base, b.base),
+                ("home", a.home, b.home),
+                ("strength", a.strength, b.strength),
+            ] {
+                assert!((x - y).abs() < 0.05, "{name} {term}: truth {x}, fit {y}");
+            }
+        }
+        for (name, x, y) in [
+            ("advantage", t.advantage, got.advantage),
+            ("penalty", t.penalty, got.penalty),
+            ("yellow", t.yellow, got.yellow),
+            ("red", t.red, got.red),
+        ] {
+            assert!((x - y).abs() < 0.05, "{name}: truth {x}, fit {y}");
+        }
+        assert!(got.check().is_ok());
     }
 
     #[test]

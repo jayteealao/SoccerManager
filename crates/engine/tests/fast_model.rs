@@ -6,10 +6,11 @@
 
 mod common;
 
+use engine::modules::fast_events::{EventFit, FitRules};
 use engine::modules::fast_model::{self, FastFit, FastParams, KickOff, MINUTES};
 use engine::modules::registry::{FAST_MODEL, FOULS};
 use engine::modules::{REGISTRY, SlotDecl, SlotEntry, SlotFile, check_card};
-use engine::{EngineEventKind, MatchConfig, StreamRules, Validator};
+use engine::{EngineEventKind, MatchConfig, Validator};
 
 fn slot_bytes(changes: &[(&str, &str, Option<u32>)]) -> Vec<u8> {
     let mut slots = SlotFile::builtin_default();
@@ -57,6 +58,7 @@ fn test_fit() -> FastFit {
             draw: 0.3,
         },
         minute_shares: vec![1.0 / MINUTES as f64; MINUTES],
+        events: EventFit::plain(FitRules::standard()),
     }
 }
 
@@ -149,32 +151,93 @@ fn the_kick_off_strength_is_the_starting_elevens_mean_attribute() {
     assert!((1.10..1.16).contains(&ratio), "{ratio}");
     assert!((boosted.strength[1] - ko.strength[1]).abs() < 1e-12);
 }
-/// 2 000 seeded matches across strengths keep every event-stream rule,
-/// and the final score equals the goal events.
+
+/// Each side's starters are the eleven the match kicks off with, slot for slot, with the
+/// keeper in slot 0; its bench is the team's bench in order, a keeper flagged by position;
+/// and six starters are advanced.
+#[test]
+fn the_kick_off_carries_both_line_ups_and_benches() {
+    let content = common::content();
+    let [a, b] = common::default_teams(&content);
+    let config = MatchConfig::new(1, 90, &content, [&a, &b]).unwrap();
+    let ko = fast_model::kick_off(&config);
+    for team in 0..2 {
+        let side = &ko.sides[team];
+        let lineup: Vec<(usize, usize)> = config
+            .players
+            .iter()
+            .filter(|p| p.team == team)
+            .map(|p| (p.slot, p.squad))
+            .collect();
+        assert_eq!(lineup.len(), 11);
+        for (slot, squad) in lineup {
+            assert_eq!(side.starters[slot].squad, squad, "team {team} slot {slot}");
+            assert_eq!(side.starters[slot].keeper, slot == 0);
+        }
+        let bench: Vec<usize> = side.bench.iter().map(|p| p.squad).collect();
+        assert_eq!(bench, config.teams[team].bench, "team {team}");
+        assert!(!bench.is_empty());
+        let squad = &config.teams[team].squad;
+        for p in &side.bench {
+            assert_eq!(
+                p.keeper,
+                squad[p.squad].position == engine::data::Position::GK
+            );
+        }
+        assert!(
+            side.bench.iter().any(|p| p.keeper),
+            "team {team} has a keeper"
+        );
+        assert_eq!(side.advanced.iter().filter(|a| **a).count(), 6);
+        assert!(!side.advanced[0], "the keeper is not advanced");
+        assert!(side.starters.iter().all(|p| p.foul > 0.0 && p.attack > 0.0));
+    }
+}
+
+/// 2 000 seeded matches across strengths, half on the generated sides and half on the
+/// default teams' line-ups, keep every event-stream rule; the final score equals the goal
+/// events; and every kind the full engine emits in a regulation match shows, except a
+/// plugin's script note and a refused change.
 #[test]
 fn the_fast_models_event_stream_keeps_the_rules() {
+    use EngineEventKind::{ChangeRejected, Goal, Script};
     let content = common::content();
+    let [a, b] = common::default_teams(&content);
+    let config = MatchConfig::new(1, 90, &content, [&a, &b]).unwrap();
+    let teams = fast_model::kick_off(&config);
     let model = fast_model::resolve(&content.modules);
     let fit = test_fit();
-    let rules = StreamRules {
-        substitutions: 5,
-        windows: 3,
-        half_time_exempt: true,
-        added_s: Some((60, 900)),
-        lineups: [std::array::from_fn(|s| s), std::array::from_fn(|s| s)],
-    };
+    let mut seen = std::collections::BTreeSet::new();
+    let mut cards = std::collections::BTreeSet::new();
     for seed in 0..2_000u64 {
         let gap = (seed % 21) as f64 - 10.0;
-        let ko = KickOff::even([50.0 + gap / 2.0, 50.0 - gap / 2.0]);
+        let mut ko = fast_model::KickOff::even([50.0 + gap / 2.0, 50.0 - gap / 2.0]);
+        if seed % 2 == 1 {
+            ko.sides = teams.sides.clone();
+        }
         let m = model.play(&fit, &ko, seed).unwrap();
+        let rules = fast_model::stream_rules(&fit, &ko);
         let violations = Validator::check_events(&m.events, &rules);
         assert!(violations.is_empty(), "seed {seed}: {violations:?}");
         let goals = |team: usize| {
             m.events
                 .iter()
-                .filter(|e| e.kind == EngineEventKind::Goal && e.team == Some(team))
+                .filter(|e| e.kind == Goal && e.team == Some(team))
                 .count() as u32
         };
         assert_eq!([goals(0), goals(1)], m.scores, "seed {seed}");
+        for e in &m.events {
+            seen.insert(e.kind.code());
+            if let Some(card) = e.card {
+                cards.insert(format!("{card:?}"));
+            }
+        }
     }
+    let regulation = EngineEventKind::ALL
+        .iter()
+        .filter(|k| !matches!(k, Script | ChangeRejected))
+        .map(|k| k.code())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(seen, regulation);
+    assert_eq!(cards.len(), 3, "{cards:?}");
 }

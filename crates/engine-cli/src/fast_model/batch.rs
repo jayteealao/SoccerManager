@@ -10,10 +10,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::{Context, bail};
 use engine::data::TeamFile;
+use engine::modules::fast_events::{FIRST_ADDED, SECOND_ADDED};
 use engine::modules::fast_model::{self, KickOff, MINUTES};
 use engine::record::NullSink;
 use engine::{
-    Content, EngineEvent, EngineEventKind, MatchConfig, Simulation, StreamRules, Validator,
+    Card, Content, EngineEvent, EngineEventKind, MatchConfig, Simulation, StreamRules, Validator,
 };
 use serde::{Deserialize, Serialize};
 
@@ -55,6 +56,160 @@ pub struct Row {
     pub goals: [u32; 2],
     /// Each goal's minute of regulation time, 0 to 89 (45 to 89 in the second half).
     pub goal_minutes: Vec<u32>,
+    /// The match's other events, counted.
+    pub tally: EventTally,
+}
+
+/// What a side's events count to in one match.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Counts {
+    /// Fouls the side committed, and those played on with advantage.
+    pub fouls: u32,
+    pub advantage: u32,
+    pub offsides: u32,
+    /// Yellow cards, a second yellow included, and straight reds.
+    pub yellow: u32,
+    pub red: u32,
+    /// Restarts the side took.
+    pub corners: u32,
+    pub throw_ins: u32,
+    pub goal_kicks: u32,
+    pub free_kicks: u32,
+    pub penalties: u32,
+    pub injuries: u32,
+    /// Substitutions, and those that replaced a player injured on that tick.
+    pub substitutions: u32,
+    pub injury_substitutions: u32,
+}
+
+/// The kinds whose minutes the fit shares out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Timed {
+    Foul,
+    Offside,
+    Corner,
+    ThrowIn,
+    GoalKick,
+    Injury,
+    /// A substitution not forced by an injury.
+    Substitution,
+}
+
+/// A match's events, counted: per side, whether anyone was sent off, the seconds each half
+/// added, and the minute bin of each timed event.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct EventTally {
+    pub counts: [Counts; 2],
+    pub sent_off: bool,
+    pub added_s: [u32; 2],
+    pub bins: Vec<(Timed, u8)>,
+}
+
+/// Counts the events of a regulation match, whatever played it: the full engine or the fast
+/// model.
+pub fn tally(events: &[EngineEvent]) -> EventTally {
+    use EngineEventKind as K;
+    let mut out = EventTally::default();
+    let half = events
+        .iter()
+        .find(|e| e.kind == K::HalfTime)
+        .map_or(u32::MAX, |e| e.tick);
+    let bin = |e: &EngineEvent| -> u8 {
+        let added = e.minute_added.is_some();
+        let b = if e.tick < half {
+            if added {
+                FIRST_ADDED
+            } else {
+                (e.minute as usize).min(FIRST_ADDED - 1)
+            }
+        } else if added {
+            SECOND_ADDED
+        } else {
+            FIRST_ADDED + 1 + (e.minute.saturating_sub(45) as usize).min(FIRST_ADDED - 1)
+        };
+        b as u8
+    };
+    for e in events {
+        match e.kind {
+            K::HalfTime => out.added_s[0] = e.added_time_s.unwrap_or(0),
+            K::FullTime => out.added_s[1] = e.added_time_s.unwrap_or(0),
+            _ => {}
+        }
+        let Some(team) = e.team.filter(|t| *t < 2) else {
+            continue;
+        };
+        let c = &mut out.counts[team];
+        let timed = match e.kind {
+            K::Foul => {
+                c.fouls += 1;
+                c.advantage += u32::from(e.advantage == Some(true));
+                Some(Timed::Foul)
+            }
+            K::Offside => {
+                c.offsides += 1;
+                Some(Timed::Offside)
+            }
+            K::Card => {
+                match e.card {
+                    Some(Card::Yellow) => c.yellow += 1,
+                    Some(Card::SecondYellow) => {
+                        c.yellow += 1;
+                        out.sent_off = true;
+                    }
+                    Some(Card::Red) => {
+                        c.red += 1;
+                        out.sent_off = true;
+                    }
+                    None => {}
+                }
+                None
+            }
+            K::Corner => {
+                c.corners += 1;
+                Some(Timed::Corner)
+            }
+            K::ThrowIn => {
+                c.throw_ins += 1;
+                Some(Timed::ThrowIn)
+            }
+            K::GoalKick => {
+                c.goal_kicks += 1;
+                Some(Timed::GoalKick)
+            }
+            K::FreeKick => {
+                c.free_kicks += 1;
+                None
+            }
+            K::Penalty if e.shootout_round.is_none() => {
+                c.penalties += 1;
+                None
+            }
+            K::Injury => {
+                c.injuries += 1;
+                Some(Timed::Injury)
+            }
+            K::Substitution => {
+                c.substitutions += 1;
+                let forced = events.iter().any(|i| {
+                    i.kind == K::Injury
+                        && i.tick == e.tick
+                        && i.team == e.team
+                        && i.player == e.player
+                });
+                if forced {
+                    c.injury_substitutions += 1;
+                    None
+                } else {
+                    Some(Timed::Substitution)
+                }
+            }
+            _ => None,
+        };
+        if let Some(t) = timed {
+            out.bins.push((t, bin(e)));
+        }
+    }
+    out
 }
 
 /// The pairing's name: `1.150 v 1.000`.
@@ -166,6 +321,7 @@ fn play_one(
         kick_off,
         goals: sim.summary().goals,
         goal_minutes,
+        tally: tally(&events),
     })
 }
 

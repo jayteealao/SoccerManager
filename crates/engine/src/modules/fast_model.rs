@@ -14,24 +14,33 @@
 //! multiplies both means, so the two scores rise and fall together as the full engine's do
 //! (a bivariate negative binomial: each side alone is negative binomial with that
 //! dispersion). The joint table over 0 to 15 goals a side then carries the Dixon-Coles
-//! factor on 0-0, 1-0, 0-1 and 1-1 and a weight on every draw, and is normalised. A goal's minute is drawn from 90 shares fitted from the full engine's goal
-//! minutes. The model plays regulation time only.
+//! factor on 0-0, 1-0, 0-1 and 1-1 and a weight on every draw, and is normalised. A goal's
+//! minute is drawn from 90 shares fitted from the full engine's goal minutes, and its scorer
+//! from the side's six most advanced outfield players by finishing. The model plays
+//! regulation time only.
+//!
+//! After the score, [`super::fast_events`] plays every other event kind the full engine
+//! emits in a regulation match, each naming the player the full engine would name: both
+//! sides' starters and benches come with the kick-off.
 
 use serde::{Deserialize, Serialize};
 
 use super::ResolvedModules;
 use super::card::ModuleCard;
+use super::fast_events::{self, EventFit};
+use crate::data::{Position, StoppageKind};
 use crate::error::EngineError;
 use crate::rng::EngineRng;
-use crate::sim::{EngineEvent, EngineEventKind, MatchConfig};
-use crate::ticks_for_minutes;
+use crate::sim::{EngineEvent, MatchConfig};
+use crate::team::PLAYERS_PER_TEAM;
+use crate::validate::StreamRules;
 
 /// Goals a side can score in the score table: 0 to 15.
 pub const MAX_GOALS: usize = 16;
 /// The minutes of regulation time a goal can fall in.
 pub const MINUTES: usize = 90;
 /// The fit file's layout version.
-pub const FIT_VERSION: u32 = 1;
+pub const FIT_VERSION: u32 = 2;
 /// The fit file inside the content folder. `Content::load` never reads it, so it moves no
 /// content hash.
 pub const FIT_FILE: &str = "fast-model.json";
@@ -65,18 +74,21 @@ pub struct FastParams {
     pub draw: f64,
 }
 
-/// What the model plays from: its parameters and the share of goals in each minute.
+/// What the model plays from: its parameters, the share of goals in each minute, and the
+/// rates of every other event.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FastFit {
     pub params: FastParams,
     /// One share per minute of regulation time, 0 to 89; they sum to 1.
     pub minute_shares: Vec<f64>,
+    pub events: EventFit,
 }
 
 impl FastFit {
     /// Refuses a fit the model cannot play: a dispersion that is not positive, a factor that
-    /// is not finite, or minute shares that are not 90 non-negative values summing to 1.
+    /// is not finite, minute shares that are not 90 non-negative values summing to 1, or an
+    /// event fit the model cannot play.
     pub fn check(&self) -> Result<(), EngineError> {
         let p = &self.params;
         let finite = [
@@ -110,12 +122,57 @@ impl FastFit {
                 "the fast-model minute shares must be {MINUTES} values summing to 1"
             )));
         }
-        Ok(())
+        self.events.check()
+    }
+}
+
+/// A player the fast model can name: the squad index and the weights its picks use.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FastPlayer {
+    pub squad: usize,
+    pub keeper: bool,
+    /// The weight of committing a foul: aggression times tackling.
+    pub foul: f64,
+    /// The weight of scoring a goal and of taking a penalty: finishing.
+    pub attack: f64,
+}
+
+/// One side as it kicks off.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Side {
+    /// The player in each roster slot; slot 0 keeps goal.
+    pub starters: [FastPlayer; PLAYERS_PER_TEAM],
+    /// `true` for the slots of the six most advanced starters by their formation slot.
+    pub advanced: [bool; PLAYERS_PER_TEAM],
+    /// The substitutes in bench order.
+    pub bench: Vec<FastPlayer>,
+}
+
+impl Side {
+    /// A side of generated players: squad 0 to 10 in their slots with slots 5 to 10
+    /// advanced, and squad 11 to 17 on the bench with a keeper first; every weight 1.
+    pub fn generated() -> Self {
+        let player = |squad: usize, keeper: bool| FastPlayer {
+            squad,
+            keeper,
+            foul: 1.0,
+            attack: 1.0,
+        };
+        Self {
+            starters: std::array::from_fn(|s| player(s, s == 0)),
+            advanced: std::array::from_fn(|s| s >= PLAYERS_PER_TEAM - ATTACKERS),
+            bench: (11..18).map(|s| player(s, s == 11)).collect(),
+        }
+    }
+
+    /// The squad index in each roster slot.
+    pub fn lineup(&self) -> [usize; PLAYERS_PER_TEAM] {
+        self.starters.map(|p| p.squad)
     }
 }
 
 /// The two teams as they kick off, home first.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct KickOff {
     /// The mean of every attribute value of the eleven players a side starts with.
     pub strength: [f64; 2],
@@ -123,19 +180,35 @@ pub struct KickOff {
     pub attack: [f64; 2],
     /// The mean attribute of a side's other five starters, the keeper included.
     pub defence: [f64; 2],
+    /// Each side's starters and bench.
+    pub sides: [Side; 2],
 }
 
 /// Starters in a side's attack: the six most advanced by their formation slot.
 pub const ATTACKERS: usize = 6;
 
 impl KickOff {
-    /// Two sides whose attack, defence and strength are all `strength`.
+    /// Two generated sides whose attack, defence and strength are all `strength`.
     pub fn even(strength: [f64; 2]) -> Self {
         Self {
             strength,
             attack: strength,
             defence: strength,
+            sides: [Side::generated(), Side::generated()],
         }
+    }
+}
+
+/// The event-stream rules a fast match keeps: the fit's substitution limits and added time,
+/// and the line-ups of `kick_off`.
+pub fn stream_rules(fit: &FastFit, kick_off: &KickOff) -> StreamRules {
+    let rules = &fit.events.rules;
+    StreamRules {
+        substitutions: u32::from(rules.substitutions.limit),
+        windows: u32::from(rules.substitutions.windows),
+        half_time_exempt: rules.substitutions.exempt(StoppageKind::HalfTime),
+        added_s: Some((rules.added_time.min_s, rules.added_time.max_s)),
+        lineups: [kick_off.sides[0].lineup(), kick_off.sides[1].lineup()],
     }
 }
 
@@ -152,6 +225,16 @@ pub fn kick_off(config: &MatchConfig) -> KickOff {
     };
     let mut out = KickOff::even([0.0; 2]);
     for team in 0..2 {
+        let side = &config.teams[team];
+        let player = |squad: usize, keeper: bool| {
+            let d = &side.squad[squad].derived;
+            FastPlayer {
+                squad,
+                keeper,
+                foul: d.aggression * d.tackling,
+                attack: d.finishing,
+            }
+        };
         let mut starters: Vec<_> = config.players.iter().filter(|p| p.team == team).collect();
         out.strength[team] = mean(&mut starters.iter().flat_map(|p| p.attributes.iter()));
         // Most advanced first: the slot furthest from the own goal line, then slot order.
@@ -164,6 +247,19 @@ pub fn kick_off(config: &MatchConfig) -> KickOff {
         let (front, back) = starters.split_at(ATTACKERS.min(starters.len()));
         out.attack[team] = mean(&mut front.iter().flat_map(|p| p.attributes.iter()));
         out.defence[team] = mean(&mut back.iter().flat_map(|p| p.attributes.iter()));
+        let mut advanced = [false; PLAYERS_PER_TEAM];
+        for p in front {
+            advanced[p.slot] = true;
+        }
+        out.sides[team] = Side {
+            starters: std::array::from_fn(|slot| player(side.lineup[slot], slot == 0)),
+            advanced,
+            bench: side
+                .bench
+                .iter()
+                .map(|&s| player(s, side.squad[s].position == Position::GK))
+                .collect(),
+        };
     }
     out
 }
@@ -173,7 +269,7 @@ pub fn kick_off(config: &MatchConfig) -> KickOff {
 pub struct FastMatch {
     /// The final score, home first.
     pub scores: [u32; 2],
-    /// Kick-off, the goals in minute order, half-time, the second-half kick-off, full time.
+    /// Every event of the match in tick order, from the kick-off to full time.
     pub events: Vec<EngineEvent>,
 }
 
@@ -308,10 +404,8 @@ impl FastModel for FittedScoresV1 {
             }
         }
         goals.sort_by_key(|&(m, _)| m);
-        Ok(FastMatch {
-            scores,
-            events: events(&goals),
-        })
+        let events = fast_events::play(&fit.events, kick_off, &goals, &mut rng);
+        Ok(FastMatch { scores, events })
     }
 }
 
@@ -327,73 +421,6 @@ fn minute(shares: &[f64], u: f64) -> u32 {
     (MINUTES - 1) as u32
 }
 
-/// The event stream of a match whose goals are `goals` (minute, team) in minute order.
-fn events(goals: &[(u32, usize)]) -> Vec<EngineEvent> {
-    let per_minute = ticks_for_minutes(1);
-    let half = ticks_for_minutes(45);
-    let mut out = vec![event(EngineEventKind::KickOff, 0, Some(0), [0, 0], 0)];
-    let mut scores = [0u32; 2];
-    let mut half_time_done = false;
-    let half_time = |out: &mut Vec<EngineEvent>, scores: [u32; 2]| {
-        out.push(event(EngineEventKind::HalfTime, half, None, scores, 45));
-        out.push(event(EngineEventKind::KickOff, half, Some(1), scores, 45));
-    };
-    for &(m, team) in goals {
-        if m >= 45 && !half_time_done {
-            half_time(&mut out, scores);
-            half_time_done = true;
-        }
-        scores[team] += 1;
-        out.push(event(
-            EngineEventKind::Goal,
-            m * per_minute + per_minute / 2,
-            Some(team),
-            scores,
-            m,
-        ));
-    }
-    if !half_time_done {
-        half_time(&mut out, scores);
-    }
-    out.push(event(
-        EngineEventKind::FullTime,
-        ticks_for_minutes(90),
-        None,
-        scores,
-        90,
-    ));
-    out
-}
-
-fn event(
-    kind: EngineEventKind,
-    tick: u32,
-    team: Option<usize>,
-    scores: [u32; 2],
-    minute: u32,
-) -> EngineEvent {
-    EngineEvent {
-        tick,
-        kind,
-        team,
-        scores,
-        minute,
-        minute_added: None,
-        player: None,
-        secondary: None,
-        card: None,
-        advantage: None,
-        added_time_s: None,
-        spot: None,
-        detail: None,
-        period: None,
-        shootout_round: None,
-        shootout_scored: None,
-        shootout_scores: None,
-        decided_by: None,
-    }
-}
-
 /// The off version: the slot is off, so there is no model to play.
 pub struct FastModelOff;
 
@@ -406,11 +433,14 @@ impl FastModel for FastModelOff {
 }
 
 pub const FITTED_SCORES_V1_CARD: ModuleCard = ModuleCard {
-    purpose: "A results model fitted from full-engine results: a final score and the goal \
-              events of a 90-minute match from the two teams at kick-off, with no ticks.",
-    inputs: "Each side's strength at kick-off (the mean attribute of its starting eleven) and \
-             the fit file content/fast-model.json.",
-    outputs: "The final score and the kick-off, goal, half-time and full-time events.",
+    purpose: "A results model fitted from full-engine results: a final score and every event \
+              of a 90-minute match from the two teams at kick-off, without playing a tick.",
+    inputs: "Each side's strength at kick-off (the mean attribute of its starting eleven), its \
+             starters and bench with their foul and finishing weights, and the fit file \
+             content/fast-model.json.",
+    outputs: "The final score and the events the full engine emits in a regulation match: \
+              kick-offs, goals, fouls, offsides, cards, restarts, injuries, substitutions with \
+              the manager's decision and its verdict, half-time and full time with added time.",
     tuning: &["none"],
     calibration: "none: fitted to equal the full engine on its own check, not to a band",
     keys: &[],
@@ -428,6 +458,8 @@ pub const FAST_MODEL_OFF_CARD: ModuleCard = ModuleCard {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::modules::fast_events::FitRules;
+    use crate::sim::EngineEventKind;
 
     fn fit() -> FastFit {
         FastFit {
@@ -442,6 +474,7 @@ mod tests {
                 draw: 0.3,
             },
             minute_shares: vec![1.0 / MINUTES as f64; MINUTES],
+            events: EventFit::plain(FitRules::standard()),
         }
     }
 
@@ -524,5 +557,36 @@ mod tests {
         let mut bad = fit();
         bad.params.dispersion = 0.0;
         assert!(FittedScoresV1.play(&bad, &ko, 1).is_err());
+        let mut bad = fit();
+        bad.events.yellow = 1.5;
+        assert!(FittedScoresV1.play(&bad, &ko, 1).is_err());
+        let mut bad = fit();
+        bad.events.fouls.minute_shares.pop();
+        assert!(FittedScoresV1.play(&bad, &ko, 1).is_err());
+    }
+
+    /// The events never change the score: a seed plays the same score and goal minutes as
+    /// the score draws alone give, and the events come after them on the generator.
+    #[test]
+    fn the_events_follow_the_score_on_the_generator() {
+        let ko = KickOff::even([55.0, 50.0]);
+        for seed in 0..200 {
+            let m = FittedScoresV1.play(&fit(), &ko, seed).unwrap();
+            let table = score_table(&fit().params, &ko);
+            let mut rng = EngineRng::from_seed(seed);
+            let u = rng.next_f64();
+            let mut acc = 0.0;
+            let mut scores = [(MAX_GOALS - 1) as u32; 2];
+            'find: for (h, row) in table.iter().enumerate() {
+                for (a, cell) in row.iter().enumerate() {
+                    acc += cell;
+                    if u < acc {
+                        scores = [h as u32, a as u32];
+                        break 'find;
+                    }
+                }
+            }
+            assert_eq!(m.scores, scores, "seed {seed}");
+        }
     }
 }

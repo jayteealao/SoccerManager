@@ -10,6 +10,7 @@
 
 pub mod card;
 pub mod config;
+pub mod fast_events;
 pub mod fast_model;
 pub mod game;
 pub mod modifier;

@@ -79,12 +79,17 @@ fn golden_ledger_index() -> usize {
     golden["ledger"].as_array().unwrap().len() - 1
 }
 
-/// The fit confirms the engine, plays both batches, and reports 49
-/// figures; the fit it reports records the golden results' id.
+/// The fit confirms the engine, plays both batches, and reports 261 figures (49 of the
+/// score, 212 of the events); the fit it reports records the golden results' id and is
+/// format 2 with its events block.
 #[test]
 fn a_small_fit_runs_and_records_the_golden_results_id() {
     let (_, report) = small_fit();
-    assert_eq!(report["figures"].as_array().unwrap().len(), 49);
+    let figures = report["figures"].as_array().unwrap();
+    assert_eq!(figures.len(), 261);
+    let z = |f: &Value| f["z"].as_f64().unwrap();
+    assert_eq!(figures.iter().filter(|f| z(f) == 3.7).count(), 49);
+    assert_eq!(figures.iter().filter(|f| z(f) == 4.07).count(), 212);
     let id = report["engine_id"].as_str().unwrap();
     assert!(
         id.starts_with(&format!("golden-{}-", golden_ledger_index())),
@@ -93,9 +98,42 @@ fn a_small_fit_runs_and_records_the_golden_results_id() {
     assert_eq!(report["fit"]["engine_id"], id);
     assert_eq!(report["fit"]["model"], "fitted-scores@1");
     assert_eq!(report["fit"]["batch"]["matches_per_pairing"], 4);
-    assert_eq!(report["fit"]["check"]["figures"], 49);
+    assert_eq!(report["fit"]["check"]["figures"], 261);
+    assert_eq!(report["fit"]["schema_version"], 2);
     let shares = report["fit"]["fit"]["minute_shares"].as_array().unwrap();
     assert_eq!(shares.len(), 90);
+    let events = &report["fit"]["fit"]["events"];
+    assert_eq!(
+        events["fouls"]["minute_shares"].as_array().unwrap().len(),
+        92
+    );
+    assert_eq!(events["rules"]["substitutions"]["limit"], 5);
+}
+
+/// A fit file of format 1 (the score only) is refused with a message that names the
+/// command that writes format 2; the format-2 fit is the control.
+#[test]
+fn a_format_1_fit_is_refused_and_names_the_fit_command() {
+    let (dir, _) = small_fit();
+    let good = dir.join("from-report.json");
+    let mut fit: Value = serde_json::from_str(&std::fs::read_to_string(&good).unwrap()).unwrap();
+    fit["schema_version"] = Value::from(1);
+    fit["fit"].as_object_mut().unwrap().remove("events");
+    let old = dir.join("format-1.json");
+    std::fs::write(&old, serde_json::to_string_pretty(&fit).unwrap()).unwrap();
+    let done = run(
+        dir,
+        &["fast-model", "stale", "--fit", old.to_str().unwrap()],
+    );
+    let stderr = String::from_utf8_lossy(&done.stderr);
+    assert_eq!(done.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("schema_version 1"), "{stderr}");
+    assert!(stderr.contains("run engine-cli fast-model fit"), "{stderr}");
+    let control = run(
+        dir,
+        &["fast-model", "stale", "--fit", good.to_str().unwrap()],
+    );
+    assert_eq!(control.status.code(), Some(0));
 }
 
 /// A fit whose engine id differs from the golden results' id fails and names both;
@@ -285,7 +323,10 @@ fn the_shipped_fit_records_the_golden_results_id() {
         fit["check"]["pass"].as_bool().unwrap(),
         "the shipped fit passed its check"
     );
-    assert_eq!(fit["check"]["figures"], 49);
+    assert_eq!(fit["schema_version"], 2);
+    assert_eq!(fit["check"]["figures"], 261);
+    assert_eq!(fit["check"]["z"], 3.7);
+    assert_eq!(fit["check"]["event_z"], 4.07);
     assert_eq!(fit["batch"]["matches_per_pairing"], 1000);
     assert_eq!(fit["batch"]["minutes"], 90);
     assert!(
