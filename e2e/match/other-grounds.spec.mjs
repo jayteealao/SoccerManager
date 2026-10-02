@@ -272,7 +272,11 @@ test('under reduced motion the new goal has no fade', async ({ page }) => {
     await expect(block).toHaveCount(1);
     expect(await block.evaluate((el) => getComputedStyle(el).animationName)).toBe('none');
     await page.emulateMedia({ reducedMotion: 'no-preference' });
-    expect(await block.evaluate((el) => getComputedStyle(el).animationName)).not.toBe('none');
+    // The page follows the system through the media query's change event, which lands a
+    // moment after the preference changes.
+    await expect
+      .poll(() => block.evaluate((el) => getComputedStyle(el).animationName), { timeout: 5_000 })
+      .not.toBe('none');
   } finally {
     engine.cleanUp();
   }
