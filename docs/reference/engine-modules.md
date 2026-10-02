@@ -119,7 +119,11 @@ One factor alone passes through unchanged, bit for bit. The engine refreshes the
 
 ## Hook slots
 
-The three `engine.hook.*` slots connect the plugin hooks of a script pack to the central loop. The module of a hook slot is an adapter: it builds what the hook sees and reads only the view. The loop keeps the hooks, their failure counts and the watchdog mark. The off version of a hook slot makes the loop consult no hook at that point, so the engine's own option scores, card or commentary line stand. A hook-slot card owns no action key.
+The three `engine.hook.*` slots connect the plugin hooks of a script pack to the central loop. The module of a hook slot is an adapter: it builds what the hook sees and reads only the view. The loop keeps the hooks, their failure counts and the watchdog mark. The off version of a hook slot makes the loop consult no hook at that point, so the engine's own option scores, card or commentary line stand. A hook-slot card owns no action key. The Rhai adapter between a script pack and the hooks carries its own card, `RHAI_ADAPTER_CARD` in the `script` crate.
+
+## The central loop
+
+Only the central loop writes match state. The loop files are `sim.rs`, the `sim/` folder, `rules/mod.rs`, `tactics/change.rs` and `modules/proposal.rs` under `crates/engine/src/`. A source scan (`crates/engine/tests/structure.rs`) fails when any other engine file has a `&mut self` method on `Simulation` or takes a `&mut Simulation`; the snapshot reader, the scenario builder and the gate's test harness are the named exceptions. A module's proposed changes are applied in `Simulation::apply_proposal`, the one writer of module output.
 
 ## Game slots
 
