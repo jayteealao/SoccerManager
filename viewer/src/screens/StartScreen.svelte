@@ -112,7 +112,7 @@
           <SectionLabel label="Saved match" note="Resume where you stopped" />
           <svg
             class="pitch"
-            width="560"
+            width="100%"
             height="236"
             viewBox="-4 -4 {ground[0] + 8} {ground[1] + 8}"
             preserveAspectRatio="xMidYMid meet"
