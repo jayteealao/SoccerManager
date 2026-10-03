@@ -731,6 +731,9 @@ pub struct ReplayOpts {
     /// Also serve this folder as the viewer page.
     #[arg(long, value_name = "DIR")]
     pub web: Option<PathBuf>,
+    /// Send every frame before this tick at once, then pace from it; a test seam.
+    #[arg(long, hide = true, value_name = "TICK")]
+    pub fast_forward_to: Option<u32>,
 }
 
 #[derive(Debug, Args)]

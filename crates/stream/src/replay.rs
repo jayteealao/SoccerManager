@@ -59,11 +59,15 @@ impl Replayer {
     ///
     /// `sustain` caps the delivered rate below `speed`. It is a test harness for the
     /// viewer's lag notice and exists on `replay` alone, never on `serve`.
+    ///
+    /// `fast_forward_to` is a test seam: every frame before that tick goes out at once, and
+    /// the pacing starts from the first frame at or after it. The bytes do not change.
     pub fn serve(
         &self,
         server: &Server,
         speed: f32,
         sustain: Option<f32>,
+        fast_forward_to: Option<u32>,
     ) -> Result<u32, StreamError> {
         let connection = server.accept(&self.hello.match_id)?;
         let mut socket = connection.socket;
@@ -73,13 +77,19 @@ impl Replayer {
             Some(cap) => speed.min(f64::from(cap.clamp(0.01, 1000.0))),
             None => speed,
         };
-        let started = Instant::now();
+        let from = fast_forward_to.unwrap_or(0);
+        let mut started = None;
         let mut sent = 0u32;
         for stored in &self.fixture.frames {
-            let due = Duration::from_secs_f64(f64::from(stored.tick) * TICK_SECONDS / delivered);
-            let elapsed = started.elapsed();
-            if due > elapsed {
-                std::thread::sleep(due - elapsed);
+            if stored.tick >= from {
+                let started = *started.get_or_insert_with(Instant::now);
+                let due = Duration::from_secs_f64(
+                    f64::from(stored.tick - from) * TICK_SECONDS / delivered,
+                );
+                let elapsed = started.elapsed();
+                if due > elapsed {
+                    std::thread::sleep(due - elapsed);
+                }
             }
             let message = match &stored.frame {
                 Frame::Tick(tick) => Message::binary(tick.as_bytes().to_vec()),
@@ -102,6 +112,7 @@ impl Replayer {
             frames = sent,
             speed = speed,
             sustain = ?sustain,
+            fast_forward_to = ?fast_forward_to,
             delivered = delivered,
             hash = %self.fixture.hash
         );

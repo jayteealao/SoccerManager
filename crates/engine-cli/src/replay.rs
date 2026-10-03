@@ -37,7 +37,7 @@ pub fn run(opts: &ReplayOpts) -> anyhow::Result<i32> {
     if let Some(page) = &page {
         println!("{}", page.address());
     }
-    let sent = replayer.serve(&server, opts.speed, opts.sustain)?;
+    let sent = replayer.serve(&server, opts.speed, opts.sustain, opts.fast_forward_to)?;
     Ok(if sent as usize == replayer.fixture().frames.len() {
         0
     } else {
