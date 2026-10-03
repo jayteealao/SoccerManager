@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use protocol::{ClientCommand, Quantised, ServerMessage};
+use protocol::{ClientCommand, Quantised, Seen, ServerMessage};
 use serde_json::Value;
 use stream::{Client, Incoming};
 
@@ -188,8 +188,13 @@ struct Watched {
     ticks: Vec<Quantised>,
 }
 
+/// The `--fast-forward-to` tick of the launches whose match is left running.
+const FAST_FORWARD: u32 = 4_000;
+
 /// Connects to the running worker and kicks off. With `skip`, the page skips at once and
-/// reads to the close; without, it returns after the hello and leaves the match running.
+/// reads to the close. Without, it reads and reports each tick as a page does until it has
+/// the fast-forward tick, then pauses and leaves the match running: the worker saves once
+/// the socket passes a stoppage and holds unfinished, however fast the build.
 fn watch(port: u16, skip: bool) -> Watched {
     let mut client = Client::connect_local(port).unwrap();
     let Incoming::Message(message) = client.read().unwrap() else {
@@ -202,6 +207,21 @@ fn watch(port: u16, skip: bool) -> Watched {
     client.send(&ClientCommand::Start).unwrap();
     let mut ticks = Vec::new();
     if !skip {
+        loop {
+            match client.read().unwrap() {
+                Incoming::Tick(_, q) => {
+                    client
+                        .send(&ClientCommand::Seen(Seen { tick: q.tick }))
+                        .unwrap();
+                    if q.tick >= FAST_FORWARD {
+                        break;
+                    }
+                }
+                Incoming::Message(_) => {}
+                Incoming::Closed => panic!("the match closed before tick {FAST_FORWARD}"),
+            }
+        }
+        client.send(&ClientCommand::Pause).unwrap();
         std::thread::spawn(
             move || while !matches!(client.read(), Ok(Incoming::Closed) | Err(_)) {},
         );
@@ -374,7 +394,7 @@ fn return_to_start_keeps_the_save_and_resume_finishes_the_same_match() {
             "--minutes",
             "3",
             "--fast-forward-to",
-            "4000",
+            &FAST_FORWARD.to_string(),
         ],
     );
     let now = status(launched.port);
@@ -449,7 +469,7 @@ fn quit_saves_the_match_and_ends_both_processes() {
             "--minutes",
             "3",
             "--fast-forward-to",
-            "4000",
+            &FAST_FORWARD.to_string(),
         ],
     );
     let now = status(launched.port);
