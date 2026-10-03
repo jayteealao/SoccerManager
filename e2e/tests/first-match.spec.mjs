@@ -73,7 +73,7 @@ async function shot(page, testInfo, step) {
   await testInfo.attach(name, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
 }
 
-test('a manager plays a whole match, lineup to full-time report', async ({ page }, testInfo) => {
+test('a manager plays a whole match, lineup to full-time report', { tag: '@timing' }, async ({ page }, testInfo) => {
   const [teamA, teamB] = generateLeague(2026);
   const engine = await startEngine({
     command: 'serve',

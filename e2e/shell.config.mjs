@@ -8,7 +8,8 @@
 import { defineConfig } from '@playwright/test';
 
 const channel = process.env.PW_CHANNEL || undefined;
-const PORT = 4180;
+// SM_SHELL_PORT moves the preview server, so two checkouts can run this suite at once.
+const PORT = Number(process.env.SM_SHELL_PORT || 4180);
 
 export default defineConfig({
   testDir: './shell',

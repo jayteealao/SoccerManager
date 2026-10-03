@@ -32,7 +32,7 @@ async function replay(page, args) {
   return engine;
 }
 
-test('at 1x the page holds 60 frames per second for five match minutes and skips no tick', async ({ page }) => {
+test('at 1x the page holds 60 frames per second for five match minutes and skips no tick', { tag: '@timing' }, async ({ page }) => {
   test.setTimeout(8 * 60_000);
   // Every signal the page writes, from its console: the in-page ring keeps only the newest.
   const signals = [];
@@ -69,7 +69,7 @@ test('at 1x the page holds 60 frames per second for five match minutes and skips
   }
 });
 
-test('at 4x the clock runs four times faster than the wall clock', async ({ page }) => {
+test('at 4x the clock runs four times faster than the wall clock', { tag: '@timing' }, async ({ page }) => {
   const engine = await replay(page, ['--speed', '8']);
   try {
     await setSpeed(page, 4);
@@ -88,7 +88,7 @@ test('at 4x the clock runs four times faster than the wall clock', async ({ page
 });
 
 for (const [sustain, lag] of [[3, true], [8, false]]) {
-  test(`a stream sustained at ${sustain}x ${lag ? 'shows' : 'shows no'} lag notice at 8x`, async ({ page }) => {
+  test(`a stream sustained at ${sustain}x ${lag ? 'shows' : 'shows no'} lag notice at 8x`, { tag: '@timing' }, async ({ page }) => {
     const engine = await replay(page, ['--speed', '8', '--sustain', String(sustain)]);
     try {
       await setSpeed(page, 8);

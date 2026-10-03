@@ -29,6 +29,8 @@ These tests drive the match viewer in a real browser against the release engine.
    npm run test:headed      # every test, in a visible window
    ```
 
+The suites run two tests at a time; each test has its own engine, port and data folder. Set `SM_E2E_WORKERS` to change the count; CI and the two single-project scripts run one. A test tagged `@timing` measures frame rate or playback speed, so it runs alone, after the others. A run narrowed to some files or tests also runs every timing test when the count is above one, so set `SM_E2E_WORKERS=1` for a narrowed run. The shell suite's preview server uses port 4180; set `SM_SHELL_PORT` to move it.
+
 To run the tests in the installed Microsoft Edge instead of the bundled Chromium, set `PW_CHANNEL=msedge`.
 
 To test an installed game instead of the repository build, set `SM_E2E_INSTALL` to its folder: every test then runs that folder's `engine-cli` and serves its `web/`, the page the release carries.

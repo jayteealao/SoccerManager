@@ -71,7 +71,7 @@ async function measure(page, web) {
   }
 }
 
-test('the match screen holds the frame budget for 60 s at 1x', async ({ browser }, info) => {
+test('the match screen holds the frame budget for 60 s at 1x', { tag: '@timing' }, async ({ browser }, info) => {
   test.setTimeout(6 * 60_000);
   const viewerPage = await browser.newPage();
   const viewer = await measure(viewerPage, VIEWER);
