@@ -392,6 +392,7 @@ impl<'a> Serving<'a> {
                 threads: self.matchday_threads,
                 fault: self.matchday_fault,
                 not_late_through: not_late_through.max(self.fast_forward_to.unwrap_or(0)),
+                fast_forward_to: self.fast_forward_to,
             },
         ));
     }

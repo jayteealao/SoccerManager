@@ -305,9 +305,13 @@ pub fn drive<S: TickSink>(
         if record.tick.is_multiple_of(ticks_per_second) {
             route(ServerMessage::Stats(stats_message(sim)))?;
             route(ServerMessage::Condition(condition_message(sim)))?;
-            if let Some(progress) = opts.matchday.and_then(|m| m.progress(record.tick)) {
-                route(progress)?;
-            }
+        }
+        if let Some(matchday) = opts.matchday
+            && (record.tick.is_multiple_of(ticks_per_second)
+                || matchday.at_fast_forward(record.tick))
+            && let Some(progress) = matchday.progress(record.tick)
+        {
+            route(progress)?;
         }
     }
     let full_time = sim.is_over();

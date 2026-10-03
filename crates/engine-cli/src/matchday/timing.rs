@@ -46,6 +46,7 @@ pub fn run(content_dir: Option<&std::path::Path>, opts: &TimingOpts) -> anyhow::
             threads: opts.threads,
             fault: None,
             not_late_through: 0,
+            fast_forward_to: None,
         },
     );
     // The player's match, flat out beside the pool.

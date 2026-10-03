@@ -77,6 +77,9 @@ pub struct Options {
     /// No event at or before this tick is late: the tick a resumed match continues from, or
     /// the tick a test fast-forward runs the player's match to.
     pub not_late_through: u32,
+    /// A test seam: the tick a fast-forward runs the player's match to. There the player's
+    /// match waits for every ground to reach it (see `Matchday::due`).
+    pub fast_forward_to: Option<u32>,
 }
 
 /// The matchday message for `round`: every fixture with its two clubs.
@@ -152,6 +155,7 @@ pub struct Matchday {
     started: Instant,
     threads: usize,
     cores: usize,
+    fast_forward_to: Option<u32>,
 }
 
 impl Matchday {
@@ -214,6 +218,7 @@ impl Matchday {
             started,
             threads,
             cores,
+            fast_forward_to: opts.fast_forward_to,
         }
     }
 
@@ -283,11 +288,47 @@ impl Matchday {
     }
 
     /// Every computed ground event this connection has not been sent whose tick the player's
-    /// match has reached, in tick order. Never blocks: it only drains what the pool sent.
+    /// match has reached, in tick order. It only drains what the pool sent, except at the tick
+    /// of a test fast-forward.
     pub fn due(&self, player_tick: u32, paced: bool) -> Vec<ServerMessage> {
         let mut inner = self.inner.borrow_mut();
+        if self.fast_forward_to == Some(player_tick) {
+            self.catch_up_to(&mut inner, player_tick, paced);
+        }
         self.drain(&mut inner, player_tick, paced);
         take_unsent(&mut inner, player_tick)
+    }
+
+    /// `true` at the tick of a test fast-forward, where the grounds' progress is sent too.
+    pub fn at_fast_forward(&self, player_tick: u32) -> bool {
+        self.fast_forward_to == Some(player_tick)
+    }
+
+    /// A test seam: waits, at most `FINISH_WAIT`, until every ground has reached `tick` or
+    /// ended. A fast-forward outruns the pool, and the player's match then waits for the page
+    /// and sends no more progress, so on a loaded machine the page would never see the
+    /// grounds reach the tick. The pool sends a ground's events before it publishes the tick
+    /// the ground reached, so every event up to `tick` is in the channel after the wait.
+    fn catch_up_to(&self, inner: &mut Inner, tick: u32, paced: bool) {
+        let deadline = Instant::now() + FINISH_WAIT;
+        let behind = |i: usize| {
+            !self.shared.ended[i].load(Ordering::Acquire)
+                && self.shared.reached[i].load(Ordering::Acquire) < tick
+        };
+        while (0..self.round.fixtures.len()).any(behind) {
+            let now = Instant::now();
+            if now >= deadline {
+                break;
+            }
+            match inner
+                .notes
+                .recv_timeout((deadline - now).min(Duration::from_millis(50)))
+            {
+                Ok(note) => self.take(inner, note, tick, paced),
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => break,
+            }
+        }
     }
 
     /// Every computed ground event up to `cursor`, for a connection that starts there: a
@@ -544,6 +585,7 @@ mod tests {
             threads: Some(threads),
             fault,
             not_late_through: 0,
+            fast_forward_to: None,
         }
     }
 
@@ -604,6 +646,44 @@ mod tests {
                     .all(|o| o.is_some_and(|o| o.0.is_none()))
             );
         }
+    }
+
+    #[test]
+    fn at_the_fast_forward_tick_every_ground_has_reached_it_before_due_returns() {
+        let loaded = loaded();
+        let player = player(&loaded, 42, 10);
+        let round = round(&loaded, 42);
+        let to = 20_000;
+        // One thread plays the four grounds in turn, so the player's match, here asking at
+        // once, is far ahead of them.
+        let md = Matchday::start(
+            &round,
+            &loaded,
+            &player,
+            Options {
+                fast_forward_to: Some(to),
+                ..options("fast-forward", 1, None)
+            },
+        );
+        assert!(!md.at_fast_forward(to - 1) && md.at_fast_forward(to));
+        let sent = md.due(to, false);
+        let Some(ServerMessage::GroundProgress(progress)) = md.progress(to) else {
+            panic!("a matchday with fixtures reports progress");
+        };
+        assert!(
+            progress.reached.iter().all(|&r| r >= to),
+            "reached {:?} at the fast-forward tick {to}",
+            progress.reached
+        );
+        // Every event up to the tick was sent, and none after it.
+        md.finish(u32::MAX, false, Duration::from_secs(300));
+        let due: Vec<u32> = md
+            .computed()
+            .iter()
+            .map(|(e, _)| e.tick)
+            .filter(|&t| t <= to)
+            .collect();
+        assert_eq!(sent.len(), due.len());
     }
 
     #[test]
