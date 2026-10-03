@@ -1,5 +1,6 @@
 // The whole first match, lineup to full-time report, against the live engine: the twelve
-// steps a manager takes, each with the checkpoint the manager sees.
+// steps a manager takes, each with the checkpoint the manager sees. The clock rate at 4x is
+// measured against the wall clock, so it is a timing test of its own, run alone.
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
@@ -73,7 +74,7 @@ async function shot(page, testInfo, step) {
   await testInfo.attach(name, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
 }
 
-test('a manager plays a whole match, lineup to full-time report', { tag: '@timing' }, async ({ page }, testInfo) => {
+test('a manager plays a whole match, lineup to full-time report', async ({ page }, testInfo) => {
   // A 90-minute match at eight times speed still takes more than eleven minutes of wall time.
   test.setTimeout(45 * 60_000);
   const [teamA, teamB] = generateLeague(2026);
@@ -167,35 +168,9 @@ test('a manager plays a whole match, lineup to full-time report', { tag: '@timin
       await shot(page, testInfo, 4);
     });
 
-    await test.step('5. at 4x the clock runs four times faster, or the notice names the sustained speed', async () => {
+    await test.step('5. the speed control switches to 4x', async () => {
       await setSpeed(page, 4);
-      await page.waitForTimeout(1000);
-      const t0 = await renderedTick(page);
-      const w0 = Date.now();
-      await page.waitForTimeout(5000);
-      const t1 = await renderedTick(page);
-      const seconds = (Date.now() - w0) / 1000;
-      const rate = (t1 - t0) / seconds / 50;
-      // The notice under the playback row, as the hook reads it.
-      const read = await hook(page, () => window.__touchline.notice());
-      const notice = (read.message ?? '').trim();
-      const noticeShown = read.shown;
       await shot(page, testInfo, 5);
-      // Never faster than asked, whichever way the step goes.
-      expect(rate).toBeLessThan(4 * 1.05);
-      if (Math.abs(rate - 4) / 4 > 0.05) {
-        // The engine could not keep up: a shown notice names the speed it sustained, below
-        // the one asked for, and the clock ran at about that speed.
-        expect(noticeShown, `notice: ${notice}`).toBe(true);
-        const named = notice.match(/Playing at (\d+)x/);
-        expect(named, `notice: ${notice}`).not.toBeNull();
-        const sustained = Number(named[1]);
-        expect(sustained).toBeLessThan(4);
-        expect(Math.abs(rate - sustained), `measured ${rate}x, notice ${notice}`).toBeLessThanOrEqual(1);
-      } else {
-        // Playing at the speed asked for: no lag notice names a lower one.
-        expect(noticeShown && /Playing at/.test(notice), `notice: ${notice}`).toBe(false);
-      }
       await expect(speedPressed(page)).toHaveAttribute('aria-label', '4x');
     });
 
@@ -381,6 +356,52 @@ test('a manager plays a whole match, lineup to full-time report', { tag: '@timin
       expect(found, 'a seed from 1 to 50 where the trailing AI manager changes tactics after minute 70').toHaveLength(1);
       testInfo.annotations.push({ type: 'trailing-change', description: JSON.stringify(found[0]) });
     });
+  } finally {
+    engine.cleanUp();
+  }
+});
+
+test('at 4x the clock of the first match runs four times faster, or the notice names the sustained speed', { tag: '@timing' }, async ({ page }, testInfo) => {
+  // The scenario's match: the same league, clubs and seed.
+  const [teamA, teamB] = generateLeague(2026);
+  const engine = await startEngine({
+    command: 'serve',
+    args: ['--seed', '42', '--web', WEB, '--team-a', teamA, '--team-b', teamB],
+  });
+  try {
+    await openMatch(page, engine.url);
+    // The match as the scenario has it at step 5: kicked off and past tick 500.
+    await kickOff(page);
+    await until(page, () => window.__touchline.lastRenderedTick() > 500, { timeout: 60_000 });
+    await setSpeed(page, 4);
+    await page.waitForTimeout(1000);
+    const t0 = await renderedTick(page);
+    const w0 = Date.now();
+    await page.waitForTimeout(5000);
+    const t1 = await renderedTick(page);
+    const seconds = (Date.now() - w0) / 1000;
+    const rate = (t1 - t0) / seconds / 50;
+    // The notice under the playback row, as the hook reads it.
+    const read = await hook(page, () => window.__touchline.notice());
+    const notice = (read.message ?? '').trim();
+    const noticeShown = read.shown;
+    await shot(page, testInfo, 5);
+    // Never faster than asked, whichever way the step goes.
+    expect(rate).toBeLessThan(4 * 1.05);
+    if (Math.abs(rate - 4) / 4 > 0.05) {
+      // The engine could not keep up: a shown notice names the speed it sustained, below
+      // the one asked for, and the clock ran at about that speed.
+      expect(noticeShown, `notice: ${notice}`).toBe(true);
+      const named = notice.match(/Playing at (\d+)x/);
+      expect(named, `notice: ${notice}`).not.toBeNull();
+      const sustained = Number(named[1]);
+      expect(sustained).toBeLessThan(4);
+      expect(Math.abs(rate - sustained), `measured ${rate}x, notice ${notice}`).toBeLessThanOrEqual(1);
+    } else {
+      // Playing at the speed asked for: no lag notice names a lower one.
+      expect(noticeShown && /Playing at/.test(notice), `notice: ${notice}`).toBe(false);
+    }
+    await expect(speedPressed(page)).toHaveAttribute('aria-label', '4x');
   } finally {
     engine.cleanUp();
   }

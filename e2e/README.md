@@ -25,7 +25,7 @@ These tests drive the match viewer in a real browser against the release engine.
    ```bash
    npm test                 # every test, headless
    npm run test:viewer      # the viewer tests and every timing test
-   npm run test:scenario    # the whole first match only, about 15 minutes
+   npm run test:scenario    # the whole first match and its clock-rate check, about 15 minutes
    npm run test:headed      # every test, in a visible window
    ```
 
@@ -46,6 +46,7 @@ A test finds a control by its role and its accessible name, as a screen reader d
 | Behaviour of the page | Test |
 |---|---|
 | The whole first match, lineup to full-time report, in twelve steps | `first-match.spec.mjs` › a manager plays a whole match, lineup to full-time report |
+| In the first match at 4x the clock runs four times faster, or the notice names the speed sustained (the scenario's step 5, measured alone) | `first-match.spec.mjs` › at 4x the clock of the first match runs four times faster, or the notice names the sustained speed |
 | At 1x, 60 frames per second for five match minutes with no skipped tick | `pitch.spec.mjs` › at 1x the page holds 60 frames per second for five match minutes and skips no tick |
 | Each drawn frame lies between two stored ticks, never past the newest | `pitch.spec.mjs` › every drawn frame lies between two stored ticks, never past the newest; viewer test `interpolate.test.js` |
 | At 8x the page skips ticks and never extrapolates | `pitch.spec.mjs` › every drawn frame lies between two stored ticks, never past the newest; viewer test `schedule.test.js` › at eight times speed ticks are skipped and counted |
