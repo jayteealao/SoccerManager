@@ -19,7 +19,7 @@ import path from 'node:path';
 import { expect, test } from '@playwright/test';
 
 import { contrastReport } from '../support/contrast.mjs';
-import { VIEWER, contentWithSkin, killTree, runEngine, startEngine, tempDir, waitForGrounds } from '../support/engine.mjs';
+import { VIEWER, contentWithSkin, fastForward, killTree, runEngine, startEngine, tempDir, waitForGrounds } from '../support/engine.mjs';
 import { kickOffFromPage } from '../support/page.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
@@ -72,12 +72,13 @@ const hook = (page, fn, arg) => page.evaluate(fn, arg);
 const until = (page, fn, arg, timeout = 120_000) =>
   page.waitForFunction(fn, arg, { timeout, polling: 100 });
 
-/// The live set-up: a recording served at 50 times speed, held at minute 30 with playback
-/// paused, as a manager reads a match. A rewind draws the stored tick itself.
+/// The live set-up: a recording sent at once up to minute 30 and at 50 times speed from there,
+/// held at minute 30 with playback paused, as a manager reads a match. A rewind draws the
+/// stored tick itself.
 async function liveAtMinute30(page, skin) {
   const engine = await startEngine({
     command: 'replay',
-    args: ['--fixture', fixture, '--web', VIEWER, '--speed', '50'],
+    args: ['--fixture', fixture, '--web', VIEWER, '--speed', '50', ...fastForward(MINUTE_30)],
   });
   if (skin !== 'broadcast-blue') {
     await routeStatus(page, { skin });

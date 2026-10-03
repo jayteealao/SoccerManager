@@ -41,13 +41,18 @@ export const everyMessage = () => true;
 /// The page is pointed at the relay by its status (`socket.port`). The relay forwards whole
 /// WebSocket frames only, so a frame the test sends never lands inside one of the engine's.
 /// Playwright's own socket route would hold every frame of a long match in the test's memory;
-/// the relay holds none.
-export async function injectingRelay(page) {
+/// the relay holds none. With `keep`, the relay also records the page's text messages that
+/// `keep(message)` picks in `relay.sent`, as `recordClientMessages` does, so a drive that
+/// fast-forwards a long match can still record what the page sent.
+export async function injectingRelay(page, { keep = null } = {}) {
   const { createServer, connect } = await import('node:net');
-  const relay = { enginePort: null, client: null };
+  const relay = { enginePort: null, client: null, sent: [] };
   const server = createServer((client) => {
     const up = connect(relay.enginePort, '127.0.0.1');
     client.pipe(up);
+    if (keep) {
+      client.on('data', recordFrames(keep, relay.sent));
+    }
     let buffer = Buffer.alloc(0);
     let upgraded = false;
     up.on('data', (chunk) => {
@@ -129,4 +134,67 @@ export async function injectingRelay(page) {
   };
   relay.close = () => server.close();
   return relay;
+}
+
+/// A reader of the page's side of a socket: it skips the upgrade request, then unmasks each
+/// whole text frame and records the JSON messages `keep` picks. It only reads; the bytes
+/// travel on unchanged.
+function recordFrames(keep, sent) {
+  let buffer = Buffer.alloc(0);
+  let upgraded = false;
+  return (chunk) => {
+    buffer = Buffer.concat([buffer, chunk]);
+    if (!upgraded) {
+      const end = buffer.indexOf('\r\n\r\n');
+      if (end < 0) {
+        return;
+      }
+      buffer = buffer.subarray(end + 4);
+      upgraded = true;
+    }
+    for (;;) {
+      if (buffer.length < 2) {
+        return;
+      }
+      const opcode = buffer[0] & 0x0f;
+      const masked = (buffer[1] & 0x80) !== 0;
+      let length = buffer[1] & 0x7f;
+      let at = 2;
+      if (length === 126) {
+        if (buffer.length < 4) {
+          return;
+        }
+        length = buffer.readUInt16BE(2);
+        at = 4;
+      } else if (length === 127) {
+        if (buffer.length < 10) {
+          return;
+        }
+        length = Number(buffer.readBigUInt64BE(2));
+        at = 10;
+      }
+      const mask = masked ? buffer.subarray(at, at + 4) : null;
+      at += masked ? 4 : 0;
+      if (buffer.length < at + length) {
+        return;
+      }
+      if (opcode === 0x1) {
+        const payload = Buffer.from(buffer.subarray(at, at + length));
+        if (mask) {
+          for (let i = 0; i < payload.length; i += 1) {
+            payload[i] ^= mask[i % 4];
+          }
+        }
+        try {
+          const parsed = JSON.parse(payload.toString('utf8'));
+          if (keep(parsed)) {
+            sent.push(parsed);
+          }
+        } catch {
+          // Not JSON: forwarded, not recorded.
+        }
+      }
+      buffer = buffer.subarray(at + length);
+    }
+  };
 }

@@ -18,7 +18,7 @@ import { expect, test } from '@playwright/test';
 
 import { contrastReport } from '../support/contrast.mjs';
 import { VIEWER, contentWithSkin, fastForward, startEngine } from '../support/engine.mjs';
-import { everyMessage, managerCommand, recordClientMessages } from '../support/messages.mjs';
+import { everyMessage, injectingRelay, managerCommand, recordClientMessages } from '../support/messages.mjs';
 import { chooseIndex, playUntil } from '../support/page.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
@@ -279,15 +279,15 @@ test('the Touchline queue: a substitution with a new shape, a cancel and an edit
 });
 
 test("the assistant's tired-player pick shows at its tick, and Accept queues it", async ({ page }, info) => {
-  // The recorded socket slows playback to between 4x and 8x: up to 20 minutes to the pick.
-  test.setTimeout(25 * 60_000);
-  const sent = await recordClientMessages(page, managerCommand);
-  // No fast-forward here: the recorded socket passes every server message through the test
-  // runner, and a burst of 170,000 ticks ends the runner (exit 134).
-  const engine = await serve(ADVICE_SEED);
+  test.setTimeout(8 * 60_000);
+  // A relay records the page's messages: Playwright's socket route would pass every server
+  // message of the fast-forward burst through the test runner, and 170,000 ticks end it.
+  const relay = await injectingRelay(page, { keep: managerCommand });
+  const sent = relay.sent;
+  const engine = await serve(ADVICE_SEED, 'broadcast-blue', ADVICE_TICK + 500);
   try {
     await tactics(page, engine, 'broadcast-blue');
-    await playTo(page, ADVICE_TICK + 500, 20 * 60_000);
+    await playTo(page, ADVICE_TICK + 500);
     await rewindTo(page, ADVICE_TICK - 50);
     const early = await hook(page, () => window.__touchline.advice());
     await rewindTo(page, ADVICE_TICK + 50);
@@ -320,6 +320,7 @@ test("the assistant's tired-player pick shows at its tick, and Accept queues it"
     expect(final.state).toBe('applied');
   } finally {
     engine.cleanUp();
+    relay.close();
   }
 });
 

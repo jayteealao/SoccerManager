@@ -21,7 +21,7 @@ import path from 'node:path';
 import { expect, test } from '@playwright/test';
 
 import { contrastReport } from '../support/contrast.mjs';
-import { VIEWER, contentWithSkin, startEngine } from '../support/engine.mjs';
+import { VIEWER, contentWithSkin, fastForward, startEngine } from '../support/engine.mjs';
 import { managerCommand, recordClientMessages } from '../support/messages.mjs';
 import { chooseIndex } from '../support/page.mjs';
 
@@ -61,9 +61,10 @@ async function open(page, url, skin = 'broadcast-blue') {
   await page.evaluate(() => document.fonts.ready);
 }
 
-async function serve(seed, skin = 'broadcast-blue') {
+/// `to`: a late tick the drive plays to; the engine sends every tick up to it at once.
+async function serve(seed, skin = 'broadcast-blue', to = undefined) {
   return startEngine({
-    args: ['--seed', String(seed), '--web', VIEWER],
+    args: ['--seed', String(seed), '--web', VIEWER, ...fastForward(to)],
     env: skin === 'broadcast-blue' ? {} : { SM_CONTENT_DIR: lightContent.dir },
   });
 }
@@ -130,7 +131,7 @@ for (const skin of SKINS) {
 
     test('in match: paused at minute 10 with two changes queued', async ({ page }) => {
       test.setTimeout(8 * 60_000);
-      const engine = await serve(7, skin);
+      const engine = await serve(7, skin, MINUTE_10);
       try {
         await preMatch(page, engine, skin);
         await playTo(page, MINUTE_10);
@@ -301,7 +302,7 @@ async function tabWalk(page, presses) {
 
 test('a Tab walk through both phases never lands in a stub and reaches every control', async ({ page }, info) => {
   test.setTimeout(6 * 60_000);
-  const engine = await serve(7);
+  const engine = await serve(7, 'broadcast-blue', MINUTE_3);
   try {
     await preMatch(page, engine, 'broadcast-blue');
     const before = await tabWalk(page, 70);
@@ -331,7 +332,7 @@ test('a Tab walk through both phases never lands in a stub and reaches every con
 
 test('both phases of the Tactics screen meet WCAG AA contrast', async ({ page }, info) => {
   test.setTimeout(6 * 60_000);
-  const engine = await serve(7);
+  const engine = await serve(7, 'broadcast-blue', MINUTE_3);
   try {
     await preMatch(page, engine, 'broadcast-blue');
     const before = await contrastReport(page);
