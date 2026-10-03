@@ -9,10 +9,12 @@
 // and a test keeps its id. SM_E2E_WORKERS sets the count; CI runs one worker. With more than
 // one, the timing project is the teardown of the others, so it waits for them and still runs
 // when one of them fails. Playwright runs a teardown project in full whatever the command line
-// picks, so a run that picks a project with `--project` has one worker and no teardown: the
-// timing project then runs last, as the last project of the config. A run narrowed to some
-// files or tests (`-g`, a file name) still runs every timing test when the count is above
-// one; set SM_E2E_WORKERS=1 for it.
+// picks: `--project=viewer` would run every timing test, each shard of `--shard` would run
+// every timing test, and `--last-failed` or `--only-changed` would run every timing test, or
+// none when only timing tests are picked. A run with one of those flags therefore has one
+// worker and no teardown: the timing project then runs last, as the last project of the
+// config. A run narrowed to some files or tests (`-g`, a file name) still runs every timing
+// test when the count is above one; set SM_E2E_WORKERS=1 for it.
 
 /// The tag of a test that measures time.
 export const TIMING = /@timing/;
@@ -23,7 +25,7 @@ export const TIMING = /@timing/;
 const DEFAULT_WORKERS = 2;
 
 /// The command-line flags that pick tests in a way a teardown project ignores.
-const PICKING_FLAGS = ['--project'];
+const PICKING_FLAGS = ['--project', '--last-failed', '--shard', '--only-changed'];
 
 function picksTests(argv) {
   return argv.some((arg) => PICKING_FLAGS.some((flag) => arg === flag || arg.startsWith(`${flag}=`)));
