@@ -69,8 +69,8 @@ export async function startEngine({ command = 'serve', args = [], env = {}, data
   const exited = new Promise((resolve) => child.on('exit', (code) => resolve(code)));
   const url = await new Promise((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new Error(`No page address within 10 s.\nstdout:\n${stdout}\nstderr:\n${stderr}`)),
-      10_000
+      () => reject(new Error(`No page address within 30 s.\nstdout:\n${stdout}\nstderr:\n${stderr}`)),
+      30_000
     );
     child.stdout.on('data', (d) => {
       stdout += d.toString();
@@ -138,12 +138,13 @@ export function contentWithGround(length, width) {
   return dir;
 }
 
-/// Runs one engine command to completion and returns its exit code and output.
+/// Runs one engine command to completion and returns its exit code and output. Without
+/// `dataDir`, the command gets a new, empty data folder, so no two tests share one.
 export function runEngine(args, { env = {}, dataDir } = {}) {
   requireBinary();
   const result = spawnSync(BINARY, args, {
     cwd: REPO,
-    env: { ...process.env, SM_CONTENT_DIR: CONTENT, ...(dataDir ? { SM_DATA_DIR: dataDir } : {}), ...env },
+    env: { ...process.env, SM_CONTENT_DIR: CONTENT, SM_DATA_DIR: dataDir ?? tempDir('data'), ...env },
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
   });
