@@ -128,7 +128,10 @@ fn a_format_1_fit_is_refused_and_names_the_fit_command() {
     let stderr = String::from_utf8_lossy(&done.stderr);
     assert_eq!(done.status.code(), Some(1), "{stderr}");
     assert!(stderr.contains("schema_version 1"), "{stderr}");
-    assert!(stderr.contains("run engine-cli fast-model fit"), "{stderr}");
+    assert!(
+        stderr.contains("this build reads 2; run engine-cli fast-model fit"),
+        "{stderr}"
+    );
     let control = run(
         dir,
         &["fast-model", "stale", "--fit", good.to_str().unwrap()],

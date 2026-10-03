@@ -91,7 +91,8 @@ impl FitFile {
             .and_then(serde_json::Value::as_u64);
         if version != Some(u64::from(FIT_VERSION)) {
             bail!(
-                "the fit file {} has schema_version {}; this build reads {FIT_VERSION};                  run engine-cli fast-model fit",
+                "the fit file {} has schema_version {}; this build reads {FIT_VERSION}; \
+                 run engine-cli fast-model fit",
                 path.display(),
                 version.map_or_else(|| "none".to_string(), |v| v.to_string())
             );
