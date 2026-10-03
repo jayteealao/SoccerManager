@@ -8,7 +8,10 @@
 //! golden-section search at a time. No statistics crate is in the workspace, and eight
 //! parameters do not need one.
 
-use engine::modules::fast_events::{BINS, CountFit, EventFit, FitRules, covariates, level};
+use engine::modules::fast_events::{
+    BINS, COUNT_TERMS, CountFit, EventFit, FitRules, SHARE_TERMS, ShareFit, SubstitutionFit,
+    count_terms, share_terms, strengths,
+};
 use engine::modules::fast_model::{self, FastFit, FastParams, MAX_GOALS, MINUTES, score_table};
 
 use super::batch::{Counts, Row, Timed};
@@ -214,37 +217,9 @@ fn minute_shares(rows: &[Row]) -> Vec<f64> {
 /// share table by its frequency in the batch, and each kind's minute shares from its
 /// minutes.
 pub fn event_fit(rows: &[Row], rules: FitRules) -> EventFit {
-    let sum = |f: &dyn Fn(&Counts) -> u32| -> f64 {
-        rows.iter()
-            .flat_map(|r| r.tally.counts.iter())
-            .map(|c| f64::from(f(c)))
-            .sum()
-    };
-    let ratio = |a: f64, b: f64| if b > 0.0 { a / b } else { 0.0 };
-    let fouls = sum(&|c| c.fouls);
-    let advantage = sum(&|c| c.advantage);
     let limit = usize::from(rules.substitutions.limit);
-    let mut tables = [
-        vec![0.0; limit + 1],
-        vec![0.0; limit + 1],
-        vec![0.0; limit + 1],
-    ];
-    let mut pooled = vec![0.0; limit + 1];
-    for r in rows {
-        for (side, c) in r.tally.counts.iter().enumerate() {
-            let n = ((c.substitutions - c.injury_substitutions) as usize).min(limit);
-            tables[level(&r.kick_off, side)][n] += 1.0;
-            pooled[n] += 1.0;
-        }
-    }
-    let pooled = normalised(pooled);
-    let substitutions = tables.map(|t| {
-        if t.iter().sum::<f64>() > 0.0 {
-            normalised(t)
-        } else {
-            pooled.clone()
-        }
-    });
+    let fouls = |c: &[Counts; 2], side: usize| c[side].fouls;
+    let played = |c: &[Counts; 2], side: usize| c[side].fouls - c[side].advantage;
     EventFit {
         fouls: count_fit(rows, &|c| c.fouls, Timed::Foul, true),
         offsides: count_fit(rows, &|c| c.offsides, Timed::Offside, true),
@@ -252,13 +227,37 @@ pub fn event_fit(rows: &[Row], rules: FitRules) -> EventFit {
         throw_ins: count_fit(rows, &|c| c.throw_ins, Timed::ThrowIn, true),
         goal_kicks: count_fit(rows, &|c| c.goal_kicks, Timed::GoalKick, true),
         injuries: count_fit(rows, &|c| c.injuries, Timed::Injury, false),
-        advantage: ratio(advantage, fouls),
-        penalty: ratio(sum(&|c| c.penalties), fouls - advantage),
-        yellow: ratio(sum(&|c| c.yellow), fouls),
-        red: ratio(sum(&|c| c.red), fouls),
-        substitutions,
+        advantage: share_fit(rows, &|c, side| c[side].advantage, &fouls),
+        // A penalty counts for the side that takes it, the other side from the foul.
+        penalty: share_fit(rows, &|c, side| c[1 - side].penalties, &played),
+        yellow: share_fit(rows, &|c, side| c[side].yellow, &fouls),
+        red: share_fit(rows, &|c, side| c[side].red, &fouls),
+        second_yellow: share_fit(rows, &|c, side| c[side].second_yellow, &|c, side| {
+            c[side].booked_cards
+        }),
+        injury_stoppage: share_fit(rows, &|c, side| c[side].stopping_injuries, &|c, side| {
+            c[side].injuries
+        }),
+        substitutions: substitution_fit(rows, limit),
         substitution_minute_shares: bin_shares(rows, Timed::Substitution),
+        added_goals: [0, 1].map(|half| added_goal_share(rows, half)),
         rules,
+    }
+}
+
+/// The share of the goals in the last minute of `half` (minute 44 or 89 of the score's
+/// minutes, which hold the half's added time) that came in added time; 0 with no such goal.
+fn added_goal_share(rows: &[Row], half: usize) -> f64 {
+    let last = [44, 89][half];
+    let in_last: u32 = rows
+        .iter()
+        .map(|r| r.goal_minutes.iter().filter(|m| **m == last).count() as u32)
+        .sum();
+    let added: u32 = rows.iter().map(|r| r.tally.added_goals[half]).sum();
+    if in_last == 0 {
+        0.0
+    } else {
+        (f64::from(added) / f64::from(in_last)).min(1.0)
     }
 }
 
@@ -294,8 +293,8 @@ fn bin_shares(rows: &[Row], kind: Timed) -> Vec<f64> {
 }
 
 /// One count's fit: Newton steps on the Poisson likelihood of every side's count for the
-/// intercept, the home term and the strength term, then the negative binomial's shape by the
-/// method of moments (none, a Poisson count, when `dispersed` is false or the counts are not
+/// coefficients of the count terms, then the negative binomial's shape by the method of
+/// moments (none, a Poisson count, when `dispersed` is false or the counts are not
 /// overdispersed).
 fn count_fit(
     rows: &[Row],
@@ -303,50 +302,23 @@ fn count_fit(
     kind: Timed,
     dispersed: bool,
 ) -> CountFit {
-    let samples: Vec<([f64; 3], f64)> = rows
+    let samples: Vec<([f64; COUNT_TERMS], f64, f64)> = rows
         .iter()
         .flat_map(|r| {
             (0..2).map(move |side| {
                 (
-                    covariates(&r.kick_off, side),
+                    count_terms(&r.kick_off, side),
                     f64::from(count(&r.tally.counts[side])),
+                    1.0,
                 )
             })
         })
         .collect();
-    let n = samples.len().max(1) as f64;
-    let total: f64 = samples.iter().map(|(_, y)| y).sum();
-    let mut beta: [f64; 3] = [(total / n).max(1e-6).ln(), 0.0, 0.0];
-    if total > 0.0 {
-        for _ in 0..100 {
-            let mut grad = [0.0; 3];
-            let mut info = [[0.0; 3]; 3];
-            for (x, y) in &samples {
-                let mu = dot(&beta, x).exp();
-                for i in 0..3 {
-                    grad[i] += (y - mu) * x[i];
-                    for j in 0..3 {
-                        info[i][j] += mu * x[i] * x[j];
-                    }
-                }
-            }
-            let Some(step) = solve(info, grad) else {
-                break;
-            };
-            let next = [0, 1, 2].map(|i| beta[i] + step[i]);
-            if next.iter().any(|v| !v.is_finite()) {
-                break;
-            }
-            beta = next;
-            if step.iter().all(|s| s.abs() < 1e-12) {
-                break;
-            }
-        }
-    }
+    let beta = poisson(&samples);
     let dispersion = dispersed
         .then(|| {
             let (mut num, mut den) = (0.0, 0.0);
-            for (x, y) in &samples {
+            for (x, y, _) in &samples {
                 let mu = dot(&beta, x).exp();
                 num += mu * mu;
                 den += (y - mu).powi(2) - mu;
@@ -355,12 +327,181 @@ fn count_fit(
         })
         .flatten();
     CountFit {
-        base: beta[0],
-        home: beta[1],
-        strength: beta[2],
+        coefficients: beta,
         dispersion,
         minute_shares: bin_shares(rows, kind),
     }
+}
+
+/// One foul share's fit: the Poisson likelihood of the outcome's count with the fouls it is a
+/// share of as exposure, on the share terms of the side that fouls. `outcome` and `exposure`
+/// take the match's counts and the fouling side.
+fn share_fit(
+    rows: &[Row],
+    outcome: &dyn Fn(&[Counts; 2], usize) -> u32,
+    exposure: &dyn Fn(&[Counts; 2], usize) -> u32,
+) -> ShareFit {
+    let samples: Vec<([f64; SHARE_TERMS], f64, f64)> = rows
+        .iter()
+        .flat_map(|r| {
+            (0..2).map(move |side| {
+                (
+                    share_terms(&r.kick_off, side),
+                    f64::from(outcome(&r.tally.counts, side)),
+                    f64::from(exposure(&r.tally.counts, side)),
+                )
+            })
+        })
+        .collect();
+    ShareFit {
+        coefficients: poisson(&samples),
+    }
+}
+
+/// The ridge on every coefficient but the intercept: it keeps a fit on a few matches finite
+/// and moves a fit on thousands by far less than its error.
+const RIDGE: f64 = 1e-3;
+
+/// The coefficients of a log-linear Poisson model of `(terms, count, exposure)` samples, by
+/// Newton steps on the likelihood with a small ridge; the first term is the intercept.
+/// Samples with no exposure carry no information and are skipped.
+fn poisson<const N: usize>(samples: &[([f64; N], f64, f64)]) -> [f64; N] {
+    let samples: Vec<&([f64; N], f64, f64)> = samples.iter().filter(|s| s.2 > 0.0).collect();
+    let total: f64 = samples.iter().map(|s| s.1).sum();
+    let exposure: f64 = samples.iter().map(|s| s.2).sum();
+    let mut beta = [0.0; N];
+    beta[0] = (total / exposure.max(1.0)).max(1e-6).ln();
+    if total <= 0.0 {
+        return beta;
+    }
+    for _ in 0..100 {
+        let mut grad = [0.0; N];
+        let mut info = [[0.0; N]; N];
+        for (x, y, e) in &samples {
+            let mu = e * dot(&beta, x).exp();
+            for i in 0..N {
+                grad[i] += (y - mu) * x[i];
+                for j in 0..N {
+                    info[i][j] += mu * x[i] * x[j];
+                }
+            }
+        }
+        for i in 1..N {
+            grad[i] -= RIDGE * beta[i];
+            info[i][i] += RIDGE;
+        }
+        let Some(step) = solve(info, grad) else {
+            break;
+        };
+        let next: [f64; N] = std::array::from_fn(|i| beta[i] + step[i]);
+        if next.iter().any(|v| !v.is_finite()) {
+            break;
+        }
+        beta = next;
+        if step.iter().all(|s| s.abs() < 1e-12) {
+            break;
+        }
+    }
+    beta
+}
+
+/// The substitution fit: Newton steps on the likelihood of every side's count of
+/// substitutions, those an injury forced among them, under the tilted table of
+/// [`SubstitutionFit`]. The
+/// parameters are the weights of counts 1 to `limit`, then `own` and `other`.
+fn substitution_fit(rows: &[Row], limit: usize) -> SubstitutionFit {
+    let samples: Vec<([f64; 2], usize)> = rows
+        .iter()
+        .flat_map(|r| {
+            (0..2).map(move |side| {
+                let n = r.tally.counts[side].substitutions as usize;
+                (strengths(&r.kick_off, side), n.min(limit))
+            })
+        })
+        .collect();
+    let size = limit + 2;
+    let mut theta = vec![0.0; size];
+    let fit_of = |theta: &[f64]| SubstitutionFit {
+        weights: std::iter::once(0.0)
+            .chain(theta[..limit].iter().copied())
+            .collect(),
+        own: theta[limit],
+        other: theta[limit + 1],
+    };
+    // The statistic of count `k` for a side at strengths `x`: count k's indicator (none for
+    // count 0), then `k × x`.
+    let stat = |k: usize, x: &[f64; 2]| -> Vec<f64> {
+        let mut u = vec![0.0; size];
+        if k > 0 {
+            u[k - 1] = 1.0;
+        }
+        u[limit] = k as f64 * x[0];
+        u[limit + 1] = k as f64 * x[1];
+        u
+    };
+    for _ in 0..100 {
+        let current = fit_of(&theta);
+        let mut grad = vec![0.0; size];
+        let mut info = vec![vec![0.0; size]; size];
+        for (x, n) in &samples {
+            let p = current.shares_at(*x);
+            let stats: Vec<Vec<f64>> = (0..=limit).map(|k| stat(k, x)).collect();
+            let mean: Vec<f64> = (0..size)
+                .map(|i| (0..=limit).map(|k| p[k] * stats[k][i]).sum())
+                .collect();
+            for i in 0..size {
+                grad[i] += stats[*n][i] - mean[i];
+                for j in 0..size {
+                    let second: f64 = (0..=limit).map(|k| p[k] * stats[k][i] * stats[k][j]).sum();
+                    info[i][j] += second - mean[i] * mean[j];
+                }
+            }
+        }
+        for i in 0..size {
+            grad[i] -= RIDGE * theta[i];
+            info[i][i] += RIDGE;
+        }
+        let Some(step) = solve_dyn(info, grad) else {
+            break;
+        };
+        if step.iter().any(|v| !v.is_finite()) {
+            break;
+        }
+        for (t, s) in theta.iter_mut().zip(&step) {
+            *t += s;
+        }
+        if step.iter().all(|s| s.abs() < 1e-10) {
+            break;
+        }
+    }
+    fit_of(&theta)
+}
+
+/// Solves `a x = b` for a system whose size is known only at run time.
+fn solve_dyn(mut a: Vec<Vec<f64>>, mut b: Vec<f64>) -> Option<Vec<f64>> {
+    let n = b.len();
+    for col in 0..n {
+        let pivot = (col..n).max_by(|&i, &j| a[i][col].abs().total_cmp(&a[j][col].abs()))?;
+        if a[pivot][col].abs() < 1e-12 {
+            return None;
+        }
+        a.swap(col, pivot);
+        b.swap(col, pivot);
+        for row in col + 1..n {
+            let f = a[row][col] / a[col][col];
+            let pivot_row = a[col].clone();
+            for (cell, p) in a[row].iter_mut().zip(pivot_row).skip(col) {
+                *cell -= f * p;
+            }
+            b[row] -= f * b[col];
+        }
+    }
+    let mut x = vec![0.0; n];
+    for row in (0..n).rev() {
+        let s: f64 = (row + 1..n).map(|k| a[row][k] * x[k]).sum();
+        x[row] = (b[row] - s) / a[row][row];
+    }
+    Some(x)
 }
 
 #[cfg(test)]
@@ -436,15 +577,17 @@ mod tests {
         assert!(got.minute_shares[89] > got.minute_shares[0]);
     }
 
-    /// 20 000 fast matches drawn from known event rates across strengths: the event fit
-    /// recovers every count's three terms and every foul share within 0.05.
+    /// 20 000 fast matches drawn from known event rates, each side's strength from 35 to 65
+    /// on its own: the event fit recovers every count's seven coefficients within 0.06, the
+    /// foul shares' coefficients within 0.06 (0.12 for the rare penalty and red, 0.3 for the
+    /// rarer second yellow), and the substitution tilt within 0.12.
     #[test]
     fn the_event_fit_recovers_known_rates() {
         let mut truth = FastFit {
             params: FastParams {
                 base: 0.1,
                 home: 0.0,
-                attack: 1.0,
+                attack: 0.3,
                 curve: 0.0,
                 defence: 0.0,
                 dispersion: 5.0,
@@ -455,17 +598,27 @@ mod tests {
             events: EventFit::plain(FitRules::standard()),
         };
         let e = &mut truth.events;
-        e.fouls.home = -0.08;
-        e.fouls.strength = -0.3;
-        e.corners.strength = 0.25;
-        e.goal_kicks.strength = -0.4;
-        e.throw_ins.home = 0.05;
-        e.injuries.base = 0.4f64.ln();
-        e.offsides.strength = 0.2;
+        // The terms: 1, home, own, other, own², other², own × other.
+        e.fouls.coefficients = [2.0, -0.08, 0.07, 0.7, 0.0, -0.2, 0.0];
+        e.corners.coefficients = [0.8, 0.0, 1.1, 0.2, -0.4, 0.0, -0.3];
+        e.goal_kicks.coefficients = [2.2, 0.0, 0.0, 1.2, 0.0, -0.5, -0.2];
+        e.throw_ins.coefficients = [2.3, 0.05, 0.38, -0.8, -0.1, 0.4, 0.4];
+        e.offsides.coefficients = [-0.5, 0.1, 1.0, -0.7, 0.3, -0.5, -0.5];
+        e.injuries.coefficients = [0.1f64.ln(), 0.0, 0.2, -0.1, 0.0, 0.0, 0.0];
+        // The share terms of the side that fouls: 1, home, own, other.
+        e.advantage.coefficients = [0.35f64.ln(), 0.0, 0.1, -0.2];
+        e.penalty.coefficients = [0.02f64.ln(), 0.0, 0.0, 0.7];
+        e.yellow.coefficients = [0.13f64.ln(), 0.0, 0.15, 0.0];
+        e.red.coefficients = [0.015f64.ln(), 0.0, 0.1, 0.3];
+        e.substitutions = SubstitutionFit {
+            weights: vec![0.0, 1.0, 2.0, 3.0, 3.5, 3.0],
+            own: -0.9,
+            other: 0.05,
+        };
         let rows: Vec<Row> = (0..20_000u64)
             .map(|i| {
-                let gap = (i % 17) as f64 - 8.0;
-                let kick_off = KickOff::even([55.0 + gap, 55.0 - gap]);
+                let level = |n: u64| 35.0 + (n % 31) as f64;
+                let kick_off = KickOff::even([level(i), level(i / 31)]);
                 let m = FittedScoresV1.play(&truth, &kick_off, i).unwrap();
                 Row {
                     pairing: 0,
@@ -479,21 +632,33 @@ mod tests {
         let got = event_fit(&rows, FitRules::standard());
         let t = &truth.events;
         for ((name, a), (_, b)) in t.counts().into_iter().zip(got.counts()) {
-            for (term, x, y) in [
-                ("base", a.base, b.base),
-                ("home", a.home, b.home),
-                ("strength", a.strength, b.strength),
-            ] {
-                assert!((x - y).abs() < 0.05, "{name} {term}: truth {x}, fit {y}");
+            for (term, (x, y)) in a.coefficients.iter().zip(&b.coefficients).enumerate() {
+                assert!(
+                    (x - y).abs() < 0.06,
+                    "{name} term {term}: truth {x}, fit {y}"
+                );
             }
         }
-        for (name, x, y) in [
-            ("advantage", t.advantage, got.advantage),
-            ("penalty", t.penalty, got.penalty),
-            ("yellow", t.yellow, got.yellow),
-            ("red", t.red, got.red),
+        for (name, a, b, within) in [
+            ("advantage", &t.advantage, &got.advantage, 0.06),
+            ("penalty", &t.penalty, &got.penalty, 0.12),
+            ("yellow", &t.yellow, &got.yellow, 0.06),
+            ("red", &t.red, &got.red, 0.12),
+            ("second_yellow", &t.second_yellow, &got.second_yellow, 0.3),
         ] {
-            assert!((x - y).abs() < 0.05, "{name}: truth {x}, fit {y}");
+            for (term, (x, y)) in a.coefficients.iter().zip(&b.coefficients).enumerate() {
+                assert!(
+                    (x - y).abs() < within,
+                    "{name} term {term}: truth {x}, fit {y}"
+                );
+            }
+        }
+        let (a, b) = (&t.substitutions, &got.substitutions);
+        for (term, x, y) in [("own", a.own, b.own), ("other", a.other, b.other)] {
+            assert!(
+                (x - y).abs() < 0.12,
+                "substitutions {term}: truth {x}, fit {y}"
+            );
         }
         assert!(got.check().is_ok());
     }

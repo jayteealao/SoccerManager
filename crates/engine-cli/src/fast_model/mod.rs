@@ -235,7 +235,10 @@ fn fit_action(
         ..fit_spec
     };
     let fit_rows = batch::play(&content, &fit_spec, jobs)?;
-    let fitted = fit::fit(&fit_rows, FitRules::of(&content.rules));
+    let fitted = fit::fit(
+        &fit_rows,
+        FitRules::of(&content.rules, &content.tuning.engine),
+    );
     let check_rows = batch::play(&content, &check_spec, jobs)?;
     let model = fast_model::resolve(&content.modules);
     let fast = check::play_fast(model, &fitted, &check_rows, opts.draws, CHECK_SEED)?;

@@ -558,7 +558,10 @@ mod tests {
         bad.params.dispersion = 0.0;
         assert!(FittedScoresV1.play(&bad, &ko, 1).is_err());
         let mut bad = fit();
-        bad.events.yellow = 1.5;
+        bad.events.yellow.coefficients[2] = f64::NAN;
+        assert!(FittedScoresV1.play(&bad, &ko, 1).is_err());
+        let mut bad = fit();
+        bad.events.substitutions.weights[0] = 1.0;
         assert!(FittedScoresV1.play(&bad, &ko, 1).is_err());
         let mut bad = fit();
         bad.events.fouls.minute_shares.pop();

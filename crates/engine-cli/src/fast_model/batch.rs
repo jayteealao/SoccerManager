@@ -13,6 +13,7 @@ use engine::data::TeamFile;
 use engine::modules::fast_events::{FIRST_ADDED, SECOND_ADDED};
 use engine::modules::fast_model::{self, KickOff, MINUTES};
 use engine::record::NullSink;
+use engine::team::PLAYERS_PER_TEAM;
 use engine::{
     Card, Content, EngineEvent, EngineEventKind, MatchConfig, Simulation, StreamRules, Validator,
 };
@@ -70,6 +71,10 @@ pub struct Counts {
     /// Yellow cards, a second yellow included, and straight reds.
     pub yellow: u32,
     pub red: u32,
+    /// Second yellows, and the yellow cards shown while a player of the side on the pitch
+    /// was already booked.
+    pub second_yellow: u32,
+    pub booked_cards: u32,
     /// Restarts the side took.
     pub corners: u32,
     pub throw_ins: u32,
@@ -77,6 +82,8 @@ pub struct Counts {
     pub free_kicks: u32,
     pub penalties: u32,
     pub injuries: u32,
+    /// Injuries that stopped play: those with a restart spot.
+    pub stopping_injuries: u32,
     /// Substitutions, and those that replaced a player injured on that tick.
     pub substitutions: u32,
     pub injury_substitutions: u32,
@@ -102,6 +109,8 @@ pub struct EventTally {
     pub counts: [Counts; 2],
     pub sent_off: bool,
     pub added_s: [u32; 2],
+    /// Per half, the goals scored in its added time.
+    pub added_goals: [u32; 2],
     pub bins: Vec<(Timed, u8)>,
 }
 
@@ -129,10 +138,15 @@ pub fn tally(events: &[EngineEvent]) -> EventTally {
         };
         b as u8
     };
+    // The booked players on the pitch, by player index.
+    let mut booked = [false; 2 * PLAYERS_PER_TEAM];
     for e in events {
         match e.kind {
             K::HalfTime => out.added_s[0] = e.added_time_s.unwrap_or(0),
             K::FullTime => out.added_s[1] = e.added_time_s.unwrap_or(0),
+            K::Goal if e.minute_added.is_some() && e.shootout_round.is_none() => {
+                out.added_goals[usize::from(e.tick >= half)] += 1;
+            }
             _ => {}
         }
         let Some(team) = e.team.filter(|t| *t < 2) else {
@@ -150,15 +164,32 @@ pub fn tally(events: &[EngineEvent]) -> EventTally {
                 Some(Timed::Offside)
             }
             K::Card => {
+                let side = team * PLAYERS_PER_TEAM..(team + 1) * PLAYERS_PER_TEAM;
+                let any_booked = booked[side].iter().any(|b| *b);
+                let player = e.player.filter(|p| *p < booked.len());
                 match e.card {
-                    Some(Card::Yellow) => c.yellow += 1,
+                    Some(Card::Yellow) => {
+                        c.yellow += 1;
+                        c.booked_cards += u32::from(any_booked);
+                        if let Some(p) = player {
+                            booked[p] = true;
+                        }
+                    }
                     Some(Card::SecondYellow) => {
                         c.yellow += 1;
+                        c.second_yellow += 1;
+                        c.booked_cards += u32::from(any_booked);
                         out.sent_off = true;
+                        if let Some(p) = player {
+                            booked[p] = false;
+                        }
                     }
                     Some(Card::Red) => {
                         c.red += 1;
                         out.sent_off = true;
+                        if let Some(p) = player {
+                            booked[p] = false;
+                        }
                     }
                     None => {}
                 }
@@ -186,10 +217,15 @@ pub fn tally(events: &[EngineEvent]) -> EventTally {
             }
             K::Injury => {
                 c.injuries += 1;
+                c.stopping_injuries += u32::from(e.spot.is_some());
                 Some(Timed::Injury)
             }
             K::Substitution => {
                 c.substitutions += 1;
+                // The player who comes on in the slot is not booked.
+                if let Some(p) = e.player.filter(|p| *p < booked.len()) {
+                    booked[p] = false;
+                }
                 let forced = events.iter().any(|i| {
                     i.kind == K::Injury
                         && i.tick == e.tick

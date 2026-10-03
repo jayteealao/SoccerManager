@@ -409,6 +409,7 @@ mod tests {
             counts: [c, c],
             sent_off: false,
             added_s: [90, 150],
+            added_goals: [0, 0],
             bins: Vec::new(),
         }
     }
