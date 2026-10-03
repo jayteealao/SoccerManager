@@ -26,6 +26,14 @@ pub fn soft_combine(factors: [f64; FAMILY_COUNT]) -> f64 {
             na += 1;
         }
     }
+    // One factor or none: nothing to sort or weigh, and `1.0 * f == f`, so the factor alone
+    // is the combine.
+    match (nb, na) {
+        (0, 0) => return 1.0,
+        (1, 0) => return below[0],
+        (0, 1) => return above[0],
+        _ => {}
+    }
     let (below, above) = (&mut below[..nb], &mut above[..na]);
     below.sort_unstable_by(|a, b| a.total_cmp(b));
     above.sort_unstable_by(|a, b| b.total_cmp(a));

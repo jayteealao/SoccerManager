@@ -41,30 +41,87 @@ pub fn separation(players: &[Player], i: usize, t: &Tuning) -> DVec2 {
         if j == i || !other.active() {
             continue;
         }
-        let d = me - other.pos;
-        if d.length_squared() >= skip {
-            continue;
-        }
-        let dist = d.length();
-        if dist < t.separation_radius {
-            let away = if dist > 1e-6 {
-                d / dist
-            } else {
-                DVec2::new(1.0, 0.0)
-            };
-            push += away * (1.0 - dist / t.separation_radius);
+        if let Some(away) = pair_push(me - other.pos, skip, t) {
+            push += away;
         }
     }
     push * t.separation_strength
 }
 
+/// The push on a player whose offset from another player is `d`, before the separation
+/// strength; `None` outside the separation radius. `skip` is `sq_skip_limit` of the radius.
+#[inline(always)]
+fn pair_push(d: DVec2, skip: f64, t: &Tuning) -> Option<DVec2> {
+    if d.length_squared() >= skip {
+        return None;
+    }
+    let dist = d.length();
+    if dist < t.separation_radius {
+        let away = if dist > 1e-6 {
+            d / dist
+        } else {
+            DVec2::new(1.0, 0.0)
+        };
+        Some(away * (1.0 - dist / t.separation_radius))
+    } else {
+        None
+    }
+}
+
+/// [`separation`] of every player on the pitch, in roster order (zero for a player off it),
+/// with each pair looked at once. The offset of `j` from `i` is the exact negation of the
+/// offset of `i` from `j`, so their squared lengths and lengths are the same and both are
+/// inside the radius or neither is; a pair inside it runs [`pair_push`] once from each side.
+/// Pairs go in index order, so each player adds its pushes in roster order, as
+/// [`separation`] does: every lower partner while that partner's row runs, then every higher
+/// one in its own row. The same additions in the same order give the same push bit for bit.
+fn separations(players: &[Player], t: &Tuning) -> [DVec2; ROSTER] {
+    let n = players.len().min(ROSTER);
+    let skip = sq_skip_limit(t.separation_radius);
+    let mut pos = [DVec2::ZERO; ROSTER];
+    let mut on = [false; ROSTER];
+    for (k, p) in players.iter().take(n).enumerate() {
+        pos[k] = p.pos;
+        on[k] = p.active();
+    }
+    let mut push = [DVec2::ZERO; ROSTER];
+    for i in 0..n {
+        if !on[i] {
+            continue;
+        }
+        for j in (i + 1)..n {
+            if !on[j] {
+                continue;
+            }
+            let d = pos[i] - pos[j];
+            if let Some(away) = pair_push(d, skip, t) {
+                push[i] += away;
+                if let Some(back) = pair_push(-d, skip, t) {
+                    push[j] += back;
+                }
+            }
+        }
+    }
+    for (k, p) in push.iter_mut().enumerate().take(n) {
+        if on[k] {
+            *p *= t.separation_strength;
+        }
+    }
+    push
+}
+
 /// The velocity of player `i` after one tick of steering toward its target.
 pub fn next_velocity(players: &[Player], i: usize, t: &Tuning) -> DVec2 {
-    let p = &players[i];
+    steer(&players[i], separation(players, i, t), t)
+}
+
+/// The velocity of `p` after one tick of arriving at its target plus the separation push
+/// `push`, within its acceleration and speed.
+#[inline(always)]
+fn steer(p: &Player, push: DVec2, t: &Tuning) -> DVec2 {
     let max_speed = p.max_speed();
     let max_accel = p.max_accel();
-    let desired =
-        arrive(p.pos, p.target, max_speed, max_accel, t.arrive_radius) + separation(players, i, t);
+    let desired = arrive(p.pos, p.target, max_speed, max_accel, t.arrive_radius) + push;
     let change = clamp_len(desired - p.vel, max_accel * t.dt);
     clamp_len(p.vel + change, max_speed)
 }
@@ -106,6 +163,33 @@ pub struct SteeringV1;
 impl SteeringModule for SteeringV1 {
     fn next_velocity(&self, view: &MatchView<'_>, i: usize) -> DVec2 {
         next_velocity(view.players(), i, view.tuning())
+    }
+
+    /// [`next_velocity`] for every player, with every separation push from
+    /// [`separations`], which looks at each pair once. Same arithmetic, same order, so the
+    /// same velocities bit for bit.
+    fn next_velocities(&self, view: &MatchView<'_>, out: &mut Vec<DVec2>) {
+        let players = view.players();
+        let t = view.tuning();
+        out.clear();
+        if players.len() > ROSTER {
+            out.extend((0..players.len()).map(|i| {
+                if players[i].active() {
+                    next_velocity(players, i, t)
+                } else {
+                    DVec2::ZERO
+                }
+            }));
+            return;
+        }
+        let push = separations(players, t);
+        out.extend(players.iter().zip(push).map(|(p, push)| {
+            if p.active() {
+                steer(p, push, t)
+            } else {
+                DVec2::ZERO
+            }
+        }));
     }
 
     /// [`separated`]: the overlap pass on a copy of the positions, made at the first overlap.
@@ -439,5 +523,31 @@ mod tests {
             })
             .collect();
         assert!(separated(&apart, &t, &Pitch::DEFAULT).is_none());
+    }
+
+    #[test]
+    fn separations_match_each_player_separation_bit_for_bit() {
+        let t = Tuning::default();
+        let r = t.separation_radius;
+        // A crowd within the radius of each other, two players on the same spot, players
+        // mirrored on an axis (offsets with a zero component), and one player off the pitch.
+        let mut crowd: Vec<Player> = (0..ROSTER)
+            .map(|i| {
+                let at = DVec2::new((i % 6) as f64 * r * 0.3, (i / 6) as f64 * r * 0.35 - 0.7);
+                player(i, at, at)
+            })
+            .collect();
+        crowd[3].pos = crowd[2].pos;
+        crowd[10].pos = DVec2::new(crowd[9].pos.x, -crowd[9].pos.y);
+        crowd[7].status = crate::player::Status::SentOff;
+        let push = separations(&crowd, &t);
+        for (i, p) in crowd.iter().enumerate() {
+            let expected = if p.active() {
+                separation(&crowd, i, &t)
+            } else {
+                DVec2::ZERO
+            };
+            assert_eq!(bits(push[i]), bits(expected), "player {i}");
+        }
     }
 }
