@@ -15,7 +15,7 @@ Football-management players who already know games such as Football Manager. Eac
 - **Broadcast** — energy lives in the score bug, the goal banner, and the team colors. The panels do not compete with them.
 
 ## Tone
-The match is live and the player is in charge. In the first five seconds the pitch moves, the clock runs, and the tactics control is visible without scrolling. The design feels engaged and mildly tense, serious about the numbers and warm about the game. It must not feel like an arcade game, a cartoon, a television sponsor board, or a spreadsheet with a pitch attached.
+The match is live and the player is in charge. In the first five seconds the pitch moves, the clock runs, and the tactics control is visible without scrolling. The design feels engaged and mildly tense, serious about the numbers and warm about the game. It must not feel like an arcade game, a cartoon, or a spreadsheet with a pitch attached.
 
 ## Positive References
 - Football Manager 2D classic view — top-down markers on a plain pitch; the view the player already reads.
@@ -23,8 +23,6 @@ The match is live and the player is in charge. In the first five seconds the pit
 - Telemetry and trading-terminal dashboards — dense tabular figures, sober panel chrome, strong number contrast.
 
 ## Anti-references
-- Football Manager 3D view — cluttered overlays hide the play.
-- Television sponsor graphics — logos and clutter compete with the score.
 - Arcade and cartoon football games — styling that undercuts a serious simulation.
 
 ## Strategic Principles

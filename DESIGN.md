@@ -49,7 +49,7 @@ Strategy: the dark Broadcast Blue look, chosen as the main look on 2026-09-26 (b
 - Saira Semi Condensed 500 to 800 for display: the header band, section headers, the score bug, the goal banner, labels in capitals, and attribute numbers. Saira 400 to 700 for text and numbers. Both are under the SIL Open Font License and ship as `woff2` with their licence texts from the skin's own `fonts/` folder (`viewer/src/skins/broadcast-blue/fonts/`); no font service is contacted. The sketch loads them from a font service only because it is a sketch.
 - Fallbacks: `'Barlow Semi Condensed', 'Arial Narrow', system-ui, sans-serif` for display, and `system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif` for text.
 - Numerals: `font-variant-numeric: tabular-nums` for the clock, the score, tables, attributes, and statistics.
-- Scale: fixed rem scale, ratio 1.125 to 1.2. Body text 16 px minimum, line height 1.5 or more. Control labels 14 px at weight 600. Numbers 14 px at weight 500. Every text size must pass contrast on its dark ground before it ships.
+- Scale: the Touchline Full Game sketch's scale, adopted on 2026-09-29. Base text 11 px/1.35; tables and section labels 10.5 px; sublabels 9.5 px; strip facts 12 px at weight 600; header name 14.5 px display 700 in capitals; score 28 to 30 px display 800. Every text size must pass contrast on its dark ground before it ships.
 - The interim light test skin keeps Barlow Condensed and IBM Plex Sans in `viewer/src/skins/interim-light/fonts/`.
 
 ## Elevation
@@ -57,7 +57,8 @@ Strategy: the dark Broadcast Blue look, chosen as the main look on 2026-09-26 (b
 - Concentric radius: outer radius equals inner radius plus padding.
 
 ## Components
-- No component library. Plain HTML, CSS, and JavaScript.
+- Every screen ports its closest screen from the Touchline Full Game sketch (https://claude.ai/artifact/5shzExrW9n9qWAVcPxD3Kr): the 40 px icon rail, the 52 px slanted navy header with the date block and the cyan action block, the sub-navigation tabs, the navy info strip, and sections split by 1 px rules instead of cards. Parts not yet built stay as marked stubs.
+- No component library.
 - Component of record: `match-control`, the button primitive for play, pause, speed, confirm substitution, and kick-off.
   - Sizes: sm 28 px, md 36 px, lg 44 px, xl 52 px (height).
   - States: default, hover, pressed, focus, disabled.
