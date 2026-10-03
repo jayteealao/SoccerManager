@@ -5,11 +5,14 @@ import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
 import {
+  cannotOpenLine,
   checkLines,
   closeLine,
   facts,
   lineForText,
   lineForTick,
+  noAnswerLine,
+  noMatchLine,
   sampled,
   socketAddress,
 } from '../src/lib/handshake.js';
@@ -40,6 +43,28 @@ test('the socket address carries the port and the protocol version', () => {
     socketAddress({ 'socket.port': 49152, 'protocol.version': 4 }),
     'ws://127.0.0.1:49152/?v=4'
   );
+});
+
+test('a status with no socket port gives no address', () => {
+  for (const port of [null, undefined, 0, -1, 1.5, '9001']) {
+    assert.equal(socketAddress({ 'socket.port': port, 'protocol.version': 3 }), null, `port ${port}`);
+  }
+  assert.equal(socketAddress({ 'protocol.version': 3 }), null, 'no port key');
+});
+
+test('the no-match, no-answer and cannot-open lines say why and what to do, in the bad style', () => {
+  assert.deepEqual(noMatchLine(), {
+    text: 'no match is running, so the engine has no socket open. Start a match, then press Run again.',
+    kind: 'bad',
+  });
+  assert.deepEqual(noAnswerLine(10), {
+    text: 'no answer from the socket after 10 s. The engine serves one page at a time: close the match page, then press Run again.',
+    kind: 'bad',
+  });
+  assert.deepEqual(cannotOpenLine('ws://127.0.0.1:1/?v=3', 'refused'), {
+    text: 'cannot open ws://127.0.0.1:1/?v=3: refused',
+    kind: 'bad',
+  });
 });
 
 test('the close line names the code, the clean flag and the count, and each fact says its state in words', () => {

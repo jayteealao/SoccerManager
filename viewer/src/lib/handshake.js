@@ -8,10 +8,19 @@
 export const FIRST_FRAMES = 3;
 export const FRAME_EVERY = 500;
 
+/// How long the page waits for the socket to open. A free engine accepts at once; an engine
+/// that already serves the match page leaves a second page's connection waiting unanswered.
+export const ANSWER_WAIT_MS = 10_000;
+
 /// The socket address the engine status names: the loopback socket port and the protocol
-/// version as the query.
+/// version as the query. Null when the status names no port: before kick-off and after full
+/// time the launcher has no socket open.
 export function socketAddress(status) {
-  return `ws://127.0.0.1:${status['socket.port']}/?v=${status['protocol.version']}`;
+  const port = status['socket.port'];
+  if (!Number.isInteger(port) || port <= 0) {
+    return null;
+  }
+  return `ws://127.0.0.1:${port}/?v=${status['protocol.version']}`;
 }
 
 /// The page's own checks, as the former page printed them: the origin, whether the page is
@@ -67,6 +76,25 @@ export function closeLine(code, clean, ticks) {
 
 export function errorLine() {
   return { text: 'socket error', kind: 'bad' };
+}
+
+export function noMatchLine() {
+  return {
+    text: 'no match is running, so the engine has no socket open. Start a match, then press Run again.',
+    kind: 'bad',
+  };
+}
+
+export function noAnswerLine(seconds) {
+  return {
+    text: `no answer from the socket after ${seconds} s. The engine serves one page at a time: close the match page, then press Run again.`,
+    kind: 'bad',
+  };
+}
+
+/// The browser refused to make the socket: the reason is its own message, printed as text.
+export function cannotOpenLine(address, reason) {
+  return { text: `cannot open ${address}: ${reason}`, kind: 'bad' };
 }
 
 /// The fact strip: each fact carries a word, never a colour alone. `socketBad` marks a

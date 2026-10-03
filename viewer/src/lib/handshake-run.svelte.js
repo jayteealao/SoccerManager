@@ -1,8 +1,12 @@
 // The handshake page's one run: the page's checks, the engine status, the socket, and the
 // log lines and facts they make. RUN AGAIN closes the socket, clears the log and runs the
-// check again. The browser's fetch, socket and scope are passed in, so a test can drive it.
+// check again. Every run ends: with no socket port, with a socket the browser refuses, or
+// with no answer within ANSWER_WAIT_MS, the page says why and stops. The browser's fetch,
+// socket, timers and scope are passed in, so a test can drive it.
 
 import {
+  ANSWER_WAIT_MS,
+  cannotOpenLine,
   checkLines,
   checks,
   closeLine,
@@ -10,6 +14,8 @@ import {
   facts,
   lineForText,
   lineForTick,
+  noAnswerLine,
+  noMatchLine,
   openingLine,
   sampled,
   socketAddress,
@@ -22,12 +28,30 @@ export class HandshakeRun {
   socketBad = $state(false);
   running = $state(false);
 
-  constructor({ scope = globalThis, fetcher = null, Socket = null } = {}) {
+  constructor({ scope = globalThis, fetcher = null, Socket = null, setTimer = null, clearTimer = null } = {}) {
     this.scope = scope;
     this.fetcher = fetcher ?? ((url) => scope.fetch(url));
     this.Socket = Socket ?? scope.WebSocket;
+    this.setTimer = setTimer ?? ((fn, ms) => scope.setTimeout(fn, ms));
+    this.clearTimer = clearTimer ?? ((id) => scope.clearTimeout(id));
     this.socket = null;
+    this.timer = null;
     this.checks = checks(scope);
+  }
+
+  /// Ends the run with a bad line and a bad socket word.
+  fail(line, word) {
+    this.say(line);
+    this.socketWord = word;
+    this.socketBad = true;
+    this.running = false;
+  }
+
+  stopTimer() {
+    if (this.timer !== null) {
+      this.clearTimer(this.timer);
+      this.timer = null;
+    }
   }
 
   /// The fact strip: isolation, the memory gauge, the tick frames counted and the socket.
@@ -69,12 +93,31 @@ export class HandshakeRun {
       return;
     }
     const address = socketAddress(status);
+    if (address === null) {
+      this.fail(noMatchLine(), 'No match');
+      return;
+    }
     this.say(openingLine(address));
-    const socket = new this.Socket(address);
+    let socket;
+    try {
+      socket = new this.Socket(address);
+    } catch (error) {
+      this.fail(cannotOpenLine(address, error?.message ?? String(error)), 'Error');
+      return;
+    }
     socket.binaryType = 'arraybuffer';
     this.socket = socket;
+    this.timer = this.setTimer(() => {
+      this.timer = null;
+      if (this.socket === socket) {
+        this.socket = null;
+        socket.close();
+        this.fail(noAnswerLine(ANSWER_WAIT_MS / 1000), 'No answer');
+      }
+    }, ANSWER_WAIT_MS);
     socket.addEventListener('open', () => {
       if (this.socket === socket) {
+        this.stopTimer();
         this.socketWord = 'Open';
       }
     });
@@ -93,6 +136,7 @@ export class HandshakeRun {
     });
     socket.addEventListener('error', () => {
       if (this.socket === socket) {
+        this.stopTimer();
         this.say(errorLine());
         this.socketWord = 'Error';
       }
@@ -101,6 +145,7 @@ export class HandshakeRun {
       if (this.socket !== socket) {
         return;
       }
+      this.stopTimer();
       const line = closeLine(event.code, event.wasClean, this.ticks);
       this.say(event.wasClean ? line : { ...line, kind: 'bad' });
       this.socketWord = `closed · ${event.code}`;
@@ -112,6 +157,7 @@ export class HandshakeRun {
 
   /// Closes the socket this run opened, if any, and forgets it: its late events print nothing.
   close() {
+    this.stopTimer();
     const socket = this.socket;
     this.socket = null;
     if (socket && socket.readyState !== 3) {
