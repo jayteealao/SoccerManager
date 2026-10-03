@@ -137,7 +137,7 @@ Only the central loop writes match state. The loop files are `sim.rs`, the `sim/
 
 ## Fast model
 
-`engine.fast-model` holds a results model fitted from full-engine results. Only the `engine-cli fast-model` command reaches it; no match that the engine plays or serves uses it. Its off version refuses to play. The fit file is `content/fast-model.json` (see [the data-file reference](data-files.md#fast-modeljson)).
+`engine.fast-model` holds a match model fitted from full-engine results: it gives a final score and an event stream that keeps the event-stream rules, with the players of both line-ups and benches. Only the `engine-cli fast-model` command reaches it; no match that the engine plays or serves uses it. Its off version refuses to play. The fit file is `content/fast-model.json` (see [the data-file reference](data-files.md#fast-modeljson)).
 
 A fit records the engine id of the golden results it came from. `engine-cli fast-model stale` exits with code 1 when that id differs from the current golden results:
 

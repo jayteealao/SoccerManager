@@ -23,7 +23,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
 | `realism-bands.json` | 2 | The accepted realism bands the calibration run checks: four from version 1 and eleven from real-match data. They are acceptance criteria, never tuning values |
-| `fast-model.json` | 1 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
+| `fast-model.json` | 2 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
 
 Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`.
 
@@ -264,15 +264,21 @@ The fit of the fast model, written by `engine-cli fast-model fit` (see [the comm
 
 | Field | Holds |
 |---|---|
-| `schema_version` | 1 |
+| `schema_version` | 2. A file of format 1 holds the score fit only; the command refuses it and names `engine-cli fast-model fit` |
 | `model` | The module the fit is for: `fitted-scores@1` |
 | `engine_id` | The engine id of the results the fit came from: `golden-<ledger index>-<build>-<digest>` |
 | `engine` | The id's parts: `id`, `ledger_index`, `build` and `digest` |
 | `fitted_by` | The `engine_version` and `build` of the program that fitted it |
 | `fit.params` | The eight parameters: `base`, `home`, `attack`, `curve`, `defence`, `dispersion` (the shape of the match factor both scores share), `rho` and `draw` |
 | `fit.minute_shares` | 90 shares, one per minute of regulation time, summing to 1 |
+| `fit.events.fouls`, `offsides`, `corners`, `throw_ins`, `goal_kicks`, `injuries` | One count each: the seven `coefficients` of the side's log mean over 1, the home flag, `o`, `t`, `o²`, `t²` and `o × t`, where `o` is the side's strength and `t` the other side's, each as (strength − 50) / 10; `dispersion` (the negative binomial's shape, or `null` for a Poisson count), and 92 `minute_shares` summing to 1, 45 per half and one for each half's added time |
+| `fit.events.advantage`, `penalty`, `yellow`, `red`, `second_yellow`, `injury_stoppage` | The four `coefficients` of each share's log over 1, the home flag, `o` and `t` of the side: the shares of fouls played on with advantage; of fouls not played on that give a penalty; of fouls booked; of fouls sent off straight; of yellow cards, while a player of the side is booked, that go to a booked player; and of injuries that stop play |
+| `fit.events.substitutions` | The count of a side's substitutions, those an injury forces among them: count `k`, from 0 to the rule pack's limit, has a share in proportion to `exp(weights[k] + k × (own × o + other × t))`; `weights[0]` is 0 |
+| `fit.events.substitution_minute_shares` | 92 shares for the substitutions no injury forces, as for a count |
+| `fit.events.added_goals` | Per half, the share of the goals in its last minute (44 or 89) that the full engine scored in added time |
+| `fit.events.rules` | The parts the fit keeps to: `substitutions` and `added_time`, as in the rule pack, and `booked_foul_factor`, the tuning's `foul_booked_factor` |
 | `batch` | The fit batch: `league_seed`, the strength `levels`, `matches_per_pairing`, `minutes` and the engine `seed` |
-| `check` | The check it passed: the engine `seed`, the fast-model `draws` per match, `z`, `share_floor`, `mean_floor`, the number of `figures`, how many `failed`, and `pass` |
+| `check` | The check it passed: the engine `seed`, the fast-model `draws` per match, `z` of the score figures, `event_z` of the event figures, `share_floor`, `mean_floor`, the number of `figures`, how many `failed`, and `pass` |
 
 CI fails when `engine_id` is not the id of `gate/golden.json`: a Rust test runs in every test job, and `engine-cli fast-model stale` runs in the gate job and before every release.
 
