@@ -24,12 +24,12 @@ These tests drive the match viewer in a real browser against the release engine.
 
    ```bash
    npm test                 # every test, headless
-   npm run test:viewer      # the viewer tests only
+   npm run test:viewer      # the viewer tests and every timing test
    npm run test:scenario    # the whole first match only, about 15 minutes
    npm run test:headed      # every test, in a visible window
    ```
 
-The suites run two tests at a time; each test has its own engine, port and data folder. Set `SM_E2E_WORKERS` to change the count; CI and the two single-project scripts run one. A test tagged `@timing` measures frame rate or playback speed, so it runs alone, after the others. A run narrowed to some files or tests also runs every timing test when the count is above one, so set `SM_E2E_WORKERS=1` for a narrowed run. The shell suite's preview server uses port 4180; set `SM_SHELL_PORT` to move it.
+The suites run two tests at a time; each test has its own engine, port and data folder. Set `SM_E2E_WORKERS` to change the count; CI runs one. A test tagged `@timing` measures frame rate or playback speed, so it is in the project `timing`, which runs on one worker after the others. The projects are the same whatever the count: `viewer` and `scenario` (in `playwright.config.mjs`) and `chromium` (in `match.config.mjs`) hold the tests without the tag, so pick `timing` as well to run a suite's timing tests, as the scripts above do. A run with `--project` runs one test at a time. A run narrowed to some files or tests (`-g`, a file name) also runs every timing test when the count is above one, so set `SM_E2E_WORKERS=1` for it. The shell suite's preview server uses port 4180; set `SM_SHELL_PORT` to move it.
 
 To run the tests in the installed Microsoft Edge instead of the bundled Chromium, set `PW_CHANNEL=msedge`.
 

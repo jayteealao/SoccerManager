@@ -10,8 +10,8 @@
   },
   "scripts": {
     "test": "playwright test",
-    "test:viewer": "playwright test --project=viewer",
-    "test:scenario": "playwright test --project=scenario",
+    "test:viewer": "playwright test --project=viewer --project=timing",
+    "test:scenario": "playwright test --project=scenario --project=timing first-match",
     "test:headed": "playwright test --headed"
   },
   "devDependencies": {

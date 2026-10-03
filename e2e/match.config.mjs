@@ -8,7 +8,7 @@
 // other systems, so this suite does not run in CI.
 import { defineConfig } from '@playwright/test';
 
-import { TIMING, timingProject, workerCount } from './support/workers.mjs';
+import { suiteProjects, workerCount } from './support/workers.mjs';
 
 const channel = process.env.PW_CHANNEL || undefined;
 const workers = workerCount();
@@ -32,9 +32,7 @@ export default defineConfig({
   expect: {
     toHaveScreenshot: { maxDiffPixelRatio: 0.01, threshold: 0.2, animations: 'disabled' },
   },
-  // With more than one worker, the timing tests run alone after the others.
-  projects:
-    workers > 1
-      ? [{ name: 'chromium', grepInvert: TIMING, teardown: 'timing' }, timingProject()]
-      : [{ name: 'chromium' }],
+  // With more than one worker, the timing tests run alone after the others (see
+  // support/workers.mjs).
+  projects: suiteProjects([{ name: 'chromium' }], workers),
 });

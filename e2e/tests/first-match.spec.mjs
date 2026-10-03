@@ -74,6 +74,8 @@ async function shot(page, testInfo, step) {
 }
 
 test('a manager plays a whole match, lineup to full-time report', { tag: '@timing' }, async ({ page }, testInfo) => {
+  // A 90-minute match at eight times speed still takes more than eleven minutes of wall time.
+  test.setTimeout(45 * 60_000);
   const [teamA, teamB] = generateLeague(2026);
   const engine = await startEngine({
     command: 'serve',

@@ -122,7 +122,7 @@ The browser suite in `e2e/` can drive the packaged program and its `web/` instea
 
 ```bash
 SM_INSTALL_UNDER_TEST=<folder> cargo test --release --locked -p engine-cli --test install_layout
-cd e2e && SM_E2E_INSTALL=<folder> npx playwright test --project=viewer
+cd e2e && SM_E2E_INSTALL=<folder> npx playwright test --project=viewer --project=timing
 ```
 
 The release workflow runs both against the Linux archive and the Windows staged folder before it drafts a release.
