@@ -113,6 +113,8 @@ async function expectFullTime(page, tick) {
   for (const name of LIVE_CONTROLS) {
     await expect(button(page, name), `no ${name} at full time`).toHaveCount(0);
   }
+  // The stage never scrolls sideways, whatever control was pressed on the way here.
+  expect(await hook(page, () => document.querySelector('.app').scrollLeft)).toBe(0);
 }
 
 /// Records every date word on show from now on: a page-side observer of the whole page that
