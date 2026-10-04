@@ -7,6 +7,17 @@
 //   - a font family name (in `font-family`, in the `font` shorthand, or as an SVG attribute);
 //   - `var(--ink-4)` anywhere but StubSection.svelte: that grey is for inactive stub text only.
 //
+// It also holds the window-step layout rules:
+//
+//   - a fluid font size: clamp(), min(), max(), a viewport unit or a container unit in
+//     `font-size` or in the `font` shorthand. Text steps only with the page's scale;
+//   - layout read in script (getBoundingClientRect, offsetWidth and offsetHeight, clientWidth
+//     and clientHeight, ResizeObserver, innerWidth and innerHeight, or a width or height read
+//     from getComputedStyle). Only the pitch measures its box; the exceptions are listed in
+//     LAYOUT_READS_ALLOWED;
+//   - an `@media` width or height other than the window steps: min-width 1024px, 1600px,
+//     1920px or 2560px, max-width 1023px and max-height 599px.
+//
 // Comments are not scanned: they describe values, they do not set them.
 //
 // Usage: node scripts/token-scan.mjs [file or folder ...]   (default: src)
@@ -63,6 +74,40 @@ const RULES = [
   },
 ];
 
+const FLUID_FONT =
+  /\bfont(?:-size)?\s*[:=][^;{}]*(?:\b(?:clamp|min|max)\(|\d(?:d|s|l)?v(?:w|h|i|b|min|max)\b|\dcq(?:w|h|i|b|min|max)\b)/i;
+
+const LAYOUT_READ =
+  /\b(getBoundingClientRect|offsetWidth|offsetHeight|clientWidth|clientHeight|ResizeObserver|innerWidth|innerHeight)\b|getComputedStyle\([^)]*\)\s*\.\s*(width|height)\b/g;
+
+/// The layout reads each file may make, by file name. The pitch sizes its canvas to its box;
+/// Root reads the window's size for the scale below 768 by 600; the test hooks report the
+/// pitch's box to the browser tests; the commentary reads its scroll position to follow it.
+const LAYOUT_READS_ALLOWED = {
+  'PitchCanvas.svelte': 'all',
+  'pitch.js': 'all',
+  'Root.svelte': ['innerWidth', 'innerHeight'],
+  'test-hooks.js': ['getBoundingClientRect'],
+  'feed.js': ['clientHeight'],
+};
+
+const STEP_WIDTHS = { 'min-width': [1024, 1600, 1920, 2560], 'max-width': [1023], 'max-height': [599] };
+
+/// The size features in one `@media` prelude that are not window steps.
+function offStepFeatures(prelude) {
+  const off = [];
+  for (const [, feature, value] of prelude.matchAll(/\(\s*((?:min-|max-)?(?:width|height))\s*:\s*([^)]*)\)/gi)) {
+    const px = /^(\d+)px$/.exec(value.trim());
+    if (!px || !(STEP_WIDTHS[feature.toLowerCase()] ?? []).includes(Number(px[1]))) {
+      off.push(`${feature}: ${value.trim()}`);
+    }
+  }
+  if (/\b(?:width|height)\s*[<>=]/i.test(prelude)) {
+    off.push('a range condition');
+  }
+  return off;
+}
+
 /// The text with every comment blanked out, line breaks kept so line numbers hold.
 export function stripComments(text) {
   const blank = (m) => m.replace(/[^\n]/g, ' ');
@@ -77,6 +122,7 @@ export function scanText(text, file) {
   const findings = [];
   const lines = stripComments(text).split('\n');
   const stubOnly = path.basename(file) !== 'StubSection.svelte';
+  const allowed = LAYOUT_READS_ALLOWED[path.basename(file)] ?? [];
   lines.forEach((line, i) => {
     const at = (what) => findings.push({ line: i + 1, what, text: line.trim() });
     for (const rule of RULES) {
@@ -95,6 +141,20 @@ export function scanText(text, file) {
     }
     if (stubOnly && /var\(\s*--ink-4\s*\)/.test(line)) {
       at('--ink-4 outside StubSection (it is for inactive stub text only)');
+    }
+    if (FLUID_FONT.test(line)) {
+      at('a fluid font size (text steps only with the scale)');
+    }
+    if (allowed !== 'all') {
+      for (const [m, name] of line.matchAll(LAYOUT_READ)) {
+        if (!allowed.includes(name ?? m)) {
+          at(`layout read in script (${name ?? 'getComputedStyle size'}); only the pitch measures its box`);
+        }
+      }
+    }
+    const media = /@media\b([^{]*)/i.exec(line);
+    for (const feature of media ? offStepFeatures(media[1]) : []) {
+      at(`an @media size that is not a window step (${feature})`);
     }
   });
   return findings;
@@ -137,6 +197,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   for (const f of findings) {
     console.error(`${f.file}:${f.line}: ${f.what}: ${f.text}`);
   }
-  console.log(`${findings.length} literal colour or font values outside the skins`);
+  console.log(`${findings.length} literal colour or font values or layout rule breaks outside the skins`);
   process.exit(findings.length === 0 ? 0 : 1);
 }

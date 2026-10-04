@@ -1,5 +1,6 @@
 // The two checks can fail: the token scan refuses a planted literal colour, a planted font
-// name and a planted --ink-4, and the contrast check refuses a planted low pair and a pair a
+// name and a planted --ink-4, and the three planted layout rule breaks (a fluid font size,
+// layout read in script and an @media width off the window steps); the contrast check refuses a planted low pair and a pair a
 // hair under 4.5:1 that a rounded comparison would pass.
 
 import assert from 'node:assert/strict';
@@ -29,6 +30,16 @@ test('the token scan names every planted literal and exits 1', () => {
 test('the token scan passes tokens and ignores a value named in a comment', () => {
   const out = run('token-scan.mjs', fixture('clean.svelte'));
   assert.equal(out.status, 0, out.stdout + out.stderr);
+});
+
+test('the scan names each planted layout rule break and exits 1', () => {
+  const out = run('token-scan.mjs', fixture('layout-planted.svelte'));
+  assert.equal(out.status, 1, out.stdout + out.stderr);
+  assert.match(out.stderr, /layout-planted\.svelte:5: layout read in script \(getBoundingClientRect\)/);
+  assert.match(out.stderr, /layout-planted\.svelte:13: a fluid font size/);
+  assert.match(out.stderr, /layout-planted\.svelte:16: an @media size that is not a window step \(min-width: 1500px\)/);
+  assert.doesNotMatch(out.stderr, /layout-planted\.svelte:22:/, 'the window steps 1600px and 599px pass');
+  assert.match(out.stdout, /^3 literal/m);
 });
 
 test('the token scan passes the viewer source', () => {
