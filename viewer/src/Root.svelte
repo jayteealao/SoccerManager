@@ -137,7 +137,7 @@
       word="Quit"
       title="Quit Touchline?"
       lines={door.quitLines}
-      primary="Save and quit"
+      primary={door.quitPrimary}
       busy={door.busy}
       onconfirm={() => door.quit()}
       oncancel={() => door.closeMenu()}

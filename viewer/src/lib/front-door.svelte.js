@@ -151,6 +151,11 @@ export class FrontDoor {
       : [`The match saves at ${this.saveClock}. Resume it from the start screen next time.`, close];
   }
 
+  /// The quit confirmation's button: a finished match has nothing to save.
+  get quitPrimary() {
+    return this.matchOver ? 'Quit' : 'Save and quit';
+  }
+
   /// The read-only test hook's view of the front door.
   snapshot() {
     return {

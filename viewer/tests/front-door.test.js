@@ -577,3 +577,10 @@ test('at full time the menu’s Return to start leaves at once, and Quit says th
   assert.equal(early.d.overlay, 'return', 'before the match is stored the dialog still asks');
   assert.match(early.d.quitLines[0], /^The match saves at /);
 });
+
+test('at full time the quit button says Quit, since nothing is saved', async () => {
+  const { d } = await finished();
+  assert.equal(d.quitPrimary, 'Quit');
+  const early = await finished({ ready: false });
+  assert.equal(early.d.quitPrimary, 'Save and quit');
+});
