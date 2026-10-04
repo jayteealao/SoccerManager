@@ -1152,10 +1152,20 @@ test('Play the replay from here opens the replay at the pitch minute, or at kick
   assert.equal(session.screen, 'full-time');
   session.closeReplay();
   assert.equal(session.view, 'match');
+  assert.equal(session.playing, false, 'the replay stops under FULL TIME');
   session.rewind(300);
   session.playFromHere();
   assert.equal(session.view, 'replay');
   assert.equal(session.renderedTick, 300);
+});
+
+test('at full time the report reopened over a playing pitch stops it', async () => {
+  const { session } = await atFullTime();
+  session.closeReport();
+  session.toNewest();
+  assert.equal(session.playing, true);
+  assert.equal(session.reopenReport(), true);
+  assert.equal(session.playing, false, 'the stopped match lies under the report');
 });
 
 test('a canvas that takes a new size redraws its pitch there, and a later pitch starts at that size', async () => {

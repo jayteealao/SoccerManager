@@ -1624,10 +1624,14 @@ export class MatchSession {
     this.selectCanvas();
   }
 
-  /// REPORT at full time: the full-time report again, over the match.
+  /// REPORT at full time: the full-time report again, over the match. A replay that played
+  /// from here stops: the stopped match lies under the report.
   reopenReport() {
     if (this.report?.kind !== KIND.fullTime) {
       return false;
+    }
+    if (this.screen === 'full-time') {
+      this.setPlaying(false);
     }
     this.reportFrom = 'match';
     this.view = 'report';
@@ -1694,7 +1698,8 @@ export class MatchSession {
     this.selectCanvas();
   }
 
-  /// CONTINUE on the replay: back to the report it came from, or to the match screen.
+  /// CONTINUE on the replay: back to the report it came from, or to the match screen. At
+  /// full time the replay stops there, since the full-time playback row has no Pause.
   closeReplay() {
     if (this.view !== 'replay') {
       return;
@@ -1702,6 +1707,9 @@ export class MatchSession {
     if (this.replayFrom === 'start' && this.onLeave) {
       this.onLeave({});
       return;
+    }
+    if (this.screen === 'full-time') {
+      this.setPlaying(false);
     }
     this.view = this.replayFrom === 'report' && this.report ? 'report' : 'match';
     this.selectCanvas();
