@@ -1065,6 +1065,27 @@ test('at full time every ground reads FT, even one whose whistle comes after the
   );
 });
 
+test('at full time a ground with no end yet shows its own minute, not a huge one', async () => {
+  const { session, socket } = await started(RUNNING);
+  socket.deliver(hello());
+  socket.deliver(matchdayMessage());
+  session.act();
+  socket.deliver(JSON.stringify({ type: 'ground-progress', tick: 0, reached: [600, 900] }));
+  shortMatch(socket);
+  session.rewind(700);
+  playFrames(session, () => session.view === 'report');
+  session.closeReport();
+  assert.equal(session.screen, 'full-time');
+  assert.deepEqual(
+    session.grounds.rows.map((r) => [r.minute, r.ended]),
+    [
+      ["0'", false],
+      ["0'", false],
+    ],
+    'the minute each ground reached, at most the whistle'
+  );
+});
+
 test('the action block at full time opens the report again', async () => {
   const { session } = await atFullTime();
   session.closeReport();

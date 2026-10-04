@@ -115,14 +115,19 @@ function standing(score, home, away) {
 /// its number from 1. A goal whose moment lies in a seek's span was jumped over or shown
 /// already, so it shows with no outline when the clock reaches it. `total` is the regulation
 /// length of the match. `final` draws the report's list: no outline, every event that
-/// arrived up to `renderedTick`. `stored` is a replay or a stored match, which keeps no
-/// other grounds.
+/// arrived up to `renderedTick`. `every` admits every event that arrived, whatever its tick,
+/// as full time does; a ground with no end yet shows its own minute, at most `renderedTick`.
+/// `stored` is a replay or a stored match, which keeps no other grounds.
 ///
 /// Returns `{ state: 'none', words, hint }` with no fixture to show, or `{ state: 'rows',
 /// rows }` with one row per fixture: `home`, `away`, `score` (null when the result is
 /// unavailable), `minute` (`KO`, a minute, `HT`, `FT` or `!`), `started`, `ended`, `behind`,
 /// `unavailable`, and `flag` (`new`, `late` or null) with its `tag` and `words`.
-export function groundsAt(matchday, renderedTick, { skip = null, seeks = [], total = 90, final = false, stored = false } = {}) {
+export function groundsAt(
+  matchday,
+  renderedTick,
+  { skip = null, seeks = [], total = 90, final = false, every = false, stored = false } = {}
+) {
   if (stored) {
     return {
       state: 'none',
@@ -139,7 +144,7 @@ export function groundsAt(matchday, renderedTick, { skip = null, seeks = [], tot
   }
   const tick = skip && HELD.has(skip.state) ? skip.from : renderedTick;
   const rows = matchday.fixtures.map((f, i) => {
-    const shown = matchday.events[i].filter((e) => e.tick <= tick);
+    const shown = every ? matchday.events[i] : matchday.events[i].filter((e) => e.tick <= tick);
     const last = shown.at(-1) ?? null;
     const score = last ? [...last.score] : [0, 0];
     const failed = shown.find((e) => e.kind === 'unavailable') ?? null;
@@ -160,7 +165,7 @@ export function groundsAt(matchday, renderedTick, { skip = null, seeks = [], tot
     } else if (lastPeriod?.kind === 'half-time') {
       minute = 'HT';
     } else {
-      minute = minuteLabel(Math.min(tick, behind ? reached : tick), periods, total);
+      minute = minuteLabel(Math.min(tick, behind || every ? reached : tick), periods, total);
     }
     let flag = null;
     let tag = null;

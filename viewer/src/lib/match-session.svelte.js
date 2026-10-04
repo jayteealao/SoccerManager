@@ -880,12 +880,13 @@ export class MatchSession {
       this.screen === 'full-time' &&
       this.match.fullTimeTick !== null &&
       this.renderedTick >= this.match.fullTimeTick;
-    this.grounds = groundsAt(this.matchday, final ? Number.MAX_SAFE_INTEGER : this.renderedTick, {
+    this.grounds = groundsAt(this.matchday, this.renderedTick, {
       skip: this.skip,
       seeks: this.groundSeeks,
       total: totalMinutes(this.hello?.ticks_expected),
       stored: this.stored,
       final,
+      every: final,
     });
   }
 

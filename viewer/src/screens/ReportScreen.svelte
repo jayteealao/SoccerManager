@@ -118,8 +118,9 @@
   /// The other grounds on the report: at the break for half time; at full time every event
   /// that has arrived, since the player's match is over and the others finish after it.
   let grounds = $derived(
-    groundsAt(session.matchday, full ? Number.MAX_SAFE_INTEGER : (report?.tick ?? 0), {
+    groundsAt(session.matchday, report?.tick ?? 0, {
       final: true,
+      every: full,
       total: totalMinutes(session.hello?.ticks_expected),
       stored: session.stored,
     })

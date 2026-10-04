@@ -195,6 +195,17 @@ test('a skip holds the rows at the skip point while it is decided and plays; the
   assert.equal(headline(day), 'Castlemere 1–1');
 });
 
+test('with every event admitted, a ground with no end yet shows its own minute, not a huge one', () => {
+  let day = newMatchday(MESSAGE);
+  day = addEvent(day, period(0, 46 * M + 3_200, 'second-half', 45, [0, 0]), 0);
+  day = addEvent(day, goal(0, 95, 'home', [1, 0], 'Tomas Okafor'), 0);
+  day = addProgress(day, { tick: 0, reached: [96 * M, 92 * M, 0, 0] });
+  const at = groundsAt(day, 93 * M, { final: true, every: true });
+  assert.deepEqual(at.rows[0].score, [1, 0], 'an event past the tick is admitted');
+  assert.equal(at.rows[0].minute, "90+1'", 'at most the tick given, after a second half that kicked off late');
+  assert.equal(at.rows[1].minute, minuteLabel(92 * M, [], 90), 'a ground behind shows the minute it reached');  assert.equal(at.rows[0].behind, false);
+});
+
 test('the minute follows each ground: half time, the second half, added time, full time elsewhere', () => {
   const day = recorded();
   assert.equal(groundsAt(day, 45 * M + 3_300).rows[0].minute, 'HT');
