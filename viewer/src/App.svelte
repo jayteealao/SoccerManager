@@ -37,6 +37,10 @@
 </div>
 
 <style>
+  .view {
+    height: 100%;
+  }
+
   .view[hidden] {
     display: none;
   }

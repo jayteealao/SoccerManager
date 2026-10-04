@@ -26,8 +26,8 @@
 
 <style>
   .closed {
-    width: 1280px;
-    height: 800px;
+    width: 100%;
+    height: 100%;
     display: grid;
     place-items: center;
     background: var(--page);

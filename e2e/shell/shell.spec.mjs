@@ -1,6 +1,6 @@
-// The Full Game shell at 1280 by 800 in each skin: its measured boxes equal the visual
-// contract's sizes, its screenshot matches the approved baseline, and a Tab walk never lands
-// inside a stub.
+// The Full Game shell in each skin, at 1280 by 800 and at 1920 by 1080: it fills the window,
+// its measured boxes equal the visual contract's sizes times the step's scale, its screenshot
+// matches the approved baseline, and a Tab walk never lands inside a stub.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -27,24 +27,33 @@ for (const skin of SKINS) {
     await open(page, skin);
     expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe(skin);
 
+    // The shell fills the window; a box measures in window pixels, so each drawn size is the
+    // contract's size times the step's scale (1 at 1280, 1.125 at 1920).
+    const viewport = page.viewportSize();
+    const scale = Number(
+      await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--step-scale'))
+    );
+    expect(scale).toBe(viewport.width >= 1920 ? 1.125 : 1);
+    const px = (n) => expect.closeTo(n * scale, 0);
     const app = await box(page, '.app');
-    expect([app.width, app.height]).toEqual([1280, 800]);
+    expect([app.width, app.height]).toEqual([viewport.width, viewport.height]);
     const rail = await box(page, 'nav.rail');
-    expect(rail.width).toBe(40);
+    expect(rail.width).toEqual(px(40));
     const header = await box(page, 'header.hd');
-    expect(header.height).toBe(52);
+    expect(header.height).toEqual(px(52));
     const band = await box(page, '.band');
-    expect(band.height).toBe(52);
+    expect(band.height).toEqual(px(52));
     const date = await box(page, '.date');
-    expect([date.width, date.height]).toEqual([152, 44]);
+    expect([date.width, date.height]).toEqual([px(152), px(44)]);
     const action = await box(page, 'button.cont');
-    expect([action.width, action.height]).toEqual([180, 44]);
+    expect([action.width, action.height]).toEqual([px(180), px(44)]);
     const tabs = await box(page, 'nav.subnav');
-    expect(tabs.height).toBe(30);
-    expect(tabs.y - (header.y + header.height)).toBe(5);
+    expect(tabs.height).toEqual(px(30));
+    expect(tabs.y - (header.y + header.height)).toEqual(px(5));
     const strip = await box(page, '.strip');
-    expect(strip.height).toBe(54);
+    expect(strip.height).toEqual(px(54));
 
+    // A computed font size is the size before the zoom, so it reads the same at every step.
     const label = await page.locator('button.cont').evaluate((el) => {
       const s = getComputedStyle(el);
       return [s.fontSize, s.fontWeight, s.textTransform];

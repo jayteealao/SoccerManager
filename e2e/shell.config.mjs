@@ -36,5 +36,10 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 60_000,
   },
-  projects: [{ name: 'chromium' }],
+  // The standard step at 1280 by 800 and the large step at 1920 by 1080 (scale 1.125); the
+  // project name places the size in each baseline's file name.
+  projects: [
+    { name: 'chromium' },
+    { name: 'chromium-1920', use: { viewport: { width: 1920, height: 1080 } } },
+  ],
 });

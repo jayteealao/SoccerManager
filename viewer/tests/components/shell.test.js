@@ -56,6 +56,15 @@ test('the shell renders the rail, the band, the date block, the action block, th
   assert.ok(screen.getByTestId('body'));
 });
 
+test('the header title may end in an ellipsis, and the Menu button sits outside the stubs that hide below 1280 px', () => {
+  const { container } = shell({ menu: () => {} });
+  const title = container.querySelector('.band .t');
+  assert.ok(title.hasAttribute('data-may-truncate'));
+  const menu = screen.getByRole('button', { name: /Menu/ });
+  assert.equal(menu.closest('[data-stub]'), null);
+  assert.ok(menu.closest('.hicons'));
+});
+
 test('the action block fires on click and on Enter, and not while busy', async () => {
   const onaction = vi.fn();
   const { rerender } = shell({ onaction });

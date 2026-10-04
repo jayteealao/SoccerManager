@@ -20,14 +20,15 @@
 
   let fileInput = $state();
 
-  // The page is drawn for a 1280 by 800 stage. A smaller window (a laptop at 1366 by 768, or
-  // a display scaled to 125 percent) shows the whole stage scaled down to fit, so the
-  // controls at the foot are never cut off; a larger window shows it at its own size.
-  const STAGE_WIDTH = 1280;
-  const STAGE_HEIGHT = 800;
-  let viewWidth = $state(STAGE_WIDTH);
-  let viewHeight = $state(STAGE_HEIGHT);
-  const fit = $derived(Math.min(1, viewWidth / STAGE_WIDTH, viewHeight / STAGE_HEIGHT));
+  // The page fills the window and lays out at one of the window steps (skins/base.css). Below
+  // 768 px wide or 600 px high the compact layout scales down to fit the window whole, as the
+  // fixed stage did before: the zoom keeps the layout at 768 by 600 or larger, and the window
+  // read here is the window's size, not an element's layout.
+  const FLOOR_WIDTH = 768;
+  const FLOOR_HEIGHT = 600;
+  let viewWidth = $state(1280);
+  let viewHeight = $state(800);
+  const fit = $derived(Math.min(1, viewWidth / FLOOR_WIDTH, viewHeight / FLOOR_HEIGHT));
 
   // Every screen names itself in the tab title and, once the page has shown a first screen,
   // in a polite announcement, so a screen-reader user hears that the screen changed (WCAG
@@ -94,8 +95,8 @@
   onpointerdown={() => door.view === 'splash' && door.press()}
 />
 
-<div class="fit" class:scaled={fit < 1} style:width={fit < 1 ? `${STAGE_WIDTH * fit}px` : null} style:height={fit < 1 ? `${STAGE_HEIGHT * fit}px` : null}>
-<div class="stage" data-view={door.view} data-overlay={door.overlay ?? 'none'} style:transform={fit < 1 ? `scale(${fit})` : null}>
+<div class="fit" style:zoom={fit < 1 ? fit : null}>
+<div class="stage" data-view={door.view} data-overlay={door.overlay ?? 'none'}>
   {#if door.view === 'splash'}
     <SplashScreen {door} />
   {:else if door.view === 'start'}
@@ -151,15 +152,19 @@
 </div>
 
 <style>
-  .fit.scaled {
-    overflow: hidden;
+  .fit,
+  .stage,
+  .match {
+    width: 100%;
+    height: 100%;
+  }
+
+  .fit {
+    overflow: clip;
   }
 
   .stage {
     position: relative;
-    width: 1280px;
-    height: 800px;
-    transform-origin: 0 0;
   }
 
   .match[hidden] {

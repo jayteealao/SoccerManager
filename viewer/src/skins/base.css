@@ -1,6 +1,16 @@
-/* The base every skin shares: the fixed 1280 by 800 page, the sketch's 11 px type scale,
- * tabular numerals, the 2 px cyan focus ring with a 2 px offset, and no motion when motion
- * is reduced. It reads only tokens, so each skin changes it by its values alone. */
+/* The base every skin shares: the page that fills the window, the window steps, the sketch's
+ * 11 px type scale, tabular numerals, the 2 px cyan focus ring with a 2 px offset, and no
+ * motion when motion is reduced. It reads only tokens, so each skin changes it by its values
+ * alone.
+ *
+ * The window picks one of five steps: compact (768 to 1023 px wide, or under 600 px high),
+ * standard (1024 to 1599), wide (1600 to 1919), large (1920 to 2559, scale 1.125) and huge
+ * (2560 and up, scale 1.375). The scale is CSS zoom on the page's top box, so every length
+ * (type, spacing, controls, radii) grows by one factor while percentages still fill the
+ * window. Inside the page each panel is a size container and changes its columns with its
+ * own width. Below 768 by 600 the page scales the compact layout down to fit (Root.svelte).
+ * The three layout properties below hold no colour and no font, so they live here, not in a
+ * skin's tokens. */
 
 *,
 *::before,
@@ -10,11 +20,53 @@
 
 html,
 body {
+  height: 100%;
   margin: 0;
   padding: 0;
 }
 
+:root {
+  /* The page's scale: 1 up to the large step. */
+  --step-scale: 1;
+  /* The smallest hit area of a control: 24 px, 44 px at the compact step. */
+  --hit: 24px;
+  /* The body's side gutter: 20 px, 16 px at the compact step. */
+  --gutter: 20px;
+}
+
+@media (min-width: 1920px) {
+  :root {
+    --step-scale: 1.125;
+  }
+}
+
+@media (min-width: 2560px) {
+  :root {
+    --step-scale: 1.375;
+  }
+}
+
+@media (max-width: 1023px), (max-height: 599px) {
+  :root {
+    --hit: 44px;
+    --gutter: 16px;
+  }
+}
+
+/* The page fills the window and never scrolls itself; a screen's body scrolls up and down
+   when its panels are taller than the window. The zoom sits on the top box only, outside
+   which the dynamic viewport height is read. */
+#app {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+#app > * {
+  zoom: var(--step-scale);
+}
+
 body {
+  overflow: hidden;
   background: var(--page);
   color: var(--ink);
   font: 400 11px/1.35 var(--fb);

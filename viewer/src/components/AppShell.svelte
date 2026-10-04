@@ -6,7 +6,12 @@
      a stub with the LATER mark. `navLabel` names the sub-navigation, and `current` is the
      `aria-current` value of its active tab: `page` for views, `step` for a stepper. `menu`, when given, draws
      the Menu button before the header icons (the in-match menu of the front door); without it
-     the shell draws no button, as before. `menuOpen` says whether that menu is open. -->
+     the shell draws no button, as before. `menuOpen` says whether that menu is open.
+
+     The shell fills its box at every window step (skins/base.css) and is the size container
+     `shell`: the header band takes the spare width and its title ends in an ellipsis; below
+     1280 px the stub header icons hide and the Menu button stays; at the compact step the
+     tabs scroll sideways and every control is at least 44 px. -->
 <script>
   import Glyph from './Glyph.svelte';
   import StubSection from './StubSection.svelte';
@@ -74,7 +79,7 @@
           <span class="ud"><Glyph glyph={{ stroke: UP_DOWN, width: 1.7 }} size={12} /></span>
           <Glyph glyph={{ stroke: SEARCH, width: 1.9 }} size={13} />
         </StubSection>
-        <div class="t">
+        <div class="t" data-may-truncate>
           <b>{title}</b>
           <span>{subtitle}</span>
         </div>
@@ -145,19 +150,19 @@
 </div>
 
 <style>
+  /* The shell fills the window, so it draws no frame radius and no frame ring. */
   .app {
-    width: 1280px;
-    height: 800px;
+    width: 100%;
+    height: 100%;
     display: flex;
     background: var(--ground);
-    border-radius: var(--radius-lg);
+    container: shell / size;
     /* Clipped, not hidden: a hidden box still scrolls when focus or a click brings a part
        past its edge into view, which shifts the whole stage sideways. */
     overflow: clip;
     position: relative;
     font: 400 11px/1.35 var(--fb);
     color: var(--ink);
-    box-shadow: 0 0 0 1px var(--frame-ring);
     text-align: left;
   }
 
@@ -191,11 +196,12 @@
     border-radius: var(--radius-sm);
   }
 
-  /* The drawn glyph is 15 px; the hit area is the rail's full 40 px width. */
+  /* The drawn glyph is 15 px; the hit area is the rail's full 40 px width and at least the
+     step's hit height. */
   .rail a.on::after {
     content: '';
     position: absolute;
-    inset: -6px -12px;
+    inset: min(-6px, calc((15px - var(--hit)) / 2)) -12px;
   }
 
   .rail-foot {
@@ -237,11 +243,12 @@
     flex: none;
   }
 
+  /* The band takes the spare width; the date and action blocks keep their size. */
   .band {
     position: relative;
     height: 52px;
-    width: 790px;
-    flex: none;
+    flex: 1 1 0;
+    min-width: 0;
     background: linear-gradient(
       90deg,
       var(--navy-700) 0%,
@@ -296,16 +303,20 @@
     letter-spacing: 0.03em;
     text-transform: uppercase;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .t span {
     font-size: 10px;
     color: var(--navy-sub);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .hicons {
-    flex: 1;
+    flex: none;
     display: flex;
     justify-content: flex-end;
     align-items: center;
@@ -321,11 +332,27 @@
     gap: 11px;
   }
 
+  /* Below 1280 px the stub header icons give their room to the band; the Menu button is a
+     live control and stays. */
+  @container shell (max-width: 1279px) {
+    .hicons {
+      padding: 0;
+    }
+
+    .menu {
+      margin: 0 12px;
+    }
+
+    .hicons :global(.stub) {
+      display: none;
+    }
+  }
+
   .menu {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 24px;
+    height: var(--hit);
     padding: 0 10px;
     border: 0;
     border-radius: var(--radius-sm);
@@ -469,6 +496,7 @@
   /* A tab is drawn at its text height; the hit area reaches 24 px. */
   button.tab {
     position: relative;
+    scroll-margin-inline: var(--gutter);
   }
 
   button.tab::after {
@@ -484,11 +512,45 @@
     font-weight: 600;
   }
 
+  /* The body scrolls up and down when its panels are taller than the window, never
+     sideways. */
   .body {
     flex: 1;
     min-height: 0;
     position: relative;
-    padding: 0 20px 14px;
+    padding: 0 var(--gutter) 14px;
     display: block;
+    overflow: hidden auto;
+    scrollbar-width: thin;
+  }
+
+  /* The compact step: a narrower action block, 44 px tabs that scroll sideways, and the
+     16 px gutter (from --gutter). */
+  @media (max-width: 1023px), (max-height: 599px) {
+    .cont {
+      width: 150px;
+    }
+
+    .subnav {
+      height: 44px;
+      margin-top: 2px;
+      gap: 6px;
+      padding: 0 var(--gutter);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .tab {
+      min-height: 36px;
+      padding: 0 10px;
+    }
+
+    .tab.on {
+      padding: 0 10px;
+    }
+
+    button.tab::after {
+      inset: -4px 0;
+    }
   }
 </style>
