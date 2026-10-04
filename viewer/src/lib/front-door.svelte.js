@@ -9,7 +9,8 @@
 // leaves at the first answer and the match session starts as the page always started it.
 //
 // Each match gets a new session; the one before it is disposed, so its socket and its frame
-// loop end with it.
+// loop end with it. After full time the report leads on to a new match with the same two
+// clubs, or back to the start screen.
 
 import * as launcher from './launcher.js';
 import { setMotion } from './goal-moment.js';
@@ -30,6 +31,9 @@ export const VIEWS = Object.freeze(['splash', 'start', 'setup', 'settings', 'lic
 
 /// The match views the in-match menu opens over.
 const MENU_VIEWS = new Set(['match', 'tactics', 'touchline']);
+
+/// How long a next step after full time waits for the finished match's worker to end.
+const WORKER_END_MS = 10_000;
 
 const defaultFetch = (...args) => globalThis.fetch(...args);
 
@@ -131,6 +135,20 @@ export class FrontDoor {
       return 'A team cannot play itself. Pick a different away team.';
     }
     return null;
+  }
+
+  /// `true` when the match on show is over and stored, so leaving it keeps nothing for Resume.
+  get matchOver() {
+    return this.session?.screen === 'full-time' && this.session.nextReady === true;
+  }
+
+  /// The quit confirmation's lines: a finished match is not kept; any other match saves at
+  /// the newest stoppage.
+  get quitLines() {
+    const close = 'The engine and the launcher stop. This tab then shows that Touchline has closed.';
+    return this.matchOver
+      ? ['The match is over and is not kept for Resume.', close]
+      : [`The match saves at ${this.saveClock}. Resume it from the start screen next time.`, close];
   }
 
   /// The read-only test hook's view of the front door.
@@ -250,6 +268,7 @@ export class FrontDoor {
       onLeave: (why) => this.leaveReplay(why),
     });
     session.onMenu = this.frontDoor ? () => this.openMenu() : null;
+    session.onNextStep = this.frontDoor ? (id) => this.afterFullTime(id) : null;
     this.session = session;
     this.onSession(session);
     return session;
@@ -457,6 +476,11 @@ export class FrontDoor {
   /// the newest stoppage the engine saved: the newest one the page has seen at once, then the
   /// launcher's own word for it.
   async ask(which) {
+    // A finished, stored match keeps nothing, so Return to start needs no confirmation.
+    if (which === 'return' && this.matchOver) {
+      await this.afterFullTime('return');
+      return;
+    }
     this.overlay = which;
     if (this.session) {
       this.session.menuOpen = false;
@@ -484,6 +508,58 @@ export class FrontDoor {
     }
     this.newSession();
     this.view = 'start';
+  }
+
+  /// New match (`new`) or Return to start (`return`) after full time. The launcher counts the
+  /// finished match's worker as running for a moment after its close and refuses a new match
+  /// meanwhile, so the page waits for the worker to end, then stops it as Return to start
+  /// does; a finished match leaves no save. New match then opens match setup with the ended
+  /// match's two clubs picked.
+  async afterFullTime(id) {
+    const session = this.session;
+    if (this.busy || !session?.nextReady) {
+      return;
+    }
+    this.busy = true;
+    const picks = id === 'new' ? this.endedPicks(session) : null;
+    await launcher.poll((s) => !s || (s['engine.state'] !== 'running' && s['engine.state'] !== 'starting'), {
+      timeoutMs: WORKER_END_MS,
+      fetcher: this.fetcher,
+    });
+    const answer = await launcher.stop(this.fetcher);
+    this.busy = false;
+    this.overlay = null;
+    this.newSession();
+    this.message = null;
+    if (answer) {
+      this.status = answer;
+    } else {
+      this.message = failure('The launcher did not answer the stop', '', 'Start a new match, or quit.');
+    }
+    if (picks) {
+      this.saved = false;
+      this.pick('home', picks.home);
+      this.pick('away', picks.away);
+      this.view = 'setup';
+    } else {
+      this.view = 'start';
+    }
+  }
+
+  /// The ended match's clubs as setup picks: by club id, then by name; otherwise the last
+  /// picks, or the first two teams.
+  endedPicks(session) {
+    const ids = (session.teams ?? []).map((team) => {
+      const club = this.teams.find((t) => t.id === team['team.id']) ?? this.teams.find((t) => t.name === team['team.name']);
+      return club?.id ?? null;
+    });
+    if (ids.length === 2 && ids[0] && ids[1] && ids[0] !== ids[1]) {
+      return { home: ids[0], away: ids[1] };
+    }
+    if (this.picks.home && this.picks.away) {
+      return { ...this.picks };
+    }
+    return { home: this.teams[0]?.id ?? null, away: this.teams[1]?.id ?? null };
   }
 
   /// Save and quit (or Quit on the start screen): the launcher stops the match, keeps its save

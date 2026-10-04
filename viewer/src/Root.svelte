@@ -137,10 +137,7 @@
     <ConfirmDialog
       word="Quit"
       title="Quit Touchline?"
-      lines={[
-        `The match saves at ${door.saveClock}. Resume it from the start screen next time.`,
-        'The engine and the launcher stop. This tab then shows that Touchline has closed.',
-      ]}
+      lines={door.quitLines}
       primary="Save and quit"
       busy={door.busy}
       onconfirm={() => door.quit()}

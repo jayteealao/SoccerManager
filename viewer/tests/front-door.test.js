@@ -467,3 +467,113 @@ test('a sample team reads as a crest team', () => {
   });
   assert.equal(teamOf(null), null);
 });
+
+// ---- After full time ---------------------------------------------------------------------------
+
+/// A door whose match ended: the session is at full time with its report `ready` (or not), and
+/// it played `teams` (the hello's clubs). `states` are the launcher's engine states in turn.
+async function finished({ ready = true, teams = null, states = ['finished'], stop = { ...IDLE } } = {}) {
+  const seen = [...states];
+  const { d, fetcher, sessions } = door({
+    'engine.json': () => ({ ...IDLE, 'engine.state': seen.length > 1 ? seen.shift() : seen[0] }),
+    'engine/new-match': IDLE,
+    'engine/round': { fixtures: [] },
+    'engine/stop': stop,
+  });
+  d.answer(IDLE);
+  d.press();
+  d.open('setup');
+  d.pick('home', TEAMS[2].id);
+  d.pick('away', TEAMS[0].id);
+  await d.kickOff();
+  const session = sessions.at(-1);
+  session.screen = 'full-time';
+  session.nextReady = ready;
+  session.teams = teams ?? [
+    { 'team.id': TEAMS[1].id, 'team.name': TEAMS[1].name },
+    { 'team.id': TEAMS[0].id, 'team.name': TEAMS[0].name },
+  ];
+  return { d, fetcher, sessions, session };
+}
+
+const stops = (fetcher) => fetcher.calls.filter((c) => c.path === 'engine/stop' && c.method === 'POST').length;
+
+test('the front door gives each session its next steps, and a page with no start screen none', async () => {
+  const { session } = await finished();
+  assert.equal(typeof session.onNextStep, 'function');
+  const { d, sessions } = door({ 'engine.json': { ...IDLE, 'front-door': false } });
+  d.answer({ ...IDLE, 'front-door': false });
+  assert.equal(sessions.at(-1).onNextStep, null);
+});
+
+test('Return to start after full time waits for the worker to end, stops it and shows the start screen', async () => {
+  const { d, fetcher, session } = await finished({ states: ['running', 'finished'] });
+  await session.onNextStep('return');
+  const order = fetcher.calls.map((c) => c.path).filter((p) => p === 'engine.json' || p === 'engine/stop');
+  assert.deepEqual(order.slice(-3), ['engine.json', 'engine.json', 'engine/stop'], 'the stop waits for the worker');
+  assert.equal(session.disposed, true);
+  assert.equal(d.view, 'start');
+  assert.equal(d.savedMatch, null, 'a finished match leaves nothing to resume');
+});
+
+test('New match after full time shows setup with the ended match’s clubs and asks for the round', async () => {
+  const { d, fetcher, session } = await finished();
+  await session.onNextStep('new');
+  assert.equal(stops(fetcher), 1);
+  assert.equal(session.disposed, true);
+  assert.equal(d.view, 'setup');
+  assert.deepEqual(d.picks, { home: TEAMS[1].id, away: TEAMS[0].id }, 'the hello’s clubs, not the last picks');
+  const round = fetcher.calls.filter((c) => c.path.startsWith('engine/round')).at(-1);
+  assert.match(round.path, new RegExp(`home=${TEAMS[1].id}&away=${TEAMS[0].id}`));
+});
+
+test('the ended clubs are found by name when the ids differ, and the last picks stand in for a stranger', async () => {
+  const byName = await finished({
+    teams: [
+      { 'team.id': 'other-1', 'team.name': TEAMS[0].name },
+      { 'team.id': 'other-2', 'team.name': TEAMS[2].name },
+    ],
+  });
+  await byName.session.onNextStep('new');
+  assert.deepEqual(byName.d.picks, { home: TEAMS[0].id, away: TEAMS[2].id });
+  const stranger = await finished({
+    teams: [
+      { 'team.id': 'x', 'team.name': 'Nowhere Town' },
+      { 'team.id': 'y', 'team.name': 'Elsewhere' },
+    ],
+  });
+  await stranger.session.onNextStep('new');
+  assert.deepEqual(stranger.d.picks, { home: TEAMS[2].id, away: TEAMS[0].id }, 'the picks of the match that ended');
+});
+
+test('nothing runs while the match is still stored', async () => {
+  const { d, fetcher, session } = await finished({ ready: false });
+  await session.onNextStep('new');
+  await session.onNextStep('return');
+  assert.equal(stops(fetcher), 0);
+  assert.equal(session.disposed, false);
+  assert.equal(d.view, 'match');
+});
+
+test('a stop the launcher refuses still leads on, with a line that says so', async () => {
+  const { d, session } = await finished({ stop: null });
+  await session.onNextStep('return');
+  assert.equal(d.view, 'start');
+  assert.match(d.message, /^The launcher did not answer the stop\. Start a new match, or quit\.$/);
+});
+
+test('at full time the menu’s Return to start leaves at once, and Quit says the match is not kept', async () => {
+  const { d, fetcher, session } = await finished();
+  assert.match(d.quitLines[0], /^The match is over and is not kept for Resume\.$/);
+  session.onMenu();
+  await d.ask('return');
+  assert.equal(d.overlay, null, 'no confirmation');
+  assert.equal(stops(fetcher), 1);
+  assert.equal(d.view, 'start');
+
+  const early = await finished({ ready: false });
+  early.session.onMenu();
+  await early.d.ask('return');
+  assert.equal(early.d.overlay, 'return', 'before the match is stored the dialog still asks');
+  assert.match(early.d.quitLines[0], /^The match saves at /);
+});
