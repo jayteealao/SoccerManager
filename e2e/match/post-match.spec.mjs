@@ -234,13 +234,9 @@ for (const skin of SKINS) {
           evidence(info, `post-contrast-${skin}.json`),
           `${JSON.stringify({ match: matchContrast, report: reportContrast }, null, 2)}\n`
         );
-        // The light skin's header and score strip fail AA on every match screen, live or not,
-        // which no spec has checked yet: only the default skin's screens are asserted here.
-        if (skin === 'broadcast-blue') {
-          for (const report of [matchContrast, reportContrast]) {
-            expect(report.checked).toBeGreaterThan(20);
-            expect(report.failures, JSON.stringify(report.failures, null, 2)).toEqual([]);
-          }
+        for (const report of [matchContrast, reportContrast]) {
+          expect(report.checked).toBeGreaterThan(20);
+          expect(report.failures, JSON.stringify(report.failures, null, 2)).toEqual([]);
         }
       } finally {
         engine.cleanUp();

@@ -159,10 +159,10 @@ test('a Tab walk on the resume screen never lands in a stub in either skin, and 
       expect(names, skin).toContain(name);
     }
   }
-  // The default skin carries the WCAG AA commitment, as on every other screen; the interim
-  // light skin's report is kept as evidence (its fact strip predates this screen).
-  expect(reports['broadcast-blue'].checked).toBeGreaterThan(10);
-  expect(reports['broadcast-blue'].failures, JSON.stringify(reports['broadcast-blue'].failures, null, 2)).toEqual([]);
+  for (const skin of SKINS) {
+    expect(reports[skin].checked, skin).toBeGreaterThan(10);
+    expect(reports[skin].failures, JSON.stringify(reports[skin].failures, null, 2)).toEqual([]);
+  }
 });
 
 test('Start a new match asks the launcher for a fresh match and leaves the resume screen', async ({ page }) => {
