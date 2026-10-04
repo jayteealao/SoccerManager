@@ -421,6 +421,13 @@ test('every field the screen reads is defined in every state', async () => {
   check(first.session);
   const second = await started({ 'engine.state': 'not-found', 'engine.path': 'x' });
   check(second.session);
+  const third = await started(RUNNING);
+  third.socket.deliver(hello());
+  third.session.act();
+  shortMatch(third.socket);
+  third.session.rewind(700);
+  playFrames(third.session, () => third.session.view === 'report');
+  check(third.session);
   assert.deepEqual([...seen].sort(), [...SCREENS].sort());
   assert.deepEqual(Object.keys(ACTIONS).sort(), SCREENS.filter((s) => s !== 'error').sort());
 });
@@ -520,7 +527,8 @@ test('a replay file opens in the replay view, and Replay the whole match rewinds
   session.closeReplay();
   assert.equal(session.view, 'report', 'CONTINUE on the replay goes back to the report');
   session.closeReport();
-  assert.equal(session.view, 'replay', 'and the report goes back to the replay it opened over');
+  assert.equal(session.view, 'match', 'and the full-time report goes back to the match at full time');
+  assert.equal(session.screen, 'full-time');
 });
 
 test('a replay file that cannot be read shows its refusal on the match view, from any view', async () => {
@@ -963,4 +971,151 @@ test('the menu pauses the match and Resume match plays on only if it played befo
   session.pauseForMenu();
   session.resumeFromMenu();
   assert.equal(session.playing, false, 'a paused match stays paused');
+});
+
+// ---- Full time and the next steps ----------------------------------------------------------------
+
+/// A match played through to its full-time report, with the engine's clean close when `close`.
+async function atFullTime({ close = true } = {}) {
+  const { session, socket, fetcher } = await started(RUNNING);
+  socket.deliver(hello('match-7'));
+  session.act();
+  shortMatch(socket);
+  session.rewind(700);
+  playFrames(session, () => session.view === 'report');
+  if (close) {
+    socket.finish();
+  }
+  return { session, socket, fetcher };
+}
+
+test('a match played through holds FULL TIME once its report opens, and the report goes back to it', async () => {
+  const { session } = await atFullTime();
+  assert.equal(session.screen, 'full-time');
+  assert.equal(session.playing, false, 'playback stops at full time');
+  session.closeReport();
+  assert.equal(session.view, 'match');
+  assert.equal(session.dateWord, 'FULL TIME');
+  assert.equal(session.dateClock, '00:16', 'the final clock: tick 800');
+  assert.equal(session.action, 'Report');
+  assert.equal(session.title, 'Ashford Rovers 1–0 Port Varrow');
+  assert.deepEqual(session.tag, { text: 'FULL TIME · 00:16', tone: 'final', live: false });
+  assert.equal(session.canSkip, false);
+});
+
+test('no control, menu or seek brings LIVE or PAUSED back after full time', async () => {
+  const { session } = await atFullTime();
+  session.closeReport();
+  const words = new Set();
+  const look = () => {
+    words.add(session.dateWord);
+    assert.equal(session.screen, 'full-time');
+  };
+  session.setPlaying(true);
+  look();
+  session.setPlaying(false);
+  look();
+  session.toNewest();
+  look();
+  session.rewind(100);
+  look();
+  assert.equal(session.dateClock, '00:16', 'the final clock, whatever minute the pitch shows');
+  session.scrubTo(300);
+  session.scrubEnd();
+  look();
+  session.pauseForMenu();
+  look();
+  session.resumeFromMenu();
+  look();
+  session.replayWhole();
+  look();
+  session.closeReplay();
+  look();
+  assert.deepEqual([...words], ['FULL TIME']);
+});
+
+test('the action block at full time opens the report again', async () => {
+  const { session } = await atFullTime();
+  session.closeReport();
+  session.show('tactics');
+  assert.equal(session.act(), true);
+  assert.equal(session.view, 'report');
+  assert.equal(session.report.kind, 'full-time');
+  session.closeReport();
+  assert.equal(session.view, 'match', 'back to the match, not to Tactics');
+  const reopened = (await import('../src/lib/signal.js')).signals().filter((s) => s.signal === 'viewer.report_reopened');
+  assert.equal(reopened.length, 1);
+});
+
+test('a skip enters full time when it finishes, and the storing report carries the final figures', async () => {
+  const { session, socket } = await skippable(200, 300);
+  session.openSkip();
+  session.confirmSkip();
+  const score = { 'home.score': 1, 'away.score': 0 };
+  for (let t = 301; t <= 800; t += 1) {
+    socket.deliver(frameAt(t));
+    if (t === 500) {
+      socket.deliver(JSON.stringify(eventMessage(500, 'goal', { 'team.id': 'club-a', ...score })));
+    }
+  }
+  socket.deliver(JSON.stringify(eventMessage(800, 'full-time', score)));
+  assert.equal(session.report.state, 'storing');
+  assert.deepEqual(session.report.model.score, [1, 0], 'the storing report shows the final score');
+  assert.equal(session.nextReady, false, 'nothing leads on while the match is stored');
+  assert.equal(session.screen, 'paused', 'the match behind waits for the store');
+  socket.finish();
+  assert.equal(session.screen, 'full-time');
+  assert.equal(session.nextReady, true);
+  assert.equal(session.subtitle, 'Engine finished · v0.3.0 · skipped from 00:04');
+  session.closeReport();
+  assert.equal(session.dateWord, 'FULL TIME');
+  assert.equal(session.action, 'Report');
+});
+
+test('a resumed match enters full time when its report opens', async () => {
+  const resumed = { ...RUNNING, 'match.resumed_from': 100 };
+  const { session, socket } = await started(resumed);
+  socket.deliver(hello('match-r'));
+  assert.equal(session.screen, 'live');
+  shortMatch(socket);
+  session.rewind(700);
+  playFrames(session, () => session.view === 'report');
+  assert.equal(session.screen, 'full-time');
+  session.closeReport();
+  assert.equal(session.dateWord, 'FULL TIME');
+});
+
+test('the next steps wait for the stored match and run only through the front door', async () => {
+  const { session, socket } = await atFullTime({ close: false });
+  const asked = [];
+  assert.equal(session.nextOffered, false, 'a page with no start screen offers no next step');
+  assert.equal(session.nextStep('new'), false);
+  session.onNextStep = (id) => asked.push(id);
+  assert.equal(session.nextOffered, true);
+  assert.equal(session.report.state, 'loading');
+  assert.equal(session.nextReady, false);
+  assert.equal(session.nextStep('new'), false, 'nothing runs while the match is stored');
+  assert.deepEqual(asked, []);
+  socket.finish();
+  assert.equal(session.nextReady, true);
+  assert.equal(session.nextStep('return'), true);
+  assert.deepEqual(asked, ['return']);
+  const sent = (await import('../src/lib/signal.js')).signals().filter((s) => s.signal === 'viewer.next_step');
+  assert.deepEqual(sent.map((s) => s.choice), ['return']);
+});
+
+test('Play the replay from here opens the replay at the pitch minute, or at kick-off from the end', async () => {
+  const { session } = await atFullTime();
+  session.closeReport();
+  session.playFromHere();
+  assert.equal(session.view, 'replay');
+  assert.equal(session.renderedTick, session.history.firstTick, 'from the end, the replay starts at kick-off');
+  assert.equal(session.playing, true);
+  assert.equal(session.screen, 'full-time');
+  session.closeReplay();
+  assert.equal(session.view, 'match');
+  session.rewind(300);
+  session.playFromHere();
+  assert.equal(session.view, 'replay');
+  assert.equal(session.renderedTick, 300);
 });

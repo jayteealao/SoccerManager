@@ -97,13 +97,12 @@ test("the ready report's figures equal the report model, and its moments are wor
 test('the full-time actions call the session: Replay the whole match, Close', async () => {
   const { s } = await played();
   s.streamEnded = true;
-  const from = s.view;
   s.openReport('full-time', 800);
   await tick();
   assert.ok(button('Open a replay'));
   button('Close').click();
   await tick();
-  assert.equal(s.view, from, 'Close goes back to the view the report opened over');
+  assert.equal(s.view, 'match', 'Close goes back to the match at full time');
   s.openReport('full-time', 800);
   await tick();
   let called = 0;

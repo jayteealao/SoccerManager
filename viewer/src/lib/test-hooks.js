@@ -69,7 +69,8 @@ export function install(session, target = globalThis, door = () => null) {
     events: () => session.match.events.map((e) => ({ ...e })),
     view: () => session.view,
     /// The report on show or last shown, as the former page's hook named it; `open` is true
-    /// while the report view is up, and `state` is `loading` or `ready`.
+    /// while the report view is up, and `state` is `loading` or `ready`. `next` says whether
+    /// the full-time report offers New match and Return to start, and whether they may run.
     report: () => {
       const report = session.report;
       return {
@@ -79,6 +80,7 @@ export function install(session, target = globalThis, door = () => null) {
         tick: report ? report.tick : null,
         score: report ? [...report.model.score] : null,
         counts: report ? Object.fromEntries(report.model.rows.map((r) => [r.id, [...r.counts]])) : null,
+        next: { offered: session.nextOffered, ready: session.nextReady },
       };
     },
     replay: () => ({

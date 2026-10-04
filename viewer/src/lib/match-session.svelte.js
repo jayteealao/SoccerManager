@@ -71,6 +71,7 @@ export const SCREENS = Object.freeze([
   'error',
   'first-run',
   'reconnecting',
+  'full-time',
 ]);
 
 /// A notice's kind, as the Notice component colours it, and the word it always carries.
@@ -91,6 +92,7 @@ export const ACTIONS = Object.freeze({
   paused: 'Resume',
   'first-run': 'Open replay',
   reconnecting: 'Reconnecting',
+  'full-time': 'Report',
 });
 
 /// The state word the date block shows above the clock, per screen.
@@ -102,6 +104,7 @@ const DATE_WORDS = Object.freeze({
   error: 'STOPPED',
   'first-run': 'NOT CONNECTED',
   reconnecting: 'RECONNECTING',
+  'full-time': 'FULL TIME',
 });
 
 /// The messages of the other grounds; none is part of the match.
@@ -172,6 +175,9 @@ export class MatchSession {
   onMenu = $state.raw(null);
   /// `true` while the in-match menu is open over this session's views.
   menuOpen = $state(false);
+  /// The front door's next steps after full time, called with `new` or `return`; null when
+  /// the page has no start screen, so the report offers no Next list.
+  onNextStep = $state.raw(null);
 
   /// `fetcher`, `timers`, `raf` and `now` are the browser's unless a test passes its own.
   /// `settings` (`{ speed, commentary }`) are the player's from the start screen: the speed a
@@ -279,7 +285,7 @@ export class MatchSession {
       return 'Touchline';
     }
     const names = this.teams ? this.teams.map((t) => t['team.name']) : null;
-    const scored = this.screen === 'live' || this.screen === 'paused';
+    const scored = this.screen === 'live' || this.screen === 'paused' || this.screen === 'full-time';
     return fixtureTitle(names, scored ? this.score : null);
   }
 
@@ -290,8 +296,12 @@ export class MatchSession {
         return 'Getting the match ready';
       case 'first-run':
         return 'First run · no engine found';
-      default:
-        return this.engineVersion ? `${this.engineWord} · v${this.engineVersion}` : this.engineWord;
+      default: {
+        const words = this.engineVersion ? `${this.engineWord} · v${this.engineVersion}` : this.engineWord;
+        return this.screen === 'full-time' && this.skip?.state === 'ready'
+          ? `${words} · skipped from ${clockAt(this.skip.from)}`
+          : words;
+      }
     }
   }
 
@@ -306,6 +316,10 @@ export class MatchSession {
     }
     if (this.screen === 'error' && this.status?.['snapshot.tick'] != null) {
       return clockAt(this.status['snapshot.tick']);
+    }
+    // Full time shows the match's final clock, whatever minute the stopped pitch shows.
+    if (this.screen === 'full-time' && this.match.fullTimeTick !== null) {
+      return clockAt(this.match.fullTimeTick);
     }
     return this.clockText;
   }
@@ -363,6 +377,8 @@ export class MatchSession {
         return { text: 'ENGINE STOPPED', tone: 'bad', live: false };
       case 'first-run':
         return { text: 'SETUP', tone: 'mid', live: false };
+      case 'full-time':
+        return { text: `FULL TIME · ${this.dateClock}`, tone: 'final', live: false };
       default:
         return { text: `RECONNECTING · ${this.clockText}`, tone: 'warn', live: false };
     }
@@ -527,7 +543,9 @@ export class MatchSession {
       this.engineWord = 'Engine connected';
       this.panel = null;
       this.busy = false;
-      this.screen = this.playing ? 'live' : 'paused';
+      if (this.screen !== 'full-time') {
+        this.screen = this.playing ? 'live' : 'paused';
+      }
       this.setNotice('connected', 'Connected again. Play resumes at the last stoppage.');
       return;
     }
@@ -785,7 +803,8 @@ export class MatchSession {
       if (this.skip?.state === 'playing') {
         this.skip = { ...this.skip, state: 'storing', newest: message.tick };
         if (this.report?.skippedFrom !== undefined) {
-          this.report = { ...this.report, state: 'storing', tick: message.tick };
+          const model = reportModel(this.match.events, message.tick, this.teams ?? []);
+          this.report = { ...this.report, state: 'storing', tick: message.tick, model };
         }
       }
     }
@@ -831,6 +850,12 @@ export class MatchSession {
       seeks: this.groundSeeks,
       total: totalMinutes(this.hello?.ticks_expected),
       stored: this.stored,
+      // At full time the stopped match screen reads every ground final, as the report does,
+      // until the pitch is moved back before the whistle.
+      final:
+        this.screen === 'full-time' &&
+        this.match.fullTimeTick !== null &&
+        this.renderedTick >= this.match.fullTimeTick,
     });
   }
 
@@ -1034,6 +1059,8 @@ export class MatchSession {
         return this.setPlaying(false);
       case 'paused':
         return this.setPlaying(true);
+      case 'full-time':
+        return this.reopenReport();
       case 'first-run':
         return pickReplay();
       case 'error':
@@ -1050,6 +1077,7 @@ export class MatchSession {
   }
 
   /// Plays or pauses the page's own playback. The engine is paced by `seen`, not by this.
+  /// It changes only the live and paused screens, so full time never turns LIVE again.
   setPlaying(playing) {
     this.scheduler.setPlaying(playing);
     this.playing = playing;
@@ -1482,7 +1510,7 @@ export class MatchSession {
     this.skip = { state: 'ready', from, newest: tick };
     this.reportBeforeSkip = null;
     this.rewind(tick);
-    this.setPlaying(false);
+    this.enterFullTime();
     this.report = {
       kind: KIND.fullTime,
       tick,
@@ -1531,6 +1559,9 @@ export class MatchSession {
       this.setPlaying(false);
     }
     const ready = kind !== KIND.fullTime || this.stored || this.streamEnded;
+    if (kind === KIND.fullTime) {
+      this.enterFullTime();
+    }
     if (this.view !== 'report') {
       this.reportFrom = ['touchline', 'tactics', 'replay'].includes(this.view) ? this.view : 'match';
     }
@@ -1541,8 +1572,17 @@ export class MatchSession {
     this.spoken = kind === KIND.halfTime ? 'Half-time. The report is open.' : 'Full time. The report is open.';
   }
 
-  /// CONTINUE or Close on the report: back to the view it opened over. Closing the half-time
-  /// report resumes playback.
+  /// The match is over: playback stops, and the screen holds FULL TIME. `setPlaying` changes
+  /// only the live and paused screens, so no control, menu or reconnect can show LIVE again.
+  enterFullTime() {
+    this.setPlaying(false);
+    this.screen = 'full-time';
+    this.updateGrounds(true);
+  }
+
+  /// CONTINUE, Close or Back to the match on the report: the half-time report goes back to
+  /// the view it opened over and resumes playback; the full-time report goes back to the
+  /// match at full time.
   closeReport() {
     if (this.view !== 'report') {
       return;
@@ -1550,8 +1590,55 @@ export class MatchSession {
     if (this.report?.kind === KIND.halfTime) {
       this.setPlaying(true);
     }
-    this.view = this.reportFrom;
+    this.view = this.report?.kind === KIND.fullTime ? 'match' : this.reportFrom;
     this.selectCanvas();
+  }
+
+  /// REPORT at full time: the full-time report again, over the match.
+  reopenReport() {
+    if (this.report?.kind !== KIND.fullTime) {
+      return false;
+    }
+    this.reportFrom = 'match';
+    this.view = 'report';
+    this.selectCanvas();
+    signal('viewer.report_reopened', { tick: this.report.tick });
+    return true;
+  }
+
+  /// `true` once the next steps may run: the full-time report is ready, which is after the
+  /// engine's clean close, and no skip is still storing the match.
+  get nextReady() {
+    return this.report?.kind === KIND.fullTime && this.report.state === 'ready' && !this.skipRunning;
+  }
+
+  /// `true` when the page has a start screen to lead on to.
+  get nextOffered() {
+    return this.onNextStep !== null;
+  }
+
+  /// New match (`new`) or Return to start (`return`) from the full-time report. Nothing runs
+  /// before the match is stored.
+  nextStep(id) {
+    if (!this.nextReady || !this.onNextStep) {
+      return false;
+    }
+    signal('viewer.next_step', { choice: id });
+    this.onNextStep(id);
+    return true;
+  }
+
+  /// Play the replay from here at full time: the replay view, playing from the minute the
+  /// stopped pitch shows, or from kick-off when it shows the end.
+  playFromHere() {
+    if (!this.history || this.history.count === 0) {
+      return;
+    }
+    const end = this.match.fullTimeTick ?? this.history.newestTick;
+    const from = this.renderedTick >= end ? this.history.firstTick : this.renderedTick;
+    this.showReplay();
+    this.rewind(from);
+    this.setPlaying(true);
   }
 
   /// Replay the whole match: back to kick-off, playing, in the replay view.
@@ -1682,7 +1769,8 @@ export class MatchSession {
         ? lineupModel(this.dugout.rosters, this.dugout.teamIds, state).flat()
         : [];
     return {
-      emptyStateShown: this.feedRows.length === 0 && ['kickoff', 'live', 'paused', 'reconnecting'].includes(this.screen),
+      emptyStateShown:
+        this.feedRows.length === 0 && ['kickoff', 'live', 'paused', 'reconnecting', 'full-time'].includes(this.screen),
       energyTick: state?.energyTick ?? null,
       lineupLabels: rows.map((r) => ({ name: r.name, shirt: r.shirt, condition: r.condition, card: r.cardWord })),
     };
