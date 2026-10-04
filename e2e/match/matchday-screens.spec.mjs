@@ -19,7 +19,7 @@ import { expect, test } from '@playwright/test';
 import { contrastReport } from '../support/contrast.mjs';
 import { VIEWER, contentWithSkin, fastForward, startEngine } from '../support/engine.mjs';
 import { everyMessage, injectingRelay, managerCommand, recordClientMessages } from '../support/messages.mjs';
-import { chooseIndex, playUntil } from '../support/page.mjs';
+import { chooseIndex, clickClear, playUntil, snap } from '../support/page.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
 /// Minute 60 at 50 ticks a second: the Touchline fixture.
@@ -125,19 +125,19 @@ async function queueFromTouchline(page, off, on, shape = 0) {
 
 for (const skin of SKINS) {
   test.describe(`the matchday screens in ${skin}`, () => {
-    test('the Pre-match line-ups after CONTINUE', async ({ page }) => {
+    test('the Pre-match line-ups after CONTINUE', { tag: '@sizes' }, async ({ page }) => {
       const engine = await serve(7, skin);
       try {
         await tactics(page, engine, skin);
         await continueToPrematch(page);
         await expect(page.getByRole('heading', { name: 'Starting line-ups' })).toBeVisible();
-        await expect(page).toHaveScreenshot(`prematch-${skin}.png`);
+        await snap(page, `prematch-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('the Touchline at minute 60 with a substitution and a new shape queued', async ({ page }) => {
+    test('the Touchline at minute 60 with a substitution and a new shape queued', { tag: '@sizes' }, async ({ page }) => {
       test.setTimeout(15 * 60_000);
       const engine = await serve(7, skin, MINUTE_60);
       try {
@@ -148,7 +148,7 @@ for (const skin of SKINS) {
         await until(page, () => window.__touchline.view() === 'touchline', undefined, 5_000);
         await queueFromTouchline(page, 7, 0, 1);
         await expect(page.locator('[data-queue-id]')).toHaveCount(2);
-        await expect(page).toHaveScreenshot(`touchline-${skin}.png`);
+        await snap(page, `touchline-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
@@ -326,7 +326,7 @@ test("the assistant's tired-player pick shows at its tick, and Accept queues it"
 
 /// Presses Tab `presses` times and records where focus lands.
 async function tabWalk(page, presses) {
-  await page.locator('body').click({ position: { x: 1270, y: 790 } });
+  await clickClear(page);
   const walk = [];
   for (let press = 1; press <= presses; press += 1) {
     await page.keyboard.press('Tab');
@@ -350,7 +350,7 @@ async function tabWalk(page, presses) {
   return walk;
 }
 
-test('a Tab walk on both screens never lands in a stub and reaches every control', async ({ page }, info) => {
+test('a Tab walk on both screens never lands in a stub and reaches every control', { tag: '@sizes' }, async ({ page }, info) => {
   test.setTimeout(6 * 60_000);
   const engine = await serve(7);
   try {

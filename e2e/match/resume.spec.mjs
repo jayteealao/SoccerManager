@@ -19,6 +19,7 @@ import { expect, test } from '@playwright/test';
 
 import { contrastReport } from '../support/contrast.mjs';
 import { REPO, VIEWER, contentWithSkin, startEngine, tempDir } from '../support/engine.mjs';
+import { clickClear, snap } from '../support/page.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
 /// The committed save: format 8, stamped as Touchline 0.1.0, stopped at 52:10.
@@ -68,7 +69,7 @@ async function openRefusal(page, launcher, skin) {
 
 /// Presses Tab `presses` times and records where focus lands.
 async function tabWalk(page, presses) {
-  await page.locator('body').click({ position: { x: 1270, y: 790 } });
+  await clickClear(page);
   const walk = [];
   for (let press = 1; press <= presses; press += 1) {
     await page.keyboard.press('Tab');
@@ -91,11 +92,11 @@ async function tabWalk(page, presses) {
 
 for (const skin of SKINS) {
   test.describe(`${skin} skin`, () => {
-    test('the Resume a saved match screen for a save two or more versions back', async ({ page }) => {
+    test('the Resume a saved match screen for a save two or more versions back', { tag: '@sizes' }, async ({ page }) => {
       const launcher = await launchOld(skin);
       try {
         await openRefusal(page, launcher, skin);
-        await expect(page).toHaveScreenshot(`resume-refused-${skin}.png`);
+        await snap(page, `resume-refused-${skin}.png`);
       } finally {
         launcher.cleanUp();
       }
@@ -132,7 +133,7 @@ test('an old save is refused before any engine starts, and the alert names its v
   }
 });
 
-test('a Tab walk on the resume screen never lands in a stub in either skin, and it meets WCAG AA contrast', async ({ page }, info) => {
+test('a Tab walk on the resume screen never lands in a stub in either skin, and it meets WCAG AA contrast', { tag: '@sizes' }, async ({ page }, info) => {
   const walks = {};
   const reports = {};
   for (const skin of SKINS) {

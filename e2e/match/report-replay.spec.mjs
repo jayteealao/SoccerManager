@@ -25,6 +25,7 @@ import { expect, test } from '@playwright/test';
 
 import { contrastReport } from '../support/contrast.mjs';
 import { VIEWER, contentWithSkin, runEngine, startEngine, tempDir, waitForGrounds } from '../support/engine.mjs';
+import { clickClear, snap } from '../support/page.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
 /// The replay screenshot's tick: minute 30.
@@ -157,7 +158,7 @@ async function fixedHandshake(page, engine, skin) {
 
 for (const skin of SKINS) {
   test.describe(`the report, replay and handshake in ${skin}`, () => {
-    test('the full-time report while the whole match is still being stored', async ({ page }) => {
+    test('the full-time report while the whole match is still being stored', { tag: '@sizes' }, async ({ page }) => {
       test.setTimeout(6 * 60_000);
       // The engine's close after full time never reaches the page: the store stays open.
       await page.routeWebSocket(/\/\?v=\d+$/, (ws) => {
@@ -172,43 +173,43 @@ for (const skin of SKINS) {
         await waitForGrounds(page, Number.MAX_SAFE_INTEGER, 180_000);
         expect(await hook(page, () => window.__touchline.report().state)).toBe('loading');
         await expect(button(page, 'Save replay')).toBeDisabled();
-        await expect(page).toHaveScreenshot(`report-loading-${skin}.png`);
+        await snap(page, `report-loading-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('the full-time report, ready', async ({ page }) => {
+    test('the full-time report, ready', { tag: '@sizes' }, async ({ page }) => {
       test.setTimeout(6 * 60_000);
       const engine = await serve(skin);
       try {
         await openReplayFile(page, engine, skin);
         await reportFromFile(page);
         expect(await hook(page, () => window.__touchline.report())).toMatchObject({ kind: 'full-time', state: 'ready' });
-        await expect(page).toHaveScreenshot(`report-ready-${skin}.png`);
+        await snap(page, `report-ready-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('the replay, paused at minute 30', async ({ page }) => {
+    test('the replay, paused at minute 30', { tag: '@sizes' }, async ({ page }) => {
       test.setTimeout(6 * 60_000);
       const engine = await serve(skin);
       try {
         await openReplayFile(page, engine, skin);
         await pause(page);
         await rewindTo(page, REPLAY_TICK);
-        await expect(page).toHaveScreenshot(`replay-${skin}.png`);
+        await snap(page, `replay-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('the handshake page after a close', async ({ page }) => {
+    test('the handshake page after a close', { tag: '@sizes' }, async ({ page }) => {
       const engine = await serve(skin);
       try {
         await fixedHandshake(page, engine, skin);
-        await expect(page).toHaveScreenshot(`handshake-${skin}.png`, {
+        await snap(page, `handshake-${skin}.png`, page, {
           // The page's own origin carries the engine's port, which changes every run.
           mask: [page.getByRole('log').locator('span').nth(1)],
         });
@@ -328,7 +329,7 @@ test('RUN AGAIN against a real engine prints a hello again', async ({ page }) =>
 
 /// Presses Tab `presses` times and records where focus lands.
 async function tabWalk(page, presses) {
-  await page.locator('body').click({ position: { x: 1270, y: 790 } });
+  await clickClear(page);
   const walk = [];
   for (let press = 1; press <= presses; press += 1) {
     await page.keyboard.press('Tab');
@@ -357,7 +358,7 @@ function expectClean(walk) {
   }
 }
 
-test('a Tab walk on the three screens never lands in a stub, and they meet WCAG AA contrast', async ({ page }, info) => {
+test('a Tab walk on the three screens never lands in a stub, and they meet WCAG AA contrast', { tag: '@sizes' }, async ({ page }, info) => {
   test.setTimeout(8 * 60_000);
   const engine = await serve();
   let second = null;

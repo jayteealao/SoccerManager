@@ -5,6 +5,9 @@
 // for on the screen on show.
 import { expect } from '@playwright/test';
 
+/// The screenshot-or-layout call and the pointer helpers for every window size.
+export { centre, clearPointer, clickClear, snap } from './snap.mjs';
+
 /// Opens the page and records the `hello` the page received, read off its own socket.
 export async function openMatch(page, url) {
   const seen = { hello: null };

@@ -33,7 +33,7 @@ import {
   waitForGrounds,
 } from '../support/engine.mjs';
 import { kickOffFromStart, open, pastSplash, rewindTo, settled, toFullTime } from '../support/front.mjs';
-import { playUntil } from '../support/page.mjs';
+import { clickClear, playUntil, snap } from '../support/page.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
 const SEED = '7';
@@ -156,7 +156,7 @@ const dateWords = (page) =>
   });
 
 async function tabWalk(page, presses) {
-  await page.locator('body').click({ position: { x: 1270, y: 790 } });
+  await clickClear(page);
   const walk = [];
   for (let press = 1; press <= presses; press += 1) {
     await page.keyboard.press('Tab');
@@ -187,7 +187,7 @@ function expectClean(walk) {
 
 for (const skin of SKINS) {
   test.describe(`after full time in ${skin}`, () => {
-    test('the match screen at full time after a match played through', async ({ page }) => {
+    test('the match screen at full time after a match played through', { tag: '@sizes' }, async ({ page }) => {
       test.setTimeout(6 * 60_000);
       const engine = await launch(skin, PAST_THE_END);
       try {
@@ -201,13 +201,13 @@ for (const skin of SKINS) {
         await expectFullTime(page, whistle.tick);
         await expect(page.locator('.pitchbox .ftag')).toHaveText(`FULL TIME · ${clockOf(whistle.tick)}`);
         await settled(page);
-        await expect(page).toHaveScreenshot(`post-full-time-${skin}.png`);
+        await snap(page, `post-full-time-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('the match screen at full time after a skip, and the report with its next steps', async ({ page }, info) => {
+    test('the match screen at full time after a skip, and the report with its next steps', { tag: '@sizes' }, async ({ page }, info) => {
       test.setTimeout(8 * 60_000);
       const engine = await launch(skin, SKIP_TICK);
       try {
@@ -220,7 +220,7 @@ for (const skin of SKINS) {
         await expectFullTime(page, whistle.tick);
         await expect(page.locator('.strip:visible')).toContainText('Skipped at');
         await settled(page);
-        await expect(page).toHaveScreenshot(`post-full-time-skipped-${skin}.png`);
+        await snap(page, `post-full-time-skipped-${skin}.png`);
         const matchContrast = await contrastReport(page);
 
         await action(page).click();
@@ -228,7 +228,7 @@ for (const skin of SKINS) {
         await expect(action(page)).toHaveText('New match');
         await expect(nextRow(page, 'new')).toBeEnabled();
         await settled(page);
-        await expect(page).toHaveScreenshot(`post-report-next-${skin}.png`);
+        await snap(page, `post-report-next-${skin}.png`);
         const reportContrast = await contrastReport(page);
         fs.writeFileSync(
           evidence(info, `post-contrast-${skin}.json`),
@@ -247,7 +247,7 @@ for (const skin of SKINS) {
       }
     });
 
-    test('the report while the skipped match is still being stored', async ({ page }) => {
+    test('the report while the skipped match is still being stored', { tag: '@sizes' }, async ({ page }) => {
       test.setTimeout(8 * 60_000);
       // The engine's close after full time never reaches the page: the store stays open. The
       // match socket's close listener is dropped in the page, so no frame passes through the
@@ -288,7 +288,7 @@ for (const skin of SKINS) {
         await expect(button(page, 'Save replay')).toBeDisabled();
         await expect(page.getByRole('status').filter({ hasText: 'Storing the match for the replay…' })).toBeVisible();
         await settled(page);
-        await expect(page).toHaveScreenshot(`post-report-storing-${skin}.png`);
+        await snap(page, `post-report-storing-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
@@ -457,7 +457,7 @@ test('New match opens match setup with the two clubs that played, and kicks off 
   }
 });
 
-test('a Tab walk reaches every new control and no stub', async ({ page }, info) => {
+test('a Tab walk reaches every new control and no stub', { tag: '@sizes' }, async ({ page }, info) => {
   test.setTimeout(8 * 60_000);
   const engine = await launch('broadcast-blue', SKIP_TICK);
   try {

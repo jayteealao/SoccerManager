@@ -24,7 +24,7 @@ import { expect, test } from '@playwright/test';
 import { contrastReport } from '../support/contrast.mjs';
 import { VIEWER, contentWithSkin, fastForward, matchdayArgs, startEngine, waitForGrounds } from '../support/engine.mjs';
 import { injectingRelay } from '../support/messages.mjs';
-import { playUntil } from '../support/page.mjs';
+import { clickClear, playUntil, snap } from '../support/page.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STATES = JSON.parse(fs.readFileSync(path.join(HERE, 'fixtures', 'matchday-states.json'), 'utf8')).states;
@@ -161,7 +161,7 @@ async function forced(page, skin, name) {
 for (const skin of SKINS) {
   test.describe(`the other grounds in ${skin}`, () => {
     for (const name of Object.keys(STATES)) {
-      test(`${STATES[name].words}`, async ({ page }) => {
+      test(`${STATES[name].words}`, { tag: '@sizes' }, async ({ page }) => {
         test.setTimeout(6 * 60_000);
         const engine = await forced(page, skin, name);
         try {
@@ -175,7 +175,7 @@ for (const skin of SKINS) {
           if (name === 'rewind') {
             expect(grounds.rows.every((r) => r.flag === null)).toBe(true);
           }
-          await expect(list(page)).toHaveScreenshot(`other-grounds-${name}-${skin}.png`);
+          await snap(page, `other-grounds-${name}-${skin}.png`, list(page));
           await page.screenshot({ path: evidence(test.info(), `other-grounds-${name}-${skin}-screen.png`) });
         } finally {
           engine.cleanUp();
@@ -183,7 +183,7 @@ for (const skin of SKINS) {
       });
     }
 
-    test('north star: match live with a goal at another ground', async ({ page }, info) => {
+    test('north star: match live with a goal at another ground', { tag: '@sizes' }, async ({ page }, info) => {
       test.setTimeout(8 * 60_000);
       const engine = await serve(skin, 150_000, { matchday: true });
       try {
@@ -209,7 +209,7 @@ for (const skin of SKINS) {
         fs.writeFileSync(evidence(info, `north-star-matchday-${skin}.json`), `${JSON.stringify(day, null, 2)}\n`);
         expect(day.fixtures).toHaveLength(4);
         expect(day.grounds.rows.some((r) => r.flag === 'new')).toBe(true);
-        await expect(page).toHaveScreenshot(`other-grounds-north-star-${skin}.png`);
+        await snap(page, `other-grounds-north-star-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
@@ -217,11 +217,11 @@ for (const skin of SKINS) {
   });
 }
 
-test('a Tab walk never stops inside the other-grounds list', async ({ page }, info) => {
+test('a Tab walk never stops inside the other-grounds list', { tag: '@sizes' }, async ({ page }, info) => {
   test.setTimeout(6 * 60_000);
   const engine = await forced(page, 'broadcast-blue', 'goal');
   try {
-    await page.locator('body').click({ position: { x: 1270, y: 790 } });
+    await clickClear(page);
     const walk = [];
     for (let press = 1; press <= 45; press += 1) {
       await page.keyboard.press('Tab');

@@ -45,9 +45,20 @@ export function workerCount() {
   return process.env.CI ? 1 : DEFAULT_WORKERS;
 }
 
-/// The projects of a suite: each of `own` without its @timing tests, then `timing` with the
-/// @timing tests of every file, on one worker. With more than one worker, `timing` is the
-/// teardown of the others.
+/// The window-size projects of the match suite: each runs only the tests tagged @sizes. The
+/// 1920 project compares pixels against its own baselines; the layout projects run the layout
+/// check. `metadata.mode` tells `snap()` which.
+export const SIZES = [
+  { name: 'chromium-1920', grep: /@sizes/, use: { viewport: { width: 1920, height: 1080 } }, metadata: { mode: 'pixels' } },
+  { name: 'layout-768x1024', grep: /@sizes/, use: { viewport: { width: 768, height: 1024 } }, metadata: { mode: 'layout' } },
+  { name: 'layout-1024x640', grep: /@sizes/, use: { viewport: { width: 1024, height: 640 } }, metadata: { mode: 'layout' } },
+  { name: 'layout-2560x1440', grep: /@sizes/, use: { viewport: { width: 2560, height: 1440 } }, metadata: { mode: 'layout' } },
+];
+
+/// The projects of a suite: each of `own` without its @timing tests (a project that carries
+/// its own grep, as the size projects do, keeps it), then `timing` with the @timing tests of
+/// every file, on one worker. With more than one worker, `timing` is the teardown of the
+/// others.
 export function suiteProjects(own, workers) {
   const teardown = workers > 1 ? { teardown: 'timing' } : {};
   return [

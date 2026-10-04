@@ -23,7 +23,7 @@ import { expect, test } from '@playwright/test';
 
 import { contrastReport } from '../support/contrast.mjs';
 import { VIEWER, contentWithSkin, fastForward, startEngine, waitForGrounds } from '../support/engine.mjs';
-import { playUntil } from '../support/page.mjs';
+import { clickClear, playUntil, snap } from '../support/page.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
 const SEED = 7;
@@ -231,7 +231,7 @@ const eventRows = (events) =>
 
 for (const skin of SKINS) {
   test.describe(`skip to result in ${skin}`, () => {
-    test('the decision, the engine playing the rest, the report after a skip and the replay', async ({ page }) => {
+    test('the decision, the engine playing the rest, the report after a skip and the replay', { tag: '@sizes' }, async ({ page }) => {
       test.setTimeout(10 * 60_000);
       const gate = await holdAfter(page, HOLD_TICK);
       const engine = await serve(skin);
@@ -241,13 +241,13 @@ for (const skin of SKINS) {
         await expect(page.locator('[data-screen="skip"]')).toBeVisible();
         // The decision names the other grounds once the matchday's fixtures are in.
         await until(page, () => window.__touchline.matchday().fixtures.length === 4, undefined, 10_000);
-        await expect(page).toHaveScreenshot(`skip-decision-${skin}.png`);
+        await snap(page, `skip-decision-${skin}.png`);
 
         await button(page, 'Confirm: skip to result').click();
         await until(page, () => window.__touchline.skip()?.state === 'playing', undefined, 10_000);
         await expect(page.locator('[data-screen="report"]')).toContainText("PLAYING THE REST · 40'", { timeout: 60_000 });
         expect(gate.holding).toBe(true);
-        await expect(page).toHaveScreenshot(`skip-playing-${skin}.png`);
+        await snap(page, `skip-playing-${skin}.png`);
 
         gate.release();
         await until(page, () => window.__touchline.report().state === 'ready', undefined, 5 * 60_000);
@@ -255,14 +255,14 @@ for (const skin of SKINS) {
         // The report lists every other ground final.
         await waitForGrounds(page, Number.MAX_SAFE_INTEGER, 180_000);
         await expect(page.locator('[data-screen="report"]')).toContainText('Matchday 1 · final');
-        await expect(page).toHaveScreenshot(`report-skipped-${skin}.png`);
+        await snap(page, `report-skipped-${skin}.png`);
 
         await button(page, 'Replay the whole match').click();
         await until(page, () => window.__touchline.view() === 'replay', undefined, 5_000);
         await pause(page);
         await rewindTo(page, REPLAY_TICK);
         await expect(page.locator('[data-screen="replay"] .tagc')).toContainText('NOT WATCHED LIVE');
-        await expect(page).toHaveScreenshot(`replay-skipped-${skin}.png`);
+        await snap(page, `replay-skipped-${skin}.png`);
       } finally {
         engine.cleanUp();
         gate.close();
@@ -376,7 +376,7 @@ test('a skipped match reports the final score, replays all of it, and equals the
 
 /// Presses Tab `presses` times and records where focus lands.
 async function tabWalk(page, presses) {
-  await page.locator('body').click({ position: { x: 1270, y: 790 } });
+  await clickClear(page);
   const walk = [];
   for (let press = 1; press <= presses; press += 1) {
     await page.keyboard.press('Tab');
@@ -397,7 +397,7 @@ async function tabWalk(page, presses) {
   return walk;
 }
 
-test('a Tab walk on the decision never lands in a stub, and the skip screens meet WCAG AA contrast', async ({ page }, info) => {
+test('a Tab walk on the decision never lands in a stub, and the skip screens meet WCAG AA contrast', { tag: '@sizes' }, async ({ page }, info) => {
   test.setTimeout(10 * 60_000);
   const engine = await serve();
   try {

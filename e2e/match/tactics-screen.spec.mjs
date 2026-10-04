@@ -23,7 +23,7 @@ import { expect, test } from '@playwright/test';
 import { contrastReport } from '../support/contrast.mjs';
 import { VIEWER, contentWithSkin, fastForward, startEngine } from '../support/engine.mjs';
 import { managerCommand, recordClientMessages } from '../support/messages.mjs';
-import { chooseIndex } from '../support/page.mjs';
+import { chooseIndex, clickClear, snap } from '../support/page.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
 /// Minute 10 at 50 ticks a second.
@@ -118,18 +118,18 @@ async function queueMentality(page) {
 
 for (const skin of SKINS) {
   test.describe(`the Tactics screen in ${skin}`, () => {
-    test('before kick-off: the squad list and the eleven slots', async ({ page }) => {
+    test('before kick-off: the squad list and the eleven slots', { tag: '@sizes' }, async ({ page }) => {
       const engine = await serve(7, skin);
       try {
         await preMatch(page, engine, skin);
         await expect(page.getByRole('status').filter({ hasText: 'READY' }).first()).toBeVisible();
-        await expect(page).toHaveScreenshot(`tactics-prematch-${skin}.png`);
+        await snap(page, `tactics-prematch-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('in match: paused at minute 10 with two changes queued', async ({ page }) => {
+    test('in match: paused at minute 10 with two changes queued', { tag: '@sizes' }, async ({ page }) => {
       test.setTimeout(8 * 60_000);
       const engine = await serve(7, skin, MINUTE_10);
       try {
@@ -145,7 +145,7 @@ for (const skin of SKINS) {
         await queueSubstitution(page, 7, 0);
         await queueMentality(page);
         await expect(page.locator('[data-queue-id]')).toHaveCount(2);
-        await expect(page).toHaveScreenshot(`tactics-match-${skin}.png`);
+        await snap(page, `tactics-match-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
@@ -210,7 +210,8 @@ test.describe('the viewer sends the manager messages the former page sent', () =
       fs.readFileSync(new URL('./fixtures/messages-web-seed42.json', import.meta.url), 'utf8')
     );
     const run = async (options) => {
-      const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+      // The project's own window size, as every other test here has.
+      const page = await browser.newPage({ viewport: info.project.use.viewport });
       const sent = await recordClientMessages(page, managerCommand);
       const engine = await serve(42, 'broadcast-blue');
       try {
@@ -276,7 +277,7 @@ test('a withdrawn substitution never applies, and the count of substitutions sta
 
 /// Presses Tab `presses` times and records where focus lands.
 async function tabWalk(page, presses) {
-  await page.locator('body').click({ position: { x: 1270, y: 790 } });
+  await clickClear(page);
   const walk = [];
   for (let press = 1; press <= presses; press += 1) {
     await page.keyboard.press('Tab');
@@ -300,7 +301,7 @@ async function tabWalk(page, presses) {
   return walk;
 }
 
-test('a Tab walk through both phases never lands in a stub and reaches every control', async ({ page }, info) => {
+test('a Tab walk through both phases never lands in a stub and reaches every control', { tag: '@sizes' }, async ({ page }, info) => {
   test.setTimeout(6 * 60_000);
   const engine = await serve(7, 'broadcast-blue', MINUTE_3);
   try {

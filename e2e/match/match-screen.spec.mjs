@@ -20,7 +20,7 @@ import { expect, test } from '@playwright/test';
 
 import { contrastReport } from '../support/contrast.mjs';
 import { VIEWER, contentWithSkin, fastForward, killTree, runEngine, startEngine, tempDir, waitForGrounds } from '../support/engine.mjs';
-import { kickOffFromPage } from '../support/page.mjs';
+import { clickClear, kickOffFromPage, snap } from '../support/page.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
 /// Minute 30 at 50 ticks a second.
@@ -112,17 +112,17 @@ async function served(page, skin, body) {
 
 for (const skin of SKINS) {
   test.describe(`the match screen in ${skin}`, () => {
-    test('live: paused at minute 30', async ({ page }) => {
+    test('live: paused at minute 30', { tag: '@sizes' }, async ({ page }) => {
       const engine = await liveAtMinute30(page, skin);
       try {
         await expect(page.locator('header')).toContainText('PAUSED');
-        await expect(page).toHaveScreenshot(`match-live-${skin}.png`);
+        await snap(page, `match-live-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('kick-off: the hello, before the kick-off', async ({ page }) => {
+    test('kick-off: the hello, before the kick-off', { tag: '@sizes' }, async ({ page }) => {
       const engine = await startEngine({
         args: ['--seed', '7', '--web', VIEWER],
         env: skin === 'broadcast-blue' ? {} : { SM_CONTENT_DIR: lightContent.dir },
@@ -135,24 +135,24 @@ for (const skin of SKINS) {
         await expect(page.locator('header button.cont')).toHaveText('Kick off');
         // The matchday's fixtures at 0-0 before kick-off, so the list is complete.
         await waitForGrounds(page, 0);
-        await expect(page).toHaveScreenshot(`match-kickoff-${skin}.png`);
+        await snap(page, `match-kickoff-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('loading: the engine is starting', async ({ page }) => {
+    test('loading: the engine is starting', { tag: '@sizes' }, async ({ page }) => {
       const engine = await served(page, skin, { 'engine.state': 'starting', launcher: true });
       try {
         await expect(page.locator('header button.cont')).toHaveText('Please wait');
         await expect(page.getByRole('heading', { name: 'Getting the match ready' })).toBeVisible();
-        await expect(page).toHaveScreenshot(`match-loading-${skin}.png`);
+        await snap(page, `match-loading-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('error: the engine stopped at 52:10', async ({ page }) => {
+    test('error: the engine stopped at 52:10', { tag: '@sizes' }, async ({ page }) => {
       const engine = await liveAtMinute30(page, skin);
       try {
         await routeStatus(page, {
@@ -167,13 +167,13 @@ for (const skin of SKINS) {
         engine.kill();
         await until(page, () => window.__touchline.recovery().kind === 'crashed', undefined, 30_000);
         await expect(page.getByRole('button', { name: 'Restart from 52:10' })).toBeVisible();
-        await expect(page).toHaveScreenshot(`match-error-${skin}.png`);
+        await snap(page, `match-error-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('first run: no engine found', async ({ page }) => {
+    test('first run: no engine found', { tag: '@sizes' }, async ({ page }) => {
       const engine = await served(page, skin, {
         'engine.state': 'not-found',
         'engine.path': BOARD_PATH,
@@ -182,13 +182,13 @@ for (const skin of SKINS) {
       try {
         await until(page, () => window.__touchline.screen() === 'first-run', undefined, 30_000);
         await expect(page.locator('.cover code')).toHaveText(BOARD_PATH);
-        await expect(page).toHaveScreenshot(`match-first-run-${skin}.png`);
+        await snap(page, `match-first-run-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('reconnect: the connection dropped', async ({ page }) => {
+    test('reconnect: the connection dropped', { tag: '@sizes' }, async ({ page }) => {
       // The engine goes away while its status still says starting, so the page holds its
       // last frame and keeps reconnecting for the screenshot. The drive below shows a real
       // drop reconnecting by itself.
@@ -201,7 +201,7 @@ for (const skin of SKINS) {
         engine.kill();
         await until(page, () => window.__touchline.screen() === 'reconnecting', undefined, 30_000);
         await expect(page.locator('.held')).toContainText('RECONNECTING');
-        await expect(page).toHaveScreenshot(`match-reconnect-${skin}.png`);
+        await snap(page, `match-reconnect-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
@@ -311,12 +311,12 @@ test.describe('the match screen with a real engine', () => {
   });
 });
 
-test('a Tab walk through the live match screen never lands in a stub, and the action block leads the header', async ({
+test('a Tab walk through the live match screen never lands in a stub, and the action block leads the header', { tag: '@sizes' }, async ({
   page,
 }, info) => {
   const engine = await liveAtMinute30(page, 'broadcast-blue');
   try {
-    await page.locator('body').click({ position: { x: 1270, y: 790 } });
+    await clickClear(page);
     const walk = [];
     for (let press = 1; press <= 40; press += 1) {
       await page.keyboard.press('Tab');

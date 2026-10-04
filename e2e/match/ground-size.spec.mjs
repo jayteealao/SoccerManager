@@ -17,7 +17,7 @@ import path from 'node:path';
 import { expect, test } from '@playwright/test';
 
 import { VIEWER, contentWithGround, fastForward, startEngine } from '../support/engine.mjs';
-import { openMatch, playUntil } from '../support/page.mjs';
+import { openMatch, playUntil, snap } from '../support/page.mjs';
 
 /// Minute 30 at 50 ticks a second (the hello's `dt_ms` of 20, which the drive checks).
 const MINUTE_30 = 90_000;
@@ -85,7 +85,7 @@ async function rewindTo(page, tick) {
   await until(page, (t) => window.__touchline.lastRenderedTick() === t, tick, 10_000);
 }
 
-test('a 100 by 64 home ground at minute 30 draws smaller, centred and in proportion', async ({ page }, info) => {
+test('a 100 by 64 home ground at minute 30 draws smaller, centred and in proportion', { tag: '@sizes' }, async ({ page }, info) => {
   test.setTimeout(10 * 60_000);
   const errors = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
@@ -124,7 +124,7 @@ test('a 100 by 64 home ground at minute 30 draws smaller, centred and in proport
     expect(Math.abs(geometry.backing.width - drawn.width * drawn.ratio)).toBeLessThanOrEqual(1);
     expect(Math.abs(geometry.backing.height - drawn.height * drawn.ratio)).toBeLessThanOrEqual(1);
 
-    await expect(pitchBox(page)).toHaveScreenshot('pitch-100x64-minute-30.png');
+    await snap(page, 'pitch-100x64-minute-30.png', pitchBox(page));
     expect(errors, 'no console error').toEqual([]);
   } finally {
     engine.cleanUp();

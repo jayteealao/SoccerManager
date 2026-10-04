@@ -32,7 +32,7 @@ import {
   tempDir,
   waitForGrounds,
 } from '../support/engine.mjs';
-import { playUntil } from '../support/page.mjs';
+import { centre, clearPointer, clickClear, playUntil, snap } from '../support/page.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STATES = JSON.parse(fs.readFileSync(path.join(HERE, 'fixtures', 'front-door-states.json'), 'utf8'));
@@ -121,7 +121,7 @@ async function matchAt30(page, skin) {
 
 for (const skin of SKINS) {
   test.describe(`the front door in ${skin}`, () => {
-    test('splash: the engine is starting', async ({ page }) => {
+    test('splash: the engine is starting', { tag: '@sizes' }, async ({ page }) => {
       const engine = await frontDoor();
       try {
         // The answer never comes during the screenshot.
@@ -130,13 +130,13 @@ for (const skin of SKINS) {
         await expect(page.locator('[data-screen="splash"]')).toBeVisible();
         await page.evaluate(() => document.fonts.ready);
         // The splash is drawn in the default look until the engine names the skin.
-        await expect(page).toHaveScreenshot(`front-splash-starting-${skin}.png`);
+        await snap(page, `front-splash-starting-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('splash: ready', async ({ page }) => {
+    test('splash: ready', { tag: '@sizes' }, async ({ page }) => {
       const engine = await frontDoor();
       try {
         await page.clock.install({ time: T0 });
@@ -149,86 +149,86 @@ for (const skin of SKINS) {
         await until(page, () => window.__touchline.frontDoor().splash === 'ready', undefined, 10_000);
         await page.evaluate(() => document.fonts.ready);
         await expect(page.getByText('Press any key or click to continue')).toBeVisible();
-        await expect(page).toHaveScreenshot(`front-splash-ready-${skin}.png`);
+        await snap(page, `front-splash-ready-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('start screen: no saved match', async ({ page }) => {
+    test('start screen: no saved match', { tag: '@sizes' }, async ({ page }) => {
       const engine = await frontDoor();
       try {
         await startScreen(page, engine, skin);
         await expect(page.locator('[data-choice="resume"]')).toBeDisabled();
-        await expect(page).toHaveScreenshot(`front-start-empty-${skin}.png`);
+        await snap(page, `front-start-empty-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('start screen: a saved match', async ({ page }) => {
+    test('start screen: a saved match', { tag: '@sizes' }, async ({ page }) => {
       const engine = await frontDoor();
       try {
         await startScreen(page, engine, skin, { ...STATES.idle, saved: STATES.saved });
         await expect(page.locator('[data-choice="resume"]')).toBeEnabled();
         await expect(page.locator('svg.pitch circle.marker')).toHaveCount(22);
-        await expect(page).toHaveScreenshot(`front-start-saved-${skin}.png`);
+        await snap(page, `front-start-saved-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('match setup: a valid pick', async ({ page }) => {
+    test('match setup: a valid pick', { tag: '@sizes' }, async ({ page }) => {
       const engine = await frontDoor();
       try {
         await startScreen(page, engine, skin);
         await page.locator('[data-choice="new"]').click();
         await expect(page.locator('[data-round="4"]')).toBeVisible();
-        await expect(page).toHaveScreenshot(`front-setup-${skin}.png`);
+        await snap(page, `front-setup-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('match setup: the same team twice', async ({ page }) => {
+    test('match setup: the same team twice', { tag: '@sizes' }, async ({ page }) => {
       const engine = await frontDoor();
       try {
         await startScreen(page, engine, skin);
         await page.locator('[data-choice="new"]').click();
         await page.locator('[data-column="away"] [data-club="club-00000001-00"] button').click();
         await expect(page.getByRole('alert')).toContainText('Same team');
-        await page.mouse.move(1270, 790);
-        await expect(page).toHaveScreenshot(`front-setup-same-${skin}.png`);
+        await clearPointer(page);
+        await snap(page, `front-setup-same-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('settings', async ({ page }) => {
+    test('settings', { tag: '@sizes' }, async ({ page }) => {
       const engine = await frontDoor();
       try {
         await startScreen(page, engine, skin);
         await page.locator('[data-choice="settings"]').click();
         await expect(page.locator('[data-screen="settings"]')).toBeVisible();
-        await expect(page).toHaveScreenshot(`front-settings-${skin}.png`);
+        await snap(page, `front-settings-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('licences and about', async ({ page }) => {
+    test('licences and about', { tag: '@sizes' }, async ({ page }) => {
       const engine = await frontDoor();
       try {
         await startScreen(page, engine, skin);
         await page.locator('[data-choice="licences"]').click();
         await expect(page.locator('[data-package]')).toHaveCount(STATES.notices.packages.length);
-        await expect(page).toHaveScreenshot(`front-licences-${skin}.png`);
+        await snap(page, `front-licences-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
     });
 
-    test('the in-match menu, and the return and quit confirmations', async ({ page }) => {
+    test('the in-match menu, and the return and quit confirmations', { tag: '@sizes' }, async ({ page }) => {
       test.setTimeout(6 * 60_000);
       const engine = await matchAt30(page, skin);
       try {
@@ -236,26 +236,26 @@ for (const skin of SKINS) {
         await until(page, () => window.__touchline.frontDoor().overlay === 'menu', undefined, 5_000);
         await expect(page.getByRole('menu', { name: 'Match menu' })).toContainText('Match paused · 30:00');
         await settled(page);
-        await expect(page).toHaveScreenshot(`front-menu-${skin}.png`);
+        await snap(page, `front-menu-${skin}.png`);
 
         await page.locator('[data-item="return"]').click();
         await expect(page.getByRole('dialog', { name: 'Return to the start screen?' })).toContainText(
           'The match saves at 30:00'
         );
         await settled(page);
-        await expect(page).toHaveScreenshot(`front-return-${skin}.png`);
+        await snap(page, `front-return-${skin}.png`);
         await page.getByRole('button', { name: 'Keep playing' }).click();
 
         await page.keyboard.press('Escape');
         await page.locator('[data-item="quit"]').click();
         await expect(page.getByRole('dialog', { name: 'Quit Touchline?' })).toContainText('The match saves at 30:00');
         await settled(page);
-        await expect(page).toHaveScreenshot(`front-quit-${skin}.png`);
+        await snap(page, `front-quit-${skin}.png`);
 
         // The quit answer is the fixed one, so the closed page names the board's save.
         await page.getByRole('button', { name: 'Save and quit' }).click();
         await expect(page.getByRole('heading', { name: 'Touchline has closed' })).toBeVisible();
-        await expect(page).toHaveScreenshot(`front-closed-${skin}.png`);
+        await snap(page, `front-closed-${skin}.png`);
       } finally {
         engine.cleanUp();
       }
@@ -332,7 +332,7 @@ test.describe('the splash on its own clock', () => {
       expect((await door(page)).view).toBe('splash');
       answer();
       await until(page, () => window.__touchline.frontDoor().answered === true, undefined, 10_000);
-      await page.mouse.click(640, 400);
+      await page.mouse.click(centre(page).x, centre(page).y);
       await until(page, () => window.__touchline.frontDoor().view === 'start', undefined, 1_000);
     } finally {
       engine.cleanUp();
@@ -374,7 +374,7 @@ test.describe('the splash on its own clock', () => {
 });
 
 test.describe('the front door with a real launcher', () => {
-  test('the start screen: Resume disabled in an empty folder, live with a save, and a Tab walk with no stub', async ({
+  test('the start screen: Resume disabled in an empty folder, live with a save, and a Tab walk with no stub', { tag: '@sizes' }, async ({
     page,
   }, info) => {
     test.setTimeout(6 * 60_000);
@@ -397,7 +397,7 @@ test.describe('the front door with a real launcher', () => {
       await expect(page.locator('[data-choice="resume"]')).toContainText('No saved match yet');
 
       // The Tab walk: no stop inside a stub, and every live choice is reached.
-      await page.locator('body').click({ position: { x: 1270, y: 790 } });
+      await clickClear(page);
       const walk = [];
       for (let press = 1; press <= 30; press += 1) {
         await page.keyboard.press('Tab');
