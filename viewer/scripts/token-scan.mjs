@@ -16,7 +16,9 @@
 //     from getComputedStyle). Only the pitch measures its box; the exceptions are listed in
 //     LAYOUT_READS_ALLOWED;
 //   - an `@media` width or height other than the window steps: min-width 1024px, 1600px,
-//     1920px or 2560px, max-width 1023px and max-height 599px.
+//     1920px or 2560px, max-width 1023px and max-height 599px;
+//   - a compact width (max-width 1023px) without the compact height (max-height 599px) in the
+//     same prelude: the compact step is both halves.
 //
 // Comments are not scanned: they describe values, they do not set them.
 //
@@ -108,6 +110,12 @@ function offStepFeatures(prelude) {
   return off;
 }
 
+/// Whether a prelude has the compact width but not the compact height.
+function halfCompact(prelude) {
+  const has = (feature, px) => new RegExp(`\\(\\s*${feature}\\s*:\\s*${px}px\\s*\\)`, 'i').test(prelude);
+  return has('max-width', 1023) && !has('max-height', 599);
+}
+
 /// The text with every comment blanked out, line breaks kept so line numbers hold.
 export function stripComments(text) {
   const blank = (m) => m.replace(/[^\n]/g, ' ');
@@ -152,12 +160,21 @@ export function scanText(text, file) {
         }
       }
     }
-    const media = /@media\b([^{]*)/i.exec(line);
-    for (const feature of media ? offStepFeatures(media[1]) : []) {
+  });
+  // A prelude may wrap over lines, so it is read whole, up to its brace.
+  const stripped = lines.join('\n');
+  for (const media of stripped.matchAll(/@media\b([^{]*)/gi)) {
+    const line = stripped.slice(0, media.index).split('\n').length;
+    const prelude = media[1].replace(/\s+/g, ' ').trim();
+    const at = (what) => findings.push({ line, what, text: `@media ${prelude}` });
+    for (const feature of offStepFeatures(prelude)) {
       at(`an @media size that is not a window step (${feature})`);
     }
-  });
-  return findings;
+    if (halfCompact(prelude)) {
+      at('a compact width without the compact height (max-height: 599px)');
+    }
+  }
+  return findings.sort((a, b) => a.line - b.line);
 }
 
 function* files(target) {

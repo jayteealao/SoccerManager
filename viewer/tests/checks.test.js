@@ -42,6 +42,15 @@ test('the scan names each planted layout rule break and exits 1', () => {
   assert.match(out.stdout, /^3 literal/m);
 });
 
+test('the scan refuses a compact width without the compact height, across wrapped lines', () => {
+  const out = run('token-scan.mjs', fixture('compact-planted.svelte'));
+  assert.equal(out.status, 1, out.stdout + out.stderr);
+  assert.match(out.stderr, /compact-planted\.svelte:5: a compact width without the compact height/);
+  assert.doesNotMatch(out.stderr, /compact-planted\.svelte:11:/, 'the wrapped compact pair passes');
+  assert.match(out.stderr, /compact-planted\.svelte:18: an @media size that is not a window step \(max-width: 1100px\)/);
+  assert.match(out.stdout, /^2 literal/m);
+});
+
 test('the token scan passes the viewer source', () => {
   const out = run('token-scan.mjs');
   assert.equal(out.status, 0, out.stdout + out.stderr);
