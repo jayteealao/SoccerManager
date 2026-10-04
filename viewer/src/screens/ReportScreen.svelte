@@ -373,8 +373,10 @@
                 <Glyph glyph={{ d: PLAY }} size={10} /> Replay the whole match
               </button>
               <div class="pair">
+                <!-- With the Next list, Replay is the one navy fill: Save replay is outlined. -->
                 <button
                   class="btn"
+                  class:gh={nextOffered}
                   type="button"
                   disabled={!nextReady || session.saveBlocked !== null || session.saving}
                   onclick={() => session.saveReplay()}>Save replay</button

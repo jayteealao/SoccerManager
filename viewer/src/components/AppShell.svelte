@@ -151,7 +151,9 @@
     display: flex;
     background: var(--ground);
     border-radius: var(--radius-lg);
-    overflow: hidden;
+    /* Clipped, not hidden: a hidden box still scrolls when focus or a click brings a part
+       past its edge into view, which shifts the whole stage sideways. */
+    overflow: clip;
     position: relative;
     font: 400 11px/1.35 var(--fb);
     color: var(--ink);

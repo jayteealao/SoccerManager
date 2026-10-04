@@ -278,6 +278,7 @@ test('with a start screen the report leads on: NEW MATCH, then the Next list bef
   const replay = button('Replay the whole match');
   assert.ok(before(back, replay), 'the Next list sits before the replay');
   assert.equal(replay.classList.contains('cy'), false, 'one cyan element: New match');
+  assert.equal(button('Save replay').classList.contains('gh'), true, 'one navy fill: Replay');
   const means = root.querySelector('[data-stub="what it means"]');
   assert.ok(before(button('Back to the match at full time'), means), 'What it means sits under the actions');
   newMatch.click();
@@ -312,4 +313,5 @@ test('with no start screen the report keeps CONTINUE and offers no Next list', a
   assert.equal(root.querySelector('.cont').textContent.trim(), 'Continue');
   assert.equal(root.querySelector('[aria-label="Next"]'), null);
   assert.equal(button('Replay the whole match').classList.contains('cy'), true);
+  assert.equal(button('Save replay').classList.contains('gh'), false, 'Save replay keeps its fill');
 });
