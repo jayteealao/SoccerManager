@@ -414,6 +414,32 @@ export class Pitch {
     ctx.fill();
   }
 
+  /// `true` when drawing `components` again would change no pixel: they are the frame on
+  /// show, and the trail has settled on the ball. A paused pitch is then not drawn again.
+  holds(components) {
+    const shown = this.shown;
+    if (!shown || shown.length !== components.length) {
+      return false;
+    }
+    for (let i = 0; i < shown.length; i += 1) {
+      if (shown[i] !== components[i]) {
+        return false;
+      }
+    }
+    const trail = this.trail;
+    if (trail.length < TRAIL_TICKS * 2) {
+      return false;
+    }
+    const x = trail[trail.length - 2];
+    const y = trail[trail.length - 1];
+    for (let i = 0; i < trail.length; i += 2) {
+      if (trail[i] !== x || trail[i + 1] !== y) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /// The turf and markings alone, with no player: the pitch before the first tick.
   clear() {
     this.ctx.drawImage(this.markings, 0, 0, this.cssWidth, this.cssHeight);

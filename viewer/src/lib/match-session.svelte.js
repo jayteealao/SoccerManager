@@ -930,7 +930,11 @@ export class MatchSession {
       this.later.set(this.earlier);
     }
     between(this.earlier, this.later, step.fraction, this.rendered);
-    this.pitch?.draw(this.rendered);
+    // A held picture (paused, full time, under the report) is not drawn again each frame. A
+    // resize draws it again at the new size.
+    if (this.pitch && !this.pitch.holds(this.rendered)) {
+      this.pitch.draw(this.rendered);
+    }
     this.renderedTick = step.from;
     this.flush(this.renderedTick, { seek: false });
     // A report opens when the pitch reaches its break, never while scrubbing.

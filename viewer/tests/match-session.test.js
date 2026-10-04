@@ -1189,6 +1189,35 @@ test('at full time the report reopened over a playing pitch stops it', async () 
   assert.equal(session.playing, false, 'the stopped match lies under the report');
 });
 
+test('a stopped pitch is not drawn again every frame, and draws again once it moves', async () => {
+  const { session } = await atFullTime();
+  session.closeReport();
+  let draws = 0;
+  session.pitch = {
+    shown: null,
+    holds(components) {
+      return this.shown !== null && this.shown.every((v, i) => v === components[i]);
+    },
+    draw(components) {
+      draws += 1;
+      this.shown = Array.from(components);
+    },
+    clearTrail() {},
+  };
+  for (let ts = 0; ts < 1600; ts += 16) {
+    session.frame(ts);
+  }
+  assert.equal(draws, 1, 'the full-time pitch is drawn once, then held');
+  session.rewind(300);
+  session.frame(1600);
+  assert.equal(draws, 2, 'a seek draws once, and the frame after holds it');
+  session.setPlaying(true);
+  for (let ts = 1616; ts < 1700; ts += 16) {
+    session.frame(ts);
+  }
+  assert.ok(draws > 4, `a moving pitch draws every frame: ${draws}`);
+});
+
 test('a canvas that takes a new size redraws its pitch there, and a later pitch starts at that size', async () => {
   const fetcher = statusFetch(RUNNING);
   const timers = { setTimeout: (fn, ms) => ({ fn, ms }), clearTimeout: () => {} };

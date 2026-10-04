@@ -231,6 +231,23 @@ test('a resize draws the frame on show again, and adds nothing to the trail', ()
   assert.equal(pitch.shown, null);
 });
 
+test('a pitch holds its frame once the same frame is on show and the trail has settled', () => {
+  const pitch = new Pitch(fakeCanvas(), KITS, TOKENS, { width: 742, height: 312, deviceWidth: 742, deviceHeight: 312 });
+  const frame = new Int16Array(3 + 22 * 2);
+  assert.equal(pitch.holds(frame), false, 'nothing on show');
+  frame[0] = 500;
+  pitch.draw(frame);
+  frame[0] = 0;
+  let draws = 0;
+  while (!pitch.holds(frame) && draws < 100) {
+    pitch.draw(frame);
+    draws += 1;
+  }
+  assert.equal(draws, 12, 'the trail fades out first, so the held picture is the one a redraw makes');
+  frame[1] = 10;
+  assert.equal(pitch.holds(frame), false, 'a moved frame is drawn');
+});
+
 test('a resize moves the ball trail with the ground', () => {
   const pitch = new Pitch(fakeCanvas(), KITS, TOKENS, { width: 742, height: 312, deviceWidth: 742, deviceHeight: 312 });
   pitch.trail.push(pitch.x(0), pitch.y(0), pitch.x(10), pitch.y(-5));
