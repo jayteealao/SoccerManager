@@ -94,15 +94,16 @@ test("the ready report's figures equal the report model, and its moments are wor
   assert.match(root.querySelector('.strip').textContent, /1 – 1/);
 });
 
-test('the full-time actions call the session: Replay the whole match, Close', async () => {
+test('the full-time actions call the session: Replay the whole match, Back to the match', async () => {
   const { s } = await played();
   s.streamEnded = true;
   s.openReport('full-time', 800);
   await tick();
   assert.ok(button('Open a replay'));
-  button('Close').click();
+  assert.equal(button('Close'), null);
+  button('Back to the match at full time').click();
   await tick();
-  assert.equal(s.view, 'match', 'Close goes back to the match at full time');
+  assert.equal(s.view, 'match', 'the way back goes to the match at full time');
   s.openReport('full-time', 800);
   await tick();
   let called = 0;
@@ -254,4 +255,61 @@ test('a ground still running at full time shows its minute, and the note is not 
   assert.doesNotMatch(list.textContent, /· final/);
   assert.match(list.querySelector('li').textContent, /0 – 0/);
   assert.doesNotMatch(list.querySelector('li').textContent, /FT/);
+});
+
+// ---- The next steps after full time ------------------------------------------------------------
+
+const before = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+test('with a start screen the report leads on: NEW MATCH, then the Next list before the replay', async () => {
+  const run = await skippedReport('ready');
+  const chosen = [];
+  run.s.onNextStep = (id) => chosen.push(id);
+  await tick();
+  const root = page();
+  assert.equal(root.querySelector('.cont').textContent.trim(), 'New match');
+  assert.equal(root.querySelector('.cont').disabled, false);
+  const next = root.querySelector('[role="group"][aria-label="Next"]');
+  assert.ok(next, 'the Next list shows');
+  const newMatch = next.querySelector('[data-choice="new"]');
+  const back = next.querySelector('[data-choice="return"]');
+  assert.match(newMatch.textContent, /New match\s*Match setup with these two teams picked/);
+  assert.match(back.textContent, /Return to start\s*The start screen\. Save replay first to watch it again\./);
+  const replay = button('Replay the whole match');
+  assert.ok(before(back, replay), 'the Next list sits before the replay');
+  assert.equal(replay.classList.contains('cy'), false, 'one cyan element: New match');
+  const means = root.querySelector('[data-stub="what it means"]');
+  assert.ok(before(button('Back to the match at full time'), means), 'What it means sits under the actions');
+  newMatch.click();
+  back.click();
+  root.querySelector('.cont').click();
+  assert.deepEqual(chosen, ['new', 'return', 'new']);
+  assert.deepEqual(stubFaults(root), []);
+});
+
+test('while the skipped match is stored, every step that could drop it waits', async () => {
+  const run = await skippedReport('storing');
+  run.s.onNextStep = () => assert.fail('nothing runs while storing');
+  await tick();
+  const root = page();
+  assert.equal(root.querySelector('[data-screen="report"]').dataset.state, 'storing');
+  assert.ok(root.querySelector('.timeline'), 'the ready layout, with the final figures');
+  assert.equal(root.querySelector('.cont').textContent.trim(), 'New match');
+  assert.equal(root.querySelector('.cont').disabled, true);
+  for (const choice of ['new', 'return']) {
+    assert.equal(root.querySelector(`[data-choice="${choice}"]`).disabled, true, choice);
+  }
+  assert.equal(button('Replay the whole match').disabled, true);
+  assert.equal(button('Save replay').disabled, true);
+  assert.equal(button('Open a replay').disabled, false);
+  assert.equal(root.querySelector('[role="status"]').textContent.trim(), '●Storing the match for the replay…');
+  assert.match(root.textContent, /waits until the match is stored/);
+});
+
+test('with no start screen the report keeps CONTINUE and offers no Next list', async () => {
+  await skippedReport('ready');
+  const root = page();
+  assert.equal(root.querySelector('.cont').textContent.trim(), 'Continue');
+  assert.equal(root.querySelector('[aria-label="Next"]'), null);
+  assert.equal(button('Replay the whole match').classList.contains('cy'), true);
 });

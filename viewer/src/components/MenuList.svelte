@@ -2,11 +2,12 @@
      word in the display face and a grey line under it. The first live row is drawn in cyan as
      the default choice. A row with `rule` sits after a 1 px rule (Quit). A disabled row keeps
      its place and says why on its second line. ↑ and ↓ move between the live rows; Enter or
-     Space chooses. -->
+     Space chooses. A row with no glyph draws none; `size="small"` draws the report's smaller
+     rows (the full-time Next list). -->
 <script>
   import Glyph from './Glyph.svelte';
 
-  let { items = [], onchoose = () => {}, label = 'Start' } = $props();
+  let { items = [], onchoose = () => {}, label = 'Start', size = 'default' } = $props();
 
   let list = $state();
 
@@ -25,7 +26,7 @@
 
 <!-- The group hands ↑ and ↓ to its buttons; each button takes its own Enter and Space. -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div class="list" role="group" aria-label={label} bind:this={list} onkeydown={move}>
+<div class="list" class:small={size === 'small'} role="group" aria-label={label} bind:this={list} onkeydown={move}>
   {#each items as item (item.id)}
     {#if item.rule}<div class="hr" role="presentation"></div>{/if}
     <button
@@ -37,7 +38,7 @@
       data-choice={item.id}
       onclick={() => onchoose(item.id)}
     >
-      <span class="icon"><Glyph glyph={item.glyph} size={15} /></span>
+      {#if item.glyph}<span class="icon"><Glyph glyph={item.glyph} size={15} /></span>{/if}
       <span class="text">
         <b>{item.label}</b>
         <span class="sub">{item.sub}</span>
@@ -117,5 +118,22 @@
     height: 1px;
     background: var(--rule);
     margin: 10px 0;
+  }
+
+  .small .row {
+    padding: 8px 12px;
+  }
+
+  .small .text b {
+    font-size: 12px;
+  }
+
+  .small .sub {
+    font-size: 9.5px;
+    color: var(--ink-2);
+  }
+
+  .small .row.on .sub {
+    color: inherit;
   }
 </style>

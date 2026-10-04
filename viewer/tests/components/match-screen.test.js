@@ -13,7 +13,7 @@ import { COMPONENT_COUNT } from '../../src/lib/decode.js';
 import { MatchSession } from '../../src/lib/match-session.svelte.js';
 import { clearSignals } from '../../src/lib/signal.js';
 import MatchScreen from '../../src/screens/MatchScreen.svelte';
-import { encodeKeyframe, roster } from '../helpers.js';
+import { encodeKeyframe, eventMessage, roster } from '../helpers.js';
 
 class FakeSocket {
   static OPEN = 1;
@@ -298,4 +298,42 @@ test('the other grounds show skeleton rows while loading and in an error', async
   const list = document.querySelector('section[aria-label="Other grounds"]');
   assert.equal(list.querySelectorAll('.skel').length, 3);
   assert.equal(list.querySelectorAll('li').length, 0);
+});
+
+test('full time holds FULL TIME, opens the report again, and keeps only the replay controls', async () => {
+  const { s, socket } = await session(RUNNING);
+  socket.deliver(HELLO);
+  s.act();
+  for (let t = 1; t <= 800; t += 1) {
+    socket.deliver(encodeKeyframe(t, new Array(COMPONENT_COUNT).fill(0)));
+  }
+  socket.deliver(JSON.stringify(eventMessage(800, 'full-time', { 'home.score': 0, 'away.score': 0 })));
+  s.rewind(800);
+  s.openReport('full-time', 800);
+  s.closeReport();
+  await tick();
+  assert.equal(document.querySelector('[data-screen]').dataset.screen, 'full-time');
+  assert.equal(document.querySelector('header .date b').textContent.trim(), 'FULL TIME');
+  assert.match(document.querySelector('header .date').textContent, /00:16/);
+  assert.equal(action().textContent.trim(), 'Report');
+  assert.equal(screen.getAllByText('FULL TIME · 00:16').length, 2, 'under the score and on the pitch');
+  const row = screen.getByRole('group', { name: 'Playback' });
+  assert.match(row.textContent, /REPLAY/);
+  for (const name of ['Back to kick-off', 'Rewind 10 seconds', 'Play the replay from here', '1x', '8x']) {
+    assert.ok(screen.getByRole('button', { name }), name);
+  }
+  for (const name of ['Pause', 'Play', 'Resume', 'Back to live', 'Next stop', 'Skip to result', 'Previous stop']) {
+    assert.equal(screen.queryByRole('button', { name }), null, `no ${name}`);
+  }
+  assert.ok(screen.getByText('The whole match is stored · play it again from any minute'));
+  assert.deepEqual(stubFaults(document.body), []);
+
+  s.skip = { state: 'ready', from: 200, newest: 800 };
+  await tick();
+  assert.ok(screen.getByText('Skipped at'));
+  assert.ok(screen.getByText('From 00:04 the engine played on unwatched · the replay holds it'));
+
+  action().click();
+  await tick();
+  assert.equal(s.view, 'report', 'REPORT opens the full-time report again');
 });

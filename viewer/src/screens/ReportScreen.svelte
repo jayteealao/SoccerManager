@@ -5,13 +5,19 @@
      event list, so the report never disagrees with the feed; the goals and cards list them
      one by one. The other grounds list the matchday's other results, final once every
      ground has ended; a ground still running shows its minute, and its later events appear
-     as they arrive. Highlights, "What each change did" and "What it means" are stubs. At full time the last column holds Replay the whole match, Save replay, Open a
-     replay and Close. While the whole match is still being stored the report is loading:
-     the steps and skeleton blocks of the Report loading board, and Save replay waits.
+     as they arrive. Highlights, "What each change did" and "What it means" are stubs. At full
+     time the last column holds the Next list (New match and Return to start, on a page that
+     opened on the start screen), Replay the whole match, Save replay, Open a replay and Back
+     to the match at full time, with "What it means" under them; the cyan block reads NEW
+     MATCH, or CONTINUE on a page with no start screen. While a played-through match is still
+     being stored the report is loading: the steps and skeleton blocks of the Report loading
+     board, and Save replay waits.
 
      After Skip to result the report first shows the engine playing the rest (the Report
      loading board for a skip): the scores hidden, the skip point and the newest minute in
-     the strip, and four steps; then, ready, the base report with the skip marks of the
+     the strip, and four steps; while the whole match is stored, the ready layout with every
+     action that could drop the match disabled (the Report storing board); then, ready, the
+     base report with the skip marks of the
      Report after a skip board: "skipped from" in the header, the skip cell, the timeline
      hatched after the skip point, and NOT LIVE on every later goal and card. A report with
      no skip renders as before. -->
@@ -22,6 +28,7 @@
   import OtherGrounds from '../components/OtherGrounds.svelte';
   import PairedBar from '../components/PairedBar.svelte';
   import ReportMoments from '../components/ReportMoments.svelte';
+  import NextSteps from '../components/NextSteps.svelte';
   import ScoreStrip from '../components/ScoreStrip.svelte';
   import SectionLabel from '../components/SectionLabel.svelte';
   import StepList from '../components/StepList.svelte';
@@ -52,16 +59,21 @@
   let breakWord = $derived(full ? 'Full time' : 'Half-time');
 
   /// The skip point after Skip to result, or null; `playingRest` while the engine plays the
-  /// rest and the whole match is stored.
+  /// rest. Once full time is reached the whole match is stored (`storing`), and the report
+  /// shows its final figures with its actions waiting.
   let skippedFrom = $derived(report?.skippedFrom ?? null);
   let skipped = $derived(skippedFrom !== null);
-  let playingRest = $derived(skipped && (report?.state === 'playing-rest' || report?.state === 'storing'));
+  let playingRest = $derived(skipped && report?.state === 'playing-rest');
+  let storing = $derived(report?.state === 'storing');
+  /// The full-time next steps: offered on a page that opened on the start screen, and ready
+  /// once the match is stored.
+  let nextOffered = $derived(full && session.nextOffered);
+  let nextReady = $derived(session.nextReady);
   let skipClock = $derived(skipped ? clockAt(skippedFrom) : '');
   let total = $derived(totalMinutes(session.hello?.ticks_expected, session.hello?.knockout === true));
   let newestMinute = $derived(Math.min(total, minuteOf(session.skip?.newest ?? skippedFrom ?? 0)));
-  let skipStage = $derived(report?.state === 'storing' ? 'storing' : 'playing');
   let restSteps = $derived(
-    playingRest ? skipSteps(skippedFrom, session.skip?.newest ?? skippedFrom, total, skipStage) : []
+    playingRest ? skipSteps(skippedFrom, session.skip?.newest ?? skippedFrom, total, 'playing') : []
   );
 
   /// The sub-navigation: Report is this view; Replay opens the replay at full time. The rest
@@ -73,7 +85,7 @@
     { id: 'highlights', label: 'Highlights', menu: true, stub: true },
     { id: 'stats', label: 'Stats', menu: true, stub: true },
     { id: 'press', label: 'Press conference', menu: true, stub: true },
-    { id: 'replay', label: 'Replay', menu: true, stub: !full || playingRest },
+    { id: 'replay', label: 'Replay', menu: true, stub: !full || playingRest || storing },
   ]);
 
   let facts = $derived.by(() => {
@@ -174,9 +186,9 @@
       : `${breakWord} · report`}
   date={playingRest ? 'PLAYING THE REST' : breakWord.toUpperCase()}
   dateSub={playingRest ? `from ${skipClock}` : clockAt(report?.tick ?? 0)}
-  action={playingRest ? 'Please wait' : 'Continue'}
-  busy={playingRest}
-  onaction={() => (playingRest ? null : session.closeReport())}
+  action={playingRest ? 'Please wait' : nextOffered ? 'New match' : 'Continue'}
+  busy={playingRest || (nextOffered && !nextReady)}
+  onaction={() => (playingRest ? null : nextOffered ? session.nextStep('new') : session.closeReport())}
   {tabs}
   ontab={tab}
   navLabel="Report views"
@@ -199,9 +211,9 @@
       hidden={playingRest}
       tag={{
         text:
-          playingRest && skipStage === 'playing'
+          playingRest
             ? `PLAYING THE REST · ${newestMinute}'`
-            : loading || playingRest
+            : loading
               ? 'FULL TIME · STORING'
               : breakWord.toUpperCase(),
         tone: 'cyan',
@@ -344,6 +356,38 @@
         </div>
 
         <div>
+          {#if full}
+            {#if nextOffered}
+              <NextSteps ready={nextReady} onchoose={(id) => session.nextStep(id)} />
+              <div class="hr"></div>
+            {/if}
+            <div class="actions">
+              <!-- One cyan element per screen: with the Next list on show, New match is it. -->
+              <button
+                class="btn tall"
+                class:cy={!nextOffered}
+                type="button"
+                disabled={!nextReady}
+                onclick={() => session.replayWhole()}
+              >
+                <Glyph glyph={{ d: PLAY }} size={10} /> Replay the whole match
+              </button>
+              <div class="pair">
+                <button
+                  class="btn"
+                  type="button"
+                  disabled={!nextReady || session.saveBlocked !== null || session.saving}
+                  onclick={() => session.saveReplay()}>Save replay</button
+                >
+                <button class="btn gh" type="button" onclick={pickReplay}>Open a replay</button>
+              </div>
+              <button class="btn gh" type="button" onclick={() => session.closeReport()}>Back to the match at full time</button>
+              {#if session.saved}
+                <p class="g saved" role="status">Saved {session.saved.name}</p>
+              {/if}
+            </div>
+            <div class="hr"></div>
+          {/if}
           <SectionLabel label="What it means" later />
           <!-- STUB: what the result means (the table, the board, the next match) needs a season
                the engine does not have. -->
@@ -352,27 +396,6 @@
             <div class="kv"><span>Board confidence</span><b>Good ► Good</b></div>
             <div class="kv"><span>Next</span><b>Harlow Vale (A) · Sat 21 Nov</b></div>
           </StubSection>
-          {#if full}
-            <div class="hr"></div>
-            <div class="actions">
-              <button class="btn cy tall" type="button" onclick={() => session.replayWhole()}>
-                <Glyph glyph={{ d: PLAY }} size={10} /> Replay the whole match
-              </button>
-              <div class="pair">
-                <button
-                  class="btn"
-                  type="button"
-                  disabled={session.saveBlocked !== null || session.saving}
-                  onclick={() => session.saveReplay()}>Save replay</button
-                >
-                <button class="btn gh" type="button" onclick={pickReplay}>Open a replay</button>
-              </div>
-              <button class="btn gh" type="button" onclick={() => session.closeReport()}>Close</button>
-              {#if session.saved}
-                <p class="g saved" role="status">Saved {session.saved.name}</p>
-              {/if}
-            </div>
-          {/if}
         </div>
       </div>
     {/if}

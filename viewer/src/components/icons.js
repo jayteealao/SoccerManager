@@ -67,6 +67,8 @@ export const REWIND = 'M14.5 3 8 8l6.5 5zM8 3 1.5 8 8 13z';
 export const PLAY = 'M4 2.2 13.5 8 4 13.8z';
 export const PAUSE = 'M4 2.5h3v11H4zm5 0h3v11H9z';
 export const FAST_FORWARD = 'M1.5 3 8 8l-6.5 5zM8 3l6.5 5L8 13z';
+/// Back to kick-off: a bar and a back arrow, on the full-time replay row.
+export const TO_START = 'M3 2.5h2v11H3zM14 2.5v11L6 8z';
 
 // The front door's glyphs: the start options, the in-match menu and the locked career rows.
 export const PLUS = 'M7 2h2v5h5v2H9v5H7V9H2V7h5z';

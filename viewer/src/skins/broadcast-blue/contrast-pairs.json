@@ -1048,5 +1048,11 @@
     "bg": "--ground",
     "kind": "boundary",
     "where": "Match setup: a strength star"
+  },
+  {
+    "fg": "--band-ink",
+    "bg": "--navy-900",
+    "kind": "text",
+    "where": "the full-time tag under the score and on the pitch"
   }
 ]

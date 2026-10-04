@@ -3,7 +3,9 @@
      in the cyan block; the 66 px score strip; then two body columns of 760 px and 1fr. The
      left column holds the pitch, the playback row and the timeline; the right the commentary,
      the statistics and the other grounds of the matchday on the player's clock. Each screen state (loading, kick-off, live, paused,
-     error, first run, reconnecting) draws the board's body for it. Parts the viewer does not
+     error, first run, reconnecting, full time) draws the board's body for it. At full time the
+     live layout stays, a FULL TIME tag sits under the score and on the stopped pitch, and the
+     playback row holds only the replay controls. Parts the viewer does not
      build yet are stubs (MatchStub, the stub tabs): drawn, faded and inert. Skip to result in
      the playback row opens the Skip decision (`App.svelte`).
      The Touchline and Tactics tabs open those views over it (`App.svelte`); the match screen
@@ -22,6 +24,7 @@
   import ScoreStrip from '../components/ScoreStrip.svelte';
   import StepList from '../components/StepList.svelte';
   import SurfacePanel from '../components/SurfacePanel.svelte';
+  import { clockAt } from '../lib/recovery.js';
   import { stripFacts } from '../lib/stats.js';
 
   let { session } = $props();
@@ -47,11 +50,20 @@
 
   let screen = $derived(session.screen);
   let names = $derived(session.teams ? session.teams.map((t) => t['team.name']) : ['Home', 'Away']);
-  let facts = $derived(stripFacts(session.stats));
+  let skippedAt = $derived(session.skip?.state === 'ready' ? clockAt(session.skip.from) : null);
+  /// After a skip the strip's Possession cell says where the player skipped.
+  let facts = $derived(
+    stripFacts(session.stats).map((fact) =>
+      fact.label === 'Possession' && skippedAt && screen === 'full-time' ? { value: skippedAt, label: 'Skipped at' } : fact
+    )
+  );
   let steps = $derived(
     session.steps.map((s) => ({ label: s.label, state: STEP_STATE[s.state], word: s.word }))
   );
   let playing = $derived(screen === 'live' || screen === 'paused');
+  let fullTime = $derived(screen === 'full-time');
+  /// The live layout: while the match plays, and at full time.
+  let shown = $derived(playing || fullTime);
   let drawn = $derived(session.teams !== null && screen !== 'loading' && screen !== 'first-run');
   let panel = $derived(session.panel);
 
@@ -98,7 +110,7 @@
 
     <div class="cols">
       <div class="left">
-        {#if playing}
+        {#if shown}
           <MatchStub part="overlays" />
         {/if}
 
@@ -107,7 +119,7 @@
           {drawn}
           dim={screen === 'reconnecting'}
           banner={session.banner}
-          overlays={playing}
+          overlays={shown}
         >
           {#if screen === 'loading'}
             <div class="loading">
@@ -151,6 +163,8 @@
                 {/snippet}
               </SurfacePanel>
             </div>
+          {:else if fullTime}
+            <span class="ftag">FULL TIME · {session.dateClock}</span>
           {/if}
         </PitchCanvas>
 
@@ -163,6 +177,15 @@
           </div>
         {:else if screen !== 'error' && screen !== 'first-run'}
           <PlaybackRow
+            {fullTime}
+            ontostart={() => session.rewind(session.history?.firstTick ?? 0)}
+            onback10={() => session.step(-10)}
+            onplayhere={() => session.playFromHere()}
+            note={fullTime
+              ? skippedAt
+                ? `From ${skippedAt} the engine played on unwatched · the replay holds it`
+                : 'The whole match is stored · play it again from any minute'
+              : undefined}
             playing={session.playing && screen === 'live'}
             speed={session.speed}
             disabled={screen === 'loading'}
@@ -189,7 +212,7 @@
               onrelease={() => session.scrubEnd()}
             />
           {/if}
-          {#if playing}
+          {#if shown}
             <MatchStub part="highlights" />
             <MatchStub part="momentum" />
           {/if}
@@ -197,7 +220,7 @@
       </div>
 
       <div class="right">
-        {#if playing || screen === 'reconnecting'}
+        {#if shown || screen === 'reconnecting'}
           <MatchStub part="win-probability" />
           <div class="hr"></div>
         {/if}
@@ -222,7 +245,7 @@
             skeleton={screen === 'loading' || screen === 'error'}
           />
         {/if}
-        {#if playing || screen === 'reconnecting'}
+        {#if shown || screen === 'reconnecting'}
           <div class="hr"></div>
           <MatchStats stats={session.stats} {names} />
         {/if}
@@ -401,6 +424,23 @@
     margin: 0;
     font-size: 9.5px;
     color: var(--ink-3);
+  }
+
+  /* The full-time mark on the stopped pitch: the score strip's final tag, in the corner. */
+  .ftag {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    z-index: 2;
+    padding: 0 6px;
+    border-radius: var(--radius-sm);
+    background: var(--navy-900);
+    color: var(--band-ink);
+    font: 700 9.5px var(--fd);
+    letter-spacing: 0.06em;
+    line-height: 1.6;
+    white-space: nowrap;
+    pointer-events: none;
   }
 
   .file {

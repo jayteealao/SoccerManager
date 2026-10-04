@@ -176,6 +176,12 @@
     color: var(--on-warn);
   }
 
+  /* Full time: the match is over, so the tag leaves the state colours for the dark navy. */
+  .tag.final {
+    background: var(--navy-900);
+    color: var(--band-ink);
+  }
+
   .dot {
     display: inline-block;
     width: 7px;

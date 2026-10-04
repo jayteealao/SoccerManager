@@ -2,10 +2,13 @@
      cyan) with 40 px hit areas, Next stop, the speed segment 1× to 8×, and the ghost Skip to
      result, which opens the Skip decision. Skip to result is live only on a kicked-off live
      engine match before full time; otherwise it is disabled and faded. The row is one group
-     named "Playback"; every control is disabled while there is nothing to play. -->
+     named "Playback"; every control is disabled while there is nothing to play.
+     At full time (`fullTime`) the live controls leave: a REPLAY tag, Back to kick-off, Rewind
+     10 seconds, Play the replay from here (filled cyan) and the speeds, with `note` at the
+     end. The match is stored, so nothing here plays on the match screen itself. -->
 <script>
   import Glyph from './Glyph.svelte';
-  import { FAST_FORWARD, PAUSE, PLAY, REWIND } from './icons.js';
+  import { FAST_FORWARD, PAUSE, PLAY, REWIND, TO_START } from './icons.js';
   import { SPEEDS } from '../lib/playback.js';
 
   let {
@@ -19,9 +22,37 @@
     onspeed = () => {},
     canSkip = false,
     onskip = () => {},
+    fullTime = false,
+    ontostart = () => {},
+    onback10 = () => {},
+    onplayhere = () => {},
+    note = 'Rewind works while paused · back to live',
   } = $props();
 </script>
 
+{#if fullTime}
+<div class="row" role="group" aria-label="Playback">
+  <span class="tag">REPLAY</span>
+  <button class="ib" type="button" aria-label="Back to kick-off" onclick={ontostart}>
+    <Glyph glyph={{ d: TO_START }} size={11} />
+  </button>
+  <button class="ib" type="button" aria-label="Rewind 10 seconds" onclick={onback10}>
+    <Glyph glyph={{ d: REWIND }} size={11} />
+  </button>
+  <button class="ib on" type="button" aria-label="Play the replay from here" onclick={onplayhere}>
+    <Glyph glyph={{ d: PLAY }} size={11} />
+  </button>
+  <span class="seg" role="group" aria-label="Speed">
+    {#each SPEEDS as s (s)}
+      <button type="button" class:on={s === speed} aria-pressed={s === speed} aria-label="{s}x" onclick={() => onspeed(s)}
+        >{s}×</button
+      >
+    {/each}
+  </span>
+  <span class="gap"></span>
+  <span class="note">{note}</span>
+</div>
+{:else}
 <div class="row" class:off={disabled} role="group" aria-label="Playback">
   <button class="ib" type="button" aria-label="Previous stop" {disabled} onclick={onprevious}>
     <Glyph glyph={{ d: REWIND }} size={11} />
@@ -58,8 +89,9 @@
     <Glyph glyph={{ d: FAST_FORWARD }} size={10} /> Skip to result
   </button>
   <span class="gap"></span>
-  <span class="note">Rewind works while paused · back to live</span>
+  <span class="note">{note}</span>
 </div>
+{/if}
 
 <style>
   .row {
@@ -207,6 +239,20 @@
 
   .gap {
     flex: 1;
+  }
+
+  /* The REPLAY tag: the score strip's tag style on the raised ground. */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: var(--radius-sm);
+    background: var(--ground-2);
+    color: var(--ink);
+    font: 700 9.5px var(--fd);
+    letter-spacing: 0.06em;
+    white-space: nowrap;
   }
 
   .note {
