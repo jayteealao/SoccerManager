@@ -2,7 +2,7 @@
 
 A football management game: a native match engine written in Rust, and Touchline, a 2D match viewer that runs in the browser.
 
-You pick a lineup and tactics, kick off against a club the computer manages, and watch the match on a 2D pitch. The engine computes the ball and all 22 players at 50 ticks per second, applies the laws of the game, and writes commentary. During the match you change tactics and make substitutions; each change applies at the next stoppage. At half-time and at full time a report counts the match, and at full time you can save a replay.
+You pick a lineup and tactics, kick off against a club the computer manages, and watch the match on a 2D pitch. The engine computes the ball and all 22 players at 50 ticks per second, applies the laws of the game, and writes commentary. During the match you change tactics and make substitutions; each change applies at the next stoppage. At half-time and at full time a report counts the match, and at full time you can save a replay. After full time the match stays at its final whistle, and the report offers **New match**, which opens match setup with the same two clubs, or **Return to start**.
 
 ## Install
 
