@@ -575,17 +575,20 @@
     min-height: 0;
   }
 
-  /* The board's 270, 330, 305 and 290 px at 1280, as shares, so the columns grow together. */
+  /* The board's 270, 330, 305 and 290 px at 1280, as shares, so the columns grow together.
+   * Each column is as tall as its content, so its rule ends with it in a tall window. */
   .cols.ready {
     grid-template-columns: minmax(0, 270fr) minmax(0, 330fr) minmax(0, 305fr) minmax(0, 290fr);
+    align-items: start;
     margin-top: 6px;
   }
 
   /* As the board draws its columns: each keeps 18 px on its right, and each after the first
-   * is split from the one before by a rule. */
+   * is split from the one before by a rule. A column taller than the row scrolls. */
   .cols.ready > div {
     min-width: 0;
     min-height: 0;
+    max-height: 100%;
     overflow-y: auto;
     padding-right: 18px;
   }
@@ -766,6 +769,7 @@
     }
 
     .cols.ready > div {
+      max-height: none;
       overflow: visible;
     }
 

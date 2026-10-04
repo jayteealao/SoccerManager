@@ -203,10 +203,12 @@
   }
 
   /* The board's 330 px and 400 px at 1280, narrower in a narrower window; the middle
-     column, with the saved match, takes the rest. */
+     column, with the saved match, takes the rest. Each column is as tall as its content, so
+     its rule ends with it. */
   .cols {
     display: grid;
     grid-template-columns: clamp(260px, 27.6%, 330px) minmax(0, 1fr) clamp(300px, 33.5%, 400px);
+    align-items: start;
     margin-top: 12px;
     min-height: 0;
   }
