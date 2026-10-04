@@ -17,8 +17,7 @@ const workers = workerCount();
 // The four size projects run only the tests tagged @sizes (each state's screenshot and the
 // Tab walks): `chromium-1920` compares a second set of baselines at 1920 by 1080, and the
 // three layout projects run the layout check (support/layout.mjs) at 768 by 1024, 1024 by 640
-// and 2560 by 1440, with no baselines. SM_E2E_SIZES=1 adds them while the layouts are built.
-const sizes = process.env.SM_E2E_SIZES === '1' ? SIZES : [];
+// and 2560 by 1440, with no baselines.
 
 export default defineConfig({
   testDir: './match',
@@ -41,5 +40,5 @@ export default defineConfig({
   },
   // With more than one worker, the timing tests run alone after the others (see
   // support/workers.mjs).
-  projects: suiteProjects([{ name: 'chromium', metadata: { mode: 'pixels' } }, ...sizes], workers),
+  projects: suiteProjects([{ name: 'chromium', metadata: { mode: 'pixels' } }, ...SIZES], workers),
 });

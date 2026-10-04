@@ -21,7 +21,9 @@ export const TIMING = /@timing/;
 
 /// Measured on the reference desktop (8 cores) with the match suite: 1 worker 624 s, 2 workers
 /// 421 s with the same results; 3 and 4 workers save under a minute more, and the load fails
-/// tests that wait on the background matchday or a paused page clock.
+/// tests that wait on the background matchday or a paused page clock. With the four window-size
+/// projects (455 tests, 2 workers) the match suite took 20.2 minutes, the shell suite 0.1 and
+/// the engine suite (playwright.config.mjs) 19.1.
 const DEFAULT_WORKERS = 2;
 
 /// The command-line flags that pick tests in a way a teardown project ignores.
