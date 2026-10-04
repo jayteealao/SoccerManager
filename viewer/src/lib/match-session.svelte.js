@@ -279,6 +279,24 @@ export class MatchSession {
     });
   }
 
+  // ---- What the screen is in ----------------------------------------------------------------
+
+  /// `true` once the match is over: the screen holds FULL TIME.
+  get isOver() {
+    return this.screen === 'full-time';
+  }
+
+  /// `true` while the match plays and once it is over: the header shows the score, and the
+  /// match screen has its live layout.
+  get underWay() {
+    return this.screen === 'live' || this.screen === 'paused' || this.isOver;
+  }
+
+  /// `true` on the screens whose empty commentary feed shows its empty text.
+  get feedWaits() {
+    return this.underWay || this.screen === 'kickoff' || this.screen === 'reconnecting';
+  }
+
   // ---- What the header and the strip show -------------------------------------------------
 
   /// The fixture, with the score once the match is under way.
@@ -287,8 +305,7 @@ export class MatchSession {
       return 'Touchline';
     }
     const names = this.teams ? this.teams.map((t) => t['team.name']) : null;
-    const scored = this.screen === 'live' || this.screen === 'paused' || this.screen === 'full-time';
-    return fixtureTitle(names, scored ? this.score : null);
+    return fixtureTitle(names, this.underWay ? this.score : null);
   }
 
   /// The engine word and version, or what the screen is waiting for.
@@ -300,7 +317,7 @@ export class MatchSession {
         return 'First run · no engine found';
       default: {
         const words = this.engineVersion ? `${this.engineWord} · v${this.engineVersion}` : this.engineWord;
-        return this.screen === 'full-time' && this.skip?.state === 'ready'
+        return this.isOver && this.skip?.state === 'ready'
           ? `${words} · skipped from ${clockAt(this.skip.from)}`
           : words;
       }
@@ -320,7 +337,7 @@ export class MatchSession {
       return clockAt(this.status['snapshot.tick']);
     }
     // Full time shows the match's final clock, whatever minute the stopped pitch shows.
-    if (this.screen === 'full-time' && this.match.fullTimeTick !== null) {
+    if (this.isOver && this.match.fullTimeTick !== null) {
       return clockAt(this.match.fullTimeTick);
     }
     return this.clockText;
@@ -558,7 +575,7 @@ export class MatchSession {
       this.engineWord = 'Engine connected';
       this.panel = null;
       this.busy = false;
-      if (this.screen !== 'full-time') {
+      if (!this.isOver) {
         this.screen = this.playing ? 'live' : 'paused';
       }
       this.setNotice('connected', 'Connected again. Play resumes at the last stoppage.');
@@ -877,7 +894,7 @@ export class MatchSession {
     // every event that arrived, whatever its tick, until the pitch is moved back before the
     // whistle.
     const final =
-      this.screen === 'full-time' &&
+      this.isOver &&
       this.match.fullTimeTick !== null &&
       this.renderedTick >= this.match.fullTimeTick;
     this.grounds = groundsAt(this.matchday, this.renderedTick, {
@@ -1635,7 +1652,7 @@ export class MatchSession {
     if (this.report?.kind !== KIND.fullTime) {
       return false;
     }
-    if (this.screen === 'full-time') {
+    if (this.isOver) {
       this.setPlaying(false);
     }
     this.reportFrom = 'match';
@@ -1713,7 +1730,7 @@ export class MatchSession {
       this.onLeave({});
       return;
     }
-    if (this.screen === 'full-time') {
+    if (this.isOver) {
       this.setPlaying(false);
     }
     this.view = this.replayFrom === 'report' && this.report ? 'report' : 'match';
@@ -1813,7 +1830,7 @@ export class MatchSession {
         : [];
     return {
       emptyStateShown:
-        this.feedRows.length === 0 && ['kickoff', 'live', 'paused', 'reconnecting', 'full-time'].includes(this.screen),
+        this.feedRows.length === 0 && this.feedWaits,
       energyTick: state?.energyTick ?? null,
       lineupLabels: rows.map((r) => ({ name: r.name, shirt: r.shirt, condition: r.condition, card: r.cardWord })),
     };

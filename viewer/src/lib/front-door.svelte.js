@@ -139,7 +139,7 @@ export class FrontDoor {
 
   /// `true` when the match on show is over and stored, so leaving it keeps nothing for Resume.
   get matchOver() {
-    return this.session?.screen === 'full-time' && this.session.nextReady === true;
+    return this.session?.isOver === true && this.session.nextReady === true;
   }
 
   /// The quit confirmation's lines: a finished match is not kept; any other match saves at

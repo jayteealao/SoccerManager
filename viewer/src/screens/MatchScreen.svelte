@@ -63,16 +63,16 @@
   /// After a skip the strip's Possession cell says where the player skipped.
   let facts = $derived(
     stripFacts(session.stats).map((fact) =>
-      fact.label === 'Possession' && skippedAt && screen === 'full-time' ? { value: skippedAt, label: 'Skipped at' } : fact
+      fact.label === 'Possession' && skippedAt && fullTime ? { value: skippedAt, label: 'Skipped at' } : fact
     )
   );
   let steps = $derived(
     session.steps.map((s) => ({ label: s.label, state: STEP_STATE[s.state], word: s.word }))
   );
   let playing = $derived(screen === 'live' || screen === 'paused');
-  let fullTime = $derived(screen === 'full-time');
+  let fullTime = $derived(session.isOver);
   /// The live layout: while the match plays, and at full time.
-  let shown = $derived(playing || fullTime);
+  let shown = $derived(session.underWay);
   let drawn = $derived(session.teams !== null && screen !== 'loading' && screen !== 'first-run');
   let panel = $derived(session.panel);
   /// At full time, with the pitch at or after the whistle and every ground ended, the other

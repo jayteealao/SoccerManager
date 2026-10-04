@@ -116,6 +116,10 @@ class FakeSession {
     this.started = true;
   }
 
+  get isOver() {
+    return this.screen === 'full-time';
+  }
+
   dispose() {
     this.disposed = true;
   }
