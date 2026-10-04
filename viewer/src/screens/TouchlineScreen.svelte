@@ -159,9 +159,10 @@
     height: 100%;
   }
 
+  /* The board's 396 px, the rest and 392 px at 1280, as shares. */
   .cols {
     display: grid;
-    grid-template-columns: 396px 1fr 392px;
+    grid-template-columns: minmax(0, 396fr) minmax(0, 407fr) minmax(0, 392fr);
     grid-template-rows: minmax(0, 1fr);
     margin-top: 10px;
     flex: 1;
@@ -233,5 +234,41 @@
     margin: 0;
     font-size: 10.5px;
     color: var(--ink-2);
+  }
+
+  /* Compact: the changes and the assistant side by side, the player state across under
+     them. The body scrolls. */
+  @media (max-width: 1023px), (max-height: 599px) {
+    .screen {
+      height: auto;
+    }
+
+    .cols {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-rows: auto auto;
+      grid-template-areas: 'l r' 'm m';
+      flex: none;
+    }
+
+    .col {
+      overflow: visible;
+    }
+
+    .col.left {
+      grid-area: l;
+    }
+
+    .col.mid {
+      grid-area: m;
+      border-left: 0;
+      border-top: 1px solid var(--rule);
+      margin-top: 14px;
+      padding: 14px 0 0;
+    }
+
+    .col.right {
+      grid-area: r;
+      padding-right: 0;
+    }
   }
 </style>

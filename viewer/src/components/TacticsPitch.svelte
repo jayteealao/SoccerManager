@@ -1,5 +1,6 @@
-<!-- An upright tactics pitch, 300 by 430, own goal at the bottom, as the sketch's Tactics board
-     draws both shapes: the striped turf, the markings, and a ringed marker per slot with the
+<!-- An upright tactics pitch, drawn 300 by 430 and filling its column at that aspect, own goal
+     at the bottom, as the sketch's Tactics board draws both shapes: the striped turf, the
+     markings, and a ringed marker per slot with the
      player's name and role tag under it. With `interactive`, each marker is a button named
      by its slot, player, role fit and fitness: a click picks it, Delete empties it, and a
      squad row dropped on it takes the slot. Otherwise the markers are drawn only. -->
@@ -42,7 +43,7 @@
 </script>
 
 <div class="pitch" role={interactive ? 'group' : 'img'} aria-label={label}>
-  <svg width={W} height={H} viewBox="0 0 {W} {H}" aria-hidden="true" focusable="false">
+  <svg viewBox="0 0 {W} {H}" aria-hidden="true" focusable="false">
     {#each STRIPES as i (i)}
       <rect class={i % 2 === 0 ? 'stripe' : 'stripe-2'} x="0" y={i * STRIPE} width={W} height={STRIPE + 0.6} />
     {/each}
@@ -94,8 +95,8 @@
 <style>
   .pitch {
     position: relative;
-    width: 300px;
-    height: 430px;
+    width: 100%;
+    aspect-ratio: 300 / 430;
     border-radius: var(--radius-md);
     overflow: hidden;
     box-shadow: 0 0 0 2px var(--pitch-deep);
@@ -103,6 +104,8 @@
 
   svg {
     display: block;
+    width: 100%;
+    height: 100%;
   }
 
   .stripe {
@@ -141,6 +144,18 @@
 
   button.tk {
     cursor: pointer;
+  }
+
+  /* The marker is drawn 19 px wide with its caption under it; its hit area is the step's
+     hit size around the ring. */
+  button.tk::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, var(--hit));
+    height: max(100%, var(--hit));
+    transform: translate(-50%, -50%);
   }
 
   /* The pitch green takes a light ring: cyan measures under 3:1 on the turf. */

@@ -158,7 +158,9 @@
   .btn {
     display: inline-flex;
     align-items: center;
-    height: 18px;
+    height: var(--hit);
+    min-width: var(--hit);
+    justify-content: center;
     padding: 0 7px;
     border: 0;
     border-radius: var(--radius-sm);

@@ -90,7 +90,7 @@
         <span class="g">{@render grip()}</span>
         <span class="chip {row.chipKind}">{row.chip}</span>
         <b class="num shirt">{row.shirt}</b>
-        <span class="who">
+        <span class="who" data-may-truncate>
           <b class="name">{row.name}</b>
           {#each row.positions as p (p)}<span class="pc">{p}</span>{/each}
           {#if row.clash}<span class="bd">named twice</span>{/if}
@@ -147,14 +147,14 @@
     <div class="group"><span>Cannot play</span><em>injuries and bans</em></div>
     <div class="row off">
       <span></span><span class="chip none">—</span><span></span>
-      <span class="who">
+      <span class="who" data-may-truncate>
         <svg class="icon" width="12" height="12" viewBox="0 0 16 16" role="img" aria-label="Injured"><rect class="hurt" x="1" y="1" width="14" height="14" rx="2" /><path class="cross" d="M8 4v8M4 8h8" /></svg>
         <span class="bd">Injured · the reason in words</span>
       </span>
     </div>
     <div class="row off">
       <span></span><span class="chip none">—</span><span></span>
-      <span class="who">
+      <span class="who" data-may-truncate>
         <svg class="icon" width="12" height="12" viewBox="0 0 16 16" role="img" aria-label="Suspended"><rect class="hurt" x="4" y="1.5" width="8.5" height="13" rx="1.2" transform="rotate(8 8 8)" /></svg>
         <span class="bd">Suspended · the reason in words</span>
       </span>
@@ -165,7 +165,8 @@
 <style>
   .legend {
     display: flex;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 4px 10px;
     align-items: center;
     font-size: 9.5px;
     color: var(--ink-2);
@@ -189,7 +190,7 @@
   .btn {
     display: inline-flex;
     align-items: center;
-    height: 22px;
+    height: var(--hit);
     padding: 0 12px;
     border: 0;
     border-radius: var(--radius-sm);
@@ -254,7 +255,7 @@
 
   .row {
     width: 100%;
-    height: 20px;
+    height: var(--hit);
     border: 0;
     border-bottom: 1px solid var(--rule-2);
     background: transparent;
@@ -316,6 +317,7 @@
   }
 
   .legend .chip {
+    flex: none;
     padding: 0 4px;
   }
 

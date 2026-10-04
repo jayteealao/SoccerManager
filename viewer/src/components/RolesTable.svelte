@@ -28,7 +28,7 @@
       <th class="r">#</th>
       <th>Player</th>
       <th>Role · duty</th>
-      <th colspan="2">
+      <th class="grasp" colspan="2">
         <StubSection note="grasp column head" inline later>Grasp</StubSection>
       </th>
     </tr>
@@ -38,7 +38,7 @@
       {@const current = tactics?.roles?.[slot]}
       <tr class:off={row.sentOff}>
         <td class="r num">{row.shirt}</td>
-        <td class="name">{row.name}</td>
+        <td class="name" data-may-truncate>{row.name}</td>
         <td>
           {#if current}<div class="pick">
             <select
@@ -99,7 +99,7 @@
 
   td {
     padding: 0 3px;
-    height: 24px;
+    height: var(--hit);
     white-space: nowrap;
     color: var(--ink);
   }
@@ -126,11 +126,11 @@
     display: flex;
     gap: 4px;
     align-items: center;
-    height: 24px;
+    height: var(--hit);
   }
 
   .sel {
-    height: 20px;
+    height: var(--hit);
     max-width: 118px;
     padding: 0 2px 0 5px;
     background: var(--select-ground);
@@ -167,5 +167,16 @@
     font-size: 9.5px;
     color: var(--ink-3);
     line-height: 1.4;
+  }
+
+  /* In a narrow column the grasp stub gives way, so the role and duty keep their room. */
+  @container (max-width: 380px) {
+    .grasp {
+      display: none;
+    }
+
+    .sel {
+      max-width: 92px;
+    }
   }
 </style>

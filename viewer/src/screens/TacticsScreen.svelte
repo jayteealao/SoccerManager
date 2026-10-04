@@ -166,40 +166,42 @@
         onmentality={(m) => edit({ mentality: m })}
       />
 
-      <!-- STUB: the in-possession shape needs a shape model the engine does not have yet. -->
-      <StubSection note="in-possession shape">
-        <span class="lab in">In possession</span>
-        <div class="box left">
-          <TacticsPitch markers={shadow} label="In possession shape" />
-        </div>
-        <span class="later-tag">LATER</span>
-      </StubSection>
+      <div class="shapes">
+        <!-- STUB: the in-possession shape needs a shape model the engine does not have yet. -->
+        <StubSection note="in-possession shape">
+          <div class="shape">
+            <span class="lab in">In possession</span>
+            <TacticsPitch markers={shadow} label="In possession shape" />
+            <span class="later-tag">LATER</span>
+          </div>
+        </StubSection>
 
-      <span class="lab out">Out of possession · {schema?.formations?.[tactics?.formation ?? 0]?.name ?? ''}</span>
-      <div class="box right">
-        <TacticsPitch
-          {markers}
-          interactive={editable}
-          label="Out of possession shape: the eleven slots"
-          onpick={(n) => act((e) => e.pickPlace({ kind: 'slot', n }))}
-          onempty={(n) => act((e) => e.emptyPlace({ kind: 'slot', n }))}
-          ondrop={(from, n) => act((e) => e.drop(from, { kind: 'slot', n }))}
-        />
+        <div class="shape">
+          <span class="lab out">Out of possession · {schema?.formations?.[tactics?.formation ?? 0]?.name ?? ''}</span>
+          <TacticsPitch
+            {markers}
+            interactive={editable}
+            label="Out of possession shape: the eleven slots"
+            onpick={(n) => act((e) => e.pickPlace({ kind: 'slot', n }))}
+            onempty={(n) => act((e) => e.emptyPlace({ kind: 'slot', n }))}
+            ondrop={(from, n) => act((e) => e.drop(from, { kind: 'slot', n }))}
+          />
+        </div>
+
+        <!-- STUB: Ball lost, Ball won, the roles catalogue and marking need models the engine
+             does not have yet. -->
+        <StubSection note="tactic cards">
+          <div class="cards">
+            {#each CARDS as card (card.id)}
+              <div class="tcard">
+                <h4>{card.title}<span class="later">LATER</span></h4>
+                <p>{card.text}</p>
+                <span class="more">Change</span>
+              </div>
+            {/each}
+          </div>
+        </StubSection>
       </div>
-
-      <!-- STUB: Ball lost, Ball won, the roles catalogue and marking need models the engine
-           does not have yet. -->
-      <StubSection note="tactic cards">
-        <div class="cards">
-          {#each CARDS as card (card.id)}
-            <div class="tcard">
-              <h4>{card.title}<span class="later">LATER</span></h4>
-              <p>{card.text}</p>
-              <span class="more">Change</span>
-            </div>
-          {/each}
-        </div>
-      </StubSection>
 
       <InstructionsPanel {schema} {tactics} disabled={!editable && !live} onedit={(c) => edit(c)} />
     </div>
@@ -245,24 +247,47 @@
 </AppShell>
 
 <style>
+  /* The board's 770 px panel and the squad beside it at 1280, as shares, so both grow
+     together. */
   .screen {
-    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 770fr) minmax(0, 409fr);
+    grid-template-rows: minmax(0, 1fr);
+    column-gap: 16px;
     height: 100%;
+    padding-top: 4px;
   }
 
   .tpanel {
-    position: absolute;
-    left: 0;
-    top: 4px;
-    width: 770px;
-    height: 692px;
+    align-self: start;
+    min-width: 0;
+    container-type: inline-size;
+    padding: 9px 12px 12px;
     background: var(--pitch);
     border-radius: 6px;
   }
 
+  /* The two shapes and the tactic cards, as the board draws them at 1280: 300, 300 and
+     126 px. */
+  .shapes {
+    display: grid;
+    grid-template-columns: minmax(0, 300fr) minmax(0, 300fr) minmax(0, 126fr);
+    gap: 10px;
+    margin-top: 7px;
+  }
+
+  .shape {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-width: 0;
+  }
+
   .lab {
-    position: absolute;
-    top: 44px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font: 700 10px var(--fd);
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -273,42 +298,21 @@
   }
 
   .lab.in {
-    left: 12px;
     background: var(--navy-700);
   }
 
   .lab.out {
-    left: 322px;
     background: var(--pitch-tag);
   }
 
-  .box {
-    position: absolute;
-    top: 68px;
-  }
-
-  .box.left {
-    left: 12px;
-  }
-
-  .box.right {
-    left: 322px;
-  }
-
   .later-tag {
-    position: absolute;
-    left: 12px;
-    top: 502px;
     font: 600 9px var(--fd);
     letter-spacing: 0.06em;
     color: var(--pitch-ink);
   }
 
   .cards {
-    position: absolute;
-    left: 632px;
-    right: 12px;
-    top: 44px;
+    min-width: 0;
   }
 
   .tcard {
@@ -349,12 +353,10 @@
   }
 
   .side {
-    position: absolute;
-    left: 786px;
-    right: 0;
-    top: 4px;
-    bottom: 0;
+    min-width: 0;
+    min-height: 0;
     overflow-y: auto;
+    container-type: inline-size;
   }
 
   .hr {
@@ -364,5 +366,42 @@
 
   .gap {
     height: 10px;
+  }
+
+  /* A panel under 740 px, as the Tactics-768 board draws it: the two shapes side by side,
+     the tactic cards in a row of four under them. */
+  @container (max-width: 739px) {
+    .shapes {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    /* The cards' stub box is the grid's last item. */
+    .shapes > :global(:last-child) {
+      grid-column: 1 / -1;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .tcard {
+      margin-bottom: 0;
+    }
+  }
+
+  /* Compact: the squad under the panel. The body scrolls. */
+  @media (max-width: 1023px), (max-height: 599px) {
+    .screen {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto;
+      row-gap: 16px;
+      height: auto;
+    }
+
+    .side {
+      overflow: visible;
+    }
   }
 </style>

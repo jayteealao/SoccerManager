@@ -139,9 +139,11 @@
     height: 100%;
   }
 
+  /* The board's 318 px, the rest and 250 px at 1280, as shares; one column at the compact
+     step, in reading order. */
   .cols {
     display: grid;
-    grid-template-columns: 318px 1fr 250px;
+    grid-template-columns: minmax(0, 318fr) minmax(0, 579fr) minmax(0, 250fr);
     gap: 0 24px;
     margin-top: 10px;
     flex: none;
@@ -213,7 +215,7 @@
   .btn {
     display: inline-flex;
     align-items: center;
-    height: 22px;
+    height: var(--hit);
     padding: 0 10px;
     border: 0;
     border-radius: var(--radius-sm);
@@ -285,5 +287,26 @@
   .none {
     margin: 20px 0;
     color: var(--ink-2);
+  }
+
+  /* Compact: the two line-ups side by side and the kick-off pitch across under them. */
+  @media (max-width: 1023px), (max-height: 599px) {
+    .cols {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-areas: 'a c' 'b b';
+      gap: 14px 24px;
+    }
+
+    .cols > :global(:nth-child(1)) {
+      grid-area: a;
+    }
+
+    .cols > .mid {
+      grid-area: b;
+    }
+
+    .cols > :global(:nth-child(3)) {
+      grid-area: c;
+    }
   }
 </style>

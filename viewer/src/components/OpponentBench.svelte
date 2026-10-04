@@ -17,7 +17,7 @@
   <div class="kv"><span>Their substitutes used</span><b class="num">{bench.text}</b></div>
   <ul>
     {#each bench.players as p (p.id)}
-      <li><span class="num">{p.shirt}</span> {p.name} <em>{p.position}</em></li>
+      <li data-may-truncate><span class="num">{p.shirt}</span> {p.name} <em>{p.position}</em></li>
     {/each}
   </ul>
 </section>

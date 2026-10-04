@@ -70,12 +70,10 @@
 
 <style>
   .bar {
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    top: 9px;
-    height: 28px;
+    position: relative;
+    min-height: 28px;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 12px;
     padding: 0 8px;
@@ -98,7 +96,7 @@
   }
 
   .sel {
-    height: 20px;
+    height: var(--hit);
     padding: 0 4px 0 6px;
     background: var(--pitch-select);
     border: 1px solid var(--pitch-deep);

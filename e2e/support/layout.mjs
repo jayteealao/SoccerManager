@@ -11,8 +11,9 @@
 //      the text or a box around it (the header title, club and player names);
 //   4. overlap: two visible text runs or controls whose boxes cross by more than 1 px on both
 //      axes where neither holds the other, outside `[data-layout-layer]` (the report
-//      timeline, whose markers for moments a minute apart touch); while a dialog is open
-//      only its own parts are checked;
+//      timeline, whose markers for moments a minute apart touch, and the kick-off pitch,
+//      where the two centre forwards' names touch); while a dialog is open only its own
+//      parts are checked;
 //   5. small controls: every visible control that takes focus answers `elementFromPoint` at
 //      the four corners of a square of `minControl` px around its centre, so a hit area drawn
 //      by a pseudo-element counts and a covered control does not;
@@ -217,18 +218,19 @@ export async function layoutReport(page, { minControl = 24 } = {}) {
           break;
         }
       }
-      const s = scroller?.getBoundingClientRect();
       const across = r.left >= -1 && r.right <= view.width + 1;
       const down = r.top >= -1 && r.bottom <= view.height + 1;
+      // Shown whole: no box around it that clips or scrolls cuts it.
+      const v = onShow(el, r);
       const inScroller =
-        s && cx >= s.left && cx <= s.right && cy >= s.top && cy <= s.bottom;
+        v !== null && v.left <= r.left + 1 && v.right >= r.right - 1 && v.top <= r.top + 1 && v.bottom >= r.bottom - 1;
       if (!across && !(scroller && tabRow(el))) {
         add('cut off', el, r, 'outside the window across');
       } else if (!down && !scroller) {
         add('cut off', el, r, 'outside the window down, with no box that scrolls to it');
       }
-      // A control scrolled out of its box's view is reachable; its hit area is measured where
-      // it shows.
+      // A control scrolled out of its box's view, or partly out, is reachable; its hit area
+      // is measured where it shows whole.
       if (!down || !across || (scroller && !inScroller)) {
         continue;
       }

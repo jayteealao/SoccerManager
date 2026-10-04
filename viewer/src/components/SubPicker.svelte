@@ -112,7 +112,7 @@
   }
 
   .sel {
-    height: 24px;
+    height: var(--hit);
     min-width: 0;
     padding: 0 4px 0 8px;
     background: var(--select-ground);
@@ -132,7 +132,7 @@
   .btn {
     display: inline-flex;
     align-items: center;
-    height: 24px;
+    height: var(--hit);
     padding: 0 12px;
     border: 0;
     border-radius: var(--radius-sm);

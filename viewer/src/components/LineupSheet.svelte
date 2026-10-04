@@ -19,7 +19,7 @@
 <section class="sheet" class:away aria-label="{name} line-up">
   <div class="head" style:border-top-color={kit?.fill}>
     {#if !away}<Crest {team} width={24} height={26} />{/if}
-    <h3>{name}</h3>
+    <h3 data-may-truncate>{name}</h3>
     <span class="shape">{shape}</span>
     {#if away}<Crest {team} width={24} height={26} />{/if}
   </div>
@@ -67,7 +67,7 @@
   <h4>Substitutes</h4>
   <ul class="subs">
     {#each sheet.bench as row (row.id)}
-      <li><span class="num">{row.shirt}</span> {row.surname}</li>
+      <li data-may-truncate><span class="num">{row.shirt}</span> {row.surname}</li>
     {/each}
   </ul>
 </section>

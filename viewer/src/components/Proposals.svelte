@@ -100,7 +100,7 @@
   .btn {
     display: inline-flex;
     align-items: center;
-    height: 22px;
+    height: var(--hit);
     padding: 0 12px;
     border: 0;
     border-radius: var(--radius-sm);

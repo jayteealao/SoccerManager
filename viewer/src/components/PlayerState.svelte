@@ -185,4 +185,15 @@
     clip-path: inset(50%);
     white-space: nowrap;
   }
+
+  section {
+    container-type: inline-size;
+  }
+
+  /* In a narrow column the three stub columns give way to the figures. */
+  @container (max-width: 400px) {
+    .stubcol {
+      display: none;
+    }
+  }
 </style>

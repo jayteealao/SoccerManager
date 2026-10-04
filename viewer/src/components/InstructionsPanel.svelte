@@ -54,10 +54,7 @@
 
 <style>
   .cards {
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    top: 508px;
+    margin-top: 10px;
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
@@ -101,7 +98,7 @@
   }
 
   .sel {
-    height: 20px;
+    height: var(--hit);
     min-width: 96px;
     padding: 0 4px 0 6px;
     background: var(--select-ground);

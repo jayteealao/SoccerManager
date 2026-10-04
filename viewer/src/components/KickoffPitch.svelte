@@ -14,8 +14,18 @@
   );
 </script>
 
-<div class="pitchbox" style:width="{width}px" style:height="{height}px" role="img" aria-label={label}>
-  <svg {width} {height} aria-hidden="true" focusable="false">
+<!-- A layer for the layout check: at kick-off the two centre forwards stand together, so
+     their surnames touch, as the picture has them; the label names both shapes. The box
+     fills its column up to the drawn 500 px, at the drawn aspect. -->
+<div
+  class="pitchbox"
+  style:max-width="{width}px"
+  style:aspect-ratio="{width} / {height}"
+  role="img"
+  aria-label={label}
+  data-layout-layer
+>
+  <svg viewBox="0 0 {width} {height}" aria-hidden="true" focusable="false">
     {#each { length: STRIPES } as _, i (i)}
       <rect class={i % 2 === 0 ? 'st' : 'st2'} x={i * stripe} y="0" width={stripe + 0.6} {height} />
     {/each}
@@ -53,6 +63,7 @@
 <style>
   .pitchbox {
     position: relative;
+    width: 100%;
     border-radius: var(--radius-md);
     overflow: hidden;
     box-shadow: 0 0 0 2px var(--pitch-deep);
@@ -62,6 +73,8 @@
   svg {
     position: absolute;
     inset: 0;
+    width: 100%;
+    height: 100%;
   }
 
   .st {
