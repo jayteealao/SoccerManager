@@ -64,24 +64,25 @@ export async function rewindTo(page, tick) {
 
 /// A fast-forwarded match, live on the match view, to its full-time report: once the engine
 /// has sent the full-time whistle, the pitch jumps to a minute before it and plays at 8x until
-/// the report opens. Returns the full-time event.
+/// the report opens, past a half-time report on the way. Returns the full-time event.
 export async function toFullTime(page) {
   await until(page, () => window.__touchline.events().some((e) => e['event.type'] === 'full-time'), undefined, 180_000);
   const whistle = await hook(page, () => window.__touchline.events().find((e) => e['event.type'] === 'full-time'));
-  await rewindTo(page, Math.max(0, whistle.tick - 3_000));
+  // Paused, so the pitch holds the tick the rewind lands on.
   const playback = page.getByRole('group', { name: 'Playback' }).filter({ visible: true });
-  await playback.getByRole('button', { name: '8x', exact: true }).click();
-  if (await playback.getByRole('button', { name: 'Play', exact: true }).isVisible()) {
-    await playback.getByRole('button', { name: 'Play', exact: true }).click();
+  if (await playback.getByRole('button', { name: 'Pause', exact: true }).isVisible()) {
+    await playback.getByRole('button', { name: 'Pause', exact: true }).click();
   }
-  await until(
-    page,
-    () => {
-      const report = window.__touchline.report();
-      return report.open && report.kind === 'full-time';
-    },
-    undefined,
-    60_000
-  );
-  return whistle;
+  await rewindTo(page, Math.max(whistle.tick - 3_000, Math.floor(whistle.tick / 2)));
+  await playback.getByRole('button', { name: '8x', exact: true }).click();
+  await playback.getByRole('button', { name: 'Play', exact: true }).click();
+  // A short match's half time may lie inside the last minute: CONTINUE plays on.
+  for (;;) {
+    await until(page, () => window.__touchline.report().open, undefined, 60_000);
+    if ((await hook(page, () => window.__touchline.report().kind)) === 'full-time') {
+      return whistle;
+    }
+    await page.locator('header button.cont:visible').click();
+    await until(page, () => !window.__touchline.report().open, undefined, 5_000);
+  }
 }
