@@ -391,6 +391,14 @@
     }
   }
 
+  /* Wide and up, as the Tactics-1920 board draws it: the panel keeps 865 px and the squad
+     list takes the rest, from 520 px. */
+  @media (min-width: 1600px) {
+    .screen {
+      grid-template-columns: minmax(0, 865px) minmax(520px, 1fr);
+    }
+  }
+
   /* Compact: the squad under the panel. The body scrolls. */
   @media (max-width: 1023px), (max-height: 599px) {
     .screen {

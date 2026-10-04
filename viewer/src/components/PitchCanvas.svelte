@@ -48,11 +48,16 @@
     const cssHeight = css ? css.blockSize : entry.contentRect.height;
     const device = entry.devicePixelContentBoxSize?.[0];
     const ratio = (globalThis.devicePixelRatio || 1) * (el.currentCSSZoom ?? 1);
+    // The browser's device-pixel box is snapped to the screen's pixels, within a pixel of the
+    // CSS box times the ratio; an emulated scale (a test's device scale factor) reports it in
+    // CSS pixels instead, so a size far from the product is not taken.
+    const snapped = (reported, cssSize) =>
+      reported !== undefined && Math.abs(reported - cssSize * ratio) <= 1 ? reported : Math.round(cssSize * ratio);
     return {
       width: cssWidth,
       height: cssHeight,
-      deviceWidth: Math.round(device ? device.inlineSize : cssWidth * ratio),
-      deviceHeight: Math.round(device ? device.blockSize : cssHeight * ratio),
+      deviceWidth: snapped(device?.inlineSize, cssWidth),
+      deviceHeight: snapped(device?.blockSize, cssHeight),
     };
   }
 

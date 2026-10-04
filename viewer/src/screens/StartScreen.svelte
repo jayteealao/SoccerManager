@@ -112,8 +112,6 @@
           <SectionLabel label="Saved match" note="Resume where you stopped" />
           <svg
             class="pitch"
-            width="100%"
-            height="236"
             viewBox="-4 -4 {ground[0] + 8} {ground[1] + 8}"
             preserveAspectRatio="xMidYMid meet"
             role="img"
@@ -204,10 +202,11 @@
     height: 100%;
   }
 
-  /* The board's 330 px, the rest and 400 px at 1280, as shares. */
+  /* The board's 330 px and 400 px at 1280, narrower in a narrower window; the middle
+     column, with the saved match, takes the rest. */
   .cols {
     display: grid;
-    grid-template-columns: minmax(0, 330fr) minmax(0, 465fr) minmax(0, 400fr);
+    grid-template-columns: clamp(260px, 27.6%, 330px) minmax(0, 1fr) clamp(300px, 33.5%, 400px);
     margin-top: 12px;
     min-height: 0;
   }
@@ -226,8 +225,12 @@
     padding-right: 0;
   }
 
+  /* The saved match's ground fills its column at the ground's proportions, up to 760 px. */
   .pitch {
     display: block;
+    width: 100%;
+    max-width: 760px;
+    height: auto;
     background: var(--pitch);
     border-radius: var(--radius-md);
   }
