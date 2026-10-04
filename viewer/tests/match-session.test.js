@@ -1034,6 +1034,37 @@ test('no control, menu or seek brings LIVE or PAUSED back after full time', asyn
   assert.deepEqual([...words], ['FULL TIME']);
 });
 
+test('at full time every ground reads FT, even one whose whistle comes after the match’s', async () => {
+  const { session, socket } = await started(RUNNING);
+  socket.deliver(hello());
+  socket.deliver(matchdayMessage());
+  session.act();
+  const groundEnd = (fixture, tick) =>
+    JSON.stringify({ type: 'ground-event', fixture, tick, kind: 'full-time', minute: 90, added: 3, score: [0, 0] });
+  socket.deliver(groundEnd(0, 790));
+  socket.deliver(groundEnd(1, 810));
+  shortMatch(socket);
+  session.rewind(700);
+  playFrames(session, () => session.view === 'report');
+  socket.finish();
+  session.closeReport();
+  assert.equal(session.screen, 'full-time');
+  assert.deepEqual(
+    session.grounds.rows.map((r) => [r.minute, r.ended]),
+    [
+      ['FT', true],
+      ['FT', true],
+    ],
+    'the ground that ends after the match’s whistle reads FT too'
+  );
+  session.rewind(700);
+  assert.deepEqual(
+    session.grounds.rows.map((r) => r.ended),
+    [false, false],
+    'back before the whistle, the list is on the player’s clock again'
+  );
+});
+
 test('the action block at full time opens the report again', async () => {
   const { session } = await atFullTime();
   session.closeReport();

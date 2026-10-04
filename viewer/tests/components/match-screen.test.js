@@ -292,6 +292,33 @@ test('the right column lists the other grounds at the rendered tick; the menu ta
   assert.equal(list().querySelector('[tabindex], button, a[href]'), null, 'the list takes no focus');
 });
 
+test('at full time the other grounds read final and FT, even one that ends after the match', async () => {
+  const { s, socket } = await session(RUNNING);
+  socket.deliver(HELLO);
+  socket.deliver(MATCHDAY);
+  s.act();
+  for (let t = 1; t <= 800; t += 1) {
+    socket.deliver(encodeKeyframe(t, new Array(COMPONENT_COUNT).fill(0)));
+  }
+  const end = (fixture, at) =>
+    JSON.stringify({ type: 'ground-event', fixture, tick: at, kind: 'full-time', minute: 90, added: 3, score: [0, 0] });
+  socket.deliver(end(0, 790));
+  socket.deliver(end(1, 810));
+  socket.deliver(JSON.stringify(eventMessage(800, 'full-time', { 'home.score': 0, 'away.score': 0 })));
+  s.rewind(800);
+  s.openReport('full-time', 800);
+  s.closeReport();
+  await tick();
+  const list = () => document.querySelector('section[aria-label="Other grounds"]');
+  assert.match(list().textContent, /Matchday 1 · final/);
+  for (const row of list().querySelectorAll('li')) {
+    assert.match(row.textContent, /FT/);
+  }
+  s.rewind(700);
+  await tick();
+  assert.match(list().textContent, /Matchday 1 · on your clock/, 'back before the whistle: the player’s clock');
+});
+
 test('the other grounds show skeleton rows while loading and in an error', async () => {
   await session(RUNNING);
   await tick();

@@ -858,17 +858,19 @@ export class MatchSession {
       return;
     }
     this.groundSecond = second;
-    this.grounds = groundsAt(this.matchday, this.renderedTick, {
+    // At full time the stopped match screen reads every ground final, as the report does:
+    // every event that arrived, whatever its tick, until the pitch is moved back before the
+    // whistle.
+    const final =
+      this.screen === 'full-time' &&
+      this.match.fullTimeTick !== null &&
+      this.renderedTick >= this.match.fullTimeTick;
+    this.grounds = groundsAt(this.matchday, final ? Number.MAX_SAFE_INTEGER : this.renderedTick, {
       skip: this.skip,
       seeks: this.groundSeeks,
       total: totalMinutes(this.hello?.ticks_expected),
       stored: this.stored,
-      // At full time the stopped match screen reads every ground final, as the report does,
-      // until the pitch is moved back before the whistle.
-      final:
-        this.screen === 'full-time' &&
-        this.match.fullTimeTick !== null &&
-        this.renderedTick >= this.match.fullTimeTick,
+      final,
     });
   }
 

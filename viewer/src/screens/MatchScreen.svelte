@@ -24,6 +24,7 @@
   import ScoreStrip from '../components/ScoreStrip.svelte';
   import StepList from '../components/StepList.svelte';
   import SurfacePanel from '../components/SurfacePanel.svelte';
+  import { allEnded } from '../lib/matchday.js';
   import { clockAt } from '../lib/recovery.js';
   import { stripFacts } from '../lib/stats.js';
 
@@ -66,6 +67,14 @@
   let shown = $derived(playing || fullTime);
   let drawn = $derived(session.teams !== null && screen !== 'loading' && screen !== 'first-run');
   let panel = $derived(session.panel);
+  /// At full time, with the pitch at or after the whistle and every ground ended, the other
+  /// grounds read final, as the report's do.
+  let groundsFinal = $derived(
+    fullTime &&
+      session.match.fullTimeTick !== null &&
+      session.tick >= session.match.fullTimeTick &&
+      allEnded(session.matchday)
+  );
 
   function pickReplay() {
     fileInput?.click();
@@ -243,6 +252,7 @@
             grounds={session.grounds}
             round={session.matchday?.round ?? 1}
             skeleton={screen === 'loading' || screen === 'error'}
+            final={groundsFinal}
           />
         {/if}
         {#if shown || screen === 'reconnecting'}
