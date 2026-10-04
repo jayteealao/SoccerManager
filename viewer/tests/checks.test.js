@@ -74,3 +74,16 @@ test('the contrast check passes the broadcast-blue skin', () => {
   assert.equal(out.status, 0, out.stdout + out.stderr);
   assert.match(out.stdout, /pass {2}4\.50:1 {2}--navy-sub on --navy-500/);
 });
+
+test('the contrast check covers every shipped skin, the light skin read from OKLCH', () => {
+  const out = run('contrast.mjs');
+  assert.equal(out.status, 0, out.stdout + out.stderr);
+  assert.match(out.stdout, /^broadcast-blue: \d+ pairs, 0 failing$/m);
+  assert.match(out.stdout, /^interim-light: \d+ pairs, 0 failing$/m);
+
+  // Its tokens are OKLCH; each is read as the hex it renders as, never skipped.
+  const light = run('contrast.mjs', path.join(VIEWER, 'src/skins/interim-light/tokens.css'));
+  assert.equal(light.status, 0, light.stdout + light.stderr);
+  assert.doesNotMatch(light.stderr, /token not defined/);
+  assert.match(light.stdout, /pass {2}\d+\.\d\d:1 {2}--navy-sub on --navy-600/);
+});
