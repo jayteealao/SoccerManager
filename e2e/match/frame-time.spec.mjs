@@ -11,7 +11,8 @@
 // largest (at 8x ticks are passed over by design, so none is held to the no-skip rule);
 // there the pitch is also sharp: its canvas's backing store equals its box on the
 // page in device pixels, within a pixel. On a display at twice the pixel ratio the backing
-// store doubles.
+// store doubles. At 2560 by 1440 on such a display the store passes 4 Mpx, so it is held to
+// about 4 Mpx at the box's aspect, and the same budget holds there.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -136,6 +137,34 @@ test('at 2560 by 1440 and 8x the pitch draws sharp and holds the frame budget', 
   expect(viewer.pitch.box.width).toBeGreaterThan(1500);
   expect(Math.abs(viewer.pitch.backing.width - viewer.pitch.device.width)).toBeLessThanOrEqual(1);
   expect(Math.abs(viewer.pitch.backing.height - viewer.pitch.device.height)).toBeLessThanOrEqual(1);
+  expect(viewer.budgets.length, 'a budget row every five seconds').toBeGreaterThanOrEqual(10);
+  // At 8x the clock passes several ticks a frame, so ticks are passed over by design
+  // (lib/schedule.js); the budget here is the frame rate.
+  expect(viewer.frame.refresh_hz).toBeGreaterThanOrEqual(59);
+  for (const budget of viewer.budgets.slice(1)) {
+    expect(budget.fps_median).toBeGreaterThanOrEqual(59);
+    expect(budget.frame_ms_p95).toBeLessThanOrEqual((1.5 * 1000) / budget.refresh_hz);
+  }
+  expect(viewer.frame.frame_ms_p95).toBeLessThanOrEqual(line);
+});
+
+test('at 2560 by 1440 on a 2x display the pitch store holds 4 Mpx and the frame budget', { tag: '@timing' }, async ({ browser }, info) => {
+  test.setTimeout(6 * 60_000);
+  const page = await browser.newPage({ viewport: { width: 2560, height: 1440 }, deviceScaleFactor: 2 });
+  const viewer = await measure(page, VIEWER, { speed: 8 });
+  await page.close();
+
+  const line = (1.5 * 1000) / viewer.frame.refresh_hz;
+  fs.writeFileSync(
+    evidence(info, 'frame-budget-2560-dpr2.json'),
+    `${JSON.stringify({ play_ms: PLAY_MS, p95_line_ms: line, viewer }, null, 2)}\n`
+  );
+
+  // The device box is past 4 Mpx; the store shrinks to about 4 Mpx at the box's aspect.
+  const { backing, device } = viewer.pitch;
+  expect(device.width * device.height).toBeGreaterThan(4_000_000);
+  expect(backing.width * backing.height).toBeLessThanOrEqual(4_000_000 + backing.width + backing.height);
+  expect(Math.abs(backing.width / backing.height - device.width / device.height)).toBeLessThan(0.01);
   expect(viewer.budgets.length, 'a budget row every five seconds').toBeGreaterThanOrEqual(10);
   // At 8x the clock passes several ticks a frame, so ticks are passed over by design
   // (lib/schedule.js); the budget here is the frame rate.

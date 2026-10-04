@@ -177,12 +177,14 @@ test('the backing store holds the box in device pixels, and a resize rebuilds it
   assert.deepEqual(pitch.geometry().backing, { width: 742, height: 312 });
   const before = pitch.geometry();
 
-  // The box grows at the same aspect, in a page zoomed by 1.125 on a 2x display.
+  // The box grows at the same aspect, in a page zoomed by 1.125 on a 2x display. That is
+  // 3339 by 1404 device pixels, past the 4 Mpx cap, so both ratios shrink alike.
   pitch.resize({ width: 1484, height: 624, deviceWidth: 3339, deviceHeight: 1404 });
   const after = pitch.geometry();
+  const ratio = 2.25 * Math.sqrt(4_000_000 / (3339 * 1404));
   assert.deepEqual(after.box, { width: 1484, height: 624 });
-  assert.deepEqual(after.backing, { width: 3339, height: 1404 });
-  assert.deepEqual(canvas.getContext().transform, [2.25, 0, 0, 2.25, 0, 0]);
+  assert.deepEqual(after.backing, { width: 3084, height: 1297 });
+  assert.deepEqual(canvas.getContext().transform, [ratio, 0, 0, ratio, 0, 0]);
   assert.ok(Math.abs(after.tilt - before.tilt) < 0.002, `${after.tilt} against ${before.tilt}`);
   assert.equal(after.sx, projection(1484, 624).sx, 'the same projection, for the new box');
 });
@@ -190,6 +192,24 @@ test('the backing store holds the box in device pixels, and a resize rebuilds it
 test('the backing store never takes more than three device pixels per CSS pixel', () => {
   const pitch = new Pitch(fakeCanvas(), KITS, TOKENS, { width: 742, height: 312, deviceWidth: 742 * 4, deviceHeight: 312 * 4 });
   assert.deepEqual(pitch.geometry().backing, { width: 742 * 3, height: 312 * 3 });
+});
+
+test('the backing store holds about 4 Mpx at most, at the box aspect and the same projection', () => {
+  // 2560 by 1440 on a 2x display: the page zoomed by 1.375, the ratio 2.75.
+  const canvas = fakeCanvas();
+  const pitch = new Pitch(canvas, KITS, TOKENS, { width: 1264, height: 532, deviceWidth: 3476, deviceHeight: 1463 });
+  const { backing, sx } = pitch.geometry();
+  assert.ok(backing.width * backing.height <= 4_000_000 + backing.width + backing.height, `${backing.width} by ${backing.height}`);
+  assert.ok(Math.abs(backing.width / backing.height - 3476 / 1463) < 0.002, 'the aspect holds');
+  const [rx, , , ry] = canvas.getContext().transform;
+  assert.ok(Math.abs(rx * 1264 - backing.width) <= 0.5 && Math.abs(ry * 532 - backing.height) <= 0.5, 'the transform follows the store');
+  assert.equal(sx, projection(1264, 532).sx, 'the same projection, for the box');
+
+  // Below the cap nothing changes: 2560 at 1x, and 1280 at 2x.
+  pitch.resize({ width: 1739, height: 731, deviceWidth: 1739, deviceHeight: 731 });
+  assert.deepEqual(pitch.geometry().backing, { width: 1739, height: 731 });
+  pitch.resize({ width: 750, height: 315.5, deviceWidth: 1500, deviceHeight: 631 });
+  assert.deepEqual(pitch.geometry().backing, { width: 1500, height: 631 });
 });
 
 test('a resize draws the frame on show again, and adds nothing to the trail', () => {

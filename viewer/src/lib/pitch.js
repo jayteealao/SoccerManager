@@ -135,6 +135,8 @@ export function readTokens(doc = globalThis.document) {
 
 /// The most backing-store pixels per CSS pixel, as on a 3x display.
 const MAX_RATIO = 3;
+/// The most backing-store pixels in all, about 4 Mpx; past it both ratios shrink together.
+const MAX_PIXELS = 4_000_000;
 
 export class Pitch {
   /// `canvas` is sized in CSS pixels by its component; the backing store holds the box in
@@ -176,7 +178,7 @@ export class Pitch {
   }
 
   /// Takes the box's new size, in CSS pixels and in device pixels: the backing store becomes
-  /// the device pixels (at most three per CSS pixel), the mapping is rebuilt for the box by
+  /// the device pixels (at most three per CSS pixel and about 4 Mpx in all), the mapping is rebuilt for the box by
   /// the same `projection()`, and the markings are drawn again. The trail moves with the
   /// ground, and the frame on show is drawn again at the new size, so a paused, full-time or
   /// replay frame stays on the pitch.
@@ -199,6 +201,13 @@ export class Pitch {
     this.cssHeight = height;
     this.ratioX = Math.min(MAX_RATIO, deviceWidth / width);
     this.ratioY = Math.min(MAX_RATIO, deviceHeight / height);
+    // A store past the area cap scales down on both axes alike, so its aspect holds.
+    const area = width * this.ratioX * height * this.ratioY;
+    if (area > MAX_PIXELS) {
+      const k = Math.sqrt(MAX_PIXELS / area);
+      this.ratioX *= k;
+      this.ratioY *= k;
+    }
     this.canvas.width = Math.round(width * this.ratioX);
     this.canvas.height = Math.round(height * this.ratioY);
     // Setting the canvas's size cleared its transform.
