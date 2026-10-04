@@ -94,8 +94,10 @@
 {/if}
 
 <style>
+  /* The row wraps when its column is narrow; the note then takes its own line. */
   .row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     margin-top: 8px;
@@ -172,7 +174,13 @@
     display: inline-flex;
     border: 1px solid var(--seg-edge);
     border-radius: var(--radius-sm);
-    overflow: hidden;
+  }
+
+  /* A part is drawn 20 px high; its hit area reaches the step's hit height. */
+  .seg button::after {
+    content: '';
+    position: absolute;
+    inset: min(-2px, calc((20px - var(--hit)) / 2)) 0;
   }
 
   .seg button {
@@ -192,6 +200,11 @@
 
   .seg button:first-child {
     border-left: 0;
+    border-radius: 1px 0 0 1px;
+  }
+
+  .seg button:last-child {
+    border-radius: 0 1px 1px 0;
   }
 
   .seg button.on {
@@ -259,5 +272,42 @@
     font-size: 9.5px;
     color: var(--ink-3);
     white-space: nowrap;
+  }
+
+  /* Compact: every control at least 44 px. */
+  @media (max-width: 1023px), (max-height: 599px) {
+    .ib {
+      width: 44px;
+      height: 44px;
+    }
+
+    /* Over the 1 px edge too: the round button's corners take no clicks. */
+    .ib::after {
+      inset: -1px;
+    }
+
+    .btn {
+      height: 44px;
+      padding: 0 16px;
+    }
+
+    .btn::after,
+    .skip::after {
+      inset: 0;
+    }
+
+    .seg button {
+      height: 44px;
+      min-width: 44px;
+      justify-content: center;
+    }
+
+    .seg button::after {
+      inset: 0;
+    }
+
+    .tag {
+      height: 32px;
+    }
   }
 </style>

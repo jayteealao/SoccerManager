@@ -99,6 +99,25 @@
     white-space: nowrap;
   }
 
+  /* Compact: the first fact takes the first row, and the others share a second. */
+  @media (max-width: 1023px), (max-height: 599px) {
+    .strip,
+    .strip.tall {
+      height: auto;
+      flex-wrap: wrap;
+      padding: 8px 0;
+      row-gap: 6px;
+    }
+
+    .cell {
+      flex: 1 1 25%;
+    }
+
+    .cell:first-child {
+      flex: 1 1 100%;
+    }
+  }
+
   .cell :global(.stub.fade) {
     text-align: center;
   }

@@ -1,8 +1,16 @@
 <!-- The match screen, ported from the Touchline Full Game sketch's Match live screen: the shell
      with the fixture in the header, the clock state in the date block and the one next action
-     in the cyan block; the 66 px score strip; then two body columns of 760 px and 1fr. The
-     left column holds the pitch, the playback row and the timeline; the right the commentary,
-     the statistics and the other grounds of the matchday on the player's clock. Each screen state (loading, kick-off, live, paused,
+     in the cyan block; the 66 px score strip; then two body columns. The left column holds
+     the pitch, the playback row and the timeline; the side column holds four groups in this
+     order: win probability (a stub), the commentary, the other grounds of the matchday on the
+     player's clock, and the statistics.
+
+     The window step places them. Standard: the side column is 300 to 440 px and the pitch is
+     also limited by the window's height, so the playback row stays on screen. Wide: the side
+     column takes 46% and its groups form two columns, the commentary beside the other
+     grounds, win probability and the statistics. Large and huge: one side column of 380 to
+     520 px and the pitch at its column's width. Compact: one column, the pitch at full width
+     and the side groups in two columns under it. Each group is a size container. Each screen state (loading, kick-off, live, paused,
      error, first run, reconnecting, full time) draws the board's body for it. At full time the
      live layout stays, a FULL TIME tag sits under the score and on the stopped pitch, and the
      playback row holds only the replay controls. Parts the viewer does not
@@ -126,7 +134,6 @@
         <PitchCanvas
           attach={(canvas) => session.attachCanvas(canvas)}
           resize={(canvas, box) => session.resizeCanvas(canvas, box)}
-          maxWidth="742px"
           {drawn}
           dim={screen === 'reconnecting'}
           banner={session.banner}
@@ -230,36 +237,41 @@
         {/if}
       </div>
 
-      <div class="right">
+      <div class="side">
         {#if shown || screen === 'reconnecting'}
-          <MatchStub part="win-probability" />
-          <div class="hr"></div>
+          <div class="grp grp-a">
+            <MatchStub part="win-probability" />
+          </div>
         {/if}
         <!-- Commentary Off in Settings hides the column; goals and cards still show on the
              pitch and in the score strip. -->
         {#if session.commentary}
-          <Commentary
-            rows={session.feedRows}
-            spoken={session.spoken}
-            state={screen === 'loading' || screen === 'error'
-              ? 'skeleton'
-              : screen === 'first-run'
-                ? 'idle'
-                : 'rows'}
-          />
+          <div class="grp grp-b">
+            <Commentary
+              rows={session.feedRows}
+              spoken={session.spoken}
+              state={screen === 'loading' || screen === 'error'
+                ? 'skeleton'
+                : screen === 'first-run'
+                  ? 'idle'
+                  : 'rows'}
+            />
+          </div>
         {/if}
         {#if screen !== 'first-run'}
-          {#if session.commentary}<div class="hr"></div>{/if}
-          <OtherGrounds
-            grounds={session.grounds}
-            round={session.matchday?.round ?? 1}
-            skeleton={screen === 'loading' || screen === 'error'}
-            final={groundsFinal}
-          />
+          <div class="grp grp-c">
+            <OtherGrounds
+              grounds={session.grounds}
+              round={session.matchday?.round ?? 1}
+              skeleton={screen === 'loading' || screen === 'error'}
+              final={groundsFinal}
+            />
+          </div>
         {/if}
         {#if shown || screen === 'reconnecting'}
-          <div class="hr"></div>
-          <MatchStats stats={session.stats} {names} />
+          <div class="grp grp-d">
+            <MatchStats stats={session.stats} {names} />
+          </div>
         {/if}
       </div>
     </div>
@@ -285,7 +297,7 @@
 
   .cols {
     display: grid;
-    grid-template-columns: 760px 1fr;
+    grid-template-columns: minmax(0, 1fr) clamp(300px, 36%, 440px);
     grid-template-rows: minmax(0, 1fr);
     margin-top: 10px;
     flex: 1;
@@ -297,7 +309,14 @@
     min-width: 0;
   }
 
-  .right {
+  /* At standard and wide the pitch is also limited by the window's height (the shell's
+     height, less the header, the strip and the playback row), so the playback row stays on
+     screen. The zoom is 1 at both steps. */
+  .left :global(.pitchbox) {
+    width: min(100%, calc((100cqb - 340px) * 742 / 312));
+  }
+
+  .side {
     border-left: 1px solid var(--rule);
     padding-left: 18px;
     min-width: 0;
@@ -306,10 +325,190 @@
     flex-direction: column;
   }
 
-  .hr {
-    border-top: 1px solid var(--rule);
-    margin: 8px 0;
+  .grp {
+    container-type: inline-size;
+    min-width: 0;
     flex: none;
+  }
+
+  /* The commentary takes the column's spare height and scrolls within it. */
+  .grp-b {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .grp + .grp {
+    border-top: 1px solid var(--rule);
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+
+  /* Wide: the side column takes 46%, and its groups form two columns: the commentary down
+     the left, the other grounds, win probability and the statistics down the right. */
+  @media (min-width: 1600px) {
+    .cols {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 46%);
+    }
+
+    .side {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-rows: auto auto minmax(0, 1fr);
+      grid-template-areas: 'b c' 'b a' 'b d';
+      align-items: start;
+    }
+
+    .grp-a {
+      grid-area: a;
+    }
+
+    .grp-b {
+      grid-area: b;
+      align-self: stretch;
+      /* Its rows never size the grid: it takes the height the other groups give it. */
+      contain: size;
+      padding-right: 18px;
+    }
+
+    .grp-c {
+      grid-area: c;
+    }
+
+    .grp-d {
+      grid-area: d;
+    }
+
+    .grp-a,
+    .grp-c,
+    .grp-d {
+      border-left: 1px solid var(--rule);
+      padding-left: 18px;
+    }
+
+    .grp + .grp.grp-b,
+    .grp + .grp.grp-c {
+      border-top: 0;
+      margin-top: 0;
+      padding-top: 0;
+    }
+
+    .grp-a {
+      border-top: 1px solid var(--rule);
+      margin-top: 8px;
+      padding-top: 8px;
+    }
+  }
+
+  /* Large and huge: one side column of 380 to 520 px, and the pitch at its column's width. */
+  @media (min-width: 1920px) {
+    .cols {
+      grid-template-columns: minmax(0, 1fr) clamp(380px, 28%, 520px);
+    }
+
+    .left :global(.pitchbox) {
+      width: 100%;
+    }
+
+    /* A group's width is contained, so it must stretch, not take its content's width. */
+    .side {
+      display: flex;
+      align-items: stretch;
+    }
+
+    .grp-a,
+    .grp-b,
+    .grp-c,
+    .grp-d {
+      contain: none;
+      border-left: 0;
+      padding-left: 0;
+      padding-right: 0;
+    }
+
+    .grp-a {
+      border-top: 0;
+      margin-top: 0;
+      padding-top: 0;
+    }
+
+    .grp + .grp.grp-b,
+    .grp + .grp.grp-c {
+      border-top: 1px solid var(--rule);
+      margin-top: 8px;
+      padding-top: 8px;
+    }
+  }
+
+  /* Compact: one column; the pitch at full width with the playback row under it, then the
+     side groups in two columns. The body scrolls down to them. */
+  @media (max-width: 1023px), (max-height: 599px) {
+    .cols {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto;
+      flex: none;
+    }
+
+    .left {
+      padding-right: 0;
+    }
+
+    .left :global(.pitchbox) {
+      width: 100%;
+    }
+
+    .side {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-rows: auto auto auto;
+      grid-template-areas: 'b c' 'b a' 'b d';
+      align-items: start;
+      border-left: 0;
+      padding-left: 0;
+      border-top: 1px solid var(--rule);
+      margin-top: 14px;
+      padding-top: 14px;
+    }
+
+    .grp-a {
+      grid-area: a;
+    }
+
+    .grp-b {
+      grid-area: b;
+      align-self: stretch;
+      contain: size;
+      padding-right: 18px;
+    }
+
+    .grp-c {
+      grid-area: c;
+    }
+
+    .grp-d {
+      grid-area: d;
+    }
+
+    .grp-a,
+    .grp-c,
+    .grp-d {
+      border-left: 1px solid var(--rule);
+      padding-left: 18px;
+    }
+
+    .grp + .grp.grp-b,
+    .grp + .grp.grp-c {
+      border-top: 0;
+      margin-top: 0;
+      padding-top: 0;
+    }
+
+    .grp-a {
+      border-top: 1px solid var(--rule);
+      margin-top: 8px;
+      padding-top: 8px;
+    }
   }
 
   .loading {
@@ -321,7 +520,8 @@
     position: absolute;
     left: 24px;
     top: 22px;
-    width: 380px;
+    right: calc(min(260px, 35%) + 40px);
+    max-width: 380px;
   }
 
   .steps h2 {
@@ -338,9 +538,19 @@
     color: var(--ink-2);
   }
 
-  /* On the dark pitch ground the step words take --ink-2: --ink-3 measures 2.69:1 there. */
-  .steps :global(.word) {
+  /* On the dark pitch ground the step words and the marks of the steps to come take --ink-2:
+     --ink-3 measures 2.69:1 there. The current step's mark is the step list's cyan dot, which
+     measures 4.15:1 on the pitch, so the step list sits on the screen's ground. */
+  .steps :global(.word),
+  .steps :global(.pending .mark) {
     color: var(--ink-2);
+  }
+
+  .steps :global(ol),
+  .steps :global(ul) {
+    background: var(--ground);
+    border-radius: var(--radius-sm);
+    padding: 6px 8px;
   }
 
   .skels {
@@ -348,7 +558,7 @@
     right: 24px;
     top: 22px;
     bottom: 22px;
-    width: 260px;
+    width: min(260px, 35%);
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -422,6 +632,13 @@
   .btn:disabled {
     cursor: default;
     opacity: 0.55;
+  }
+
+  @media (max-width: 1023px), (max-height: 599px) {
+    .btn {
+      height: var(--hit);
+      padding: 0 16px;
+    }
   }
 
   .held {

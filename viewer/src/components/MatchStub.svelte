@@ -67,7 +67,7 @@
   <StubSection note="momentum chart">
     <div class="momentum">
       <SectionLabel label="Momentum" note="threat per 3 minutes · cyan home, orange away" />
-      <svg width="742" height="76" viewBox="0 0 742 76" aria-hidden="true">
+      <svg class="pic" width="742" height="76" viewBox="0 0 742 76" aria-hidden="true">
         {#each [0, 15, 30, 45, 60, 75] as m (m)}
           <line class="rule" x1={m * 8.24} y1="2" x2={m * 8.24} y2="66" />
           <text x={m * 8.24 + 2} y="75">{m}'</text>
@@ -86,13 +86,13 @@
   <StubSection note="win probability">
     <div class="win">
       <SectionLabel label="Win probability" note="a model figure · if level: extra time" />
-      <div class="bar">
+      <div class="bar" data-may-truncate>
         <i class="h" style:flex="44">ROVERS 44%</i><i class="d" style:flex="31">EXTRA TIME 31%</i><i
           class="a"
           style:flex="25">25%</i
         >
       </div>
-      <svg width="384" height="60" viewBox="0 0 384 60" aria-hidden="true">
+      <svg class="pic" width="384" height="60" viewBox="0 0 384 60" aria-hidden="true">
         <line class="mid" x1="0" y1="30" x2="384" y2="30" />
         <polyline class="curve" points={WIN} />
       </svg>
@@ -101,12 +101,13 @@
 {/if}
 
 <style>
+  /* A row of toggles wraps when its column is narrow. */
   .line {
     display: flex;
     align-items: center;
     gap: 4px;
     margin-top: 6px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
   }
 
   .overlays {
@@ -197,6 +198,14 @@
     display: block;
   }
 
+  /* The stub drawings scale as pictures with their column; the minute words may reach past
+     the drawing's foot. */
+  svg.pic {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
   svg .rule {
     stroke: var(--rule-2);
   }
@@ -240,6 +249,7 @@
     padding-left: 5px;
     white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .bar .h {

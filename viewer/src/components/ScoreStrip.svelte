@@ -18,7 +18,7 @@
 <div class="strip" role="group" aria-label="Score">
   <div class="side home">
     <Crest team={teams?.[0] ?? null} width={38} height={41} />
-    <div class="club">
+    <div class="club" data-may-truncate>
       <b>{names[0]}</b>
       <span>{scorers[0]}</span>
     </div>
@@ -35,7 +35,7 @@
   </div>
   <div class="side away">
     <Crest team={teams?.[1] ?? null} width={38} height={41} />
-    <div class="club">
+    <div class="club" data-may-truncate>
       <b>{names[1]}</b>
       <span>{scorers[1]}</span>
     </div>
@@ -100,12 +100,23 @@
     text-align: left;
   }
 
+  .club {
+    min-width: 0;
+  }
+
   .club b {
     display: block;
     font: 700 15px var(--fd);
     letter-spacing: 0.03em;
     text-transform: uppercase;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .club span {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .centre {
@@ -143,6 +154,28 @@
     color: var(--navy-sub);
     white-space: nowrap;
     min-height: 1em;
+  }
+
+  /* Compact: the crests, the score and the names take the first row, each about a third;
+     the figures take a 36 px second row under a hairline. */
+  @media (max-width: 1023px), (max-height: 599px) {
+    .strip {
+      height: auto;
+      flex-wrap: wrap;
+      padding-top: 8px;
+    }
+
+    .side,
+    .centre {
+      flex: 1 1 30%;
+    }
+
+    .fact {
+      flex: 1 1 30% !important; /* over the fact's own drawn share */
+      height: 36px;
+      margin-top: 8px;
+      border-top: 1px solid var(--navy-700);
+    }
   }
 
   .tag {

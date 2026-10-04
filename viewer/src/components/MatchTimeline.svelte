@@ -20,10 +20,10 @@
   const MARKS = [0, 15, 30, 45, 60, 75, 90];
 
   let share = $derived(max > 0 ? Math.min(1, Math.max(0, tick / max)) : 0);
-  // The track's drawn width, and the width the NOT WATCHED LIVE words take after the skip
-  // point: the minute marks under the words are left out.
-  const WIDTH = 742;
-  const UNSEEN_WIDTH = 100;
+  // The track fills its column. The NOT WATCHED LIVE words after the skip point take about
+  // 115 px; the minute marks under them are left out, measured against the narrowest track
+  // (about 580 px, at 1024 px wide), so the words never cover a mark at any width.
+  const UNSEEN_SHARE = 115 / 580;
 
   let marks = $derived(
     MARKS.filter((m) => m * MINUTE <= max)
@@ -32,8 +32,8 @@
         (mark) =>
           skippedFrom === null ||
           !(max > 0) ||
-          mark.at * WIDTH < (skippedFrom / max) * WIDTH ||
-          mark.at * WIDTH > (skippedFrom / max) * WIDTH + UNSEEN_WIDTH
+          mark.at < skippedFrom / max ||
+          mark.at > skippedFrom / max + UNSEEN_SHARE
       )
   );
   let skipAt = $derived(
@@ -77,8 +77,8 @@
 <style>
   .timeline {
     position: relative;
-    width: 742px;
-    height: 26px;
+    width: 100%;
+    height: 28px;
     margin-top: 8px;
   }
 
@@ -122,10 +122,13 @@
     background: var(--cyan);
   }
 
+  /* The slider is invisible over the drawn track; its hit area is 24 px high, from the
+     playback row above the track to 1 px above the minute marks. */
   input {
     position: absolute;
-    inset: 0 0 12px;
+    inset: -8px 0 12px;
     width: 100%;
+    height: auto;
     margin: 0;
     appearance: none;
     background: transparent;
@@ -175,5 +178,21 @@
     letter-spacing: 0.06em;
     color: var(--ink-2);
     white-space: nowrap;
+  }
+
+  /* Compact: the slider's hit area is 44 px high, with the track at its middle and the minute
+     marks under it. */
+  @media (max-width: 1023px), (max-height: 599px) {
+    .timeline {
+      height: 56px;
+    }
+
+    .track {
+      top: 20px;
+    }
+
+    input {
+      inset: 0 0 12px;
+    }
   }
 </style>

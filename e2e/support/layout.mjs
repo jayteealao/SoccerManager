@@ -99,6 +99,7 @@ export async function layoutReport(page, { minControl = 24 } = {}) {
       let top = Infinity;
       let right = -Infinity;
       let bottom = -Infinity;
+      const lineRects = [];
       for (const node of nodes) {
         const range = document.createRange();
         range.selectNodeContents(node);
@@ -109,11 +110,12 @@ export async function layoutReport(page, { minControl = 24 } = {}) {
             top = Math.min(top, r.top + inset);
             right = Math.max(right, r.right);
             bottom = Math.max(bottom, r.bottom - inset);
+            lineRects.push({ left: r.left, top: r.top + inset, right: r.right, bottom: r.bottom - inset });
           }
         }
       }
       if (right > left) {
-        texts.push({ el, rect: { left, top, right, bottom, width: right - left, height: bottom - top } });
+        texts.push({ el, rect: { left, top, right, bottom, width: right - left, height: bottom - top }, lines: lineRects });
       }
     }
 
@@ -164,12 +166,27 @@ export async function layoutReport(page, { minControl = 24 } = {}) {
           bottom = Math.min(bottom, u.bottom);
         }
       }
-      return right - left > 1 && bottom - top > 1 ? { left, top, right, bottom } : null;
+      return right - left > 1 && bottom - top > 1 ? { left, top, right, bottom, width: right - left, height: bottom - top } : null;
     };
+    // A text run is measured line by line, so a run that wraps and starts on the line another
+    // run ends does not cross it.
     const items = [...texts, ...controls.map((el) => ({ el, rect: el.getBoundingClientRect() }))]
       .filter((i) => !layer(i.el))
-      .map((i) => ({ el: i.el, rect: onShow(i.el, i.rect) }))
-      .filter((i) => i.rect);
+      .map((i) => ({ el: i.el, rect: onShow(i.el, i.rect), rects: (i.lines ?? [i.rect]).map((r) => onShow(i.el, r)).filter(Boolean) }))
+      .filter((i) => i.rect && i.rects.length);
+    const cross = (p, q) => {
+      let best = null;
+      for (const r of p.rects) {
+        for (const s of q.rects) {
+          const x = Math.min(r.right, s.right) - Math.max(r.left, s.left);
+          const y = Math.min(r.bottom, s.bottom) - Math.max(r.top, s.top);
+          if (x > 1 && y > 1 && (!best || x * y > best.x * best.y)) {
+            best = { x, y };
+          }
+        }
+      }
+      return best;
+    };
     for (let a = 0; a < items.length; a += 1) {
       for (let b = a + 1; b < items.length; b += 1) {
         const p = items[a];
@@ -177,10 +194,9 @@ export async function layoutReport(page, { minControl = 24 } = {}) {
         if (p.el === q.el || p.el.contains(q.el) || q.el.contains(p.el)) {
           continue;
         }
-        const x = Math.min(p.rect.right, q.rect.right) - Math.max(p.rect.left, q.rect.left);
-        const y = Math.min(p.rect.bottom, q.rect.bottom) - Math.max(p.rect.top, q.rect.top);
-        if (x > 1 && y > 1) {
-          add('overlap', p.el, p.rect, `crosses ${name(q.el)} by ${Math.round(x)} by ${Math.round(y)} px`);
+        const hit = cross(p, q);
+        if (hit) {
+          add('overlap', p.el, p.rect, `crosses ${name(q.el)} by ${Math.round(hit.x)} by ${Math.round(hit.y)} px`);
         }
       }
     }
@@ -214,17 +230,21 @@ export async function layoutReport(page, { minControl = 24 } = {}) {
       if (!down || !across || (scroller && !inScroller)) {
         continue;
       }
+      // A point past the window's edge is taken at the edge: the edge stops the pointer, so a
+      // control against it is as large as its hit area inside the window.
+      const inside = ([px, py]) => [Math.min(Math.max(px, 0), view.width - 1), Math.min(Math.max(py, 0), view.height - 1)];
       const misses = [
         [cx - half, cy - half],
         [cx + half, cy - half],
         [cx - half, cy + half],
         [cx + half, cy + half],
-      ].filter(([px, py]) => {
-        const hit = document.elementFromPoint(px, py);
-        return !hit || !(hit === el || el.contains(hit));
-      });
+      ]
+        .map(inside)
+        .map(([px, py]) => document.elementFromPoint(px, py))
+        .filter((hit) => !hit || !(hit === el || el.contains(hit)));
       if (misses.length) {
-        add('small control', el, r, `${misses.length} of 4 points of a ${min} px square miss it`);
+        const by = misses[0] ? ` (${name(misses[0])} takes the first)` : '';
+        add('small control', el, r, `${misses.length} of 4 points of a ${min} px square miss it${by}`);
       }
     }
     return out;

@@ -166,7 +166,10 @@
     text-align: left;
   }
 
+  /* Above the body, so the current section's hit area may reach past the rail's edge. */
   .rail {
+    position: relative;
+    z-index: 1;
     width: 40px;
     flex: none;
     background: var(--rail);
@@ -201,7 +204,7 @@
   .rail a.on::after {
     content: '';
     position: absolute;
-    inset: min(-6px, calc((15px - var(--hit)) / 2)) -12px;
+    inset: min(-6px, calc((15px - var(--hit)) / 2)) min(-12px, calc((15px - var(--hit)) / 2));
   }
 
   .rail-foot {

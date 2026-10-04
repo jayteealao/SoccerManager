@@ -32,7 +32,7 @@
     display: grid;
     grid-template-columns: 56px 1fr 56px;
     align-items: center;
-    height: 15px;
+    min-height: 15px;
     font-size: 10px;
   }
 

@@ -33,11 +33,11 @@
       {#each grounds.rows as row (row.fixture)}
         <li class:block={row.flag !== null} class:new={row.flag === 'new'} class:late={row.flag === 'late'}>
           <div class="fixture" class:ruled={row.flag === null && !row.unavailable}>
-            <span class="home">{row.home['team.name']} <Crest team={row.home} width={12} height={13} /></span>
+            <span class="home" data-may-truncate>{row.home['team.name']} <Crest team={row.home} width={12} height={13} /></span>
             <b class="num score" class:g={!row.started || row.unavailable}
               >{#if row.score}{row.score[0]} – {row.score[1]}{:else}–{/if}</b
             >
-            <span class="away"><Crest team={row.away} width={12} height={13} /> {row.away['team.name']}</span>
+            <span class="away" data-may-truncate><Crest team={row.away} width={12} height={13} /> {row.away['team.name']}</span>
             <span
               class="num minute"
               class:w={row.flag !== null || (row.ended && !report && !row.unavailable)}
@@ -86,6 +86,14 @@
   .fixture span {
     white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* In a narrow column the minute column narrows. */
+  @container (max-width: 280px) {
+    .fixture {
+      grid-template-columns: 1fr 40px 1fr 26px;
+    }
   }
 
   .fixture :global(.crest) {
