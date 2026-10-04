@@ -392,7 +392,7 @@ test('a Tab walk on the three screens never lands in a stub, and they meet WCAG 
       expect(names(replayWalk)).toContain(name);
     }
     expect(names(replayWalk).some((n) => n === 'Play' || n === 'Pause')).toBe(true);
-    for (const name of ['Continue', 'Replay the whole match', 'Save replay', 'Open a replay', 'Close', 'Replay']) {
+    for (const name of ['Continue', 'Replay the whole match', 'Save replay', 'Open a replay', 'Back to the match at full time', 'Replay']) {
       expect(names(reportWalk)).toContain(name);
     }
     expect(names(handshakeWalk)).toContain('Run again');
