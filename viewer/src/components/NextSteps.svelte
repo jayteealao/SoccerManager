@@ -1,8 +1,8 @@
-<!-- The full-time report's Next list: New match (cyan, the screen's one cyan choice) and
-     Return to start, as the start screen's option rows at the report's smaller size. Both wait
-     until the replay is ready: until then they are faded and disabled, and a status line says
-     what the page waits for. "Save" is kept for the replay file. The change to ready is not
-     animated. A hidden live region, in the page from the start, reads out both moments. -->
+<!-- The full-time report's Next list: New match and Return to start, as the start screen's
+     option rows at the report's smaller size, both unfilled: the header's NEW MATCH block is
+     the screen's one cyan choice. Both wait until the replay is ready: until then they are
+     faded and disabled, and a status line says what the page waits for. "Save" is kept for
+     the replay file. The change to ready is not animated. A hidden live region, in the page from the start, reads out both moments. -->
 <script>
   import MenuList from './MenuList.svelte';
   import SectionLabel from './SectionLabel.svelte';
@@ -24,7 +24,6 @@
       id: 'new',
       label: 'New match',
       sub: 'Match setup with these two teams picked',
-      primary: ready,
       disabled: !ready,
     },
     {

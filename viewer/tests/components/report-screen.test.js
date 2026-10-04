@@ -275,6 +275,7 @@ test('with a start screen the report leads on: NEW MATCH, then the Next list bef
   const back = next.querySelector('[data-choice="return"]');
   assert.match(newMatch.textContent, /New match\s*Match setup with these two teams picked/);
   assert.match(back.textContent, /Return to start\s*The start screen\. Save replay first to watch it again\./);
+  assert.equal(newMatch.classList.contains('on'), false, 'the header block is the one cyan New match');
   const replay = button('Replay the whole match');
   assert.ok(before(back, replay), 'the Next list sits before the replay');
   assert.equal(replay.classList.contains('cy'), false, 'one cyan element: New match');
