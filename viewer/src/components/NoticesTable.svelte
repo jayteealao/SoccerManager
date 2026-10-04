@@ -8,7 +8,8 @@
 </script>
 
 <div class="wrap">
-  <table class="tbl" aria-label="Open-source notices">
+  <!-- A row may end in an ellipsis: its notice opens whole beside the table. -->
+  <table class="tbl" aria-label="Open-source notices" data-may-truncate>
     <thead>
       <tr><th>Package</th><th>Version</th><th>Licence</th><th>Used for</th></tr>
     </thead>
@@ -66,7 +67,7 @@
   }
 
   td {
-    height: 24px;
+    height: var(--hit);
     padding: 0 6px;
     border-bottom: 1px solid var(--rule-2);
     white-space: nowrap;
@@ -82,7 +83,13 @@
     box-shadow: inset 2px 0 0 var(--cyan);
   }
 
+  /* The name fills its cell, so the whole cell takes the click. */
   .pick {
+    display: block;
+    width: 100%;
+    height: var(--hit);
+    text-align: left;
+    white-space: nowrap;
     border: 0;
     padding: 0;
     background: none;

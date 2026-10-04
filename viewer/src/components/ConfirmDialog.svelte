@@ -48,11 +48,13 @@
     animation: fade 150ms var(--ease) both;
   }
 
+  /* Centred across, 250 px down at 1280 by 800, as the board places it. */
   .dialog {
     position: absolute;
-    left: 410px;
-    top: 250px;
-    width: 460px;
+    left: 50%;
+    top: min(250px, 30%);
+    width: min(460px, calc(100% - 32px));
+    transform: translateX(-50%);
     background: var(--rail);
     box-shadow:
       inset 0 0 0 1px var(--rule),
@@ -99,7 +101,7 @@
   .btn {
     display: inline-flex;
     align-items: center;
-    height: 28px;
+    height: max(28px, var(--hit));
     padding: 0 12px;
     border: 0;
     border-radius: var(--radius-sm);

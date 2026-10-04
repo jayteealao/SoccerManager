@@ -85,12 +85,14 @@
     cursor: default;
   }
 
+  /* The lockup sits 200 px down and 160 px in at 1280 by 800, nearer the corner in a
+     smaller or shorter window. */
   .top {
-    padding: 200px 0 0 160px;
+    padding: min(200px, 25dvh) 0 0 min(160px, 12.5%);
   }
 
   .after {
-    width: 520px;
+    width: min(520px, 100%);
     margin: 60px 0 0 4px;
     animation: fade 250ms var(--ease) 1800ms both;
   }

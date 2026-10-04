@@ -204,9 +204,10 @@
     height: 100%;
   }
 
+  /* The board's 330 px, the rest and 400 px at 1280, as shares. */
   .cols {
     display: grid;
-    grid-template-columns: 330px 1fr 400px;
+    grid-template-columns: minmax(0, 330fr) minmax(0, 465fr) minmax(0, 400fr);
     margin-top: 12px;
     min-height: 0;
   }
@@ -296,7 +297,7 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 28px;
+    height: max(28px, var(--hit));
     padding: 0 12px;
     border: 0;
     border-radius: var(--radius-sm);
@@ -394,5 +395,31 @@
     overflow: hidden;
     clip: rect(0 0 0 0);
     margin: 0;
+  }
+
+  /* Compact, as the Start-768 board draws it: the menu down the left, the saved match with
+     the career and the recent replays under it down the right. */
+  @media (max-width: 1023px), (max-height: 599px) {
+    .cols {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-areas: 'a b' 'a c';
+      align-items: start;
+    }
+
+    .cols > div:nth-child(1) {
+      grid-area: a;
+    }
+
+    .cols > div:nth-child(2) {
+      grid-area: b;
+      padding-right: 0;
+    }
+
+    .cols > div:nth-child(3) {
+      grid-area: c;
+      border-top: 1px solid var(--rule);
+      margin-top: 14px;
+      padding-top: 14px;
+    }
   }
 </style>

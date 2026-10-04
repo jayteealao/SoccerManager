@@ -13,7 +13,7 @@
 //      axes where neither holds the other, outside `[data-layout-layer]` (the report
 //      timeline, whose markers for moments a minute apart touch, and the kick-off pitch,
 //      where the two centre forwards' names touch); while a dialog is open only its own
-//      parts are checked;
+//      parts are checked, and an open menu crosses nothing under it;
 //   5. small controls: every visible control that takes focus answers `elementFromPoint` at
 //      the four corners of a square of `minControl` px around its centre, so a hit area drawn
 //      by a pseudo-element counts and a covered control does not;
@@ -55,6 +55,10 @@ export async function layoutReport(page, { minControl = 24 } = {}) {
     const dialog = [...document.querySelectorAll('[role="dialog"], [role="alertdialog"]')].find(shown) ?? null;
     const inScope = (el) => (dialog ? dialog.contains(el) : true);
     const layer = (el) => Boolean(el.closest('[data-layout-layer]')) && !(dialog && dialog.contains(el));
+    // An open menu lies over the page: a page part under it neither crosses it nor is
+    // measured through it.
+    const menu = [...document.querySelectorAll('[role="menu"]')].find(shown) ?? null;
+    const underMenu = (el, hit) => menu !== null && !menu.contains(el) && hit !== null && menu.contains(hit);
 
     // 1. fill
     const root = document.getElementById('app');
@@ -197,6 +201,9 @@ export async function layoutReport(page, { minControl = 24 } = {}) {
         if (p.el === q.el || p.el.contains(q.el) || q.el.contains(p.el)) {
           continue;
         }
+        if (menu !== null && menu.contains(p.el) !== menu.contains(q.el)) {
+          continue;
+        }
         const hit = cross(p, q);
         if (hit) {
           add('overlap', p.el, p.rect, `crosses ${name(q.el)} by ${Math.round(hit.x)} by ${Math.round(hit.y)} px`);
@@ -245,7 +252,8 @@ export async function layoutReport(page, { minControl = 24 } = {}) {
       ]
         .map(inside)
         .map(([px, py]) => document.elementFromPoint(px, py))
-        .filter((hit) => !hit || !(hit === el || el.contains(hit)));
+        .filter((hit) => !hit || !(hit === el || el.contains(hit)))
+        .filter((hit) => !underMenu(el, hit));
       if (misses.length) {
         const by = misses[0] ? ` (${name(misses[0])} takes the first)` : '';
         add('small control', el, r, `${misses.length} of 4 points of a ${min} px square miss it${by}`);

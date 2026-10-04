@@ -136,10 +136,35 @@
     height: 100%;
   }
 
+  /* The board's 330 px, the rest and 360 px at 1280, as shares; at the compact step the
+     third column goes under the second. */
   .cols {
     display: grid;
-    grid-template-columns: 330px 1fr 360px;
+    grid-template-columns: minmax(0, 330fr) minmax(0, 505fr) minmax(0, 360fr);
     margin-top: 12px;
+  }
+
+  @media (max-width: 1023px), (max-height: 599px) {
+    .cols {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-areas: 'a b' 'a c';
+      align-items: start;
+    }
+
+    .cols > div:nth-child(1) {
+      grid-area: a;
+    }
+
+    .cols > div:nth-child(2) {
+      grid-area: b;
+    }
+
+    .cols > div:nth-child(3) {
+      grid-area: c;
+      border-top: 1px solid var(--rule);
+      margin-top: 14px;
+      padding-top: 14px;
+    }
   }
 
   .cols > div {
@@ -179,6 +204,9 @@
   }
 
   .more {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--hit);
     margin-top: 6px;
     border: 0;
     padding: 0;

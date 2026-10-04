@@ -75,7 +75,7 @@
   }
 
   td {
-    height: 24px;
+    height: var(--hit);
     padding: 0 6px;
     border-bottom: 1px solid var(--rule-2);
     white-space: nowrap;
@@ -93,8 +93,11 @@
     box-shadow: inset 2px 0 0 var(--cyan);
   }
 
+  /* The club fills its cell, so the whole cell takes the click. */
   .club {
-    display: inline-flex;
+    display: flex;
+    width: 100%;
+    min-height: var(--hit);
     align-items: center;
     gap: 6px;
     border: 0;

@@ -138,10 +138,26 @@
     height: 100%;
   }
 
+  /* The board's two halves and 360 px at 1280, as shares; at the compact step the two
+     clubs side by side and the match settings under them. */
   .cols {
     display: grid;
-    grid-template-columns: 1fr 1fr 360px;
+    grid-template-columns: minmax(0, 417fr) minmax(0, 417fr) minmax(0, 360fr);
     margin-top: 12px;
+  }
+
+  @media (max-width: 1023px), (max-height: 599px) {
+    .cols {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .cols > div:nth-child(3) {
+      grid-column: 1 / -1;
+      border-left: 0;
+      border-top: 1px solid var(--rule);
+      margin-top: 14px;
+      padding: 14px 0 0;
+    }
   }
 
   .cols > div {
@@ -266,7 +282,7 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 28px;
+    height: max(28px, var(--hit));
     padding: 0 12px;
     border: 0;
     border-radius: var(--radius-sm);

@@ -28,7 +28,8 @@
 
   button {
     border: 0;
-    height: 24px;
+    height: var(--hit);
+    min-width: var(--hit);
     padding: 0 12px;
     font: 600 10.5px var(--fd);
     letter-spacing: 0.03em;

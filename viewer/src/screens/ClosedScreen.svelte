@@ -35,7 +35,7 @@
   }
 
   .column {
-    width: 520px;
+    width: min(520px, calc(100% - 32px));
   }
 
   .title {

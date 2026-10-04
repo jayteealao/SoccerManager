@@ -90,7 +90,7 @@
     display: flex;
     align-items: center;
     gap: 9px;
-    height: 30px;
+    height: max(30px, var(--hit));
     padding: 0 8px;
     border: 0;
     border-radius: var(--radius-sm);
