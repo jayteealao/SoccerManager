@@ -345,17 +345,23 @@
     padding-top: 8px;
   }
 
-  /* Wide: the side column takes 46%, and its groups form two columns: the commentary down
-     the left, the other grounds, win probability and the statistics down the right. */
+  /* Wide: the side column takes 46%, and its groups form two columns (below). */
   @media (min-width: 1600px) {
     .cols {
       grid-template-columns: minmax(0, 1fr) minmax(0, 46%);
     }
 
     .side {
+      grid-template-rows: auto auto minmax(0, 1fr);
+    }
+  }
+
+  /* Wide and compact: the side groups form two columns: the commentary down the left, the
+     other grounds, win probability and the statistics down the right. */
+  @media (min-width: 1600px) and (max-width: 1919px), (max-width: 1023px), (max-height: 599px) {
+    .side {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      grid-template-rows: auto auto minmax(0, 1fr);
       grid-template-areas: 'b c' 'b a' 'b d';
       align-items: start;
     }
@@ -410,39 +416,10 @@
     .left :global(.pitchbox) {
       width: 100%;
     }
-
-    /* A group's width is contained, so it must stretch, not take its content's width. */
-    .side {
-      display: flex;
-      align-items: stretch;
-    }
-
-    .grp-a,
-    .grp-b,
-    .grp-c,
-    .grp-d {
-      contain: none;
-      border-left: 0;
-      padding-left: 0;
-      padding-right: 0;
-    }
-
-    .grp-a {
-      border-top: 0;
-      margin-top: 0;
-      padding-top: 0;
-    }
-
-    .grp + .grp.grp-b,
-    .grp + .grp.grp-c {
-      border-top: 1px solid var(--rule);
-      margin-top: 8px;
-      padding-top: 8px;
-    }
   }
 
   /* Compact: one column; the pitch at full width with the playback row under it, then the
-     side groups in two columns. The body scrolls down to them. */
+     side groups in two columns (above). The body scrolls down to them. */
   @media (max-width: 1023px), (max-height: 599px) {
     .cols {
       grid-template-columns: minmax(0, 1fr);
@@ -459,55 +436,12 @@
     }
 
     .side {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       grid-template-rows: auto auto auto;
-      grid-template-areas: 'b c' 'b a' 'b d';
-      align-items: start;
       border-left: 0;
       padding-left: 0;
       border-top: 1px solid var(--rule);
       margin-top: 14px;
       padding-top: 14px;
-    }
-
-    .grp-a {
-      grid-area: a;
-    }
-
-    .grp-b {
-      grid-area: b;
-      align-self: stretch;
-      contain: size;
-      padding-right: 18px;
-    }
-
-    .grp-c {
-      grid-area: c;
-    }
-
-    .grp-d {
-      grid-area: d;
-    }
-
-    .grp-a,
-    .grp-c,
-    .grp-d {
-      border-left: 1px solid var(--rule);
-      padding-left: 18px;
-    }
-
-    .grp + .grp.grp-b,
-    .grp + .grp.grp-c {
-      border-top: 0;
-      margin-top: 0;
-      padding-top: 0;
-    }
-
-    .grp-a {
-      border-top: 1px solid var(--rule);
-      margin-top: 8px;
-      padding-top: 8px;
     }
   }
 

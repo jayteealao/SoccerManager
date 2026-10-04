@@ -16,7 +16,7 @@
 //     from getComputedStyle). Only the pitch measures its box; the exceptions are listed in
 //     LAYOUT_READS_ALLOWED;
 //   - an `@media` width or height other than the window steps: min-width 1024px, 1600px,
-//     1920px or 2560px, max-width 1023px and max-height 599px;
+//     1920px or 2560px, max-width 1023px or 1919px (the top of wide) and max-height 599px;
 //   - a compact width (max-width 1023px) without the compact height (max-height 599px) in the
 //     same prelude: the compact step is both halves.
 //
@@ -93,7 +93,7 @@ const LAYOUT_READS_ALLOWED = {
   'feed.js': ['clientHeight'],
 };
 
-const STEP_WIDTHS = { 'min-width': [1024, 1600, 1920, 2560], 'max-width': [1023], 'max-height': [599] };
+const STEP_WIDTHS = { 'min-width': [1024, 1600, 1920, 2560], 'max-width': [1023, 1919], 'max-height': [599] };
 
 /// The size features in one `@media` prelude that are not window steps.
 function offStepFeatures(prelude) {
