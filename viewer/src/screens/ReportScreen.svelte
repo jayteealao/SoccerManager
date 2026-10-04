@@ -162,7 +162,7 @@
 
   const STEPS = [
     { label: 'Write the report', state: 'done', word: 'Figures, goals and cards' },
-    { label: 'Store the whole match', state: 'current', word: "The replay from 0' to full time", progress: 90 },
+    { label: 'Get the replay ready', state: 'current', word: "The replay from 0' to full time", progress: 90 },
   ];
 
   let fileInput = $state();
@@ -260,7 +260,7 @@
     {:else if loading}
       <div class="cols loading">
         <div>
-          <SectionLabel label="Storing the whole match" note={session.engineWord} />
+          <SectionLabel label="Getting the replay ready" note={session.engineWord} />
           <StepList steps={STEPS} />
           <p class="g">No cancel: the engine is closing the match, and the replay keeps all of it.</p>
           <div class="actions">

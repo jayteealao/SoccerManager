@@ -1,7 +1,7 @@
 <!-- The full-time report's Next list: New match (cyan, the screen's one cyan choice) and
      Return to start, as the start screen's option rows at the report's smaller size. Both wait
-     until the whole match is stored: while it is stored they are faded and disabled, and a
-     status line says what the page waits for. The change from storing to ready is not
+     until the replay is ready: until then they are faded and disabled, and a status line says
+     what the page waits for. "Save" is kept for the replay file. The change to ready is not
      animated. A hidden live region, in the page from the start, reads out both moments. -->
 <script>
   import MenuList from './MenuList.svelte';
@@ -9,8 +9,8 @@
 
   let { ready = false, onchoose = () => {} } = $props();
 
-  const STORING = 'Storing the match for the replay…';
-  const READY = 'The match is stored. New match and Return to start are available.';
+  const STORING = 'Getting the replay ready…';
+  const READY = 'The replay is ready. New match and Return to start are available.';
 
   /// The live region starts empty and takes its words after it is in the page, so screen
   /// readers speak the storing line and then the moment the choices are ready.
@@ -37,7 +37,7 @@
 </script>
 
 <div class="next">
-  <SectionLabel label="Next" note={ready ? 'the match is stored' : 'waits until the match is stored'} level={4} />
+  <SectionLabel label="Next" note={ready ? 'the replay is ready' : 'waits until the replay is ready'} level={4} />
   <MenuList {items} {onchoose} label="Next" size="small" />
   {#if !ready}
     <p class="storing"><span class="dot" aria-hidden="true">●</span>{STORING}</p>

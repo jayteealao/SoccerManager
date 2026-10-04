@@ -64,9 +64,9 @@ test('the full-time report is loading until the match is stored, with Save repla
   assert.equal(root.querySelector('[data-screen="report"]').dataset.state, 'loading');
   const steps = [...root.querySelectorAll('.steps li')].map((li) => li.textContent);
   assert.match(steps[0], /Write the report/);
-  assert.match(steps[1], /Store the whole match/);
+  assert.match(steps[1], /Get the replay ready/);
   assert.equal(button('Save replay').disabled, true);
-  assert.match(root.textContent, /Nothing is stored yet\.|The whole match is still being stored\./);
+  assert.match(root.textContent, /Nothing to save yet\.|The replay is still getting ready\./);
   assert.equal(root.querySelector('.timeline'), null, 'no figures while loading');
 });
 
@@ -303,9 +303,9 @@ test('while the skipped match is stored, every step that could drop it waits', a
   assert.equal(button('Replay the whole match').disabled, true);
   assert.equal(button('Save replay').disabled, true);
   assert.equal(button('Open a replay').disabled, false);
-  assert.equal(root.querySelector('.storing').textContent.trim(), '●Storing the match for the replay…');
-  assert.equal(root.querySelector('.next [role="status"]').textContent.trim(), 'Storing the match for the replay…');
-  assert.match(root.textContent, /waits until the match is stored/);
+  assert.equal(root.querySelector('.storing').textContent.trim(), '●Getting the replay ready…');
+  assert.equal(root.querySelector('.next [role="status"]').textContent.trim(), 'Getting the replay ready…');
+  assert.match(root.textContent, /waits until the replay is ready/);
 });
 
 test('the Next list speaks through one live region, there before storing ends', async () => {
@@ -315,12 +315,12 @@ test('the Next list speaks through one live region, there before storing ends', 
   const status = page().querySelector('.next [role="status"]');
   assert.ok(status, 'the live region is in the page while the match is stored');
   assert.equal(status.getAttribute('aria-live'), 'polite');
-  assert.equal(status.textContent.trim(), 'Storing the match for the replay…');
+  assert.equal(status.textContent.trim(), 'Getting the replay ready…');
   run.s.skip = { ...run.s.skip, state: 'ready' };
   run.s.report = { ...run.s.report, state: 'ready', tick: 800 };
   await tick();
   assert.equal(page().querySelector('.next [role="status"]'), status, 'the same region, still in the page');
-  assert.equal(status.textContent.trim(), 'The match is stored. New match and Return to start are available.');
+  assert.equal(status.textContent.trim(), 'The replay is ready. New match and Return to start are available.');
   assert.equal(page().querySelector('.storing'), null, 'the visible storing line is gone');
 });
 

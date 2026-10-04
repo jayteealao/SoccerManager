@@ -34,7 +34,7 @@ test('while the engine plays, step 2 is current and names the newest minute of 9
       ['Freeze the match at 67:12', 'done'],
       ['Play 67:12 to full time', 'current'],
       ['Write the report', 'pending'],
-      ['Store the whole match', 'pending'],
+      ['Get the replay ready', 'pending'],
     ]
   );
   assert.equal(steps[1].word, "82' of 90 · at full speed");

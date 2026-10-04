@@ -343,7 +343,7 @@ test('a skipped match reports the final score, replays all of it, and equals the
     await kickOffAndPauseAt(page, fullTime.tick);
     // The engine closes after full time once the page has every frame: the whole match is
     // stored.
-    await until(page, () => /whole match is stored/.test(window.__touchline.notice().message ?? ''), undefined, 60_000);
+    await until(page, () => /whole match is here/.test(window.__touchline.notice().message ?? ''), undefined, 60_000);
     const watchedEvents = await hook(page, () => window.__touchline.events());
     const watchedEnd = watchedEvents.find((e) => e['event.type'] === 'full-time');
     runs.watched = {

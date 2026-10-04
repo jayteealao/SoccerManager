@@ -54,7 +54,7 @@ export function skipSteps(from, newestTick, total, stage) {
       word: 'Figures, goals and cards',
     },
     {
-      label: 'Store the whole match',
+      label: 'Get the replay ready',
       state: stage === 'ready' ? 'done' : stage === 'storing' ? 'current' : 'pending',
       word: "The replay from 0' to full time",
       progress: 90,

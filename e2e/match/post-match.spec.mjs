@@ -286,8 +286,8 @@ for (const skin of SKINS) {
         }
         await expect(button(page, 'Replay the whole match')).toBeDisabled();
         await expect(button(page, 'Save replay')).toBeDisabled();
-        await expect(page.locator('.storing:visible')).toHaveText(/Storing the match for the replay…/);
-        await expect(page.getByRole('status').filter({ hasText: 'Storing the match for the replay…' })).toHaveCount(1);
+        await expect(page.locator('.storing:visible')).toHaveText(/Getting the replay ready…/);
+        await expect(page.getByRole('status').filter({ hasText: 'Getting the replay ready…' })).toHaveCount(1);
         await settled(page);
         await snap(page, `post-report-storing-${skin}.png`);
       } finally {

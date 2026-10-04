@@ -477,7 +477,7 @@ test('the full-time report is loading until the engine closes after full time, t
   playFrames(session, () => session.view === 'report');
   assert.equal(session.report.kind, 'full-time');
   assert.equal(session.report.state, 'loading');
-  assert.equal(session.saveBlocked, 'The whole match is still being stored.');
+  assert.equal(session.saveBlocked, 'The replay is still getting ready.');
   socket.finish();
   assert.equal(session.report.state, 'ready', 'the close after full time completes the store');
   assert.equal(session.saveBlocked, null);
@@ -686,7 +686,7 @@ test('Confirm sends one skip; while the engine plays the rest nothing paces it a
   assert.equal(session.view, 'report');
   assert.equal(session.report.state, 'playing-rest');
   assert.equal(session.report.skippedFrom, 200);
-  assert.equal(session.saveBlocked, 'The whole match is still being stored.');
+  assert.equal(session.saveBlocked, 'The replay is still getting ready.');
   socket.deliver(JSON.stringify({ type: 'ack', command: 'skip', 'change.queued_tick': 300 }));
   assert.equal(session.skip.state, 'playing', 'the ack keeps the skip playing');
 

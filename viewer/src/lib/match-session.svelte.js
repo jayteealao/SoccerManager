@@ -1227,7 +1227,7 @@ export class MatchSession {
     // fault: every tick is stored and the match plays back. Any other close is.
     if (this.match.fullTimeTick !== null) {
       this.engineWord = 'Engine finished';
-      this.setNotice('end', 'Full time. The whole match is stored and plays back.');
+      this.setNotice('end', 'Full time. The whole match is here and plays back.');
       this.streamEnded = true;
       if (this.skipRunning) {
         this.finishSkip();
@@ -1720,10 +1720,10 @@ export class MatchSession {
   /// Why Save replay cannot run yet, or null when it can.
   get saveBlocked() {
     if (this.frames.count === 0 || !this.matchId) {
-      return 'Nothing is stored yet.';
+      return 'Nothing to save yet.';
     }
     if (this.report?.kind === KIND.fullTime && this.report.state !== 'ready') {
-      return 'The whole match is still being stored.';
+      return 'The replay is still getting ready.';
     }
     return null;
   }

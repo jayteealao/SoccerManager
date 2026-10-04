@@ -222,7 +222,7 @@ test('the charter scenario to the replay of a skipped match', async ({ page }, i
     await kickOff(page);
     await playback(page).getByRole('button', { name: '8x', exact: true }).click();
     await playUntil(page, (t) => window.__touchline.history().newest_tick >= t, { arg: fullTime.tick, timeout: 5 * 60_000 });
-    await until(page, () => /whole match is stored/.test(window.__touchline.notice().message ?? ''), undefined, 3 * 60_000);
+    await until(page, () => /whole match is here/.test(window.__touchline.notice().message ?? ''), undefined, 3 * 60_000);
     const watchedEnd = (await hook(page, () => window.__touchline.events())).find((e) => e['event.type'] === 'full-time');
     digests.watched = {
       digest: await hook(page, () => window.__touchline.tickFrameDigest()),

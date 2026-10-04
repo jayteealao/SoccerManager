@@ -352,7 +352,7 @@ test('full time holds FULL TIME, opens the report again, and keeps only the repl
   for (const name of ['Pause', 'Play', 'Resume', 'Back to live', 'Next stop', 'Skip to result', 'Previous stop']) {
     assert.equal(screen.queryByRole('button', { name }), null, `no ${name}`);
   }
-  assert.ok(screen.getByText('The whole match is stored · play it again from any minute'));
+  assert.ok(screen.getByText('The whole match is here · play it again from any minute'));
   assert.deepEqual(stubFaults(document.body), []);
 
   s.skip = { state: 'ready', from: 200, newest: 800 };

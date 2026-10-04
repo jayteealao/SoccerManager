@@ -99,7 +99,7 @@ Select **Continue**. The second half starts.
 
 At full time, the page opens the full-time report.
 
-When the whole match is stored, **Save replay** is available. Select it.
+When the replay is ready, **Save replay** is available. Select it.
 
 The browser downloads a file named `touchline-<match id>.smfx`. At full time, the engine command in the terminal ends.
 

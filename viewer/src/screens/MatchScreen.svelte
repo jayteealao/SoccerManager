@@ -202,7 +202,7 @@
             note={fullTime
               ? skippedAt
                 ? `From ${skippedAt} the engine played on unwatched · the replay holds it`
-                : 'The whole match is stored · play it again from any minute'
+                : 'The whole match is here · play it again from any minute'
               : undefined}
             playing={session.playing && screen === 'live'}
             speed={session.speed}
