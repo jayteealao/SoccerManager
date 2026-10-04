@@ -74,7 +74,7 @@
 
   .cols {
     display: grid;
-    grid-template-columns: 380px 1fr;
+    grid-template-columns: minmax(0, 380fr) minmax(0, 815fr);
     grid-template-rows: minmax(0, 1fr);
     margin-top: 12px;
     flex: 1;

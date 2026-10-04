@@ -46,7 +46,7 @@
       <li>
         <b class="min num">{moment.minute}</b>
         <b class={tone(moment)}>{moment.kind}</b>
-        <span class="who">{who(moment)}</span>
+        <span class="who" data-may-truncate>{who(moment)}</span>
         {#if skipped}
           {#if notLive(moment, skippedFrom)}<span class="nl">NOT LIVE</span>{:else}<span></span>{/if}
         {/if}

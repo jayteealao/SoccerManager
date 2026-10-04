@@ -48,7 +48,7 @@
     align-items: flex-start;
     gap: 10px;
     width: 100%;
-    min-height: 24px;
+    min-height: var(--hit);
     padding: 7px 10px;
     margin: 0 0 4px;
     border: 0;

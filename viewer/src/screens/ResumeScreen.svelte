@@ -108,9 +108,10 @@
     color: var(--band-ink);
   }
 
+  /* The board's 700 px and the rest at 1280, as shares. */
   .cols {
     display: grid;
-    grid-template-columns: 700px 1fr;
+    grid-template-columns: minmax(0, 700fr) minmax(0, 495fr);
     margin-top: 12px;
   }
 
@@ -167,5 +168,20 @@
 
   .file {
     display: none;
+  }
+
+  /* Compact: the panel takes the width; its actions are 44 px. */
+  @media (max-width: 1023px), (max-height: 599px) {
+    .cols {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .cols > div + div {
+      display: none;
+    }
+
+    .btn {
+      height: var(--hit);
+    }
   }
 </style>

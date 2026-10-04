@@ -1,7 +1,9 @@
 <!-- The half-time and full-time report, ported from the sketch's Post-match report board: the
      shell with the result in the header and CONTINUE in the cyan block; the 66 px score strip;
-     "How you saw it" with the match timeline and its goals and cards; then four columns of
-     270, 330, 1fr and 290 px. The match figures are paired bars counted from the page's one
+     "How you saw it" with the match timeline and its goals and cards; then four columns that
+     share the width as the board's 270, 330, 305 and 290 px do at 1280; at the compact step
+     two columns, the figures beside the last column and the rest under them, placed by the
+     grid with the reading order unchanged. The match figures are paired bars counted from the page's one
      event list, so the report never disagrees with the feed; the goals and cards list them
      one by one. The other grounds list the matchday's other results, final once every
      ground has ended; a ground still running shows its minute, and its later events appear
@@ -46,8 +48,11 @@
 
   const MINUTE = TICKS_PER_SECOND * 60;
   const MARKS = [0, 15, 30, 45, 60, 75, 90];
-  // The timeline's drawn width and its inset, as the board draws them.
-  const TRACK = { x: 10, width: 1140 };
+  // The timeline fills its row, so a point on it is a share of the track. The minute marks
+  // under the skip words are left out by these track widths: the board's 1140 px at 1280 and
+  // up, and the narrowest track, at the compact step, below that.
+  const TRACK_WIDE = 1140;
+  const TRACK_NARROW = 670;
   // The width the skip words take after the skip point, "SKIPPED AT 00:00 · NOT WATCHED LIVE →".
   const SKIP_WORDS_WIDTH = 230;
 
@@ -122,13 +127,19 @@
 
   /// The timeline spans the whole match: 90 minutes, or longer when the match ran on.
   let span = $derived(Math.max(90 * MINUTE, report?.tick ?? 0));
-  const at = (tick) => TRACK.x + (Math.min(tick, span) / span) * TRACK.width;
+  /// A tick's share of the track, from 0 to 1.
+  const share = (tick) => Math.min(tick, span) / span;
+  const at = (tick) => `${share(tick) * 100}%`;
+  /// Whether a mark at `x` (a share) is clear of the skip words on a track `width` px wide.
+  const clear = (x, width) =>
+    skippedFrom === null || x < share(skippedFrom) - 14 / width || x > share(skippedFrom) + SKIP_WORDS_WIDTH / width;
   /// The minute marks; after a skip, the marks under the skip words are left out, so the
-  /// words never sit on a number.
+  /// words never sit on a number. A mark clear only on the wide track carries `wide`, and
+  /// shows only there.
   let marks = $derived(
-    MARKS.map((m) => ({ m, x: at(m * MINUTE) })).filter(
-      (mark) => skippedFrom === null || mark.x < at(skippedFrom) - 14 || mark.x > at(skippedFrom) + SKIP_WORDS_WIDTH
-    )
+    MARKS.map((m) => ({ m, x: share(m * MINUTE) }))
+      .filter((mark) => clear(mark.x, TRACK_WIDE))
+      .map((mark) => ({ ...mark, x: `${mark.x * 100}%`, wide: !clear(mark.x, TRACK_NARROW) }))
   );
   let markers = $derived(
     model.moments.map((m) => ({
@@ -282,50 +293,54 @@
           <SectionLabel label="How you saw it" note="0' to {clockAt(report?.tick ?? 0)} live" />
         {/if}
       </div>
-      {#if skipped}
-        <svg class="timeline" width="1160" height="44" role="img" aria-label={timelineLabel}>
-          <defs>
-            <pattern id="skip-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <rect class="h1" width="4" height="8"></rect>
-              <rect class="h2" x="4" width="4" height="8"></rect>
-            </pattern>
-          </defs>
-          <rect class="hatched" x={TRACK.x} y="18" width={TRACK.width} height="7" rx="3"></rect>
-          <rect class="seen" x={TRACK.x} y="18" width={at(skippedFrom) - TRACK.x} height="7" rx="3"></rect>
-          <line class="head" x1={at(skippedFrom)} y1="10" x2={at(skippedFrom)} y2="32"></line>
-          <text class="unseen" x={at(skippedFrom) + 6} y="40">SKIPPED AT {skipClock} · NOT WATCHED LIVE →</text>
-          {#each markers as m (m.key)}
-            <circle class="mk {m.tone}" class:hollow={m.hollow} cx={m.x} cy="9" r="6.5"></circle>
-            <text class="mt {m.tone}" class:hollow={m.hollow} x={m.x} y="12" text-anchor="middle">{m.letter}</text>
-          {/each}
-          {#each marks as mark (mark.m)}
-            <text class="min" x={mark.x} y="40" text-anchor="middle">{mark.m}'</text>
-          {/each}
-        </svg>
-      {:else}
-        <svg class="timeline" width="1160" height="44" role="img" aria-label={timelineLabel}>
-          <rect class="track" x={TRACK.x} y="18" width={TRACK.width} height="7" rx="3"></rect>
-          <rect class="seen" x={TRACK.x} y="18" width={at(report?.tick ?? 0) - TRACK.x} height="7" rx="3"></rect>
-          <line class="head" x1={at(report?.tick ?? 0)} y1="10" x2={at(report?.tick ?? 0)} y2="32"></line>
-          {#each markers as m (m.key)}
-            <circle class="mk {m.tone}" cx={m.x} cy="9" r="6.5"></circle>
-            <text class="mt {m.tone}" x={m.x} y="12" text-anchor="middle">{m.letter}</text>
-          {/each}
-          {#each marks as mark (mark.m)}
-            <text class="min" x={mark.x} y="40" text-anchor="middle">{mark.m}'</text>
-          {/each}
-        </svg>
-      {/if}
+      <!-- A layer for the layout check: the markers of moments a minute apart touch, as the
+           match had them; the label names every one. -->
+      <div class="tl" data-layout-layer>
+        {#if skipped}
+          <svg class="timeline" height="44" role="img" aria-label={timelineLabel}>
+            <defs>
+              <pattern id="skip-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <rect class="h1" width="4" height="8"></rect>
+                <rect class="h2" x="4" width="4" height="8"></rect>
+              </pattern>
+            </defs>
+            <rect class="hatched" x="0" y="18" width="100%" height="7" rx="3"></rect>
+            <rect class="seen" x="0" y="18" width={at(skippedFrom)} height="7" rx="3"></rect>
+            <line class="head" x1={at(skippedFrom)} y1="10" x2={at(skippedFrom)} y2="32"></line>
+            <text class="unseen" x={at(skippedFrom)} dx="6" y="40">SKIPPED AT {skipClock} · NOT WATCHED LIVE →</text>
+            {#each markers as m (m.key)}
+              <circle class="mk {m.tone}" class:hollow={m.hollow} cx={m.x} cy="9" r="6.5"></circle>
+              <text class="mt {m.tone}" class:hollow={m.hollow} x={m.x} y="12" text-anchor="middle">{m.letter}</text>
+            {/each}
+            {#each marks as mark (mark.m)}
+              <text class="min" class:wide={mark.wide} x={mark.x} y="40" text-anchor="middle">{mark.m}'</text>
+            {/each}
+          </svg>
+        {:else}
+          <svg class="timeline" height="44" role="img" aria-label={timelineLabel}>
+            <rect class="track" x="0" y="18" width="100%" height="7" rx="3"></rect>
+            <rect class="seen" x="0" y="18" width={at(report?.tick ?? 0)} height="7" rx="3"></rect>
+            <line class="head" x1={at(report?.tick ?? 0)} y1="10" x2={at(report?.tick ?? 0)} y2="32"></line>
+            {#each markers as m (m.key)}
+              <circle class="mk {m.tone}" cx={m.x} cy="9" r="6.5"></circle>
+              <text class="mt {m.tone}" x={m.x} y="12" text-anchor="middle">{m.letter}</text>
+            {/each}
+            {#each marks as mark (mark.m)}
+              <text class="min" x={mark.x} y="40" text-anchor="middle">{mark.m}'</text>
+            {/each}
+          </svg>
+        {/if}
+      </div>
 
       <div class="cols ready">
-        <div>
+        <div class="c1">
           <SectionLabel label="Match figures" note="{initials(names[0])} · {initials(names[1])}" />
           {#each model.rows as row (row.id)}
             <PairedBar label={row.label} home={row.counts[0]} away={row.counts[1]} />
           {/each}
         </div>
 
-        <div>
+        <div class="c2">
           <SectionLabel label="Goals and cards" />
           <ReportMoments moments={model.moments} teams={session.teams} {skippedFrom} />
           <div class="hr"></div>
@@ -337,13 +352,13 @@
           />
         </div>
 
-        <div>
+        <div class="c3">
           <SectionLabel label="Highlights" note="ranked by win-probability swing" later />
           <!-- STUB: highlights ranked by win-probability swing need a win-probability model the
                engine does not have. Drawn for layout and feel only. -->
           <StubSection note="highlights">
             {#each [["84'", 'GOAL Palova', '+38%', 'ok'], ["58'", 'GOAL Hask, near-post header', '−22%', 'bd'], ["23'", "GOAL Oduya from Morrow's cut-back", '+16%', 'ok'], ["88'", "Reyna saves Ferrie's low shot", '+9%', 'ok']] as [min, text, swing, tone] (min)}
-              <div class="hl"><b class="num min">{min}</b><span>{text}</span><b class="num {tone}">{swing}</b></div>
+              <div class="hl"><b class="num min">{min}</b><span data-may-truncate>{text}</span><b class="num {tone}">{swing}</b></div>
             {/each}
           </StubSection>
           <div class="hr"></div>
@@ -355,7 +370,7 @@
           </StubSection>
         </div>
 
-        <div>
+        <div class="c4">
           {#if full}
             {#if nextOffered}
               <NextSteps ready={nextReady} onchoose={(id) => session.nextStep(id)} />
@@ -430,9 +445,28 @@
     margin-bottom: 0;
   }
 
+  /* The track fills the row inside the board's 10 px inset; the marks at its ends draw into
+     the inset. */
+  .tl {
+    flex: none;
+    padding: 0 10px;
+    container-type: inline-size;
+  }
+
   .timeline {
     display: block;
-    flex: none;
+    width: 100%;
+    overflow: visible;
+  }
+
+  .min.wide {
+    display: none;
+  }
+
+  @container (min-width: 1140px) {
+    .min.wide {
+      display: inline;
+    }
   }
 
   .track {
@@ -541,8 +575,9 @@
     min-height: 0;
   }
 
+  /* The board's 270, 330, 305 and 290 px at 1280, as shares, so the columns grow together. */
   .cols.ready {
-    grid-template-columns: 270px 330px 1fr 290px;
+    grid-template-columns: minmax(0, 270fr) minmax(0, 330fr) minmax(0, 305fr) minmax(0, 290fr);
     margin-top: 6px;
   }
 
@@ -561,7 +596,7 @@
   }
 
   .cols.loading {
-    grid-template-columns: 400px 1fr;
+    grid-template-columns: minmax(0, 400px) minmax(0, 1fr);
     gap: 36px;
     margin-top: 12px;
   }
@@ -710,5 +745,73 @@
 
   .file {
     display: none;
+  }
+
+  /* Compact, as the Report-768 board draws it: the figures beside the last column (the Next
+     list and the actions at the top right), then the goals, cards and other grounds beside
+     the highlights. The body scrolls; the columns keep their reading order for Tab. */
+  @media (max-width: 1023px), (max-height: 599px) {
+    .screen {
+      height: auto;
+    }
+
+    .cols {
+      flex: none;
+    }
+
+    .cols.ready {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-rows: auto auto;
+      grid-template-areas: 'a d' 'b c';
+    }
+
+    .cols.ready > div {
+      overflow: visible;
+    }
+
+    .c1 {
+      grid-area: a;
+    }
+
+    .c2 {
+      grid-area: b;
+    }
+
+    .c3 {
+      grid-area: c;
+    }
+
+    .c4 {
+      grid-area: d;
+    }
+
+    .cols.ready > .c2 {
+      border-left: 0;
+      padding-left: 0;
+    }
+
+    .cols.ready > .c2,
+    .cols.ready > .c3 {
+      border-top: 1px solid var(--rule);
+      margin-top: 14px;
+      padding-top: 14px;
+    }
+
+    .cols.ready > .c4 {
+      padding-right: 0;
+    }
+
+    .cols.loading {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 18px;
+    }
+
+    .btn {
+      min-height: var(--hit);
+    }
+
+    .btn.tall {
+      min-height: var(--hit);
+    }
   }
 </style>

@@ -142,7 +142,6 @@
         <PitchCanvas
           width={310}
           height={170}
-          maxWidth="310px"
           attach={(canvas) => session.attachCanvas(canvas, 'skip')}
           resize={(canvas, box) => session.resizeCanvas(canvas, box)}
           detach={(canvas) => session.detachCanvas(canvas, 'skip')}
@@ -228,9 +227,10 @@
     color: var(--band-ink);
   }
 
+  /* The board's 330 px, the rest and 400 px at 1280, as shares. */
   .cols {
     display: grid;
-    grid-template-columns: 330px 1fr 400px;
+    grid-template-columns: minmax(0, 330fr) minmax(0, 465fr) minmax(0, 400fr);
     grid-template-rows: minmax(0, 1fr);
     flex: 1;
     min-height: 0;
@@ -365,5 +365,46 @@
   .what {
     margin: 0;
     color: var(--read-ink);
+  }
+
+  /* Compact: where the match stands beside the decision, and what the engine does under
+     them, placed by the grid with the reading order unchanged. The body scrolls. */
+  @media (max-width: 1023px), (max-height: 599px) {
+    .screen {
+      height: auto;
+    }
+
+    .cols {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-rows: auto auto;
+      grid-template-areas: 'a c' 'b b';
+      flex: none;
+    }
+
+    .cols > div {
+      overflow: visible;
+    }
+
+    .cols > div:nth-child(1) {
+      grid-area: a;
+    }
+
+    .cols > div:nth-child(2) {
+      grid-area: b;
+      border-left: 0;
+      border-top: 1px solid var(--rule);
+      margin-top: 14px;
+      padding: 14px 0 0;
+    }
+
+    .cols > div:nth-child(3) {
+      grid-area: c;
+      padding-right: 0;
+    }
+
+    .btn {
+      height: var(--hit);
+      padding: 0 16px;
+    }
   }
 </style>

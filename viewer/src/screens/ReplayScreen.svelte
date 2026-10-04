@@ -99,7 +99,6 @@
         <PitchCanvas
           width={752}
           height={290}
-          maxWidth="752px"
           attach={(canvas) => session.attachCanvas(canvas, 'replay')}
           resize={(canvas, box) => session.resizeCanvas(canvas, box)}
           detach={(canvas) => session.detachCanvas(canvas, 'replay')}
@@ -230,9 +229,10 @@
     height: 100%;
   }
 
+  /* The board's 770 px and the rest at 1280, as shares, so both columns grow together. */
   .cols {
     display: grid;
-    grid-template-columns: 770px 1fr;
+    grid-template-columns: minmax(0, 770fr) minmax(0, 425fr);
     grid-template-rows: minmax(0, 1fr);
     margin-top: 8px;
     flex: 1;
@@ -310,6 +310,7 @@
 
   .row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     margin-top: 2px;
@@ -346,7 +347,17 @@
     display: inline-flex;
     border: 1px solid var(--seg-edge);
     border-radius: var(--radius-sm);
-    overflow: hidden;
+  }
+
+  /* A part is drawn 20 px high; its hit area reaches the step's hit height. */
+  button.part::after {
+    content: '';
+    position: absolute;
+    inset: min(-2px, calc((20px - var(--hit)) / 2)) 0;
+  }
+
+  .part:last-child {
+    border-radius: 0 1px 1px 0;
   }
 
   .part {
@@ -366,6 +377,7 @@
 
   .part.stubbed:first-child {
     border-left: 0;
+    border-radius: 1px 0 0 1px;
   }
 
   .part.stubbed {
@@ -424,7 +436,7 @@
 
   .panels {
     display: grid;
-    grid-template-columns: 256px 1fr 1fr 1fr;
+    grid-template-columns: minmax(0, 256fr) repeat(3, minmax(0, 158fr));
     gap: 8px;
   }
 
@@ -572,5 +584,58 @@
     overflow: hidden;
     clip: rect(0 0 0 0);
     white-space: nowrap;
+  }
+
+  /* Compact: one column, the pitch at full width with its controls at 44 px, then the
+     catalogue under it. The body scrolls down to it. */
+  @media (max-width: 1023px), (max-height: 599px) {
+    .screen {
+      height: auto;
+    }
+
+    .cols {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto;
+      flex: none;
+    }
+
+    .left,
+    .right {
+      overflow: visible;
+    }
+
+    .left {
+      padding-right: 0;
+    }
+
+    .right {
+      border-left: 0;
+      border-top: 1px solid var(--rule);
+      margin-top: 14px;
+      padding: 14px 0 0;
+    }
+
+    .ib {
+      width: 44px;
+      height: 44px;
+    }
+
+    .ib::after {
+      inset: -1px;
+    }
+
+    .part {
+      height: 44px;
+      min-width: 44px;
+      justify-content: center;
+    }
+
+    button.part::after {
+      inset: 0;
+    }
+
+    .panels {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 </style>

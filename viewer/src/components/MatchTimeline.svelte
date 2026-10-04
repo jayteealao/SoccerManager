@@ -151,7 +151,9 @@
     cursor: default;
   }
 
+  /* The marks never take a click: the slider's hit area ends where they start. */
   .marks {
+    pointer-events: none;
     position: absolute;
     left: 0;
     right: 0;

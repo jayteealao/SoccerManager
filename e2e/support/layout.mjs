@@ -10,8 +10,9 @@
 //      (overflow hidden or clip). An ellipsis is allowed only where `data-may-truncate` marks
 //      the text or a box around it (the header title, club and player names);
 //   4. overlap: two visible text runs or controls whose boxes cross by more than 1 px on both
-//      axes where neither holds the other, outside `[data-layout-layer]` (the pitch box with
-//      its overlays, a popover); while a dialog is open only its own parts are checked;
+//      axes where neither holds the other, outside `[data-layout-layer]` (the report
+//      timeline, whose markers for moments a minute apart touch); while a dialog is open
+//      only its own parts are checked;
 //   5. small controls: every visible control that takes focus answers `elementFromPoint` at
 //      the four corners of a square of `minControl` px around its centre, so a hit area drawn
 //      by a pseudo-element counts and a covered control does not;
@@ -156,7 +157,8 @@ export async function layoutReport(page, { minControl = 24 } = {}) {
     // scrolled out of its list is not on show and overlaps nothing.
     const onShow = (el, rect) => {
       let { left, top, right, bottom } = rect;
-      for (let up = el.parentElement; up && up !== document.body; up = up.parentElement) {
+      // From the item itself: a run cut by its own ellipsis shows only inside its box.
+      for (let up = el; up && up !== document.body; up = up.parentElement) {
         const ucs = getComputedStyle(up);
         if (ucs.overflowX !== 'visible' || ucs.overflowY !== 'visible') {
           const u = up.getBoundingClientRect();
