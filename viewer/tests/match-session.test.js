@@ -1052,15 +1052,22 @@ test('a skip enters full time when it finishes, and the storing report carries t
   session.openSkip();
   session.confirmSkip();
   const score = { 'home.score': 1, 'away.score': 0 };
-  for (let t = 301; t <= 800; t += 1) {
+  for (let t = 301; t < 800; t += 1) {
     socket.deliver(frameAt(t));
     if (t === 500) {
       socket.deliver(JSON.stringify(eventMessage(500, 'goal', { 'team.id': 'club-a', ...score })));
     }
   }
+  const scorersAtSkip = session.scorers;
   socket.deliver(JSON.stringify(eventMessage(800, 'full-time', score)));
   assert.equal(session.report.state, 'storing');
   assert.deepEqual(session.report.model.score, [1, 0], 'the storing report shows the final score');
+  assert.notEqual(session.renderedTick, 800, 'the whistle tick is not in yet');
+  socket.deliver(frameAt(800));
+  assert.equal(session.renderedTick, 800, 'the match behind moves to the whistle once its tick is in');
+  assert.notDeepEqual(session.scorers, scorersAtSkip, 'the strip names the scorer of the rest');
+  socket.deliver(frameAt(801));
+  assert.equal(session.renderedTick, 800, 'and stays there while the match is stored');
   assert.equal(session.nextReady, false, 'nothing leads on while the match is stored');
   assert.equal(session.screen, 'paused', 'the match behind waits for the store');
   socket.finish();

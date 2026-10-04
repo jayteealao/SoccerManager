@@ -759,6 +759,9 @@ export class MatchSession {
     if (this.screen === 'kickoff') {
       this.screen = 'live';
     }
+    if (live) {
+      this.drawStoredWhistle();
+    }
   }
 
   onMessage(message) {
@@ -806,7 +809,17 @@ export class MatchSession {
           const model = reportModel(this.match.events, message.tick, this.teams ?? []);
           this.report = { ...this.report, state: 'storing', tick: message.tick, model };
         }
+        this.drawStoredWhistle();
       }
+    }
+  }
+
+  /// While a skipped match is stored, the match behind the report moves to the whistle once
+  /// its tick is in, so the score strip's figures and scorers are the final ones.
+  drawStoredWhistle() {
+    if (this.skip?.state === 'storing' && !this.skip.drawn && this.history?.newestTick >= this.skip.newest) {
+      this.skip = { ...this.skip, drawn: true };
+      this.rewind(this.skip.newest);
     }
   }
 
