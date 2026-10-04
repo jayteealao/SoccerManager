@@ -6,23 +6,42 @@
 // The ratio is compared unrounded: the tightest shipped pair passes at 4.5019:1, and a
 // rounded comparison would let a 4.495:1 pair through. Two decimals appear in the report only.
 //
+// A token written in OKLCH is read as the sRGB hex it renders as, so a skin may use either.
+//
 // Usage: node scripts/contrast.mjs [tokens.css] [pairs.json]
-// Defaults: the broadcast-blue skin's tokens.css and contrast-pairs.json.
+// Defaults: every shipped skin that has a contrast-pairs.json, each against its own tokens.css.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { oklchToHex } from '../src/lib/colour.js';
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const SKIN = path.join(HERE, '../src/skins/broadcast-blue');
+const SKINS_DIR = path.join(HERE, '../src/skins');
+
+/// The skins the build ships, read from the loader's list (the loader imports CSS, which
+/// node cannot load).
+export function shippedSkins() {
+  const loader = fs.readFileSync(path.join(SKINS_DIR, 'index.js'), 'utf8');
+  const list = /export const SKINS = \[([^\]]*)\]/.exec(loader);
+  if (!list) {
+    throw new Error('src/skins/index.js has no SKINS list');
+  }
+  return [...list[1].matchAll(/'([^']+)'/g)].map(([, name]) => name);
+}
 
 export const FLOORS = { text: 4.5, 'large-text': 3, boundary: 3 };
 
-/// Every `--name: #hex;` in a stylesheet.
+/// Every `--name: #hex;` and opaque `--name: oklch(L C H);` in a stylesheet, as hex.
 export function readTokens(css) {
   const tokens = new Map();
   for (const [, name, value] of css.matchAll(/(--[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,8})\s*;/g)) {
     tokens.set(name, value.toLowerCase());
+  }
+  const oklch = /(--[a-z0-9-]+)\s*:\s*oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)\s*;/g;
+  for (const [, name, l, c, h] of css.matchAll(oklch)) {
+    tokens.set(name, oklchToHex({ l: Number(l), c: Number(c), h: Number(h) }));
   }
   return tokens;
 }
@@ -83,9 +102,9 @@ export function check(tokens, pairs) {
   return { lines, failures };
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  const cssPath = process.argv[2] ?? path.join(SKIN, 'tokens.css');
-  const pairsPath = process.argv[3] ?? path.join(SKIN, 'contrast-pairs.json');
+/// Checks one skin's tokens.css against one pair list; prints the report and returns the
+/// number of failing pairs.
+function report(cssPath, pairsPath, name) {
   const tokens = readTokens(fs.readFileSync(cssPath, 'utf8'));
   const pairs = JSON.parse(fs.readFileSync(pairsPath, 'utf8'));
   const { lines, failures } = check(tokens, pairs);
@@ -95,6 +114,22 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   for (const failure of failures) {
     console.error(`FAIL  ${failure}`);
   }
-  console.log(`${pairs.length} pairs, ${failures.length} failing`);
-  process.exit(failures.length === 0 ? 0 : 1);
+  console.log(`${name ? `${name}: ` : ''}${pairs.length} pairs, ${failures.length} failing`);
+  return failures.length;
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  let failing = 0;
+  if (process.argv[2]) {
+    const cssPath = process.argv[2];
+    failing = report(cssPath, process.argv[3] ?? path.join(path.dirname(cssPath), 'contrast-pairs.json'));
+  } else {
+    for (const skin of shippedSkins()) {
+      const pairsPath = path.join(SKINS_DIR, skin, 'contrast-pairs.json');
+      if (fs.existsSync(pairsPath)) {
+        failing += report(path.join(SKINS_DIR, skin, 'tokens.css'), pairsPath, skin);
+      }
+    }
+  }
+  process.exit(failing === 0 ? 0 : 1);
 }

@@ -1,6 +1,7 @@
 // A WCAG 2.2 AA contrast check of what the page renders, run in the page. Every visible text
 // run is measured against the background it sits on (the nearest painted ancestor, composited
 // over the ones below it): 4.5:1 for body text, 3:1 for large text (24 px, or 18.66 px bold).
+// A gradient ground is measured at each colour stop, and the worst stop is reported.
 // Controls are measured too: each icon button's glyph and edge, the rewind playhead, and the
 // focus ring against the ground, at 3:1. Text inside a stub is inert and exempt, so it is
 // reported but never counted as a failure.
@@ -55,25 +56,59 @@ export async function contrastReport(page) {
     };
     const hex = (c) => `#${c.slice(0, 3).map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 
-    /// The colour behind `el`: its own background and its ancestors', composited, over the
-    /// page ground.
+    /// The colour stops of a gradient background image, or [] when there is none. A stop
+    /// that paints nothing (transparent) is null.
+    const stops = (image) => {
+      if (!image || !image.includes('gradient(')) {
+        return [];
+      }
+      const colours =
+        /(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^()]*\)|#[0-9a-f]{3,8}\b|transparent/gi;
+      return (image.match(colours) ?? []).map((stop) => rgba(stop));
+    };
+
+    /// The grounds behind `el`: its own background and its ancestors', composited, over the
+    /// page ground. A solid ground gives one colour; a gradient gives one per colour stop.
     const behind = (el) => {
       const layers = [];
       for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
-        const c = rgba(getComputedStyle(node).backgroundColor);
+        const style = getComputedStyle(node);
+        // The image paints over the colour, so it is the upper layer.
+        const image = stops(style.backgroundImage);
+        if (image.some(Boolean)) {
+          layers.push(image);
+          if (image.every((c) => c && c[3] === 1)) {
+            break;
+          }
+        }
+        const c = rgba(style.backgroundColor);
         if (c) {
-          layers.push(c);
+          layers.push([c]);
           if (c[3] === 1) {
             break;
           }
         }
       }
-      let colour = rgba(getComputedStyle(document.body).backgroundColor) ?? [255, 255, 255, 1];
+      let grounds = [rgba(getComputedStyle(document.body).backgroundColor) ?? [255, 255, 255, 1]];
       for (const layer of layers.reverse()) {
-        colour = over(layer, colour);
+        const next = new Map();
+        for (const ground of grounds) {
+          for (const stop of layer) {
+            // A transparent stop leaves the ground below it.
+            const colour = stop ? over(stop, ground) : ground;
+            next.set(hex(colour), colour);
+          }
+        }
+        grounds = [...next.values()];
       }
-      return colour;
+      return grounds;
     };
+
+    /// The ground `fg` measures worst against, and that ratio.
+    const worst = (fg, grounds) =>
+      grounds
+        .map((bg) => ({ bg, ratio: ratio(over(fg, bg), bg) }))
+        .reduce((a, b) => (b.ratio < a.ratio ? b : a));
     const visible = (el) => {
       const box = el.getBoundingClientRect();
       if (box.width === 0 || box.height === 0 || box.bottom < 0 || box.top > innerHeight) {
@@ -105,14 +140,13 @@ export async function contrastReport(page) {
       if (!fg) {
         continue;
       }
-      const bg = behind(el);
+      const { bg, ratio: measured } = worst(fg, behind(el));
       const size = parseFloat(style.fontSize);
       const bold = Number(style.fontWeight) >= 700;
       const large = size >= 24 || (bold && size >= 18.66);
       // Opacity on an ancestor fades the text and its own ground together; the stub is the
       // only faded part, and it is exempt.
       const stub = el.closest('[data-stub]');
-      const measured = ratio(over(fg, bg), bg);
       add({
         kind: 'text',
         text: node.textContent.trim().slice(0, 40),
@@ -133,29 +167,31 @@ export async function contrastReport(page) {
       }
       const style = getComputedStyle(button);
       const own = rgba(style.backgroundColor);
-      const ground = behind(button.parentElement);
-      const face = own ? over(own, ground) : ground;
+      const grounds = behind(button.parentElement);
+      const faces = own ? grounds.map((ground) => over(own, ground)) : grounds;
       const glyph = rgba(style.color);
+      const face = worst(glyph, faces);
       add({
         kind: 'glyph',
         text: button.getAttribute('aria-label'),
         element: describe(button),
         fg: hex(glyph),
-        bg: hex(face),
+        bg: hex(face.bg),
         floor: 3,
-        ratio: ratio(over(glyph, face), face),
+        ratio: face.ratio,
         exempt: null,
       });
       const edge = rgba(style.borderTopColor);
       if (edge && !own) {
+        const ground = worst(edge, grounds);
         add({
           kind: 'boundary',
           text: `${button.getAttribute('aria-label')} edge`,
           element: describe(button),
           fg: hex(edge),
-          bg: hex(ground),
+          bg: hex(ground.bg),
           floor: 3,
-          ratio: ratio(over(edge, ground), ground),
+          ratio: ground.ratio,
           exempt: null,
         });
       }
@@ -164,8 +200,8 @@ export async function contrastReport(page) {
     // The rewind playhead against its track.
     const head = document.querySelector('.timeline .head');
     if (head && visible(head)) {
-      const bg = behind(head.parentElement);
       const fg = rgba(getComputedStyle(head).backgroundColor);
+      const { bg, ratio: measured } = worst(fg, behind(head.parentElement));
       add({
         kind: 'boundary',
         text: 'rewind playhead',
@@ -173,7 +209,7 @@ export async function contrastReport(page) {
         fg: hex(fg),
         bg: hex(bg),
         floor: 3,
-        ratio: ratio(over(fg, bg), bg),
+        ratio: measured,
         exempt: null,
       });
     }
