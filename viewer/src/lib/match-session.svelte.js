@@ -226,6 +226,8 @@ export class MatchSession {
     this.canvas = null;
     /// The pitch canvas of each view that draws one: the match screen's, and the replay's.
     this.canvases = {};
+    /// The newest box each canvas reported, in CSS pixels and in device pixels.
+    this.boxes = new WeakMap();
     /// Every frame of the match as it arrived, for the replay file.
     this.frames = new FrameStore();
     /// The record of a loaded version-4 replay, kept so saving it writes the same kind of file.
@@ -418,6 +420,16 @@ export class MatchSession {
     this.selectCanvas();
   }
 
+  /// A canvas's box took a new size (`PitchCanvas` observes it): CSS pixels and device
+  /// pixels. The pitch on that canvas takes the size and draws its frame on show again, so a
+  /// paused, full-time or replay pitch redraws at its new size.
+  resizeCanvas(canvas, box) {
+    this.boxes.set(canvas, box);
+    if (canvas === this.canvas && this.pitch) {
+      this.pitch.resize(box);
+    }
+  }
+
   /// The screen took its canvas away (the replay view closed).
   detachCanvas(canvas, where = 'match') {
     if (this.canvases[where] === canvas) {
@@ -450,9 +462,12 @@ export class MatchSession {
       primary: t['team.kit.primary'],
       secondary: t['team.kit.secondary'],
     }));
+    const box = this.boxes.get(this.canvas);
     this.pitch = new Pitch(this.canvas, kits, readTokens(this.doc), {
-      width: Number(this.canvas.dataset?.width) || undefined,
-      height: Number(this.canvas.dataset?.height) || undefined,
+      width: box?.width ?? (Number(this.canvas.dataset?.width) || undefined),
+      height: box?.height ?? (Number(this.canvas.dataset?.height) || undefined),
+      deviceWidth: box?.deviceWidth,
+      deviceHeight: box?.deviceHeight,
       ground: this.ground,
     });
     if (this.history && this.history.count > 0 && this.history.tickAt(this.renderedTick, this.earlier)) {

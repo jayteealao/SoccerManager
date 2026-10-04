@@ -142,7 +142,9 @@
         <PitchCanvas
           width={310}
           height={170}
+          maxWidth="310px"
           attach={(canvas) => session.attachCanvas(canvas, 'skip')}
+          resize={(canvas, box) => session.resizeCanvas(canvas, box)}
           detach={(canvas) => session.detachCanvas(canvas, 'skip')}
           drawn={session.teams !== null}
           overlays={false}

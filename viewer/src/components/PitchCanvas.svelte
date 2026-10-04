@@ -1,8 +1,17 @@
-<!-- The pitch box (742 × 312 on the match screen; the replay's is 752 × 290): the canvas the
-     pitch renderer draws the match into, the goal banner over it, and the sketch's pitch
-     overlays, which are stubs. A panel passed as the body (the loading steps, an error, first
-     run) covers the box; `dim` holds the last frame at half strength while the engine
-     reconnects. The canvas names its box, which the renderer reads. -->
+<!-- The pitch box: the canvas the pitch renderer draws the match into, the goal banner over it,
+     and the sketch's pitch overlays, which are stubs. A panel passed as the body (the loading
+     steps, an error, first run) covers the box; `dim` holds the last frame at half strength
+     while the engine reconnects.
+
+     The box fills its column at the aspect `width` by `height` (742 by 312 on the match
+     screen; the replay's is 752 by 290), up to `maxWidth` when a screen sets one. A
+     ResizeObserver on the box is the one layout the viewer measures in script: each change
+     reports the box in CSS pixels and in device pixels through `resize`, so the renderer
+     draws sharp at its size. The device pixels come from devicePixelContentBoxSize where the
+     browser has it (Chrome, Edge, Firefox); otherwise from the CSS size times the device
+     pixel ratio times the page's zoom (Safari). The canvas also names its box in data-width
+     and data-height. The renderer owns the canvas's backing store: its width and height
+     attributes are set here once, because setting them again would clear a held frame. -->
 <script>
   import StubSection from './StubSection.svelte';
 
@@ -11,6 +20,8 @@
     detach = () => {},
     width = 742,
     height = 312,
+    maxWidth = null,
+    resize = () => {},
     drawn = false,
     dim = false,
     banner = null,
@@ -19,6 +30,8 @@
   } = $props();
 
   let canvas = $state();
+  let box = $state();
+  let measured = $state(null);
 
   $effect(() => {
     if (canvas) {
@@ -27,17 +40,59 @@
       return () => detach(drawnOn);
     }
   });
+
+  /// The box an observer entry reports: CSS pixels and device pixels, whole numbers.
+  function sizes(entry, el) {
+    const css = entry.contentBoxSize?.[0];
+    const cssWidth = css ? css.inlineSize : entry.contentRect.width;
+    const cssHeight = css ? css.blockSize : entry.contentRect.height;
+    const device = entry.devicePixelContentBoxSize?.[0];
+    const ratio = (globalThis.devicePixelRatio || 1) * (el.currentCSSZoom ?? 1);
+    return {
+      width: cssWidth,
+      height: cssHeight,
+      deviceWidth: Math.round(device ? device.inlineSize : cssWidth * ratio),
+      deviceHeight: Math.round(device ? device.blockSize : cssHeight * ratio),
+    };
+  }
+
+  $effect(() => {
+    if (!box || !globalThis.ResizeObserver) {
+      return;
+    }
+    const el = box;
+    // The observer reports at most once a frame, after layout and before paint, so the
+    // canvas redraws at its new size in the same frame.
+    const observer = new ResizeObserver(([entry]) => {
+      const next = sizes(entry, el);
+      if (next.width > 0 && next.height > 0) {
+        measured = next;
+        resize(canvas, next);
+      }
+    });
+    try {
+      observer.observe(el, { box: 'device-pixel-content-box' });
+    } catch {
+      observer.observe(el);
+    }
+    return () => observer.disconnect();
+  });
 </script>
 
-<div class="pitchbox" class:dim class:blank={!drawn} style:width="{width}px" style:height="{height}px">
+<div
+  class="pitchbox"
+  class:dim
+  class:blank={!drawn}
+  bind:this={box}
+  style:aspect-ratio="{width} / {height}"
+  style:max-width={maxWidth}
+>
   <canvas
     bind:this={canvas}
     {width}
     {height}
-    data-width={width}
-    data-height={height}
-    style:width="{width}px"
-    style:height="{height}px"
+    data-width={measured?.width ?? width}
+    data-height={measured?.height ?? height}
     hidden={!drawn}
     role="img"
     aria-label="The pitch: both teams and the ball at the rendered tick"
@@ -62,6 +117,7 @@
 <style>
   .pitchbox {
     position: relative;
+    width: 100%;
     border-radius: var(--radius-md);
     overflow: hidden;
     box-shadow: 0 0 0 2px var(--pitch-deep);
@@ -80,6 +136,8 @@
     position: absolute;
     inset: 0;
     display: block;
+    width: 100%;
+    height: 100%;
   }
 
   canvas[hidden] {

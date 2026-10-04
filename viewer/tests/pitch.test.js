@@ -1,12 +1,14 @@
 // A sent-off player is parked beside the pitch and is not drawn; every drawn position is a
-// fixed projection of the engine's metres into the match screen's pitch box.
+// fixed projection of the engine's metres into the match screen's pitch box; the box takes a
+// new size at its aspect, and the backing store follows it in device pixels.
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'vitest';
 
-import { BOX, DEFAULT_GROUND, LENGTH, WIDTH, groundOf, isParkingSpot, projection } from '../src/lib/pitch.js';
+import { BOX, DEFAULT_GROUND, LENGTH, Pitch, WIDTH, groundOf, isParkingSpot, projection } from '../src/lib/pitch.js';
+import { CANVAS } from '../src/skins/broadcast-blue/palette.js';
 import { REPO_ROOT } from './helpers.js';
 
 /// The engine's own parking spots: a Rust test in `crates/engine/src/pitch.rs` fails when
@@ -130,4 +132,91 @@ test('a hello names its ground, or the default 105 by 68', () => {
   assert.deepEqual({ ...groundOf({ 'ground.length': 110 }) }, { length: 110, width: 68 });
   assert.deepEqual({ ...groundOf({}) }, { ...DEFAULT_GROUND });
   assert.deepEqual({ ...groundOf(null) }, { length: LENGTH, width: WIDTH });
+});
+
+/// A canvas with a 2D context that records nothing but its transform, enough for the renderer
+/// to build its markings and size its backing store without a browser.
+function fakeCanvas() {
+  const ctx = new Proxy(
+    { transform: null },
+    {
+      get(target, key) {
+        if (key in target) {
+          return target[key];
+        }
+        if (key === 'setTransform') {
+          return (...m) => {
+            target.transform = m;
+          };
+        }
+        return () => {};
+      },
+      set() {
+        return true;
+      },
+    }
+  );
+  const canvas = {
+    width: 300,
+    height: 150,
+    getContext: () => ctx,
+    ownerDocument: { createElement: () => fakeCanvas() },
+  };
+  return canvas;
+}
+
+const TOKENS = { ...CANVAS, line: CANVAS.pitchLine, face: 'sans' };
+const KITS = [
+  { primary: '#1e6b52', secondary: '#f7f8fa' },
+  { primary: '#d4572a', secondary: '#15161a' },
+];
+
+test('the backing store holds the box in device pixels, and a resize rebuilds it at the same tilt', () => {
+  const canvas = fakeCanvas();
+  const pitch = new Pitch(canvas, KITS, TOKENS, { width: 742, height: 312, deviceWidth: 742, deviceHeight: 312 });
+  assert.deepEqual(pitch.geometry().backing, { width: 742, height: 312 });
+  const before = pitch.geometry();
+
+  // The box grows at the same aspect, in a page zoomed by 1.125 on a 2x display.
+  pitch.resize({ width: 1484, height: 624, deviceWidth: 3339, deviceHeight: 1404 });
+  const after = pitch.geometry();
+  assert.deepEqual(after.box, { width: 1484, height: 624 });
+  assert.deepEqual(after.backing, { width: 3339, height: 1404 });
+  assert.deepEqual(canvas.getContext().transform, [2.25, 0, 0, 2.25, 0, 0]);
+  assert.ok(Math.abs(after.tilt - before.tilt) < 0.002, `${after.tilt} against ${before.tilt}`);
+  assert.equal(after.sx, projection(1484, 624).sx, 'the same projection, for the new box');
+});
+
+test('the backing store never takes more than three device pixels per CSS pixel', () => {
+  const pitch = new Pitch(fakeCanvas(), KITS, TOKENS, { width: 742, height: 312, deviceWidth: 742 * 4, deviceHeight: 312 * 4 });
+  assert.deepEqual(pitch.geometry().backing, { width: 742 * 3, height: 312 * 3 });
+});
+
+test('a resize draws the frame on show again, and adds nothing to the trail', () => {
+  const pitch = new Pitch(fakeCanvas(), KITS, TOKENS, { width: 742, height: 312, deviceWidth: 742, deviceHeight: 312 });
+  const frame = new Int16Array(3 + 22 * 2);
+  pitch.draw(frame);
+  frame[0] = 999;
+  assert.equal(pitch.shown[0], 0, 'the frame on show is a copy');
+  const repaints = [];
+  const draw = pitch.draw.bind(pitch);
+  pitch.draw = (c, o) => {
+    repaints.push([c[0], o]);
+    return draw(c, o);
+  };
+  pitch.resize({ width: 1484, height: 624, deviceWidth: 1484, deviceHeight: 624 });
+  assert.deepEqual(repaints, [[0, { repaint: true }]]);
+  assert.equal(pitch.trail.length, 2, 'one tick drawn, one trail point');
+  pitch.clear();
+  assert.equal(pitch.shown, null);
+});
+
+test('a resize moves the ball trail with the ground', () => {
+  const pitch = new Pitch(fakeCanvas(), KITS, TOKENS, { width: 742, height: 312, deviceWidth: 742, deviceHeight: 312 });
+  pitch.trail.push(pitch.x(0), pitch.y(0), pitch.x(10), pitch.y(-5));
+  pitch.resize({ width: 371, height: 156, deviceWidth: 371, deviceHeight: 156 });
+  assert.ok(Math.abs(pitch.trail[0] - pitch.x(0)) < 1e-9);
+  assert.ok(Math.abs(pitch.trail[1] - pitch.y(0)) < 1e-9);
+  assert.ok(Math.abs(pitch.trail[2] - pitch.x(10)) < 1e-9);
+  assert.ok(Math.abs(pitch.trail[3] - pitch.y(-5)) < 1e-9);
 });

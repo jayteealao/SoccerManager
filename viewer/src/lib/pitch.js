@@ -2,8 +2,9 @@
 //
 // It owns one mapping: the engine's centred metre space, where x runs along the ground's
 // length and y across its width (-52.5 to 52.5 and -34 to 34 on the default 105 by 68
-// ground), onto the box its canvas gives it: 742 by 312 on the match screen, 752 by 290 on
-// the replay. The length maps with one uniform scale; the width maps with one fixed vertical
+// ground), onto the box its canvas gives it. The box follows its column at a fixed aspect
+// (742 by 312 on the match screen, 752 by 290 on the replay), and `resize()` takes each new
+// size. The length maps with one uniform scale; the width maps with one fixed vertical
 // factor, the sketch's top-down tilt. Both come from the default ground in the box, so a
 // smaller ground draws smaller and centred, at the same tilt, and every drawn position stays
 // a pure function of the engine's metres: the tilt projects a position, it never moves one.
@@ -32,8 +33,9 @@ export function groundOf(hello) {
 }
 export const GOAL_WIDTH = 7.32;
 
-/// The box the match screen draws the pitch in, in CSS pixels. A canvas may name another
-/// (the replay's is 752 by 290).
+/// The match screen's pitch box at the standard step, in CSS pixels: the reference aspect and
+/// the default size. A canvas may name another (the replay's is 752 by 290), and every box
+/// follows its column at its aspect.
 export const BOX = Object.freeze({ width: 742, height: 312 });
 
 /// A sent-off player stands beside the pitch, past the touchline, at `parking_spot()` in
@@ -131,12 +133,16 @@ export function readTokens(doc = globalThis.document) {
   return tokens;
 }
 
+/// The most backing-store pixels per CSS pixel, as on a 3x display.
+const MAX_RATIO = 3;
+
 export class Pitch {
-  /// `canvas` is sized in CSS pixels by its component; the backing store is multiplied by the
-  /// device pixel ratio here so the markings stay crisp on a scaled display. `tokens` are
-  /// the active skin's values (`readTokens`); `kits` the two clubs' kit colours; `width` and
-  /// `height` the box in CSS pixels, the match screen's unless given; `ground` the match's
-  /// ground in metres (`groundOf`), 105 by 68 unless given.
+  /// `canvas` is sized in CSS pixels by its component; the backing store holds the box in
+  /// device pixels, so the markings stay crisp on a scaled display and in a zoomed page.
+  /// `tokens` are the active skin's values (`readTokens`); `kits` the two clubs' kit
+  /// colours; `width` and `height` the box in CSS pixels, the match screen's unless given;
+  /// `deviceWidth` and `deviceHeight` the box in device pixels, the CSS box times `ratio`
+  /// unless given; `ground` the match's ground in metres (`groundOf`), 105 by 68 unless given.
   constructor(
     canvas,
     kits,
@@ -145,25 +151,59 @@ export class Pitch {
       ratio = globalThis.devicePixelRatio || 1,
       width = BOX.width,
       height = BOX.height,
+      deviceWidth,
+      deviceHeight,
       ground = DEFAULT_GROUND,
     } = {}
   ) {
     this.canvas = canvas;
-    this.cssWidth = width;
-    this.cssHeight = height;
-    this.ratio = Math.max(1, Math.min(3, ratio));
-    canvas.width = Math.round(this.cssWidth * this.ratio);
-    canvas.height = Math.round(this.cssHeight * this.ratio);
-
     // `alpha: false` lets the browser skip compositing a transparent layer every frame.
     this.ctx = canvas.getContext('2d', { alpha: false });
-    this.ctx.scale(this.ratio, this.ratio);
-
     this.ground = ground;
-    this.map = projection(this.cssWidth, this.cssHeight, ground.length, ground.width);
     this.tokens = tokens;
     this.kits = [safeKit(kits[0], tokens), safeKit(kits[1], tokens)];
     this.trail = [];
+    /// The frame on show, which a resize draws again; null before the first frame.
+    this.shown = null;
+    this.frame = null;
+    const r = Math.max(1, Math.min(MAX_RATIO, ratio));
+    this.size({
+      width,
+      height,
+      deviceWidth: deviceWidth ?? Math.round(width * r),
+      deviceHeight: deviceHeight ?? Math.round(height * r),
+    });
+  }
+
+  /// Takes the box's new size, in CSS pixels and in device pixels: the backing store becomes
+  /// the device pixels (at most three per CSS pixel), the mapping is rebuilt for the box by
+  /// the same `projection()`, and the markings are drawn again. The trail moves with the
+  /// ground, and the frame on show is drawn again at the new size, so a paused, full-time or
+  /// replay frame stays on the pitch.
+  resize(box) {
+    const before = this.map;
+    this.size(box);
+    for (let i = 0; i < this.trail.length; i += 2) {
+      this.trail[i] = this.map.rect.left + (this.trail[i] - before.rect.left) * (this.map.sx / before.sx);
+      this.trail[i + 1] = this.map.rect.top + (this.trail[i + 1] - before.rect.top) * (this.map.sy / before.sy);
+    }
+    if (this.shown) {
+      this.draw(this.shown, { repaint: true });
+    } else {
+      this.ctx.drawImage(this.markings, 0, 0, this.cssWidth, this.cssHeight);
+    }
+  }
+
+  size({ width, height, deviceWidth, deviceHeight }) {
+    this.cssWidth = width;
+    this.cssHeight = height;
+    this.ratioX = Math.min(MAX_RATIO, deviceWidth / width);
+    this.ratioY = Math.min(MAX_RATIO, deviceHeight / height);
+    this.canvas.width = Math.round(width * this.ratioX);
+    this.canvas.height = Math.round(height * this.ratioY);
+    // Setting the canvas's size cleared its transform.
+    this.ctx.setTransform(this.ratioX, 0, 0, this.ratioY, 0, 0);
+    this.map = projection(width, height, this.ground.length, this.ground.width);
     this.markings = this.renderMarkings();
   }
 
@@ -177,12 +217,14 @@ export class Pitch {
   }
 
   /// Where the ground is drawn: the ground in metres, the box, the drawn rectangle in box
-  /// pixels, the two scales and the tilt. The browser tests read it through the test hook.
+  /// pixels, the two scales and the tilt, and the backing store's size in device pixels.
+  /// The browser tests read it through the test hook.
   geometry() {
     const { sx, sy, tilt, rect } = this.map;
     return {
       ground: { length: this.ground.length, width: this.ground.width },
       box: { width: this.cssWidth, height: this.cssHeight },
+      backing: { width: this.canvas.width, height: this.canvas.height },
       rect: { ...rect },
       sx,
       sy,
@@ -197,7 +239,7 @@ export class Pitch {
     off.width = this.canvas.width;
     off.height = this.canvas.height;
     const ctx = off.getContext('2d', { alpha: false });
-    ctx.scale(this.ratio, this.ratio);
+    ctx.scale(this.ratioX, this.ratioY);
     const { stripe, stripe2, line } = this.tokens;
     const { sx, sy } = this.map;
 
@@ -268,15 +310,23 @@ export class Pitch {
   }
 
   /// Draws one frame from wire components: ball x, y, height, then two per player.
-  draw(components) {
+  draw(components, { repaint = false } = {}) {
     const ctx = this.ctx;
     ctx.drawImage(this.markings, 0, 0, this.cssWidth, this.cssHeight);
+    if (!repaint) {
+      // One buffer, filled again each frame, so drawing allocates nothing.
+      this.frame ??= new Int16Array(components.length);
+      this.frame.set(components);
+      this.shown = this.frame;
+    }
 
     const ballX = this.x(components[0] / 100);
     const ballY = this.y(components[1] / 100);
-    this.trail.push(ballX, ballY);
-    if (this.trail.length > TRAIL_TICKS * 2) {
-      this.trail.splice(0, this.trail.length - TRAIL_TICKS * 2);
+    if (!repaint) {
+      this.trail.push(ballX, ballY);
+      if (this.trail.length > TRAIL_TICKS * 2) {
+        this.trail.splice(0, this.trail.length - TRAIL_TICKS * 2);
+      }
     }
 
     // One `fillStyle` change per team rather than one per marker, and one path for the
@@ -359,6 +409,7 @@ export class Pitch {
   clear() {
     this.ctx.drawImage(this.markings, 0, 0, this.cssWidth, this.cssHeight);
     this.trail.length = 0;
+    this.shown = null;
   }
 
   /// Drops the trail, so a rewind does not draw a streak the engine never produced.

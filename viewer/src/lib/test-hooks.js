@@ -66,6 +66,14 @@ export function install(session, target = globalThis, door = () => null) {
     /// The ground the match is played on and where the pitch canvas draws it: the ground in
     /// metres, the box, and the drawn rectangle in CSS pixels; null before a canvas has a pitch.
     pitchGeometry: () => (session.pitch ? session.pitch.geometry() : null),
+    /// The pitch canvas's box on the page, in window pixels (after the page's zoom), and the
+    /// device pixel ratio, for the sharpness check; null before a canvas is shown.
+    pitchBox: () => {
+      const rect = session.canvas?.getBoundingClientRect();
+      return rect && rect.width > 0
+        ? { width: rect.width, height: rect.height, ratio: target.devicePixelRatio || 1 }
+        : null;
+    },
     events: () => session.match.events.map((e) => ({ ...e })),
     view: () => session.view,
     /// The report on show or last shown, as the former page's hook named it; `open` is true

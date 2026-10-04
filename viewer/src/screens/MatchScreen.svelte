@@ -125,6 +125,8 @@
 
         <PitchCanvas
           attach={(canvas) => session.attachCanvas(canvas)}
+          resize={(canvas, box) => session.resizeCanvas(canvas, box)}
+          maxWidth="742px"
           {drawn}
           dim={screen === 'reconnecting'}
           banner={session.banner}

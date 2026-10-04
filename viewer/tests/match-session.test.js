@@ -1157,3 +1157,23 @@ test('Play the replay from here opens the replay at the pitch minute, or at kick
   assert.equal(session.view, 'replay');
   assert.equal(session.renderedTick, 300);
 });
+
+test('a canvas that takes a new size redraws its pitch there, and a later pitch starts at that size', async () => {
+  const fetcher = statusFetch(RUNNING);
+  const timers = { setTimeout: (fn, ms) => ({ fn, ms }), clearTimeout: () => {} };
+  const session = new MatchSession({ fetcher, timers, raf: () => {}, now: () => 0, doc: null });
+  const calls = [];
+  const canvas = {};
+  session.canvas = canvas;
+  session.pitch = { resize: (box) => calls.push(['resize', box]) };
+  const box = { width: 1484, height: 624, deviceWidth: 1484, deviceHeight: 624 };
+  session.resizeCanvas(canvas, box);
+  assert.deepEqual(calls, [['resize', box]], 'the pitch on show takes the size');
+
+  calls.length = 0;
+  const other = {};
+  const replayBox = { width: 600, height: 231, deviceWidth: 1200, deviceHeight: 462 };
+  session.resizeCanvas(other, replayBox);
+  assert.deepEqual(calls, [], 'a canvas with no pitch only keeps its box');
+  assert.equal(session.boxes.get(other), replayBox);
+});

@@ -7,9 +7,10 @@
 // engine sends every tick up to minute 30 at once, so the drive never waits for playback.
 //
 // Drive: the hello on the wire names the ground; the test hook reports a drawn rectangle
-// inside the 742 by 312 box, centred, narrower and shorter than the default ground's, at the
-// default ground's tilt and in the ground's proportion. A control run on the shipped content
-// reports the default ground filling the box.
+// inside the pitch box (742 by 312 at the reference aspect, sized by its column), centred,
+// narrower and shorter than the default ground's, at the default ground's tilt for that box
+// and in the ground's proportion. A control run on the shipped content reports the default
+// ground filling the box. Each run reads the box from the geometry, never a fixed size.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -21,8 +22,8 @@ import { openMatch, playUntil } from '../support/page.mjs';
 /// Minute 30 at 50 ticks a second (the hello's `dt_ms` of 20, which the drive checks).
 const MINUTE_30 = 90_000;
 const GROUND = { length: 100, width: 64 };
-/// The match screen's pitch box.
-const BOX = { width: 742, height: 312 };
+/// The match screen's pitch box keeps this aspect at every size.
+const ASPECT = 742 / 312;
 
 const fixture = {};
 
@@ -104,7 +105,8 @@ test('a 100 by 64 home ground at minute 30 draws smaller, centred and in proport
       `${JSON.stringify({ hello: { length: seen.hello['ground.length'], width: seen.hello['ground.width'] }, geometry }, null, 2)}\n`
     );
     expect(geometry.ground).toEqual(GROUND);
-    expect(geometry.box).toEqual(BOX);
+    const BOX = geometry.box;
+    expect(Math.abs(BOX.width / BOX.height - ASPECT), 'the box keeps its aspect').toBeLessThan(0.01);
     const { rect, tilt } = geometry;
     // Inside the box, narrower and shorter than the default ground, which fills it.
     expect(rect.left).toBeGreaterThan(1);
@@ -117,6 +119,10 @@ test('a 100 by 64 home ground at minute 30 draws smaller, centred and in proport
     expect(Math.abs(tilt - (BOX.height - 2) / 68 / ((BOX.width - 2) / 105))).toBeLessThan(1e-9);
     const expectedHeight = (rect.width * (GROUND.width / GROUND.length)) * tilt;
     expect(Math.abs(rect.height - expectedHeight)).toBeLessThan(0.5);
+    // The backing store is the box drawn on the page in device pixels, within a pixel.
+    const drawn = await hook(page, () => window.__touchline.pitchBox());
+    expect(Math.abs(geometry.backing.width - drawn.width * drawn.ratio)).toBeLessThanOrEqual(1);
+    expect(Math.abs(geometry.backing.height - drawn.height * drawn.ratio)).toBeLessThanOrEqual(1);
 
     await expect(pitchBox(page)).toHaveScreenshot('pitch-100x64-minute-30.png');
     expect(errors, 'no console error').toEqual([]);
@@ -136,6 +142,8 @@ test('control: the shipped content plays on 105 by 68, which fills the box', asy
     );
     fs.writeFileSync(evidence(info, 'pitch-geometry-default.json'), `${JSON.stringify(geometry, null, 2)}\n`);
     expect(geometry.ground).toEqual({ length: 105, width: 68 });
+    const BOX = geometry.box;
+    expect(Math.abs(BOX.width / BOX.height - ASPECT), 'the box keeps its aspect').toBeLessThan(0.01);
     expect(geometry.rect).toEqual({ left: 1, top: 1, width: BOX.width - 2, height: BOX.height - 2 });
   } finally {
     engine.cleanUp();
