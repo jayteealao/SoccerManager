@@ -13,7 +13,12 @@ Matches play differently from 0.2.0-beta.1 for the same seed: the kick-off and t
 - Each club has a home ground with its own length and width, inside the limits of the Laws of the Game.
 - The other matches of the round play at the same time as your match. Their scores and events show at the moment your match clock reaches them.
 - Skip to result: after one confirmation, the engine plays the rest of the match at full speed. The result is the same as when you watch the match, and the replay keeps the whole match.
-- An in-match menu: return to the start screen or quit. Both save the match, and Resume continues it later.
+- An in-match menu: return to the start screen or quit. Both save an unfinished match, and Resume continues it later. A finished match is not kept for Resume.
+- At full time the match screen shows FULL TIME with the replay controls. Once the match is stored, the report offers New match, with the same two clubs, and Return to start.
+- The page fills the window and picks one of five steps by its width: compact (768 to 1023 px), standard, wide, large (1920 px and wider, everything drawn 1.125 times larger) and huge (2560 px and wider, 1.375 times). Below 768 px wide the compact layout scales down to fit.
+- The pitch is drawn at the screen's own pixels, so it stays sharp on a high-density screen and at the large steps.
+- When no engine answers the page's connection check, the check ends and says why.
+- The browser tests check every screen at five window sizes.
 - Settings: the default playback speed, reduced motion, and commentary on or off. They are kept in `settings.json`.
 - Licences and about: the licence notices of every library and font the game ships.
 - The release ships the engine of the previous release beside the new one. A match saved by 0.2.0-beta.1 finishes on that engine and gives the same result as it would have there. A match saved by an older release is refused with a message that names its version.
