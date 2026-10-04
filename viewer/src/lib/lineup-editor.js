@@ -178,6 +178,31 @@ export class LineupEditor {
     return this.verdict().legal && this.serverReason === null;
   }
 
+  /// What the NOT READY words point at, in the check's order: the first empty slot, the
+  /// keeper's slot holding an outfield player, or the player placed twice. `{ kind: 'slot', n }`
+  /// for an empty slot, `{ kind: 'squad', index }` for a player, or null when no one row is
+  /// at fault (a full bench, or the engine's own refusal).
+  culprit() {
+    if (this.serverReason !== null || this.verdict().legal) {
+      return null;
+    }
+    const empty = this.slots.indexOf(null);
+    if (empty !== -1) {
+      return { kind: 'slot', n: empty };
+    }
+    if (this.squad[this.slots[0]]?.['player.position'] !== 'GK') {
+      return { kind: 'squad', index: this.slots[0] };
+    }
+    const seen = new Set();
+    for (const index of [...this.slots, ...this.bench]) {
+      if (index !== null && seen.has(index)) {
+        return { kind: 'squad', index };
+      }
+      seen.add(index);
+    }
+    return null;
+  }
+
   /// The engine refused the lineup; its reason shows until the lineup changes.
   refused(reason) {
     this.serverReason = reason;

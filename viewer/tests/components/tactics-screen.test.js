@@ -55,6 +55,36 @@ test('a clash disables KICK OFF and names the reason; a swap by clicks clears it
   assert.equal(action().disabled, false);
 });
 
+test('the NOT READY reason is a link that scrolls to and focuses the clashing row', async () => {
+  await opened();
+  const root = tactics();
+  root.querySelector('button[data-squad="12"]').click();
+  await tick();
+  root.querySelector('button[data-slot="3"]').click();
+  await tick();
+  const link = root.querySelector('[role="status"] button.why');
+  assert.ok(link, 'the reason is a button');
+  assert.match(link.textContent, /placed twice/);
+  const row = root.querySelector('button[data-squad="12"]');
+  const scrolled = [];
+  row.scrollIntoView = (options) => scrolled.push(options);
+  link.click();
+  await tick();
+  assert.equal(document.activeElement, row);
+  assert.deepEqual(scrolled, [{ block: 'nearest' }]);
+});
+
+test('with an empty slot the NOT READY link focuses that empty place', async () => {
+  await opened();
+  const root = tactics();
+  const slot = root.querySelector('button[data-slot="5"]');
+  slot.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+  await tick();
+  root.querySelector('[role="status"] button.why').click();
+  await tick();
+  assert.equal(document.activeElement.getAttribute('aria-label'), 'Empty place: slot 6, LW');
+});
+
 test('Delete on a slot empties it, and the empty place gets its own row', async () => {
   await opened();
   const root = tactics();

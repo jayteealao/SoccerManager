@@ -62,6 +62,7 @@
         class:picked={row.picked}
         aria-pressed={row.picked}
         aria-label={row.label}
+        data-place={row.key}
         onclick={() => onpickplace(row.place)}
         ondragover={dragover}
         ondrop={(e) => drop(e, row.place)}

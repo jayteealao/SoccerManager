@@ -133,6 +133,23 @@
   function edit(change, slot = null) {
     dugout.editTactics(change, slot);
   }
+
+  let side = $state(null);
+
+  /// The NOT READY link: brings the squad row the reason is about into view and focuses it,
+  /// or the list's first row when no one row is at fault.
+  function showCulprit() {
+    const at = editor?.culprit();
+    const hook =
+      at?.kind === 'slot' ? `[data-place="slot-${at.n}"]` : at ? `[data-squad="${at.index}"]` : null;
+    const row =
+      (hook && side?.querySelector(`button${hook}`)) ||
+      side?.querySelector('button[data-squad], button[data-place]');
+    if (row) {
+      row.scrollIntoView?.({ block: 'nearest' });
+      row.focus({ preventScroll: true });
+    }
+  }
 </script>
 
 <AppShell
@@ -164,6 +181,7 @@
         {reason}
         onformation={(f) => dugout.setFormation(f)}
         onmentality={(m) => edit({ mentality: m })}
+        onreason={showCulprit}
       />
 
       <div class="shapes">
@@ -206,7 +224,7 @@
       <InstructionsPanel {schema} {tactics} disabled={!editable && !live} onedit={(c) => edit(c)} />
     </div>
 
-    <div class="side">
+    <div class="side" bind:this={side}>
       {#if preMatch && list}
         <SquadList
           {list}

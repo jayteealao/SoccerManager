@@ -1,7 +1,7 @@
 <!-- The tactic bar across the top of the pitch panel, as the sketch's Tactics board draws it:
      the TACTIC word, the shape and mentality selects, the base-shape line, and at the right
-     the lineup's verdict before kick-off (READY, or NOT READY with the reason, in a status
-     region) or, during play, team familiarity (a LATER stub: no engine model yet). -->
+     the lineup's verdict before kick-off (READY, or NOT READY with the reason as a link to
+     the squad row, in a status region) or, during play, team familiarity (a LATER stub: no engine model yet). -->
 <script>
   import StubSection from './StubSection.svelte';
   import { shapeLine } from '../lib/tactics-board.js';
@@ -16,6 +16,7 @@
     reason = null,
     onformation = () => {},
     onmentality = () => {},
+    onreason = () => {},
   } = $props();
 
   let formations = $derived(schema?.formations ?? []);
@@ -57,7 +58,8 @@
       {#if ready}
         <span class="tagc good">READY</span><span class="why">The lineup is legal.</span>
       {:else}
-        <span class="tagc bad">NOT READY</span><span class="why">{reason}</span>
+        <!-- The reason is a link to the squad row that fixes it, which can sit below the fold. -->
+        <span class="tagc bad">NOT READY</span><button type="button" class="why link" onclick={onreason}>{reason}</button>
       {/if}
     </div>
   {:else}
@@ -151,6 +153,20 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* The reason as a text link: the same words, underlined, a full hit tall. */
+  .link {
+    min-width: 0;
+    height: var(--hit);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    font-size: 10.5px;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
   }
 
   .fam {
