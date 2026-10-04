@@ -303,8 +303,25 @@ test('while the skipped match is stored, every step that could drop it waits', a
   assert.equal(button('Replay the whole match').disabled, true);
   assert.equal(button('Save replay').disabled, true);
   assert.equal(button('Open a replay').disabled, false);
-  assert.equal(root.querySelector('[role="status"]').textContent.trim(), '●Storing the match for the replay…');
+  assert.equal(root.querySelector('.storing').textContent.trim(), '●Storing the match for the replay…');
+  assert.equal(root.querySelector('.next [role="status"]').textContent.trim(), 'Storing the match for the replay…');
   assert.match(root.textContent, /waits until the match is stored/);
+});
+
+test('the Next list speaks through one live region, there before storing ends', async () => {
+  const run = await skippedReport('storing');
+  run.s.onNextStep = () => {};
+  await tick();
+  const status = page().querySelector('.next [role="status"]');
+  assert.ok(status, 'the live region is in the page while the match is stored');
+  assert.equal(status.getAttribute('aria-live'), 'polite');
+  assert.equal(status.textContent.trim(), 'Storing the match for the replay…');
+  run.s.skip = { ...run.s.skip, state: 'ready' };
+  run.s.report = { ...run.s.report, state: 'ready', tick: 800 };
+  await tick();
+  assert.equal(page().querySelector('.next [role="status"]'), status, 'the same region, still in the page');
+  assert.equal(status.textContent.trim(), 'The match is stored. New match and Return to start are available.');
+  assert.equal(page().querySelector('.storing'), null, 'the visible storing line is gone');
 });
 
 test('with no start screen the report keeps CONTINUE and offers no Next list', async () => {

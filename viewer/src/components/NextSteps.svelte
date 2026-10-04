@@ -2,12 +2,22 @@
      Return to start, as the start screen's option rows at the report's smaller size. Both wait
      until the whole match is stored: while it is stored they are faded and disabled, and a
      status line says what the page waits for. The change from storing to ready is not
-     animated. -->
+     animated. A hidden live region, in the page from the start, reads out both moments. -->
 <script>
   import MenuList from './MenuList.svelte';
   import SectionLabel from './SectionLabel.svelte';
 
   let { ready = false, onchoose = () => {} } = $props();
+
+  const STORING = 'Storing the match for the replay…';
+  const READY = 'The match is stored. New match and Return to start are available.';
+
+  /// The live region starts empty and takes its words after it is in the page, so screen
+  /// readers speak the storing line and then the moment the choices are ready.
+  let spoken = $state('');
+  $effect(() => {
+    spoken = ready ? READY : STORING;
+  });
 
   let items = $derived([
     {
@@ -30,8 +40,9 @@
   <SectionLabel label="Next" note={ready ? 'the match is stored' : 'waits until the match is stored'} level={4} />
   <MenuList {items} {onchoose} label="Next" size="small" />
   {#if !ready}
-    <p class="storing" role="status"><span class="dot" aria-hidden="true">●</span>Storing the match for the replay…</p>
+    <p class="storing"><span class="dot" aria-hidden="true">●</span>{STORING}</p>
   {/if}
+  <p class="sr" role="status" aria-live="polite">{spoken}</p>
 </div>
 
 <style>
@@ -46,5 +57,14 @@
 
   .dot {
     color: var(--cyan);
+  }
+
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 </style>
