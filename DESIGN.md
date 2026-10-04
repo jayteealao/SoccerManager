@@ -75,7 +75,25 @@ Strategy: the dark Broadcast Blue look, chosen as the main look on 2026-09-26 (b
 - Each skin's `tokens.css`, in `viewer/src/skins/<skin>/`, is the token file and the single source for CSS. The Broadcast Blue skin holds the values above. The canvas reads its colours from the active skin (`palette.js` beside the tokens), and `viewer/tests/colour.test.js` fails when the two drift apart.
 - No prefix: the tokens use the sketch's names, as in the table above (`--ground`, `--navy`, `--cyan`, `--ink`, and the rest), plus the radii `--radius-sm`, `--radius-md` and `--radius-lg`. Every skin defines the same names.
 - `npm run scan` (in `viewer/`) fails on a literal colour or font value outside the skins, and on `--ink-4` outside inactive stub text. `npm run contrast` checks every text and boundary pair that `contrast-pairs.json` lists against WCAG 2.2 AA.
-- The screen is a fixed 1280 by 800 stage. A smaller window shows the whole stage scaled down to fit.
+- `npm run scan` also holds the window-step rules: no fluid font size, no layout measured in script outside the pitch canvas, and no `@media` width other than the window steps below.
+
+## Layout
+- The page fills the browser window. The window picks one of five steps:
+
+  | Step | Window width | Scale | Controls |
+  |---|---|---|---|
+  | Compact | 768 to 1023 px, or under 600 px high | 1 | 44 px hit areas; the tabs scroll sideways |
+  | Standard | 1024 to 1599 px | 1 | 24 px hit areas; as drawn at 1280 by 800 |
+  | Wide | 1600 to 1919 px | 1 | 24 px; side panels in two columns |
+  | Large | 1920 to 2559 px | 1.125 | 24 px times the scale |
+  | Huge | 2560 px and up | 1.375 | 24 px times the scale |
+
+- Below 768 by 600 the compact layout scales down to fit the window whole.
+- Media queries on the window pick the step: `min-width` 1024, 1600, 1920 and 2560 px, `max-width` 1023 px and `max-height` 599 px are the only widths and heights a media query uses. Each panel (the side groups, the tables, the report columns) is a size container and changes its columns with its own width.
+- The scale is CSS `zoom` on the page's top box, so type, spacing, controls and radii grow by one factor. Text never takes a fluid size.
+- The pitch canvas is the only layout measured in script: a `ResizeObserver` on its box, which draws at the device pixel ratio and keeps the ground's proportions.
+- A screen's body scrolls up and down in a tall window. The page never scrolls sideways.
+- At every step the header band takes the spare width and its title ends in an ellipsis; below 1280 px the stub header icons hide, and Menu stays.
 
 ## Brand Assets
 - No asset files exist and none are added. Generate the logo, the palette, and any illustration programmatically in JavaScript.

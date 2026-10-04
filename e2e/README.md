@@ -31,6 +31,30 @@ These tests drive the match viewer in a real browser against the release engine.
 
 The suites run two tests at a time; each test has its own engine, port and data folder. Set `SM_E2E_WORKERS` to change the count; CI runs one. A test tagged `@timing` measures frame rate or playback speed, so it is in the project `timing`, which runs on one worker after the others. The projects are the same whatever the count: `viewer` and `scenario` (in `playwright.config.mjs`) and `chromium` (in `match.config.mjs`) hold the tests without the tag, so pick `timing` as well to run a suite's timing tests, as the scripts above do. A run with `--project`, `--last-failed`, `--shard` or `--only-changed` runs one test at a time, so that it picks the timing tests as it picks the others. A run narrowed to some files or tests (`-g`, a file name) also runs every timing test when the count is above one, so set `SM_E2E_WORKERS=1` for it. The shell suite's preview server uses port 4180; set `SM_SHELL_PORT` to move it.
 
+### Window sizes
+
+`match.config.mjs` runs every test in the project `chromium`, at 1280 by 800. Four more projects run only the tests tagged `@sizes`, which are each state's screenshot and the Tab walks:
+
+| Project | Window | What it checks |
+|---|---|---|
+| `chromium-1920` | 1920 by 1080 | the screenshots against their own baselines (`*-chromium-1920-win32.png`) |
+| `layout-768x1024` | 768 by 1024 | the layout check, with 44 px controls |
+| `layout-1024x640` | 1024 by 640 | the layout check |
+| `layout-2560x1440` | 2560 by 1440 | the layout check |
+
+A test reaches each state once and calls `snap()` (`support/snap.mjs`): it compares the screenshot in a pixels project and runs the layout check in a layout project. The layout check (`support/layout.mjs`) fails on six things:
+
+1. the page does not fill the window;
+2. the page, or a box that scrolls sideways, is wider than its window (the compact tab row may scroll);
+3. text is cut off, or ends in an ellipsis where no `data-may-truncate` allows it;
+4. two text runs or controls overlap, outside a `data-layout-layer` (the report timeline and the kick-off pitch, where markers and names of players standing together touch); an open menu crosses nothing under it;
+5. a control does not answer clicks across a 24 px square (44 px at the compact step);
+6. a control lies outside the window with no box that scrolls to it.
+
+It also fails on a rendered contrast failure in the default skin. Each check writes its report as `layout-<state>-<project>.json` beside the test's output, or in `LAYOUT_EVIDENCE_DIR`.
+
+To run one size, name its project: `npx playwright test -c match.config.mjs --project=layout-768x1024`. To make one size's baselines again, add `--update-snapshots=all` to that project's run, look at every changed image, and commit only those. `match/window-fit.spec.mjs` sets its own sizes, from 375 by 667 to 2560 by 1440, so it runs in `chromium` only. The shell suite runs at 1280 by 800 and at 1920 by 1080.
+
 To run the tests in the installed Microsoft Edge instead of the bundled Chromium, set `PW_CHANNEL=msedge`.
 
 To test an installed game instead of the repository build, set `SM_E2E_INSTALL` to its folder: every test then runs that folder's `engine-cli` and serves its `web/`, the page the release carries.
