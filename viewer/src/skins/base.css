@@ -8,7 +8,8 @@
  * (2560 and up, scale 1.375). The scale is CSS zoom on the page's top box, so every length
  * (type, spacing, controls, radii) grows by one factor while percentages still fill the
  * window. Inside the page each panel is a size container and changes its columns with its
- * own width. Below 768 by 600 the page scales the compact layout down to fit (Root.svelte).
+ * own width. Below 768 px wide the page scales the compact layout down to fit the width, and
+ * under 600 px high the page scrolls up and down (Root.svelte).
  * The three layout properties below hold no colour and no font, so they live here, not in a
  * skin's tokens. */
 
@@ -53,12 +54,13 @@ body {
   }
 }
 
-/* The page fills the window and never scrolls itself; a screen's body scrolls up and down
-   when its panels are taller than the window. The zoom sits on the top box only, outside
-   which the dynamic viewport height is read. */
+/* The page fills the window; a screen's body scrolls up and down when its panels are taller
+   than the window. Under 600 px high the page itself scrolls up and down, never sideways
+   (Root.svelte). The zoom sits on the top box only, outside which the dynamic viewport
+   height is read. */
 #app {
   height: 100dvh;
-  overflow: hidden;
+  overflow: hidden auto;
 }
 
 #app > * {

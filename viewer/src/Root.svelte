@@ -21,14 +21,13 @@
   let fileInput = $state();
 
   // The page fills the window and lays out at one of the window steps (skins/base.css). Below
-  // 768 px wide or 600 px high the compact layout scales down to fit the window whole, as the
-  // fixed stage did before: the zoom keeps the layout at 768 by 600 or larger, and the window
-  // read here is the window's size, not an element's layout.
+  // 768 px wide the compact layout scales down to fit the window's width, so the layout stays
+  // 768 px wide or more; the window read here is the window's size, not an element's layout.
+  // The height never scales the page: under 600 px high the page scrolls up and down instead,
+  // so browser zoom, which shrinks the window read here, still grows the text (WCAG 1.4.4).
   const FLOOR_WIDTH = 768;
-  const FLOOR_HEIGHT = 600;
   let viewWidth = $state(1280);
-  let viewHeight = $state(800);
-  const fit = $derived(Math.min(1, viewWidth / FLOOR_WIDTH, viewHeight / FLOOR_HEIGHT));
+  const fit = $derived(Math.min(1, viewWidth / FLOOR_WIDTH));
 
   // Every screen names itself in the tab title and, once the page has shown a first screen,
   // in a polite announcement, so a screen-reader user hears that the screen changed (WCAG
@@ -90,7 +89,6 @@
 
 <svelte:window
   bind:innerWidth={viewWidth}
-  bind:innerHeight={viewHeight}
   onkeydown={keydown}
   onpointerdown={() => door.view === 'splash' && door.press()}
 />
@@ -157,6 +155,9 @@
   .match {
     width: 100%;
     height: 100%;
+    /* 600 px high on screen at least: a shorter window scrolls the page (skins/base.css). The
+       zoom multiplies this length, so it is divided by the step's scale first. */
+    min-height: calc(600px / var(--step-scale));
   }
 
   .fit {

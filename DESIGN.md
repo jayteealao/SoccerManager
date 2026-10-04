@@ -88,7 +88,7 @@ Strategy: the dark Broadcast Blue look, chosen as the main look on 2026-09-26 (b
   | Large | 1920 to 2559 px | 1.125 | 24 px times the scale |
   | Huge | 2560 px and up | 1.375 | 24 px times the scale |
 
-- Below 768 by 600 the compact layout scales down to fit the window whole.
+- The compact layout scales down only below 768 px wide, to fit the window's width. Under 600 px high the page does not shrink: it scrolls up and down, so browser zoom still grows the text.
 - Media queries on the window pick the step: `min-width` 1024, 1600, 1920 and 2560 px, `max-width` 1023 px and `max-height` 599 px are the only widths and heights a media query uses. Each panel (the side groups, the tables, the report columns) is a size container and changes its columns with its own width.
 - The scale is CSS `zoom` on the page's top box, so type, spacing, controls and radii grow by one factor. Text never takes a fluid size.
 - The pitch canvas is the only layout measured in script: a `ResizeObserver` on its box, which draws at the device pixel ratio and keeps the ground's proportions.

@@ -1,16 +1,18 @@
-// The page fills every window, and scales down below the smallest one. One drive through the
-// front door, served by the release launcher with `--web viewer/dist` and fast-forwarded, so it
-// never waits for playback: the start screen, Tactics before kick-off, the match paused at
-// minute 30, and the full-time report. At each state the window takes every size below in
-// turn.
+// The page fills every window, scales down below the narrowest one and scrolls in a short
+// one. One drive through the front door, served by the release launcher with
+// `--web viewer/dist` and fast-forwarded, so it never waits for playback: the start screen,
+// Tactics before kick-off, the match paused at minute 30, and the full-time report. At each
+// state the window takes every size below in turn.
 //
 // - From 768 by 600 to 2560 by 1440: the page's root and its top box equal the window, and the
 //   layout check (support/layout.mjs) finds no sideways scroll, no clipped text and no control
 //   cut off.
 // - Below 768 by 600 (a phone at 375 by 667, a narrow 600 by 800, a short 1280 by 560): the
-//   page's zoom equals min(width / 768, height / 600) within 0.001, the page still fills the
-//   window with no sideways scroll, and the action block, a tab and Menu (on the match views)
-//   each lie in the window and take a click.
+//   page's zoom equals min(1, width / 768) within 0.001, so the height never shrinks it. The
+//   page fills the window's width with no sideways scroll; in a narrow window it fills the
+//   height too, and in a short one its top box stays 600 px high and the page scrolls up and
+//   down. The action block, a tab and Menu (on the match views) each lie in the window once
+//   scrolled into view, and take a click.
 //
 // It sets its own sizes, so it runs once, in the chromium project.
 import fs from 'node:fs';
@@ -64,25 +66,31 @@ async function sweep(page, state) {
     await page.setViewportSize({ width, height });
     await frames(page);
     const fit = await page.evaluate(() => {
-      const top = document.querySelector('#app > *');
+      const app = document.querySelector('#app');
+      const top = app.firstElementChild;
       const r = top.getBoundingClientRect();
       return {
         zoom: Number(getComputedStyle(top).zoom),
         width: r.width,
         height: r.height,
-        scrollWidth: document.scrollingElement.scrollWidth,
+        scrollWidth: Math.max(document.scrollingElement.scrollWidth, app.scrollWidth),
+        scrollHeight: app.scrollHeight,
       };
     });
-    const expected = Math.min(1, width / 768, height / 600);
+    const expected = Math.min(1, width / 768);
+    const tall = Math.max(height, 600);
     expect.soft(Math.abs(fit.zoom - expected), `${state} zoom at ${width} by ${height}`).toBeLessThan(0.001);
-    expect.soft([Math.round(fit.width), Math.round(fit.height)], `${state} fills ${width} by ${height}`).toEqual([width, height]);
+    expect.soft([Math.round(fit.width), Math.round(fit.height)], `${state} fills ${width} by ${height}`).toEqual([width, tall]);
     expect.soft(fit.scrollWidth, `${state} has no sideways scroll at ${width} by ${height}`).toBeLessThanOrEqual(width);
+    expect.soft(Math.round(fit.scrollHeight), `${state} scrolls up and down at ${width} by ${height}`).toBe(tall);
     const controls = [page.locator('header button.cont:visible'), page.locator('nav.subnav:visible button').first()];
     if (await page.locator('[data-menu-button]:visible').count()) {
       controls.push(page.locator('[data-menu-button]:visible'));
     }
     const reached = [];
     for (const control of controls) {
+      // A short window scrolls the page; a control below its fold comes into view first.
+      await control.scrollIntoViewIfNeeded();
       const box = await control.boundingBox();
       const inside = box !== null && box.x >= 0 && box.y >= 0 && box.x + box.width <= width && box.y + box.height <= height;
       expect.soft(inside, `${state}: ${await control.evaluate((el) => el.textContent.trim())} lies in ${width} by ${height}`).toBe(true);
@@ -97,7 +105,7 @@ async function sweep(page, state) {
   return found;
 }
 
-test('every screen fills the window from 768 by 600 to 2560 by 1440, and scales down below it', async ({ page }, info) => {
+test('every screen fills the window from 768 by 600 to 2560 by 1440, scales down when narrower and scrolls when shorter', async ({ page }, info) => {
   test.setTimeout(10 * 60_000);
   const engine = await frontDoor({ fastForwardTo: 400_000 });
   const out = {};

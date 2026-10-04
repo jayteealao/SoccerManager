@@ -83,12 +83,12 @@ const LAYOUT_READ =
   /\b(getBoundingClientRect|offsetWidth|offsetHeight|clientWidth|clientHeight|ResizeObserver|innerWidth|innerHeight)\b|getComputedStyle\([^)]*\)\s*\.\s*(width|height)\b/g;
 
 /// The layout reads each file may make, by file name. The pitch sizes its canvas to its box;
-/// Root reads the window's size for the scale below 768 by 600; the test hooks report the
+/// Root reads the window's width for the scale below 768 px wide; the test hooks report the
 /// pitch's box to the browser tests; the commentary reads its scroll position to follow it.
 const LAYOUT_READS_ALLOWED = {
   'PitchCanvas.svelte': 'all',
   'pitch.js': 'all',
-  'Root.svelte': ['innerWidth', 'innerHeight'],
+  'Root.svelte': ['innerWidth'],
   'test-hooks.js': ['getBoundingClientRect'],
   'feed.js': ['clientHeight'],
 };
