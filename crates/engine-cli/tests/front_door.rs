@@ -369,6 +369,53 @@ fn the_chosen_fixture_plays_with_the_two_chosen_clubs() {
     assert!(done["engine.pid"].is_null());
 }
 
+/// The page's way on from full time: once a finished match's worker has ended, stop leaves
+/// nothing to resume, and the same two clubs start a fresh match on a new worker.
+#[test]
+fn after_full_time_stop_leaves_nothing_to_resume_and_a_new_match_starts_fresh() {
+    let data = temp("after-full-time");
+    let launched = launch(&data, &["--seed", "42", "--minutes", "2"]);
+    let now = status(launched.port);
+    let generated = now["teams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] != "Oakmere Rangers" && t["name"] != "Eldstead City")
+        .unwrap()
+        .clone();
+    let names = [
+        generated["name"].as_str().unwrap().to_string(),
+        "Oakmere Rangers".to_string(),
+    ];
+    let pick = format!(
+        r#"{{"home":"{}","away":"{}"}}"#,
+        generated["id"].as_str().unwrap(),
+        team_id(&now, "Oakmere Rangers")
+    );
+    let (code, body) = post(&launched, "/engine/new-match", &pick);
+    assert_eq!(code, 202, "{body}");
+    let first = wait_for(launched.port, 30, |s| s["engine.state"] == "running");
+    assert_eq!(watch(socket_port(&first), true).clubs, names);
+    wait_for(launched.port, 60, |s| s["engine.state"] == "finished");
+
+    let (code, body) = post(&launched, "/engine/stop", "");
+    assert_eq!(code, 202, "{body}");
+    let stopped: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(stopped["engine.state"], "idle", "{stopped}");
+    assert!(
+        stopped["saved"].is_null(),
+        "a finished match is no save: {stopped}"
+    );
+
+    let (code, body) = post(&launched, "/engine/new-match", &pick);
+    assert_eq!(code, 202, "{body}");
+    let second = wait_for(launched.port, 30, |s| s["engine.state"] == "running");
+    assert_ne!(second["match.id"], first["match.id"], "{second}");
+    assert_ne!(second["engine.pid"], first["engine.pid"], "{second}");
+    assert_eq!(watch(socket_port(&second), true).clubs, names);
+    wait_for(launched.port, 60, |s| s["engine.state"] == "finished");
+}
+
 /// The result of a resumed match: a match stopped from the start screen and resumed later ends with
 /// every tick after the save equal to the same fixture and seed played through.
 #[test]
