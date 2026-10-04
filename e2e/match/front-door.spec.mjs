@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 
 import { contrastReport } from '../support/contrast.mjs';
+import { kickOffFromStart, open, settled } from '../support/front.mjs';
 import {
   VIEWER,
   contentWithSkin,
@@ -77,13 +78,6 @@ async function routeFixed(page, { status = STATES.idle, skin = 'broadcast-blue',
   await page.route('**/engine/quit', (route) => route.fulfill({ json: { ...STATES.quit, 'viewer.skin': skin } }));
 }
 
-/// Opens the page and waits until its skin and fonts are in.
-async function open(page, url, skin = 'broadcast-blue') {
-  await page.goto(url);
-  await expect(page.locator('html')).toHaveAttribute('data-ready', skin, { timeout: 30_000 });
-  await page.evaluate(() => document.fonts.ready);
-}
-
 /// Opens the page on the fixed bodies and goes past the splash to the start screen.
 async function startScreen(page, engine, skin, status = STATES.idle) {
   await routeFixed(page, { status, skin });
@@ -91,37 +85,6 @@ async function startScreen(page, engine, skin, status = STATES.idle) {
   await until(page, () => window.__touchline.frontDoor().splash !== null && window.__touchline.frontDoor().answered);
   await page.keyboard.press('Enter');
   await until(page, () => window.__touchline.frontDoor().view === 'start', undefined, 10_000);
-}
-
-/// From the start screen through match setup to a live match.
-async function kickOffFromStart(page) {
-  await page.locator('[data-choice="new"]').click();
-  await until(page, () => window.__touchline.frontDoor().round !== null, undefined, 10_000);
-  await page.locator('[data-kickoff]').click();
-  await until(page, () => window.__touchline.screen() === 'kickoff', undefined, 30_000);
-  const action = page.locator('header button.cont:visible');
-  if ((await hook(page, () => window.__touchline.view())) === 'tactics') {
-    await expect(action).toHaveText('Continue');
-    await action.click();
-    await until(page, () => window.__touchline.view() === 'prematch', undefined, 5_000);
-  }
-  await expect(action).toHaveText('Kick off');
-  await expect(action).toBeEnabled();
-  await action.click();
-  await until(page, () => window.__touchline.lineup().phase === 'live', undefined, 15_000);
-}
-
-/// Waits until every finite animation on the page has finished, so an overlay is captured
-/// settled rather than part way through its fade.
-async function settled(page) {
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity)
-        .map((a) => a.finished.catch(() => null))
-    )
-  );
 }
 
 /// A real match of seed 7 from the start screen, held paused at 30:00 with the other grounds
