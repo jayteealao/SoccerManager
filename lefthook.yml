@@ -12,3 +12,5 @@ commit-msg:
   commands:
     committed:
       run: committed --commit-file {1}
+    subject-length:
+      run: sh scripts/commit-subject.sh {1}

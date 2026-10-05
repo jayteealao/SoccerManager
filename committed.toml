@@ -2,7 +2,7 @@
 # every pull request. Conventional commits with a lowercase subject, as the history uses.
 style = "conventional"
 allowed_types = ["feat", "fix", "docs", "test", "chore", "refactor", "perf", "style", "build", "ci", "revert"]
-subject_length = 100
+subject_length = 70
 line_length = 100
 subject_capitalized = false
 subject_not_punctuated = true
