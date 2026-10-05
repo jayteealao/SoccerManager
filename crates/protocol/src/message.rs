@@ -419,6 +419,15 @@ pub struct Seen {
     pub tick: u32,
 }
 
+/// A test seam: asks a started match to produce every tick up to `tick` without waiting for
+/// `start`, `pause` or the `seen` lead bound. The match is unchanged; only when its ticks are
+/// sent changes. Refused unless the engine was started with `--test-jump`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Jump {
+    pub tick: u32,
+}
+
 /// A change a client queues for a later stoppage.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -538,6 +547,9 @@ pub enum ClientCommand {
     /// engine stops waiting for `start`, `pause` and the `seen` lead bound and streams every
     /// remaining tick and message as usual. Refused before kick-off.
     Skip,
+    /// A test seam: after kick-off, produces every tick up to `tick` flat out. Refused unless
+    /// the engine was started with `--test-jump`, and before kick-off.
+    Jump(Jump),
 }
 
 impl ClientCommand {
@@ -552,6 +564,7 @@ impl ClientCommand {
             ClientCommand::Seen(_) => "seen",
             ClientCommand::CancelChange(_) => "cancel-change",
             ClientCommand::Skip => "skip",
+            ClientCommand::Jump(_) => "jump",
         }
     }
 }
@@ -813,6 +826,7 @@ mod tests {
                 queue_id: "q-1200-0".into(),
             }),
             ClientCommand::Skip,
+            ClientCommand::Jump(Jump { tick: 20_000 }),
         ];
         for c in commands {
             let json = serde_json::to_string(&c).unwrap();
@@ -939,6 +953,27 @@ mod tests {
         assert_eq!(
             ack,
             "{\"type\":\"ack\",\"command\":\"skip\",\"change.queued_tick\":90000}"
+        );
+    }
+
+    #[test]
+    fn a_jump_carries_its_tick_and_its_ack_names_it() {
+        let jump = ClientCommand::Jump(Jump { tick: 20_000 });
+        let text = serde_json::to_string(&jump).unwrap();
+        assert_eq!(text, "{\"type\":\"jump\",\"tick\":20000}");
+        assert_eq!(serde_json::from_str::<ClientCommand>(&text).unwrap(), jump);
+        assert_eq!(jump.name(), "jump");
+        let ack = serde_json::to_string(&ServerMessage::Ack(crate::Ack {
+            command: jump.name().into(),
+            queue_id: None,
+            queued_tick: 3_000,
+            state: None,
+            speed: None,
+        }))
+        .unwrap();
+        assert_eq!(
+            ack,
+            "{\"type\":\"ack\",\"command\":\"jump\",\"change.queued_tick\":3000}"
         );
     }
 
