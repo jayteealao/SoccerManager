@@ -76,12 +76,14 @@ mod windows {
         let mut system = 0usize;
         // SAFETY: the pseudo handle of the current process is always valid, and both
         // out-pointers point at live locals.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage -- Windows process affinity API call; see SAFETY above
         let ok = unsafe { GetProcessAffinityMask(GetCurrentProcess(), &mut process, &mut system) };
         (ok != 0 && process != 0).then_some(process)
     }
 
     pub fn lower_this_thread() -> Result<(), i64> {
         // SAFETY: the pseudo handle of the current thread is always valid.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage -- Windows thread priority API call; see SAFETY above
         let ok = unsafe { SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL) };
         if ok == 0 {
             return Err(i64::from(
@@ -112,6 +114,7 @@ mod windows {
         }
         // SAFETY: the pseudo handle of the current process is always valid, and `kept` is a
         // subset of the mask Windows reported.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage -- Windows process affinity API call; see SAFETY above
         if unsafe { SetProcessAffinityMask(GetCurrentProcess(), kept) } == 0 {
             return Err(format!(
                 "the affinity mask could not be set: {}",
@@ -130,6 +133,7 @@ mod linux {
     pub fn lower_this_thread() -> Result<(), i64> {
         // SAFETY: gettid has no preconditions; setpriority on the calling thread's id
         // changes only that thread's nice value.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage -- Linux thread priority system call; see SAFETY above
         let rc = unsafe {
             let tid = libc::gettid();
             libc::setpriority(libc::PRIO_PROCESS, tid as libc::id_t, NICE)
@@ -145,6 +149,7 @@ mod linux {
     pub fn limit_to(n: usize) -> Result<(), String> {
         // SAFETY: `set` is a zeroed cpu_set_t on the stack; the CPU_* helpers only touch it,
         // and pid 0 names the calling process.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage -- Linux affinity system call; see SAFETY above
         unsafe {
             let mut current: libc::cpu_set_t = std::mem::zeroed();
             if libc::sched_getaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &mut current) != 0
