@@ -1,6 +1,6 @@
 //! The inputs of a recorded match, by value, and the one way a match is built from them.
 //!
-//! `record` reads the nine input files from disk once and stores their bytes in the replay
+//! `record` reads the ten input files from disk once and stores their bytes in the replay
 //! file; `resimulate` takes the same bytes back from the file. Both build the match through
 //! [`build`], which reads no file, so the bytes a replay file stores are exactly the bytes
 //! its match was played from, and a re-simulated match cannot read the checkout. Only
@@ -11,16 +11,15 @@ use std::path::Path;
 
 use anyhow::{Context, bail};
 use engine::data::{
-    ATTRIBUTES_FILE, COMMENTARY_FILE, ContentFiles, RULES_FILE, TACTICS_FILE, TEAM_A_FILE,
-    TEAM_B_FILE, TUNING_FILE,
+    ATTRIBUTES_FILE, COMMENTARY_FILE, ContentFiles, RULES_FILE, SLOTS_FILE, TACTICS_FILE,
+    TEAM_A_FILE, TEAM_B_FILE, TUNING_FILE,
 };
 use engine::{Commentary, Content, MatchConfig, Simulation};
 use script::{Backstop, LoadedPack, Pack};
 use stream::{Fixture, InputFile, MatchSettings};
 
-/// Each input's role, in the order the replay file stores them. The pack roles are present
-/// only when the match ran a script pack.
-pub const ROLES: [&str; 9] = [
+/// The roles every replay file holds, in the order the file stores them.
+const CORE_ROLES: [&str; 7] = [
     "attributes",
     "tuning",
     "rules",
@@ -28,11 +27,17 @@ pub const ROLES: [&str; 9] = [
     "commentary",
     "team_a",
     "team_b",
-    "pack_manifest",
-    "pack_script",
 ];
 
-/// The input files of one match, in [`ROLES`] order.
+/// The slot file's role. It follows the core roles. A replay file written before the role
+/// existed lacks it and plays with the built-in default selection, the only one then.
+const SLOTS_ROLE: &str = "slots";
+
+/// The script pack's roles. They come last and are present only when the match ran a pack.
+const PACK_ROLES: [&str; 2] = ["pack_manifest", "pack_script"];
+
+/// The input files of one match: the core roles, the slot file, and the pack files, in the
+/// order the replay file stores them.
 pub struct InputFiles(pub Vec<InputFile>);
 
 impl InputFiles {
@@ -75,6 +80,11 @@ impl InputFiles {
             let bytes = read_bytes(&path, &name)?;
             files.push(file(role, &name, bytes));
         }
+        files.push(file(
+            SLOTS_ROLE,
+            SLOTS_FILE,
+            read_bytes(&dir.path(SLOTS_FILE), SLOTS_FILE)?,
+        ));
         if let Some(pack_dir) = script_pack {
             // The folder checks (the entry stays inside the folder) run on the disk layout.
             let pack = Pack::read(pack_dir).inspect_err(|err| {
@@ -100,11 +110,25 @@ impl InputFiles {
     /// The inputs a replay file holds, checked to be the roles a match needs.
     pub fn from_record(fixture: &Fixture) -> anyhow::Result<Self> {
         let roles: Vec<&str> = fixture.inputs.iter().map(|f| f.role.as_str()).collect();
-        if roles != ROLES[..7] && roles != ROLES {
+        let accepted = [false, true].into_iter().any(|slots| {
+            [false, true].into_iter().any(|pack| {
+                let mut wanted = CORE_ROLES.to_vec();
+                if slots {
+                    wanted.push(SLOTS_ROLE);
+                }
+                if pack {
+                    wanted.extend(PACK_ROLES);
+                }
+                roles == wanted
+            })
+        });
+        if !accepted {
             bail!(
-                "the replay file's inputs are {} ; a match needs {}",
+                "the replay file's inputs are {} ; a match needs {}, then optionally {SLOTS_ROLE}, \
+                 then optionally {}",
                 roles.join(", "),
-                ROLES.join(", ")
+                CORE_ROLES.join(", "),
+                PACK_ROLES.join(" and ")
             );
         }
         Ok(Self(fixture.inputs.clone()))
@@ -146,6 +170,11 @@ pub fn build(
         rules: inputs.role("rules")?.bytes.clone(),
         tactics: inputs.role("tactics")?.bytes.clone(),
     })?;
+    // A file without the slot file plays with the built-in default selection.
+    let content = match inputs.get(SLOTS_ROLE) {
+        Some(slots) => content.with_slots(&slots.bytes)?,
+        None => content,
+    };
     let commentary = inputs.role("commentary")?;
     let commentary = Commentary::from_bytes(&commentary.bytes, &commentary.name)?;
     let team = |role: &str| -> anyhow::Result<_> {

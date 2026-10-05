@@ -39,6 +39,7 @@ fn record(path: &Path, minutes: u32) -> u32 {
                 roster: Vec::new(),
                 squad: Vec::new(),
                 setup: None,
+                formation: String::new(),
             },
             TeamRef {
                 id: config.teams[1].club_id.clone(),
@@ -48,10 +49,14 @@ fn record(path: &Path, minutes: u32) -> u32 {
                 roster: Vec::new(),
                 squad: Vec::new(),
                 setup: None,
+                formation: String::new(),
             },
         ],
         tactics: serde_json::Value::Null,
         substitutions: protocol::SubstitutionRules::default(),
+        knockout: false,
+        ground_length: protocol::DEFAULT_GROUND_LENGTH,
+        ground_width: protocol::DEFAULT_GROUND_WIDTH,
     };
     messages
         .send(Frame::Text(
@@ -92,7 +97,7 @@ fn a_replayed_fixture_is_byte_identical_to_the_recording() {
     let port = server.port();
     let replayer = Arc::new(Replayer::new(fixture.clone(), "match.smfx").unwrap());
     let serving = Arc::clone(&replayer);
-    let handle = std::thread::spawn(move || serving.serve(&server, 1000.0, None).unwrap());
+    let handle = std::thread::spawn(move || serving.serve(&server, 1000.0, None, None).unwrap());
 
     let mut client = Client::connect_local(port).unwrap();
     let mut received: Vec<Frame> = Vec::new();
@@ -117,6 +122,55 @@ fn a_replayed_fixture_is_byte_identical_to_the_recording() {
 }
 
 #[test]
+fn a_fast_forward_sends_the_frames_before_its_tick_at_once_and_paces_the_rest() {
+    let dir = common::temp_dir("fixture-fast-forward");
+    let path = dir.join("match.smfx");
+    let ticks = record(&path, 1);
+    let fixture = read_fixture(&path).unwrap();
+    // One minute is 3000 ticks: at real time the frames before tick `from` take 59 seconds,
+    // and the 50 ticks from it take one second.
+    let from = ticks - 50;
+    let server = Server::bind(&dir, "fast-forward-match").unwrap();
+    let port = server.port();
+    let replayer = Arc::new(Replayer::new(fixture.clone(), "match.smfx").unwrap());
+    let serving = Arc::clone(&replayer);
+    let handle = std::thread::spawn(move || serving.serve(&server, 1.0, None, Some(from)).unwrap());
+
+    let mut client = Client::connect_local(port).unwrap();
+    let started = std::time::Instant::now();
+    let mut received = Vec::new();
+    while let Some(frame) = client.read_raw().unwrap() {
+        received.push((frame, started.elapsed()));
+    }
+    handle.join().unwrap();
+
+    assert_eq!(
+        received.len(),
+        fixture.frames.len(),
+        "every stored frame is replayed"
+    );
+    for (i, ((frame, _), stored)) in received.iter().zip(&fixture.frames).enumerate() {
+        assert_eq!(
+            frame.payload(),
+            stored.frame.payload(),
+            "frame {i} differs on the wire"
+        );
+    }
+    let first_paced = fixture.frames.iter().position(|f| f.tick >= from).unwrap();
+    let burst = received[first_paced - 1].1.as_secs_f64();
+    assert!(
+        burst < 5.0,
+        "the frames before tick {from} took {burst:.3}s"
+    );
+    let paced = received.last().unwrap().1.as_secs_f64() - received[first_paced].1.as_secs_f64();
+    assert!(
+        paced > 0.9,
+        "the last 50 ticks took {paced:.3}s, not about one second"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn the_sustain_cap_delivers_below_the_requested_speed() {
     let dir = common::temp_dir("fixture-sustain");
     let path = dir.join("match.smfx");
@@ -128,7 +182,7 @@ fn the_sustain_cap_delivers_below_the_requested_speed() {
     // Eight times real time is asked for and three times real time is delivered, which is
     // the only way to drive the viewer's lag notice: nothing else in the workspace can
     // sustain less than it is asked for on demand.
-    let handle = std::thread::spawn(move || replayer.serve(&server, 8.0, Some(3.0)));
+    let handle = std::thread::spawn(move || replayer.serve(&server, 8.0, Some(3.0), None));
 
     let mut client = Client::connect_local(port).unwrap();
     let mut ticks = 0u32;

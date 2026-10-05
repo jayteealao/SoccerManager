@@ -4,11 +4,18 @@
 //! overlap resolution. The referee (`rules`) owns the phase of play: live, a dead ball
 //! waiting for its restart, or full time.
 
+mod decisions;
+mod fatigue;
+mod hooks;
+mod manager;
+mod movement;
+mod possession;
+
 use crate::trace::Point;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
-use crate::ai::{self, AiCode, AiState, Manager};
+use crate::ai::{AiCode, AiState, Manager};
 use crate::ball::Ball;
 use crate::data::attributes::AttributeSchema;
 use crate::data::rules::{RulePack, StoppageKind};
@@ -20,27 +27,21 @@ use crate::decision::Kick;
 use crate::error::EngineError;
 use crate::fatigue::InjurySource;
 use crate::flags::ActiveFlags;
-use crate::math::{self, DVec2, DVec3, toward};
-use crate::pitch;
+use crate::math::{self, DVec2};
+use crate::modules::ResolvedModules;
+use crate::pitch::{GOAL_WIDTH, Pitch};
 use crate::player::Player;
 use crate::plugin::{Plugins, ScriptNote};
 use crate::record::{TickRecord, TickSink};
-use crate::rules::fouls::{self, Card, Tackle};
-use crate::rules::offside;
+use crate::rules::fouls::Card;
 use crate::rules::{Phase, Referee, Stoppage};
-use crate::shot;
-use crate::steering;
-use crate::streams::{Action, Key, Streams};
+use crate::streams::Streams;
 use crate::tactics::Tactics;
 use crate::tactics::change::{
     AppliedChange, ChangeId, ChangeKind, ChangeQueue, RejectReason, SubLedger,
 };
 use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::{Tuning, XgTuning};
-
-/// Metres per second above which a carrier runs with the ball rather than shields it, for
-/// the extra tackle chance against a running carrier.
-const RUNNING_SPEED: f64 = 2.0;
 
 /// Everything a match needs to start: the seed, the length, the tuning, the rule pack, the
 /// tactics file, and the attribute schema from the content, the two teams with their
@@ -68,9 +69,28 @@ pub struct MatchConfig {
     pub knockout: bool,
     /// The flags that are on, resolved when the content loaded. Never changes in a match.
     pub flags: ActiveFlags,
+    /// The module in each slot, resolved when the content loaded. Never changes in a match.
+    pub modules: ResolvedModules,
+    /// The home team's ground. Never changes in a match. Private: `set_pitch` writes it and
+    /// the teams' copies together.
+    pitch: Pitch,
 }
 
 impl MatchConfig {
+    /// The home team's ground, which the whole match plays on.
+    pub fn pitch(&self) -> &Pitch {
+        &self.pitch
+    }
+
+    /// Sets the ground of the match and of both teams in one write, so a match never holds
+    /// two grounds.
+    pub fn set_pitch(&mut self, pitch: Pitch) {
+        self.pitch = pitch;
+        for team in &mut self.teams {
+            team.set_pitch(pitch);
+        }
+    }
+
     /// Builds a match from loaded content and two validated team files. `minutes` must be
     /// 1 to 200; the home team is `files[0]`. The AI manager's pre-match setup picks each
     /// team's lineup, bench, and tactics.
@@ -86,10 +106,19 @@ impl MatchConfig {
             )));
         }
         let tuning = content.tuning.engine.clone();
+        let pitch = files[0]
+            .club
+            .pitch()
+            .map_err(|e| EngineError::InvalidConfig(format!("club {}: {e}", files[0].club.id)))?;
         let (mut home, _) = Team::from_file(0, files[0], &content.attributes, &tuning)?;
         let (mut away, _) = Team::from_file(1, files[1], &content.attributes, &tuning)?;
         for team in [&mut home, &mut away] {
-            let setup = ai::pre_match(team, &content.tactics, &content.attributes);
+            team.set_pitch(pitch);
+            let setup =
+                content
+                    .modules
+                    .pre_match
+                    .setup(team, &content.tactics, &content.attributes);
             team.lineup = setup.lineup;
             team.bench = setup.bench;
             team.set_tactics(setup.tactics, &content.tactics, &tuning);
@@ -119,6 +148,8 @@ impl MatchConfig {
             team_digests,
             knockout: false,
             flags: content.flags.clone(),
+            modules: content.modules,
+            pitch,
         })
     }
 
@@ -466,15 +497,15 @@ pub struct ShotCensus {
 }
 
 /// The expected goals of a shot from `from` at the goal a team attacking `attack_x` aims
-/// at: a logistic function of the distance to the goal centre and of the angle the goal
+/// at on `pitch`: a logistic function of the distance to the goal centre and of the angle the goal
 /// mouth subtends, with the coefficients from the tuning file.
-pub fn shot_xg(from: DVec2, attack_x: f64, t: &XgTuning) -> f64 {
-    let x = pitch::HALF_LENGTH * attack_x;
-    let half = pitch::GOAL_WIDTH / 2.0;
+pub fn shot_xg(from: DVec2, attack_x: f64, t: &XgTuning, pitch: &Pitch) -> f64 {
+    let x = pitch.half_length() * attack_x;
+    let half = GOAL_WIDTH / 2.0;
     let a = DVec2::new(x, half) - from;
     let b = DVec2::new(x, -half) - from;
     let angle = math::atan2(a.perp_dot(b), a.dot(b)).abs();
-    let distance = (pitch::goal_centre(attack_x) - from).length();
+    let distance = (pitch.goal_centre(attack_x) - from).length();
     let z = t.intercept + t.distance_coef * distance + t.angle_coef * angle;
     1.0 / (1.0 + math::exp(-z))
 }
@@ -544,6 +575,15 @@ pub struct Simulation {
     /// Test seam: the outcomes the next shoot-out kicks are given, whatever the ball does.
     #[cfg(feature = "scenario")]
     pub(crate) forced_kicks: std::collections::VecDeque<bool>,
+    /// Test seam: every change of phase, in order (the phase machine).
+    #[cfg(feature = "scenario")]
+    pub(crate) phase_log: Vec<crate::rules::phases::Step>,
+    /// Test seam: every restart position fault so far, one line each.
+    #[cfg(feature = "scenario")]
+    pub(crate) position_faults: Vec<String>,
+    /// Test seam: the restarts the position check judged.
+    #[cfg(feature = "scenario")]
+    pub(crate) restarts_checked: u32,
     /// The plugin hooks, none unless a caller attaches them.
     pub(crate) plugins: Plugins,
     /// The decision hook's offsets for the current carrier. A stoppage and a new carrier
@@ -671,6 +711,12 @@ impl Simulation {
             census: ShotCensus::default(),
             #[cfg(feature = "scenario")]
             forced_kicks: std::collections::VecDeque::new(),
+            #[cfg(feature = "scenario")]
+            phase_log: Vec::new(),
+            #[cfg(feature = "scenario")]
+            position_faults: Vec::new(),
+            #[cfg(feature = "scenario")]
+            restarts_checked: 0,
             plugins: Plugins::default(),
             script_cache: None,
             finished: false,
@@ -718,51 +764,6 @@ impl Simulation {
     /// The attached plugin hooks, their pack, and their counters.
     pub fn plugins(&self) -> &Plugins {
         &self.plugins
-    }
-
-    /// Offers `native`, the line the commentator chose for `event`, to the commentary hook.
-    /// Returns the line to use and, when the hook failed, the `script` events to record on
-    /// the event's tick. Without a commentary hook the line comes back as it went in.
-    pub fn offer_line(
-        &mut self,
-        event: &EngineEvent,
-        native: Option<String>,
-    ) -> (Option<String>, Vec<EngineEvent>) {
-        let (Some(native), Some(hook)) = (native.as_deref(), self.plugins.commentary.as_mut())
-        else {
-            return (native, Vec::new());
-        };
-        let ctx = crate::plugin::LineContext {
-            tick: event.tick,
-            minute: event.minute,
-            kind: event.kind.code(),
-            team: event.team,
-            scores: event.scores,
-        };
-        let outcome = hook.line(&ctx, native);
-        let (line, notes) =
-            self.plugins
-                .settle(crate::plugin::HookPoint::Commentary, outcome, event.tick);
-        let events = notes
-            .into_iter()
-            .map(|note| self.script_event_at(event.tick, note))
-            .collect();
-        (Some(line.unwrap_or_else(|| native.to_string())), events)
-    }
-
-    /// Records the notes a hook call produced as `script` events on the tick this step
-    /// produces.
-    pub(crate) fn push_script_notes(&mut self, notes: Vec<ScriptNote>) {
-        for note in notes {
-            let event = self.script_event_at(self.tick + 1, note);
-            self.events.push(event);
-        }
-    }
-
-    fn script_event_at(&self, tick: u32, note: ScriptNote) -> EngineEvent {
-        let mut event = self.event_at(tick, EngineEventKind::Script, None);
-        event.detail = Some(EventDetail::Script(note));
-        event
     }
 
     pub fn config(&self) -> &MatchConfig {
@@ -871,6 +872,35 @@ impl Simulation {
         self.shot_in_flight.map(|_| self.shot_on_target)
     }
 
+    /// Test seam: every change of phase so far, in order.
+    #[cfg(feature = "scenario")]
+    pub fn phase_log(&self) -> &[crate::rules::phases::Step] {
+        &self.phase_log
+    }
+
+    /// Test seam: every restart position fault so far, one line each.
+    #[cfg(feature = "scenario")]
+    pub fn position_faults(&self) -> &[String] {
+        &self.position_faults
+    }
+
+    /// Test seam: the restarts the position check judged so far.
+    #[cfg(feature = "scenario")]
+    pub fn restarts_checked(&self) -> u32 {
+        self.restarts_checked
+    }
+
+    /// The phase's name in the phase machine.
+    pub fn phase_name(&self) -> crate::rules::phases::PhaseName {
+        self.referee.named
+    }
+
+    /// The phase machine's name of the stored phase: equal to [`Self::phase_name`] at every
+    /// tick boundary.
+    pub fn derived_phase_name(&self) -> crate::rules::phases::PhaseName {
+        crate::rules::phases::derive(self.referee.phase, self.referee.shootout.is_some())
+    }
+
     /// Test seam: the position of every random stream the match has used.
     #[cfg(feature = "scenario")]
     pub fn stream_state(&self) -> crate::rng::StreamState {
@@ -933,7 +963,7 @@ impl Simulation {
         }
         self.finished = true;
         self.streams.begin_tick(self.tick);
-        self.referee.phase = Phase::FullTime;
+        self.enter_phase(Phase::FullTime, crate::rules::phases::Cause::MatchEnd);
         let added = self
             .referee
             .clock
@@ -993,7 +1023,7 @@ impl Simulation {
             }
             Phase::FullTime => {}
         }
-        steering::step_all(&mut self.players, &mut self.scratch, &t);
+        self.steer_players(&t);
         if self.referee.phase == Phase::Live {
             self.move_ball(&t);
         }
@@ -1015,8 +1045,13 @@ impl Simulation {
             self.apply_changes(stoppage);
             self.script_cache = None;
         }
-        steering::resolve_overlaps(&mut self.players, &t);
+        if let Some(separated) = self.config.modules.steering.separate(&self.view()) {
+            for (p, &pos) in self.players.iter_mut().zip(separated.iter()) {
+                p.pos = pos;
+            }
+        }
         self.tick += 1;
+        self.check_phase_name();
     }
 
     /// The current tick as a record with 32-bit positions.
@@ -1104,9 +1139,11 @@ impl Simulation {
                 let (xg, quality) = if penalty {
                     (t.shots.penalty_xg, t.shots.penalty_xg)
                 } else {
+                    let shots = self.config.modules.shot;
+                    let view = self.view();
                     (
-                        shot_xg(from, attack_x, &t.xg),
-                        shot::quality(from, attack_x, t),
+                        shots.xg(&view, from, attack_x),
+                        shots.quality(&view, from, attack_x),
                     )
                 };
                 self.summary.xg[team] += xg;
@@ -1123,16 +1160,25 @@ impl Simulation {
             }
             self.last_touch = Some(team);
             self.last_kicker = Some(c);
-            self.referee.offside = if offside_counts {
+            if offside_counts {
                 self.summary.offside_checks += 1;
-                offside::offside_set(c, self.ball.pos.x, &self.players, self.teams[team].attack_x)
+                let proposal = self.config.modules.offside.on_kick(&self.view(), c, team);
+                self.apply_proposal(proposal);
             } else {
-                0
-            };
+                self.referee.offside = 0;
+            }
         }
-        self.ball.kick(dir, speed, loft, t);
+        self.ball = self
+            .config
+            .modules
+            .ball
+            .kick(&self.view(), self.ball, dir, speed, loft);
         if let Some((team, attack_x)) = shooter
-            && shot::on_target(self.ball, attack_x, t)
+            && self
+                .config
+                .modules
+                .shot
+                .on_target(&self.view(), self.ball, attack_x)
         {
             self.shot_on_target = true;
             self.summary.shots_on_target[team] += 1;
@@ -1147,461 +1193,6 @@ impl Simulation {
         self.shot_on_target = false;
         self.shot_quality = 0.0;
         self.blockers_tried = 0;
-    }
-
-    /// While a shot is in flight and fast, an outfield defender near the ball may block it,
-    /// and the keeper may save a shot heading on target. Nobody else touches it. Returns
-    /// `false` when no shot is in flight or the ball is slow, and the ordinary contest
-    /// applies.
-    fn contest_shot(&mut self, t: &Tuning) -> bool {
-        let Some(shooter) = self.shot_in_flight else {
-            return false;
-        };
-        if self.ball.speed() <= t.control_speed {
-            return false;
-        }
-        if self.try_block(shooter, t) {
-            return true;
-        }
-        if self.shot_on_target {
-            self.try_save(shooter, t);
-        }
-        true
-    }
-
-    /// Each outfield defender within `block_reach` of a shot under `reach_height` rolls once
-    /// per shot to block it. A block deflects the ball back the way it came, with the
-    /// blocker's side as the last touch, and ends the shot.
-    fn try_block(&mut self, shooter: usize, t: &Tuning) -> bool {
-        if self.ball.pos.z > t.reach_height {
-            return false;
-        }
-        let ball_xy = self.ball.xy();
-        let keeper = self.keeper(1 - shooter);
-        for i in 0..self.players.len() {
-            let p = self.players[i];
-            let bit = 1u32 << i;
-            if p.team == shooter
-                || i == keeper
-                || !p.active()
-                || self.blockers_tried & bit != 0
-                || (p.pos - ball_xy).length() >= t.shots.block_reach
-            {
-                continue;
-            }
-            self.blockers_tried |= bit;
-            let blocked = self
-                .streams
-                .tested(Key::player(Action::Block, &p), &[t.shots.block_chance])
-                < t.shots.block_chance;
-            if self.trace_on() {
-                self.trace_point(Point::ShotBlock, json!({"blocker": i, "blocked": blocked}));
-            }
-            if blocked {
-                let s = &t.shots;
-                let back = -DVec2::new(self.ball.vel.x, self.ball.vel.y);
-                let angle = self.streams.draw(Key::player(Action::BlockDeflect, &p));
-                self.ball.vel = shot::deflect(
-                    self.ball.vel,
-                    back,
-                    s.block_speed,
-                    s.block_spread,
-                    0.0,
-                    angle,
-                    0.0,
-                );
-                self.deflected_by(i);
-                self.keeper_beaten = false;
-                #[cfg(feature = "scenario")]
-                {
-                    self.census.blocked += 1;
-                }
-                return true;
-            }
-        }
-        false
-    }
-
-    /// The acting keeper within `keeper_reach` of a shot on target under the bar rolls once
-    /// per shot to save it, with a chance that falls with the shot's quality. A save is held
-    /// with `save_hold`; otherwise it is parried.
-    fn try_save(&mut self, shooter: usize, t: &Tuning) {
-        let k = self.keeper(1 - shooter);
-        if self.keeper_beaten
-            || self.ball.pos.z >= t.crossbar_height
-            || !self.players[k].active()
-            || (self.players[k].pos - self.ball.xy()).length() >= t.keeper_reach
-        {
-            return;
-        }
-        let keeper = self.players[k];
-        let save = shot::save_chance(self.shot_quality, t);
-        if self
-            .streams
-            .tested(Key::player(Action::Save, &keeper), &[save])
-            >= save
-        {
-            self.trace_save(Point::ShotSave, k, "beaten");
-            self.keeper_beaten = true;
-            return;
-        }
-        if self
-            .streams
-            .tested(Key::player(Action::SaveHold, &keeper), &[t.shots.save_hold])
-            < t.shots.save_hold
-        {
-            #[cfg(feature = "scenario")]
-            {
-                self.census.held += 1;
-            }
-            self.trace_save(Point::ShotSave, k, "held");
-            self.gain(k, t);
-            return;
-        }
-        self.trace_save(Point::ShotSave, k, "parried");
-        self.parry(k, t);
-        #[cfg(feature = "scenario")]
-        {
-            self.census.parried += 1;
-        }
-    }
-
-    /// Records a keeper's save roll at `point`: `beaten`, `held`, `parried`, or, in the
-    /// shoot-out, `reached` for a slow ball he picks up.
-    pub(crate) fn trace_save(&mut self, point: Point, keeper: usize, outcome: &str) {
-        if self.trace_on() {
-            self.trace_point(point, json!({"keeper": keeper, "outcome": outcome}));
-        }
-    }
-
-    /// Keeper `k` parries the ball: it keeps `parry_speed` of its speed and goes along the
-    /// goal line away from the goal centre, turned by up to `parry_spread` either way, with
-    /// a loft of up to `parry_loft`. The keeper gets no second touch of this flight.
-    pub(crate) fn parry(&mut self, k: usize, t: &Tuning) {
-        let s = &t.shots;
-        let keeper = self.players[k];
-        let side = if self.ball.pos.y == 0.0 {
-            if self
-                .streams
-                .tested(Key::player(Action::ParrySide, &keeper), &[0.5])
-                < 0.5
-            {
-                1.0
-            } else {
-                -1.0
-            }
-        } else {
-            self.ball.pos.y.signum()
-        };
-        let angle = self.streams.draw(Key::player(Action::ParryAngle, &keeper));
-        let loft = self.streams.draw(Key::player(Action::ParryLoft, &keeper));
-        self.ball.vel = shot::deflect(
-            self.ball.vel,
-            DVec2::new(0.0, side),
-            s.parry_speed,
-            s.parry_spread,
-            s.parry_loft,
-            angle,
-            loft,
-        );
-        self.deflected_by(k);
-        self.keeper_beaten = true;
-    }
-
-    /// While an open-play pass is in flight, fast, under `reach_height` and inside the
-    /// penalty area of the side that did not play it, each active defending outfield player
-    /// within `cross_reach` rolls once per flight to clear it. A clearance deflects the ball
-    /// away from his own goal centre, or wide toward his own goal line with `wide_chance`,
-    /// with his side as the last touch; the pass is not completed. Returns `true` when the
-    /// ball was cleared.
-    fn try_clear_cross(&mut self, t: &Tuning) -> bool {
-        let Some(passer) = self.pass_in_flight else {
-            return false;
-        };
-        let c = &t.clearances;
-        if c.cross_chance <= 0.0
-            || self.ball.speed() <= t.control_speed
-            || self.ball.pos.z > t.reach_height
-        {
-            return false;
-        }
-        let def = 1 - passer;
-        let own_goal_x = -self.teams[def].attack_x;
-        let ball_xy = self.ball.xy();
-        if !pitch::in_penalty_area(ball_xy, own_goal_x) {
-            return false;
-        }
-        let keeper = self.keeper(def);
-        for i in 0..self.players.len() {
-            let p = self.players[i];
-            let bit = 1u32 << i;
-            if p.team != def
-                || i == keeper
-                || !p.active()
-                || self.clearers_tried & bit != 0
-                || (p.pos - ball_xy).length() >= c.cross_reach
-            {
-                continue;
-            }
-            self.clearers_tried |= bit;
-            let cleared = self
-                .streams
-                .tested(Key::player(Action::CrossClear, &p), &[c.cross_chance])
-                < c.cross_chance;
-            if !cleared && self.trace_on() {
-                self.trace_point(Point::CrossClear, json!({"defender": i, "cleared": false}));
-            }
-            if cleared {
-                let wide = c.wide_chance > 0.0
-                    && self
-                        .streams
-                        .tested(Key::player(Action::CrossWide, &p), &[c.wide_chance])
-                        < c.wide_chance;
-                if self.trace_on() {
-                    self.trace_point(
-                        Point::CrossClear,
-                        json!({"defender": i, "cleared": true, "wide": wide}),
-                    );
-                }
-                let (away, spread) = if wide {
-                    (wide_of_goal(ball_xy, own_goal_x), WIDE_SPREAD)
-                } else {
-                    let goal = pitch::goal_centre(own_goal_x);
-                    let away = match toward(goal, ball_xy) {
-                        v if v == DVec2::ZERO => DVec2::new(-own_goal_x.signum(), 0.0),
-                        v => v,
-                    };
-                    (away, c.cross_spread)
-                };
-                let angle = self.streams.draw(Key::player(Action::CrossAngle, &p));
-                let loft = self.streams.draw(Key::player(Action::CrossLoft, &p));
-                self.ball.vel = shot::deflect(
-                    self.ball.vel,
-                    away,
-                    c.cross_speed,
-                    spread,
-                    c.cross_loft,
-                    angle,
-                    loft,
-                );
-                self.deflected_by(i);
-                self.pass_in_flight = None;
-                self.clearers_tried = 0;
-                self.keeper_beaten = false;
-                self.summary.clearances[def] += 1;
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Player `i` deflected the shot in flight: his side touched the ball last and the shot
-    /// is over.
-    fn deflected_by(&mut self, i: usize) {
-        if self.ball.vel.z > 0.0 && self.ball.pos.z <= 0.0 {
-            self.ball.pos.z = 0.001;
-        }
-        let team = self.players[i].team;
-        self.last_touch = Some(team);
-        self.last_kicker = Some(i);
-        self.end_shot();
-    }
-
-    fn move_ball(&mut self, t: &Tuning) {
-        match self.carrier {
-            Some(c) => {
-                let p = &self.players[c];
-                let at = pitch::clamp(p.pos + p.facing * 0.5, 0.1);
-                let step = crate::math::clamp_len(at - self.ball.xy(), t.carry_step);
-                let next = self.ball.xy() + step;
-                self.ball.pos = DVec3::new(next.x, next.y, 0.0);
-                self.ball.vel = DVec3::new(p.vel.x, p.vel.y, 0.0);
-            }
-            None => {
-                let prev = self.ball.xy();
-                self.ball.integrate(t);
-                let xy = self.ball.xy();
-                if self.referee.shootout.is_some() {
-                    self.shootout_ball(prev, xy, t);
-                    return;
-                }
-                for team in 0..2 {
-                    if pitch::in_goal(prev, xy, self.teams[team].attack_x)
-                        && self.ball.pos.z < t.crossbar_height
-                    {
-                        self.goal(team);
-                        return;
-                    }
-                }
-                if let Some(exit) = pitch::exit(prev, xy) {
-                    self.ball_out(exit);
-                    return;
-                }
-            }
-        }
-        let speed = self.ball.speed();
-        if speed > self.summary.ball_max_speed {
-            self.summary.ball_max_speed = speed;
-        }
-        if speed == 0.0 && self.carrier.is_none() {
-            self.summary.ball_idle_ticks += 1;
-        }
-    }
-
-    fn resolve_possession(&mut self, t: &Tuning) {
-        if self.referee.shootout.is_some() {
-            self.shootout_save(t);
-            return;
-        }
-        let ball_xy = self.ball.xy();
-        match self.carrier {
-            None => {
-                if self.contest_shot(t) {
-                    return;
-                }
-                if self.try_clear_cross(t) {
-                    return;
-                }
-                if self.ball.pos.z > t.reach_height {
-                    return;
-                }
-                let fast = self.ball.speed() > t.control_speed;
-                let keepers = [self.keeper(0), self.keeper(1)];
-                let mut best: Option<(f64, usize)> = None;
-                for (i, p) in self.players.iter().enumerate() {
-                    let keeper = i == keepers[p.team];
-                    if !p.active() || (fast && !keeper) {
-                        continue;
-                    }
-                    let reach = if keeper {
-                        t.keeper_reach
-                    } else {
-                        t.reach_radius
-                    };
-                    let d = (p.pos - ball_xy).length();
-                    if d < reach && best.is_none_or(|(bd, _)| d < bd) {
-                        best = Some((d, i));
-                    }
-                }
-                if self.trace_on() {
-                    self.trace_point(
-                        Point::LooseBall,
-                        json!({
-                            "player": best.map(|(_, i)| i),
-                            "distance": best.map(|(d, _)| d),
-                            "fast": fast,
-                            "keeper_beaten": self.keeper_beaten,
-                        }),
-                    );
-                }
-                if let Some((_, i)) = best {
-                    if fast {
-                        if self.keeper_beaten {
-                            return;
-                        }
-                        let catcher = self.players[i];
-                        let caught = self.streams.chance(
-                            Key::player(Action::KeeperCatch, &catcher),
-                            t.keeper_catch_chance,
-                        );
-                        if self.trace_on() {
-                            self.trace_point(
-                                Point::KeeperCatch,
-                                json!({"keeper": i, "caught": caught}),
-                            );
-                        }
-                        if !caught {
-                            self.keeper_beaten = true;
-                            return;
-                        }
-                    }
-                    self.gain(i, t);
-                }
-            }
-            Some(c) => {
-                if self.tick.saturating_sub(self.control_since) < t.control_cooldown_ticks {
-                    return;
-                }
-                let carrier = self.players[c];
-                for i in 0..self.players.len() {
-                    let p = self.players[i];
-                    if !p.active()
-                        || p.team == carrier.team
-                        || self.tick < p.foul_ready
-                        || (p.pos - ball_xy).length() > t.tackle_reach
-                    {
-                        continue;
-                    }
-                    let mut p_win = fouls::win_chance(&p.derived, &carrier.derived, t);
-                    if carrier.vel.length() > RUNNING_SPEED {
-                        p_win += fouls::dribble_win_chance(&p.derived, &carrier.derived, t);
-                    }
-                    let p_foul = fouls::foul_chance(&p.derived, p.yellow, t);
-                    let draw = self
-                        .streams
-                        .tested(Key::player(Action::Tackle, &p), &[p_win, p_win + p_foul]);
-                    let outcome = fouls::tackle_outcome(p_win, p_foul, t.foul_ball_loss, draw);
-                    if self.trace_on() {
-                        let label = match outcome {
-                            Tackle::Win => "win",
-                            Tackle::Foul { ball_lost: true } => "foul_ball_lost",
-                            Tackle::Foul { ball_lost: false } => "foul_ball_kept",
-                            Tackle::Miss => "miss",
-                        };
-                        self.trace_point(
-                            Point::Tackle,
-                            json!({
-                                "tackler": i,
-                                "carrier": c,
-                                "p_win": p_win,
-                                "p_foul": p_foul,
-                                "outcome": label,
-                            }),
-                        );
-                    }
-                    match outcome {
-                        Tackle::Win => {
-                            self.gain(i, t);
-                            self.tackle_injury_roll(c);
-                            return;
-                        }
-                        Tackle::Foul { ball_lost } => {
-                            self.foul(i, c, ball_lost, t);
-                            self.tackle_injury_roll(c);
-                            return;
-                        }
-                        Tackle::Miss => {}
-                    }
-                }
-            }
-        }
-    }
-
-    /// Player `i` touches the ball first. A player in an offside position is penalised
-    /// instead of gaining the ball.
-    fn gain(&mut self, i: usize, _t: &Tuning) {
-        if offside::is_offence(self.referee.offside, i) {
-            self.offside_offence(i);
-            return;
-        }
-        self.referee.offside = 0;
-        self.keeper_beaten = false;
-        let team = self.players[i].team;
-        if self.pass_in_flight.take() == Some(team) {
-            self.summary.passes_completed[team] += 1;
-        }
-        self.clearers_tried = 0;
-        if self.restart_taker != Some(i) {
-            self.restart_taker = None;
-        }
-        self.end_shot();
-        if self.last_touch != Some(team) {
-            self.summary.possession_changes += 1;
-        }
-        self.last_touch = Some(team);
-        self.carrier = Some(i);
-        self.control_since = self.tick;
-        self.script_cache = None;
     }
 }
 

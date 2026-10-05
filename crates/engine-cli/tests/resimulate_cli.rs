@@ -158,7 +158,7 @@ fn a_replay_file_alone_reproduces_its_tick_frames_with_every_source_file_deleted
             .all(|c| c.team == 0 && c.source == ChangeSource::Manager)
     );
     assert_eq!(rejected_rows(&fixture), 1);
-    assert_eq!(fixture.inputs.len(), 9);
+    assert_eq!(fixture.inputs.len(), 10);
 
     // Every source file goes: the content folder with its teams and the script pack, and
     // the change file.
@@ -175,6 +175,61 @@ fn a_replay_file_alone_reproduces_its_tick_frames_with_every_source_file_deleted
     assert_eq!(line["first_difference"], serde_json::Value::Null, "{line}");
     assert_eq!(line["tick_frames"], recorded.summary["ticks"], "{line}");
     let _ = std::fs::remove_dir_all(&recorded.dir);
+}
+
+/// Copies the shipped content into `dir/content`, sets the slot file to `slots`, records
+/// `minutes` of seed 42 from that copy only, and returns the replay file.
+fn record_with_slots(dir: &Path, name: &str, slots: &str, minutes: u32) -> PathBuf {
+    let content = dir.join(format!("content-{name}"));
+    copy_dir(&repo().join("content"), &content);
+    std::fs::write(content.join("slots.json"), slots).unwrap();
+    let file = dir.join("out").join(format!("{name}.smfx"));
+    let out = bin(&dir.join("data"))
+        .arg("--content-dir")
+        .arg(&content)
+        .args(["record", "--seed", "42", "--minutes", &minutes.to_string()])
+        .arg("--out")
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "record: {}", stderr(&out));
+    std::fs::remove_dir_all(&content).unwrap();
+    file
+}
+
+#[test]
+fn a_match_recorded_with_a_module_off_replays_with_it_off() {
+    let dir = temp("slots-off");
+    let default = r#"{"schema_version":1,"slots":{"engine.fouls":{"module":"fouls","version":1},"engine.offside":{"module":"offside","version":1},"engine.shot":{"module":"shot","version":1},"engine.fatigue":{"module":"fatigue","version":1},"engine.steering":{"module":"steering","version":1},"engine.pre-match":{"module":"pre-match","version":1},"engine.modifier.fatigue":{"module":"fatigue-curve","version":1},"engine.modifier.pressure":{"module":"pressure","version":1},"engine.modifier.momentum":{"module":"momentum","version":1},"engine.modifier.weather":{"module":"weather","version":1},"engine.clock":{"module":"clock","version":1},"engine.restarts":{"module":"restarts","version":1},"engine.discipline":{"module":"discipline","version":1},"engine.injuries":{"module":"injuries","version":1},"engine.ball":{"module":"ball","version":1},"engine.possession":{"module":"possession","version":1},"engine.decision":{"module":"decision","version":1},"engine.manager":{"module":"ai-manager","version":1},"engine.changes":{"module":"changes","version":1},"engine.hook.decision":{"module":"decision-hook","version":1},"engine.hook.rule":{"module":"rule-hook","version":1},"engine.hook.commentary":{"module":"commentary-hook","version":1},"game.rules":{"module":"rule-pack","version":1},"game.world":{"module":"world-stub","version":1},"game.season":{"module":"season-stub","version":1},"game.people":{"module":"people-stub","version":1},"game.presentation":{"module":"presentation-stub","version":1},"viewer.skin":{"module":"broadcast-blue","version":1},"engine.fast-model":{"module":"fitted-scores","version":1}}}"#;
+    let fouls_off = r#"{"schema_version":1,"slots":{"engine.fouls":{"module":"off"},"engine.offside":{"module":"offside","version":1},"engine.shot":{"module":"shot","version":1},"engine.fatigue":{"module":"fatigue","version":1},"engine.steering":{"module":"steering","version":1},"engine.pre-match":{"module":"pre-match","version":1},"engine.modifier.fatigue":{"module":"fatigue-curve","version":1},"engine.modifier.pressure":{"module":"pressure","version":1},"engine.modifier.momentum":{"module":"momentum","version":1},"engine.modifier.weather":{"module":"weather","version":1},"engine.clock":{"module":"clock","version":1},"engine.restarts":{"module":"restarts","version":1},"engine.discipline":{"module":"discipline","version":1},"engine.injuries":{"module":"injuries","version":1},"engine.ball":{"module":"ball","version":1},"engine.possession":{"module":"possession","version":1},"engine.decision":{"module":"decision","version":1},"engine.manager":{"module":"ai-manager","version":1},"engine.changes":{"module":"changes","version":1},"engine.hook.decision":{"module":"decision-hook","version":1},"engine.hook.rule":{"module":"rule-hook","version":1},"engine.hook.commentary":{"module":"commentary-hook","version":1},"game.rules":{"module":"rule-pack","version":1},"game.world":{"module":"world-stub","version":1},"game.season":{"module":"season-stub","version":1},"game.people":{"module":"people-stub","version":1},"game.presentation":{"module":"presentation-stub","version":1},"viewer.skin":{"module":"broadcast-blue","version":1},"engine.fast-model":{"module":"fitted-scores","version":1}}}"#;
+    let off = record_with_slots(&dir, "off", fouls_off, 30);
+    let on = record_with_slots(&dir, "on", default, 30);
+
+    // The slot file is an input of the replay, byte for byte.
+    for (file, slots) in [(&off, fouls_off), (&on, default)] {
+        let fixture = read_fixture(file).unwrap();
+        let held = fixture
+            .inputs
+            .iter()
+            .find(|f| f.role == "slots")
+            .expect("the replay file holds the slot file");
+        assert_eq!(held.name, "slots.json");
+        assert_eq!(held.bytes, slots.as_bytes());
+    }
+
+    // Each replays identically from the file alone, so the off match is re-simulated with
+    // fouls off and not with the built-in default. The two matches differ, so a replay that
+    // took the default for both would fail one of them.
+    let mut stored = Vec::new();
+    for file in [&off, &on] {
+        let out = resimulate(&dir, file, &[]);
+        assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+        let line = line(&out);
+        assert_eq!(line["verdict"], "identical", "{line}");
+        stored.push(line["stored_sha256"].clone());
+    }
+    assert_ne!(stored[0], stored[1], "fouls off must change the match");
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -214,6 +269,7 @@ fn a_new_replay_file_holds_the_engine_identity_every_input_and_every_applied_cha
         ("commentary", "commentary/en.json"),
         ("team_a", "teams/default-a.json"),
         ("team_b", "teams/default-b.json"),
+        ("slots", "slots.json"),
         ("pack_manifest", "scripts/sample/pack.json"),
         ("pack_script", "scripts/sample/main.rhai"),
     ];
@@ -428,7 +484,7 @@ fn comparison_mode_runs_on_another_identity_reports_both_and_leaves_the_file_as_
 #[test]
 fn a_version_three_file_is_refused_because_it_holds_no_inputs() {
     let dir = temp("ac43");
-    let legacy = repo().join("web/tests/data/one-minute.smfx");
+    let legacy = repo().join("viewer/tests/data/one-minute.smfx");
     let out = resimulate(&dir, &legacy, &[]);
     assert_eq!(out.status.code(), Some(1));
     let err = stderr(&out);
@@ -566,7 +622,7 @@ fn a_changed_tick_frame_or_log_entry_is_reported_as_a_difference() {
 
 /// The committed version-4 replay file: one minute of seed 42, 3,000 tick frames.
 fn committed_v4() -> PathBuf {
-    repo().join("web/tests/data/one-minute-v4.smfx")
+    repo().join("viewer/tests/data/one-minute-v4.smfx")
 }
 
 /// The lines of a state digest file.
@@ -595,12 +651,16 @@ fn joined_fields_sha(path: &Path) -> String {
 
 #[test]
 fn state_digests_give_one_line_per_tick_and_the_same_file_twice() {
+    // A minute of seed 42 recorded by this build: a file recorded by an older build plays on
+    // the build that recorded it, and this build's results differ from it.
+    let recorded = record("digests-rec", 1);
+    let file = recorded.file.clone();
     let dir = temp("digests");
     let (a, b) = (dir.join("a.digests"), dir.join("b.digests"));
     for path in [&a, &b] {
         let out = resimulate(
             &dir,
-            &committed_v4(),
+            &file,
             &["--compare", "--state-digests", path.to_str().unwrap()],
         );
         assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
@@ -630,11 +690,15 @@ fn state_digests_give_one_line_per_tick_and_the_same_file_twice() {
 
 #[test]
 fn a_tick_digest_is_the_sha256_of_that_ticks_fields_and_at_tick_stops_there() {
+    // A minute of seed 42 recorded by this build: a file recorded by an older build plays on
+    // the build that recorded it, and this build's results differ from it.
+    let recorded = record("fields-rec", 1);
+    let file = recorded.file.clone();
     let dir = temp("fields");
     let digests = dir.join("m.digests");
     let out = resimulate(
         &dir,
-        &committed_v4(),
+        &file,
         &["--compare", "--state-digests", digests.to_str().unwrap()],
     );
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
@@ -644,7 +708,7 @@ fn a_tick_digest_is_the_sha256_of_that_ticks_fields_and_at_tick_stops_there() {
         let at = tick.to_string();
         let out = resimulate(
             &dir,
-            &committed_v4(),
+            &file,
             &[
                 "--compare",
                 "--state-fields",
@@ -666,7 +730,7 @@ fn a_tick_digest_is_the_sha256_of_that_ticks_fields_and_at_tick_stops_there() {
     let fields = dir.join("late.json");
     let out = resimulate(
         &dir,
-        &committed_v4(),
+        &file,
         &[
             "--compare",
             "--state-fields",
@@ -750,12 +814,16 @@ fn the_debug_trace_of_a_resimulation_counts_every_draw_and_stops_at_the_tick() {
 
 #[test]
 fn a_resimulation_stopped_at_a_tick_writes_no_full_time_record_to_its_trace() {
+    // A minute of seed 42 recorded by this build: a file recorded by an older build plays on
+    // the build that recorded it, and this build's results differ from it.
+    let recorded = record("stopped-trace-rec", 1);
+    let file = recorded.file.clone();
     let dir = temp("stopped-trace");
     let (stopped, whole) = (dir.join("stopped.jsonl"), dir.join("whole.jsonl"));
     let fields = dir.join("f.json");
     let out = resimulate(
         &dir,
-        &committed_v4(),
+        &file,
         &[
             "--compare",
             "--debug-trace",
@@ -769,7 +837,7 @@ fn a_resimulation_stopped_at_a_tick_writes_no_full_time_record_to_its_trace() {
     assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
     let out = resimulate(
         &dir,
-        &committed_v4(),
+        &file,
         &["--compare", "--debug-trace", whole.to_str().unwrap()],
     );
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));

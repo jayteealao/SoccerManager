@@ -1,0 +1,5 @@
+error[E0594]: cannot assign to data in a `&` reference
+ --> tests/ui/writes_through_view.rs:9:9
+  |
+9 |         view.player(passer).pos.x = 0.0;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot assign

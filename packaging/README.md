@@ -16,19 +16,35 @@ Every release holds one folder:
 
 - `engine-cli` (`engine-cli.exe` on Windows): the engine and the launcher.
 - `content/`: the attributes, tuning, rules, teams, commentary, and script packs.
-- `web/`: the match page, without its tests.
+- `web/`: the match viewer, as the viewer's release build (`npm run build:release` in `viewer/`): the viewer page, the handshake check page, their scripts and fonts, the font licence texts in `web/fonts/`, and `web/notices.json`, the licence notices of every shipped crate, npm package and font, which the Licences screen shows.
+- `previous/`: the previous release's engine (`previous/engine-cli`) with that release's own `content/`. A match the previous release saved finishes on this engine, which started it; `engine-cli resume` and `engine-cli launch --resume` run it.
 - `LICENSE-MIT` and `LICENSE-APACHE`.
 - `soccermanager` (Linux and macOS only): the start script.
 
-The program finds `content/` and `web/` beside itself, so an installed game needs no path, no flag, and no environment variable. The start entry runs `engine-cli launch --open`. The launcher picks a seed from the clock, starts the engine, serves the page, and opens it in the default browser. Each start plays one match. To play again, start the game again.
+The program finds `content/` and `web/` beside itself, so an installed game needs no path, no flag, and no environment variable. The start entry runs `engine-cli launch --open`. The launcher picks a seed from the clock, starts the engine, serves the page, and opens it in the default browser. The page opens on the start screen, where the player starts a new match, resumes a saved one, or quits; Quit ends the engine and the launcher.
 
 The Windows program links the C runtime statically (`.cargo/config.toml`), so it runs on a machine without the Visual C++ redistributable.
 
 ## Prerequisites
 
 - Rust 1.87 or later.
+- Node 22.12 or later, with `npm`. Both build scripts run `npm ci` and `npm run build:release` in `viewer/` and copy `viewer/dist-release/` to `web/`.
 - Windows: NSIS 3 (`makensis` on `PATH`, or installed in `Program Files (x86)\NSIS`), and PowerShell 7 or Windows PowerShell 5.1.
 - Linux archive: a Linux shell with Rust, `tar`, `curl`, and `sha256sum`. On Windows, WSL with Ubuntu 24.04 works.
+- Git, with the previous release's tag fetched (`git fetch origin tag v0.2.0-beta.1`). The tag, its commit and its version are pinned in `packaging/previous-engine.json`.
+
+## The previous release's engine
+
+Both build scripts build the previous release's engine from its tag before they stage the release:
+
+```bash
+pwsh packaging/windows/previous-engine.ps1   # Windows
+sh packaging/unix/previous-engine.sh         # Linux and macOS
+```
+
+Each script checks that the tag names the pinned commit, builds `engine-cli` from it in a detached git worktree with `cargo build --locked`, copies the program and the tag's `content/` into `previous/` in its cache folder, removes the worktree, and checks that the program prints the pinned version. It prints the path of `previous/`. The cache is `target/previous-engine` on Windows and `~/.cache/soccermanager-previous` elsewhere; set `SM_PREVIOUS_CACHE` to change it. A cached `previous/` whose program prints the pinned version is reused without a build.
+
+To move to a new previous release, change the pin's tag, commit and version together.
 
 ## Build
 
@@ -36,6 +52,12 @@ Windows setup file:
 
 ```powershell
 pwsh packaging/windows/build.ps1
+```
+
+To build only the installed layout, in `dist/stage`, without the setup file (no NSIS needed):
+
+```powershell
+pwsh packaging/windows/build.ps1 -StageOnly
 ```
 
 Linux archive (from the repository folder, in a Linux shell or WSL):
@@ -70,9 +92,9 @@ pwsh packaging/windows/run-sandbox.ps1
 `run-sandbox.ps1` starts Windows Sandbox, a fresh Windows 11 image, with networking off. It maps `dist/` read-only and a new evidence folder `dist/evidence/windows/<utc>/` writable. Inside the sandbox, `smoke.ps1`:
 
 1. records whether the Visual C++ runtime is present, as a fact;
-2. installs silently and checks the installed files and the Start-menu entry;
-3. starts the Start-menu entry, checks that the engine runs, and takes `desktop.png`;
-4. runs `engine-cli launch` from the install folder and takes `page.png` with headless Microsoft Edge at 1280 by 800;
+2. installs silently and checks the installed files (with the font licence texts) and the Start-menu entry;
+3. starts the Start-menu entry, checks that `engine.json` reads the start screen (`front-door` true, state `idle`), asks for a new match as the page does, checks that the engine runs, and takes `desktop.png`;
+4. runs `engine-cli launch` from the install folder, checks that the page's module script is served as JavaScript, and takes `page.png` with headless Microsoft Edge at 1280 by 800;
 5. runs a third launch, reads the engine's `hello` over the socket, compares its version with `engine-cli --version`, starts the match, and waits for the kick-off record in `events.jsonl`;
 6. uninstalls silently and checks that the program is gone and the matches stay.
 
@@ -92,7 +114,18 @@ powershell -ExecutionPolicy Bypass -File smoke.ps1 -Setup <setup file> -Evidence
 sh packaging/unix/smoke.sh dist/SoccerManager-<version>-linux-x86_64.tar.gz dist/evidence/linux/<utc>
 ```
 
-`smoke.sh` unpacks the archive into a fresh temporary home and starts `soccermanager` from an unrelated folder with only `HOME` and `PATH` set. It checks the page address, the page, `engine.json` reporting a running engine, `engine.port` in the fresh home's data folder, and the program's version against the archive name. Then it runs the install-layout test against the unpacked folder (`SM_INSTALL_UNDER_TEST`), which reads the engine's `hello` and compares its version. It writes `results.json` in the same shape as the Windows check.
+`smoke.sh` unpacks the archive into a fresh temporary home and starts `soccermanager` from an unrelated folder with only `HOME` and `PATH` set. It checks the page address, the page, that the page's module script is served as JavaScript, that `web/fonts/OFL-Saira.txt` ships, `engine.json` reading the start screen (`front-door` true, state `idle`), then, after a new match asked for as the page does, reporting a running engine, `engine.port` in the fresh home's data folder, the program's version against the archive name, and that `previous/engine-cli` prints the pinned previous version with `previous/content/` beside it. Then it runs the install-layout test against the unpacked folder (`SM_INSTALL_UNDER_TEST`), which reads the engine's `hello` and compares its version. It writes `results.json` in the same shape as the Windows check.
+
+### The browser suite against a packaged folder
+
+The browser suite in `e2e/` can drive the packaged program and its `web/` instead of the repository build. Point `SM_E2E_INSTALL` at the unpacked or staged folder:
+
+```bash
+SM_INSTALL_UNDER_TEST=<folder> cargo test --release --locked -p engine-cli --test install_layout
+cd e2e && SM_E2E_INSTALL=<folder> npx playwright test --project=viewer --project=timing
+```
+
+The release workflow runs both against the Linux archive and the Windows staged folder before it drafts a release.
 
 ## macOS
 

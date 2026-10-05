@@ -39,13 +39,20 @@ If the change also changes what the gate measures (the fixture list, the state i
 
    The command refuses to run without a reason, and leaves the golden file byte-identical. On success it writes the new portable hash set and appends one `regenerate` entry.
 3. Run the gate on the other operating system (Linux if you regenerated on Windows, or the reverse) before you push. It must report `none differ`. If it does not, the change brought back a platform difference: find it, and do not push the regeneration.
-4. Commit `gate/golden.json` in its own commit.
+4. Fit the fast model again on the new results. CI fails when the fit records other results than the golden file:
+
+   ```bash
+   target/release/engine-cli fast-model fit
+   ```
+
+   The fit takes about 25 minutes on 8 cores, and writes `content/fast-model.json` only when the fast model passes its check. See [`fast-model`](../reference/cli.md#fast-model) in the command-line reference.
+5. Commit `gate/golden.json` in its own commit, then commit `content/fast-model.json` in the same change.
 
 The entry's `band_result` path, `gate/bands/ledger-<index>.json`, is where the realism band run for this regeneration is saved later. Never edit the entry to fill it in.
 
 ## Machine hash sets (history)
 
-Before the one recorded result change (ledger entry 2), each machine key (`<os>-<arch>`, for example `linux-x86_64`) had its own hash set, added with a `gate` flag that no longer exists, and `set_differences` listed the matches that differed between the machines. Entry 2 replaced both sets with the portable set. The engine now plays the same bits on every supported machine, so a portable set is the only set and nothing adds a machine set.
+Before ledger entry 2 (the move to the portable hash set), each machine key (`<os>-<arch>`, for example `linux-x86_64`) had its own hash set, added with a `gate` flag that no longer exists, and `set_differences` listed the matches that differed between the machines. Entry 2 replaced both sets with the portable set. The engine now plays the same bits on every supported machine, so a portable set is the only set and nothing adds a machine set.
 
 ## Check the history before you push
 

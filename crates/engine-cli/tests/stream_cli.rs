@@ -144,7 +144,7 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
         .args([
             "serve",
             "--seed",
-            "18",
+            "25",
             "--minutes",
             "2",
             "--reconnect-wait",
@@ -213,7 +213,7 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
         }
     }
     let first_tick = first_tick.expect("the match goes on after the reconnect");
-    // Seed 18 stops play at ticks 2,248 and 3,000 (half-time of a two-minute match), so the
+    // Seed 25 stops play at ticks 2,209 and 3,000 (half-time of a two-minute match), so the
     // match goes back to a stoppage the viewer held, never to kick-off and never past it.
     assert!(
         first_tick > 2_000 && first_tick <= last_tick + 1,
@@ -337,5 +337,141 @@ fn a_viewer_that_closes_in_mid_match_ends_the_run_without_an_error() {
         "the run must name the viewer that went away: {text}"
     );
     assert!(!dir.join("engine.port").exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// What one served match sent and wrote: every binary tick frame in order, the `--ticks-out`
+/// file, and the rows of its events file.
+struct Served {
+    frames: Vec<Vec<u8>>,
+    ticks_file: Vec<u8>,
+    rows: Vec<String>,
+    /// The tick the page skipped at; `None` when it watched to the end.
+    skipped_at: Option<u32>,
+}
+
+/// Serves `seed` for ten minutes in `dir` and plays the page's part over the real socket:
+/// it kicks off and reads to the close. With `skip_from`, once a tick frame at or past that
+/// tick arrives it pauses and then skips, and reads the rest of the match.
+fn serve_and_read(dir: &std::path::Path, seed: u64, skip_from: Option<u32>) -> Served {
+    let ticks_out = dir.join(format!("served-{seed}-{}.ticks", skip_from.is_some()));
+    let mut child = bin(&dir.to_path_buf())
+        .args([
+            "serve",
+            "--seed",
+            &seed.to_string(),
+            "--minutes",
+            "10",
+            "--match-millis",
+            "1",
+            "--ticks-out",
+        ])
+        .arg(&ticks_out)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().expect("serve prints its port"));
+    let mut line = String::new();
+    stdout.read_line(&mut line).unwrap();
+    let port: u16 = line.trim().parse().unwrap();
+    let mut client = Client::connect_local(port).unwrap();
+    let Incoming::Message(message) = client.read().unwrap() else {
+        panic!("the first frame is the hello");
+    };
+    let ServerMessage::Hello(hello) = *message else {
+        panic!("the first message is the hello");
+    };
+    client.send(&ClientCommand::Start).unwrap();
+    let mut frames = Vec::new();
+    let mut skipped_at = None;
+    let mut skip_read_at = None;
+    loop {
+        match client.read().unwrap() {
+            Incoming::Tick(frame, q) => {
+                frames.push(frame.as_bytes().to_vec());
+                // Like a page, report the drawn tick, so the engine stays within its lead
+                // bound and a pause holds it.
+                if skipped_at.is_none() && q.tick.is_multiple_of(50) {
+                    client
+                        .send(&ClientCommand::Seen(protocol::Seen { tick: q.tick }))
+                        .unwrap();
+                }
+                if skipped_at.is_none() && skip_from.is_some_and(|from| q.tick >= from) {
+                    client.send(&ClientCommand::Pause).unwrap();
+                    client.send(&ClientCommand::Skip).unwrap();
+                    skipped_at = Some(q.tick);
+                }
+            }
+            Incoming::Message(message) => match *message {
+                ServerMessage::Reject(reject) => {
+                    panic!("the engine refused {}: {}", reject.command, reject.reason)
+                }
+                ServerMessage::Ack(ack) if ack.command == "skip" => {
+                    skip_read_at = Some(ack.queued_tick);
+                }
+                _ => {}
+            },
+            Incoming::Closed => break,
+        }
+    }
+    if skip_from.is_some() {
+        // The skip reached the engine mid-match, held by the pause and the lead bound.
+        let read_at = skip_read_at.expect("the skip was acknowledged");
+        assert!(read_at < 12_000, "the skip was read at tick {read_at}");
+    }
+    client.close().unwrap();
+    let status = child.wait().unwrap();
+    assert!(status.success(), "serve exited with {status}");
+    let folder = dir.join("matches").join(&hello.match_id);
+    let rows = std::fs::read_to_string(folder.join("events.jsonl"))
+        .unwrap()
+        .lines()
+        .map(str::to_string)
+        .collect();
+    // The next run of the same seed writes the same match folder.
+    std::fs::remove_dir_all(&folder).unwrap();
+    Served {
+        frames,
+        ticks_file: std::fs::read(&ticks_out).unwrap(),
+        rows,
+        skipped_at,
+    }
+}
+
+#[test]
+fn a_skipped_served_match_streams_the_same_ticks_and_events_as_one_played_through() {
+    let dir = temp("serve-skip");
+    let skipped = serve_and_read(&dir, 42, Some(9_000));
+    let watched = serve_and_read(&dir, 42, None);
+    let at = skipped.skipped_at.expect("the page skipped");
+    assert!(at >= 9_000, "skipped at {at}");
+    assert_eq!(
+        skipped.frames.len(),
+        30_000,
+        "the skipped run reached full time"
+    );
+    assert_eq!(
+        skipped.frames.len(),
+        watched.frames.len(),
+        "the same number of tick frames"
+    );
+    if let Some(i) = (0..skipped.frames.len()).find(|&i| skipped.frames[i] != watched.frames[i]) {
+        panic!("tick frame {i} differs between the skipped and the watched run");
+    }
+    assert!(
+        skipped.ticks_file == watched.ticks_file,
+        "the --ticks-out files differ"
+    );
+    assert!(!skipped.rows.is_empty());
+    assert_eq!(skipped.rows, watched.rows, "the events files differ");
+
+    // The control: another seed's match differs, so the comparison can fail.
+    let other = serve_and_read(&dir, 43, None);
+    assert_ne!(
+        other.frames, watched.frames,
+        "seed 43 must stream another match"
+    );
+    assert_ne!(other.ticks_file, watched.ticks_file);
     let _ = std::fs::remove_dir_all(&dir);
 }

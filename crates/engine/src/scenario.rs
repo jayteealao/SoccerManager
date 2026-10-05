@@ -125,6 +125,12 @@ impl Scene {
         self
     }
 
+    /// Counts `n` video reviews in the current half, as the video referee would.
+    pub fn reviews(mut self, n: u32) -> Self {
+        self.sim.referee.tally.reviews += n;
+        self
+    }
+
     /// Counts `n` cards in the current half.
     pub fn cards(mut self, n: u32) -> Self {
         self.sim.referee.tally.cards += n;
@@ -182,19 +188,17 @@ impl Scene {
     /// line, and the kick due on the next step.
     pub fn penalty(mut self, team: usize, taker: usize) -> Self {
         let attack_x = self.sim.teams[team].attack_x;
-        let spot = crate::pitch::penalty_spot(attack_x);
+        let spot = self.sim.config.pitch().penalty_spot(attack_x);
         let keeper = self.sim.keeper(1 - team);
+        let line_x = attack_x * (self.sim.config.pitch().half_length() - 0.5);
         self = self
             .place(taker, spot)
-            .place(
-                keeper,
-                DVec2::new(attack_x * (crate::pitch::HALF_LENGTH - 0.5), 0.0),
-            )
+            .place(keeper, DVec2::new(line_x, 0.0))
             .ball(DVec3::new(spot.x, spot.y, 0.0))
             .carrier(None);
         let sim = &mut self.sim;
         sim.last_touch = Some(team);
-        sim.referee.phase = crate::rules::Phase::DeadBall(crate::rules::DeadBall {
+        sim.seat_phase(crate::rules::Phase::DeadBall(crate::rules::DeadBall {
             kind: StoppageKind::Penalty,
             team,
             spot,
@@ -202,7 +206,7 @@ impl Scene {
             since: sim.tick,
             ready_at: sim.tick,
             taker,
-        });
+        }));
         self
     }
 
@@ -238,6 +242,8 @@ impl Scene {
             for team in &mut self.sim.teams {
                 team.switch_ends();
             }
+            // The scene skips to the break, so the kick-off starts the period from it.
+            self.sim.seat_break();
             self.sim.place_kick_off(1);
             self.sim.events.clear();
         }
@@ -284,6 +290,8 @@ impl Scene {
             usize::from(period % 2 == 1)
         };
         self.sim.tick = start;
+        // The scene skips to the break, so the kick-off starts the period from it.
+        self.sim.seat_break();
         self.sim.place_kick_off(kick_off);
         self.sim.events.clear();
         self.sim.control_since = self.sim.tick;

@@ -7,9 +7,23 @@
 //! into the engine's own change type here, on the socket thread, and left in the [`Inbox`]
 //! for the simulation thread, which queues it in the engine while the match runs.
 //!
+//! `cancel-change` withdraws a change a stoppage has not settled: from the inbox at once, or
+//! from the engine's queue at the simulation thread's next hold. It is answered at once, and a
+//! change already applied or refused is refused by name. A withdrawal writes no row: the
+//! change's `queued` row stays, and no verdict row ever follows it.
+//!
 //! A viewer that reports the tick it has drawn (`seen`) bounds the engine's lead: once a lead
 //! bound is set and a first report arrives, the producer waits while it is that many ticks
 //! ahead of the drawn tick. A client that never reports is never held by it.
+//!
+//! A test seam, the fast-forward, lets a started match run flat out to a named tick: before
+//! it, neither a pause nor the lead bound holds the producer; from it on, both hold as usual.
+//! The simulation is the same either way; only when its ticks are sent changes.
+//!
+//! A skip (`skip`) plays the rest of a started match at full speed: from it on, neither a
+//! pause nor the lead bound holds the producer, so the same simulation steps on from its
+//! exact state to full time and every tick and message streams as usual. Nothing is saved,
+//! restored or rebuilt. A skip before kick-off is refused, and a second skip is answered again.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -46,9 +60,26 @@ struct GateState {
     seen: Option<u32>,
     /// The most ticks the producer may run ahead of `seen`; `None` leaves the lead unbounded.
     lead_bound: Option<u32>,
+    /// A test seam: once started, the producer is not held before this tick.
+    fast_forward_to: Option<u32>,
+    /// `true` once the client skipped to the result: the producer never waits again.
+    skipping: bool,
 }
 
 impl GateState {
+    /// `true` while producing the tick after `tick` must wait: the client paused, or the
+    /// lead bound is reached. A started match that skipped, or is inside its fast-forward,
+    /// never waits.
+    fn holds(&self, tick: u32) -> bool {
+        if self.started && self.skipping {
+            return false;
+        }
+        if self.started && self.fast_forward_to.is_some_and(|to| tick < to) {
+            return false;
+        }
+        !self.running || self.beyond_lead(tick)
+    }
+
     /// `true` while producing the tick after `tick` would pass the lead bound.
     fn beyond_lead(&self, tick: u32) -> bool {
         match (self.seen, self.lead_bound) {
@@ -78,6 +109,8 @@ impl Gate {
                 started: running,
                 seen: None,
                 lead_bound: None,
+                fast_forward_to: None,
+                skipping: false,
             }),
             changed: Condvar::new(),
             speed_centis: AtomicU32::new(100),
@@ -101,7 +134,7 @@ impl Gate {
     /// tick after `tick` lies within the lead bound of it. `false` when the session ended.
     pub fn wait_for_room(&self, tick: u32) -> bool {
         let mut state = self.state.lock().expect("the gate lock is never poisoned");
-        while !state.stopped && (!state.running || state.beyond_lead(tick)) {
+        while !state.stopped && state.holds(tick) {
             state = self
                 .changed
                 .wait(state)
@@ -115,6 +148,35 @@ impl Gate {
         let mut state = self.state.lock().expect("the gate lock is never poisoned");
         state.lead_bound = Some(ticks);
         self.changed.notify_all();
+    }
+
+    /// A test seam: after the first `start`, produce every tick up to `tick` without waiting
+    /// for a pause to end or for the drawn tick to catch up. The match is unchanged.
+    pub fn set_fast_forward(&self, tick: u32) {
+        let mut state = self.state.lock().expect("the gate lock is never poisoned");
+        state.fast_forward_to = Some(tick);
+        self.changed.notify_all();
+    }
+
+    /// Skips a started match to its result: from now on neither a pause nor the lead bound
+    /// holds the producer, so the match plays to full time at full speed. Refused (`false`,
+    /// the gate unchanged) before the first `start`. The simulation is untouched.
+    pub fn skip(&self) -> bool {
+        let mut state = self.state.lock().expect("the gate lock is never poisoned");
+        if !state.started {
+            return false;
+        }
+        state.skipping = true;
+        self.changed.notify_all();
+        true
+    }
+
+    /// `true` once the client skipped to the result.
+    pub fn skipping(&self) -> bool {
+        self.state
+            .lock()
+            .expect("the gate lock is never poisoned")
+            .skipping
     }
 
     /// The newest tick the client has drawn. A rewind reports a lower tick, and the bound
@@ -230,21 +292,95 @@ pub struct Admitted {
     pub tick: u32,
 }
 
-/// The changes the socket admitted and the engine has not queued yet, oldest first.
+/// The page's changes between the socket thread and the simulation thread: the changes the
+/// socket admitted and the engine has not queued yet (oldest first), the identifiers the
+/// engine holds, the withdrawals the engine has still to make, and the changes a stoppage
+/// has settled.
+///
+/// The simulation thread holds the inbox ([`Inbox::hold`]) from the moment it queues and
+/// withdraws changes until the step after it has settled, so a withdrawal the socket
+/// acknowledges can never meet a change that the same step applies.
 #[derive(Debug, Default)]
-pub struct Inbox(Mutex<Vec<Admitted>>);
+pub struct Inbox(Mutex<Mail>);
+
+#[derive(Debug, Default)]
+struct Mail {
+    waiting: Vec<Admitted>,
+    /// Identifiers the engine has queued and not settled.
+    engine: Vec<String>,
+    /// Identifiers withdrawn from the engine's queue at its next hold.
+    cancels: Vec<String>,
+    /// Identifiers a stoppage settled, with `true` for an applied change.
+    settled: Vec<(String, bool)>,
+}
+
+/// The inbox, held by the simulation thread.
+pub struct Held<'a>(std::sync::MutexGuard<'a, Mail>);
+
+impl Held<'_> {
+    /// Every waiting change, oldest first, leaving none waiting. The engine queues each one
+    /// now, so a later withdrawal goes to the engine.
+    pub fn drain(&mut self) -> Vec<Admitted> {
+        let waiting = std::mem::take(&mut self.0.waiting);
+        self.0
+            .engine
+            .extend(waiting.iter().map(|a| a.queue_id.clone()));
+        waiting
+    }
+
+    /// The identifiers to withdraw from the engine's queue now.
+    pub fn take_cancels(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.0.cancels)
+    }
+
+    /// Records that a stoppage applied (`true`) or refused the change `queue_id`.
+    pub fn settle(&mut self, queue_id: &str, applied: bool) {
+        self.0.engine.retain(|id| id != queue_id);
+        self.0.settled.push((queue_id.to_string(), applied));
+    }
+
+    /// Marks changes a resumed match already holds in its queue, so the page can withdraw
+    /// them over a new connection.
+    pub fn adopt(&mut self, queue_ids: impl IntoIterator<Item = String>) {
+        self.0.engine.extend(queue_ids);
+    }
+}
 
 impl Inbox {
     pub fn push(&self, admitted: Admitted) {
-        self.0
-            .lock()
-            .expect("the inbox lock is never poisoned")
-            .push(admitted);
+        self.hold().0.waiting.push(admitted);
     }
 
     /// Every waiting change, oldest first, leaving the inbox empty.
     pub fn drain(&self) -> Vec<Admitted> {
-        std::mem::take(&mut *self.0.lock().expect("the inbox lock is never poisoned"))
+        self.hold().drain()
+    }
+
+    /// The inbox, locked until the returned value drops.
+    pub fn hold(&self) -> Held<'_> {
+        Held(self.0.lock().expect("the inbox lock is never poisoned"))
+    }
+
+    /// Withdraws the change `queue_id`: at once when it still waits here, or at the engine's
+    /// next hold when the engine has queued it. Refused, with the reason in words, for a
+    /// change a stoppage settled or an identifier this connection never gave.
+    pub fn cancel(&self, queue_id: &str) -> Result<(), String> {
+        let mut held = self.hold();
+        let mail = &mut held.0;
+        if let Some(at) = mail.waiting.iter().position(|a| a.queue_id == queue_id) {
+            mail.waiting.remove(at);
+            return Ok(());
+        }
+        if let Some(at) = mail.engine.iter().position(|id| id == queue_id) {
+            mail.engine.remove(at);
+            mail.cancels.push(queue_id.to_string());
+            return Ok(());
+        }
+        match mail.settled.iter().find(|(id, _)| id == queue_id) {
+            Some((_, true)) => Err(format!("change {queue_id} has already applied")),
+            Some((_, false)) => Err(format!("change {queue_id} was already refused")),
+            None => Err(format!("unknown change {queue_id}")),
+        }
     }
 }
 
@@ -405,6 +541,34 @@ impl CommandContext {
                 None,
             ),
             ClientCommand::QueueChange(change) => self.queue_change(change, tick),
+            ClientCommand::CancelChange(cancel) => (
+                match self.inbox.cancel(&cancel.queue_id) {
+                    Ok(()) => ServerMessage::Ack(Ack {
+                        command: command.name().into(),
+                        queue_id: Some(cancel.queue_id.clone()),
+                        queued_tick: tick,
+                        state: None,
+                        speed: None,
+                    }),
+                    Err(reason) => ServerMessage::Reject(Reject {
+                        command: command.name().into(),
+                        reason,
+                    }),
+                },
+                None,
+            ),
+            ClientCommand::Skip => (
+                if self.gate.skip() {
+                    tracing::info!(signal = "socket.skip", tick);
+                    ack(&command, None)
+                } else {
+                    ServerMessage::Reject(Reject {
+                        command: command.name().into(),
+                        reason: "the match has not kicked off; there is nothing to skip".into(),
+                    })
+                },
+                None,
+            ),
         };
         if let Some(event) = &answer.1 {
             self.events
@@ -595,6 +759,130 @@ mod tests {
     }
 
     #[test]
+    fn a_fast_forward_runs_past_a_pause_and_the_lead_bound_up_to_its_tick_only() {
+        let gate = Arc::new(Gate::held());
+        gate.set_lead_bound(500);
+        gate.set_fast_forward(9_000);
+        let waiter = Arc::clone(&gate);
+        let handle = std::thread::spawn(move || waiter.wait_for_room(10));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        assert!(
+            !handle.is_finished(),
+            "before the first start nothing is produced"
+        );
+        gate.set_running(true);
+        assert!(handle.join().unwrap());
+        gate.set_seen(0);
+        gate.set_running(false);
+        assert!(
+            gate.wait_for_room(8_999),
+            "paused and 8999 ticks ahead: still produced"
+        );
+        let waiter = Arc::clone(&gate);
+        let handle = std::thread::spawn(move || waiter.wait_for_room(9_000));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        assert!(
+            !handle.is_finished(),
+            "from the fast-forward tick the pause holds again"
+        );
+        gate.set_seen(8_600);
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        assert!(
+            !handle.is_finished(),
+            "within the bound, the pause still holds"
+        );
+        gate.set_running(true);
+        assert!(handle.join().unwrap());
+        let waiter = Arc::clone(&gate);
+        let handle = std::thread::spawn(move || waiter.wait_for_room(9_100));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        assert!(
+            !handle.is_finished(),
+            "past the fast-forward the lead bound holds again"
+        );
+        gate.stop();
+        assert!(!handle.join().unwrap());
+    }
+
+    #[test]
+    fn a_skip_runs_past_a_pause_and_the_lead_bound_to_the_end() {
+        let gate = Arc::new(Gate::held());
+        gate.set_lead_bound(1);
+        gate.set_running(true);
+        gate.set_seen(1_000);
+        gate.set_running(false);
+        let waiter = Arc::clone(&gate);
+        let handle = std::thread::spawn(move || waiter.wait_for_room(1_001));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        assert!(
+            !handle.is_finished(),
+            "paused at the bound: the producer waits"
+        );
+        assert!(!gate.skipping());
+        assert!(gate.skip());
+        assert!(handle.join().unwrap(), "the skip releases the producer");
+        assert!(gate.skipping());
+        for tick in [1_002, 50_000, 269_999] {
+            assert!(gate.wait_for_room(tick), "tick {tick} never waits");
+        }
+        gate.set_seen(0);
+        gate.set_running(false);
+        assert!(
+            gate.wait_for_room(200_000),
+            "a later pause or seen has no effect"
+        );
+        assert!(gate.skip(), "a second skip is answered again");
+        gate.stop();
+        assert!(!gate.wait_for_room(200_001), "a stopped session still ends");
+    }
+
+    #[test]
+    fn a_skip_before_kick_off_is_refused_and_the_gate_still_holds() {
+        let dir = temp("skip-early");
+        let mut ctx = context(&dir, Gate::held(), PreMatch::none());
+        let (answer, event) = ctx.handle("{\"type\":\"skip\"}").unwrap();
+        assert!(event.is_none());
+        let ServerMessage::Reject(reject) = answer else {
+            panic!("a skip before kick-off must be refused: {answer:?}");
+        };
+        assert_eq!(reject.command, "skip");
+        assert_eq!(
+            reject.reason,
+            "the match has not kicked off; there is nothing to skip"
+        );
+        assert!(!ctx.gate.skipping());
+        let waiter = Arc::clone(&ctx.gate);
+        let handle = std::thread::spawn(move || waiter.wait_for_room(0));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        assert!(
+            !handle.is_finished(),
+            "the gate still holds before kick-off"
+        );
+        ctx.gate.stop();
+        assert!(!handle.join().unwrap());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_skip_after_kick_off_is_acknowledged_through_handle() {
+        let dir = temp("skip");
+        let mut ctx = context(&dir, Gate::held(), PreMatch::none());
+        ctx.handle("{\"type\":\"start\"}").unwrap();
+        ctx.state.set_tick(90_000);
+        for _ in 0..2 {
+            let (answer, event) = ctx.handle("{\"type\":\"skip\"}").unwrap();
+            assert!(event.is_none(), "a skip writes no row");
+            let ServerMessage::Ack(ack) = answer else {
+                panic!("a skip after kick-off must be acknowledged: {answer:?}");
+            };
+            assert_eq!(ack.command, "skip");
+            assert_eq!(ack.queued_tick, 90_000);
+        }
+        assert!(ctx.gate.skipping());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_held_gate_produces_nothing_until_the_first_start() {
         let gate = Arc::new(Gate::held());
         assert!(!gate.started());
@@ -768,6 +1056,89 @@ mod tests {
             Some("unknown change type formation")
         );
         assert_eq!(reason(answer), "unknown change type formation");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn cancel(id: &str) -> String {
+        serde_json::to_string(&ClientCommand::CancelChange(protocol::CancelChange {
+            queue_id: id.into(),
+        }))
+        .unwrap()
+    }
+
+    fn queue_sub(ctx: &mut CommandContext) -> String {
+        let (answer, _) = ctx
+            .handle(
+                "{\"type\":\"queue-change\",\"change.kind\":\"substitution\",\
+                 \"detail\":{\"off\":9,\"on\":14}}",
+            )
+            .unwrap();
+        let ServerMessage::Ack(ack) = answer else {
+            panic!("a readable change must be acknowledged: {answer:?}");
+        };
+        ack.queue_id.expect("a queued change has an identifier")
+    }
+
+    #[test]
+    fn a_change_still_in_the_inbox_is_withdrawn_at_once() {
+        let dir = temp("cancel-inbox");
+        let mut ctx = context(&dir, Gate::new(), PreMatch::none());
+        let id = queue_sub(&mut ctx);
+        let (answer, event) = ctx.handle(&cancel(&id)).unwrap();
+        assert!(event.is_none(), "a withdrawal writes no row");
+        let ServerMessage::Ack(ack) = answer else {
+            panic!("a waiting change must be withdrawn: {answer:?}");
+        };
+        assert_eq!(ack.command, "cancel-change");
+        assert_eq!(ack.queue_id.as_deref(), Some(id.as_str()));
+        let mut held = ctx.inbox.hold();
+        assert!(held.drain().is_empty(), "the engine never sees it");
+        assert!(
+            held.take_cancels().is_empty(),
+            "nothing is left to withdraw"
+        );
+        drop(held);
+        assert_eq!(
+            reason(ctx.handle(&cancel(&id)).unwrap().0),
+            format!("unknown change {id}")
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_change_the_engine_queued_is_withdrawn_at_its_next_hold() {
+        let dir = temp("cancel-engine");
+        let mut ctx = context(&dir, Gate::new(), PreMatch::none());
+        let id = queue_sub(&mut ctx);
+        assert_eq!(ctx.inbox.hold().drain().len(), 1, "the engine queues it");
+        let (answer, _) = ctx.handle(&cancel(&id)).unwrap();
+        assert!(matches!(answer, ServerMessage::Ack(_)), "{answer:?}");
+        assert_eq!(ctx.inbox.hold().take_cancels(), vec![id.clone()]);
+        assert!(ctx.inbox.hold().take_cancels().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_change_a_stoppage_settled_cannot_be_withdrawn() {
+        let dir = temp("cancel-settled");
+        let mut ctx = context(&dir, Gate::new(), PreMatch::none());
+        let applied = queue_sub(&mut ctx);
+        let refused = queue_sub(&mut ctx);
+        {
+            let mut held = ctx.inbox.hold();
+            held.drain();
+            held.settle(&applied, true);
+            held.settle(&refused, false);
+        }
+        assert_eq!(
+            reason(ctx.handle(&cancel(&applied)).unwrap().0),
+            format!("change {applied} has already applied")
+        );
+        assert_eq!(
+            reason(ctx.handle(&cancel(&refused)).unwrap().0),
+            format!("change {refused} was already refused")
+        );
+        assert!(ctx.inbox.hold().take_cancels().is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

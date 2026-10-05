@@ -2,7 +2,7 @@
 
 A football management game: a native match engine written in Rust, and Touchline, a 2D match viewer that runs in the browser.
 
-You pick a lineup and tactics, kick off against a club the computer manages, and watch the match on a 2D pitch. The engine computes the ball and all 22 players at 50 ticks per second, applies the laws of the game, and writes commentary. During the match you change tactics and make substitutions; each change applies at the next stoppage. At half-time and at full time a report counts the match, and at full time you can save a replay.
+You pick a lineup and tactics, kick off against a club the computer manages, and watch the match on a 2D pitch. The engine computes the ball and all 22 players at 50 ticks per second, applies the laws of the game, and writes commentary. During the match you change tactics and make substitutions; each change applies at the next stoppage. At half-time and at full time a report counts the match, and at full time you can save a replay. After full time the match stays at its final whistle, and the report offers **New match**, which opens match setup with the same two clubs, or **Return to start**.
 
 ## Install
 
@@ -10,21 +10,25 @@ On Windows 11, run `SoccerManager-<version>-windows-x64-setup.exe`. It installs 
 
 On Linux x86_64 (glibc 2.39 or later), unpack `SoccerManager-<version>-linux-x86_64.tar.gz` and run `./soccermanager` in the unpacked folder.
 
-Each start plays one match. Your matches stay in `%LOCALAPPDATA%\SoccerManager` on Windows and `~/.local/share/SoccerManager` on Linux, also after an uninstall. To build the setup file and the archive yourself, see [packaging/README.md](packaging/README.md).
+Each start opens on the start screen: start a new match with two clubs you pick, resume the match you left, open a replay, change the settings, read the licences, or quit. `engine-cli launch --no-start-screen` skips it and starts a match at once. Your matches stay in `%LOCALAPPDATA%\SoccerManager` on Windows and `~/.local/share/SoccerManager` on Linux, also after an uninstall. To build the setup file and the archive yourself, see [packaging/README.md](packaging/README.md).
 
 ## Build
 
-You need Rust 1.87 or later.
+You need Rust 1.87 or later, and Node 22.12 or later for the viewer.
 
 ```bash
 cargo build --release
+npm --prefix viewer ci
+npm --prefix viewer run build
 ```
+
+The second pair builds the match viewer into `viewer/dist`, the page the engine serves. The viewer is a Svelte 5 app built with Vite.
 
 ## Play a match
 
 ```bash
 target/release/engine-cli generate --seed 2026 --clubs 2 --out my-league
-target/release/engine-cli serve --seed 42 --web web --team-a my-league/club-000007ea-00.json --team-b my-league/club-000007ea-01.json
+target/release/engine-cli serve --seed 42 --web viewer/dist --team-a my-league/club-000007ea-00.json --team-b my-league/club-000007ea-01.json
 ```
 
 The second command prints a port and a page address. Open the page address in a browser. For a step-by-step first match, follow [the tutorial](docs/tutorials/first-match.md).
@@ -32,10 +36,10 @@ The second command prints a port and a page address. Open the page address in a 
 To have the page survive a crash of the engine, start the launcher instead:
 
 ```bash
-target/release/engine-cli launch --seed 42 --web web
+target/release/engine-cli launch --seed 42 --web viewer/dist
 ```
 
-From the repository folder, `target/release/engine-cli launch --open` also works: it finds `./web`, picks a seed, and opens the page in your browser.
+From the repository folder, `target/release/engine-cli launch --open` also works: it finds the built viewer in `./viewer/dist`, picks a seed, and opens the page in your browser.
 
 When the engine stops in mid-match, the page offers to restart from the last stoppage.
 
@@ -46,7 +50,7 @@ target/release/engine-cli simulate --seed 42 --ticks-out match.ticks   # one mat
 target/release/engine-cli bench --seed 42 --matches 5 --json           # time the engine
 target/release/engine-cli calibrate --seed 2026 --matches 1000         # check the realism bands
 target/release/engine-cli record --seed 7 --out match.smfx             # record a replay file
-target/release/engine-cli replay --fixture match.smfx --web web        # play a replay file
+target/release/engine-cli replay --fixture match.smfx --web viewer/dist # play a replay file
 ```
 
 The engine reads its data from the `content/` folder and writes each match to `SM_DATA_DIR` (default `%LOCALAPPDATA%\SoccerManager` on Windows).
@@ -56,9 +60,9 @@ To compare a candidate model with the current one, declare a flag in the `flags`
 ## Documentation
 
 - Tutorial: [Play your first match](docs/tutorials/first-match.md)
-- How-to: [Tune the engine and add a rule pack](docs/how-to/modding.md)
-- Reference: [Command line](docs/reference/cli.md), [Data files](docs/reference/data-files.md), [Socket protocol](docs/reference/protocol.md)
-- Explanation: [How the engine works](docs/explanation/engine.md)
+- How-to: [Tune the engine and add a rule pack](docs/how-to/modding.md), [Write and register an engine module](docs/how-to/engine-modules.md)
+- Reference: [Command line](docs/reference/cli.md), [Data files](docs/reference/data-files.md), [Socket protocol](docs/reference/protocol.md), [Engine modules and slot configuration](docs/reference/engine-modules.md)
+- Explanation: [How the engine works](docs/explanation/engine.md), [The plugin contract](docs/explanation/plugin-contract.md)
 
 ## Test
 
@@ -74,18 +78,21 @@ The slow tests (the tactics effects and the two 1000-match calibration suites) a
 cargo test --release --workspace -- --ignored
 ```
 
-The page tests use the test runner that ships with Node 22, with no install:
+The viewer tests run with Vitest:
 
 ```bash
-node --test "web/tests/*.test.mjs"
+npm --prefix viewer ci
+npm --prefix viewer test
 ```
 
 ### The browser suite
 
-The browser suite in `e2e/` drives the page against the live engine with Playwright. Each test starts its own engine with a new data folder. Build the engine first, then install and run the suite:
+The browser suite in `e2e/` drives the viewer against the live engine with Playwright. Each test starts its own engine with a new data folder and serves the built viewer. Build the engine and the viewer first, then install and run the suite:
 
 ```bash
 cargo build --release
+npm --prefix viewer ci
+npm --prefix viewer run build
 cd e2e
 npm install
 npx playwright install chromium

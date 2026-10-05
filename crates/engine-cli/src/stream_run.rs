@@ -8,19 +8,21 @@
 //! the home team, and it names the change on its verdict event by the identifier the page
 //! was given, because the two queues number their changes independently.
 
-use engine::gate::PlannedChange;
 use engine::observe::{MatchFigures, round_to};
 use engine::record::TickSink;
+use engine::tactics::planned::PlannedChange;
 use engine::{
     Card, Change, ChangeId, Commentary, Commentator, EngineEvent, EngineEventKind, EventDetail,
     Simulation,
 };
 use protocol::{
-    CardKind, ChangeKind, ChangeOutcome, ChangeState, Condition, EventType, MatchEvent,
-    RosterEntry, ServerMessage, SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
+    CardKind, ChangeKind, ChangeOutcome, ChangeState, ChangeStateNote, Condition, EventType,
+    MatchEvent, RosterEntry, ServerMessage, SlotRole, SquadEntry, Stats, SubstitutionRules,
+    TeamRef, TeamSetup,
 };
 use std::cell::RefCell;
 
+use crate::advice::Advisor;
 use stream::session::MatchState;
 use stream::{Admitted, Gate, Inbox, StreamError};
 
@@ -57,6 +59,9 @@ pub struct Drive<'a> {
     pub planned: &'a [Planned],
     /// Sees the match after each step and after full time, before its events are routed.
     pub observe: Option<&'a Observe<'a>>,
+    /// The other matches of the matchday, revealed on this match's clock. `None` for every
+    /// run but a served match's.
+    pub matchday: Option<&'a crate::matchday::Matchday>,
 }
 
 /// A change queued at a fixed tick.
@@ -100,13 +105,22 @@ pub struct PageChange {
     /// The engine's identifier; `None` while the change still waits in the inbox.
     pub id: Option<ChangeId>,
     pub admitted: Admitted,
+    /// `true` once the page withdrew it.
+    pub cancelled: bool,
 }
 
 /// Carries the page's changes onto a match rewound to `resume_at`. A change the engine queued
 /// before that tick is in the resumed match and keeps its identifier. A change queued later,
 /// or still in the inbox, is queued again when the events file kept its `queued` row (the
-/// page was told it is queued); any other goes with its row.
+/// page was told it is queued); any other goes with its row. A change the page withdrew is
+/// withdrawn from the resumed match too, and goes.
 pub fn carry_page_changes(sim: &mut Simulation, changes: &mut Vec<PageChange>, resume_at: u32) {
+    for change in changes.iter().filter(|c| c.cancelled) {
+        if let Some(id) = change.id.filter(|id| id.tick < resume_at) {
+            sim.cancel_change(HOME, id);
+        }
+    }
+    changes.retain(|c| !c.cancelled);
     changes.retain(|c| c.id.is_some_and(|id| id.tick < resume_at) || c.admitted.tick <= resume_at);
     for change in changes.iter_mut() {
         if change.id.is_none_or(|id| id.tick >= resume_at) {
@@ -141,9 +155,14 @@ pub fn drive<S: TickSink>(
         );
     }
     let mut commentator = Commentator::for_match(opts.commentary, sim);
+    // The assistant advises only a page that can queue changes; a recording, a replay and the
+    // bench get no advice.
+    let mut advisor = opts.inbox.map(|_| Advisor::default());
     // One simulated second of ticks: the cadence of the running statistics and energy.
     let ticks_per_second = ((1.0 / sim.tuning().dt).round() as u32).max(1);
     let mut written = 0u32;
+    // `true` once the inbox knows the page changes a resumed match already holds.
+    let mut adopted = false;
     // A sudden death can run past the announced maximum; it is played to its end.
     while !sim.is_over() && (written < opts.ticks || sim.in_shootout()) {
         // A stopped gate means the viewer left: the match did not end, so no full-time
@@ -165,21 +184,69 @@ pub fn drive<S: TickSink>(
         for planned in opts.planned.iter().filter(|p| p.tick() == now) {
             planned.queue(sim);
         }
-        // A change queued while the match was paused is queued here, on the first running
-        // tick, so it waits for the next stoppage and never applies on the resume tick.
-        if let Some(inbox) = opts.inbox {
-            for admitted in inbox.drain() {
+        // The inbox stays held from here until this step's verdicts are settled, so a
+        // withdrawal the socket acknowledges never meets a change this step applies.
+        let mut held = opts.inbox.map(Inbox::hold);
+        if let Some(held) = held.as_mut() {
+            if !adopted {
+                adopted = true;
+                held.adopt(page_ids(sim, &ids));
+            }
+            // A change queued while the match was paused is queued here, on the first
+            // running tick, so it waits for the next stoppage and never applies on the resume
+            // tick.
+            for admitted in held.drain() {
                 let id = sim.queue_change(HOME, admitted.change.clone());
                 ids.page.push((id, admitted.queue_id.clone()));
                 if let Some(carried) = opts.page_changes {
                     carried.borrow_mut().push(PageChange {
                         id: Some(id),
                         admitted,
+                        cancelled: false,
                     });
                 }
             }
+            for queue_id in held.take_cancels() {
+                if let Some(id) = ids.engine_id(&queue_id) {
+                    sim.cancel_change(HOME, id);
+                }
+                if let Some(carried) = opts.page_changes {
+                    for c in carried
+                        .borrow_mut()
+                        .iter_mut()
+                        .filter(|c| c.admitted.queue_id == queue_id)
+                    {
+                        c.cancelled = true;
+                    }
+                }
+            }
         }
+        // The page's changes still waiting, and the stoppage marks before the step: a mark
+        // that moves means a stoppage that takes that kind opened in this step.
+        let watched: Vec<(ChangeId, usize, String)> = if held.is_some() {
+            page_pending(sim, &ids)
+        } else {
+            Vec::new()
+        };
+        let marks = sim.changes_admitted();
         sim.step();
+        if let Some(held) = held.as_mut() {
+            for (id, _, queue_id) in &watched {
+                if !sim.pending_changes().iter().any(|q| q.id == *id) {
+                    let applied = sim
+                        .applied_changes()
+                        .iter()
+                        .any(|a| a.team == HOME && a.id == *id);
+                    held.settle(queue_id, applied);
+                }
+            }
+        }
+        drop(held);
+        let opened = sim.changes_admitted();
+        let taken: Vec<&(ChangeId, usize, String)> = watched
+            .iter()
+            .filter(|(_, kind, _)| opened[*kind] != marks[*kind])
+            .collect();
         let trace = sim.take_trace();
         if !trace.is_empty()
             && let Err(err) = sink.on_trace(&trace)
@@ -201,6 +268,14 @@ pub fn drive<S: TickSink>(
         if let Some(observe) = opts.observe {
             (observe.borrow_mut())(sim, &events, false);
         }
+        // Each page change the opening stoppage takes is "applies now" before its verdict.
+        for (_, _, queue_id) in taken {
+            route(ServerMessage::ChangeState(ChangeStateNote {
+                queue_id: queue_id.clone(),
+                state: ChangeState::AppliesNow,
+                tick: record.tick,
+            }))?;
+        }
         for event in &events {
             opts.state.set_scores(event.scores);
             for row in rows(
@@ -215,9 +290,28 @@ pub fn drive<S: TickSink>(
                 route(ServerMessage::Event(Box::new(row)))?;
             }
         }
+        // After the events, so the page reads the goal or the injury before the pick it asks
+        // for. The check reads the match and writes nothing.
+        if let Some(advice) = advisor.as_mut().and_then(|a| a.after_step(sim, &events)) {
+            route(ServerMessage::Advice(advice))?;
+        }
+        // The other grounds' events this match's tick has reached. The pool is only
+        // drained, never waited for. A skip plays on unpaced, so nothing is late in it.
+        if let Some(matchday) = opts.matchday {
+            for message in matchday.due(record.tick, paced(opts)) {
+                route(message)?;
+            }
+        }
         if record.tick.is_multiple_of(ticks_per_second) {
             route(ServerMessage::Stats(stats_message(sim)))?;
             route(ServerMessage::Condition(condition_message(sim)))?;
+        }
+        if let Some(matchday) = opts.matchday
+            && (record.tick.is_multiple_of(ticks_per_second)
+                || matchday.at_fast_forward(record.tick))
+            && let Some(progress) = matchday.progress(record.tick)
+        {
+            route(progress)?;
         }
     }
     let full_time = sim.is_over();
@@ -247,10 +341,49 @@ pub fn drive<S: TickSink>(
             }
         }
     }
+    // The other grounds end before the closing statistics, so the report the page shows
+    // after them has every ground final, or marked with no result.
+    if full_time && let Some(matchday) = opts.matchday {
+        let rest = matchday.finish(sim.tick(), paced(opts), crate::matchday::FINISH_WAIT);
+        for message in rest {
+            if let Err(err) = route(message) {
+                return closing_or_fail(err, written).map(|written| Driven { written, full_time });
+            }
+        }
+    }
     if let Err(err) = route(ServerMessage::Stats(stats_message(sim))) {
         return closing_or_fail(err, written).map(|written| Driven { written, full_time });
     }
     Ok(Driven { written, full_time })
+}
+
+/// `true` while the page sets the pace: a ground event that arrives after the match passed
+/// its moment is late then, and never during a skip, which plays at full speed.
+fn paced(opts: &Drive<'_>) -> bool {
+    opts.gate.is_some_and(|gate| !gate.skipping())
+}
+
+/// The page's changes the engine still holds: the engine identifier, the kind's index, and
+/// the page's identifier.
+fn page_pending(sim: &Simulation, ids: &Ids) -> Vec<(ChangeId, usize, String)> {
+    sim.pending_changes()
+        .iter()
+        .filter(|q| q.team == HOME)
+        .filter_map(|q| {
+            ids.page
+                .iter()
+                .find(|(engine, _)| *engine == q.id)
+                .map(|(_, page)| (q.id, q.change.kind().index(), page.clone()))
+        })
+        .collect()
+}
+
+/// The page identifiers of the page changes the engine still holds.
+fn page_ids(sim: &Simulation, ids: &Ids) -> Vec<String> {
+    page_pending(sim, ids)
+        .into_iter()
+        .map(|(_, _, page)| page)
+        .collect()
 }
 
 /// The running totals at the current tick. The shares and expected goals come from
@@ -287,6 +420,8 @@ pub(crate) fn condition_message(sim: &Simulation) -> Condition {
             .iter()
             .map(|p| round_to(p.energy, 3))
             .collect(),
+        subs_used: sim.ledgers().map(|l| l.used),
+        windows_used: sim.ledgers().map(|l| l.windows),
     }
 }
 
@@ -298,6 +433,7 @@ pub(crate) fn condition_message(sim: &Simulation) -> Condition {
 pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
     let config = sim.config();
     let fitness = config.attributes.index("natural_fitness");
+    let resistance = config.attributes.index("injury_resistance");
     let mut index = 0usize;
     sim.teams().map(|team| {
         let editable = page_lineup && index == HOME;
@@ -312,6 +448,7 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
                     shirt: player.shirt,
                     position: player.position.code().to_string(),
                     natural_fitness: fitness.map_or(0, |i| player.attributes.get(i)),
+                    injury_resistance: resistance.map_or(0, |i| player.attributes.get(i)),
                     role_fit: (0..config.tactics.roles.len())
                         .map(|role| {
                             let fit = engine::ai::role_fit(
@@ -365,6 +502,14 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
             roster,
             squad,
             setup,
+            // Both teams' shapes, for the page's line-up sheet.
+            formation: if page_lineup {
+                config.tactics.formations[usize::from(team.tactics.formation)]
+                    .name
+                    .clone()
+            } else {
+                String::new()
+            },
         }
     })
 }
@@ -389,12 +534,21 @@ pub(crate) fn hello_tactics(sim: &Simulation) -> serde_json::Value {
     tactics
 }
 
-/// The rule pack's substitution limits.
+/// The rule pack's substitution limits, with what extra time adds and the stoppages that use
+/// no window.
 pub(crate) fn hello_substitutions(sim: &Simulation) -> SubstitutionRules {
-    let rules = &sim.config().rules.substitutions;
+    let rules = &sim.config().rules;
     SubstitutionRules {
-        limit: rules.limit,
-        windows: rules.windows,
+        limit: rules.substitutions.limit,
+        windows: rules.substitutions.windows,
+        extra_substitutions: rules.extra_time.extra_substitutions,
+        extra_windows: rules.extra_time.extra_windows,
+        windows_exempt: rules
+            .substitutions
+            .windows_exempt
+            .iter()
+            .map(|k| k.code().to_string())
+            .collect(),
     }
 }
 
@@ -454,6 +608,14 @@ impl Ids {
             page: Vec::new(),
             pack_named: false,
         }
+    }
+
+    /// The engine's identifier for the page's change `queue_id`.
+    fn engine_id(&self, queue_id: &str) -> Option<ChangeId> {
+        self.page
+            .iter()
+            .find(|(_, page)| page == queue_id)
+            .map(|(engine, _)| *engine)
     }
 
     /// The identifier a change's verdict carries: the page's, for a change the page queued.
@@ -641,6 +803,7 @@ mod tests {
                 page_changes: None,
                 planned: &[],
                 observe: None,
+                matchday: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -681,6 +844,7 @@ mod tests {
                 page_changes: None,
                 planned: &[],
                 observe: None,
+                matchday: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -823,6 +987,7 @@ mod tests {
             assert_eq!(entry.role_fit.len(), roles);
             assert!(entry.role_fit.iter().all(|&f| f <= 100), "{entry:?}");
             assert!(entry.natural_fitness > 0, "{entry:?}");
+            assert!(entry.injury_resistance > 0, "{entry:?}");
         }
         let setup = teams[HOME]
             .setup
@@ -833,15 +998,35 @@ mod tests {
         assert_eq!(setup.roles.len(), 11);
         assert_eq!(setup.instructions, home.tactics.instructions.to_vec());
         assert!(hello_teams(&sim, false)[HOME].setup.is_none());
+        // Both teams name their shape for the page; a hello with no page names none.
+        let formations = &sim.config().tactics.formations;
+        for (t, team) in sim.teams().iter().enumerate() {
+            assert_eq!(
+                teams[t].formation,
+                formations[usize::from(team.tactics.formation)].name
+            );
+        }
+        assert!(
+            hello_teams(&sim, false)
+                .iter()
+                .all(|t| t.formation.is_empty())
+        );
         let tactics = hello_tactics(&sim);
         assert_eq!(
             tactics["instruction_order"],
             serde_json::json!(engine::data::tactics::INSTRUCTIONS)
         );
+        let subs = hello_substitutions(&sim);
+        let rules = &sim.config().rules;
+        assert_eq!(subs.limit, rules.substitutions.limit);
         assert_eq!(
-            hello_substitutions(&sim).limit,
-            sim.config().rules.substitutions.limit
+            (subs.extra_substitutions, subs.extra_windows),
+            (
+                rules.extra_time.extra_substitutions,
+                rules.extra_time.extra_windows
+            )
         );
+        assert_eq!(subs.windows_exempt, ["half_time"]);
     }
 
     /// Keeps the tick and kind of every stoppage the match opened.
@@ -936,6 +1121,7 @@ mod tests {
                 page_changes: None,
                 planned: &[],
                 observe: None,
+                matchday: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -969,6 +1155,7 @@ mod tests {
                 tick,
                 ..admitted[0].clone()
             },
+            cancelled: false,
         };
         let resume_at = 100;
         let mut changes = vec![
@@ -981,6 +1168,13 @@ mod tests {
             // Admitted after the snapshot: its row is gone, and so is it.
             change("q-120-3", 120, Some(ChangeId { tick: 120, n: 2 })),
         ];
+        // Queued into the engine before the snapshot, then withdrawn by the page: the resumed
+        // match holds it, so it is withdrawn there too.
+        let withdrawn = sim.queue_change(HOME, admitted[1].change.clone());
+        changes.push(PageChange {
+            cancelled: true,
+            ..change("q-0-4", 0, Some(withdrawn))
+        });
         let before = sim.pending_changes().len();
         carry_page_changes(&mut sim, &mut changes, resume_at);
         let kept: Vec<&str> = changes
@@ -990,7 +1184,8 @@ mod tests {
         assert_eq!(kept, ["q-50-0", "q-100-1", "q-90-2"]);
         assert_eq!(changes[0].id, Some(ChangeId { tick: 60, n: 0 }));
         assert!(changes.iter().all(|c| c.id.is_some()));
-        assert_eq!(sim.pending_changes().len(), before + 2);
+        assert_eq!(sim.pending_changes().len(), before - 1 + 2);
+        assert!(sim.pending_changes().iter().all(|q| q.id != withdrawn));
     }
 
     #[test]
@@ -1023,6 +1218,7 @@ mod tests {
                 page_changes: None,
                 planned: &[],
                 observe: None,
+                matchday: None,
             },
             &mut |m: ServerMessage| {
                 messages.push(m);
@@ -1048,6 +1244,170 @@ mod tests {
             .teams[HOME]
             .lineup;
         assert_ne!(home.lineup[10], starters[10], "the substitute took slot 10");
+    }
+
+    #[test]
+    fn a_page_run_carries_the_assistants_picks_and_a_run_without_a_page_none() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let config = MatchConfig::new(1, 90, &loaded.content, [a, b])
+            .unwrap()
+            .with_manager(HOME, engine::Manager::Human);
+        let ticks = config.max_ticks();
+        let run = |inbox: Option<&Inbox>| {
+            let mut sim = Simulation::new(config.clone()).unwrap();
+            let state = MatchState::default();
+            let mut messages = Vec::new();
+            drive(
+                &mut sim,
+                &mut VecSink::default(),
+                &Drive {
+                    ticks,
+                    owner_id: "0123456789abcdef0123456789abcdef",
+                    match_id: "0000000000000001-1",
+                    club_ids: ["club-a", "club-b"],
+                    state: &state,
+                    gate: None,
+                    commentary: &loaded.commentary,
+                    inbox,
+                    page_changes: None,
+                    planned: &[],
+                    observe: None,
+                    matchday: None,
+                },
+                &mut |m: ServerMessage| {
+                    messages.push(m);
+                    Ok(())
+                },
+            )
+            .unwrap();
+            messages
+        };
+        let inbox = Inbox::default();
+        let paged = run(Some(&inbox));
+        let advice: Vec<&protocol::Advice> = paged
+            .iter()
+            .filter_map(|m| match m {
+                ServerMessage::Advice(a) => Some(a),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            advice
+                .iter()
+                .any(|a| a.picks.iter().any(|p| p.code == "sub-fatigue")),
+            "{advice:?}"
+        );
+        // Each message differs from the one before it.
+        assert!(advice.windows(2).all(|w| w[0].picks != w[1].picks));
+        let bare = run(None);
+        assert!(!bare.iter().any(|m| matches!(m, ServerMessage::Advice(_))));
+        // Without the advice, both runs send the same messages in the same order.
+        let without: Vec<&ServerMessage> = paged
+            .iter()
+            .filter(|m| !matches!(m, ServerMessage::Advice(_)))
+            .collect();
+        assert_eq!(without, bare.iter().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn a_withdrawn_change_never_applies_and_a_taken_one_is_applies_now_before_applied() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let config = MatchConfig::new(42, 3, &loaded.content, [a, b])
+            .unwrap()
+            .with_manager(HOME, engine::Manager::Human);
+        let ticks = config.max_ticks();
+        let mut sim = Simulation::new(config).unwrap();
+        let mentality = sim.teams()[HOME].tactics.mentality;
+        let inbox = Inbox::default();
+        for change in page_changes(&sim) {
+            inbox.push(change);
+        }
+        // The engine runs one tick past each drawn tick the test reports.
+        let gate = Gate::new();
+        gate.set_lead_bound(1);
+        gate.set_seen(10);
+        let state = MatchState::default();
+        let mut messages = Vec::new();
+        std::thread::scope(|scope| {
+            let run = scope.spawn(|| {
+                drive(
+                    &mut sim,
+                    &mut VecSink::default(),
+                    &Drive {
+                        ticks,
+                        owner_id: "0123456789abcdef0123456789abcdef",
+                        match_id: "000000000000002a-1",
+                        club_ids: ["club-a", "club-b"],
+                        state: &state,
+                        gate: Some(&gate),
+                        commentary: &loaded.commentary,
+                        inbox: Some(&inbox),
+                        page_changes: None,
+                        planned: &[],
+                        observe: None,
+                        matchday: None,
+                    },
+                    &mut |m: ServerMessage| {
+                        messages.push(m);
+                        Ok(())
+                    },
+                )
+            });
+            while state.tick() < 11 {
+                std::thread::yield_now();
+            }
+            assert_eq!(settled(&state), 11);
+            // The engine queued both on its first tick; the tactics change is withdrawn now.
+            assert_eq!(inbox.cancel("q-7-0"), Ok(()));
+            gate.set_lead_bound(u32::MAX);
+            run.join().unwrap().unwrap();
+        });
+        let verdicts = verdicts(&messages);
+        let ids: Vec<&str> = verdicts
+            .iter()
+            .filter_map(|e| e.change_queue_id.as_deref())
+            .collect();
+        assert_eq!(ids, ["q-7-1"], "the withdrawn change has no verdict");
+        assert_eq!(sim.teams()[HOME].tactics.mentality, mentality);
+        let at = |pred: &dyn Fn(&ServerMessage) -> bool| messages.iter().position(pred);
+        let applies_now = at(&|m| {
+            matches!(m, ServerMessage::ChangeState(n)
+                if n.queue_id == "q-7-1" && n.state == ChangeState::AppliesNow)
+        })
+        .expect("the substitution was applies now");
+        let applied = at(&|m| {
+            matches!(m, ServerMessage::Event(e)
+                if e.change_queue_id.as_deref() == Some("q-7-1")
+                    && e.change_state == Some(ChangeState::Applied))
+        })
+        .expect("the substitution applied");
+        assert!(applies_now < applied, "applies now comes first");
+        let ServerMessage::ChangeState(note) = &messages[applies_now] else {
+            unreachable!();
+        };
+        assert_eq!(Some(note.tick), verdicts[0].change_applied_tick);
+        assert!(
+            !messages
+                .iter()
+                .any(|m| matches!(m, ServerMessage::ChangeState(n) if n.queue_id == "q-7-0")),
+            "a withdrawn change is never applies now"
+        );
+        assert_eq!(
+            inbox.cancel("q-7-1"),
+            Err("change q-7-1 has already applied".into())
+        );
+        let condition = messages
+            .iter()
+            .rev()
+            .find_map(|m| match m {
+                ServerMessage::Condition(c) => Some(c),
+                _ => None,
+            })
+            .expect("energy is sent every second");
+        assert_eq!(condition.subs_used[0], 1);
+        assert_eq!(condition.windows_used[0], 1);
     }
 
     /// Waits until the producer stops moving and returns the tick it stopped on.
@@ -1093,6 +1453,7 @@ mod tests {
                         page_changes: None,
                         planned: &[],
                         observe: None,
+                        matchday: None,
                     },
                     &mut |_: ServerMessage| Ok(()),
                 )
@@ -1129,7 +1490,10 @@ mod tests {
         let ticks = config.max_ticks();
         let mut sim = Simulation::new(config).unwrap();
         let changes = page_changes(&sim);
+        // Paused from the outset, the producer runs flat out to tick 2_000 and holds there.
         let gate = Gate::new();
+        gate.set_fast_forward(2_000);
+        gate.set_running(false);
         let inbox = Inbox::default();
         let state = MatchState::default();
         let mut messages = Vec::new();
@@ -1151,6 +1515,7 @@ mod tests {
                         page_changes: None,
                         planned: &[],
                         observe: None,
+                        matchday: None,
                     },
                     &mut |m: ServerMessage| {
                         messages.push(m);
@@ -1161,7 +1526,6 @@ mod tests {
             while state.tick() < 2_000 {
                 std::thread::yield_now();
             }
-            gate.set_running(false);
             // The producer finishes the tick it is on, then waits at the gate.
             let mut paused_at = state.tick();
             loop {

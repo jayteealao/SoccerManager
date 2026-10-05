@@ -52,7 +52,7 @@ The engine reads the rule pack from `rules/default.json` in the content folder. 
 4. Run a match with `--content-dir short-halves`:
 
    ```bash
-   target/release/engine-cli serve --seed 42 --web web --content-dir short-halves
+   target/release/engine-cli serve --seed 42 --web viewer/dist --content-dir short-halves
    ```
 
 The rule pack decides how long each half lasts, how many substitutions each team makes, at which stoppages a queued change applies, how much added time each stoppage gives, and how few players a team can have.

@@ -20,7 +20,7 @@ fn repo() -> PathBuf {
 }
 
 fn v4_file() -> PathBuf {
-    repo().join("web/tests/data/one-minute-v4.smfx")
+    repo().join("viewer/tests/data/one-minute-v4.smfx")
 }
 
 /// The folder of this test run's prepared builds, with the fake compiled once.
@@ -202,7 +202,7 @@ fn a_build_that_fails_in_any_way_is_incomplete_and_never_no_difference() {
 fn a_version_three_file_is_refused_before_any_build_runs() {
     let a = fake("marker-a");
     let b = fake("marker-b");
-    let v3 = repo().join("web/tests/data/one-minute.smfx");
+    let v3 = repo().join("viewer/tests/data/one-minute.smfx");
     let out = bisect(&v3, &a, &b, &[]);
     let err = stderr(&out);
     assert_eq!(out.status.code(), Some(1), "{err}");

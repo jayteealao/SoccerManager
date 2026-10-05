@@ -1,0 +1,1058 @@
+[
+  {
+    "fg": "--ink",
+    "bg": "--page",
+    "kind": "text",
+    "where": "primary text"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--page",
+    "kind": "text",
+    "where": "secondary text, key-value keys"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--well",
+    "kind": "text",
+    "where": "primary text"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--well",
+    "kind": "text",
+    "where": "secondary text, key-value keys"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "primary text"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "secondary text, key-value keys"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "primary text"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "secondary text, key-value keys"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground-3",
+    "kind": "text",
+    "where": "primary text"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--ground-3",
+    "kind": "text",
+    "where": "secondary text, key-value keys"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "primary text"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "secondary text, key-value keys"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--page",
+    "kind": "text",
+    "where": "labels, section notes, step words"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "labels, section notes, step words"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "labels, section notes, step words"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground-3",
+    "kind": "text",
+    "where": "labels, section notes, step words"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "labels, section notes, step words"
+  },
+  {
+    "fg": "--band-ink",
+    "bg": "--navy-700",
+    "kind": "text",
+    "where": "header title, date, fact strip values"
+  },
+  {
+    "fg": "--navy-sub",
+    "bg": "--navy-700",
+    "kind": "text",
+    "where": "header sub-line, date sub-line, fact strip labels"
+  },
+  {
+    "fg": "--band-ink",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "header title, date, fact strip values"
+  },
+  {
+    "fg": "--navy-sub",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "header sub-line, date sub-line, fact strip labels"
+  },
+  {
+    "fg": "--band-ink",
+    "bg": "--navy-500",
+    "kind": "text",
+    "where": "header title, date, fact strip values"
+  },
+  {
+    "fg": "--navy-sub",
+    "bg": "--navy-500",
+    "kind": "text",
+    "where": "header sub-line, date sub-line, fact strip labels"
+  },
+  {
+    "fg": "--band-arrow",
+    "bg": "--navy-700",
+    "kind": "boundary",
+    "where": "header club switcher glyph (stub)"
+  },
+  {
+    "fg": "--cyan-ink",
+    "bg": "--cyan",
+    "kind": "text",
+    "where": "action block label, active tab, tags"
+  },
+  {
+    "fg": "--cyan-ink",
+    "bg": "--cyan",
+    "kind": "boundary",
+    "where": "action block focus ring (inside the block)"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "section labels, current rail section"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "section labels, current rail section"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "section labels, current rail section"
+  },
+  {
+    "fg": "--tab-ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "sub-navigation tabs"
+  },
+  {
+    "fg": "--rail-glyph",
+    "bg": "--rail",
+    "kind": "boundary",
+    "where": "rail glyphs"
+  },
+  {
+    "fg": "--header-icon",
+    "bg": "--ground",
+    "kind": "boundary",
+    "where": "header icons (stub)"
+  },
+  {
+    "fg": "--help-ink",
+    "bg": "--help-ground",
+    "kind": "text",
+    "where": "help mark (stub)"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "error and refusal words, bad values"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "error and refusal words, bad values"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "error and refusal words, bad values"
+  },
+  {
+    "fg": "--good",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "state numerals and words"
+  },
+  {
+    "fg": "--good",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "state numerals and words"
+  },
+  {
+    "fg": "--mid",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "state numerals and words"
+  },
+  {
+    "fg": "--mid",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "state numerals and words"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "state numerals and words"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "state numerals and words"
+  },
+  {
+    "fg": "--good",
+    "bg": "--ground",
+    "kind": "boundary",
+    "where": "step list done mark and bar"
+  },
+  {
+    "fg": "--on-good",
+    "bg": "--good",
+    "kind": "text",
+    "where": "notice tag"
+  },
+  {
+    "fg": "--on-mid",
+    "bg": "--mid",
+    "kind": "text",
+    "where": "notice tag"
+  },
+  {
+    "fg": "--on-warn",
+    "bg": "--warn",
+    "kind": "text",
+    "where": "notice tag"
+  },
+  {
+    "fg": "--on-bad",
+    "bg": "--bad",
+    "kind": "text",
+    "where": "notice tag"
+  },
+  {
+    "fg": "--on-neutral",
+    "bg": "--notice-neutral",
+    "kind": "text",
+    "where": "notice tag"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--page",
+    "kind": "boundary",
+    "where": "2 px focus ring"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground",
+    "kind": "boundary",
+    "where": "2 px focus ring"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground-2",
+    "kind": "boundary",
+    "where": "2 px focus ring"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground-3",
+    "kind": "boundary",
+    "where": "2 px focus ring"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--rail",
+    "kind": "boundary",
+    "where": "2 px focus ring"
+  },
+  {
+    "fg": "--ink-4",
+    "bg": "--page",
+    "kind": "inert",
+    "where": "LATER labels and inactive stub text"
+  },
+  {
+    "fg": "--ink-4",
+    "bg": "--ground",
+    "kind": "inert",
+    "where": "LATER labels and inactive stub text"
+  },
+  {
+    "fg": "--ink-4",
+    "bg": "--ground-2",
+    "kind": "inert",
+    "where": "LATER labels and inactive stub text"
+  },
+  {
+    "fg": "--ink-4",
+    "bg": "--ground-3",
+    "kind": "inert",
+    "where": "LATER labels and inactive stub text"
+  },
+  {
+    "fg": "--band-ink",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "score strip names, score and fact values"
+  },
+  {
+    "fg": "--navy-sub",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "score strip scorers and fact labels"
+  },
+  {
+    "fg": "--cyan-ink",
+    "bg": "--cyan",
+    "kind": "text",
+    "where": "strip clock tag, active speed part, goal banner"
+  },
+  {
+    "fg": "--on-bad",
+    "bg": "--bad",
+    "kind": "text",
+    "where": "strip ENGINE STOPPED tag"
+  },
+  {
+    "fg": "--on-mid",
+    "bg": "--mid",
+    "kind": "text",
+    "where": "strip SETUP tag"
+  },
+  {
+    "fg": "--on-warn",
+    "bg": "--warn",
+    "kind": "text",
+    "where": "strip RECONNECTING tag"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "commentary rows and minutes"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "statistics labels"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "timeline minute labels, playback note, feed empty state"
+  },
+  {
+    "fg": "--seg-ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "speed segment parts"
+  },
+  {
+    "fg": "--control-edge",
+    "bg": "--ground",
+    "kind": "boundary",
+    "where": "playback icon button edge"
+  },
+  {
+    "fg": "--control-ink",
+    "bg": "--ground",
+    "kind": "boundary",
+    "where": "playback icon button glyph"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--button-dark",
+    "kind": "text",
+    "where": "Next stop label"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground",
+    "kind": "boundary",
+    "where": "timeline playhead"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--bar-track",
+    "kind": "boundary",
+    "where": "timeline playhead on its track"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--pitch-deep",
+    "kind": "text",
+    "where": "loading title over the pitch box"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--pitch-deep",
+    "kind": "text",
+    "where": "loading note and step words over the pitch box"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "error and first-run panel text"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "error panel word"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "first-run panel word"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--rail",
+    "kind": "large-text",
+    "where": "error and first-run panel title"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "engine path in the first-run panel"
+  },
+  {
+    "fg": "--pitch-ink",
+    "bg": "--pitch-select",
+    "kind": "text",
+    "where": "Tactics: the formation and mentality selects on the pitch panel"
+  },
+  {
+    "fg": "--pitch-ink",
+    "bg": "--navy-700",
+    "kind": "text",
+    "where": "Tactics: the in-possession label over the pitch"
+  },
+  {
+    "fg": "--pitch-ink",
+    "bg": "--pitch-tag",
+    "kind": "text",
+    "where": "Tactics: the out-of-possession label over the pitch"
+  },
+  {
+    "fg": "--pitch-ink",
+    "bg": "--pitch-card",
+    "kind": "text",
+    "where": "Tactics: the TACTIC word on its bar, and card headings on the pitch panel"
+  },
+  {
+    "fg": "--pitch-card-ink",
+    "bg": "--pitch-card",
+    "kind": "text",
+    "where": "Tactics: the base-shape line on the tactic bar, card text and instruction names"
+  },
+  {
+    "fg": "--select-ink",
+    "bg": "--select-ground",
+    "kind": "text",
+    "where": "Tactics: instruction, role and picker selects"
+  },
+  {
+    "fg": "--tactic-marker-ink",
+    "bg": "--tactic-marker",
+    "kind": "text",
+    "where": "Tactics: shirt number in a slot marker"
+  },
+  {
+    "fg": "--keeper-home-ink",
+    "bg": "--keeper-home",
+    "kind": "text",
+    "where": "Tactics: shirt number in the goalkeeper marker"
+  },
+  {
+    "fg": "--pitch-ink",
+    "bg": "--chip",
+    "kind": "text",
+    "where": "Tactics: player name under a slot marker"
+  },
+  {
+    "fg": "--duty-attack",
+    "bg": "--chip",
+    "kind": "text",
+    "where": "Tactics: attack role tag under a slot marker"
+  },
+  {
+    "fg": "--duty-support",
+    "bg": "--chip",
+    "kind": "text",
+    "where": "Tactics: support role tag under a slot marker"
+  },
+  {
+    "fg": "--duty-defend",
+    "bg": "--chip",
+    "kind": "text",
+    "where": "Tactics: defend role tag under a slot marker"
+  },
+  {
+    "fg": "--pitch-line",
+    "bg": "--pitch",
+    "kind": "boundary",
+    "where": "Tactics: the focus ring and the picked ring on a slot marker"
+  },
+  {
+    "fg": "--on-slot",
+    "bg": "--good",
+    "kind": "text",
+    "where": "Squad list: the slot chip of a player in the eleven"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Squad list: the bench chip"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Squad list: the clash chip and named twice"
+  },
+  {
+    "fg": "--position-chip-ink",
+    "bg": "--position-chip",
+    "kind": "text",
+    "where": "Squad list: position chips"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Squad list: player names"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Squad list: group headers"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Squad list: column heads, grey numbers and notes"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--picked-ground",
+    "kind": "text",
+    "where": "Squad list: the picked row and the picked hint"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--picked-ground",
+    "kind": "text",
+    "where": "Squad list: the grey words of the picked hint"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--picked-ground",
+    "kind": "boundary",
+    "where": "Squad list: the picked row ring"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--queue-ground",
+    "kind": "text",
+    "where": "Queued changes: change words"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--queue-ground",
+    "kind": "text",
+    "where": "Queued changes: the waiting note"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--queue-ground",
+    "kind": "text",
+    "where": "Queued changes: the reason under a change"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--queue-ground",
+    "kind": "text",
+    "where": "Queued changes: the section label"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--queue-ground",
+    "kind": "boundary",
+    "where": "Queued changes: the block edge"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "Queued changes: the Queued tag"
+  },
+  {
+    "fg": "--cyan-ink",
+    "bg": "--cyan",
+    "kind": "text",
+    "where": "Queued changes: the Applies now tag and Queue substitution"
+  },
+  {
+    "fg": "--on-bad",
+    "bg": "--bad",
+    "kind": "text",
+    "where": "Queued changes: the Rejected tag, and NOT READY"
+  },
+  {
+    "fg": "--on-good",
+    "bg": "--good",
+    "kind": "text",
+    "where": "Tactics: the READY tag"
+  },
+  {
+    "fg": "--ghost-ink",
+    "bg": "--queue-ground",
+    "kind": "text",
+    "where": "Queued changes: Edit, Cancel and Dismiss"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "Tactics: the grasp table rows"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground-3",
+    "kind": "text",
+    "where": "Tactics: the grasp table rows"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--select-ground",
+    "kind": "text",
+    "where": "Substitution picker: the chosen player in each select"
+  },
+  {
+    "fg": "--band-ink",
+    "bg": "--sheet-head",
+    "kind": "text",
+    "where": "Pre-match: the team sheet heads"
+  },
+  {
+    "fg": "--navy-sub",
+    "bg": "--sheet-head",
+    "kind": "text",
+    "where": "Pre-match: the formation beside each team name"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Pre-match: the starters' names"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Pre-match: positions, column heads and the substitutes label"
+  },
+  {
+    "fg": "--good",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Pre-match: the risk word Low and the rule-pack ticks"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Pre-match: the risk word Raised"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Pre-match: the risk word High"
+  },
+  {
+    "fg": "--read-ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Pre-match: the rule-pack rows"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Pre-match: the status line"
+  },
+  {
+    "fg": "--pitch-line",
+    "bg": "--pitch-stripe",
+    "kind": "boundary",
+    "where": "Pre-match: the dot ring on the light stripe"
+  },
+  {
+    "fg": "--pitch-line",
+    "bg": "--pitch-stripe-2",
+    "kind": "boundary",
+    "where": "Pre-match: the dot ring on the dark stripe"
+  },
+  {
+    "fg": "--ball-ring",
+    "bg": "--pitch-stripe",
+    "kind": "boundary",
+    "where": "Pre-match: the other team's dot ring on the light stripe"
+  },
+  {
+    "fg": "--ball-ring",
+    "bg": "--pitch-stripe-2",
+    "kind": "boundary",
+    "where": "Pre-match: the other team's dot ring on the dark stripe"
+  },
+  {
+    "fg": "--keeper-home-ink",
+    "bg": "--keeper-home",
+    "kind": "text",
+    "where": "Pre-match: our keeper's shirt number"
+  },
+  {
+    "fg": "--keeper-away-ink",
+    "bg": "--keeper-away",
+    "kind": "text",
+    "where": "Pre-match: their keeper's shirt number"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--proposal-ground",
+    "kind": "text",
+    "where": "Touchline: a pick's heading"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--proposal-ground",
+    "kind": "text",
+    "where": "Touchline: a pick's reason"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--proposal-ground",
+    "kind": "text",
+    "where": "Touchline: Queued on an accepted pick"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Touchline: the empty proposals note and the player-state note"
+  },
+  {
+    "fg": "--good",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "Touchline: the band word Fresh on an odd row"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "Touchline: the band word Tiring on an odd row"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "Touchline: the band word Exhausted on an odd row"
+  },
+  {
+    "fg": "--good",
+    "bg": "--ground-3",
+    "kind": "text",
+    "where": "Touchline: the band word Fresh on an even row"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--ground-3",
+    "kind": "text",
+    "where": "Touchline: the band word Tiring on an even row"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--ground-3",
+    "kind": "text",
+    "where": "Touchline: the band word Exhausted on an even row"
+  },
+  {
+    "fg": "--ghost-ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "Pre-match: Change on Tactics"
+  },
+  {
+    "fg": "--cyan-ink",
+    "bg": "--cyan",
+    "kind": "text",
+    "where": "Touchline: Accept on a pick"
+  },
+  {
+    "fg": "--good",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "handshake log: a check that passed and the hello"
+  },
+  {
+    "fg": "--strip-good",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "handshake fact strip: a check that passed"
+  },
+  {
+    "fg": "--strip-bad",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "handshake fact strip: a check that failed, a socket error"
+  },
+  {
+    "fg": "--strip-warn",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "resume screen fact strip: Cannot resume"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--rail",
+    "kind": "text",
+    "where": "resume screen alert: the Cannot resume word"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--not-live-ground",
+    "kind": "text",
+    "where": "skip report: the NOT LIVE tag on a moment after the skip"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--page",
+    "kind": "text",
+    "where": "skip report and replay: SKIPPED AT and NOT WATCHED LIVE on the timeline"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "skip decision: an option's title"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "skip decision: an option's sub-line"
+  },
+  {
+    "fg": "--cyan-ink",
+    "bg": "--cyan",
+    "kind": "text",
+    "where": "skip decision: the selected option and Confirm"
+  },
+  {
+    "fg": "--read-ink",
+    "bg": "--page",
+    "kind": "text",
+    "where": "skip decision: what the engine does, what happens next"
+  },
+  {
+    "fg": "--read-ink",
+    "bg": "--proposal-ground",
+    "kind": "text",
+    "where": "skip decision: what you give up"
+  },
+  {
+    "fg": "--band-ink",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "skip strip: the skip cell's clock and minute"
+  },
+  {
+    "fg": "--navy-sub",
+    "bg": "--navy-600",
+    "kind": "text",
+    "where": "skip strip: Scores hidden until full time, Skipped at"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground-2",
+    "kind": "boundary",
+    "where": "skip decision: the ring of an option not chosen"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground-2",
+    "kind": "boundary",
+    "where": "skip decision: the focus ring on an option"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--page",
+    "kind": "boundary",
+    "where": "skip decision: the selected option's edge on the page"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--hatch-2",
+    "kind": "boundary",
+    "where": "skip timeline: the watched part against the hatch"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--new-goal-ground",
+    "kind": "text",
+    "where": "other grounds: a new goal's row, its minute and its words"
+  },
+  {
+    "fg": "--cyan-ink",
+    "bg": "--cyan",
+    "kind": "text",
+    "where": "other grounds: the GOAL tag"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--new-goal-ground",
+    "kind": "boundary",
+    "where": "other grounds: the new goal's outline inside its block"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--ground",
+    "kind": "boundary",
+    "where": "other grounds: the new goal's outline on the column"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "other grounds: a late goal's row"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground-2",
+    "kind": "text",
+    "where": "other grounds: a late goal's words, shown at your minute"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--not-live-ground",
+    "kind": "text",
+    "where": "other grounds: the GOAL · LATE tag"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "other grounds: the ! mark and Result unavailable"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "other grounds: a minute, KO, a score before kick-off, the fault's words"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--ground",
+    "kind": "text",
+    "where": "other grounds: club names, a score, FT"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--well",
+    "kind": "text",
+    "where": "In-match menu: the Match paused header"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--picked-ground",
+    "kind": "text",
+    "where": "Licences and about: the selected package used for"
+  },
+  {
+    "fg": "--toggle-ink",
+    "bg": "--toggle-ground",
+    "kind": "text",
+    "where": "Settings: a segmented option not chosen"
+  },
+  {
+    "fg": "--star",
+    "bg": "--ground",
+    "kind": "boundary",
+    "where": "Match setup: a strength star"
+  },
+  {
+    "fg": "--band-ink",
+    "bg": "--navy-900",
+    "kind": "text",
+    "where": "the full-time tag under the score and on the pitch"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--picked-ground",
+    "kind": "text",
+    "where": "Match setup: the club name under the pointer on the picked row"
+  }
+]

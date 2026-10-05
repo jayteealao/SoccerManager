@@ -1,7 +1,7 @@
 name: PR Checks
 
-# The light checks for every pull request. Heavy runs (the ignored slow tests and the
-# calibrate suite) stay on the owner's machine or the build server.
+# The light checks for every pull request. Heavy runs (the ignored slow tests, the
+# calibrate suite and coverage) stay on the owner's machine or the build server.
 
 on:
   pull_request:
@@ -45,29 +45,67 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
       - name: Fetch every crate
         run: cargo fetch --locked
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: e2e/package.json
       - name: Engine tests (ignored slow tests excluded)
         run: cargo test --workspace --locked
-      - name: Page tests
-        run: node --test "web/tests/*.test.mjs"
 
-  coverage:
+  # A match saved by the previous release finishes on that release's engine, built from its
+  # tag (packaging/previous-engine.json), with the result the previous build reaches.
+  previous-engine:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
-        with:
-          components: llvm-tools-preview
       - name: Fetch every crate
         run: cargo fetch --locked
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+      - name: Fetch the previous release's tag
+        run: |
+          echo "SM_PREVIOUS_CACHE=$RUNNER_TEMP/previous-engine" >> "$GITHUB_ENV"
+          tag=$(jq -r .tag packaging/previous-engine.json)
+          git fetch --no-tags --depth=1 origin "refs/tags/$tag:refs/tags/$tag"
+      - name: Restore the previous engine
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          tool: cargo-llvm-cov
-      - name: coverage
-        run: cargo llvm-cov --workspace --locked --fail-under-lines 78
+          path: ${{ runner.temp }}/previous-engine/previous
+          key: previous-engine-notices-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml', 'viewer/scripts/notices.mjs', 'packaging/notices/clarify.json') }}
+      - name: Build the previous engine from its tag
+        run: sh packaging/unix/previous-engine.sh
+      - name: A previous release's save finishes on its engine
+        run: |
+          export SM_PREVIOUS_ENGINE_PATH="$SM_PREVIOUS_CACHE/previous/engine-cli"
+          cargo test --locked -p engine-cli --test previous_engine -- --ignored
+
+  viewer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: viewer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: viewer/package.json
+      # The build writes the open-source notices, which read the engine's crates from
+      # `cargo metadata`; every crate is fetched first.
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        with:
+          cache: false
+      - name: Fetch every crate
+        working-directory: .
+        run: cargo fetch --locked
+      - name: Install
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: The notices list every shipped package with an allowed licence and its text
+        run: npm run notices:verify -- dist/notices.json
+      - name: Logic and component tests
+        run: npx vitest run
+      - name: Token scan
+        run: npm run scan
+      - name: Contrast check
+        run: npm run contrast
 
   commit-convention:
     runs-on: ubuntu-latest
@@ -102,6 +140,9 @@ jobs:
           node-version-file: e2e/package.json
       - name: npm audit (e2e)
         working-directory: e2e
+        run: npm audit --audit-level=high
+      - name: npm audit (viewer)
+        working-directory: viewer
         run: npm audit --audit-level=high
 
   gitleaks:
@@ -216,3 +257,5 @@ jobs:
         run: ./target/release/engine-cli guard --base "$BASE" --head "$HEAD"
       - name: Replay gate
         run: ./target/release/engine-cli gate
+      - name: The fast-model fit matches the golden results
+        run: ./target/release/engine-cli fast-model stale

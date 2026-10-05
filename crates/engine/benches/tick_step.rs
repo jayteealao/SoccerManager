@@ -4,6 +4,8 @@ use std::path::Path;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use engine::data::{TEAM_A_FILE, TEAM_B_FILE};
+use engine::math::DVec2;
+use engine::modules::SteeringModule;
 use engine::{Content, ContentDir, MatchConfig, Simulation};
 use std::hint::black_box;
 
@@ -46,14 +48,21 @@ fn tick_step(c: &mut Criterion) {
 }
 
 fn steering_pass(c: &mut Criterion) {
-    let config = config();
-    let tuning = config.tuning.clone();
-    let mut players = config.players.clone();
-    let mut scratch = Vec::new();
+    // The steering module the loop resolves, through the read-only view, as the movement pass
+    // calls it: every active player's next velocity.
+    let mut sim = Simulation::new(config()).unwrap();
+    for _ in 0..500 {
+        sim.step();
+    }
+    let steering: &dyn SteeringModule = &engine::steering::SteeringV1;
     c.bench_function("steering_pass_22", |b| {
         b.iter(|| {
-            engine::steering::step_all(&mut players, &mut scratch, &tuning);
-            black_box(players[0].pos)
+            let view = sim.view();
+            let mut sum = DVec2::ZERO;
+            for i in 0..view.players().len() {
+                sum += steering.next_velocity(&view, i);
+            }
+            black_box(sum)
         })
     });
 }

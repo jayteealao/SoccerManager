@@ -1,0 +1,237 @@
+//! A bad slot file refuses `simulate` at start-up: for an unknown module, an unbuilt
+//! version, an empty module name, and a required slot switched off, the program exits 1 and
+//! names the slot, the bad value, and the valid names. An unknown skin refuses `serve` and
+//! `launch` the same way, before any port or page address is printed.
+
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+fn repo() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
+/// Runs `simulate` on a copy of the shipped content whose slot file is `fixture`, and
+/// returns the exit code and stderr.
+fn simulate_with(fixture: &str) -> (Option<i32>, String) {
+    let (code, _, stderr) = run_with(
+        fixture,
+        &[
+            "simulate",
+            "--seed",
+            "1",
+            "--minutes",
+            "1",
+            "--no-snapshot",
+            "--ticks-out",
+            "match.ticks",
+        ],
+    );
+    (code, stderr)
+}
+
+/// Runs `engine-cli --content-dir <copy> <args>` from a scratch folder, on a copy of the
+/// shipped content whose slot file is `fixture`, and returns the exit code, stdout, and
+/// stderr.
+fn run_with(fixture: &str, args: &[&str]) -> (Option<i32>, String, String) {
+    let root = std::env::temp_dir().join(format!(
+        "engine-cli-slots-{}-{}-{}",
+        std::process::id(),
+        fixture.trim_end_matches(".json"),
+        args[0]
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    let content = root.join("content");
+    copy_tree(&repo().join("content"), &content);
+    std::fs::copy(
+        repo()
+            .join("crates/engine/tests/fixtures/slots")
+            .join(fixture),
+        content.join("slots.json"),
+    )
+    .unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_engine-cli"))
+        .env("SM_DATA_DIR", root.join("data"))
+        .env_remove("SM_CONTENT_DIR")
+        .current_dir(&root)
+        .arg("--content-dir")
+        .arg(&content)
+        .args(args)
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(&root);
+    (
+        out.status.code(),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+fn assert_refused(fixture: &str, slot: &str, value: &str, valid: &str) {
+    let (code, stderr) = simulate_with(fixture);
+    assert_eq!(code, Some(1), "{fixture}: stderr: {stderr}");
+    let line = stderr
+        .lines()
+        .find(|l| l.starts_with("error: slot configuration refused"))
+        .unwrap_or_else(|| panic!("{fixture}: no refusal line in stderr: {stderr}"));
+    assert!(line.contains(&format!("slot {slot}:")), "{line}");
+    assert!(line.contains(value), "{line}");
+    // A test build that unifies the engine's test features also lists the test-only
+    // modules, so the valid list is matched by its first and last names.
+    let listed = line.rsplit_once("; valid: ").map_or("", |(_, v)| v);
+    let (first, last) = valid.split_once(" .. ").unwrap_or((valid, valid));
+    assert!(
+        listed.starts_with(first) && listed.ends_with(last),
+        "{line}"
+    );
+    assert!(!stderr.contains("match.finished"), "{stderr}");
+}
+
+#[test]
+fn an_unknown_module_refuses_start_up() {
+    assert_refused(
+        "unknown-module.json",
+        "engine.offside",
+        "module \"ofside\" is not registered",
+        "offside@1 .. off",
+    );
+}
+
+#[test]
+fn an_unbuilt_version_refuses_start_up() {
+    assert_refused(
+        "unbuilt-version.json",
+        "engine.fouls",
+        "fouls version 2 is not built",
+        "fouls@1 .. off",
+    );
+}
+
+#[test]
+fn an_empty_module_refuses_start_up() {
+    assert_refused(
+        "empty-slot.json",
+        "engine.fouls",
+        "the module name \"\" is empty",
+        "fouls@1 .. off",
+    );
+}
+
+#[test]
+fn a_clock_switched_off_refuses_start_up() {
+    // A test build that unifies the engine's test features lists `clock-faulty@1` after
+    // `clock@1`, so only the first name is pinned.
+    assert_refused(
+        "clock-off.json",
+        "engine.clock",
+        "off is not allowed: the slot is required",
+        "clock@1 .. ",
+    );
+}
+
+#[test]
+fn restarts_switched_off_refuses_start_up() {
+    assert_refused(
+        "restarts-off.json",
+        "engine.restarts",
+        "off is not allowed: the slot is required",
+        "restarts@1",
+    );
+}
+
+#[test]
+fn a_required_slot_switched_off_refuses_start_up() {
+    assert_refused(
+        "steering-off.json",
+        "engine.steering",
+        "off is not allowed: the slot is required",
+        "steering@1",
+    );
+}
+
+#[test]
+fn ball_switched_off_refuses_start_up() {
+    assert_refused(
+        "ball-off.json",
+        "engine.ball",
+        "off is not allowed: the slot is required",
+        "ball@1",
+    );
+}
+
+#[test]
+fn possession_switched_off_refuses_start_up() {
+    // A test build that unifies the engine's test features lists `possession-faulty@1`
+    // after `possession@1`, so only the first name is pinned.
+    assert_refused(
+        "possession-off.json",
+        "engine.possession",
+        "off is not allowed: the slot is required",
+        "possession@1 .. ",
+    );
+}
+
+#[test]
+fn decision_switched_off_refuses_start_up() {
+    assert_refused(
+        "decision-off.json",
+        "engine.decision",
+        "off is not allowed: the slot is required",
+        "decision@1",
+    );
+}
+
+/// `serve` with an unknown skin refuses before it binds a port.
+#[test]
+fn an_unknown_skin_refuses_serve() {
+    let (code, stdout, stderr) = run_with("skin-unknown.json", &["serve", "--seed", "1"]);
+    assert_skin_refused(code, &stdout, &stderr);
+}
+
+/// `launch` with an unknown skin refuses before it serves a page.
+#[test]
+fn an_unknown_skin_refuses_launch() {
+    // A temporary page folder: the refusal comes before any page is served.
+    let page = std::env::temp_dir().join(format!("engine-cli-slot-page-{}", std::process::id()));
+    std::fs::create_dir_all(&page).unwrap();
+    std::fs::write(
+        page.join("index.html"),
+        "<!doctype html><title>page</title>
+",
+    )
+    .unwrap();
+    let web = page.to_str().unwrap();
+    let (code, stdout, stderr) = run_with(
+        "skin-unknown.json",
+        &["launch", "--seed", "1", "--web", web],
+    );
+    let _ = std::fs::remove_dir_all(&page);
+    assert_skin_refused(code, &stdout, &stderr);
+}
+
+fn assert_skin_refused(code: Option<i32>, stdout: &str, stderr: &str) {
+    assert_eq!(code, Some(1), "stderr: {stderr}");
+    assert!(stdout.trim().is_empty(), "nothing is served: {stdout}");
+    let line = stderr
+        .lines()
+        .find(|l| l.starts_with("error: slot configuration refused"))
+        .unwrap_or_else(|| panic!("no refusal line in stderr: {stderr}"));
+    assert!(line.contains("slot viewer.skin:"), "{line}");
+    assert!(line.contains("\"nope\""), "{line}");
+    assert!(
+        line.ends_with("; valid: broadcast-blue@1, interim-light@1, off"),
+        "{line}"
+    );
+}

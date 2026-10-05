@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0-dev"
+version = "0.2.0-beta.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.87"
@@ -29,6 +29,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 sha2 = "0.10"
 garde = { version = "0.23", default-features = false, features = ["derive"] }
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_System_ProcessStatus"] }
+libc = "0.2"
 criterion = "0.8"
 tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
 boon = "0.6.1"
@@ -37,6 +38,8 @@ rhai = { version = "1.26", features = ["sync"] }
 # stay off here, because a member that inherits a workspace dependency cannot turn them off;
 # the default "arch" feature would select hardware sqrt and fma paths.
 libm = { version = "0.2.16", default-features = false }
+# Compile-fail tests: the module contract refuses a module that writes match state.
+trybuild = "1.0.119"
 
 [profile.release]
 debug = 1
@@ -45,4 +48,21 @@ debug = 1
 # the gate tests fast in debug builds; it cannot change a result, because the hash is not
 # part of play.
 [profile.dev.package.sha2]
+opt-level = 3
+
+# Optimised workspace crates keep the full-match tests inside the CI runner's time limit;
+# debug assertions and overflow checks stay on.
+[profile.dev.package.engine]
+opt-level = 3
+
+[profile.dev.package.engine-cli]
+opt-level = 3
+
+[profile.dev.package.stream]
+opt-level = 3
+
+[profile.dev.package.script]
+opt-level = 3
+
+[profile.dev.package.protocol]
 opt-level = 3

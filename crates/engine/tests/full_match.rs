@@ -14,7 +14,10 @@ use engine::{EngineEventKind, FileSink, Simulation, read_ticks, ticks_for_minute
 #[test]
 fn ninety_minutes_play_to_full_time_under_the_laws() {
     let path = common::temp_path("full");
-    let config = common::full_match();
+    let content = common::content();
+    let [a, b] = common::default_teams(&content);
+    // Seed 1: a match whose foul counts sit inside the sanity band for both sides.
+    let config = engine::MatchConfig::new(1, 90, &content, [&a, &b]).unwrap();
     let most = config.max_ticks();
     assert_eq!(most, 360_000);
     let mut sim = Simulation::new(config.clone()).unwrap();

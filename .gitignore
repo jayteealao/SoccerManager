@@ -1,10 +1,11 @@
 target/
 .scratch/
+__pycache__/
 *.ticks
 *.smfx
 
 # The one-minute replay file the page tests read, written by `engine-cli record`.
-!web/tests/data/*.smfx
+!viewer/tests/data/*.smfx
 
 # The browser suite: its install and its output.
 e2e/node_modules/
@@ -32,3 +33,18 @@ dist/
 /docs/research/
 /docs/design/realism/
 /%SystemDrive%/
+
+# The viewer project: its install and its build.
+viewer/node_modules/
+viewer/dist/
+viewer/dist-release/
+
+# Local research files, kept out of the repository by path.
+.codex-remote-attachments/
+/CUsersjayteAppDataLocalTempclaudeC--Users-jayte-Documents-dev-SoccerManagerca355989-7839-4d7a-860c-1eaec2c1784cscratchpaddocs.diff
+docs/how-to/player-research-fixes.md
+docs/how-to/research-player-attributes.md
+docs/how-to/world-database.md
+/downloads/
+/reports/
+/tools/

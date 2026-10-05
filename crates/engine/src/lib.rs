@@ -14,11 +14,14 @@ pub mod error;
 pub mod fatigue;
 pub mod flags;
 pub mod gate;
+pub mod hook_slots;
 pub mod math;
+pub mod modules;
 pub mod observe;
 pub mod pitch;
 pub mod player;
 pub mod plugin;
+pub mod possession;
 pub mod record;
 pub mod rng;
 pub mod rules;
@@ -51,13 +54,13 @@ pub use rules::{DeadBall, Stoppage};
 pub use sim::{
     DecidedBy, EngineEvent, EngineEventKind, EventDetail, MatchConfig, Simulation, Summary,
 };
-pub use snapshot::{Snapshot, SnapshotSink};
+pub use snapshot::{Snapshot, SnapshotIdentity, SnapshotSink};
 pub use tactics::change::{
     AppliedChange, Change, ChangeId, ChangeKind, RejectReason, SubLedger, Unapplied,
 };
 pub use tactics::{RoleDuty, Tactics, TacticsPatch};
 pub use tuning::Tuning;
-pub use validate::{Validator, Violation};
+pub use validate::{StreamRules, Validator, Violation};
 
 /// Ticks per simulated second.
 pub const TICKS_PER_SECOND: u32 = 50;

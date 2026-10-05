@@ -18,10 +18,8 @@ use serde_json::json;
 use std::fmt;
 
 use crate::data::rules::StoppageKind;
-use crate::math::DVec2;
-use crate::pitch;
-use crate::player::Status;
-use crate::rules::{Phase, Stoppage, restart};
+use crate::modules::SubRequest;
+use crate::rules::{Phase, Stoppage};
 use crate::sim::{EngineEventKind, EventDetail, Simulation};
 use crate::tactics::TacticsPatch;
 use crate::team::PLAYERS_PER_TEAM;
@@ -254,6 +252,29 @@ impl Simulation {
         id
     }
 
+    /// Withdraws the waiting change `id` of `team` before a stoppage takes it. `false` when
+    /// no such change waits (it applied, was refused, or never existed). A withdrawn change
+    /// never reached the match, so it leaves the queued count as well.
+    pub fn cancel_change(&mut self, team: usize, id: ChangeId) -> bool {
+        let before = self.queue.pending.len();
+        self.queue
+            .pending
+            .retain(|q| !(q.team == team && q.id == id));
+        let removed = self.queue.pending.len() < before;
+        if removed {
+            self.summary.changes_queued = self.summary.changes_queued.saturating_sub(1);
+            tracing::debug!(signal = "change.cancelled", tick = self.tick, team, queue_id = %id);
+        }
+        removed
+    }
+
+    /// The tick of the latest stoppage that admitted each kind, tactics first, then
+    /// substitutions. A value that moves during a step means a stoppage that takes that kind
+    /// opened in it.
+    pub fn changes_admitted(&self) -> [Option<u32>; 2] {
+        self.queue.admitted
+    }
+
     /// Every change applied so far, in the order it applied. Rejected changes are not in
     /// it; their verdicts stay in the events.
     pub fn applied_changes(&self) -> &[AppliedChange] {
@@ -294,7 +315,11 @@ impl Simulation {
         if self.referee.shootout.is_some() {
             return;
         }
-        let (tactics_ok, subs_ok) = self.config.rules.admits(stoppage.kind);
+        let (tactics_ok, subs_ok) = self
+            .config
+            .modules
+            .changes
+            .admits(&self.view(), stoppage.kind);
         let now = self.tick + 1;
         for (admits, at) in [tactics_ok, subs_ok]
             .into_iter()
@@ -356,8 +381,14 @@ impl Simulation {
         {
             // A substitute may have replaced the taker; the law's choice of taker stands.
             dead.taker =
-                restart::taker(dead.kind, dead.team, dead.spot, &self.players, &self.teams);
-            self.referee.phase = Phase::DeadBall(dead);
+                self.config
+                    .modules
+                    .restarts
+                    .taker(&self.view(), dead.kind, dead.team, dead.spot);
+            self.enter_phase(
+                Phase::DeadBall(dead),
+                crate::rules::phases::Cause::TakerRenamed,
+            );
         }
         self.timeline.push((now, self.teams.clone()));
     }
@@ -446,48 +477,30 @@ impl Simulation {
         now: u32,
         entered: &mut [usize; 2],
     ) -> Result<(), RejectReason> {
-        let (limit, windows) = self.substitution_limits();
-        let rules = &self.config.rules.substitutions;
-        let ledger = self.ledgers[team];
-        if ledger.used >= limit {
-            return Err(RejectReason::LimitReached { limit });
-        }
-        let needs_window = !rules.exempt(kind) && ledger.window_at != Some(now);
-        if needs_window && ledger.windows >= windows {
-            return Err(RejectReason::NoWindowLeft { windows });
-        }
-        let side = &self.teams[team];
-        let slot = side
-            .lineup
-            .iter()
-            .position(|&s| s == off)
-            .ok_or(RejectReason::NotOnPitch { squad: off })?;
-        let i = team * PLAYERS_PER_TEAM + slot;
-        let leaving = self.players[i];
-        if leaving.status == Status::SentOff {
-            return Err(RejectReason::SentOff { squad: off });
-        }
-        if !side.bench.contains(&on) {
-            return Err(RejectReason::NotOnBench { squad: on });
+        let request = SubRequest {
+            team,
+            off,
+            on,
+            kind,
+            now,
+            entered: entered[team],
+        };
+        let entry = self
+            .config
+            .modules
+            .changes
+            .substitution(&self.view(), &request)?;
+        if entry.from_touchline {
+            entered[team] += 1;
         }
         let ledger = &mut self.ledgers[team];
         ledger.used += 1;
-        if needs_window {
+        if entry.needs_window {
             ledger.windows += 1;
             ledger.window_at = Some(now);
         }
-        // At half-time the substitute takes the leaving player's kick-off place; otherwise it
-        // enters at the halfway line on the near touchline, on its own side.
-        let at = if kind == StoppageKind::HalfTime && leaving.active() {
-            leaving.pos
-        } else {
-            let k = entered[team] as f64;
-            entered[team] += 1;
-            DVec2::new(
-                -side.attack_x * (1.0 + 1.5 * k),
-                -(pitch::HALF_WIDTH - ENTRY_MARGIN),
-            )
-        };
+        let (slot, at) = (entry.slot, entry.at);
+        let i = team * PLAYERS_PER_TEAM + slot;
         let side = &mut self.teams[team];
         side.bench.retain(|&s| s != on);
         side.lineup[slot] = on;
@@ -517,25 +530,11 @@ impl Simulation {
         patch: &TacticsPatch,
         off_now: &[(usize, usize)],
     ) -> Result<(), RejectReason> {
-        let schema = &self.config.tactics;
-        if !patch.in_range(schema) {
-            return Err(RejectReason::OutOfRange);
-        }
-        let side = &self.teams[team];
-        for (squad, _) in &patch.roles {
-            if off_now.contains(&(team, *squad)) {
-                return Err(RejectReason::LeftThePitch { squad: *squad });
-            }
-            let on_pitch = side
-                .lineup
-                .iter()
-                .position(|s| s == squad)
-                .is_some_and(|slot| self.players[team * PLAYERS_PER_TEAM + slot].active());
-            if !on_pitch {
-                return Err(RejectReason::NotOnPitch { squad: *squad });
-            }
-        }
-        let tactics = patch.applied_to(side.tactics, &side.lineup, schema);
+        let tactics = self
+            .config
+            .modules
+            .changes
+            .tactics(&self.view(), team, patch, off_now)?;
         let tuning = self.config.tuning.clone();
         let schema = self.config.tactics.clone();
         let side = &mut self.teams[team];
@@ -552,9 +551,6 @@ impl Simulation {
         Ok(())
     }
 }
-
-/// How far inside the touchline a substitute enters, in metres.
-const ENTRY_MARGIN: f64 = 0.5;
 
 #[cfg(test)]
 mod tests {
@@ -631,5 +627,49 @@ mod tests {
         assert_eq!((log[0].id.n, log[1].id.n), (1, 0));
         assert!(log.iter().all(|c| c.team == 0 && c.id.tick == 0));
         assert_eq!(sim.summary().changes_rejected, 1);
+    }
+
+    #[test]
+    fn a_cancelled_change_never_applies_and_an_applied_one_cannot_be_cancelled() {
+        let config = crate::data::test_support::shipped_config(42, 3)
+            .unwrap()
+            .with_manager(0, crate::ai::Manager::Human)
+            .with_manager(1, crate::ai::Manager::Human);
+        let mut sim = Simulation::new(config).unwrap();
+        let home = sim.teams()[0].clone();
+        let sub = Change::Substitution {
+            off: home.lineup[9],
+            on: home.bench[0],
+        };
+        let kept = sim.queue_change(0, Change::Tactics(TacticsPatch::mentality(4)));
+        let withdrawn = sim.queue_change(0, sub);
+        assert_eq!(sim.summary().changes_queued, 2);
+        assert!(
+            !sim.cancel_change(1, withdrawn),
+            "the away team queued no such change"
+        );
+        assert!(sim.cancel_change(0, withdrawn));
+        assert!(
+            !sim.cancel_change(0, withdrawn),
+            "a change is withdrawn once"
+        );
+        assert_eq!(sim.summary().changes_queued, 1);
+        let admitted = sim.changes_admitted();
+        while !sim.is_over() && sim.applied_changes().is_empty() {
+            sim.step();
+        }
+        let log = sim.applied_changes();
+        assert_eq!(log.len(), 1, "{log:?}");
+        assert_eq!(log[0].id, kept);
+        assert_ne!(
+            sim.changes_admitted(),
+            admitted,
+            "the stoppage marked its kinds"
+        );
+        assert_eq!(sim.summary().substitutions[0], 0);
+        assert!(
+            !sim.cancel_change(0, kept),
+            "an applied change stays applied"
+        );
     }
 }

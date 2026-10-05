@@ -15,13 +15,16 @@ use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Context;
 
 /// The longest request line and header block this server reads. A browser's request for a
 /// local file is far below it; anything larger is cut off rather than buffered.
 const MAX_REQUEST_BYTES: u64 = 8 * 1024;
+/// The largest POST body an action may carry. The bodies are a team pair or three settings;
+/// a larger one is refused before any of it is read.
+pub const MAX_BODY_BYTES: usize = 4 * 1024;
 /// The most connections served at once. A page load asks for about twenty files; a client
 /// that opens many more and sends nothing must not pile up threads in the process.
 const MAX_CONNECTIONS: usize = 64;
@@ -45,26 +48,57 @@ impl WebServer {
 /// on another, and the operating system chooses both at every run, so the server answers
 /// for itself rather than making a person paste a number into a query string.
 const ENGINE_JSON: &str = "/engine.json";
-/// The two actions a page may ask of the launcher. Both change state, so both are POST.
+/// The actions a page may ask of the launcher. Each changes state, so each is a POST.
 const RESTART: &str = "/engine/restart";
 const ABANDON: &str = "/engine/abandon";
+const NEW_MATCH: &str = "/engine/new-match";
+const RESUME: &str = "/engine/resume";
+const STOP: &str = "/engine/stop";
+const QUIT: &str = "/engine/quit";
+const SETTINGS: &str = "/engine/settings";
+/// A read-only question besides `/engine.json`: the round match setup would form.
+const ROUND: &str = "/engine/round";
+/// A read-only question besides `/engine.json`: the events a resumed match played before
+/// its save, which the engine does not stream again.
+const EARLIER_EVENTS: &str = "/engine/earlier-events";
 
 /// What a page asks the process that serves it to do.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     /// Start the engine again from the match's latest snapshot.
     Restart,
     /// Stop the engine and give the match up.
     Abandon,
+    /// Start a fresh match: with the launch's seed and teams when the body is empty, or with
+    /// the two clubs the body names (`{"home": <club id>, "away": <club id>}`).
+    NewMatch(Option<String>),
+    /// Continue the newest unfinished saved match.
+    Resume,
+    /// Stop the match and keep its snapshot, so Resume can finish it.
+    Stop,
+    /// Stop the match, keep its snapshot, and end the launcher.
+    Quit,
+    /// Save the player's settings (the body).
+    Settings(String),
 }
 
-/// Where `/engine.json` comes from, and who answers the two actions.
+/// Where `/engine.json` comes from, and who answers the actions.
 pub trait Status: Send + Sync {
     /// The `/engine.json` body.
     fn json(&self) -> String;
-    /// Carries out one action and returns the new `/engine.json` body, or `None` when this
-    /// server takes no actions.
-    fn act(&self, action: Action) -> Option<String>;
+    /// Carries out one action and returns the new `/engine.json` body, the reason the action
+    /// was refused, or `None` when this server takes no actions.
+    fn act(&self, action: Action) -> Option<Result<String, String>>;
+    /// The fixtures of the round a match between `home` and `away` would meet, or the reason
+    /// the pair is refused; `None` when this server starts no matches.
+    fn round(&self, _home: &str, _away: &str) -> Option<Result<String, String>> {
+        None
+    }
+    /// The events a resumed match played up to its save, as a JSON array in tick order (empty
+    /// for a match that was not resumed); `None` when this server resumes no matches.
+    fn earlier_events(&self) -> Option<String> {
+        None
+    }
 }
 
 /// The status of a page served by the engine itself: always running on one socket port, and
@@ -72,6 +106,8 @@ pub trait Status: Send + Sync {
 pub struct Fixed {
     pub socket_port: u16,
     pub match_id: String,
+    /// The skin folder the viewer loads, from the `viewer.skin` slot.
+    pub skin: &'static str,
 }
 
 impl Status for Fixed {
@@ -86,11 +122,12 @@ impl Status for Fixed {
             "snapshot.tick": null,
             "match.id": self.match_id,
             "launcher": false,
+            "viewer.skin": self.skin,
         })
         .to_string()
     }
 
-    fn act(&self, _action: Action) -> Option<String> {
+    fn act(&self, _action: Action) -> Option<Result<String, String>> {
         None
     }
 }
@@ -98,26 +135,26 @@ impl Status for Fixed {
 /// Environment variable that names the page folder.
 pub const WEB_DIR_ENV: &str = "SM_WEB_DIR";
 
+/// The built viewer in a repository checkout, relative to the working folder: `npm run build`
+/// in `viewer/` writes it.
+pub const BUILT_VIEWER: &str = "viewer/dist";
+
 /// Finds the page folder the way the engine finds its content folder. When `flag` is given,
 /// only that folder is used. Otherwise, when `SM_WEB_DIR` is set, only that folder is used.
-/// Only when neither is set does the search fall through to `./web`, then the `web` folder
-/// beside the running binary, which is where an installed game keeps it. A folder counts
-/// only when it holds `index.html`; the refusal lists every folder tried.
+/// Only when neither is set does the search fall through to the default folders (see
+/// [`default_web_dirs`]). A folder counts only when it holds `index.html`; the refusal lists
+/// every folder tried.
 pub fn resolve_web_dir(flag: Option<&Path>) -> anyhow::Result<PathBuf> {
     let tried: Vec<PathBuf> = if let Some(dir) = flag {
         vec![dir.to_path_buf()]
     } else if let Some(dir) = std::env::var_os(WEB_DIR_ENV).filter(|d| !d.is_empty()) {
         vec![PathBuf::from(dir)]
     } else {
-        let mut tried = vec![PathBuf::from("web")];
         // nosemgrep: rust.lang.security.current-exe.current-exe -- only finds the page folder next to the program; not a security decision
-        if let Some(dir) = std::env::current_exe()
+        let beside = std::env::current_exe()
             .ok()
-            .and_then(|exe| exe.parent().map(Path::to_path_buf))
-        {
-            tried.push(dir.join("web"));
-        }
-        tried
+            .and_then(|exe| exe.parent().map(Path::to_path_buf));
+        default_web_dirs(beside.as_deref())
     };
     if let Some(found) = tried.iter().find(|dir| dir.join("index.html").is_file()) {
         return Ok(found.clone());
@@ -127,6 +164,17 @@ pub fn resolve_web_dir(flag: Option<&Path>) -> anyhow::Result<PathBuf> {
         "cannot read page folder (tried {}): no folder holds index.html",
         list.join(", ")
     )
+}
+
+/// The default page folders, in the order they are tried: the built viewer in a repository
+/// checkout (`viewer/dist` under the working folder), then the `web` folder beside the
+/// program, which is where an installed game keeps the same build.
+pub fn default_web_dirs(beside_program: Option<&Path>) -> Vec<PathBuf> {
+    let mut dirs = vec![PathBuf::from(BUILT_VIEWER)];
+    if let Some(dir) = beside_program {
+        dirs.push(dir.join("web"));
+    }
+    dirs
 }
 
 /// Serves `dir` on a loopback port the operating system chooses. `status` answers
@@ -218,7 +266,8 @@ fn answer(
     let method = parts.next().unwrap_or_default().to_string();
     let target = parts.next().unwrap_or_default().to_string();
     let path = target.split(['?', '#']).next().unwrap_or_default();
-    if method == "POST" && (path == RESTART || path == ABANDON) {
+    let posts = [RESTART, ABANDON, NEW_MATCH, RESUME, STOP, QUIT, SETTINGS];
+    if method == "POST" && posts.contains(&path) {
         // Only the page this server serves may ask. A page on any other site sends its own
         // origin, or none, and is refused before anything happens.
         let own = format!("http://127.0.0.1:{page_port}");
@@ -230,19 +279,36 @@ fn answer(
             );
             return write_response(&mut stream, 403, "text/plain", b"refused origin", false);
         }
-        let action = if path == RESTART {
-            Action::Restart
-        } else {
-            Action::Abandon
+        let body = match request.body {
+            Body::TooLarge => {
+                return write_response(&mut stream, 413, "text/plain", b"body too large", false);
+            }
+            Body::Unreadable => {
+                return write_response(&mut stream, 400, "text/plain", b"bad body", false);
+            }
+            Body::Read(body) => body,
+        };
+        let text = (!body.trim().is_empty()).then_some(body);
+        let action = match path {
+            RESTART => Action::Restart,
+            ABANDON => Action::Abandon,
+            RESUME => Action::Resume,
+            STOP => Action::Stop,
+            QUIT => Action::Quit,
+            SETTINGS => Action::Settings(text.unwrap_or_default()),
+            _ => Action::NewMatch(text),
         };
         return match status.act(action) {
-            Some(body) => write_response(
+            Some(Ok(body)) => write_response(
                 &mut stream,
                 202,
                 "application/json; charset=utf-8",
                 body.as_bytes(),
                 false,
             ),
+            Some(Err(reason)) => {
+                write_response(&mut stream, 400, "text/plain", reason.as_bytes(), false)
+            }
             None => write_response(
                 &mut stream,
                 405,
@@ -262,6 +328,44 @@ fn answer(
         );
     }
     let head_only = method == "HEAD";
+
+    if path == ROUND {
+        let query = target.split_once('?').map_or("", |(_, q)| q);
+        let value = |key: &str| {
+            query
+                .split('&')
+                .filter_map(|pair| pair.split_once('='))
+                .find(|(k, _)| *k == key)
+                .map(|(_, v)| percent_decode(v))
+                .unwrap_or_default()
+        };
+        return match status.round(&value("home"), &value("away")) {
+            Some(Ok(body)) => write_response(
+                &mut stream,
+                200,
+                "application/json; charset=utf-8",
+                body.as_bytes(),
+                head_only,
+            ),
+            Some(Err(reason)) => {
+                write_response(&mut stream, 400, "text/plain", reason.as_bytes(), head_only)
+            }
+            None => write_response(&mut stream, 404, "text/plain", b"not found", head_only),
+        };
+    }
+
+    if path == EARLIER_EVENTS {
+        return match status.earlier_events() {
+            Some(body) => write_response(
+                &mut stream,
+                200,
+                "application/json; charset=utf-8",
+                body.as_bytes(),
+                head_only,
+            ),
+            None => write_response(&mut stream, 404, "text/plain", b"not found", head_only),
+        };
+    }
 
     if path == ENGINE_JSON {
         let body = status.json();
@@ -291,11 +395,22 @@ fn answer(
     write_response(&mut stream, 200, mime_for(&resolved), &body, head_only)
 }
 
-/// The request line and the two headers this server reads.
+/// The request line, the two headers this server reads, and a POST body.
 struct Request {
     line: String,
     origin: Option<String>,
     host: Option<String>,
+    body: Body,
+}
+
+/// The body a request carried.
+enum Body {
+    /// Read whole: empty when the request carried none.
+    Read(String),
+    /// Longer than [`MAX_BODY_BYTES`]; nothing of it was read.
+    TooLarge,
+    /// Shorter than its `Content-Length`, or not UTF-8.
+    Unreadable,
 }
 
 /// `true` for a `Host` of `127.0.0.1` or `localhost`, with no port or this server's own.
@@ -311,19 +426,30 @@ fn host_allowed(host: Option<&str>, page_port: u16) -> bool {
     local && port.is_none_or(|p| p.parse::<u16>().ok() == Some(page_port))
 }
 
-/// Reads the request line, then drains the header block, keeping `Origin`.
+/// Reads the request line, then drains the header block, keeping `Origin`, `Host` and
+/// `Content-Length`, then reads a body of at most [`MAX_BODY_BYTES`].
 fn read_request(stream: &TcpStream) -> Option<Request> {
-    let mut reader = BufReader::new(stream.try_clone().ok()?.take(MAX_REQUEST_BYTES));
+    let limit = MAX_REQUEST_BYTES + MAX_BODY_BYTES as u64;
+    let deadline = Deadline {
+        stream: stream.try_clone().ok()?,
+        until: Instant::now() + IO_TIMEOUT,
+    };
+    let mut reader = BufReader::new(deadline.take(limit));
     let mut line = String::new();
-    reader.read_line(&mut line).ok()?;
+    let mut head_bytes = reader.read_line(&mut line).ok()? as u64;
     let line = line.trim_end().to_string();
     if line.is_empty() {
         return None;
     }
     let mut origin = None;
     let mut host = None;
+    let mut length = 0usize;
     let mut header = String::new();
-    while reader.read_line(&mut header).ok()? > 0 {
+    while let Some(read) = reader.read_line(&mut header).ok().filter(|n| *n > 0) {
+        head_bytes += read as u64;
+        if head_bytes > MAX_REQUEST_BYTES {
+            return None;
+        }
         let text = header.trim_end();
         if text.is_empty() {
             break;
@@ -333,11 +459,49 @@ fn read_request(stream: &TcpStream) -> Option<Request> {
                 origin = Some(value.trim().to_string());
             } else if name.trim().eq_ignore_ascii_case("host") {
                 host = Some(value.trim().to_string());
+            } else if name.trim().eq_ignore_ascii_case("content-length") {
+                length = value.trim().parse().ok()?;
             }
         }
         header.clear();
     }
-    Some(Request { line, origin, host })
+    let body = if length > MAX_BODY_BYTES {
+        Body::TooLarge
+    } else {
+        let mut bytes = vec![0u8; length];
+        match reader.read_exact(&mut bytes) {
+            Ok(()) => String::from_utf8(bytes).map_or(Body::Unreadable, Body::Read),
+            Err(_) => Body::Unreadable,
+        }
+    };
+    Some(Request {
+        line,
+        origin,
+        host,
+        body,
+    })
+}
+
+/// The connection as the request reads it: the whole request has one deadline, and each
+/// read waits at most the time left, so a client that sends a byte now and then cannot hold
+/// a connection, and its thread, past `IO_TIMEOUT`.
+struct Deadline {
+    stream: TcpStream,
+    until: Instant,
+}
+
+impl Read for Deadline {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let left = self.until.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "the request took longer than its deadline",
+            ));
+        }
+        self.stream.set_read_timeout(Some(left))?;
+        self.stream.read(buf)
+    }
 }
 
 /// Turns a request target into a relative path inside the served folder, or refuses it.
@@ -421,6 +585,7 @@ fn write_response(
         400 => "Bad Request",
         403 => "Forbidden",
         404 => "Not Found",
+        413 => "Content Too Large",
         _ => "Method Not Allowed",
     };
     let mut head = String::new();
@@ -470,6 +635,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_page_status_names_the_skin() {
+        let status = Fixed {
+            socket_port: 4000,
+            match_id: "m".into(),
+            skin: "interim-light",
+        };
+        let json: serde_json::Value = serde_json::from_str(&status.json()).unwrap();
+        assert_eq!(json["viewer.skin"], "interim-light");
+        assert_eq!(json["socket.port"], 4000);
+    }
+
+    #[test]
     fn only_a_loopback_host_on_this_port_is_answered() {
         for host in ["127.0.0.1", "127.0.0.1:8123", "localhost:8123", "LOCALHOST"] {
             assert!(host_allowed(Some(host), 8123), "{host} must be answered");
@@ -483,6 +660,16 @@ mod tests {
             assert!(!host_allowed(Some(host), 8123), "{host} must be refused");
         }
         assert!(!host_allowed(None, 8123));
+    }
+
+    #[test]
+    fn the_built_viewer_is_tried_before_the_folder_beside_the_program() {
+        let beside = Path::new("install");
+        assert_eq!(
+            default_web_dirs(Some(beside)),
+            vec![PathBuf::from("viewer/dist"), beside.join("web")]
+        );
+        assert_eq!(default_web_dirs(None), vec![PathBuf::from("viewer/dist")]);
     }
 
     #[test]

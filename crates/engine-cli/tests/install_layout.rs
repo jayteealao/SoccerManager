@@ -3,9 +3,12 @@
 //! the engine finds its content, both beside the program, and the engine's `hello` names
 //! the version the program prints.
 //!
-//! By default the layout is copied from the built program and the repository folders. When
-//! `SM_INSTALL_UNDER_TEST` names a folder, that folder is the layout instead, so the same
-//! check runs against an unpacked release archive.
+//! By default the layout is the built program, the repository's content folder and a small
+//! generated page folder (an `index.html` and one module), so the test needs no viewer
+//! build. When `SM_INSTALL_UNDER_TEST` names a folder, that folder is the layout instead, so
+//! the same check runs against an unpacked release archive or a staged package, and two more
+//! tests check that its `web/` is the built viewer the release carries and that the previous
+//! release's engine ships beside this one in `previous/`, with its own content.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
@@ -64,8 +67,22 @@ fn layout(name: &str) -> PathBuf {
     std::fs::create_dir_all(&install).unwrap();
     std::fs::copy(env!("CARGO_BIN_EXE_engine-cli"), program(&install)).unwrap();
     copy_dir(&repo().join("content"), &install.join("content"), &[]);
-    copy_dir(&repo().join("web"), &install.join("web"), &["tests"]);
+    write_page(&install.join("web"));
     install
+}
+
+/// A page folder shaped like the built viewer: an `index.html` that loads one module from
+/// `assets/`.
+fn write_page(web: &Path) {
+    std::fs::create_dir_all(web.join("assets")).unwrap();
+    std::fs::write(
+        web.join("index.html"),
+        "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    \
+         <title>Touchline</title>\n    <script type=\"module\" src=\"/assets/index-test.js\"></script>\n  \
+         </head>\n  <body><div id=\"app\"></div></body>\n</html>\n",
+    )
+    .unwrap();
+    std::fs::write(web.join("assets").join("index-test.js"), "export {};\n").unwrap();
 }
 
 /// The installed program with no path configuration, run from `cwd`.
@@ -107,12 +124,18 @@ fn kill(pid: u64) {
 
 /// One HTTP GET; the status code and the body.
 fn get(port: u16, target: &str) -> (u16, String) {
+    let (code, _, body) = get_with_headers(port, target);
+    (code, body)
+}
+
+/// One HTTP GET; the status code, the header block and the body.
+fn get_with_headers(port: u16, target: &str) -> (u16, String, String) {
     let Ok(mut socket) = TcpStream::connect(("127.0.0.1", port)) else {
-        return (0, String::new());
+        return (0, String::new(), String::new());
     };
     let request = format!("GET {target} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
     if socket.write_all(request.as_bytes()).is_err() {
-        return (0, String::new());
+        return (0, String::new(), String::new());
     }
     let mut response = Vec::new();
     let _ = socket.read_to_end(&mut response);
@@ -122,11 +145,8 @@ fn get(port: u16, target: &str) -> (u16, String) {
         .nth(1)
         .and_then(|c| c.parse().ok())
         .unwrap_or(0);
-    let body = text
-        .split_once("\r\n\r\n")
-        .map_or("", |(_, b)| b)
-        .to_string();
-    (code, body)
+    let (head, body) = text.split_once("\r\n\r\n").unwrap_or((&text, ""));
+    (code, head.to_string(), body.to_string())
 }
 
 fn status(port: u16) -> Value {
@@ -152,7 +172,7 @@ fn the_installed_program_serves_the_page_and_the_engine_without_configuration() 
     std::fs::create_dir_all(&cwd).unwrap();
 
     let mut child = installed(&install, &data, &cwd)
-        .args(["launch", "--minutes", "1"])
+        .args(["launch", "--no-start-screen", "--minutes", "1"])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
@@ -222,7 +242,7 @@ fn a_layout_without_the_page_folder_is_refused_naming_both_folders_tried() {
     std::fs::create_dir_all(&cwd).unwrap();
 
     let out = installed(&install, &data, &cwd)
-        .args(["launch", "--minutes", "1"])
+        .args(["launch", "--no-start-screen", "--minutes", "1"])
         .output()
         .unwrap();
     assert_eq!(
@@ -233,8 +253,8 @@ fn a_layout_without_the_page_folder_is_refused_naming_both_folders_tried() {
     assert!(out.stdout.is_empty(), "no address is printed");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stderr.contains("tried web, "),
-        "the refusal names ./web: {stderr}"
+        stderr.contains("tried viewer/dist, "),
+        "the refusal names the built viewer in a checkout: {stderr}"
     );
     assert!(
         stderr.contains(&install.join("web").display().to_string()),
@@ -242,4 +262,237 @@ fn a_layout_without_the_page_folder_is_refused_naming_both_folders_tried() {
     );
     let _ = std::fs::remove_dir_all(install.parent().unwrap());
     let _ = std::fs::remove_dir_all(&scratch);
+}
+
+/// The licence texts the release carries beside the fonts, one per typeface family.
+const LICENCES: [&str; 4] = [
+    "OFL-Saira.txt",
+    "OFL-Saira-Semi-Condensed.txt",
+    "OFL-Barlow.txt",
+    "OFL-IBM-Plex.txt",
+];
+
+/// What a packaged `web/` must be: the built viewer. Every failure is listed.
+fn packaged_page_faults(install: &Path, port: u16) -> Vec<String> {
+    let web = install.join("web");
+    let mut faults = Vec::new();
+    let index = std::fs::read_to_string(web.join("index.html")).unwrap_or_default();
+    let module = index
+        .split("<script type=\"module\"")
+        .nth(1)
+        .and_then(|rest| rest.split("src=\"").nth(1))
+        .and_then(|rest| rest.split('"').next())
+        .map(str::to_string);
+    match module {
+        Some(src) if src.trim_start_matches('/').starts_with("assets/") => {
+            let (code, head, _) =
+                get_with_headers(port, &format!("/{}", src.trim_start_matches('/')));
+            if code != 200 {
+                faults.push(format!("GET {src} answers {code}"));
+            }
+            if !head
+                .to_ascii_lowercase()
+                .contains("content-type: text/javascript")
+            {
+                faults.push(format!("{src} is not served as JavaScript: {head}"));
+            }
+        }
+        Some(src) => faults.push(format!(
+            "index.html loads its module from {src}, not assets/"
+        )),
+        None => faults.push("index.html loads no module script".to_string()),
+    }
+    for licence in LICENCES {
+        if !web.join("fonts").join(licence).is_file() {
+            faults.push(format!("web/fonts/{licence} is missing"));
+        }
+    }
+    // The open-source notices the licences screen reads: every package with its licence text.
+    match std::fs::read_to_string(web.join("notices.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+    {
+        Some(notices) => {
+            let packages = notices["packages"].as_array().cloned().unwrap_or_default();
+            let kinds = |kind: &str| packages.iter().filter(|p| p["kind"] == kind).count();
+            if kinds("crate") == 0 || kinds("npm") == 0 || kinds("font") == 0 {
+                faults.push(format!(
+                    "web/notices.json lists {} crates, {} npm packages and {} fonts",
+                    kinds("crate"),
+                    kinds("npm"),
+                    kinds("font")
+                ));
+            }
+            for package in &packages {
+                if package["text"].as_str().is_none_or(|t| t.trim().is_empty()) {
+                    faults.push(format!(
+                        "web/notices.json has no licence text for {}",
+                        package["name"]
+                    ));
+                }
+            }
+        }
+        None => faults.push("web/notices.json is missing or not JSON".to_string()),
+    }
+    for left_out in ["src", "tests", "node_modules", "shell-test.html"] {
+        if web.join(left_out).exists() {
+            faults.push(format!("web/{left_out} is in the package"));
+        }
+    }
+    faults
+}
+
+/// The previous release the package carries, from the pin the build scripts read.
+fn pinned_previous_version() -> String {
+    let pin: Value = serde_json::from_str(include_str!("../../../packaging/previous-engine.json"))
+        .expect("the pin is JSON");
+    pin["version"]
+        .as_str()
+        .expect("the pin names a version")
+        .to_string()
+}
+
+/// What a packaged `previous/` must be: the pinned release's program, which prints its
+/// version, with that release's content folder beside it. Every failure is listed.
+fn previous_engine_faults(install: &Path) -> Vec<String> {
+    let previous = install.join("previous");
+    let program = previous.join(program(install).file_name().unwrap());
+    let mut faults = Vec::new();
+    if !program.is_file() {
+        faults.push(format!("{} is missing", program.display()));
+    } else {
+        let pinned = pinned_previous_version();
+        let printed = version_of(&program);
+        if printed != pinned {
+            faults.push(format!(
+                "previous/ holds version {printed}, not the pinned {pinned}"
+            ));
+        }
+        if printed == version_of(&self::program(install)) {
+            faults.push(format!(
+                "previous/ holds this release's own program ({printed})"
+            ));
+        }
+    }
+    if !previous.join("content").join("attributes.json").is_file() {
+        faults.push("previous/content/attributes.json is missing".to_string());
+    }
+    faults
+}
+
+/// Starts the installed launcher from an unrelated folder and returns it with its port.
+fn launch(install: &Path, scratch: &Path) -> Running {
+    let (data, cwd) = (scratch.join("data"), scratch.join("elsewhere"));
+    std::fs::create_dir_all(&cwd).unwrap();
+    let mut child = installed(install, &data, &cwd)
+        .args(["launch", "--no-start-screen", "--minutes", "1"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut line = String::new();
+    BufReader::new(child.stdout.take().expect("the launcher prints"))
+        .read_line(&mut line)
+        .unwrap();
+    let port: u16 = line
+        .trim()
+        .trim_start_matches("http://127.0.0.1:")
+        .trim_end_matches('/')
+        .parse()
+        .unwrap_or_else(|e| panic!("launch must print the page address, printed {line:?}: {e}"));
+    Running { child, port }
+}
+
+#[test]
+fn a_packaged_layout_carries_the_built_viewer_and_its_font_licences() {
+    let Some(dir) = std::env::var_os("SM_INSTALL_UNDER_TEST").filter(|d| !d.is_empty()) else {
+        // Only a packaged folder carries the release build.
+        return;
+    };
+    let install = PathBuf::from(dir);
+    let scratch = temp("packaged-run");
+    let running = launch(&install, &scratch);
+    let faults = packaged_page_faults(&install, running.port);
+    drop(running);
+    let _ = std::fs::remove_dir_all(&scratch);
+    assert!(
+        faults.is_empty(),
+        "the packaged web/ is not the built viewer: {faults:#?}"
+    );
+}
+
+#[test]
+fn the_packaged_check_fails_on_a_page_folder_that_is_not_the_build() {
+    if std::env::var_os("SM_INSTALL_UNDER_TEST").is_some_and(|d| !d.is_empty()) {
+        // A packaged folder is never changed by a test.
+        return;
+    }
+    // The control: a layout whose web/ holds only an index.html with no module.
+    let install = layout("not-the-build");
+    std::fs::remove_dir_all(install.join("web")).unwrap();
+    std::fs::create_dir_all(install.join("web")).unwrap();
+    std::fs::write(
+        install.join("web").join("index.html"),
+        "<!doctype html><title>x</title>\n",
+    )
+    .unwrap();
+    let scratch = temp("not-the-build-run");
+    let running = launch(&install, &scratch);
+    let faults = packaged_page_faults(&install, running.port);
+    drop(running);
+    let _ = std::fs::remove_dir_all(install.parent().unwrap());
+    let _ = std::fs::remove_dir_all(&scratch);
+    assert!(
+        faults.iter().any(|f| f.contains("no module script")),
+        "the check must fail on a page folder with no module: {faults:#?}"
+    );
+    assert!(
+        faults.iter().any(|f| f.contains("OFL-Saira.txt")),
+        "the check must fail on a page folder with no licence texts: {faults:#?}"
+    );
+}
+
+#[test]
+fn a_packaged_layout_carries_the_previous_release_engine() {
+    let Some(dir) = std::env::var_os("SM_INSTALL_UNDER_TEST").filter(|d| !d.is_empty()) else {
+        // Only a packaged folder carries the previous release's engine.
+        return;
+    };
+    let faults = previous_engine_faults(&PathBuf::from(dir));
+    assert!(
+        faults.is_empty(),
+        "the package does not carry the previous release's engine: {faults:#?}"
+    );
+}
+
+#[test]
+fn the_previous_engine_check_fails_on_a_layout_without_it() {
+    if std::env::var_os("SM_INSTALL_UNDER_TEST").is_some_and(|d| !d.is_empty()) {
+        // A packaged folder is never changed by a test.
+        return;
+    }
+    // The control: a layout with no previous/, then one whose previous/ holds this program.
+    let install = layout("no-previous");
+    let missing = previous_engine_faults(&install);
+    let previous = install.join("previous");
+    std::fs::create_dir_all(&previous).unwrap();
+    std::fs::copy(
+        program(&install),
+        previous.join(program(&install).file_name().unwrap()),
+    )
+    .unwrap();
+    let own = previous_engine_faults(&install);
+    let _ = std::fs::remove_dir_all(install.parent().unwrap());
+    assert!(
+        missing.iter().any(|f| f.contains("is missing")),
+        "the check must fail on a layout with no previous/: {missing:#?}"
+    );
+    assert!(
+        own.iter().any(|f| f.contains("not the pinned")),
+        "the check must fail on a previous/ that is not the pinned release: {own:#?}"
+    );
+    assert!(
+        own.iter().any(|f| f.contains("content")),
+        "the check must fail on a previous/ with no content: {own:#?}"
+    );
 }

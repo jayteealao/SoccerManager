@@ -1,0 +1,187 @@
+/* Broadcast Blue: the default look. Dark grounds, navy bands, and cyan as the one action
+ * colour, with Saira Semi Condensed for display and Saira for text.
+ *
+ * The values are the visual contract's (the design stage's contract, revision 2), which
+ * overrides DESIGN.md's table in four places: --ink #f7f8fa (no pure white text),
+ * --navy-sub #c0cade, --ink-3 #8f9298 and --bad #e96a6e (each the smallest lift that passes
+ * WCAG 2.2 AA on every background it sits on). --ink-4 keeps #5d6067 and colours inactive
+ * stub text only; the token scan fails on it anywhere but StubSection.
+ *
+ * `scripts/contrast.mjs` reads this file with `contrast-pairs.json` and fails the build when
+ * a text pair drops under 4.5:1 or a boundary pair under 3:1.
+ */
+
+:root[data-theme='broadcast-blue'] {
+  color-scheme: dark;
+
+  /* Grounds */
+  --page: #141517;
+  --well: #0e0f11;
+  --ground: #232427;
+  --ground-2: #2a2b2f;
+  --ground-3: #26272a;
+  --rail: #1b1c1f;
+  --rule: #3a3c41;
+  --rule-2: #303236;
+
+  /* Ink */
+  --ink: #f7f8fa;
+  --ink-2: #c3c6cc;
+  --ink-3: #8f9298;
+  --ink-4: #5d6067;
+
+  /* Navy bands */
+  --navy-900: #082a66;
+  --navy-700: #0b3a8c;
+  --navy-600: #0d47a8;
+  --navy-500: #0f4fb8;
+  --navy-sub: #c0cade;
+
+  /* Action */
+  --cyan: #19c6f0;
+  --cyan-ink: #0a2250;
+
+  /* State: every one carries a word or a mark beside it, never colour alone. */
+  --star: #f5d33a;
+  --good: #4ad66d;
+  --mid: #e3d34a;
+  --warn: #f0923a;
+  --bad: #e96a6e;
+
+  /* The pitch: the most saturated object on the screen. The canvas draws --pitch-line at
+   * 55 percent over the turf. */
+  --pitch: #1f8a2e;
+  --pitch-deep: #0f5a1d;
+  --pitch-line: #f7f8fa;
+  --chip: #17181a;
+
+  /* Colours the sketch writes inline in the shell, as tokens. */
+  --rail-glyph: #d7d9de;
+  --rail-badge: #9a9da3;
+  --tab-ink: #e9ebef;
+  --band-ink: #f7f8fa;
+  --band-arrow: #c7d3ea;
+  --band-watermark: rgba(247, 248, 250, 0.045);
+  --header-icon: #f7f8fa;
+  --help-ground: #f7f8fa;
+  --help-ink: #111214;
+  --frame-ring: #2d2e32;
+  --club-sample: #0f5c63;
+  --skeleton: #2a2b2f;
+  --bar-track: #3a3c41;
+  --bar-away: #5d6067;
+
+  /* Text on a state colour: each passes 4.5:1 on its ground (contrast-pairs.json). */
+  --on-good: #0d1410;
+  --on-mid: #1c1a08;
+  --on-warn: #1c1206;
+  --on-bad: #1f0a0b;
+  --notice-neutral: #5d6067;
+  --on-neutral: #f7f8fa;
+
+  /* The match screen: the colours the sketch's Match live board writes inline, as tokens.
+   * The canvas reads the pitch ones once, when it is built (src/lib/pitch.js). */
+  --pitch-stripe: #21912f;
+  --pitch-stripe-2: #1d842c;
+  --ball-ring: #15161a;
+  --keeper-home: #e3d34a;
+  --keeper-home-ink: #111214;
+  --keeper-away: #7c56d6;
+  --keeper-away-ink: #f7f8fa;
+  --pitch-chip: rgba(14, 15, 17, 0.55);
+  --pitch-skeleton: rgba(247, 248, 250, 0.06);
+  --pitch-skeleton-2: rgba(247, 248, 250, 0.08);
+  --control-edge: #6b6e75;
+  --control-ink: #f7f8fa;
+  --button-dark: #1b1c1f;
+  --ghost-ink: #e9ebef;
+  --seg-edge: #4a4d53;
+  --seg-ink: #e9ebef;
+  --toggle-ground: #1a1b1e;
+  --toggle-edge: #4a4d53;
+  --toggle-ink: #c3c6cc;
+  --toggle-on-ground: #12303c;
+  --new-goal-ground: #16252f;
+
+  /* The Tactics screen: the colours the sketch's two Tactics boards write inline, as
+   * tokens. The pitch panel, its cards and markers, the duty colours, the squad list's slot
+   * chips and picked row, and the queued-changes block. */
+  --pitch-card: #17722a;
+  --pitch-ink: #f7f8fa;
+  --pitch-tag: #3a3c41;
+  --pitch-card-edge: rgba(0, 0, 0, 0.25);
+  --pitch-card-ink: #cfe8d3;
+  --pitch-label: rgba(0, 0, 0, 0.45);
+  --pitch-note: rgba(0, 0, 0, 0.5);
+  --pitch-select: #15161a;
+  --tactic-marker: #0f5c63;
+  --tactic-marker-ink: #f7f8fa;
+  --marker-shadow: rgba(0, 0, 0, 0.5);
+  --duty-attack: #f59e3b;
+  --duty-support: #4aa8ff;
+  --duty-defend: #4ad66d;
+  --weight-bar: #72f04e;
+  --select-ground: #1a1b1e;
+  --select-edge: #4a4d53;
+  --select-ink: #e9ebef;
+  --position-chip: #1a1c1e;
+  --position-chip-ink: #dfe2e6;
+  --on-slot: #0b2a14;
+  --eleven-tint: rgba(74, 214, 109, 0.06);
+  --picked-ground: #16252f;
+  --queue-ground: #16252f;
+  --queue-rule: #2a4552;
+
+  /* The matchday screens: the colours the Pre-match line-ups and the Touchline boards write
+   * inline, as tokens. The team colours on the line-up graphic are each club's kit, made
+   * safe at run time, never a literal. */
+  --sheet-head: #0b3a8c;
+  --label-shadow: rgba(0, 0, 0, 0.9);
+  --read-ink: #dfe1e5;
+  --star-empty: #4a4c52;
+  --proposal-ground: #1f2023;
+  --reading-edge: #8a7a24;
+  --reading-ink: #f5d33a;
+
+  /* The handshake page: a check's state word on the navy fact strip. The plain state
+   * colours measure under 4.5:1 on navy, so the strip carries the board's lighter pair. */
+  --strip-good: #9df0b0;
+  --strip-bad: #ffb3b5;
+  /* A warning word on the navy strip: the board's light warning tone, which reads 4.5:1 there. */
+  --strip-warn: #ffc58f;
+
+  /* Skip to the result: the hatch over the part of a match the engine played after a skip,
+   * as the report and replay boards draw it, and the ground of the NOT LIVE tag, whose word
+   * is --ink-2. A marker after the skip is hollow: --ground inside its state colour. */
+  --hatch-1: #5d6067;
+  --hatch-2: #3a3c41;
+  --not-live-ground: #34363b;
+
+  /* The front door: the dim layer behind the return and quit dialogs (--well at 72 percent),
+   * and the one shadow inside the shell, under the in-match menu and the dialogs. */
+  --scrim: rgba(14, 15, 17, 0.72);
+  --popover-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+
+  /* Type */
+  --fd: 'Saira Semi Condensed', 'Barlow Semi Condensed', 'Arial Narrow', system-ui, sans-serif;
+  --fb: 'Saira', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --fm: ui-monospace, Consolas, monospace;
+
+  /* Shape and motion */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 10px;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --tab-change: 180ms;
+  --live-pulse: 1400ms;
+
+  /* The goal moment. `src/lib/goal-moment.js` times the same values and a test holds them
+   * equal. */
+  --goal-in: 250ms;
+  --goal-hold: 1050ms;
+  --goal-out: 200ms;
+  --pulse: 600ms;
+
+  /* Stubs: parts this workflow does not build render at this opacity. */
+  --stub-opacity: 0.55;
+}

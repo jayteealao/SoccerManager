@@ -9,6 +9,11 @@
 //! off before the snapshot was taken. With `--reconnect-wait` a connection lost without a
 //! close frame does not end the run: the match goes back to the newest stoppage the viewer
 //! received in full and waits for the viewer on the same port.
+//!
+//! The other matches of the player's matchday play beside the match on background threads
+//! from kick-off (`crate::matchday`). The page learns the fixtures right after the hello and
+//! receives each ground's events as the match's own tick reaches them; a resumed match
+//! rebuilds its round from the snapshot's matchday mark.
 
 use std::cell::RefCell;
 use std::path::Path;
@@ -23,7 +28,10 @@ use engine::observe::identity::{
 use engine::observe::{
     LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef, write_stats,
 };
-use engine::{EngineError, FanoutSink, FileSink, Manager, MatchConfig, Simulation, Snapshot};
+use engine::snapshot::MatchdayMark;
+use engine::{
+    ContentDir, EngineError, FanoutSink, FileSink, Manager, MatchConfig, Simulation, Snapshot,
+};
 use engine::{TickHeader, snapshot::shorten_for_log};
 use protocol::{ChangeKind, Hello, PROTOCOL_VERSION, Queue, ServerMessage};
 use stream::events::EventWriter;
@@ -35,6 +43,7 @@ use stream::{
 };
 
 use crate::cli::ServeOpts;
+use crate::matchday::{self, Matchday, Round};
 use crate::stream_run::{
     Drive, PageChange, carry_page_changes, drive, hello_substitutions, hello_tactics, hello_teams,
 };
@@ -105,6 +114,8 @@ struct Opened {
     sim: Option<Simulation>,
     /// The tick a resumed match continues from.
     resume_tick: Option<u32>,
+    /// The matchday mark of a resumed match's snapshot.
+    mark: Option<MatchdayMark>,
     hello: Hello,
 }
 
@@ -145,6 +156,24 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
         None => open_fresh(&loaded, opts, &data)?,
     };
     let match_id = opened.identity.match_id.clone();
+    // The other matches of the matchday: every other club in the content folder, or, for a
+    // resumed match, the round its snapshot recorded.
+    let round = if opts.no_matchday {
+        None
+    } else {
+        let dir = ContentDir::resolve(content_dir)?;
+        match (&opened.mark, opened.sim.is_some()) {
+            (Some(mark), _) => Some(Round::from_mark(mark, &dir, &loaded.content)),
+            // A resumed match saved with no round keeps none.
+            (None, true) => None,
+            (None, false) => Some(Round::for_match(
+                &dir,
+                &loaded.content,
+                opened.config.club_ids(),
+                opened.identity.seed,
+            )),
+        }
+    };
     let server = Server::bind(&data, &match_id)?;
     println!("{}", server.port());
     // The page address is printed after the port, because it is the line a reader copies.
@@ -154,6 +183,7 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
             Arc::new(crate::web::Fixed {
                 socket_port: server.port(),
                 match_id: match_id.clone(),
+                skin: loaded.content.modules.skin.skin(),
             }),
         )?),
         None => None,
@@ -162,7 +192,7 @@ pub fn run(content_dir: Option<&Path>, opts: &ServeOpts) -> anyhow::Result<i32> 
         println!("{}", page.address());
     }
 
-    let mut serving = Serving::new(&loaded, opened, opts, data)?;
+    let mut serving = Serving::new(&loaded, opened, opts, data, round)?;
     let wait = Duration::from_secs(opts.reconnect_wait);
     let mut connection = server.accept(&match_id)?;
     loop {
@@ -237,6 +267,15 @@ struct Serving<'a> {
     ticks: u32,
     stream_tuning: engine::data::StreamTuning,
     drop_at: Option<u32>,
+    /// A test seam: the engine runs flat out to this tick (`--fast-forward-to`).
+    fast_forward_to: Option<u32>,
+    /// The other matches of the matchday; `None` with `--no-matchday`.
+    round: Option<Round>,
+    /// The round playing, from the match's kick-off on.
+    matchday: Option<Matchday>,
+    /// Test seams: the worker count and a planted fault.
+    matchday_threads: Option<usize>,
+    matchday_fault: Option<matchday::Fault>,
 }
 
 impl<'a> Serving<'a> {
@@ -245,12 +284,14 @@ impl<'a> Serving<'a> {
         opened: Opened,
         opts: &ServeOpts,
         data: std::path::PathBuf,
+        round: Option<Round>,
     ) -> anyhow::Result<Self> {
         let Opened {
             identity,
             config,
             sim,
             resume_tick,
+            mark: _,
             hello,
         } = opened;
         let ticks = config.max_ticks();
@@ -268,13 +309,16 @@ impl<'a> Serving<'a> {
             tactics: config.tactics.clone(),
         }));
         let state = Arc::new(MatchState::default());
-        let gated = GatedSnapshots::new(
+        let mut gated = GatedSnapshots::new(
             &data,
             &identity.match_id,
             identity.owner,
             identity.match_millis,
             Arc::clone(&state),
         );
+        if let Some(round) = round.as_ref().filter(|r| !r.fixtures.is_empty()) {
+            gated.set_matchday(round.mark(0));
+        }
         // The events file: a resumed match keeps the rows up to its snapshot.
         let writer = Some(match resume_tick {
             Some(tick) => EventWriter::resume(&data, &identity.match_id, tick)?,
@@ -300,7 +344,7 @@ impl<'a> Serving<'a> {
             ),
             None => None,
         };
-        Ok(Self {
+        let mut serving = Self {
             loaded,
             identity,
             config,
@@ -318,7 +362,39 @@ impl<'a> Serving<'a> {
             ticks,
             stream_tuning: loaded.content.tuning.stream.clone(),
             drop_at: opts.drop_client_at,
-        })
+            fast_forward_to: opts.fast_forward_to,
+            round,
+            matchday: None,
+            matchday_threads: opts.matchday_threads,
+            matchday_fault: opts.matchday_fault,
+        };
+        // A resumed match kicked off long ago: its matchday plays again from kick-off now,
+        // and nothing up to the resume tick is late.
+        if let Some(tick) = resume_tick {
+            serving.start_matchday(tick);
+        }
+        Ok(serving)
+    }
+
+    /// Starts the other matches of the matchday at the match's kick-off. No event at or
+    /// before `not_late_through` is late.
+    fn start_matchday(&mut self, not_late_through: u32) {
+        let Some(round) = self.round.as_ref().filter(|r| !r.fixtures.is_empty()) else {
+            return;
+        };
+        self.matchday = Some(Matchday::start(
+            round,
+            self.loaded,
+            &self.config,
+            matchday::Options {
+                data_dir: self.data.clone(),
+                match_id: self.identity.match_id.clone(),
+                threads: self.matchday_threads,
+                fault: self.matchday_fault,
+                not_late_through: not_late_through.max(self.fast_forward_to.unwrap_or(0)),
+                fast_forward_to: self.fast_forward_to,
+            },
+        ));
     }
 
     /// Serves one connection: holds for kick-off when the match has not started, plays until
@@ -339,6 +415,11 @@ impl<'a> Serving<'a> {
         // A page that reports the tick it draws keeps the engine within the buffer bound of
         // it, so a change the manager queues reaches the engine before the stoppage on screen.
         gate.set_lead_bound(u32::try_from(self.stream_tuning.buffer_ticks).unwrap_or(u32::MAX));
+        // A browser test skips the wait for playback to reach a late minute; the ticks are
+        // the same, only sent sooner.
+        if let Some(tick) = self.fast_forward_to {
+            gate.set_fast_forward(tick);
+        }
         let inbox = Arc::new(Inbox::default());
         let session = Session::start(
             connection,
@@ -363,6 +444,17 @@ impl<'a> Serving<'a> {
                 drop_at: self.drop_at.take(),
             },
         )?;
+        // The fixtures right after the hello, then every ground event up to where this
+        // connection starts: kick-off, the resume tick, or the tick a reconnect went back to.
+        if let Some(round) = &self.round {
+            session.send(&matchday::message(round))?;
+        }
+        if let Some(matchday) = &self.matchday {
+            let cursor = self.sim.as_ref().map_or(0, Simulation::tick);
+            for message in matchday.catch_up(cursor) {
+                session.send(&message)?;
+            }
+        }
 
         let mut full_time = false;
         let mut written = 0;
@@ -377,6 +469,8 @@ impl<'a> Serving<'a> {
             // stoppage.
             self.gated.capture(&kicked_off);
             self.sim = Some(kicked_off);
+            // Every other ground kicks off with this match.
+            self.start_matchday(0);
         }
         if let Some(sim) = self.sim.as_mut().filter(|_| started) {
             let played_from = Instant::now();
@@ -399,6 +493,7 @@ impl<'a> Serving<'a> {
                     page_changes: Some(&self.page_changes),
                     planned: &[],
                     observe: None,
+                    matchday: self.matchday.as_ref(),
                 },
                 &mut |message: ServerMessage| {
                     if let ServerMessage::Event(event) = &message {
@@ -457,13 +552,25 @@ impl<'a> Serving<'a> {
             pauses = gauge.pauses(),
             paused_ms = gauge.paused_ms()
         );
-        // A change the socket admitted that the engine never took is still the page's.
-        self.page_changes.borrow_mut().extend(
-            inbox
-                .drain()
-                .into_iter()
-                .map(|admitted| PageChange { id: None, admitted }),
-        );
+        // A change the socket admitted that the engine never took is still the page's, and a
+        // withdrawal the engine never made is still owed.
+        let (waiting, cancels) = {
+            let mut held = inbox.hold();
+            (held.drain(), held.take_cancels())
+        };
+        let mut carried = self.page_changes.borrow_mut();
+        for change in carried
+            .iter_mut()
+            .filter(|c| cancels.contains(&c.admitted.queue_id))
+        {
+            change.cancelled = true;
+        }
+        carried.extend(waiting.into_iter().map(|admitted| PageChange {
+            id: None,
+            admitted,
+            cancelled: false,
+        }));
+        drop(carried);
         Ok(Played {
             started,
             full_time,
@@ -573,6 +680,7 @@ fn open_fresh(
         config,
         sim: None,
         resume_tick: None,
+        mark: None,
         hello,
     })
 }
@@ -625,6 +733,7 @@ fn open_resumed(loaded: &crate::content::Loaded, path: &Path) -> Result<Opened, 
         identity,
         resume_tick: Some(sim.tick()),
         sim: Some(sim),
+        mark: snapshot.matchday.clone(),
         config,
         hello,
     })
@@ -651,6 +760,9 @@ fn hello_for(
         teams: hello_teams(sim, true),
         tactics: hello_tactics(sim),
         substitutions: hello_substitutions(sim),
+        knockout: config.knockout,
+        ground_length: config.pitch().length(),
+        ground_width: config.pitch().width(),
     }
 }
 
@@ -678,4 +790,450 @@ pub fn admitted_kinds(rules: &engine::data::RulePack) -> Vec<ChangeKind> {
         kinds.push(ChangeKind::Substitution);
     }
     kinds
+}
+
+/// A skip is the same match playing on: a served match held at a skip point and then
+/// skipped plays exactly the match a page that never held it receives. Each match is built
+/// by serve's own builder and played by serve's own driver; only the gate differs. Every
+/// tick's gate state bytes and tick record, every event, and the rolling hash over the state
+/// bytes must be equal, at skip points across the phases of play.
+#[cfg(test)]
+mod skip_equality {
+    use super::*;
+    use crate::stream_run::Observe;
+    use engine::EngineEvent;
+    use engine::gate::{KNOCKOUT_PACK, StateWriter};
+    use engine::record::{NullSink, RECORD_BYTES};
+    use sha2::{Digest, Sha256};
+    use std::path::PathBuf;
+
+    /// The knockout seed whose served match with the sample pack is level after extra time
+    /// and goes to a shoot-out. `scan_for_the_shootout_seed` finds it again.
+    const SHOOTOUT_SEED: u64 = 1;
+
+    /// The tick the knockout match marks a watchdog hit on, in every run.
+    const WATCHDOG_AT: u32 = 60_000;
+
+    /// Ticks in one minute of play at the 20 ms step.
+    const MINUTE: u32 = 3_000;
+
+    /// One served match: its seed, and whether it is the knockout match with the sample pack.
+    #[derive(Clone, Copy)]
+    struct Game {
+        seed: u64,
+        knockout: bool,
+    }
+
+    /// Where a skip run holds: the tick the producer stops at, and whether the page also
+    /// paused before it skipped.
+    #[derive(Clone, Copy, Debug)]
+    struct Hold {
+        at: u32,
+        paused: bool,
+    }
+
+    /// What one played match leaves, tick by tick.
+    struct Trail {
+        /// One SHA-256 per observed step over the gate state bytes and the tick record.
+        steps: Vec<(u32, [u8; 32])>,
+        events: Vec<EngineEvent>,
+        /// The rolling hash over every step's gate state bytes, as the replay gate hashes.
+        hash: [u8; 32],
+        slow_calls: u32,
+        goals: [u32; 2],
+        /// The skip points found while playing.
+        points: Points,
+    }
+
+    /// Ticks of the phases a skip point is chosen in, recorded by the reference run.
+    #[derive(Default)]
+    struct Points {
+        minute_30: Option<u32>,
+        dead_ball_after_10: Option<u32>,
+        first_half_added: Vec<u32>,
+        minute_80: Option<u32>,
+        extra_time: Vec<u32>,
+        shootout: Vec<u32>,
+    }
+
+    impl Points {
+        fn see(&mut self, sim: &Simulation) {
+            let tick = sim.tick();
+            let (minute, added) = sim.minute();
+            let half = sim.half();
+            if half == 0 && minute >= 30 && self.minute_30.is_none() {
+                self.minute_30 = Some(tick);
+            }
+            if minute >= 10 && sim.stoppage().is_some() && self.dead_ball_after_10.is_none() {
+                self.dead_ball_after_10 = Some(tick);
+            }
+            if half == 0 && added.is_some() {
+                self.first_half_added.push(tick);
+            }
+            if half == 1 && minute >= 80 && self.minute_80.is_none() {
+                self.minute_80 = Some(tick);
+            }
+            if half >= 2 && !sim.in_shootout() && !sim.is_over() {
+                self.extra_time.push(tick);
+            }
+            if sim.in_shootout() {
+                self.shootout.push(tick);
+            }
+        }
+    }
+
+    fn content() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content")
+    }
+
+    fn temp(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "engine-cli-skip-equality-{}-{name}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn serve_opts(game: Game) -> ServeOpts {
+        ServeOpts {
+            seed: Some(game.seed),
+            minutes: 90,
+            knockout: game.knockout,
+            ticks_out: None,
+            team_a: None,
+            team_b: None,
+            script_pack: game
+                .knockout
+                .then(|| content().join("scripts").join(KNOCKOUT_PACK)),
+            web: None,
+            resume: None,
+            reconnect_wait: 0,
+            match_millis: Some(1),
+            drop_client_at: None,
+            fast_forward_to: None,
+            no_matchday: true,
+            matchday_threads: None,
+            matchday_fault: None,
+        }
+    }
+
+    /// Plays `game` as serve plays it. With no hold the gate never holds, as for a page that
+    /// never pauses or falls behind. With a hold, the page's part is played from this thread:
+    /// it kicks off, reports `at - 1` as drawn under a lead bound of 1 so the producer stops
+    /// exactly at `at`, pauses when asked, and skips.
+    fn play(game: Game, hold: Option<Hold>, name: &str) -> Trail {
+        let opts = serve_opts(game);
+        let data = temp(name);
+        let gate = match hold {
+            None => Gate::new(),
+            Some(h) => {
+                let gate = Gate::held();
+                gate.set_lead_bound(1);
+                gate.set_seen(h.at - 1);
+                gate
+            }
+        };
+        let state = MatchState::default();
+        let trail = std::thread::scope(|scope| {
+            let producer = scope.spawn(|| {
+                let loaded =
+                    crate::content::load(Some(&content()), None, None, opts.script_pack.as_deref())
+                        .unwrap();
+                let opened = open_fresh(&loaded, &opts, &data).unwrap();
+                let mut sim = Simulation::new(opened.config.clone()).unwrap();
+                loaded.attach(&mut sim);
+                let mut writer = StateWriter::new(false);
+                let mut rolling = Sha256::new();
+                let mut steps = Vec::new();
+                let mut events = Vec::new();
+                let mut points = Points::default();
+                let mut record = [0u8; RECORD_BYTES];
+                let inbox = Inbox::default();
+                let observed =
+                    RefCell::new(|sim: &Simulation, step: &[EngineEvent], _finished: bool| {
+                        if game.knockout && sim.tick() == WATCHDOG_AT {
+                            sim.plugins().watchdog().hit();
+                        }
+                        let bytes = writer.tick(sim, step);
+                        rolling.update(bytes);
+                        sim.record().write_to(&mut record);
+                        let mut digest = Sha256::new();
+                        digest.update(bytes);
+                        digest.update(record);
+                        steps.push((sim.tick(), digest.finalize().into()));
+                        events.extend_from_slice(step);
+                        points.see(sim);
+                    });
+                let driven = drive(
+                    &mut sim,
+                    &mut NullSink,
+                    &Drive {
+                        ticks: opened.config.max_ticks(),
+                        owner_id: &opened.identity.owner_id,
+                        match_id: &opened.identity.match_id,
+                        club_ids: [
+                            &opened.config.teams[0].club_id,
+                            &opened.config.teams[1].club_id,
+                        ],
+                        state: &state,
+                        gate: Some(&gate),
+                        commentary: &loaded.commentary,
+                        inbox: Some(&inbox),
+                        page_changes: None,
+                        planned: &[],
+                        observe: Some(&observed as &Observe<'_>),
+                        matchday: None,
+                    },
+                    &mut |_| Ok(()),
+                )
+                .unwrap();
+                assert!(driven.full_time, "{name}: the match reached full time");
+                let summary = sim.summary();
+                Trail {
+                    steps,
+                    events,
+                    hash: rolling.finalize().into(),
+                    slow_calls: sim.plugins().slow_calls(),
+                    goals: summary.goals,
+                    points,
+                }
+            });
+            if let Some(h) = hold {
+                gate.set_running(true);
+                while state.tick() < h.at && !producer.is_finished() {
+                    std::thread::yield_now();
+                }
+                std::thread::sleep(Duration::from_millis(5));
+                assert_eq!(
+                    state.tick(),
+                    h.at,
+                    "{name}: the producer holds at the skip point"
+                );
+                if h.paused {
+                    gate.set_running(false);
+                }
+                assert!(gate.skip(), "{name}: a started match can skip");
+            }
+            producer.join().unwrap()
+        });
+        let _ = std::fs::remove_dir_all(&data);
+        trail
+    }
+
+    /// The first difference between a skipped run and the reference, in words naming the
+    /// tick, or `None` when the two are the same match.
+    fn first_difference(reference: &Trail, skipped: &Trail) -> Option<String> {
+        if let Some(((tick, _), _)) = reference
+            .steps
+            .iter()
+            .zip(&skipped.steps)
+            .find(|(a, b)| a != b)
+        {
+            return Some(format!("the state first differs at tick {tick}"));
+        }
+        if reference.steps.len() != skipped.steps.len() {
+            let at = reference.steps.len().min(skipped.steps.len());
+            let tick = reference
+                .steps
+                .get(at)
+                .or(skipped.steps.get(at))
+                .map(|s| s.0);
+            return Some(format!(
+                "one run has more steps: {} against {}, from tick {tick:?}",
+                reference.steps.len(),
+                skipped.steps.len()
+            ));
+        }
+        if let Some((event, _)) = reference
+            .events
+            .iter()
+            .zip(&skipped.events)
+            .find(|(a, b)| a != b)
+        {
+            return Some(format!("the events first differ at tick {}", event.tick));
+        }
+        if reference.events.len() != skipped.events.len() {
+            return Some(format!(
+                "{} events against {}",
+                reference.events.len(),
+                skipped.events.len()
+            ));
+        }
+        if reference.hash != skipped.hash {
+            return Some("the final gate hash differs".into());
+        }
+        // The watchdog count is wall-clock time by design (`engine::plugin`): a loaded machine
+        // adds real hits that never change play. The planted mark must survive the skip.
+        if (reference.slow_calls > 0) != (skipped.slow_calls > 0) {
+            return Some(format!(
+                "{} watchdog hits against {}",
+                reference.slow_calls, skipped.slow_calls
+            ));
+        }
+        None
+    }
+
+    /// Plays every skip run of `game` beside each other and checks each against `reference`.
+    fn check_points(game: Game, reference: &Trail, holds: &[(&str, Hold)]) {
+        let failures: Vec<String> = std::thread::scope(|scope| {
+            let runs: Vec<_> = holds
+                .iter()
+                .map(|&(label, hold)| {
+                    let name = format!("{}-{label}", game.seed);
+                    scope.spawn(move || (label, hold, play(game, Some(hold), &name)))
+                })
+                .collect();
+            runs.into_iter()
+                .filter_map(|run| {
+                    let (label, hold, skipped) = run.join().unwrap();
+                    first_difference(reference, &skipped).map(|why| {
+                        format!(
+                            "seed {}, skip {label} at tick {}: {why}",
+                            game.seed, hold.at
+                        )
+                    })
+                })
+                .collect()
+        });
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    fn middle(ticks: &[u32], what: &str) -> u32 {
+        assert!(!ticks.is_empty(), "the reference run has no {what}");
+        ticks[ticks.len() / 2]
+    }
+
+    /// Five skip points of a league match: tick 1, minute 30 paused, the first dead ball after
+    /// minute 10, the first half's added time, and minute 80.
+    fn league(seed: u64) {
+        let game = Game {
+            seed,
+            knockout: false,
+        };
+        let reference = play(game, None, &format!("{seed}-reference"));
+        let p = &reference.points;
+        let at = |at: u32| Hold { at, paused: false };
+        let holds = [
+            ("tick-1", at(1)),
+            (
+                "minute-30-paused",
+                Hold {
+                    at: p.minute_30.expect("minute 30"),
+                    paused: true,
+                },
+            ),
+            (
+                "dead-ball",
+                at(p.dead_ball_after_10.expect("a dead ball after minute 10")),
+            ),
+            (
+                "first-half-added-time",
+                at(middle(&p.first_half_added, "first-half added time")),
+            ),
+            ("minute-80", at(p.minute_80.expect("minute 80"))),
+        ];
+        assert_eq!(holds[1].1.at, 30 * MINUTE, "minute 30 is tick 90000");
+        check_points(game, &reference, &holds);
+    }
+
+    #[test]
+    fn a_skipped_match_at_seed_42_plays_out_as_the_match_played_through() {
+        league(42);
+    }
+
+    #[test]
+    fn a_skipped_match_at_seed_7_plays_out_as_the_match_played_through() {
+        league(7);
+    }
+
+    #[test]
+    fn a_skipped_match_at_seed_1_plays_out_as_the_match_played_through() {
+        league(1);
+    }
+
+    /// The rarest phases: a knockout match with the sample script pack, skipped in extra
+    /// time, in the shoot-out, and at the tick its watchdog is marked.
+    #[test]
+    fn a_skipped_knockout_match_with_a_script_pack_plays_out_as_the_match_played_through() {
+        let game = Game {
+            seed: SHOOTOUT_SEED,
+            knockout: true,
+        };
+        let reference = play(game, None, "knockout-reference");
+        assert!(
+            !reference.points.shootout.is_empty(),
+            "seed {SHOOTOUT_SEED} must reach a shoot-out; run scan_for_the_shootout_seed"
+        );
+        assert!(
+            reference.slow_calls >= 1,
+            "the watchdog mark is in the match"
+        );
+        let p = &reference.points;
+        let at = |at: u32| Hold { at, paused: false };
+        let holds = [
+            ("extra-time", at(middle(&p.extra_time, "extra time"))),
+            ("shootout", at(middle(&p.shootout, "shoot-out"))),
+            (
+                "watchdog",
+                Hold {
+                    at: WATCHDOG_AT,
+                    paused: true,
+                },
+            ),
+        ];
+        check_points(game, &reference, &holds);
+    }
+
+    /// The control: the comparison can fail. A skip run of another seed differs from the
+    /// reference, and the failure names the first differing tick.
+    #[test]
+    fn a_skip_run_of_another_seed_is_found_different_at_its_first_tick() {
+        let reference = play(
+            Game {
+                seed: 42,
+                knockout: false,
+            },
+            None,
+            "control-reference",
+        );
+        let other = play(
+            Game {
+                seed: 43,
+                knockout: false,
+            },
+            Some(Hold {
+                at: 30 * MINUTE,
+                paused: true,
+            }),
+            "control-43",
+        );
+        let why = first_difference(&reference, &other).expect("another seed must differ");
+        assert!(why.starts_with("the state first differs at tick "), "{why}");
+    }
+
+    #[test]
+    #[ignore = "a scan over knockout matches; run it to choose SHOOTOUT_SEED again"]
+    fn scan_for_the_shootout_seed() {
+        for seed in 0..40 {
+            let trail = play(
+                Game {
+                    seed,
+                    knockout: true,
+                },
+                None,
+                &format!("scan-{seed}"),
+            );
+            if !trail.points.shootout.is_empty() {
+                println!(
+                    "seed {seed}: a shoot-out from tick {}",
+                    trail.points.shootout[0]
+                );
+                return;
+            }
+            println!("seed {seed}: decided {:?}", trail.goals);
+        }
+        panic!("no seed in 0..40 reaches a shoot-out");
+    }
 }

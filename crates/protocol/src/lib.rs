@@ -17,9 +17,10 @@ pub use command::{Ack, ChangeKind, ChangeState, Pending, Queue, Reject, Verdict}
 pub use event::{CardKind, ChangeOutcome, EventType, MatchEvent};
 pub use frame::{Frame, TickFrame};
 pub use message::{
-    ChangeDetail, ClientCommand, Condition, Hello, PatchWire, QueueChange, RoleWire, RosterEntry,
-    Seen, ServerMessage, SetLineup, SetSpeed, SlotRole, SquadEntry, Stats, SubstitutionRules,
-    TeamRef, TeamSetup,
+    Advice, AdvicePick, CancelChange, ChangeDetail, ChangeStateNote, ClientCommand, Condition,
+    DEFAULT_GROUND_LENGTH, DEFAULT_GROUND_WIDTH, GroundEvent, GroundKind, GroundProgress, Hello,
+    Matchday, MatchdayFixture, PatchWire, QueueChange, RoleWire, RosterEntry, Seen, ServerMessage,
+    SetLineup, SetSpeed, Side, SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
 };
 
 /// The protocol version a client must ask for. A client that asks for another version is
@@ -70,6 +71,25 @@ pub use message::{
 /// fields (`script.pack`, `script.hook`, `script.outcome`, `script.detail`). A match without
 /// a pack sends exactly what it sent before, no field changed meaning, the page ignores an
 /// event type it does not list, and both producers changed in the same commit.
+///
+/// Version 3 also survived withdrawing a queued change: one command (`cancel-change`), one
+/// message (`change-state`, the "applies now" word for a change the opening stoppage takes),
+/// and optional fields (`player.injury_resistance` on a squad entry, the extra-time and
+/// window-exempt substitution rules on the hello, and each team's substitutions and windows
+/// used on `condition`). No field was removed or changed meaning, a client ignores a message
+/// type or field it does not know, and a client that never sends `cancel-change` gets exactly
+/// the answers it got before.
+///
+/// Version 3 also survived the assistant's advice: one message (`advice`, the computer
+/// manager's picks for the page's team, sent only to a page that manages a team), and two
+/// optional hello fields (`formation` on each team and `knockout`). No field was removed or
+/// changed meaning, a client ignores a message type or field it does not know, and the match
+/// itself is unchanged: the advice reads the match and writes nothing.
+///
+/// Version 3 also survived skipping to the result: one command (`skip`, no fields), answered
+/// with the existing `ack` or `reject`. The match it plays on is the same match, so every
+/// tick and message after it is what the match played through would send, and a client that
+/// never sends it gets exactly the answers it got before.
 pub const PROTOCOL_VERSION: u16 = 3;
 
 /// Errors this crate returns.
@@ -174,6 +194,13 @@ pub const MESSAGES: &[MessageSpec] = &[
             "substitutions",
             "limit",
             "windows",
+            "extra_substitutions",
+            "extra_windows",
+            "windows_exempt",
+            "player.injury_resistance",
+            "knockout",
+            "ground.length",
+            "ground.width",
         ],
     },
     MessageSpec {
@@ -247,7 +274,51 @@ pub const MESSAGES: &[MessageSpec] = &[
         name: "condition",
         direction: Direction::ServerToClient,
         encoding: Encoding::JsonText,
-        fields: &["tick", "energy"],
+        fields: &["tick", "energy", "subs_used", "windows_used"],
+    },
+    MessageSpec {
+        name: "change-state",
+        direction: Direction::ServerToClient,
+        encoding: Encoding::JsonText,
+        fields: &["change.queue_id", "state", "tick"],
+    },
+    MessageSpec {
+        name: "advice",
+        direction: Direction::ServerToClient,
+        encoding: Encoding::JsonText,
+        fields: &[
+            "tick", "minute", "picks", "code", "kind", "off", "on", "patch",
+        ],
+    },
+    MessageSpec {
+        name: "matchday",
+        direction: Direction::ServerToClient,
+        encoding: Encoding::JsonText,
+        fields: &[
+            "round",
+            "fixtures",
+            "fixture",
+            "home",
+            "away",
+            "team.id",
+            "team.name",
+            "team.kit.primary",
+            "team.kit.secondary",
+        ],
+    },
+    MessageSpec {
+        name: "ground-event",
+        direction: Direction::ServerToClient,
+        encoding: Encoding::JsonText,
+        fields: &[
+            "fixture", "tick", "kind", "minute", "added", "side", "scorer", "score", "late",
+        ],
+    },
+    MessageSpec {
+        name: "ground-progress",
+        direction: Direction::ServerToClient,
+        encoding: Encoding::JsonText,
+        fields: &["tick", "reached"],
     },
     MessageSpec {
         name: "ack",
@@ -316,6 +387,18 @@ pub const MESSAGES: &[MessageSpec] = &[
         encoding: Encoding::JsonText,
         fields: &["tick"],
     },
+    MessageSpec {
+        name: "cancel-change",
+        direction: Direction::ClientToServer,
+        encoding: Encoding::JsonText,
+        fields: &["change.queue_id"],
+    },
+    MessageSpec {
+        name: "skip",
+        direction: Direction::ClientToServer,
+        encoding: Encoding::JsonText,
+        fields: &[],
+    },
 ];
 
 /// The specification of `name`, or `None`.
@@ -338,6 +421,11 @@ mod tests {
             ServerMessage::Condition(_) => "condition",
             ServerMessage::Ack(_) => "ack",
             ServerMessage::Reject(_) => "reject",
+            ServerMessage::ChangeState(_) => "change-state",
+            ServerMessage::Advice(_) => "advice",
+            ServerMessage::Matchday(_) => "matchday",
+            ServerMessage::GroundEvent(_) => "ground-event",
+            ServerMessage::GroundProgress(_) => "ground-progress",
         }
     }
 
@@ -349,6 +437,8 @@ mod tests {
             ClientCommand::QueueChange(_) => "queue-change",
             ClientCommand::SetLineup(_) => "set-lineup",
             ClientCommand::Seen(_) => "seen",
+            ClientCommand::CancelChange(_) => "cancel-change",
+            ClientCommand::Skip => "skip",
         }
     }
 
@@ -361,6 +451,7 @@ mod tests {
             roster: Vec::new(),
             squad: Vec::new(),
             setup: None,
+            formation: String::new(),
         }
     }
 
@@ -379,6 +470,9 @@ mod tests {
                 teams: [blank_team(), blank_team()],
                 tactics: serde_json::Value::Null,
                 substitutions: SubstitutionRules::default(),
+                knockout: false,
+                ground_length: DEFAULT_GROUND_LENGTH,
+                ground_width: DEFAULT_GROUND_WIDTH,
             })),
             ServerMessage::Event(Box::new(MatchEvent::play(
                 "",
@@ -409,6 +503,8 @@ mod tests {
             ServerMessage::Condition(Condition {
                 tick: 0,
                 energy: Vec::new(),
+                subs_used: [0; 2],
+                windows_used: [0; 2],
             }),
             ServerMessage::Ack(Ack {
                 command: String::new(),
@@ -420,6 +516,35 @@ mod tests {
             ServerMessage::Reject(Reject {
                 command: String::new(),
                 reason: String::new(),
+            }),
+            ServerMessage::ChangeState(ChangeStateNote {
+                queue_id: String::new(),
+                state: ChangeState::AppliesNow,
+                tick: 0,
+            }),
+            ServerMessage::Advice(Advice {
+                tick: 0,
+                minute: 0,
+                picks: Vec::new(),
+            }),
+            ServerMessage::Matchday(Matchday {
+                round: 1,
+                fixtures: Vec::new(),
+            }),
+            ServerMessage::GroundEvent(GroundEvent {
+                fixture: 0,
+                tick: 0,
+                kind: GroundKind::FullTime,
+                minute: 0,
+                added: None,
+                side: None,
+                scorer: None,
+                score: [0, 0],
+                late: false,
+            }),
+            ServerMessage::GroundProgress(GroundProgress {
+                tick: 0,
+                reached: Vec::new(),
             }),
         ]
     }
@@ -439,6 +564,10 @@ mod tests {
                 patch: None,
             }),
             ClientCommand::Seen(Seen { tick: 0 }),
+            ClientCommand::CancelChange(CancelChange {
+                queue_id: String::new(),
+            }),
+            ClientCommand::Skip,
         ]
     }
 

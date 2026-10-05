@@ -172,6 +172,9 @@ fn measure_stream(
         teams: hello_teams(&sim, false),
         tactics: hello_tactics(&sim),
         substitutions: hello_substitutions(&sim),
+        knockout: false,
+        ground_length: config.pitch().length(),
+        ground_width: config.pitch().width(),
     };
 
     let server = Server::bind(&data, &match_id)?;
@@ -225,6 +228,7 @@ fn measure_stream(
             page_changes: None,
             planned: &[],
             observe: None,
+            matchday: None,
         },
         &mut |message: ServerMessage| session.send(&message),
     )?;

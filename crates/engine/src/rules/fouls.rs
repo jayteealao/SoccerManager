@@ -5,8 +5,14 @@
 //! first `ball_loss` share is a foul after which the fouled team loses the ball, and the rest
 //! is a foul after which the fouled team keeps it. So a tackle costs exactly one draw.
 
+use crate::modules::{FoulsModule, MatchView, ModuleCard, TackleChances};
 use crate::player::Derived;
+use crate::streams::Action;
 use crate::tuning::Tuning;
+
+/// Metres per second above which a carrier runs with the ball rather than shields it, for
+/// the extra tackle chance against a running carrier.
+pub const RUNNING_SPEED: f64 = 2.0;
 
 /// What one tackle attempt did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,6 +127,112 @@ pub fn card_thresholds(aggression: f64, t: &Tuning) -> [f64; 2] {
     let yellow = t.yellow_base + t.yellow_aggression_weight * aggression;
     [red, red + yellow]
 }
+
+/// The fouls module, version 1: the functions above, called with the same operands in the
+/// same order as before the move, so every chance keeps its bits.
+pub struct FoulsV1;
+
+impl FoulsModule for FoulsV1 {
+    #[inline]
+    fn tackle_chances(
+        &self,
+        view: &MatchView<'_>,
+        tackler: usize,
+        carrier: usize,
+    ) -> TackleChances {
+        let t = view.tuning();
+        let p = view.player(tackler);
+        let carrier = view.player(carrier);
+        let mut p_win = win_chance(&p.derived, &carrier.derived, t);
+        if carrier.vel.length() > RUNNING_SPEED {
+            p_win += dribble_win_chance(&p.derived, &carrier.derived, t);
+        }
+        TackleChances {
+            p_win,
+            p_foul: foul_chance(&p.derived, p.yellow, t),
+            ball_loss: t.foul_ball_loss,
+        }
+    }
+
+    #[inline]
+    fn tackle_outcome(&self, c: &TackleChances, draw: f64) -> Tackle {
+        tackle_outcome(c.p_win, c.p_foul, c.ball_loss, draw)
+    }
+
+    #[inline]
+    fn card_thresholds(&self, view: &MatchView<'_>, offender: usize) -> [f64; 2] {
+        card_thresholds(view.player(offender).derived.aggression, view.tuning())
+    }
+
+    #[inline]
+    fn card(&self, view: &MatchView<'_>, offender: usize, draw: f64) -> Option<Card> {
+        let p = view.player(offender);
+        card_outcome(p.derived.aggression, p.yellow, view.tuning(), draw)
+    }
+}
+
+pub const FOULS_V1_CARD: ModuleCard = ModuleCard {
+    purpose: "Decides each tackle attempt (clean win, foul, or miss) and the card for a foul.",
+    inputs: "The tackler's and carrier's derived tackling, dribbling, and aggression, the carrier's speed, the tackler's yellow cards, and the engine tuning.",
+    outputs: "The tackle chances and outcome, the card thresholds, and the card; the loop applies the foul and the card.",
+    tuning: &[
+        "tackle_win_base",
+        "tackle_dribble_win",
+        "foul_base",
+        "foul_aggression_weight",
+        "foul_tackling_weight",
+        "foul_booked_factor",
+        "foul_ball_loss",
+        "red_base",
+        "yellow_base",
+        "yellow_aggression_weight",
+    ],
+    calibration: "yellow_cards_per_team",
+    keys: &[Action::Tackle, Action::FoulCard],
+};
+
+/// The fouls module switched off: tackles win and miss as in version 1, but never foul, so
+/// no card is ever drawn. The tackle draw still happens, so every other draw stays in step.
+pub struct FoulsOff;
+
+impl FoulsModule for FoulsOff {
+    #[inline]
+    fn tackle_chances(
+        &self,
+        view: &MatchView<'_>,
+        tackler: usize,
+        carrier: usize,
+    ) -> TackleChances {
+        TackleChances {
+            p_foul: 0.0,
+            ..FoulsV1.tackle_chances(view, tackler, carrier)
+        }
+    }
+
+    #[inline]
+    fn tackle_outcome(&self, c: &TackleChances, draw: f64) -> Tackle {
+        tackle_outcome(c.p_win, 0.0, c.ball_loss, draw)
+    }
+
+    #[inline]
+    fn card_thresholds(&self, _view: &MatchView<'_>, _offender: usize) -> [f64; 2] {
+        [0.0, 0.0]
+    }
+
+    #[inline]
+    fn card(&self, _view: &MatchView<'_>, _offender: usize, _draw: f64) -> Option<Card> {
+        None
+    }
+}
+
+pub const FOULS_OFF_CARD: ModuleCard = ModuleCard {
+    purpose: "Fouls switched off: tackles win or miss, and nobody fouls or is shown a card.",
+    inputs: "The tackler's and carrier's derived tackling and dribbling, the carrier's speed, and the engine tuning.",
+    outputs: "The tackle chances with a foul chance of 0, and the tackle outcome.",
+    tuning: &["tackle_win_base", "tackle_dribble_win"],
+    calibration: "none: off version, no fouls",
+    keys: &[Action::Tackle],
+};
 
 #[cfg(test)]
 mod tests {

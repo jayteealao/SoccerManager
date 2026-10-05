@@ -9,6 +9,10 @@
 //! match keeps a fixed tick count.
 
 use crate::data::rules::{AddedTime, RulePack, StoppageKind};
+use crate::modules::{ClockModule, MatchView, ModuleCard, PeriodEnd, ShootoutLineup};
+use crate::rules::{discipline, shootout};
+use crate::sim::DecidedBy;
+use crate::streams::Action;
 use crate::{TICKS_PER_SECOND, ticks_for_minutes};
 
 /// Ticks in one minute of play.
@@ -17,11 +21,17 @@ pub const TICKS_PER_MINUTE: u32 = 60 * TICKS_PER_SECOND;
 /// Ticks a shoot-out kick may stay live before it counts as missed (5 s).
 pub const KICK_LIVE_TICKS: u32 = 5 * TICKS_PER_SECOND;
 
-/// Stoppages counted in the current half, by kind, and the cards shown in it.
+/// Stoppages counted in the current half, by kind, the cards shown in it, and its video
+/// reviews.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Tally {
     pub kinds: [u32; StoppageKind::ALL.len()],
     pub cards: u32,
+    /// Video reviews in the current half. No match event counts one yet (the video referee
+    /// comes later), so it stays 0: the replay gate and the snapshot do not carry it, and
+    /// both assert in debug builds that it is 0, so the day an event counts one it must be
+    /// hashed and saved with its own result change.
+    pub reviews: u32,
 }
 
 impl Tally {
@@ -35,7 +45,7 @@ impl Tally {
             .iter()
             .map(|k| self.kinds[k.index()] * added.seconds(*k))
             .sum();
-        stoppages + self.cards * added.card_s
+        stoppages + self.cards * added.card_s + self.reviews * added.video_review_s
     }
 }
 
@@ -215,6 +225,210 @@ impl MatchClock {
     }
 }
 
+/// The clock and match end, version 1: the rule pack's added time, the period sequence of
+/// the Laws (half-time, extra time for a level knockout match, then the shoot-out), the
+/// rule pack's minimum players, and the shoot-out law in `shootout`.
+pub struct ClockV1;
+
+impl ClockModule for ClockV1 {
+    fn tally_seconds(&self, view: &MatchView<'_>, extra: bool) -> u32 {
+        let tally = &view.referee().tally;
+        if extra {
+            tally.seconds(&extra_time_allowance(view.rules()))
+        } else {
+            tally.seconds(&view.rules().added_time)
+        }
+    }
+
+    fn added_seconds(&self, view: &MatchView<'_>, extra: bool, draw: f64) -> u32 {
+        let tally = &view.referee().tally;
+        if extra {
+            added_seconds(tally, &extra_time_allowance(view.rules()), draw)
+        } else {
+            added_seconds(tally, &view.rules().added_time, draw)
+        }
+    }
+
+    fn period_end(&self, view: &MatchView<'_>) -> PeriodEnd {
+        let clock = view.referee().clock;
+        let goals = view.goals();
+        let level = goals[0] == goals[1];
+        if !clock.last_half() {
+            PeriodEnd::Break { recover: true }
+        } else if !clock.last_period() && (clock.in_extra_time() || level) {
+            // Extra-time periods exist only in a knockout match. Its breaks give no energy
+            // back, so fatigue runs on past 90 minutes without a step.
+            PeriodEnd::Break { recover: false }
+        } else if view.knockout() && level {
+            PeriodEnd::Shootout
+        } else {
+            PeriodEnd::FullTime {
+                decided_by: view.knockout().then_some(if clock.in_extra_time() {
+                    DecidedBy::ExtraTime
+                } else {
+                    DecidedBy::Regulation
+                }),
+            }
+        }
+    }
+
+    fn extra_kick_off(&self, draw: f64) -> usize {
+        usize::from(draw >= 0.5)
+    }
+
+    fn abandoned(&self, view: &MatchView<'_>) -> Option<usize> {
+        discipline::abandoned(view.players(), view.rules().min_players)
+    }
+
+    fn shootout_lineup(&self, view: &MatchView<'_>) -> ShootoutLineup {
+        let attributes = view.attributes();
+        let keeping = [
+            attributes.index("reflexes"),
+            attributes.index("one_on_ones"),
+        ];
+        let acting = [view.keeper(0), view.keeper(1)];
+        let candidates = [0, 1].map(|team| {
+            view.players()
+                .iter()
+                .enumerate()
+                .filter(|(_, p)| p.team == team && p.active())
+                .map(|(i, p)| shootout::Candidate {
+                    index: i,
+                    goalkeeper: i == acting[team],
+                    kicking: p.derived.finishing + p.derived.composure,
+                    keeping: keeping
+                        .iter()
+                        .flatten()
+                        .map(|&k| f64::from(p.attributes.get(k)))
+                        .sum(),
+                })
+                .collect::<Vec<_>>()
+        });
+        let eligible = shootout::equalise(candidates);
+        let keepers = [0, 1].map(|team| shootout::keeper(&eligible[team]).unwrap_or(acting[team]));
+        let order = [0, 1].map(|team| shootout::order(&eligible[team], Some(keepers[team])));
+        ShootoutLineup { order, keepers }
+    }
+
+    fn shootout_first(&self, draw: f64) -> usize {
+        usize::from(draw >= 0.5)
+    }
+
+    fn shootout_end(&self, draw: f64) -> f64 {
+        if draw < 0.5 { -1.0 } else { 1.0 }
+    }
+
+    fn keeper_dive(&self, view: &MatchView<'_>, draw: f64) -> f64 {
+        if draw.abs() < view.tuning().shots.keeper_stays {
+            0.0
+        } else {
+            draw.signum()
+        }
+    }
+
+    fn shootout_save_hold(&self, view: &MatchView<'_>) -> f64 {
+        view.tuning().shots.save_hold
+    }
+
+    fn shootout_decided(&self, view: &MatchView<'_>, scores: [u32; 2], taken: [u32; 2]) -> bool {
+        shootout::decided(scores, taken, u32::from(view.rules().shootout.kicks))
+    }
+}
+
+/// The action keys the clock and match end owns.
+const CLOCK_KEYS: &[Action] = &[
+    Action::AddedTime,
+    Action::ExtraTimeAdded,
+    Action::ExtraKickOff,
+    Action::ShootoutFirstTeam,
+    Action::ShootoutEnd,
+    Action::KeeperDive,
+    Action::ShootoutSaveHold,
+];
+
+pub const CLOCK_V1_CARD: ModuleCard = ModuleCard {
+    purpose: "Runs the clock and the end of the match: added time, half-time, extra time, the shoot-out, full time, and abandonment below the minimum players.",
+    inputs: "The referee's clock and stoppage tally, the score, whether the match is a knockout, the players on the pitch and their finishing, composure, and keeping attributes, the rule pack, and the engine tuning.",
+    outputs: "The added seconds, what follows each period, the extra-time kick-off team, the abandoned team, the shoot-out line-up, first team, end, keeper dive, save-hold threshold, and result; the loop applies them.",
+    tuning: &[
+        "added_time",
+        "extra_time",
+        "shootout",
+        "min_players",
+        "shots.keeper_stays",
+        "shots.save_hold",
+    ],
+    calibration: "none: no added-time or shoot-out band in realism-bands.json",
+    keys: CLOCK_KEYS,
+};
+
+/// Test only: version 1 with one second more added time in the first half. The gate tests
+/// select it to prove that one changed output fails the gate.
+#[cfg(feature = "scenario")]
+pub struct ClockFaulty;
+
+#[cfg(feature = "scenario")]
+impl ClockModule for ClockFaulty {
+    fn tally_seconds(&self, view: &MatchView<'_>, extra: bool) -> u32 {
+        ClockV1.tally_seconds(view, extra)
+    }
+
+    fn added_seconds(&self, view: &MatchView<'_>, extra: bool, draw: f64) -> u32 {
+        let seconds = ClockV1.added_seconds(view, extra, draw);
+        if view.referee().clock.half == 0 {
+            seconds + 1
+        } else {
+            seconds
+        }
+    }
+
+    fn period_end(&self, view: &MatchView<'_>) -> PeriodEnd {
+        ClockV1.period_end(view)
+    }
+
+    fn extra_kick_off(&self, draw: f64) -> usize {
+        ClockV1.extra_kick_off(draw)
+    }
+
+    fn abandoned(&self, view: &MatchView<'_>) -> Option<usize> {
+        ClockV1.abandoned(view)
+    }
+
+    fn shootout_lineup(&self, view: &MatchView<'_>) -> ShootoutLineup {
+        ClockV1.shootout_lineup(view)
+    }
+
+    fn shootout_first(&self, draw: f64) -> usize {
+        ClockV1.shootout_first(draw)
+    }
+
+    fn shootout_end(&self, draw: f64) -> f64 {
+        ClockV1.shootout_end(draw)
+    }
+
+    fn keeper_dive(&self, view: &MatchView<'_>, draw: f64) -> f64 {
+        ClockV1.keeper_dive(view, draw)
+    }
+
+    fn shootout_save_hold(&self, view: &MatchView<'_>) -> f64 {
+        ClockV1.shootout_save_hold(view)
+    }
+
+    fn shootout_decided(&self, view: &MatchView<'_>, scores: [u32; 2], taken: [u32; 2]) -> bool {
+        ClockV1.shootout_decided(view, scores, taken)
+    }
+}
+
+#[cfg(feature = "scenario")]
+pub const CLOCK_FAULTY_CARD: ModuleCard = ModuleCard {
+    purpose: "Test only: clock version 1 with one second more added time in the first half.",
+    inputs: "As clock version 1.",
+    outputs: "As clock version 1.",
+    tuning: &["none"],
+    calibration: "none: test module for the replay gate",
+    keys: CLOCK_KEYS,
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -247,6 +461,21 @@ mod tests {
         let extra = extra_time_allowance(&rules);
         assert_eq!(added_seconds(&busy, &extra, 0.9), 300);
         assert_eq!(added_seconds(&tally, &extra, 0.5), 190);
+    }
+
+    /// A video review adds its price; with none counted, the price changes nothing.
+    #[test]
+    fn a_video_review_adds_its_price_and_none_adds_nothing() {
+        let mut added = shipped_content().rules.added_time;
+        assert_eq!(added.video_review_s, 60, "the default price");
+        let mut tally = Tally::default();
+        tally.add(StoppageKind::Goal);
+        tally.cards = 1;
+        let without = tally.seconds(&added);
+        added.video_review_s = 90;
+        assert_eq!(tally.seconds(&added), without, "no review, no time");
+        tally.reviews = 2;
+        assert_eq!(tally.seconds(&added), without + 180);
     }
 
     #[test]

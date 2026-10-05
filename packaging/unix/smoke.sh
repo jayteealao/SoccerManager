@@ -1,7 +1,8 @@
 #!/bin/sh
 # The clean-user check for the Linux (or macOS) archive. It unpacks the archive into a fresh
 # home folder, starts the game with a cleared environment from an unrelated folder, and
-# checks that the page and the engine are served with no configuration.
+# checks that the page and the engine are served with no configuration, and that the page is
+# the built viewer: its module script is served as JavaScript, and the font licences ship.
 #
 # Run from the repository folder:  sh packaging/unix/smoke.sh <archive> <evidence-dir>
 #
@@ -89,6 +90,25 @@ if [ -n "$address" ]; then
     else
         check page false "GET / did not return the packaged index.html"
     fi
+    module=$(sed -n 's/.*<script type="module"[^>]*src="\/\{0,1\}\(assets\/[^"]*\)".*/\1/p' "$installed/web/index.html" | head -n 1)
+    if [ -n "$module" ] &&
+        curl -sf -D "$evidence/module.headers.txt" -o /dev/null "$address$module" &&
+        grep -qi '^content-type: text/javascript' "$evidence/module.headers.txt"; then
+        check viewer-module true "GET /$module is served as JavaScript"
+    else
+        check viewer-module false "index.html loads no module from assets/, or it is not served as JavaScript: '$module'"
+    fi
+    # The game opens on the start screen: no match runs until the page asks for one.
+    curl -sf "${address}engine.json" -o "$evidence/engine-idle.json" 2>/dev/null || true
+    if grep -q '"front-door":true' "$evidence/engine-idle.json" 2>/dev/null &&
+        grep -q '"engine.state":"idle"' "$evidence/engine-idle.json" 2>/dev/null; then
+        check front-door true "engine.json reads front-door true and engine.state idle"
+    else
+        check front-door false "engine.json at start: $(cat "$evidence/engine-idle.json" 2>/dev/null)"
+    fi
+    # New match from the start screen, as the page asks for it.
+    curl -sf -X POST -H "Origin: ${address%/}" -H 'Content-Length: 0' \
+        "${address}engine/new-match" -o /dev/null 2>/dev/null || true
     state=""
     i=0
     while [ $i -lt 240 ]; do
@@ -112,6 +132,11 @@ if [ -n "$address" ]; then
         check data-folder false "no engine.port in ~/.local/share/SoccerManager in the fresh home"
     fi
 fi
+if [ -f "$installed/web/fonts/OFL-Saira.txt" ]; then
+    check font-licences true "web/fonts/OFL-Saira.txt ships with the page"
+else
+    check font-licences false "web/fonts/OFL-Saira.txt is missing from the page"
+fi
 if grep -q 'launch.open_failed' "$evidence/launch.err.txt" 2>/dev/null; then
     fact browser "no browser opened (launch.open_failed logged); the game kept running"
 else
@@ -124,6 +149,24 @@ if [ -n "$program_version" ] && [ "$program_version" = "$archive_version" ]; the
     check version true "engine-cli --version $program_version matches the archive name"
 else
     check version false "engine-cli --version '$program_version', archive name '$archive_version'"
+fi
+
+# The previous release's engine ships beside this one, with its own content, so a match that
+# release saved finishes on its engine; its version is the pinned one.
+pinned=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$repo/packaging/previous-engine.json")
+previous_version=""
+if [ -x "$installed/previous/engine-cli" ]; then
+    previous_version=$("$installed/previous/engine-cli" --version | awk '{ print $2 }')
+fi
+if [ -n "$previous_version" ] && [ "$previous_version" = "$pinned" ]; then
+    check previous-engine true "previous/engine-cli --version $previous_version is the pinned release"
+else
+    check previous-engine false "previous/engine-cli --version '$previous_version', pinned '$pinned'"
+fi
+if [ -f "$installed/previous/content/attributes.json" ]; then
+    check previous-content true "previous/content ships beside the previous engine"
+else
+    check previous-content false "previous/content/attributes.json is missing"
 fi
 
 # (f) Stop the game, then read the engine's hello from the packaged program.

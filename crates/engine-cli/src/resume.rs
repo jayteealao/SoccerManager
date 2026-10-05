@@ -1,5 +1,6 @@
 //! `engine-cli resume`: continue a match from its latest snapshot to full time, and print one
-//! match-stats record. A snapshot resumes only on the build and the content that wrote it.
+//! match-stats record. A snapshot resumes only on the build and the content that wrote it, so
+//! a save of the previous release is handed to that release's program ([`crate::engines`]).
 
 use std::path::Path;
 use std::time::Instant;
@@ -17,8 +18,65 @@ use engine::{
 use tracing::info_span;
 
 use crate::cli::ResumeOpts;
+use crate::engines::{Choice, PreviousEngine};
+
+/// Finishes a save of the previous release on that release's program, with its own content
+/// folder, and passes its output and exit code through.
+fn delegate(engine: &PreviousEngine, version: &str, opts: &ResumeOpts) -> anyhow::Result<i32> {
+    tracing::info!(
+        signal = "resume.delegated",
+        engine.version = version,
+        program = %engine
+            .program
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    );
+    let mut command = std::process::Command::new(&engine.program);
+    command
+        .arg("--content-dir")
+        .arg(&engine.content)
+        .arg("resume")
+        .arg("--snapshot")
+        .arg(&opts.snapshot);
+    if let Some(path) = &opts.ticks_out {
+        command.arg("--ticks-out").arg(path);
+    }
+    if opts.json {
+        command.arg("--json");
+    }
+    for (flag, value) in [
+        ("--team-a", &opts.team_a),
+        ("--team-b", &opts.team_b),
+        ("--script-pack", &opts.script_pack),
+    ] {
+        if let Some(value) = value {
+            command.arg(flag).arg(value);
+        }
+    }
+    let status = command
+        .status()
+        .with_context(|| format!("cannot run {}", engine.program.display()))?;
+    Ok(status.code().unwrap_or(1))
+}
 
 pub fn run(content_dir: Option<&Path>, opts: &ResumeOpts) -> anyhow::Result<i32> {
+    let previous = PreviousEngine::locate(opts.previous_engine.as_deref());
+    match crate::engines::resolve(&opts.snapshot, &previous).0 {
+        Choice::Current => {}
+        Choice::Previous { engine, version } => return delegate(&engine, &version, opts),
+        Choice::Refused(refusal) => {
+            tracing::error!(
+                signal = "snapshot.refused",
+                kind = refusal.kind.word(),
+                saved.version = refusal.identity.engine_version.as_deref().unwrap_or(""),
+                saved.build = %refusal.identity.build_hash,
+                reason = %refusal.reason
+            );
+            eprintln!("error: snapshot refused: {}", refusal.reason);
+            return Ok(1);
+        }
+    }
     let shown = opts.snapshot.display().to_string();
     let snapshot = match Snapshot::read(&opts.snapshot, &shown) {
         Ok(snapshot) => snapshot,

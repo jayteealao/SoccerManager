@@ -19,6 +19,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::EngineError;
 use crate::flags::{ActiveFlags, FlagState, FlagStates};
+use crate::modules::{Picked, REGISTRY, ResolvedModules, SLOTS_VERSION, SlotFile};
 
 pub use attributes::{ATTRIBUTES_VERSION, AttributeSchema, Group, MAX_ATTRIBUTES};
 pub use generator::generate_league;
@@ -39,6 +40,14 @@ pub const TEAM_B_FILE: &str = "teams/default-b.json";
 /// The English commentary lines. The file stays out of `Content` and its digest: editing a
 /// line changes no content hash and never makes a snapshot refuse to resume.
 pub const COMMENTARY_FILE: &str = "commentary/en.json";
+/// The slot file: which module fills each engine slot. It stays out of the content digest
+/// while it names the built-in default selection; any other selection is folded in (see
+/// [`Content::with_slots`]), so a match played with it is never taken for a default one.
+pub const SLOTS_FILE: &str = "slots.json";
+/// Slots whose id starts with this choose how the viewer looks; they never enter the digest.
+pub const VIEWER_SLOT_PREFIX: &str = "viewer.";
+/// The fast-model slot never plays a full-engine match, so it never enters the digest either.
+pub const FAST_MODEL_SLOT: &str = "engine.fast-model";
 /// Environment variable that names the content folder.
 pub const CONTENT_DIR_ENV: &str = "SM_CONTENT_DIR";
 
@@ -268,16 +277,77 @@ pub struct Content {
     pub digest: [u8; 32],
     /// The flags that are on; `tuning` already holds their overrides.
     pub flags: ActiveFlags,
+    /// The module in each slot. [`Content::load`] resolves `slots.json`; content built from
+    /// the four files' bytes alone takes the built-in default selection.
+    pub modules: ResolvedModules,
     /// The tuning file as written, and the digest over the files as written.
     written_tuning: TuningFile,
     written_digest: [u8; 32],
+    /// The rule file as written. The rules slot's module turns it into `rules`.
+    written_rules: Vec<u8>,
 }
 
 impl Content {
-    /// Loads the four shipped files from `dir`. The tactics file is checked against the
-    /// attribute schema, so a role naming an unknown attribute is refused by name.
+    /// Loads the four shipped files from `dir`, then the slot file. The tactics file is
+    /// checked against the attribute schema, so a role naming an unknown attribute is
+    /// refused by name; a bad slot entry is refused with the slot, the value, and the valid
+    /// names.
     pub fn load(dir: &ContentDir) -> Result<Self, EngineError> {
-        Self::from_files(&ContentFiles::read(dir)?)
+        let content = Self::from_files(&ContentFiles::read(dir)?)?;
+        content.with_slots(&read_bytes(&dir.path(SLOTS_FILE), SLOTS_FILE)?)
+    }
+
+    /// This content with the modules the slot file `bytes` selects. A bad entry is refused
+    /// with the slot, the value, and the valid names.
+    ///
+    /// A selection other than the built-in default (`viewer.*` and the fast-model slot aside)
+    /// is folded into the digest, the way a changed flag state is: a match played with a
+    /// module off never shares a content hash with a default one, so a snapshot refuses to
+    /// resume under another selection, and the default selection leaves every hash as it
+    /// was. Call it once, on content that [`Content::from_files`] built.
+    pub fn with_slots(&self, bytes: &[u8]) -> Result<Self, EngineError> {
+        let slots = load_json_bytes::<SlotFile>("slots", bytes, SLOTS_FILE, SLOTS_VERSION, &())?;
+        let modules = crate::modules::resolve(&slots.value, REGISTRY)?;
+        let mut next = Self {
+            modules,
+            ..self.clone()
+        };
+        // The rule pack loads through the rules slot: a selection that changes the rules
+        // module reloads it from the rule file as written.
+        let rules_slot = crate::modules::registry::RULES.id;
+        if modules.picked_for(rules_slot) != self.modules.picked_for(rules_slot) {
+            next.rules = modules.rule_pack.load(&self.written_rules)?.value;
+        }
+        // A `viewer.*` slot chooses how a match looks, never what happens in it, and the
+        // fast-model slot never plays a full-engine match, so both stay out of the digest: a
+        // save or a replay does not split on either.
+        let in_match = |picked: &[Picked]| -> Vec<Picked> {
+            picked
+                .iter()
+                .copied()
+                .filter(|p| !p.slot.starts_with(VIEWER_SLOT_PREFIX) && p.slot != FAST_MODEL_SLOT)
+                .collect()
+        };
+        let in_match_picked = in_match(modules.picked());
+        if in_match_picked != in_match(ResolvedModules::builtin_default().picked()) {
+            let fold = |digest: [u8; 32]| -> [u8; 32] {
+                let mut hasher = Sha256::new();
+                hasher.update(digest);
+                hasher.update(b"slots:");
+                for p in &in_match_picked {
+                    hasher.update(format!("{}={}@{},", p.slot, p.module, p.version).as_bytes());
+                }
+                hasher.finalize().into()
+            };
+            let flagged = self.digest != self.written_digest;
+            next.written_digest = fold(self.written_digest);
+            next.digest = if flagged {
+                fold(self.digest)
+            } else {
+                next.written_digest
+            };
+        }
+        Ok(next)
     }
 
     /// The content from the four files' bytes, with the same checks, digest, and flag
@@ -297,8 +367,8 @@ impl Content {
             TUNING_VERSION,
             &(),
         )?;
-        let rules =
-            load_json_bytes::<RulePack>("rules", &files.rules, RULES_FILE, RULES_VERSION, &())?;
+        let modules = ResolvedModules::builtin_default();
+        let rules = modules.rule_pack.load(&files.rules)?;
         let tactics = load_json_bytes::<TacticsSchema>(
             "tactics",
             &files.tactics,
@@ -328,8 +398,10 @@ impl Content {
             tactics: tactics.value,
             digest,
             flags: ActiveFlags::default(),
+            modules,
             written_tuning: tuning.value,
             written_digest: digest,
+            written_rules: files.rules.clone(),
         };
         written.with_flags(&FlagStates::default())
     }

@@ -32,6 +32,10 @@ const IDLE_SLEEP: Duration = Duration::from_micros(100);
 /// held, paused, or lead-bound match does not wake the thread ten thousand times a second,
 /// and the first frame after a quiet spell waits at most this long.
 const IDLE_SLEEP_MAX: Duration = Duration::from_millis(1);
+/// The longest the close waits for the client's own close answer after the client's last
+/// message. A client reading a backlog answers once it has read every frame before the close,
+/// which at the end of a skipped match on a slow machine takes a few seconds.
+const CLOSE_ANSWER_WAIT: Duration = Duration::from_secs(10);
 
 /// The tick and the score, shared between the simulation thread and the socket thread.
 #[derive(Debug, Default)]
@@ -532,20 +536,41 @@ fn dropped(commands: &CommandContext) -> SessionEnd {
     SessionEnd::Dropped
 }
 
-/// Sends the close frame and drives the close handshake to its end.
+/// Sends the close frame and drives the close handshake to its end: the client's own close
+/// answer, or `CLOSE_ANSWER_WAIT`. Until then every message the client sends is read and
+/// dropped. A client can still be reading a backlog of frames when the match ends (the rest
+/// of a skipped match arrives at once), and it keeps sending `seen` as it draws them; a
+/// socket closed with those unread answers with a reset, which throws away the frames the
+/// client had not read yet, the end of the match with them. The wait counts from the
+/// client's last message, so a client still reading and answering on a busy machine is never
+/// cut off; a client that has gone quiet is closed `CLOSE_ANSWER_WAIT` after its last word.
 fn finish_socket(socket: &mut WebSocket<TcpStream>) -> Result<(), StreamError> {
     let _ = socket.close(None);
-    let deadline = Instant::now() + Duration::from_secs(2);
+    let mut deadline = Instant::now() + CLOSE_ANSWER_WAIT;
     while Instant::now() < deadline {
-        match socket.flush() {
-            Ok(()) => return Ok(()),
+        match socket.read() {
+            Ok(_) => deadline = Instant::now() + CLOSE_ANSWER_WAIT,
             Err(tungstenite::Error::Io(e)) if would_block(&e) => {
-                std::thread::sleep(IDLE_SLEEP);
+                // The last frames and the close frame can still sit in the write buffer when
+                // the client is behind (the close's own flush found the socket full), and a
+                // read does not send them; push them on, or the client waits for them forever.
+                match socket.flush() {
+                    Ok(()) => {}
+                    Err(tungstenite::Error::Io(e)) if would_block(&e) => {}
+                    Err(e) if peer_gone(&e) => return Ok(()),
+                    Err(e) => return Err(e.into()),
+                }
+                std::thread::sleep(IDLE_SLEEP_MAX);
             }
+            // The client's close answer ends the handshake; a client already gone ends it too.
             Err(e) if peer_gone(&e) => return Ok(()),
             Err(e) => return Err(e.into()),
         }
     }
+    tracing::warn!(
+        signal = "socket.close_unanswered",
+        wait_ms = CLOSE_ANSWER_WAIT.as_millis() as u64
+    );
     Ok(())
 }
 
@@ -643,5 +668,65 @@ mod tests {
         let state = MatchState::default();
         state.set_scores([3, 1]);
         assert_eq!(state.scores(), [3, 1]);
+    }
+
+    /// The close sends what a full socket still held. A client behind at the end of the
+    /// match has left the kernel buffer full, so the close's own flush finds no room and the
+    /// last frames and the close frame stay in the write buffer; the wait for the close answer
+    /// must keep pushing them, or the client never gets them and the close times out.
+    #[test]
+    fn the_close_sends_the_frames_a_full_socket_still_held() {
+        use std::net::{TcpListener, TcpStream};
+        use tungstenite::protocol::WebSocketConfig;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let client = std::thread::spawn(move || {
+            let stream = TcpStream::connect(addr).unwrap();
+            let (mut ws, _) = tungstenite::client(format!("ws://{addr}/"), stream).unwrap();
+            // Fall behind, so the server fills every buffer before the close.
+            std::thread::sleep(Duration::from_millis(500));
+            let mut frames = 0usize;
+            loop {
+                match ws.read().expect("the client reads to the close frame") {
+                    Message::Binary(_) => frames += 1,
+                    Message::Close(_) => {
+                        let _ = ws.flush();
+                        return frames;
+                    }
+                    _ => {}
+                }
+            }
+        });
+
+        let (stream, _) = listener.accept().unwrap();
+        let config = WebSocketConfig::default()
+            .write_buffer_size(4 * 1024)
+            .max_write_buffer_size(8 * 1024);
+        let mut socket = tungstenite::accept_with_config(stream, Some(config)).unwrap();
+        socket.get_ref().set_nonblocking(true).unwrap();
+        // Write until the kernel buffer is full and the write buffer holds what is left.
+        let mut sent = 0usize;
+        loop {
+            match socket.write(Message::binary(vec![7u8; 1024])) {
+                Ok(()) => sent += 1,
+                Err(tungstenite::Error::Io(e)) if would_block(&e) => sent += 1,
+                Err(tungstenite::Error::WriteBufferFull(_)) => break,
+                Err(e) => panic!("write: {e}"),
+            }
+        }
+        let _ = socket.flush();
+
+        let started = Instant::now();
+        finish_socket(&mut socket).unwrap();
+        assert!(
+            started.elapsed() < CLOSE_ANSWER_WAIT,
+            "the client answered the close; the wait did not run out"
+        );
+        assert_eq!(
+            client.join().unwrap(),
+            sent,
+            "every frame reached the client"
+        );
     }
 }

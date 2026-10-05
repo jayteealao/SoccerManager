@@ -1,0 +1,5 @@
+error[E0616]: field `sim` of struct `MatchView` is private
+ --> tests/ui/writes_private_field.rs:9:25
+  |
+9 |         let _sim = view.sim;
+  |                         ^^^ private field

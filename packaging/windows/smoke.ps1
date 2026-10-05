@@ -73,7 +73,7 @@ function Stop-Game {
 function Start-Launcher([string]$Tag) {
     $out = Join-Path $Evidence "launch-$Tag.out.txt"
     $err = Join-Path $Evidence "launch-$Tag.err.txt"
-    $process = Start-Process -FilePath $program -ArgumentList @('launch', '--minutes', '1') `
+    $process = Start-Process -FilePath $program -ArgumentList @('launch', '--no-start-screen', '--minutes', '1') `
         -WorkingDirectory $installDir -RedirectStandardOutput $out -RedirectStandardError $err `
         -WindowStyle Hidden -PassThru
     $deadline = (Get-Date).AddSeconds(30)
@@ -134,35 +134,59 @@ try {
     # (c) The installed files and the shortcut.
     $missing = @()
     foreach ($path in @($program, (Join-Path $installDir 'content\attributes.json'),
-            (Join-Path $installDir 'web\index.html'), (Join-Path $installDir 'Uninstall.exe'),
+            (Join-Path $installDir 'web\index.html'), (Join-Path $installDir 'web\fonts\OFL-Saira.txt'),
+            (Join-Path $installDir 'Uninstall.exe'),
             $shortcut)) {
         if (-not (Test-Path $path)) { $missing += $path }
     }
-    Add-Check 'installed-files' ($missing.Count -eq 0) ($(if ($missing.Count) { "missing: $($missing -join '; ')" } else { 'program, content, page, uninstaller, and shortcut present' }))
+    Add-Check 'installed-files' ($missing.Count -eq 0) ($(if ($missing.Count) { "missing: $($missing -join '; ')" } else { 'program, content, page, font licences, uninstaller, and shortcut present' }))
     $installedVersion = ((& $program --version) -split '\s+')[1]
     Add-Fact 'installed-version' "engine-cli --version: $installedVersion"
 
-    # (d) The Start-menu shortcut: the launcher starts, runs the engine, and opens the page.
+    # The previous release's engine ships beside this one, with its own content, so a match
+    # that release saved finishes on its engine. The pinned version comes from the pin file
+    # build.ps1 copies beside this script (packaging\previous-engine.json when the check runs
+    # from the repository). Without a pin the check fails: it cannot say which engine is right.
+    $previousProgram = Join-Path $installDir 'previous\engine-cli.exe'
+    $previousVersion = if (Test-Path $previousProgram) { ((& $previousProgram --version) -split '\s+')[1] } else { $null }
+    $pinFile = @((Join-Path $PSScriptRoot 'previous-engine.json'), (Join-Path $PSScriptRoot '..\previous-engine.json')) |
+        Where-Object { Test-Path $_ } | Select-Object -First 1
+    $pinned = if ($pinFile) { [string](Get-Content -Raw $pinFile | ConvertFrom-Json).version } else { $null }
+    $previousOk = [bool]$pinned -and [bool]$previousVersion -and $previousVersion -ne $installedVersion -and $previousVersion -eq $pinned
+    Add-Check 'previous-engine' $previousOk "previous\engine-cli.exe --version '$previousVersion', pinned '$pinned', installed '$installedVersion'"
+    $previousContent = Join-Path $installDir 'previous\content\attributes.json'
+    Add-Check 'previous-content' (Test-Path $previousContent) "previous\content\attributes.json present: $(Test-Path $previousContent)"
+
+    # (d) The Start-menu shortcut: the launcher starts on the start screen and opens the page;
+    # a new match asked for as the page asks runs the engine.
     $shortcutStart = Get-Date
     Start-Process -FilePath $shortcut
     $deadline = (Get-Date).AddSeconds(60)
-    $portSeen = $false
-    while ((Get-Date) -lt $deadline) {
-        if ((Test-Path $portFile) -and ((Get-Item $portFile).LastWriteTime -ge $shortcutStart.AddSeconds(-2))) {
-            $portSeen = $true
-            break
-        }
-        Start-Sleep -Milliseconds 250
+    $launcher = $null
+    while ((Get-Date) -lt $deadline -and -not $launcher) {
+        $launcher = Get-CimInstance Win32_Process -Filter "Name = 'engine-cli.exe'" |
+            Where-Object { $_.CommandLine -match ' launch' } | Select-Object -First 1
+        if (-not $launcher) { Start-Sleep -Milliseconds 250 }
     }
-    Add-Check 'shortcut-engine-port' $portSeen "engine.port written after the shortcut started: $portSeen"
-    $launcher = Get-CimInstance Win32_Process -Filter "Name = 'engine-cli.exe'" |
-        Where-Object { $_.CommandLine -match ' launch' } | Select-Object -First 1
     $shortcutRunning = $false
+    $frontDoor = $false
     $shortcutDetail = 'no launcher process found'
     if ($launcher) {
-        $ports = Get-NetTCPConnection -OwningProcess $launcher.ProcessId -State Listen -ErrorAction SilentlyContinue |
-            Where-Object { $_.LocalAddress -eq '127.0.0.1' } | Select-Object -ExpandProperty LocalPort
+        $ports = @()
+        while ((Get-Date) -lt $deadline -and $ports.Count -eq 0) {
+            $ports = @(Get-NetTCPConnection -OwningProcess $launcher.ProcessId -State Listen -ErrorAction SilentlyContinue |
+                Where-Object { $_.LocalAddress -eq '127.0.0.1' } | Select-Object -ExpandProperty LocalPort)
+            if ($ports.Count -eq 0) { Start-Sleep -Milliseconds 250 }
+        }
         foreach ($port in $ports) {
+            $idle = Get-Status "http://127.0.0.1:$port/"
+            if ($idle -and $idle.'front-door' -eq $true -and $idle.'engine.state' -eq 'idle') {
+                $frontDoor = $true
+                try {
+                    Invoke-WebRequest -Uri "http://127.0.0.1:$port/engine/new-match" -Method Post `
+                        -Headers @{ Origin = "http://127.0.0.1:$port" } -UseBasicParsing | Out-Null
+                } catch { }
+            }
             $status = Wait-Running "http://127.0.0.1:$port/" 30
             if ($status -and $status.'engine.state' -eq 'running') {
                 $shortcutRunning = $true
@@ -172,7 +196,10 @@ try {
         }
         if (-not $shortcutRunning) { $shortcutDetail = "launcher $($launcher.ProcessId) found; no page port reported a running engine" }
     }
+    Add-Check 'shortcut-front-door' $frontDoor "the shortcut's launcher opened on the start screen (front-door true, engine.state idle): $frontDoor"
     Add-Check 'shortcut-engine-running' $shortcutRunning $shortcutDetail
+    $portSeen = (Test-Path $portFile) -and ((Get-Item $portFile).LastWriteTime -ge $shortcutStart.AddSeconds(-2))
+    Add-Check 'shortcut-engine-port' $portSeen "engine.port written after the new match started: $portSeen"
     # The browser is the machine's own: on a first start it can show its welcome page first,
     # so whether it opened is recorded, and the screenshot shows what the player sees.
     Start-Sleep -Seconds 20
@@ -187,6 +214,21 @@ try {
     if ($second.address) {
         $status = Wait-Running $second.address 60
         Add-Check 'launch-engine-running' ($status -and $status.'engine.state' -eq 'running') "engine.state: $($status.'engine.state')"
+        # The page is the built viewer: its module script comes from assets/ as JavaScript.
+        $index = Get-Content -Raw (Join-Path $installDir 'web\index.html')
+        $moduleType = $null
+        $module = $null
+        if ($index -match '<script type="module"[^>]*src="/?(assets/[^"]+)"') {
+            $module = $Matches[1]
+            try {
+                $request = [System.Net.WebRequest]::Create($second.address + $module)
+                $request.Timeout = 5000
+                $response = $request.GetResponse()
+                $moduleType = $response.ContentType
+                $response.Close()
+            } catch { $moduleType = "error: $($_.Exception.Message)" }
+        }
+        Add-Check 'viewer-module' ([bool]$module -and "$moduleType" -match '^text/javascript') "module '$module' served as '$moduleType'"
         $edge = Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'
         if (Test-Path $edge) {
             $edgeProfile = Join-Path $env:TEMP 'smoke-edge-profile'

@@ -10,7 +10,11 @@
 pub mod clock;
 pub mod discipline;
 pub mod fouls;
+pub mod injury;
 pub mod offside;
+pub mod pack;
+pub mod phases;
+pub mod positions;
 pub mod restart;
 pub mod shootout;
 
@@ -20,7 +24,8 @@ use crate::data::rules::{RulePack, StoppageKind};
 use crate::decision::Kick;
 use crate::fatigue::InjurySource;
 use crate::math::DVec2;
-use crate::pitch::{self, Exit, Line};
+use crate::modules::{PeriodEnd, ShootoutLineup};
+use crate::pitch::{Exit, Line};
 use crate::player::Status;
 use crate::sim::{DecidedBy, EngineEventKind, EventDetail, Simulation};
 use crate::streams::{Action, Key};
@@ -29,6 +34,7 @@ use crate::tuning::Tuning;
 use clock::{KICK_LIVE_TICKS, MatchClock, Tally};
 use fouls::Card;
 use offside::OffsideSet;
+use phases::{Cause, PhaseName};
 pub use restart::DeadBall;
 use serde_json::json;
 
@@ -94,7 +100,15 @@ impl Shootout {
 /// The referee's state.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Referee {
+    /// The stored phase: the gate hashes it and the snapshot saves it. Only
+    /// `Simulation::enter_phase` writes it.
     pub phase: Phase,
+    /// The phase's name in the phase machine: derived state that equals
+    /// `phases::derive(phase, shootout)` at every tick boundary, so it is neither hashed nor
+    /// saved. Its writers are `enter_phase` and `note_phase`, the snapshot restore (which
+    /// derives it), and the test scenes' `seat_phase` and `seat_break`. A step checks the
+    /// equality whenever the checks are on (`check_phase_name`).
+    pub named: PhaseName,
     /// Players in an offside position since the last kick in open play.
     pub offside: OffsideSet,
     pub pending: Vec<PendingCard>,
@@ -112,6 +126,7 @@ impl Referee {
     pub fn new(minutes: u32, rules: &RulePack, knockout: bool) -> Self {
         Self {
             phase: Phase::Live,
+            named: PhaseName::PreMatch,
             offside: 0,
             pending: Vec::new(),
             tally: Tally::default(),
@@ -124,6 +139,134 @@ impl Referee {
 }
 
 impl Simulation {
+    /// `true` when the phase machine checks every change of phase, and the restart position
+    /// check judges every restart: in debug builds, in the engine's tests, and in debug mode
+    /// (`trace_on`). A release match without debug mode checks and corrects nothing.
+    #[inline(always)]
+    pub(crate) fn checks_on(&self) -> bool {
+        cfg!(any(debug_assertions, feature = "scenario")) || self.trace_on()
+    }
+
+    /// The one writer of the phase (the phase machine): names the target, checks that the
+    /// table declares the change when the checks are on, records it in the engine's tests,
+    /// and writes the stored and the named phase.
+    ///
+    /// # Panics
+    ///
+    /// When the checks are on and no row of `phases::TRANSITIONS` allows the change, or a
+    /// restart is taken with a position against the Laws (`positions::check`): the message
+    /// names the tick, the phase, the restart, the player, his position, and the rule.
+    pub(crate) fn enter_phase(&mut self, next: Phase, cause: Cause) {
+        let to = phases::derive(next, self.referee.shootout.is_some());
+        let phase = self.referee.named;
+        self.note_phase(to, cause);
+        if self.checks_on()
+            && let Some(restart) = self.restart_taken(cause)
+        {
+            let faults = self.restart_faults(&restart);
+            let lines: Vec<String> = faults
+                .iter()
+                .map(|f| format!("tick {}: {phase} ({}): {f}", self.tick + 1, restart.name()))
+                .collect();
+            #[cfg(feature = "scenario")]
+            {
+                self.restarts_checked += 1;
+                self.position_faults.extend(lines.iter().cloned());
+            }
+            if let Some(first) = lines.first() {
+                panic!("restart position fault at {first}");
+            }
+        }
+        self.referee.phase = next;
+    }
+
+    /// The restart that `cause` takes, read before the phase changes: the kick-off that starts
+    /// a period (its taker already holds the ball), a dead ball's restart, or a shoot-out
+    /// kick. `None` for every other cause.
+    fn restart_taken(&self, cause: Cause) -> Option<positions::Restart> {
+        let dead = match self.referee.phase {
+            Phase::DeadBall(dead) => Some(dead),
+            _ => None,
+        };
+        match cause {
+            Cause::KickOffTaken => {
+                let taker = self.carrier?;
+                Some(positions::Restart::KickOff {
+                    team: self.players[taker].team,
+                    taker,
+                })
+            }
+            Cause::RestartTaken => dead.map(positions::Restart::Dead),
+            Cause::ShootoutKickTaken => Some(positions::Restart::ShootoutKick {
+                dead: dead?,
+                keepers: self.referee.shootout.as_ref()?.keepers,
+            }),
+            _ => None,
+        }
+    }
+
+    /// Every position against the Laws as `restart` is taken (`positions::check`).
+    fn restart_faults(&self, restart: &positions::Restart) -> Vec<positions::Fault> {
+        positions::check(
+            self.config.pitch(),
+            restart,
+            self.ball.xy(),
+            &self.players,
+            &self.teams,
+            self.config.tuning.restart_ready_radius,
+        )
+    }
+
+    /// Moves the named phase to `to` for `cause` without a change of the stored phase: the
+    /// break inside `half_time`, which places the next kick-off on the same tick.
+    pub(crate) fn note_phase(&mut self, to: PhaseName, cause: Cause) {
+        let from = self.referee.named;
+        if self.checks_on() && phases::declared(from, to, cause).is_none() {
+            panic!("undeclared phase transition: {from} -> {to} ({cause})");
+        }
+        #[cfg(feature = "scenario")]
+        self.phase_log.push(phases::Step {
+            tick: self.tick + 1,
+            from,
+            to,
+            cause,
+        });
+        self.referee.named = to;
+    }
+
+    /// Fails when the named phase differs from the name of the stored phase at a tick
+    /// boundary, with the checks on.
+    ///
+    /// # Panics
+    ///
+    /// When the two names differ: a writer bypassed the phase machine.
+    pub(crate) fn check_phase_name(&self) {
+        if !self.checks_on() {
+            return;
+        }
+        let derived = phases::derive(self.referee.phase, self.referee.shootout.is_some());
+        assert_eq!(
+            self.referee.named, derived,
+            "tick {}: the named phase differs from the stored phase",
+            self.tick
+        );
+    }
+
+    /// Test scenes only: seats a stored phase the scene builds without a transition, with its
+    /// derived name.
+    #[cfg(feature = "scenario")]
+    pub(crate) fn seat_phase(&mut self, phase: Phase) {
+        self.referee.phase = phase;
+        self.referee.named = phases::derive(phase, self.referee.shootout.is_some());
+    }
+
+    /// Test scenes only: seats the half-time break, so the kick-off the scene places starts
+    /// the next period from it.
+    #[cfg(feature = "scenario")]
+    pub(crate) fn seat_break(&mut self) {
+        self.referee.named = PhaseName::HalfTime;
+    }
+
     /// Places every player for a kick-off by `team` at once, as at the start of a half, and
     /// gives the centre-forward the ball.
     pub(crate) fn place_kick_off(&mut self, team: usize) {
@@ -133,27 +276,21 @@ impl Simulation {
         self.restart_taker = None;
         self.clearers_tried = 0;
         self.end_shot();
+        let restarts = self.config.modules.restarts;
         for i in 0..self.players.len() {
             let p = self.players[i];
             if !p.active() {
                 continue;
             }
-            let side = &self.teams[p.team];
-            let pos = restart::kick_off_position(side, p.slot);
-            let facing = DVec2::new(side.attack_x, 0.0);
+            let pos = restarts.kick_off_position(&self.view(), p.team, p.slot, team);
+            let facing = DVec2::new(self.teams[p.team].attack_x, 0.0);
             let p = &mut self.players[i];
             p.pos = pos;
             p.vel = DVec2::ZERO;
             p.target = pos;
             p.facing = facing;
         }
-        let kicker = restart::taker(
-            StoppageKind::KickOff,
-            team,
-            DVec2::ZERO,
-            &self.players,
-            &self.teams,
-        );
+        let kicker = restarts.taker(&self.view(), StoppageKind::KickOff, team, DVec2::ZERO);
         let mut event = self.event(EngineEventKind::KickOff, Some(team));
         event.spot = Some(DVec2::ZERO);
         event.player = Some(kicker);
@@ -170,7 +307,7 @@ impl Simulation {
         self.last_touch = Some(team);
         self.restart_taker = Some(kicker);
         self.referee.offside = 0;
-        self.referee.phase = crate::rules::Phase::Live;
+        self.enter_phase(Phase::Live, Cause::KickOffTaken);
     }
 
     /// `team` scored. The event names the player who kicked the ball last; a player of the
@@ -238,7 +375,7 @@ impl Simulation {
                 StoppageKind::ThrowIn,
                 StoppageKind::ThrowIn,
                 1 - last,
-                pitch::throw_in_spot(exit.point, side),
+                self.config.pitch().throw_in_spot(exit.point, side),
                 false,
             ),
             Line::Goal { side } => {
@@ -252,7 +389,7 @@ impl Simulation {
                         StoppageKind::GoalKick,
                         StoppageKind::GoalKick,
                         1 - attacking,
-                        pitch::goal_kick_spot(side, exit.point.y),
+                        self.config.pitch().goal_kick_spot(side, exit.point.y),
                         true,
                     );
                 } else {
@@ -260,7 +397,7 @@ impl Simulation {
                         StoppageKind::Corner,
                         StoppageKind::Corner,
                         attacking,
-                        pitch::corner_spot(side, exit.point.y),
+                        self.config.pitch().corner_spot(side, exit.point.y),
                         true,
                     );
                 }
@@ -279,39 +416,21 @@ impl Simulation {
         self.players[i].foul_ready = self.tick.saturating_add(t.foul_cooldown_ticks);
         let own_end = -self.teams[offender.team].attack_x;
         let at = self.players[c].pos;
-        let penalty = pitch::in_penalty_area(at, own_end);
+        let penalty = self.config.pitch().in_penalty_area(at, own_end);
         let advantage = !ball_lost && !penalty;
-        let draw = self.streams.tested(
-            Key::player(Action::FoulCard, &offender),
-            &fouls::card_thresholds(offender.derived.aggression, t),
-        );
-        let mut card = fouls::card_outcome(offender.derived.aggression, offender.yellow, t, draw);
+        let fouls = self.config.modules.fouls;
+        let thresholds = fouls.card_thresholds(&self.view(), i);
+        let draw = self
+            .streams
+            .tested(Key::player(Action::FoulCard, &offender), &thresholds);
+        let mut card = fouls.card(&self.view(), i, draw);
         let decided = card;
         let mut event = self.event(EngineEventKind::Foul, Some(offender.team));
         event.player = Some(i);
         event.secondary = Some(c);
         event.advantage = Some(advantage);
         self.events.push(event);
-        if let Some(hook) = self.plugins.rule.as_mut() {
-            let ctx = crate::plugin::FoulContext {
-                tick: self.tick,
-                minute: self.referee.clock.minute(self.tick).0,
-                team: offender.team,
-                slot: offender.slot,
-                yellows: offender.yellow,
-                aggression: offender.derived.aggression,
-                advantage,
-                penalty,
-            };
-            let outcome = hook.card(&ctx, card);
-            let (value, notes) =
-                self.plugins
-                    .settle(crate::plugin::HookPoint::Rule, outcome, self.tick);
-            self.push_script_notes(notes);
-            if let Some(scripted) = value {
-                card = scripted;
-            }
-        }
+        card = self.rule_card(i, advantage, penalty, card);
         if self.trace_on() {
             self.trace_point(
                 Point::Foul,
@@ -341,7 +460,7 @@ impl Simulation {
             .position(|p| p.player == i)
             .map(|k| self.referee.pending.remove(k).card);
         let card = match (card, held) {
-            (Some(a), Some(b)) => Some(if b.severity() > a.severity() { b } else { a }),
+            (Some(a), Some(b)) => Some(self.config.modules.discipline.more_severe(a, b)),
             (a, b) => a.or(b),
         };
         if let Some(card) = card {
@@ -352,7 +471,7 @@ impl Simulation {
                 StoppageKind::Penalty,
                 StoppageKind::Penalty,
                 fouled_team,
-                pitch::penalty_spot(own_end),
+                self.config.pitch().penalty_spot(own_end),
                 true,
             );
         } else {
@@ -360,7 +479,7 @@ impl Simulation {
                 StoppageKind::FreeKick,
                 StoppageKind::FreeKick,
                 fouled_team,
-                pitch::clamp(at, 0.5),
+                self.config.pitch().clamp(at, 0.5),
                 true,
             );
         }
@@ -370,9 +489,9 @@ impl Simulation {
     /// a spell of advantage: a more severe card replaces the one held, and a less severe one
     /// is dropped.
     fn hold_card(&mut self, i: usize, card: Card) {
+        let discipline = self.config.modules.discipline;
         match self.referee.pending.iter_mut().find(|p| p.player == i) {
-            Some(held) if card.severity() > held.card.severity() => held.card = card,
-            Some(_) => {}
+            Some(held) => held.card = discipline.more_severe(held.card, card),
             None => self.referee.pending.push(PendingCard { player: i, card }),
         }
     }
@@ -389,7 +508,7 @@ impl Simulation {
         if self.trace_on() {
             self.trace_point(Point::Offside, json!({"player": i, "team": team}));
         }
-        let spot = pitch::clamp(self.players[i].pos, 0.5);
+        let spot = self.config.pitch().clamp(self.players[i].pos, 0.5);
         self.open_dead_ball(
             StoppageKind::FreeKick,
             StoppageKind::FreeKick,
@@ -408,18 +527,13 @@ impl Simulation {
     /// Shows `card` to player `i`; `held` marks a card held back for advantage until this
     /// stoppage.
     fn show_card_as(&mut self, i: usize, card: Card, held: bool) {
-        if !self.players[i].active() {
+        let judge = self.config.modules.discipline;
+        let Some(card) = judge.shown(&self.view(), i, card) else {
             return;
-        }
-        let team = self.players[i].team;
-        // A caution held back for advantage was judged before any card shown since; a player
-        // already booked receives it as a second yellow.
-        let card = if card == Card::Yellow && self.players[i].yellow >= 1 {
-            Card::SecondYellow
-        } else {
-            card
         };
-        let sent_off = discipline::book(&mut self.players[i], card);
+        let team = self.players[i].team;
+        discipline::book(&mut self.players[i], card);
+        let sent_off = judge.sends_off(card);
         if card != Card::Red {
             self.summary.yellow[team] += 1;
         }
@@ -449,7 +563,7 @@ impl Simulation {
         // the bench keeper.
         self.ai[team].due = true;
         self.timeline.push((self.tick + 1, self.teams.clone()));
-        if let Some(short) = discipline::abandoned(&self.players, self.config.rules.min_players) {
+        if let Some(short) = self.config.modules.clock.abandoned(&self.view()) {
             tracing::warn!(
                 signal = "rules.abandoned",
                 tick = self.tick + 1,
@@ -458,7 +572,7 @@ impl Simulation {
             );
             self.trace_abandoned(short);
             self.referee.abandoned = true;
-            self.referee.phase = Phase::FullTime;
+            self.enter_phase(Phase::FullTime, Cause::Abandoned);
         }
     }
 
@@ -480,7 +594,8 @@ impl Simulation {
     /// stopped on this tick (a foul), the injury rides that stoppage. The team's AI manager
     /// checks at once.
     pub(crate) fn injure(&mut self, i: usize, source: InjurySource) {
-        if !self.players[i].active() {
+        let injuries = self.config.modules.injuries;
+        if !injuries.leaves(&self.view(), i, source) {
             return;
         }
         let p = self.players[i];
@@ -501,7 +616,7 @@ impl Simulation {
         {
             let p = &mut self.players[i];
             p.status = Status::Injured;
-            p.pos = pitch::parking_spot(p.team, p.slot);
+            p.pos = self.config.pitch().parking_spot(p.team, p.slot);
             p.vel = DVec2::ZERO;
             p.target = p.pos;
         }
@@ -523,8 +638,7 @@ impl Simulation {
         let detail = Some(EventDetail::Injury { source });
         match self.referee.phase {
             Phase::Live => {
-                let with = self.last_touch.unwrap_or(team);
-                let spot = pitch::clamp(self.ball.xy(), 0.5);
+                let (with, spot) = injuries.dropped_ball(&self.view(), team);
                 self.open_dead_ball(
                     StoppageKind::Injury,
                     StoppageKind::Injury,
@@ -546,14 +660,18 @@ impl Simulation {
                 event.detail = detail;
                 self.events.push(event);
                 if dead.taker == i {
-                    dead.taker =
-                        restart::taker(dead.kind, dead.team, dead.spot, &self.players, &self.teams);
-                    self.referee.phase = Phase::DeadBall(dead);
+                    dead.taker = self.config.modules.restarts.taker(
+                        &self.view(),
+                        dead.kind,
+                        dead.team,
+                        dead.spot,
+                    );
+                    self.enter_phase(Phase::DeadBall(dead), Cause::TakerRenamed);
                 }
             }
             Phase::FullTime => {}
         }
-        if let Some(short) = discipline::abandoned(&self.players, self.config.rules.min_players) {
+        if let Some(short) = self.config.modules.clock.abandoned(&self.view()) {
             tracing::warn!(
                 signal = "rules.abandoned",
                 tick = self.tick + 1,
@@ -562,7 +680,7 @@ impl Simulation {
             );
             self.trace_abandoned(short);
             self.referee.abandoned = true;
-            self.referee.phase = Phase::FullTime;
+            self.enter_phase(Phase::FullTime, Cause::Abandoned);
         }
     }
 
@@ -599,7 +717,8 @@ impl Simulation {
         self.clearers_tried = 0;
         self.end_shot();
         let since = self.tick + 1;
-        let taker = restart::taker(kind, team, spot, &self.players, &self.teams);
+        let restarts = self.config.modules.restarts;
+        let taker = restarts.taker(&self.view(), kind, team, spot);
         if self.trace_on() {
             let preferred = restart::preferred_taker(kind, team, spot, &self.teams);
             self.trace_point(
@@ -622,23 +741,19 @@ impl Simulation {
                 }),
             );
         }
-        let mut delay = restart::delay_ticks(kind, &self.config.tuning);
-        if self.summary.goals[team] > self.summary.goals[1 - team] {
-            // A leading team with time wasting on takes longer over its restarts.
-            let factor = self.teams[team].plan.time_wasting;
-            // The factor is at most 20 and the delay under 3000 ticks, so the cast fits.
-            delay = (f64::from(delay) * factor).round() as u32;
-        }
-        let ready_at = since + delay;
-        self.referee.phase = Phase::DeadBall(DeadBall {
-            kind,
-            team,
-            spot,
-            direct,
-            since,
-            ready_at,
-            taker,
-        });
+        let ready_at = since + restarts.delay_ticks(&self.view(), kind, team);
+        self.enter_phase(
+            Phase::DeadBall(DeadBall {
+                kind,
+                team,
+                spot,
+                direct,
+                since,
+                ready_at,
+                taker,
+            }),
+            Cause::BallDead(cause),
+        );
         self.referee.tally.add(cause);
         self.summary.stoppages += 1;
         let count = match kind {
@@ -667,22 +782,15 @@ impl Simulation {
     /// One tick of a dead ball: every player steers to a restart target, and the taker
     /// restarts play when ready, or at the hard limit whatever the players are doing.
     pub(crate) fn dead_ball_tick(&mut self, dead: &DeadBall, t: &Tuning) {
-        let keepers = self.referee.shootout.as_ref().map(|s| s.keepers);
+        let restarts = self.config.modules.restarts;
         for i in 0..self.players.len() {
             if self.players[i].active() {
-                let target = match keepers {
-                    Some(keepers) => restart::shootout_target(dead, i, keepers),
-                    None => restart::target(dead, i, &self.players, &self.teams, t),
-                };
-                self.players[i].target = target;
+                self.players[i].target = restarts.target(&self.view(), dead, i);
             }
         }
         let now = self.tick + 1;
         let forced = now >= dead.hard_limit();
-        let ready = match keepers {
-            Some(keepers) => restart::shootout_ready(dead, now, &self.players, keepers, t),
-            None => restart::is_ready(dead, now, &self.players, &self.teams, t),
-        };
+        let ready = restarts.ready(&self.view(), dead, now);
         if !forced && !ready {
             return;
         }
@@ -708,7 +816,7 @@ impl Simulation {
             self.take_shootout_kick(dead, t);
             return;
         }
-        self.referee.phase = Phase::Live;
+        self.enter_phase(Phase::Live, Cause::RestartTaken);
         self.carrier = Some(dead.taker);
         self.control_since = self.tick;
         self.last_touch = Some(dead.team);
@@ -790,30 +898,30 @@ impl Simulation {
             return;
         }
         let half = clock.half as usize;
+        let rules = self.config.modules.clock;
         if clock.added_ticks[half].is_none() {
             let added_s = if !clock.plays_added {
                 0
             } else if clock.in_extra_time() {
-                let added = clock::extra_time_allowance(&self.config.rules);
                 let draw = self.streams.draw(Key::of_match(Action::ExtraTimeAdded));
-                let seconds = clock::added_seconds(&self.referee.tally, &added, draw);
+                let seconds = rules.added_seconds(&self.view(), true, draw);
                 tracing::info!(
                     signal = "rules.extra_time",
                     period = half,
-                    tally_s = self.referee.tally.seconds(&added),
+                    tally_s = rules.tally_seconds(&self.view(), true),
                     added_s = seconds,
                     announced_min = clock::announced_minutes(seconds)
                 );
                 seconds
             } else {
-                let added = &self.config.rules.added_time;
                 let draw = self.streams.draw(Key::of_match(Action::AddedTime));
-                let seconds = clock::added_seconds(&self.referee.tally, added, draw);
+                let seconds = rules.added_seconds(&self.view(), false, draw);
+                let variance_s = f64::from(self.config.rules.added_time.variance_s);
                 tracing::info!(
                     signal = "rules.added_time",
                     half,
-                    tally_s = self.referee.tally.seconds(added),
-                    variance_s = ((2.0 * draw - 1.0) * f64::from(added.variance_s)).round(),
+                    tally_s = rules.tally_seconds(&self.view(), false),
+                    variance_s = ((2.0 * draw - 1.0) * variance_s).round(),
                     added_s = seconds,
                     announced_min = clock::announced_minutes(seconds)
                 );
@@ -828,13 +936,13 @@ impl Simulation {
             }
             self.referee.clock = clock;
             if self.trace_on() {
-                let (point, tally_s) = if clock.in_extra_time() {
-                    let added = clock::extra_time_allowance(&self.config.rules);
-                    (Point::ExtraTimeAdded, self.referee.tally.seconds(&added))
+                let extra = clock.in_extra_time();
+                let point = if extra {
+                    Point::ExtraTimeAdded
                 } else {
-                    let added = &self.config.rules.added_time;
-                    (Point::AddedTime, self.referee.tally.seconds(added))
+                    Point::AddedTime
                 };
+                let tally_s = rules.tally_seconds(&self.view(), extra);
                 self.trace_point(
                     point,
                     json!({
@@ -848,24 +956,15 @@ impl Simulation {
             }
         }
         if clock.half_end().is_some_and(|end| now >= end) {
-            let level = self.summary.goals[0] == self.summary.goals[1];
-            if !clock.last_half() {
-                self.half_time(true);
-            } else if !clock.last_period() && (clock.in_extra_time() || level) {
-                // Extra-time periods exist only in a knockout match. Its breaks give no
-                // energy back, so fatigue runs on past 90 minutes without a step.
-                self.half_time(false);
-            } else if self.config.knockout && level {
-                self.start_shootout();
-            } else {
-                if self.config.knockout {
-                    self.summary.decided_by = Some(if clock.in_extra_time() {
-                        DecidedBy::ExtraTime
-                    } else {
-                        DecidedBy::Regulation
-                    });
+            match rules.period_end(&self.view()) {
+                PeriodEnd::Break { recover } => self.half_time(recover),
+                PeriodEnd::Shootout => self.start_shootout(),
+                PeriodEnd::FullTime { decided_by } => {
+                    if decided_by.is_some() {
+                        self.summary.decided_by = decided_by;
+                    }
+                    self.enter_phase(Phase::FullTime, Cause::MatchEnd);
                 }
-                self.referee.phase = Phase::FullTime;
             }
         }
     }
@@ -895,6 +994,7 @@ impl Simulation {
                 json!({"period": half, "next": next, "extra_time": extra, "recover": recover}),
             );
         }
+        self.note_phase(PhaseName::HalfTime, Cause::PeriodEnd);
         self.show_pending_cards();
         if self.referee.abandoned {
             return;
@@ -921,11 +1021,10 @@ impl Simulation {
             1 - first
         } else {
             self.summary.extra_time = true;
-            let team = usize::from(
-                self.streams
-                    .tested(Key::of_match(Action::ExtraKickOff), &[0.5])
-                    >= 0.5,
-            );
+            let draw = self
+                .streams
+                .tested(Key::of_match(Action::ExtraKickOff), &[0.5]);
+            let team = self.config.modules.clock.extra_kick_off(draw);
             self.referee.extra_kick_off = Some(team);
             if self.trace_on() {
                 self.trace_point(Point::ExtraTimeKickOff, json!({ "team": team }));
@@ -946,45 +1045,16 @@ impl Simulation {
     /// first and a second toss the end every kick is taken at. The first kick is set up at
     /// once.
     fn start_shootout(&mut self) {
-        let keeping = [
-            self.config.attributes.index("reflexes"),
-            self.config.attributes.index("one_on_ones"),
-        ];
-        let acting = [self.keeper(0), self.keeper(1)];
-        let candidates = [0, 1].map(|team| {
-            self.players
-                .iter()
-                .enumerate()
-                .filter(|(_, p)| p.team == team && p.active())
-                .map(|(i, p)| shootout::Candidate {
-                    index: i,
-                    goalkeeper: i == acting[team],
-                    kicking: p.derived.finishing + p.derived.composure,
-                    keeping: keeping
-                        .iter()
-                        .flatten()
-                        .map(|&k| f64::from(p.attributes.get(k)))
-                        .sum(),
-                })
-                .collect::<Vec<_>>()
-        });
-        let eligible = shootout::equalise(candidates);
-        let keepers = [0, 1].map(|team| shootout::keeper(&eligible[team]).unwrap_or(acting[team]));
-        let order = [0, 1].map(|team| shootout::order(&eligible[team], Some(keepers[team])));
-        let first = usize::from(
+        let rules = self.config.modules.clock;
+        let ShootoutLineup { order, keepers } = rules.shootout_lineup(&self.view());
+        let first = rules.shootout_first(
             self.streams
-                .tested(Key::of_match(Action::ShootoutFirstTeam), &[0.5])
-                >= 0.5,
+                .tested(Key::of_match(Action::ShootoutFirstTeam), &[0.5]),
         );
-        let end = if self
-            .streams
-            .tested(Key::of_match(Action::ShootoutEnd), &[0.5])
-            < 0.5
-        {
-            -1.0
-        } else {
-            1.0
-        };
+        let end = rules.shootout_end(
+            self.streams
+                .tested(Key::of_match(Action::ShootoutEnd), &[0.5]),
+        );
         if self.trace_on() {
             self.trace_point(
                 Point::ShootoutOrder,
@@ -1013,12 +1083,12 @@ impl Simulation {
             kicker: None,
             live_since: None,
         });
-        self.shootout_next_kick();
+        self.shootout_next_kick(Cause::ShootoutStart);
     }
 
     /// Sets up the next shoot-out kick: the kicking team's next player on the pitch in its
     /// order, at the penalty mark of the shoot-out end, after the unscaled penalty delay.
-    fn shootout_next_kick(&mut self) {
+    fn shootout_next_kick(&mut self, cause: Cause) {
         let Some(state) = self.referee.shootout.as_mut() else {
             return;
         };
@@ -1036,7 +1106,7 @@ impl Simulation {
         state.kicker = Some(kicker);
         state.live_since = None;
         let round = state.taken[team] + 1;
-        let spot = pitch::penalty_spot(state.end);
+        let spot = self.config.pitch().penalty_spot(state.end);
         self.show_pending_cards();
         if self.referee.abandoned {
             return;
@@ -1052,16 +1122,23 @@ impl Simulation {
         self.clearers_tried = 0;
         self.end_shot();
         let since = self.tick + 1;
-        let delay = restart::delay_ticks(StoppageKind::Penalty, &self.config.tuning);
-        self.referee.phase = Phase::DeadBall(DeadBall {
-            kind: StoppageKind::Penalty,
-            team,
-            spot,
-            direct: true,
-            since,
-            ready_at: since + delay,
-            taker: kicker,
-        });
+        let delay = self
+            .config
+            .modules
+            .restarts
+            .shootout_delay_ticks(&self.view());
+        self.enter_phase(
+            Phase::DeadBall(DeadBall {
+                kind: StoppageKind::Penalty,
+                team,
+                spot,
+                direct: true,
+                since,
+                ready_at: since + delay,
+                taker: kicker,
+            }),
+            cause,
+        );
         self.summary.stoppages += 1;
         let mut event = self.event(EngineEventKind::Penalty, Some(team));
         event.spot = Some(spot);
@@ -1087,18 +1164,14 @@ impl Simulation {
         state.live_since = Some(self.tick + 1);
         let keeper = state.keepers[1 - dead.team];
         let end = state.end;
-        let goal = pitch::goal_centre(end);
-        self.referee.phase = Phase::Live;
+        let goal = self.config.pitch().goal_centre(end);
+        self.enter_phase(Phase::Live, Cause::ShootoutKickTaken);
         let kick = self.shot_kick(dead.taker, goal, keeper, t.shots.penalty_spread);
         let diver = self.players[keeper];
         let dive = self
             .streams
             .range(Key::player(Action::KeeperDive, &diver), -1.0, 1.0);
-        let side = if dive.abs() < t.shots.keeper_stays {
-            0.0
-        } else {
-            dive.signum()
-        };
+        let side = self.config.modules.clock.keeper_dive(&self.view(), dive);
         if self.trace_on() {
             self.trace_point(
                 Point::RestartTaken,
@@ -1113,13 +1186,21 @@ impl Simulation {
             );
         }
         self.players[keeper].target = DVec2::new(
-            end * (pitch::HALF_LENGTH - 0.3),
+            end * (self.config.pitch().half_length() - 0.3),
             side * t.shots.keeper_dive_m,
         );
         let (dir, speed, loft) = kick.flight();
-        self.ball.kick(dir, speed, loft, t);
+        self.ball = self
+            .config
+            .modules
+            .ball
+            .kick(&self.view(), self.ball, dir, speed, loft);
         self.end_shot();
-        self.shot_on_target = crate::shot::on_target(self.ball, end, t);
+        self.shot_on_target = self
+            .config
+            .modules
+            .shot
+            .on_target(&self.view(), self.ball, end);
         self.carrier = None;
         self.keeper_beaten = false;
         self.last_touch = Some(dead.team);
@@ -1133,9 +1214,9 @@ impl Simulation {
         let Some(end) = self.referee.shootout.as_ref().map(|s| s.end) else {
             return;
         };
-        if pitch::in_goal(prev, xy, end) && self.ball.pos.z < t.crossbar_height {
+        if self.config.pitch().in_goal(prev, xy, end) && self.ball.pos.z < t.crossbar_height {
             self.shootout_outcome(true, "goal");
-        } else if pitch::exit(prev, xy).is_some() {
+        } else if self.config.pitch().exit(prev, xy).is_some() {
             self.shootout_outcome(false, "off_target");
         }
     }
@@ -1159,7 +1240,11 @@ impl Simulation {
             if self.keeper_beaten || !self.shot_on_target {
                 return;
             }
-            let save = crate::shot::save_chance(t.shots.penalty_xg, t);
+            let save = self
+                .config
+                .modules
+                .shot
+                .save_chance(&self.view(), t.shots.penalty_xg);
             let k = self.players[keeper];
             if self
                 .streams
@@ -1170,10 +1255,11 @@ impl Simulation {
                 self.keeper_beaten = true;
                 return;
             }
-            if self.streams.tested(
-                Key::player(Action::ShootoutSaveHold, &k),
-                &[t.shots.save_hold],
-            ) >= t.shots.save_hold
+            let hold = self.config.modules.clock.shootout_save_hold(&self.view());
+            if self
+                .streams
+                .tested(Key::player(Action::ShootoutSaveHold, &k), &[hold])
+                >= hold
             {
                 self.trace_save(Point::ShootoutSave, keeper, "parried");
                 self.parry(keeper, t);
@@ -1218,7 +1304,6 @@ impl Simulation {
         }
         let (scores, taken) = (state.scores, state.taken);
         let round = taken[team];
-        let kicks = u32::from(self.config.rules.shootout.kicks);
         self.summary.shootout = Some(scores);
         self.summary.shootout_kicks += 1;
         self.carrier = None;
@@ -1250,7 +1335,12 @@ impl Simulation {
                 }),
             );
         }
-        if shootout::decided(scores, taken, kicks) {
+        if self
+            .config
+            .modules
+            .clock
+            .shootout_decided(&self.view(), scores, taken)
+        {
             if self.trace_on() {
                 let winner = usize::from(scores[1] > scores[0]);
                 self.trace_point(
@@ -1266,7 +1356,7 @@ impl Simulation {
                 kicks = taken[0] + taken[1]
             );
             self.summary.decided_by = Some(DecidedBy::Shootout);
-            self.referee.phase = Phase::FullTime;
+            self.enter_phase(Phase::FullTime, Cause::ShootoutDecided);
         } else if taken[0].min(taken[1]) >= shootout::SAFETY_ROUNDS {
             tracing::error!(
                 signal = "rules.shootout_round_limit",
@@ -1282,9 +1372,9 @@ impl Simulation {
                 );
             }
             self.referee.abandoned = true;
-            self.referee.phase = Phase::FullTime;
+            self.enter_phase(Phase::FullTime, Cause::Abandoned);
         } else {
-            self.shootout_next_kick();
+            self.shootout_next_kick(Cause::NextShootoutKick);
         }
     }
 }
@@ -1319,6 +1409,18 @@ mod tests {
         assert_eq!(sim.summary.yellow[team], 2);
     }
 
+    /// The phase machine refuses a change its table does not declare: a kick-off after full
+    /// time fails loudly, naming both phases and the cause.
+    #[test]
+    #[should_panic(
+        expected = "undeclared phase transition: full time -> open play (kick-off taken)"
+    )]
+    fn a_kick_off_after_full_time_is_an_undeclared_transition() {
+        let mut sim = Simulation::new(shipped_config(1, 90).unwrap()).unwrap();
+        sim.enter_phase(Phase::FullTime, Cause::MatchEnd);
+        sim.place_kick_off(0);
+    }
+
     /// A penalty in play is a direct kick at goal from the mark (IFAB Law 14): the taker
     /// shoots at once and never keeps the ball to pass, dribble, or hold.
     #[test]
@@ -1327,8 +1429,12 @@ mod tests {
         let team = 0;
         let taker = 9;
         let attack_x = sim.teams[team].attack_x;
-        let spot = pitch::penalty_spot(attack_x);
+        let spot = sim.config.pitch().penalty_spot(attack_x);
         sim.players[taker].pos = spot;
+        // The defending keeper on his goal line (IFAB Law 14).
+        let keeper = sim.keeper(1 - team);
+        sim.players[keeper].pos =
+            DVec2::new(attack_x * (sim.config.pitch().half_length() - 0.3), 0.0);
         sim.ball = Ball::at(spot);
         let dead = DeadBall {
             kind: StoppageKind::Penalty,
@@ -1339,6 +1445,10 @@ mod tests {
             ready_at: sim.tick,
             taker,
         };
+        sim.enter_phase(
+            Phase::DeadBall(dead),
+            Cause::BallDead(StoppageKind::Penalty),
+        );
         let shots = sim.summary.shots[team];
         let t = sim.config.tuning.clone();
         sim.take_restart(&dead, &t);

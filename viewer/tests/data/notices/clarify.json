@@ -1,0 +1,5 @@
+{
+  "crates": [
+    { "name": "bare", "version": "2.0.0", "licence": "MIT", "text": "MIT", "reason": "Planted: the manifest declares MIT and the upstream file applies." }
+  ]
+}

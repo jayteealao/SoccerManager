@@ -23,6 +23,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
 | `realism-bands.json` | 2 | The accepted realism bands the calibration run checks: four from version 1 and eleven from real-match data. They are acceptance criteria, never tuning values |
+| `fast-model.json` | 2 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
 
 Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`.
 
@@ -257,6 +258,32 @@ Rules:
 
 Every statistics record carries `tuning.flags_on`, the flags that were on. To compare a candidate and remove the loser, follow [the modding how-to](../how-to/modding.md#compare-two-models-with-a-flag).
 
+## fast-model.json
+
+The fit of the fast model, written by `engine-cli fast-model fit` (see [the command-line reference](cli.md#fast-model)). The engine never reads it to play a match, and the content hash does not include it, so a new fit changes no save, replay or gate hash. The release ships it with the rest of the content folder.
+
+| Field | Holds |
+|---|---|
+| `schema_version` | 2. A file of format 1 holds the score fit only; the command refuses it and names `engine-cli fast-model fit` |
+| `model` | The module the fit is for: `fitted-scores@1` |
+| `engine_id` | The engine id of the results the fit came from: `golden-<ledger index>-<build>-<digest>` |
+| `engine` | The id's parts: `id`, `ledger_index`, `build` and `digest` |
+| `fitted_by` | The `engine_version` and `build` of the program that fitted it |
+| `fit.params` | The eight parameters: `base`, `home`, `attack`, `curve`, `defence`, `dispersion` (the shape of the match factor both scores share), `rho` and `draw` |
+| `fit.minute_shares` | 90 shares, one per minute of regulation time, summing to 1 |
+| `fit.events.fouls`, `offsides`, `corners`, `throw_ins`, `goal_kicks`, `injuries` | One count each: the seven `coefficients` of the side's log mean over 1, the home flag, `o`, `t`, `o²`, `t²` and `o × t`, where `o` is the side's strength and `t` the other side's, each as (strength − 50) / 10; `dispersion` (the negative binomial's shape, or `null` for a Poisson count), and 92 `minute_shares` summing to 1, 45 per half and one for each half's added time |
+| `fit.events.advantage`, `penalty`, `yellow`, `red`, `second_yellow`, `injury_stoppage` | The four `coefficients` of each share's log over 1, the home flag, `o` and `t` of the side: the shares of fouls played on with advantage; of fouls not played on that give a penalty; of fouls booked; of fouls sent off straight; of yellow cards, while a player of the side is booked, that go to a booked player; and of injuries that stop play |
+| `fit.events.substitutions` | The count of a side's substitutions, those an injury forces among them: count `k`, from 0 to the rule pack's limit, has a share in proportion to `exp(weights[k] + k × (own × o + other × t))`; `weights[0]` is 0 |
+| `fit.events.substitution_minute_shares` | 92 shares for the substitutions no injury forces, as for a count |
+| `fit.events.added_goals` | Per half, the share of the goals in its last minute (44 or 89) that the full engine scored in added time |
+| `fit.events.rules` | The parts the fit keeps to: `substitutions` and `added_time`, as in the rule pack, and `booked_foul_factor`, the tuning's `foul_booked_factor` |
+| `batch` | The fit batch: `league_seed`, the strength `levels`, `matches_per_pairing`, `minutes` and the engine `seed` |
+| `check` | The check it passed: the engine `seed`, the fast-model `draws` per match, `z` of the score figures, `event_z` of the event figures, `share_floor`, `mean_floor`, the number of `figures`, how many `failed`, and `pass` |
+
+CI fails when `engine_id` is not the id of `gate/golden.json`: a Rust test runs in every test job, and `engine-cli fast-model stale` runs in the gate job and before every release.
+
+The slot file's `engine.fast-model` entry picks the module: `{"module": "fitted-scores", "version": 1}`, or `{"module": "off"}`, which refuses to play. The slot never enters the content hash. Only the `fast-model` command reaches the module; a test fails the build when anything else does.
+
 ## Position codes
 
 `GK`, `CB`, `LB`, `RB`, `DM`, `CM`, `AM`, `LW`, `RW`, `ST`.
@@ -273,6 +300,7 @@ Every statistics record carries `tuning.flags_on`, the flags that were on. To co
 | stoppages | one entry per kind | see file | every kind exactly once |
 | added_time.per_kind | seconds each stoppage of a kind adds | see file | 0 to 600; every kind present |
 | added_time.card_s | seconds each card adds | 15 | 0 to 120 |
+| added_time.video_review_s | seconds each video review adds; optional, and the shipped file leaves it out. No match event counts a review yet, so the price adds no time | 60 | 0 to 600 |
 | added_time.variance_s | the most seconds the seeded variance adds or removes | 30 | 0 to 300 |
 | added_time.min_s | the least added time of a half | 60 | 0 to 900 |
 | added_time.max_s | the most added time of a half | 900 | `min_s` to 1800 |
@@ -297,7 +325,8 @@ The added time of a half is the sum of `per_kind` over the half's stoppages, plu
 {
   "schema_version": 1,
   "club": { "id": "club-00000001-00", "name": "Oakmere Rangers", "short_name": "OAK",
-            "kit": { "primary": "#c8102e", "secondary": "#000000" } },
+            "kit": { "primary": "#c8102e", "secondary": "#000000" },
+            "ground": { "length": 100, "width": 64 } },
   "players": [
     { "id": "p-club-00000001-00-01", "name": "Peton Tavwood", "shirt": 1, "position": "GK",
       "attributes": { "acceleration": 56, "...": 0 } }
@@ -311,6 +340,8 @@ The added time of a half is the sum of `per_kind` over the half's stoppages, plu
 | club.name | 2 to 48 characters |
 | club.short_name | 2 to 4 characters |
 | club.kit.primary, secondary | `#RRGGBB` |
+| club.ground.length | the home ground's touchline in metres: 90 to 120, and longer than the width; default 105 |
+| club.ground.width | the home ground's goal line in metres: 45 to 90; default 68 |
 | players | 11 to 40 entries; ids and shirts unique |
 | players[].id | 1 to 64 characters |
 | players[].name | 2 to 48 characters |
@@ -320,11 +351,15 @@ The added time of a half is the sum of `per_kind` over the half's stoppages, plu
 
 Before kick-off the AI manager picks the best-fitting player for each formation slot in slot order, by the slot role's attribute weights in `tactics.json`, and names a bench of up to `ai.bench_size` from the rest, the best remaining goalkeeper first. File order breaks ties. A bad value is refused by player and attribute: `content refused: team teams/x.json: players: player p-club-00000001-00-03: attribute pace is 120; allowed 1 to 100`.
 
+A match is played on the home team's ground. `club.ground` is optional: a file without it plays on 105 by 68 metres, and the default is never written back, so a file that gives 105 by 68 and one that gives no ground hash the same. The touchlines, the goal lines, the halfway line and every spot measured from them follow the ground; the goal, the goal and penalty areas, the penalty mark, the centre circle, the corner arcs and the 9.15 m kick distance keep their sizes from the Laws. The formation slots in `tactics.json` are drawn for 105 by 68 and scale with the ground: along the touchline by its length over 105, across by its width over 68. A ground outside the Laws is refused by club: `content refused: team teams/x.json: club.ground: Oakmere Rangers: the ground is 121 m long; the Laws allow 90 to 120 m`. A touchline that is not longer than the goal line is refused the same way.
+
+Every other club file in `teams/` plays in the background round of a served match's matchday: `serve` pairs every club except the two of the player's match into fixtures, with a round seed derived from the match seed, and plays each on the full engine beside the match. The shipped folder holds ten clubs, so a matchday has four other fixtures. A file that does not load is left out of the round, with a `matchday.team_refused` warning that names it. No club file other than the two a match plays enters that match's content hash, save or replay.
+
 ## tactics.json
 
 | Field | Holds | Bound |
 |---|---|---|
-| formations | `{ "name", "slots" }`; eleven slots `{ "x", "y", "position" }` in metres from the own goal line (1 to 100) and from the centre line (-33 to 33) | 1 to 16; slot 0 is the only `GK` |
+| formations | `{ "name", "slots" }`; eleven slots `{ "x", "y", "position" }` in metres from the own goal line (1 to 100) and from the centre line (-33 to 33) on a 105 by 68 ground; the slots scale with the home ground | 1 to 16; slot 0 is the only `GK` |
 | mentalities | `{ "name", "block_depth", "shoot", "progress", "hold" }`: metres the block moves up (-20 to 20), and offsets on shots, forward passes, and holding the ball (-2 to 2) | 1 to 9 |
 | instructions | the six team instructions, each `{ "default", "levels" }` with 2 to 5 levels | see below |
 | roles | `{ "name", "positions", "attributes", "shoot", "dribble", "progress" }`: the positions it suits, attribute weights (0 to 10, each a name in `attributes.json`) the AI manager uses to pick players, and option offsets (-2 to 2) | 1 to 64; a role for every position a formation uses |
@@ -428,9 +463,11 @@ The engine writes these files to the data folder. The data folder is `SM_DATA_DI
 |---|---|---|
 | `owner.id` | every command, once | 32 hexadecimal characters that name the owner of every match on this machine |
 | `engine.port` | `serve`, while it serves a match | the socket port, as one line |
+| `settings.json` | `launch`, when the player saves the settings | the player's three settings; see below |
 | `matches/<match.id>/events.jsonl` | `simulate`, `serve`, `resume` | one match event per line, as the `match-event` record |
 | `matches/<match.id>/stats.json` | `simulate`, `serve`, `resume` | the statistics of the match, as the `match-stats` record |
 | `matches/<match.id>/snapshot.smsn` | `simulate`, `serve` | the newest snapshot of the match; `resume` and `serve --resume` read it |
+| `matches/<match.id>/matchday-bug-<fixture>.json` | `serve` | the bug report of a background match that failed; see below |
 | `runs/<run.id>/report.json` | `calibrate` | the run report, as the `run-report` record |
 | `runs/<run.id>/stats/<match.id>.json` | `calibrate` | the statistics record of each match in the run |
 | `runs/<run.id>/events/<match.id>.jsonl` | `calibrate` | the event rows of each match the run keeps |
@@ -453,6 +490,58 @@ The engine writes a record at each stoppage snapshot and at the end of the match
 
 `snapshot.smsn` holds the full state of a match at one stoppage: the clock, the score, every player's position, energy, and cards, the queue of changes, the state of the random-number generator, and for a knockout match the extra-time periods and the shoot-out. The engine replaces the file at each stoppage. A snapshot resumes only on the build that wrote it, with the same content files and team files. The engine refuses any other snapshot and names the reason.
 
+The file is format 9. Its header (at least 192 bytes; its length is stored at bytes 6 to 8) names the match without reading the rest, at fixed places, so a later build can say who saved a file it cannot read:
+
+| Bytes | Field |
+|---|---|
+| 0 to 4 | `SMSN` |
+| 4 to 6 | the format, 9 |
+| 6 to 8 | the header length: 192 plus the matchday mark |
+| 64 to 96 | the release version that saved it, such as `0.2.0`, padded with zeros |
+| 96 to 100 | the tick of the stoppage |
+| 100 to 102 | the score, home then away |
+| 104 to 148 | the home team's name, padded with zeros |
+| 148 to 192 | the away team's name, padded with zeros |
+
+The build's commit, the content files' hash, the owner and the match stamp sit in the first 64 bytes, as in formats 6 and 7. Files of format 6 and 7 carry no version; the engine names their release from the build's commit when a release shipped that build.
+
+Format 9 appends the matchday mark after byte 192: the mark's length after its first two bytes (u16), the round seed (u64), the reveal tick (u32: the tick the snapshot was taken on, up to which the other grounds' events were revealed), the fixture count (one byte), and for each fixture, home first, each club's id (one length byte, then at most 64 bytes) and the SHA-256 of its team file (32 bytes). A count of 0 is a match with no round. A match resumed from the snapshot rebuilds the same round from the mark and plays each other match again from kick-off; a club whose file is missing or changed since the save makes its fixture unavailable. Format 8 is the same file without the mark, and the engine still reads it.
+
+A snapshot from the previous release finishes on that release's engine: `resume` and `launch --resume` run the program in `previous/` beside this one (the release ships it, see `packaging/README.md`). A snapshot from any other version is refused, and the refusal names the version that saved it and the versions this release finishes.
+
+### The saved match
+
+The start screen's Resume continues the newest match folder that holds a `snapshot.smsn` and no `stats.json`: the engine writes `stats.json` only at full time, so a match without it was stopped before the end. Return to start and Quit both keep the snapshot. A save of the previous release resumes on the program in `previous/`; a save of any other version shows why it cannot resume.
+
+### The settings file
+
+`settings.json` holds the settings the start screen's Settings page saves. The launcher keeps them in the data folder rather than in the browser, because the page's port, and with it the browser's storage, changes at every launch.
+
+| Field | Values | Default |
+|---|---|---|
+| `schema_version` | 1 | 1 |
+| `speed` | the playback speed a match starts at: 1, 2, 4 or 8 | 1 |
+| `motion` | `follow` (as the operating system asks), `reduce` or `full` | `follow` |
+| `commentary` | whether the match screen shows the commentary column | `true` |
+
+A missing file gives the defaults. A file that does not read, has another field, or holds a value outside the table gives the defaults and logs the `launch.settings_refused` signal; the launcher refuses the same values from the page with the reason. The launcher writes the file through a temporary file, so a crash never leaves half of one.
+
+### The matchday bug report
+
+A background match should never fail. When a defect makes one fail anyway, the player's match plays on, the fixture shows "result unavailable", and `serve` writes `matches/<match.id>/matchday-bug-<fixture>.json`, one JSON object, so the match can be played again:
+
+| Field | Holds |
+|---|---|
+| `schema.version` | 1 |
+| `match.id` | the player's match |
+| `fixture` | the fixture's place in the round, from 0 |
+| `seed` | the background match's seed |
+| `engine.version`, `build.hash` | the engine that played it |
+| `home.team.id`, `away.team.id` | the two clubs |
+| `tick` | the tick the match reached |
+| `error.type` | `panic`, `did-not-finish` (still running 120 seconds after the player's full time), or `team-file` (a club file missing or changed since a save) |
+| `error.message` | what stopped it, with every absolute path cut to its file name |
+
 ### The tick file
 
 `simulate --ticks-out <FILE>` writes one record per tick: the ball position and height, then the position of each of the 22 players. The header states the seed, the tick length, and the most ticks the match can last. The trailer states the ticks written. When a knockout match's sudden death runs past the announced length, the engine raises the header's figure to the ticks written, so the file still reads. `--json` also writes the same ticks as JSON Lines beside the tick file.
@@ -460,3 +549,14 @@ The engine writes a record at each stoppage snapshot and at the end of the match
 ### The replay file
 
 A replay file (`.smfx`) holds every frame of one match, starting with the `hello`, in the same bytes the socket sends. `record --out <FILE>` writes one. The viewer page saves one at full time as `touchline-<match.id>.smfx`. `replay --fixture <FILE>` plays one over the socket, and the page opens one with no engine running. The layout of both formats (version 3, frames only, and version 4, which also holds the inputs and the record that `resimulate` reads) is in [the protocol reference](protocol.md#replay-files).
+
+## notices.json
+
+`notices.json` sits in the folder the page is served from (`viewer/dist/`, and `web/` in a release). The Licences and about screen reads it. The viewer build writes it and fails when a shipped package has no licence text or a licence outside the allow list in `deny.toml` (and OFL-1.1, for fonts only).
+
+| Field | Holds |
+|---|---|
+| `version` | the release version the build belongs to |
+| `packages` | one entry per shipped package: `kind` (`crate`, `npm` or `font`), `name`, `version` (null for a font), `licence` (an SPDX expression), `description` (the package's own description) and `text` (its licence text) |
+
+The crates are the normal dependencies of `engine-cli` for the build's platform, without the workspace's own crates, together with those of the previous engine the release ships in `previous/`. The npm packages are those bundled into the page. A crate that ships no licence file needs a reviewed entry in `packaging/notices/clarify.json`, which names its licence, the standard text its notice takes (with the crate's authors) and why. `npm --prefix viewer run notices:verify -- <file>` checks a built file against `cargo metadata` and the page's imports.

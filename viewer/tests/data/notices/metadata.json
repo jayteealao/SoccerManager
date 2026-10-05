@@ -1,0 +1,29 @@
+{
+  "about": "A cut-down `cargo metadata` for the notices test: engine-cli with one normal dependency that ships a licence file (good), one that ships none (bare), one under a licence deny.toml does not allow (gpl), and one dev-dependency that never ships (dev-only). `<dir>` is replaced by the test with this folder.",
+  "workspace_members": ["path+file:///ws/engine-cli#0.2.0", "path+file:///ws/engine#0.2.0"],
+  "packages": [
+    { "id": "path+file:///ws/engine-cli#0.2.0", "name": "engine-cli", "version": "0.2.0", "license": "MIT OR Apache-2.0", "manifest_path": "<dir>/ws/engine-cli/Cargo.toml", "authors": [] },
+    { "id": "path+file:///ws/engine#0.2.0", "name": "engine", "version": "0.2.0", "license": "MIT OR Apache-2.0", "manifest_path": "<dir>/ws/engine/Cargo.toml", "authors": [] },
+    { "id": "registry+good@1.0.0", "name": "good", "version": "1.0.0", "license": "MIT OR Apache-2.0", "description": "A crate that ships its licence", "manifest_path": "<dir>/crates/good-1.0.0/Cargo.toml", "authors": ["Good Authors"] },
+    { "id": "registry+bare@2.0.0", "name": "bare", "version": "2.0.0", "license": "MIT", "description": "A crate that ships no licence file", "manifest_path": "<dir>/crates/bare-2.0.0/Cargo.toml", "authors": ["Bare Author"] },
+    { "id": "registry+gpl@3.1.0", "name": "gpl", "version": "3.1.0", "license": "GPL-3.0-only", "description": "A crate under a licence the project does not allow", "manifest_path": "<dir>/crates/gpl-3.1.0/Cargo.toml", "authors": [] },
+    { "id": "registry+dev-only@0.1.0", "name": "dev-only", "version": "0.1.0", "license": "MIT", "description": "A test-only crate", "manifest_path": "<dir>/crates/dev-only-0.1.0/Cargo.toml", "authors": [] }
+  ],
+  "resolve": {
+    "nodes": [
+      { "id": "path+file:///ws/engine-cli#0.2.0", "deps": [
+        { "pkg": "path+file:///ws/engine#0.2.0", "dep_kinds": [{ "kind": null }] },
+        { "pkg": "registry+dev-only@0.1.0", "dep_kinds": [{ "kind": "dev" }] }
+      ] },
+      { "id": "path+file:///ws/engine#0.2.0", "deps": [
+        { "pkg": "registry+good@1.0.0", "dep_kinds": [{ "kind": null }] },
+        { "pkg": "registry+bare@2.0.0", "dep_kinds": [{ "kind": null }] },
+        { "pkg": "registry+gpl@3.1.0", "dep_kinds": [{ "kind": null }] }
+      ] },
+      { "id": "registry+good@1.0.0", "deps": [] },
+      { "id": "registry+bare@2.0.0", "deps": [] },
+      { "id": "registry+gpl@3.1.0", "deps": [] },
+      { "id": "registry+dev-only@0.1.0", "deps": [] }
+    ]
+  }
+}

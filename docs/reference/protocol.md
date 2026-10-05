@@ -30,6 +30,12 @@ meaning for a match that is not a knockout match. For a knockout match, `ticks_e
 covers extra time and the rule pack's allowance of shoot-out rounds; a sudden death longer
 than the allowance plays on past it, and a client grows its history to hold it.
 
+Version 3 also carries the home ground's size without a new version. The `hello` gained two
+optional fields, `ground.length` and `ground.width`, written only for a ground that is not
+105 by 68 metres, so every hello of a match on the default ground is unchanged. Positions on
+the wire keep their units and their origin, the centre spot; on another ground they run to
+that ground's lines.
+
 Version 3 also carries script packs (`--script-pack`) without a new version. The event message
 gained one event type (`script`) and four optional fields (`script.pack`, `script.hook`,
 `script.outcome`, and `script.detail`). A match without a pack sends exactly what it sent
@@ -84,7 +90,10 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 | `keyframe_interval` | integer | ticks between keyframes |
 | `teams` | array of two | one entry per club, home first; see the table below |
 | `tactics` | object | the tactics file the engine loaded (`content/tactics.json`): `formations`, `mentalities`, `instructions` with their levels, `roles`, `duties`, and the computer manager's settings. Every tactics index on the wire is a place in one of its lists. Because a JSON object carries no key order, the engine adds `instruction_order`, the six instruction names in the order an instruction list indexes them |
-| `substitutions` | object | the rule pack's limits: `limit` and `windows` |
+| `substitutions` | object | the rule pack's limits: `limit`, `windows`, `extra_substitutions`, `extra_windows`, and `windows_exempt` |
+| `knockout` | boolean | `true` for a knockout match: level after regulation time, it plays extra time and then a penalty shoot-out. Left out when `false`; a hello without it reads as `false` |
+| `ground.length` | number | the length of the home team's ground, where the match is played, in metres (90 to 120). Left out when it is 105; a hello without it reads as 105 |
+| `ground.width` | number | the width of the home team's ground in metres (45 to 90). Left out when it is 68; a hello without it reads as 68 |
 
 `substitutions`:
 
@@ -92,6 +101,9 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 |---|---|---|
 | `limit` | integer | substitutions each team may make, 5 in the shipped rule pack |
 | `windows` | integer | stoppages at which each team may make them, 3 in the shipped rule pack; half-time uses none |
+| `extra_substitutions` | integer | substitutions each team gains once extra time starts, 1 in the shipped rule pack; 0 when an earlier build sent none |
+| `extra_windows` | integer | windows each team gains once extra time starts, 1 in the shipped rule pack; 0 when an earlier build sent none |
+| `windows_exempt` | array of strings | the stoppage kinds whose substitutions use no window, as the rule pack writes them (`half_time` in the shipped pack); left out when empty |
 
 Each entry of `teams`:
 
@@ -102,6 +114,7 @@ Each entry of `teams`:
 | `team.kit.primary` | string | lower-case `#rrggbb`, the shirt colour |
 | `team.kit.secondary` | string | lower-case `#rrggbb`, the trim colour |
 | `roster` | array | the 11 starters in wire-slot order (home slots 0 to 10, away 11 to 21), then the named bench in bench order; see the table below. A hello without it reads as an empty list |
+| `formation` | string | on `serve` only, for both clubs: the name of the club's formation at kick-off, as `tactics.formations` names it (`4-4-2`); left out otherwise, and an empty string when an earlier build sent none |
 
 Each entry of `roster`:
 
@@ -127,6 +140,7 @@ Each entry of `squad` carries `player.id`, `player.name`, `player.shirt`, and
 | Field | Type | Meaning |
 |---|---|---|
 | `player.natural_fitness` | integer | the natural-fitness attribute, 0 to 100; every player is fresh before kick-off, so this is the fitness figure the editor shows |
+| `player.injury_resistance` | integer | the injury-resistance attribute, 0 to 100; 0 when an earlier build sent none |
 | `role_fit` | array of integers | how well the player fits each role, 0 to 100, one value per entry of `tactics.roles`, in that order |
 
 `setup`:
@@ -268,13 +282,114 @@ Sent right after each periodic `stats` message, not at full time.
 |---|---|---|
 | `tick` | integer | the tick the values were taken on |
 | `energy` | array of 22 floats | each wire slot's energy, home slots first, from 0.0 (spent) to 1.0 (fresh), three decimals. A substitute takes the slot of the player who left |
+| `subs_used` | array of two integers | substitutions each team has made, home first; `[0, 0]` when an earlier build sent none |
+| `windows_used` | array of two integers | substitution windows each team has used, home first; `[0, 0]` when an earlier build sent none |
+
+### change-state
+
+Sent on `serve` for a change the page queued, on the tick a stoppage that takes the change's
+kind opens, before the change's verdict event. It is not a match event: no events file, record,
+or replay keeps it, and it never changes the match.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `change.queue_id` | string | the identifier the change's `queue-change` acknowledgement gave |
+| `state` | enumeration | `applies-now` in this build |
+| `tick` | integer | the tick the stoppage opened on, the tick of the verdict that follows |
+
+### advice
+
+Sent on `serve` to a page that manages the home team, after a check of the computer manager
+finds picks that differ from the last ones sent. The check runs for the page's team every
+`tactics.ai.check_interval_s` of match time (30 seconds with the shipped tactics file) and on
+a tick that holds a goal, an injury to the home team, or a sending-off of a home player; it
+does not run in a penalty shoot-out or after full time. The check is advice only: it reads the
+match, works on a copy of the change queue, draws no random number, and writes nothing, so the
+match plays exactly as it would without it. No events file, record, or replay keeps the
+message. Each message replaces the picks before it, and an empty `picks` list means no pick is
+open. A page that wants a pick sends it as an ordinary `queue-change`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `tick` | integer | the tick the check ran after |
+| `minute` | integer | the minute of play the check read |
+| `picks` | array | the picks in the order the check made them; see the table below |
+
+Each entry of `picks`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `code` | string | the reason, as `ai.decision` names it: `sub-injury`, `sub-keeper`, `sub-fatigue`, `mentality-up-trailing`, or `mentality-down-leading`. A mentality pick is offered once per score |
+| `kind` | enumeration | `substitution` or `tactics`, as `change.kind` names it |
+| `off` | integer | on a substitution: the squad index of the player coming off |
+| `on` | integer | on a substitution: the squad index of the player coming on |
+| `patch` | object | on a tactics pick: the change as `queue-change` writes it (`mentality`, `instructions`) |
+
+### matchday
+
+Sent on `serve` right after the `hello`, on every connection, before kick-off as well. It
+lists the other matches of the player's matchday: every club file in the content folder's
+`teams/` except the two of the player's match, paired into fixtures from a seed derived from
+the match seed, so one served match always meets the same round. Every fixture shows 0-0
+until its `ground-event` messages say otherwise. A content folder with no other club sends an
+empty `fixtures` list. It is not a match event: no events file, record, or replay keeps it.
+`serve --no-matchday` sends none and plays no other match.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `round` | integer | the matchday's number; 1 while the generated round is the only matchday |
+| `fixtures` | array | one entry per other match, in fixture order; see the table below |
+
+Each entry of `fixtures`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `fixture` | integer | the fixture's place in the round, from 0; every ground message names it |
+| `home` | object | the home club as the `hello` names a team (`team.id`, `team.name`, `team.kit.primary`, `team.kit.secondary`), with an empty roster |
+| `away` | object | the away club, the same way |
+
+### ground-event
+
+One event at another ground. Every other match kicks off with the player's match and plays
+on the full engine in the background, so an event's `tick` is also a moment on the player's
+match clock. The engine sends the event once its own tick of the player's match reaches
+`tick`: a pause, a speed change, and a skip move that tick, and nothing is sent before it. A
+page shows the event once the tick it draws reaches `tick`. On a new connection, after a
+reconnect or a resume, every event up to the player's tick is sent again, none marked late;
+a page drops an exact repeat (the same `fixture`, `tick`, and `kind`). After the player's
+full time the engine waits, at most 120 seconds, until every other match has ended, sends
+their remaining events, and then closes. It is not a match event: no events file, record, or
+replay keeps it.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `fixture` | integer | the fixture, as `matchday` numbers it |
+| `tick` | integer | the tick of the event in its own match, which is also its moment on the player's clock |
+| `kind` | enumeration | `goal`, `half-time`, `second-half`, `extra-time` (a period of extra time starts), `full-time`, or `unavailable` (a fault stopped the match; it has no result and a bug report names its seed and engine) |
+| `minute` | integer | the minute of play, counted from 0 |
+| `added` | integer | in added time only: the added minute |
+| `side` | enumeration | on a goal only: `home` or `away`, the side that scored |
+| `scorer` | string | on a goal only: the name of the player who kicked the ball last |
+| `score` | array of two integers | the score after the event, home first |
+| `late` | boolean | present and `true` when the event was computed more than one simulated second after the player's match had passed its tick on a paced run (not during a skip or a test fast-forward), so it reaches the page late |
+
+### ground-progress
+
+Sent on `serve` with the running statistics, once every simulated second while other matches
+play: how far each one has played. A fixture whose tick is behind the player's clock shows
+its next events late.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `tick` | integer | the player's tick when the progress was sent |
+| `reached` | array of integers | the tick each fixture has reached, in fixture order; a fixture that ended keeps its last tick |
 
 ### ack
 
 | Field | Type | Meaning |
 |---|---|---|
-| `command` | string | `start`, `pause`, `set-speed`, `queue-change`, `set-lineup`, or `seen` |
-| `change.queue_id` | string | queued changes only |
+| `command` | string | `start`, `pause`, `set-speed`, `queue-change`, `set-lineup`, `seen`, `cancel-change`, or `skip` |
+| `change.queue_id` | string | queued and withdrawn changes only |
 | `change.queued_tick` | integer | the tick the command was read on |
 | `state` | enumeration | queued changes only; `queued` in this build |
 | `speed` | float | `set-speed` only, after clamping to 0.25 to 8.0 |
@@ -374,6 +489,33 @@ past the newest reported tick and waits until the next report moves it on. A cha
 manager queues therefore reaches the engine at most `buffer_ticks` after the tick on screen.
 A client that never sends it is not held by it, and `record`, `replay`, and `bench` ignore it.
 
+### cancel-change
+
+Withdraws a queued change before a stoppage takes it. It is answered at once: an `ack` that
+names the change, or a `reject` with `unknown change <id>`, `change <id> has already applied`,
+or `change <id> was already refused`. A withdrawn change never applies and gets no verdict
+event; its `queued` row stays in the events file. To edit a change, a page withdraws it and,
+on the acknowledgement, queues the edited change.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `change.queue_id` | string | the identifier the change's `queue-change` acknowledgement gave |
+
+### skip
+
+Skips to the result. No fields. After kick-off the engine plays the rest of the match from
+its exact state at full speed: it stops waiting for `start`, `pause` and the `seen` lead
+bound, and streams every remaining tick and message as usual, up to the final `full-time`
+event and the clean close. Nothing is saved or restored; it is the same match, so every tick
+frame and event after a skip is the one the match played through would send. A change
+queued before or after the skip still applies at the next stoppage that admits it.
+
+It is acknowledged with an `ack` whose `change.queued_tick` is the tick it was read on. A
+second `skip` is acknowledged again. Before the first `start` it is refused with `the match
+has not kicked off; there is nothing to skip`. After a skip, `pause`, `start` and `seen`
+are acknowledged and have no effect on production. `record`, `replay`, and `bench` ignore
+it. The protocol version is unchanged: a client that never sends it is unaffected.
+
 ## The page server
 
 `serve --web <DIR>`, `replay --web <DIR>`, and `launch --web <DIR>` start a second listener
@@ -381,7 +523,7 @@ on `127.0.0.1`, on its own port, serving the named folder over plain HTTP. It is
 WebSocket server on purpose: the socket's origin allowlist and version guard have nothing
 to do with serving a stylesheet.
 
-It answers `GET` and `HEAD`, and `POST` on the two action paths below; anything else is
+It answers `GET` and `HEAD`, and `POST` on the action paths below; anything else is
 `405`. A request path that contains `..`,
 a drive letter, a backslash, or a leading `//` is `403`, and the resolved path is compared
 against the resolved folder, so a symbolic link cannot lead out of it either.
@@ -415,7 +557,7 @@ guess the WebSocket port on another and the operating system chooses both at eve
 
 | Key | Type | Meaning |
 |---|---|---|
-| `engine.state` | string | `starting`, `running`, `finished`, `crashed`, `refused`, `abandoned`, or `not-found` |
+| `engine.state` | string | `idle` (the start screen, no match running), `starting`, `running`, `finished`, `crashed`, `refused`, `abandoned`, `not-found`, or `closed` (the player quit; launcher only) |
 | `socket.port` | int or null | the WebSocket port; present only while `running` |
 | `protocol.version` | int | the protocol version the engine speaks, `3` |
 | `engine.pid` | int or null | the process identifier of the engine serving the match |
@@ -425,6 +567,16 @@ guess the WebSocket port on another and the operating system chooses both at eve
 | `snapshot.tick` | int or null | the tick of the latest snapshot on disk (launcher only) |
 | `match.id` | string | the match being served |
 | `launcher` | bool | `true` when `engine-cli launch` serves the page and can restart the engine |
+| `engine.version` | string | the release version of the program that plays the match: the launcher's own, or the previous release's for a save of that release (launcher only) |
+| `launcher.version` | string | the release version of the launcher (launcher only) |
+| `match.resumed_from` | int or null | the tick a saved match continued from (`launch --resume`; launcher only) |
+| `previous.version` | string | the release version of the previous engine this launcher can finish a save with (launcher only) |
+| `settings` | object | the player's settings: `schema_version`, `speed`, `motion` and `commentary` (launcher only; see `settings.json` in the data-files reference) |
+| `front-door` | bool | `true` when the launch opened on the start screen; absent under `launch --no-start-screen` |
+| `teams` | array | the sample teams match setup offers, by club id: `id`, `name`, `short_name`, `kit` (two colours), `ground` (length and width in metres) and `strength` (the mean attribute of the first eleven, 0 to 100); start screen only |
+| `saved` | object or null | the newest unfinished saved match: `kind` (`current`, `previous` or `other`), `version`, `tick`, `teams`, `score`, `millis` (when the match was created, not the match clock) and `positions` (`pitch` and each player as `[team, x, y]` in metres from the corner, or null for a save of another release); start screen only |
+| `closed` | object | in the answer to `quit` only: `match` (whether a match was running) and `saved` (that match's save, as `saved`, or null) |
+| `resume` | object or null | why a saved match cannot resume: `kind`, `saved.version`, `saved.build`, `saved.tick`, `saved.teams`, `saved.score`, `saved.millis`, `engines` and `reason` (launcher only; see `launch --resume` in the CLI reference) |
 
 `serve --web` and `replay --web` always answer `running`, because the page's server is the
 engine process itself. Under `launch` the page's server is a separate process that runs the
@@ -434,11 +586,20 @@ engine as a worker, so it can report `crashed` and act on it:
 |---|---|---|
 | `POST /engine/restart` | after a crash, starts the engine again from the match's latest snapshot; a snapshot that does not read is `refused` with the reason | `202` with the new `/engine.json` body |
 | `POST /engine/abandon` | stops the engine and gives the match up | `202` with the new `/engine.json` body |
+| `POST /engine/new-match` | once no match is running, starts a fresh match: with no body, with the launch's seed and teams; with `{"home": <club id>, "away": <club id>}`, that fixture on the home club's ground | `202` with the new `/engine.json` body |
+| `POST /engine/resume` | once no match is running, continues the newest unfinished saved match with the engine that saved it | `202` with the new `/engine.json` body |
+| `POST /engine/stop` | stops the running match, keeps its snapshot for Resume and goes back to `idle` | `202` with the new `/engine.json` body |
+| `POST /engine/quit` | stops the running match, keeps its snapshot, and ends `launch` shortly after the answer | `202` with the `/engine.json` body in state `closed`, plus `closed` |
+| `POST /engine/settings` | checks and saves the settings in the body (`schema_version` 1, `speed` 1, 2, 4 or 8, `motion` `follow`, `reduce` or `full`, `commentary` true or false) to `settings.json` | `202` with the new `/engine.json` body |
 
-Both ignore any body. Both require an `Origin` header equal to the page's own origin,
+A body is at most 4 KiB; a longer one is `413`, and one that is not UTF-8 text is `400`. An action that cannot be carried out is `400` with the reason as plain text, for example `a match is already running`, `no saved match yet`, `<club> cannot play itself; choose another team` or `speed 3 is not one of 1, 2, 4 or 8`. `restart`, `abandon`, `resume`, `stop` and `quit` ignore any body.
+
+`GET /engine/round?home=<club id>&away=<club id>` answers the other fixtures of the round that match would meet, as `{"fixtures": [{"home": <team>, "away": <team>}]}` with each team as in `teams`; an unknown club or the same club twice is `400` with the reason. It is `404` when the launch did not open on the start screen.
+
+Each action requires an `Origin` header equal to the page's own origin,
 `http://127.0.0.1:<page port>`; any other origin, or none, is `403`, so a page on another
 site cannot restart or stop the engine. Served by `serve --web` or `replay --web`, where
-nothing would survive to carry them out, both are `405`.
+nothing would survive to carry them out, each is `405`.
 
 ## Reconnection
 
@@ -458,7 +619,11 @@ the match again from kick-off with the same seed and lineup.
 A restart after a crash works the same way on the page's side: the launcher starts
 `serve --resume <snapshot>`, which sends the same `hello` and continues at the snapshot's
 tick plus one. No message and no field changed for either path, so `PROTOCOL_VERSION`
-stays 3.
+stays 3. On both paths the `matchday` message follows the `hello` again, then every
+`ground-event` up to the player's tick; a resumed match rebuilds its round from the
+snapshot's matchday mark and plays each other match again from kick-off. The `matchday`,
+`ground-event`, and `ground-progress` messages were added beside the others, as `advice` was,
+so `PROTOCOL_VERSION` stays 3 for them too.
 
 ## Backpressure
 

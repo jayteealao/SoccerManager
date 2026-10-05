@@ -12,10 +12,17 @@
 //!
 //! Each hook holds its match's [`WatchdogMark`]; a call past the wall-clock limit adds a hit
 //! to it and keeps its result.
+//!
+//! The match loop reaches these hooks only through the engine's hook slots
+//! (`engine.hook.decision`, `engine.hook.rule`, `engine.hook.commentary`): with a slot switched
+//! off, the pack's hook for that point is never called. [`RHAI_ADAPTER_CARD`] describes this
+//! runtime with the engine's module card; the engine's registry cannot list it, because this
+//! crate depends on the engine.
 
 use std::sync::Arc;
 
 use engine::Card;
+use engine::modules::ModuleCard;
 use engine::plugin::{
     CommentaryHook, DecisionContext, DecisionHook, FoulContext, HookOutcome, LineContext,
     OptionOffsets, RuleHook, WatchdogMark,
@@ -23,6 +30,16 @@ use engine::plugin::{
 use rhai::Dynamic;
 
 use crate::sandbox::Sandbox;
+
+/// The card of the Rhai adapter: the script runtime behind the three hook slots.
+pub const RHAI_ADAPTER_CARD: ModuleCard = ModuleCard {
+    purpose: "Runs a script pack's decide, card, and line functions in the Rhai sandbox as the decision, rule, and commentary hooks, under the operation budget and the wall-clock backstop.",
+    inputs: "The decision context, the foul context with the referee's card, and the line context with the commentator's line, as the hook slots build them.",
+    outputs: "Offsets to the carrier's option scores, a replacement card, or a replacement line; or keep, aborted, or denied; and a hit on the match's watchdog mark for a call past the wall-clock limit.",
+    tuning: &["none"],
+    calibration: "none: script runtime, no realism band",
+    keys: &[],
+};
 
 /// The largest offset, either way, a decision hook may return.
 pub const MAX_OFFSET: f64 = 10.0;

@@ -183,7 +183,7 @@ impl Streams {
 
     /// A value in `[lo, hi)` for `key`.
     pub fn range(&mut self, key: Key, lo: f64, hi: f64) -> f64 {
-        lo + (hi - lo) * self.draw(key)
+        map_range(lo, hi, self.draw(key))
     }
 
     /// `true` with probability `p`, for `key`.
@@ -382,6 +382,14 @@ fn record_draw(
     scripted: bool,
 ) {
     trace.push_draw(key, value, thresholds, scripted);
+}
+
+/// Maps a raw draw `u` in `[0, 1)` to `[lo, hi)`. [`Streams::range`] maps its draw with it,
+/// and a module that is handed a raw draw maps it with the same expression, so the value is
+/// bit-identical.
+#[inline]
+pub fn map_range(lo: f64, hi: f64, u: f64) -> f64 {
+    lo + (hi - lo) * u
 }
 
 #[cfg(test)]

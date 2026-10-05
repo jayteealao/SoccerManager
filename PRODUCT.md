@@ -15,7 +15,7 @@ Football-management players who already know games such as Football Manager. Eac
 - **Broadcast** — energy lives in the score bug, the goal banner, and the team colors. The panels do not compete with them.
 
 ## Tone
-The match is live and the player is in charge. In the first five seconds the pitch moves, the clock runs, and the tactics control is visible without scrolling. The design feels engaged and mildly tense, serious about the numbers and warm about the game. It must not feel like an arcade game, a cartoon, a television sponsor board, or a spreadsheet with a pitch attached.
+The match is live and the player is in charge. In the first five seconds the pitch moves, the clock runs, and the tactics control is visible without scrolling. The design feels engaged and mildly tense, serious about the numbers and warm about the game. It must not feel like an arcade game, a cartoon, or a spreadsheet with a pitch attached.
 
 ## Positive References
 - Football Manager 2D classic view — top-down markers on a plain pitch; the view the player already reads.
@@ -23,8 +23,6 @@ The match is live and the player is in charge. In the first five seconds the pit
 - Telemetry and trading-terminal dashboards — dense tabular figures, sober panel chrome, strong number contrast.
 
 ## Anti-references
-- Football Manager 3D view — cluttered overlays hide the play.
-- Television sponsor graphics — logos and clutter compete with the score.
 - Arcade and cartoon football games — styling that undercuts a serious simulation.
 
 ## Strategic Principles
@@ -34,7 +32,7 @@ The match is live and the player is in charge. In the first five seconds the pit
 4. Motion conveys state: a goal, a card, a substitution applied. Product transitions run under 300 ms; the goal banner leaves within 1.5 s. The reduced-motion preference disables all of it.
 
 ## Constraints
-- Frontend: plain HTML, CSS, and JavaScript. No UI framework and no component library is chosen.
+- Frontend: Svelte 5, built with Vite; no component library.
 - Brand assets: none exist. Generate the logo, the palette, and any illustration programmatically in JavaScript as part of the product. Do not source them from image files.
 - Clubs and competitions are facsimiles of real ones where public sources are rich: a near name, the real city, and the real club's size, standing, trophies, and rivalries. Crests and kits echo the real club's colours and shape, never the real badge. Clubs where sources are thin are generated. Players are invented and generated. Real names, badges, and likenesses do not ship.
 - Licenses: MIT-compatible or Apache-2.0-compatible dependencies only. Do not copy from GPL code.

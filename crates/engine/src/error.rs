@@ -45,6 +45,15 @@ pub enum EngineError {
         found: u32,
         expected: u32,
     },
+
+    /// The slot file names a module the engine cannot run in a slot.
+    #[error("slot configuration refused: slot {slot}: {problem}; valid: {valid}")]
+    SlotRefused {
+        slot: String,
+        value: String,
+        problem: String,
+        valid: String,
+    },
 }
 
 impl EngineError {
@@ -55,7 +64,7 @@ impl EngineError {
             Self::Io(_) | Self::Read { .. } => "io",
             Self::Format(_) => "format",
             Self::Sink(_) => "sink",
-            Self::Data { .. } | Self::Version { .. } => "content",
+            Self::Data { .. } | Self::Version { .. } | Self::SlotRefused { .. } => "content",
             Self::Snapshot { .. } => "snapshot",
         }
     }
@@ -70,6 +79,7 @@ impl EngineError {
             Self::Sink(_) => "sink-stopped",
             Self::Data { .. } => "content-refused",
             Self::Version { .. } => "content-version",
+            Self::SlotRefused { .. } => "slot-refused",
             Self::Snapshot { .. } => "snapshot-refused",
         }
     }
@@ -144,6 +154,17 @@ mod tests {
                 },
                 "content",
                 "content-version",
+                false,
+            ),
+            (
+                EngineError::SlotRefused {
+                    slot: "engine.fouls".into(),
+                    value: "x".into(),
+                    problem: "p".into(),
+                    valid: "fouls@1, off".into(),
+                },
+                "content",
+                "slot-refused",
                 false,
             ),
         ];

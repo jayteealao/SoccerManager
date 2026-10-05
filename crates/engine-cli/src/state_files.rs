@@ -209,7 +209,8 @@ pub fn parse_fields(written: &serde_json::Value) -> Result<Vec<Field>, String> {
 
 /// The bytes of lowercase or uppercase hex text.
 fn unhex(text: &str) -> Option<Vec<u8>> {
-    if !text.len().is_multiple_of(2) {
+    // `from_str_radix` alone would take a sign (`+f`), so every character is checked first.
+    if !text.len().is_multiple_of(2) || !text.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
     (0..text.len())
@@ -221,6 +222,13 @@ fn unhex(text: &str) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_signed_pair_is_not_hex() {
+        assert_eq!(unhex("+f"), None);
+        assert_eq!(unhex("0a+f"), None);
+        assert_eq!(unhex("0aff"), Some(vec![0x0a, 0xff]));
+    }
 
     #[test]
     fn written_digests_read_back() {

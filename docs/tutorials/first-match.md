@@ -5,20 +5,23 @@ In this tutorial, you generate two clubs, pick a lineup, kick off, make a substi
 You need:
 
 - Rust 1.87 or later, with `cargo`.
+- Node 22.12 or later, with `npm`, to build the match viewer.
 - A desktop browser, for example Microsoft Edge, Google Chrome, or Firefox.
 - A clone of this repository. Run every command from the root folder of the clone.
 
 The match lasts about 12 minutes at the fastest playback speed.
 
-## 1. Build the engine
+## 1. Build the engine and the viewer
 
 Run:
 
 ```bash
 cargo build --release
+npm --prefix viewer ci
+npm --prefix viewer run build
 ```
 
-The build ends with a `Finished` line. The engine program is now in `target/release/`.
+The engine build ends with a `Finished` line, and the engine program is now in `target/release/`. The viewer build ends with a `built in` line, and the page the engine serves is now in `viewer/dist/`.
 
 ## 2. Generate two clubs
 
@@ -35,7 +38,7 @@ The command prints `wrote 2 team files`. The folder `my-league` now holds two te
 Run:
 
 ```bash
-target/release/engine-cli serve --seed 42 --web web --team-a my-league/club-000007ea-00.json --team-b my-league/club-000007ea-01.json
+target/release/engine-cli serve --seed 42 --web viewer/dist --team-a my-league/club-000007ea-00.json --team-b my-league/club-000007ea-01.json
 ```
 
 The command prints two lines: a port number, and a page address such as `http://127.0.0.1:50811/`. You manage the first club, the home club. The computer manages the second club.
@@ -46,42 +49,45 @@ Keep this command running until the end of the tutorial.
 
 Open the page address in your browser.
 
-The header shows the two club names, the score `0–0`, and `Engine connected` with the engine version. The pitch shows eleven slots in a formation. Each slot names a player from your squad. The squad list is under the pitch.
+The page opens on **Tactics**, before kick-off. The header names the two clubs. The pitch shows eleven slots in a formation. Each slot names a player from your squad. The squad list is beside the pitch. Select the **Match** tab to see the match screen, with the score `0–0` and `Engine connected` with the engine version in the header, then select **Tactics** to come back.
 
 ## 5. Pick the lineup
 
 1. Select a slot on the pitch, for example the fourth slot.
 2. Select **Empty the picked slot**.
 
-   The **Kick off** button becomes unavailable. The text above the button tells you why: the lineup has fewer than eleven players.
+   The **Continue** button in the header becomes unavailable. Beside the formation, **NOT READY** tells you why: the lineup has fewer than eleven players.
 
 3. Select a player in the squad list, then select the empty slot.
 
-   The player moves into the slot. The text above the button reads `The lineup is ready.` and **Kick off** is available again.
+   The player moves into the slot. **READY** shows with `The lineup is legal.`, and **Continue** is available again.
 
-4. In the **Tactics** panel on the right, change **Mentality** to another value.
+4. Change **Mentality** to another value.
 
-   The panel shows the value you chose.
+   The field shows the value you chose.
 
 ## 6. Kick off
 
-Select **Kick off**.
+Select **Continue**. The Pre-match line-ups show both teams. Select **Kick off**.
 
-The clock starts. The ball and the 22 players move on the pitch. The match feed on the right fills with events.
+The match screen opens and the clock starts. The ball and the 22 players move on the pitch. The commentary on the right fills with events.
 
 Select **8x** under the pitch. The clock runs eight times faster.
 
 ## 7. Make a substitution
 
-1. In the **Substitution** area of the **Tactics** panel, choose a player in **Player coming off**.
-2. Choose a player in **Substitute coming on**.
-3. Select **Queue substitution**.
+1. Select the **Tactics** tab. The match plays on behind it.
+2. In the **Substitution** area, choose a player in **Coming off**.
+3. Choose a player in **Coming on**.
+4. Select **Queue substitution**.
 
-   A chip with the word **Queued** shows in the **Tactics** panel. The substitution waits for the next time the ball is out of play.
+   The change shows under the queued changes, marked **Queued**. The substitution waits for the next time the ball is out of play.
 
-4. Watch the chip.
+5. Watch the change.
 
-   At the next stoppage, the chip reads **Applied**. The match feed shows `Substitution applied`, the lineup panel shows the new player, and the count of substitutions left goes down by one.
+   At the next stoppage, it reads **Applied**. The commentary shows `Substitution applied`, the roles table shows the new player, and the count of substitutions left goes down by one.
+
+6. Select the **Match** tab to watch the pitch again.
 
 ## 8. Continue after half-time
 
@@ -93,7 +99,7 @@ Select **Continue**. The second half starts.
 
 At full time, the page opens the full-time report.
 
-Select **Save replay**.
+When the replay is ready, **Save replay** is available. Select it.
 
 The browser downloads a file named `touchline-<match id>.smfx`. At full time, the engine command in the terminal ends.
 
@@ -101,6 +107,6 @@ The browser downloads a file named `touchline-<match id>.smfx`. At full time, th
 
 You generated two clubs, picked a lineup, changed the tactics, played a whole match, made a substitution, and saved a replay.
 
-To watch the replay again, select **Open a replay** in the full-time report and choose the file. You can also run `target/release/engine-cli replay --fixture <file> --web web` and open the page address it prints.
+To watch the replay again, select **Open a replay** in the full-time report and choose the file. You can also run `target/release/engine-cli replay --fixture <file> --web viewer/dist` and open the page address it prints.
 
 To change how the engine plays, read [the modding how-to](../how-to/modding.md).

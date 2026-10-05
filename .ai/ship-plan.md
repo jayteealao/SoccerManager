@@ -2,9 +2,9 @@
 schema: sdlc/v1
 type: ship-plan
 slug: soccer-manager
-plan-version: 2
+plan-version: 4
 created-at: "2026-09-25T23:46:20Z"
-updated-at: "2026-09-26T00:45:53Z"
+updated-at: "2026-10-05T10:45:00Z"
 project-name: "SoccerManager"
 template-hint: none
 
@@ -26,6 +26,7 @@ version-scheme: semver
 version-source-of-truth:
   - { path: "Cargo.toml", field: "workspace.package.version" }
   - { path: "e2e/package.json", field: "version", bump: false, note: "private browser-test harness; never published, never bumped with a release" }
+  - { path: "viewer/package.json", field: "version", bump: false, note: "private viewer package; built into the release, never published, never bumped with a release" }
 version-bump-rule: manual
 version-bump-cmd: "cargo release version <major|minor|patch|x.y.z-beta.N|x.y.z-rc.N> --execute"
 prerelease-suffix: "-beta.N | -rc.N"
@@ -38,7 +39,8 @@ ci-pipeline:
     - fmt
     - clippy
     - test-fast
-    - coverage
+    - previous-engine
+    - viewer
     - commit-convention
     - pr-title
     - cargo-deny
@@ -47,11 +49,12 @@ ci-pipeline:
     - semgrep
     - windows-build
     - content-changelog
+    - gate
   pr-workflow-files: [".github/workflows/pr-checks.yml", ".github/workflows/pr-title.yml"]
   rollback-workflow-file: ".github/workflows/rollback.yml"
   release-trigger: tag-on-main
   release-workflow-file: ".github/workflows/release.yml"
-  release-jobs: [version-gate, test, build-windows, build-linux, smoke-linux, draft-release, verify-draft, attest]
+  release-jobs: [version-gate, test, build-windows, build-linux, smoke-linux, browser-linux, browser-windows, draft-release, verify-draft, attest]
   publish-dry-run-cmd: "gh workflow run release.yml -f dry-run=true"
   publish-cmd: "git push origin v<version>  # the workflow uploads to a draft release; publish with: gh release edit v<version> --draft=false [--prerelease]"
   required-secrets:
@@ -124,7 +127,7 @@ code-quality:
   format-check: { tool: "rustfmt", cmd: "cargo fmt --all --check" }
   lint:         { tool: "clippy", cmd: "cargo clippy --workspace --all-targets --locked -- -D warnings" }
   type-check:   { tool: "n/a", cmd: "" }
-  test-coverage: { min-percent: 78, cmd: "cargo llvm-cov --workspace --locked --fail-under-lines 78" }
+  test-coverage: { min-percent: 78, cmd: "cargo llvm-cov --workspace --locked --fail-under-lines 78", runs: local-pre-push }
   commit-convention:   { spec: conventional, config-path: "committed.toml", enforce: [local, ci] }
   pr-title-convention: { spec: conventional, enforce: [ci] }
 
@@ -147,7 +150,7 @@ governance:
   branch-protection:
     base-branch: "main"
     mechanism: branch-protection
-    required-checks: ["fmt", "clippy", "test-fast", "coverage", "commit-convention", "pr-title", "cargo-deny", "npm-audit-e2e", "gitleaks", "semgrep", "windows-build", "content-changelog"]
+    required-checks: ["fmt", "clippy", "test-fast", "previous-engine", "viewer", "commit-convention", "pr-title", "cargo-deny", "npm-audit-e2e", "gitleaks", "semgrep", "windows-build", "content-changelog", "gate"]
     required-approvals: 0
     dismiss-stale-reviews: false
     require-up-to-date: true
@@ -232,7 +235,7 @@ additional-contracts:
 A release publishes the downloadable game: a Windows 11 x64 setup file (NSIS) and a Linux x86_64 archive, each with a `.sha256` file. The files go to a GitHub release on this repository. The repository is private, so only invited people can download a release until the download location changes. Discovery found the build scripts in `packaging/windows/build.ps1` and `packaging/unix/build.sh`, and built 0.1.0 files in `dist/`, but no earlier tag or release. A release moves through three stages: smoke, prerelease, and release. Releases happen on demand, when a finished piece of work is worth a build. The self-updating Tauri app from the packaging brainstorm replaces the NSIS setup later; that change is a `/wf ship-plan edit`.
 
 ## Versioning
-The version is semver, and it lives in one place: `[workspace.package].version` in `Cargo.toml`. The test `crates/engine-cli/tests/release_version.rs` keeps `--version`, the engine's `hello` message, and every release file name equal to it. cargo-release sets the version; the owner picks the level by hand. `CHANGELOG.md` is written by hand. Prereleases carry `-beta.N` or `-rc.N`, as each release needs. After a release, main moves to the next `-dev` version, so a development build is never mistaken for a release.
+The version is semver, and it lives in one place: `[workspace.package].version` in `Cargo.toml`. `e2e/package.json` and `viewer/package.json` carry their own version fields, but both packages are private: the release never publishes or bumps them. The test `crates/engine-cli/tests/release_version.rs` keeps `--version`, the engine's `hello` message, and every release file name equal to it. cargo-release sets the version; the owner picks the level by hand. `CHANGELOG.md` is written by hand. Prereleases carry `-beta.N` or `-rc.N`, as each release needs. After a release, main moves to the next `-dev` version, so a development build is never mistaken for a release.
 
 ## CI/CD pipeline
 Releases run on GitHub Actions. This reverses the earlier "hosted CI later" decision from the packaging brainstorm. A pushed `v*` tag starts `.github/workflows/release.yml`:
@@ -241,13 +244,14 @@ Releases run on GitHub Actions. This reverses the earlier "hosted CI later" deci
 2. The fast tests run again on the release commit.
 3. `windows-latest` builds the setup file with `build.ps1`.
 4. `ubuntu-22.04` builds the archive with `build.sh` (glibc 2.35 floor) and runs `smoke.sh`.
-5. The workflow uploads all four files to a draft release.
-6. A check downloads the draft's files and confirms the asset list, the hashes, and the version.
-7. Provenance attestation runs only when the repository allows it (inert while the repository is private).
+5. The browser suite runs against the packaged folder on Linux (`browser-linux`) and on Windows (`browser-windows`), after the packaged-layout test checks that the built viewer is in the package.
+6. The workflow uploads all four files to a draft release.
+7. A check downloads the draft's files and confirms the asset list, the hashes, and the version.
+8. Provenance attestation runs only when the repository allows it (inert while the repository is private).
 
 The workflow also runs by hand (`workflow_dispatch`), one run at a time, with `contents: write` as its only write permission, and with third-party actions pinned to a commit.
 
-Every PR runs the light checks on Ubuntu (format, clippy, fast tests, coverage, commit and PR-title conventions, cargo-deny, npm audit, gitleaks, semgrep, and the content-changelog check) and a Windows build job. The checks live in `.github/workflows/pr-checks.yml` and `.github/workflows/pr-title.yml`. PRs that change only `.ai/` skip the checks. PRs that change `docs/` run them, because a test reads `docs/`. A rollback runs from `.github/workflows/rollback.yml` once that file is on `main`. Heavy runs (slow tests, calibrate) stay on this PC or the Contabo server, and the owner is asked first. The only secret is the built-in `GITHUB_TOKEN`. Private-repository Actions minutes are metered, and Windows minutes count double.
+Every PR runs the light checks on Ubuntu (format, clippy, fast tests, commit and PR-title conventions, cargo-deny, npm audit, gitleaks, semgrep, and the content-changelog check), the viewer build and its tests (notices, vitest, token scan, contrast), a check that a match saved by the previous release finishes on that release's engine (`previous-engine`), a Windows build job, and the replay gate on Ubuntu and Windows (`gate`: the golden-file history check, the 22 gate matches, and the fast-model fit). The checks live in `.github/workflows/pr-checks.yml` and `.github/workflows/pr-title.yml`. PRs that change only `.ai/` skip the checks. PRs that change `docs/` run them, because a test reads `docs/`. A rollback runs from `.github/workflows/rollback.yml` once that file is on `main`. Coverage (`cargo llvm-cov`, 78% lines) runs on this PC before every push, not on the hosted runner, to keep the checks within the free Actions minutes; the test build optimises the workspace crates so the full-match tests fit the runner's limits. Heavy runs (slow tests, calibrate) stay on this PC or the Contabo server, and the owner is asked first. The only secret is the built-in `GITHUB_TOKEN`. Private-repository Actions minutes are metered, and Windows minutes count double.
 
 ## Post-publish verification
 The release is checked while it is still a draft:
@@ -277,7 +281,7 @@ The GitHub release notes carry the version's `CHANGELOG.md` section. The owner p
 - Format: `cargo fmt --all --check` against `rustfmt.toml`.
 - Lint: `cargo clippy --workspace --all-targets -- -D warnings`.
 - Tests: the fast tests, meaning `cargo test --workspace` without the ignored tests, plus `node --test "web/tests/*.test.mjs"`.
-- Coverage: cargo-llvm-cov fails a PR under 78% line coverage. The baseline measured on 2026-09-25 is 80.30% for lines, 82.15% for functions, and 78.89% for regions.
+- Coverage: cargo-llvm-cov fails under 78% line coverage. It runs in the local pre-push gate, not in PR CI. The baseline measured on 2026-09-25 is 80.30% for lines, 82.15% for functions, and 78.89% for regions.
 - Commits follow conventional commits, checked by `committed` in the commit-msg hook and in CI. Merge commits are left out of that check.
 - PR titles follow conventional commits, checked in CI.
 

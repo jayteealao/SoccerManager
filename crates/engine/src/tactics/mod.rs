@@ -4,6 +4,8 @@
 //! each time the tactics change, never per tick.
 
 pub mod change;
+pub mod planned;
+pub mod verdict;
 
 use crate::data::tactics::{
     DIRECTNESS, LINE_HEIGHT, PRESSING, TEMPO, TIME_WASTING, TacticsSchema, WIDTH,

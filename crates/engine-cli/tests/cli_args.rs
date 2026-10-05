@@ -230,6 +230,7 @@ fn no_help_line_exceeds_eighty_columns() {
         Some("gate"),
         Some("guard"),
         Some("bisect"),
+        Some("fast-model"),
     ];
     let mut checks = 0;
     for surface in surfaces {
@@ -245,7 +246,7 @@ fn no_help_line_exceeds_eighty_columns() {
             checks += 1;
         }
     }
-    assert_eq!(checks, 26);
+    assert_eq!(checks, 28);
 }
 
 #[test]

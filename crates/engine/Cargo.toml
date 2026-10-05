@@ -35,6 +35,7 @@ scenario = []
 [dev-dependencies]
 criterion = { workspace = true }
 tracing-subscriber = { workspace = true }
+trybuild = { workspace = true }
 # No default features, so `--no-default-features` also removes the recorder from test and
 # bench builds.
 engine = { path = ".", default-features = false, features = ["scenario"] }

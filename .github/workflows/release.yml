@@ -80,13 +80,34 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
       - name: Fetch every crate
         run: cargo fetch --locked
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: e2e/package.json
       - name: Engine tests (ignored slow tests excluded)
         run: cargo test --workspace --locked
-      - name: Page tests
-        run: node --test "web/tests/*.test.mjs"
+      - name: The fast-model fit matches the golden results
+        run: cargo run --locked -p engine-cli -- fast-model stale
+      - name: Fetch the previous release's tag
+        run: |
+          echo "SM_PREVIOUS_CACHE=$RUNNER_TEMP/previous-engine" >> "$GITHUB_ENV"
+          tag=$(jq -r .tag packaging/previous-engine.json)
+          git fetch --no-tags --depth=1 origin "refs/tags/$tag:refs/tags/$tag"
+      - name: Restore the previous engine
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/previous-engine/previous
+          key: previous-engine-notices-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml', 'viewer/scripts/notices.mjs', 'packaging/notices/clarify.json') }}
+      - name: A previous release's save finishes on its engine
+        run: |
+          sh packaging/unix/previous-engine.sh
+          export SM_PREVIOUS_ENGINE_PATH="$SM_PREVIOUS_CACHE/previous/engine-cli"
+          cargo test --locked -p engine-cli --test previous_engine -- --ignored
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: viewer/package.json
+      - name: Install the viewer
+        working-directory: viewer
+        run: npm ci
+      - name: Viewer tests
+        working-directory: viewer
+        run: npx vitest run
 
   build-windows:
     needs: version-gate
@@ -97,6 +118,21 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
         with:
           build-warnings: ""
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: viewer/package.json
+      - name: Fetch the previous release's tag
+        shell: pwsh
+        run: |
+          "SM_PREVIOUS_CACHE=$env:RUNNER_TEMP\previous-engine" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          $tag = (Get-Content -Raw packaging/previous-engine.json | ConvertFrom-Json).tag
+          git fetch --no-tags --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Restore the previous engine
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/previous-engine/previous
+          key: previous-engine-notices-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml', 'viewer/scripts/notices.mjs', 'packaging/notices/clarify.json') }}
       - name: Install NSIS when the runner lacks it
         shell: pwsh
         run: |
@@ -132,6 +168,13 @@ jobs:
             dist/SoccerManager-*-windows-x64-setup.exe
             dist/SoccerManager-*-windows-x64-setup.exe.sha256
           if-no-files-found: error
+      # The staged folder the setup file was made from, so the browser suite tests the
+      # shipped layout rather than one built again.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-stage
+          path: dist/stage/
+          if-no-files-found: error
 
   build-linux:
     needs: version-gate
@@ -145,6 +188,19 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
         with:
           build-warnings: ""
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: viewer/package.json
+      - name: Fetch the previous release's tag
+        run: |
+          echo "SM_PREVIOUS_CACHE=$RUNNER_TEMP/previous-engine" >> "$GITHUB_ENV"
+          tag=$(jq -r .tag packaging/previous-engine.json)
+          git fetch --no-tags --depth=1 origin "refs/tags/$tag:refs/tags/$tag"
+      - name: Restore the previous engine
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/previous-engine/previous
+          key: previous-engine-notices-${{ runner.os }}-${{ hashFiles('packaging/previous-engine.json', 'rust-toolchain.toml', 'viewer/scripts/notices.mjs', 'packaging/notices/clarify.json') }}
       - name: Build the archive
         run: sh packaging/unix/build.sh
       - name: The archive names the gated version
@@ -185,8 +241,102 @@ jobs:
           path: dist/evidence/linux/
           if-no-files-found: ignore
 
+  # The browser suite against the packaged program and its web/ folder: the release carries
+  # the built viewer, and the engine serves it.
+  browser-linux:
+    needs: [version-gate, build-linux]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        with:
+          build-warnings: ""
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: e2e/package.json
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux
+          path: dist
+      - name: Unpack the archive
+        env:
+          VERSION: ${{ needs.version-gate.outputs.version }}
+        run: |
+          mkdir -p dist/unpacked
+          tar -xzf "dist/SoccerManager-$VERSION-linux-x86_64.tar.gz" -C dist/unpacked
+          echo "INSTALLED=$PWD/dist/unpacked/SoccerManager-$VERSION-linux-x86_64" >> "$GITHUB_ENV"
+      - name: The packaged layout carries the built viewer
+        run: SM_INSTALL_UNDER_TEST="$INSTALLED" cargo test --release --locked -p engine-cli --test install_layout
+      - name: Install the browser suite
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: The browser suite against the packaged folder
+        working-directory: e2e
+        run: SM_E2E_INSTALL="$INSTALLED" npx playwright test --project=viewer --project=timing
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: browser-linux-results
+          path: e2e/test-results/
+          if-no-files-found: ignore
+
+  browser-windows:
+    needs: [version-gate, build-windows]
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        with:
+          build-warnings: ""
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: viewer/package.json
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-stage
+          path: dist/stage
+      - name: The packaged layout carries the built viewer
+        shell: pwsh
+        run: |
+          $env:SM_INSTALL_UNDER_TEST = (Resolve-Path dist/stage).Path
+          cargo test --release --locked -p engine-cli --test install_layout
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install the browser suite
+        shell: pwsh
+        working-directory: e2e
+        run: |
+          npm ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx playwright install chromium
+      - name: The browser suite against the packaged folder
+        shell: pwsh
+        working-directory: e2e
+        run: |
+          $env:SM_E2E_INSTALL = (Resolve-Path ../dist/stage).Path
+          npx playwright test --project=viewer --project=timing
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:SM_PREVIOUS_ENGINE_PATH = Join-Path $env:SM_E2E_INSTALL 'previous\engine-cli.exe'
+          # The drives only: the screenshots are compared on the machine that made them.
+          npx playwright test -c match.config.mjs resume -g "before any engine starts|previous release"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: browser-windows-results
+          path: e2e/test-results/
+          if-no-files-found: ignore
+
   draft-release:
-    needs: [version-gate, test, build-windows, smoke-linux]
+    needs: [version-gate, test, build-windows, smoke-linux, browser-linux, browser-windows]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -231,7 +381,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Assets, hashes, and version of the draft
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          sparse-checkout: packaging
+          persist-credentials: false
+      - name: Assets of the draft
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -249,11 +404,24 @@ jobs:
           done
           mkdir verify && cd verify
           gh release download "$TAG"
+      # No token here: this step runs the program downloaded from the draft.
+      - name: Hashes and version of the draft
+        env:
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version-gate.outputs.version }}
+        working-directory: verify
+        run: |
           sha256sum -c ./*.sha256
           tar -xzf "SoccerManager-$VERSION-linux-x86_64.tar.gz"
           printed=$("./SoccerManager-$VERSION-linux-x86_64/engine-cli" --version | awk '{ print $2 }')
           if [ "$printed" != "$VERSION" ]; then
             echo "::error::engine-cli --version prints $printed, expected $VERSION"
+            exit 1
+          fi
+          pinned=$(jq -r .version ../source/packaging/previous-engine.json)
+          previous=$("./SoccerManager-$VERSION-linux-x86_64/previous/engine-cli" --version | awk '{ print $2 }')
+          if [ "$previous" != "$pinned" ] || [ ! -f "./SoccerManager-$VERSION-linux-x86_64/previous/content/attributes.json" ]; then
+            echo "::error::previous/engine-cli prints '$previous', expected $pinned with previous/content beside it"
             exit 1
           fi
           echo "Draft $TAG verified. Next: run the Windows Sandbox check on the draft setup file, then publish."

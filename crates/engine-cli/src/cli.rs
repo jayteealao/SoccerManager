@@ -55,6 +55,130 @@ pub enum Command {
     Gate(GateOpts),
     /// Check each commit's golden-file change against the ledger rules.
     Guard(GuardOpts),
+    /// Fit the fast model, check it, or refuse a stale fit.
+    FastModel(FastModelOpts),
+    /// Time a whole matchday on a limited number of cores; a test seam.
+    #[command(hide = true)]
+    MatchdayTiming(TimingOpts),
+}
+
+/// The hidden timing run of a matchday.
+#[derive(Debug, Args)]
+pub struct TimingOpts {
+    /// Seed of the player's match; the round derives from it.
+    #[arg(long, default_value_t = 42)]
+    pub seed: u64,
+    /// Minutes of play of every match.
+    #[arg(long, default_value_t = 90)]
+    pub minutes: u32,
+    /// Limit the process to its first N logical cores before anything starts.
+    #[arg(long, value_name = "N")]
+    pub cores: Option<usize>,
+    /// Background worker threads; default usable cores minus one.
+    #[arg(long, value_name = "N")]
+    pub threads: Option<usize>,
+    /// Playback speed of the reveal schedule; 8 is the fastest the viewer offers.
+    #[arg(long, default_value_t = 8.0)]
+    pub speed: f64,
+    /// Where the timing record goes.
+    #[arg(long, value_name = "FILE")]
+    pub out: PathBuf,
+}
+
+#[derive(Debug, Args)]
+pub struct FastModelOpts {
+    /// What to do.
+    #[arg(
+        value_enum,
+        long_help = "What to do.\n\
+                     fit: confirm the engine reproduces the golden results, play\n\
+                     the fit batch and the check batch on the full engine, fit the\n\
+                     model, check it, and write the fit file when every figure is\n\
+                     within its tolerance.\n\
+                     check: play the check batch again for the fit file and compare.\n\
+                     stale: refuse a fit whose engine id is not the golden results'."
+    )]
+    pub action: FastModelAction,
+    /// Fit file to read; default in the content folder.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "The fit file check and stale read. Default: fast-model.json\n\
+                     in the content folder."
+    )]
+    pub fit: Option<PathBuf>,
+    /// Where fit writes the fit file.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Where fit writes the fit file when the check passes.\n\
+                     Default: fast-model.json in the content folder."
+    )]
+    pub out: Option<PathBuf>,
+    /// Golden file the engine id comes from.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "The golden file whose results the engine id names; default\n\
+                     gate/golden.json in the current folder (the repository root)."
+    )]
+    pub golden: Option<PathBuf>,
+    /// Full matches per pairing (fit only).
+    #[arg(
+        long,
+        default_value_t = 1000,
+        long_help = "Full-engine matches per strength pairing in each batch (fit\n\
+                     only; check reads the count from the fit file). Nine pairings."
+    )]
+    pub matches: u32,
+    /// Fast-model draws per check match.
+    #[arg(
+        long,
+        default_value_t = 20,
+        long_help = "Fast-model matches played for each check-batch match (fit\n\
+                     only; check reads the count from the fit file)."
+    )]
+    pub draws: u32,
+    /// Minutes per full match (fit only).
+    #[arg(
+        long,
+        default_value_t = 90,
+        long_help = "Minutes of play per full-engine match (fit only). A fit for\n\
+                     the game uses 90; a shorter match is for tests."
+    )]
+    pub minutes: u32,
+    /// Threads that play full matches.
+    #[arg(
+        long,
+        long_help = "Threads that play the full-engine matches; default the\n\
+                     number of logical cores."
+    )]
+    pub jobs: Option<u32>,
+    /// Confirm only this gate fixture; repeatable.
+    #[arg(
+        long = "gate-fixture",
+        value_name = "ID",
+        long_help = "Before fit and check play, the engine replays the gate\n\
+                     fixtures and stops when a hash differs from the golden file.\n\
+                     Name a fixture to replay only it; repeatable. Default: all 22."
+    )]
+    pub gate_fixtures: Vec<String>,
+    /// Folder for report.json.
+    #[arg(
+        long,
+        value_name = "DIR",
+        long_help = "Write report.json with every figure, its tolerance and the\n\
+                     fit into this folder (fit and check)."
+    )]
+    pub report: Option<PathBuf>,
+}
+
+/// What `fast-model` does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum FastModelAction {
+    Fit,
+    Check,
+    Stale,
 }
 
 #[derive(Debug, Args)]
@@ -212,9 +336,19 @@ pub struct SimulateOpts {
 
 #[derive(Debug, Args)]
 pub struct ResumeOpts {
-    /// Snapshot file written during a match (snapshot.smsn).
+    /// Snapshot file of a match (snapshot.smsn).
     #[arg(long, value_name = "FILE")]
     pub snapshot: PathBuf,
+    /// The previous release's engine program.
+    #[arg(
+        long = "previous",
+        value_name = "FILE",
+        long_help = "Previous release's engine program, which finishes the matches that\n\
+                     release saved; default SM_PREVIOUS_ENGINE_PATH, then\n\
+                     previous/engine-cli beside this program. It plays with the\n\
+                     content folder beside it."
+    )]
+    pub previous_engine: Option<PathBuf>,
     /// Also write the resumed ticks to this file.
     #[arg(long, value_name = "FILE")]
     pub ticks_out: Option<PathBuf>,
@@ -328,6 +462,18 @@ pub struct ServeOpts {
     /// Drop the viewer's connection once this tick is sent; a test seam.
     #[arg(long, hide = true, value_name = "TICK")]
     pub drop_client_at: Option<u32>,
+    /// Produce every tick up to this one without waiting for the viewer; a test seam.
+    #[arg(long, hide = true, value_name = "TICK")]
+    pub fast_forward_to: Option<u32>,
+    /// Play no other match of the matchday; a test seam.
+    #[arg(long, hide = true)]
+    pub no_matchday: bool,
+    /// Background worker threads of the matchday; a test seam.
+    #[arg(long, hide = true, value_name = "N")]
+    pub matchday_threads: Option<usize>,
+    /// Make one background match fail at a tick (FIXTURE@TICK); a test seam.
+    #[arg(long, hide = true, value_name = "FIXTURE@TICK")]
+    pub matchday_fault: Option<crate::matchday::Fault>,
 }
 
 #[derive(Debug, Args)]
@@ -335,7 +481,9 @@ pub struct LaunchOpts {
     /// Random-number seed; default from the clock.
     #[arg(
         long,
-        long_help = "Seed for the engine's random-number generator; default from the clock."
+        long_help = "Seed for the engine's random-number generator; default from the clock.\n\n\
+                     Every match started from match setup uses it.\n\
+                     Without it, each match takes a seed from the clock."
     )]
     pub seed: Option<u64>,
     /// Minutes of play to simulate.
@@ -359,9 +507,10 @@ pub struct LaunchOpts {
     #[arg(
         long,
         value_name = "DIR",
-        long_help = "Folder holding the viewer page; default SM_WEB_DIR, ./web, then web/.\n\n\
+        long_help = "Folder holding the viewer page; default SM_WEB_DIR, viewer/dist, web/.\n\n\
                      Without the flag, SM_WEB_DIR is used alone when it is set.\n\
-                     Otherwise ./web, then the web folder beside this program.\n\
+                     Otherwise ./viewer/dist (the built viewer in a checkout),\n\
+                     then the web folder beside this program (an installed game).\n\
                      A folder counts only when it holds index.html."
     )]
     pub web: Option<PathBuf>,
@@ -377,9 +526,39 @@ pub struct LaunchOpts {
                      for and how to build the engine."
     )]
     pub engine: Option<PathBuf>,
+    /// Continue the saved match in this snapshot file.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "Continue the saved match in this snapshot file instead of starting\n\
+                     one. The engine that wrote the save finishes it: this program, or\n\
+                     the previous release's program. A save from any other version is\n\
+                     refused, and the page shows its version."
+    )]
+    pub resume: Option<PathBuf>,
+    /// The previous release's engine program.
+    #[arg(
+        long = "previous",
+        value_name = "FILE",
+        long_help = "Previous release's engine program, which finishes the matches that\n\
+                     release saved; default SM_PREVIOUS_ENGINE_PATH, then\n\
+                     previous/engine-cli beside this program."
+    )]
+    pub previous: Option<PathBuf>,
+    /// Start a match at once; no start screen.
+    #[arg(
+        long,
+        conflicts_with = "resume",
+        long_help = "Start a match at once with the seed and the team\n\
+                     files given, instead of opening the start screen."
+    )]
+    pub no_start_screen: bool,
     /// Drop the viewer's connection once this tick is sent; a test seam.
     #[arg(long, hide = true, value_name = "TICK")]
     pub drop_client_at: Option<u32>,
+    /// Make every match's worker produce ticks up to this one at once; a test seam.
+    #[arg(long, hide = true, value_name = "TICK")]
+    pub fast_forward_to: Option<u32>,
 }
 
 #[derive(Debug, Args)]
@@ -552,6 +731,9 @@ pub struct ReplayOpts {
     /// Also serve this folder as the viewer page.
     #[arg(long, value_name = "DIR")]
     pub web: Option<PathBuf>,
+    /// Send every frame before this tick at once, then pace from it; a test seam.
+    #[arg(long, hide = true, value_name = "TICK")]
+    pub fast_forward_to: Option<u32>,
 }
 
 #[derive(Debug, Args)]

@@ -139,7 +139,7 @@ fn a_foul_in_the_penalty_area_gives_a_penalty_at_the_mark() {
         );
         assert_eq!(events[0].advantage, Some(false), "no advantage in the area");
         let spot = events[1].spot.unwrap();
-        let mark = engine::pitch::penalty_spot(1.0);
+        let mark = engine::pitch::Pitch::DEFAULT.penalty_spot(1.0);
         assert!((spot - mark).length() <= 0.5, "{spot} against {mark}");
         assert_eq!(sim.dead_ball().unwrap().kind, StoppageKind::Penalty);
         assert_eq!(sim.summary().penalties, [1, 0]);

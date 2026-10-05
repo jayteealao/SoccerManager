@@ -13,8 +13,8 @@ use crate::player::Player;
 /// The keyed scheme's id: every key reads its own stream from the match seed.
 pub const KEYED_SCHEME: u8 = 1;
 
-/// The largest squad a team file may hold (`data/team.rs`).
-pub const SQUAD_MAX: usize = 40;
+/// The largest squad a team file may hold: the team file's own limit.
+pub const SQUAD_MAX: usize = crate::data::team::MAX_SQUAD;
 
 /// Player slots per action in the dense key index: two squads, then the match key.
 pub(crate) const SLOTS_PER_ACTION: usize = 2 * SQUAD_MAX + 1;

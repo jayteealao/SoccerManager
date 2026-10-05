@@ -121,21 +121,26 @@ Exit codes: 0 at full time; 1 when the snapshot of `--resume` is refused; 2 when
 
 Serve the viewer page and run the engine as a separate process. Restart the engine after a crash.
 
+By default the page opens on the start screen and no match runs: the player starts a new match with two chosen teams, resumes the saved match, opens replays, changes the settings, reads the licences, or quits. `--no-start-screen` starts a match at once instead.
+
 | Flag | Value | Default | Meaning |
 |---|---|---|---|
-| `--seed` | integer | from the clock | The seed of the random-number generator. When absent, `launch` picks one from the clock and prints `seed <n>` on standard error. |
+| `--seed` | integer | from the clock | The seed of the random-number generator, used for every match started from match setup. When absent, each match takes a seed from the clock; with `--no-start-screen`, `launch` prints that seed as `seed <n>` on standard error. |
 | `--minutes` | integer | 90 | Minutes of play. |
 | `--team-a` | file | `teams/default-a.json` in the content folder | The home team file. |
 | `--team-b` | file | `teams/default-b.json` in the content folder | The away team file. |
 | `--web` | folder | see below | The folder that holds the viewer page. |
 | `--open` | none | off | Open the page in the default browser. When the browser does not open, `launch` logs `launch.open_failed` and keeps running. |
 | `--engine` | file | `SM_ENGINE_PATH`, then this program | The engine program to run. When the file does not exist, the page shows the path and how to build the engine. |
+| `--resume` | file | not set | Continue the saved match in this snapshot file instead of starting one. The engine that wrote the save finishes it, as for `resume`. A save from any other version starts no engine: the page shows the Resume a saved match screen, which names the save's version and offers a new match. |
+| `--previous` | file | `SM_PREVIOUS_ENGINE_PATH`, then `previous/engine-cli` beside this program | The previous release's engine program. |
+| `--no-start-screen` | none | off | Start a match at once with `--seed`, `--team-a` and `--team-b`, instead of opening the start screen. Do not use it with `--resume`. |
 
-When `--web` is absent, `launch` uses `SM_WEB_DIR`. When `SM_WEB_DIR` is not set, `launch` uses `./web`, then the `web` folder beside the binary. A folder counts only when it holds `index.html`. An installed game keeps `content` and `web` beside the binary, so it starts with no flag.
+When `--web` is absent, `launch` uses `SM_WEB_DIR`. When `SM_WEB_DIR` is not set, `launch` uses `./viewer/dist` (the built viewer in a repository checkout, after `npm --prefix viewer run build`), then the `web` folder beside the binary (an installed game). A folder counts only when it holds `index.html`. An installed game keeps `content` and `web` beside the binary, so it starts with no flag.
 
-Output: the page address. The page reads the engine state from `engine.json` at the same address.
+Output: the page address. The page reads the engine state from `engine.json` at the same address. Its fields include `engine.version` (the release version of the program that plays the match), `launcher.version`, `match.resumed_from` (the tick a saved match continued from), and, when a save cannot resume, a `resume` block: `kind` (`older`, `newer`, `other`, `unreleased` or `previous-missing`), `saved.version`, `saved.build`, `saved.tick`, `saved.teams`, `saved.score`, `saved.millis` (the match stamp), `engines` (the two versions this program finishes) and `reason`. On the start screen the state is `idle`, and `engine.json` also carries `front-door` (true), `teams` (the sample teams match setup offers), `saved` (the newest unfinished match, or null), `settings` and `previous.version`. The page asks for actions with a POST from its own origin, each with a body of at most 4 KiB: `/engine/new-match` (with no body, a fresh match with the launch's seed and teams; with `{"home": <club id>, "away": <club id>}`, that fixture), `/engine/resume` (the saved match), `/engine/stop` (stop the match and keep its save), `/engine/quit` (stop the match, keep its save and end `launch`), and `/engine/settings` (save the three settings). A GET of `/engine/round?home=<club id>&away=<club id>` answers the other fixtures of the round that match would meet. See the protocol reference for the fields and the answers.
 
-Exit codes: the launcher runs until you stop it; 1 on an error.
+Exit codes: the launcher runs until you stop it or the player quits (0); 1 on an error.
 
 ## record
 
@@ -249,9 +254,16 @@ Exit codes: 0 when every frame was sent; 1; 2 when the viewer left early.
 
 Continue a match from its newest snapshot to full time. A knockout match resumes as a knockout match: the snapshot records it.
 
+A snapshot resumes only on the build that wrote it. The snapshot records the release version of that build, and `resume` picks the program by that version:
+
+- A snapshot from this version: this program continues it.
+- A snapshot from the previous release (0.2.0-beta.1): the previous release's program, shipped as `previous/engine-cli` beside this program, continues it with its own `previous/content` folder. `resume` passes that program's output and exit code through, and logs `resume.delegated`.
+- Any other snapshot: refused, with a message that names the version that saved it, for example `snapshot refused: this match was saved by Touchline 0.1.0, two or more versions back; ...`. The file stays on disk.
+
 | Flag | Value | Default | Meaning |
 |---|---|---|---|
 | `--snapshot` | file | required | The snapshot file, `matches/<match.id>/snapshot.smsn` in the data folder. |
+| `--previous` | file | `SM_PREVIOUS_ENGINE_PATH`, then `previous/engine-cli` beside this program | The previous release's engine program. It plays with the `content` folder beside it. |
 | `--ticks-out` | file | not set | Also write the resumed ticks to this file. |
 | `--json` | none | off | Also write the ticks as JSON Lines. Requires `--ticks-out`. |
 | `--team-a` | file | as for `simulate` | The home team file the match started with. |
@@ -260,7 +272,7 @@ Continue a match from its newest snapshot to full time. A knockout match resumes
 
 Output: one JSON line with the match statistics.
 
-Exit codes: 0; 1 when the snapshot is refused: a damaged file, a file from another build, or a file from other content.
+Exit codes: 0; 1 when the snapshot is refused: a damaged file, a file from a version this program does not carry, a file from another build of this version, or a file from other content.
 
 ## calibrate
 
@@ -333,7 +345,7 @@ The fixtures, in gate order:
 
 Output: one line per match on standard output: the fixture id, `match` or `differs`, the tick count, the first 12 characters of the final hash, and for `change` and `knockout` the applied substitutions and tactics changes, or whether the match went to extra time and a shoot-out. A match that differs gets a second line that names the window of ticks in which its state first changed, for example `seed-42 differs: the state first differs between tick 30000 and tick 31000`, or the two tick counts when the match lasted longer or shorter. With `--json`, each match is one JSON object with `fixture`, `verdict`, `ticks`, `final_hash`, `window` (`from` and `to`), `detail`, `extra_time`, `shootout`, `decided_by`, `substitutions_applied`, `tactics_changes_applied`, `slow_calls` (script hook calls past the wall-clock limit), and `invalid` (`slow script` when `slow_calls` is above 0, otherwise `null`). A match with a slow hook call gets a line on standard error, for example `warning: knockout is marked invalid: slow script (1 hook call ran past the wall-clock limit); its hashes were compared`; its hashes are compared as for any other match, and the warning does not change the exit code. Standard error ends with the match count, the machine key, and the run time.
 
-The golden file holds, in this order: the gate schema version, the state inventory version, the checkpoint spacing, the toolchain, the fixture list, the `ledger`, the `set_differences` record, and the hash sets. Since the one recorded result change, the file holds one hash set, keyed `portable`, which every machine compares against. Before it, each machine had its own set, keyed `<os>-<arch>`, for example `windows-x86_64`. Seeds are decimal strings and hashes are 64 lowercase hex characters.
+The golden file holds, in this order: the gate schema version, the state inventory version, the checkpoint spacing, the toolchain, the fixture list, the `ledger`, the `set_differences` record, and the hash sets. Since ledger entry 2 (the move to the portable hash set), the file holds one hash set, keyed `portable`, which every machine compares against. Before that entry, each machine had its own set, keyed `<os>-<arch>`, for example `windows-x86_64`. Seeds are decimal strings and hashes are 64 lowercase hex characters.
 
 The ledger is append-only. Each entry has a `kind` (`bootstrap` for the first file, `add-machine-set` for a second machine's set of unchanged code, `regenerate` for a hash change), the `reason`, the `engine_version`, the `build` commit, the random-stream `scheme`, the `utc` time, and the `machine`: the key of the hash set the entry writes, `portable` for the portable set. A `regenerate` entry also has the `candidate` commit and a `band_result` path, `gate/bands/ledger-<index>.json`, fixed when the entry is written. The `set_differences` record has one item per pair of machines: `a`, `b`, the ids of the matches that `differ`, and the count of matches that are the `same`. A file written before the ledger existed, with a top-level `bootstrap` object, reads as a ledger of one `bootstrap` entry.
 
@@ -370,6 +382,57 @@ A merge commit is compared with its first parent.
 Output: one line per commit on standard output, `<short commit> ok`, or one line per broken rule, for example `3f2a9c1 rule 5: hash set linux-x86_64 changes with no new regenerate entry`. Standard error ends with the commit count and the number that fail.
 
 Exit codes: 0 when every commit passes, or no commit in the range changes the file; 1 when a flag is refused, git cannot run, or a revision cannot be read; 2 when a commit breaks a rule.
+
+## fast-model
+
+Fit the fast model from full-engine results, check it against the full engine, or refuse a stale fit. The fast model plays a 90-minute match without playing a tick: from the two teams as they kick off it gives a final score and an event stream with every kind the full engine emits in regulation time, apart from a plugin's script note and a refused manager change. Nothing in the game plays it yet; these commands are its only users. Run the command from the repository root, where `gate/golden.json` is.
+
+```text
+engine-cli fast-model <fit|check|stale> [OPTIONS]
+```
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `fit`, `check`, `stale` | action | required | What to do; see below. |
+| `--fit` | path | `fast-model.json` in the content folder | The fit file `check` and `stale` read. |
+| `--out` | path | `fast-model.json` in the content folder | Where `fit` writes the fit file when the check passes. |
+| `--golden` | path | `gate/golden.json` | The golden file whose results the engine id names. |
+| `--matches` | 1 or more | 1000 | `fit` only: full-engine matches per strength pairing in each batch. `check` reads the count from the fit file. |
+| `--draws` | 1 or more | 20 | `fit` only: fast-model matches for each check-batch match. `check` reads the count from the fit file. |
+| `--minutes` | 1 to 200 | 90 | `fit` only: minutes of play per full-engine match. A fit for the game uses 90; a shorter match is for tests. |
+| `--jobs` | 1 or more | logical cores | Threads that play the full-engine matches. |
+| `--gate-fixture` | fixture id | all 22 | Before `fit` and `check` play, replay only this gate fixture; repeatable. |
+| `--report` | folder | none | Write `report.json` with every figure, its tolerance and the fit into this folder (`fit` and `check`). |
+
+The actions:
+
+- `fit` reads the engine id from the golden file and replays the gate fixtures; a fixture whose hashes differ stops the command, so the id the fit records is the id of the engine that played it. It then plays the fit batch and the check batch on the full engine, fits the model to the fit batch, and compares the model with the check batch. When every figure is within its tolerance it writes the fit file.
+- `check` refuses a stale fit file, replays the gate fixtures, plays the check batch again with the fit file's batch size, and compares. The batches are fixed, so the same engine gives the same figures.
+- `stale` compares the fit file's engine id with the golden file's. It plays no match. CI runs it on every pull request and before every release.
+
+**The engine id.** `golden-<ledger index>-<build>-<digest>`: the golden file's last ledger entry, the commit whose code made its hashes, and the first 12 hexadecimal characters of SHA-256 over the portable hash set's fixture ids and final hashes. The golden file changes only through a regeneration with a ledger entry, so the id changes exactly when the engine's results change. After a regeneration, run `fast-model fit` in the same change.
+
+**The batches.** Three strength levels, every attribute times 1.00, 1.075 and 1.15, give nine ordered pairings (home level, then away level). Match `k` of each pairing plays the clubs of calibration fixture `k` from the leagues generated with seed 1, each boosted by its level. The fit batch uses engine seed 1 and the check batch engine seed 2: the same clubs, other matches. With the defaults the two batches play 18,000 full matches, about 25 minutes on 8 cores.
+
+**The model.** Each side's mean goals are `exp(base + home + attack × a + curve × a² + defence × e)`: `a` is the side's attack, the mean attribute of its six most advanced starters, and `e` the other side's defence, the mean attribute of its other five starters, each as (mean − 50) / 10; `home` applies to the home side only. The two scores share one match factor, a gamma with shape `dispersion` and mean 1 that multiplies both means, so they rise and fall together as the full engine's do; each side alone is negative binomial with that dispersion. A Dixon–Coles factor `rho` adjusts the scores 0–0, 1–0, 0–1 and 1–1, and every draw is weighted by `1 + draw`. A goal's minute is drawn from 90 shares fitted from the full engine's goals. The model plays regulation time only.
+
+**The events.** Fouls, offsides, corners, throw-ins, goal kicks and injuries each have a side's mean count `exp(c · [1, home, o, t, o², t², o × t])`, where `o` is the side's strength and `t` the other side's, each as (strength − 50) / 10, and `home` is 1 for the home side; a count is negative binomial with its fitted `dispersion`, or Poisson when the full engine shows no excess spread. Each kind has 92 minute shares: 45 per half, and one for each half's added time. Each foul share is `exp(c · [1, home, o, t])` of the side that fouls, at most 1. A foul is played on with advantage at the advantage share; a foul not played on gives a penalty at the penalty share, or else a free kick to the fouled player's side. A foul is booked at the yellow share, and sends off straight at the red share. While a player of the side is booked, a yellow card goes to a booked player at the second-yellow share and sends him off; otherwise it goes to an unbooked player. A side's substitutions, those an injury forces among them, follow a table over the counts from 0 to the rule pack's limit: count `k` has a share in proportion to `exp(w_k + k × (own × o + other × t))`. An injured player is replaced when a substitution is left, a keeper by the bench keeper; otherwise the side plays on a player short. Each injury takes one substitution of the count, as in the full engine, and the rest are planned: timed from their own minute shares and grouped into the windows the injuries leave, so they keep the rule pack's substitution and window limits. An injury stops play at the injury-stoppage share; the rest happen while the ball is dead and add no stoppage. A goal in a half's last minute comes in its added time at the fitted share for that half, and adds no stoppage. Each half's added time is what the rule pack prices for that half's own stoppages, with the rule pack's variance and limits. The players come from the line-ups and benches the match kicks off with: a foul is weighted by aggression and tackling, and a booked player's foul without a card by the tuning's `foul_booked_factor` as well, a goal and an offside by the advanced starters, a penalty goes to the best finisher, and a goal kick to the keeper.
+
+**The check.** For each check-batch match the fast model plays `--draws` matches from the same kick-off. The report compares 261 figures, full engine against fast model. The 49 score figures:
+
+- per pairing (45): the home win, draw and away win shares, and the home and away goals per match;
+- season (4): goals per match, the goalless share and the share of matches with ten or more goals over the three equal pairings, and the stronger side's win rate over 1.150 v 1.000 in both orders.
+
+The 212 event figures:
+
+- per pairing (207): for each side, fouls, offsides, yellow cards, corners, throw-ins, goal kicks, free kicks, penalties, injuries and substitutions per match; the share of matches with a player sent off; and the added seconds of each half;
+- season (5): the sent-off share, yellow cards and corners per team, and throw-ins and goal kicks per match, over the three equal pairings.
+
+A figure passes when the difference is at most `max(floor, 3.7 × √(se_full² + se_fast²))`, each standard error from that side's own results (`√(p(1 − p)/n)` for a share, `s/√n` for a mean). The floor is 0.01 for a share and 0.03 goals for a mean. The score figures use z = 3.7 and the event figures z = 4.07: a fast model equal to the full engine fails one of the 49 score figures by chance in about one fit in a hundred, and one of the 212 event figures in about one fit in a hundred. A figure with no events on either side, such as penalties in a pairing where nobody gives one, passes and says `no events`. The report prints each season figure's realism band beside it, for information only: the check asks the fast model to equal the full engine, not to sit inside the bands.
+
+Output: the parameters, then one line per figure with the full-engine value, the fast-model value, the difference, the tolerance, its z, `pass`, `no events` or `FAIL`, and for a season figure its band; the last line counts the figures outside their tolerance. `stale` prints `the fast-model fit <file> matches the golden results: <id>`, or fails with `the fast-model fit is stale: the fit records <fit id>, the golden results are <golden id>; run engine-cli fast-model fit`. A fit file of an older format fails `check` and `stale` with `the fit file <file> has schema_version <n>; this build reads 2; run engine-cli fast-model fit`.
+
+Exit codes: 0 when the fit is written, the check passes, or the fit matches the golden results; 1 when a flag is refused, a file cannot be read or written, a gate fixture differs, a full-engine match breaks an event-stream rule, the fit file is of an older format, or the fit is stale; 2 when a figure is outside its tolerance (`fit` then writes no fit file).
 
 ## Debug trace file
 

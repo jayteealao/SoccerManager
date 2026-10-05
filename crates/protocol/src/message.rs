@@ -33,6 +33,11 @@ pub struct TeamRef {
     /// exactly when `squad` is: the page starts its lineup editor from it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub setup: Option<TeamSetup>,
+    /// The name of the team's formation at kick-off, as the tactics file names it (`4-4-2`).
+    /// Sent by a session a page manages, for both teams; empty otherwise, and a hello from an
+    /// earlier build carries none.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub formation: String,
 }
 
 /// One squad player, as the lineup editor shows it.
@@ -52,6 +57,10 @@ pub struct SquadEntry {
     /// this is the one fitness figure the engine holds.
     #[serde(rename = "player.natural_fitness")]
     pub natural_fitness: u8,
+    /// The injury-resistance attribute, 0 to 100: how well the player stands up to knocks.
+    /// A hello from an earlier build carries none and reads as 0.
+    #[serde(rename = "player.injury_resistance", default)]
+    pub injury_resistance: u8,
     /// How well the player fits each role, 0 to 100, one value per role in the order of the
     /// hello's `tactics.roles`.
     pub role_fit: Vec<u8>,
@@ -84,13 +93,23 @@ pub struct TeamSetup {
 }
 
 /// The substitution limits of the loaded rule pack.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SubstitutionRules {
     /// Substitutions each team may make.
     pub limit: u8,
     /// Stoppages at which each team may make them; half-time uses none.
     pub windows: u8,
+    /// Substitutions each team gains once extra time starts, on top of `limit`.
+    #[serde(default)]
+    pub extra_substitutions: u8,
+    /// Windows each team gains once extra time starts, on top of `windows`.
+    #[serde(default)]
+    pub extra_windows: u8,
+    /// The stoppage kinds whose substitutions use no window, as the rule pack writes them
+    /// (`half_time` in the shipped pack).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub windows_exempt: Vec<String>,
 }
 
 /// One player a hello names. `player.squad_index` is the player's place in the team file's
@@ -140,6 +159,48 @@ pub struct Hello {
     pub tactics: serde_json::Value,
     #[serde(default)]
     pub substitutions: SubstitutionRules,
+    /// `true` for a knockout match: level after regulation time, it plays extra time and then
+    /// a penalty shoot-out. Written only when `true`; a hello from an earlier build reads as
+    /// `false`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub knockout: bool,
+    /// The length of the home team's ground, the pitch of the match, in metres. Written
+    /// only when it is not 105; a hello without it, as from an earlier build, reads as 105.
+    #[serde(
+        rename = "ground.length",
+        default = "default_ground_length",
+        skip_serializing_if = "is_default_ground_length"
+    )]
+    pub ground_length: f64,
+    /// The width of the home team's ground in metres. Written only when it is not 68; a
+    /// hello without it reads as 68.
+    #[serde(
+        rename = "ground.width",
+        default = "default_ground_width",
+        skip_serializing_if = "is_default_ground_width"
+    )]
+    pub ground_width: f64,
+}
+
+/// The length of a ground that a hello does not name, in metres.
+pub const DEFAULT_GROUND_LENGTH: f64 = 105.0;
+/// The width of a ground that a hello does not name, in metres.
+pub const DEFAULT_GROUND_WIDTH: f64 = 68.0;
+
+fn default_ground_length() -> f64 {
+    DEFAULT_GROUND_LENGTH
+}
+
+fn default_ground_width() -> f64 {
+    DEFAULT_GROUND_WIDTH
+}
+
+fn is_default_ground_length(v: &f64) -> bool {
+    *v == DEFAULT_GROUND_LENGTH
+}
+
+fn is_default_ground_width(v: &f64) -> bool {
+    *v == DEFAULT_GROUND_WIDTH
 }
 
 /// The running totals of a match, sent once every simulated second and again at full time.
@@ -190,6 +251,138 @@ pub struct Condition {
     pub tick: u32,
     /// One value per wire slot, home first, from 0.0 (spent) to 1.0 (fresh), three decimals.
     pub energy: Vec<f64>,
+    /// Substitutions each team has made, home first.
+    #[serde(default)]
+    pub subs_used: [u8; 2],
+    /// Substitution windows each team has used, home first.
+    #[serde(default)]
+    pub windows_used: [u8; 2],
+}
+
+/// A queued change that the stoppage now opening takes. It is not a match event: it is sent
+/// on the tick the stoppage opens, before the change's verdict event, and no record or
+/// replay keeps it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChangeStateNote {
+    #[serde(rename = "change.queue_id")]
+    pub queue_id: String,
+    pub state: crate::command::ChangeState,
+    pub tick: u32,
+}
+
+/// One change the assistant would make for the page's team, as the computer manager's check
+/// finds it. The page may queue it with `queue-change`; nothing is queued until it does.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AdvicePick {
+    /// The reason, as the `ai.decision` codes name it: `sub-injury`, `sub-keeper`,
+    /// `sub-fatigue`, `mentality-up-trailing` or `mentality-down-leading`.
+    pub code: String,
+    /// `substitution` or `tactics`, as `change.kind` names it.
+    pub kind: String,
+    /// The squad index of the player coming off, for a substitution.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub off: Option<u16>,
+    /// The squad index of the player coming on, for a substitution.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on: Option<u16>,
+    /// The tactics change, for a tactics pick.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub patch: Option<PatchWire>,
+}
+
+/// The assistant's picks for the page's team after a check. It is not a match event: no
+/// record or replay keeps it, and it changes nothing in the match. Each message replaces the
+/// picks before it; an empty list means the assistant has no pick open.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Advice {
+    pub tick: u32,
+    pub minute: u32,
+    pub picks: Vec<AdvicePick>,
+}
+
+/// One other match of the player's matchday.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MatchdayFixture {
+    /// The fixture's place in the round, from 0; every ground message names it.
+    pub fixture: u32,
+    /// The two clubs, with no roster.
+    pub home: TeamRef,
+    pub away: TeamRef,
+}
+
+/// The other matches of the player's matchday. It is not a match event: no record or replay
+/// keeps it. Sent after the hello on every connection, every fixture at 0-0 until its
+/// ground events say otherwise; an empty list means the match has no other grounds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Matchday {
+    /// The matchday's number; 1 while the generated round is the only matchday.
+    pub round: u32,
+    pub fixtures: Vec<MatchdayFixture>,
+}
+
+/// What happened at another ground.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GroundKind {
+    Goal,
+    HalfTime,
+    SecondHalf,
+    /// A period of extra time starts.
+    ExtraTime,
+    FullTime,
+    /// A fault stopped the match; it has no result.
+    Unavailable,
+}
+
+/// The side of a fixture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Side {
+    Home,
+    Away,
+}
+
+/// One event at another ground, revealed on the player's match clock: the engine sends it
+/// once its own tick of the player's match reaches `tick`, and a new connection receives
+/// every one up to that tick again. Every ground kicks off with the player's match, so
+/// `tick` is a moment on the player's clock too.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GroundEvent {
+    pub fixture: u32,
+    pub tick: u32,
+    pub kind: GroundKind,
+    /// The minute of play, counted from 0, and the added minute in added time.
+    pub minute: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added: Option<u32>,
+    /// The scoring side, on a goal only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub side: Option<Side>,
+    /// The scorer's name, on a goal only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scorer: Option<String>,
+    /// The score after the event, home first.
+    pub score: [u32; 2],
+    /// `true` when the event was computed more than a simulated second after the player's
+    /// match passed its tick, so it reaches the page late.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub late: bool,
+}
+
+/// How far each other ground has played, once every simulated second: the tick each fixture
+/// has reached, in fixture order. A fixture behind the player's clock shows its events late.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GroundProgress {
+    /// The player's tick when the progress was sent.
+    pub tick: u32,
+    pub reached: Vec<u32>,
 }
 
 /// Everything the server sends as a JSON text frame.
@@ -203,6 +396,11 @@ pub enum ServerMessage {
     Condition(Condition),
     Ack(Ack),
     Reject(Reject),
+    ChangeState(ChangeStateNote),
+    Advice(Advice),
+    Matchday(Matchday),
+    GroundEvent(GroundEvent),
+    GroundProgress(GroundProgress),
 }
 
 /// The playback speed a client asks for.
@@ -316,6 +514,15 @@ pub struct SetLineup {
     pub patch: Option<PatchWire>,
 }
 
+/// Withdraws a queued change before a stoppage takes it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CancelChange {
+    /// The identifier the change's `queue-change` acknowledgement gave.
+    #[serde(rename = "change.queue_id")]
+    pub queue_id: String,
+}
+
 /// Everything a client sends.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -326,6 +533,11 @@ pub enum ClientCommand {
     QueueChange(QueueChange),
     SetLineup(SetLineup),
     Seen(Seen),
+    CancelChange(CancelChange),
+    /// After kick-off, plays the rest of the match from its exact state at full speed: the
+    /// engine stops waiting for `start`, `pause` and the `seen` lead bound and streams every
+    /// remaining tick and message as usual. Refused before kick-off.
+    Skip,
 }
 
 impl ClientCommand {
@@ -338,6 +550,8 @@ impl ClientCommand {
             ClientCommand::QueueChange(_) => "queue-change",
             ClientCommand::SetLineup(_) => "set-lineup",
             ClientCommand::Seen(_) => "seen",
+            ClientCommand::CancelChange(_) => "cancel-change",
+            ClientCommand::Skip => "skip",
         }
     }
 }
@@ -378,6 +592,7 @@ mod tests {
                         shirt: 1,
                         position: "GK".into(),
                         natural_fitness: 71,
+                        injury_resistance: 64,
                         role_fit: vec![80, 12],
                     }],
                     setup: Some(TeamSetup {
@@ -388,6 +603,7 @@ mod tests {
                         instructions: vec![1, 1, 1, 1, 1, 0],
                         roles: vec![SlotRole { role: 0, duty: 1 }; 11],
                     }),
+                    formation: "4-4-2".into(),
                 },
                 TeamRef {
                     id: "club-b".into(),
@@ -397,13 +613,20 @@ mod tests {
                     roster: Vec::new(),
                     squad: Vec::new(),
                     setup: None,
+                    formation: "4-3-3".into(),
                 },
             ],
             tactics: serde_json::json!({"roles": [{"name": "goalkeeper"}]}),
             substitutions: SubstitutionRules {
                 limit: 5,
                 windows: 3,
+                extra_substitutions: 1,
+                extra_windows: 1,
+                windows_exempt: vec!["half_time".into()],
             },
+            knockout: true,
+            ground_length: DEFAULT_GROUND_LENGTH,
+            ground_width: DEFAULT_GROUND_WIDTH,
         }
     }
 
@@ -537,6 +760,8 @@ mod tests {
             ServerMessage::Condition(Condition {
                 tick: 50,
                 energy: vec![0.998; 22],
+                subs_used: [2, 0],
+                windows_used: [1, 0],
             }),
             ServerMessage::Ack(Ack {
                 command: "queue-change".into(),
@@ -548,6 +773,18 @@ mod tests {
             ServerMessage::Reject(Reject {
                 command: "queue-change".into(),
                 reason: "unknown change type formation".into(),
+            }),
+            ServerMessage::ChangeState(ChangeStateNote {
+                queue_id: "q-1-0".into(),
+                state: ChangeState::AppliesNow,
+                tick: 3_000,
+            }),
+            ServerMessage::Advice(advice()),
+            ServerMessage::Matchday(matchday()),
+            ServerMessage::GroundEvent(goal()),
+            ServerMessage::GroundProgress(GroundProgress {
+                tick: 6_000,
+                reached: vec![6_150, 6_100, 6_200, 5_900],
             }),
         ];
         for m in messages {
@@ -572,6 +809,10 @@ mod tests {
                 patch: None,
             }),
             ClientCommand::Seen(Seen { tick: 1_200 }),
+            ClientCommand::CancelChange(CancelChange {
+                queue_id: "q-1200-0".into(),
+            }),
+            ClientCommand::Skip,
         ];
         for c in commands {
             let json = serde_json::to_string(&c).unwrap();
@@ -636,12 +877,278 @@ mod tests {
         let json = serde_json::to_string(&ServerMessage::Condition(Condition {
             tick: 50,
             energy: vec![1.0, 0.5],
+            subs_used: [1, 0],
+            windows_used: [1, 0],
         }))
         .unwrap();
         assert_eq!(
             json,
-            "{\"type\":\"condition\",\"tick\":50,\"energy\":[1.0,0.5]}"
+            "{\"type\":\"condition\",\"tick\":50,\"energy\":[1.0,0.5],\
+             \"subs_used\":[1,0],\"windows_used\":[1,0]}"
         );
+        // A condition message from an earlier build carries no counts and reads as none.
+        let ServerMessage::Condition(bare) = serde_json::from_str::<ServerMessage>(
+            "{\"type\":\"condition\",\"tick\":50,\"energy\":[1.0]}",
+        )
+        .unwrap() else {
+            panic!("not a condition message");
+        };
+        assert_eq!((bare.subs_used, bare.windows_used), ([0, 0], [0, 0]));
+    }
+
+    #[test]
+    fn a_change_state_note_and_a_cancel_travel_under_their_own_tags() {
+        let note = serde_json::to_string(&ServerMessage::ChangeState(ChangeStateNote {
+            queue_id: "q-7-0".into(),
+            state: ChangeState::AppliesNow,
+            tick: 9,
+        }))
+        .unwrap();
+        assert_eq!(
+            note,
+            "{\"type\":\"change-state\",\"change.queue_id\":\"q-7-0\",\
+             \"state\":\"applies-now\",\"tick\":9}"
+        );
+        let cancel = serde_json::to_string(&ClientCommand::CancelChange(CancelChange {
+            queue_id: "q-7-0".into(),
+        }))
+        .unwrap();
+        assert_eq!(
+            cancel,
+            "{\"type\":\"cancel-change\",\"change.queue_id\":\"q-7-0\"}"
+        );
+    }
+
+    #[test]
+    fn a_skip_carries_no_fields_and_its_ack_names_it() {
+        let text = serde_json::to_string(&ClientCommand::Skip).unwrap();
+        assert_eq!(text, "{\"type\":\"skip\"}");
+        assert_eq!(
+            serde_json::from_str::<ClientCommand>(&text).unwrap(),
+            ClientCommand::Skip
+        );
+        assert_eq!(ClientCommand::Skip.name(), "skip");
+        let ack = serde_json::to_string(&ServerMessage::Ack(crate::Ack {
+            command: ClientCommand::Skip.name().into(),
+            queue_id: None,
+            queued_tick: 90_000,
+            state: None,
+            speed: None,
+        }))
+        .unwrap();
+        assert_eq!(
+            ack,
+            "{\"type\":\"ack\",\"command\":\"skip\",\"change.queued_tick\":90000}"
+        );
+    }
+
+    #[test]
+    fn a_hello_from_an_earlier_build_reads_without_the_newer_fields() {
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello())))
+            .unwrap()
+            .replace(",\"player.injury_resistance\":64", "")
+            .replace(",\"extra_substitutions\":1,\"extra_windows\":1", "")
+            .replace(",\"windows_exempt\":[\"half_time\"]", "");
+        assert!(!json.contains("injury_resistance"), "{json}");
+        assert!(!json.contains("extra_windows"), "{json}");
+        let ServerMessage::Hello(back) = serde_json::from_str::<ServerMessage>(&json).unwrap()
+        else {
+            panic!("not a hello");
+        };
+        assert_eq!(back.teams[0].squad[0].injury_resistance, 0);
+        assert_eq!(back.substitutions.extra_substitutions, 0);
+        assert!(back.substitutions.windows_exempt.is_empty());
+    }
+
+    fn bare_team(id: &str, name: &str) -> TeamRef {
+        TeamRef {
+            id: id.into(),
+            name: name.into(),
+            kit_primary: "#c8102e".into(),
+            kit_secondary: "#000000".into(),
+            roster: Vec::new(),
+            squad: Vec::new(),
+            setup: None,
+            formation: String::new(),
+        }
+    }
+
+    fn matchday() -> Matchday {
+        Matchday {
+            round: 1,
+            fixtures: vec![MatchdayFixture {
+                fixture: 0,
+                home: bare_team("club-000007ea-00", "Belfield Athletic"),
+                away: bare_team("club-000007ea-03", "Harrow Vale"),
+            }],
+        }
+    }
+
+    fn goal() -> GroundEvent {
+        GroundEvent {
+            fixture: 2,
+            tick: 201_000,
+            kind: GroundKind::Goal,
+            minute: 66,
+            added: None,
+            side: Some(Side::Home),
+            scorer: Some("Ade Okafor".into()),
+            score: [1, 0],
+            late: false,
+        }
+    }
+
+    #[test]
+    fn the_matchday_messages_travel_under_their_own_tags() {
+        let json = serde_json::to_string(&ServerMessage::Matchday(matchday())).unwrap();
+        assert!(
+            json.starts_with(r#"{"type":"matchday","round":1,"fixtures":[{"fixture":0,"#),
+            "{json}"
+        );
+        assert!(json.contains(r#""team.id":"club-000007ea-00""#), "{json}");
+        let text = serde_json::to_string(&ServerMessage::GroundEvent(goal())).unwrap();
+        assert_eq!(
+            text,
+            r#"{"type":"ground-event","fixture":2,"tick":201000,"kind":"goal","minute":66,"side":"home","scorer":"Ade Okafor","score":[1,0]}"#
+        );
+        // A late event says so; a half-time names no side or scorer.
+        let late = GroundEvent {
+            kind: GroundKind::HalfTime,
+            minute: 45,
+            added: Some(2),
+            side: None,
+            scorer: None,
+            late: true,
+            ..goal()
+        };
+        let json = serde_json::to_string(&ServerMessage::GroundEvent(late.clone())).unwrap();
+        assert!(
+            json.contains(r#""kind":"half-time","minute":45,"added":2,"#),
+            "{json}"
+        );
+        assert!(json.ends_with(r#""score":[1,0],"late":true}"#), "{json}");
+        assert_eq!(
+            serde_json::from_str::<ServerMessage>(&json).unwrap(),
+            ServerMessage::GroundEvent(late)
+        );
+        assert_eq!(
+            serde_json::to_string(&GroundKind::Unavailable).unwrap(),
+            r#""unavailable""#
+        );
+        let progress = serde_json::to_string(&ServerMessage::GroundProgress(GroundProgress {
+            tick: 50,
+            reached: vec![50, 0],
+        }))
+        .unwrap();
+        assert_eq!(
+            progress,
+            r#"{"type":"ground-progress","tick":50,"reached":[50,0]}"#
+        );
+        let err = serde_json::from_str::<ServerMessage>(
+            r#"{"type":"ground-progress","tick":1,"reached":[],"fast":true}"#,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("fast"), "{err}");
+    }
+
+    fn advice() -> Advice {
+        Advice {
+            tick: 3_000,
+            minute: 58,
+            picks: vec![
+                AdvicePick {
+                    code: "sub-fatigue".into(),
+                    kind: "substitution".into(),
+                    off: Some(9),
+                    on: Some(14),
+                    patch: None,
+                },
+                AdvicePick {
+                    code: "mentality-up-trailing".into(),
+                    kind: "tactics".into(),
+                    off: None,
+                    on: None,
+                    patch: Some(PatchWire {
+                        mentality: Some(3),
+                        instructions: Some([Some(2), None, None, None, None, None]),
+                        ..PatchWire::default()
+                    }),
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn advice_travels_under_its_own_tag_and_a_pick_omits_what_its_kind_does_not_use() {
+        let json = serde_json::to_string(&ServerMessage::Advice(advice())).unwrap();
+        assert!(
+            json.starts_with("{\"type\":\"advice\",\"tick\":3000,\"minute\":58,"),
+            "{json}"
+        );
+        assert!(
+            json.contains(
+                "{\"code\":\"sub-fatigue\",\"kind\":\"substitution\",\"off\":9,\"on\":14}"
+            ),
+            "{json}"
+        );
+        assert!(
+            json.contains("\"kind\":\"tactics\",\"patch\":{\"mentality\":3"),
+            "{json}"
+        );
+        let err = serde_json::from_str::<ServerMessage>(
+            "{\"type\":\"advice\",\"tick\":1,\"minute\":0,\"picks\":[],\"gain\":2}",
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("gain"), "{err}");
+    }
+
+    #[test]
+    fn a_hello_names_both_formations_and_the_knockout_flag_and_reads_without_them() {
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello()))).unwrap();
+        assert!(json.contains("\"formation\":\"4-4-2\""), "{json}");
+        assert!(json.contains("\"formation\":\"4-3-3\""), "{json}");
+        assert!(json.ends_with("\"knockout\":true}"), "{json}");
+        let bare = json
+            .replace(",\"formation\":\"4-4-2\"", "")
+            .replace(",\"formation\":\"4-3-3\"", "")
+            .replace(",\"knockout\":true", "");
+        let ServerMessage::Hello(back) = serde_json::from_str::<ServerMessage>(&bare).unwrap()
+        else {
+            panic!("not a hello");
+        };
+        assert!(back.teams.iter().all(|t| t.formation.is_empty()));
+        assert!(!back.knockout);
+        // A hello that is not a knockout match and names no formation writes neither field.
+        let mut plain = hello();
+        plain.knockout = false;
+        plain.teams[1].formation.clear();
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(plain))).unwrap();
+        assert!(!json.contains("knockout"), "{json}");
+        assert_eq!(json.matches("\"formation\":\"").count(), 1, "{json}");
+    }
+
+    #[test]
+    fn a_hello_names_a_ground_only_off_105_by_68_and_reads_without_it() {
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello()))).unwrap();
+        assert!(!json.contains("ground."), "{json}");
+        let ServerMessage::Hello(back) = serde_json::from_str::<ServerMessage>(&json).unwrap()
+        else {
+            panic!("not a hello");
+        };
+        assert_eq!((back.ground_length, back.ground_width), (105.0, 68.0));
+        let mut smaller = hello();
+        smaller.ground_length = 100.0;
+        smaller.ground_width = 64.0;
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(smaller.clone()))).unwrap();
+        assert!(
+            json.ends_with("\"knockout\":true,\"ground.length\":100.0,\"ground.width\":64.0}"),
+            "{json}"
+        );
+        let ServerMessage::Hello(back) = serde_json::from_str::<ServerMessage>(&json).unwrap()
+        else {
+            panic!("not a hello");
+        };
+        assert_eq!(*back, smaller);
     }
 
     #[test]

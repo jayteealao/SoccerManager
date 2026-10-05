@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
-import { REPO, readRecords, startEngine } from '../support/engine.mjs';
+import { REPO, WEB, readRecords, startEngine } from '../support/engine.mjs';
 import { kickOff, openMatch, playUntil, setSpeed, until } from '../support/page.mjs';
 
 const schema = (name) =>
@@ -31,7 +31,7 @@ async function recordsWithin(dataDir, matchId, accept, ms) {
 }
 
 test('the records of a browser-driven match reach the data folder in time', async ({ page }) => {
-  const engine = await startEngine({ command: 'serve', args: ['--seed', '42', '--minutes', '10', '--web', 'web'] });
+  const engine = await startEngine({ command: 'serve', args: ['--seed', '42', '--minutes', '10', '--web', WEB] });
   try {
     const seen = await openMatch(page, engine.url);
     await kickOff(page);

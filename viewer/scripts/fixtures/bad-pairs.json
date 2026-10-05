@@ -1,0 +1,5 @@
+[
+  { "fg": "#777777", "bg": "#888888", "kind": "text", "where": "planted: far under the floor" },
+  { "fg": "#009a9a", "bg": "#232427", "kind": "text", "where": "planted: 4.4999 to 1, rounds to 4.50" },
+  { "fg": "#5d6067", "bg": "#232427", "kind": "inert", "where": "planted: inert, reported only" }
+]

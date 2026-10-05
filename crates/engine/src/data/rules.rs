@@ -124,6 +124,16 @@ pub struct AddedTime {
     /// Seconds added for each card shown.
     #[garde(range(min = 0, max = 120))]
     pub card_s: u32,
+    /// Seconds added for each video review of a decision. No match event counts a review
+    /// yet, so the price adds nothing until the video referee arrives. A rule pack that
+    /// leaves the field out prices a review at the default, and the default is never written
+    /// back, so the shipped rule file and every digest of it stay as they are.
+    #[serde(
+        default = "default_video_review_s",
+        skip_serializing_if = "is_default_video_review_s"
+    )]
+    #[garde(range(min = 0, max = 600))]
+    pub video_review_s: u32,
     /// The largest variance either way, in seconds.
     #[garde(range(min = 0, max = 300))]
     pub variance_s: u32,
@@ -133,6 +143,18 @@ pub struct AddedTime {
     /// The most time added to a half, in seconds. It sets the announced maximum match length.
     #[garde(range(min = 0, max = 1800), custom(at_least(self.min_s)))]
     pub max_s: u32,
+}
+
+/// The price of a video review when a rule pack names none: about one review's length,
+/// and the shipped pack's price for an injury.
+pub const DEFAULT_VIDEO_REVIEW_S: u32 = 60;
+
+fn default_video_review_s() -> u32 {
+    DEFAULT_VIDEO_REVIEW_S
+}
+
+fn is_default_video_review_s(seconds: &u32) -> bool {
+    *seconds == DEFAULT_VIDEO_REVIEW_S
 }
 
 impl AddedTime {

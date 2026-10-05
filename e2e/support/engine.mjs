@@ -1,23 +1,30 @@
 // Starts the release engine for one test, with its own data folder, and reads what it wrote.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const CONTENT = path.join(REPO, 'content');
-export const WEB = path.join(REPO, 'web');
-export const BINARY = path.join(
-  REPO,
-  'target',
-  'release',
-  process.platform === 'win32' ? 'engine-cli.exe' : 'engine-cli'
-);
+const EXE = process.platform === 'win32' ? 'engine-cli.exe' : 'engine-cli';
+/// An installed game's folder to test instead of the repository build: with SM_E2E_INSTALL
+/// set, every test runs that folder's engine-cli and serves its `web/`, the page the release
+/// carries.
+export const INSTALL = process.env.SM_E2E_INSTALL ? path.resolve(process.env.SM_E2E_INSTALL) : null;
+/// The page folder every test serves with `--web`: the built viewer (`npm run build` in
+/// viewer/), or the installed game's `web/`.
+export const VIEWER = INSTALL ? path.join(INSTALL, 'web') : path.join(REPO, 'viewer', 'dist');
+export const WEB = VIEWER;
+export const BINARY = INSTALL ? path.join(INSTALL, EXE) : path.join(REPO, 'target', 'release', EXE);
 
 function requireBinary() {
   if (!existsSync(BINARY)) {
-    throw new Error(`The engine is not built: ${BINARY} is missing. Run "cargo build --release".`);
+    throw new Error(
+      INSTALL
+        ? `No engine in the installed game: ${BINARY} is missing.`
+        : `The engine is not built: ${BINARY} is missing. Run "cargo build --release".`
+    );
   }
 }
 
@@ -62,8 +69,8 @@ export async function startEngine({ command = 'serve', args = [], env = {}, data
   const exited = new Promise((resolve) => child.on('exit', (code) => resolve(code)));
   const url = await new Promise((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new Error(`No page address within 10 s.\nstdout:\n${stdout}\nstderr:\n${stderr}`)),
-      10_000
+      () => reject(new Error(`No page address within 30 s.\nstdout:\n${stdout}\nstderr:\n${stderr}`)),
+      30_000
     );
     child.stdout.on('data', (d) => {
       stdout += d.toString();
@@ -97,12 +104,47 @@ export async function startEngine({ command = 'serve', args = [], env = {}, data
   };
 }
 
-/// Runs one engine command to completion and returns its exit code and output.
+/// The `serve` arguments that let a browser test skip the wait for playback to reach a late
+/// minute: the engine sends every tick up to `tick` at once, and holds for the page as usual
+/// from there. The match is the same; the page stores the ticks sooner and plays them at its
+/// own speed, so a test that waits for a stored tick and then rewinds to it sees the same
+/// screen. Empty when `tick` is not given.
+export function fastForward(tick) {
+  return tick === undefined || tick === null ? [] : ['--fast-forward-to', String(tick)];
+}
+
+/// A copy of the content folder whose slot file names `skin` for the viewer. A test passes it
+/// as SM_CONTENT_DIR, so the skin changes by configuration alone.
+export function contentWithSkin(skin) {
+  const dir = tempDir(`content-${skin}`);
+  cpSync(CONTENT, dir, { recursive: true });
+  const file = path.join(dir, 'slots.json');
+  const slots = JSON.parse(readFileSync(file, 'utf8'));
+  slots.slots['viewer.skin'] = { module: skin, version: 1 };
+  writeFileSync(file, `${JSON.stringify(slots, null, 2)}\n`);
+  return dir;
+}
+
+/// A copy of the content folder whose home team file (teams/default-a.json) names a home
+/// ground of `length` by `width` metres. A test passes it as SM_CONTENT_DIR, so the ground
+/// changes by configuration alone.
+export function contentWithGround(length, width) {
+  const dir = tempDir(`content-ground-${length}x${width}`);
+  cpSync(CONTENT, dir, { recursive: true });
+  const file = path.join(dir, 'teams', 'default-a.json');
+  const team = JSON.parse(readFileSync(file, 'utf8'));
+  team.club.ground = { length, width };
+  writeFileSync(file, `${JSON.stringify(team, null, 2)}\n`);
+  return dir;
+}
+
+/// Runs one engine command to completion and returns its exit code and output. Without
+/// `dataDir`, the command gets a new, empty data folder, so no two tests share one.
 export function runEngine(args, { env = {}, dataDir } = {}) {
   requireBinary();
   const result = spawnSync(BINARY, args, {
     cwd: REPO,
-    env: { ...process.env, SM_CONTENT_DIR: CONTENT, ...(dataDir ? { SM_DATA_DIR: dataDir } : {}), ...env },
+    env: { ...process.env, SM_CONTENT_DIR: CONTENT, SM_DATA_DIR: dataDir ?? tempDir('data'), ...env },
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
   });
@@ -146,4 +188,57 @@ export function readRecords(dataDir, matchId) {
         .map((line) => JSON.parse(line))
     : null;
   return { folder, stats, events };
+}
+
+/// The hidden `serve` arguments of the background matchday: `matchday: false` plays no other
+/// match and sends no ground message (a test that forces the other grounds itself), `threads`
+/// sets the worker count, and `fault` makes one fixture fail at a tick (`FIXTURE@TICK`).
+export function matchdayArgs({ matchday = true, threads = null, fault = null } = {}) {
+  return [
+    ...(matchday ? [] : ['--no-matchday']),
+    ...(threads === null ? [] : ['--matchday-threads', String(threads)]),
+    ...(fault === null ? [] : ['--matchday-fault', fault]),
+  ];
+}
+
+/// Waits until every other ground has reached `tick` or ended, so a screenshot of the list
+/// shows settled rows, never a ground behind the clock.
+export async function waitForGrounds(page, tick, timeout = 60_000) {
+  await page.waitForFunction((t) => window.__touchline.groundsReady(t), tick, { timeout, polling: 100 });
+}
+
+/// Starts `launch` on the start screen, serving the built viewer, with its own data folder (or
+/// `dataDir`, to start again on the same one). `fastForwardTo` passes the launcher's hidden
+/// `--fast-forward-to` on to each match it starts, so a drive never waits for real-time play.
+export function frontDoor({ args = [], dataDir, fastForwardTo, env = {} } = {}) {
+  const more = fastForwardTo === undefined ? [] : ['--fast-forward-to', String(fastForwardTo)];
+  return startEngine({ command: 'launch', args: [...args, ...more, '--web', VIEWER], dataDir, env });
+}
+
+/// Whether a process with this id is running.
+export function processAlive(pid) {
+  if (!pid) {
+    return false;
+  }
+  if (process.platform === 'win32') {
+    const out = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH', '/FO', 'CSV'], { encoding: 'utf8' });
+    return out.stdout.includes(`"${pid}"`);
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/// The match folders under a data folder that hold a snapshot.
+export function savedSnapshots(dataDir) {
+  const matches = path.join(dataDir, 'matches');
+  if (!existsSync(matches)) {
+    return [];
+  }
+  return readdirSync(matches)
+    .map((id) => path.join(matches, id, 'snapshot.smsn'))
+    .filter((file) => existsSync(file));
 }

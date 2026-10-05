@@ -1,0 +1,26 @@
+{
+  "about": "Crates that ship no licence file. Each entry was reviewed: the crate's manifest declares the licence, and its notice takes the named standard text with the crate's authors. A new crate with no licence file fails the viewer build until it gets a reviewed entry here.",
+  "crates": [
+    {
+      "name": "garde",
+      "version": "0.23.0",
+      "licence": "MIT OR Apache-2.0",
+      "text": "MIT",
+      "reason": "The published crate carries no licence file; its manifest declares MIT OR Apache-2.0 and the upstream repository's LICENSE-MIT applies."
+    },
+    {
+      "name": "garde_derive",
+      "version": "0.23.0",
+      "licence": "MIT OR Apache-2.0",
+      "text": "MIT",
+      "reason": "The published crate carries no licence file; its manifest declares MIT OR Apache-2.0 and the upstream repository's LICENSE-MIT applies."
+    },
+    {
+      "name": "rhai_codegen",
+      "version": "3.2.0",
+      "licence": "MIT OR Apache-2.0",
+      "text": "MIT",
+      "reason": "The published crate carries no licence file; its manifest declares MIT OR Apache-2.0 and the rhai repository's LICENSE-MIT applies."
+    }
+  ]
+}

@@ -43,21 +43,22 @@ Strategy: the dark Broadcast Blue look, chosen as the main look on 2026-09-26 (b
 - Team kit colours come from team data. Use them on the pitch and in the score only. Map each kit colour to a contrast-safe on-pitch variant.
 - Attribute values use four bands: 15 and up good, 11 to 14 middle, 7 to 10 warning, below 7 bad.
 - Semantic states to define before the first screen ships: hover, focus, active, disabled, selected, loading, error, warning, success, info. One meaning per colour on every screen.
-- The interim light palette (OKLCH, brand hue 250) is still in `web/tokens.css` and on today's match screen. It stays there until a workflow rebuilds a screen on these values.
+- The interim light palette (OKLCH, brand hue 250) is the viewer's test skin, in `viewer/src/skins/interim-light/`. It proves that a skin swap needs no code change; players are not offered it.
 
 ## Typography
-- Saira Semi Condensed 500 to 800 for display: the header band, section headers, the score bug, the goal banner, labels in capitals, and attribute numbers. Saira 400 to 700 for text and numbers. Both are under the SIL Open Font License and ship from `web/fonts/` as `woff2`; no font service is contacted. The sketch loads them from a font service only because it is a sketch.
+- Saira Semi Condensed 500 to 800 for display: the header band, section headers, the score bug, the goal banner, labels in capitals, and attribute numbers. Saira 400 to 700 for text and numbers. Both are under the SIL Open Font License and ship as `woff2` with their licence texts from the skin's own `fonts/` folder (`viewer/src/skins/broadcast-blue/fonts/`); no font service is contacted. The sketch loads them from a font service only because it is a sketch.
 - Fallbacks: `'Barlow Semi Condensed', 'Arial Narrow', system-ui, sans-serif` for display, and `system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif` for text.
 - Numerals: `font-variant-numeric: tabular-nums` for the clock, the score, tables, attributes, and statistics.
-- Scale: fixed rem scale, ratio 1.125 to 1.2. Body text 16 px minimum, line height 1.5 or more. Control labels 14 px at weight 600. Numbers 14 px at weight 500. Every text size must pass contrast on its dark ground before it ships.
-- Today `web/fonts/` holds Barlow Condensed and IBM Plex Sans for the interim screen. The Saira files are added when a workflow rebuilds a screen.
+- Scale: the Touchline Full Game sketch's scale, adopted on 2026-09-29. Base text 11 px/1.35; tables and section labels 10.5 px; sublabels 9.5 px; strip facts 12 px at weight 600; header name 14.5 px display 700 in capitals; score 28 to 30 px display 800. Every text size must pass contrast on its dark ground before it ships.
+- The interim light test skin keeps Barlow Condensed and IBM Plex Sans in `viewer/src/skins/interim-light/fonts/`.
 
 ## Elevation
 - Shadows over borders for panels: `0 1px 2px oklch(0.24 0.02 250 / 0.12)`.
 - Concentric radius: outer radius equals inner radius plus padding.
 
 ## Components
-- No component library. Plain HTML, CSS, and JavaScript.
+- Every screen ports its closest screen from the Touchline Full Game sketch (https://claude.ai/artifact/5shzExrW9n9qWAVcPxD3Kr): the 40 px icon rail, the 52 px slanted navy header with the date block and the cyan action block, the sub-navigation tabs, the navy info strip, and sections split by 1 px rules instead of cards. Parts not yet built stay as marked stubs.
+- No component library.
 - Component of record: `match-control`, the button primitive for play, pause, speed, confirm substitution, and kick-off.
   - Sizes: sm 28 px, md 36 px, lg 44 px, xl 52 px (height).
   - States: default, hover, pressed, focus, disabled.
@@ -71,13 +72,32 @@ Strategy: the dark Broadcast Blue look, chosen as the main look on 2026-09-26 (b
 - No bounce and no elastic easing. `@media (prefers-reduced-motion: reduce)` disables every animation.
 
 ## Tokens
-- `web/tokens.css` is the token file and the single source for CSS. Today it holds the 36 interim light tokens, which no longer match the colours above; the next workflow that rebuilds a screen moves it to the Broadcast Blue values, and from then on the two never disagree. `web/tests/colour.test.mjs` reads `web/tokens.css` and fails when the four values the canvas draws with drift from the module that draws them.
-- Prefix: `--tl-`. Names: `--tl-bg`, `--tl-panel`, `--tl-fg`, `--tl-fg-muted`, `--tl-line`, `--tl-brand`, `--tl-brand-hover`, `--tl-brand-pressed`, `--tl-on-brand`, `--tl-pitch`, `--tl-pitch-line`, `--tl-pitchside-bg`, `--tl-ring`, `--tl-success`, `--tl-warning`, `--tl-danger`, `--tl-card-yellow`, `--tl-skeleton`, `--tl-radius-sm`, `--tl-radius-md`, `--tl-radius-lg`, `--tl-radius-xl`, `--tl-padx-md`, `--tl-pady-md`, `--tl-gap`, `--tl-font-display`, `--tl-font-md`, `--tl-font-num`, `--tl-ease`, `--tl-shadow-1`, `--tl-header-h`, `--tl-col-left`, `--tl-col-mid`, `--tl-col-right`, `--tl-pitch-h`, `--tl-controls-h`.
-- Layout tokens fix the 1280 by 800 screen: header 56, columns 336 / 616 / 296, gutter 8, pitch 411 tall, control strip 40.
+- Each skin's `tokens.css`, in `viewer/src/skins/<skin>/`, is the token file and the single source for CSS. The Broadcast Blue skin holds the values above. The canvas reads its colours from the active skin (`palette.js` beside the tokens), and `viewer/tests/colour.test.js` fails when the two drift apart.
+- No prefix: the tokens use the sketch's names, as in the table above (`--ground`, `--navy`, `--cyan`, `--ink`, and the rest), plus the radii `--radius-sm`, `--radius-md` and `--radius-lg`. Every skin defines the same names.
+- `npm run scan` (in `viewer/`) fails on a literal colour or font value outside the skins, and on `--ink-4` outside inactive stub text. `npm run contrast` checks every text and boundary pair that `contrast-pairs.json` lists against WCAG 2.2 AA.
+- `npm run scan` also holds the window-step rules: no fluid font size, no layout measured in script outside the pitch canvas, and no `@media` width other than the window steps below.
+
+## Layout
+- The page fills the browser window. The window picks one of five steps:
+
+  | Step | Window width | Scale | Controls |
+  |---|---|---|---|
+  | Compact | 768 to 1023 px, or under 600 px high | 1 | 44 px hit areas; the tabs scroll sideways |
+  | Standard | 1024 to 1599 px | 1 | 24 px hit areas; as drawn at 1280 by 800 |
+  | Wide | 1600 to 1919 px | 1 | 24 px; side panels in two columns |
+  | Large | 1920 to 2559 px | 1.125 | 24 px times the scale |
+  | Huge | 2560 px and up | 1.375 | 24 px times the scale |
+
+- The compact layout scales down only below 768 px wide, to fit the window's width. Under 600 px high the page does not shrink: it scrolls up and down, so browser zoom still grows the text.
+- Media queries on the window pick the step: `min-width` 1024, 1600, 1920 and 2560 px, `max-width` 1023 px and `max-height` 599 px are the only widths and heights a media query uses. Each panel (the side groups, the tables, the report columns) is a size container and changes its columns with its own width.
+- The scale is CSS `zoom` on the page's top box, so type, spacing, controls and radii grow by one factor. Text never takes a fluid size.
+- The pitch canvas is the only layout measured in script: a `ResizeObserver` on its box, which draws at the device pixel ratio and keeps the ground's proportions.
+- A screen's body scrolls up and down in a tall window. The page never scrolls sideways.
+- At every step the header band takes the spare width and its title ends in an ellipsis; below 1280 px the stub header icons hide, and Menu stays.
 
 ## Brand Assets
 - No asset files exist and none are added. Generate the logo, the palette, and any illustration programmatically in JavaScript.
-- `web/mark.mjs` is that function. **The mark is the touchline.** One function draws three zones into an SVG or a canvas: the field above, a white line at 58 percent of the tile height, and the pitchside band below it, where the manager stands. Two objects sit on the field: one marker and the ball, with one faint pitch marking. Inputs: tile size, corner radius (tile size x 0.21), and the tokens `--tl-pitch`, `--tl-pitch-line`, `--tl-pitchside-bg`.
+- `viewer/src/lib/mark.js` is that function. **The mark is the touchline.** One function draws three zones into an SVG or a canvas: the field above, a white line at 58 percent of the tile height, and the pitchside band below it, where the manager stands. Two objects sit on the field: one marker and the ball, with one faint pitch marking. Inputs: tile size, corner radius (tile size x 0.21), and the active skin's three mark colours: the field, the line, and the pitchside band.
 - Four variants: primary (turf tile), reversed (paper tile, brand line), pitchside (turf tile with a paper ring, for dark surfaces), mono (outline, for the favicon and print).
 - Club crests call the same function with the club's kit colours in place of the turf and a marker position seeded from the club id. A facsimile club's crest and kit echo the real club's colours and shape, never the real badge.
 - Schedule the generator as its own feature before the first public screen.

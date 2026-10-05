@@ -1,0 +1,59 @@
+/* Broadcast Blue: the two Saira faces, the base type, the focus ring, and the reduced-motion
+ * rule. Both faces are under the SIL Open Font License 1.1; the licence texts sit in
+ * `fonts/`. No font service is contacted. */
+
+@font-face {
+  font-family: 'Saira Semi Condensed';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/saira-semi-condensed-latin-500-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Saira Semi Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fonts/saira-semi-condensed-latin-600-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Saira Semi Condensed';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/saira-semi-condensed-latin-700-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Saira Semi Condensed';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('./fonts/saira-semi-condensed-latin-800-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Saira';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/saira-latin-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Saira';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/saira-latin-500-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Saira';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fonts/saira-latin-600-normal.woff2') format('woff2');
+}

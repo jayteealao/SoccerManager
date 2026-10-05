@@ -1,0 +1,172 @@
+/* Interim light: today's light look, kept as the test skin that proves a skin swap needs no
+ * code change. It is not offered to players.
+ *
+ * It redefines every name Broadcast Blue defines, with the OKLCH values of the page in
+ * `web/` (brand hue 250, turf hue 145) as the approved light board maps them, and Barlow
+ * Condensed and IBM Plex Sans as the two faces.
+ *
+ * The bands, the action blue, the star, the state colours and the Tactics card are darker
+ * than the page in `web/`, and the pitch box lighter, so every pair passes WCAG 2.2 AA:
+ * `scripts/contrast.mjs` reads this file with `contrast-pairs.json`. The weight bar turns
+ * dark so it still shows on the lighter pitch-box track.
+ */
+
+:root[data-theme='interim-light'] {
+  color-scheme: light;
+
+  /* Grounds */
+  --page: oklch(0.985 0.006 250);
+  --well: oklch(0.97 0.006 250);
+  --ground: oklch(0.995 0.003 250);
+  --ground-2: oklch(0.97 0.006 250);
+  --ground-3: oklch(0.985 0.004 250);
+  --rail: oklch(0.95 0.008 250);
+  --rule: oklch(0.9 0.008 250);
+  --rule-2: oklch(0.93 0.008 250);
+
+  /* Ink */
+  --ink: oklch(0.24 0.02 250);
+  --ink-2: oklch(0.36 0.02 250);
+  --ink-3: oklch(0.48 0.02 250);
+  --ink-4: oklch(0.6 0.02 250);
+
+  /* Brand bands */
+  --navy-900: oklch(0.4 0.15 250);
+  --navy-700: oklch(0.49 0.17 250);
+  --navy-600: oklch(0.47 0.17 250);
+  --navy-500: oklch(0.47 0.17 250);
+  --navy-sub: oklch(0.92 0.03 250);
+
+  /* Action */
+  --cyan: oklch(0.47 0.17 250);
+  --cyan-ink: oklch(0.985 0.006 250);
+
+  /* State */
+  --star: oklch(0.62 0.14 80);
+  --good: oklch(0.5 0.14 150);
+  --mid: oklch(0.5 0.12 95);
+  --warn: oklch(0.52 0.13 75);
+  --bad: oklch(0.5 0.19 25);
+
+  /* The pitch */
+  --pitch: oklch(0.62 0.13 145);
+  --pitch-deep: oklch(0.78 0.04 145);
+  --pitch-line: oklch(0.97 0.01 145);
+  --chip: oklch(0.28 0.03 250);
+
+  /* The shell's inline colours */
+  --rail-glyph: oklch(0.24 0.02 250);
+  --rail-badge: oklch(0.48 0.02 250);
+  --tab-ink: oklch(0.24 0.02 250);
+  --band-ink: oklch(0.985 0.006 250);
+  --band-arrow: oklch(0.92 0.03 250);
+  --band-watermark: oklch(0.985 0.006 250 / 0.06);
+  --header-icon: oklch(0.24 0.02 250);
+  --help-ground: oklch(0.24 0.02 250);
+  --help-ink: oklch(0.985 0.006 250);
+  --frame-ring: oklch(0.9 0.008 250);
+  --club-sample: oklch(0.45 0.08 200);
+  --skeleton: oklch(0.93 0.01 250);
+  --bar-track: oklch(0.9 0.008 250);
+  --bar-away: oklch(0.6 0.02 250);
+  --on-good: oklch(0.985 0.006 250);
+  --on-mid: oklch(0.985 0.006 250);
+  --on-warn: oklch(0.985 0.006 250);
+  --on-bad: oklch(0.985 0.006 250);
+  --notice-neutral: oklch(0.48 0.02 250);
+  --on-neutral: oklch(0.985 0.006 250);
+
+  /* The match screen, as the light board maps it: the turf keeps its hue, the controls take
+   * the light grounds and the ink. */
+  --pitch-stripe: oklch(0.63 0.13 145);
+  --pitch-stripe-2: oklch(0.59 0.13 145);
+  --ball-ring: oklch(0.24 0.02 250);
+  --keeper-home: oklch(0.85 0.16 95);
+  --keeper-home-ink: oklch(0.24 0.02 250);
+  --keeper-away: oklch(0.52 0.17 295);
+  --keeper-away-ink: oklch(0.985 0.006 250);
+  --pitch-chip: oklch(0.24 0.02 250 / 0.55);
+  --pitch-skeleton: oklch(0.985 0.006 250 / 0.5);
+  --pitch-skeleton-2: oklch(0.985 0.006 250 / 0.7);
+  --control-edge: oklch(0.6 0.02 250);
+  --control-ink: oklch(0.24 0.02 250);
+  --button-dark: oklch(0.97 0.006 250);
+  --ghost-ink: oklch(0.24 0.02 250);
+  --seg-edge: oklch(0.9 0.008 250);
+  --seg-ink: oklch(0.24 0.02 250);
+  --toggle-ground: oklch(0.97 0.006 250);
+  --toggle-edge: oklch(0.9 0.008 250);
+  --toggle-ink: oklch(0.36 0.02 250);
+  --toggle-on-ground: oklch(0.93 0.03 250);
+  --new-goal-ground: oklch(0.95 0.03 250);
+
+  /* The Tactics screen, as the light board maps it: the turf keeps its hue, the lists and
+   * controls take the light grounds and the ink. */
+  --pitch-card: oklch(0.52 0.12 145);
+  --pitch-ink: oklch(0.985 0.006 250);
+  --pitch-tag: oklch(0.36 0.02 250);
+  --pitch-card-edge: oklch(0.24 0.02 250 / 0.2);
+  --pitch-card-ink: oklch(0.985 0.006 250);
+  --pitch-label: oklch(0.24 0.02 250 / 0.6);
+  --pitch-note: oklch(0.24 0.02 250 / 0.6);
+  --pitch-select: oklch(0.28 0.03 250);
+  --tactic-marker: oklch(0.45 0.08 200);
+  --tactic-marker-ink: oklch(0.985 0.006 250);
+  --marker-shadow: oklch(0.24 0.02 250 / 0.4);
+  --duty-attack: oklch(0.8 0.14 65);
+  --duty-support: oklch(0.8 0.1 240);
+  --duty-defend: oklch(0.85 0.14 150);
+  --weight-bar: oklch(0.36 0.1 145);
+  --select-ground: oklch(0.995 0.003 250);
+  --select-edge: oklch(0.6 0.02 250);
+  --select-ink: oklch(0.24 0.02 250);
+  --position-chip: oklch(0.93 0.01 250);
+  --position-chip-ink: oklch(0.24 0.02 250);
+  --on-slot: oklch(0.985 0.006 250);
+  --eleven-tint: oklch(0.52 0.14 150 / 0.08);
+  --picked-ground: oklch(0.93 0.03 250);
+  --queue-ground: oklch(0.97 0.02 250);
+  --queue-rule: oklch(0.9 0.008 250);
+
+  /* The matchday screens, as the light board maps them. */
+  --sheet-head: oklch(0.49 0.17 250);
+  --label-shadow: oklch(0.24 0.02 250 / 0.8);
+
+  /* The front door: the dim layer behind the dialogs, and the popover shadow. */
+  --scrim: oklch(0.24 0.02 250 / 0.45);
+  --popover-shadow: 0 10px 24px oklch(0.24 0.02 250 / 0.25);
+  --read-ink: oklch(0.36 0.02 250);
+  --star-empty: oklch(0.9 0.008 250);
+  --proposal-ground: oklch(0.97 0.006 250);
+  --reading-edge: oklch(0.62 0.1 95);
+  --reading-ink: oklch(0.45 0.1 95);
+
+  /* The handshake page: a check's state word on the navy fact strip. The plain state
+   * colours measure under 4.5:1 on navy, so the strip carries the board's lighter pair. */
+  --strip-good: oklch(0.93 0.09 150);
+  --strip-bad: oklch(0.92 0.07 20);
+  --strip-warn: oklch(0.92 0.07 70);
+
+  /* Skip to the result: the hatch after a skip and the NOT LIVE tag's ground. */
+  --hatch-1: oklch(0.8 0.01 250);
+  --hatch-2: oklch(0.92 0.008 250);
+  --not-live-ground: oklch(0.92 0.008 250);
+
+  /* Type */
+  --fd: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --fb: 'IBM Plex Sans', system-ui, sans-serif;
+  --fm: ui-monospace, Consolas, monospace;
+
+  /* Shape and motion: the same as Broadcast Blue, so only the look changes. */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 10px;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --tab-change: 180ms;
+  --live-pulse: 1400ms;
+  --goal-in: 250ms;
+  --goal-hold: 1050ms;
+  --goal-out: 200ms;
+  --pulse: 600ms;
+  --stub-opacity: 0.55;
+}
