@@ -161,6 +161,7 @@ pub struct Launcher {
     front_door: Option<FrontDoor>,
     drop_client_at: Mutex<Option<u32>>,
     fast_forward_to: Option<u32>,
+    test_jump: bool,
 }
 
 /// The snapshot file of a match in the data folder.
@@ -254,6 +255,7 @@ pub fn run(content_dir: Option<&Path>, opts: &LaunchOpts) -> anyhow::Result<i32>
         front_door,
         drop_client_at: Mutex::new(opts.drop_client_at),
         fast_forward_to: opts.fast_forward_to,
+        test_jump: opts.test_jump,
     });
 
     let page = crate::web::start(&web, Arc::new(Arc::clone(&launcher)))?;
@@ -493,6 +495,9 @@ impl Launcher {
             if let Some(tick) = self.fast_forward_to {
                 args.push("--fast-forward-to".into());
                 args.push(tick.to_string().into());
+            }
+            if self.test_jump {
+                args.push("--test-jump".into());
             }
         }
         if let Some(dir) = content {

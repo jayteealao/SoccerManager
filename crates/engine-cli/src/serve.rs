@@ -269,6 +269,8 @@ struct Serving<'a> {
     drop_at: Option<u32>,
     /// A test seam: the engine runs flat out to this tick (`--fast-forward-to`).
     fast_forward_to: Option<u32>,
+    /// A test seam: each connection accepts the jump command (`--test-jump`).
+    test_jump: bool,
     /// The other matches of the matchday; `None` with `--no-matchday`.
     round: Option<Round>,
     /// The round playing, from the match's kick-off on.
@@ -363,6 +365,7 @@ impl<'a> Serving<'a> {
             stream_tuning: loaded.content.tuning.stream.clone(),
             drop_at: opts.drop_client_at,
             fast_forward_to: opts.fast_forward_to,
+            test_jump: opts.test_jump,
             round,
             matchday: None,
             matchday_threads: opts.matchday_threads,
@@ -419,6 +422,10 @@ impl<'a> Serving<'a> {
         // the same, only sent sooner.
         if let Some(tick) = self.fast_forward_to {
             gate.set_fast_forward(tick);
+        }
+        // A browser test may also jump a started match on in mid-match; refused without it.
+        if self.test_jump {
+            gate.allow_jump();
         }
         let inbox = Arc::new(Inbox::default());
         let session = Session::start(
@@ -913,6 +920,7 @@ mod skip_equality {
             match_millis: Some(1),
             drop_client_at: None,
             fast_forward_to: None,
+            test_jump: false,
             no_matchday: true,
             matchday_threads: None,
             matchday_fault: None,

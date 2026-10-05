@@ -346,15 +346,44 @@ struct Served {
     frames: Vec<Vec<u8>>,
     ticks_file: Vec<u8>,
     rows: Vec<String>,
-    /// The tick the page skipped at; `None` when it watched to the end.
+    /// The tick the page skipped or jumped at; `None` when it watched to the end.
     skipped_at: Option<u32>,
 }
 
-/// Serves `seed` for ten minutes in `dir` and plays the page's part over the real socket:
-/// it kicks off and reads to the close. With `skip_from`, once a tick frame at or past that
-/// tick arrives it pauses and then skips, and reads the rest of the match.
-fn serve_and_read(dir: &std::path::Path, seed: u64, skip_from: Option<u32>) -> Served {
-    let ticks_out = dir.join(format!("served-{seed}-{}.ticks", skip_from.is_some()));
+/// How the page plays a served match.
+#[derive(Debug, Clone, Copy)]
+enum Pace {
+    /// It kicks off and watches to the end.
+    Watch,
+    /// Once a tick frame at or past `from` arrives it pauses, skips, and reads the rest.
+    Skip { from: u32 },
+    /// Once a tick frame at or past `from` arrives it pauses, jumps to `to`, and stops
+    /// reporting drawn ticks. When the frame at `to` arrives, still paused, it reports it,
+    /// starts again and watches to the end.
+    Jump { from: u32, to: u32 },
+}
+
+impl Pace {
+    fn start_tick(self) -> Option<u32> {
+        match self {
+            Pace::Watch => None,
+            Pace::Skip { from } | Pace::Jump { from, .. } => Some(from),
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Pace::Watch => "watch",
+            Pace::Skip { .. } => "skip",
+            Pace::Jump { .. } => "jump",
+        }
+    }
+}
+
+/// Serves `seed` for ten minutes in `dir`, with `extra` arguments, and plays the page's part
+/// over the real socket as `pace` says, reading to the close.
+fn serve_and_read(dir: &std::path::Path, seed: u64, pace: Pace, extra: &[&str]) -> Served {
+    let ticks_out = dir.join(format!("served-{seed}-{}.ticks", pace.label()));
     let mut child = bin(&dir.to_path_buf())
         .args([
             "serve",
@@ -364,8 +393,9 @@ fn serve_and_read(dir: &std::path::Path, seed: u64, skip_from: Option<u32>) -> S
             "10",
             "--match-millis",
             "1",
-            "--ticks-out",
         ])
+        .args(extra)
+        .arg("--ticks-out")
         .arg(&ticks_out)
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -385,21 +415,50 @@ fn serve_and_read(dir: &std::path::Path, seed: u64, skip_from: Option<u32>) -> S
     client.send(&ClientCommand::Start).unwrap();
     let mut frames = Vec::new();
     let mut skipped_at = None;
-    let mut skip_read_at = None;
+    let mut read_at = None;
+    // `true` from the jump until the page starts again: it reports no drawn tick then.
+    let mut held = false;
+    let mut resumed_at = None;
     loop {
         match client.read().unwrap() {
             Incoming::Tick(frame, q) => {
                 frames.push(frame.as_bytes().to_vec());
+                if let Pace::Jump { to, .. } = pace
+                    && held
+                    && q.tick >= to
+                {
+                    // Every frame up to `to` came while the page was paused and reported
+                    // nothing new: the engine produced them without its pacing.
+                    held = false;
+                    resumed_at = Some(q.tick);
+                    client
+                        .send(&ClientCommand::Seen(protocol::Seen { tick: q.tick }))
+                        .unwrap();
+                    client.send(&ClientCommand::Start).unwrap();
+                }
                 // Like a page, report the drawn tick, so the engine stays within its lead
                 // bound and a pause holds it.
-                if skipped_at.is_none() && q.tick.is_multiple_of(50) {
+                let reporting = match pace {
+                    Pace::Skip { .. } => skipped_at.is_none(),
+                    _ => !held,
+                };
+                if reporting && q.tick.is_multiple_of(50) {
                     client
                         .send(&ClientCommand::Seen(protocol::Seen { tick: q.tick }))
                         .unwrap();
                 }
-                if skipped_at.is_none() && skip_from.is_some_and(|from| q.tick >= from) {
+                if skipped_at.is_none() && pace.start_tick().is_some_and(|from| q.tick >= from) {
                     client.send(&ClientCommand::Pause).unwrap();
-                    client.send(&ClientCommand::Skip).unwrap();
+                    match pace {
+                        Pace::Skip { .. } => client.send(&ClientCommand::Skip).unwrap(),
+                        Pace::Jump { to, .. } => {
+                            client
+                                .send(&ClientCommand::Jump(protocol::Jump { tick: to }))
+                                .unwrap();
+                            held = true;
+                        }
+                        Pace::Watch => unreachable!("a watched match has no from"),
+                    }
                     skipped_at = Some(q.tick);
                 }
             }
@@ -407,18 +466,31 @@ fn serve_and_read(dir: &std::path::Path, seed: u64, skip_from: Option<u32>) -> S
                 ServerMessage::Reject(reject) => {
                     panic!("the engine refused {}: {}", reject.command, reject.reason)
                 }
-                ServerMessage::Ack(ack) if ack.command == "skip" => {
-                    skip_read_at = Some(ack.queued_tick);
+                ServerMessage::Ack(ack) if ack.command == "skip" || ack.command == "jump" => {
+                    read_at = Some(ack.queued_tick);
                 }
                 _ => {}
             },
             Incoming::Closed => break,
         }
     }
-    if skip_from.is_some() {
-        // The skip reached the engine mid-match, held by the pause and the lead bound.
-        let read_at = skip_read_at.expect("the skip was acknowledged");
-        assert!(read_at < 12_000, "the skip was read at tick {read_at}");
+    match pace {
+        Pace::Watch => {}
+        Pace::Skip { .. } => {
+            // The skip reached the engine mid-match, held by the pause and the lead bound.
+            let read_at = read_at.expect("the skip was acknowledged");
+            assert!(read_at < 12_000, "the skip was read at tick {read_at}");
+        }
+        Pace::Jump { from, to } => {
+            // The jump reached the engine mid-match, held by the pause and the lead bound,
+            // and the paused page then received every frame up to its tick.
+            let read_at = read_at.expect("the jump was acknowledged");
+            assert!(
+                read_at >= from && read_at < from + 1_000,
+                "the jump was read at tick {read_at}"
+            );
+            assert_eq!(resumed_at, Some(to), "the paused page received tick {to}");
+        }
     }
     client.close().unwrap();
     let status = child.wait().unwrap();
@@ -439,39 +511,205 @@ fn serve_and_read(dir: &std::path::Path, seed: u64, skip_from: Option<u32>) -> S
     }
 }
 
+/// Holds `left` and `right` to the same tick frames, `--ticks-out` file and events rows.
+fn assert_same_match(left: &Served, right: &Served, what: &str) {
+    assert_eq!(
+        left.frames.len(),
+        30_000,
+        "the {what} run reached full time"
+    );
+    assert_eq!(
+        left.frames.len(),
+        right.frames.len(),
+        "the same number of tick frames"
+    );
+    if let Some(i) = (0..left.frames.len()).find(|&i| left.frames[i] != right.frames[i]) {
+        panic!("tick frame {i} differs between the {what} and the watched run");
+    }
+    assert!(
+        left.ticks_file == right.ticks_file,
+        "the --ticks-out files differ"
+    );
+    assert!(!left.rows.is_empty());
+    assert_eq!(left.rows, right.rows, "the events files differ");
+}
+
 #[test]
 fn a_skipped_served_match_streams_the_same_ticks_and_events_as_one_played_through() {
     let dir = temp("serve-skip");
-    let skipped = serve_and_read(&dir, 42, Some(9_000));
-    let watched = serve_and_read(&dir, 42, None);
+    let skipped = serve_and_read(&dir, 42, Pace::Skip { from: 9_000 }, &[]);
+    let watched = serve_and_read(&dir, 42, Pace::Watch, &[]);
     let at = skipped.skipped_at.expect("the page skipped");
     assert!(at >= 9_000, "skipped at {at}");
-    assert_eq!(
-        skipped.frames.len(),
-        30_000,
-        "the skipped run reached full time"
-    );
-    assert_eq!(
-        skipped.frames.len(),
-        watched.frames.len(),
-        "the same number of tick frames"
-    );
-    if let Some(i) = (0..skipped.frames.len()).find(|&i| skipped.frames[i] != watched.frames[i]) {
-        panic!("tick frame {i} differs between the skipped and the watched run");
-    }
-    assert!(
-        skipped.ticks_file == watched.ticks_file,
-        "the --ticks-out files differ"
-    );
-    assert!(!skipped.rows.is_empty());
-    assert_eq!(skipped.rows, watched.rows, "the events files differ");
+    assert_same_match(&skipped, &watched, "skipped");
 
     // The control: another seed's match differs, so the comparison can fail.
-    let other = serve_and_read(&dir, 43, None);
+    let other = serve_and_read(&dir, 43, Pace::Watch, &[]);
     assert_ne!(
         other.frames, watched.frames,
         "seed 43 must stream another match"
     );
     assert_ne!(other.ticks_file, watched.ticks_file);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_jumped_served_match_streams_the_same_ticks_and_events_as_one_played_through() {
+    let dir = temp("serve-jump");
+    let jump = Pace::Jump {
+        from: 3_000,
+        to: 20_000,
+    };
+    let jumped = serve_and_read(&dir, 42, jump, &["--test-jump"]);
+    let watched = serve_and_read(&dir, 42, Pace::Watch, &["--test-jump"]);
+    let at = jumped.skipped_at.expect("the page jumped");
+    assert!(at >= 3_000, "jumped at {at}");
+    assert_same_match(&jumped, &watched, "jumped");
+
+    // The control: another seed's match differs, so the comparison can fail.
+    let other = serve_and_read(&dir, 43, Pace::Watch, &[]);
+    assert_ne!(
+        other.frames, watched.frames,
+        "seed 43 must stream another match"
+    );
+    assert_ne!(other.ticks_file, watched.ticks_file);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Starts `serve` for `minutes` in `dir` with `extra` arguments; returns the child and a
+/// client that has read the hello.
+fn serve_with(dir: &PathBuf, minutes: &str, extra: &[&str]) -> (std::process::Child, Client) {
+    let mut child = bin(dir)
+        .args([
+            "serve",
+            "--seed",
+            "42",
+            "--minutes",
+            minutes,
+            "--no-matchday",
+        ])
+        .args(extra)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().expect("serve prints its port"));
+    let mut line = String::new();
+    stdout.read_line(&mut line).unwrap();
+    let port: u16 = line.trim().parse().unwrap();
+    let mut client = Client::connect_local(port).unwrap();
+    let Incoming::Message(message) = client.read().unwrap() else {
+        panic!("the first frame is the hello");
+    };
+    assert!(matches!(*message, ServerMessage::Hello(_)));
+    (child, client)
+}
+
+#[test]
+fn a_jump_without_the_test_flag_is_refused_by_a_served_match() {
+    let dir = temp("serve-jump-refused");
+    let (mut child, mut client) = serve_with(&dir, "10", &[]);
+    client.send(&ClientCommand::Start).unwrap();
+    let mut last_seen = 0u32;
+    // Read and report drawn ticks up to 3,000, then pause and ask for a jump.
+    loop {
+        let Incoming::Tick(_, q) = client.read().unwrap() else {
+            continue;
+        };
+        if q.tick.is_multiple_of(50) {
+            last_seen = q.tick;
+            client
+                .send(&ClientCommand::Seen(protocol::Seen { tick: q.tick }))
+                .unwrap();
+        }
+        if q.tick >= 3_000 {
+            break;
+        }
+    }
+    client.send(&ClientCommand::Pause).unwrap();
+    client
+        .send(&ClientCommand::Jump(protocol::Jump { tick: 20_000 }))
+        .unwrap();
+    let reject = loop {
+        if let Incoming::Message(message) = client.read().unwrap() {
+            match *message {
+                ServerMessage::Reject(reject) => break reject,
+                ServerMessage::Ack(ack) if ack.command == "jump" => {
+                    // End the run before failing, so a broken guard fails instead of hanging.
+                    let _ = child.kill();
+                    panic!("an engine without --test-jump accepted the jump");
+                }
+                _ => {}
+            }
+        }
+    };
+    assert_eq!(reject.command, "jump");
+    assert!(
+        reject.reason.contains("--test-jump"),
+        "the refusal names the flag: {}",
+        reject.reason
+    );
+    // Paused and refused, the engine holds: one second later it has produced no tick past
+    // the lead bound of the newest reported tick. The start's ack names the tick it holds at.
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    client.send(&ClientCommand::Start).unwrap();
+    let held_at = loop {
+        if let Incoming::Message(message) = client.read().unwrap()
+            && let ServerMessage::Ack(ack) = *message
+            && ack.command == "start"
+        {
+            break ack.queued_tick;
+        }
+    };
+    assert!(
+        held_at <= last_seen + 500,
+        "held at {held_at}; the newest reported tick was {last_seen}"
+    );
+    // End the match quickly and cleanly.
+    client.send(&ClientCommand::Skip).unwrap();
+    while !matches!(client.read().unwrap(), Incoming::Closed) {}
+    client.close().unwrap();
+    assert!(child.wait().unwrap().success());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_jump_past_full_time_ends_the_match_at_full_time() {
+    let dir = temp("serve-jump-past");
+    let (mut child, mut client) = serve_with(&dir, "1", &["--test-jump"]);
+    client.send(&ClientCommand::Start).unwrap();
+    let mut ticks = 0u32;
+    let mut jumped = false;
+    loop {
+        match client.read().unwrap() {
+            Incoming::Tick(_, q) => {
+                ticks += 1;
+                // Report drawn ticks only before the jump: after it the paused page reports
+                // nothing, so only the jump can carry the match to its end.
+                if !jumped && q.tick.is_multiple_of(50) {
+                    client
+                        .send(&ClientCommand::Seen(protocol::Seen { tick: q.tick }))
+                        .unwrap();
+                }
+                if !jumped && q.tick >= 100 {
+                    client.send(&ClientCommand::Pause).unwrap();
+                    client
+                        .send(&ClientCommand::Jump(protocol::Jump { tick: 1_000_000 }))
+                        .unwrap();
+                    jumped = true;
+                }
+            }
+            Incoming::Message(message) => {
+                if let ServerMessage::Reject(reject) = *message {
+                    panic!("the engine refused {}: {}", reject.command, reject.reason);
+                }
+            }
+            Incoming::Closed => break,
+        }
+    }
+    assert_eq!(ticks, 3_000, "the match ended at full time");
+    client.close().unwrap();
+    let status = child.wait().unwrap();
+    assert!(status.success(), "serve exited with {status}");
     let _ = std::fs::remove_dir_all(&dir);
 }

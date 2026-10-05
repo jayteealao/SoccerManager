@@ -465,6 +465,9 @@ pub struct ServeOpts {
     /// Produce every tick up to this one without waiting for the viewer; a test seam.
     #[arg(long, hide = true, value_name = "TICK")]
     pub fast_forward_to: Option<u32>,
+    /// Accept the jump command, which fast-forwards a started match; a test seam.
+    #[arg(long, hide = true)]
+    pub test_jump: bool,
     /// Play no other match of the matchday; a test seam.
     #[arg(long, hide = true)]
     pub no_matchday: bool,
@@ -559,6 +562,9 @@ pub struct LaunchOpts {
     /// Make every match's worker produce ticks up to this one at once; a test seam.
     #[arg(long, hide = true, value_name = "TICK")]
     pub fast_forward_to: Option<u32>,
+    /// Pass --test-jump to every match's engine; a test seam.
+    #[arg(long, hide = true)]
+    pub test_jump: bool,
 }
 
 #[derive(Debug, Args)]
