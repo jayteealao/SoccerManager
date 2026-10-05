@@ -4,6 +4,7 @@
 import { expect, test } from '@playwright/test';
 import { WEB, startEngine } from '../support/engine.mjs';
 import {
+  actAndRead,
   changeReaches,
   chipList,
   chooseIndex,
@@ -13,6 +14,7 @@ import {
   openMatch,
   pause,
   play,
+  pressVisible,
   queueSubstitution,
   queued,
   setSpeed,
@@ -29,6 +31,10 @@ const lineupReason = (page) => page.locator('.verdict .why');
 const READY = 'The lineup is legal.';
 /// The picker's option text is "shirt name · position"; the name is between.
 const optionName = (text) => text.replace(/^\d+\s*/, '').replace(/\s*·.*$/, '');
+/// The playback row's buttons; the hidden match screen keeps its own, so look for the visible one.
+const PLAYBACK_BUTTONS = '[role="group"][aria-label="Playback"] button';
+/// The rendered tick, read in the page.
+const readTick = () => window.__touchline.lastRenderedTick();
 
 async function serve(page, args = []) {
   const engine = await startEngine({ command: 'serve', args: ['--seed', '42', '--web', WEB, ...args] });
@@ -157,8 +163,9 @@ test('a role change made while paused applies at the next stoppage, not at resum
     await kickOff(page);
     await setSpeed(page, 4);
     await until(page, () => window.__touchline.lastRenderedTick() > 1000, { timeout: 60_000 });
-    await pause(page);
-    const pausedAt = await page.evaluate(() => window.__touchline.lastRenderedTick());
+    // Press Pause and read the tick in one page turn, so no frame can draw between them.
+    await showMatch(page);
+    const pausedAt = await actAndRead(page, pressVisible, readTick, { selector: PLAYBACK_BUTTONS, name: 'Pause' });
     await showTactics(page);
     await page.getByText('Roles and duties').click();
     // The roles table lists the eleven in slot order, each with a role and a duty select.
@@ -182,16 +189,10 @@ test('a role change made while paused applies at the next stoppage, not at resum
     // The match held still while paused.
     const heldAt = await page.evaluate(() => window.__touchline.lastRenderedTick());
     expect(heldAt).toBe(pausedAt);
-    // Read the tick and press Play in one step, so a slow runner cannot play on between them.
+    // Press Play and read the tick in one page turn, so a slow runner cannot play on between
+    // them. Play draws no frame by itself, so the tick read after the click is the resume tick.
     await showMatch(page);
-    const resumeTick = await page.evaluate(() => {
-      const button = [...document.querySelectorAll('[role="group"][aria-label="Playback"] button[aria-label="Play"]')].find(
-        (b) => b.checkVisibility()
-      );
-      const tick = window.__touchline.lastRenderedTick();
-      button.click();
-      return tick;
-    });
+    const resumeTick = await actAndRead(page, pressVisible, readTick, { selector: PLAYBACK_BUTTONS, name: 'Play' });
     const applied = await changeReaches(page, change.queue_id, ['applied', 'rejected']);
     expect(applied.state).toBe('applied');
     const stoppage = await page.evaluate((t) => window.__touchline.stoppageAt(t), applied.queued_tick);
