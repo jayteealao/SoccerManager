@@ -53,7 +53,7 @@ A test reaches each state once and calls `snap()` (`support/snap.mjs`): it compa
 
 It also fails on a rendered contrast failure in the default skin. Each check writes its report as `layout-<state>-<project>.json` beside the test's output, or in `LAYOUT_EVIDENCE_DIR`.
 
-With two workers, the match suite takes about 20 minutes with the size projects and about 7 without them; the shell suite takes 0.1 minutes and the engine suite (`playwright.config.mjs`) about 19. To leave the size projects out and keep two workers, set `SM_E2E_SIZES=0` (PowerShell: `$env:SM_E2E_SIZES = '0'; npx playwright test -c match.config.mjs`). `--project=chromium` also leaves them out, but runs one test at a time.
+With two workers, the match suite takes about 20 minutes with the size projects and about 7 without them; the shell suite takes 0.1 minutes and the engine suite (`playwright.config.mjs`) about 14. To leave the size projects out and keep two workers, set `SM_E2E_SIZES=0` (PowerShell: `$env:SM_E2E_SIZES = '0'; npx playwright test -c match.config.mjs`). `--project=chromium` also leaves them out, but runs one test at a time.
 
 To run one size, name its project: `npx playwright test -c match.config.mjs --project=layout-768x1024`. To make one size's baselines again, run its pixels project with `--update-snapshots=changed`, for example `npx playwright test -c match.config.mjs --project=chromium-1920 --update-snapshots=changed`, look at every changed image, and commit only those; `changed` rewrites only the images that fail. The layout projects have no baselines. `match/window-fit.spec.mjs` sets its own sizes, from 375 by 667 to 2560 by 1440, so it runs in `chromium` only. The shell suite runs at 1280 by 800 and at 1920 by 1080.
 
