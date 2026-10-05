@@ -117,6 +117,8 @@ Output: the socket port on the first line, then the page address when `--web` is
 
 Exit codes: 0 at full time; 1 when the snapshot of `--resume` is refused; 2 when the viewer leaves before full time.
 
+Test seams: `serve` also takes hidden flags that `--help` does not show. They are for automated tests, not for players. `--test-jump` lets a client send the `jump` command, which makes a started match send every tick up to a named tick at once; the match itself is unchanged. Without `--test-jump` the engine refuses the `jump` command and keeps its normal pace. See `jump` in the protocol reference.
+
 ## launch
 
 Serve the viewer page and run the engine as a separate process. Restart the engine after a crash.
@@ -139,6 +141,8 @@ By default the page opens on the start screen and no match runs: the player star
 When `--web` is absent, `launch` uses `SM_WEB_DIR`. When `SM_WEB_DIR` is not set, `launch` uses `./viewer/dist` (the built viewer in a repository checkout, after `npm --prefix viewer run build`), then the `web` folder beside the binary (an installed game). A folder counts only when it holds `index.html`. An installed game keeps `content` and `web` beside the binary, so it starts with no flag.
 
 Output: the page address. The page reads the engine state from `engine.json` at the same address. Its fields include `engine.version` (the release version of the program that plays the match), `launcher.version`, `match.resumed_from` (the tick a saved match continued from), and, when a save cannot resume, a `resume` block: `kind` (`older`, `newer`, `other`, `unreleased` or `previous-missing`), `saved.version`, `saved.build`, `saved.tick`, `saved.teams`, `saved.score`, `saved.millis` (the match stamp), `engines` (the two versions this program finishes) and `reason`. On the start screen the state is `idle`, and `engine.json` also carries `front-door` (true), `teams` (the sample teams match setup offers), `saved` (the newest unfinished match, or null), `settings` and `previous.version`. The page asks for actions with a POST from its own origin, each with a body of at most 4 KiB: `/engine/new-match` (with no body, a fresh match with the launch's seed and teams; with `{"home": <club id>, "away": <club id>}`, that fixture), `/engine/resume` (the saved match), `/engine/stop` (stop the match and keep its save), `/engine/quit` (stop the match, keep its save and end `launch`), and `/engine/settings` (save the three settings). A GET of `/engine/round?home=<club id>&away=<club id>` answers the other fixtures of the round that match would meet. See the protocol reference for the fields and the answers.
+
+`launch` also takes the hidden test seam `--test-jump`, which it passes on to each match's engine (see `serve`); it is for automated tests, not for players.
 
 Exit codes: the launcher runs until you stop it or the player quits (0); 1 on an error.
 
