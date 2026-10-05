@@ -16,6 +16,7 @@ import {
   queueSubstitution,
   queued,
   setSpeed,
+  showMatch,
   showTactics,
   until,
 } from '../support/page.mjs';
@@ -178,14 +179,25 @@ test('a role change made while paused applies at the next stoppage, not at resum
     await page.waitForTimeout(3000);
     const whilePaused = await page.evaluate((id) => window.__touchline.pending().find((c) => c.queue_id === id), change.queue_id);
     expect(whilePaused.state).not.toBe('applied');
-    await play(page);
-    const resumeTick = await page.evaluate(() => window.__touchline.lastRenderedTick());
+    // The match held still while paused.
+    const heldAt = await page.evaluate(() => window.__touchline.lastRenderedTick());
+    expect(heldAt).toBe(pausedAt);
+    // Read the tick and press Play in one step, so a slow runner cannot play on between them.
+    await showMatch(page);
+    const resumeTick = await page.evaluate(() => {
+      const button = [...document.querySelectorAll('[role="group"][aria-label="Playback"] button[aria-label="Play"]')].find(
+        (b) => b.checkVisibility()
+      );
+      const tick = window.__touchline.lastRenderedTick();
+      button.click();
+      return tick;
+    });
     const applied = await changeReaches(page, change.queue_id, ['applied', 'rejected']);
     expect(applied.state).toBe('applied');
     const stoppage = await page.evaluate((t) => window.__touchline.stoppageAt(t), applied.queued_tick);
     expect(applied.applied_tick).toBe(stoppage);
     expect(applied.applied_tick).toBeGreaterThan(pausedAt);
-    expect(resumeTick).toBeLessThanOrEqual(pausedAt + 1);
+    expect(resumeTick).toBe(pausedAt);
   } finally {
     engine.cleanUp();
   }
