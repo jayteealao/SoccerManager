@@ -49,3 +49,20 @@ debug = 1
 # part of play.
 [profile.dev.package.sha2]
 opt-level = 3
+
+# Optimised workspace crates keep the full-match tests inside the CI runner's time limit;
+# debug assertions and overflow checks stay on.
+[profile.dev.package.engine]
+opt-level = 3
+
+[profile.dev.package.engine-cli]
+opt-level = 3
+
+[profile.dev.package.stream]
+opt-level = 3
+
+[profile.dev.package.script]
+opt-level = 3
+
+[profile.dev.package.protocol]
+opt-level = 3
