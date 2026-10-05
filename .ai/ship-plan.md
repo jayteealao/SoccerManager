@@ -127,7 +127,7 @@ code-quality:
   format-check: { tool: "rustfmt", cmd: "cargo fmt --all --check" }
   lint:         { tool: "clippy", cmd: "cargo clippy --workspace --all-targets --locked -- -D warnings" }
   type-check:   { tool: "n/a", cmd: "" }
-  test-coverage: { min-percent: 78, cmd: "cargo llvm-cov --workspace --locked --fail-under-lines 78", runs: local-pre-push }
+  test-coverage: { min-percent: 78, cmd: "lefthook run coverage", runs: local-recorded-pass }
   commit-convention:   { spec: conventional, config-path: "committed.toml", enforce: [local, ci] }
   pr-title-convention: { spec: conventional, enforce: [ci] }
 
@@ -138,7 +138,7 @@ local-dx:
     hooks:
       pre-commit: ["cargo fmt --all --check", "gitleaks protect --staged"]
       commit-msg: ["committed --commit-file {1}"]
-      pre-push:   []
+      pre-push:   ["sh scripts/coverage.sh check (recorded coverage pass for Rust pushes)"]
   editorconfig: true
   runtime-version-files: ["rust-toolchain.toml"]
   task-runner: { kind: none, targets: {} }
@@ -251,7 +251,7 @@ Releases run on GitHub Actions. This reverses the earlier "hosted CI later" deci
 
 The workflow also runs by hand (`workflow_dispatch`), one run at a time, with `contents: write` as its only write permission, and with third-party actions pinned to a commit.
 
-Every PR runs the light checks on Ubuntu (format, clippy, fast tests, commit and PR-title conventions, cargo-deny, npm audit, gitleaks, semgrep, and the content-changelog check), the viewer build and its tests (notices, vitest, token scan, contrast), a check that a match saved by the previous release finishes on that release's engine (`previous-engine`), a Windows build job, and the replay gate on Ubuntu and Windows (`gate`: the golden-file history check, the 22 gate matches, and the fast-model fit). The checks live in `.github/workflows/pr-checks.yml` and `.github/workflows/pr-title.yml`. PRs that change only `.ai/` skip the checks. PRs that change `docs/` run them, because a test reads `docs/`. A rollback runs from `.github/workflows/rollback.yml` once that file is on `main`. Coverage (`cargo llvm-cov`, 78% lines) runs on this PC before every push, not on the hosted runner, to keep the checks within the free Actions minutes; the test build optimises the workspace crates so the full-match tests fit the runner's limits. Heavy runs (slow tests, calibrate) stay on this PC or the Contabo server, and the owner is asked first. The only secret is the built-in `GITHUB_TOKEN`. Private-repository Actions minutes are metered, and Windows minutes count double.
+Every PR runs the light checks on Ubuntu (format, clippy, fast tests, commit and PR-title conventions, cargo-deny, npm audit, gitleaks, semgrep, and the content-changelog check), the viewer build and its tests (notices, vitest, token scan, contrast), a check that a match saved by the previous release finishes on that release's engine (`previous-engine`), a Windows build job, and the replay gate on Ubuntu and Windows (`gate`: the golden-file history check, the 22 gate matches, and the fast-model fit). The checks live in `.github/workflows/pr-checks.yml` and `.github/workflows/pr-title.yml`. PRs that change only `.ai/` skip the checks. PRs that change `docs/` run them, because a test reads `docs/`. A rollback runs from `.github/workflows/rollback.yml` once that file is on `main`. Coverage (`cargo llvm-cov`, 78% lines) runs on this PC by command (`lefthook run coverage`) and records a pass for the Rust content it measured, and the pre-push step refuses a Rust push without one; it does not run on the hosted runner, to keep the checks within the free Actions minutes; the test build optimises the workspace crates so the full-match tests fit the runner's limits. Heavy runs (slow tests, calibrate) stay on this PC or the Contabo server, and the owner is asked first. The only secret is the built-in `GITHUB_TOKEN`. Private-repository Actions minutes are metered, and Windows minutes count double.
 
 ## Post-publish verification
 The release is checked while it is still a draft:
@@ -281,14 +281,14 @@ The GitHub release notes carry the version's `CHANGELOG.md` section. The owner p
 - Format: `cargo fmt --all --check` against `rustfmt.toml`.
 - Lint: `cargo clippy --workspace --all-targets -- -D warnings`.
 - Tests: the fast tests, meaning `cargo test --workspace` without the ignored tests, plus `node --test "web/tests/*.test.mjs"`.
-- Coverage: cargo-llvm-cov fails under 78% line coverage. It runs in the local pre-push gate, not in PR CI. The baseline measured on 2026-09-25 is 80.30% for lines, 82.15% for functions, and 78.89% for regions.
+- Coverage: cargo-llvm-cov fails under 78% line coverage. It runs on this PC by command (`lefthook run coverage`), not in PR CI, and records a pass for the Rust content it measured; the pre-push step refuses a push that changes Rust code unless a pass is recorded for that content. The baseline measured on 2026-10-05 is 79.52% for lines, 80.56% for functions, and 78.60% for regions.
 - Commits follow conventional commits, checked by `committed` in the commit-msg hook and in CI. Merge commits are left out of that check.
 - PR titles follow conventional commits, checked in CI.
 
 Every gate is a pre-merge check.
 
 ## Local developer experience
-lefthook runs `cargo fmt --all --check` and a staged gitleaks scan before each commit, and the commit-message check at commit-msg. No pre-push tests run, because heavy runs stay off this PC. `rust-toolchain.toml` pins the toolchain with rustfmt and clippy, and `.editorconfig` sets the line endings (the Unix scripts stay LF). `CONTRIBUTING.md` says how to build, test, commit, and release. A new checkout runs `lefthook install`, then `npm ci` in `e2e/`. There is no task runner.
+lefthook runs `cargo fmt --all --check` and a staged gitleaks scan before each commit, and the commit-message checks at commit-msg (`committed` and an exact 70-character subject check). The pre-push step checks the recorded coverage pass for a push that changes Rust code; it runs no tests itself, and `lefthook run coverage` records the pass. `rust-toolchain.toml` pins the toolchain with rustfmt and clippy, and `.editorconfig` sets the line endings (the Unix scripts stay LF). `CONTRIBUTING.md` says how to build, test, commit, and release. A new checkout runs `lefthook install`, then `npm ci` in `e2e/`. There is no task runner.
 
 ## Repo governance
 The wanted rules for `main`: every pre-merge check passes, the branch is up to date, conversations are resolved, there are no force-pushes and no deletions, 0 approvals are needed, and code-owner review is off. `/wf ship-plan build` applies them with `gh api`. Until the repository is public or on GitHub Pro, the API returns 403 and no check blocks a merge. PRs merge with a merge commit, and auto-merge is off. `CODEOWNERS` names `@jayteealao` for every path. A PR template and issue templates (bug with version and platform, feature request) are added. There is no dependency automation.
