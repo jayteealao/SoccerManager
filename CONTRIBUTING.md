@@ -47,7 +47,7 @@ Each pull request runs these checks. Run the fast ones before you push:
 | Coverage | `cargo llvm-cov --workspace --locked --fail-under-lines 78` |
 | Licences and advisories | `cargo deny check` |
 
-On the hosted runner the engine tests and coverage skip the full-match tests in `contract_checks`, `phase_machine` and `plugin_hooks` for time (the list is `SKIP_FULL_MATCH` in `.github/workflows/pr-checks.yml`), so run the plain commands above before you push.
+Coverage does not run on the hosted runner, to keep the pull-request checks within the free Actions minutes, so run it before you push.
 
 The gate, the history check and the fast-model check need the release build (`cargo build --release`). [The replay gate guide](docs/how-to/replay-gate.md) says what to do when the gate reports `differs`.
 

@@ -1,8 +1,7 @@
 name: PR Checks
 
-# The light checks for every pull request. Heavy runs (the ignored slow tests and the
-# calibrate suite) stay on the owner's machine or the build server, and so do the
-# full-match contract tests listed in SKIP_FULL_MATCH.
+# The light checks for every pull request. Heavy runs (the ignored slow tests, the
+# calibrate suite and coverage) stay on the owner's machine or the build server.
 
 on:
   pull_request:
@@ -16,31 +15,6 @@ permissions:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
-# These full-match tests (contract_checks, phase_machine and plugin_hooks) are skipped
-# on the hosted runner for time. A plain cargo test still runs them locally.
-env:
-  SKIP_FULL_MATCH: >-
-    --skip a_stand_in_in_each_slot_keeps_every_other_key_and_the_events
-    --skip every_optional_slot_off_at_once_plays_a_batch_the_validator_accepts
-    --skip every_optional_slot_switched_off_plays_a_batch_the_validator_accepts
-    --skip every_stand_in_keeps_one_owner_per_key_and_a_complete_card
-    --skip the_swap_comparison_finds_a_changed_module
-    --skip a_planted_undeclared_step_fails_the_validator
-    --skip an_illegal_position_at_a_restart_fails_naming_the_phase_the_player_and_the_position
-    --skip counted_video_reviews_add_their_price
-    --skip every_change_of_phase_in_the_batch_is_declared_and_every_row_is_reached
-    --skip in_debug_mode_every_restart_passes_the_position_check
-    --skip only_the_phase_machine_writes_the_phase
-    --skip pricing_video_reviews_changes_no_added_time
-    --skip restart_position_report
-    --skip restart_position_report_wide
-    --skip restart_position_sweep
-    --skip a_hook_that_keeps_or_fails_leaves_the_native_choice_and_a_failure_is_recorded
-    --skip a_switched_off_hook_slot_never_calls_its_hook
-    --skip the_decision_hook_turns_the_carriers_choice_into_the_option_it_favours
-    --skip the_offsets_are_cached_for_the_carrier_until_the_refresh_interval_passes
-    --skip the_rule_hook_replaces_the_referees_card_and_keep_leaves_it
 
 jobs:
   fmt:
@@ -71,8 +45,8 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
       - name: Fetch every crate
         run: cargo fetch --locked
-      - name: Engine tests (ignored and full-match tests excluded)
-        run: cargo test --workspace --locked -- $SKIP_FULL_MATCH
+      - name: Engine tests (ignored slow tests excluded)
+        run: cargo test --workspace --locked
 
   # A match saved by the previous release finishes on that release's engine, built from its
   # tag (packaging/previous-engine.json), with the result the previous build reaches.
@@ -132,22 +106,6 @@ jobs:
         run: npm run scan
       - name: Contrast check
         run: npm run contrast
-
-  coverage:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
-        with:
-          components: llvm-tools-preview
-      - name: Fetch every crate
-        run: cargo fetch --locked
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
-        with:
-          tool: cargo-llvm-cov
-      - name: coverage
-        run: cargo llvm-cov --workspace --locked --fail-under-lines 78 -- $SKIP_FULL_MATCH
 
   commit-convention:
     runs-on: ubuntu-latest
@@ -262,9 +220,8 @@ jobs:
           if ($imports -match '(?i)vcruntime\d*\.dll|msvcp\d*\.dll') { throw 'engine-cli.exe imports the Visual C++ runtime; the static C runtime is missing' }
       - name: clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: Engine tests (ignored and full-match tests excluded)
-        shell: bash
-        run: cargo test --workspace --locked -- $SKIP_FULL_MATCH
+      - name: Engine tests (ignored slow tests excluded)
+        run: cargo test --workspace --locked
 
   # The replay gate on the pinned images: a release build plays the 22 gate matches against
   # the committed golden file, and both images must match its one portable hash set. The
