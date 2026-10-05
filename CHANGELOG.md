@@ -4,7 +4,9 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
-Matches play differently from 0.2.0-beta.1 for the same seed: the kick-off and the penalty positions now follow the Laws.
+## [0.2.0-beta.2] - 2026-10-05
+
+A prerelease for testers. Matches play differently from 0.2.0-beta.1 for the same seed: the kick-off and the penalty positions now follow the Laws.
 
 ### Added
 
