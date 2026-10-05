@@ -67,6 +67,28 @@ The HTML report is in `playwright-report/`. A failed test keeps its screenshot a
 
 A test finds a control by its role and its accessible name, as a screen reader does, and reads the state of the page through the read-only hook `window.__touchline`. The viewer shows one screen at a time (Tactics, the Pre-match line-ups, the match, the Touchline, the report, the replay) and keeps the match screen mounted behind the others, so a control is looked for on the screen on show; `support/page.mjs` opens the right one first. Where a control has no unique accessible name, a test finds it by the data attribute or the region that holds it.
 
+## Exact ticks and clocks
+
+A test that checks an exact tick or clock reads it in the same page turn as the action, or waits on the final condition. It never clicks in one `page.evaluate` (or a Playwright click) and reads in the next: a frame or a socket message can run between two calls, so a slow machine reads a later tick.
+
+`actAndRead(page, action, read, arg)` in `support/page.mjs` runs the action and the read in one synchronous page turn and returns what the read returns. `pressVisible` clicks the visible control with a given name; it is defined in the page for that turn, so an action or a read can call it too:
+
+```js
+import { actAndRead, pressVisible, showMatch } from '../support/page.mjs';
+
+await showMatch(page);
+const pausedAt = await actAndRead(
+  page,
+  pressVisible,
+  () => window.__touchline.lastRenderedTick(),
+  { selector: '[role="group"][aria-label="Playback"] button', name: 'Pause' }
+);
+```
+
+The action and the read are sent to the page as source, so they use only `arg` and the page, never a test variable. The read gets `(arg, acted)`, where `acted` is what the action returned. An action that returns a promise is refused, because an `await` ends the turn.
+
+Wait instead of reading once when the answer comes from the engine: an applied change, a stored tick or a report arrives later. Use `until(page, fn)` on the final condition, for example `until(page, () => window.__touchline.view() === 'report')`.
+
 ## Which test covers each behaviour
 
 | Behaviour of the page | Test |
