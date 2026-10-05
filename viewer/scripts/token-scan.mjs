@@ -215,5 +215,5 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     console.error(`${f.file}:${f.line}: ${f.what}: ${f.text}`);
   }
   console.log(`${findings.length} literal colour or font values or layout rule breaks outside the skins`);
-  process.exit(findings.length === 0 ? 0 : 1);
+  process.exitCode = findings.length === 0 ? 0 : 1;
 }

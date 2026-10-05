@@ -131,5 +131,5 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
       }
     }
   }
-  process.exit(failing === 0 ? 0 : 1);
+  process.exitCode = failing === 0 ? 0 : 1;
 }
