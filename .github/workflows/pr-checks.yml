@@ -262,8 +262,9 @@ jobs:
           if ($imports -match '(?i)vcruntime\d*\.dll|msvcp\d*\.dll') { throw 'engine-cli.exe imports the Visual C++ runtime; the static C runtime is missing' }
       - name: clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: Engine tests (ignored slow tests excluded)
-        run: cargo test --workspace --locked
+      - name: Engine tests (ignored and full-match tests excluded)
+        shell: bash
+        run: cargo test --workspace --locked -- $SKIP_FULL_MATCH
 
   # The replay gate on the pinned images: a release build plays the 22 gate matches against
   # the committed golden file, and both images must match its one portable hash set. The
