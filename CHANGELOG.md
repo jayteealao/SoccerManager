@@ -4,9 +4,9 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
-## [0.2.0-beta.2] - 2026-10-05
+## [0.2.0-beta.3] - 2026-10-05
 
-A prerelease for testers. Matches play differently from 0.2.0-beta.1 for the same seed: the kick-off and the penalty positions now follow the Laws.
+A prerelease for testers. It replaces 0.2.0-beta.2, which was tagged but not published because two browser tests of the release build measured their timing wrongly; the game is the same. Matches play differently from 0.2.0-beta.1 for the same seed: the kick-off and the penalty positions now follow the Laws.
 
 ### Added
 

@@ -69,8 +69,8 @@ test('a crashed engine shows the failure and restarts from the last stoppage', a
     const snapTick = (await status(launcher.url))['snapshot.tick'];
 
     await surfaceButton(page, /^Restart/).click();
-    // Read the page in the frame the resume lands: the clock and the score it shows. The
-    // viewer plays on from the stoppage by itself once it has resumed.
+    // Read the page in a frame after the resume: the tick drawn, and the clock and score it
+    // shows. The viewer plays on from the stoppage by itself, so the frame may be past it.
     const at = await (
       await page.waitForFunction(
         () => {
@@ -80,6 +80,7 @@ test('a crashed engine shows the failure and restarts from the last stoppage', a
           return resumed
             ? {
                 resumed,
+                rendered: window.__touchline.lastRenderedTick(),
                 clock: shown('header .date span').textContent,
                 score: score.trim().split(' – '),
               }
@@ -90,9 +91,10 @@ test('a crashed engine shows the failure and restarts from the last stoppage', a
       )
     ).jsonValue();
     expect(at.resumed.to_tick).toBe(snapTick);
-    const upto = events.filter((e) => e.tick <= at.resumed.to_tick);
+    expect(at.rendered).toBeGreaterThanOrEqual(at.resumed.to_tick);
+    const upto = events.filter((e) => e.tick <= at.rendered);
     const last = upto[upto.length - 1];
-    expect(at.clock).toBe(clockText(at.resumed.to_tick));
+    expect(at.clock).toBe(clockText(at.rendered));
     expect(at.score).toEqual([String(last['home.score']), String(last['away.score'])]);
     await expect(surface(page)).toBeHidden();
     await expect(page.locator('header:visible')).toContainText('Engine connected');
