@@ -1490,7 +1490,10 @@ mod tests {
         let ticks = config.max_ticks();
         let mut sim = Simulation::new(config).unwrap();
         let changes = page_changes(&sim);
+        // Paused from the outset, the producer runs flat out to tick 2_000 and holds there.
         let gate = Gate::new();
+        gate.set_fast_forward(2_000);
+        gate.set_running(false);
         let inbox = Inbox::default();
         let state = MatchState::default();
         let mut messages = Vec::new();
@@ -1523,7 +1526,6 @@ mod tests {
             while state.tick() < 2_000 {
                 std::thread::yield_now();
             }
-            gate.set_running(false);
             // The producer finishes the tick it is on, then waits at the gate.
             let mut paused_at = state.tick();
             loop {
