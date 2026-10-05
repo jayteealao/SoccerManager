@@ -25,7 +25,7 @@ These tests drive the match viewer in a real browser against the release engine.
    ```bash
    npm test                 # every test, headless
    npm run test:viewer      # the viewer tests and every timing test
-   npm run test:scenario    # the whole first match and its clock-rate check, about 15 minutes
+   npm run test:scenario    # the whole first match and its clock-rate check, about 5 minutes
    npm run test:headed      # every test, in a visible window
    ```
 
