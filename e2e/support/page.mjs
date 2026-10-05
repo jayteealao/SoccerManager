@@ -42,6 +42,40 @@ export async function until(page, fn, { timeout = 60_000, arg } = {}) {
   return handle.jsonValue();
 }
 
+/// Runs `action` and then `read` in the page in one synchronous turn, and returns what `read`
+/// returns. No frame and no socket message can run between them, so `read` sees the state the
+/// action left: use it to read an exact tick or clock at the moment of a click.
+/// - `action` and `read` are arrow or function expressions that use only `arg` and the page;
+///   they are sent as source, so they cannot close over test variables.
+/// - `read` gets `(arg, acted)`, where `acted` is what `action` returned.
+/// - Both can call `pressVisible`, which is defined in the page for the turn.
+/// - An action that returns a promise is refused: an `await` would end the turn.
+/// - For an answer from the engine (an applied change, a stored tick), wait on the final
+///   condition with `until` instead.
+export function actAndRead(page, action, read, arg) {
+  return page.evaluate(`(() => {
+    const pressVisible = (${pressVisible});
+    const arg = ${JSON.stringify(arg ?? null)};
+    const acted = (${action})(arg);
+    if (acted && typeof acted.then === 'function') {
+      throw new Error('actAndRead: the action must be synchronous');
+    }
+    return (${read})(arg, acted);
+  })()`);
+}
+
+/// Runs in the page, as the action of `actAndRead`: clicks the first visible element that
+/// matches `selector` and whose aria-label, or else trimmed text, is `name`.
+export function pressVisible({ selector, name }) {
+  const target = [...document.querySelectorAll(selector)].find(
+    (e) => e.checkVisibility() && (e.getAttribute('aria-label') ?? e.textContent.trim()) === name
+  );
+  if (!target) {
+    throw new Error(`no visible ${selector} named ${name}`);
+  }
+  target.click();
+}
+
 /// The cyan action block of the screen on show. Before kick-off, on Tactics, it reads
 /// CONTINUE and the lineup gates it: it is the control that leads to kick-off.
 export const kickOffButton = (page) => page.locator('header button.cont:visible');
