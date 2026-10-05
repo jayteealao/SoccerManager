@@ -102,8 +102,8 @@ check() {
     is_zero "$local_sha" && continue
 
     # Compare with the remote's commit for this ref when this clone has it. Otherwise
-    # leave out every commit already known on that remote: for a new ref, a URL or an
-    # empty remote this leaves out nothing, so the whole history counts.
+    # leave out every commit already known on that remote. For a URL, or a remote with
+    # no fetched refs, this leaves out nothing, so the whole history counts.
     if ! is_zero "${remote_sha:-0}" && git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
       base=$remote_sha
     elif [ -n "$remote" ]; then
