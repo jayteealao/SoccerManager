@@ -113,6 +113,14 @@ export function fastForward(tick) {
   return tick === undefined || tick === null ? [] : ['--fast-forward-to', String(tick)];
 }
 
+/// The hidden `serve` argument that lets a browser test send the jump command in mid-match,
+/// `{"type":"jump","tick":T}`: the engine then sends every tick up to `T` at once and holds
+/// for the page as usual from there. Without it the engine refuses the command. The match is
+/// the same; only when its ticks are sent changes.
+export function testJump() {
+  return ['--test-jump'];
+}
+
 /// A copy of the content folder whose slot file names `skin` for the viewer. A test passes it
 /// as SM_CONTENT_DIR, so the skin changes by configuration alone.
 export function contentWithSkin(skin) {
