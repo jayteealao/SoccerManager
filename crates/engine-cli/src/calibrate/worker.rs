@@ -298,11 +298,7 @@ pub fn play_match(
         sim.send_off_before_kickoff(player);
     }
     // Each tick and event is judged as the match plays; no record is kept.
-    let mut check = Timed {
-        check: RunningCheck::for_match(&sim, rules),
-        calls: 0,
-        sampled: Duration::ZERO,
-    };
+    let mut check = Timed::new(RunningCheck::for_match(&sim, rules));
     let started = Instant::now();
     {
         let _play = stages::enter(Stage::Play);
@@ -375,17 +371,34 @@ pub fn play_match(
 /// checker on a short tick.
 const CHECK_STRIDE: u32 = 16;
 
-/// The running checker, with every [`CHECK_STRIDE`]th call timed.
+/// The two kinds of checker call: the step check, then the tick check, once per tick.
+const STEP: usize = 0;
+const TICK: usize = 1;
+
+/// The running checker, with every [`CHECK_STRIDE`]th call of each kind timed. Each kind
+/// keeps its own count: the two kinds alternate, so one shared count would time only one
+/// kind and scale its cost onto both.
 struct Timed {
     check: RunningCheck,
-    calls: u32,
+    calls: [u32; 2],
+    timed: [u32; 2],
     sampled: Duration,
 }
 
 impl Timed {
-    fn call<T>(&mut self, f: impl FnOnce(&mut RunningCheck) -> T) -> T {
-        self.calls = self.calls.wrapping_add(1);
-        if self.calls.is_multiple_of(CHECK_STRIDE) {
+    fn new(check: RunningCheck) -> Self {
+        Self {
+            check,
+            calls: [0; 2],
+            timed: [0; 2],
+            sampled: Duration::ZERO,
+        }
+    }
+
+    fn call<T>(&mut self, kind: usize, f: impl FnOnce(&mut RunningCheck) -> T) -> T {
+        self.calls[kind] = self.calls[kind].wrapping_add(1);
+        if self.calls[kind].is_multiple_of(CHECK_STRIDE) {
+            self.timed[kind] += 1;
             let t = Instant::now();
             let out = f(&mut self.check);
             self.sampled += t.elapsed();
@@ -398,11 +411,11 @@ impl Timed {
 
 impl TickSink for Timed {
     fn on_step(&mut self, sim: &Simulation) -> Result<(), EngineError> {
-        self.call(|c| c.on_step(sim))
+        self.call(STEP, |c| c.on_step(sim))
     }
 
     fn on_tick(&mut self, record: &TickRecord) -> Result<(), EngineError> {
-        self.call(|c| c.on_tick(record))
+        self.call(TICK, |c| c.on_tick(record))
     }
 }
 
@@ -590,5 +603,138 @@ mod tests {
                 keyed.arm
             );
         }
+    }
+
+    /// The checker's time is sampled from both kinds of call: every 16th step check and
+    /// every 16th tick check, each counted on its own, so neither kind's cost stands in for
+    /// the other's.
+    #[test]
+    fn the_checker_time_samples_every_sixteenth_call_of_each_kind() {
+        let s = shipped();
+        let teams = default_clubs(&s.content, &s.dir).unwrap();
+        let config = MatchConfig::new(7, 1, &s.content, [&teams[0], &teams[1]]).unwrap();
+        let rules = StreamRules::for_config(&config);
+        let mut sim = Simulation::new(config).unwrap();
+        let mut check = Timed::new(RunningCheck::for_match(&sim, rules));
+        sim.run(&mut check).unwrap();
+        let ticks = sim.tick();
+        assert!(ticks >= 32, "{ticks} ticks");
+        assert_eq!(
+            check.calls,
+            [ticks, ticks],
+            "one step and one tick check per tick"
+        );
+        for kind in [STEP, TICK] {
+            assert_eq!(check.timed[kind], ticks / CHECK_STRIDE, "kind {kind}");
+        }
+    }
+
+    /// An A/A comparison on played matches: both arms are full matches of the shipped
+    /// engine on different fixtures of the equal suite, so every change is noise. Each
+    /// replicate draws two arms of 150 matches from one pool of played matches, pairs them,
+    /// and judges them with the change run's max-t bootstrap. Over 1000 replicates the test
+    /// flags at most 3 percent, and every band of the equal suite has its own row. Slow (it
+    /// plays 400 matches and runs 1000 bootstraps): run it in release with
+    /// `cargo test --release -p engine-cli --bin engine-cli -- --ignored a_a_on_played`.
+    #[test]
+    #[ignore = "slow: plays 400 full matches and judges 1000 replicates; run in release"]
+    fn an_a_a_on_played_matches_flags_at_most_three_percent_of_replicates() {
+        use std::collections::BTreeMap;
+
+        use engine::rng::EngineRng;
+
+        use crate::report::RunBuilder;
+        use crate::report::verdict::{self, FALSE_ALARM, RESAMPLES};
+
+        let (pool_size, n, replicates) = (400u32, 150usize, 1000u32);
+        let s = shipped();
+        let bands = Registry::load(&s.dir).unwrap();
+        let names: Vec<String> = s
+            .content
+            .tactics
+            .formations
+            .iter()
+            .map(|f| f.name.clone())
+            .collect();
+        let keyed = fixtures::keyed(Suite::Equal, 2026, pool_size, &names, &[]);
+        let threads = std::thread::available_parallelism().map_or(4, |t| t.get());
+        let (s, bands) = (&s, &bands);
+        let pool: Vec<MatchStats> = std::thread::scope(|scope| {
+            let handles: Vec<_> = keyed
+                .chunks(keyed.len().div_ceil(threads))
+                .map(|chunk| {
+                    scope.spawn(move || {
+                        let mut leagues = Leagues::new(2026, &s.content);
+                        chunk
+                            .iter()
+                            .map(|k| {
+                                let (teams, formations, red_card) = setup(
+                                    k,
+                                    &mut leagues,
+                                    None,
+                                    &[],
+                                    bands.stronger_team.attribute_boost,
+                                );
+                                play(s, &teams, formations, red_card, k.engine_seed, 90)
+                                    .row
+                                    .band_record()
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .flat_map(|h| h.join().unwrap())
+                .collect()
+        });
+        assert_eq!(pool.len(), pool_size as usize);
+        let equal_bands: Vec<&str> = bands
+            .bands
+            .iter()
+            .filter(|b| b.judged_in(Suite::Equal))
+            .map(|b| b.band.as_str())
+            .collect();
+        let keys: BTreeMap<Suite, Vec<u64>> = [(Suite::Equal, (0..n as u64).collect())].into();
+        let per_unit: BTreeMap<Suite, u32> = [(Suite::Equal, n as u32)].into();
+        let mut rng = EngineRng::from_seed(2026);
+        let mut alarms = 0u32;
+        for rep in 0..replicates {
+            // 2n different matches of the pool, in a random order, split into two arms.
+            let mut picks: Vec<usize> = (0..pool.len()).collect();
+            for i in 0..2 * n {
+                let j = i + rng.range_usize(picks.len() - i);
+                picks.swap(i, j);
+            }
+            let arm = |chosen: &[usize]| {
+                let mut b = RunBuilder::new(bands.clone());
+                b.plan(Suite::Equal, n as u32);
+                for &p in chosen {
+                    b.add(Suite::Equal, pool[p].clone(), None);
+                }
+                b
+            };
+            let (first, second) = (arm(&picks[..n]), arm(&picks[n..2 * n]));
+            let (sets, rows) = verdict::paired((&first, &keys), (&second, &keys), &per_unit);
+            let (found, c) = verdict::bootstrap(&sets, &rows, 1000 + u64::from(rep), RESAMPLES);
+            let (judged, _) = verdict::judge(&sets, &rows, &found, c, Vec::new());
+            for band in &equal_bands {
+                assert!(
+                    judged.iter().any(|r| r.band == *band),
+                    "{band} has its own row"
+                );
+            }
+            // The move rule of the verdict: a change beyond `c` errors, or any change of a
+            // band with no error.
+            let moved = found.iter().any(|f| match f.diff {
+                Some(d) if f.se > 0.0 => d.abs() > c * f.se,
+                Some(d) => d != 0.0,
+                None => false,
+            });
+            alarms += u32::from(moved);
+        }
+        let rate = f64::from(alarms) / f64::from(replicates);
+        eprintln!("A/A rate on played matches {rate} over {replicates} replicates of {n} pairs");
+        assert!(rate <= FALSE_ALARM, "joint false-alarm rate {rate}");
     }
 }
