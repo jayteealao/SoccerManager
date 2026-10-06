@@ -117,7 +117,7 @@ Output: the socket port on the first line, then the page address when `--web` is
 
 Exit codes: 0 at full time; 1 when the snapshot of `--resume` is refused; 2 when the viewer leaves before full time.
 
-Test seams: `serve` also takes hidden flags that `--help` does not show. They are for automated tests, not for players. `--test-jump` lets a client send the `jump` command, which makes a started match send every tick up to a named tick at once; the match itself is unchanged. Without `--test-jump` the engine refuses the `jump` command and keeps its normal pace. See `jump` in the protocol reference.
+Test seams: `serve` also takes hidden test flags that `--help` does not show, among them `--test-jump`. They are for automated tests, not for players. `--test-jump` lets a client send the `jump` command, which makes a started match send every tick up to a named tick at once; the match itself is unchanged. Without `--test-jump` the engine refuses the `jump` command and keeps its normal pace. See `jump` in the protocol reference.
 
 ## launch
 

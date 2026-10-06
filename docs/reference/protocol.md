@@ -353,7 +353,7 @@ Each entry of `fixtures`:
 One event at another ground. Every other match kicks off with the player's match and plays
 on the full engine in the background, so an event's `tick` is also a moment on the player's
 match clock. The engine sends the event once its own tick of the player's match reaches
-`tick`: a pause, a speed change, and a skip move that tick, and nothing is sent before it. A
+`tick`: a pause, a speed change, a skip, and a jump move that tick, and nothing is sent before it. A
 page shows the event once the tick it draws reaches `tick`. On a new connection, after a
 reconnect or a resume, every event up to the player's tick is sent again, none marked late;
 a page drops an exact repeat (the same `fixture`, `tick`, and `kind`). After the player's

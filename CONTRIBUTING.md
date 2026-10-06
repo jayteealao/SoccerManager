@@ -77,7 +77,9 @@ A push that changes Rust code needs a recorded coverage pass. Get one before you
 3. When line coverage is 78% or more, the command records a pass for the Rust content it measured. When coverage is lower, or a test fails, or the run stops part-way, it records nothing.
 4. Push.
 
-The pass stays valid while the Rust content stays the same. A reworded commit message, or another branch with the same Rust code, keeps it. Any change under `crates/`, or to `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml` or `.cargo/`, needs a new run.
+The pass stays valid while the Rust content stays the same. The Rust content is everything under `crates/`, plus `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `.cargo/`, and the two files compiled into the programs: `content/rules/default.json` and `packaging/previous-engine.json`. A reworded commit message, or another branch with the same Rust content, keeps the pass. Any change to the Rust content needs a new run. The tests also read other files at run time, such as the rest of `content/` and `gate/golden.json`. A change to those files alone does not need a pass, and it does not end a pass that was recorded before the change.
+
+The pass is stored in this clone's git directory (`.git`), which its worktrees share. Another clone or another machine needs its own run. The `COVERAGE_FLOOR` setting changes the floor of a run, for example `COVERAGE_FLOOR=101 lefthook run coverage` to see a refusal. The pre-push hook accepts only a pass recorded at a floor of 78 or more.
 
 The pre-push hook (`lefthook install` puts it in place) checks the pushed commits. A push that changes no Rust code goes through without a pass. A push that changes Rust code with no pass for its content is refused with this message:
 
@@ -85,7 +87,7 @@ The pre-push hook (`lefthook install` puts it in place) checks the pushed commit
 Push refused: refs/heads/<branch> changes Rust code, and no coverage pass is recorded for its Rust content. Run 'lefthook run coverage' (about 30 minutes) and push again.
 ```
 
-In an emergency, `LEFTHOOK=0 git push` skips the hook. The skipped coverage run must then pass before the pull request merges.
+In an emergency, `LEFTHOOK=0 git push` skips the hook. The hook runs only on your machine, and no hosted check runs coverage or blocks a merge without it. After an emergency push, run `lefthook run coverage` on the pushed commit yourself before you ask for a merge, and say in the pull request that it passed.
 
 ## Write commits
 
