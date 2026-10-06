@@ -25,7 +25,7 @@ These tests drive the match viewer in a real browser against the release engine.
    ```bash
    npm test                 # every test, headless
    npm run test:viewer      # the viewer tests and every timing test
-   npm run test:scenario    # the whole first match and its clock-rate check, about 15 minutes
+   npm run test:scenario    # the whole first match and its clock-rate check, about 5 minutes
    npm run test:headed      # every test, in a visible window
    ```
 
@@ -53,7 +53,7 @@ A test reaches each state once and calls `snap()` (`support/snap.mjs`): it compa
 
 It also fails on a rendered contrast failure in the default skin. Each check writes its report as `layout-<state>-<project>.json` beside the test's output, or in `LAYOUT_EVIDENCE_DIR`.
 
-With two workers, the match suite takes about 20 minutes with the size projects and about 7 without them; the shell suite takes 0.1 minutes and the engine suite (`playwright.config.mjs`) about 19. To leave the size projects out and keep two workers, set `SM_E2E_SIZES=0` (PowerShell: `$env:SM_E2E_SIZES = '0'; npx playwright test -c match.config.mjs`). `--project=chromium` also leaves them out, but runs one test at a time.
+With two workers, the match suite takes about 20 minutes with the size projects and about 7 without them; the shell suite takes 0.1 minutes and the engine suite (`playwright.config.mjs`) about 14. To leave the size projects out and keep two workers, set `SM_E2E_SIZES=0` (PowerShell: `$env:SM_E2E_SIZES = '0'; npx playwright test -c match.config.mjs`). `--project=chromium` also leaves them out, but runs one test at a time.
 
 To run one size, name its project: `npx playwright test -c match.config.mjs --project=layout-768x1024`. To make one size's baselines again, run its pixels project with `--update-snapshots=changed`, for example `npx playwright test -c match.config.mjs --project=chromium-1920 --update-snapshots=changed`, look at every changed image, and commit only those; `changed` rewrites only the images that fail. The layout projects have no baselines. `match/window-fit.spec.mjs` sets its own sizes, from 375 by 667 to 2560 by 1440, so it runs in `chromium` only. The shell suite runs at 1280 by 800 and at 1920 by 1080.
 
@@ -66,6 +66,28 @@ The HTML report is in `playwright-report/`. A failed test keeps its screenshot a
 ## How the tests find things
 
 A test finds a control by its role and its accessible name, as a screen reader does, and reads the state of the page through the read-only hook `window.__touchline`. The viewer shows one screen at a time (Tactics, the Pre-match line-ups, the match, the Touchline, the report, the replay) and keeps the match screen mounted behind the others, so a control is looked for on the screen on show; `support/page.mjs` opens the right one first. Where a control has no unique accessible name, a test finds it by the data attribute or the region that holds it.
+
+## Exact ticks and clocks
+
+A test that checks an exact tick or clock reads it in the same page turn as the action, or waits on the final condition. It never clicks in one `page.evaluate` (or a Playwright click) and reads in the next: a frame or a socket message can run between two calls, so a slow machine reads a later tick.
+
+`actAndRead(page, action, read, arg)` in `support/page.mjs` runs the action and the read in one synchronous page turn and returns what the read returns. `pressVisible` clicks the visible control with a given name; it is defined in the page for that turn, so an action or a read can call it too:
+
+```js
+import { actAndRead, pressVisible, showMatch } from '../support/page.mjs';
+
+await showMatch(page);
+const pausedAt = await actAndRead(
+  page,
+  pressVisible,
+  () => window.__touchline.lastRenderedTick(),
+  { selector: '[role="group"][aria-label="Playback"] button', name: 'Pause' }
+);
+```
+
+The action and the read are sent to the page as source, so they use only `arg` and the page, never a test variable. The read gets `(arg, acted)`, where `acted` is what the action returned. An action that returns a promise is refused, because an `await` ends the turn.
+
+Wait instead of reading once when the answer comes from the engine: an applied change, a stored tick or a report arrives later. Use `until(page, fn)` on the final condition, for example `until(page, () => window.__touchline.view() === 'report')`.
 
 ## Which test covers each behaviour
 

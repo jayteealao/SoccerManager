@@ -19,8 +19,8 @@ use thiserror::Error;
 
 pub use client::{Client, Incoming};
 pub use control::{
-    Admitted, CommandContext, Gate, Held, Inbox, LineupRules, PageSetup, PreMatch, check_lineup,
-    engine_change, tactics_patch,
+    Admitted, CommandContext, Gate, Held, Inbox, JumpVerdict, LineupRules, PageSetup, PreMatch,
+    check_lineup, engine_change, tactics_patch,
 };
 pub use events::EventWriter;
 // The migration chain has no step yet, so only the tests that build their own chain reach it.

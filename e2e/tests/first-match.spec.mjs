@@ -1,6 +1,8 @@
 // The whole first match, lineup to full-time report, against the live engine: the twelve
-// steps a manager takes, each with the checkpoint the manager sees. The clock rate at 4x is
-// measured against the wall clock, so it is a timing test of its own, run alone.
+// steps a manager takes, each with the checkpoint the manager sees. Steps 1-9 play live; the
+// quiet waits to half time and to full time are jumped by the engine's test-only jump, and
+// each whistle still plays out at 8x. The clock rate at 4x is measured against the wall
+// clock, so it is a timing test of its own, run alone.
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
@@ -11,7 +13,9 @@ import {
   runEngine,
   startEngine,
   tempDir,
+  testJump,
 } from '../support/engine.mjs';
+import { jumpSocket, sendJump } from '../support/messages.mjs';
 import {
   changeReaches,
   chipList,
@@ -23,7 +27,10 @@ import {
   kickOffButton,
   matchClock,
   openMatch,
+  pause,
+  play,
   playUntil,
+  playback,
   queueSubstitution,
   queued,
   renderedTick,
@@ -66,6 +73,11 @@ function countsFrom(events, teamIds, uptoTick) {
   );
 }
 
+// 50 ticks a second. A period ends only after its own time and its added time, so 45:00
+// (135,000) and 90:00 (270,000) are the earliest whistles; each jump stops a minute before.
+const HALF_TIME_JUMP = 132_000;
+const FULL_TIME_JUMP = 267_000;
+
 /// The picker's option text is "shirt name · position"; the name is between.
 const optionName = (text) => text.replace(/^\d+\s*/, '').replace(/\s*·.*$/, '');
 
@@ -74,16 +86,39 @@ async function shot(page, testInfo, step) {
   await testInfo.attach(name, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
 }
 
+/// Paused, the engine jumps to `target`; the pitch moves there and plays on at 8x, so the
+/// whistle after it plays out the normal way.
+async function jumpPlayback(page, testInfo, target) {
+  await showMatch(page);
+  if ((await playback(page).getByRole('button', { name: 'Pause', exact: true }).count()) > 0) {
+    await pause(page);
+  }
+  const newest = await hook(page, () => window.__touchline.history().newest_tick);
+  if (newest < target) {
+    const answer = await sendJump(page, target);
+    expect(answer.type, answer.reason ?? '').toBe('ack');
+  }
+  await until(page, (t) => window.__touchline.history().newest_tick >= t, { arg: target, timeout: 180_000 });
+  if ((await hook(page, () => window.__touchline.lastRenderedTick())) < target) {
+    await scrubTo(page, target);
+    await until(page, (t) => window.__touchline.lastRenderedTick() === t, { arg: target, timeout: 10_000 });
+  }
+  await setSpeed(page, 8);
+  await play(page);
+  testInfo.annotations.push({ type: 'jump', description: String(target) });
+}
+
 test('a manager plays a whole match, lineup to full-time report', async ({ page }, testInfo) => {
-  // A 90-minute match at eight times speed still takes more than eleven minutes of wall time.
-  test.setTimeout(45 * 60_000);
+  // The jumps leave a few minutes of wall time; the rest is headroom for a slow machine.
+  test.setTimeout(20 * 60_000);
   const [teamA, teamB] = generateLeague(2026);
   const engine = await startEngine({
     command: 'serve',
-    args: ['--seed', '42', '--web', WEB, '--team-a', teamA, '--team-b', teamB],
+    args: ['--seed', '42', '--web', WEB, '--team-a', teamA, '--team-b', teamB, ...testJump()],
   });
   let chosenMentality = null;
   try {
+    await jumpSocket(page);
     const seen = await openMatch(page, engine.url);
 
     await test.step('1. the header says the engine is connected, with its version', async () => {
@@ -280,6 +315,7 @@ test('a manager plays a whole match, lineup to full-time report', async ({ page 
     });
 
     await test.step('10. the half-time report counts equal the event counts', async () => {
+      await jumpPlayback(page, testInfo, HALF_TIME_JUMP);
       const report = await playUntil(page, () => {
         const r = window.__touchline.report();
         return r.open && r.kind === 'half-time' ? r : null;
@@ -307,6 +343,7 @@ test('a manager plays a whole match, lineup to full-time report', async ({ page 
     });
 
     await test.step('11. the full-time report shows, the replay saves, and the records are written', async () => {
+      await jumpPlayback(page, testInfo, FULL_TIME_JUMP);
       await playUntil(page, () => {
         const r = window.__touchline.report();
         return r.open && r.kind === 'full-time';

@@ -296,8 +296,12 @@ pub fn drive<S: TickSink>(
             route(ServerMessage::Advice(advice))?;
         }
         // The other grounds' events this match's tick has reached. The pool is only
-        // drained, never waited for. A skip plays on unpaced, so nothing is late in it.
+        // drained, never waited for. A skip plays on unpaced, so nothing is late in it; a
+        // jump, like a fast-forward, marks nothing late up to its tick and waits there.
         if let Some(matchday) = opts.matchday {
+            if let Some(gate) = opts.gate {
+                matchday.follow_fast_forward(gate.fast_forward_to());
+            }
             for message in matchday.due(record.tick, paced(opts)) {
                 route(message)?;
             }

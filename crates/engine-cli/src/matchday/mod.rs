@@ -18,7 +18,7 @@ pub mod record;
 pub mod round;
 pub mod timing;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -155,7 +155,9 @@ pub struct Matchday {
     started: Instant,
     threads: usize,
     cores: usize,
-    fast_forward_to: Option<u32>,
+    /// A test seam: the tick the player's match runs flat out to, set at launch and moved on
+    /// by a jump.
+    fast_forward_to: Cell<Option<u32>>,
 }
 
 impl Matchday {
@@ -218,7 +220,7 @@ impl Matchday {
             started,
             threads,
             cores,
-            fast_forward_to: opts.fast_forward_to,
+            fast_forward_to: Cell::new(opts.fast_forward_to),
         }
     }
 
@@ -292,7 +294,7 @@ impl Matchday {
     /// of a test fast-forward.
     pub fn due(&self, player_tick: u32, paced: bool) -> Vec<ServerMessage> {
         let mut inner = self.inner.borrow_mut();
-        if self.fast_forward_to == Some(player_tick) {
+        if self.fast_forward_to.get() == Some(player_tick) {
             self.catch_up_to(&mut inner, player_tick, paced);
         }
         self.drain(&mut inner, player_tick, paced);
@@ -301,7 +303,22 @@ impl Matchday {
 
     /// `true` at the tick of a test fast-forward, where the grounds' progress is sent too.
     pub fn at_fast_forward(&self, player_tick: u32) -> bool {
-        self.fast_forward_to == Some(player_tick)
+        self.fast_forward_to.get() == Some(player_tick)
+    }
+
+    /// A test seam: follows the playback gate's fast-forward, which a jump moves on in
+    /// mid-match. A later target becomes the tick where the grounds are waited for, and no
+    /// event up to it is late, as for a fast-forward set at launch.
+    pub fn follow_fast_forward(&self, to: Option<u32>) {
+        let Some(to) = to else {
+            return;
+        };
+        if self.fast_forward_to.get().is_some_and(|at| at >= to) {
+            return;
+        }
+        self.fast_forward_to.set(Some(to));
+        let mut inner = self.inner.borrow_mut();
+        inner.not_late_through = inner.not_late_through.max(to);
     }
 
     /// A test seam: waits, at most `FINISH_WAIT`, until every ground has reached `tick` or
@@ -684,6 +701,58 @@ mod tests {
             .filter(|&t| t <= to)
             .collect();
         assert_eq!(sent.len(), due.len());
+    }
+
+    #[test]
+    fn a_moved_fast_forward_marks_nothing_late_up_to_it_and_waits_there() {
+        let loaded = loaded();
+        let player = player(&loaded, 42, 10);
+        let round = round(&loaded, 42);
+        let to = 20_000;
+        // Started with no fast-forward, as a served match with --test-jump is; a jump then
+        // moves the target on in mid-match.
+        let md = Matchday::start(&round, &loaded, &player, options("jump", 1, None));
+        md.follow_fast_forward(None);
+        assert!(!md.at_fast_forward(to));
+        md.follow_fast_forward(Some(to));
+        assert!(!md.at_fast_forward(to - 1) && md.at_fast_forward(to));
+        md.follow_fast_forward(Some(to - 1_000));
+        assert!(
+            md.at_fast_forward(to),
+            "an earlier target never pulls it back"
+        );
+        // A paced run asking at once is far ahead of the one worker: due waits there.
+        let sent = md.due(to, true);
+        let Some(ServerMessage::GroundProgress(progress)) = md.progress(to) else {
+            panic!("a matchday with fixtures reports progress");
+        };
+        assert!(
+            progress.reached.iter().all(|&r| r >= to),
+            "reached {:?} at the jump's tick {to}",
+            progress.reached
+        );
+        assert!(!sent.is_empty());
+        for m in &sent {
+            let ServerMessage::GroundEvent(e) = m else {
+                panic!("due sends ground events only");
+            };
+            assert!(e.tick <= to && !e.late, "event at {} sent late", e.tick);
+        }
+        md.finish(u32::MAX, false, Duration::from_secs(300));
+        let due = md.computed().iter().filter(|(e, _)| e.tick <= to).count();
+        assert_eq!(sent.len(), due);
+
+        // The control: without the moved target the same paced read marks them late.
+        let control = Matchday::start(&round, &loaded, &player, options("jump-control", 1, None));
+        while !control.all_ended() {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(
+            control
+                .due(to, true)
+                .iter()
+                .any(|m| matches!(m, ServerMessage::GroundEvent(e) if e.late))
+        );
     }
 
     #[test]

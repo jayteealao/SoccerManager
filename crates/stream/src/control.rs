@@ -18,7 +18,9 @@
 //!
 //! A test seam, the fast-forward, lets a started match run flat out to a named tick: before
 //! it, neither a pause nor the lead bound holds the producer; from it on, both hold as usual.
-//! The simulation is the same either way; only when its ticks are sent changes.
+//! The simulation is the same either way; only when its ticks are sent changes. A test may
+//! move that tick later in mid-match with `jump`, which the gate accepts only when the
+//! session allows it (`serve --test-jump`) and only after the first `start`.
 //!
 //! A skip (`skip`) plays the rest of a started match at full speed: from it on, neither a
 //! pause nor the lead bound holds the producer, so the same simulation steps on from its
@@ -64,6 +66,21 @@ struct GateState {
     fast_forward_to: Option<u32>,
     /// `true` once the client skipped to the result: the producer never waits again.
     skipping: bool,
+    /// A test seam: `true` when the session accepts `jump`.
+    jump_allowed: bool,
+}
+
+/// What the gate did with a `jump`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JumpVerdict {
+    /// The producer now runs flat out up to the target.
+    Jumping,
+    /// The target is at or behind the current tick: the gate is unchanged.
+    Behind,
+    /// The session does not accept `jump`: the gate is unchanged.
+    NotAllowed,
+    /// The match has not kicked off: the gate is unchanged.
+    NotStarted,
 }
 
 impl GateState {
@@ -111,6 +128,7 @@ impl Gate {
                 lead_bound: None,
                 fast_forward_to: None,
                 skipping: false,
+                jump_allowed: false,
             }),
             changed: Condvar::new(),
             speed_centis: AtomicU32::new(100),
@@ -156,6 +174,41 @@ impl Gate {
         let mut state = self.state.lock().expect("the gate lock is never poisoned");
         state.fast_forward_to = Some(tick);
         self.changed.notify_all();
+    }
+
+    /// A test seam: from now on the session accepts `jump`. Without it every jump is refused.
+    pub fn allow_jump(&self) {
+        let mut state = self.state.lock().expect("the gate lock is never poisoned");
+        state.jump_allowed = true;
+    }
+
+    /// A test seam: moves the fast-forward of a started match on to `to`, so every tick up to
+    /// it is produced without waiting for a pause to end or the drawn tick to catch up. `now`
+    /// is the newest tick produced. A target at or behind it, or behind a fast-forward
+    /// already set, changes nothing. A target past full time needs no clamp: the match ends
+    /// there. The simulation is untouched.
+    pub fn jump(&self, to: u32, now: u32) -> JumpVerdict {
+        let mut state = self.state.lock().expect("the gate lock is never poisoned");
+        if !state.jump_allowed {
+            return JumpVerdict::NotAllowed;
+        }
+        if !state.started {
+            return JumpVerdict::NotStarted;
+        }
+        if to <= now {
+            return JumpVerdict::Behind;
+        }
+        state.fast_forward_to = Some(state.fast_forward_to.map_or(to, |at| at.max(to)));
+        self.changed.notify_all();
+        JumpVerdict::Jumping
+    }
+
+    /// The tick the producer runs flat out to, set at launch or moved by a jump.
+    pub fn fast_forward_to(&self) -> Option<u32> {
+        self.state
+            .lock()
+            .expect("the gate lock is never poisoned")
+            .fast_forward_to
     }
 
     /// Skips a started match to its result: from now on neither a pause nor the lead bound
@@ -569,6 +622,28 @@ impl CommandContext {
                 },
                 None,
             ),
+            ClientCommand::Jump(jump) => (
+                match self.gate.jump(jump.tick, tick) {
+                    JumpVerdict::Jumping => {
+                        tracing::info!(signal = "socket.jump", tick, to = jump.tick);
+                        ack(&command, None)
+                    }
+                    JumpVerdict::Behind => {
+                        tracing::info!(signal = "socket.jump_ignored", tick, to = jump.tick);
+                        ack(&command, None)
+                    }
+                    JumpVerdict::NotAllowed => ServerMessage::Reject(Reject {
+                        command: command.name().into(),
+                        reason: "the engine was not started with --test-jump; jump is a test seam"
+                            .into(),
+                    }),
+                    JumpVerdict::NotStarted => ServerMessage::Reject(Reject {
+                        command: command.name().into(),
+                        reason: "the match has not kicked off; there is nothing to jump".into(),
+                    }),
+                },
+                None,
+            ),
         };
         if let Some(event) = &answer.1 {
             self.events
@@ -880,6 +955,145 @@ mod tests {
         }
         assert!(ctx.gate.skipping());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn jump(ctx: &mut CommandContext, tick: u32) -> ServerMessage {
+        let text = serde_json::to_string(&ClientCommand::Jump(protocol::Jump { tick })).unwrap();
+        let (answer, event) = ctx.handle(&text).unwrap();
+        assert!(event.is_none(), "a jump writes no row");
+        answer
+    }
+
+    /// `true` while a producer asking to pass `tick` is still held after a short wait. The
+    /// waiting thread is released by stopping the gate.
+    fn still_holds(gate: &Arc<Gate>, tick: u32) -> bool {
+        let waiter = Arc::clone(gate);
+        let handle = std::thread::spawn(move || waiter.wait_for_room(tick));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        let held = !handle.is_finished();
+        gate.stop();
+        let _ = handle.join();
+        held
+    }
+
+    #[test]
+    fn a_jump_without_the_test_flag_is_refused_and_the_pause_still_holds() {
+        let dir = temp("jump-refused");
+        let mut ctx = context(&dir, Gate::held(), PreMatch::none());
+        ctx.gate.set_lead_bound(500);
+        ctx.handle("{\"type\":\"start\"}").unwrap();
+        ctx.gate.set_seen(3_000);
+        ctx.handle("{\"type\":\"pause\"}").unwrap();
+        ctx.state.set_tick(3_000);
+        let ServerMessage::Reject(reject) = jump(&mut ctx, 20_000) else {
+            panic!("a jump without --test-jump must be refused");
+        };
+        assert_eq!(reject.command, "jump");
+        assert_eq!(
+            reject.reason,
+            "the engine was not started with --test-jump; jump is a test seam"
+        );
+        assert_eq!(ctx.gate.fast_forward_to(), None);
+        assert!(
+            still_holds(&ctx.gate, 3_001),
+            "the pause still holds the producer"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_jump_before_kick_off_is_refused() {
+        let dir = temp("jump-early");
+        let mut ctx = context(&dir, Gate::held(), PreMatch::none());
+        ctx.gate.allow_jump();
+        let ServerMessage::Reject(reject) = jump(&mut ctx, 20_000) else {
+            panic!("a jump before kick-off must be refused");
+        };
+        assert_eq!(reject.command, "jump");
+        assert_eq!(
+            reject.reason,
+            "the match has not kicked off; there is nothing to jump"
+        );
+        assert_eq!(ctx.gate.fast_forward_to(), None);
+        assert!(
+            still_holds(&ctx.gate, 0),
+            "the gate still holds before kick-off"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_jump_behind_the_current_tick_is_acknowledged_and_changes_nothing() {
+        let dir = temp("jump-behind");
+        let mut ctx = context(&dir, Gate::held(), PreMatch::none());
+        ctx.gate.allow_jump();
+        ctx.handle("{\"type\":\"start\"}").unwrap();
+        ctx.handle("{\"type\":\"pause\"}").unwrap();
+        ctx.state.set_tick(5_000);
+        for to in [4_000, 5_000] {
+            let ServerMessage::Ack(ack) = jump(&mut ctx, to) else {
+                panic!("a jump to {to} at tick 5000 is acknowledged");
+            };
+            assert_eq!(ack.command, "jump");
+            assert_eq!(ack.queued_tick, 5_000);
+        }
+        assert_eq!(ctx.gate.fast_forward_to(), None);
+        assert!(
+            still_holds(&ctx.gate, 5_000),
+            "the paused producer still holds"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_jump_runs_past_a_pause_and_the_lead_bound_up_to_its_tick_only() {
+        let dir = temp("jump");
+        let mut ctx = context(&dir, Gate::held(), PreMatch::none());
+        ctx.gate.allow_jump();
+        ctx.gate.set_lead_bound(500);
+        ctx.handle("{\"type\":\"start\"}").unwrap();
+        ctx.gate.set_seen(3_000);
+        ctx.handle("{\"type\":\"pause\"}").unwrap();
+        ctx.state.set_tick(3_000);
+        let gate = Arc::clone(&ctx.gate);
+        let waiter = Arc::clone(&gate);
+        let handle = std::thread::spawn(move || waiter.wait_for_room(3_000));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        assert!(!handle.is_finished(), "paused: the producer waits");
+        let ServerMessage::Ack(ack) = jump(&mut ctx, 9_000) else {
+            panic!("a jump after kick-off with the flag is acknowledged");
+        };
+        assert_eq!(ack.queued_tick, 3_000);
+        assert!(handle.join().unwrap(), "the jump releases the producer");
+        assert_eq!(gate.fast_forward_to(), Some(9_000));
+        assert!(
+            gate.wait_for_room(8_999),
+            "paused and far past the bound: still produced"
+        );
+        // A later, shorter jump never pulls the target back.
+        ctx.state.set_tick(4_000);
+        jump(&mut ctx, 6_000);
+        assert_eq!(gate.fast_forward_to(), Some(9_000));
+        assert!(
+            still_holds(&gate, 9_000),
+            "from the target tick the pause holds again"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_jump_past_full_time_never_holds_again_before_it() {
+        let gate = Arc::new(Gate::held());
+        gate.allow_jump();
+        gate.set_lead_bound(1);
+        gate.set_running(true);
+        gate.set_seen(100);
+        gate.set_running(false);
+        assert_eq!(gate.jump(u32::MAX, 100), JumpVerdict::Jumping);
+        for tick in [101, 50_000, 269_999, u32::MAX - 1] {
+            assert!(gate.wait_for_room(tick), "tick {tick} never waits");
+        }
+        gate.stop();
     }
 
     #[test]

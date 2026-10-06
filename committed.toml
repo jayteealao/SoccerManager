@@ -2,7 +2,9 @@
 # every pull request. Conventional commits with a lowercase subject, as the history uses.
 style = "conventional"
 allowed_types = ["feat", "fix", "docs", "test", "chore", "refactor", "perf", "style", "build", "ci", "revert"]
-subject_length = 100
+# committed counts the subject without its last word; scripts/commit-subject.sh checks
+# the whole first line against the same limit. Keep the two numbers in step.
+subject_length = 70
 line_length = 100
 subject_capitalized = false
 subject_not_punctuated = true

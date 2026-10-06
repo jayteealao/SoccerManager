@@ -6,7 +6,7 @@ This guide tells you how to set up a checkout, run the checks, write commits, an
 
 1. Install Rust with rustup. `rust-toolchain.toml` selects the toolchain (1.92.0, with rustfmt and clippy) on the first build.
 2. Install Node 22.12 or later to build the viewer and to run the viewer tests and the browser suite.
-3. Install the hook tools: [lefthook](https://github.com/evilmartians/lefthook), [committed](https://github.com/crate-ci/committed) (`cargo install committed`), and [gitleaks](https://github.com/gitleaks/gitleaks).
+3. Install the hook tools: [lefthook](https://github.com/evilmartians/lefthook), [committed](https://github.com/crate-ci/committed) (`cargo install committed`), [gitleaks](https://github.com/gitleaks/gitleaks), and [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov) (`cargo install cargo-llvm-cov --locked`, then `rustup component add llvm-tools-preview`).
 4. Install the hooks:
 
    ```bash
@@ -44,10 +44,10 @@ Each pull request runs these checks. Run the fast ones before you push:
 | Replay gate | `target/release/engine-cli gate` |
 | Golden-file history | `target/release/engine-cli guard --base main` |
 | Fast-model fit matches the golden results | `target/release/engine-cli fast-model stale` |
-| Coverage | `cargo llvm-cov --workspace --locked --fail-under-lines 78` |
+| Coverage (78% lines, about 30 minutes) | `lefthook run coverage` |
 | Licences and advisories | `cargo deny check` |
 
-Coverage does not run on the hosted runner, to keep the pull-request checks within the free Actions minutes, so run it before you push.
+Coverage does not run on the hosted runner, to keep the pull-request checks within the free Actions minutes. The pre-push hook checks it instead: see [Coverage before a Rust push](#coverage-before-a-rust-push).
 
 The gate, the history check and the fast-model check need the release build (`cargo build --release`). [The replay gate guide](docs/how-to/replay-gate.md) says what to do when the gate reports `differs`.
 
@@ -63,9 +63,35 @@ cargo test --release --workspace -- --include-ignored
 
 CAUTION: the slow tests use every core for a long time. On a machine that is not stable under a long full load, run them on a build server.
 
+### Coverage before a Rust push
+
+A push that changes Rust code needs a recorded coverage pass. Get one before you push:
+
+1. Commit your Rust changes. The command refuses to run while files under `crates/` or the build settings have uncommitted changes.
+2. Run the coverage command. It runs `cargo llvm-cov --workspace --locked --fail-under-lines 78` and takes about 30 minutes:
+
+   ```bash
+   lefthook run coverage
+   ```
+
+3. When line coverage is 78% or more, the command records a pass for the Rust content it measured. When coverage is lower, or a test fails, or the run stops part-way, it records nothing.
+4. Push.
+
+The pass stays valid while the Rust content stays the same. The Rust content is everything under `crates/`, plus `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `.cargo/`, and the two files compiled into the programs: `content/rules/default.json` and `packaging/previous-engine.json`. A reworded commit message, or another branch with the same Rust content, keeps the pass. Any change to the Rust content needs a new run. The tests also read other files at run time, such as the rest of `content/` and `gate/golden.json`. A change to those files alone does not need a pass, and it does not end a pass that was recorded before the change.
+
+The pass is stored in this clone's git directory (`.git`), which its worktrees share. Another clone or another machine needs its own run. The `COVERAGE_FLOOR` setting changes the floor of a run, for example `COVERAGE_FLOOR=101 lefthook run coverage` to see a refusal. The pre-push hook accepts only a pass recorded at a floor of 78 or more.
+
+The pre-push hook (`lefthook install` puts it in place) checks the pushed commits. A push that changes no Rust code goes through without a pass. A push that changes Rust code with no pass for its content is refused with this message:
+
+```text
+Push refused: refs/heads/<branch> changes Rust code, and no coverage pass is recorded for its Rust content. Run 'lefthook run coverage' (about 30 minutes) and push again.
+```
+
+In an emergency, `LEFTHOOK=0 git push` skips the hook. The hook runs only on your machine, and no hosted check runs coverage or blocks a merge without it. After an emergency push, run `lefthook run coverage` on the pushed commit yourself before you ask for a merge, and say in the pull request that it passed.
+
 ## Write commits
 
-Commits follow [Conventional Commits](https://www.conventionalcommits.org/) with a lowercase subject, for example `fix(engine): take penalties as kicks`. The allowed types are `feat`, `fix`, `docs`, `test`, `chore`, `refactor`, `perf`, `style`, `build`, `ci`, and `revert`. The subject is at most 100 characters. `committed.toml` holds the rules, and the commit-msg hook checks each commit.
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/) with a lowercase subject, for example `fix(engine): take penalties as kicks`. The allowed types are `feat`, `fix`, `docs`, `test`, `chore`, `refactor`, `perf`, `style`, `build`, `ci`, and `revert`. The subject is at most 70 characters. `committed.toml` holds the rules, and the commit-msg hook checks each commit.
 
 The pull request title follows the same format.
 

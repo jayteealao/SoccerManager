@@ -353,7 +353,7 @@ Each entry of `fixtures`:
 One event at another ground. Every other match kicks off with the player's match and plays
 on the full engine in the background, so an event's `tick` is also a moment on the player's
 match clock. The engine sends the event once its own tick of the player's match reaches
-`tick`: a pause, a speed change, and a skip move that tick, and nothing is sent before it. A
+`tick`: a pause, a speed change, a skip, and a jump move that tick, and nothing is sent before it. A
 page shows the event once the tick it draws reaches `tick`. On a new connection, after a
 reconnect or a resume, every event up to the player's tick is sent again, none marked late;
 a page drops an exact repeat (the same `fixture`, `tick`, and `kind`). After the player's
@@ -371,7 +371,7 @@ replay keeps it.
 | `side` | enumeration | on a goal only: `home` or `away`, the side that scored |
 | `scorer` | string | on a goal only: the name of the player who kicked the ball last |
 | `score` | array of two integers | the score after the event, home first |
-| `late` | boolean | present and `true` when the event was computed more than one simulated second after the player's match had passed its tick on a paced run (not during a skip or a test fast-forward), so it reaches the page late |
+| `late` | boolean | present and `true` when the event was computed more than one simulated second after the player's match had passed its tick on a paced run (not during a skip, a test fast-forward or a jump), so it reaches the page late |
 
 ### ground-progress
 
@@ -388,7 +388,7 @@ its next events late.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `command` | string | `start`, `pause`, `set-speed`, `queue-change`, `set-lineup`, `seen`, `cancel-change`, or `skip` |
+| `command` | string | `start`, `pause`, `set-speed`, `queue-change`, `set-lineup`, `seen`, `cancel-change`, `skip`, or `jump` |
 | `change.queue_id` | string | queued and withdrawn changes only |
 | `change.queued_tick` | integer | the tick the command was read on |
 | `state` | enumeration | queued changes only; `queued` in this build |
@@ -515,6 +515,28 @@ second `skip` is acknowledged again. Before the first `start` it is refused with
 has not kicked off; there is nothing to skip`. After a skip, `pause`, `start` and `seen`
 are acknowledged and have no effect on production. `record`, `replay`, and `bench` ignore
 it. The protocol version is unchanged: a client that never sends it is unaffected.
+
+### jump
+
+A test seam, not for players. After kick-off the engine produces every tick up to `tick` at
+full speed: until it reaches `tick` it stops waiting for `start`, `pause` and the `seen` lead
+bound, then waits for them as usual. Nothing is saved or restored; it is the same match, so
+every tick frame and event is the one the match played through would send. Events at other
+grounds up to `tick` are not marked late, and the engine waits for the other grounds to reach
+`tick` before it sends their events.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `tick` | integer | the tick to produce up to |
+
+The engine accepts it only when `serve` was started with the hidden `--test-jump` flag;
+otherwise it is refused with `the engine was not started with --test-jump; jump is a test
+seam`, and production keeps its pace. Before the first `start` it is refused with `the match
+has not kicked off; there is nothing to jump`. A `tick` at or behind the current tick is
+acknowledged and changes nothing. A `tick` past full time runs the match at full speed to
+full time, where it ends as usual. It is acknowledged with an `ack` whose
+`change.queued_tick` is the tick it was read on, and writes no event row. The protocol
+version is unchanged: a client that never sends it is unaffected.
 
 ## The page server
 

@@ -23,7 +23,7 @@ import { expect, test } from '@playwright/test';
 
 import { contrastReport } from '../support/contrast.mjs';
 import { VIEWER, contentWithSkin, fastForward, startEngine, waitForGrounds } from '../support/engine.mjs';
-import { clickClear, playUntil, snap } from '../support/page.mjs';
+import { actAndRead, clickClear, playUntil, pressVisible, snap } from '../support/page.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
 const SEED = 7;
@@ -277,10 +277,19 @@ test('Keep watching goes back to the paused match at the same tick, and RESUME p
   try {
     await open(page, engine.url);
     await decision(page);
-    const before = await hook(page, () => window.__touchline.lastRenderedTick());
-    await button(page, 'Keep watching').click();
-    await until(page, () => window.__touchline.view() === 'match', undefined, 5_000);
-    const after = await hook(page, () => window.__touchline.lastRenderedTick());
+    // Read the tick, press Keep watching and read it again in one page turn, so no frame can
+    // draw between them. Keep watching shows the match in the same turn.
+    const { before, after, view } = await actAndRead(
+      page,
+      (arg) => {
+        const tick = window.__touchline.lastRenderedTick();
+        pressVisible(arg);
+        return tick;
+      },
+      (arg, tick) => ({ before: tick, after: window.__touchline.lastRenderedTick(), view: window.__touchline.view() }),
+      { selector: 'button', name: 'Keep watching' }
+    );
+    expect(view).toBe('match');
     const sent = await hook(page, () => window.__touchline.sentCommands());
     expect(before).toBe(SKIP_TICK);
     expect(after).toBe(SKIP_TICK);

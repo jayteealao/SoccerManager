@@ -198,3 +198,50 @@ function recordFrames(keep, sent) {
     }
   };
 }
+
+/// Keeps the page's match socket (`/?v=<n>`) as `window.__matchSocket`, so a test can send the
+/// engine a command on it, and records the engine's answers to `jump` in
+/// `window.__jumpAnswers`. Call before the page opens. A test seam: the engine accepts the
+/// jump only when started with `testJump()`, and the page itself ignores the answer.
+export async function jumpSocket(page) {
+  await page.addInitScript(() => {
+    const Native = window.WebSocket;
+    window.WebSocket = class extends Native {
+      constructor(...args) {
+        super(...args);
+        if (/\/\?v=\d+$/.test(this.url)) {
+          window.__matchSocket = this;
+          window.__jumpAnswers = [];
+          this.addEventListener('message', ({ data }) => {
+            if (typeof data !== 'string' || !data.includes('"jump"')) {
+              return;
+            }
+            const m = JSON.parse(data);
+            if ((m.type === 'ack' || m.type === 'reject') && m.command === 'jump') {
+              window.__jumpAnswers.push({ type: m.type, reason: m.reason ?? null, queued_tick: m['change.queued_tick'] ?? null });
+            }
+          });
+        }
+      }
+    };
+  });
+}
+
+/// Sends `{"type":"jump","tick":tick}` on the page's match socket and returns the engine's
+/// answer: `{ type: 'ack' | 'reject', reason, queued_tick }`. The browser frames and masks
+/// the message, so it never lands inside another frame.
+export async function sendJump(page, tick, timeout = 10_000) {
+  const n = await page.evaluate((t) => {
+    if (!window.__matchSocket) {
+      return null;
+    }
+    const count = window.__jumpAnswers.length;
+    window.__matchSocket.send(JSON.stringify({ type: 'jump', tick: t }));
+    return count;
+  }, tick);
+  if (n === null) {
+    throw new Error('no match socket: call jumpSocket(page) before the page opens');
+  }
+  const answer = await page.waitForFunction((i) => window.__jumpAnswers[i] ?? null, n, { timeout, polling: 50 });
+  return answer.jsonValue();
+}

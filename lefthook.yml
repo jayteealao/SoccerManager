@@ -1,5 +1,7 @@
 # Local git hooks. Install once per checkout: lefthook install
-# Heavy runs (tests, clippy) are not hooked: they run in CI or on the build server.
+# The tests and clippy are not hooked: they run in CI or on the build server.
+# Coverage runs by command (`lefthook run coverage`, about 30 minutes) and records a pass for the Rust content it measured.
+# The pre-push step refuses a push that changes Rust code unless a pass is recorded for that content; `LEFTHOOK=0 git push` skips it in an emergency.
 pre-commit:
   commands:
     fmt:
@@ -12,3 +14,18 @@ commit-msg:
   commands:
     committed:
       run: committed --commit-file {1}
+    subject-length:
+      run: sh scripts/commit-subject.sh {1}
+
+pre-push:
+  commands:
+    coverage-pass:
+      use_stdin: true
+      run: sh scripts/coverage.sh check {1}
+
+# Not a git hook: the coverage command, run as `lefthook run coverage`.
+coverage:
+  follow: true
+  commands:
+    coverage:
+      run: sh scripts/coverage.sh run

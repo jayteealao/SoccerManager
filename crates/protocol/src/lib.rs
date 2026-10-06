@@ -19,8 +19,9 @@ pub use frame::{Frame, TickFrame};
 pub use message::{
     Advice, AdvicePick, CancelChange, ChangeDetail, ChangeStateNote, ClientCommand, Condition,
     DEFAULT_GROUND_LENGTH, DEFAULT_GROUND_WIDTH, GroundEvent, GroundKind, GroundProgress, Hello,
-    Matchday, MatchdayFixture, PatchWire, QueueChange, RoleWire, RosterEntry, Seen, ServerMessage,
-    SetLineup, SetSpeed, Side, SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
+    Jump, Matchday, MatchdayFixture, PatchWire, QueueChange, RoleWire, RosterEntry, Seen,
+    ServerMessage, SetLineup, SetSpeed, Side, SlotRole, SquadEntry, Stats, SubstitutionRules,
+    TeamRef, TeamSetup,
 };
 
 /// The protocol version a client must ask for. A client that asks for another version is
@@ -90,6 +91,11 @@ pub use message::{
 /// with the existing `ack` or `reject`. The match it plays on is the same match, so every
 /// tick and message after it is what the match played through would send, and a client that
 /// never sends it gets exactly the answers it got before.
+///
+/// Version 3 also survived the test-only jump: one command (`jump`, one `tick` field),
+/// answered with the existing `ack` or `reject` and refused unless the engine was started
+/// with `--test-jump`. Like a skip it changes only when ticks are sent, never the match, and
+/// a client that never sends it gets exactly the answers it got before.
 pub const PROTOCOL_VERSION: u16 = 3;
 
 /// Errors this crate returns.
@@ -399,6 +405,12 @@ pub const MESSAGES: &[MessageSpec] = &[
         encoding: Encoding::JsonText,
         fields: &[],
     },
+    MessageSpec {
+        name: "jump",
+        direction: Direction::ClientToServer,
+        encoding: Encoding::JsonText,
+        fields: &["tick"],
+    },
 ];
 
 /// The specification of `name`, or `None`.
@@ -439,6 +451,7 @@ mod tests {
             ClientCommand::Seen(_) => "seen",
             ClientCommand::CancelChange(_) => "cancel-change",
             ClientCommand::Skip => "skip",
+            ClientCommand::Jump(_) => "jump",
         }
     }
 
@@ -568,6 +581,7 @@ mod tests {
                 queue_id: String::new(),
             }),
             ClientCommand::Skip,
+            ClientCommand::Jump(Jump { tick: 0 }),
         ]
     }
 

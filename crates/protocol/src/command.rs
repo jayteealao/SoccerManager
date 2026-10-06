@@ -69,7 +69,8 @@ pub struct Pending {
 #[serde(deny_unknown_fields)]
 pub struct Ack {
     /// The command this answers: `start`, `pause`, `set-speed`, `queue-change`,
-    /// `cancel-change`, or `skip`.
+    /// `set-lineup`, `seen`, `cancel-change`, `skip`, or `jump` (the protocol
+    /// reference lists them under `ack`).
     pub command: String,
     #[serde(rename = "change.queue_id", skip_serializing_if = "Option::is_none")]
     pub queue_id: Option<String>,
