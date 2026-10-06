@@ -33,6 +33,7 @@ import {
   waitForGrounds,
 } from '../support/engine.mjs';
 import { centre, clearPointer, clickClear, playUntil, snap } from '../support/page.mjs';
+import { expectStarLabels } from '../support/ratings.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STATES = JSON.parse(fs.readFileSync(path.join(HERE, 'fixtures', 'front-door-states.json'), 'utf8'));
@@ -184,6 +185,7 @@ for (const skin of SKINS) {
         await startScreen(page, engine, skin);
         await page.locator('[data-choice="new"]').click();
         await expect(page.locator('[data-round="4"]')).toBeVisible();
+        await expectStarLabels(page);
         await snap(page, `front-setup-${skin}.png`);
       } finally {
         engine.cleanUp();
