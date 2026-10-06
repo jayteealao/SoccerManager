@@ -1,8 +1,8 @@
 //! The one-process runner of `engine-cli calibrate`: a panicking match is caught and
 //! recorded as failed while the run goes on; every match leaves one compact row of
 //! unrounded counts; only the 1-in-16 sample and the outliers get statistics and event
-//! files; and the threads give the same band values as the old worker processes on the same
-//! fixtures. Every run here is short.
+//! files; the single-thread figure leaves out the threads' matches; and the worker-process
+//! runner is gone. Every run here is short.
 
 mod common;
 
@@ -338,104 +338,79 @@ fn only_the_sample_and_the_outliers_have_a_full_recording() {
 }
 
 /// `bench.peak_mem_mb` is the single-thread figure: the process peak after the default
-/// teams are timed on one thread. Under the threads runner the matches of every thread share
-/// that process, so the figure must be taken before they play, or it would hold their memory
-/// too and no longer compare with the worker processes' figure.
+/// teams are timed on one thread. The matches of every thread share that process, so the
+/// figure must be taken before they play, or it would hold their memory too and no longer
+/// compare with the same figure of `engine-cli bench`, which plays nothing else.
 #[test]
 fn the_single_thread_peak_memory_leaves_out_the_matches_of_the_threads() {
     let data = temp("engine-cli-runner", "bench-memory");
-    let common = [
-        "--seed",
-        "5",
-        "--suite",
-        "equal",
-        "--matches",
-        "16",
-        "--minutes",
-        "10",
-        "--jobs",
-        "8",
-    ];
-    let mut peaks = Vec::new();
-    for (name, extra) in [("threads", None), ("processes", Some("--worker-processes"))] {
-        let dir = data.join(name);
-        let args: Vec<&str> = common.iter().copied().chain(extra).collect();
-        let out = calibrate(&data, &dir, &args);
-        assert!(matches!(out.status.code(), Some(0 | 2)), "{}", stderr(&out));
-        let report = report(&dir);
-        assert_eq!(report["calib.runner"], name);
-        peaks.push(
-            report["bench.peak_mem_mb"]
-                .as_f64()
-                .expect("a peak memory figure"),
-        );
-    }
-    let (threads, processes) = (peaks[0], peaks[1]);
+    let dir = data.join("threads");
+    let out = calibrate(
+        &data,
+        &dir,
+        &[
+            "--seed",
+            "5",
+            "--suite",
+            "equal",
+            "--matches",
+            "16",
+            "--minutes",
+            "10",
+            "--jobs",
+            "8",
+        ],
+    );
+    assert!(matches!(out.status.code(), Some(0 | 2)), "{}", stderr(&out));
+    let threads = report(&dir)["bench.peak_mem_mb"]
+        .as_f64()
+        .expect("a peak memory figure");
+    let out = common::bin(&data)
+        .args(["bench", "--seed", "5", "--minutes", "10", "--json"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    let alone = record(&String::from_utf8_lossy(&out.stdout))["bench.peak_mem_mb"]
+        .as_f64()
+        .expect("a peak memory figure");
     assert!(
-        threads <= processes * 2.0,
-        "threads {threads} MB against worker processes {processes} MB"
+        threads <= alone * 2.0,
+        "calibrate {threads} MB against bench alone {alone} MB"
     );
     let _ = std::fs::remove_dir_all(&data);
 }
 
-/// A report's band rows without the time budget, which measures wall time.
-fn bands(report: &Value) -> Vec<Value> {
-    report["calib.bands"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|b| b["band"] != "wall_ms")
-        .cloned()
-        .collect()
-}
-
-/// A report's suite figures without the outlier count, which each runner judges by its
-/// own rule.
-fn suites(report: &Value) -> Value {
-    let mut s = report["calib.suites"].clone();
-    for (_, f) in s.as_object_mut().unwrap() {
-        f.as_object_mut().unwrap().remove("outliers");
-    }
-    s
-}
-
+/// The worker-process runner and its hidden options are gone: each option is refused as a
+/// usage error that names it (exit 1, as every usage error), and a plain run plays on
+/// threads.
 #[test]
-fn the_threads_and_the_worker_processes_give_the_same_band_values_on_the_same_fixtures() {
-    let data = temp("engine-cli-runner", "equivalence");
-    for (name, args) in [
-        ("all", ["--suite", "all", "--matches", "2"]),
-        ("red-card", ["--suite", "red-card", "--matches", "2"]),
-    ] {
-        let common = [&args[..], &["--seed", "4", "--minutes", "5", "--jobs", "2"]].concat();
-        let threads_dir = data.join(format!("{name}-threads"));
-        let out = calibrate(&data, &threads_dir, &common);
-        assert!(matches!(out.status.code(), Some(0 | 2)), "{}", stderr(&out));
-        let processes_dir = data.join(format!("{name}-processes"));
-        let out = calibrate(
-            &data,
-            &processes_dir,
-            &[&common[..], &["--worker-processes"]].concat(),
-        );
-        assert!(matches!(out.status.code(), Some(0 | 2)), "{}", stderr(&out));
-        let (threads, processes) = (report(&threads_dir), report(&processes_dir));
-        assert_eq!(threads["calib.runner"], "threads");
-        assert_eq!(processes["calib.runner"], "processes");
-        assert!(processes.get("calib.rows").is_none());
-        // Every band row: value, range, verdict and sampling error.
-        assert_eq!(bands(&threads), bands(&processes), "{name}");
-        assert!(!bands(&threads).is_empty());
-        assert_eq!(suites(&threads), suites(&processes), "{name}");
-        assert_eq!(threads["calib.formations"], processes["calib.formations"]);
-        assert_eq!(threads["calib.red_card"], processes["calib.red_card"]);
-        for key in [
-            "darkpath.change_never_applied",
-            "change.expired_at_full_time",
-            "darkpath.match_without_stats",
-            "validate.violations",
-        ] {
-            assert_eq!(threads[key], processes[key], "{name} {key}");
-        }
-        assert_eq!(threads["fixtures.hash"], processes["fixtures.hash"]);
+fn the_old_worker_path_is_gone() {
+    let data = temp("engine-cli-runner", "no-workers");
+    for gone in ["--worker-processes", "--worker"] {
+        let out = calibrate(&data, &data.join("refused"), &["--seed", "1", gone]);
+        assert_eq!(out.status.code(), Some(1), "{gone}: {}", stderr(&out));
+        let text = stderr(&out);
+        assert!(text.contains("unexpected argument"), "{gone}: {text}");
+        assert!(text.contains(gone), "{gone}: {text}");
     }
+    let run = data.join("run");
+    let out = calibrate(
+        &data,
+        &run,
+        &[
+            "--seed",
+            "2",
+            "--suite",
+            "equal",
+            "--matches",
+            "2",
+            "--minutes",
+            "5",
+            "--jobs",
+            "1",
+        ],
+    );
+    assert!(matches!(out.status.code(), Some(0 | 2)), "{}", stderr(&out));
+    assert_eq!(report(&run)["calib.runner"], "threads");
     let _ = std::fs::remove_dir_all(&data);
 }

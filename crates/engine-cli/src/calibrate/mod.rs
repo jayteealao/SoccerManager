@@ -28,9 +28,7 @@
 //! suite's power target (`--matches` is the cap), the run grows to it, and one paired max-t
 //! bootstrap gives each band pass, fail or not sure, and one joint verdict. The target is
 //! kept in `target.json`; a run into a finished folder plays nothing and judges again from
-//! the stored rows. Every run reports the time and memory of each stage. The hidden
-//! `--worker-processes` plays in worker processes of this binary instead, the old path,
-//! kept until the threads give the same band values on the same fixtures.
+//! the stored rows. Every run reports the time and memory of each stage.
 
 pub mod base;
 pub mod fixtures;
@@ -43,22 +41,18 @@ pub mod worker;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::time::Instant;
 
 use anyhow::Context;
 use engine::data::{TeamFile, hex12};
-use engine::flags::{FlagSetting, FlagState, FlagStates, effective};
+use engine::flags::{FlagState, FlagStates, effective};
 use engine::observe::identity::{data_dir, load_or_create_owner_id};
-use engine::observe::{
-    MatchStats, emit_line, machine_hash, read_stats, unix_millis, write_record_at,
-};
+use engine::observe::{MatchStats, emit_line, machine_hash, unix_millis, write_record_at};
 use engine::{Content, ContentDir, MatchConfig};
-use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::bench::BenchFigures;
-use crate::cli::{CalibrateOpts, InjectFailure, KeepEvents, SuiteArg};
+use crate::cli::{CalibrateOpts, InjectFailure, SuiteArg};
 use crate::report::bands::{REGISTRY_VERSION, Registry};
 use crate::report::baseline::{self, Identity};
 use crate::report::compare::{self, Guard};
@@ -85,42 +79,13 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     }
     let dir = ContentDir::resolve(content_dir)?;
     let states = FlagStates::from_settings(&opts.flags);
-    if opts.worker {
-        let suite = match opts.suite {
-            SuiteArg::Equal => Suite::Equal,
-            SuiteArg::Strength => Suite::Strength,
-            SuiteArg::Formations => Suite::Formations,
-            SuiteArg::RedCard => Suite::RedCard,
-            SuiteArg::All => anyhow::bail!("a worker plays one suite"),
-        };
-        let run_dir = opts
-            .run_dir
-            .as_deref()
-            .context("a worker needs its run folder")?;
-        return worker::run(&worker::Share {
-            content_dir: dir.root(),
-            run_dir,
-            seed: opts.seed,
-            matches: opts.matches,
-            minutes: opts.minutes,
-            suite,
-            shard: opts.shard,
-            shards: opts.shards,
-            run_millis: opts.run_millis,
-            states: &states,
-            inject: opts.inject_failure,
-            pairings: &opts.pairing_numbers,
-            session: &opts.session,
-            stop: opts.stop_after_units,
-        });
-    }
     if opts.baseline.is_some() && opts.pair.is_some() {
         anyhow::bail!(
             "--baseline cannot be used with --pair: a paired run already compares its two arms"
         );
     }
 
-    // Every flag name and state is checked before a worker starts.
+    // Every flag name and state is checked before any match plays.
     let loaded = crate::content::load(Some(dir.root()), None, None, None)?;
     let arms: Vec<(&str, FlagStates)> = match &opts.pair {
         None => vec![("", states.clone())],
@@ -182,7 +147,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     let data = data_dir();
     let owner_id = load_or_create_owner_id(&data)?;
     let millis = u64::try_from(unix_millis()).unwrap_or(u64::MAX);
-    // The largest selected suite sets how many workers can have work. At most 136
+    // The largest selected suite sets how many threads can have work. At most 136
     // pairings, and four red-card arms.
     let most = suites
         .iter()
@@ -199,8 +164,8 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         .unwrap_or(u32::try_from(cores).unwrap_or(u32::MAX))
         .clamp(1, most);
     let bands = registry;
-    // nosemgrep: rust.lang.security.current-exe.current-exe -- only used to start worker copies of this program and to hash the build
-    let exe = std::env::current_exe().context("cannot find this program to start workers")?;
+    // nosemgrep: rust.lang.security.current-exe.current-exe -- only used to hash the build for the run's identity
+    let exe = std::env::current_exe().context("cannot find this program to hash it")?;
     let identity = RunIdentity {
         build: run_folder::Build {
             hash: engine::build_hash().to_string(),
@@ -257,7 +222,6 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         opts,
         loaded: &loaded,
         bands,
-        exe,
         jobs,
         selection: Selection {
             suites: suites.iter().map(|s| s.code().to_string()).collect(),
@@ -328,30 +292,24 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         );
         Ok(1)
     };
-    let inputs = if opts.worker_processes {
-        Vec::new()
-    } else {
-        arms.iter()
-            .zip(&arm_dirs)
-            .map(|((_, s), dir)| {
-                std::fs::create_dir_all(dir)
-                    .with_context(|| format!("cannot create the run folder runs/{run_id}"))?;
-                Ok(runner::ArmInput {
-                    dir,
-                    content: loaded.content.with_flags(s)?,
-                })
+    let inputs = arms
+        .iter()
+        .zip(&arm_dirs)
+        .map(|((_, s), dir)| {
+            std::fs::create_dir_all(dir)
+                .with_context(|| format!("cannot create the run folder runs/{run_id}"))?;
+            Ok(runner::ArmInput {
+                dir,
+                content: loaded.content.with_flags(s)?,
             })
-            .collect::<anyhow::Result<Vec<_>>>()?
-    };
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
     // The single-thread figure is taken before the threads play: they share this process,
     // so its peak memory afterwards would hold every thread's matches.
-    let benches = if opts.worker_processes {
-        Vec::new()
-    } else {
-        arms.iter()
-            .map(|(_, s)| ctx.bench(s))
-            .collect::<anyhow::Result<Vec<_>>>()?
-    };
+    let benches = arms
+        .iter()
+        .map(|(_, s)| ctx.bench(s))
+        .collect::<anyhow::Result<Vec<_>>>()?;
     let Some(mut played) = ctx.play_all(&arms, &arm_dirs, &inputs, &benches, &owner_id)? else {
         return stopped();
     };
@@ -407,20 +365,11 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             );
         }
     }
-    let results_digest = if opts.worker_processes {
-        let digest_input: Vec<(String, Vec<(FixtureKey, Value)>)> = arms
-            .iter()
+    let results_digest = rows::rows_digest(
+        arms.iter()
             .zip(&played)
-            .map(|((name, _), arm)| (name.to_string(), arm.records.clone()))
-            .collect();
-        run_folder::results_digest(&digest_input)
-    } else {
-        rows::rows_digest(
-            arms.iter()
-                .zip(&played)
-                .map(|((name, _), arm)| (*name, &arm.rows)),
-        )
-    };
+            .map(|((name, _), arm)| (*name, &arm.rows)),
+    );
     // The rows of every arm: their files, and the matches with a full recording.
     let rows_info = played
         .iter()
@@ -497,8 +446,6 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     }
     ctx.write_target(&run_dir, change, pilot_used)?;
 
-    // A failed worker is not an engine error in this process; it has its own error keys.
-    let worker_failed = played.iter().any(|a| a.workers_failed > 0);
     let mut report = CalibrationReport {
         owner_id,
         run_id: run_id.clone(),
@@ -507,10 +454,10 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         fixtures_hash,
         fixtures_scheme: FIXTURE_SCHEME,
         identity: serde_json::to_value(&identity)?,
-        outcome: if worker_failed { "error" } else { "success" },
-        error_type: worker_failed.then_some("worker"),
-        error_code: worker_failed.then_some("worker-failed"),
-        error_retriable: worker_failed.then_some(false),
+        outcome: "success",
+        error_type: None,
+        error_code: None,
+        error_retriable: None,
         duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
         matches: opts.matches,
         minutes: opts.minutes,
@@ -537,11 +484,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         violations: first.violations,
         events_written: first.events_written,
         events_kept: first.events_kept,
-        runner: if opts.worker_processes {
-            "processes"
-        } else {
-            "threads"
-        },
+        runner: "threads",
         rows: rows_info,
         machine_hash: machine_hash(),
         cpu_model: crate::bench::cpu_model(),
@@ -641,7 +584,6 @@ struct RunCtx<'a> {
     opts: &'a CalibrateOpts,
     loaded: &'a crate::content::Loaded,
     bands: Registry,
-    exe: PathBuf,
     jobs: u32,
     selection: Selection,
     suites: Vec<Suite>,
@@ -657,7 +599,7 @@ struct RunCtx<'a> {
     /// The run's start, from its `run.json`: part of every match identifier.
     millis: u64,
     run_id: String,
-    /// This invocation: the ledger files its workers write carry it.
+    /// This invocation: the ledger files its threads write carry it.
     session: String,
 }
 
@@ -767,7 +709,7 @@ pub fn fixtures_hash(content: &Content, teams: &[TeamFile; 2]) -> anyhow::Result
     Ok(hex12(&hasher.finalize()))
 }
 
-/// The outcome of one arm: every suite played in workers under one set of flag states,
+/// The outcome of one arm: every suite played on the threads under one set of flag states,
 /// folded and checked, and the single-thread figure under the same states.
 struct Arm {
     content_hash: String,
@@ -778,7 +720,6 @@ struct Arm {
     checks: Vec<BandCheck>,
     wall_ms: BTreeMap<String, u64>,
     pass: bool,
-    workers_failed: u32,
     change_never_applied: u32,
     change_expired_at_full_time: u32,
     match_without_stats: u32,
@@ -787,10 +728,7 @@ struct Arm {
     events_written: u32,
     events_kept: u32,
     bench: BenchFigures,
-    /// The worker processes: every match's statistics record, by fixture key, for the
-    /// results digest.
-    records: Vec<(FixtureKey, Value)>,
-    /// The threads: every planned match's row, by fixture key, for the results digest.
+    /// Every planned match's row, by fixture key, for the results digest.
     rows: BTreeMap<FixtureKey, Row>,
     rows_info: Option<RowsInfo>,
     /// Every match folded, for the paired verdict, with its fixture key by suite.
@@ -800,7 +738,7 @@ struct Arm {
 
 impl Arm {
     /// What fails a change run outside the bands: panics, missing results, unapplied
-    /// changes, failed workers, and rule violations.
+    /// changes, and rule violations.
     fn guards(&self) -> Vec<String> {
         let mut out = Vec::new();
         for (n, what) in [
@@ -810,7 +748,6 @@ impl Arm {
                 self.change_never_applied,
                 "tactics changes were never applied",
             ),
-            (self.workers_failed, "workers failed"),
         ] {
             if n > 0 {
                 out.push(format!("{n} {what}"));
@@ -822,11 +759,10 @@ impl Arm {
         out
     }
 
-    /// No worker failed, no match panicked, no record is missing, no change was left
-    /// unapplied, and the rule checker found nothing.
+    /// No match panicked, no record is missing, no change was left unapplied, and the rule
+    /// checker found nothing.
     fn trusted(&self) -> bool {
-        self.workers_failed == 0
-            && self.match_panicked == 0
+        self.match_panicked == 0
             && self.match_without_stats == 0
             && self.change_never_applied == 0
             && self.violations == 0
@@ -834,10 +770,7 @@ impl Arm {
 
     fn guard(&self) -> Guard {
         Guard {
-            dark_paths: self.match_without_stats
-                + self.change_never_applied
-                + self.workers_failed
-                + self.match_panicked,
+            dark_paths: self.match_without_stats + self.change_never_applied + self.match_panicked,
             violations: self.violations,
             match_wall_ms: self.bench.match_wall_ms,
         }
@@ -857,7 +790,8 @@ impl Arm {
             match_without_stats: self.match_without_stats,
             match_panicked: self.match_panicked,
             violations: self.violations,
-            workers_failed: self.workers_failed,
+            // Worker processes are gone; the key stays for readers of earlier reports.
+            workers_failed: 0,
             match_wall_ms: self.bench.match_wall_ms,
             ticks_per_match: self.bench.ticks_per_match,
             cpu_us_per_tick: self.bench.cpu_us_per_tick,
@@ -872,7 +806,6 @@ struct Folded {
     builder: RunBuilder,
     /// The fixture key of each match in the builder, by suite, in the builder's order.
     keys: BTreeMap<Suite, Vec<u64>>,
-    records: Vec<(FixtureKey, Value)>,
     rows: BTreeMap<FixtureKey, Row>,
     rows_info: Option<RowsInfo>,
     /// Matches that panicked.
@@ -1020,50 +953,9 @@ impl RunCtx<'_> {
     }
 
     /// Folds every planned match the ledger of `dir` finished into a builder, from its
-    /// statistics file (the worker processes); a planned match with no ledger entry or no
-    /// statistics file is the dark path. With `prune_events`, the event file of a match
-    /// that is not an outlier is removed.
-    fn fold(&self, dir: &Path, prune_events: bool) -> anyhow::Result<Folded> {
-        let done = run_folder::finished(dir, None)?;
-        let events_dir = dir.join("events");
-        let mut builder = self.planned_builder();
-        let mut records = Vec::new();
-        let mut keys: BTreeMap<Suite, Vec<u64>> = BTreeMap::new();
-        for &suite in &self.suites {
-            for k in self.keyed(suite) {
-                let Some(entry) = done.get(&k.key).filter(|d| d.seed == k.engine_seed) else {
-                    builder.add_missing();
-                    continue;
-                };
-                let id = &entry.match_id;
-                match read_stats(&dir.join("stats").join(format!("{id}.json"))) {
-                    Ok(stats) => {
-                        records.push((k.key, serde_json::to_value(&stats)?));
-                        keys.entry(suite).or_default().push(k.key.as_u64());
-                        let outlier = self.add(&mut builder, suite, &k, stats);
-                        if prune_events && !outlier {
-                            let _ = std::fs::remove_file(events_dir.join(format!("{id}.jsonl")));
-                        }
-                    }
-                    // A missing record is the dark path; its event file, if any, is kept.
-                    Err(_) => builder.add_missing(),
-                }
-            }
-        }
-        Ok(Folded {
-            builder,
-            keys,
-            records,
-            rows: BTreeMap::new(),
-            rows_info: None,
-            panicked: 0,
-        })
-    }
-
-    /// Folds every planned match the ledger of `dir` finished into a builder, from its
     /// compact row, in fixture order; a planned match with no ledger entry or no row is the
     /// dark path. Each match's band record is rebuilt from its row with the statistics
-    /// files' rounding, so the bands equal those of [`Self::fold`] on the same matches.
+    /// files' rounding, so the bands equal those folded from the statistics files.
     fn fold_rows(&self, dir: &Path) -> anyhow::Result<Folded> {
         let done = run_folder::finished(dir, None)?;
         let read = rows::read_rows(dir, &done)?;
@@ -1107,100 +999,10 @@ impl RunCtx<'_> {
         Ok(Folded {
             builder,
             keys,
-            records: Vec::new(),
             rows: planned,
             rows_info: Some(rows_info),
             panicked,
         })
-    }
-
-    /// Plays every suite's unfinished fixtures into `arm_dir` with `states`, then times the
-    /// default teams on one thread under the same states. `budget`, the stop seam, counts
-    /// the work units left to play; `None` comes back when it ran out.
-    fn play_arm(
-        &self,
-        states: &FlagStates,
-        arm_dir: &Path,
-        budget: &mut Option<u32>,
-    ) -> anyhow::Result<Option<Arm>> {
-        let opts = self.opts;
-        std::fs::create_dir_all(arm_dir)
-            .with_context(|| format!("cannot create the run folder runs/{}", self.run_id))?;
-        let settings: Vec<FlagSetting> = states
-            .0
-            .iter()
-            .map(|(name, &state)| FlagSetting {
-                name: name.clone(),
-                state,
-            })
-            .collect();
-        let started = Instant::now();
-        let mut wall = BTreeMap::new();
-        let mut workers_failed = 0u32;
-        for &suite in &self.suites {
-            let suite_started = Instant::now();
-            let remaining = worker::remaining(arm_dir, &self.session, self.keyed(suite))?;
-            let unit = run_folder::unit_size(remaining.len(), self.jobs);
-            let units = u32::try_from(remaining.len().div_ceil(unit)).unwrap_or(u32::MAX);
-            if !remaining.is_empty() {
-                let children = (0..self.jobs)
-                    .map(|shard| {
-                        worker_command(self, suite, shard, arm_dir, &settings, *budget)
-                            .spawn()
-                            .context("cannot start a calibration worker")
-                    })
-                    .collect::<anyhow::Result<Vec<_>>>()?;
-                for mut child in children {
-                    let status = child.wait().context("a calibration worker was lost")?;
-                    if !status.success() {
-                        workers_failed += 1;
-                        tracing::warn!(
-                            signal = "calibrate.worker_failed",
-                            run.id = %self.run_id,
-                            suite = suite.code(),
-                            code = ?status.code()
-                        );
-                    }
-                }
-            }
-            if let Some(left) = *budget {
-                if left < units {
-                    return Ok(None);
-                }
-                *budget = Some(left - units);
-            }
-            let wall_ms = u64::try_from(suite_started.elapsed().as_millis()).unwrap_or(u64::MAX);
-            tracing::info!(
-                signal = "calibrate.suite",
-                run.id = %self.run_id,
-                suite = suite.code(),
-                matches = remaining.len(),
-                wall_ms,
-                jobs = self.jobs
-            );
-            wall.insert(suite, wall_ms);
-        }
-        let suites_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
-        let events_dir = arm_dir.join("events");
-        let events_written = count_files(&events_dir);
-        let folded = {
-            let _judge = stages::enter(Stage::Judge);
-            self.fold(arm_dir, opts.keep_events == KeepEvents::Outliers)?
-        };
-        let events_kept = count_files(&events_dir);
-        // The worker processes play in their own processes, so this process's peak after
-        // them still holds only the single-thread figure's match.
-        let bench = self.bench(states)?;
-        self.finish_arm(
-            states,
-            &wall,
-            suites_ms,
-            workers_failed,
-            folded,
-            (events_written, events_kept),
-            bench,
-        )
-        .map(Some)
     }
 
     /// The single-thread figure: the default teams timed on one thread under `states`.
@@ -1218,13 +1020,11 @@ impl RunCtx<'_> {
 
     /// Judges an arm's folded matches against the bands, given each suite's wall time and
     /// the whole run's, with the arm's single-thread figure.
-    #[allow(clippy::too_many_arguments)]
     fn finish_arm(
         &self,
         states: &FlagStates,
         wall: &BTreeMap<Suite, u64>,
         suites_ms: u64,
-        workers_failed: u32,
         folded: Folded,
         (events_written, events_kept): (u32, u32),
         bench: BenchFigures,
@@ -1237,7 +1037,6 @@ impl RunCtx<'_> {
         let Folded {
             builder,
             keys,
-            records,
             rows,
             rows_info,
             panicked: match_panicked,
@@ -1263,8 +1062,7 @@ impl RunCtx<'_> {
         let pass = checks.iter().all(|c| c.pass)
             && change_never_applied == 0
             && match_without_stats == 0
-            && match_panicked == 0
-            && workers_failed == 0;
+            && match_panicked == 0;
         checks
             .sort_by(|a, b| (&a.suite, &a.band, &a.pairing).cmp(&(&b.suite, &b.band, &b.pairing)));
         for c in checks.iter().filter(|c| !c.pass) {
@@ -1293,7 +1091,6 @@ impl RunCtx<'_> {
             checks,
             wall_ms,
             pass,
-            workers_failed,
             change_never_applied,
             change_expired_at_full_time: builder.change_expired_at_full_time(),
             match_without_stats,
@@ -1302,7 +1099,6 @@ impl RunCtx<'_> {
             events_written,
             events_kept,
             bench,
-            records,
             rows,
             rows_info,
             builder,
@@ -1310,8 +1106,8 @@ impl RunCtx<'_> {
         })
     }
 
-    /// Plays every arm's unfinished fixtures of this phase: on threads, or in worker
-    /// processes. `None` comes back when the stop seam cut the phase short.
+    /// Plays every arm's unfinished fixtures of this phase on the threads. `None` comes
+    /// back when the stop seam cut the phase short.
     fn play_all(
         &self,
         arms: &[(&str, FlagStates)],
@@ -1321,16 +1117,6 @@ impl RunCtx<'_> {
         owner_id: &str,
     ) -> anyhow::Result<Option<Vec<Arm>>> {
         let mut played = Vec::with_capacity(arms.len());
-        if self.opts.worker_processes {
-            let mut budget = self.opts.stop_after_units;
-            for ((_, s), arm_dir) in arms.iter().zip(arm_dirs) {
-                match self.play_arm(s, arm_dir, &mut budget)? {
-                    Some(arm) => played.push(arm),
-                    None => return Ok(None),
-                }
-            }
-            return Ok(Some(played));
-        }
         let ran = runner::run_arms(self, inputs, owner_id)?;
         if ran.stopped {
             return Ok(None);
@@ -1347,7 +1133,6 @@ impl RunCtx<'_> {
                 s,
                 wall,
                 ran.total_ms,
-                0,
                 folded,
                 (events, events),
                 *bench,
@@ -1441,60 +1226,6 @@ fn content_identity(content: &Content, dir: &ContentDir) -> anyhow::Result<Strin
         );
     }
     Ok(stream::record::hex(&hasher.finalize()))
-}
-
-/// The command line of one worker. Workers log warnings and errors only unless `SM_LOG`
-/// says otherwise, and their standard output is discarded. The flag states the parent
-/// resolved are passed on, so every worker of an arm plays under the same states.
-fn worker_command(
-    ctx: &RunCtx<'_>,
-    suite: Suite,
-    shard: u32,
-    run_dir: &Path,
-    settings: &[FlagSetting],
-    stop: Option<u32>,
-) -> Command {
-    let (opts, content, shards, millis) = (ctx.opts, ctx.dir.root(), ctx.jobs, ctx.millis);
-    let mut cmd = Command::new(&ctx.exe);
-    cmd.arg("--content-dir")
-        .arg(content)
-        .arg("calibrate")
-        .arg("--worker")
-        .args(["--seed", &opts.seed.to_string()])
-        .args(["--matches", &opts.matches.to_string()])
-        .args(["--minutes", &opts.minutes.to_string()])
-        .args(["--suite", suite.code()])
-        .args(["--shard", &shard.to_string()])
-        .args(["--shards", &shards.to_string()])
-        .arg("--run-dir")
-        .arg(run_dir)
-        .args(["--run-millis", &millis.to_string()])
-        .args(["--session", &ctx.session])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::inherit());
-    if suite == Suite::Formations && ctx.selected.len() < ctx.pairings.len() {
-        let numbers: Vec<String> = ctx.selected.iter().map(usize::to_string).collect();
-        cmd.arg("--pairing-numbers").arg(numbers.join(","));
-    }
-    if let Some(stop) = stop {
-        cmd.args(["--stop-after-units", &stop.to_string()]);
-    }
-    // The match, panic and worker seams reach the first worker only.
-    if let (
-        Some(inject @ (InjectFailure::Match | InjectFailure::Worker | InjectFailure::Panic)),
-        0,
-    ) = (opts.inject_failure, shard)
-    {
-        cmd.args(["--inject-failure", inject.code()]);
-    }
-    for setting in settings {
-        cmd.arg("--flag").arg(setting.to_string());
-    }
-    if std::env::var_os("SM_LOG").is_none() {
-        cmd.env("SM_LOG", "warn");
-    }
-    cmd
 }
 
 /// Files in `dir`, or 0 when it does not exist.

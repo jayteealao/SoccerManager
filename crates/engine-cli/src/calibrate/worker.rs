@@ -1,25 +1,15 @@
-//! One calibration worker of the old worker-process path (the hidden
-//! `--worker-processes`): the same binary started by the parent with hidden flags. It plays
-//! its share of one suite's fixtures, each with the AI manager on both sides, and writes
-//! one statistics file and one event file per match into the run folder. The match itself,
-//! [`play_match`], is the one both runners play. In the formations suite, each side starts
-//! in its pairing's formation and keeps it. In the red-card suite, the default clubs play
-//! with cards otherwise off, in both home and away orders, and the arm's away player is
-//! sent off at kick-off.
-//!
-//! The fixtures earlier sessions of the run left unfinished are cut into work units of
-//! [`run_folder::UNIT`] in fixture order; the worker plays the units whose place modulo the
-//! number of workers is its shard, and appends one ledger line when a unit's last match is
-//! written.
+//! One calibration match, as the one-process runner plays it: [`play_match`] plays the
+//! match with the AI manager on both sides, checks its rules as it plays, and gives its
+//! statistics record and compact row. In the formations suite, each side starts in its
+//! pairing's formation and keeps it. In the red-card suite, the default clubs play with
+//! cards otherwise off, in both home and away orders, and the arm's away player is sent off
+//! at kick-off.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use engine::data::{TEAM_A_FILE, TEAM_B_FILE, TeamFile};
-use engine::observe::identity::{data_dir, load_or_create_owner_id};
-use engine::observe::{
-    LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef, write_stats_at,
-};
+use engine::observe::{LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef};
 use engine::{
     Commentary, Commentator, Content, ContentDir, EngineError, MatchConfig, RunningCheck,
     Simulation, StreamRules, Tactics, TickRecord, TickSink,
@@ -28,40 +18,13 @@ use stream::EventWriter;
 
 use super::fixtures::{self, FixtureKey, Keyed, Leagues};
 use super::rows::Row;
-use super::run_folder::{self, Done, LedgerWriter, UnitLine};
+use super::run_folder;
 use super::stages::{self, Stage};
-use crate::cli::InjectFailure;
-use crate::report::bands::Registry;
-use crate::report::{RED_CARD_ARMS, Suite};
+use crate::report::RED_CARD_ARMS;
 use crate::stream_run::{Ids, match_event};
 
-/// What one worker plays.
-pub struct Share<'a> {
-    pub content_dir: &'a Path,
-    pub run_dir: &'a Path,
-    pub seed: u64,
-    pub matches: u32,
-    pub minutes: u32,
-    pub suite: Suite,
-    pub shard: u32,
-    pub shards: u32,
-    pub run_millis: u64,
-    /// The flag states the parent resolved for this arm.
-    pub states: &'a engine::FlagStates,
-    /// A test seam: make this worker's first match or the worker itself fail.
-    pub inject: Option<InjectFailure>,
-    /// The formations suite: the numbers of the pairings to play; empty plays every one.
-    pub pairings: &'a [usize],
-    /// The parent's session: the ledger files it names are this session's own.
-    pub session: &'a str,
-    /// A test seam: units from this place on are not played, and the unit at this place
-    /// plays its first half and writes no ledger line, as a run killed mid-unit leaves it.
-    pub stop: Option<u32>,
-}
-
 /// The fixtures of `planned` that earlier sessions of the run in `run_dir` left
-/// unfinished, in fixture order: the list the parent and every worker cut into the same
-/// units.
+/// unfinished, in fixture order: the list the runner cuts into work units.
 pub fn remaining(run_dir: &Path, session: &str, planned: Vec<Keyed>) -> anyhow::Result<Vec<Keyed>> {
     let done = run_folder::finished(run_dir, Some(session))?;
     Ok(planned
@@ -76,134 +39,6 @@ pub fn default_clubs(content: &Content, dir: &ContentDir) -> anyhow::Result<[Tea
         content.load_team(dir, &dir.path(TEAM_A_FILE))?.value,
         content.load_team(dir, &dir.path(TEAM_B_FILE))?.value,
     ])
-}
-
-/// Plays the share's units. A failed match still writes its statistics record, with
-/// `outcome` `error` and the `error.*` keys, and the worker goes on with the next fixture.
-pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
-    if share.inject == Some(InjectFailure::Worker) {
-        tracing::error!(signal = "calibrate.injected_failure", shard = share.shard);
-        return Ok(1);
-    }
-    let dir = ContentDir::at(share.content_dir);
-    let content = Content::load(&dir)?.with_flags(share.states)?;
-    let commentary = Commentary::load(&dir)?;
-    let bands = Registry::load(&dir)?;
-    let owner_id = load_or_create_owner_id(&data_dir())?;
-    let stats_dir = share.run_dir.join("stats");
-    let events_dir = share.run_dir.join("events");
-    let mut leagues = Leagues::new(share.seed, &content);
-    // The red-card suite plays the default clubs, loaded once.
-    let defaults: Option<[TeamFile; 2]> = if share.suite == Suite::RedCard {
-        Some(default_clubs(&content, &dir)?)
-    } else {
-        None
-    };
-    let names: Vec<String> = content
-        .tactics
-        .formations
-        .iter()
-        .map(|f| f.name.clone())
-        .collect();
-    let pairings = fixtures::pairings(names.len());
-    let selected: Vec<usize> = if share.pairings.is_empty() {
-        (0..pairings.len()).collect()
-    } else {
-        share.pairings.to_vec()
-    };
-    let planned = fixtures::keyed(share.suite, share.seed, share.matches, &names, &selected);
-    let remaining = remaining(share.run_dir, share.session, planned)?;
-    let shards = share.shards.max(1);
-    let mut ledger: Option<LedgerWriter> = None;
-    let mut inject_match = share.inject == Some(InjectFailure::Match);
-    let mut inject_panic = share.inject == Some(InjectFailure::Panic);
-    let size = run_folder::unit_size(remaining.len(), shards);
-    for (place, unit) in remaining.chunks(size).enumerate() {
-        let place = u32::try_from(place).unwrap_or(u32::MAX);
-        if place % shards != share.shard {
-            continue;
-        }
-        let (unit, finished) = match share.stop {
-            Some(stop) if place > stop => break,
-            Some(stop) if place == stop => (&unit[..unit.len() / 2], false),
-            _ => (unit, true),
-        };
-        let mut done = Vec::with_capacity(unit.len());
-        for keyed in unit {
-            let match_id = fixtures::match_id(keyed.key, share.run_millis);
-            let (teams, formations, red_card) = setup(
-                keyed,
-                &mut leagues,
-                defaults.as_ref(),
-                &pairings,
-                bands.stronger_team.attribute_boost,
-            );
-            let seed = keyed.engine_seed;
-            // A worker process does not catch a panic: it stops, and the parent counts a
-            // failed worker.
-            assert!(!std::mem::take(&mut inject_panic), "injected panic");
-            let played = if std::mem::take(&mut inject_match) {
-                Err(EngineError::InvalidConfig("injected failure".into()))
-            } else {
-                let path = events_dir.join(format!("{match_id}.jsonl"));
-                play_match(
-                    &MatchInput {
-                        content: &content,
-                        commentary: &commentary,
-                        teams: &teams,
-                        formations,
-                        red_card,
-                        key: keyed.key,
-                        seed,
-                        minutes: share.minutes,
-                        owner_id: &owner_id,
-                        match_id: &match_id,
-                    },
-                    &mut |_| Some(path.clone()),
-                )
-            };
-            let stats = match played {
-                Ok(played) => played.stats,
-                Err(err) => {
-                    tracing::error!(
-                        signal = "calibrate.match_failed",
-                        match.id = %match_id,
-                        error = %err
-                    );
-                    failure(
-                        (&owner_id, &match_id, seed),
-                        &teams,
-                        &Failure::of(&err),
-                        &content,
-                    )
-                }
-            };
-            write_stats_at(&stats_dir, &stats)?;
-            done.push(Done {
-                key: keyed.key,
-                seed,
-                match_id,
-                session: String::new(),
-            });
-        }
-        if finished {
-            let writer = match &mut ledger {
-                Some(w) => w,
-                None => ledger.insert(LedgerWriter::open(
-                    share.run_dir,
-                    share.session,
-                    share.suite.code(),
-                    share.shard,
-                )?),
-            };
-            writer.append(&UnitLine {
-                suite: share.suite.code().to_string(),
-                unit: place,
-                fixtures: done,
-            })?;
-        }
-    }
-    Ok(0)
 }
 
 /// The teams, the formations, and the sending-off of the match `keyed`: the generated
@@ -241,7 +76,7 @@ pub fn setup(
     (teams, formations, red_card)
 }
 
-/// One match to play, as both runners describe it.
+/// One match to play.
 pub struct MatchInput<'a> {
     pub content: &'a Content,
     pub commentary: &'a Commentary,
@@ -496,6 +331,8 @@ pub fn failure(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::report::Suite;
+    use crate::report::bands::Registry;
 
     struct Shipped {
         dir: ContentDir,

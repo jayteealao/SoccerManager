@@ -667,7 +667,7 @@
             "minimum": 0
           },
           "calib.runner": {
-            "description": "threads for the one-process runner, processes for the old worker processes.",
+            "description": "threads: the one-process runner. processes appears only in reports of earlier builds, which also had worker processes.",
             "enum": ["threads", "processes"]
           },
           "calib.rows": {

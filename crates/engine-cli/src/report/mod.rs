@@ -828,10 +828,11 @@ pub struct CalibrationReport {
     pub events_written: u32,
     #[serde(rename = "events.files_kept")]
     pub events_kept: u32,
-    /// `threads` for the one-process runner, `processes` for the old worker processes.
+    /// `threads`: the one-process runner. Reports of earlier builds can say `processes`,
+    /// the worker-process runner they also had.
     #[serde(rename = "calib.runner")]
     pub runner: &'static str,
-    /// The compact rows of every arm; absent for the old worker processes.
+    /// The compact rows of every arm; absent in reports of the earlier worker processes.
     #[serde(rename = "calib.rows", skip_serializing_if = "Option::is_none")]
     pub rows: Option<RowsInfo>,
     #[serde(rename = "machine.hash")]
@@ -856,8 +857,8 @@ pub struct CalibrationReport {
     /// The fixtures of the run, those an earlier session finished, and those played now.
     #[serde(rename = "calib.units")]
     pub units: Units,
-    /// SHA-256 over every match's statistics in key order, identifiers and timing left out.
-    /// The one-process runner hashes the compact rows' result columns instead.
+    /// SHA-256 over the compact rows' result columns in key order. Reports of the earlier
+    /// worker processes hashed every match's statistics, identifiers and timing left out.
     #[serde(rename = "calib.results_digest")]
     pub results_digest: String,
     /// The old engine's results on the same fixtures; absent without an old engine.
@@ -1035,6 +1036,7 @@ pub struct ArmReport {
     pub match_panicked: u32,
     #[serde(rename = "validate.violations")]
     pub violations: usize,
+    /// Always 0 since the worker processes are gone; kept for readers of earlier reports.
     #[serde(rename = "calib.workers_failed")]
     pub workers_failed: u32,
     #[serde(rename = "bench.match_wall_ms")]

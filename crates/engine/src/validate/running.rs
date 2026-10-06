@@ -36,6 +36,10 @@ const BALL_SPEED: u8 = 2;
 const RESTART_SPOT: u8 = 3;
 const ANCHOR_TOLERANCE: u8 = 4;
 
+/// A squared distance a little above `MIN_SEPARATION²`: a pair at or beyond it is far
+/// enough apart that its exact distance need not be taken.
+const SEPARATION_BOUND_SQ: f64 = MIN_SEPARATION * MIN_SEPARATION * 1.0001;
+
 /// Each event rule's place among the rules of one event.
 const KICK_OFF_FIRST: u8 = 0;
 const FULL_TIME_LAST: u8 = 1;
@@ -365,11 +369,23 @@ impl RunningCheck {
             }
         }
         for i in 0..PLAYER_COUNT {
+            if parked[i] {
+                continue;
+            }
             for j in (i + 1)..PLAYER_COUNT {
-                if parked[i] || parked[j] {
+                if parked[j] {
                     continue;
                 }
-                let d = (pos[i] - pos[j]).length();
+                // `length()` is the square root of `length_squared()` (source: glam 0.33.8
+                // `src/f64/dvec2.rs`), so a squared distance at or above the bound has a
+                // length above `MIN_SEPARATION`: only a pair below it takes the square
+                // root, through the same `length()` call, so its value and decision are
+                // the old validator's.
+                let gap = pos[i] - pos[j];
+                if gap.length_squared() >= SEPARATION_BOUND_SQ {
+                    continue;
+                }
+                let d = gap.length();
                 if d < MIN_SEPARATION {
                     bad(SEPARATION, "separation", Some(i), d);
                 }

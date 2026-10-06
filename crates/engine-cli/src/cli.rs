@@ -904,29 +904,10 @@ pub struct CalibrateOpts {
                      holds both arms, a row per band, and a verdict."
     )]
     pub pair: Option<String>,
-    /// Run as a worker of a calibration run (set by the parent process).
-    #[arg(long, hide = true)]
-    pub worker: bool,
-    /// Play in worker processes of this binary, the old path, instead of on threads.
-    #[arg(long, hide = true, conflicts_with = "worker")]
-    pub worker_processes: bool,
-    #[arg(long, hide = true, default_value_t = 0)]
-    pub shard: u32,
-    #[arg(long, hide = true, default_value_t = 1)]
-    pub shards: u32,
-    #[arg(long, hide = true, value_name = "DIR")]
-    pub run_dir: Option<PathBuf>,
-    #[arg(long, hide = true, default_value_t = 0)]
-    pub run_millis: u64,
-    /// A worker of the formations suite plays only these pairings, by number.
-    #[arg(long = "pairing-numbers", hide = true, value_delimiter = ',')]
-    pub pairing_numbers: Vec<usize>,
-    /// Make one match or one worker fail, to exercise the error records; a test seam.
+    /// Make one match or the old engine's build fail, to exercise the error records; a
+    /// test seam.
     #[arg(long, hide = true, value_enum, value_name = "WHAT")]
     pub inject_failure: Option<InjectFailure>,
-    /// The session of the parent run a worker belongs to (set by the parent process).
-    #[arg(long, hide = true, default_value = "")]
-    pub session: String,
     /// Stop after this many work units, leaving the next one half played; a test seam.
     #[arg(long, hide = true, value_name = "K")]
     pub stop_after_units: Option<u32>,
@@ -954,26 +935,12 @@ pub struct CalibrateOpts {
 }
 
 /// The failure `calibrate --inject-failure` makes: an error in the first match of the work
-/// list, a panic in it, the first worker process before it plays (`--worker-processes`), or
-/// the build of the old engine (`--base`).
+/// list, a panic in it, or the build of the old engine (`--base`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum InjectFailure {
     Match,
     Panic,
-    Worker,
     BaseBuild,
-}
-
-impl InjectFailure {
-    /// The value as the command line spells it.
-    pub fn code(self) -> &'static str {
-        match self {
-            Self::Match => "match",
-            Self::Panic => "panic",
-            Self::Worker => "worker",
-            Self::BaseBuild => "base-build",
-        }
-    }
 }
 
 /// The suites a calibration run plays.

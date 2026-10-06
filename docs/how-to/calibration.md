@@ -18,7 +18,7 @@ A baseline is the `report.json` of an earlier run on the same seed and match cou
 target/release/engine-cli calibrate --seed 42 --matches 1000 --out runs/base-42
 ```
 
-This plays every suite: about 76 minutes on an 8-core machine. Keep `runs/base-42/report.json`; every targeted run below compares with it.
+This plays every suite, 57,000 matches: see [How long the runs take](#how-long-the-runs-take). Keep `runs/base-42/report.json`; every targeted run below compares with it.
 
 For the red-card experiment, make its own baseline:
 
@@ -143,8 +143,34 @@ target/release/engine-cli calibrate --seed 42 --matches 2000 --out runs/base-42
 
 When the program, the content, the flags, the seed, or the minutes changed since the folder's run, the run does not resume. It moves the old files to `superseded/<old run.id>/`, names what differs, and starts again. Do not run two commands into one folder at the same time.
 
+## Run the realistic evaluation
+
+The realistic evaluation is the full run of every default suite at 1,000 matches: 1,000 equal, 1,000 strength, and 1,000 for each of the 55 formation pairings.
+
+```bash
+target/release/engine-cli calibrate --seed 2026 --out runs/eval-2026
+```
+
+Read `calib.pass` and the band table at the end of standard error. Read the stage table to see where the time went.
+
+## How long the runs take
+
+Time a run on an idle machine: other heavy work on the processor slows every thread. Read the console total and `calib.wall_ms.total` in `report.json`, and note the number of logical processors (`--jobs` defaults to all of them).
+
+Measured on the 8-thread reference machine (AMD Ryzen 7 9800X3D, simultaneous threading off) with other heavy work running:
+
+| Run | Matches played | Time |
+|---|---|---|
+| `--matches 20`, every suite | 1,140 | 86 to 91 s (about 13 matches per second) |
+| `--suite equal --matches 64 --jobs 1` | 64 | 23 s on one thread (about 0.36 s per match) |
+| `--suite equal --matches 64 --jobs 8` | 64 | 6 s |
+
+At that rate the realistic evaluation takes about 70 minutes. On an idle machine, one match takes about a third of a second on one thread, so with perfect scaling over 8 threads the evaluation takes about 40 minutes. A change run plays the changed engine's pilot of 11,400 matches and then grows to its power target: with the default cap of 1,000, the formations suite reaches the cap for every pairing, so a change run plays about as many matches as the evaluation.
+
 ## Build a faster calibrate binary
 
 Measure before you keep a faster build: run the same pairing with the release build and with the other build, and check that the diff between the two shows a change of exactly 0 on every row. A native CPU target (`RUSTFLAGS="-C target-cpu=native"`) is a local option only: the shipped build runs on other CPUs.
 
-On the 8-core reference machine, a build with whole-program optimisation (`lto = "fat"`, `codegen-units = 1`) and one with a native CPU target gave the same figures as the release build, but neither was faster by more than the spread between two release runs (about 12.5 matches per second each). The release build is the one to use.
+On the 8-core reference machine, a build with whole-program optimisation (`lto = "fat"`, `codegen-units = 1`) and one with a native CPU target gave the same figures as the release build, but neither was faster by more than the spread between two release runs. The release build is the one to use.
+
+A faster rule checker made the same 1,140-match run about 15 percent faster on the same machine, with every result unchanged: the checks fell from about 250 ms to about 145 ms of thread time per match.

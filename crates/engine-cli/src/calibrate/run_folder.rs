@@ -5,10 +5,10 @@
 //! A run's identity is everything that changes a match's result: the build, the content,
 //! the flags, the seed, the minutes, the strength boost, the random-number scheme, the
 //! fixture scheme, the measure definitions, and the band registry's version. The match
-//! count, the suites, the pairings, the bands judged, the workers, and the event files kept
+//! count, the suites, the pairings, the bands judged, the threads, and the event files kept
 //! only choose which work is done, so they are not part of it.
 //!
-//! Each worker or thread appends to its own ledger file,
+//! Each thread appends to its own ledger file,
 //! `ledger/<session>-<suite>-<shard>.jsonl`, after every match of a unit has its result on
 //! disk, and syncs the file. A unit cut off mid-way has no line, so it plays again; a
 //! trailing partial line is ignored.
@@ -21,7 +21,6 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 
 use super::fixtures::FixtureKey;
 
@@ -32,9 +31,9 @@ pub const RUN_FILE_VERSION: u32 = 1;
 /// Fixtures per work unit, at most.
 pub const UNIT: usize = 8;
 
-/// The fixtures per work unit for `remaining` fixtures over `shards` workers: [`UNIT`], or
-/// fewer when there are too few fixtures to give every worker a unit, so a short suite
-/// still keeps every worker busy. The parent and the workers cut with the same size.
+/// The fixtures per work unit for `remaining` fixtures over `shards` threads: [`UNIT`], or
+/// fewer when there are too few fixtures to give every thread a unit, so a short suite
+/// still keeps every thread busy.
 pub fn unit_size(remaining: usize, shards: u32) -> usize {
     let shards = usize::try_from(shards.max(1)).unwrap_or(usize::MAX);
     remaining.div_ceil(shards).clamp(1, UNIT)
@@ -345,8 +344,8 @@ pub struct UnitLine {
 }
 
 /// Every finished fixture in the ledger of `dir`, by key. The ledger files of the session
-/// `skip` are left out: a worker reads only what earlier sessions finished, so every
-/// worker of a session cuts the same units. A trailing partial line is ignored; a key
+/// `skip` are left out: a session reads only what earlier sessions finished, so it cuts
+/// the same units however far it has played. A trailing partial line is ignored; a key
 /// finished twice is an error that names it.
 pub fn finished(dir: &Path, skip: Option<&str>) -> anyhow::Result<BTreeMap<FixtureKey, Done>> {
     let ledger = dir.join("ledger");
@@ -415,7 +414,7 @@ fn session_of(file: &Path, suite: &str) -> String {
         .to_string()
 }
 
-/// A worker's ledger file.
+/// One thread's ledger file.
 pub struct LedgerWriter {
     file: fs::File,
 }
@@ -447,32 +446,6 @@ impl LedgerWriter {
         self.file.sync_data()?;
         Ok(())
     }
-}
-
-/// The keys of a statistics record that differ between two plays of the same match: its
-/// identifier, its owner, and its timing.
-const VOLATILE: [&str; 4] = ["match.id", "owner.id", "duration_ms", "engine.ticks_per_s"];
-
-/// SHA-256, as 64 hex characters, over every arm's statistics records in key order, with
-/// the identifier, owner, and timing keys removed: equal results give equal digests however
-/// the run was cut into sessions.
-pub fn results_digest(arms: &[(String, Vec<(FixtureKey, Value)>)]) -> String {
-    let mut hasher = Sha256::new();
-    for (arm, records) in arms {
-        hasher.update(format!("arm {arm}\n"));
-        let mut sorted: Vec<&(FixtureKey, Value)> = records.iter().collect();
-        sorted.sort_by_key(|(key, _)| *key);
-        for (key, record) in sorted {
-            let mut record = record.clone();
-            if let Some(map) = record.as_object_mut() {
-                for name in VOLATILE {
-                    map.remove(name);
-                }
-            }
-            hasher.update(format!("{key} {record}\n"));
-        }
-    }
-    stream::record::hex(&hasher.finalize())
 }
 
 #[cfg(test)]
@@ -670,28 +643,5 @@ mod tests {
         assert_eq!(session_of(file, "red-card"), "1700000000000-4242");
         let file = Path::new("ledger/1700000000000-4242-equal-0.jsonl");
         assert_eq!(session_of(file, "equal"), "1700000000000-4242");
-    }
-
-    #[test]
-    fn the_digest_ignores_identifiers_and_timing_and_follows_a_goal() {
-        let record = |id: &str, ms: u64, goals: u32| {
-            json!({"match.id": id, "owner.id": "o", "duration_ms": ms,
-                   "engine.ticks_per_s": ms as f64, "goals": [goals, 0], "seed": 1})
-        };
-        let one = [(
-            "".to_string(),
-            vec![(key(1), record("a", 5, 1)), (key(2), record("b", 6, 0))],
-        )];
-        let two = [(
-            "".to_string(),
-            vec![(key(2), record("y", 9, 0)), (key(1), record("x", 7, 1))],
-        )];
-        assert_eq!(results_digest(&one), results_digest(&two));
-        assert_eq!(results_digest(&one).len(), 64);
-        let goal = [(
-            "".to_string(),
-            vec![(key(1), record("a", 5, 2)), (key(2), record("b", 6, 0))],
-        )];
-        assert_ne!(results_digest(&one), results_digest(&goal));
     }
 }
