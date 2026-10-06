@@ -633,6 +633,7 @@ impl RowsWriter {
 
     /// Appends one unit's rows as one block and syncs the file.
     pub fn append_block(&mut self, suite: &str, place: u32, rows: &[Row]) -> anyhow::Result<()> {
+        let writing = super::stages::enter(super::stages::Stage::Writing);
         let mut block = Vec::new();
         // Every suite code is shorter than 256 bytes.
         block.push(suite.len() as u8);
@@ -647,6 +648,8 @@ impl RowsWriter {
         }
         let sum = checksum(&block);
         block.extend_from_slice(&sum);
+        drop(writing);
+        let _disk = super::stages::enter(super::stages::Stage::Disk);
         self.file.write_all(&block)?;
         self.file.sync_data()?;
         self.rows += count;

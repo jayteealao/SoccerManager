@@ -22,7 +22,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `tactics.json` | 1 | Ten formations, mentalities, team instructions, roles, duties, and the AI manager's settings |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
-| `realism-bands.json` | 2 | The accepted realism bands the calibration run checks: four from version 1 and eleven from real-match data. They are acceptance criteria, never tuning values |
+| `realism-bands.json` | 3 | The band registry: every realism band the calibration run judges, with its measure, range, and smallest shift. Version 2 still loads. They are acceptance criteria, never tuning values |
 | `fast-model.json` | 2 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
 
 Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`.
@@ -258,6 +258,40 @@ Rules:
 
 Every statistics record carries `tuning.flags_on`, the flags that were on. To compare a candidate and remove the loser, follow [the modding how-to](../how-to/modding.md#compare-two-models-with-a-flag).
 
+## realism-bands.json
+
+The band registry: every realism band the calibration run judges. The bands are acceptance criteria, never tuning values. A band is added, moved, or removed by editing this file; no code changes.
+
+| Field | Holds |
+|---|---|
+| `schema_version` | 3 |
+| `sample_size` | the match count the time budget is set for: 1000 |
+| `wall_minutes_per_sample` | the time budget of a suite of `sample_size` matches, in minutes; each suite's `wall_ms` check scales it to the run's match count |
+| `stronger_team.attribute_boost` | the factor the strength suite raises every attribute of the stronger club by |
+| `bands` | the bands, in the order the run shows them |
+
+Each band:
+
+| Field | Holds |
+|---|---|
+| `band` | its name, unique in the file |
+| `suites` | the suites that judge it: `equal`, `strength`, `formations`, `red-card` |
+| `measure` | what it measures; see below |
+| `lo`, `hi` | its range, both ends included; `hi` is at least `lo` |
+| `smallest_shift` | the smallest change a change run must have the power to see, above 0 |
+| `group` | optional: a name the report gives bands of one figure, such as `possession_pct` for the home and away bands |
+
+A measure is one of four kinds. Its fields come from a closed list. Each side has `goals`, `shots`, `shots_on_target`, `xg`, `passes`, `passes_completed`, `pass_accuracy_pct`, `possession_pct`, `fouls`, `offsides`, `corners`, `throw_ins`, `goal_kicks`, `yellow`, `red`, and `substitutions`, named as `goals.home`, `goals.away`, or `goals.{side}` for each side in turn; each match has `injuries` and `ball_in_play_s`.
+
+- `{"kind": "mean", "per": "match", "of": [...]}`: the mean over matches of the sum of the fields, such as goals per match. With `"per": "team"` and `{side}` fields, the mean over each team of each match.
+- `{"kind": "share", "of": [...], "op": ">=", "value": 10}`: the share of matches whose sum of the fields holds against the value; `op` is `>=`, `==`, or `<=`.
+- `{"kind": "ratio", "num": [...], "den": [...]}`: the sum of the numerator fields over the sum of the denominator fields, pooled over the matches.
+- `{"kind": "builtin", "name": ...}`: a measure of a whole suite: `stronger_team_win_rate` (strength), `reduced_minus_full` and `full_over_control` (red-card).
+
+A field outside the list, a measure without fields, a range with `hi` below `lo`, a `smallest_shift` that is not above 0, an unknown suite, and a band name used twice are refused, and the message names the band and the field, for example `content refused: realism bands realism-bands.json: bands[0] (goals_per_match).hi: hi 2 is below lo 2.4`.
+
+A file of version 2, with one fixed field per band, still loads: it is read as version 3 in memory, with each band's smallest shift a quarter of its range, and the report's `calib.registry.migrated_from` says `2`. The file is not rewritten. A file of version 1 is refused.
+
 ## fast-model.json
 
 The fit of the fast model, written by `engine-cli fast-model fit` (see [the command-line reference](cli.md#fast-model)). The engine never reads it to play a match, and the content hash does not include it, so a new fit changes no save, replay or gate hash. The release ships it with the rest of the content folder.
@@ -469,6 +503,7 @@ The engine writes these files to the data folder. The data folder is `SM_DATA_DI
 | `matches/<match.id>/snapshot.smsn` | `simulate`, `serve` | the newest snapshot of the match; `resume` and `serve --resume` read it |
 | `matches/<match.id>/matchday-bug-<fixture>.json` | `serve` | the bug report of a background match that failed; see below |
 | `runs/<run.id>/report.json` | `calibrate` | the run report, as the `run-report` record |
+| `runs/<run.id>/target.json` | `calibrate` | the run's matches per suite, the pilot and cap of a change run, and the digest of each band it was last judged with |
 | `runs/<run.id>/rows/<session>-<thread>.rows` | `calibrate` | one compact row per match of the run; see "The row file" below |
 | `runs/<run.id>/stats/<match.id>.json` | `calibrate` | the statistics record of each recorded match: about 1 in 16 and every outlier, or every match with `--keep-events all` |
 | `runs/<run.id>/events/<match.id>.jsonl` | `calibrate` | the event rows, with commentary, of each recorded match that played to full time |

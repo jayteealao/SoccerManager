@@ -13,7 +13,7 @@
 //! written.
 
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use engine::data::{TEAM_A_FILE, TEAM_B_FILE, TeamFile};
 use engine::observe::identity::{data_dir, load_or_create_owner_id};
@@ -22,15 +22,16 @@ use engine::observe::{
 };
 use engine::{
     Commentary, Commentator, Content, ContentDir, EngineError, MatchConfig, RunningCheck,
-    Simulation, StreamRules, Tactics,
+    Simulation, StreamRules, Tactics, TickRecord, TickSink,
 };
 use stream::EventWriter;
 
 use super::fixtures::{self, FixtureKey, Keyed, Leagues};
 use super::rows::Row;
 use super::run_folder::{self, Done, LedgerWriter, UnitLine};
+use super::stages::{self, Stage};
 use crate::cli::InjectFailure;
-use crate::report::bands::Bands;
+use crate::report::bands::Registry;
 use crate::report::{RED_CARD_ARMS, Suite};
 use crate::stream_run::{Ids, match_event};
 
@@ -87,7 +88,7 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
     let dir = ContentDir::at(share.content_dir);
     let content = Content::load(&dir)?.with_flags(share.states)?;
     let commentary = Commentary::load(&dir)?;
-    let bands = Bands::load(&dir)?;
+    let bands = Registry::load(&dir)?;
     let owner_id = load_or_create_owner_id(&data_dir())?;
     let stats_dir = share.run_dir.join("stats");
     let events_dir = share.run_dir.join("events");
@@ -297,13 +298,24 @@ pub fn play_match(
         sim.send_off_before_kickoff(player);
     }
     // Each tick and event is judged as the match plays; no record is kept.
-    let mut check = RunningCheck::for_match(&sim, rules);
+    let mut check = Timed {
+        check: RunningCheck::for_match(&sim, rules),
+        calls: 0,
+        sampled: Duration::ZERO,
+    };
     let started = Instant::now();
-    sim.run(&mut check)?;
+    {
+        let _play = stages::enter(Stage::Play);
+        sim.run(&mut check)?;
+    }
     let elapsed = started.elapsed();
-    let written = check.ticks();
+    stages::shift(Stage::Play, Stage::Checks, check.sampled * CHECK_STRIDE);
+    let written = check.check.ticks();
     // Full time comes after the last record: the checker sees it before the events go.
-    let violations = check.finish_match(&sim).len();
+    let violations = {
+        let _checks = stages::enter(Stage::Checks);
+        check.check.finish_match(&sim).len()
+    };
     let events = sim.take_events();
     let summary = sim.summary();
     let tactics = TacticsStats::new(&sim);
@@ -316,6 +328,7 @@ pub fn play_match(
         u64::try_from(elapsed.as_micros()).unwrap_or(u64::MAX),
     );
     if let Some(path) = events_to(&row) {
+        let _commentary = stages::enter(Stage::Commentary);
         let mut ids = Ids::new(&sim);
         let mut commentator = Commentator::for_match(m.commentary, &sim);
         let mut writer =
@@ -356,6 +369,41 @@ pub fn play_match(
         script: ScriptFigures::new(sim.plugins()),
     };
     Ok(Played { stats, row })
+}
+
+/// The checker calls timed: one in this many, scaled up, so the clock costs less than the
+/// checker on a short tick.
+const CHECK_STRIDE: u32 = 16;
+
+/// The running checker, with every [`CHECK_STRIDE`]th call timed.
+struct Timed {
+    check: RunningCheck,
+    calls: u32,
+    sampled: Duration,
+}
+
+impl Timed {
+    fn call<T>(&mut self, f: impl FnOnce(&mut RunningCheck) -> T) -> T {
+        self.calls = self.calls.wrapping_add(1);
+        if self.calls.is_multiple_of(CHECK_STRIDE) {
+            let t = Instant::now();
+            let out = f(&mut self.check);
+            self.sampled += t.elapsed();
+            out
+        } else {
+            f(&mut self.check)
+        }
+    }
+}
+
+impl TickSink for Timed {
+    fn on_step(&mut self, sim: &Simulation) -> Result<(), EngineError> {
+        self.call(|c| c.on_step(sim))
+    }
+
+    fn on_tick(&mut self, record: &TickRecord) -> Result<(), EngineError> {
+        self.call(|c| c.on_tick(record))
+    }
 }
 
 fn team_refs(teams: &[TeamFile; 2]) -> [TeamRef; 2] {
@@ -501,7 +549,7 @@ mod tests {
     #[test]
     fn every_suite_kind_plays_without_a_violation() {
         let s = shipped();
-        let bands = Bands::load(&s.dir).unwrap();
+        let bands = Registry::load(&s.dir).unwrap();
         let defaults = default_clubs(&s.content, &s.dir).unwrap();
         let names: Vec<String> = s
             .content

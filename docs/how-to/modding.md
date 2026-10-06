@@ -40,7 +40,26 @@ To see the effect over many matches, run a calibration run:
 target/release/engine-cli calibrate --seed 2026 --matches 200 --content-dir my-content
 ```
 
-The run report compares every realism band, and the goal bands of every formation pairing, against `realism-bands.json`. Standard error names each band that fails, and the exit code is 2 when a band fails. Add `--suite equal` to skip the formations suite, which plays 55 pairings. A `realism-bands.json` of version 1 is refused: copy the shipped file of version 2.
+The run report compares every realism band, and the goal bands of every formation pairing, against `realism-bands.json`. Standard error names each band that fails, and the exit code is 2 when a band fails. Add `--suite equal` to skip the formations suite, which plays 55 pairings. A `realism-bands.json` of version 2 still loads; one of version 1 is refused: copy the shipped file of version 3.
+
+To judge the change against the engine before it, add `--base main` from your git checkout: each band then reads `pass`, `fail`, or `not sure`. See [Measure a tuning change](calibration.md).
+
+## Add a realism band
+
+Every band is an entry of `bands` in `realism-bands.json`, so a new band needs no code. To check the fouls of each team in the equal suite, add:
+
+```json
+{
+  "band": "fouls_per_team",
+  "suites": ["equal"],
+  "measure": { "kind": "mean", "per": "team", "of": ["fouls.{side}"] },
+  "lo": 8.0,
+  "hi": 14.0,
+  "smallest_shift": 1.5
+}
+```
+
+The next calibration run judges it. The measure's fields come from a closed list, and a mistake is refused with the band and the field named; see [`realism-bands.json`](../reference/data-files.md#realism-bandsjson) for the list and the four kinds of measure. Set `smallest_shift` to the smallest change that should matter: a change run sizes itself to see it.
 
 ## Add a rule pack
 

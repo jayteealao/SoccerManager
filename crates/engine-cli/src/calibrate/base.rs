@@ -43,7 +43,8 @@ pub struct Request<'a> {
     pub content_dir: &'a Path,
     pub seed: u64,
     pub minutes: u32,
-    pub matches: u32,
+    /// Matches per suite unit, by suite.
+    pub matches: &'a std::collections::BTreeMap<Suite, u32>,
     pub jobs: u32,
     pub suites: &'a [Suite],
     /// The `--pairing` names, when the run plays only some pairings.
@@ -328,7 +329,10 @@ fn play(
 ) -> anyhow::Result<()> {
     let mut cmd = calibrate(exe, content);
     cmd.args(["--seed", &req.seed.to_string()])
-        .args(["--matches", &req.matches.to_string()])
+        .args([
+            "--matches",
+            &req.matches.get(&suite).copied().unwrap_or(1).to_string(),
+        ])
         .args(["--minutes", &req.minutes.to_string()])
         .args(["--suite", suite.code()])
         .args(["--jobs", &req.jobs.to_string()])
@@ -364,11 +368,14 @@ fn calibrate(exe: &Path, content: &Path) -> Command {
     if std::env::var_os("SM_LOG").is_none() {
         cmd.env("SM_LOG", "warn");
     }
+    cmd.env(super::QUIET_ENV, "1");
     cmd
 }
 
 /// SHA-256, as 12 hex characters, over every file of a folder: its path inside the folder
-/// and its bytes, in path order.
+/// and its bytes, in path order. The band registry counts only by the strength suite's
+/// attribute boost, the one value in it a match plays with: a changed range or shift is
+/// judged again, so the old engine's results stay in the cache.
 pub fn folder_hash(dir: &Path) -> anyhow::Result<String> {
     fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) -> std::io::Result<()> {
         for entry in fs::read_dir(dir)? {
@@ -390,7 +397,16 @@ pub fn folder_hash(dir: &Path) -> anyhow::Result<String> {
         if name == ".complete" {
             continue;
         }
-        let bytes = fs::read(&path).with_context(|| format!("cannot read {}", path.display()))?;
+        let mut bytes =
+            fs::read(&path).with_context(|| format!("cannot read {}", path.display()))?;
+        if name == crate::report::bands::BANDS_FILE {
+            let boost = serde_json::from_slice::<serde_json::Value>(&bytes)
+                .ok()
+                .and_then(|v| v["stronger_team"]["attribute_boost"].as_f64());
+            if let Some(boost) = boost {
+                bytes = format!("attribute_boost {boost}").into_bytes();
+            }
+        }
         hasher.update((name.len() as u64).to_le_bytes());
         hasher.update(name.as_bytes());
         hasher.update((bytes.len() as u64).to_le_bytes());

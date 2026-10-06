@@ -285,19 +285,20 @@ Play many AI-managed matches and check the realism bands.
 | Flag | Value | Default | Meaning |
 |---|---|---|---|
 | `--seed` | integer | required | The seed of the run: the leagues, the fixtures, and every match seed. |
-| `--matches` | integer | 1000 | Matches in each suite, and in each formation pairing of the formations suite. |
+| `--matches` | integer | 1000 | Matches in each suite, and in each formation pairing of the formations suite. In a change run (`--base`), the most it plays. |
 | `--minutes` | integer | 90 | Minutes of play in each match. |
 | `--jobs` | integer | the number of logical cores | Matches played at once, each on its own thread of the one process. |
 | `--suite` | `all`, `equal`, `strength`, `formations`, `red-card` | `all` | The suites to play. `all` plays the first three; `red-card` runs only when named. |
 | `--pairing` | `A v B`, for example `"4-4-1-1 v 4-4-2"` | every pairing | Play only this formation pairing of the formations suite. Name the two formations in either order. Repeat it for more than one pairing. The run then plays the formations suite only. |
-| `--band` | band name, for example `goals_per_match` | every band | Judge and show only this band, and play only the suites that check it. Repeat it for more than one band. |
+| `--band` | band name, for example `goals_per_match` | every band | Judge and show only this band of the band registry, `realism-bands.json`, and play only the suites that check it. Repeat it for more than one band. An unknown name is refused with the list. |
 | `--baseline` | file | none | Compare the run with an earlier `report.json`, band by band, and print the diff. |
 | `--out` | folder | `runs/<run.id>` in the data folder | The run folder. Run the same command again into the same folder to resume a stopped run, or to grow it with a larger `--matches`. |
 | `--keep-events` | `outliers`, `all` | `outliers` | The matches whose statistics and event files are written. `outliers` writes the files of about 1 in 16 matches, chosen by fixture key, and of every outlier (below); `all` writes every match's files. Every match has its compact row either way. |
 | `--flag` | `NAME=on` or `NAME=off` | the state in `tuning.json` | Set a feature flag for the whole run. Repeat it for more than one flag. The flag must be declared in `tuning.json`. |
 | `--pair` | flag name | none | Play every fixture with the flag off, then on, on the same match seeds, and compare the two arms band by band. |
+| `--base` | revision | none | Make it a change run: compare this build with the old engine of the revision, and judge each band `pass`, `fail`, or `not sure`. See "Change runs" below. Cannot be used with `--pair`. |
 
-Output: the run report as one JSON line. Files: `run.json`, `ledger/`, `rows/`, `report.json`, `stats/<match.id>.json`, and `events/<match.id>.jsonl` in the run folder.
+Output: the run report as one JSON line. Files: `run.json`, `target.json`, `ledger/`, `rows/`, `report.json`, `stats/<match.id>.json`, and `events/<match.id>.jsonl` in the run folder.
 
 The matches play on `--jobs` threads of one process. The fixtures still to play, of every suite (and of both arms of a paired run), go into one list of work units, and each thread takes the next unit when it finishes one, so no thread waits for a suite to end. `calib.wall_ms` gives each suite the time from the start of its first unit to the end of its last; suites overlap, and `total` is the whole list's time. `calib.runner` is `threads`.
 
@@ -305,7 +306,7 @@ Every match is checked while it plays by the running rule checker: the tick rule
 
 The three suites:
 
-- `equal`: clubs of the same generated strength. The run checks goals, shots, and possession, and the eleven bands of version 2 of `realism-bands.json`.
+- `equal`: clubs of the same generated strength. The run checks goals, shots, and possession, and every other band `realism-bands.json` gives the equal suite.
 - `strength`: one club of each match has every attribute raised by the bands' boost. The run checks that the stronger club wins more than half its matches.
 - `formations`: every pairing of the formations in `tactics.json`, a formation against itself included. Ten formations give 55 pairings, and each pairing plays `--matches` matches with the clubs of the equal suite, its first formation at home in every other match. The run checks goals per match, the share of matches with 10 or more goals, and the share of goalless matches for each pairing. `calib.formations` holds the figures of every pairing, and each of its band checks carries a `pairing` such as `4-3-3 v 4-4-2`.
 
@@ -313,11 +314,11 @@ The three suites:
 
 With the defaults, `--suite all` plays 57,000 matches: about 74 minutes on a 16-core machine. `--suite equal` plays 1,000 matches in about 80 seconds.
 
-A targeted run plays only what it selects. `--pairing` plays each named pairing's `--matches` matches, with the same fixture keys, engine seeds, clubs, and home sides as in a full run, so the figures of a targeted pairing or suite equal the figures of the same pairing or suite in a `--suite all` run on the same seed. `--band` narrows `--suite` to the suites that check the named bands: `goals_per_match`, `ten_plus_goals_share`, and `goalless_share` belong to `equal` and `formations`; `stronger_team_win_rate` to `strength`; `reduced_minus_full` and `full_over_control` to `red-card`; every other band to `equal`. Each suite's `wall_ms` check stays. `calib.selection` names the suites, pairings, and bands the run selected.
+A targeted run plays only what it selects. `--pairing` plays each named pairing's `--matches` matches, with the same fixture keys, engine seeds, clubs, and home sides as in a full run, so the figures of a targeted pairing or suite equal the figures of the same pairing or suite in a `--suite all` run on the same seed. `--band` narrows `--suite` to the suites that check the named bands, the `suites` of each band in `realism-bands.json`. In the shipped file, `goals_per_match`, `ten_plus_goals_share`, and `goalless_share` belong to `equal` and `formations`; `stronger_team_win_rate` to `strength`; `reduced_minus_full` and `full_over_control` to `red-card`; every other band to `equal`. Each suite's `wall_ms` check stays. `calib.selection` names the suites, pairings, and bands the run selected.
 
 Every fixture has a key: a hash of what the fixture is, made by the fixture scheme `fixture-key-1`. The key covers the scenario (`equal`, the strength suite's boosted side, `formations`, or the red-card arm), the world (the generated league's seed, or the default clubs and `--seed` in the red-card suite), the two clubs with the home club first, both formations by name, and a repeat number. The engine seed is stored beside the key: it comes from the same hash, except in the red-card suite, which keeps the seeds from `--seed` onward. The match identifier is the key and the run's start time. So a run with a larger `--matches` keeps every earlier fixture's key and engine seed, and a new formation in `tactics.json` leaves the other pairings' matches alone. `fixtures.scheme` in the report names the scheme.
 
-The run folder holds the run's identity in `run.json`: the build (its commit and the SHA-256 of the program), the content, the fixtures hash, the flags set on the command line, the paired flag, the seed, the minutes, the strength boost of `realism-bands.json`, the random-number scheme, the fixture scheme, the measures version, and the bands file's version. The match count, the suites, the pairings, the bands judged, `--jobs`, and `--keep-events` are not part of it: they choose which work is done. The fixtures still to play are cut into work units of 8, or fewer when a suite has too few fixtures to give every thread a unit. When every match of a unit is played, its thread appends the unit's rows to its row file, then one line to `ledger/`. When the same command runs again into the same folder:
+The run folder holds the run's identity in `run.json`: the build (its commit and the SHA-256 of the program), the content, the fixtures hash, the flags set on the command line, the paired flag, the seed, the minutes, the strength boost of `realism-bands.json`, the random-number scheme, the fixture scheme, the measures version, and the band registry's version (3). The bands' ranges and smallest shifts are not part of it. The match count, the suites, the pairings, the bands judged, `--jobs`, and `--keep-events` are not part of it: they choose which work is done. The fixtures still to play are cut into work units of 8, or fewer when a suite has too few fixtures to give every thread a unit. When every match of a unit is played, its thread appends the unit's rows to its row file, then one line to `ledger/`. When the same command runs again into the same folder:
 
 - With the same identity, the run resumes: it plays only the fixtures the ledger does not hold, and standard error says `resuming run <run.id>: <done> of <total> fixtures done, <left> to play`. A unit cut off mid-way plays again; a finished unit never does. A larger `--matches` grows the run the same way.
 - With another identity, the old run's files move to `superseded/<old run.id>/`, a new run starts, and standard error names each part that differs, for example `minutes 3 -> 4` or `content <old> -> <new>`. Nothing is resumed.
@@ -340,7 +341,37 @@ A paired run writes each arm to its own folder: `arms/off/rows/`, `arms/off/stat
 
 A flag name that `tuning.json` does not declare, a state other than `on` or `off`, a `--pair` flag also given with `--flag`, an unknown pairing or band, a `--pairing` without the formations suite, and a `--band` that no selected suite checks are refused with exit code 1 before any match is played. Each message lists the valid names.
 
-Exit codes: 0 when every band passes and the dark-path counters (`darkpath.change_never_applied`, `darkpath.match_without_stats`, `darkpath.match_panicked`) are zero; 1; 2 otherwise. For a paired run: 0 when both arms have no missing row, no panicked match, no change left unapplied, and no rule violation; 1; 2 otherwise. The verdict does not change the exit code.
+Exit codes: 0 when every band passes and the dark-path counters (`darkpath.change_never_applied`, `darkpath.match_without_stats`, `darkpath.match_panicked`) are zero; 1; 2 otherwise. For a paired run: 0 when both arms have no missing row, no panicked match, no change left unapplied, and no rule violation; 1; 2 otherwise. The verdict does not change the exit code. For a change run: 0 when the joint verdict is `pass`; 1; 2 when it is `fail` or `not sure`.
+
+### Change runs
+
+`--base REV` makes a change run: it compares this build with the old engine of `REV`, a branch, tag, or commit of the repository, which is built once and cached with its results (`calib.base`). Run it from a git checkout of the repository. Both engines play the same fixtures, so each band's change is measured on pairs of matches.
+
+```bash
+engine-cli calibrate --suite equal --seed 42 --matches 1000 --base main --out runs/change-42
+```
+
+The run plays a pilot of 200 matches in each suite unit (each suite, each formation pairing, each red-card arm), or `--matches` when that is fewer. From the pilot's spread it sets each suite's target: the matches that give every band of the suite 80 percent power to see the band's smallest shift, at most `--matches`. Standard error says, for example, `pilot of 200 matches judged; growing to the power target: equal 640`, and the run plays the rest in the same command. The target is kept in `target.json` in the run folder, so a stopped change run resumes to it.
+
+Each band's change is the new engine's value less the old engine's, over the fixtures both engines finished. The test is a paired max-t bootstrap: 1999 resamples of the pairs within each suite, formation pairing, and red-card arm; in each resample, every band's change is divided by that resample's own standard error, and the largest of these is kept. The threshold `c` is the resample value that leaves 3 percent of them above it, and never less than 2.1701. Over every band at once, an engine that did not change fails at most 3 percent of change runs. A band has power when `(c + 0.8416) × se` is at most its smallest shift, with `se` the larger of the paired error and the error the two engines' values would have apart.
+
+Each band gets one word:
+
+- `fail`: the new value is outside the band's range, or the change is more than `c` errors from 0.
+- `pass`: the new value is inside the range, the change is within `c` errors, and the band has power.
+- `not sure`: the new value is inside the range and the change is within `c` errors, but the band lacks power. The table says about how many matches per suite would give it power.
+
+The joint verdict is `fail` when any band fails, or when a match panicked, a fixture has no result, a change was never applied, a worker failed, or the running rule checker found a violation. It is `pass` when every band passes, and `not sure` otherwise. Standard error prints the table, with the columns `band`, `suite`, `pairing`, `value`, `old`, `change`, `se`, `power`, and the word, then `joint verdict: <word> (max-t threshold <c> over 1999 resamples, 3 percent false-alarm limit, <n> paired matches)` and each guard that failed it. The run then checks the sensitivity rules its change touched and prints `rules stage: <n> touched sensitivity rules checked at <levels> levels, <failed> failed`; no such rule is declared yet, so it checks none.
+
+A run without `--base` prints a verdict table too: each band's value, its range, and `pass` or `fail`.
+
+Run a finished run's command again into its folder to judge it again: nothing plays, and standard error says `judged again from <n> stored rows; 0 matches played`. When `realism-bands.json` changed since the run was last judged, the next line names each band whose measure, suites, range, or smallest shift changed, and each band added or removed, for example `bands changed since the last judgement: goals_per_match, corners_per_team (new)`. The ranges and shifts are not part of the run's identity, so a changed band never discards the run.
+
+The report of a change run holds `calib.verdicts` (one row per band, pairing, and arm, with `word`, `value`, `base_value`, `diff`, `se`, `smallest_shift`, `power`, and `needed`), `calib.joint` (`word`, `critical`, `resamples`, `false_alarm`, `pairs`, and `guards`), `calib.power` (each suite's `pilot`, `target`, `cap`, and whether every band `reached` power), and `calib.rules` (`checked`, `levels`, `failed`). Every run's report holds `calib.registry` (the registry's `version` and `digest`, and `migrated_from` when the file was of version 2) and `calib.stages`. The report's `schema.version` is `2`.
+
+### Stage costs
+
+Every run ends with a table on standard error of the time and memory of each stage: `play`, `checks` (the running rule checker), `commentary`, `writing` (making the rows, ledger lines, and records), `disk` (writing them out), `judge` (folding the rows and judging the bands), and `total`. Time is thread time summed over the threads, so a stage on many threads can take longer than the run. The checker runs inside each match, so every 16th call is timed, and its time is scaled and moved from `play` to `checks`. A stage's memory is the largest heap growth of one thread while it was in the stage; for `total` it is the process's peak working set. `calib.stages` in the report holds the same figures, as `ms` and `peak_mb` by stage. The figures describe the run and never change a result.
 
 ## gate
 

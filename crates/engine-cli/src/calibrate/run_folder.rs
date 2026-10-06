@@ -41,8 +41,12 @@ pub fn unit_size(remaining: usize, shards: u32) -> usize {
 }
 /// Where a run with another identity moves the old run's files.
 pub const SUPERSEDED: &str = "superseded";
+/// The file that holds a run's match target and the registry it was last judged with.
+pub const TARGET_FILE: &str = "target.json";
+/// The version of [`Target`] this program writes and reads.
+pub const TARGET_VERSION: u32 = 1;
 /// The files and folders a run owns in its folder.
-const OWNED: [&str; 7] = [
+const OWNED: [&str; 8] = [
     RUN_FILE,
     "ledger",
     "rows",
@@ -50,6 +54,7 @@ const OWNED: [&str; 7] = [
     "events",
     "arms",
     "report.json",
+    TARGET_FILE,
 ];
 
 /// What makes a run's results what they are.
@@ -269,6 +274,50 @@ pub fn move_superseded(dir: &Path, old_run_id: &str) -> anyhow::Result<PathBuf> 
     Ok(to)
 }
 
+/// `target.json`: how many matches each suite plays (per pairing, per arm), and what the
+/// run was last judged with. It is not part of the identity: a changed range or shift is
+/// judged again from the stored rows, and a resumed change run plays to the same target.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Target {
+    pub version: u32,
+    /// `true` for a change run, whose target comes from its pilot's power.
+    pub change: bool,
+    /// Matches per suite unit, by suite code.
+    pub target: BTreeMap<String, u32>,
+    /// A change run: the pilot's matches per suite unit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pilot: Option<u32>,
+    /// `--matches`: a change run's cap.
+    pub cap: u32,
+    /// The band registry's digest at the last judgement.
+    pub registry: String,
+    /// Each band's digest at the last judgement, by band.
+    pub bands: BTreeMap<String, String>,
+}
+
+/// The target of the run in `dir`, or `None` when it has none or it cannot be read (a
+/// change run then plays its pilot again, which finds its matches done).
+pub fn read_target(dir: &Path) -> Option<Target> {
+    let text = fs::read_to_string(dir.join(TARGET_FILE)).ok()?;
+    let target: Target = serde_json::from_str(&text).ok()?;
+    (target.version == TARGET_VERSION).then_some(target)
+}
+
+/// Writes `target.json` whole, through a partial file and a rename.
+pub fn write_target(dir: &Path, target: &Target) -> anyhow::Result<()> {
+    let path = dir.join(TARGET_FILE);
+    let partial = dir.join(format!("{TARGET_FILE}.partial"));
+    fs::write(&partial, serde_json::to_vec_pretty(target)?)
+        .and_then(|()| fs::rename(&partial, &path))
+        .with_context(|| format!("cannot write {}", path.display()))
+}
+
+/// `true` when `dir` holds a run of `identity`: the next run into it resumes.
+pub fn holds(dir: &Path, identity: &RunIdentity) -> bool {
+    read_run_file(&dir.join(RUN_FILE)).is_ok_and(|f| f.identity == *identity)
+}
+
 /// One finished fixture of a ledger line.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -388,8 +437,12 @@ impl LedgerWriter {
 
     /// Appends one finished unit as one line and syncs it to disk.
     pub fn append(&mut self, unit: &UnitLine) -> anyhow::Result<()> {
-        let mut line = serde_json::to_vec(unit)?;
+        let mut line = {
+            let _writing = super::stages::enter(super::stages::Stage::Writing);
+            serde_json::to_vec(unit)?
+        };
         line.push(b'\n');
+        let _disk = super::stages::enter(super::stages::Stage::Disk);
         self.file.write_all(&line)?;
         self.file.sync_data()?;
         Ok(())

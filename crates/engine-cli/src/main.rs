@@ -38,6 +38,10 @@ use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id};
 use engine::observe::{FailureRecord, emit_line, machine_hash, unix_millis};
 use tracing_subscriber::EnvFilter;
 
+/// The system allocator, counting each thread's heap for calibrate's stage costs.
+#[global_allocator]
+static ALLOCATOR: calibrate::stages::CountingAlloc = calibrate::stages::CountingAlloc;
+
 fn main() {
     // A usage error exits 1, like any other run error: exit 2 is only a verdict (frames
     // differ, builds differ, hashes differ, a rule broken). `--help` and `--version` exit 0.

@@ -664,9 +664,9 @@ fn band_result_holds_every_band(entry: &golden::LedgerEntry, index: usize) {
         assert_eq!(s["matches"], want, "{suite}");
         assert_eq!(s["recorded"], want, "{suite}");
     }
-    // Each band of the content file has a verdict. Three bands report under other names:
-    // possession as the home and away shares, the stronger team as its win rate, and the
-    // wall time per sample as `wall_ms`.
+    // Each band of the registry that the three suites of a band run judge has a verdict,
+    // under its own name, and each suite's time budget has one as `wall_ms`. The red-card
+    // bands belong to the red-card suite, which a band run does not play.
     let judged: Vec<&str> = report["calib.bands"]
         .as_array()
         .unwrap()
@@ -674,24 +674,29 @@ fn band_result_holds_every_band(entry: &golden::LedgerEntry, index: usize) {
         .filter(|b| b["pass"].is_boolean())
         .map(|b| b["band"].as_str().unwrap())
         .collect();
-    let bands = read("content/realism-bands.json");
-    let names: Vec<&String> = bands
-        .as_object()
-        .unwrap()
-        .keys()
-        .filter(|k| !["schema_version", "sample_size"].contains(&k.as_str()))
+    let registry = read("content/realism-bands.json");
+    let bands = registry["bands"].as_array().unwrap();
+    assert_eq!(bands.len(), 18, "the registry holds 18 bands");
+    let played = ["equal", "strength", "formations"];
+    let names: Vec<&str> = bands
+        .iter()
+        .filter(|b| {
+            b["suites"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|s| played.contains(&s.as_str().unwrap()))
+        })
+        .map(|b| b["band"].as_str().unwrap())
+        .chain(["wall_ms"])
         .collect();
-    assert_eq!(names.len(), 16, "the content file holds 16 bands");
-    for name in names {
-        let reported: &[&str] = match name.as_str() {
-            "possession_pct" => &["possession_home_pct", "possession_away_pct"],
-            "stronger_team" => &["stronger_team_win_rate"],
-            "wall_minutes_per_sample" => &["wall_ms"],
-            other => &[other][..],
-        };
-        for band in reported {
-            assert!(judged.contains(band), "no verdict for band {name} ({band})");
-        }
+    assert_eq!(
+        names.len(),
+        17,
+        "16 bands of the three suites and the time budget"
+    );
+    for band in names {
+        assert!(judged.contains(&band), "no verdict for band {band}");
     }
 }
 

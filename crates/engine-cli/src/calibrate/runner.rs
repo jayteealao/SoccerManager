@@ -21,14 +21,16 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Instant;
 
+use anyhow::Context;
 use engine::data::TeamFile;
-use engine::observe::write_stats_at;
+use engine::observe::to_json;
 use engine::{Commentary, Content, EngineError};
 
 use super::RunCtx;
 use super::fixtures::{self, Keyed, Leagues};
 use super::rows::{Outcome, Row, RowsWriter, reason};
 use super::run_folder::{self, Done, LedgerWriter, UnitLine};
+use super::stages::{self, Stage};
 use super::worker::{self, Failure, MatchInput};
 use crate::cli::{InjectFailure, KeepEvents};
 use crate::matchday::record::panic_message;
@@ -436,7 +438,7 @@ fn play_unit(
         };
         row.reasons = reasons;
         if let Some(stats) = stats {
-            write_stats_at(&stats_dir, &stats)?;
+            write_stats(&stats_dir, &stats)?;
         }
         rows.push(row);
         dones.push(Done {
@@ -447,6 +449,20 @@ fn play_unit(
         });
     }
     Ok((rows, dones))
+}
+
+/// Writes a match's statistics file: the record's text is the writing stage, the file the
+/// disk stage.
+fn write_stats(dir: &Path, stats: &engine::observe::MatchStats) -> anyhow::Result<()> {
+    let line = {
+        let _writing = stages::enter(Stage::Writing);
+        to_json(stats)?
+    };
+    let _disk = stages::enter(Stage::Disk);
+    std::fs::create_dir_all(dir)?;
+    let path = dir.join(format!("{}.json", stats.match_id));
+    std::fs::write(&path, format!("{line}\n"))
+        .with_context(|| format!("cannot write {}", path.display()))
 }
 
 /// The recorder, also after a thread panicked holding it: its lists stay sorted.

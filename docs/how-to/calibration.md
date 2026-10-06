@@ -99,7 +99,31 @@ A targeted run is an inner loop. Before a change is accepted, run the full gate:
    target/release/engine-cli calibrate --suite formations --seed 42 --matches 1000 --out runs/gate-formations-42
    ```
 
-3. Read `calib.pass` and the failing bands in each report.
+3. Read `calib.pass` and the failing bands in each report, or the verdict table at the end of standard error.
+
+## Judge a change against the old engine
+
+A baseline diff marks a change as `noise` or `change`, but it does not say whether the run had enough matches to see a change that matters. A change run does: it plays this build and the old engine of a revision on the same fixtures, sizes the run for each band, and judges every band `pass`, `fail`, or `not sure`. Run it from your git checkout:
+
+```bash
+target/release/engine-cli calibrate --suite equal --seed 42 --matches 2000 --base main --out runs/change-42
+```
+
+The old engine is built once and its results are cached, so the next change run against the same revision plays only the new engine's matches. The run plays a pilot of 200 matches, then grows each suite to the matches that give every band the power to see its smallest shift, at most `--matches`.
+
+Read the table at the end of standard error:
+
+- `pass`: the band is in its range, and the run could have seen a change of the band's smallest shift but found none.
+- `fail`: the band left its range, or it moved: the change is too large to be chance. A move is a fail even inside the range; if the move was meant, widen the band or accept the change by review.
+- `not sure`: the band is in its range and did not move, but the run had too few matches to tell. The row says about how many matches per suite would give it power: run again into the same folder with that `--matches`.
+
+The last line is the joint verdict. It passes only when every band passes and no match panicked, lost its result, or broke a rule. The exit code is 0 for a joint `pass` and 2 for `fail` or `not sure`. Over every band at once, an engine that did not change fails at most 3 percent of change runs.
+
+To judge a finished run again, for example after editing a band in `realism-bands.json`, run the same command into the same folder. Nothing plays; the run says `judged again from <n> stored rows; 0 matches played` and names the bands that changed since it was last judged.
+
+## Read the stage table
+
+Every run ends with the time and memory of each stage: `play`, `checks`, `commentary`, `writing`, `disk`, `judge`, and `total`. Use it to find where a slow run spends its time before you optimise. The times are thread time summed over the threads, so on 16 threads `play` can read sixteen times the run's wall time. The `checks` time is estimated from every 16th call of the rule checker.
 
 ## Resume or grow a run
 

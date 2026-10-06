@@ -801,7 +801,10 @@ pub struct CalibrateOpts {
     #[arg(
         long,
         default_value_t = 1000,
-        long_help = "Matches in each suite and in each formation pairing."
+        long_help = "Matches in each suite and in each formation pairing.\n\n\
+                     In a change run (--base) it is the cap: the run plays a pilot,\n\
+                     sizes each suite for the power to see each band's smallest\n\
+                     shift, and plays at most this many."
     )]
     pub matches: u32,
     /// Minutes of play per match.
@@ -842,7 +845,9 @@ pub struct CalibrateOpts {
         long = "band",
         value_name = "NAME",
         long_help = "Judge and show only this realism band; repeatable.\n\n\
-                     The run plays only the suites that check the band."
+                     The bands are those of the band registry, realism-bands.json\n\
+                     in the content folder; an unknown name is refused with the\n\
+                     list. The run plays only the suites that check the band."
     )]
     pub bands: Vec<String>,
     /// Compare with an earlier run report.
@@ -925,9 +930,24 @@ pub struct CalibrateOpts {
     /// Stop after this many work units, leaving the next one half played; a test seam.
     #[arg(long, hide = true, value_name = "K")]
     pub stop_after_units: Option<u32>,
-    /// The old engine of a change run: a revision of this repository, built once.
-    #[arg(long, hide = true, value_name = "REV", conflicts_with_all = ["pair", "base_binary"])]
+    /// Judge a change against the old engine of REV.
+    #[arg(
+        long,
+        value_name = "REV",
+        conflicts_with_all = ["pair", "base_binary"],
+        long_help = "Make it a change run: compare this build with the old engine\n\
+                     of REV (a branch, tag or commit of this repository), built once\n\
+                     and cached with its results.\n\n\
+                     Both engines play the same fixtures. A pilot sizes each suite\n\
+                     for 80 percent power to see each band's smallest shift, the\n\
+                     run grows to it (at most --matches), and each band reports\n\
+                     pass, fail or not sure, with one joint verdict. Needs a git\n\
+                     checkout of this repository as the working folder."
+    )]
     pub base: Option<String>,
+    /// A change run's pilot, in matches per suite unit; a test seam (default 200).
+    #[arg(long, hide = true, value_name = "N", default_value_t = 200)]
+    pub pilot: u32,
     /// The old engine of a change run: a ready executable, played on the run's content.
     #[arg(long, hide = true, value_name = "EXE", conflicts_with = "pair")]
     pub base_binary: Option<PathBuf>,

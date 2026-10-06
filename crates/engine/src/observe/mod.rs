@@ -50,6 +50,10 @@ pub trait Record: Serialize {
     fn kind(&self) -> &'static str;
     fn operation(&self) -> &'static str;
     fn owner_id(&self) -> &str;
+    /// The record's `schema.version`: [`SCHEMA_VERSION`] unless a kind has moved on.
+    fn schema_version(&self) -> &'static str {
+        SCHEMA_VERSION
+    }
 }
 
 /// One club as `match-stats` names it.
@@ -525,7 +529,7 @@ impl Record for FailureRecord {
 pub fn to_json<R: Record>(record: &R) -> Result<String, EngineError> {
     let mut map = serde_json::Map::new();
     map.insert("record.kind".into(), record.kind().into());
-    map.insert("schema.version".into(), SCHEMA_VERSION.into());
+    map.insert("schema.version".into(), record.schema_version().into());
     map.insert("owner.id".into(), record.owner_id().into());
     map.insert("service".into(), SERVICE.into());
     map.insert("version".into(), crate::version().into());
