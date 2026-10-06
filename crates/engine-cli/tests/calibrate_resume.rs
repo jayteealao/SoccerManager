@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Output;
 
-use common::{RecordSchemas, bin, edited_content, record, temp};
+use common::{RecordSchemas, bin, edited_content, read_rows, record, temp};
 use serde_json::{Value, json};
 
 /// A calibrate run into `run` with `args` after the subcommand, on `content` when given.
@@ -69,17 +69,16 @@ fn ledger(run: &Path) -> Vec<(String, u64, String)> {
     out
 }
 
-/// Every statistics record of the run folder by match id, with its timing removed.
-fn stats(run: &Path) -> BTreeMap<String, Value> {
-    std::fs::read_dir(run.join("stats"))
-        .unwrap()
-        .map(|e| {
-            let mut s = record(&std::fs::read_to_string(e.unwrap().path()).unwrap());
-            let map = s.as_object_mut().unwrap();
-            for key in ["ts", "duration_ms", "engine.ticks_per_s"] {
-                map.remove(key);
-            }
-            (map["match.id"].as_str().unwrap().to_string(), s)
+/// Every compact row of the run folder by fixture key, with its wall time and record
+/// reasons removed: the match's result.
+fn rows(run: &Path) -> BTreeMap<String, String> {
+    read_rows(run)
+        .into_iter()
+        .map(|r| {
+            let mut columns = r.columns.clone();
+            columns.remove("duration_us");
+            columns.remove("record.reasons");
+            (r.key(), format!("{columns:?}"))
         })
         .collect()
 }
@@ -105,9 +104,9 @@ fn a_bigger_run_in_the_same_folder_keeps_every_earlier_match_and_plays_only_the_
         &json!({"total": 114, "finished_before": 0, "played": 114})
     );
     let before_ledger = ledger(&run);
-    let before_stats = stats(&run);
+    let before_rows = rows(&run);
     assert_eq!(before_ledger.len(), 114);
-    assert_eq!(before_stats.len(), 114);
+    assert_eq!(before_rows.len(), 114);
 
     let out = calibrate(
         &data,
@@ -128,10 +127,10 @@ fn a_bigger_run_in_the_same_folder_keeps_every_earlier_match_and_plays_only_the_
     for entry in &before_ledger {
         assert!(after_ledger.contains(entry), "{entry:?} changed");
     }
-    let after_stats = stats(&run);
-    assert_eq!(after_stats.len(), 228);
-    for (id, record) in &before_stats {
-        assert_eq!(after_stats.get(id), Some(record), "{id} changed");
+    let after_rows = rows(&run);
+    assert_eq!(after_rows.len(), 228);
+    for (key, row) in &before_rows {
+        assert_eq!(after_rows.get(key), Some(row), "{key} changed");
     }
     assert_eq!(big["fixtures.scheme"], "fixture-key-1");
     let _ = std::fs::remove_dir_all(&data);
@@ -163,9 +162,10 @@ fn a_stopped_run_resumes_to_the_result_of_an_uninterrupted_run_with_no_match_twi
     assert_eq!(stopped.status.code(), Some(1), "{}", stderr(&stopped));
     assert!(stderr(&stopped).contains("stopped after 1 work units"));
     assert!(!run.join("report.json").exists());
-    // One unit of 8 finished; half the next unit has statistics but no ledger line.
+    // One unit of 8 finished; half the next unit played but left no rows block and no
+    // ledger line.
     assert_eq!(ledger(&run).len(), 8);
-    assert_eq!(stats(&run).len(), 12);
+    assert_eq!(rows(&run).len(), 8);
 
     let out = calibrate(&data, None, &run, &args);
     let resumed = finished(&out, &run);
@@ -188,7 +188,7 @@ fn a_stopped_run_resumes_to_the_result_of_an_uninterrupted_run_with_no_match_twi
     keys.dedup();
     assert_eq!(keys.len(), 20, "a key twice or one missing");
     assert_eq!(entries.len(), 20);
-    assert_eq!(stats(&run).len(), 20);
+    assert_eq!(rows(&run).len(), 20);
     let _ = std::fs::remove_dir_all(&data);
 }
 
@@ -227,7 +227,7 @@ fn a_folder_of_another_identity_starts_a_new_run_and_names_what_differs() {
     let moved = run.join("superseded").join(&old_id);
     assert!(moved.join("run.json").is_file());
     assert!(moved.join("report.json").is_file());
-    assert_eq!(std::fs::read_dir(moved.join("stats")).unwrap().count(), 2);
+    assert_eq!(read_rows(&moved).len(), 2);
 
     // Other minutes.
     let out = calibrate(

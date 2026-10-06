@@ -807,10 +807,11 @@ pub struct CalibrateOpts {
     /// Minutes of play per match.
     #[arg(long, default_value_t = 90)]
     pub minutes: u32,
-    /// Worker processes; default one per core.
+    /// Matches played at once; default one per core.
     #[arg(
         long,
-        long_help = "Worker processes; default the number of logical cores."
+        long_help = "Matches played at once, each on its own thread; default the number\n\
+                     of logical cores."
     )]
     pub jobs: Option<u32>,
     /// Suites to run.
@@ -870,10 +871,13 @@ pub struct CalibrateOpts {
         value_enum,
         default_value = "outliers",
         hide_possible_values = true,
-        long_help = "Event files to keep at the end of the run.\n\n\
-                     Values: outliers, all. outliers keeps the files of failed,\n\
-                     slow, and out-of-band matches and of dark-path hits; all\n\
-                     keeps every file."
+        long_help = "Matches whose statistics and event files are written.\n\n\
+                     Values: outliers, all. outliers (default) keeps the files of\n\
+                     about 1 in 16 matches, chosen by fixture key, and of every\n\
+                     failed, panicked or violating match, dark-path hit, and match\n\
+                     with a band measure outside the 1st to 99th percentile of its\n\
+                     suite so far; all keeps every match's files. Every match has\n\
+                     its compact row either way."
     )]
     pub keep_events: KeepEvents,
     /// Set a tuning-file feature flag; repeatable.
@@ -898,6 +902,9 @@ pub struct CalibrateOpts {
     /// Run as a worker of a calibration run (set by the parent process).
     #[arg(long, hide = true)]
     pub worker: bool,
+    /// Play in worker processes of this binary, the old path, instead of on threads.
+    #[arg(long, hide = true, conflicts_with = "worker")]
+    pub worker_processes: bool,
     #[arg(long, hide = true, default_value_t = 0)]
     pub shard: u32,
     #[arg(long, hide = true, default_value_t = 1)]
@@ -926,11 +933,13 @@ pub struct CalibrateOpts {
     pub base_binary: Option<PathBuf>,
 }
 
-/// The failure `calibrate --inject-failure` makes: the first match of the first worker, the
-/// first worker before it plays, or the build of the old engine (`--base`).
+/// The failure `calibrate --inject-failure` makes: an error in the first match of the work
+/// list, a panic in it, the first worker process before it plays (`--worker-processes`), or
+/// the build of the old engine (`--base`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum InjectFailure {
     Match,
+    Panic,
     Worker,
     BaseBuild,
 }
@@ -940,6 +949,7 @@ impl InjectFailure {
     pub fn code(self) -> &'static str {
         match self {
             Self::Match => "match",
+            Self::Panic => "panic",
             Self::Worker => "worker",
             Self::BaseBuild => "base-build",
         }

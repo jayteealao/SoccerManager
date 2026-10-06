@@ -105,7 +105,7 @@ fn a_targeted_pairing_and_suite_play_only_their_selection_and_agree_with_a_full_
         &pair_dir,
     );
     // That pairing only, and 2 matches played.
-    assert_eq!(count(&pair_dir.join("stats")), 2);
+    assert_eq!(pair["calib.rows"]["rows"], 2);
     let entries = pair["calib.formations"].as_array().unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0]["pairing"], json!(["4-4-2", "4-4-1-1"]));
@@ -164,7 +164,7 @@ fn a_band_narrows_the_run_to_the_suites_that_check_it() {
     );
     let suites: Vec<&String> = report["calib.suites"].as_object().unwrap().keys().collect();
     assert_eq!(suites, ["strength"]);
-    assert_eq!(count(&run.join("stats")), 2);
+    assert_eq!(report["calib.rows"]["rows"], 2);
     let bands: Vec<&str> = report["calib.bands"]
         .as_array()
         .unwrap()

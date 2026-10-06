@@ -192,25 +192,17 @@ impl MatchFigures {
     /// The figures of a match from its summary and its managers.
     pub fn new(s: &Summary, managers: [crate::Manager; 2]) -> Self {
         let possession: u32 = s.possession_ticks[0] + s.possession_ticks[1];
-        let share = |part: u32, whole: u32| {
-            if whole == 0 {
-                0.0
-            } else {
-                round_to(100.0 * f64::from(part) / f64::from(whole), 1)
-            }
-        };
         Self {
             goals: s.goals,
             shots_on_target: s.shots_on_target,
-            xg: s.xg.map(|x| round_to(x, 2)),
+            xg: s.xg.map(round_xg),
             passes: s.passes,
             passes_completed: s.passes_completed,
-            pass_accuracy_pct: [0, 1].map(|t| share(s.passes_completed[t], s.passes[t])),
+            pass_accuracy_pct: [0, 1].map(|t| share_pct(s.passes_completed[t], s.passes[t])),
             clearances: s.clearances,
             restart_kicks: s.restart_kicks,
-            // 50 ticks a second.
-            ball_in_play_s: (s.live_ticks + 25) / 50,
-            possession_pct: [0, 1].map(|t| share(s.possession_ticks[t], possession)),
+            ball_in_play_s: ball_in_play_s(s.live_ticks),
+            possession_pct: [0, 1].map(|t| share_pct(s.possession_ticks[t], possession)),
             manager_kind: managers.map(|m| {
                 match m {
                     crate::Manager::Ai => "ai",
@@ -223,6 +215,28 @@ impl MatchFigures {
             error_retriable: None,
         }
     }
+}
+
+/// `part` over `whole` as a percentage with one decimal, as the per-match figures show it;
+/// 0 when `whole` is 0. Calibration rebuilds a match's figures from its unrounded counts
+/// with this function, so both give the same value.
+pub fn share_pct(part: u32, whole: u32) -> f64 {
+    if whole == 0 {
+        0.0
+    } else {
+        round_to(100.0 * f64::from(part) / f64::from(whole), 1)
+    }
+}
+
+/// Expected goals as the per-match figures show them: two decimals.
+pub fn round_xg(xg: f64) -> f64 {
+    round_to(xg, 2)
+}
+
+/// Whole seconds with the ball in play from ticks with the ball in play: 50 ticks a second,
+/// rounded to the nearest second.
+pub fn ball_in_play_s(live_ticks: u32) -> u32 {
+    (live_ticks + 25) / 50
 }
 
 /// `x` rounded to `places` decimals.

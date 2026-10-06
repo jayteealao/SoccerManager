@@ -399,8 +399,9 @@ fn a_failed_bench_prints_one_error_record() {
         .unwrap_or_else(|e| panic!("{e}\n{rec}"));
 }
 
-/// A two-match calibration run of the equal suite on one worker, with a failure injected.
-fn calibrate_with(inject: &str) -> (std::process::Output, PathBuf, PathBuf) {
+/// A two-match calibration run of the equal suite on one thread or worker, with a failure
+/// injected.
+fn calibrate_with(inject: &str, extra: &[&str]) -> (std::process::Output, PathBuf, PathBuf) {
     let data = common::temp("engine-cli-inject", inject);
     let run = data.join("run");
     let out = common::bin(&data)
@@ -420,8 +421,9 @@ fn calibrate_with(inject: &str) -> (std::process::Output, PathBuf, PathBuf) {
             "all",
             "--inject-failure",
             inject,
-            "--out",
         ])
+        .args(extra)
+        .arg("--out")
         .arg(&run)
         .output()
         .unwrap();
@@ -431,7 +433,7 @@ fn calibrate_with(inject: &str) -> (std::process::Output, PathBuf, PathBuf) {
 #[test]
 fn a_failed_calibration_match_writes_an_error_record() {
     let schemas = RecordSchemas::load();
-    let (out, data, run) = calibrate_with("match");
+    let (out, data, run) = calibrate_with("match", &[]);
     let mut records = Vec::new();
     for entry in std::fs::read_dir(run.join("stats")).unwrap() {
         let text = std::fs::read_to_string(entry.unwrap().path()).unwrap();
@@ -480,7 +482,7 @@ fn a_failed_calibration_match_writes_an_error_record() {
 
 #[test]
 fn a_failed_calibration_worker_makes_the_report_an_error() {
-    let (out, data, run) = calibrate_with("worker");
+    let (out, data, run) = calibrate_with("worker", &["--worker-processes"]);
     let printed = record(&String::from_utf8_lossy(&out.stdout));
     let saved = record(&std::fs::read_to_string(run.join("report.json")).unwrap());
     let _ = std::fs::remove_dir_all(&data);
@@ -514,6 +516,8 @@ fn the_test_seams_stay_out_of_the_help() {
             "--run-millis",
             "--inject-failure",
             "--pairing-numbers",
+            "--worker-processes",
+            "--stop-after-units",
         ] {
             assert!(!stdout.contains(hidden), "calibrate {flag} shows {hidden}");
         }

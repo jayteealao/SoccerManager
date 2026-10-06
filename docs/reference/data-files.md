@@ -469,8 +469,10 @@ The engine writes these files to the data folder. The data folder is `SM_DATA_DI
 | `matches/<match.id>/snapshot.smsn` | `simulate`, `serve` | the newest snapshot of the match; `resume` and `serve --resume` read it |
 | `matches/<match.id>/matchday-bug-<fixture>.json` | `serve` | the bug report of a background match that failed; see below |
 | `runs/<run.id>/report.json` | `calibrate` | the run report, as the `run-report` record |
-| `runs/<run.id>/stats/<match.id>.json` | `calibrate` | the statistics record of each match in the run |
-| `runs/<run.id>/events/<match.id>.jsonl` | `calibrate` | the event rows of each match the run keeps |
+| `runs/<run.id>/rows/<session>-<thread>.rows` | `calibrate` | one compact row per match of the run; see "The row file" below |
+| `runs/<run.id>/stats/<match.id>.json` | `calibrate` | the statistics record of each recorded match: about 1 in 16 and every outlier, or every match with `--keep-events all` |
+| `runs/<run.id>/events/<match.id>.jsonl` | `calibrate` | the event rows, with commentary, of each recorded match that played to full time |
+| `calibrate/base/v2/<build id>/<content hash>/seed-<S>-minutes-<M>/` | `calibrate` with an old engine | the old engine's run folder: its rows are the cache of its results. `v1` folders, from before rows, are never read and can be deleted |
 
 A `match.id` is `<seed as 16 hexadecimal characters>-<start time in milliseconds>`.
 
@@ -485,6 +487,57 @@ The records are JSON objects with flat, dotted keys. Every record carries `recor
 | `run-report` | `run-report.schema.json` | `report.json` at the end of a calibration run, and the one line `bench` prints |
 
 The engine writes a record at each stoppage snapshot and at the end of the match. A match that stops early keeps every record up to the newest stoppage.
+
+### The row file
+
+A calibration run writes one compact row per match into `rows/` of its run folder (of each arm's folder in a paired run). Each thread of each session writes its own file, `<session>-<thread>.rows`. A row holds the match's unrounded counts, numerators and denominators, keyed by fixture; it holds no event and no commentary. All numbers are little-endian.
+
+The file starts with a header:
+
+| Bytes | Field |
+|---|---|
+| 6 | the magic `SMROWS` |
+| 4 | the format version: 1 |
+| 4 | the measures version (`run.identity.measures`) |
+| 4 | the number of columns |
+| per column | 1 byte name length, the name, 1 byte type: 1 is an 8-bit integer, 4 a 32-bit integer, 8 a 64-bit integer, 9 a 64-bit float |
+
+Blocks follow, one per finished work unit:
+
+| Bytes | Field |
+|---|---|
+| 1 + n | the suite code, length first |
+| 4 | the unit's place among its suite's units in the session |
+| 4 | the row count |
+| per column | the column's value for every row of the block, in row order |
+| 8 | the first 8 bytes of the SHA-256 of the block's bytes before them |
+
+The columns of format 1, in file order (a `.home` and `.away` pair is one column per team):
+
+| Column | Type | Holds |
+|---|---|---|
+| `fixture.key` | 64-bit | the fixture key; its 16 hexadecimal characters start the match identifier |
+| `engine.seed` | 64-bit | the seed the engine played the match with |
+| `outcome` | 8-bit | 0 played to full time, 1 the engine returned an error, 2 the match panicked |
+| `record.reasons` | 8-bit | why the match has a statistics and an event file, as bits: 1 the 1-in-16 sample (the key is a multiple of 16), 2 failed, panicked or a dark-path hit, 4 a validator violation, 8 a measure outside the 1st to 99th percentile of its suite so far, 16 `--keep-events all`; 0 for none |
+| `goals`, `shots`, `shots_on_target` | 32-bit pairs | counts |
+| `xg` | float pair | expected goals, unrounded |
+| `passes`, `passes_completed` | 32-bit pairs | open-play passes played and completed |
+| `possession_ticks` | 32-bit pair | open-play ticks credited to each team |
+| `live_ticks` | 32-bit | ticks with the ball in play |
+| `fouls`, `offsides`, `corners`, `throw_ins`, `goal_kicks`, `yellow`, `red` | 32-bit pairs | counts |
+| `injuries` | 32-bit | injuries, both teams |
+| `substitutions` | 32-bit pair | substitutions made |
+| `change_never_applied`, `change_expired_at_full_time` | 32-bit | the two change counters of the statistics record |
+| `validate.violations` | 32-bit | the validator's violations |
+| `ticks` | 32-bit | ticks played |
+| `duration_us` | 64-bit | the match's wall time in microseconds |
+
+A failed or panicked match has a row with its key, its seed, its outcome and zero counts.
+
+The statistics file rounds what the row keeps unrounded: `stats.xg` is `xg` to 2 decimals, `stats.pass_accuracy_pct` is `100 x passes_completed / passes` to 1 decimal (0 with no pass), `stats.possession_pct` is each team's `possession_ticks` over both teams' to 1 decimal, and `stats.ball_in_play_s` is `(live_ticks + 25) / 50`, rounded down. The bands read these rounded figures, rebuilt from the rows with the same functions, so a run's bands do not depend on which matches have a statistics file.
+
+A block is written and synced before its unit's ledger line. A row counts only when the ledger line of its key was written by the session in the file's name, with the same engine seed; the rows of a unit cut off before its ledger line are never read, and the unit plays again. Reading a file stops at a block cut off part-way or with a wrong checksum, which only a stopped run leaves at the end of a file. A file of another format version is refused by name. `calib.results_digest` hashes, for every arm in key order, each row's key and its columns except `record.reasons` and `duration_us`.
 
 ### The snapshot file
 

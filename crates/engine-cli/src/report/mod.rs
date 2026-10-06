@@ -333,6 +333,12 @@ impl RunBuilder {
         self.missing += 1;
     }
 
+    /// Sets the outlier count of `suite`: the one-process runner judges outliers when it
+    /// plays, by the rule of its full recording.
+    pub fn set_outliers(&mut self, suite: Suite, outliers: u32) {
+        self.suites.entry(suite).or_default().outliers = outliers;
+    }
+
     /// `true` for a failed match, a match with validator violations, a slow match, a
     /// dark-path hit, and a match with a possession or a team's shots outside its band.
     pub fn outlier(&self, s: &MatchStats) -> bool {
@@ -1064,12 +1070,21 @@ pub struct CalibrationReport {
     pub change_expired_at_full_time: u32,
     #[serde(rename = "darkpath.match_without_stats")]
     pub match_without_stats: u32,
+    /// Matches that panicked; the run caught each one and recorded it as failed.
+    #[serde(rename = "darkpath.match_panicked")]
+    pub match_panicked: u32,
     #[serde(rename = "validate.violations")]
     pub violations: usize,
     #[serde(rename = "events.files_written")]
     pub events_written: u32,
     #[serde(rename = "events.files_kept")]
     pub events_kept: u32,
+    /// `threads` for the one-process runner, `processes` for the old worker processes.
+    #[serde(rename = "calib.runner")]
+    pub runner: &'static str,
+    /// The compact rows of every arm; absent for the old worker processes.
+    #[serde(rename = "calib.rows", skip_serializing_if = "Option::is_none")]
+    pub rows: Option<RowsInfo>,
     #[serde(rename = "machine.hash")]
     pub machine_hash: String,
     #[serde(rename = "machine.cpu_model")]
@@ -1093,11 +1108,38 @@ pub struct CalibrationReport {
     #[serde(rename = "calib.units")]
     pub units: Units,
     /// SHA-256 over every match's statistics in key order, identifiers and timing left out.
+    /// The one-process runner hashes the compact rows' result columns instead.
     #[serde(rename = "calib.results_digest")]
     pub results_digest: String,
     /// The old engine's results on the same fixtures; absent without an old engine.
     #[serde(rename = "calib.base", skip_serializing_if = "Option::is_none")]
     pub base: Option<BaseReport>,
+}
+
+/// The compact rows of a run, over every arm: the row format, the row files, the rows the
+/// ledger counts, and the matches with a full recording, by reason. A match can have more
+/// than one reason.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct RowsInfo {
+    pub format: u32,
+    pub files: u32,
+    pub rows: u32,
+    pub recorded: Recorded,
+}
+
+/// Matches with a full recording (a statistics file and an event file), and why.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct Recorded {
+    pub matches: u32,
+    /// About 1 in 16, chosen by fixture key.
+    pub sample: u32,
+    /// Failed, panicked, or a dark-path hit.
+    pub error: u32,
+    pub violation: u32,
+    /// A measure outside the 1st to 99th percentile of its suite so far.
+    pub extreme: u32,
+    /// `--keep-events all`.
+    pub all: u32,
 }
 
 /// The fixtures of a run, counted over every arm and suite.
@@ -1192,6 +1234,8 @@ pub struct ArmReport {
     pub change_expired_at_full_time: u32,
     #[serde(rename = "darkpath.match_without_stats")]
     pub match_without_stats: u32,
+    #[serde(rename = "darkpath.match_panicked")]
+    pub match_panicked: u32,
     #[serde(rename = "validate.violations")]
     pub violations: usize,
     #[serde(rename = "calib.workers_failed")]

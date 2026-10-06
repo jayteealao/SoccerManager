@@ -67,6 +67,8 @@ fn calibrate(data: &Path, content: &Path, run: &Path, extra: &[&str]) -> std::pr
             "5",
             "--jobs",
             "2",
+            "--keep-events",
+            "all",
         ])
         .args(extra)
         .arg("--out")
@@ -249,6 +251,8 @@ fn a_single_state_run_plays_every_match_with_the_flag_on() {
             "2",
             "--suite",
             "equal",
+            "--keep-events",
+            "all",
             "--flag",
         ])
         .arg(format!("{FLAG}=on"))

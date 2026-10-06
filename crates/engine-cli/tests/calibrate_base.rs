@@ -55,6 +55,10 @@ fn a_second_change_run_takes_every_old_engine_result_from_the_cache() {
     );
     let base = &first["calib.base"];
     assert_eq!(base["source"], "binary");
+    // The cache holds the old engine's rows, in the rows format's folder.
+    let cache = data.join("calibrate").join("base");
+    assert!(cache.join("v2").is_dir(), "no v2 cache folder");
+    assert!(!cache.join("v1").exists(), "a v1 cache folder");
     assert_eq!(base["cache"]["hits"], 0);
     assert_eq!(base["cache"]["played"], 2);
     // The same engine on the same fixtures: the old engine's rows equal the run's.

@@ -24,12 +24,17 @@ pub const FIXTURE_SCHEME: &str = "fixture-key-1";
 
 /// A fixture's key: the first 8 bytes of the SHA-256 of what the fixture is, shown as 16
 /// hex characters.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FixtureKey(u64);
 
 impl FixtureKey {
     pub fn as_u64(self) -> u64 {
         self.0
+    }
+
+    /// The key whose 64 bits are `v`, as a row file stores it.
+    pub fn from_u64(v: u64) -> Self {
+        Self(v)
     }
 
     /// The key a 16-hex-character text names.

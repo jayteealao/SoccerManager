@@ -660,6 +660,30 @@
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
           },
+          "darkpath.match_panicked": {
+            "description": "Matches that panicked; the run caught each one, recorded it as failed, and went on.",
+            "type": "integer",
+            "minimum": 0
+          },
+          "calib.runner": {
+            "description": "threads for the one-process runner, processes for the old worker processes.",
+            "enum": ["threads", "processes"]
+          },
+          "calib.rows": {
+            "description": "The compact rows of every arm: the row format, the row files, the rows the ledger counts, and the matches with a full recording (statistics and event file), by reason; a match can have more than one reason.",
+            "type": "object",
+            "required": ["format", "files", "rows", "recorded"],
+            "properties": {
+              "format": { "type": "integer", "minimum": 1 },
+              "files": { "type": "integer", "minimum": 0 },
+              "rows": { "type": "integer", "minimum": 0 },
+              "recorded": {
+                "type": "object",
+                "required": ["matches", "sample", "error", "violation", "extreme", "all"],
+                "additionalProperties": { "type": "integer", "minimum": 0 }
+              }
+            }
+          },
           "calib.base": {
             "description": "The old engine of a change run: where it came from, its build and content, how many of its results came from the cache and how many it played, and its band rows on the run's fixtures.",
             "type": "object",

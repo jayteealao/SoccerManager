@@ -8,9 +8,10 @@
 //! count, the suites, the pairings, the bands judged, the workers, and the event files kept
 //! only choose which work is done, so they are not part of it.
 //!
-//! Each worker appends to its own ledger file, `ledger/<session>-<suite>-<shard>.jsonl`,
-//! after every match of a unit has its statistics file, and syncs the file. A unit cut off
-//! mid-way has no line, so it plays again; a trailing partial line is ignored.
+//! Each worker or thread appends to its own ledger file,
+//! `ledger/<session>-<suite>-<shard>.jsonl`, after every match of a unit has its result on
+//! disk, and syncs the file. A unit cut off mid-way has no line, so it plays again; a
+//! trailing partial line is ignored.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -41,7 +42,15 @@ pub fn unit_size(remaining: usize, shards: u32) -> usize {
 /// Where a run with another identity moves the old run's files.
 pub const SUPERSEDED: &str = "superseded";
 /// The files and folders a run owns in its folder.
-const OWNED: [&str; 6] = [RUN_FILE, "ledger", "stats", "events", "arms", "report.json"];
+const OWNED: [&str; 7] = [
+    RUN_FILE,
+    "ledger",
+    "rows",
+    "stats",
+    "events",
+    "arms",
+    "report.json",
+];
 
 /// What makes a run's results what they are.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -270,6 +279,10 @@ pub struct Done {
     /// The match identifier: the name of its statistics file.
     #[serde(rename = "match")]
     pub match_id: String,
+    /// The session that finished it, from the ledger file's name; not written in the line.
+    /// Only that session's row of the fixture counts.
+    #[serde(skip)]
+    pub session: String,
 }
 
 /// One ledger line: a finished work unit.
@@ -320,7 +333,9 @@ pub fn finished(dir: &Path, skip: Option<&str>) -> anyhow::Result<BTreeMap<Fixtu
                     file.display()
                 )
             })?;
-            for done in unit.fixtures {
+            let session = session_of(&file, &unit.suite);
+            for mut done in unit.fixtures {
+                done.session.clone_from(&session);
                 if let Some(first) = out.insert(done.key, done) {
                     anyhow::bail!(
                         "the ledger of {} finishes the fixture {} twice; the run folder is \
@@ -333,6 +348,22 @@ pub fn finished(dir: &Path, skip: Option<&str>) -> anyhow::Result<BTreeMap<Fixtu
         }
     }
     Ok(out)
+}
+
+/// The session of the ledger file `file` (`<session>-<suite>-<shard>.jsonl`) for a line of
+/// `suite`: its name without the shard and the suite.
+fn session_of(file: &Path, suite: &str) -> String {
+    let stem = file
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let without_shard = stem
+        .rsplit_once('-')
+        .map_or(stem.as_str(), |(rest, _)| rest);
+    without_shard
+        .strip_suffix(&format!("-{suite}"))
+        .unwrap_or(without_shard)
+        .to_string()
 }
 
 /// A worker's ledger file.
@@ -453,6 +484,7 @@ mod tests {
                     key: key(k),
                     seed: k * 10,
                     match_id: format!("{k:016x}-1"),
+                    session: String::new(),
                 })
                 .collect(),
         }
@@ -565,6 +597,9 @@ mod tests {
             [key(1), key(2), key(3), key(4)]
         );
         assert_eq!(all[&key(2)].seed, 20);
+        // Each key carries the session of the file that finished it.
+        assert_eq!(all[&key(1)].session, "s1");
+        assert_eq!(all[&key(4)].session, "s2");
         let earlier = finished(&dir, Some("s2")).unwrap();
         assert_eq!(earlier.len(), 3);
         assert!(finished(&temp("none"), None).unwrap().is_empty());
@@ -574,6 +609,14 @@ mod tests {
         let err = finished(&dir, None).unwrap_err().to_string();
         assert!(err.contains(&key(2).to_string()), "{err}");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_session_with_dashes_and_a_suite_with_a_dash_are_read_from_the_file_name() {
+        let file = Path::new("ledger/1700000000000-4242-red-card-3.jsonl");
+        assert_eq!(session_of(file, "red-card"), "1700000000000-4242");
+        let file = Path::new("ledger/1700000000000-4242-equal-0.jsonl");
+        assert_eq!(session_of(file, "equal"), "1700000000000-4242");
     }
 
     #[test]

@@ -1,15 +1,18 @@
-//! One calibration worker: the same binary started by the parent with hidden flags. It
-//! plays its share of one suite's fixtures, each with the AI manager on both sides, and
-//! writes one statistics file and one event file per match into the run folder. In the
-//! formations suite, each side starts in its pairing's formation and keeps it. In the
-//! red-card suite, the default clubs play with cards otherwise off, in both home and away
-//! orders, and the arm's away player is sent off at kick-off.
+//! One calibration worker of the old worker-process path (the hidden
+//! `--worker-processes`): the same binary started by the parent with hidden flags. It plays
+//! its share of one suite's fixtures, each with the AI manager on both sides, and writes
+//! one statistics file and one event file per match into the run folder. The match itself,
+//! [`play_match`], is the one both runners play. In the formations suite, each side starts
+//! in its pairing's formation and keeps it. In the red-card suite, the default clubs play
+//! with cards otherwise off, in both home and away orders, and the arm's away player is
+//! sent off at kick-off.
 //!
 //! The fixtures earlier sessions of the run left unfinished are cut into work units of
-//! [`UNIT`] in fixture order; the worker plays the units whose place modulo the number of
-//! workers is its shard, and appends one ledger line when a unit's last match is written.
+//! [`run_folder::UNIT`] in fixture order; the worker plays the units whose place modulo the
+//! number of workers is its shard, and appends one ledger line when a unit's last match is
+//! written.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use engine::data::{TEAM_A_FILE, TEAM_B_FILE, TeamFile};
@@ -23,7 +26,8 @@ use engine::{
 };
 use stream::EventWriter;
 
-use super::fixtures::{self, Fixture, Keyed, Leagues};
+use super::fixtures::{self, FixtureKey, Keyed, Leagues};
+use super::rows::Row;
 use super::run_folder::{self, Done, LedgerWriter, UnitLine};
 use crate::cli::InjectFailure;
 use crate::report::bands::Bands;
@@ -65,6 +69,14 @@ pub fn remaining(run_dir: &Path, session: &str, planned: Vec<Keyed>) -> anyhow::
         .collect())
 }
 
+/// The default clubs of `dir`, loaded once: the clubs of the red-card suite.
+pub fn default_clubs(content: &Content, dir: &ContentDir) -> anyhow::Result<[TeamFile; 2]> {
+    Ok([
+        content.load_team(dir, &dir.path(TEAM_A_FILE))?.value,
+        content.load_team(dir, &dir.path(TEAM_B_FILE))?.value,
+    ])
+}
+
 /// Plays the share's units. A failed match still writes its statistics record, with
 /// `outcome` `error` and the `error.*` keys, and the worker goes on with the next fixture.
 pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
@@ -82,10 +94,7 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
     let mut leagues = Leagues::new(share.seed, &content);
     // The red-card suite plays the default clubs, loaded once.
     let defaults: Option<[TeamFile; 2]> = if share.suite == Suite::RedCard {
-        Some([
-            content.load_team(&dir, &dir.path(TEAM_A_FILE))?.value,
-            content.load_team(&dir, &dir.path(TEAM_B_FILE))?.value,
-        ])
+        Some(default_clubs(&content, &dir)?)
     } else {
         None
     };
@@ -106,6 +115,7 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
     let shards = share.shards.max(1);
     let mut ledger: Option<LedgerWriter> = None;
     let mut inject_match = share.inject == Some(InjectFailure::Match);
+    let mut inject_panic = share.inject == Some(InjectFailure::Panic);
     let size = run_folder::unit_size(remaining.len(), shards);
     for (place, unit) in remaining.chunks(size).enumerate() {
         let place = u32::try_from(place).unwrap_or(u32::MAX);
@@ -120,46 +130,39 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
         let mut done = Vec::with_capacity(unit.len());
         for keyed in unit {
             let match_id = fixtures::match_id(keyed.key, share.run_millis);
-            let teams = match &defaults {
-                Some([first, second]) if keyed.fixture.clubs == [1, 0] => {
-                    [second.clone(), first.clone()]
-                }
-                Some([first, second]) => [first.clone(), second.clone()],
-                None => {
-                    let mut teams = leagues.teams(&keyed.fixture);
-                    if let Some(side) = keyed.boosted {
-                        teams[side] =
-                            fixtures::boosted(&teams[side], bands.stronger_team.attribute_boost);
-                    }
-                    teams
-                }
-            };
-            // A tactics file holds at most 16 formations.
-            let formations = keyed.pairing.map(|(pairing, first_side)| {
-                let [first, second] = pairings[pairing].map(|i| i as u8);
-                if first_side == 0 {
-                    [first, second]
-                } else {
-                    [second, first]
-                }
-            });
-            let red_card = keyed.arm.map(|arm| RED_CARD_ARMS[arm].1);
+            let (teams, formations, red_card) = setup(
+                keyed,
+                &mut leagues,
+                defaults.as_ref(),
+                &pairings,
+                bands.stronger_team.attribute_boost,
+            );
             let seed = keyed.engine_seed;
+            // A worker process does not catch a panic: it stops, and the parent counts a
+            // failed worker.
+            assert!(!std::mem::take(&mut inject_panic), "injected panic");
             let played = if std::mem::take(&mut inject_match) {
                 Err(EngineError::InvalidConfig("injected failure".into()))
             } else {
-                play(
-                    share,
-                    (&content, &commentary),
-                    (&teams, formations, red_card),
-                    seed,
-                    &owner_id,
-                    &match_id,
-                    &events_dir,
+                let path = events_dir.join(format!("{match_id}.jsonl"));
+                play_match(
+                    &MatchInput {
+                        content: &content,
+                        commentary: &commentary,
+                        teams: &teams,
+                        formations,
+                        red_card,
+                        key: keyed.key,
+                        seed,
+                        minutes: share.minutes,
+                        owner_id: &owner_id,
+                        match_id: &match_id,
+                    },
+                    &mut |_| Some(path.clone()),
                 )
             };
             let stats = match played {
-                Ok(stats) => stats,
+                Ok(played) => played.stats,
                 Err(err) => {
                     tracing::error!(
                         signal = "calibrate.match_failed",
@@ -169,8 +172,7 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
                     failure(
                         (&owner_id, &match_id, seed),
                         &teams,
-                        &keyed.fixture,
-                        &err,
+                        &Failure::of(&err),
                         &content,
                     )
                 }
@@ -180,6 +182,7 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
                 key: keyed.key,
                 seed,
                 match_id,
+                session: String::new(),
             });
         }
         if finished {
@@ -202,28 +205,83 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
     Ok(0)
 }
 
-/// One match to full time, validated, with its events and their commentary lines written.
-/// `formations`, when present, is each side's starting formation. `red_card`, when present,
-/// plays the match with cards otherwise off and sends the named player off at kick-off,
-/// as the slow test `a_sending_off_gives_no_advantage` does.
-fn play(
-    share: &Share<'_>,
-    (content, commentary): (&Content, &Commentary),
-    (teams, formations, red_card): (&[TeamFile; 2], Option<[u8; 2]>, Option<Option<usize>>),
-    seed: u64,
-    owner_id: &str,
-    match_id: &str,
-    events_dir: &Path,
-) -> Result<MatchStats, EngineError> {
-    let mut config = MatchConfig::new(seed, share.minutes, content, [&teams[0], &teams[1]])?;
-    if let Some(sides) = formations {
+/// The teams, the formations, and the sending-off of the match `keyed`: the generated
+/// league's clubs (the stronger one boosted by `boost` in the strength suite), or the
+/// default clubs in the red-card suite; each side's starting formation in the formations
+/// suite; and, in the red-card suite, the player sent off at kick-off.
+pub fn setup(
+    keyed: &Keyed,
+    leagues: &mut Leagues<'_>,
+    defaults: Option<&[TeamFile; 2]>,
+    pairings: &[[usize; 2]],
+    boost: f64,
+) -> ([TeamFile; 2], Option<[u8; 2]>, Option<Option<usize>>) {
+    let teams = match defaults {
+        Some([first, second]) if keyed.fixture.clubs == [1, 0] => [second.clone(), first.clone()],
+        Some([first, second]) => [first.clone(), second.clone()],
+        None => {
+            let mut teams = leagues.teams(&keyed.fixture);
+            if let Some(side) = keyed.boosted {
+                teams[side] = fixtures::boosted(&teams[side], boost);
+            }
+            teams
+        }
+    };
+    // A tactics file holds at most 16 formations.
+    let formations = keyed.pairing.map(|(pairing, first_side)| {
+        let [first, second] = pairings[pairing].map(|i| i as u8);
+        if first_side == 0 {
+            [first, second]
+        } else {
+            [second, first]
+        }
+    });
+    let red_card = keyed.arm.map(|arm| RED_CARD_ARMS[arm].1);
+    (teams, formations, red_card)
+}
+
+/// One match to play, as both runners describe it.
+pub struct MatchInput<'a> {
+    pub content: &'a Content,
+    pub commentary: &'a Commentary,
+    pub teams: &'a [TeamFile; 2],
+    /// Each side's starting formation, in the formations suite.
+    pub formations: Option<[u8; 2]>,
+    /// The red-card suite: cards otherwise off, and the player sent off at kick-off.
+    pub red_card: Option<Option<usize>>,
+    pub key: FixtureKey,
+    pub seed: u64,
+    pub minutes: u32,
+    pub owner_id: &'a str,
+    pub match_id: &'a str,
+}
+
+/// A match played to full time: its statistics record and its compact row.
+pub struct Played {
+    pub stats: MatchStats,
+    pub row: Row,
+}
+
+/// One match to full time, validated. `events_to` sees the match's row once it is over and
+/// names the event file to write, with every event and its commentary line, or `None` for
+/// no event file; nothing else is written. `formations`, when present, is each side's
+/// starting formation. `red_card`, when present, plays the match with cards otherwise off
+/// and sends the named player off at kick-off, as the slow test
+/// `a_sending_off_gives_no_advantage` does.
+pub fn play_match(
+    m: &MatchInput<'_>,
+    events_to: &mut dyn FnMut(&Row) -> Option<PathBuf>,
+) -> Result<Played, EngineError> {
+    let (content, teams) = (m.content, m.teams);
+    let mut config = MatchConfig::new(m.seed, m.minutes, content, [&teams[0], &teams[1]])?;
+    if let Some(sides) = m.formations {
         for (team, formation) in sides.into_iter().enumerate() {
             let mut tactics = Tactics::defaults(&content.tactics);
             tactics.set_formation(formation, &content.tactics);
             config = config.with_tactics(team, tactics);
         }
     }
-    if red_card.is_some() {
+    if m.red_card.is_some() {
         // Set on the match, not in the content, so the content hash is unchanged.
         config.tuning.red_base = 0.0;
         config.tuning.yellow_base = 0.0;
@@ -234,11 +292,9 @@ fn play(
     let content_hash = config.content_hash.clone();
     let max_ticks = config.max_ticks() as usize;
     let mut sim = Simulation::new(config)?;
-    if let Some(Some(player)) = red_card {
+    if let Some(Some(player)) = m.red_card {
         sim.send_off_before_kickoff(player);
     }
-    let mut ids = Ids::new(&sim);
-    let mut commentator = Commentator::for_match(commentary, &sim);
     // The validator reads the whole match once it is over, so the records are kept; sized
     // up front, the buffer never doubles, and the timed run pays for no copies.
     let mut sink = VecSink {
@@ -248,28 +304,41 @@ fn play(
     sim.run(&mut sink)?;
     let elapsed = started.elapsed();
     let events = sim.take_events();
-    let mut writer = EventWriter::create_at(&events_dir.join(format!("{match_id}.jsonl")))
-        .map_err(|e| EngineError::Sink(e.to_string()))?;
-    for event in &events {
-        let row = match_event(
-            event,
-            owner_id,
-            match_id,
-            [&refs[0].id, &refs[1].id],
-            &mut ids,
-        );
-        writer
-            .write(&row.commentary(commentator.line(event)))
-            .map_err(|e| EngineError::Sink(e.to_string()))?;
-    }
     let validator = Validator::for_match(sim.tuning().clone(), sim.team_timeline(), &events);
     let violations = validator.check(&sink.records).len();
     let summary = sim.summary();
+    let tactics = TacticsStats::new(&sim);
     let written = u32::try_from(sink.records.len()).unwrap_or(u32::MAX);
-    Ok(MatchStats {
-        owner_id: owner_id.to_string(),
-        match_id: match_id.to_string(),
-        seed,
+    let row = Row::played(
+        (m.key, m.seed),
+        &summary,
+        &tactics,
+        violations,
+        sim.tick(),
+        u64::try_from(elapsed.as_micros()).unwrap_or(u64::MAX),
+    );
+    if let Some(path) = events_to(&row) {
+        let mut ids = Ids::new(&sim);
+        let mut commentator = Commentator::for_match(m.commentary, &sim);
+        let mut writer =
+            EventWriter::create_at(&path).map_err(|e| EngineError::Sink(e.to_string()))?;
+        for event in &events {
+            let line = match_event(
+                event,
+                m.owner_id,
+                m.match_id,
+                [&refs[0].id, &refs[1].id],
+                &mut ids,
+            );
+            writer
+                .write(&line.commentary(commentator.line(event)))
+                .map_err(|e| EngineError::Sink(e.to_string()))?;
+        }
+    }
+    let stats = MatchStats {
+        owner_id: m.owner_id.to_string(),
+        match_id: m.match_id.to_string(),
+        seed: m.seed,
         content_hash,
         teams: refs,
         duration_ms: u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
@@ -284,10 +353,11 @@ fn play(
         goals: summary.goals,
         flags_on: sim.config().flags.names().to_vec(),
         laws: LawStats::new(&summary, pack_version, sim.tick(), 0),
-        tactics: TacticsStats::new(&sim),
+        tactics,
         figures: MatchFigures::new(&summary, sim.managers()),
         script: ScriptFigures::new(sim.plugins()),
-    })
+    };
+    Ok(Played { stats, row })
 }
 
 fn team_refs(teams: &[TeamFile; 2]) -> [TeamRef; 2] {
@@ -297,16 +367,39 @@ fn team_refs(teams: &[TeamFile; 2]) -> [TeamRef; 2] {
     })
 }
 
-/// The statistics record of a match the engine could not play. The figures are zero; the
-/// rule pack version and the managers are the ones the match would have used.
-fn failure(
+/// Why a match failed, as its statistics record names it.
+pub struct Failure {
+    pub error_type: &'static str,
+    pub error_code: &'static str,
+    pub retriable: bool,
+}
+
+impl Failure {
+    /// A match the engine could not play.
+    pub fn of(err: &EngineError) -> Self {
+        Self {
+            error_type: err.error_type(),
+            error_code: err.error_code(),
+            retriable: err.retriable(),
+        }
+    }
+
+    /// A match that panicked and was caught.
+    pub const PANIC: Self = Self {
+        error_type: "panic",
+        error_code: "match-panicked",
+        retriable: false,
+    };
+}
+
+/// The statistics record of a match that failed. The figures are zero; the rule pack
+/// version and the managers are the ones the match would have used.
+pub fn failure(
     (owner_id, match_id, seed): (&str, &str, u64),
     teams: &[TeamFile; 2],
-    fixture: &Fixture,
-    err: &EngineError,
+    why: &Failure,
     content: &Content,
 ) -> MatchStats {
-    tracing::debug!(fixture = fixture.index, "recording a failed match");
     MatchStats {
         owner_id: owner_id.to_string(),
         match_id: match_id.to_string(),
@@ -332,9 +425,9 @@ fn failure(
         figures: MatchFigures {
             // Calibration plays the AI manager on both sides.
             manager_kind: ["ai".to_string(), "ai".to_string()],
-            error_type: Some(err.error_type().to_string()),
-            error_code: Some(err.error_code().to_string()),
-            error_retriable: Some(err.retriable()),
+            error_type: Some(why.error_type.to_string()),
+            error_code: Some(why.error_code.to_string()),
+            error_retriable: Some(why.retriable),
             ..MatchFigures::default()
         },
         script: ScriptFigures::default(),

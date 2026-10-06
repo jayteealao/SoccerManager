@@ -2,12 +2,13 @@
 //!
 //! The old engine is a revision, built once through the bisect build cache, or a ready
 //! binary. Its results live in an ordinary keyed run folder that the old engine's own
-//! `calibrate` writes, under
-//! `SM_DATA_DIR/calibrate/base/v1/<build id>/<content hash>/seed-<S>-minutes-<M>/`. A planned
-//! fixture whose key that folder's ledger finished with the same engine seed is a cache hit.
-//! Only when a fixture misses is the old engine built and run, and then it resumes its folder
-//! and plays only the missing fixtures. `v1` is the cache format: a later format uses
-//! another folder, so an old cache is never misread.
+//! `calibrate` writes, with a compact row per match, under
+//! `SM_DATA_DIR/calibrate/base/v2/<build id>/<content hash>/seed-<S>-minutes-<M>/`. A planned
+//! fixture whose key that folder's ledger finished with the same engine seed is a cache hit,
+//! and its row is the old engine's result. Only when a fixture misses is the old engine
+//! built and run, and then it resumes its folder and plays only the missing fixtures. `v2`
+//! is the cache format: `v1` folders (statistics files, no rows) are never read and can be
+//! deleted.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -17,12 +18,13 @@ use anyhow::Context;
 use sha2::{Digest, Sha256};
 
 use super::fixtures::{FIXTURE_SCHEME, FixtureKey};
+use super::rows::ROWS_FORMAT;
 use super::run_folder;
 use crate::bisect::cache::{self, Builder, CacheKey};
 use crate::report::Suite;
 
 /// The cache format, the first folder under `calibrate/base/`.
-pub const CACHE_FORMAT: &str = "v1";
+pub const CACHE_FORMAT: &str = "v2";
 
 /// Where the old engine comes from.
 #[derive(Debug, Clone)]
@@ -248,8 +250,9 @@ fn build(rev: &str, revision: &Revision, fail: bool) -> anyhow::Result<PathBuf> 
 }
 
 /// Plays one one-minute match with the old engine and refuses it when its report does not
-/// carry this program's fixture scheme: an engine from before fixture keys plays other
-/// matches, so its results cannot be joined on keys.
+/// carry this program's fixture scheme (an engine from before fixture keys plays other
+/// matches, so its results cannot be joined on keys) or this program's row format (an
+/// engine from before compact rows leaves no rows to read).
 fn probe(exe: &Path, content: &Path, dir: &Path) -> anyhow::Result<()> {
     let probe = dir.with_file_name(format!("probe-{}", std::process::id()));
     let _ = fs::remove_dir_all(&probe);
@@ -277,8 +280,10 @@ fn probe(exe: &Path, content: &Path, dir: &Path) -> anyhow::Result<()> {
             status.code()
         );
     }
+    let report =
+        report.and_then(|text| serde_json::from_str::<serde_json::Value>(text.trim()).ok());
     let scheme = report
-        .and_then(|text| serde_json::from_str::<serde_json::Value>(text.trim()).ok())
+        .as_ref()
         .and_then(|v| v["fixtures.scheme"].as_str().map(str::to_string));
     if scheme.as_deref() != Some(FIXTURE_SCHEME) {
         anyhow::bail!(
@@ -287,6 +292,27 @@ fn probe(exe: &Path, content: &Path, dir: &Path) -> anyhow::Result<()> {
              be joined with this run's",
             exe.display(),
             scheme.as_deref().unwrap_or("old seeding")
+        );
+    }
+    let format = report
+        .as_ref()
+        .and_then(|v| v["calib.rows"]["format"].as_u64());
+    refuse_rows(exe, format)
+}
+
+/// Refuses an old engine whose probe report names no row format, or another one than
+/// this program reads.
+fn refuse_rows(exe: &Path, format: Option<u64>) -> anyhow::Result<()> {
+    if format != Some(u64::from(ROWS_FORMAT)) {
+        anyhow::bail!(
+            "the old engine {} writes {}, and this run reads compact rows of format \
+             {ROWS_FORMAT}; it was built before that row format, so its results cannot be \
+             cached",
+            exe.display(),
+            format.map_or_else(
+                || "no compact rows".to_string(),
+                |f| format!("compact rows of format {f}")
+            )
         );
     }
     Ok(())
@@ -403,11 +429,13 @@ mod tests {
                         key: key(1),
                         seed: 11,
                         match_id: "a".into(),
+                        session: String::new(),
                     },
                     Done {
                         key: key(2),
                         seed: 22,
                         match_id: "b".into(),
+                        session: String::new(),
                     },
                 ],
             })
@@ -419,6 +447,17 @@ mod tests {
         assert_eq!(hits(&dir, &[(key(1), 12)]).unwrap(), 0);
         assert_eq!(hits(&dir.join("empty"), &[(key(1), 11)]).unwrap(), 0);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_cache_is_the_rows_format_and_an_old_engine_without_rows_is_refused() {
+        assert_eq!(CACHE_FORMAT, "v2");
+        let exe = Path::new("old-engine");
+        let err = refuse_rows(exe, None).unwrap_err().to_string();
+        assert!(err.contains("no compact rows"), "{err}");
+        let err = refuse_rows(exe, Some(9)).unwrap_err().to_string();
+        assert!(err.contains("compact rows of format 9"), "{err}");
+        refuse_rows(exe, Some(u64::from(ROWS_FORMAT))).unwrap();
     }
 
     #[test]
