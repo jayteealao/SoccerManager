@@ -337,6 +337,47 @@ fn only_the_sample_and_the_outliers_have_a_full_recording() {
     let _ = std::fs::remove_dir_all(&data);
 }
 
+/// `bench.peak_mem_mb` is the single-thread figure: the process peak after the default
+/// teams are timed on one thread. Under the threads runner the matches of every thread share
+/// that process, so the figure must be taken before they play, or it would hold their memory
+/// too and no longer compare with the worker processes' figure.
+#[test]
+fn the_single_thread_peak_memory_leaves_out_the_matches_of_the_threads() {
+    let data = temp("engine-cli-runner", "bench-memory");
+    let common = [
+        "--seed",
+        "5",
+        "--suite",
+        "equal",
+        "--matches",
+        "16",
+        "--minutes",
+        "10",
+        "--jobs",
+        "8",
+    ];
+    let mut peaks = Vec::new();
+    for (name, extra) in [("threads", None), ("processes", Some("--worker-processes"))] {
+        let dir = data.join(name);
+        let args: Vec<&str> = common.iter().copied().chain(extra).collect();
+        let out = calibrate(&data, &dir, &args);
+        assert!(matches!(out.status.code(), Some(0 | 2)), "{}", stderr(&out));
+        let report = report(&dir);
+        assert_eq!(report["calib.runner"], name);
+        peaks.push(
+            report["bench.peak_mem_mb"]
+                .as_f64()
+                .expect("a peak memory figure"),
+        );
+    }
+    let (threads, processes) = (peaks[0], peaks[1]);
+    assert!(
+        threads <= processes * 2.0,
+        "threads {threads} MB against worker processes {processes} MB"
+    );
+    let _ = std::fs::remove_dir_all(&data);
+}
+
 /// A report's band rows without the time budget, which measures wall time.
 fn bands(report: &Value) -> Vec<Value> {
     report["calib.bands"]

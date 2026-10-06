@@ -308,14 +308,30 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
+        // The single-thread figure is taken before the threads play: they share this
+        // process, so its peak memory afterwards would hold every thread's matches.
+        let benches = arms
+            .iter()
+            .map(|(_, s)| ctx.bench(s))
+            .collect::<anyhow::Result<Vec<_>>>()?;
         let ran = runner::run_arms(&ctx, &inputs, &owner_id)?;
         if ran.stopped {
             return stopped();
         }
-        for (((_, s), arm_dir), wall) in arms.iter().zip(&arm_dirs).zip(&ran.wall) {
+        for ((((_, s), arm_dir), wall), bench) in
+            arms.iter().zip(&arm_dirs).zip(&ran.wall).zip(benches)
+        {
             let events = count_files(&arm_dir.join("events"));
             let folded = ctx.fold_rows(arm_dir)?;
-            played.push(ctx.finish_arm(s, wall, ran.total_ms, 0, folded, (events, events))?);
+            played.push(ctx.finish_arm(
+                s,
+                wall,
+                ran.total_ms,
+                0,
+                folded,
+                (events, events),
+                bench,
+            )?);
         }
     }
     let first = &played[0];
@@ -994,6 +1010,9 @@ impl RunCtx<'_> {
         let events_written = count_files(&events_dir);
         let folded = self.fold(arm_dir, opts.keep_events == KeepEvents::Outliers)?;
         let events_kept = count_files(&events_dir);
+        // The worker processes play in their own processes, so this process's peak after
+        // them still holds only the single-thread figure's match.
+        let bench = self.bench(states)?;
         self.finish_arm(
             states,
             &wall,
@@ -1001,12 +1020,27 @@ impl RunCtx<'_> {
             workers_failed,
             folded,
             (events_written, events_kept),
+            bench,
         )
         .map(Some)
     }
 
+    /// The single-thread figure: the default teams timed on one thread under `states`.
+    fn bench(&self, states: &FlagStates) -> anyhow::Result<BenchFigures> {
+        let content = self.loaded.content.with_flags(states)?;
+        let [team_a, team_b] = &self.loaded.teams;
+        let config = MatchConfig::new(
+            self.opts.seed,
+            self.opts.minutes,
+            &content,
+            [team_a, team_b],
+        )?;
+        crate::bench::measure(&config, None, BENCH_MATCHES)
+    }
+
     /// Judges an arm's folded matches against the bands, given each suite's wall time and
-    /// the whole run's, and times the default teams on one thread under the arm's states.
+    /// the whole run's, with the arm's single-thread figure.
+    #[allow(clippy::too_many_arguments)]
     fn finish_arm(
         &self,
         states: &FlagStates,
@@ -1015,13 +1049,12 @@ impl RunCtx<'_> {
         workers_failed: u32,
         folded: Folded,
         (events_written, events_kept): (u32, u32),
+        bench: BenchFigures,
     ) -> anyhow::Result<Arm> {
         let opts = self.opts;
-        // The single-thread figure, on the default teams, once every match is played.
         let content = self.loaded.content.with_flags(states)?;
         let [team_a, team_b] = &self.loaded.teams;
         let config = MatchConfig::new(opts.seed, opts.minutes, &content, [team_a, team_b])?;
-        let bench = crate::bench::measure(&config, None, BENCH_MATCHES)?;
 
         let Folded {
             builder,
