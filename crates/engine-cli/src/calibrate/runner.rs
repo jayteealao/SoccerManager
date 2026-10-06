@@ -10,7 +10,7 @@
 //!
 //! A match gets a full recording (its statistics file, and its event file with commentary)
 //! when its key falls in the 1-in-16 sample, or when it is an outlier: it failed, panicked
-//! or hit a dark path, the validator found a violation, or one of its measures lies outside
+//! or hit a dark path, the rule checker found a violation, or one of its measures lies outside
 //! the 1st to 99th percentile of the same suite's earlier matches in this session. The
 //! decision comes before anything is written, so no file is written and removed again.
 

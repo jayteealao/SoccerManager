@@ -664,7 +664,7 @@ struct Arm {
 
 impl Arm {
     /// No worker failed, no match panicked, no record is missing, no change was left
-    /// unapplied, and the validator found nothing.
+    /// unapplied, and the rule checker found nothing.
     fn trusted(&self) -> bool {
         self.workers_failed == 0
             && self.match_panicked == 0

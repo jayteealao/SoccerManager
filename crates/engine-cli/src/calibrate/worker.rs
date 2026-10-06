@@ -21,8 +21,8 @@ use engine::observe::{
     LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef, write_stats_at,
 };
 use engine::{
-    Commentary, Commentator, Content, ContentDir, EngineError, MatchConfig, Simulation, Tactics,
-    Validator, VecSink,
+    Commentary, Commentator, Content, ContentDir, EngineError, MatchConfig, RunningCheck,
+    Simulation, StreamRules, Tactics,
 };
 use stream::EventWriter;
 
@@ -262,7 +262,8 @@ pub struct Played {
     pub row: Row,
 }
 
-/// One match to full time, validated. `events_to` sees the match's row once it is over and
+/// One match to full time, checked by the running rule checker as it plays (every tick
+/// and event rule, with no tick list kept). `events_to` sees the match's row once it is over and
 /// names the event file to write, with every event and its commentary line, or `None` for
 /// no event file; nothing else is written. `formations`, when present, is each side's
 /// starting formation. `red_card`, when present, plays the match with cards otherwise off
@@ -290,25 +291,22 @@ pub fn play_match(
     let pack_version = config.rules.schema_version;
     let refs = team_refs(teams);
     let content_hash = config.content_hash.clone();
-    let max_ticks = config.max_ticks() as usize;
+    let rules = StreamRules::for_config(&config);
     let mut sim = Simulation::new(config)?;
     if let Some(Some(player)) = m.red_card {
         sim.send_off_before_kickoff(player);
     }
-    // The validator reads the whole match once it is over, so the records are kept; sized
-    // up front, the buffer never doubles, and the timed run pays for no copies.
-    let mut sink = VecSink {
-        records: Vec::with_capacity(max_ticks),
-    };
+    // Each tick and event is judged as the match plays; no record is kept.
+    let mut check = RunningCheck::for_match(&sim, rules);
     let started = Instant::now();
-    sim.run(&mut sink)?;
+    sim.run(&mut check)?;
     let elapsed = started.elapsed();
+    let written = check.ticks();
+    // Full time comes after the last record: the checker sees it before the events go.
+    let violations = check.finish_match(&sim).len();
     let events = sim.take_events();
-    let validator = Validator::for_match(sim.tuning().clone(), sim.team_timeline(), &events);
-    let violations = validator.check(&sink.records).len();
     let summary = sim.summary();
     let tactics = TacticsStats::new(&sim);
-    let written = u32::try_from(sink.records.len()).unwrap_or(u32::MAX);
     let row = Row::played(
         (m.key, m.seed),
         &summary,
@@ -431,5 +429,118 @@ pub fn failure(
             ..MatchFigures::default()
         },
         script: ScriptFigures::default(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Shipped {
+        dir: ContentDir,
+        content: Content,
+        commentary: Commentary,
+    }
+
+    fn shipped() -> Shipped {
+        let dir = ContentDir::at(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content"));
+        let content = Content::load(&dir).unwrap();
+        let commentary = Commentary::load(&dir).unwrap();
+        Shipped {
+            dir,
+            content,
+            commentary,
+        }
+    }
+
+    fn play(
+        s: &Shipped,
+        teams: &[TeamFile; 2],
+        formations: Option<[u8; 2]>,
+        red_card: Option<Option<usize>>,
+        seed: u64,
+        minutes: u32,
+    ) -> Played {
+        play_match(
+            &MatchInput {
+                content: &s.content,
+                commentary: &s.commentary,
+                teams,
+                formations,
+                red_card,
+                key: FixtureKey::from_u64(seed),
+                seed,
+                minutes,
+                owner_id: "owner",
+                match_id: "match",
+            },
+            &mut |_| None,
+        )
+        .unwrap()
+    }
+
+    /// A match checked as it plays counts every tick it played, and a clean match has no
+    /// violation.
+    #[test]
+    fn a_match_checked_as_it_plays_counts_every_tick() {
+        let s = shipped();
+        let teams = default_clubs(&s.content, &s.dir).unwrap();
+        let played = play(&s, &teams, None, None, 7, 5);
+        let config = MatchConfig::new(7, 5, &s.content, [&teams[0], &teams[1]]).unwrap();
+        let mut sim = Simulation::new(config).unwrap();
+        sim.run(&mut engine::NullSink).unwrap();
+        assert_eq!(played.stats.ticks_written, sim.tick());
+        assert_eq!(played.row.ticks, sim.tick());
+        assert_eq!(played.stats.validate_violations, 0);
+        assert_eq!(played.row.violations, 0);
+    }
+
+    /// One 90-minute match of each suite's kind (a generated league, a boosted club, a
+    /// formations pairing, and every red-card arm) breaks no tick or event rule, so the
+    /// event rules add no violation to calibrate's count.
+    #[test]
+    fn every_suite_kind_plays_without_a_violation() {
+        let s = shipped();
+        let bands = Bands::load(&s.dir).unwrap();
+        let defaults = default_clubs(&s.content, &s.dir).unwrap();
+        let names: Vec<String> = s
+            .content
+            .tactics
+            .formations
+            .iter()
+            .map(|f| f.name.clone())
+            .collect();
+        let pairings = fixtures::pairings(names.len());
+        let selected: Vec<usize> = (0..pairings.len()).collect();
+        let mut leagues = Leagues::new(2026, &s.content);
+        let mut cases: Vec<(Suite, Keyed)> = Vec::new();
+        for suite in [Suite::Equal, Suite::Strength, Suite::Formations] {
+            let first = fixtures::keyed(suite, 2026, 1, &names, &selected)
+                .into_iter()
+                .next()
+                .unwrap();
+            cases.push((suite, first));
+        }
+        let red = fixtures::keyed(Suite::RedCard, 2026, 4, &names, &selected);
+        for arm in 0..RED_CARD_ARMS.len() {
+            let keyed = red.iter().find(|k| k.arm == Some(arm)).unwrap();
+            cases.push((Suite::RedCard, *keyed));
+        }
+        for (suite, keyed) in &cases {
+            let defaults = (*suite == Suite::RedCard).then_some(&defaults);
+            let (teams, formations, red_card) = setup(
+                keyed,
+                &mut leagues,
+                defaults,
+                &pairings,
+                bands.stronger_team.attribute_boost,
+            );
+            let played = play(&s, &teams, formations, red_card, keyed.engine_seed, 90);
+            assert_eq!(
+                played.row.violations, 0,
+                "{suite:?} arm {:?}: a violation",
+                keyed.arm
+            );
+        }
     }
 }

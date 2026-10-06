@@ -1,4 +1,5 @@
-//! criterion benches: one tick step on a warmed simulation, and one steering pass.
+//! criterion benches: one tick step on a warmed simulation, the same step checked by the
+//! running rule checker, and one steering pass.
 
 use std::path::Path;
 
@@ -6,7 +7,8 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use engine::data::{TEAM_A_FILE, TEAM_B_FILE};
 use engine::math::DVec2;
 use engine::modules::SteeringModule;
-use engine::{Content, ContentDir, MatchConfig, Simulation};
+use engine::record::TickSink;
+use engine::{Content, ContentDir, MatchConfig, RunningCheck, Simulation, StreamRules};
 use std::hint::black_box;
 
 fn config() -> MatchConfig {
@@ -47,6 +49,34 @@ fn tick_step(c: &mut Criterion) {
     });
 }
 
+fn running_check_tick(c: &mut Criterion) {
+    // One step fed to the running rule checker as `Simulation::run` feeds it; the checker's
+    // share of a tick is this bench's time less `tick_step`'s.
+    let config = config();
+    let warmed = || {
+        let mut sim = Simulation::new(config.clone()).unwrap();
+        let mut check = RunningCheck::for_match(&sim, StreamRules::for_config(&config));
+        for _ in 0..500 {
+            sim.step();
+            check.on_step(&sim).unwrap();
+            check.on_tick(&sim.record()).unwrap();
+        }
+        (sim, check)
+    };
+    let (mut sim, mut check) = warmed();
+    c.bench_function("running_check_tick", |b| {
+        b.iter(|| {
+            if sim.is_over() {
+                (sim, check) = warmed();
+            }
+            sim.step();
+            check.on_step(&sim).unwrap();
+            check.on_tick(&sim.record()).unwrap();
+            black_box(check.ticks())
+        })
+    });
+}
+
 fn steering_pass(c: &mut Criterion) {
     // The steering module the loop resolves, through the read-only view, as the movement pass
     // calls it: every active player's next velocity.
@@ -67,5 +97,5 @@ fn steering_pass(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, tick_step, steering_pass);
+criterion_group!(benches, tick_step, running_check_tick, steering_pass);
 criterion_main!(benches);

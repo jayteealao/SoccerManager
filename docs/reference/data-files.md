@@ -519,7 +519,7 @@ The columns of format 1, in file order (a `.home` and `.away` pair is one column
 | `fixture.key` | 64-bit | the fixture key; its 16 hexadecimal characters start the match identifier |
 | `engine.seed` | 64-bit | the seed the engine played the match with |
 | `outcome` | 8-bit | 0 played to full time, 1 the engine returned an error, 2 the match panicked |
-| `record.reasons` | 8-bit | why the match has a statistics and an event file, as bits: 1 the 1-in-16 sample (the key is a multiple of 16), 2 failed, panicked or a dark-path hit, 4 a validator violation, 8 a measure outside the 1st to 99th percentile of its suite so far, 16 `--keep-events all`; 0 for none |
+| `record.reasons` | 8-bit | why the match has a statistics and an event file, as bits: 1 the 1-in-16 sample (the key is a multiple of 16), 2 failed, panicked or a dark-path hit, 4 a violation the running rule checker found, 8 a measure outside the 1st to 99th percentile of its suite so far, 16 `--keep-events all`; 0 for none |
 | `goals`, `shots`, `shots_on_target` | 32-bit pairs | counts |
 | `xg` | float pair | expected goals, unrounded |
 | `passes`, `passes_completed` | 32-bit pairs | open-play passes played and completed |
@@ -529,7 +529,7 @@ The columns of format 1, in file order (a `.home` and `.away` pair is one column
 | `injuries` | 32-bit | injuries, both teams |
 | `substitutions` | 32-bit pair | substitutions made |
 | `change_never_applied`, `change_expired_at_full_time` | 32-bit | the two change counters of the statistics record |
-| `validate.violations` | 32-bit | the validator's violations |
+| `validate.violations` | 32-bit | the violations the running rule checker found while the match played: the tick rules and the event rules |
 | `ticks` | 32-bit | ticks played |
 | `duration_us` | 64-bit | the match's wall time in microseconds |
 

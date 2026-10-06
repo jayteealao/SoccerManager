@@ -75,7 +75,7 @@ pub mod reason {
     pub const SAMPLE: u8 = 1;
     /// The match failed, panicked, or hit a dark path.
     pub const ERROR: u8 = 2;
-    /// The validator found a violation.
+    /// The rule checker found a violation.
     pub const VIOLATION: u8 = 4;
     /// A measure lay outside the 1st to 99th percentile of its suite so far.
     pub const EXTREME: u8 = 8;
@@ -117,7 +117,7 @@ pub struct Row {
     pub substitutions: [u32; 2],
     pub change_never_applied: u32,
     pub change_expired_at_full_time: u32,
-    /// Validator violations.
+    /// Rule violations the running checker found (tick and event rules).
     pub violations: u32,
     pub ticks: u32,
     /// The match's wall time in microseconds; not part of its result.
@@ -459,7 +459,7 @@ const COLUMNS: &[Column] = &[
 
 impl Row {
     /// The row of a match played to full time: its summary, its tactics counts, the
-    /// validator's violations, the ticks played, and its wall time.
+    /// rule checker's violations, the ticks played, and its wall time.
     pub fn played(
         (key, seed): (FixtureKey, u64),
         s: &Summary,

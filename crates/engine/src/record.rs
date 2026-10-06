@@ -157,6 +157,13 @@ impl TickHeader {
 pub trait TickSink {
     fn on_tick(&mut self, record: &TickRecord) -> Result<(), EngineError>;
 
+    /// The step hook: called once per step, after the step and before its record, with the
+    /// match as it stands, so a sink can read the events and team shapes the step added
+    /// before it sees the step's record. The default does nothing.
+    fn on_step(&mut self, _sim: &Simulation) -> Result<(), EngineError> {
+        Ok(())
+    }
+
     /// The stoppage hook (named mechanism): called once for every stoppage, after the record
     /// of the tick the ball went dead on, with the match as it stands. The default does
     /// nothing.
@@ -218,6 +225,11 @@ impl<A: TickSink, B: TickSink> TickSink for FanoutSink<A, B> {
         self.b.on_tick(record)
     }
 
+    fn on_step(&mut self, sim: &Simulation) -> Result<(), EngineError> {
+        self.a.on_step(sim)?;
+        self.b.on_step(sim)
+    }
+
     fn on_stoppage(&mut self, stoppage: &Stoppage, sim: &Simulation) -> Result<(), EngineError> {
         self.a.on_stoppage(stoppage, sim)?;
         self.b.on_stoppage(stoppage, sim)
@@ -235,6 +247,13 @@ impl<S: TickSink> TickSink for Option<S> {
     fn on_tick(&mut self, record: &TickRecord) -> Result<(), EngineError> {
         match self {
             Some(sink) => sink.on_tick(record),
+            None => Ok(()),
+        }
+    }
+
+    fn on_step(&mut self, sim: &Simulation) -> Result<(), EngineError> {
+        match self {
+            Some(sink) => sink.on_step(sim),
             None => Ok(()),
         }
     }
@@ -426,6 +445,43 @@ mod tests {
             players,
             restart: tick.is_multiple_of(3),
         }
+    }
+
+    /// Counts the steps and records it is handed, and checks each step comes before its
+    /// record.
+    #[derive(Default)]
+    struct Steps {
+        steps: u32,
+        ticks: u32,
+    }
+
+    impl TickSink for Steps {
+        fn on_tick(&mut self, record: &TickRecord) -> Result<(), EngineError> {
+            self.ticks += 1;
+            assert_eq!(
+                self.steps, self.ticks,
+                "the step hook runs before the record"
+            );
+            assert_eq!(record.tick, self.ticks);
+            Ok(())
+        }
+
+        fn on_step(&mut self, _sim: &Simulation) -> Result<(), EngineError> {
+            self.steps += 1;
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_fan_out_hands_every_step_to_both_sinks_before_the_record() {
+        let config = crate::data::test_support::shipped_config(1, 1).unwrap();
+        let mut sim = Simulation::new(config).unwrap();
+        let mut sink = FanoutSink::new(Steps::default(), Some(Steps::default()));
+        sim.run(&mut sink).unwrap();
+        let (a, b) = sink.into_parts();
+        let b = b.unwrap();
+        assert_eq!(a.steps, sim.tick());
+        assert_eq!((b.steps, b.ticks), (a.steps, a.ticks));
     }
 
     #[test]
