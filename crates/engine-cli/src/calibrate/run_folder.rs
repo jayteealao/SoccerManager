@@ -28,8 +28,16 @@ use super::fixtures::FixtureKey;
 pub const RUN_FILE: &str = "run.json";
 /// The version of [`RunFile`] this program writes and reads.
 pub const RUN_FILE_VERSION: u32 = 1;
-/// Fixtures per work unit.
+/// Fixtures per work unit, at most.
 pub const UNIT: usize = 8;
+
+/// The fixtures per work unit for `remaining` fixtures over `shards` workers: [`UNIT`], or
+/// fewer when there are too few fixtures to give every worker a unit, so a short suite
+/// still keeps every worker busy. The parent and the workers cut with the same size.
+pub fn unit_size(remaining: usize, shards: u32) -> usize {
+    let shards = usize::try_from(shards.max(1)).unwrap_or(usize::MAX);
+    remaining.div_ceil(shards).clamp(1, UNIT)
+}
 /// Where a run with another identity moves the old run's files.
 pub const SUPERSEDED: &str = "superseded";
 /// The files and folders a run owns in its folder.
@@ -419,6 +427,20 @@ mod tests {
 
     fn key(n: u64) -> FixtureKey {
         FixtureKey::parse(&format!("{n:016x}")).unwrap()
+    }
+
+    #[test]
+    fn a_short_suite_is_cut_into_smaller_units_so_every_worker_has_one() {
+        // 20 fixtures over 8 workers: units of 3 give 7 workers a unit, not 3.
+        assert_eq!(unit_size(20, 8), 3);
+        assert_eq!(20usize.div_ceil(unit_size(20, 8)), 7);
+        // Enough fixtures: full units.
+        assert_eq!(unit_size(1000, 8), UNIT);
+        assert_eq!(unit_size(20, 2), UNIT);
+        // Edges: no fixtures, one worker, no worker count.
+        assert_eq!(unit_size(0, 8), 1);
+        assert_eq!(unit_size(5, 1), 5);
+        assert_eq!(unit_size(5, 0), 5);
     }
 
     fn line(suite: &str, unit: u32, keys: &[u64]) -> UnitLine {

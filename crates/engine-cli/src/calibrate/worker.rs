@@ -24,7 +24,7 @@ use engine::{
 use stream::EventWriter;
 
 use super::fixtures::{self, Fixture, Keyed, Leagues};
-use super::run_folder::{self, Done, LedgerWriter, UNIT, UnitLine};
+use super::run_folder::{self, Done, LedgerWriter, UnitLine};
 use crate::cli::InjectFailure;
 use crate::report::bands::Bands;
 use crate::report::{RED_CARD_ARMS, Suite};
@@ -106,7 +106,8 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
     let shards = share.shards.max(1);
     let mut ledger: Option<LedgerWriter> = None;
     let mut inject_match = share.inject == Some(InjectFailure::Match);
-    for (place, unit) in remaining.chunks(UNIT).enumerate() {
+    let size = run_folder::unit_size(remaining.len(), shards);
+    for (place, unit) in remaining.chunks(size).enumerate() {
         let place = u32::try_from(place).unwrap_or(u32::MAX);
         if place % shards != share.shard {
             continue;

@@ -52,7 +52,7 @@ use crate::report::{
     Selection, Suite, SuiteFigures, Units, band_suites,
 };
 use fixtures::{FIXTURE_SCHEME, FixtureKey, Keyed};
-use run_folder::{Opened, RunIdentity, UNIT};
+use run_folder::{Opened, RunIdentity};
 
 /// Matches the single-thread benchmark times after its warm-up.
 const BENCH_MATCHES: u32 = 5;
@@ -797,7 +797,8 @@ impl RunCtx<'_> {
         for &suite in &self.suites {
             let suite_started = Instant::now();
             let remaining = worker::remaining(arm_dir, &self.session, self.keyed(suite))?;
-            let units = u32::try_from(remaining.len().div_ceil(UNIT)).unwrap_or(u32::MAX);
+            let unit = run_folder::unit_size(remaining.len(), self.jobs);
+            let units = u32::try_from(remaining.len().div_ceil(unit)).unwrap_or(u32::MAX);
             if !remaining.is_empty() {
                 let children = (0..self.jobs)
                     .map(|shard| {
