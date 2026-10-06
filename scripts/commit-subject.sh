@@ -6,6 +6,7 @@
 # message file as the only argument.
 set -u
 
+# Keep in step with subject_length in committed.toml.
 limit=70
 file=${1:?usage: sh scripts/commit-subject.sh <commit message file>}
 
@@ -13,6 +14,6 @@ subject=$(head -n 1 "$file" | tr -d '\r')
 length=$(printf '%s' "$subject" | LC_ALL=C.UTF-8 wc -m | tr -d ' ')
 
 if [ "$length" -gt "$limit" ]; then
-  echo "The commit subject is $length characters; the limit is $limit."
+  echo "The commit subject is $length characters; the limit is $limit." >&2
   exit 1
 fi

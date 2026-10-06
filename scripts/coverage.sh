@@ -14,9 +14,11 @@
 # pass recorded at 78 or more.
 set -u
 
-# The Rust code and the build settings that change it: the push trigger and the key.
-# It is split on spaces into pathspecs, so no entry may contain a space.
-RUST_PATHS="crates Cargo.toml Cargo.lock rust-toolchain.toml .cargo"
+# The Rust code, the build settings that change it, and the files compiled into it
+# (include_bytes! and include_str! targets outside crates/): the push trigger and the
+# key. Test data that the tests read at run time (content/, gate/ and others) is not
+# part of it. It is split on spaces into pathspecs, so no entry may contain a space.
+RUST_PATHS="crates Cargo.toml Cargo.lock rust-toolchain.toml .cargo content/rules/default.json packaging/previous-engine.json"
 MIN_FLOOR=78
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
@@ -47,22 +49,22 @@ run() {
   case $floor in
     [0-9] | [1-9][0-9] | 100 | 101) ;;
     *)
-      echo "COVERAGE_FLOOR must be a whole number from 0 to 101, not '$floor'."
+      echo "COVERAGE_FLOOR must be a whole number from 0 to 101, not '$floor'." >&2
       exit 2
       ;;
   esac
 
   if ! command -v cargo-llvm-cov >/dev/null 2>&1; then
-    echo "cargo-llvm-cov is not installed. Install it with:"
-    echo "  cargo install cargo-llvm-cov --locked"
-    echo "  rustup component add llvm-tools-preview"
+    echo "cargo-llvm-cov is not installed. Install it with:" >&2
+    echo "  cargo install cargo-llvm-cov --locked" >&2
+    echo "  rustup component add llvm-tools-preview" >&2
     exit 1
   fi
 
   if [ -n "$(rust_status)" ]; then
-    echo "The Rust code has uncommitted changes. Commit them first: a coverage pass is"
-    echo "recorded for committed Rust content only."
-    rust_status
+    echo "The Rust code has uncommitted changes. Commit them first: a coverage pass is" >&2
+    echo "recorded for committed Rust content only." >&2
+    rust_status >&2
     exit 1
   fi
 
@@ -77,12 +79,12 @@ run() {
   cargo llvm-cov --workspace --locked --fail-under-lines "$floor"
   status=$?
   if [ "$status" -ne 0 ]; then
-    echo "Coverage did not pass (exit $status). No pass was recorded."
+    echo "Coverage did not pass (exit $status). No pass was recorded." >&2
     exit "$status"
   fi
 
   if [ -n "$(rust_status)" ] || [ "$(key HEAD)" != "$k" ]; then
-    echo "The Rust code changed during the run. No pass was recorded."
+    echo "The Rust code changed during the run. No pass was recorded." >&2
     exit 1
   fi
 
@@ -104,8 +106,10 @@ check() {
     # Compare with the remote's commit for this ref when this clone has it. Otherwise
     # leave out every commit already known on that remote. For a URL, or a remote with
     # no fetched refs, this leaves out nothing, so the whole history counts.
+    same_ref=
     if ! is_zero "${remote_sha:-0}" && git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
       base=$remote_sha
+      same_ref=$remote_sha
     elif [ -n "$remote" ]; then
       base="--remotes=$remote"
     else
@@ -117,13 +121,19 @@ check() {
     fi
     [ -n "$changed" ] || continue
 
+    # The pushed Rust content equals what the remote already holds for this ref (a
+    # change and its revert): nothing new to measure.
+    if [ -n "$same_ref" ] && [ "$(key "$local_sha")" = "$(key "$same_ref")" ]; then
+      continue
+    fi
+
     pass_floor=$(sed -n 's/^floor=//p' "$store/$(key "$local_sha")" 2>/dev/null)
     case $pass_floor in
       [0-9] | [1-9][0-9] | 100 | 101) ;;
       *) pass_floor=-1 ;;
     esac
     if [ "$pass_floor" -lt "$MIN_FLOOR" ]; then
-      echo "Push refused: ${remote_ref:-$local_ref} changes Rust code, and no coverage pass is recorded for its Rust content. Run 'lefthook run coverage' (about 30 minutes) and push again."
+      echo "Push refused: ${remote_ref:-$local_ref} changes Rust code, and no coverage pass is recorded for its Rust content. Run 'lefthook run coverage' (about 30 minutes) and push again." >&2
       refused=1
     fi
   done
@@ -134,7 +144,7 @@ case ${1:-} in
   run) run ;;
   check) check "${2:-}" ;;
   *)
-    echo "usage: sh scripts/coverage.sh run | check <remote>"
+    echo "usage: sh scripts/coverage.sh run | check <remote>" >&2
     exit 2
     ;;
 esac
