@@ -18,6 +18,10 @@ use bands::Bands;
 /// Matches slower than this, in milliseconds, are outliers (the contract's slow threshold).
 pub const SLOW_MATCH_MS: u64 = 2000;
 
+/// The version of the measure definitions: how a match's figures are counted. A change to a
+/// measure raises it, so a run folder made under the old definitions is not resumed.
+pub const MEASURES_VERSION: u32 = 1;
+
 /// One suite of a calibration run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Suite {
@@ -42,16 +46,6 @@ impl Suite {
             Suite::Strength => "strength",
             Suite::Formations => "formations",
             Suite::RedCard => "red-card",
-        }
-    }
-
-    /// The suite's number in match seeds and match identifiers.
-    pub fn number(self) -> u64 {
-        match self {
-            Suite::Equal => 0,
-            Suite::Strength => 1,
-            Suite::Formations => 2,
-            Suite::RedCard => 3,
         }
     }
 }
@@ -1002,6 +996,12 @@ pub struct CalibrationReport {
     /// content, the generator block, and the two default clubs. A baseline must share it.
     #[serde(rename = "fixtures.hash")]
     pub fixtures_hash: String,
+    /// The scheme the fixtures' keys and engine seeds are made by.
+    #[serde(rename = "fixtures.scheme")]
+    pub fixtures_scheme: &'static str,
+    /// Everything that makes the run's results what they are, as the run folder holds it.
+    #[serde(rename = "run.identity")]
+    pub identity: serde_json::Value,
     pub outcome: &'static str,
     /// Present only when `outcome` is `error`.
     #[serde(rename = "error.type", skip_serializing_if = "Option::is_none")]
@@ -1089,6 +1089,52 @@ pub struct CalibrationReport {
     pub compare: Option<Vec<compare::CompareRow>>,
     #[serde(rename = "calib.verdict", skip_serializing_if = "Option::is_none")]
     pub verdict: Option<compare::Verdict>,
+    /// The fixtures of the run, those an earlier session finished, and those played now.
+    #[serde(rename = "calib.units")]
+    pub units: Units,
+    /// SHA-256 over every match's statistics in key order, identifiers and timing left out.
+    #[serde(rename = "calib.results_digest")]
+    pub results_digest: String,
+    /// The old engine's results on the same fixtures; absent without an old engine.
+    #[serde(rename = "calib.base", skip_serializing_if = "Option::is_none")]
+    pub base: Option<BaseReport>,
+}
+
+/// The fixtures of a run, counted over every arm and suite.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct Units {
+    pub total: u32,
+    /// Fixtures an earlier session of the run had finished.
+    pub finished_before: u32,
+    /// Fixtures this session played to the end.
+    pub played: u32,
+}
+
+/// The old engine of a change run and its results on the run's fixtures.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct BaseReport {
+    /// `rev` for a built revision, `binary` for a ready executable.
+    pub source: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rev: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commit: Option<String>,
+    #[serde(rename = "build.id")]
+    pub build_id: String,
+    #[serde(rename = "content.hash")]
+    pub content_hash: String,
+    pub cache: BaseCache,
+    #[serde(rename = "calib.bands")]
+    pub bands: Vec<BandCheck>,
+}
+
+/// Where the old engine's results came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct BaseCache {
+    /// Fixtures whose result the cache held.
+    pub hits: u32,
+    /// Fixtures the old engine played now.
+    pub played: u32,
 }
 
 /// What a calibration run selected: the suites played, the formation pairings of the

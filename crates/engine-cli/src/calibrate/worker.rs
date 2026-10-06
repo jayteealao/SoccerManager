@@ -4,6 +4,10 @@
 //! formations suite, each side starts in its pairing's formation and keeps it. In the
 //! red-card suite, the default clubs play with cards otherwise off, in both home and away
 //! orders, and the arm's away player is sent off at kick-off.
+//!
+//! The fixtures earlier sessions of the run left unfinished are cut into work units of
+//! [`UNIT`] in fixture order; the worker plays the units whose place modulo the number of
+//! workers is its shard, and appends one ledger line when a unit's last match is written.
 
 use std::path::Path;
 use std::time::Instant;
@@ -19,7 +23,8 @@ use engine::{
 };
 use stream::EventWriter;
 
-use super::fixtures::{self, Fixture, Leagues};
+use super::fixtures::{self, Fixture, Keyed, Leagues};
+use super::run_folder::{self, Done, LedgerWriter, UNIT, UnitLine};
 use crate::cli::InjectFailure;
 use crate::report::bands::Bands;
 use crate::report::{RED_CARD_ARMS, Suite};
@@ -42,19 +47,25 @@ pub struct Share<'a> {
     pub inject: Option<InjectFailure>,
     /// The formations suite: the numbers of the pairings to play; empty plays every one.
     pub pairings: &'a [usize],
+    /// The parent's session: the ledger files it names are this session's own.
+    pub session: &'a str,
+    /// A test seam: units from this place on are not played, and the unit at this place
+    /// plays its first half and writes no ledger line, as a run killed mid-unit leaves it.
+    pub stop: Option<u32>,
 }
 
-/// One match of a worker's share.
-struct Job {
-    fixture: Fixture,
-    /// The formations suite: each side's starting formation.
-    formations: Option<[u8; 2]>,
-    /// The red-card suite: the engine seed, the away player sent off (none for the
-    /// control), and whether the default clubs play in the other order.
-    red_card: Option<(u64, Option<usize>, bool)>,
+/// The fixtures of `planned` that earlier sessions of the run in `run_dir` left
+/// unfinished, in fixture order: the list the parent and every worker cut into the same
+/// units.
+pub fn remaining(run_dir: &Path, session: &str, planned: Vec<Keyed>) -> anyhow::Result<Vec<Keyed>> {
+    let done = run_folder::finished(run_dir, Some(session))?;
+    Ok(planned
+        .into_iter()
+        .filter(|k| !done.contains_key(&k.key))
+        .collect())
 }
 
-/// Plays every fixture of the share. A failed match still writes its statistics record, with
+/// Plays the share's units. A failed match still writes its statistics record, with
 /// `outcome` `error` and the `error.*` keys, and the worker goes on with the next fixture.
 pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
     if share.inject == Some(InjectFailure::Worker) {
@@ -78,123 +89,116 @@ pub fn run(share: &Share<'_>) -> anyhow::Result<i32> {
     } else {
         None
     };
+    let names: Vec<String> = content
+        .tactics
+        .formations
+        .iter()
+        .map(|f| f.name.clone())
+        .collect();
+    let pairings = fixtures::pairings(names.len());
+    let selected: Vec<usize> = if share.pairings.is_empty() {
+        (0..pairings.len()).collect()
+    } else {
+        share.pairings.to_vec()
+    };
+    let planned = fixtures::keyed(share.suite, share.seed, share.matches, &names, &selected);
+    let remaining = remaining(share.run_dir, share.session, planned)?;
     let shards = share.shards.max(1);
+    let mut ledger: Option<LedgerWriter> = None;
     let mut inject_match = share.inject == Some(InjectFailure::Match);
-    for job in planned(share, &content)
-        .into_iter()
-        .filter(|j| j.fixture.index % shards == share.shard)
-    {
-        let fixture = job.fixture;
-        let match_id = fixtures::match_id(share.seed, share.suite, fixture.index, share.run_millis);
-        let (teams, seed) = match (&defaults, job.red_card) {
-            (Some([first, second]), Some((engine_seed, _, swapped))) => {
-                let teams = if swapped {
+    for (place, unit) in remaining.chunks(UNIT).enumerate() {
+        let place = u32::try_from(place).unwrap_or(u32::MAX);
+        if place % shards != share.shard {
+            continue;
+        }
+        let (unit, finished) = match share.stop {
+            Some(stop) if place > stop => break,
+            Some(stop) if place == stop => (&unit[..unit.len() / 2], false),
+            _ => (unit, true),
+        };
+        let mut done = Vec::with_capacity(unit.len());
+        for keyed in unit {
+            let match_id = fixtures::match_id(keyed.key, share.run_millis);
+            let teams = match &defaults {
+                Some([first, second]) if keyed.fixture.clubs == [1, 0] => {
                     [second.clone(), first.clone()]
-                } else {
-                    [first.clone(), second.clone()]
-                };
-                (teams, engine_seed)
-            }
-            _ => {
-                let mut teams = leagues.teams(&fixture);
-                if share.suite == Suite::Strength {
-                    let side = fixture.boosted_side();
-                    teams[side] =
-                        fixtures::boosted(&teams[side], bands.stronger_team.attribute_boost);
                 }
-                (
-                    teams,
-                    fixtures::match_seed(share.seed, share.suite, fixture.index),
+                Some([first, second]) => [first.clone(), second.clone()],
+                None => {
+                    let mut teams = leagues.teams(&keyed.fixture);
+                    if let Some(side) = keyed.boosted {
+                        teams[side] =
+                            fixtures::boosted(&teams[side], bands.stronger_team.attribute_boost);
+                    }
+                    teams
+                }
+            };
+            // A tactics file holds at most 16 formations.
+            let formations = keyed.pairing.map(|(pairing, first_side)| {
+                let [first, second] = pairings[pairing].map(|i| i as u8);
+                if first_side == 0 {
+                    [first, second]
+                } else {
+                    [second, first]
+                }
+            });
+            let red_card = keyed.arm.map(|arm| RED_CARD_ARMS[arm].1);
+            let seed = keyed.engine_seed;
+            let played = if std::mem::take(&mut inject_match) {
+                Err(EngineError::InvalidConfig("injected failure".into()))
+            } else {
+                play(
+                    share,
+                    (&content, &commentary),
+                    (&teams, formations, red_card),
+                    seed,
+                    &owner_id,
+                    &match_id,
+                    &events_dir,
                 )
-            }
-        };
-        let played = if std::mem::take(&mut inject_match) {
-            Err(EngineError::InvalidConfig("injected failure".into()))
-        } else {
-            play(
-                share,
-                (&content, &commentary),
-                (&teams, job.formations, job.red_card.map(|(_, off, _)| off)),
+            };
+            let stats = match played {
+                Ok(stats) => stats,
+                Err(err) => {
+                    tracing::error!(
+                        signal = "calibrate.match_failed",
+                        match.id = %match_id,
+                        error = %err
+                    );
+                    failure(
+                        (&owner_id, &match_id, seed),
+                        &teams,
+                        &keyed.fixture,
+                        &err,
+                        &content,
+                    )
+                }
+            };
+            write_stats_at(&stats_dir, &stats)?;
+            done.push(Done {
+                key: keyed.key,
                 seed,
-                &owner_id,
-                &match_id,
-                &events_dir,
-            )
-        };
-        let stats = match played {
-            Ok(stats) => stats,
-            Err(err) => {
-                tracing::error!(
-                    signal = "calibrate.match_failed",
-                    match.id = %match_id,
-                    error = %err
-                );
-                failure(
-                    (&owner_id, &match_id, seed),
-                    &teams,
-                    &fixture,
-                    &err,
-                    &content,
-                )
-            }
-        };
-        write_stats_at(&stats_dir, &stats)?;
+                match_id,
+            });
+        }
+        if finished {
+            let writer = match &mut ledger {
+                Some(w) => w,
+                None => ledger.insert(LedgerWriter::open(
+                    share.run_dir,
+                    share.session,
+                    share.suite.code(),
+                    share.shard,
+                )?),
+            };
+            writer.append(&UnitLine {
+                suite: share.suite.code().to_string(),
+                unit: place,
+                fixtures: done,
+            })?;
+        }
     }
     Ok(0)
-}
-
-/// Every fixture of the share's suite, with the formation of each side in the formations
-/// suite and the arm in the red-card suite.
-fn planned(share: &Share<'_>, content: &Content) -> Vec<Job> {
-    let matches = share.matches;
-    match share.suite {
-        Suite::Formations => {
-            let pairings = fixtures::pairings(content.tactics.formations.len());
-            let selected: Vec<usize> = if share.pairings.is_empty() {
-                (0..pairings.len()).collect()
-            } else {
-                share.pairings.to_vec()
-            };
-            fixtures::formation_fixtures_for(matches, pairings.len(), &selected)
-                .into_iter()
-                .map(|f| {
-                    // A tactics file holds at most 16 formations.
-                    let [first, second] = pairings[f.pairing].map(|i| i as u8);
-                    let sides = if f.first_side == 0 {
-                        [first, second]
-                    } else {
-                        [second, first]
-                    };
-                    Job {
-                        fixture: f.fixture,
-                        formations: Some(sides),
-                        red_card: None,
-                    }
-                })
-                .collect()
-        }
-        Suite::RedCard => fixtures::red_card_fixtures(share.seed, matches)
-            .into_iter()
-            .map(|f| Job {
-                // The default clubs play every red-card match; no league is generated.
-                fixture: Fixture {
-                    index: f.index,
-                    league: 0,
-                    clubs: if f.swapped { [1, 0] } else { [0, 1] },
-                },
-                formations: None,
-                red_card: Some((f.engine_seed, RED_CARD_ARMS[f.arm].1, f.swapped)),
-            })
-            .collect(),
-        Suite::Equal | Suite::Strength => fixtures::fixtures(matches)
-            .into_iter()
-            .map(|fixture| Job {
-                fixture,
-                formations: None,
-                red_card: None,
-            })
-            .collect(),
-    }
 }
 
 /// One match to full time, validated, with its events and their commentary lines written.

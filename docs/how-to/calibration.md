@@ -26,7 +26,7 @@ For the red-card experiment, make its own baseline:
 target/release/engine-cli calibrate --suite red-card --seed 1 --matches 240 --out runs/base-red-card
 ```
 
-A report made before sampling errors and fixtures hashes existed cannot be a baseline. Make a new one.
+A report made before sampling errors, fixtures hashes, or fixture keys existed cannot be a baseline: a report from before fixture keys played other matches, and the run refuses it by naming the old seeding scheme. Make a new one.
 
 ## Make the change
 
@@ -100,6 +100,24 @@ A targeted run is an inner loop. Before a change is accepted, run the full gate:
    ```
 
 3. Read `calib.pass` and the failing bands in each report.
+
+## Resume or grow a run
+
+A long run that stops (Ctrl+C, a closed terminal, a power cut) keeps every finished work unit. Run the same command into the same folder to finish it:
+
+```bash
+target/release/engine-cli calibrate --seed 42 --matches 1000 --out runs/base-42
+```
+
+The run says `resuming run <run.id>: <done> of <total> fixtures done, <left> to play` and plays only the rest. The report equals the report of a run that never stopped.
+
+To grow a run, run it again into the same folder with a larger `--matches`. The earlier matches keep their fixture keys, engine seeds, and results, and only the new fixtures play:
+
+```bash
+target/release/engine-cli calibrate --seed 42 --matches 2000 --out runs/base-42
+```
+
+When the program, the content, the flags, the seed, or the minutes changed since the folder's run, the run does not resume. It moves the old files to `superseded/<old run.id>/`, names what differs, and starts again. Do not run two commands into one folder at the same time.
 
 ## Build a faster calibrate binary
 

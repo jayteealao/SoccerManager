@@ -108,3 +108,31 @@ pub fn with_machine_set(
     file.set_differences = golden::set_differences(&file.hash_sets);
     file
 }
+
+/// Copies `from` into `to`, folders included.
+pub fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
+/// A copy of the shipped content folder with `edit` applied to one of its JSON files.
+pub fn edited_content(data: &Path, file: &str, edit: impl FnOnce(&mut Value)) -> PathBuf {
+    let content = data.join("content");
+    copy_tree(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content"),
+        &content,
+    );
+    let path = content.join(file);
+    let mut value: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    edit(&mut value);
+    std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap()).unwrap();
+    content
+}

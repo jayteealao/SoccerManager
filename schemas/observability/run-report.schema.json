@@ -68,6 +68,15 @@
       "type": "string",
       "pattern": "^[0-9a-f]{12}$"
     },
+    "fixtures.scheme": {
+      "description": "A calibration run: the scheme its fixture keys and engine seeds are made by. A report without it is from the old seeding scheme, whose match seeds came from the fixture's place in the run; it cannot be a baseline.",
+      "type": "string",
+      "minLength": 1
+    },
+    "run.identity": {
+      "description": "A calibration run: everything that makes its results what they are (build, content, fixtures, flags, paired flag, seed, minutes, strength boost, random-number scheme, fixture scheme, measures version, registry version), as the run folder's run.json holds it.",
+      "type": "object"
+    },
     "outcome": {
       "description": "error marks a run or match that failed; it then carries the three error.* keys and need not carry statistics.",
       "enum": [
@@ -635,6 +644,48 @@
               "off-better",
               "no-difference"
             ]
+          },
+          "calib.units": {
+            "description": "The run's fixtures over every arm and suite, those an earlier session of the run had finished, and those this session played.",
+            "type": "object",
+            "required": ["total", "finished_before", "played"],
+            "properties": {
+              "total": { "type": "integer", "minimum": 0 },
+              "finished_before": { "type": "integer", "minimum": 0 },
+              "played": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "calib.results_digest": {
+            "description": "SHA-256 over every match's statistics in fixture-key order, with the match identifier, owner, and timing left out: a resumed run gives the same digest as an uninterrupted one.",
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "calib.base": {
+            "description": "The old engine of a change run: where it came from, its build and content, how many of its results came from the cache and how many it played, and its band rows on the run's fixtures.",
+            "type": "object",
+            "required": ["source", "build.id", "content.hash", "cache", "calib.bands"],
+            "properties": {
+              "source": { "enum": ["rev", "binary"] },
+              "rev": { "type": "string" },
+              "commit": { "type": "string" },
+              "build.id": { "type": "string", "minLength": 1 },
+              "content.hash": { "type": "string" },
+              "cache": {
+                "type": "object",
+                "required": ["hits", "played"],
+                "properties": {
+                  "hits": { "type": "integer", "minimum": 0 },
+                  "played": { "type": "integer", "minimum": 0 }
+                }
+              },
+              "calib.bands": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["band", "suite", "value", "pass"]
+                }
+              }
+            }
           }
         },
         "dependentRequired": {

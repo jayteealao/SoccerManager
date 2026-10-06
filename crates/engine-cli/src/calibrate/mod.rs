@@ -7,16 +7,24 @@
 //! `--suite red-card` plays the controlled sending-off experiment instead.
 //!
 //! A targeted run plays only what `--pairing` and `--band` select, and each selected
-//! fixture keeps its place in the full list, so its figures equal a full run's. With
+//! fixture keeps its key and engine seed, so its figures equal a full run's. With
 //! `--baseline`, the run is checked against an earlier report before it plays and a diff
 //! is printed band by band, each change with its sampling error.
 //!
-//! Run folder: `report.json`, `stats/<match.id>.json` for every match, and
+//! Run folder: `run.json` with the run's identity, `ledger/` with one line per finished
+//! work unit, `report.json`, `stats/<match.id>.json` for every match, and
 //! `events/<match.id>.jsonl` for the matches kept (outliers by default). A paired run
 //! (`--pair <flag>`) plays every fixture twice, into `arms/off/` and `arms/on/`, and its one
-//! report compares the two arms band by band.
+//! report compares the two arms band by band. The same command into the same folder
+//! resumes a stopped run and grows it to a larger `--matches`; a run of another identity
+//! moves the old files to `superseded/<run.id>/` and starts again.
+//!
+//! The hidden `--base <REV>` and `--base-binary <EXE>` name an old engine; its results on
+//! the same fixtures come from a cache and are reported under `calib.base`.
 
+pub mod base;
 pub mod fixtures;
+pub mod run_folder;
 pub mod worker;
 
 use std::collections::BTreeMap;
@@ -30,17 +38,21 @@ use engine::flags::{FlagSetting, FlagState, FlagStates, effective};
 use engine::observe::identity::{data_dir, load_or_create_owner_id};
 use engine::observe::{emit_line, machine_hash, read_stats, unix_millis, write_record_at};
 use engine::{Content, ContentDir, MatchConfig};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::bench::BenchFigures;
-use crate::cli::{CalibrateOpts, KeepEvents, SuiteArg};
+use crate::cli::{CalibrateOpts, InjectFailure, KeepEvents, SuiteArg};
 use crate::report::bands::Bands;
 use crate::report::baseline::{self, Identity};
 use crate::report::compare::{self, Guard};
 use crate::report::{
-    ArmReport, BAND_NAMES, BandCheck, CalibrationReport, FlagEntry, PairInfo, PairingFigures,
-    RED_CARD_ARMS, RedCardFigures, RunBuilder, Selection, Suite, SuiteFigures, band_suites,
+    ArmReport, BAND_NAMES, BandCheck, BaseCache, BaseReport, CalibrationReport, FlagEntry,
+    MEASURES_VERSION, PairInfo, PairingFigures, RED_CARD_ARMS, RedCardFigures, RunBuilder,
+    Selection, Suite, SuiteFigures, Units, band_suites,
 };
+use fixtures::{FIXTURE_SCHEME, FixtureKey, Keyed};
+use run_folder::{Opened, RunIdentity, UNIT};
 
 /// Matches the single-thread benchmark times after its warm-up.
 const BENCH_MATCHES: u32 = 5;
@@ -76,6 +88,8 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             states: &states,
             inject: opts.inject_failure,
             pairings: &opts.pairing_numbers,
+            session: &opts.session,
+            stop: opts.stop_after_units,
         });
     }
     if opts.baseline.is_some() && opts.pair.is_some() {
@@ -145,13 +159,6 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     let data = data_dir();
     let owner_id = load_or_create_owner_id(&data)?;
     let millis = u64::try_from(unix_millis()).unwrap_or(u64::MAX);
-    let run_id = format!("calib-{:016x}-{millis}", opts.seed);
-    let run_dir = opts
-        .out
-        .clone()
-        .unwrap_or_else(|| data.join("runs").join(&run_id));
-    std::fs::create_dir_all(&run_dir)
-        .with_context(|| format!("cannot create the run folder runs/{run_id}"))?;
     // The largest selected suite sets how many workers can have work. At most 136
     // pairings, and four red-card arms.
     let most = suites
@@ -168,13 +175,37 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         .jobs
         .unwrap_or(u32::try_from(cores).unwrap_or(u32::MAX))
         .clamp(1, most);
-    let ctx = RunCtx {
+    let bands = Bands::load(&dir)?;
+    // nosemgrep: rust.lang.security.current-exe.current-exe -- only used to start worker copies of this program and to hash the build
+    let exe = std::env::current_exe().context("cannot find this program to start workers")?;
+    let identity = RunIdentity {
+        build: run_folder::Build {
+            hash: engine::build_hash().to_string(),
+            executable_sha256: crate::bisect::cache::file_sha256(&exe)
+                .context("cannot read this program to hash it")?,
+        },
+        content: content_identity(&loaded.content, &dir)?,
+        fixtures: fixtures_hash.clone(),
+        flags: states
+            .0
+            .iter()
+            .map(|(n, s)| (n.clone(), s.code().to_string()))
+            .collect(),
+        pair: opts.pair.clone(),
+        seed: opts.seed,
+        minutes: opts.minutes,
+        strength_boost: bands.stronger_team.attribute_boost,
+        rng_scheme: engine::rng::STREAM_SCHEME,
+        fixture_scheme: FIXTURE_SCHEME.to_string(),
+        measures: MEASURES_VERSION,
+        registry: bands.schema_version,
+    };
+    let mut ctx = RunCtx {
         dir: &dir,
         opts,
         loaded: &loaded,
-        bands: Bands::load(&dir)?,
-        // nosemgrep: rust.lang.security.current-exe.current-exe -- only used to start worker copies of this program
-        exe: std::env::current_exe().context("cannot find this program to start workers")?,
+        bands,
+        exe,
         jobs,
         selection: Selection {
             suites: suites.iter().map(|s| s.code().to_string()).collect(),
@@ -190,22 +221,82 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         },
         suites,
         pairings,
+        formation_names,
         selected,
         millis,
-        run_id: &run_id,
+        run_id: String::new(),
+        session: format!("{millis}-{}", std::process::id()),
     };
 
+    // The old engine's results come before the run folder exists and before any match of
+    // the changed engine plays, so a base that cannot build stops the run with nothing done.
+    let old = ctx.old_engine(&data)?;
+
+    let fresh_id = format!("calib-{:016x}-{millis}", opts.seed);
+    let run_dir = opts
+        .out
+        .clone()
+        .unwrap_or_else(|| data.join("runs").join(&fresh_id));
+    let session = run_folder::open(&run_dir, &identity, &fresh_id, millis)?;
+    ctx.millis = session.millis;
+    ctx.run_id = session.run_id.clone();
+    let run_id = session.run_id.clone();
+    let arm_dirs: Vec<PathBuf> = arms
+        .iter()
+        .map(|(name, _)| {
+            if name.is_empty() {
+                run_dir.clone()
+            } else {
+                run_dir.join("arms").join(name)
+            }
+        })
+        .collect();
+    let (total, finished_before) = ctx.progress(&arm_dirs)?;
+    match &session.opened {
+        Opened::New => {}
+        Opened::Resumed => eprintln!(
+            "resuming run {run_id}: {finished_before} of {total} fixtures done, {} to play",
+            total - finished_before
+        ),
+        Opened::Superseded {
+            old_run_id,
+            differences,
+        } => eprintln!(
+            "the run folder held run {old_run_id} of another identity ({}); its files moved \
+             to {}/{old_run_id}/, and a new run {run_id} starts",
+            differences.join("; "),
+            run_folder::SUPERSEDED
+        ),
+    }
+
     let started = Instant::now();
+    let mut budget = opts.stop_after_units;
     let mut played: Vec<Arm> = Vec::with_capacity(arms.len());
-    for (name, s) in &arms {
-        let arm_dir = if name.is_empty() {
-            run_dir.clone()
-        } else {
-            run_dir.join("arms").join(name)
-        };
-        played.push(ctx.play_arm(s, &arm_dir)?);
+    for ((_, s), arm_dir) in arms.iter().zip(&arm_dirs) {
+        match ctx.play_arm(s, arm_dir, &mut budget)? {
+            Some(arm) => played.push(arm),
+            None => {
+                eprintln!(
+                    "stopped after {} work units; run the same command again to resume",
+                    opts.stop_after_units.unwrap_or(0)
+                );
+                return Ok(1);
+            }
+        }
     }
     let first = &played[0];
+    let (_, finished_after) = ctx.progress(&arm_dirs)?;
+    let units = Units {
+        total,
+        finished_before,
+        played: finished_after.saturating_sub(finished_before),
+    };
+    let digest_input: Vec<(String, Vec<(FixtureKey, Value)>)> = arms
+        .iter()
+        .zip(&played)
+        .map(|((name, _), arm)| (name.to_string(), arm.records.clone()))
+        .collect();
+    let results_digest = run_folder::results_digest(&digest_input);
 
     let written = loaded.content.written_tuning();
     let resolved = effective(written, &states)?;
@@ -230,6 +321,8 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         seed: opts.seed,
         content_hash: first.content_hash.clone(),
         fixtures_hash,
+        fixtures_scheme: FIXTURE_SCHEME,
+        identity: serde_json::to_value(&identity)?,
         outcome: if worker_failed { "error" } else { "success" },
         error_type: worker_failed.then_some("worker"),
         error_code: worker_failed.then_some("worker-failed"),
@@ -266,6 +359,9 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         arms: None,
         compare: None,
         verdict: None,
+        units,
+        results_digest,
+        base: old,
     };
     if let Some(base) = &base {
         let diff = baseline::diff(base, &report.content_hash, &report.bands);
@@ -343,10 +439,15 @@ struct RunCtx<'a> {
     suites: Vec<Suite>,
     /// The formation names of every pairing of the formations suite.
     pairings: Vec<[String; 2]>,
+    /// The formations of the tactics file, in order.
+    formation_names: Vec<String>,
     /// The numbers of the pairings this run plays, in order.
     selected: Vec<usize>,
+    /// The run's start, from its `run.json`: part of every match identifier.
     millis: u64,
-    run_id: &'a str,
+    run_id: String,
+    /// This invocation: the ledger files its workers write carry it.
+    session: String,
 }
 
 /// The suites a run plays, and the numbers of the formation pairings it plays: `--suite`
@@ -470,6 +571,8 @@ struct Arm {
     events_written: u32,
     events_kept: u32,
     bench: BenchFigures,
+    /// Every match's statistics record, by fixture key, for the results digest.
+    records: Vec<(FixtureKey, Value)>,
 }
 
 impl Arm {
@@ -513,10 +616,170 @@ impl Arm {
     }
 }
 
+/// The finished matches of a run folder, folded.
+struct Folded {
+    builder: RunBuilder,
+    records: Vec<(FixtureKey, Value)>,
+}
+
 impl RunCtx<'_> {
-    /// Plays every suite into `arm_dir` with `states`, then times the default teams on one
-    /// thread under the same states.
-    fn play_arm(&self, states: &FlagStates, arm_dir: &Path) -> anyhow::Result<Arm> {
+    /// Every match `suite` plays, in fixture order, with its key and engine seed.
+    fn keyed(&self, suite: Suite) -> Vec<Keyed> {
+        fixtures::keyed(
+            suite,
+            self.opts.seed,
+            self.opts.matches,
+            &self.formation_names,
+            &self.selected,
+        )
+    }
+
+    /// The planned fixtures of every arm and suite, and those the arms' ledgers have
+    /// finished with the planned engine seed.
+    fn progress(&self, arm_dirs: &[PathBuf]) -> anyhow::Result<(u32, u32)> {
+        let (mut total, mut done) = (0usize, 0usize);
+        for arm_dir in arm_dirs {
+            let finished = run_folder::finished(arm_dir, None)?;
+            for &suite in &self.suites {
+                for k in self.keyed(suite) {
+                    total += 1;
+                    if finished
+                        .get(&k.key)
+                        .is_some_and(|d| d.seed == k.engine_seed)
+                    {
+                        done += 1;
+                    }
+                }
+            }
+        }
+        let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+        Ok((count(total), count(done)))
+    }
+
+    /// The old engine's band rows on the run's fixtures, from its cache, played first where
+    /// the cache misses; `None` without `--base` or `--base-binary`.
+    fn old_engine(&self, data: &Path) -> anyhow::Result<Option<BaseReport>> {
+        let opts = self.opts;
+        let source = match (&opts.base, &opts.base_binary) {
+            (Some(rev), _) => base::Source::Rev(rev.clone()),
+            (None, Some(path)) => base::Source::Binary(path.clone()),
+            (None, None) => return Ok(None),
+        };
+        let planned: Vec<(FixtureKey, u64)> = self
+            .suites
+            .iter()
+            .flat_map(|&s| self.keyed(s))
+            .map(|k| (k.key, k.engine_seed))
+            .collect();
+        let old = base::run(&base::Request {
+            source,
+            data,
+            content_dir: self.dir.root(),
+            seed: opts.seed,
+            minutes: opts.minutes,
+            matches: opts.matches,
+            jobs: self.jobs,
+            suites: &self.suites,
+            pairings: &self.selection.pairings,
+            planned: &planned,
+            fail_build: opts.inject_failure == Some(InjectFailure::BaseBuild),
+        })?;
+        eprintln!(
+            "old engine {}: {} results from the cache, {} played",
+            old.build_id, old.hits, old.played
+        );
+        let folded = self.fold(&old.dir, false)?;
+        let figures = folded.builder.figures();
+        let formations = folded.builder.pairing_figures();
+        let mut checks = folded
+            .builder
+            .checks(&figures, &formations, &BTreeMap::new());
+        if !opts.bands.is_empty() {
+            checks.retain(|c| opts.bands.contains(&c.band));
+        }
+        checks
+            .sort_by(|a, b| (&a.suite, &a.band, &a.pairing).cmp(&(&b.suite, &b.band, &b.pairing)));
+        Ok(Some(BaseReport {
+            source: old.source,
+            rev: old.rev,
+            commit: old.commit,
+            build_id: old.build_id,
+            content_hash: old.content_hash,
+            cache: BaseCache {
+                hits: old.hits,
+                played: old.played,
+            },
+            bands: checks,
+        }))
+    }
+
+    /// Folds every planned match the ledger of `dir` finished into a builder; a planned
+    /// match with no ledger entry or no statistics file is the dark path. With
+    /// `prune_events`, the event file of a match that is not an outlier is removed.
+    fn fold(&self, dir: &Path, prune_events: bool) -> anyhow::Result<Folded> {
+        let opts = self.opts;
+        let done = run_folder::finished(dir, None)?;
+        let events_dir = dir.join("events");
+        let mut builder = RunBuilder::new(self.bands.clone());
+        builder.minutes = opts.minutes;
+        let mut records = Vec::new();
+        for &suite in &self.suites {
+            match suite {
+                Suite::Formations => builder.plan_pairings(
+                    opts.matches,
+                    self.selected
+                        .iter()
+                        .map(|&p| self.pairings[p].clone())
+                        .collect(),
+                ),
+                Suite::RedCard => builder.plan(
+                    suite,
+                    opts.matches.saturating_mul(RED_CARD_ARMS.len() as u32),
+                ),
+                Suite::Equal | Suite::Strength => builder.plan(suite, opts.matches),
+            }
+            for k in self.keyed(suite) {
+                let Some(entry) = done.get(&k.key).filter(|d| d.seed == k.engine_seed) else {
+                    builder.add_missing();
+                    continue;
+                };
+                let id = &entry.match_id;
+                match read_stats(&dir.join("stats").join(format!("{id}.json"))) {
+                    Ok(stats) => {
+                        records.push((k.key, serde_json::to_value(&stats)?));
+                        let outlier = match (k.pairing, k.arm) {
+                            (Some((pairing, side)), _) => {
+                                let place = self
+                                    .selected
+                                    .iter()
+                                    .position(|&p| p == pairing)
+                                    .unwrap_or(0);
+                                builder.add_pairing(stats, place, side)
+                            }
+                            (None, Some(arm)) => builder.add_red_card(stats, arm),
+                            (None, None) => builder.add(suite, stats, k.boosted),
+                        };
+                        if prune_events && !outlier {
+                            let _ = std::fs::remove_file(events_dir.join(format!("{id}.jsonl")));
+                        }
+                    }
+                    // A missing record is the dark path; its event file, if any, is kept.
+                    Err(_) => builder.add_missing(),
+                }
+            }
+        }
+        Ok(Folded { builder, records })
+    }
+
+    /// Plays every suite's unfinished fixtures into `arm_dir` with `states`, then times the
+    /// default teams on one thread under the same states. `budget`, the stop seam, counts
+    /// the work units left to play; `None` comes back when it ran out.
+    fn play_arm(
+        &self,
+        states: &FlagStates,
+        arm_dir: &Path,
+        budget: &mut Option<u32>,
+    ) -> anyhow::Result<Option<Arm>> {
         let opts = self.opts;
         std::fs::create_dir_all(arm_dir)
             .with_context(|| format!("cannot create the run folder runs/{}", self.run_id))?;
@@ -533,31 +796,41 @@ impl RunCtx<'_> {
         let mut workers_failed = 0u32;
         for &suite in &self.suites {
             let suite_started = Instant::now();
-            let children = (0..self.jobs)
-                .map(|shard| {
-                    worker_command(self, suite, shard, arm_dir, &settings)
-                        .spawn()
-                        .context("cannot start a calibration worker")
-                })
-                .collect::<anyhow::Result<Vec<_>>>()?;
-            for mut child in children {
-                let status = child.wait().context("a calibration worker was lost")?;
-                if !status.success() {
-                    workers_failed += 1;
-                    tracing::warn!(
-                        signal = "calibrate.worker_failed",
-                        run.id = %self.run_id,
-                        suite = suite.code(),
-                        code = ?status.code()
-                    );
+            let remaining = worker::remaining(arm_dir, &self.session, self.keyed(suite))?;
+            let units = u32::try_from(remaining.len().div_ceil(UNIT)).unwrap_or(u32::MAX);
+            if !remaining.is_empty() {
+                let children = (0..self.jobs)
+                    .map(|shard| {
+                        worker_command(self, suite, shard, arm_dir, &settings, *budget)
+                            .spawn()
+                            .context("cannot start a calibration worker")
+                    })
+                    .collect::<anyhow::Result<Vec<_>>>()?;
+                for mut child in children {
+                    let status = child.wait().context("a calibration worker was lost")?;
+                    if !status.success() {
+                        workers_failed += 1;
+                        tracing::warn!(
+                            signal = "calibrate.worker_failed",
+                            run.id = %self.run_id,
+                            suite = suite.code(),
+                            code = ?status.code()
+                        );
+                    }
                 }
+            }
+            if let Some(left) = *budget {
+                if left < units {
+                    return Ok(None);
+                }
+                *budget = Some(left - units);
             }
             let wall_ms = u64::try_from(suite_started.elapsed().as_millis()).unwrap_or(u64::MAX);
             tracing::info!(
                 signal = "calibrate.suite",
                 run.id = %self.run_id,
                 suite = suite.code(),
-                matches = self.planned(suite).len(),
+                matches = remaining.len(),
                 wall_ms,
                 jobs = self.jobs
             );
@@ -573,41 +846,8 @@ impl RunCtx<'_> {
 
         let events_dir = arm_dir.join("events");
         let events_written = count_files(&events_dir);
-        let mut builder = RunBuilder::new(self.bands.clone());
-        builder.minutes = opts.minutes;
-        for &suite in &self.suites {
-            match suite {
-                Suite::Formations => builder.plan_pairings(
-                    opts.matches,
-                    self.selected
-                        .iter()
-                        .map(|&p| self.pairings[p].clone())
-                        .collect(),
-                ),
-                Suite::RedCard => builder.plan(
-                    suite,
-                    opts.matches.saturating_mul(RED_CARD_ARMS.len() as u32),
-                ),
-                Suite::Equal | Suite::Strength => builder.plan(suite, opts.matches),
-            }
-            for planned in self.planned(suite) {
-                let id = fixtures::match_id(opts.seed, suite, planned.index, self.millis);
-                match read_stats(&arm_dir.join("stats").join(format!("{id}.json"))) {
-                    Ok(stats) => {
-                        let outlier = match (planned.pairing, planned.arm) {
-                            (Some((pairing, side)), _) => builder.add_pairing(stats, pairing, side),
-                            (None, Some(arm)) => builder.add_red_card(stats, arm),
-                            (None, None) => builder.add(suite, stats, planned.boosted),
-                        };
-                        if !outlier && opts.keep_events == KeepEvents::Outliers {
-                            let _ = std::fs::remove_file(events_dir.join(format!("{id}.jsonl")));
-                        }
-                    }
-                    // A missing record is the dark path; its event file, if any, is kept.
-                    Err(_) => builder.add_missing(),
-                }
-            }
-        }
+        let Folded { builder, records } =
+            self.fold(arm_dir, opts.keep_events == KeepEvents::Outliers)?;
         let events_kept = count_files(&events_dir);
 
         let figures = builder.figures();
@@ -650,7 +890,7 @@ impl RunCtx<'_> {
             .map(|(s, &ms)| (s.code().to_string(), ms))
             .collect();
         wall_ms.insert("total".into(), suites_ms);
-        Ok(Arm {
+        Ok(Some(Arm {
             content_hash: config.content_hash.clone(),
             flags_on: content.flags.names().to_vec(),
             figures,
@@ -667,61 +907,8 @@ impl RunCtx<'_> {
             events_written,
             events_kept,
             bench,
-        })
-    }
-}
-
-/// One planned match of a suite, as the parent reads it back.
-struct Planned {
-    index: u32,
-    /// The strength suite: the side of the boosted club.
-    boosted: Option<usize>,
-    /// The formations suite: the pairing's place in the selection, and the side of its
-    /// first formation.
-    pairing: Option<(usize, usize)>,
-    /// The red-card suite: the arm's number in [`RED_CARD_ARMS`].
-    arm: Option<usize>,
-}
-
-impl RunCtx<'_> {
-    /// Every match `suite` plays, in fixture order.
-    fn planned(&self, suite: Suite) -> Vec<Planned> {
-        let matches = self.opts.matches;
-        match suite {
-            Suite::Formations => {
-                fixtures::formation_fixtures_for(matches, self.pairings.len(), &self.selected)
-                    .into_iter()
-                    .map(|f| Planned {
-                        index: f.fixture.index,
-                        boosted: None,
-                        pairing: self
-                            .selected
-                            .iter()
-                            .position(|&p| p == f.pairing)
-                            .map(|place| (place, f.first_side)),
-                        arm: None,
-                    })
-                    .collect()
-            }
-            Suite::RedCard => fixtures::red_card_fixtures(self.opts.seed, matches)
-                .into_iter()
-                .map(|f| Planned {
-                    index: f.index,
-                    boosted: None,
-                    pairing: None,
-                    arm: Some(f.arm),
-                })
-                .collect(),
-            Suite::Equal | Suite::Strength => fixtures::fixtures(matches)
-                .into_iter()
-                .map(|f| Planned {
-                    index: f.index,
-                    boosted: (suite == Suite::Strength).then(|| f.boosted_side()),
-                    pairing: None,
-                    arm: None,
-                })
-                .collect(),
-        }
+            records,
+        }))
     }
 }
 
@@ -730,6 +917,20 @@ fn suite_codes(figures: &BTreeMap<Suite, SuiteFigures>) -> BTreeMap<String, Suit
         .iter()
         .map(|(s, f)| (s.code().to_string(), f.clone()))
         .collect()
+}
+
+/// SHA-256 over the content files' digest and the slot file: the content part of a run's
+/// identity. The bands file is left out: its ranges are judged again, never replayed.
+fn content_identity(content: &Content, dir: &ContentDir) -> anyhow::Result<String> {
+    let mut hasher = Sha256::new();
+    hasher.update(content.digest);
+    let slots = dir.path(engine::data::SLOTS_FILE);
+    if slots.is_file() {
+        hasher.update(
+            std::fs::read(&slots).with_context(|| format!("cannot read {}", slots.display()))?,
+        );
+    }
+    Ok(stream::record::hex(&hasher.finalize()))
 }
 
 /// The command line of one worker. Workers log warnings and errors only unless `SM_LOG`
@@ -741,6 +942,7 @@ fn worker_command(
     shard: u32,
     run_dir: &Path,
     settings: &[FlagSetting],
+    stop: Option<u32>,
 ) -> Command {
     let (opts, content, shards, millis) = (ctx.opts, ctx.dir.root(), ctx.jobs, ctx.millis);
     let mut cmd = Command::new(&ctx.exe);
@@ -757,6 +959,7 @@ fn worker_command(
         .arg("--run-dir")
         .arg(run_dir)
         .args(["--run-millis", &millis.to_string()])
+        .args(["--session", &ctx.session])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::inherit());
@@ -764,8 +967,13 @@ fn worker_command(
         let numbers: Vec<String> = ctx.selected.iter().map(usize::to_string).collect();
         cmd.arg("--pairing-numbers").arg(numbers.join(","));
     }
-    // The test seam reaches the first worker only.
-    if let (Some(inject), 0) = (opts.inject_failure, shard) {
+    if let Some(stop) = stop {
+        cmd.args(["--stop-after-units", &stop.to_string()]);
+    }
+    // The match and worker seams reach the first worker only.
+    if let (Some(inject @ (InjectFailure::Match | InjectFailure::Worker)), 0) =
+        (opts.inject_failure, shard)
+    {
         cmd.args(["--inject-failure", inject.code()]);
     }
     for setting in settings {

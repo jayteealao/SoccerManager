@@ -6,10 +6,10 @@
 
 mod common;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Output;
 
-use common::{RecordSchemas, bin, record, temp};
+use common::{RecordSchemas, bin, edited_content, record, temp};
 use serde_json::{Value, json};
 
 /// The pairing the slice names, stored as `4-4-2 v 4-4-1-1` (4-4-2 is formation 0).
@@ -75,34 +75,6 @@ fn figures(report: &Value, suite: &str) -> Value {
 
 fn stderr(out: &Output) -> String {
     String::from_utf8_lossy(&out.stderr).into_owned()
-}
-
-/// Copies `from` into `to`, folders included.
-fn copy_tree(from: &Path, to: &Path) {
-    std::fs::create_dir_all(to).unwrap();
-    for entry in std::fs::read_dir(from).unwrap() {
-        let entry = entry.unwrap();
-        let target = to.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &target);
-        } else {
-            std::fs::copy(entry.path(), target).unwrap();
-        }
-    }
-}
-
-/// A copy of the shipped content folder with `edit` applied to one of its JSON files.
-fn edited_content(data: &Path, file: &str, edit: impl FnOnce(&mut Value)) -> PathBuf {
-    let content = data.join("content");
-    copy_tree(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content"),
-        &content,
-    );
-    let path = content.join(file);
-    let mut value: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    edit(&mut value);
-    std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap()).unwrap();
-    content
 }
 
 #[test]
@@ -441,5 +413,31 @@ fn the_red_card_suite_reports_every_arm_the_control_and_the_verdict() {
             );
         }
     }
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[test]
+fn a_baseline_from_the_old_seeding_scheme_is_refused_by_name_before_any_match() {
+    let data = temp("engine-cli-targeted", "old-scheme");
+    let run = data.join("run");
+    let ledger = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../gate/bands/ledger-3.json");
+    let out = calibrate(
+        &data,
+        &run,
+        &[
+            "--seed",
+            "42",
+            "--matches",
+            "1000",
+            "--baseline",
+            ledger.to_str().unwrap(),
+        ],
+    );
+    let text = stderr(&out);
+    assert_eq!(out.status.code(), Some(1), "{text}");
+    assert!(text.contains("old seeding scheme"), "{text}");
+    assert!(text.contains("fixture-key-1"), "{text}");
+    assert!(text.contains("ledger-3.json"), "{text}");
+    assert!(!run.exists(), "the refused run made its folder");
     let _ = std::fs::remove_dir_all(&data);
 }

@@ -855,7 +855,14 @@ pub struct CalibrateOpts {
     )]
     pub baseline: Option<PathBuf>,
     /// Run folder; default SM_DATA_DIR/runs/<run.id>.
-    #[arg(long, value_name = "DIR")]
+    #[arg(
+        long,
+        value_name = "DIR",
+        long_help = "Run folder; default SM_DATA_DIR/runs/<run.id>.\n\n\
+                     Run again into the same folder to resume a stopped run or\n\
+                     grow it with a larger --matches; a run with another\n\
+                     identity moves the old files to superseded/."
+    )]
     pub out: Option<PathBuf>,
     /// Event files to keep.
     #[arg(
@@ -905,14 +912,27 @@ pub struct CalibrateOpts {
     /// Make one match or one worker fail, to exercise the error records; a test seam.
     #[arg(long, hide = true, value_enum, value_name = "WHAT")]
     pub inject_failure: Option<InjectFailure>,
+    /// The session of the parent run a worker belongs to (set by the parent process).
+    #[arg(long, hide = true, default_value = "")]
+    pub session: String,
+    /// Stop after this many work units, leaving the next one half played; a test seam.
+    #[arg(long, hide = true, value_name = "K")]
+    pub stop_after_units: Option<u32>,
+    /// The old engine of a change run: a revision of this repository, built once.
+    #[arg(long, hide = true, value_name = "REV", conflicts_with_all = ["pair", "base_binary"])]
+    pub base: Option<String>,
+    /// The old engine of a change run: a ready executable, played on the run's content.
+    #[arg(long, hide = true, value_name = "EXE", conflicts_with = "pair")]
+    pub base_binary: Option<PathBuf>,
 }
 
-/// The failure `calibrate --inject-failure` makes: the first match of the first worker, or
-/// the first worker before it plays.
+/// The failure `calibrate --inject-failure` makes: the first match of the first worker, the
+/// first worker before it plays, or the build of the old engine (`--base`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum InjectFailure {
     Match,
     Worker,
+    BaseBuild,
 }
 
 impl InjectFailure {
@@ -921,6 +941,7 @@ impl InjectFailure {
         match self {
             Self::Match => "match",
             Self::Worker => "worker",
+            Self::BaseBuild => "base-build",
         }
     }
 }
