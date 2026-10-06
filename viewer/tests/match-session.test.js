@@ -200,7 +200,7 @@ test('loading, then kick-off on the hello, then live once the kick-off is sent',
 
 test('with a lineup to pick, CONTINUE opens the Pre-match line-ups, which send nothing until KICK OFF', async () => {
   const { session, socket } = await started(RUNNING);
-  const squad = roster(0).map((p) => ({ ...p, 'player.natural_fitness': 60, role_fit: [] }));
+  const squad = roster(0).map((p) => ({ ...p, 'player.natural_fitness': 120, role_fit: [] }));
   const setup = {
     lineup: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     bench: [11, 12, 13, 14, 15, 16, 17],

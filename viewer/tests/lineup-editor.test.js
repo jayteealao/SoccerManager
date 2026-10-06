@@ -22,9 +22,9 @@ function squad() {
     'player.name': `Player ${i}`,
     'player.shirt': i + 1,
     'player.position': position,
-    'player.natural_fitness': 40 + i,
-    'player.injury_resistance': 60,
-    role_fit: SCHEMA.roles.map(() => 50),
+    'player.natural_fitness': 80 + 2 * i,
+    'player.injury_resistance': 120,
+    role_fit: SCHEMA.roles.map(() => 100),
   }));
 }
 
@@ -60,9 +60,10 @@ test('the squad list holds every player once, in the eleven, the bench, then not
   assert.equal(rows.bench[0].chipKind, 'bench');
   assert.equal(rows.out[0].chip, '—');
   assert.equal(rows.out[0].chipKind, 'none');
-  assert.equal(keeper.fitness, 40);
+  // 8.0 in tenths shows as 8.
+  assert.equal(keeper.fitness, 8);
   assert.equal(keeper.fitnessWord, 'Low');
-  assert.match(keeper.label, /^1 Player 0, GK, in the eleven at GK, fitness 40 Low$/);
+  assert.match(keeper.label, /^1 Player 0, GK, in the eleven at GK, fitness 8 Low$/);
   assert.match(rows.out[0].label, /not picked/);
 });
 
@@ -148,7 +149,7 @@ test('an engine refusal shows until the lineup changes', () => {
 test('each slot button names its player, role fit and fitness, on an upright pitch', () => {
   const rows = editor().slotRows(() => 0);
   assert.equal(rows.length, 11);
-  assert.match(rows[0].label, /^Slot 1, GK: Player 0, GK, role fit 50 Fair, fitness 40 Low$/);
+  assert.match(rows[0].label, /^Slot 1, GK: Player 0, GK, role fit 10 Fair, fitness 8 Low$/);
   const spot = SCHEMA.formations[0].slots[0];
   const flat = slotPlace(spot.x, spot.y);
   assert.deepEqual(uprightPlace(spot.x, spot.y), { left: flat.top, top: 100 - flat.left });

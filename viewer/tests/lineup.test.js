@@ -16,8 +16,8 @@ function squad() {
     'player.name': `Player ${i}`,
     'player.shirt': i + 1,
     'player.position': position,
-    'player.natural_fitness': 70,
-    role_fit: [50],
+    'player.natural_fitness': 140,
+    role_fit: [100],
   }));
 }
 
@@ -84,6 +84,23 @@ test('a legal lineup enables kick-off, with or without a bench', () => {
 
 test('the lineup message drops empty bench places and the word bands name every figure', () => {
   assert.deepEqual(lineupMessage(ELEVEN, [11, null, 13]), { lineup: ELEVEN, bench: [11, 13] });
-  assert.deepEqual([80, 60, 45, 10].map(fitWord), ['Strong', 'Good', 'Fair', 'Poor']);
-  assert.deepEqual([90, 55, 20].map(fitnessWord), ['High', 'Medium', 'Low']);
+  // The bands read the whole number 1 to 20 a screen shows.
+  assert.deepEqual([20, 15, 14, 12, 11, 9, 8, 1].map(fitWord), [
+    'Strong',
+    'Strong',
+    'Good',
+    'Good',
+    'Fair',
+    'Fair',
+    'Poor',
+    'Poor',
+  ]);
+  assert.deepEqual([20, 14, 13, 10, 9, 1].map(fitnessWord), [
+    'High',
+    'High',
+    'Medium',
+    'Medium',
+    'Low',
+    'Low',
+  ]);
 });

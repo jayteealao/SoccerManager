@@ -15,7 +15,7 @@ import { test } from 'vitest';
 
 import {
   FORMAT_VERSION,
-  PROTOCOL_VERSION,
+  READS_PROTOCOLS,
   REPLAY_STEPS,
   ReplayRefused,
   joinReplay,
@@ -131,7 +131,7 @@ function unbundle(payload) {
 /// production decode applies: the frames, the required record fields, and the inputs.
 async function decodeV6(raw) {
   assert.equal(raw.format, 6);
-  if (raw.protocol !== PROTOCOL_VERSION) {
+  if (!READS_PROTOCOLS.includes(raw.protocol)) {
     throw new ReplayRefused(`frames protocol version ${raw.protocol}`);
   }
   let engine = null;

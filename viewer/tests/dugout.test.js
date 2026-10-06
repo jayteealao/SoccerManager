@@ -30,9 +30,9 @@ function squad(team) {
     'player.name': `Player ${team}-${i}`,
     'player.shirt': i + 1,
     'player.position': position,
-    'player.natural_fitness': 60,
-    'player.injury_resistance': 60,
-    role_fit: SCHEMA.roles.map(() => 50),
+    'player.natural_fitness': 120,
+    'player.injury_resistance': 120,
+    role_fit: SCHEMA.roles.map(() => 100),
   }));
 }
 

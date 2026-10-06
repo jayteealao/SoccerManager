@@ -52,9 +52,9 @@ function fakeTime() {
 }
 
 const TEAMS = [
-  { id: 'club-00000001-00', name: 'Oakmere Rangers', short_name: 'OAK', kit: ['#1d4ed8', '#ffffff'], ground: [105, 68], strength: 62.4 },
-  { id: 'club-00000002-00', name: 'Eldstead City', short_name: 'ELD', kit: ['#b91c1c', '#ffffff'], ground: [100, 64], strength: 55 },
-  { id: 'club-000007ea-00', name: 'Belfield Athletic', short_name: 'BEL', kit: ['#065f46', '#fde047'], ground: [105, 68], strength: 48 },
+  { id: 'club-00000001-00', name: 'Oakmere Rangers', short_name: 'OAK', kit: ['#1d4ed8', '#ffffff'], ground: [105, 68], strength: 12.5 },
+  { id: 'club-00000002-00', name: 'Eldstead City', short_name: 'ELD', kit: ['#b91c1c', '#ffffff'], ground: [100, 64], strength: 11.0 },
+  { id: 'club-000007ea-00', name: 'Belfield Athletic', short_name: 'BEL', kit: ['#065f46', '#fde047'], ground: [105, 68], strength: 9.6 },
 ];
 
 const SAVED = {

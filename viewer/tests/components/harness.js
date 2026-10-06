@@ -48,9 +48,9 @@ const squad = (team) =>
     'player.name': `Player ${team}-${i + 1}`,
     'player.shirt': i + 1,
     'player.position': position,
-    'player.natural_fitness': 70,
-    'player.injury_resistance': 60,
-    role_fit: SCHEMA.roles.map(() => 50),
+    'player.natural_fitness': 140,
+    'player.injury_resistance': 120,
+    role_fit: SCHEMA.roles.map(() => 100),
   }));
 
 export const SETUP = {

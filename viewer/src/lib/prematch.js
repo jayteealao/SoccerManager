@@ -7,19 +7,21 @@
 // have no function here.
 
 import { LENGTH, WIDTH } from './pitch.js';
+import { wholeOf } from './scale.js';
 import { words } from './tactics-panel.js';
 
 export const STARTERS = 11;
 
-/// The injury-risk word for an injury-resistance figure (0 to 100): the one figure the engine
-/// holds that moves a player's chance of injury (injury chance scales with 1.5 less the
-/// resistance). Each word carries its state token; the word, never the colour, is the state.
+/// The injury-risk word for an injury-resistance figure in tenths of 1 to 20: the one figure
+/// the engine holds that moves a player's chance of injury (injury chance scales with 1.5
+/// less the resistance). The word reads the whole number a screen would show. Each word
+/// carries its state token; the word, never the colour, is the state.
 export function riskWord(injuryResistance) {
-  const value = Number(injuryResistance ?? 0);
-  if (value < 40) {
+  const value = wholeOf(injuryResistance);
+  if (value < 8) {
     return { word: 'High', tone: 'bad' };
   }
-  if (value < 60) {
+  if (value < 12) {
     return { word: 'Raised', tone: 'warn' };
   }
   return { word: 'Low', tone: 'good' };

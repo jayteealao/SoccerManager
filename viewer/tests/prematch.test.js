@@ -21,13 +21,14 @@ import { REPO_ROOT } from './helpers.js';
 
 const SCHEMA = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'content/tactics.json'), 'utf8'));
 
-test('the risk word follows injury resistance: High below 40, Raised to 59, Low from 60', () => {
+test('the risk word follows injury resistance on 1 to 20: High below 8, Raised to 11, Low from 12', () => {
+  // The figure arrives in tenths; the word reads the whole number a screen shows.
   assert.deepEqual(riskWord(0), { word: 'High', tone: 'bad' });
-  assert.deepEqual(riskWord(39), { word: 'High', tone: 'bad' });
-  assert.deepEqual(riskWord(40), { word: 'Raised', tone: 'warn' });
-  assert.deepEqual(riskWord(59), { word: 'Raised', tone: 'warn' });
-  assert.deepEqual(riskWord(60), { word: 'Low', tone: 'good' });
-  assert.deepEqual(riskWord(100), { word: 'Low', tone: 'good' });
+  assert.deepEqual(riskWord(74), { word: 'High', tone: 'bad' });
+  assert.deepEqual(riskWord(75), { word: 'Raised', tone: 'warn' });
+  assert.deepEqual(riskWord(114), { word: 'Raised', tone: 'warn' });
+  assert.deepEqual(riskWord(115), { word: 'Low', tone: 'good' });
+  assert.deepEqual(riskWord(200), { word: 'Low', tone: 'good' });
   assert.equal(riskWord(undefined).word, 'High', 'no figure reads as the worst case');
 });
 
@@ -68,7 +69,7 @@ function squad() {
     'player.name': `Home Player${i}`,
     'player.shirt': i + 1,
     'player.position': i === 0 ? 'GK' : 'CM',
-    'player.injury_resistance': [70, 50, 20][i % 3],
+    'player.injury_resistance': [140, 100, 40][i % 3],
   }));
 }
 

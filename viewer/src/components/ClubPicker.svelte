@@ -8,10 +8,25 @@
 
   let { label, teams = [], picked = null, other = null, otherWord = '', onpick = () => {} } = $props();
 
-  /// 0 to 100 as 0 to 5 stars in half stars, each `full`, `half` or `empty`.
+  /// The strength (1 to 20) in half stars, 0 to 10.
+  function halvesOf(strength) {
+    return Math.round(Math.max(0, Math.min(20, strength)) / 2);
+  }
+
+  /// 1 to 20 as 0 to 5 stars in half stars, each `full`, `half` or `empty`.
   function stars(strength) {
-    const halves = Math.round((Math.max(0, Math.min(100, strength)) / 20) * 2);
+    const halves = halvesOf(strength);
     return Array.from({ length: 5 }, (_, i) => (halves >= (i + 1) * 2 ? 'full' : halves === i * 2 + 1 ? 'half' : 'empty'));
+  }
+
+  /// The stars in words, with no decimal: "3 and a half of 5 stars".
+  function starsLabel(strength) {
+    const halves = halvesOf(strength);
+    const whole = Math.floor(halves / 2);
+    if (halves % 2 === 0) {
+      return `${whole} of 5 stars`;
+    }
+    return whole === 0 ? 'Half a star of 5' : `${whole} and a half of 5 stars`;
   }
 
   const uid = $props.id();
@@ -31,7 +46,7 @@
           </button>
         </td>
         <td>
-          <span class="stars" role="img" aria-label="{(Math.round((team.strength / 20) * 2) / 2).toFixed(1)} of 5 stars">
+          <span class="stars" role="img" aria-label={starsLabel(team.strength)}>
             {#each stars(team.strength) as star, i (i)}
               <svg class="star {star}" width="9" height="9" viewBox="0 0 16 16" aria-hidden="true">
                 <defs>

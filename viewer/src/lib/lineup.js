@@ -72,20 +72,21 @@ export function lineupMessage(slots, bench) {
   };
 }
 
-/// Word bands beside every 0 to 100 figure, so a number is never read by colour.
+/// Word bands beside every 1 to 20 figure, so a number is never read by colour. Each takes
+/// the whole number the screen shows (`wholeOf`), so a number and its word never disagree.
 export function fitWord(fit) {
-  if (fit >= 75) {
+  if (fit >= 15) {
     return 'Strong';
   }
-  if (fit >= 60) {
+  if (fit >= 12) {
     return 'Good';
   }
-  return fit >= 45 ? 'Fair' : 'Poor';
+  return fit >= 9 ? 'Fair' : 'Poor';
 }
 
 export function fitnessWord(fitness) {
-  if (fitness >= 70) {
+  if (fitness >= 14) {
     return 'High';
   }
-  return fitness >= 50 ? 'Medium' : 'Low';
+  return fitness >= 10 ? 'Medium' : 'Low';
 }

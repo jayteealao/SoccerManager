@@ -1,0 +1,38 @@
+{
+  "type": "hello",
+  "protocol.version": 3,
+  "match.id": "42-1700000000000",
+  "ticks_expected": 3000,
+  "keyframe_interval": 50,
+  "teams": [
+    {
+      "club.id": "home",
+      "club.name": "Home",
+      "squad": [
+        {
+          "player.id": "a-1",
+          "player.name": "Keeper One",
+          "player.shirt": 1,
+          "player.position": "GK",
+          "player.natural_fitness": 71,
+          "player.injury_resistance": 64,
+          "role_fit": [80, 12]
+        },
+        {
+          "player.id": "a-2",
+          "player.name": "Back Two",
+          "player.shirt": 2,
+          "player.position": "CB",
+          "player.natural_fitness": 2,
+          "player.injury_resistance": 100,
+          "role_fit": [4, 97]
+        }
+      ]
+    },
+    {
+      "club.id": "away",
+      "club.name": "Away",
+      "squad": []
+    }
+  ]
+}
