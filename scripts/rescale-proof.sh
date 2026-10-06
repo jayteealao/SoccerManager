@@ -172,7 +172,11 @@ import json, sys
 def figures(path):
     r = json.load(open(path, encoding="utf-8"))
     bands = {(b["suite"], b["band"]): b["value"] for b in r["calib.bands"] if b["band"] != "wall_ms"}
-    suites = {s: {k: v for k, v in f.items() if "wall" not in k and not k.endswith("_ms")}
+    # `outliers` counts matches slower than 2 seconds of wall time, among other things, so
+    # it moves with the machine's load; the failures and the match figures stay compared.
+    timed = ("outliers",)
+    suites = {s: {k: v for k, v in f.items()
+                  if "wall" not in k and not k.endswith("_ms") and k not in timed}
               for s, f in r["calib.suites"].items()}
     return bands, suites
 a, b = figures(sys.argv[1]), figures(sys.argv[2])
