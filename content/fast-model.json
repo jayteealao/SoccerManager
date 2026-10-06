@@ -1,16 +1,16 @@
 {
   "schema_version": 2,
   "model": "fitted-scores@1",
-  "engine_id": "golden-3-ee6508d-c896aba0e61b",
+  "engine_id": "golden-4-69f4977-c1c764a814ae",
   "engine": {
-    "id": "golden-3-ee6508d-c896aba0e61b",
-    "ledger_index": 3,
-    "build": "ee6508d",
-    "digest": "c896aba0e61b"
+    "id": "golden-4-69f4977-c1c764a814ae",
+    "ledger_index": 4,
+    "build": "69f4977",
+    "digest": "c1c764a814ae"
   },
   "fitted_by": {
     "engine_version": "0.2.0-dev",
-    "build": "cc000a5-dirty"
+    "build": "69f4977"
   },
   "fit": {
     "params": {
