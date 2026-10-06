@@ -92,7 +92,7 @@ Generate fictional clubs as team files, one file for each club.
 | `--out` | folder | required | The folder for the team files. The command creates the folder when it does not exist. |
 | `--force` | none | off | Overwrite team files that exist. |
 
-Output: one team file for each club, named `<club.id>.json`.
+Output: one version 2 team file for each club, named `<club.id>.json`, with every rating on 1.0 to 20.0 and each player's height, age, and nationality. A drawn rating under 1.0 (a goalkeeping attribute of an outfield player) is written as 1.0, and the command prints how many it lifted on standard output, for example `lifted 31 values below 1.0 to 1.0`. The tuning file's `generator.body` block is required; without it the command exits 1.
 
 Exit codes: 0 or 1.
 

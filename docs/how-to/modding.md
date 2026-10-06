@@ -65,20 +65,38 @@ The rule pack decides how long each half lasts, how many substitutions each team
    target/release/engine-cli generate --seed 7 --clubs 2 --out my-teams
    ```
 
-2. Open a team file. Change the club name, the kit colours, or a player's name, shirt, position, or attributes.
+2. Open a team file. Change the club name, the kit colours, or a player's name, shirt, position, attributes, height, age, or nationality.
 3. Pass the file to the engine with `--team-a` or `--team-b`:
 
    ```bash
    target/release/engine-cli simulate --seed 1 --ticks-out check.ticks --team-a my-teams/club-00000007-00.json
    ```
 
-Each player must have every attribute of the attribute schema, and no other attribute. Each attribute value is from 1 to 100.
+Each player must have every attribute of the attribute schema, and no other attribute. A version 2 file, which `generate` writes, holds each attribute as a rating from 1.0 to 20.0 with at most one decimal, for example `12.4`, and each player's `height` in centimetres (150 to 215), `age` in years (15 to 45), and `nationality` as three upper-case letters:
+
+```json
+{ "id": "p-club-00000007-00-04", "name": "Jon Ashby", "shirt": 4, "position": "CB",
+  "attributes": { "acceleration": 12.4, "pace": 11.0, "...": 1.0 },
+  "height": 187, "age": 26, "nationality": "ENG" }
+```
+
+The screens show each rating as its whole number, so 12.4 shows as 12 and 12.5 as 13.
+
+### Convert a version 1 file by hand
+
+A version 1 file (`"schema_version": 1`) holds whole numbers from 1 to 100 and no body fields. The engine still reads it and converts it as it loads: each value is halved, so 62 plays as 12.4, exactly as it played before. To write it as version 2:
+
+1. Set `"schema_version": 2`.
+2. Halve every attribute value: 62 becomes `12.4`, 25 becomes `12.5`. A value under 2 halves to under 1.0; write `1.0` instead. This one change plays differently from the version 1 file.
+3. Add `height`, `age`, and `nationality` to every player.
+
+A version 1 tactics file converts on load in the same way; the data-file reference lists its version 2 fields.
 
 ## Change the attribute schema
 
 1. Open `my-content/attributes.json`.
 2. Add an attribute as `{ "name": "flair", "group": "technical" }`, or remove one that the engine does not require.
-3. Add the new attribute to every player in every team file you use, with a value from 1 to 100. Remove a removed attribute from every player.
+3. Add the new attribute to every player in every team file you use, with a rating from 1.0 to 20.0 (or a value from 1 to 100 in a version 1 file). Remove a removed attribute from every player.
 
 The schema holds 30 to 50 attributes. The engine requires 14 attributes by name, and refuses a schema without one of them. The list is in the data-file reference.
 
@@ -120,7 +138,10 @@ When a file has a bad value, the engine does not start the match. It prints one 
 
 ```text
 error: content refused: tuning tuning.json: engine.keeper_catch_chance: greater than 1
-error: content refused: team teams/x.json: players: player p-club-00000001-00-03: attribute pace is 120; allowed 1 to 100
+error: content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 20.5; allowed 1.0 to 20.0
+error: content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 12.34; not on a tenth
+error: content refused: team teams/x.json: players: player p-club-00000001-00-04: body field height is missing
+error: content refused: team teams/x.json: schema_version 3; this build reads 2
 error: content refused: rules rules/default.json: schema_version 7; this build reads 3
 ```
 

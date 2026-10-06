@@ -4,6 +4,14 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Changed
+
+- Player ratings are on a scale of 1 to 20 with one decimal, in tenths. Every screen shows a rating as its whole number. Matches play exactly as before: a rating is the old value halved, with nothing lost.
+- Team files are version 2: ratings from 1.0 to 20.0, and each player's height, age, and nationality. A version 1 team file still loads and converts as it loads. A version 2 file with a rating out of range or off the tenth grid, or without a body field, is refused with the player and the field named.
+- `engine-cli generate` writes version 2 team files with height, age, and nationality, and reports how many ratings under 1.0 it raised to 1.0.
+- Tactics files are version 2: each role has positions in and out of possession, preferred actions, and a long-ball target, and each duty a scale. The shipped values play as before, and a version 1 tactics file converts as it loads.
+- The match stream protocol is version 4: the squad's ratings are sent in tenths. Replays recorded in version 3 still open, with their ratings shown on the new scale.
+
 ## [0.2.0-beta.3] - 2026-10-05
 
 A prerelease for testers. It replaces 0.2.0-beta.2, which was tagged but not published because two browser tests of the release build measured their timing wrongly; the game is the same. Matches play differently from 0.2.0-beta.1 for the same seed: the kick-off and the penalty positions now follow the Laws.

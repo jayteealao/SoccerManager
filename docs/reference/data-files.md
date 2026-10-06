@@ -25,7 +25,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `realism-bands.json` | 2 | The accepted realism bands the calibration run checks: four from version 1 and eleven from real-match data. They are acceptance criteria, never tuning values |
 | `fast-model.json` | 2 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
 
-Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`.
+Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files and `tactics.json` are read in version 2 and in version 1, which converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)); any other version is refused the same way.
 
 ## attributes.json
 
@@ -194,7 +194,17 @@ A carrier is lone when no active outfield team-mate stands nearer the opponents'
 | bench_positions | positions of the bench, in order | GK CB LB RB DM CM AM LW RW ST ST | `squad_size - 11` codes |
 | per_position | one entry per position code | see file | every one of the ten codes present |
 
-Each `per_position` entry holds `technical`, `mental`, `physical`, and `goalkeeping`, each `{ "mean", "spread" }`. `mean` is 1 to 100; `spread` is 0 to 40. A generated value is a bell-curve draw (mean plus spread times a unit normal), rounded, then clamped to 1 to 100.
+Each `per_position` entry holds `technical`, `mental`, `physical`, and `goalkeeping`, each `{ "mean", "spread" }`. `mean` is 1 to 100; `spread` is 0 to 40. A generated value is a bell-curve draw (mean plus spread times a unit normal) on the 1 to 100 scale, rounded, clamped to 1 to 100, and stored as twice that many tenths of the 1 to 20 scale, so a value of 62 is the rating 12.4.
+
+`body` is optional and draws the body fields of a version 2 team file. `engine-cli generate` needs it; without it the generated players have no body fields.
+
+| Field | Meaning | Bound |
+|---|---|---|
+| body.height | one `{ "mean", "spread" }` in centimetres per position code; a draw is rounded and kept to 150 to 215 | every one of the ten codes; mean 150 to 215, spread 0 to 20 |
+| body.age | `{ "mean", "spread", "min", "max" }` in years; a draw is rounded and kept to `min` to `max` | mean 15 to 45, spread 0 to 15, min 15 to 45, max min to 45 |
+| body.nationality | `{ "home", "foreign", "foreign_share" }`: the club's country, the countries a foreign player comes from, and the share of foreign players | three upper-case letters each; 1 to 64 foreign codes; share 0 to 1 |
+
+The body fields are drawn from their own random stream, after every attribute of the league, so adding or changing the block never moves an attribute. The shipped values are provisional.
 
 ### fatigue
 
@@ -321,15 +331,18 @@ The added time of a half is the sum of `per_kind` over the half's stoppages, plu
 
 ## teams/*.json
 
+Version 2 holds every rating in tenths of the 1 to 20 scale, written as a number with one decimal, and three body fields per player:
+
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "club": { "id": "club-00000001-00", "name": "Oakmere Rangers", "short_name": "OAK",
             "kit": { "primary": "#c8102e", "secondary": "#000000" },
             "ground": { "length": 100, "width": 64 } },
   "players": [
     { "id": "p-club-00000001-00-01", "name": "Peton Tavwood", "shirt": 1, "position": "GK",
-      "attributes": { "acceleration": 56, "...": 0 } }
+      "attributes": { "acceleration": 11.2, "...": 1.0 },
+      "height": 189, "age": 27, "nationality": "ENG" }
   ]
 }
 ```
@@ -347,9 +360,22 @@ The added time of a half is the sum of `per_kind` over the half's stoppages, plu
 | players[].name | 2 to 48 characters |
 | players[].shirt | 1 to 99 |
 | players[].position | one of the ten codes |
-| players[].attributes | every schema attribute present, no other key, each 1 to 100 |
+| players[].attributes | every schema attribute present, no other key, each 1.0 to 20.0 on the tenth grid (one decimal) |
+| players[].height | whole centimetres, 150 to 215; required |
+| players[].age | whole years, 15 to 45; required |
+| players[].nationality | three upper-case letters, for example `ENG`; required |
 
-Before kick-off the AI manager picks the best-fitting player for each formation slot in slot order, by the slot role's attribute weights in `tactics.json`, and names a bench of up to `ai.bench_size` from the rest, the best remaining goalkeeper first. File order breaks ties. A bad value is refused by player and attribute: `content refused: team teams/x.json: players: player p-club-00000001-00-03: attribute pace is 120; allowed 1 to 100`.
+The screens show a rating as its whole number, 1 to 20: 12.5 shows as 13.
+
+Before kick-off the AI manager picks the best-fitting player for each formation slot in slot order, by the slot role's attribute weights in `tactics.json`, and names a bench of up to `ai.bench_size` from the rest, the best remaining goalkeeper first. File order breaks ties. A bad value is refused by player and field:
+
+- a rating out of range: `content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 20.5; allowed 1.0 to 20.0`
+- a rating off the tenth grid: `content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 12.34; not on a tenth`
+- a missing body field: `content refused: team teams/x.json: players: player p-club-00000001-00-04: body field height is missing`
+
+### Version 1 files
+
+A version 1 team file holds every attribute as a whole number 1 to 100 and no body fields. It still loads, from the content folder and from the inputs a replay file embeds: each value `v` becomes `2v` tenths exactly, so 62 becomes 12.4, and its players have no body fields. Values 1 to 4 become 0.2 to 0.8. Only a converted file may hold a rating under 1.0; this is a temporary floor, and a version 2 file is refused for it. A version 1 file is checked as before: `content refused: team teams/x.json: players: player p-club-00000001-00-03: attribute pace is 120; allowed 1 to 100`. The shipped team files are version 1.
 
 A match is played on the home team's ground. `club.ground` is optional: a file without it plays on 105 by 68 metres, and the default is never written back, so a file that gives 105 by 68 and one that gives no ground hash the same. The touchlines, the goal lines, the halfway line and every spot measured from them follow the ground; the goal, the goal and penalty areas, the penalty mark, the centre circle, the corner arcs and the 9.15 m kick distance keep their sizes from the Laws. The formation slots in `tactics.json` are drawn for 105 by 68 and scale with the ground: along the touchline by its length over 105, across by its width over 68. A ground outside the Laws is refused by club: `content refused: team teams/x.json: club.ground: Oakmere Rangers: the ground is 121 m long; the Laws allow 90 to 120 m`. A touchline that is not longer than the goal line is refused the same way.
 
@@ -362,9 +388,19 @@ Every other club file in `teams/` plays in the background round of a served matc
 | formations | `{ "name", "slots" }`; eleven slots `{ "x", "y", "position" }` in metres from the own goal line (1 to 100) and from the centre line (-33 to 33) on a 105 by 68 ground; the slots scale with the home ground | 1 to 16; slot 0 is the only `GK` |
 | mentalities | `{ "name", "block_depth", "shoot", "progress", "hold" }`: metres the block moves up (-20 to 20), and offsets on shots, forward passes, and holding the ball (-2 to 2) | 1 to 9 |
 | instructions | the six team instructions, each `{ "default", "levels" }` with 2 to 5 levels | see below |
-| roles | `{ "name", "positions", "attributes", "shoot", "dribble", "progress" }`: the positions it suits, attribute weights (0 to 10, each a name in `attributes.json`) the AI manager uses to pick players, and option offsets (-2 to 2) | 1 to 64; a role for every position a formation uses |
-| duties | `{ "name", "depth", "risk" }`: metres the anchor moves up (-15 to 15), and an offset on forward passes and dribbles (-2 to 2) | 1 to 5 |
+| roles | `{ "name", "positions", "attributes", "in_possession", "out_of_possession", "preferred_actions", "teammates" }`: the positions it suits, attribute weights (0 to 10, each a name in `attributes.json`) the AI manager uses to pick players, and the role's three behaviours (see below) | 1 to 64; a role for every position a formation uses |
+| duties | `{ "name", "depth", "risk", "scale" }`: metres the anchor moves up (-15 to 15), an offset on forward passes and dribbles (-2 to 2), and a scale on the role's preferred actions (0.5 to 1.5) | 1 to 5 |
 | ai | the AI manager's formation, mentality, and duty by name, and its thresholds | see below |
+
+A role's three behaviours:
+
+| Field | Holds | Bound |
+|---|---|---|
+| in_possession, out_of_possession | `{ "x", "y" }`: metres the player's anchor moves while the team has the ball, and while it does not; `x` up the pitch, `y` away from the centre line on the slot's side | each -15 to 15 |
+| preferred_actions | `{ "shoot", "dribble", "progress" }`: offsets on the carrier's shot, dribble, and forward-pass scores, each times the duty's `scale` | each -2 to 2 |
+| teammates | `{ "long_ball_target" }`: added to a team-mate's pass to this player in proportion to its length, so a target forward draws long balls | 0 to 2 |
+
+The shipped roles set every offset and `long_ball_target` to 0 and every duty's `scale` to 1, which plays as version 1 did. A version 1 tactics file, whose roles hold `shoot`, `dribble`, and `progress` directly and whose duties have no scale, converts on load to exactly those values.
 
 The instructions are `pressing` (levels `{ "name", "press_count", "press_distance_scale" }`: how many players press the carrier, 0 to 4, and a scale on `press_distance`, 0.1 to 3), `width` (a scale on each slot's distance from the centre line), `tempo` (added to passes and taken from dribbles and holding), `line_height` (metres the block moves up), `passing_directness` (a bonus for longer passes), and `time_wasting` (a factor on the restart delay while the team leads). Every level other than a pressing level is `{ "name", "value" }`, with the value -20 to 20.
 
@@ -453,7 +489,7 @@ lines.
 engine-cli generate --seed 7 --clubs 20 --out my-league
 ```
 
-Writes one file per club, named by club id. The same seed and the same content give the same files. Pass `--force` to overwrite.
+Writes one version 2 file per club, named by club id. The same seed and the same content give the same files. Pass `--force` to overwrite. The tuning file must hold the `generator.body` block. A generated value can be under 1.0 (a goalkeeping attribute on an outfield player); the written file holds 1.0 instead, and the command prints how many values it lifted: `lifted 31 values below 1.0 to 1.0`.
 
 ## Runtime files
 

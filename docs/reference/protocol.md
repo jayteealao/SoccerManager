@@ -1,8 +1,8 @@
-# Match stream protocol, version 3
+# Match stream protocol, version 4
 
 The engine serves one viewer over a WebSocket on `127.0.0.1`. The port is chosen by the
 operating system at every run and written to `engine.port` inside the runtime data folder.
-A page connects to `ws://127.0.0.1:<port>/?v=3`.
+A page connects to `ws://127.0.0.1:<port>/?v=4`.
 
 Version 2 changed the meaning of `ticks_expected` from the exact tick count to the most ticks
 the match can last, because the time added at the end of each half is known only when the
@@ -41,6 +41,16 @@ gained one event type (`script`) and four optional fields (`script.pack`, `scrip
 `script.outcome`, and `script.detail`). A match without a pack sends exactly what it sent
 before, and no field changed meaning. The page ignores the `script` event type.
 
+Version 4 moves every rating the `hello` carries to tenths of the 1 to 20 scale. A `squad`
+entry's `player.natural_fitness`, `player.injury_resistance`, and `role_fit` values are
+tenths: 10 to 200 for 1.0 to 20.0, and 2 to 8 for a low value of a team converted from a
+version 1 team file. Version 3 sent whole numbers 1 to 100; a version 3 value `v` is `2v`
+tenths exactly. The loaded `tactics` file is version 2: each role holds `in_possession`,
+`out_of_possession`, `preferred_actions` (with the `shoot`, `dribble`, and `progress` a version 3
+hello held on the role), and `teammates`, and each duty a `scale`. No message or field was
+added or removed, and the tick frames are unchanged. A page shows a rating as its whole number,
+1 to 20.
+
 A test in `crates/protocol/tests/document.rs` holds this document to the code: every message
 the implementation names must appear below with every one of its fields.
 
@@ -49,7 +59,7 @@ the implementation names must appear below with every one of its fields.
 | Step | Rule |
 |---|---|
 | Address | `ws://127.0.0.1:<port>/?v=<protocol version>` |
-| Version | `v` must equal `3`. Any other value, or no value, is refused with both versions named. |
+| Version | `v` must equal `4`. Any other value, or no value, is refused with both versions named. |
 | Origin | Any port of `http://localhost` or `http://127.0.0.1`, or no `Origin` header at all. Any other origin is refused, including `null` (a sandboxed frame or a `data:` document) and a `file://` page. |
 | Clients | One viewer per match. |
 | First message | `hello`, always before the first tick frame. |
@@ -79,7 +89,7 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 
 | Field | Type | Meaning |
 |---|---|---|
-| `protocol.version` | integer | always 3 in this build |
+| `protocol.version` | integer | always 4 in this build |
 | `engine.version` | string | the engine crate version |
 | `build.hash` | string | the git hash the engine was built from |
 | `owner.id` | string | 32 hex characters, created once per machine |
@@ -139,9 +149,9 @@ Each entry of `squad` carries `player.id`, `player.name`, `player.shirt`, and
 
 | Field | Type | Meaning |
 |---|---|---|
-| `player.natural_fitness` | integer | the natural-fitness attribute, 0 to 100; every player is fresh before kick-off, so this is the fitness figure the editor shows |
-| `player.injury_resistance` | integer | the injury-resistance attribute, 0 to 100; 0 when an earlier build sent none |
-| `role_fit` | array of integers | how well the player fits each role, 0 to 100, one value per entry of `tactics.roles`, in that order |
+| `player.natural_fitness` | integer | the natural-fitness attribute in tenths of 1 to 20; every player is fresh before kick-off, so this is the fitness figure the editor shows |
+| `player.injury_resistance` | integer | the injury-resistance attribute in tenths of 1 to 20; 0 when an earlier build sent none |
+| `role_fit` | array of integers | how well the player fits each role in tenths of 1 to 20 (0 to 200), one value per entry of `tactics.roles`, in that order |
 
 `setup`:
 
@@ -581,7 +591,7 @@ guess the WebSocket port on another and the operating system chooses both at eve
 |---|---|---|
 | `engine.state` | string | `idle` (the start screen, no match running), `starting`, `running`, `finished`, `crashed`, `refused`, `abandoned`, `not-found`, or `closed` (the player quit; launcher only) |
 | `socket.port` | int or null | the WebSocket port; present only while `running` |
-| `protocol.version` | int | the protocol version the engine speaks, `3` |
+| `protocol.version` | int | the protocol version the engine speaks, `4` |
 | `engine.pid` | int or null | the process identifier of the engine serving the match |
 | `engine.path` | string or null | the engine program the launcher runs; null when the engine serves the page itself |
 | `engine.reason` | string or null | the engine's own words when `refused`, for example `snapshot refused: <path>: checksum mismatch: the file is corrupt` |
@@ -595,7 +605,7 @@ guess the WebSocket port on another and the operating system chooses both at eve
 | `previous.version` | string | the release version of the previous engine this launcher can finish a save with (launcher only) |
 | `settings` | object | the player's settings: `schema_version`, `speed`, `motion` and `commentary` (launcher only; see `settings.json` in the data-files reference) |
 | `front-door` | bool | `true` when the launch opened on the start screen; absent under `launch --no-start-screen` |
-| `teams` | array | the sample teams match setup offers, by club id: `id`, `name`, `short_name`, `kit` (two colours), `ground` (length and width in metres) and `strength` (the mean attribute of the first eleven, 0 to 100); start screen only |
+| `teams` | array | the sample teams match setup offers, by club id: `id`, `name`, `short_name`, `kit` (two colours), `ground` (length and width in metres) and `strength` (the mean rating of the first eleven on 1 to 20, with one decimal); start screen only |
 | `saved` | object or null | the newest unfinished saved match: `kind` (`current`, `previous` or `other`), `version`, `tick`, `teams`, `score`, `millis` (when the match was created, not the match clock) and `positions` (`pitch` and each player as `[team, x, y]` in metres from the corner, or null for a save of another release); start screen only |
 | `closed` | object | in the answer to `quit` only: `match` (whether a match was running) and `saved` (that match's save, as `saved`, or null) |
 | `resume` | object or null | why a saved match cannot resume: `kind`, `saved.version`, `saved.build`, `saved.tick`, `saved.teams`, `saved.score`, `saved.millis`, `engines` and `reason` (launcher only; see `launch --resume` in the CLI reference) |
@@ -681,7 +691,13 @@ record of the engine, the settings, and the applied changes. `record` writes for
 | trailer | 16 | magic `SMFE`, the frame count, and the first six bytes of a SHA-256 over every payload of every kind, in file order |
 
 All numbers are little-endian. The frame count counts tick and text frames only. In format 3,
-offset 4 was the protocol version, which is also 3, so every older file reads as format 3.
+offset 4 was the protocol version, which is also 3, so every older file reads as format 3; a
+format-3 file still says 3 there, and its `hello` names the protocol of its frames.
+
+A reader reads frames of protocol 3 and 4: the tick frames are the same, and only the scale of
+the `hello`'s ratings differs. A page doubles a protocol 3 `hello`'s ratings into tenths before
+any screen shows them, and keeps the stored frame as it is, so the file writes back byte for
+byte.
 
 ### Inputs
 
@@ -734,7 +750,7 @@ which the log does not keep. The script runs with no wall-clock limit, so the re
 mark is reported, not made again.
 
 A reader refuses a file with the wrong magic, a format newer than the reader knows or older
-than 3, frames of another protocol version, a count mismatch, a truncated entry, an input or
+than 3, frames of a protocol version other than 3 and 4, a count mismatch, a truncated entry, an input or
 record entry in a format-3 file, an input entry after the frames, an entry after the record, a
 format-4 file with no record or with two, a record without one of its fields or with a field
 it does not define, a field of the wrong type or outside its values, a header tick count that
