@@ -191,7 +191,7 @@ impl DecisionModule for DecisionV1 {
                     if !p.active() {
                         continue;
                     }
-                    let anchor = teams[p.team].anchor(p.slot, ball_xy, t);
+                    let anchor = teams[p.team].anchor(p.slot, ball_xy, p.team == team, t);
                     targets[i] = anchor;
                     if p.team != team && i != keepers[def] && count > 0 {
                         let d = (p.pos - ball_xy).length();
@@ -248,7 +248,8 @@ impl DecisionModule for DecisionV1 {
                     if !p.active() {
                         continue;
                     }
-                    let anchor = teams[p.team].anchor(p.slot, ball_xy, t);
+                    // A loose ball: neither team has it, so both stand as out of possession.
+                    let anchor = teams[p.team].anchor(p.slot, ball_xy, false, t);
                     targets[i] = anchor;
                     let d = (p.pos - ball_xy).length();
                     if i != keepers[p.team] && d < nearest_dist[p.team] {
@@ -394,7 +395,8 @@ impl DecisionModule for DecisionV1 {
                 - w.distance * (d / 45.0)
                 + plan.directness * (d / 45.0)
                 + plan.tempo
-                + layoff;
+                + layoff
+                + plan.slots[mate.slot].long_ball_target * (d / 45.0);
             passes[pass_count] = (j, score);
             pass_count += 1;
         }

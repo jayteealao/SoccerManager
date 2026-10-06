@@ -83,18 +83,18 @@ pub fn sample_teams(dir: &ContentDir, content: &Content) -> anyhow::Result<Vec<S
     Ok(teams)
 }
 
-/// The mean attribute of the first eleven players in the file.
+/// The mean rating of the first eleven players in the file, on the 1 to 20 scale.
 fn strength(file: &TeamFile) -> f64 {
     let (sum, count) = file
         .players
         .iter()
         .take(11)
         .flat_map(|p| p.attributes.values())
-        .fold((0u64, 0u64), |(s, n), v| (s + u64::from(*v), n + 1));
+        .fold((0u64, 0u64), |(s, n), v| (s + u64::from(v.tenths()), n + 1));
     if count == 0 {
         0.0
     } else {
-        sum as f64 / count as f64
+        sum as f64 / count as f64 / 10.0
     }
 }
 

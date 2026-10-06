@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "formations": [
     {
       "name": "4-4-2",
@@ -223,124 +223,85 @@
       "name": "goalkeeper",
       "positions": ["GK"],
       "attributes": { "reflexes": 3.0, "handling": 2.0, "one_on_ones": 1.0, "command_of_area": 1.0 },
-      "in_possession": { "x": 0.0, "y": 0.0 },
-      "out_of_possession": { "x": 0.0, "y": 0.0 },
-      "preferred_actions": { "shoot": 0.0, "dribble": 0.0, "progress": 0.0 },
-      "teammates": { "long_ball_target": 0.0 }
+      "shoot": 0.0, "dribble": 0.0, "progress": 0.0
     },
     {
       "name": "central_defender",
       "positions": ["CB"],
       "attributes": { "tackling": 3.0, "positioning": 3.0, "heading": 2.0, "strength": 1.0 },
-      "in_possession": { "x": 0.0, "y": 0.0 },
-      "out_of_possession": { "x": 0.0, "y": 0.0 },
-      "preferred_actions": { "shoot": -0.2, "dribble": -0.2, "progress": 0.0 },
-      "teammates": { "long_ball_target": 0.0 }
+      "shoot": -0.2, "dribble": -0.2, "progress": 0.0
     },
     {
       "name": "ball_playing_defender",
       "positions": ["CB"],
       "attributes": { "passing": 3.0, "tackling": 2.0, "positioning": 2.0, "vision": 1.0 },
-      "in_possession": { "x": 0.0, "y": 0.0 },
-      "out_of_possession": { "x": 0.0, "y": 0.0 },
-      "preferred_actions": { "shoot": -0.2, "dribble": -0.1, "progress": 0.1 },
-      "teammates": { "long_ball_target": 0.0 }
+      "shoot": -0.2, "dribble": -0.1, "progress": 0.1
     },
     {
       "name": "full_back",
       "positions": ["LB", "RB"],
       "attributes": { "tackling": 2.0, "pace": 2.0, "positioning": 2.0, "stamina": 1.0 },
-      "in_possession": { "x": 0.0, "y": 0.0 },
-      "out_of_possession": { "x": 0.0, "y": 0.0 },
-      "preferred_actions": { "shoot": -0.1, "dribble": 0.0, "progress": 0.0 },
-      "teammates": { "long_ball_target": 0.0 }
+      "shoot": -0.1, "dribble": 0.0, "progress": 0.0
     },
     {
       "name": "wing_back",
       "positions": ["LB", "RB"],
       "attributes": { "pace": 2.0, "crossing": 2.0, "stamina": 2.0, "dribbling": 1.0 },
-      "in_possession": { "x": 0.0, "y": 0.0 },
-      "out_of_possession": { "x": 0.0, "y": 0.0 },
-      "preferred_actions": { "shoot": -0.1, "dribble": 0.1, "progress": 0.1 },
-      "teammates": { "long_ball_target": 0.0 }
+      "shoot": -0.1, "dribble": 0.1, "progress": 0.1
     },
     {
       "name": "defensive_midfielder",
       "positions": ["DM", "CM"],
       "attributes": { "tackling": 3.0, "positioning": 2.0, "passing": 2.0, "teamwork": 1.0 },
-      "in_possession": { "x": 0.0, "y": 0.0 },
-      "out_of_possession": { "x": 0.0, "y": 0.0 },
-      "preferred_actions": { "shoot": -0.1, "dribble": -0.05, "progress": 0.0 },
-      "teammates": { "long_ball_target": 0.0 }
+      "shoot": -0.1, "dribble": -0.05, "progress": 0.0
     },
     {
       "name": "central_midfielder",
       "positions": ["CM", "DM", "AM"],
       "attributes": { "passing": 3.0, "decisions": 2.0, "stamina": 1.0, "vision": 1.0 },
-      "in_possession": { "x": 0.0, "y": 0.0 },
-      "out_of_possession": { "x": 0.0, "y": 0.0 },
-      "preferred_actions": { "shoot": 0.0, "dribble": 0.0, "progress": 0.0 },
-      "teammates": { "long_ball_target": 0.0 }
+      "shoot": 0.0, "dribble": 0.0, "progress": 0.0
     },
     {
       "name": "playmaker",
       "positions": ["CM", "AM", "DM"],
       "attributes": { "passing": 3.0, "vision": 3.0, "technique": 2.0, "decisions": 1.0 },
-      "in_possession": { "x": 0.0, "y": 0.0 },
-      "out_of_possession": { "x": 0.0, "y": 0.0 },
-      "preferred_actions": { "shoot": 0.0, "dribble": 0.0, "progress": 0.15 },
-      "teammates": { "long_ball_target": 0.0 }
+      "shoot": 0.0, "dribble": 0.0, "progress": 0.15
     },
     {
       "name": "attacking_midfielder",
       "positions": ["AM", "CM"],
       "attributes": { "passing": 2.0, "long_shots": 2.0, "dribbling": 2.0, "vision": 2.0 },
-      "in_possession": { "x": 0.0, "y": 0.0 },
-      "out_of_possession": { "x": 0.0, "y": 0.0 },
-      "preferred_actions": { "shoot": 0.1, "dribble": 0.05, "progress": 0.05 },
-      "teammates": { "long_ball_target": 0.0 }
+      "shoot": 0.1, "dribble": 0.05, "progress": 0.05
     },
     {
       "name": "winger",
       "positions": ["LW", "RW"],
       "attributes": { "pace": 2.0, "dribbling": 3.0, "crossing": 2.0, "acceleration": 1.0 },
-      "in_possession": { "x": 0.0, "y": 0.0 },
-      "out_of_possession": { "x": 0.0, "y": 0.0 },
-      "preferred_actions": { "shoot": 0.0, "dribble": 0.15, "progress": 0.05 },
-      "teammates": { "long_ball_target": 0.0 }
+      "shoot": 0.0, "dribble": 0.15, "progress": 0.05
     },
     {
       "name": "inside_forward",
       "positions": ["LW", "RW"],
       "attributes": { "dribbling": 2.0, "finishing": 3.0, "pace": 2.0, "composure": 1.0 },
-      "in_possession": { "x": 0.0, "y": 0.0 },
-      "out_of_possession": { "x": 0.0, "y": 0.0 },
-      "preferred_actions": { "shoot": 0.15, "dribble": 0.1, "progress": 0.0 },
-      "teammates": { "long_ball_target": 0.0 }
+      "shoot": 0.15, "dribble": 0.1, "progress": 0.0
     },
     {
       "name": "striker",
       "positions": ["ST"],
       "attributes": { "finishing": 3.0, "composure": 2.0, "positioning": 2.0, "pace": 1.0 },
-      "in_possession": { "x": 0.0, "y": 0.0 },
-      "out_of_possession": { "x": 0.0, "y": 0.0 },
-      "preferred_actions": { "shoot": 0.15, "dribble": 0.0, "progress": 0.0 },
-      "teammates": { "long_ball_target": 0.0 }
+      "shoot": 0.15, "dribble": 0.0, "progress": 0.0
     },
     {
       "name": "target_forward",
       "positions": ["ST"],
       "attributes": { "heading": 3.0, "strength": 3.0, "finishing": 2.0, "jumping": 1.0 },
-      "in_possession": { "x": 0.0, "y": 0.0 },
-      "out_of_possession": { "x": 0.0, "y": 0.0 },
-      "preferred_actions": { "shoot": 0.05, "dribble": -0.1, "progress": 0.0 },
-      "teammates": { "long_ball_target": 0.0 }
+      "shoot": 0.05, "dribble": -0.1, "progress": 0.0
     }
   ],
   "duties": [
-    { "name": "defend", "depth": -4.0, "risk": -0.1, "scale": 1.0 },
-    { "name": "support", "depth": 0.0, "risk": 0.0, "scale": 1.0 },
-    { "name": "attack", "depth": 4.0, "risk": 0.1, "scale": 1.0 }
+    { "name": "defend", "depth": -4.0, "risk": -0.1 },
+    { "name": "support", "depth": 0.0, "risk": 0.0 },
+    { "name": "attack", "depth": 4.0, "risk": 0.1 }
   ],
   "ai": {
     "formation": "4-4-2",

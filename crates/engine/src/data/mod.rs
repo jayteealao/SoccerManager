@@ -3,6 +3,7 @@
 //! the relative path, the field path, and the reason.
 
 pub mod attributes;
+pub mod convert;
 pub mod generator;
 pub mod names;
 pub mod rules;
@@ -146,6 +147,8 @@ struct VersionOnly {
 pub struct Loaded<T> {
     pub value: T,
     pub digest: [u8; 32],
+    /// The version the file was written in, when it was older and converted on load.
+    pub converted_from: Option<u32>,
 }
 
 /// Reads, version-checks, deserializes, and validates one JSON content file.
@@ -185,56 +188,207 @@ pub fn load_json_bytes<T>(
 where
     T: DeserializeOwned + Validate,
 {
-    let refused = |field: String, reason: String| {
-        tracing::error!(signal = "content.refused", kind, path = shown, field = %field, reason = %reason);
-        EngineError::Data {
-            kind,
-            path: shown.to_string(),
-            field,
-            reason,
-        }
-    };
-    let peek: VersionOnly = serde_json::from_slice(bytes)
-        .map_err(|e| refused("schema_version".into(), e.to_string()))?;
-    if peek.schema_version != expected_version {
-        tracing::error!(
-            signal = "content.refused",
-            kind,
-            path = shown,
-            field = "schema_version",
-            reason = %format!("found {}; this build reads {expected_version}", peek.schema_version)
-        );
-        return Err(EngineError::Version {
-            kind,
-            path: shown.to_string(),
-            found: peek.schema_version,
-            expected: expected_version,
-        });
+    let version = peek_version(kind, bytes, shown)?;
+    if version != expected_version {
+        return Err(version_refused(kind, shown, version, expected_version));
     }
-    let value: T = serde_json::from_slice(bytes).map_err(|e| {
+    let value: T = parse_checked(kind, bytes, shown, ctx)?;
+    Ok(loaded(kind, bytes, shown, value, version, None))
+}
+
+/// A refusal of `kind` at `shown`, logged as `content.refused`.
+fn refused(kind: &'static str, shown: &str, field: String, reason: String) -> EngineError {
+    tracing::error!(signal = "content.refused", kind, path = shown, field = %field, reason = %reason);
+    EngineError::Data {
+        kind,
+        path: shown.to_string(),
+        field,
+        reason,
+    }
+}
+
+/// The `schema_version` of a content file's bytes.
+fn peek_version(kind: &'static str, bytes: &[u8], shown: &str) -> Result<u32, EngineError> {
+    let peek: VersionOnly = serde_json::from_slice(bytes)
+        .map_err(|e| refused(kind, shown, "schema_version".into(), e.to_string()))?;
+    Ok(peek.schema_version)
+}
+
+/// The refusal of a version this build does not read, naming both versions.
+fn version_refused(kind: &'static str, shown: &str, found: u32, expected: u32) -> EngineError {
+    tracing::error!(
+        signal = "content.refused",
+        kind,
+        path = shown,
+        field = "schema_version",
+        reason = %format!("found {found}; this build reads {expected}")
+    );
+    EngineError::Version {
+        kind,
+        path: shown.to_string(),
+        found,
+        expected,
+    }
+}
+
+/// Deserializes and validates `bytes` as `T`.
+fn parse_checked<T>(
+    kind: &'static str,
+    bytes: &[u8],
+    shown: &str,
+    ctx: &T::Context,
+) -> Result<T, EngineError>
+where
+    T: DeserializeOwned + Validate,
+{
+    checked(kind, shown, parse(kind, bytes, shown)?, ctx)
+}
+
+/// Deserializes `bytes` as `T`, refusing with the line and column of the fault.
+fn parse<T: DeserializeOwned>(
+    kind: &'static str,
+    bytes: &[u8],
+    shown: &str,
+) -> Result<T, EngineError> {
+    serde_json::from_slice(bytes).map_err(|e| {
         refused(
+            kind,
+            shown,
             format!("line {} column {}", e.line(), e.column()),
             e.to_string(),
         )
-    })?;
+    })
+}
+
+/// `value` when it validates, or the refusal of its first fault.
+fn checked<T: Validate>(
+    kind: &'static str,
+    shown: &str,
+    value: T,
+    ctx: &T::Context,
+) -> Result<T, EngineError> {
     if let Err(report) = value.validate_with(ctx) {
         let (field, reason) = report
             .iter()
             .next()
             .map(|(path, error)| (path.to_string(), error.message().to_string()))
             .unwrap_or_default();
-        return Err(refused(field, reason));
+        return Err(refused(kind, shown, field, reason));
     }
+    Ok(value)
+}
+
+/// A loaded value with the SHA-256 of the bytes read, logged as `content.loaded`.
+fn loaded<T>(
+    kind: &'static str,
+    bytes: &[u8],
+    shown: &str,
+    value: T,
+    version: u32,
+    converted_from: Option<u32>,
+) -> Loaded<T> {
     let digest: [u8; 32] = Sha256::digest(bytes).into();
     tracing::info!(
         signal = "content.loaded",
         kind,
         path = shown,
-        schema_version = expected_version,
+        schema_version = version,
         bytes = bytes.len(),
         hash = %hex12(&digest)
     );
-    Ok(Loaded { value, digest })
+    Loaded {
+        value,
+        digest,
+        converted_from,
+    }
+}
+
+/// Loads a team file's bytes in either version this build reads. A version 2 file has its
+/// ratings checked first, so a value off the tenth grid or outside 1.0 to 20.0 is refused
+/// naming the player and the attribute; a version 1 file is checked as version 1 and
+/// converted ([`convert::team_v1_to_v2`]). The digest is that of the bytes read.
+pub fn load_team_bytes(
+    bytes: &[u8],
+    shown: &str,
+    schema: &AttributeSchema,
+) -> Result<Loaded<TeamFile>, EngineError> {
+    const KIND: &str = "team";
+    match peek_version(KIND, bytes, shown)? {
+        TEAM_VERSION => {
+            check_ratings(bytes, shown)?;
+            let value = parse_checked::<TeamFile>(KIND, bytes, shown, schema)?;
+            Ok(loaded(KIND, bytes, shown, value, TEAM_VERSION, None))
+        }
+        convert::TEAM_V1 => {
+            let v1 = parse_checked::<convert::TeamFileV1>(KIND, bytes, shown, schema)?;
+            let value = convert::team_v1_to_v2(v1);
+            Ok(loaded(
+                KIND,
+                bytes,
+                shown,
+                value,
+                convert::TEAM_V1,
+                Some(convert::TEAM_V1),
+            ))
+        }
+        found => Err(version_refused(KIND, shown, found, TEAM_VERSION)),
+    }
+}
+
+/// Refuses the first rating of a version 2 team file that is off the tenth grid or outside
+/// 1.0 to 20.0, naming the player and the attribute. Anything else malformed is left to the
+/// full parse.
+fn check_ratings(bytes: &[u8], shown: &str) -> Result<(), EngineError> {
+    let Ok(doc) = serde_json::from_slice::<serde_json::Value>(bytes) else {
+        return Ok(());
+    };
+    let Some(players) = doc.get("players").and_then(|p| p.as_array()) else {
+        return Ok(());
+    };
+    for p in players {
+        let id = p.get("id").and_then(|v| v.as_str()).unwrap_or("?");
+        let Some(attributes) = p.get("attributes").and_then(|a| a.as_object()) else {
+            continue;
+        };
+        for (name, value) in attributes {
+            if let Some(x) = value.as_f64()
+                && let Err(e) = crate::rating::Rating::from_decimal(x)
+            {
+                return Err(refused(
+                    "team",
+                    shown,
+                    "players".into(),
+                    format!("player {id}: attribute {name} {e}"),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Loads a tactics file's bytes in either version this build reads; a version 1 file is
+/// converted ([`convert::tactics_v1_to_v2`]) and checked as a current file.
+pub fn load_tactics_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TacticsSchema>, EngineError> {
+    const KIND: &str = "tactics";
+    match peek_version(KIND, bytes, shown)? {
+        TACTICS_VERSION => {
+            let value = parse_checked::<TacticsSchema>(KIND, bytes, shown, &())?;
+            Ok(loaded(KIND, bytes, shown, value, TACTICS_VERSION, None))
+        }
+        convert::TACTICS_V1 => {
+            let v1: convert::TacticsV1 = parse(KIND, bytes, shown)?;
+            let value = checked(KIND, shown, convert::tactics_v1_to_v2(v1), &())?;
+            Ok(loaded(
+                KIND,
+                bytes,
+                shown,
+                value,
+                convert::TACTICS_V1,
+                Some(convert::TACTICS_V1),
+            ))
+        }
+        found => Err(version_refused(KIND, shown, found, TACTICS_VERSION)),
+    }
 }
 
 /// The first twelve hex characters of a digest.
@@ -369,13 +523,7 @@ impl Content {
         )?;
         let modules = ResolvedModules::builtin_default();
         let rules = modules.rule_pack.load(&files.rules)?;
-        let tactics = load_json_bytes::<TacticsSchema>(
-            "tactics",
-            &files.tactics,
-            TACTICS_FILE,
-            TACTICS_VERSION,
-            &(),
-        )?;
+        let tactics = load_tactics_bytes(&files.tactics, TACTICS_FILE)?;
         if let Err((field, reason)) = tactics.value.check(&attributes.value) {
             tracing::error!(signal = "content.refused", kind = "tactics", path = TACTICS_FILE, field = %field, reason = %reason);
             return Err(EngineError::Data {
@@ -444,14 +592,15 @@ impl Content {
         })
     }
 
-    /// Loads and validates one team file against the attribute schema of this content.
+    /// Loads and validates one team file against the attribute schema of this content. A
+    /// version 1 file converts; its `converted_from` is `Some(1)`.
     pub fn load_team(
         &self,
         dir: &ContentDir,
         path: &Path,
     ) -> Result<Loaded<TeamFile>, EngineError> {
         let shown = dir.relative(path);
-        load_json::<TeamFile>("team", path, &shown, TEAM_VERSION, &self.attributes)
+        load_team_bytes(&read_bytes(path, &shown)?, &shown, &self.attributes)
     }
 
     /// Loads and validates one team file's bytes against the attribute schema of this
@@ -461,7 +610,7 @@ impl Content {
         bytes: &[u8],
         shown: &str,
     ) -> Result<Loaded<TeamFile>, EngineError> {
-        load_json_bytes::<TeamFile>("team", bytes, shown, TEAM_VERSION, &self.attributes)
+        load_team_bytes(bytes, shown, &self.attributes)
     }
 
     /// The tuning file as written, before any flag state is applied.

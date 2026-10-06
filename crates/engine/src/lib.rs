@@ -22,6 +22,7 @@ pub mod pitch;
 pub mod player;
 pub mod plugin;
 pub mod possession;
+pub mod rating;
 pub mod record;
 pub mod rng;
 pub mod rules;
@@ -45,6 +46,7 @@ pub use error::EngineError;
 pub use fatigue::InjurySource;
 pub use flags::{ActiveFlags, CODE_FLAGS, FlagSetting, FlagState, FlagStates};
 pub use plugin::{PLUGIN_API_VERSION, Plugins};
+pub use rating::Rating;
 pub use record::{
     FanoutSink, FileSink, NullSink, TickHeader, TickRecord, TickSink, VecSink, read_ticks,
 };

@@ -390,8 +390,9 @@ impl Team {
     }
 
     /// The formation anchor for `slot` given the ball position: the slot moved up by the
-    /// plan's block depth and the slot's duty, widened by the plan, plus the ball shift.
-    pub fn anchor(&self, slot: usize, ball: DVec2, t: &Tuning) -> DVec2 {
+    /// plan's block depth, the slot's duty, and the role's offset for the phase (the team has
+    /// the ball when `in_possession`), widened by the plan, plus the ball shift.
+    pub fn anchor(&self, slot: usize, ball: DVec2, in_possession: bool, t: &Tuning) -> DVec2 {
         if slot == self.keeper_slot() {
             // The keeper stands on the line from the goal centre toward the ball.
             let goal = self.own_goal();
@@ -401,10 +402,19 @@ impl Team {
         }
         let (fx, fy) = self.formation[slot];
         let (sx, sy) = self.pitch.scale();
-        let depth = (fx + self.plan.block_depth + self.plan.slots[slot].depth) * sx;
+        let plan = &self.plan.slots[slot];
+        let offset = if in_possession {
+            plan.in_possession
+        } else {
+            plan.out_of_possession
+        };
+        // The role's offset comes after the existing sums, so an offset of 0 keeps every
+        // anchor's bits.
+        let depth = (fx + self.plan.block_depth + plan.depth + offset.x) * sx;
+        let side = if fy < 0.0 { -1.0 } else { 1.0 };
         let base = DVec2::new(
             (depth - self.pitch.half_length()) * self.attack_x,
-            fy * self.plan.width * sy,
+            (fy * self.plan.width + side * offset.y) * sy,
         );
         let shift = DVec2::new(ball.x * t.compactness_x, ball.y * t.compactness_y);
         self.pitch.clamp(base + shift, 0.5)
@@ -447,7 +457,7 @@ mod tests {
                 DVec2::new(-52.5, -34.0),
             ] {
                 for slot in 0..PLAYERS_PER_TEAM {
-                    assert!(Pitch::DEFAULT.contains(team.anchor(slot, ball, &t)));
+                    assert!(Pitch::DEFAULT.contains(team.anchor(slot, ball, false, &t)));
                 }
             }
         }
@@ -479,7 +489,9 @@ mod tests {
                                 DVec2::ZERO,
                             ] {
                                 for slot in 0..PLAYERS_PER_TEAM {
-                                    assert!(Pitch::DEFAULT.contains(team.anchor(slot, ball, t)));
+                                    assert!(
+                                        Pitch::DEFAULT.contains(team.anchor(slot, ball, false, t))
+                                    );
                                 }
                             }
                         }
@@ -508,7 +520,7 @@ mod tests {
         assert!(!team.active[2]);
         let t = Tuning::default();
         for slot in [1, 3, 4] {
-            assert!(Pitch::DEFAULT.contains(team.anchor(slot, DVec2::ZERO, &t)));
+            assert!(Pitch::DEFAULT.contains(team.anchor(slot, DVec2::ZERO, false, &t)));
         }
         team.reshape(9);
         assert_eq!(

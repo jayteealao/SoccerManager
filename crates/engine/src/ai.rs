@@ -88,7 +88,7 @@ pub fn role_fit(
     let mut weight = 0.0;
     for (name, w) in &schema.roles[role].attributes {
         if let Some(i) = attrs.index(name) {
-            sum += w * f64::from(p.attributes.get(i));
+            sum += w * p.attributes.get(i).old_scale();
             weight += w;
         }
     }

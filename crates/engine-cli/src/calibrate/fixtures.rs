@@ -2,10 +2,10 @@
 //! double round-robin, with a seed per match, the stronger club of the strength suite, and
 //! the formation pairing of the formations suite.
 
-use engine::Content;
 use engine::data::TeamFile;
 use engine::data::generator::generate_league;
 use engine::observe::identity::MatchId;
+use engine::{Content, Rating};
 
 use crate::report::Suite;
 
@@ -170,13 +170,16 @@ pub fn match_id(run_seed: u64, suite: Suite, index: u32, millis: u64) -> String 
     .to_string()
 }
 
-/// A copy of `file` with every attribute times `boost`, rounded and clamped to 1 to 100.
+/// A copy of `file` with every attribute times `boost`. The boost works on the old 1 to 100
+/// scale, rounded and clamped to 1 to 100, and the result is doubled into tenths, so a
+/// boosted club is the club it was before ratings moved to tenths.
 pub fn boosted(file: &TeamFile, boost: f64) -> TeamFile {
     let mut out = file.clone();
     for p in &mut out.players {
         for v in p.attributes.values_mut() {
             // Clamped to 1 to 100 first, so the cast cannot truncate.
-            *v = (f64::from(*v) * boost).round().clamp(1.0, 100.0) as u8;
+            let old = (v.old_scale() * boost).round().clamp(1.0, 100.0) as u8;
+            *v = Rating::from_tenths(2 * old);
         }
     }
     out
@@ -268,11 +271,15 @@ mod tests {
         let content = Content::load(&dir).unwrap();
         let mut file = generate_league(1, 2, &content).remove(0);
         let first = file.players[0].attributes.keys().next().unwrap().clone();
-        file.players[0].attributes.insert(first.clone(), 95);
-        file.players[1].attributes.insert(first.clone(), 40);
+        file.players[0]
+            .attributes
+            .insert(first.clone(), Rating::from_tenths(190));
+        file.players[1]
+            .attributes
+            .insert(first.clone(), Rating::from_tenths(80));
         let strong = boosted(&file, 1.15);
-        assert_eq!(strong.players[0].attributes[&first], 100);
-        assert_eq!(strong.players[1].attributes[&first], 46);
+        assert_eq!(strong.players[0].attributes[&first].tenths(), 200);
+        assert_eq!(strong.players[1].attributes[&first].tenths(), 92);
         assert_eq!(strong.club, file.club);
     }
 

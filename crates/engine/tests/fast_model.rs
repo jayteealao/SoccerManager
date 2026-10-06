@@ -139,7 +139,7 @@ fn the_kick_off_strength_is_the_starting_elevens_mean_attribute() {
     assert_eq!(starters.len(), 11);
     let values: Vec<f64> = starters
         .iter()
-        .flat_map(|p| p.attributes.iter().map(f64::from))
+        .flat_map(|p| p.attributes.iter().map(|r| r.old_scale()))
         .collect();
     let mean = values.iter().sum::<f64>() / values.len() as f64;
     assert!((ko.strength[0] - mean).abs() < 1e-12);

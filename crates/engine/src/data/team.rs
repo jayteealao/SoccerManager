@@ -1,6 +1,10 @@
-//! The team data file: club identity, kit, and a squad with positions and attributes.
-//! Validation runs with the attribute schema as context so a value of 120 is refused by
-//! player and attribute name.
+//! The team data file: club identity, kit, and a squad with positions, ratings, and body
+//! fields. Validation runs with the attribute schema as context so a rating of 20.5 is
+//! refused by player and attribute name.
+//!
+//! Version 2 holds every rating in tenths of the 1 to 20 scale, written with one decimal,
+//! and three body fields per player: height, age, and nationality. A version 1 file (whole
+//! numbers 1 to 100, no body fields) converts on load; see [`crate::data::convert`].
 
 use std::collections::BTreeMap;
 
@@ -9,9 +13,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::data::attributes::AttributeSchema;
 use crate::pitch::Pitch;
+use crate::rating::{MAX_TENTHS, MIN_TENTHS, Rating};
 
-/// Schema version this build reads.
-pub const TEAM_VERSION: u32 = 1;
+/// Schema version this build reads and writes. Version 1 files convert on load.
+pub const TEAM_VERSION: u32 = 2;
+
+/// Height in whole centimetres a version 2 file may give.
+pub const HEIGHT_CM: std::ops::RangeInclusive<u8> = 150..=215;
+/// Age in whole years a version 2 file may give.
+pub const AGE_YEARS: std::ops::RangeInclusive<u8> = 15..=45;
 
 /// The largest squad a team file may hold. The random streams size their dense key index
 /// from it (`streams::table::SQUAD_MAX`), so the two can never disagree.
@@ -137,9 +147,23 @@ pub struct PlayerEntry {
     pub shirt: u8,
     #[garde(skip)]
     pub position: Position,
-    /// Attribute name to value; the squad check compares it with the schema.
+    /// Attribute name to rating; the squad check compares it with the schema.
     #[garde(skip)]
-    pub attributes: BTreeMap<String, u8>,
+    pub attributes: BTreeMap<String, Rating>,
+    /// Height in whole centimetres, 150 to 215. Required in a version 2 file; a player
+    /// converted from version 1 has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(skip)]
+    pub height: Option<u8>,
+    /// Age in whole years, 15 to 45. Required in a version 2 file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(skip)]
+    pub age: Option<u8>,
+    /// Nationality as three upper-case letters, for example `ENG`. Required in a version 2
+    /// file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(skip)]
+    pub nationality: Option<String>,
 }
 
 /// The team data file.
@@ -196,15 +220,16 @@ fn check_squad(players: &[PlayerEntry], schema: &AttributeSchema) -> garde::Resu
                         p.id, def.name
                     )));
                 }
-                Some(&value) if !(1..=100).contains(&value) => {
+                Some(&value) if !(MIN_TENTHS..=MAX_TENTHS).contains(&value.tenths()) => {
                     return Err(garde::Error::new(format!(
-                        "player {}: attribute {} is {value}; allowed 1 to 100",
+                        "player {}: attribute {} is {value}; allowed 1.0 to 20.0",
                         p.id, def.name
                     )));
                 }
                 Some(_) => {}
             }
         }
+        check_body(p)?;
         for name in p.attributes.keys() {
             if schema.index(name).is_none() {
                 return Err(garde::Error::new(format!(
@@ -213,6 +238,47 @@ fn check_squad(players: &[PlayerEntry], schema: &AttributeSchema) -> garde::Resu
                 )));
             }
         }
+    }
+    Ok(())
+}
+
+/// Refuses a missing or out-of-range body field, naming the player and the field.
+fn check_body(p: &PlayerEntry) -> garde::Result {
+    let missing = |field: &str| {
+        Err(garde::Error::new(format!(
+            "player {}: body field {field} is missing",
+            p.id
+        )))
+    };
+    match p.height {
+        None => return missing("height"),
+        Some(h) if !HEIGHT_CM.contains(&h) => {
+            return Err(garde::Error::new(format!(
+                "player {}: body field height is {h}; allowed 150 to 215 cm",
+                p.id
+            )));
+        }
+        Some(_) => {}
+    }
+    match p.age {
+        None => return missing("age"),
+        Some(a) if !AGE_YEARS.contains(&a) => {
+            return Err(garde::Error::new(format!(
+                "player {}: body field age is {a}; allowed 15 to 45 years",
+                p.id
+            )));
+        }
+        Some(_) => {}
+    }
+    match &p.nationality {
+        None => return missing("nationality"),
+        Some(n) if !(n.len() == 3 && n.bytes().all(|b| b.is_ascii_uppercase())) => {
+            return Err(garde::Error::new(format!(
+                "player {}: body field nationality is {n}; allowed three upper-case letters",
+                p.id
+            )));
+        }
+        Some(_) => {}
     }
     Ok(())
 }

@@ -8,21 +8,26 @@ use std::collections::BTreeMap;
 
 use crate::data::attributes::{AttributeSchema, MAX_ATTRIBUTES};
 use crate::math::DVec2;
+use crate::rating::Rating;
 use crate::tuning::Tuning;
 
-/// Attribute values on the 1 to 100 scale, in schema order.
+/// Attribute ratings in tenths of the 1 to 20 scale, in schema order.
 #[derive(Debug, Clone, Copy)]
 pub struct Attributes {
-    pub values: [u8; MAX_ATTRIBUTES],
+    pub values: [Rating; MAX_ATTRIBUTES],
     pub len: u8,
 }
 
 impl Attributes {
-    /// The values of a validated team-file entry, in schema order.
-    pub fn from_entry(entry: &BTreeMap<String, u8>, schema: &AttributeSchema) -> Self {
-        let mut values = [0u8; MAX_ATTRIBUTES];
+    /// The ratings of a validated team-file entry, in schema order. A missing attribute
+    /// reads 0.2, the old default of 1 converted.
+    pub fn from_entry(entry: &BTreeMap<String, Rating>, schema: &AttributeSchema) -> Self {
+        let mut values = [Rating::default(); MAX_ATTRIBUTES];
         for (slot, def) in values.iter_mut().zip(&schema.attributes) {
-            *slot = entry.get(&def.name).copied().unwrap_or(1);
+            *slot = entry
+                .get(&def.name)
+                .copied()
+                .unwrap_or(Rating::from_tenths(2));
         }
         Self {
             values,
@@ -31,13 +36,13 @@ impl Attributes {
         }
     }
 
-    /// The value at schema index `index`.
-    pub fn get(&self, index: usize) -> u8 {
+    /// The rating at schema index `index`.
+    pub fn get(&self, index: usize) -> Rating {
         self.values[index]
     }
 
-    /// The values in schema order.
-    pub fn iter(&self) -> impl Iterator<Item = u8> + '_ {
+    /// The ratings in schema order.
+    pub fn iter(&self) -> impl Iterator<Item = Rating> + '_ {
         self.values[..usize::from(self.len)].iter().copied()
     }
 }
@@ -67,7 +72,9 @@ pub struct Derived {
 }
 
 impl Derived {
-    /// Derives from the required attributes of a validated schema.
+    /// Derives from the required attributes of a validated schema. Each rating is read on
+    /// the old 1 to 100 scale ([`Rating::old_scale`]), which is exact, so every value keeps
+    /// the bits it had before ratings moved to tenths.
     pub fn from_attributes(a: &Attributes, schema: &AttributeSchema, t: &Tuning) -> Self {
         let [
             pace,
@@ -84,7 +91,7 @@ impl Derived {
             stamina,
             natural_fitness,
             injury_resistance,
-        ] = schema.required_indices().map(|i| f64::from(a.get(i)));
+        ] = schema.required_indices().map(|i| a.get(i).old_scale());
         Self {
             max_speed: t.base_speed + t.pace_speed * pace / 100.0,
             max_accel: t.base_accel + t.accel_bonus * acceleration / 100.0,
@@ -169,10 +176,11 @@ impl Player {
 pub(crate) mod test_support {
     use super::*;
 
-    /// A player with every attribute at `v`, for unit tests that need no schema.
+    /// A player with every attribute at `v` on the old 1 to 100 scale (`2v` tenths), for unit
+    /// tests that need no schema.
     pub(crate) fn flat_player(id: usize, v: u8, t: &Tuning) -> Player {
         let attributes = Attributes {
-            values: [v; MAX_ATTRIBUTES],
+            values: [Rating::from_tenths(2 * v); MAX_ATTRIBUTES],
             len: 6,
         };
         let value = f64::from(v);
@@ -239,13 +247,16 @@ mod tests {
     fn derived_speed_scales_with_pace() {
         let t = Tuning::default();
         let s = schema();
-        let mut entry: BTreeMap<String, u8> =
-            s.attributes.iter().map(|a| (a.name.clone(), 1)).collect();
+        let mut entry: BTreeMap<String, Rating> = s
+            .attributes
+            .iter()
+            .map(|a| (a.name.clone(), Rating::from_tenths(2)))
+            .collect();
         let a = Attributes::from_entry(&entry, &s);
         assert_eq!(a.len, 30);
         let d = Derived::from_attributes(&a, &s, &t);
         assert_eq!(d.max_speed, t.base_speed + t.pace_speed * 0.01);
-        entry.insert("pace".into(), 100);
+        entry.insert("pace".into(), Rating::from_tenths(200));
         let d = Derived::from_attributes(&Attributes::from_entry(&entry, &s), &s, &t);
         assert_eq!(d.max_speed, t.base_speed + t.pace_speed);
     }

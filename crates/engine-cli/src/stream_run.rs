@@ -451,8 +451,8 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
                     name: team.player_names[s].clone(),
                     shirt: player.shirt,
                     position: player.position.code().to_string(),
-                    natural_fitness: fitness.map_or(0, |i| player.attributes.get(i)),
-                    injury_resistance: resistance.map_or(0, |i| player.attributes.get(i)),
+                    natural_fitness: fitness.map_or(0, |i| player.attributes.get(i).tenths()),
+                    injury_resistance: resistance.map_or(0, |i| player.attributes.get(i).tenths()),
                     role_fit: (0..config.tactics.roles.len())
                         .map(|role| {
                             let fit = engine::ai::role_fit(
@@ -461,7 +461,9 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
                                 &config.tactics,
                                 &config.attributes,
                             );
-                            fit.round().clamp(0.0, 100.0) as u8
+                            // The fit is a weighted mean on the old 1 to 100 scale;
+                            // doubled, it is in tenths of 1 to 20.
+                            (fit * 2.0).round().clamp(0.0, 200.0) as u8
                         })
                         .collect(),
                 })
@@ -989,7 +991,8 @@ mod tests {
         let roles = sim.config().tactics.roles.len();
         for entry in &teams[HOME].squad {
             assert_eq!(entry.role_fit.len(), roles);
-            assert!(entry.role_fit.iter().all(|&f| f <= 100), "{entry:?}");
+            // Tenths of 1 to 20.
+            assert!(entry.role_fit.iter().all(|&f| f <= 200), "{entry:?}");
             assert!(entry.natural_fitness > 0, "{entry:?}");
             assert!(entry.injury_resistance > 0, "{entry:?}");
         }

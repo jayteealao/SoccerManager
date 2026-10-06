@@ -20,9 +20,18 @@ fn twenty_clubs_have_twenty_two_players_with_legal_positions() {
             "club {} has no goalkeeper",
             team.club.id
         );
-        // A generated file passes the same validation a hand-written one must pass.
-        garde::Validate::validate_with(team, &content.attributes)
+        // A generated file, as `engine-cli generate` writes it (values under 1.0 lifted to
+        // 1.0), passes the same validation a hand-written one must pass.
+        let mut written = team.clone();
+        engine::data::generator::lift_to_floor(&mut written);
+        garde::Validate::validate_with(&written, &content.attributes)
             .unwrap_or_else(|r| panic!("club {} invalid: {r}", team.club.id));
+        for p in &team.players {
+            let (height, age) = (p.height.unwrap(), p.age.unwrap());
+            assert!((150..=215).contains(&height), "{} height {height}", p.id);
+            assert!((17..=38).contains(&age), "{} age {age}", p.id);
+            assert_eq!(p.nationality.as_deref().map(str::len), Some(3), "{}", p.id);
+        }
     }
 }
 
@@ -34,7 +43,7 @@ fn per_position_means_fall_inside_the_tuning_bounds() {
     for team in &league {
         for p in &team.players {
             for def in &content.attributes.attributes {
-                let v = f64::from(p.attributes[&def.name]);
+                let v = p.attributes[&def.name].old_scale();
                 let e = sums.entry((p.position, def.group)).or_insert((0.0, 0));
                 e.0 += v;
                 e.1 += 1;

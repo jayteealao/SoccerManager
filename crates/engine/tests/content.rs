@@ -24,12 +24,17 @@ fn the_shipped_attribute_schema_has_thirty_to_fifty_grouped_names() {
         // The group is an enum: every loaded definition carries one of the four.
         let _ = def.group;
     }
-    // Every generated value on every default player lies on the 1 to 100 scale.
+    // The default teams are version 1 files: every value converts to 2 to 200 tenths
+    // (0.2 to 20.0), and only a converted value may sit under 1.0.
     for team in common::default_teams(&content) {
         for p in &team.players {
             assert_eq!(p.attributes.len(), n, "player {} attribute count", p.id);
             for (name, v) in &p.attributes {
-                assert!((1..=100).contains(v), "player {} {name} = {v}", p.id);
+                assert!(
+                    (2..=200).contains(&v.tenths()) && v.tenths() % 2 == 0,
+                    "player {} {name} = {v}",
+                    p.id
+                );
             }
         }
     }

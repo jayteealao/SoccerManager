@@ -299,7 +299,7 @@ impl ClockModule for ClockV1 {
                     keeping: keeping
                         .iter()
                         .flatten()
-                        .map(|&k| f64::from(p.attributes.get(k)))
+                        .map(|&k| p.attributes.get(k).old_scale())
                         .sum(),
                 })
                 .collect::<Vec<_>>()

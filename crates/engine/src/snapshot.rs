@@ -33,6 +33,8 @@
 //!   stream used its id (u64) and word position (u128), in ascending stream id. A snapshot
 //!   of an unknown scheme, of a scheme this build does not play, or with a malformed stream
 //!   entry is refused by name.
+//!   Version 10 changes no layout: it marks the move of ratings to tenths of 1 to 20, after
+//!   which a team rebuilt from a snapshot reads its ratings in tenths.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -62,7 +64,7 @@ use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 9;
+pub const VERSION: u16 = 10;
 /// The earliest layout version the strict reader still reads: version 8 has no matchday mark.
 const FIRST_READ: u16 = 8;
 /// The released builds from before the snapshot recorded its engine version: the full commit
@@ -1309,7 +1311,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 9"),
+                .contains("unknown version 1; this build reads 10"),
             "{err}"
         );
     }

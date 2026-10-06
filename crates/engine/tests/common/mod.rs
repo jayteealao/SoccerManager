@@ -125,15 +125,16 @@ pub fn kinds(events: &[engine::EngineEvent]) -> Vec<engine::EngineEventKind> {
     events.iter().map(|e| e.kind).collect()
 }
 
-/// A copy of `file` with every attribute times 1.15, rounded and clamped to 100, under a new
-/// club id.
+/// A copy of `file` with every attribute times 1.15 on the old 1 to 100 scale, rounded and
+/// clamped to 100, then doubled into tenths, under a new club id.
 pub fn stronger(file: &engine::data::TeamFile) -> engine::data::TeamFile {
     let mut out = file.clone();
     out.club.id = format!("{}-strong", file.club.id);
     out.club.name = format!("{} Strong", file.club.name);
     for p in &mut out.players {
         for v in p.attributes.values_mut() {
-            *v = (f64::from(*v) * 1.15).round().min(100.0) as u8;
+            let old = (v.old_scale() * 1.15).round().min(100.0) as u8;
+            *v = engine::Rating::from_tenths(2 * old);
         }
     }
     out

@@ -195,6 +195,26 @@
         "physical": { "mean": 60.0, "spread": 8.0 },
         "goalkeeping": { "mean": 15.0, "spread": 5.0 }
       }
+    },
+    "body": {
+      "height": {
+        "GK": { "mean": 189.0, "spread": 4.0 },
+        "CB": { "mean": 187.0, "spread": 4.5 },
+        "LB": { "mean": 178.0, "spread": 4.5 },
+        "RB": { "mean": 178.0, "spread": 4.5 },
+        "DM": { "mean": 181.0, "spread": 4.5 },
+        "CM": { "mean": 179.0, "spread": 4.5 },
+        "AM": { "mean": 177.0, "spread": 4.5 },
+        "LW": { "mean": 175.0, "spread": 4.5 },
+        "RW": { "mean": 175.0, "spread": 4.5 },
+        "ST": { "mean": 183.0, "spread": 5.0 }
+      },
+      "age": { "mean": 26.0, "spread": 4.0, "min": 17, "max": 38 },
+      "nationality": {
+        "home": "ENG",
+        "foreign": ["FRA", "ESP", "GER", "NED", "BRA", "ARG", "POR", "BEL", "IRL", "SCO", "WAL", "NOR"],
+        "foreign_share": 0.35
+      }
     }
   },
   "fatigue": {

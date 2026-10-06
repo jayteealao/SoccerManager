@@ -30,6 +30,7 @@ use super::card::ModuleCard;
 use super::fast_events::{self, EventFit};
 use crate::data::{Position, StoppageKind};
 use crate::error::EngineError;
+use crate::rating::Rating;
 use crate::rng::EngineRng;
 use crate::sim::{EngineEvent, MatchConfig};
 use crate::team::PLAYERS_PER_TEAM;
@@ -215,12 +216,16 @@ pub fn stream_rules(fit: &FastFit, kick_off: &KickOff) -> StreamRules {
 /// The kick-off of the match `config` describes: the starting elevens the pre-match setup
 /// picked, so the fast model and the full engine start from the same teams.
 pub fn kick_off(config: &MatchConfig) -> KickOff {
-    let mean = |values: &mut dyn Iterator<Item = u8>| {
-        let (sum, count) = values.fold((0u64, 0u64), |(s, n), v| (s + u64::from(v), n + 1));
+    // The mean on the old 1 to 100 scale: tenths are summed, then halved after the
+    // division. Doubling and halving commute with a correctly rounded division, so the
+    // value keeps its bits.
+    let mean = |values: &mut dyn Iterator<Item = Rating>| {
+        let (sum, count) =
+            values.fold((0u64, 0u64), |(s, n), v| (s + u64::from(v.tenths()), n + 1));
         if count == 0 {
             0.0
         } else {
-            sum as f64 / count as f64
+            sum as f64 / count as f64 / 2.0
         }
     };
     let mut out = KickOff::even([0.0; 2]);

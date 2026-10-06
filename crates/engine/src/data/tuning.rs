@@ -66,6 +66,83 @@ pub struct GeneratorTuning {
     /// One distribution per position code; every one of the ten codes must be present.
     #[garde(dive, custom(every_position_present))]
     pub per_position: BTreeMap<String, GroupDist>,
+    /// What the body fields are drawn from. Optional, so a tuning file written before body
+    /// fields (as an old replay embeds it) still loads; `engine-cli generate` needs it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub body: Option<BodyTuning>,
+}
+
+/// The body-field distributions: height per position, age, and nationality.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct BodyTuning {
+    /// Height in centimetres per position code; every one of the ten codes must be present.
+    #[garde(dive, custom(every_height_present))]
+    pub height: BTreeMap<String, HeightDist>,
+    #[garde(dive)]
+    pub age: AgeDist,
+    #[garde(dive)]
+    pub nationality: NationalityDist,
+}
+
+/// A height bell curve in centimetres; draws are rounded and kept to 150 to 215.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct HeightDist {
+    #[garde(range(min = 150.0, max = 215.0))]
+    pub mean: f64,
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub spread: f64,
+}
+
+/// An age bell curve in years; draws are rounded and kept to `min` to `max`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct AgeDist {
+    #[garde(range(min = 15.0, max = 45.0))]
+    pub mean: f64,
+    #[garde(range(min = 0.0, max = 15.0))]
+    pub spread: f64,
+    #[garde(range(min = 15, max = 45))]
+    pub min: u8,
+    #[garde(range(min = self.min, max = 45))]
+    pub max: u8,
+}
+
+/// Nationality: the club's country, the others a foreign player comes from, and the share
+/// of foreign players. Codes are three upper-case letters.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct NationalityDist {
+    #[garde(custom(nation_code))]
+    pub home: String,
+    #[garde(length(min = 1, max = 64), inner(custom(nation_code)))]
+    pub foreign: Vec<String>,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub foreign_share: f64,
+}
+
+fn nation_code(code: &str, _ctx: &()) -> garde::Result {
+    if code.len() == 3 && code.bytes().all(|b| b.is_ascii_uppercase()) {
+        Ok(())
+    } else {
+        Err(garde::Error::new(format!(
+            "{code} is not three upper-case letters"
+        )))
+    }
+}
+
+fn every_height_present(map: &BTreeMap<String, HeightDist>, _ctx: &()) -> garde::Result {
+    for p in Position::ALL {
+        if !map.contains_key(p.code()) {
+            return Err(garde::Error::new(format!(
+                "position {} has no height",
+                p.code()
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// A mean and spread per attribute group.
