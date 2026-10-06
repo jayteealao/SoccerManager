@@ -96,7 +96,21 @@ pub use message::{
 /// answered with the existing `ack` or `reject` and refused unless the engine was started
 /// with `--test-jump`. Like a skip it changes only when ticks are sent, never the match, and
 /// a client that never sends it gets exactly the answers it got before.
-pub const PROTOCOL_VERSION: u16 = 3;
+///
+/// Version 4 moves every rating the hello carries to tenths of the 1 to 20 scale: a squad
+/// entry's `player.natural_fitness`, `player.injury_resistance`, and `role_fit` values are
+/// tenths (10 to 200 for 1.0 to 20.0; a team converted from an old file may hold 2 to 8),
+/// where version 3 sent whole numbers 1 to 100. The hello's `tactics` is the version 2
+/// tactics file: each role carries `in_possession`, `out_of_possession`,
+/// `preferred_actions` (which holds the old `shoot`, `dribble`, and `progress`), and
+/// `teammates`, and each duty a `scale`. No message field was added or removed, and the
+/// tick frames are unchanged. A version 3 value `v` is `2v` tenths, so a reader of an old replay
+/// doubles them before it shows them.
+pub const PROTOCOL_VERSION: u16 = 4;
+
+/// The protocol version before ratings moved to tenths. Replay readers still read its
+/// frames; a hello of this version carries ratings on the 1 to 100 scale.
+pub const PROTOCOL_V3: u16 = 3;
 
 /// Errors this crate returns.
 #[derive(Debug, Error)]

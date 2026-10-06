@@ -53,16 +53,17 @@ pub struct SquadEntry {
     /// The position code, such as `GK` or `CB`.
     #[serde(rename = "player.position")]
     pub position: String,
-    /// The natural-fitness attribute, 0 to 100. Before kick-off every player is fresh, so
-    /// this is the one fitness figure the engine holds.
+    /// The natural-fitness attribute in tenths of the 1 to 20 scale (10 to 200; a team
+    /// converted from an old file may hold 2 to 8). Before kick-off every player is fresh,
+    /// so this is the one fitness figure the engine holds. Protocol 3 sent 0 to 100.
     #[serde(rename = "player.natural_fitness")]
     pub natural_fitness: u8,
-    /// The injury-resistance attribute, 0 to 100: how well the player stands up to knocks.
-    /// A hello from an earlier build carries none and reads as 0.
+    /// The injury-resistance attribute in tenths of the 1 to 20 scale: how well the player
+    /// stands up to knocks. A hello from an earlier build carries none and reads as 0.
     #[serde(rename = "player.injury_resistance", default)]
     pub injury_resistance: u8,
-    /// How well the player fits each role, 0 to 100, one value per role in the order of the
-    /// hello's `tactics.roles`.
+    /// How well the player fits each role in tenths of the 1 to 20 scale (0 to 200), one value
+    /// per role in the order of the hello's `tactics.roles`.
     pub role_fit: Vec<u8>,
 }
 
@@ -604,9 +605,9 @@ mod tests {
                         name: "Keeper One".into(),
                         shirt: 1,
                         position: "GK".into(),
-                        natural_fitness: 71,
-                        injury_resistance: 64,
-                        role_fit: vec![80, 12],
+                        natural_fitness: 142,
+                        injury_resistance: 128,
+                        role_fit: vec![160, 24],
                     }],
                     setup: Some(TeamSetup {
                         lineup: (0..11).collect(),
@@ -737,7 +738,7 @@ mod tests {
         let hello = serde_json::to_string(&ServerMessage::Hello(Box::new(hello()))).unwrap();
         assert_eq!(hello.matches("\"squad\":").count(), 1, "{hello}");
         assert_eq!(hello.matches("\"setup\":").count(), 1, "{hello}");
-        assert!(hello.contains("\"player.natural_fitness\":71"), "{hello}");
+        assert!(hello.contains("\"player.natural_fitness\":142"), "{hello}");
     }
 
     #[test]
@@ -981,7 +982,7 @@ mod tests {
     fn a_hello_from_an_earlier_build_reads_without_the_newer_fields() {
         let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello())))
             .unwrap()
-            .replace(",\"player.injury_resistance\":64", "")
+            .replace(",\"player.injury_resistance\":128", "")
             .replace(",\"extra_substitutions\":1,\"extra_windows\":1", "")
             .replace(",\"windows_exempt\":[\"half_time\"]", "");
         assert!(!json.contains("injury_resistance"), "{json}");
