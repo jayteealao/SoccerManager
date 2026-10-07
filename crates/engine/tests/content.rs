@@ -140,7 +140,7 @@ fn a_schema_without_aggression_is_refused_naming_it() {
     std::fs::remove_file(&path).unwrap();
     assert_eq!(
         err.to_string(),
-        "content refused: attributes attributes.json: attributes: required attribute aggression is missing"
+        "content refused: attributes attributes.json: actions: tackle.choose: attribute aggression is not in the file"
     );
 }
 

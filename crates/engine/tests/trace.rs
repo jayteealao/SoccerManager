@@ -194,7 +194,7 @@ fn every_action_and_event_kind_maps_to_a_point() {
     assert_eq!(names.len(), 37, "every point has its own name");
     assert_eq!(
         Action::ALL.iter().filter(|a| trace::is_chance(**a)).count(),
-        18
+        20
     );
 }
 
@@ -298,10 +298,10 @@ fn a_red_card_below_the_minimum_records_the_send_off_and_the_abandonment() {
     const TACKLER: usize = 16;
     let config = common::quiet_match(90);
     let plain = Simulation::new(config.clone()).unwrap();
-    let tackler = plain.players()[TACKLER].derived;
-    let carrier = plain.players()[CARRIER].derived;
-    let p_win = engine::rules::fouls::win_chance(&tackler, &carrier, &config.tuning);
-    let p_foul = engine::rules::fouls::foul_chance(&tackler, 0, &config.tuning);
+    let tackler = plain.skills(TACKLER);
+    let carrier = plain.skills(CARRIER);
+    let p_win = engine::rules::fouls::win_chance(tackler, carrier, &config.tuning);
+    let p_foul = engine::rules::fouls::foul_chance(tackler, 0, &config.tuning);
     let at = DVec2::new(0.0, 10.0);
     let scene = [12, 13, 14, 15].into_iter().fold(
         common::spread(Scene::new(config), -30.0, 30.0),

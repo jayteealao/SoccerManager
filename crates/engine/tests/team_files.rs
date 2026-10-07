@@ -108,10 +108,15 @@ fn a_version_1_file_converts_to_twice_its_values_on_both_paths() {
         );
         for (name, rating) in &p.attributes {
             let v = raw["attributes"][name].as_u64().unwrap();
-            assert_eq!(u64::from(rating.tenths()), 2 * v, "{} {name}", p.id);
+            // Doubled into tenths, then held at the 1.0 floor: 1 to 4 read as 1.0.
+            assert_eq!(
+                u64::from(rating.tenths()),
+                (2 * v).max(10),
+                "{} {name}",
+                p.id
+            );
             if v < 5 {
-                // 1 to 4 become 0.2 to 0.8: the temporary floor of converted files.
-                assert!((2..=8).contains(&rating.tenths()));
+                assert_eq!(rating.tenths(), 10);
                 low += 1;
             }
         }

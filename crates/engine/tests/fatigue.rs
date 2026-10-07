@@ -1,5 +1,5 @@
 //! AC-4: above the fatigue threshold a player's effective values equal the base; at energy
-//! 0.5 and 0.3 the effective top speed and decisions are the base times the curve's
+//! 0.5 and 0.3 the effective top speed and decision stages are the base times the curve's
 //! multiplier; a 90-minute match ends with every player's energy below 1.0 and above 0.0.
 //! The effective values reach the player through the modifiers, bit for bit as the fatigue
 //! curve gives them, and with the fatigue modifier off they stay at base.
@@ -8,6 +8,7 @@ mod common;
 
 use common::{calm_match, full_match, index};
 use engine::Simulation;
+use engine::contract::Stage;
 use engine::fatigue::{effective, multiplier};
 use engine::modules::{REGISTRY, SlotEntry, SlotFile, resolve};
 use engine::record::NullSink;
@@ -26,7 +27,7 @@ fn above_the_threshold_the_effective_values_equal_the_base() {
     for energy in [1.0, 0.9, 0.7] {
         let sim = at_energy(energy);
         let p = sim.players()[index(0, PLAYER)];
-        assert_eq!(p.derived, p.base, "energy {energy}");
+        assert_eq!(&p.derived, sim.base(index(0, PLAYER)), "energy {energy}");
     }
 }
 
@@ -39,11 +40,33 @@ fn below_the_threshold_the_curve_scales_the_effective_values() {
         assert!((m - expected).abs() < 1e-12, "energy {energy}: {m}");
         let sim = at_energy(energy);
         let p = sim.players()[index(0, PLAYER)];
+        let base = sim.base(index(0, PLAYER));
+        let (d, b) = (
+            sim.skills(index(0, PLAYER)),
+            sim.base_skills(index(0, PLAYER)),
+        );
         for (name, effective, base) in [
-            ("max_speed", p.derived.max_speed, p.base.max_speed),
-            ("decisions", p.derived.decisions, p.base.decisions),
-            ("passing", p.derived.passing, p.base.passing),
-            ("finishing", p.derived.finishing, p.base.finishing),
+            ("max_speed", p.derived.max_speed, base.max_speed),
+            (
+                "pass.choose",
+                d.f(Stage::PASS_CHOOSE),
+                b.f(Stage::PASS_CHOOSE),
+            ),
+            (
+                "pass.execute",
+                d.f(Stage::PASS_EXECUTE),
+                b.f(Stage::PASS_EXECUTE),
+            ),
+            (
+                "shot.execute",
+                d.f(Stage::SHOT_EXECUTE),
+                b.f(Stage::SHOT_EXECUTE),
+            ),
+            (
+                "shot.execute share",
+                d.share(Stage::SHOT_EXECUTE),
+                b.share(Stage::SHOT_EXECUTE),
+            ),
         ] {
             assert!(
                 (effective - base * m).abs() < 1e-9,
@@ -51,10 +74,11 @@ fn below_the_threshold_the_curve_scales_the_effective_values() {
             );
         }
         assert_eq!(
-            p.derived.tackling, p.base.tackling,
+            d.f(Stage::TACKLE_EXECUTE),
+            b.f(Stage::TACKLE_EXECUTE),
             "tackling is not scaled"
         );
-        assert!(p.max_speed() < p.base.max_speed);
+        assert!(p.max_speed() < base.max_speed);
     }
 }
 
@@ -100,9 +124,11 @@ fn fatigue_runs_on_through_extra_time_without_a_step_at_ninety_minutes() {
         let (minute, added) = sim.minute();
         if minute == 105 && added.is_none() && sim.tick().is_multiple_of(REFRESH_TICKS) {
             let p = sim.players()[i];
+            let base = sim.base(i);
             let m = multiplier(p.energy, &sim.config().fatigue);
-            assert!((p.derived.max_speed - p.base.max_speed * m).abs() < 1e-9);
-            assert!((p.derived.decisions - p.base.decisions * m).abs() < 1e-9);
+            assert!((p.derived.max_speed - base.max_speed * m).abs() < 1e-9);
+            let (d, b) = (sim.skills(i), sim.base_skills(i));
+            assert!((d.f(Stage::PASS_CHOOSE) - b.f(Stage::PASS_CHOOSE) * m).abs() < 1e-9);
             checked_105 = true;
         }
         assert!(sim.tick() < 200 * TICKS_PER_MINUTE, "minute 106 never came");
@@ -136,25 +162,13 @@ fn effective_values_through_the_modifiers_equal_the_fatigue_curve() {
     for energy in [1.0, 0.9, 0.7, 0.6, 0.5, 0.45, 0.3, 0.1, 0.0] {
         let sim = at_energy(energy);
         let p = sim.players()[index(0, PLAYER)];
-        let expected = effective(&p.base, energy, &f);
+        let expected = effective(sim.base(index(0, PLAYER)), energy, &f);
         let bits = |d: &engine::player::Derived| {
-            [
-                d.max_speed,
-                d.max_accel,
-                d.passing,
-                d.dribbling,
-                d.tackling,
-                d.positioning,
-                d.aggression,
-                d.finishing,
-                d.vision,
-                d.decisions,
-                d.composure,
-                d.stamina,
-                d.natural_fitness,
-                d.injury_resistance,
-            ]
-            .map(f64::to_bits)
+            [d.max_speed, d.max_accel, d.turn]
+                .into_iter()
+                .chain(d.factors)
+                .map(f64::to_bits)
+                .collect::<Vec<_>>()
         };
         assert_eq!(bits(&p.derived), bits(&expected), "energy {energy}");
     }
@@ -175,5 +189,5 @@ fn fatigue_modifier_off_leaves_the_base_values() {
     let sim = Scene::new(config).energy(index(0, PLAYER), 0.3).build();
     let p = sim.players()[index(0, PLAYER)];
     assert_eq!(p.energy, 0.3);
-    assert_eq!(p.derived, p.base);
+    assert_eq!(&p.derived, sim.base(index(0, PLAYER)));
 }

@@ -3,6 +3,7 @@
 //! The central loop draws every roll and writes every outcome; this module only says who
 //! may try and with what chance.
 
+use crate::contract::{ActionKind, HEAD_HEIGHT_M, Stage, curve};
 use crate::math::{DVec2, toward};
 use crate::modules::{
     Contest, CrossContest, LooseBall, MatchView, ModuleCard, ParrySide, PossessionModule,
@@ -26,8 +27,8 @@ impl PossessionModule for PossessionV1 {
         save_reach(view, shooter)
     }
 
-    fn save_hold(&self, view: &MatchView<'_>) -> f64 {
-        view.tuning().shots.save_hold
+    fn save_hold(&self, view: &MatchView<'_>, keeper: usize) -> f64 {
+        hold_chance(view, keeper)
     }
 
     fn parry_side(&self, view: &MatchView<'_>, k: usize) -> ParrySide {
@@ -62,8 +63,25 @@ fn shot_contest(view: &MatchView<'_>) -> Option<usize> {
     (view.ball().speed() > view.tuning().control_speed).then_some(shooter)
 }
 
-/// Each outfield defender of the side that did not shoot within `block_reach` of a shot
-/// under `reach_height` may try once per shot to block it.
+/// The chance keeper `k` holds a save: the tuned hold threshold as the base of a contest of
+/// his hold stage (handling) against the average player.
+pub fn hold_chance(view: &MatchView<'_>, k: usize) -> f64 {
+    let t = view.tuning();
+    let c = &t.contract;
+    let p = c.actions.of(ActionKind::Hold);
+    curve::contest(
+        t.shots.save_hold,
+        p.k(),
+        view.skills(k).f(Stage::HOLD_EXECUTE),
+        curve::f(10.0, &c.curve),
+        p.floor(),
+        p.ceiling(),
+    )
+}
+
+/// Each outfield defender of the side that did not shoot within his block reach
+/// (`block_reach` times his block factor) of a shot under `reach_height` may try once per
+/// shot to block it.
 fn blockers(view: &MatchView<'_>, shooter: usize) -> Contest {
     let t = view.tuning();
     let chance = t.shots.block_chance;
@@ -81,7 +99,7 @@ fn blockers(view: &MatchView<'_>, shooter: usize) -> Contest {
             || i == keeper
             || !p.active()
             || tried & bit != 0
-            || (p.pos - ball_xy).length() >= t.shots.block_reach
+            || (p.pos - ball_xy).length() >= t.shots.block_reach * p.derived.knobs.block
         {
             continue;
         }
@@ -181,34 +199,115 @@ fn clearance_line(view: &MatchView<'_>, i: usize, wide: bool) -> (DVec2, f64) {
     }
 }
 
-/// The nearest active player within reach of a loose ball under `reach_height`: an outfield
-/// player within `reach_radius`, a keeper within `keeper_reach`; only a keeper reaches a ball
-/// faster than `control_speed`.
-fn loose_ball(view: &MatchView<'_>, reach_radius: f64) -> Option<LooseBall> {
+/// How far player `p` reaches a ball at `ball_xy` and height `z`, or `None` when he cannot:
+/// an outfield player within `reach_radius` times his intercept factor, a keeper within
+/// `keeper_reach` times his claim factor (and his claim range for a ball above head height
+/// in his own penalty area). The ball must be under `reach_height` times his aerial factor,
+/// and only a keeper reaches a ball faster than `control_speed` times his receive factor.
+fn reach(
+    view: &MatchView<'_>,
+    p: &crate::player::Player,
+    keeper: bool,
+    reach_radius: f64,
+) -> Option<f64> {
     let t = view.tuning();
     let ball = view.ball();
-    if ball.pos.z > t.reach_height {
+    let k = &p.derived.knobs;
+    if !p.active() || ball.pos.z > t.reach_height * k.aerial_reach {
+        return None;
+    }
+    if !keeper && ball.speed() > t.control_speed * k.receive {
         return None;
     }
     let ball_xy = ball.xy();
+    let reach = if keeper {
+        let lofted = ball.pos.z > HEAD_HEIGHT_M
+            && view
+                .pitch()
+                .in_penalty_area(ball_xy, -view.attack_x(p.team));
+        let range = if lofted { k.claim_range } else { 1.0 };
+        t.keeper_reach * k.claim_reach * range
+    } else {
+        reach_radius * k.intercept
+    };
+    let d = (p.pos - ball_xy).length();
+    (d < reach).then_some(d)
+}
+
+/// The nearest active player within reach of a loose ball (see [`reach`]). A ball faster
+/// than `control_speed` is fast, and only a keeper takes it, holding it with the catch
+/// chance times his claim factor. An outfield player who meets the ball above head height
+/// heads it: he controls it with a contest of his header stage against the best header of
+/// an opponent within reach (the average player when none is).
+fn loose_ball(view: &MatchView<'_>, reach_radius: f64) -> Option<LooseBall> {
+    let t = view.tuning();
+    let ball = view.ball();
     let fast = ball.speed() > t.control_speed;
     let keepers = [view.keeper(0), view.keeper(1)];
     let mut best: Option<(f64, usize)> = None;
+    let mut any_height = false;
     for (i, p) in view.players().iter().enumerate() {
         let keeper = i == keepers[p.team];
-        if !p.active() || (fast && !keeper) {
+        if ball.pos.z <= t.reach_height * p.derived.knobs.aerial_reach {
+            any_height = true;
+        }
+        if fast && !keeper {
             continue;
         }
-        let reach = if keeper { t.keeper_reach } else { reach_radius };
-        let d = (p.pos - ball_xy).length();
-        if d < reach && best.is_none_or(|(bd, _)| d < bd) {
+        let Some(d) = reach(view, p, keeper, reach_radius) else {
+            continue;
+        };
+        if best.is_none_or(|(bd, _)| d < bd) {
             best = Some((d, i));
         }
     }
+    if !any_height {
+        return None;
+    }
+    let c = &t.contract;
+    let claim = c.actions.of(ActionKind::Claim);
+    let catch_chance = match best {
+        Some((_, i)) if i == keepers[view.player(i).team] => {
+            let knob = view.player(i).derived.knobs.claim_reach;
+            if knob == 1.0 {
+                t.keeper_catch_chance
+            } else {
+                (t.keeper_catch_chance * knob).clamp(claim.floor(), claim.ceiling())
+            }
+        }
+        _ => t.keeper_catch_chance,
+    };
+    let header = match best {
+        Some((_, i)) if ball.pos.z > HEAD_HEIGHT_M && i != keepers[view.player(i).team] => {
+            let me = view.player(i);
+            let rival = view
+                .players()
+                .iter()
+                .enumerate()
+                .filter(|&(j, q)| {
+                    q.team != me.team
+                        && reach(view, q, j == keepers[q.team], reach_radius).is_some()
+                })
+                .map(|(j, _)| view.skills(j).f(Stage::HEADER_EXECUTE))
+                .fold(None, |m: Option<f64>, v| Some(m.map_or(v, |m| m.max(v))))
+                .unwrap_or_else(|| curve::f(10.0, &c.curve));
+            let h = c.actions.of(ActionKind::Header);
+            Some(curve::contest(
+                h.base(),
+                h.k(),
+                view.skills(i).f(Stage::HEADER_EXECUTE),
+                rival,
+                h.floor(),
+                h.ceiling(),
+            ))
+        }
+        _ => None,
+    };
     Some(LooseBall {
         best,
         fast,
-        catch_chance: t.keeper_catch_chance,
+        catch_chance,
+        header,
     })
 }
 
@@ -268,6 +367,7 @@ const POSSESSION_KEYS: &[Action] = &[
     Action::CrossClear,
     Action::CrossWide,
     Action::KeeperCatch,
+    Action::Header,
 ];
 
 /// A faulty possession module for the gate tests: an outfield player reaches a loose ball
@@ -289,8 +389,8 @@ impl PossessionModule for PossessionFaulty {
         save_reach(view, shooter)
     }
 
-    fn save_hold(&self, view: &MatchView<'_>) -> f64 {
-        view.tuning().shots.save_hold
+    fn save_hold(&self, view: &MatchView<'_>, keeper: usize) -> f64 {
+        hold_chance(view, keeper)
     }
 
     fn parry_side(&self, view: &MatchView<'_>, k: usize) -> ParrySide {

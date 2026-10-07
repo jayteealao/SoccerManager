@@ -770,6 +770,34 @@ impl Simulation {
         &self.config
     }
 
+    /// Player `i`'s base values: what his attributes give him fresh. They live in his squad
+    /// entry, not in the player, which keeps the player small for the hot loops.
+    #[inline]
+    pub fn base(&self, i: usize) -> &crate::player::Derived {
+        let p = &self.players[i];
+        &self.teams[p.team].squad[p.squad].derived
+    }
+
+    /// Player `i`'s base stage values, from his squad entry.
+    #[inline]
+    pub fn base_stages(&self, i: usize) -> &crate::contract::StageValues {
+        let p = &self.players[i];
+        &self.teams[p.team].squad[p.squad].stages
+    }
+
+    /// Player `i`'s effective stage values: his base stage values through his effective
+    /// values' group factors.
+    #[inline]
+    pub fn skills(&self, i: usize) -> crate::contract::Skills<'_> {
+        crate::contract::Skills::new(self.base_stages(i), &self.players[i].derived)
+    }
+
+    /// Player `i`'s fresh stage values: his base stage values with no factor.
+    #[inline]
+    pub fn base_skills(&self, i: usize) -> crate::contract::Skills<'_> {
+        crate::contract::Skills::new(self.base_stages(i), self.base(i))
+    }
+
     pub fn teams(&self) -> [Team; 2] {
         self.teams.clone()
     }

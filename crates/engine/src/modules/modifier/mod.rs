@@ -28,7 +28,9 @@ pub enum Family {
     Surroundings,
 }
 
-/// One factor per effective value a modifier may scale. 1.0 is no effect.
+/// One factor per effective value a modifier may scale. 1.0 is no effect. Passing,
+/// finishing, decisions, and composure each scale a group of stage values
+/// ([`crate::contract::EFFECT_STAGES`]).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Effect {
     pub max_speed: f64,
@@ -55,7 +57,9 @@ impl Effect {
         }
     }
 
-    fn fields(&self) -> [f64; 6] {
+    /// The six factors in order: top speed, acceleration, passing, finishing, decisions,
+    /// composure.
+    pub fn fields(&self) -> [f64; 6] {
         [
             self.max_speed,
             self.max_accel,
@@ -110,23 +114,6 @@ impl Modifiers {
                 field[family] *= factor;
             }
         }
-        let [
-            max_speed,
-            max_accel,
-            passing,
-            finishing,
-            decisions,
-            composure,
-        ] = families.map(soft_combine);
-        let base = &view.player(i).base;
-        Derived {
-            max_speed: base.max_speed * max_speed,
-            max_accel: base.max_accel * max_accel,
-            passing: base.passing * passing,
-            finishing: base.finishing * finishing,
-            decisions: base.decisions * decisions,
-            composure: base.composure * composure,
-            ..*base
-        }
+        view.base(i).scaled(families.map(soft_combine))
     }
 }

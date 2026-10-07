@@ -461,9 +461,9 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
                                 &config.tactics,
                                 &config.attributes,
                             );
-                            // The fit is a weighted mean on the old 1 to 100 scale;
-                            // doubled, it is in tenths of 1 to 20.
-                            (fit * 2.0).round().clamp(0.0, 200.0) as u8
+                            // The fit is a weighted mean on the 1 to 20 scale; times ten,
+                            // it is in tenths.
+                            (fit * 10.0).round().clamp(0.0, 200.0) as u8
                         })
                         .collect(),
                 })

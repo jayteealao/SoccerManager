@@ -77,7 +77,8 @@ pub struct Setup {
     pub bench: Vec<usize>,
 }
 
-/// How well `p` fits role `role`: the weighted mean of the role's attributes.
+/// How well `p` fits role `role`: the weighted mean of the role's attributes, on the 1 to 20
+/// scale. A lineup choice, not an action of play, so it reads the ratings directly.
 pub fn role_fit(
     p: &SquadPlayer,
     role: usize,
@@ -88,7 +89,7 @@ pub fn role_fit(
     let mut weight = 0.0;
     for (name, w) in &schema.roles[role].attributes {
         if let Some(i) = attrs.index(name) {
-            sum += w * p.attributes.get(i).old_scale();
+            sum += w * p.attributes.get(i).decimal();
             weight += w;
         }
     }

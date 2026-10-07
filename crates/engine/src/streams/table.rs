@@ -19,7 +19,7 @@ pub const SQUAD_MAX: usize = crate::data::team::MAX_SQUAD;
 /// Player slots per action in the dense key index: two squads, then the match key.
 pub(crate) const SLOTS_PER_ACTION: usize = 2 * SQUAD_MAX + 1;
 
-/// Every possible key: 36 actions times 81 player slots.
+/// Every possible key: 38 actions times 81 player slots.
 pub const KEY_COUNT: usize = Action::ALL.len() * SLOTS_PER_ACTION;
 
 /// The part of the engine a draw belongs to; the number is its stream-id code.
@@ -106,11 +106,13 @@ pub enum Action {
     ShootoutSaveHold,
     InjuryMinute,
     InjuryTackle,
+    Lapse,
+    Header,
 }
 
 impl Action {
     /// Every action in table order.
-    pub const ALL: [Action; 36] = [
+    pub const ALL: [Action; 38] = [
         Action::ShotScore,
         Action::PassScore,
         Action::DribbleScore,
@@ -147,6 +149,8 @@ impl Action {
         Action::ShootoutSaveHold,
         Action::InjuryMinute,
         Action::InjuryTackle,
+        Action::Lapse,
+        Action::Header,
     ];
 
     /// The action's table row.
@@ -190,7 +194,7 @@ use PlayerKind::{Actor, Match};
 use Subsystem::{Ball, Decision, Fatigue, Kick, Laws, Shootout};
 
 /// The stream-id table, one row per draw call in match play, in [`Action`] order.
-pub const TABLE: [Row; 36] = [
+pub const TABLE: [Row; 38] = [
     row(
         Action::ShotScore,
         Decision,
@@ -346,6 +350,8 @@ pub const TABLE: [Row; 36] = [
         Actor,
         Injury,
     ),
+    row(Action::Lapse, Decision, 6, "lapse", Actor, Unscripted),
+    row(Action::Header, Ball, 13, "header", Actor, Unscripted),
 ];
 
 /// Who a key names: `team << 8 | squad index`, or [`PlayerKey::MATCH`].
@@ -386,6 +392,20 @@ impl PlayerKey {
     }
 }
 
+impl From<&PlayerKey> for PlayerKey {
+    #[inline]
+    fn from(k: &PlayerKey) -> Self {
+        *k
+    }
+}
+
+impl From<&Player> for PlayerKey {
+    #[inline]
+    fn from(p: &Player) -> Self {
+        PlayerKey::of(p)
+    }
+}
+
 impl std::fmt::Display for PlayerKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if *self == Self::MATCH {
@@ -404,11 +424,12 @@ pub struct Key {
 }
 
 impl Key {
-    /// A draw for player `p`, who acts.
-    pub fn player(action: Action, p: &Player) -> Self {
+    /// A draw for player `p`, who acts: a player or his key.
+    #[inline]
+    pub fn player(action: Action, p: impl Into<PlayerKey>) -> Self {
         Self {
             action,
-            player: PlayerKey::of(p),
+            player: p.into(),
         }
     }
 
@@ -473,10 +494,12 @@ const ACTION_SHIFT: u32 = 32;
 
 /// The committed digest of each scheme's table, key derivation, and draw conversion. A test
 /// fails when [`digest`] gives another value: the table, the derivation, or the conversion
-/// changed, and the change needs a new scheme id and a new line here.
+/// changed. A change that moves the stream of an existing key needs a new scheme id and a
+/// new line here; a row appended at the end of the table moves no existing stream, so it
+/// keeps the scheme id and updates its digest.
 pub const SCHEME_DIGESTS: [(u8, &str); 1] = [(
     1,
-    "91652878ed8a8c15d99f0a6fe956e03e55b9d248e1176b67679ffd602504a384",
+    "b8aca4c29b44416ca4114e56b06911ba45f204e38d07cdfa04c41ed7173747d0",
 )];
 
 /// The SHA-256, as lowercase hex, of what fixes `scheme`: the scheme id, every row (the
@@ -571,7 +594,7 @@ mod tests {
         let count = |c: Class| TABLE.iter().filter(|r| r.class == c).count();
         assert_eq!(count(Class::Referee), 15);
         assert_eq!(count(Class::Injury), 2);
-        assert_eq!(count(Class::Unscripted), 19);
+        assert_eq!(count(Class::Unscripted), 21);
         let mut codes: Vec<(u8, u8)> = TABLE.iter().map(|r| (r.subsystem as u8, r.code)).collect();
         codes.sort_unstable();
         codes.dedup();

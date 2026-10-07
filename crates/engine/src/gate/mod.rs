@@ -26,10 +26,11 @@ use crate::tactics::change::ChangeKind;
 pub use crate::tactics::planned::{PlannedChange, PlannedWhat};
 use crate::trace::TraceRecord;
 
-/// The version of the gate's file layout and report.
-pub const GATE_SCHEMA: u16 = 1;
+/// The version of the gate's file layout and report. Version 2 follows state inventory
+/// version 2: a change to the inventory needs a higher gate schema.
+pub const GATE_SCHEMA: u16 = 2;
 /// The version of the state inventory the hashes are computed over.
-pub const INVENTORY_VERSION: u16 = 1;
+pub const INVENTORY_VERSION: u16 = 2;
 /// Ticks between two checkpoints.
 pub const CHECKPOINT_EVERY: u32 = 1_000;
 /// The version of the state digest file that `resimulate --state-digests` writes and `bisect`

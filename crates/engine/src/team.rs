@@ -55,7 +55,10 @@ pub struct SquadPlayer {
     pub shirt: u8,
     pub position: Position,
     pub attributes: Attributes,
+    /// What his attributes give him fresh.
     pub derived: Derived,
+    /// His base stage values.
+    pub stages: crate::contract::StageValues,
 }
 
 /// A team: club identity, an attack direction, the squad, the lineup and bench, the
@@ -160,15 +163,18 @@ impl Team {
         );
         team.player_ids = file.players.iter().map(|p| p.id.clone()).collect();
         team.player_names = file.players.iter().map(|p| p.name.clone()).collect();
+        let blend = crate::contract::stages::Blend::of(schema);
         team.squad = file
             .players
             .iter()
             .map(|entry| {
                 let attributes = Attributes::from_entry(&entry.attributes, schema);
+                let (derived, stages) = Derived::from_blend(&attributes, &blend, schema, tuning);
                 SquadPlayer {
                     shirt: entry.shirt,
                     position: entry.position,
-                    derived: Derived::from_attributes(&attributes, schema, tuning),
+                    derived,
+                    stages,
                     attributes,
                 }
             })
@@ -199,7 +205,6 @@ impl Team {
             shirt: s.shirt,
             attributes: s.attributes,
             derived: s.derived,
-            base: s.derived,
             energy: 1.0,
             pos,
             vel: DVec2::ZERO,
@@ -208,6 +213,7 @@ impl Team {
             status: Status::OnPitch,
             yellow: 0,
             foul_ready: 0,
+            lapse_until: 0,
         }
     }
 
@@ -259,7 +265,12 @@ impl Team {
         let mut back: Vec<usize> = self.back_line();
         back.retain(|&s| !out(s));
         back.sort_by(|a, b| self.formation[*a].1.total_cmp(&self.formation[*b].1));
-        let gap = self.plan.back_line_gap;
+        // The acting keeper organises the line: a better organiser keeps it tighter.
+        let organise = self
+            .squad
+            .get(self.lineup[self.keeper_slot()])
+            .map_or(1.0, |k| k.derived.knobs.organise);
+        let gap = self.plan.back_line_gap / organise;
         let too_wide = back
             .windows(2)
             .any(|w| self.formation[w[1]].1 - self.formation[w[0]].1 > gap);

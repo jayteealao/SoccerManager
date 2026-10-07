@@ -234,10 +234,14 @@ fn a_broken_golden_file_is_refused_naming_the_fault() {
     );
 
     let mut schema = base.clone();
-    schema["gate_schema"] = 2.into();
+    schema["gate_schema"] = (gate::GATE_SCHEMA + 1).into();
     assert_eq!(
         refused(&schema, &fixtures),
-        "golden file has gate schema 2; this build reads gate schema 1"
+        format!(
+            "golden file has gate schema {}; this build reads gate schema {}",
+            gate::GATE_SCHEMA + 1,
+            gate::GATE_SCHEMA
+        )
     );
 
     let why = golden::parse(&text[..text.len() / 2], &fixtures)
@@ -696,14 +700,14 @@ fn band_result_holds_every_band(entry: &golden::LedgerEntry, index: usize) {
     }
 }
 
-/// The regeneration kept what the gate measures: gate schema 1, state inventory 1, and the
-/// fixture list of the golden-file guard, by its digest at the guard's commit.
+/// The regeneration kept what the gate measures: gate schema 2 with state inventory 2, and
+/// the fixture list of the golden-file guard, by its digest at the guard's commit.
 #[test]
 fn the_regeneration_kept_the_gate_schema_and_the_fixture_list() {
     use sha2::{Digest, Sha256};
     let file = committed();
-    assert_eq!(file.gate_schema, 1);
-    assert_eq!(file.inventory_version, 1);
+    assert_eq!(file.gate_schema, 2);
+    assert_eq!(file.inventory_version, 2);
     let list = serde_json::to_string(&file.fixtures).unwrap();
     let hex: String = Sha256::digest(list.as_bytes())
         .iter()

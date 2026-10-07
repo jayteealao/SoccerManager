@@ -537,11 +537,11 @@ mod tests {
         };
         let rows: Vec<Row> = (0..6_000u64)
             .map(|i| {
-                let level = |n: u64| 40.0 + (n % 21) as f64;
+                let level = |n: u64| 8.0 + (n % 21) as f64 / 5.0;
                 let kick_off = KickOff {
                     attack: [level(i), level(i / 21)],
                     defence: [level(i / 441), level(i / 11)],
-                    ..KickOff::even([50.0; 2])
+                    ..KickOff::even([10.0; 2])
                 };
                 let m = FittedScoresV1.play(&truth, &kick_off, i).unwrap();
                 Row {
@@ -617,7 +617,7 @@ mod tests {
         };
         let rows: Vec<Row> = (0..20_000u64)
             .map(|i| {
-                let level = |n: u64| 35.0 + (n % 31) as f64;
+                let level = |n: u64| 7.0 + (n % 31) as f64 / 5.0;
                 let kick_off = KickOff::even([level(i), level(i / 31)]);
                 let m = FittedScoresV1.play(&truth, &kick_off, i).unwrap();
                 Row {

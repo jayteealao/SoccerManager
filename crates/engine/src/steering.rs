@@ -122,7 +122,14 @@ fn steer(p: &Player, push: DVec2, t: &Tuning) -> DVec2 {
     let max_speed = p.max_speed();
     let max_accel = p.max_accel();
     let desired = arrive(p.pos, p.target, max_speed, max_accel, t.arrive_radius) + push;
-    let change = clamp_len(desired - p.vel, max_accel * t.dt);
+    let mut change = clamp_len(desired - p.vel, max_accel * t.dt);
+    // The turn factor scales the part of the change across the way he faces (a unit vector);
+    // the average player's factor is exactly 1, which leaves the change as it is.
+    let turn = p.derived.turn;
+    if turn != 1.0 {
+        let along = change.dot(p.facing);
+        change = change * turn + p.facing * (along * (1.0 - turn));
+    }
     clamp_len(p.vel + change, max_speed)
 }
 
@@ -288,7 +295,7 @@ mod tests {
     use crate::player::test_support::flat_player;
 
     fn player(id: usize, pos: DVec2, target: DVec2) -> Player {
-        let mut p = flat_player(id, 50, &Tuning::default());
+        let mut p = flat_player(id, 100, &Tuning::default());
         p.pos = pos;
         p.target = target;
         p

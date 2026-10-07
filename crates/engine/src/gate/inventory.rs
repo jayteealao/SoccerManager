@@ -354,7 +354,6 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
         shirt,
         // Functions of the squad index and the team file, whose digest is in the header.
         attributes: _,
-        base: _,
         derived,
         energy,
         pos,
@@ -364,6 +363,7 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
         status,
         yellow,
         foul_ready,
+        lapse_until,
     } = p;
     use FieldKind::{Bytes, Floats};
     w.mark(Floats, || format!("players[{i}].pos"));
@@ -380,6 +380,8 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
     w.u8(*yellow);
     w.mark(Bytes, || format!("players[{i}].foul_ready"));
     w.u32(*foul_ready);
+    w.mark(Bytes, || format!("players[{i}].lapse_until"));
+    w.u32(*lapse_until);
     w.mark(Bytes, || format!("players[{i}].slot"));
     w.u8(*slot as u8);
     w.mark(Bytes, || format!("players[{i}].squad"));

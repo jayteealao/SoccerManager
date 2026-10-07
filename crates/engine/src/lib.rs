@@ -8,6 +8,7 @@ pub mod ai;
 pub mod ball;
 mod canon;
 pub mod commentary;
+pub mod contract;
 pub mod data;
 pub mod decision;
 pub mod error;

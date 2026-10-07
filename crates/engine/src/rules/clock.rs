@@ -281,26 +281,19 @@ impl ClockModule for ClockV1 {
     }
 
     fn shootout_lineup(&self, view: &MatchView<'_>) -> ShootoutLineup {
-        let attributes = view.attributes();
-        let keeping = [
-            attributes.index("reflexes"),
-            attributes.index("one_on_ones"),
-        ];
+        use crate::contract::Stage;
         let acting = [view.keeper(0), view.keeper(1)];
         let candidates = [0, 1].map(|team| {
             view.players()
                 .iter()
                 .enumerate()
                 .filter(|(_, p)| p.team == team && p.active())
-                .map(|(i, p)| shootout::Candidate {
+                .map(|(i, _)| shootout::Candidate {
                     index: i,
                     goalkeeper: i == acting[team],
-                    kicking: p.derived.finishing + p.derived.composure,
-                    keeping: keeping
-                        .iter()
-                        .flatten()
-                        .map(|&k| p.attributes.get(k).old_scale())
-                        .sum(),
+                    kicking: view.skills(i).f(Stage::PENALTY_EXECUTE),
+                    keeping: view.skills(i).f(Stage::SAVE_EXECUTE)
+                        + view.skills(i).f(Stage::ONE_ON_ONE_EXECUTE),
                 })
                 .collect::<Vec<_>>()
         });
@@ -326,8 +319,8 @@ impl ClockModule for ClockV1 {
         }
     }
 
-    fn shootout_save_hold(&self, view: &MatchView<'_>) -> f64 {
-        view.tuning().shots.save_hold
+    fn shootout_save_hold(&self, view: &MatchView<'_>, keeper: usize) -> f64 {
+        crate::possession::hold_chance(view, keeper)
     }
 
     fn shootout_decided(&self, view: &MatchView<'_>, scores: [u32; 2], taken: [u32; 2]) -> bool {
@@ -348,7 +341,7 @@ const CLOCK_KEYS: &[Action] = &[
 
 pub const CLOCK_V1_CARD: ModuleCard = ModuleCard {
     purpose: "Runs the clock and the end of the match: added time, half-time, extra time, the shoot-out, full time, and abandonment below the minimum players.",
-    inputs: "The referee's clock and stoppage tally, the score, whether the match is a knockout, the players on the pitch and their finishing, composure, and keeping attributes, the rule pack, and the engine tuning.",
+    inputs: "The referee's clock and stoppage tally, the score, whether the match is a knockout, the players on the pitch and, through the attribute contract, their penalty, save and one-on-one stages, the rule pack, and the engine tuning.",
     outputs: "The added seconds, what follows each period, the extra-time kick-off team, the abandoned team, the shoot-out line-up, first team, end, keeper dive, save-hold threshold, and result; the loop applies them.",
     tuning: &[
         "added_time",
@@ -410,8 +403,8 @@ impl ClockModule for ClockFaulty {
         ClockV1.keeper_dive(view, draw)
     }
 
-    fn shootout_save_hold(&self, view: &MatchView<'_>) -> f64 {
-        ClockV1.shootout_save_hold(view)
+    fn shootout_save_hold(&self, view: &MatchView<'_>, keeper: usize) -> f64 {
+        ClockV1.shootout_save_hold(view, keeper)
     }
 
     fn shootout_decided(&self, view: &MatchView<'_>, scores: [u32; 2], taken: [u32; 2]) -> bool {

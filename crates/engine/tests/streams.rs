@@ -92,8 +92,8 @@ fn sequences(keys: &[Key], skip: Option<Key>, extra: usize) -> Vec<Vec<u64>> {
 #[test]
 fn extra_draws_on_one_key_leave_every_other_key_unchanged() {
     let keys = sample_keys();
-    // 5 match rows and 31 player rows.
-    assert_eq!(keys.len(), 5 + 2 * 31);
+    // 5 match rows and 33 player rows.
+    assert_eq!(keys.len(), 5 + 2 * 33);
     let control = sequences(&keys, None, 0);
     for (x, &key) in keys.iter().enumerate() {
         let disturbed = sequences(&keys, Some(key), 100);

@@ -168,8 +168,14 @@ impl ShotModule for StandIn<dyn ShotModule> {
     fn on_target(&self, view: &MatchView<'_>, ball: Ball, attack_x: f64) -> bool {
         self.0.on_target(view, ball, attack_x)
     }
-    fn save_chance(&self, view: &MatchView<'_>, quality: f64) -> f64 {
-        self.0.save_chance(view, quality)
+    fn save_chance(
+        &self,
+        view: &MatchView<'_>,
+        quality: f64,
+        keeper: usize,
+        shooter: Option<usize>,
+    ) -> f64 {
+        self.0.save_chance(view, quality, keeper, shooter)
     }
 }
 
@@ -234,8 +240,8 @@ impl ClockModule for StandIn<dyn ClockModule> {
     fn keeper_dive(&self, view: &MatchView<'_>, draw: f64) -> f64 {
         self.0.keeper_dive(view, draw)
     }
-    fn shootout_save_hold(&self, view: &MatchView<'_>) -> f64 {
-        self.0.shootout_save_hold(view)
+    fn shootout_save_hold(&self, view: &MatchView<'_>, keeper: usize) -> f64 {
+        self.0.shootout_save_hold(view, keeper)
     }
     fn shootout_decided(&self, view: &MatchView<'_>, scores: [u32; 2], taken: [u32; 2]) -> bool {
         self.0.shootout_decided(view, scores, taken)
@@ -318,8 +324,8 @@ impl PossessionModule for StandIn<dyn PossessionModule> {
     fn save_reach(&self, view: &MatchView<'_>, shooter: usize) -> Option<usize> {
         self.0.save_reach(view, shooter)
     }
-    fn save_hold(&self, view: &MatchView<'_>) -> f64 {
-        self.0.save_hold(view)
+    fn save_hold(&self, view: &MatchView<'_>, keeper: usize) -> f64 {
+        self.0.save_hold(view, keeper)
     }
     fn parry_side(&self, view: &MatchView<'_>, k: usize) -> ParrySide {
         self.0.parry_side(view, k)
@@ -342,6 +348,9 @@ impl PossessionModule for StandIn<dyn PossessionModule> {
 }
 
 impl DecisionModule for StandIn<dyn DecisionModule> {
+    fn lapse_chance(&self, view: &MatchView<'_>, i: usize) -> f64 {
+        self.0.lapse_chance(view, i)
+    }
     fn targets(&self, view: &MatchView<'_>) -> Targets {
         self.0.targets(view)
     }

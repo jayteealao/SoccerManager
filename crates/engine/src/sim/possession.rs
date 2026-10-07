@@ -42,17 +42,17 @@ impl Simulation {
         while mask != 0 {
             let i = mask.trailing_zeros() as usize;
             mask &= mask - 1;
-            let p = self.players[i];
+            let p = crate::streams::PlayerKey::of(&self.players[i]);
             self.blockers_tried |= 1u32 << i;
             let blocked = self
                 .streams
-                .tested(Key::player(Action::Block, &p), &[contest.chance])
+                .tested(Key::player(Action::Block, p), &[contest.chance])
                 < contest.chance;
             if self.trace_on() {
                 self.trace_point(Point::ShotBlock, json!({"blocker": i, "blocked": blocked}));
             }
             if blocked {
-                let angle = self.streams.draw(Key::player(Action::BlockDeflect, &p));
+                let angle = self.streams.draw(Key::player(Action::BlockDeflect, p));
                 self.ball.vel =
                     self.config
                         .modules
@@ -78,25 +78,26 @@ impl Simulation {
         let Some(k) = possession.save_reach(&self.view(), shooter) else {
             return;
         };
-        let keeper = self.players[k];
-        let save = self
-            .config
-            .modules
-            .shot
-            .save_chance(&self.view(), self.shot_quality);
+        let keeper = crate::streams::PlayerKey::of(&self.players[k]);
+        let save = self.config.modules.shot.save_chance(
+            &self.view(),
+            self.shot_quality,
+            k,
+            self.last_kicker,
+        );
         if self
             .streams
-            .tested(Key::player(Action::Save, &keeper), &[save])
+            .tested(Key::player(Action::Save, keeper), &[save])
             >= save
         {
             self.trace_save(Point::ShotSave, k, "beaten");
             self.keeper_beaten = true;
             return;
         }
-        let hold = possession.save_hold(&self.view());
+        let hold = possession.save_hold(&self.view(), k);
         if self
             .streams
-            .tested(Key::player(Action::SaveHold, &keeper), &[hold])
+            .tested(Key::player(Action::SaveHold, keeper), &[hold])
             < hold
         {
             #[cfg(feature = "scenario")]
@@ -127,18 +128,18 @@ impl Simulation {
     /// ball module. The keeper gets no second touch of this flight.
     pub(crate) fn parry(&mut self, k: usize, _t: &Tuning) {
         let possession = self.config.modules.possession;
-        let keeper = self.players[k];
+        let keeper = crate::streams::PlayerKey::of(&self.players[k]);
         let side = match possession.parry_side(&self.view(), k) {
             ParrySide::Fixed(side) => side,
             ParrySide::Draw(threshold) => {
                 let draw = self
                     .streams
-                    .tested(Key::player(Action::ParrySide, &keeper), &[threshold]);
+                    .tested(Key::player(Action::ParrySide, keeper), &[threshold]);
                 possession.parry_side_from_draw(draw, threshold)
             }
         };
-        let angle = self.streams.draw(Key::player(Action::ParryAngle, &keeper));
-        let loft = self.streams.draw(Key::player(Action::ParryLoft, &keeper));
+        let angle = self.streams.draw(Key::player(Action::ParryAngle, keeper));
+        let loft = self.streams.draw(Key::player(Action::ParryLoft, keeper));
         self.ball.vel =
             self.config
                 .modules
@@ -162,20 +163,18 @@ impl Simulation {
         while mask != 0 {
             let i = mask.trailing_zeros() as usize;
             mask &= mask - 1;
-            let p = self.players[i];
+            let p = crate::streams::PlayerKey::of(&self.players[i]);
             self.clearers_tried |= 1u32 << i;
             let cleared = self
                 .streams
-                .tested(Key::player(Action::CrossClear, &p), &[chance])
+                .tested(Key::player(Action::CrossClear, p), &[chance])
                 < chance;
             if !cleared && self.trace_on() {
                 self.trace_point(Point::CrossClear, json!({"defender": i, "cleared": false}));
             }
             if cleared {
                 let wide = cross.wide_chance.is_some_and(|w| {
-                    self.streams
-                        .tested(Key::player(Action::CrossWide, &p), &[w])
-                        < w
+                    self.streams.tested(Key::player(Action::CrossWide, p), &[w]) < w
                 });
                 if self.trace_on() {
                     self.trace_point(
@@ -184,8 +183,8 @@ impl Simulation {
                     );
                 }
                 let (away, spread) = possession.clearance_line(&self.view(), i, wide);
-                let angle = self.streams.draw(Key::player(Action::CrossAngle, &p));
-                let loft = self.streams.draw(Key::player(Action::CrossLoft, &p));
+                let angle = self.streams.draw(Key::player(Action::CrossAngle, p));
+                let loft = self.streams.draw(Key::player(Action::CrossLoft, p));
                 self.ball.vel = self.config.modules.ball.deflect(
                     &self.view(),
                     Deflection::Clear { away, spread },
@@ -285,13 +284,40 @@ impl Simulation {
                     );
                 }
                 if let Some((_, i)) = best {
+                    if let Some(chance) = loose.header {
+                        let p = crate::streams::PlayerKey::of(&self.players[i]);
+                        let draw = self
+                            .streams
+                            .tested(Key::player(Action::Header, p), &[chance]);
+                        let won = draw < chance;
+                        if self.trace_on() {
+                            self.trace_point(
+                                Point::LooseBall,
+                                json!({"header": i, "chance": chance, "won": won}),
+                            );
+                        }
+                        if !won {
+                            // The part of the draw above the chance, spread over [0, 1),
+                            // sets the angle the ball glances off at.
+                            let angle =
+                                ((draw - chance) / (1.0 - chance)).clamp(0.0, 1.0 - f64::EPSILON);
+                            self.ball.vel = self.config.modules.ball.deflect(
+                                &self.view(),
+                                Deflection::Block,
+                                angle,
+                                0.0,
+                            );
+                            self.deflected_by(i);
+                            return;
+                        }
+                    }
                     if fast {
                         if self.keeper_beaten {
                             return;
                         }
-                        let catcher = self.players[i];
+                        let catcher = crate::streams::PlayerKey::of(&self.players[i]);
                         let caught = self.streams.chance(
-                            Key::player(Action::KeeperCatch, &catcher),
+                            Key::player(Action::KeeperCatch, catcher),
                             loose.catch_chance,
                         );
                         if self.trace_on() {
@@ -315,13 +341,13 @@ impl Simulation {
                 while mask != 0 {
                     let i = mask.trailing_zeros() as usize;
                     mask &= mask - 1;
-                    let p = self.players[i];
+                    let p = crate::streams::PlayerKey::of(&self.players[i]);
                     let fouls = self.config.modules.fouls;
                     let chances = fouls.tackle_chances(&self.view(), i, c);
                     let (p_win, p_foul) = (chances.p_win, chances.p_foul);
                     let draw = self
                         .streams
-                        .tested(Key::player(Action::Tackle, &p), &[p_win, p_win + p_foul]);
+                        .tested(Key::player(Action::Tackle, p), &[p_win, p_win + p_foul]);
                     let outcome = fouls.tackle_outcome(&chances, draw);
                     if self.trace_on() {
                         let label = match outcome {

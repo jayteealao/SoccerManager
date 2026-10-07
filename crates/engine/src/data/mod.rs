@@ -23,12 +23,13 @@ use crate::flags::{ActiveFlags, FlagState, FlagStates};
 use crate::modules::{Picked, REGISTRY, ResolvedModules, SLOTS_VERSION, SlotFile};
 
 pub use attributes::{ATTRIBUTES_VERSION, AttributeSchema, Group, MAX_ATTRIBUTES};
-pub use generator::generate_league;
+pub use generator::{generate_league, generate_league_in_tier};
 pub use rules::{AddedTime, ExtraTime, RULES_VERSION, RulePack, Shootout, StoppageKind};
 pub use tactics::{TACTICS_VERSION, TacticsSchema};
 pub use team::{Club, Kit, PlayerEntry, Position, TEAM_VERSION, TeamFile};
 pub use tuning::{
-    Dist, FatigueTuning, GeneratorTuning, GroupDist, StreamTuning, TUNING_VERSION, TuningFile,
+    FatigueTuning, GeneratorTuning, GroupOffsets, StreamTuning, TUNING_VERSION, TierDist,
+    TuningFile, WorldTuning,
 };
 
 /// Relative path of each shipped file inside the content folder.
@@ -366,6 +367,66 @@ fn check_ratings(bytes: &[u8], shown: &str) -> Result<(), EngineError> {
     Ok(())
 }
 
+/// Loads an attribute file's bytes in either version this build reads; a version 1 file is
+/// converted with the frozen contract tables ([`convert::attributes_v1_to_v2`]) and checked
+/// as a current file. The digest is that of the bytes read.
+pub fn load_attributes_bytes(
+    bytes: &[u8],
+    shown: &str,
+) -> Result<Loaded<AttributeSchema>, EngineError> {
+    const KIND: &str = "attributes";
+    match peek_version(KIND, bytes, shown)? {
+        ATTRIBUTES_VERSION => {
+            let value = parse_checked::<AttributeSchema>(KIND, bytes, shown, &())?;
+            Ok(loaded(KIND, bytes, shown, value, ATTRIBUTES_VERSION, None))
+        }
+        convert::ATTRIBUTES_V1 => {
+            let v1: convert::AttributeSchemaV1 = parse(KIND, bytes, shown)?;
+            let value = convert::attributes_v1_to_v2(v1)
+                .map_err(|reason| refused(KIND, shown, "attributes".into(), reason))?;
+            let value = checked(KIND, shown, value, &())?;
+            Ok(loaded(
+                KIND,
+                bytes,
+                shown,
+                value,
+                convert::ATTRIBUTES_V1,
+                Some(convert::ATTRIBUTES_V1),
+            ))
+        }
+        found => Err(version_refused(KIND, shown, found, ATTRIBUTES_VERSION)),
+    }
+}
+
+/// Loads a tuning file's bytes in either version this build reads; a version 2 file is
+/// converted ([`convert::tuning_v2_to_v3`]) and checked as a current file.
+pub fn load_tuning_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TuningFile>, EngineError> {
+    const KIND: &str = "tuning";
+    match peek_version(KIND, bytes, shown)? {
+        TUNING_VERSION => {
+            let value = parse_checked::<TuningFile>(KIND, bytes, shown, &())?;
+            Ok(loaded(KIND, bytes, shown, value, TUNING_VERSION, None))
+        }
+        convert::TUNING_V2 => {
+            let v2: serde_json::Value = parse(KIND, bytes, shown)?;
+            let v3 = convert::tuning_v2_to_v3(v2)
+                .map_err(|reason| refused(KIND, shown, "engine".into(), reason))?;
+            let value: TuningFile = serde_json::from_value(v3)
+                .map_err(|e| refused(KIND, shown, "converted file".into(), e.to_string()))?;
+            let value = checked(KIND, shown, value, &())?;
+            Ok(loaded(
+                KIND,
+                bytes,
+                shown,
+                value,
+                convert::TUNING_V2,
+                Some(convert::TUNING_V2),
+            ))
+        }
+        found => Err(version_refused(KIND, shown, found, TUNING_VERSION)),
+    }
+}
+
 /// Loads a tactics file's bytes in either version this build reads; a version 1 file is
 /// converted ([`convert::tactics_v1_to_v2`]) and checked as a current file.
 pub fn load_tactics_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TacticsSchema>, EngineError> {
@@ -507,20 +568,8 @@ impl Content {
     /// The content from the four files' bytes, with the same checks, digest, and flag
     /// states as [`Content::load`].
     pub fn from_files(files: &ContentFiles) -> Result<Self, EngineError> {
-        let attributes = load_json_bytes::<AttributeSchema>(
-            "attributes",
-            &files.attributes,
-            ATTRIBUTES_FILE,
-            ATTRIBUTES_VERSION,
-            &(),
-        )?;
-        let tuning = load_json_bytes::<TuningFile>(
-            "tuning",
-            &files.tuning,
-            TUNING_FILE,
-            TUNING_VERSION,
-            &(),
-        )?;
+        let attributes = load_attributes_bytes(&files.attributes, ATTRIBUTES_FILE)?;
+        let tuning = load_tuning_bytes(&files.tuning, TUNING_FILE)?;
         let modules = ResolvedModules::builtin_default();
         let rules = modules.rule_pack.load(&files.rules)?;
         let tactics = load_tactics_bytes(&files.tactics, TACTICS_FILE)?;

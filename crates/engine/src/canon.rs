@@ -155,25 +155,15 @@ impl Writer {
         }
     }
 
-    /// The 14 derived values, each under `<path()>.<name>`.
+    /// The effective values a modifier can move, each under `<path()>.<name>`: top speed,
+    /// acceleration, then the factor of each effect group of the stage values, in
+    /// [`crate::contract::EFFECT_STAGES`] order. The rest of the derived values, and the stage
+    /// values, are fixed by the squad entry and the team file.
     pub(crate) fn derived(&mut self, path: &dyn Fn() -> String, d: &Derived) {
-        for (name, v) in [
-            ("max_speed", d.max_speed),
-            ("max_accel", d.max_accel),
-            ("passing", d.passing),
-            ("dribbling", d.dribbling),
-            ("tackling", d.tackling),
-            ("positioning", d.positioning),
-            ("aggression", d.aggression),
-            ("finishing", d.finishing),
-            ("vision", d.vision),
-            ("decisions", d.decisions),
-            ("composure", d.composure),
-            ("stamina", d.stamina),
-            ("natural_fitness", d.natural_fitness),
-            ("injury_resistance", d.injury_resistance),
-        ] {
-            self.f64_at(|| format!("{}.{name}", path()), v);
+        self.f64_at(|| format!("{}.max_speed", path()), d.max_speed);
+        self.f64_at(|| format!("{}.max_accel", path()), d.max_accel);
+        for (g, &m) in d.factors.iter().enumerate() {
+            self.f64_at(|| format!("{}.factors[{g}]", path()), m);
         }
     }
 

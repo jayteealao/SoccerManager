@@ -67,7 +67,7 @@ fn the_shipped_slot_file_picks_the_fitted_model_and_off_refuses_to_play() {
     let content = common::content();
     let picked = content.modules.picked_for(FAST_MODEL.id).unwrap();
     assert_eq!((picked.module, picked.version), ("fitted-scores", 1));
-    let ko = KickOff::even([50.0, 50.0]);
+    let ko = KickOff::even([10.0, 10.0]);
     let played = fast_model::resolve(&content.modules).play(&test_fit(), &ko, 3);
     assert!(played.is_ok(), "{played:?}");
 
@@ -139,7 +139,7 @@ fn the_kick_off_strength_is_the_starting_elevens_mean_attribute() {
     assert_eq!(starters.len(), 11);
     let values: Vec<f64> = starters
         .iter()
-        .flat_map(|p| p.attributes.iter().map(|r| r.old_scale()))
+        .flat_map(|p| p.attributes.iter().map(|r| r.decimal()))
         .collect();
     let mean = values.iter().sum::<f64>() / values.len() as f64;
     assert!((ko.strength[0] - mean).abs() < 1e-12);
@@ -211,7 +211,7 @@ fn the_fast_models_event_stream_keeps_the_rules() {
     let mut cards = std::collections::BTreeSet::new();
     for seed in 0..2_000u64 {
         let gap = (seed % 21) as f64 - 10.0;
-        let mut ko = fast_model::KickOff::even([50.0 + gap / 2.0, 50.0 - gap / 2.0]);
+        let mut ko = fast_model::KickOff::even([10.0 + gap / 10.0, 10.0 - gap / 10.0]);
         if seed % 2 == 1 {
             ko.sides = teams.sides.clone();
         }

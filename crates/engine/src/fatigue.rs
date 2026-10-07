@@ -14,6 +14,8 @@
 //! test scene may script.
 
 use crate::TICKS_PER_SECOND;
+use crate::contract::Skills;
+use crate::contract::Stage;
 use crate::data::tuning::FatigueTuning;
 use crate::modules::modifier::{Effect, Family, Modifier, Neutral};
 use crate::modules::{FatigueModule, MatchView, ModuleCard};
@@ -60,31 +62,26 @@ pub fn multiplier(energy: f64, f: &FatigueTuning) -> f64 {
     f.curve.last().map_or(1.0, |p| p[1])
 }
 
-/// The effective values of `base` at `energy`.
+/// The effective values of `base` at `energy`: the fatigue curve's multiplier on every value
+/// the fatigue modifier scales.
 pub fn effective(base: &Derived, energy: f64, f: &FatigueTuning) -> Derived {
-    let m = multiplier(energy, f);
-    Derived {
-        max_speed: base.max_speed * m,
-        max_accel: base.max_accel * m,
-        passing: base.passing * m,
-        finishing: base.finishing * m,
-        decisions: base.decisions * m,
-        composure: base.composure * m,
-        ..*base
-    }
+    base.scaled([multiplier(energy, f); 6])
 }
 
-/// Energy one player loses in one tick of `dt` seconds.
-pub fn drain(p: &Player, f: &FatigueTuning, dt: f64) -> f64 {
-    let top = p.base.max_speed.max(1e-6);
+/// Energy player `p`, of base values `base`, loses in one tick of `dt` seconds. The endure
+/// stage (stamina) scales it by `1.5 − share`: an average player's drain, half of it at the
+/// top of the scale.
+pub fn drain(p: &Player, base: Skills<'_>, f: &FatigueTuning, dt: f64) -> f64 {
+    let top = base.derived.max_speed.max(1e-6);
     let frac = (p.vel.length() / top).min(1.0);
-    let stamina_scale = 1.5 - p.base.stamina;
+    let stamina_scale = 1.5 - base.share(Stage::ENDURE_EXECUTE);
     (f.drain_base_per_s + f.drain_effort_per_s * frac * frac) * dt * stamina_scale
 }
 
-/// The chance that one roll injures `p`, from a base rate for an average player.
-pub fn injury_chance(p: &Player, rate: f64) -> f64 {
-    (rate * (1.5 - p.base.injury_resistance)).clamp(0.0, 1.0)
+/// The chance that one roll injures a player of base values `base`, from a base rate for an
+/// average player, scaled by `1.5 − share` of the injury stage (injury resistance).
+pub fn injury_chance(base: Skills<'_>, rate: f64) -> f64 {
+    (rate * (1.5 - base.share(Stage::INJURY_EXECUTE))).clamp(0.0, 1.0)
 }
 
 /// Fatigue version 1: the drain and the injury chance above. The fatigue curve's effect on
@@ -93,7 +90,12 @@ pub struct FatigueV1;
 
 impl FatigueModule for FatigueV1 {
     fn drain(&self, view: &MatchView<'_>, i: usize) -> f64 {
-        drain(view.player(i), view.fatigue(), view.tuning().dt)
+        drain(
+            view.player(i),
+            view.base_skills(i),
+            view.fatigue(),
+            view.tuning().dt,
+        )
     }
 
     fn injury_chance(&self, view: &MatchView<'_>, i: usize, source: InjurySource) -> f64 {
@@ -102,13 +104,13 @@ impl FatigueModule for FatigueV1 {
             InjurySource::Tackle => t.injury_per_tackle,
             InjurySource::Background => t.injury_per_minute,
         };
-        injury_chance(view.player(i), rate)
+        injury_chance(view.base_skills(i), rate)
     }
 }
 
 pub const FATIGUE_V1_CARD: ModuleCard = ModuleCard {
     purpose: "Drains each player's energy by speed and stamina and sets each injury chance.",
-    inputs: "Each player's velocity and base values, the fatigue tuning, and the engine tuning.",
+    inputs: "Each player's velocity, base top speed, and endure and injury stages through the attribute contract (stamina and injury resistance), the fatigue tuning, and the engine tuning.",
     outputs: "The energy drained per tick and the injury chance of a roll.",
     tuning: &[
         "fatigue.drain_base_per_s",
@@ -161,7 +163,7 @@ impl Modifier for FatigueCurveV1 {
 pub const FATIGUE_CURVE_V1_CARD: ModuleCard = ModuleCard {
     purpose: "Scales pace and the decision values by the fatigue curve at the player's energy (body family).",
     inputs: "Each player's energy and the fatigue tuning.",
-    outputs: "One factor on max speed, max acceleration, passing, finishing, decisions, and composure.",
+    outputs: "One factor on max speed, max acceleration, and the passing, finishing, decision, and composure stage groups.",
     tuning: &["fatigue.threshold", "fatigue.curve"],
     calibration: "none: no fatigue band in realism-bands.json",
     keys: &[],
@@ -183,7 +185,7 @@ pub const FATIGUE_CURVE_OFF_CARD: ModuleCard = ModuleCard {
 mod tests {
     use super::*;
     use crate::data::test_support::shipped_content;
-    use crate::player::test_support::flat_player;
+    use crate::player::test_support::{flat, flat_player};
     use crate::tuning::Tuning;
 
     fn fatigue() -> FatigueTuning {
@@ -214,14 +216,43 @@ mod tests {
     fn a_player_standing_still_drains_only_the_base_rate() {
         let f = fatigue();
         let t = Tuning::default();
-        let mut p = flat_player(0, 50, &t);
-        let still = drain(&p, &f, t.dt);
+        let mut p = flat_player(0, 100, &t);
+        let (d, stages) = flat(100, &t);
+        let base = Skills::new(&stages, &d);
+        let still = drain(&p, base, &f, t.dt);
         assert!((still - f.drain_base_per_s * t.dt * 1.0).abs() < 1e-15);
-        p.vel = crate::math::DVec2::new(p.base.max_speed, 0.0);
-        let running = drain(&p, &f, t.dt);
+        p.vel = crate::math::DVec2::new(d.max_speed, 0.0);
+        let running = drain(&p, base, &f, t.dt);
         assert!(
             (running - (f.drain_base_per_s + f.drain_effort_per_s) * t.dt).abs() < 1e-15,
             "{running}"
+        );
+    }
+
+    /// At rating 10 the drain, the injury chance, and the fatigue scaling read exactly what
+    /// they read before the contract at the old value 50.
+    #[test]
+    fn a_rating_ten_player_drains_and_is_injured_as_before() {
+        let f = fatigue();
+        let t = Tuning::default();
+        let mut p = flat_player(0, 100, &t);
+        p.vel = crate::math::DVec2::new(3.0, 0.0);
+        let (d, stages) = flat(100, &t);
+        let base = Skills::new(&stages, &d);
+        let frac: f64 = 3.0 / d.max_speed;
+        let before = (f.drain_base_per_s + f.drain_effort_per_s * frac * frac) * t.dt * (1.5 - 0.5);
+        assert!((drain(&p, base, &f, t.dt) - before).abs() < 1e-12);
+        assert!((injury_chance(base, 0.004) - 0.004 * (1.5 - 0.5)).abs() < 1e-12);
+        let tired_values = effective(&d, 0.4, &f);
+        let tired = Skills::new(&stages, &tired_values);
+        let m = multiplier(0.4, &f);
+        let s = crate::contract::Stage::PASS_EXECUTE;
+        assert!((tired.share(s) - 50.0 * m / 100.0).abs() < 1e-12);
+        assert!((tired_values.max_speed - d.max_speed * m).abs() < 1e-12);
+        assert_eq!(
+            tired.share(crate::contract::Stage::TACKLE_EXECUTE),
+            base.share(crate::contract::Stage::TACKLE_EXECUTE),
+            "the curve leaves tackling alone, as before"
         );
     }
 }

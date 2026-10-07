@@ -38,16 +38,51 @@ impl Simulation {
                 if !self.players[i].active() {
                     continue;
                 }
-                let p = self.players[i];
+                let p = crate::streams::PlayerKey::of(&self.players[i]);
                 let chance = fatigue.injury_chance(&self.view(), i, InjurySource::Background);
                 let injured = self
                     .streams
-                    .tested(Key::player(Action::InjuryMinute, &p), &[chance])
+                    .tested(Key::player(Action::InjuryMinute, p), &[chance])
                     < chance;
                 self.trace_injury_roll(i, InjurySource::Background, chance, injured);
                 if injured {
                     self.injure(i, InjurySource::Background);
                 }
+            }
+            self.lapse_rolls();
+        }
+    }
+
+    /// While a team has the ball, each active outfield player of the other side rolls once
+    /// a minute for a concentration lapse; a lapse holds him where he stands for the tuned
+    /// number of ticks.
+    fn lapse_rolls(&mut self) {
+        let Some(c) = self.carrier else {
+            return;
+        };
+        let def = 1 - self.players[c].team;
+        let keeper = self.view().keeper(def);
+        let decision = self.config.modules.decision;
+        let ticks = self.config.tuning.contract.lapse.ticks;
+        for i in 0..self.players.len() {
+            let player = &self.players[i];
+            if player.team != def || i == keeper || !player.active() {
+                continue;
+            }
+            let p = crate::streams::PlayerKey::of(player);
+            let chance = decision.lapse_chance(&self.view(), i);
+            let lapsed = self
+                .streams
+                .tested(Key::player(Action::Lapse, p), &[chance])
+                < chance;
+            if self.trace_on() {
+                self.trace_point(
+                    Point::Cover,
+                    json!({"lapse": i, "chance": chance, "lapsed": lapsed}),
+                );
+            }
+            if lapsed {
+                self.players[i].lapse_until = self.tick + ticks;
             }
         }
     }
@@ -61,11 +96,19 @@ impl Simulation {
         }
     }
 
-    /// Half-time: every player on the pitch recovers some energy, scaled by natural fitness.
+    /// Half-time: every player on the pitch recovers some energy, scaled by `0.5 + share` of
+    /// his recover stage (natural fitness): the average player's gain at rating 10.
     pub(crate) fn half_time_recovery(&mut self) {
         let gain = self.config.fatigue.half_time_recovery;
-        for p in self.players.iter_mut().filter(|p| p.active()) {
-            p.energy = (p.energy + gain * (0.5 + p.base.natural_fitness)).min(1.0);
+        for i in 0..self.players.len() {
+            if !self.players[i].active() {
+                continue;
+            }
+            let fitness = self
+                .base_skills(i)
+                .share(crate::contract::Stage::RECOVER_EXECUTE);
+            let p = &mut self.players[i];
+            p.energy = (p.energy + gain * (0.5 + fitness)).min(1.0);
         }
         self.refresh_effective();
     }
@@ -76,7 +119,7 @@ impl Simulation {
         if !self.players[c].active() {
             return;
         }
-        let p = self.players[c];
+        let p = crate::streams::PlayerKey::of(&self.players[c]);
         let chance =
             self.config
                 .modules
@@ -84,7 +127,7 @@ impl Simulation {
                 .injury_chance(&self.view(), c, InjurySource::Tackle);
         let injured = self
             .streams
-            .tested(Key::player(Action::InjuryTackle, &p), &[chance])
+            .tested(Key::player(Action::InjuryTackle, p), &[chance])
             < chance;
         self.trace_injury_roll(c, InjurySource::Tackle, chance, injured);
         if injured {

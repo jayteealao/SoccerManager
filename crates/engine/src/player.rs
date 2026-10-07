@@ -1,14 +1,17 @@
 //! Player state, the attribute array, and the derived values the hot path reads.
 //!
 //! `Attributes` is a fixed array in schema order so `Player` stays `Copy` and no name lookup
-//! happens during a tick. `Derived` is computed once at load from the required attributes;
-//! fatigue lowers a player's effective values from that base as energy falls.
+//! happens during a tick. `Derived` is computed once at load through the attribute contract
+//! ([`crate::contract`]): top speed from the pace map, acceleration and turning from their
+//! stages, every stage value, and the skill gates. The modifiers lower a player's effective
+//! values from that base as energy falls.
 
 use std::collections::BTreeMap;
 
+use crate::contract::{self, Gates, Stage, StageValues, stages::Blend};
 use crate::data::attributes::{AttributeSchema, MAX_ATTRIBUTES};
 use crate::math::DVec2;
-use crate::rating::Rating;
+use crate::rating::{MIN_TENTHS, Rating};
 use crate::tuning::Tuning;
 
 /// Attribute ratings in tenths of the 1 to 20 scale, in schema order.
@@ -20,14 +23,14 @@ pub struct Attributes {
 
 impl Attributes {
     /// The ratings of a validated team-file entry, in schema order. A missing attribute
-    /// reads 0.2, the old default of 1 converted.
+    /// reads 1.0, the floor.
     pub fn from_entry(entry: &BTreeMap<String, Rating>, schema: &AttributeSchema) -> Self {
         let mut values = [Rating::default(); MAX_ATTRIBUTES];
         for (slot, def) in values.iter_mut().zip(&schema.attributes) {
             *slot = entry
                 .get(&def.name)
                 .copied()
-                .unwrap_or(Rating::from_tenths(2));
+                .unwrap_or(Rating::from_tenths(MIN_TENTHS));
         }
         Self {
             values,
@@ -47,67 +50,144 @@ impl Attributes {
     }
 }
 
-/// Values the simulation reads every tick, computed once from the attributes.
+/// Values the simulation reads every tick, computed once from the attributes through the
+/// contract.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Derived {
-    /// Maximum speed in metres per second.
+    /// Maximum speed in metres per second, from the pace map.
     pub max_speed: f64,
-    /// Maximum acceleration in metres per second squared.
+    /// Maximum acceleration in metres per second squared, from the sprint stage.
     pub max_accel: f64,
-    pub passing: f64,
-    pub dribbling: f64,
-    pub tackling: f64,
-    pub positioning: f64,
-    /// Aggression on a 0 to 1 scale; it raises the chance of a foul and of a card.
-    pub aggression: f64,
-    /// Skill values on the 1 to 100 scale the decision layer reads.
-    pub finishing: f64,
-    pub vision: f64,
-    pub decisions: f64,
-    pub composure: f64,
-    /// Stamina, natural fitness, and injury resistance on a 0 to 1 scale.
-    pub stamina: f64,
-    pub natural_fitness: f64,
-    pub injury_resistance: f64,
+    /// The factor on the sideways part of a change of velocity, from the turn stage: 1 at
+    /// rating 10.
+    pub turn: f64,
+    /// The factor on the stage values and shares of each effect group, in
+    /// [`contract::EFFECT_STAGES`] order: 1 for a fresh player. The stage values themselves
+    /// are the squad entry's; [`contract::Skills`] reads them through these factors.
+    pub factors: [f64; 4],
+    /// The per-player factors on the average player's reaches and ranges.
+    pub knobs: Knobs,
+    /// The skill gates.
+    pub gates: Gates,
+}
+
+/// The per-player factors on values every player had alike before the contract, each
+/// `1 + spread · (2 · share − 1)` of its stage, exactly 1 at rating 10. No modifier moves
+/// them, so they are computed once at load.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Knobs {
+    /// The speed of a ball he controls on receipt (receive execute).
+    pub receive: f64,
+    /// His reach to a loose ball and how far ahead he reads a run (intercept see).
+    pub intercept: f64,
+    /// How far he presses from (press choose).
+    pub press: f64,
+    /// How closely he keeps his place out of possession (shape execute).
+    pub shape: f64,
+    /// His reach to block a shot (block execute).
+    pub block: f64,
+    /// How high he reaches in the air (aerial reach execute).
+    pub aerial_reach: f64,
+    /// A keeper's reach to a shot and his catch (claim execute).
+    pub claim_reach: f64,
+    /// A keeper's range for a lofted ball in his box (claim choose).
+    pub claim_range: f64,
+    /// How far from goal a keeper comes off his line for a loose ball (rush choose).
+    pub rush: f64,
+    /// How tight a keeper keeps the back line across the pitch (organise execute).
+    pub organise: f64,
+}
+
+impl Knobs {
+    /// Every factor 1: the average player.
+    pub const NEUTRAL: Knobs = Knobs {
+        receive: 1.0,
+        intercept: 1.0,
+        press: 1.0,
+        shape: 1.0,
+        block: 1.0,
+        aerial_reach: 1.0,
+        claim_reach: 1.0,
+        claim_range: 1.0,
+        rush: 1.0,
+        organise: 1.0,
+    };
 }
 
 impl Derived {
-    /// Derives from the required attributes of a validated schema. Each rating is read on
-    /// the old 1 to 100 scale ([`Rating::old_scale`]), which is exact, so every value keeps
-    /// the bits it had before ratings moved to tenths.
-    pub fn from_attributes(a: &Attributes, schema: &AttributeSchema, t: &Tuning) -> Self {
-        let [
-            pace,
-            acceleration,
-            passing,
-            dribbling,
-            tackling,
-            positioning,
-            aggression,
-            finishing,
-            vision,
-            decisions,
-            composure,
-            stamina,
-            natural_fitness,
-            injury_resistance,
-        ] = schema.required_indices().map(|i| a.get(i).old_scale());
-        Self {
-            max_speed: t.base_speed + t.pace_speed * pace / 100.0,
-            max_accel: t.base_accel + t.accel_bonus * acceleration / 100.0,
-            passing,
-            dribbling,
-            tackling,
-            positioning,
-            aggression: aggression / 100.0,
-            finishing,
-            vision,
-            decisions,
-            composure,
-            stamina: stamina / 100.0,
-            natural_fitness: natural_fitness / 100.0,
-            injury_resistance: injury_resistance / 100.0,
+    /// Derives from a validated schema's attributes through the contract: the values and the
+    /// base stage values.
+    pub fn from_attributes(
+        a: &Attributes,
+        schema: &AttributeSchema,
+        t: &Tuning,
+    ) -> (Self, StageValues) {
+        Self::from_blend(a, &Blend::of(schema), schema, t)
+    }
+
+    /// These values with the six modifier factors applied, in
+    /// [`crate::modules::modifier::Effect`] order: top speed, acceleration, then the factor of
+    /// each group of [`contract::EFFECT_STAGES`], which multiplies its curve values and
+    /// shares as play reads them. A factor of 1 leaves its values untouched, so a fresh
+    /// player's effective values are his base bit for bit; at rating 10 a share times the
+    /// factor is the old skill / 100 times it.
+    pub fn scaled(&self, factors: [f64; 6]) -> Derived {
+        let mut d = *self;
+        d.max_speed = self.max_speed * factors[0];
+        d.max_accel = self.max_accel * factors[1];
+        for (g, &m) in factors[2..].iter().enumerate() {
+            d.factors[g] = self.factors[g] * m;
         }
+        d
+    }
+
+    /// [`Derived::from_attributes`] with the schema's blend resolved once, for a squad.
+    pub fn from_blend(
+        a: &Attributes,
+        blend: &Blend,
+        schema: &AttributeSchema,
+        t: &Tuning,
+    ) -> (Self, StageValues) {
+        let c = &t.contract;
+        let stages = blend.values(a, c);
+        let [pace, technique, agility] = contract::direct_ratings(a, schema);
+        let knob = |action: contract::ActionKind, s: Stage| {
+            contract::factor(c.actions.of(action).spread(), stages.share(s))
+        };
+        use contract::ActionKind as A;
+        let g = &schema.gates;
+        let penalty = |def: &contract::GateDef| {
+            if agility < def.agility_pull_off {
+                def.penalty_k
+            } else {
+                0.0
+            }
+        };
+        let derived = Self {
+            max_speed: c.speed.top_speed(pace),
+            max_accel: c.accel.anchor * knob(A::Sprint, Stage::SPRINT_EXECUTE),
+            turn: knob(A::Turn, Stage::TURN_EXECUTE),
+            knobs: Knobs {
+                receive: knob(A::Receive, Stage::RECEIVE_EXECUTE),
+                intercept: knob(A::Intercept, Stage::INTERCEPT_SEE),
+                press: knob(A::Press, Stage::PRESS_CHOOSE),
+                shape: knob(A::Shape, Stage::SHAPE_EXECUTE),
+                block: knob(A::Block, Stage::BLOCK_EXECUTE),
+                aerial_reach: knob(A::AerialReach, Stage::AERIAL_REACH_EXECUTE),
+                claim_reach: knob(A::Claim, Stage::CLAIM_EXECUTE),
+                claim_range: knob(A::Claim, Stage::CLAIM_CHOOSE),
+                rush: knob(A::Rush, Stage::RUSH_CHOOSE),
+                organise: knob(A::Organise, Stage::ORGANISE_EXECUTE),
+            },
+            factors: [1.0; 4],
+            gates: Gates {
+                chip_try: technique >= g.chip.technique_try,
+                chip_penalty: penalty(&g.chip),
+                take_on_try: technique >= g.take_on.technique_try,
+                take_on_penalty: penalty(&g.take_on),
+            },
+        };
+        (derived, stages)
     }
 }
 
@@ -136,10 +216,9 @@ pub struct Player {
     pub squad: usize,
     pub shirt: u8,
     pub attributes: Attributes,
-    /// The effective values play reads: `base` lowered by fatigue.
+    /// The effective values play reads: his base values (his squad entry's, which
+    /// [`crate::sim::Simulation::base`] reads) lowered by fatigue.
     pub derived: Derived,
-    /// The values the attributes give a fresh player.
-    pub base: Derived,
     /// Energy from 1.0 (fresh) down to 0.0.
     pub energy: f64,
     pub pos: DVec2,
@@ -153,6 +232,9 @@ pub struct Player {
     pub yellow: u8,
     /// The first tick the player may attempt a tackle again after a foul.
     pub foul_ready: u32,
+    /// The first tick after a concentration lapse; until then the player holds where he
+    /// stands.
+    pub lapse_until: u32,
 }
 
 impl Player {
@@ -176,30 +258,26 @@ impl Player {
 pub(crate) mod test_support {
     use super::*;
 
-    /// A player with every attribute at `v` on the old 1 to 100 scale (`2v` tenths), for unit
-    /// tests that need no schema.
-    pub(crate) fn flat_player(id: usize, v: u8, t: &Tuning) -> Player {
+    /// The values and base stage values of a player with every attribute at `tenths` tenths
+    /// of the shipped attribute file, for unit tests.
+    pub(crate) fn flat(tenths: u8, t: &Tuning) -> (Derived, StageValues) {
+        let schema = crate::data::test_support::shipped_content().attributes;
         let attributes = Attributes {
-            values: [Rating::from_tenths(2 * v); MAX_ATTRIBUTES],
-            len: 6,
+            values: [Rating::from_tenths(tenths); MAX_ATTRIBUTES],
+            len: schema.len() as u8,
         };
-        let value = f64::from(v);
-        let derived = Derived {
-            max_speed: t.base_speed + t.pace_speed * value / 100.0,
-            max_accel: t.base_accel + t.accel_bonus * value / 100.0,
-            passing: value,
-            dribbling: value,
-            tackling: value,
-            positioning: value,
-            aggression: value / 100.0,
-            finishing: value,
-            vision: value,
-            decisions: value,
-            composure: value,
-            stamina: value / 100.0,
-            natural_fitness: value / 100.0,
-            injury_resistance: value / 100.0,
+        Derived::from_attributes(&attributes, &schema, t)
+    }
+
+    /// A player with every attribute at `tenths` tenths of the shipped attribute file, for
+    /// unit tests.
+    pub(crate) fn flat_player(id: usize, tenths: u8, t: &Tuning) -> Player {
+        let schema = crate::data::test_support::shipped_content().attributes;
+        let attributes = Attributes {
+            values: [Rating::from_tenths(tenths); MAX_ATTRIBUTES],
+            len: schema.len() as u8,
         };
+        let (derived, _) = Derived::from_attributes(&attributes, &schema, t);
         Player {
             id,
             team: 0,
@@ -208,7 +286,6 @@ pub(crate) mod test_support {
             shirt: 1,
             attributes,
             derived,
-            base: derived,
             energy: 1.0,
             pos: DVec2::ZERO,
             vel: DVec2::ZERO,
@@ -217,6 +294,7 @@ pub(crate) mod test_support {
             status: Status::OnPitch,
             yellow: 0,
             foul_ready: 0,
+            lapse_until: 0,
         }
     }
 }
@@ -224,40 +302,56 @@ pub(crate) mod test_support {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::attributes::{ATTRIBUTES_VERSION, AttributeDef, Group, REQUIRED};
+    use crate::data::test_support::shipped_content;
 
-    fn schema() -> AttributeSchema {
-        let mut names: Vec<String> = REQUIRED.iter().map(|s| s.to_string()).collect();
-        for i in 0..16 {
-            names.push(format!("attr_{i}"));
-        }
-        AttributeSchema {
-            schema_version: ATTRIBUTES_VERSION,
-            attributes: names
-                .into_iter()
-                .map(|name| AttributeDef {
-                    name,
-                    group: Group::Physical,
-                })
-                .collect(),
-        }
+    fn entry_at(schema: &AttributeSchema, tenths: u8) -> BTreeMap<String, Rating> {
+        schema
+            .attributes
+            .iter()
+            .map(|a| (a.name.clone(), Rating::from_tenths(tenths)))
+            .collect()
     }
 
     #[test]
-    fn derived_speed_scales_with_pace() {
-        let t = Tuning::default();
-        let s = schema();
-        let mut entry: BTreeMap<String, Rating> = s
-            .attributes
-            .iter()
-            .map(|a| (a.name.clone(), Rating::from_tenths(2)))
-            .collect();
-        let a = Attributes::from_entry(&entry, &s);
-        assert_eq!(a.len, 30);
-        let d = Derived::from_attributes(&a, &s, &t);
-        assert_eq!(d.max_speed, t.base_speed + t.pace_speed * 0.01);
+    fn a_rating_ten_player_reads_the_anchors_exactly() {
+        let content = shipped_content();
+        let (s, t) = (&content.attributes, &content.tuning.engine);
+        let (d, stages) =
+            Derived::from_attributes(&Attributes::from_entry(&entry_at(s, 100), s), s, t);
+        assert_eq!(d.max_speed, t.contract.speed.anchor_ms);
+        assert_eq!(d.max_accel, t.contract.accel.anchor);
+        assert_eq!(d.turn, 1.0);
+        assert_eq!(d.knobs, Knobs::NEUTRAL);
+        for i in 0..contract::STAGE_COUNT {
+            assert_eq!(stages.f[i], 8.0, "{}", contract::STAGES[i].0.name());
+            assert_eq!(stages.share[i], 0.5);
+        }
+        assert_eq!(d.gates, Gates::OPEN);
+    }
+
+    #[test]
+    fn top_speed_follows_pace_through_the_map_and_a_missing_attribute_reads_the_floor() {
+        let content = shipped_content();
+        let (s, t) = (&content.attributes, &content.tuning.engine);
+        let mut entry = entry_at(s, 100);
         entry.insert("pace".into(), Rating::from_tenths(200));
-        let d = Derived::from_attributes(&Attributes::from_entry(&entry, &s), &s, &t);
-        assert_eq!(d.max_speed, t.base_speed + t.pace_speed);
+        let (fast, _) = Derived::from_attributes(&Attributes::from_entry(&entry, s), s, t);
+        assert_eq!(fast.max_speed, t.contract.speed.top_speed(20.0));
+        entry.remove("pace");
+        let a = Attributes::from_entry(&entry, s);
+        assert_eq!(a.get(s.index("pace").unwrap()).tenths(), MIN_TENTHS);
+    }
+
+    #[test]
+    fn a_low_technique_closes_the_gates_and_a_low_agility_costs_the_execution() {
+        let content = shipped_content();
+        let (s, t) = (&content.attributes, &content.tuning.engine);
+        let mut entry = entry_at(s, 100);
+        entry.insert("technique".into(), Rating::from_tenths(50));
+        entry.insert("agility".into(), Rating::from_tenths(50));
+        let (d, _) = Derived::from_attributes(&Attributes::from_entry(&entry, s), s, t);
+        assert!(!d.gates.chip_try && !d.gates.take_on_try);
+        assert_eq!(d.gates.chip_penalty, s.gates.chip.penalty_k);
+        assert_eq!(d.gates.take_on_penalty, s.gates.take_on.penalty_k);
     }
 }

@@ -35,6 +35,9 @@
 //!   entry is refused by name.
 //!   Version 10 changes no layout: it marks the move of ratings to tenths of 1 to 20, after
 //!   which a team rebuilt from a snapshot reads its ratings in tenths.
+//!   Version 11 reads every action through the attribute contract: each player stores his
+//!   lapse end (u32) after the foul cooldown, and his effective values are top speed,
+//!   acceleration, and the factor of each of the four stage groups a modifier scales.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -64,7 +67,7 @@ use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 10;
+pub const VERSION: u16 = 11;
 /// The earliest layout version the strict reader still reads: version 8 has no matchday mark.
 const FIRST_READ: u16 = 8;
 /// The released builds from before the snapshot recorded its engine version: the full commit
@@ -787,23 +790,15 @@ impl<'a> Reader<'a> {
             roles,
         })
     }
-    fn derived(&mut self) -> Decoded<Derived> {
-        Ok(Derived {
-            max_speed: self.f64()?,
-            max_accel: self.f64()?,
-            passing: self.f64()?,
-            dribbling: self.f64()?,
-            tackling: self.f64()?,
-            positioning: self.f64()?,
-            aggression: self.f64()?,
-            finishing: self.f64()?,
-            vision: self.f64()?,
-            decisions: self.f64()?,
-            composure: self.f64()?,
-            stamina: self.f64()?,
-            natural_fitness: self.f64()?,
-            injury_resistance: self.f64()?,
-        })
+    /// The effective values over `base`, in the order [`Writer::derived`] writes them.
+    fn derived(&mut self, base: Derived) -> Decoded<Derived> {
+        let mut d = base;
+        d.max_speed = self.f64()?;
+        d.max_accel = self.f64()?;
+        for m in &mut d.factors {
+            *m = self.f64()?;
+        }
+        Ok(d)
     }
 }
 
@@ -849,6 +844,7 @@ fn encode(sim: &Simulation, w: &mut Writer) {
         w.u8(canon::status_code(p.status));
         w.u8(p.yellow);
         w.u32(p.foul_ready);
+        w.u32(p.lapse_until);
         w.u8(p.squad as u8);
         w.f64_at(String::new, p.energy);
         w.derived(&String::new, &p.derived);
@@ -1070,15 +1066,15 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
         };
         p.yellow = r.u8()?;
         p.foul_ready = r.u32()?;
+        p.lapse_until = r.u32()?;
         let team = &sim.teams[p.team];
         let squad = r.some_index(team.squad.len())?;
         let entry = &team.squad[squad];
         p.squad = squad;
         p.shirt = entry.shirt;
         p.attributes = entry.attributes;
-        p.base = entry.derived;
         p.energy = r.f64()?;
-        p.derived = r.derived()?;
+        p.derived = r.derived(entry.derived)?;
     }
     sim.queue.next = r.u32()?;
     let pending = r.u32()?;
@@ -1311,7 +1307,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 10"),
+                .contains("unknown version 1; this build reads 11"),
             "{err}"
         );
     }

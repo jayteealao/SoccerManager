@@ -170,16 +170,15 @@ pub fn match_id(run_seed: u64, suite: Suite, index: u32, millis: u64) -> String 
     .to_string()
 }
 
-/// A copy of `file` with every attribute times `boost`. The boost works on the old 1 to 100
-/// scale, rounded and clamped to 1 to 100, and the result is doubled into tenths, so a
-/// boosted club is the club it was before ratings moved to tenths.
+/// A copy of `file` with every attribute's tenths times `boost`, rounded and clamped to the
+/// 1.0 to 20.0 range.
 pub fn boosted(file: &TeamFile, boost: f64) -> TeamFile {
     let mut out = file.clone();
     for p in &mut out.players {
         for v in p.attributes.values_mut() {
-            // Clamped to 1 to 100 first, so the cast cannot truncate.
-            let old = (v.old_scale() * boost).round().clamp(1.0, 100.0) as u8;
-            *v = Rating::from_tenths(2 * old);
+            // Clamped to 10 to 200 tenths first, so the cast cannot truncate.
+            let tenths = (f64::from(v.tenths()) * boost).round().clamp(10.0, 200.0) as u8;
+            *v = Rating::from_tenths(tenths);
         }
     }
     out

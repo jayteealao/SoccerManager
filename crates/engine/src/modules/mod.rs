@@ -105,8 +105,15 @@ pub trait ShotModule: Send + Sync + 'static {
     fn quality(&self, view: &MatchView<'_>, from: DVec2, attack_x: f64) -> f64;
     /// `true` when `ball`, just kicked and left alone, goes in under the bar.
     fn on_target(&self, view: &MatchView<'_>, ball: Ball, attack_x: f64) -> bool;
-    /// The chance that a keeper saves a shot of `quality` heading on target.
-    fn save_chance(&self, view: &MatchView<'_>, quality: f64) -> f64;
+    /// The chance that keeper `keeper` saves a shot of `quality` heading on target, struck by
+    /// `shooter` when the loop knows him.
+    fn save_chance(
+        &self,
+        view: &MatchView<'_>,
+        quality: f64,
+        keeper: usize,
+        shooter: Option<usize>,
+    ) -> f64;
 }
 
 /// Fatigue and injury chances. The loop writes energy, and draws the `InjuryMinute` and
@@ -200,7 +207,7 @@ pub trait ClockModule: Send + Sync + 'static {
     /// The side the keeper dives to (-1, 0, or +1), given the dive draw in `[-1, 1)`.
     fn keeper_dive(&self, view: &MatchView<'_>, draw: f64) -> f64;
     /// The `ShootoutSaveHold` threshold: a draw below it holds a saved shoot-out kick.
-    fn shootout_save_hold(&self, view: &MatchView<'_>) -> f64;
+    fn shootout_save_hold(&self, view: &MatchView<'_>, keeper: usize) -> f64;
     /// `true` once the shoot-out has a winner.
     fn shootout_decided(&self, view: &MatchView<'_>, scores: [u32; 2], taken: [u32; 2]) -> bool;
 }
@@ -299,6 +306,9 @@ pub struct LooseBall {
     pub fast: bool,
     /// The chance a keeper holds a fast ball.
     pub catch_chance: f64,
+    /// The chance the nearest player controls a ball he meets above head height, against
+    /// the best header of an opponent within reach; `None` when the ball is not a header.
+    pub header: Option<f64>,
 }
 
 /// The defenders (one bit per roster index, read from bit 0 up) who may try to stop the
@@ -339,7 +349,7 @@ pub trait PossessionModule: Send + Sync + 'static {
     /// The keeper who can reach the shot of `shooter` on target, or `None`.
     fn save_reach(&self, view: &MatchView<'_>, shooter: usize) -> Option<usize>;
     /// The `SaveHold` threshold: a draw below it holds a save.
-    fn save_hold(&self, view: &MatchView<'_>) -> f64;
+    fn save_hold(&self, view: &MatchView<'_>, keeper: usize) -> f64;
     /// The side keeper `k` parries to.
     fn parry_side(&self, view: &MatchView<'_>, k: usize) -> ParrySide;
     /// The parry side for a drawn side, given the draw and the threshold.
@@ -403,8 +413,9 @@ pub struct OptionDraft {
     /// The open team-mates in roster order and their pass scores.
     pub passes: [(usize, f64); MATES],
     pub pass_count: usize,
-    /// The dribble and hold scores; `None` for a keeper.
-    pub dribble_hold: Option<(f64, f64)>,
+    /// The dribble and hold scores; `None` for a keeper. The dribble score is `None` when
+    /// an opponent is close and the carrier does not try a take-on (the skill gate).
+    pub dribble_hold: Option<(Option<f64>, f64)>,
     pub clear: f64,
     /// The carry cost subtracted from the best pass after the pick.
     pub carry: f64,
@@ -506,6 +517,9 @@ pub trait DecisionModule: Send + Sync + 'static {
     ) -> Kick;
     /// The kick that takes a restart of `kind`.
     fn restart_pass(&self, view: &MatchView<'_>, taker: usize, kind: StoppageKind) -> RestartPass;
+    /// The chance that player `i`, on the side without the ball, lapses in this minute of
+    /// play. The loop draws the `Lapse` key against it.
+    fn lapse_chance(&self, view: &MatchView<'_>, i: usize) -> f64;
 }
 
 /// One check of the AI manager: the minute, the changes to queue in order, and the manager's

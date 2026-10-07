@@ -4,9 +4,9 @@
 //! 1.0 to 20.0. It fits in a `u8`, so a player record stays `Copy`. A team file writes a
 //! rating as a number with one decimal (`12.5`); the screens show the whole number (`13`).
 //!
-//! A rating converted from a version 1 team file is `2 × v` tenths exactly, so a version 1
-//! value of 1 to 4 becomes 0.2 to 0.8. Only converted ratings may sit under 1.0; a version 2
-//! file is refused for them.
+//! A rating converted from a version 1 team file is `2 × v` tenths, at least 1.0: a version
+//! 1 value of 1 to 4 becomes 1.0. Play reads ratings only through the attribute contract
+//! ([`crate::contract`]).
 
 use std::fmt;
 
@@ -16,7 +16,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default)]
 pub struct Rating(u8);
 
-/// The tenths of 1.0, the lowest rating a version 2 file may hold.
+/// The tenths of 1.0, the lowest rating.
 pub const MIN_TENTHS: u8 = 10;
 /// The tenths of 20.0, the highest rating.
 pub const MAX_TENTHS: u8 = 200;
@@ -31,8 +31,8 @@ pub enum RatingError {
 }
 
 impl Rating {
-    /// The rating of `tenths` tenths. Any `u8` is accepted: a converted version 1 value may
-    /// sit under 1.0.
+    /// The rating of `tenths` tenths. Any `u8` is accepted; the loaders keep a rating inside
+    /// 1.0 to 20.0.
     pub const fn from_tenths(tenths: u8) -> Self {
         Self(tenths)
     }
@@ -40,14 +40,6 @@ impl Rating {
     /// The rating in tenths.
     pub const fn tenths(self) -> u8 {
         self.0
-    }
-
-    /// The rating on the old 1 to 100 scale, `T / 2`. Halving is exact in binary floating
-    /// point, so a value converted from version 1 (`T = 2v`) gives the same bits as
-    /// `f64::from(v)` did: the play formulas read ratings through this until the stage blend
-    /// replaces them.
-    pub fn old_scale(self) -> f64 {
-        f64::from(self.0) / 2.0
     }
 
     /// The whole number a screen shows: `T / 10` rounded, at least 1.
@@ -135,14 +127,6 @@ mod tests {
         assert_eq!(Rating::from_decimal(20.0).unwrap().tenths(), 200);
         assert!(serde_json::from_str::<Rating>("12.34").is_err());
         assert!(serde_json::from_str::<Rating>("25.6").is_err());
-    }
-
-    #[test]
-    fn old_scale_has_the_bits_of_the_old_value() {
-        for v in 1u8..=100 {
-            let r = Rating::from_tenths(2 * v);
-            assert_eq!(r.old_scale().to_bits(), f64::from(v).to_bits());
-        }
     }
 
     #[test]

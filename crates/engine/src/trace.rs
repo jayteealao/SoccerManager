@@ -178,7 +178,7 @@ impl Trace {
     }
 }
 
-/// `true` for the 18 actions whose draw is tested against a probability. The other 18 are
+/// `true` for the 20 actions whose draw is tested against a probability. The other 18 are
 /// value draws: score noise, aims, angles, lofts, the keeper's dive, and added time. The
 /// list is outside the stream table, so the scheme digest does not change.
 pub fn is_chance(action: Action) -> bool {
@@ -200,7 +200,9 @@ pub fn is_chance(action: Action) -> bool {
         | Action::ShootoutSave
         | Action::ShootoutSaveHold
         | Action::InjuryMinute
-        | Action::InjuryTackle => true,
+        | Action::InjuryTackle
+        | Action::Lapse
+        | Action::Header => true,
         Action::ShotScore
         | Action::PassScore
         | Action::DribbleScore
@@ -406,6 +408,9 @@ pub fn points_of(action: Action) -> &'static [Point] {
         Action::KeeperDive => &[Point::RestartTaken],
         Action::ShootoutSave | Action::ShootoutSaveHold => &[Point::ShootoutSave],
         Action::InjuryMinute | Action::InjuryTackle => &[Point::Injury],
+        // A lapse is a defender losing his place in the shape.
+        Action::Lapse => &[Point::Cover],
+        Action::Header => &[Point::LooseBall],
     }
 }
 

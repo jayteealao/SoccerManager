@@ -170,10 +170,10 @@ fn foul_scene(config: MatchConfig, plugins: Plugins) -> Simulation {
     const CARRIER: usize = 5;
     const TACKLER: usize = 16;
     let sim = Simulation::new(config.clone()).unwrap();
-    let tackler = sim.players()[TACKLER].derived;
-    let carrier = sim.players()[CARRIER].derived;
-    let p_win = engine::rules::fouls::win_chance(&tackler, &carrier, &config.tuning);
-    let p_foul = foul_chance(&tackler, 0, &config.tuning);
+    let tackler = sim.skills(TACKLER);
+    let carrier = sim.skills(CARRIER);
+    let p_win = engine::rules::fouls::win_chance(tackler, carrier, &config.tuning);
+    let p_foul = foul_chance(tackler, 0, &config.tuning);
     let at = DVec2::new(0.0, 10.0);
     spread(Scene::new(config), -30.0, 30.0)
         .place(CARRIER, at)
