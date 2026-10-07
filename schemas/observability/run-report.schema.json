@@ -373,6 +373,7 @@
             }
           },
           "calib.pass": {
+            "description": "The run's answer, as the exit code gives it: in a change run, true only when calib.joint.word is pass; otherwise every band check, the time budget included, passes and no dark-path counter is set.",
             "type": "boolean"
           },
           "calib.selection": {
@@ -657,7 +658,7 @@
             }
           },
           "calib.results_digest": {
-            "description": "SHA-256 over every match's statistics in fixture-key order, with the match identifier, owner, and timing left out: a resumed run gives the same digest as an uninterrupted one.",
+            "description": "SHA-256 over every arm's compact rows in fixture-key order: each row's key and its columns except record.reasons and duration_us. A resumed run gives the same digest as an uninterrupted one. Reports of earlier builds hashed each match's statistics instead, so their digests are not comparable with these.",
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
           },
@@ -686,7 +687,7 @@
             }
           },
           "calib.verdicts": {
-            "description": "Each band's word. In a change run it comes from the paired max-t test: fail when the value is outside the range or the change is beyond the joint threshold, pass when inside, not beyond, and with the power to see the band's smallest shift, not sure otherwise. In a run without an old engine it is the range check.",
+            "description": "Each band's word. In a change run it comes from the paired max-t test: fail when the value is outside the range or the change is beyond the joint threshold and at least the band's smallest shift, pass when inside, not a fail, and with the power to see the band's smallest shift, not sure otherwise. In a run without an old engine it is the range check, without the time budget (wall_ms), which calib.pass still includes.",
             "type": "array",
             "items": {
               "type": "object",

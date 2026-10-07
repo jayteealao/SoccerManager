@@ -5,20 +5,21 @@
 //! For each of [`RESAMPLES`] resamples, the paired fixtures are drawn with replacement
 //! within their stratum (a suite, a formation pairing, a red-card arm) from the engine's own
 //! random stream, so the result is the same on every machine. Every band's change (changed
-//! minus old) is computed under the resample's weights; a band's standard error is the
-//! spread of its resampled changes; the statistic of a resample is the largest standardized
-//! change over every band. The joint threshold `c` is its 97th percentile: one threshold
-//! for every band, set by how the bands move together, with a 3 percent false-alarm limit
-//! for the whole run.
+//! minus old) is computed under the resample's weights, with its delta-method standard
+//! error over the resampled pairs; the statistic of a resample is the largest change over
+//! every band, each divided by its own error (studentized). The joint threshold `c` is its
+//! 97th percentile: one threshold for every band, set by how the bands move together, with
+//! a 3 percent false-alarm limit for the whole run.
 //!
 //! A band has power when `(c + z) · se <= smallest shift`, with `z` the normal quantile of
 //! 80 percent power. For power, `se` is the larger of the paired error and the error the
 //! two engines' values would have apart: two engines that differ at all soon play
 //! different matches, so the pairing of a run whose engines are still identical says
-//! nothing about how precise a real change would be. A band **fails** when the changed engine's value is outside its range
-//! or its change is beyond the threshold; it **passes** when the value is inside, the change
-//! is not beyond the threshold, and it has power; otherwise it is **not sure**. A band with
-//! no power never passes.
+//! nothing about how precise a real change would be. A band **fails** when the changed
+//! engine's value is outside its range, or its change is beyond the threshold and at least
+//! its smallest shift; it **passes** when the value is inside, it did not move by its
+//! smallest shift, and it has power; otherwise it is **not sure**. A band with no power
+//! never passes.
 
 use std::collections::BTreeMap;
 
@@ -400,7 +401,11 @@ pub fn judge(
         let power_se = f.se.max(r.apart_se);
         let power =
             enough && r.spread && f.diff.is_some() && (critical + Z_POWER) * power_se <= r.shift;
-        let moved = f.diff.is_some_and(|d| significant(d, f.se, critical));
+        // A move fails a band when it is beyond the threshold and at least the smallest
+        // shift that matters: a smaller move, however certain, is not a change of the band.
+        let moved = f
+            .diff
+            .is_some_and(|d| significant(d, f.se, critical) && d.abs() >= r.shift);
         let word = match (r.value, f.diff) {
             (Some(_), _) if !r.in_range || moved => Word::Fail,
             (Some(_), Some(_)) if power => Word::Pass,
@@ -605,9 +610,13 @@ mod tests {
         assert_eq!(words(mk(true, true), f(0.05, 0.1)), Word::Pass);
         // The same without power: never pass.
         assert_eq!(words(mk(true, true), f(0.05, 0.2)), Word::NotSure);
-        // A move beyond the threshold, or a value outside the range: fail.
-        assert_eq!(words(mk(true, true), f(0.25, 0.1)), Word::Fail);
+        // A move beyond the threshold and at least the smallest shift, or a value outside
+        // the range: fail.
+        assert_eq!(words(mk(true, true), f(0.6, 0.1)), Word::Fail);
+        assert_eq!(words(mk(true, true), f(-0.5, 0.1)), Word::Fail);
         assert_eq!(words(mk(false, true), f(0.0, 0.1)), Word::Fail);
+        // A certain move smaller than the smallest shift is no change of the band.
+        assert_eq!(words(mk(true, true), f(0.25, 0.1)), Word::Pass);
         // Zero events in both engines: no spread, so not sure.
         assert_eq!(words(mk(true, false), f(0.0, 0.0)), Word::NotSure);
         // No value at all: not sure.

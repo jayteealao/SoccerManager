@@ -13,10 +13,8 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
-
-use serde::Serialize;
 
 /// A stage of a run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -66,10 +64,23 @@ thread_local! {
 static NANOS: [AtomicU64; 6] = [const { AtomicU64::new(0) }; 6];
 static PEAK_BYTES: [AtomicI64; 6] = [const { AtomicI64::new(0) }; 6];
 
-/// The program's allocator: the system allocator, counting each thread's live heap bytes.
+/// The program's allocator: the system allocator, counting each thread's live heap bytes
+/// once [`enable`] has run. Until then (every command but `calibrate`) an allocation pays
+/// one relaxed load and counts nothing.
 pub struct CountingAlloc;
 
+/// Whether [`CountingAlloc`] counts: set by `calibrate`, the one command with stage costs.
+static COUNTING: AtomicBool = AtomicBool::new(false);
+
+/// Turns the heap counting on for the rest of the process.
+pub fn enable() {
+    COUNTING.store(true, Ordering::Relaxed);
+}
+
 fn counted(delta: i64) {
+    if !COUNTING.load(Ordering::Relaxed) {
+        return;
+    }
     // The thread-locals hold plain numbers with no destructor, so they are always there;
     // `try_with` keeps an allocation during thread teardown from panicking all the same.
     let _ = LIVE.try_with(|live| {
@@ -177,13 +188,7 @@ pub fn shift(from: Stage, to: Stage, d: Duration) {
 }
 
 /// One stage's cost in a report.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-pub struct Cost {
-    pub ms: u64,
-    /// The largest heap growth of one thread in the stage, in mebibytes; for `total`, the
-    /// process's peak working set where the platform gives it.
-    pub peak_mb: Option<f64>,
-}
+pub use crate::report::StageCost as Cost;
 
 /// Every stage's cost so far, by stage code, with the run's total.
 pub fn snapshot(total: Duration) -> BTreeMap<String, Cost> {
@@ -238,6 +243,7 @@ mod tests {
     // only that its own stage grew.
     #[test]
     fn a_stage_counts_its_time_and_the_heap_it_grows_and_restores_the_outer_stage() {
+        enable();
         let before = snapshot(Duration::ZERO);
         {
             let _span = enter(Stage::Commentary);

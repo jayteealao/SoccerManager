@@ -795,7 +795,8 @@ pub struct CalibrationReport {
     /// One row per band both runs judged, with its change and sampling error.
     #[serde(rename = "calib.diff", skip_serializing_if = "Option::is_none")]
     pub diff: Option<baseline::Diff>,
-    /// Every band, both dark paths, and the time budget pass.
+    /// The run's answer, as the exit code gives it: a change run's joint word is `pass`;
+    /// any other run's bands, dark paths, and time budget pass.
     #[serde(rename = "calib.pass")]
     pub pass: bool,
     #[serde(rename = "bench.matches")]
@@ -880,10 +881,30 @@ pub struct CalibrationReport {
     pub registry: RegistryInfo,
     /// The time and memory of each stage, and the run's total.
     #[serde(rename = "calib.stages")]
-    pub stages: BTreeMap<String, crate::calibrate::stages::Cost>,
+    pub stages: BTreeMap<String, StageCost>,
     /// A change run's rules stage.
     #[serde(rename = "calib.rules", skip_serializing_if = "Option::is_none")]
-    pub rules: Option<crate::calibrate::rules::RulesReport>,
+    pub rules: Option<RulesReport>,
+}
+
+/// One stage's cost in a report.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct StageCost {
+    pub ms: u64,
+    /// The largest heap growth of one thread in the stage, in mebibytes; for `total`, the
+    /// process's peak working set where the platform gives it.
+    pub peak_mb: Option<f64>,
+}
+
+/// What a change run's rules stage did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct RulesReport {
+    /// Touched rules checked.
+    pub checked: u32,
+    /// Levels checked, over every rule.
+    pub levels: u32,
+    /// Levels at which a rule failed.
+    pub failed: u32,
 }
 
 /// The schema version of the calibrate run report: 2 since the registry, the verdicts and

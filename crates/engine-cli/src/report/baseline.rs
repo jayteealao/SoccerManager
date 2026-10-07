@@ -16,7 +16,6 @@ use serde_json::Value;
 
 use super::BandCheck;
 use super::compare;
-use crate::calibrate::fixtures::FIXTURE_SCHEME;
 
 /// A change is noise when it is at most this many sampling errors.
 pub const NOISE_ERRORS: f64 = 2.0;
@@ -45,6 +44,8 @@ pub struct Identity<'a> {
     pub seed: u64,
     pub matches: u32,
     pub fixtures_hash: &'a str,
+    /// The run's fixture scheme: a baseline of another scheme played other matches.
+    pub fixtures_scheme: &'a str,
 }
 
 /// Reads the report at `path` and refuses it, naming every difference, when it is not a
@@ -79,19 +80,20 @@ fn check(report: &Value, run: Identity<'_>) -> Result<(), String> {
     let Some(bands) = report["calib.bands"].as_array().filter(|_| calibrate) else {
         return Err("it is not the run report of a calibrate run".into());
     };
+    let ours = run.fixtures_scheme;
     match report["fixtures.scheme"].as_str() {
-        Some(scheme) if scheme == FIXTURE_SCHEME => {}
+        Some(scheme) if scheme == ours => {}
         Some(scheme) => {
             return Err(format!(
                 "it was made with the fixture scheme {scheme}; this run uses fixture keys \
-                 ({FIXTURE_SCHEME}), so the two runs played different matches; make a new \
+                 ({ours}), so the two runs played different matches; make a new \
                  baseline"
             ));
         }
         None => {
             return Err(format!(
                 "it was made with the old seeding scheme (match seeds from the fixture's \
-                 place in the run); this run uses fixture keys ({FIXTURE_SCHEME}), so the \
+                 place in the run); this run uses fixture keys ({ours}), so the \
                  two runs played different matches; make a new baseline"
             ));
         }
@@ -277,10 +279,14 @@ mod tests {
         })
     }
 
+    /// The fixture scheme of the run under test.
+    const FIXTURE_SCHEME: &str = "fixture-key-1";
+
     const RUN: Identity<'static> = Identity {
         seed: 42,
         matches: 1000,
         fixtures_hash: "0c44e1a9f2b3",
+        fixtures_scheme: FIXTURE_SCHEME,
     };
 
     #[test]

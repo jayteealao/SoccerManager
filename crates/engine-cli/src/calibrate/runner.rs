@@ -229,12 +229,19 @@ pub(super) fn run_arms(
     let first_error: Mutex<Option<anyhow::Error>> = Mutex::new(None);
     let started = Instant::now();
     let threads = ctx.jobs.max(1);
+    let progress = Progress {
+        total: list.iter().map(|j| j.fixtures.len()).sum(),
+        done: AtomicUsize::new(0),
+        last: Mutex::new(started),
+        started,
+    };
 
     std::thread::scope(|scope| {
         for thread in 0..threads {
             let (list, arms, defaults, pairings) = (&list, arms, &defaults, &pairings);
             let (recorder, spans, next, failed, first_error) =
                 (&recorder, &spans, &next, &failed, &first_error);
+            let progress = &progress;
             let commentary = &commentary;
             scope.spawn(move || {
                 let mut state: Vec<ArmState<'_>> = arms
@@ -295,6 +302,16 @@ pub(super) fn run_arms(
                         Ok(())
                     });
                     if let Err(e) = done {
+                        // Every thread's error is logged; the first one ends the run.
+                        tracing::error!(
+                            signal = "calibrate.thread_failed",
+                            run.id = %ctx.run_id,
+                            arm = job.arm,
+                            suite = job.suite.code(),
+                            unit = job.place,
+                            thread,
+                            error = %format!("{e:#}")
+                        );
                         failed.store(true, Ordering::Relaxed);
                         first_error
                             .lock()
@@ -312,6 +329,7 @@ pub(super) fn run_arms(
                             *last = (*last).max(now);
                         })
                         .or_insert((unit_started, now));
+                    progress.unit_done(&ctx.run_id, fixtures.len(), now);
                 }
             });
         }
@@ -344,6 +362,49 @@ pub(super) fn run_arms(
         total_ms: millis(started.elapsed()),
         stopped: stop.is_some_and(|k| k < list.len()),
     })
+}
+
+/// The least time between two progress events of a run.
+const PROGRESS_EVERY: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// How far the work list is: a run of hours tells a slow run from a stalled one by one
+/// structured event at most every [`PROGRESS_EVERY`].
+struct Progress {
+    /// Fixtures in the work list.
+    total: usize,
+    /// Fixtures of finished units.
+    done: AtomicUsize,
+    /// When the last event went out.
+    last: Mutex<Instant>,
+    started: Instant,
+}
+
+impl Progress {
+    /// Counts a finished unit of `fixtures` matches, and logs the progress when the last
+    /// event is at least [`PROGRESS_EVERY`] old.
+    fn unit_done(&self, run_id: &str, fixtures: usize, now: Instant) {
+        let done = self.done.fetch_add(fixtures, Ordering::Relaxed) + fixtures;
+        let mut last = self
+            .last
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if now.duration_since(*last) < PROGRESS_EVERY {
+            return;
+        }
+        *last = now;
+        let elapsed = now.duration_since(self.started).as_secs_f64();
+        let rate = done as f64 / elapsed.max(1e-9);
+        let left = self.total.saturating_sub(done) as f64;
+        tracing::info!(
+            signal = "calibrate.progress",
+            run.id = %run_id,
+            fixtures_done = done,
+            fixtures_total = self.total,
+            elapsed_s = elapsed.round() as u64,
+            matches_per_s = (rate * 10.0).round() / 10.0,
+            eta_s = (left / rate.max(1e-9)).round() as u64
+        );
+    }
 }
 
 /// What every match of a unit shares.
@@ -410,6 +471,12 @@ fn play_unit(
         }));
         let (mut row, stats) = match played {
             Ok(Ok(played)) => (played.row, (reasons != 0).then_some(played.stats)),
+            // The match itself finished: only its event file could not be written (a full
+            // disk, a locked file). That stops the run like any other write; the unit has
+            // no ledger line, so a resume plays it again.
+            Ok(Err(EngineError::Sink(why))) => {
+                anyhow::bail!("cannot write the event file of match {match_id}: {why}");
+            }
             Ok(Err(err)) => {
                 tracing::error!(
                     signal = "calibrate.match_failed",

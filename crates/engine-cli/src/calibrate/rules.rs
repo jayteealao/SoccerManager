@@ -2,7 +2,7 @@
 //! every level of its setting. No sensitivity rule exists yet, so the list is empty and the
 //! stage reports zero rules; the rules arrive with their own format later.
 
-use serde::Serialize;
+pub use crate::report::RulesReport;
 
 /// A sensitivity rule: a setting, its levels, and the check at one level.
 pub struct Rule {
@@ -13,17 +13,6 @@ pub struct Rule {
 
 /// Every sensitivity rule. Empty until the first rule is written.
 pub const RULES: &[Rule] = &[];
-
-/// What the rules stage did.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
-pub struct RulesReport {
-    /// Touched rules checked.
-    pub checked: u32,
-    /// Levels checked, over every rule.
-    pub levels: u32,
-    /// Levels at which a rule failed.
-    pub failed: u32,
-}
 
 /// Checks every rule of `rules` that `touched` names, at every level.
 pub fn run(rules: &[Rule], touched: &dyn Fn(&Rule) -> bool) -> RulesReport {

@@ -74,6 +74,7 @@ pub const QUIET_ENV: &str = "SM_CALIBRATE_QUIET";
 
 pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i32> {
     let run_started = Instant::now();
+    stages::enable();
     if opts.matches == 0 {
         anyhow::bail!("--matches must be at least 1");
     }
@@ -139,6 +140,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
                     seed: opts.seed,
                     matches: opts.matches,
                     fixtures_hash: &fixtures_hash,
+                    fixtures_scheme: FIXTURE_SCHEME,
                 },
             )
         })
@@ -164,30 +166,13 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         .unwrap_or(u32::try_from(cores).unwrap_or(u32::MAX))
         .clamp(1, most);
     let bands = registry;
-    // nosemgrep: rust.lang.security.current-exe.current-exe -- only used to hash the build for the run's identity
-    let exe = std::env::current_exe().context("cannot find this program to hash it")?;
-    let identity = RunIdentity {
-        build: run_folder::Build {
-            hash: engine::build_hash().to_string(),
-            executable_sha256: crate::bisect::cache::file_sha256(&exe)
-                .context("cannot read this program to hash it")?,
-        },
-        content: content_identity(&loaded.content, &dir)?,
-        fixtures: fixtures_hash.clone(),
-        flags: states
-            .0
-            .iter()
-            .map(|(n, s)| (n.clone(), s.code().to_string()))
-            .collect(),
-        pair: opts.pair.clone(),
-        seed: opts.seed,
-        minutes: opts.minutes,
-        strength_boost: bands.stronger_team.attribute_boost,
-        rng_scheme: engine::rng::STREAM_SCHEME,
-        fixture_scheme: FIXTURE_SCHEME.to_string(),
-        measures: MEASURES_VERSION,
-        registry: REGISTRY_VERSION,
-    };
+    let identity = run_identity(
+        opts,
+        &states,
+        &content_identity(&loaded.content, &dir)?,
+        &fixtures_hash,
+        &bands,
+    )?;
     let change = opts.pair.is_none() && (opts.base.is_some() || opts.base_binary.is_some());
     let fresh_id = format!("calib-{:016x}-{millis}", opts.seed);
     let run_dir = opts
@@ -201,22 +186,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         .flatten();
     let pilot = opts.pilot.clamp(1, opts.matches);
     let known_change = known.as_ref().filter(|t| t.change);
-    let matches: BTreeMap<Suite, u32> = suites
-        .iter()
-        .map(|&s| {
-            let n = match (change, known_change) {
-                (true, Some(t)) => t
-                    .target
-                    .get(s.code())
-                    .copied()
-                    .unwrap_or(pilot)
-                    .min(opts.matches),
-                (true, None) => pilot,
-                (false, _) => opts.matches,
-            };
-            (s, n)
-        })
-        .collect();
+    let matches = run_folder::phase_matches(&suites, change, known_change, pilot, opts.matches);
     let mut ctx = RunCtx {
         dir: &dir,
         opts,
@@ -317,16 +287,8 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     // spread it saw, and grows to it in the same command.
     let mut pilot_used = known_change.and_then(|t| t.pilot);
     if change && known_change.is_none() && pilot < opts.matches {
-        let targets = {
-            let _judge = stages::enter(Stage::Judge);
-            let (sets, rows) = ctx.paired(&played[0], old.as_ref().map(|(_, f)| f));
-            let (found, c) = verdict::bootstrap(&sets, &rows, opts.seed, verdict::RESAMPLES);
-            verdict::targets(&sets, &rows, &found, c, pilot, opts.matches)
-        };
+        ctx.set_targets(&played[0], old.as_ref().map(|(_, f)| f), pilot);
         pilot_used = Some(pilot);
-        for (suite, n) in ctx.matches.iter_mut() {
-            *n = targets.get(suite).copied().unwrap_or(pilot);
-        }
         ctx.write_target(&run_dir, true, pilot_used)?;
         if ctx.matches.values().any(|&n| n > pilot) {
             let plan: Vec<String> = ctx
@@ -370,74 +332,18 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             .zip(&played)
             .map(|((name, _), arm)| (*name, &arm.rows)),
     );
-    // The rows of every arm: their files, and the matches with a full recording.
-    let rows_info = played
-        .iter()
-        .filter_map(|a| a.rows_info)
-        .reduce(|a, b| RowsInfo {
-            format: a.format,
-            files: a.files + b.files,
-            rows: a.rows + b.rows,
-            recorded: Recorded {
-                matches: a.recorded.matches + b.recorded.matches,
-                sample: a.recorded.sample + b.recorded.sample,
-                error: a.recorded.error + b.recorded.error,
-                violation: a.recorded.violation + b.recorded.violation,
-                extreme: a.recorded.extreme + b.recorded.extreme,
-                all: a.recorded.all + b.recorded.all,
-            },
-        });
+    let rows_info = rows_of_every_arm(&played);
 
     let written = loaded.content.written_tuning();
-    let resolved = effective(written, &states)?;
-    let flags: Vec<FlagEntry> = resolved
-        .iter()
-        .map(|(name, (state, source))| {
-            let paired = opts.pair.as_deref() == Some(name.as_str());
-            FlagEntry {
-                name: name.clone(),
-                owner: written.flags[name].owner.clone(),
-                state: if paired { "paired" } else { state.code() },
-                source: if paired { "cli" } else { source.code() },
-            }
-        })
-        .collect();
+    let flags = flag_entries(written, &states, opts.pair.as_deref())?;
 
     // The verdict: a change run's paired max-t test, or each band's range check.
-    let (verdicts, joint, power, rules) = {
-        let _judge = stages::enter(Stage::Judge);
-        if change {
-            let (sets, mut rows) = ctx.paired(first, old.as_ref().map(|(_, f)| f));
-            if !opts.bands.is_empty() {
-                rows.retain(|r| opts.bands.contains(&r.band));
-            }
-            let (found, c) = verdict::bootstrap(&sets, &rows, opts.seed, verdict::RESAMPLES);
-            let (rows, joint) = verdict::judge(&sets, &rows, &found, c, first.guards());
-            let power: BTreeMap<String, PowerInfo> = ctx
-                .matches
-                .iter()
-                .map(|(&s, &target)| {
-                    let reached = rows
-                        .iter()
-                        .filter(|r| r.suite == s.code())
-                        .all(|r| r.power == Some(true));
-                    let info = PowerInfo {
-                        pilot: pilot_used,
-                        target,
-                        cap: opts.matches,
-                        reached,
-                    };
-                    (s.code().to_string(), info)
-                })
-                .collect();
-            let rules = rules::run(rules::RULES, &|_| true);
-            (rows, Some(joint), Some(power), Some(rules))
-        } else if opts.pair.is_none() {
-            (verdict::range_only(&first.checks), None, None, None)
-        } else {
-            (Vec::new(), None, None, None)
-        }
-    };
+    let Judged {
+        verdicts,
+        joint,
+        power,
+        rules,
+    } = ctx.judge_run(first, old.as_ref().map(|(_, f)| f), change, pilot_used);
     if !verdicts.is_empty() && !quiet {
         eprint!("{}", verdict::render_table(&verdicts, joint.as_ref()));
     }
@@ -470,7 +376,10 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         red_card: first.red_card.clone(),
         baseline: None,
         diff: None,
-        pass: first.pass,
+        // A change run's answer is its joint word; any other run's is its range checks.
+        pass: joint
+            .as_ref()
+            .map_or(first.pass, |j| j.word == verdict::Word::Pass),
         bench_matches: BENCH_MATCHES,
         match_wall_ms: first.bench.match_wall_ms,
         ticks_per_match: first.bench.ticks_per_match,
@@ -522,49 +431,10 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     }
 
     let code = match (&opts.pair, played.as_slice()) {
-        (Some(flag), [off, on]) => {
-            let rows = compare::compare(&off.checks, &on.checks);
-            let verdict = compare::verdict(&rows, &off.guard(), &on.guard());
-            let def = &written.flags[flag];
-            report.pair = Some(PairInfo {
-                flag: flag.clone(),
-                owner: def.owner.clone(),
-                hypothesis: def.hypothesis.clone(),
-                removal_condition: def.removal_condition.clone(),
-                pinned: states
-                    .0
-                    .iter()
-                    .map(|(n, s)| (n.clone(), s.code()))
-                    .collect(),
-            });
-            report.arms = Some(BTreeMap::from([
-                ("off".to_string(), off.report()),
-                ("on".to_string(), on.report()),
-            ]));
-            eprint!("{}", compare::render_table(flag, &rows, verdict));
-            tracing::info!(
-                signal = "calibrate.pair",
-                run.id = %run_id,
-                flag = %flag,
-                verdict = verdict.code()
-            );
-            report.compare = Some(rows);
-            report.verdict = Some(verdict);
-            // The verdict is the comparison's answer; the exit code says whether both arms
-            // can be trusted.
-            if off.trusted() && on.trusted() { 0 } else { 2 }
-        }
-        _ => match &report.joint {
-            // A change run passes only on a joint pass: a fail or a not sure exits 2.
-            Some(joint) => i32::from(joint.word != verdict::Word::Pass) * 2,
-            None => {
-                if first.pass {
-                    0
-                } else {
-                    2
-                }
-            }
-        },
+        (Some(flag), [off, on]) => compare_arms(&mut report, (flag, written), &states, off, on),
+        // A change run passes only on a joint pass, any other run on its range checks: a
+        // fail or a not sure exits 2.
+        _ => i32::from(!report.pass) * 2,
     };
     if !quiet {
         eprint!("{}", stages::render_table(&report.stages));
@@ -576,6 +446,130 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     )?;
     emit_line(&report)?;
     Ok(code)
+}
+
+/// The identity of a run: what decides its results, so a run folder of the same identity
+/// resumes and one of another identity starts again.
+fn run_identity(
+    opts: &CalibrateOpts,
+    states: &FlagStates,
+    content: &str,
+    fixtures_hash: &str,
+    bands: &Registry,
+) -> anyhow::Result<RunIdentity> {
+    // nosemgrep: rust.lang.security.current-exe.current-exe -- only used to hash the build for the run's identity
+    let exe = std::env::current_exe().context("cannot find this program to hash it")?;
+    Ok(RunIdentity {
+        build: run_folder::Build {
+            hash: engine::build_hash().to_string(),
+            executable_sha256: crate::bisect::cache::file_sha256(&exe)
+                .context("cannot read this program to hash it")?,
+        },
+        content: content.to_string(),
+        fixtures: fixtures_hash.to_string(),
+        flags: states
+            .0
+            .iter()
+            .map(|(n, s)| (n.clone(), s.code().to_string()))
+            .collect(),
+        pair: opts.pair.clone(),
+        seed: opts.seed,
+        minutes: opts.minutes,
+        strength_boost: bands.stronger_team.attribute_boost,
+        rng_scheme: engine::rng::STREAM_SCHEME,
+        fixture_scheme: FIXTURE_SCHEME.to_string(),
+        measures: MEASURES_VERSION,
+        registry: REGISTRY_VERSION,
+    })
+}
+
+/// Every flag the run resolved, with its owner, state and where the state came from; the
+/// paired flag of a paired run is `paired`, from the command line.
+fn flag_entries(
+    written: &engine::data::TuningFile,
+    states: &FlagStates,
+    pair: Option<&str>,
+) -> anyhow::Result<Vec<FlagEntry>> {
+    let resolved = effective(written, states)?;
+    Ok(resolved
+        .iter()
+        .map(|(name, (state, source))| {
+            let paired = pair == Some(name.as_str());
+            FlagEntry {
+                name: name.clone(),
+                owner: written.flags[name].owner.clone(),
+                state: if paired { "paired" } else { state.code() },
+                source: if paired { "cli" } else { source.code() },
+            }
+        })
+        .collect())
+}
+
+/// A paired run's comparison of its two arms, into `report`. The verdict is the
+/// comparison's answer; the exit code says whether both arms can be trusted.
+fn compare_arms(
+    report: &mut CalibrationReport,
+    (flag, written): (&String, &engine::data::TuningFile),
+    states: &FlagStates,
+    off: &Arm,
+    on: &Arm,
+) -> i32 {
+    let rows = compare::compare(&off.checks, &on.checks);
+    let verdict = compare::verdict(&rows, &off.guard(), &on.guard());
+    let def = &written.flags[flag];
+    report.pair = Some(PairInfo {
+        flag: flag.clone(),
+        owner: def.owner.clone(),
+        hypothesis: def.hypothesis.clone(),
+        removal_condition: def.removal_condition.clone(),
+        pinned: states
+            .0
+            .iter()
+            .map(|(n, s)| (n.clone(), s.code()))
+            .collect(),
+    });
+    report.arms = Some(BTreeMap::from([
+        ("off".to_string(), off.report()),
+        ("on".to_string(), on.report()),
+    ]));
+    eprint!("{}", compare::render_table(flag, &rows, verdict));
+    tracing::info!(
+        signal = "calibrate.pair",
+        run.id = %report.run_id,
+        flag = %flag,
+        verdict = verdict.code()
+    );
+    report.compare = Some(rows);
+    report.verdict = Some(verdict);
+    if off.trusted() && on.trusted() { 0 } else { 2 }
+}
+
+/// The rows of every arm: their files, and the matches with a full recording.
+fn rows_of_every_arm(played: &[Arm]) -> Option<RowsInfo> {
+    played
+        .iter()
+        .filter_map(|a| a.rows_info)
+        .reduce(|a, b| RowsInfo {
+            format: a.format,
+            files: a.files + b.files,
+            rows: a.rows + b.rows,
+            recorded: Recorded {
+                matches: a.recorded.matches + b.recorded.matches,
+                sample: a.recorded.sample + b.recorded.sample,
+                error: a.recorded.error + b.recorded.error,
+                violation: a.recorded.violation + b.recorded.violation,
+                extreme: a.recorded.extreme + b.recorded.extreme,
+                all: a.recorded.all + b.recorded.all,
+            },
+        })
+}
+
+/// A run's verdict: each band's word, and a change run's joint word, power and rules stage.
+struct Judged {
+    verdicts: Vec<verdict::VerdictRow>,
+    joint: Option<verdict::Joint>,
+    power: Option<BTreeMap<String, PowerInfo>>,
+    rules: Option<rules::RulesReport>,
 }
 
 /// What every arm of a run shares.
@@ -737,12 +731,20 @@ struct Arm {
 }
 
 impl Arm {
-    /// What fails a change run outside the bands: panics, missing results, unapplied
-    /// changes, and rule violations.
+    /// Matches that ended with an engine error: every failed match but the panicked ones.
+    /// They leave the bands, so a change run must fail on them, not judge without them.
+    fn match_failed(&self) -> u32 {
+        let failed: u32 = self.figures.values().map(|f| f.failures).sum();
+        failed.saturating_sub(self.match_panicked)
+    }
+
+    /// What fails a change run outside the bands: panics, engine errors, missing results,
+    /// unapplied changes, and rule violations.
     fn guards(&self) -> Vec<String> {
         let mut out = Vec::new();
         for (n, what) in [
             (self.match_panicked, "matches panicked"),
+            (self.match_failed(), "matches ended with an engine error"),
             (self.match_without_stats, "planned matches have no result"),
             (
                 self.change_never_applied,
@@ -1139,6 +1141,119 @@ impl RunCtx<'_> {
             )?);
         }
         Ok(Some(played))
+    }
+
+    /// Judges a change run's pilot and sets each suite's matches to its power target: at
+    /// least the pilot, at most `--matches`. The target depends on the spread alone.
+    fn set_targets(&mut self, first: &Arm, old: Option<&Folded>, pilot: u32) {
+        let opts = self.opts;
+        let targets = {
+            let _judge = stages::enter(Stage::Judge);
+            let (sets, rows) = self.paired(first, old);
+            let (found, c) = verdict::bootstrap(&sets, &rows, opts.seed, verdict::RESAMPLES);
+            verdict::targets(&sets, &rows, &found, c, pilot, opts.matches)
+        };
+        for (suite, n) in self.matches.iter_mut() {
+            *n = targets.get(suite).copied().unwrap_or(pilot);
+            tracing::info!(
+                signal = "calibrate.power_target",
+                run.id = %self.run_id,
+                suite = suite.code(),
+                pilot,
+                target = *n,
+                cap = opts.matches,
+                reached_cap = *n >= opts.matches
+            );
+        }
+    }
+
+    /// Judges the run: a change run (`change`) by the paired max-t test against the old
+    /// engine's matches, a plain run by each band's range, a paired flag run not here.
+    fn judge_run(
+        &self,
+        first: &Arm,
+        old: Option<&Folded>,
+        change: bool,
+        pilot: Option<u32>,
+    ) -> Judged {
+        let opts = self.opts;
+        let _judge = stages::enter(Stage::Judge);
+        if !change {
+            let verdicts = if opts.pair.is_none() {
+                verdict::range_only(&first.checks)
+            } else {
+                Vec::new()
+            };
+            return Judged {
+                verdicts,
+                joint: None,
+                power: None,
+                rules: None,
+            };
+        }
+        let (sets, mut rows) = self.paired(first, old);
+        if !opts.bands.is_empty() {
+            rows.retain(|r| opts.bands.contains(&r.band));
+        }
+        let (found, c) = verdict::bootstrap(&sets, &rows, opts.seed, verdict::RESAMPLES);
+        let (rows, joint) = verdict::judge(&sets, &rows, &found, c, first.guards());
+        let power: BTreeMap<String, PowerInfo> = self
+            .matches
+            .iter()
+            .map(|(&s, &target)| {
+                let reached = rows
+                    .iter()
+                    .filter(|r| r.suite == s.code())
+                    .all(|r| r.power == Some(true));
+                let info = PowerInfo {
+                    pilot,
+                    target,
+                    cap: opts.matches,
+                    reached,
+                };
+                (s.code().to_string(), info)
+            })
+            .collect();
+        let rules = rules::run(rules::RULES, &|_| true);
+        self.log_verdict(&rows, &joint);
+        Judged {
+            verdicts: rows,
+            joint: Some(joint),
+            power: Some(power),
+            rules: Some(rules),
+        }
+    }
+
+    /// One structured event for a change run's joint word with its counts, and one for each
+    /// band that failed, so a log reader sees the answer without parsing the table.
+    fn log_verdict(&self, rows: &[verdict::VerdictRow], joint: &verdict::Joint) {
+        let count = |w: verdict::Word| rows.iter().filter(|r| r.word == w).count();
+        tracing::info!(
+            signal = "calibrate.verdict",
+            run.id = %self.run_id,
+            joint = joint.word.code(),
+            pass = count(verdict::Word::Pass),
+            fail = count(verdict::Word::Fail),
+            not_sure = count(verdict::Word::NotSure),
+            critical = joint.critical,
+            pairs = joint.pairs,
+            guards = %joint.guards.join("; ")
+        );
+        for r in rows.iter().filter(|r| r.word == verdict::Word::Fail) {
+            tracing::warn!(
+                signal = "calibrate.verdict_failed",
+                run.id = %self.run_id,
+                band = %r.band,
+                suite = %r.suite,
+                pairing = r.pairing.as_deref(),
+                value = r.value,
+                lo = r.lo,
+                hi = r.hi,
+                diff = r.diff,
+                se = r.se,
+                smallest_shift = r.smallest_shift
+            );
+        }
     }
 
     /// The paired rows of a change run: the changed engine's matches and the old engine's

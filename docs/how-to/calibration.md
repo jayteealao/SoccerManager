@@ -1,6 +1,6 @@
 # Measure a tuning change
 
-This guide shows how to measure one tuning change in about two minutes: make a baseline once, run only the pairing, suite, or band the change targets, and read the diff. Then it shows how to run the full suites before a change is accepted.
+This guide shows how to measure one tuning change in about two minutes: make a baseline once, run only the pairing, suite, or band the change targets, and read the diff. Then it shows how to run the full suites before a change is accepted, how to judge a change against the old engine with a change run, how to resume or grow a run, how to read the stage table, and how to run the realistic evaluation.
 
 Every flag and every report key is in [the command-line reference](../reference/cli.md#calibrate).
 
@@ -157,7 +157,7 @@ Read `calib.pass` and the band table at the end of standard error. Read the stag
 
 Time a run on an idle machine: other heavy work on the processor slows every thread. Read the console total and `calib.wall_ms.total` in `report.json`, and note the number of logical processors (`--jobs` defaults to all of them).
 
-Measured on the 8-thread reference machine (AMD Ryzen 7 9800X3D, simultaneous threading off) with other heavy work running:
+Measurement note, taken on the 8-thread reference machine (AMD Ryzen 7 9800X3D, simultaneous threading off) with other heavy work running:
 
 | Run | Matches played | Time |
 |---|---|---|

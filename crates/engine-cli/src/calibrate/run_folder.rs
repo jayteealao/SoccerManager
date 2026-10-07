@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::fixtures::FixtureKey;
+use crate::report::Suite;
 
 /// The file that holds the run's identity.
 pub const RUN_FILE: &str = "run.json";
@@ -256,11 +257,33 @@ fn read_run_file(path: &Path) -> anyhow::Result<RunFile> {
             )));
         }
     }
-    serde_json::from_value(value).map_err(|e| refuse(e.to_string()))
+    let file: RunFile = serde_json::from_value(value).map_err(|e| refuse(e.to_string()))?;
+    // The run id names a folder under `superseded/`: it must be one plain folder name, so
+    // a `run.json` from elsewhere cannot move the run's files out of its folder.
+    if !plain_name(&file.run_id) {
+        return Err(refuse(format!(
+            "its run.id {:?} is not a plain folder name",
+            file.run_id
+        )));
+    }
+    Ok(file)
+}
+
+/// `true` for one ordinary path component: no separator, drive, root, `.` or `..`.
+fn plain_name(name: &str) -> bool {
+    let mut parts = Path::new(name).components();
+    matches!(
+        (parts.next(), parts.next()),
+        (Some(std::path::Component::Normal(_)), None)
+    ) && !name.contains(['/', '\\', ':'])
 }
 
 /// Moves the files of the run `old_run_id` in `dir` to `dir/superseded/<old_run_id>/`.
 pub fn move_superseded(dir: &Path, old_run_id: &str) -> anyhow::Result<PathBuf> {
+    anyhow::ensure!(
+        plain_name(old_run_id),
+        "the run id {old_run_id:?} is not a plain folder name, so its files stay where they are"
+    );
     let to = dir.join(SUPERSEDED).join(old_run_id);
     fs::create_dir_all(&to).with_context(|| format!("cannot create {}", to.display()))?;
     for name in OWNED {
@@ -301,6 +324,29 @@ pub fn read_target(dir: &Path) -> Option<Target> {
     let text = fs::read_to_string(dir.join(TARGET_FILE)).ok()?;
     let target: Target = serde_json::from_str(&text).ok()?;
     (target.version == TARGET_VERSION).then_some(target)
+}
+
+/// Matches per suite unit the first phase of a run plays: `cap` (`--matches`) for a plain
+/// run; for a change run, the target a finished pilot left in `known`, at most `cap`, or
+/// else the pilot.
+pub fn phase_matches(
+    suites: &[Suite],
+    change: bool,
+    known: Option<&Target>,
+    pilot: u32,
+    cap: u32,
+) -> BTreeMap<Suite, u32> {
+    suites
+        .iter()
+        .map(|&s| {
+            let n = match (change, known) {
+                (true, Some(t)) => t.target.get(s.code()).copied().unwrap_or(pilot).min(cap),
+                (true, None) => pilot,
+                (false, _) => cap,
+            };
+            (s, n)
+        })
+        .collect()
 }
 
 /// Writes `target.json` whole, through a partial file and a rename.
@@ -588,6 +634,49 @@ mod tests {
         assert!(dir.join("superseded/calib-1/run.json").is_file());
         assert!(!dir.join("stats").exists());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_run_file_whose_run_id_is_not_a_plain_name_moves_nothing_out_of_the_folder() {
+        for bad in ["../../x", "..", "a/b", "a\\b", "C:x", "/abs", ""] {
+            assert!(!plain_name(bad), "{bad}");
+        }
+        assert!(plain_name("calib-00000000000007e6-1700000000000"));
+        let dir = temp("tampered");
+        open(&dir, &identity(), "calib-1", 100).unwrap();
+        let path = dir.join(RUN_FILE);
+        let mut file: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        file["run.id"] = json!("../../escaped");
+        fs::write(&path, file.to_string()).unwrap();
+        let mut other = identity();
+        other.minutes = 5;
+        let err = open(&dir, &other, "calib-2", 200).unwrap_err().to_string();
+        assert!(err.contains("not a plain folder name"), "{err}");
+        assert!(path.is_file(), "the run stays where it is");
+        assert!(!dir.join(SUPERSEDED).exists());
+        assert!(move_superseded(&dir, "../x").is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_change_run_plays_its_pilot_then_its_kept_target_and_a_plain_run_its_cap() {
+        let suites = [Suite::Equal, Suite::Formations];
+        let plain = phase_matches(&suites, false, None, 200, 1000);
+        assert_eq!(plain.values().copied().collect::<Vec<_>>(), [1000, 1000]);
+        let pilot = phase_matches(&suites, true, None, 200, 1000);
+        assert_eq!(pilot.values().copied().collect::<Vec<_>>(), [200, 200]);
+        let kept = Target {
+            version: TARGET_VERSION,
+            change: true,
+            target: BTreeMap::from([("equal".into(), 600), ("formations".into(), 5000)]),
+            pilot: Some(200),
+            cap: 1000,
+            registry: String::new(),
+            bands: BTreeMap::new(),
+        };
+        let resumed = phase_matches(&suites, true, Some(&kept), 200, 1000);
+        assert_eq!(resumed[&Suite::Equal], 600);
+        assert_eq!(resumed[&Suite::Formations], 1000, "never above the cap");
     }
 
     #[test]

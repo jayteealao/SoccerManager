@@ -745,8 +745,11 @@ fn read_block(r: &mut Reader<'_>) -> Option<Vec<Row>> {
     r.take(suite_len)?;
     let _place = r.u32()?;
     let count = r.u32()? as usize;
-    // A damaged count cannot ask for more rows than the bytes left could hold.
-    if count > r.bytes.len() {
+    // A damaged count cannot ask for more rows than the bytes left could hold: every row
+    // takes the width of every column, so the rows allocated never outgrow the file.
+    let row_bytes: usize = COLUMNS.iter().map(|c| c.kind.width()).sum();
+    let left = r.bytes.len().saturating_sub(r.at);
+    if count.checked_mul(row_bytes).is_none_or(|need| need > left) {
         return None;
     }
     let mut rows = vec![Row::default(); count];
@@ -928,6 +931,21 @@ mod tests {
         fs::write(&path, &bytes[..3]).unwrap();
         assert!(read_rows(&dir, &finished).unwrap().rows.is_empty());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_block_whose_count_the_bytes_left_cannot_hold_is_not_read() {
+        // Suite "equal", place 0, and 50 rows: fewer than the bytes left, more than they hold.
+        let mut block = vec![5u8];
+        block.extend_from_slice(b"equal");
+        block.extend_from_slice(&0u32.to_le_bytes());
+        block.extend_from_slice(&50u32.to_le_bytes());
+        block.extend_from_slice(&[0u8; 64]);
+        let mut r = Reader {
+            bytes: &block,
+            at: 0,
+        };
+        assert!(read_block(&mut r).is_none());
     }
 
     #[test]

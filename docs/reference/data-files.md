@@ -25,7 +25,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `realism-bands.json` | 3 | The band registry: every realism band the calibration run judges, with its measure, range, and smallest shift. Version 2 still loads. They are acceptance criteria, never tuning values |
 | `fast-model.json` | 2 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
 
-Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`.
+Every file starts with `"schema_version"`. A file with another version is refused, except `realism-bands.json`, which also reads version 2: `content refused: rules rules/default.json: schema_version 7; this build reads 4`.
 
 ## attributes.json
 

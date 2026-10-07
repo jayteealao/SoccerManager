@@ -40,11 +40,11 @@ A change run compares the changed engine with the old engine on the same fixture
 
 1. For each band, the difference between the arms is divided by its standard error, which gives a standardized difference.
 2. The run draws 1,999 resamples of its paired matches, within each suite, pairing and red-card arm. In each resample, each band's difference is centred on the observed difference and divided by that resample's own standard error, and the largest of these over all bands is kept.
-3. The threshold is the 97th percentile of those largest differences. A band whose standardized difference passes the threshold moved.
+3. The threshold is the 97th percentile of those largest differences. A band whose standardized difference passes the threshold moved, and it fails when that move is also at least its smallest shift: a certain move smaller than the shift that matters is not a change of the band.
 
 Testing each band on its own at 3 percent would raise the false alarms: with 18 bands, a change that did nothing would fail far more often than 3 percent of the time. A fixed correction for many tests, such as dividing 3 percent by the number of bands, goes the other way: the bands move together (goals, shots and expected goals all rise with attacking play), so the correction is stricter than it needs to be and misses real moves. The max-t threshold comes from how the bands actually move together in the run, so an engine that did not change fails at most 3 percent of change runs over all bands at once, and each band still gets its own word. The threshold never falls below the one-band value, so a run whose arms are still identical cannot pass on a zero error.
 
-The joint verdict passes only when every band passes and no match panicked, lost its result, or broke a rule.
+The joint verdict passes only when every band passes and no match panicked, ended with an engine error, lost its result, or broke a rule.
 
 ## Rules are checked while a match plays
 
@@ -62,6 +62,6 @@ Every speed change to the engine or the checker must keep every result the same,
 
 ## What the time limits mean
 
-The two time limits are a change run within 10 minutes and the full evaluation (every default suite at 1,000 matches, 57,000 matches) within 15 minutes. They are measured on an idle machine with every logical processor, after the old engine's results are cached. The full evaluation needs about 63 matches per second. A change run plays only the changed engine: a pilot of 200 matches per suite unit, then growth to the power target.
+The two time limits are a change run within 10 minutes and the full evaluation (every default suite at 1,000 matches, 57,000 matches) within its measured time, at most 46 minutes; 15 minutes stays the target of later speed work, which needs about 63 matches per second. They are measured on an idle machine with every logical processor, after the old engine's results are cached. A change run plays only the changed engine: a pilot of 200 matches per suite unit, then growth to the power target.
 
 When a limit is missed, the harness does not relax a rule to meet it. The measured times and the gap go to the person, who decides between more speed work, more threads or machines, or a changed limit.
