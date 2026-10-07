@@ -135,6 +135,19 @@ pub fn extreme(sorted: &[f64], v: f64) -> bool {
 pub struct Recorder {
     pub keep_all: bool,
     seen: BTreeMap<(usize, Suite), Vec<Vec<f64>>>,
+    /// Per arm and suite, how many matches were played and how many were recorded.
+    tally: BTreeMap<(usize, Suite), Tally>,
+}
+
+/// How many matches of one arm and suite were played and recorded in this session.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Tally {
+    /// Matches played.
+    pub matches: u64,
+    /// Matches with any record reason.
+    pub recorded: u64,
+    /// Matches with the extreme-measure reason.
+    pub extreme: u64,
 }
 
 impl Recorder {
@@ -172,6 +185,42 @@ impl Recorder {
             }
         }
         out
+    }
+
+    /// Counts one played match of `suite` in arm `arm` with its final record reasons.
+    /// Called once per match, so a match judged twice is still counted once.
+    pub fn count(&mut self, arm: usize, suite: Suite, reasons: u8) {
+        let t = self.tally.entry((arm, suite)).or_default();
+        t.matches += 1;
+        if reasons != 0 {
+            t.recorded += 1;
+        }
+        if reasons & reason::EXTREME != 0 {
+            t.extreme += 1;
+        }
+    }
+
+    /// The counts of every arm and suite that played a match, in arm and suite order.
+    pub fn tallies(&self) -> impl Iterator<Item = (usize, Suite, Tally)> + '_ {
+        self.tally.iter().map(|(&(arm, suite), &t)| (arm, suite, t))
+    }
+
+    /// Logs, per arm and suite, the share of matches that got a full recording, so the
+    /// cost of the recording rules shows in the log.
+    fn log_shares(&self, run_id: &str) {
+        for (arm, suite, t) in self.tallies() {
+            let share = t.recorded as f64 / (t.matches.max(1)) as f64;
+            tracing::info!(
+                signal = "calibrate.recorded",
+                run.id = %run_id,
+                arm,
+                suite = suite.code(),
+                matches = t.matches,
+                recorded = t.recorded,
+                share = (share * 10_000.0).round() / 10_000.0,
+                extreme = t.extreme
+            );
+        }
     }
 }
 
@@ -334,6 +383,7 @@ pub(super) fn run_arms(
             });
         }
     });
+    lock(&recorder).log_shares(&ctx.run_id);
     if let Some(e) = first_error
         .into_inner()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -480,7 +530,12 @@ fn play_unit(
             Ok(Err(err)) => {
                 tracing::error!(
                     signal = "calibrate.match_failed",
+                    run.id = %ctx.run_id,
+                    arm = u.arm_index,
+                    suite = u.suite.code(),
+                    fixture.key = %keyed.key,
                     match.id = %match_id,
+                    seed,
                     error = %err
                 );
                 let row = Row::failed((keyed.key, seed), Outcome::Error);
@@ -490,11 +545,22 @@ fn play_unit(
                 (row, Some(stats))
             }
             Err(payload) => {
+                let message = panic_message(&*payload);
+                tracing::error!(
+                    signal = "calibrate.match_panicked",
+                    run.id = %ctx.run_id,
+                    arm = u.arm_index,
+                    suite = u.suite.code(),
+                    fixture.key = %keyed.key,
+                    match.id = %match_id,
+                    seed,
+                    panic = %message
+                );
+                // The plain line stays for a reader of the console whatever the log filter.
                 eprintln!(
-                    "match {} ({}) panicked: {}; recorded as failed",
+                    "match {} ({}) panicked: {message}; recorded as failed",
                     keyed.key,
-                    u.suite.code(),
-                    panic_message(&*payload)
+                    u.suite.code()
                 );
                 let row = Row::failed((keyed.key, seed), Outcome::Panic);
                 reasons = lock(u.recorder).reasons(u.arm_index, u.suite, &row);
@@ -504,6 +570,7 @@ fn play_unit(
             }
         };
         row.reasons = reasons;
+        lock(u.recorder).count(u.arm_index, u.suite, reasons);
         if let Some(stats) = stats {
             write_stats(&stats_dir, &stats)?;
         }
@@ -635,6 +702,49 @@ mod tests {
             "another suite"
         );
         assert_eq!(r.reasons(0, Suite::Equal, &row(5, 1)), 0);
+    }
+
+    #[test]
+    fn the_tally_counts_played_recorded_and_extreme_matches_per_arm_and_suite() {
+        let mut r = Recorder::default();
+        r.count(0, Suite::Equal, 0);
+        r.count(0, Suite::Equal, reason::SAMPLE);
+        r.count(0, Suite::Equal, reason::EXTREME | reason::SAMPLE);
+        r.count(1, Suite::Equal, 0);
+        r.count(0, Suite::Strength, reason::ERROR);
+        let tallies: Vec<(usize, Suite, Tally)> = r.tallies().collect();
+        assert_eq!(
+            tallies,
+            [
+                (
+                    0,
+                    Suite::Equal,
+                    Tally {
+                        matches: 3,
+                        recorded: 2,
+                        extreme: 1
+                    }
+                ),
+                (
+                    0,
+                    Suite::Strength,
+                    Tally {
+                        matches: 1,
+                        recorded: 1,
+                        extreme: 0
+                    }
+                ),
+                (
+                    1,
+                    Suite::Equal,
+                    Tally {
+                        matches: 1,
+                        recorded: 0,
+                        extreme: 0
+                    }
+                ),
+            ]
+        );
     }
 
     fn keyed(n: u32) -> Keyed {
