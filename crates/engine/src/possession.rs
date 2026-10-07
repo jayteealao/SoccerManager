@@ -199,38 +199,48 @@ fn clearance_line(view: &MatchView<'_>, i: usize, wide: bool) -> (DVec2, f64) {
     }
 }
 
-/// How far player `p` reaches a ball at `ball_xy` and height `z`, or `None` when he cannot:
-/// an outfield player within `reach_radius` times his intercept factor, a keeper within
-/// `keeper_reach` times his claim factor (and his claim range for a ball above head height
-/// in his own penalty area). The ball must be under `reach_height` times his aerial factor,
-/// and only a keeper reaches a ball faster than `control_speed` times his receive factor.
+/// The loose ball as every reach test of one tick reads it: its place on the ground, its
+/// height and its speed, each worked out once.
+#[derive(Clone, Copy)]
+struct BallAt {
+    xy: DVec2,
+    z: f64,
+    speed: f64,
+}
+
+/// How far player `p` reaches a ball at `ball.xy` and height `ball.z`, or `None` when he
+/// cannot: an outfield player within `reach_radius` times his intercept factor, a keeper
+/// within `keeper_reach` times his claim factor (and his claim range for a ball above head
+/// height in his own penalty area). The ball must be under `reach_height` times his aerial
+/// factor, and only a keeper reaches a ball faster than `control_speed` times his receive
+/// factor.
+#[inline]
 fn reach(
     view: &MatchView<'_>,
     p: &crate::player::Player,
     keeper: bool,
     reach_radius: f64,
+    ball: BallAt,
 ) -> Option<f64> {
     let t = view.tuning();
-    let ball = view.ball();
     let k = &p.derived.knobs;
-    if !p.active() || ball.pos.z > t.reach_height * k.aerial_reach {
+    if !p.active() || ball.z > t.reach_height * k.aerial_reach {
         return None;
     }
-    if !keeper && ball.speed() > t.control_speed * k.receive {
+    if !keeper && ball.speed > t.control_speed * k.receive {
         return None;
     }
-    let ball_xy = ball.xy();
     let reach = if keeper {
-        let lofted = ball.pos.z > HEAD_HEIGHT_M
+        let lofted = ball.z > HEAD_HEIGHT_M
             && view
                 .pitch()
-                .in_penalty_area(ball_xy, -view.attack_x(p.team));
+                .in_penalty_area(ball.xy, -view.attack_x(p.team));
         let range = if lofted { k.claim_range } else { 1.0 };
         t.keeper_reach * k.claim_reach * range
     } else {
         reach_radius * k.intercept
     };
-    let d = (p.pos - ball_xy).length();
+    let d = (p.pos - ball.xy).length();
     (d < reach).then_some(d)
 }
 
@@ -242,19 +252,24 @@ fn reach(
 fn loose_ball(view: &MatchView<'_>, reach_radius: f64) -> Option<LooseBall> {
     let t = view.tuning();
     let ball = view.ball();
-    let fast = ball.speed() > t.control_speed;
+    let at = BallAt {
+        xy: ball.xy(),
+        z: ball.pos.z,
+        speed: ball.speed(),
+    };
+    let fast = at.speed > t.control_speed;
     let keepers = [view.keeper(0), view.keeper(1)];
     let mut best: Option<(f64, usize)> = None;
     let mut any_height = false;
     for (i, p) in view.players().iter().enumerate() {
         let keeper = i == keepers[p.team];
-        if ball.pos.z <= t.reach_height * p.derived.knobs.aerial_reach {
+        if at.z <= t.reach_height * p.derived.knobs.aerial_reach {
             any_height = true;
         }
         if fast && !keeper {
             continue;
         }
-        let Some(d) = reach(view, p, keeper, reach_radius) else {
+        let Some(d) = reach(view, p, keeper, reach_radius, at) else {
             continue;
         };
         if best.is_none_or(|(bd, _)| d < bd) {
@@ -278,7 +293,7 @@ fn loose_ball(view: &MatchView<'_>, reach_radius: f64) -> Option<LooseBall> {
         _ => t.keeper_catch_chance,
     };
     let header = match best {
-        Some((_, i)) if ball.pos.z > HEAD_HEIGHT_M && i != keepers[view.player(i).team] => {
+        Some((_, i)) if at.z > HEAD_HEIGHT_M && i != keepers[view.player(i).team] => {
             let me = view.player(i);
             let rival = view
                 .players()
@@ -286,7 +301,7 @@ fn loose_ball(view: &MatchView<'_>, reach_radius: f64) -> Option<LooseBall> {
                 .enumerate()
                 .filter(|&(j, q)| {
                     q.team != me.team
-                        && reach(view, q, j == keepers[q.team], reach_radius).is_some()
+                        && reach(view, q, j == keepers[q.team], reach_radius, at).is_some()
                 })
                 .map(|(j, _)| view.skills(j).f(Stage::HEADER_EXECUTE))
                 .fold(None, |m: Option<f64>, v| Some(m.map_or(v, |m| m.max(v))))

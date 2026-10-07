@@ -591,6 +591,10 @@ pub struct Simulation {
     pub(crate) script_cache: Option<ScriptCache>,
     pub(crate) finished: bool,
     pub(crate) scratch: Vec<DVec2>,
+    /// A shared copy of `config.tuning`, which no code changes during a match: each tick
+    /// hands it to the passes that also borrow the match mutably, so the tick copies a
+    /// pointer instead of the whole tuning block.
+    pub(crate) tuning: std::sync::Arc<Tuning>,
 }
 
 impl Simulation {
@@ -721,6 +725,7 @@ impl Simulation {
             script_cache: None,
             finished: false,
             scratch: Vec::with_capacity(2 * PLAYERS_PER_TEAM),
+            tuning: std::sync::Arc::new(config.tuning.clone()),
             config,
         })
     }
@@ -1029,7 +1034,7 @@ impl Simulation {
         self.streams.begin_tick(self.tick + 1);
         self.restart = false;
         self.stoppage = None;
-        let t = self.config.tuning.clone();
+        let t = std::sync::Arc::clone(&self.tuning);
         match self.referee.phase {
             // During a shoot-out kick nobody decides: every player keeps the target the kick
             // was set up with, and the keeper the dive it committed to.

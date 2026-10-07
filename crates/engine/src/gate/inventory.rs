@@ -87,6 +87,8 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         finished: _,
         // Rewritten before every use.
         scratch: _,
+        // A shared copy of `config.tuning`, constant for the match.
+        tuning: _,
     } = sim;
 
     use FieldKind::{Bytes, Floats};
