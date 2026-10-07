@@ -145,7 +145,7 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
         .args([
             "serve",
             "--seed",
-            "8",
+            "41",
             "--minutes",
             "2",
             "--reconnect-wait",
@@ -214,7 +214,7 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
         }
     }
     let first_tick = first_tick.expect("the match goes on after the reconnect");
-    // Seed 8 stops play at ticks 2,322 and 3,000 (half-time of a two-minute match), so the
+    // Seed 41 stops play at ticks 2,292 and 3,000 (half-time of a two-minute match), so the
     // match goes back to a stoppage the viewer held, never to kick-off and never past it.
     assert!(
         first_tick > 2_000 && first_tick <= last_tick + 1,
