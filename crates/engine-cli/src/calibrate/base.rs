@@ -403,9 +403,9 @@ fn play(
     Ok(now)
 }
 
-/// The log filter of the old engine when the parent sets none: warnings, and the runner's
-/// `calibrate.progress` events, the only info events the runner logs. A long base play
-/// shows its progress and time left this way.
+/// The log filter of the old engine when the parent sets none: warnings, and the info
+/// events of the match runner. Those are the `calibrate.progress` lines and the
+/// `calibrate.recorded` share. A long base play shows its progress and time left this way.
 pub const CHILD_LOG: &str = concat!(
     "warn,",
     env!("CARGO_CRATE_NAME"),
