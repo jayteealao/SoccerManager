@@ -653,7 +653,7 @@ pub fn note_points(seen: &mut std::collections::BTreeSet<Point>, records: &[Trac
 /// The points the 22 gate matches never reach. Each has a scene test in
 /// `crates/engine/tests/trace.rs` that forces it and checks its record.
 #[cfg(feature = "scenario")]
-pub const SCENE_ONLY: &[Point] = &[Point::CrossClear, Point::Abandoned];
+pub const SCENE_ONLY: &[Point] = &[Point::CrossClear, Point::Abandoned, Point::Offside];
 
 /// Checks the partition: the points the gate matches reached plus [`SCENE_ONLY`] are
 /// exactly [`Point::ALL`]. Returns the missing points by name, or the scene-only points the

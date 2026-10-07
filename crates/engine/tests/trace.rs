@@ -378,3 +378,32 @@ fn a_cleared_cross_records_the_defender_and_the_clearance() {
     assert_eq!(json["k"], "rule");
     assert_eq!(json["point"], "cross_clear");
 }
+
+/// Scene-only point `offside` (since every sprint costs stamina, none of the 22 gate matches
+/// has an offside): an attacker beyond the second-last defender is penalised at his first
+/// touch of a team-mate's pass.
+#[test]
+fn an_attacker_beyond_the_defenders_records_the_offside() {
+    use engine::math::{DVec2, DVec3};
+    const PASSER: usize = 9;
+    const ATTACKER: usize = 10;
+    let mut sim = common::spread(Scene::new(common::quiet_match(90)), -30.0, 20.0)
+        .traced()
+        .place(PASSER, DVec2::new(25.8, 0.0))
+        .place(ATTACKER, DVec2::new(29.8, 0.0))
+        .carrier(Some(PASSER))
+        .ball(DVec3::new(29.0, 0.0, 0.0))
+        .tick(1_001)
+        .kick(DVec2::X, 1.0, 0.0)
+        .build();
+    sim.step();
+    let records = sim.take_trace();
+    let events = sim.take_events();
+    trace::check_tick(&records, &events).unwrap();
+    let offside = points(&records)
+        .into_iter()
+        .find(|p| p.point == Point::Offside)
+        .expect("an offside record");
+    assert_eq!(offside.detail["player"], ATTACKER);
+    assert_eq!(offside.detail["team"], 0);
+}

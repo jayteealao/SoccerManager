@@ -104,8 +104,7 @@ fn height_adds_reach_costs_turning_and_the_taller_player_reaches_a_higher_ball()
     }
 }
 
-/// Energy the home side loses from minute 60 to the end: the sum of every fall in a home
-/// player's energy from one tick to the next (a substitute coming on is a rise, not counted).
+/// The energy of each home player on the pitch.
 fn home_energies(sim: &Simulation) -> Vec<f64> {
     sim.players()
         .iter()
@@ -114,7 +113,9 @@ fn home_energies(sim: &Simulation) -> Vec<f64> {
         .collect()
 }
 
-/// The home side's energies at minute 60, and the energy it loses from there to the end.
+/// The home side's energies at minute 60, and the energy it loses from there to the end:
+/// the sum of every fall in a home player's energy from one tick to the next (a substitute
+/// coming on is a rise, not counted).
 fn late_drain(mut sim: Simulation) -> (Vec<f64>, f64) {
     let late = 60 * TICKS_PER_MINUTE;
     while sim.tick() < late {
