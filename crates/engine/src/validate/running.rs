@@ -9,7 +9,10 @@
 //!
 //! Its report equals the old validator's on the same match: the tick-rule violations of
 //! [`Validator::check`], then the event-rule violations of [`Validator::check_events`],
-//! each list in the same order with the same values.
+//! each list in the same order with the same values. It keeps at most
+//! [`RunningCheck::KEPT_PER_RULE`] violations of each rule, the first ones, and only counts
+//! the rest: a broken match can break a rule hundreds of times per tick, and a list of all
+//! of them would fill memory and the log. Under that cap the kept list is the old report.
 //!
 //! [`Validator::check`]: super::Validator::check
 //! [`Validator::check_events`]: super::Validator::check_events
@@ -35,6 +38,8 @@ const SEPARATION: u8 = 1;
 const BALL_SPEED: u8 = 2;
 const RESTART_SPOT: u8 = 3;
 const ANCHOR_TOLERANCE: u8 = 4;
+/// The tick rules' count: the first places of [`RunningCheck::RULES`].
+const TICK_RULES: usize = 5;
 
 /// A squared distance a little above `MIN_SEPARATION²`: a pair at or beyond it is far
 /// enough apart that its exact distance need not be taken.
@@ -53,6 +58,8 @@ const SUBSTITUTION_LIMITS: u8 = 8;
 const EVENT_ORDER: u8 = 9;
 const GOAL_SCORE: u8 = 10;
 const SCORE_KEPT: u8 = 11;
+/// The event rules' count: the places of [`RunningCheck::RULES`] after the tick rules.
+const EVENT_RULES: usize = 12;
 
 /// The tick, player and index of one event, as a violation of it reports them.
 #[derive(Debug, Clone, Copy)]
@@ -70,6 +77,64 @@ impl At {
             player: self.player,
             value: self.index as f64,
         }
+    }
+}
+
+/// The violations of one family of rules (tick or event) found so far: the first
+/// [`RunningCheck::KEPT_PER_RULE`] of each rule with its sort key, and each rule's count.
+/// `N` is the family's rule count; a key's rank is the rule's place in it.
+struct Found<const N: usize> {
+    kept: Vec<(Key, Violation)>,
+    counts: [usize; N],
+}
+
+impl<const N: usize> Found<N> {
+    fn new() -> Self {
+        Self {
+            kept: Vec::new(),
+            counts: [0; N],
+        }
+    }
+
+    /// Counts `v` against its rule and keeps it while the rule is under the cap. Each
+    /// rule's violations arrive in key order, so the kept ones are the rule's first.
+    fn push(&mut self, key: Key, v: Violation) {
+        let count = &mut self.counts[usize::from(key.1)];
+        *count += 1;
+        if *count <= RunningCheck::KEPT_PER_RULE {
+            self.kept.push((key, v));
+        }
+    }
+}
+
+/// A match's violations as the running checker reports them: the kept ones in the old
+/// validator's order, and every rule's total count, kept or not.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Violations {
+    kept: Vec<Violation>,
+    totals: [usize; RunningCheck::RULES.len()],
+}
+
+impl Violations {
+    /// Every violation found, kept or not.
+    pub fn len(&self) -> usize {
+        self.totals.iter().sum()
+    }
+
+    /// True when no rule was broken.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// The kept violations: at most [`RunningCheck::KEPT_PER_RULE`] of each rule, the
+    /// first ones; the tick rules' in record order, then the event rules' in stream order.
+    pub fn kept(&self) -> &[Violation] {
+        &self.kept
+    }
+
+    /// Each rule of [`RunningCheck::RULES`] with its total count, kept or not.
+    pub fn totals(&self) -> impl Iterator<Item = (&'static str, usize)> + '_ {
+        RunningCheck::RULES.into_iter().zip(self.totals)
     }
 }
 
@@ -101,7 +166,7 @@ pub struct RunningCheck {
     restarts: Vec<(usize, u32, DVec2)>,
     /// The restart spots the events name, in stream order.
     spots: Vec<(u32, DVec2)>,
-    tick_found: Vec<(Key, Violation)>,
+    tick_found: Found<TICK_RULES>,
 
     // Event rules.
     events: usize,
@@ -117,7 +182,7 @@ pub struct RunningCheck {
     used: [u32; 2],
     subs: Vec<Sub>,
     shootout: bool,
-    event_found: Vec<(Key, Violation)>,
+    event_found: Found<EVENT_RULES>,
 
     // The live face's place in the match's timeline and event list.
     timeline_seen: usize,
@@ -146,6 +211,10 @@ impl RunningCheck {
         "score_kept",
     ];
 
+    /// The most violations of one rule a checker keeps. Past it, only the rule's count
+    /// grows.
+    pub const KEPT_PER_RULE: usize = 64;
+
     /// A checker for a match judged by `tuning` and `rules`, whose teams start in `teams`.
     pub fn new(tuning: Tuning, teams: [Team; 2], rules: StreamRules) -> Self {
         Self {
@@ -159,7 +228,7 @@ impl RunningCheck {
             shootout_from: None,
             restarts: Vec::new(),
             spots: Vec::new(),
-            tick_found: Vec::new(),
+            tick_found: Found::new(),
             events: 0,
             prev_event: None,
             last_event: None,
@@ -173,7 +242,7 @@ impl RunningCheck {
             used: [0; 2],
             subs: Vec::new(),
             shootout: false,
-            event_found: Vec::new(),
+            event_found: Found::new(),
             timeline_seen: 1,
             events_seen: 0,
             rules,
@@ -217,7 +286,7 @@ impl RunningCheck {
             player: e.player,
         };
         let found = &mut self.event_found;
-        let mut bad = |rank: u8, rule: &'static str| found.push(((i, rank), at.violation(rule)));
+        let mut bad = |rank: u8, rule: &'static str| found.push((i, rank), at.violation(rule));
         if i == 0 && !(e.kind == EngineEventKind::KickOff && e.scores == [0, 0]) {
             bad(KICK_OFF_FIRST, "kick_off_first");
         }
@@ -352,7 +421,7 @@ impl RunningCheck {
         let parked: [bool; PLAYER_COUNT] = std::array::from_fn(|i| pitch.is_parking_spot(pos[i]));
         let found = &mut self.tick_found;
         let mut bad = |rank: u8, rule: &'static str, player: Option<usize>, value: f64| {
-            found.push((
+            found.push(
                 (idx, rank),
                 Violation {
                     tick: r.tick,
@@ -360,7 +429,7 @@ impl RunningCheck {
                     player,
                     value,
                 },
-            ));
+            );
         };
 
         for (i, p) in pos.iter().enumerate() {
@@ -429,10 +498,12 @@ impl RunningCheck {
         }
     }
 
-    /// Judges the rules that need the whole match and returns every violation: the tick
-    /// rules' in record order, then the event rules' in stream order, as
-    /// [`super::Validator::check`] and [`super::Validator::check_events`] return them.
-    pub fn finish(mut self) -> Vec<Violation> {
+    /// Judges the rules that need the whole match and returns the violations: the kept
+    /// ones, the tick rules' in record order, then the event rules' in stream order, as
+    /// [`super::Validator::check`] and [`super::Validator::check_events`] return them; and
+    /// every rule's total. It logs each kept tick-rule violation, and one line with the
+    /// total for each tick rule past the cap.
+    pub fn finish(mut self) -> Violations {
         // The same stable sort and lookup as `Validator::for_match` and `check`, so a tick
         // with two spots resolves to the same one.
         self.spots.sort_by_key(|(tick, _)| *tick);
@@ -440,7 +511,7 @@ impl RunningCheck {
             if let Ok(at) = self.spots.binary_search_by_key(&tick, |(t, _)| *t) {
                 let off = (ball - self.spots[at].1).length();
                 if off > RESTART_SPOT_TOLERANCE {
-                    self.tick_found.push((
+                    self.tick_found.push(
                         (idx, RESTART_SPOT),
                         Violation {
                             tick,
@@ -448,7 +519,7 @@ impl RunningCheck {
                             player: None,
                             value: off,
                         },
-                    ));
+                    );
                 }
             }
         }
@@ -457,7 +528,7 @@ impl RunningCheck {
             if !(self.full_times == 1 && last_is_full_time) {
                 let at = self.first_full_time.unwrap_or(last);
                 self.event_found
-                    .push(((at.index, FULL_TIME_LAST), at.violation("full_time_last")));
+                    .push((at.index, FULL_TIME_LAST), at.violation("full_time_last"));
             }
             let mut windows: [Vec<u32>; 2] = [Vec::new(), Vec::new()];
             for sub in &self.subs {
@@ -469,24 +540,43 @@ impl RunningCheck {
                 if sub.used > self.rules.substitutions
                     || windows[sub.team].len() as u32 > self.rules.windows
                 {
-                    self.event_found.push((
+                    self.event_found.push(
                         (sub.at.index, SUBSTITUTION_LIMITS),
                         sub.at.violation("substitution_limits"),
-                    ));
+                    );
                 }
             }
         }
 
-        self.tick_found.sort_by_key(|(key, _)| *key);
-        self.event_found.sort_by_key(|(key, _)| *key);
-        for (_, v) in &self.tick_found {
+        self.tick_found.kept.sort_by_key(|(key, _)| *key);
+        self.event_found.kept.sort_by_key(|(key, _)| *key);
+        for (_, v) in &self.tick_found.kept {
             tracing::warn!(signal = "validate.violation", tick = v.tick, rule = v.rule, player = ?v.player, value = v.value);
         }
-        self.tick_found
-            .into_iter()
-            .chain(self.event_found)
-            .map(|(_, v)| v)
-            .collect()
+        for (rule, &total) in Self::RULES.iter().zip(&self.tick_found.counts) {
+            if total > Self::KEPT_PER_RULE {
+                tracing::warn!(
+                    signal = "validate.violations_capped",
+                    rule,
+                    total,
+                    kept = Self::KEPT_PER_RULE
+                );
+            }
+        }
+        let mut totals = [0; Self::RULES.len()];
+        let (tick, event) = totals.split_at_mut(TICK_RULES);
+        tick.copy_from_slice(&self.tick_found.counts);
+        event.copy_from_slice(&self.event_found.counts);
+        Violations {
+            kept: self
+                .tick_found
+                .kept
+                .into_iter()
+                .chain(self.event_found.kept)
+                .map(|(_, v)| v)
+                .collect(),
+            totals,
+        }
     }
 
     /// Feeds every team shape and event `sim` added since the last call.
@@ -510,7 +600,7 @@ impl RunningCheck {
 
     /// Feeds what `sim` added after its last record (full time) and finishes. Call it
     /// before the match's events are taken.
-    pub fn finish_match(mut self, sim: &Simulation) -> Vec<Violation> {
+    pub fn finish_match(mut self, sim: &Simulation) -> Violations {
         self.catch_up(sim);
         self.finish()
     }
@@ -565,7 +655,7 @@ mod tests {
         timeline: &[(u32, [Team; 2])],
         events: &[EngineEvent],
         records: &[TickRecord],
-    ) -> Vec<Violation> {
+    ) -> Violations {
         let mut check = RunningCheck::new(Tuning::default(), timeline[0].1.clone(), rules());
         let (mut shape, mut event) = (1, 0);
         for r in records {
@@ -599,11 +689,31 @@ mod tests {
         out
     }
 
+    /// The old report as the running checker keeps it: the first `KEPT_PER_RULE` of each
+    /// rule in the report's order, and each rule's total.
+    fn capped(old: &[Violation]) -> (Vec<Violation>, Vec<(&'static str, usize)>) {
+        let mut seen = [0usize; RunningCheck::RULES.len()];
+        let place = |rule| RunningCheck::RULES.iter().position(|r| *r == rule).unwrap();
+        let kept = old
+            .iter()
+            .filter(|v| {
+                let n = &mut seen[place(v.rule)];
+                *n += 1;
+                *n <= RunningCheck::KEPT_PER_RULE
+            })
+            .cloned()
+            .collect();
+        let totals = RunningCheck::RULES
+            .map(|rule| (rule, old.iter().filter(|v| v.rule == rule).count()))
+            .to_vec();
+        (kept, totals)
+    }
+
     fn same(timeline: &[(u32, [Team; 2])], events: &[EngineEvent], records: &[TickRecord]) {
-        assert_eq!(
-            running(timeline, events, records),
-            old(timeline, events, records)
-        );
+        let new = running(timeline, events, records);
+        let old = old(timeline, events, records);
+        assert_eq!(new.len(), old.len());
+        assert_eq!((new.kept().to_vec(), new.totals().collect()), capped(&old));
     }
 
     fn teams() -> Vec<(u32, [Team; 2])> {
@@ -616,13 +726,13 @@ mod tests {
         overlap.players[1] = overlap.players[0];
         let out = running(&teams(), &[], &[record(9), overlap]);
         assert_eq!(out.len(), 1);
-        assert_eq!((out[0].rule, out[0].tick), ("separation", 10));
+        assert_eq!((out.kept()[0].rule, out.kept()[0].tick), ("separation", 10));
         same(&teams(), &[], &[record(9), overlap]);
 
         let mut fast = record(2);
         fast.ball = [0.9, 0.0, 0.0];
         assert_eq!(
-            running(&teams(), &[], &[record(1), fast])[0].rule,
+            running(&teams(), &[], &[record(1), fast]).kept()[0].rule,
             "ball_speed"
         );
         same(&teams(), &[], &[record(1), fast]);
@@ -649,8 +759,9 @@ mod tests {
         on_spot.ball = [10.0, 34.0, 0.0];
         let mut off_spot = on_spot;
         off_spot.ball = [11.0, 34.0, 0.0];
-        let tick_rules = |out: Vec<Violation>| -> Vec<&'static str> {
-            out.iter()
+        let tick_rules = |out: Violations| -> Vec<&'static str> {
+            out.kept()
+                .iter()
                 .map(|v| v.rule)
                 .filter(|r| *r == "restart_spot")
                 .collect()
@@ -697,7 +808,8 @@ mod tests {
         check.event(&throw_in);
         let out = check.finish();
         assert!(
-            out.iter()
+            out.kept()
+                .iter()
                 .any(|v| v.rule == "restart_spot" && v.tick == 2 && (v.value - 1.0).abs() < 1e-6),
             "{out:?}"
         );
@@ -717,9 +829,10 @@ mod tests {
         let records: Vec<TickRecord> = (1..=grace + 20).map(far).collect();
         let anchors = |events: &[EngineEvent]| {
             running(&teams(), events, &records)
-                .iter()
-                .filter(|v| v.rule == "anchor_tolerance")
-                .count()
+                .totals()
+                .find(|(rule, _)| *rule == "anchor_tolerance")
+                .unwrap()
+                .1
         };
         assert!(anchors(&[]) > 0, "the plant drifts without a shoot-out");
         let config = crate::data::test_support::shipped_config(1, 90).unwrap();
@@ -729,6 +842,33 @@ mod tests {
         kick.shootout_round = Some(1);
         assert_eq!(anchors(&[kick]), 0);
         same(&teams(), &[kick], &records);
+        same(&teams(), &[], &records);
+    }
+
+    /// Every player on one spot for three ticks: 231 pairs too close per tick. The checker
+    /// keeps the first 64 separation violations and counts all 693, as the old validator
+    /// does.
+    #[test]
+    fn a_rule_past_the_cap_keeps_its_first_violations_and_counts_them_all() {
+        let crowd = |tick: u32| {
+            let mut r = record(tick);
+            r.players = [[1.0, 1.0]; PLAYER_COUNT];
+            r
+        };
+        let records = [crowd(1), crowd(2), crowd(3)];
+        let pairs = PLAYER_COUNT * (PLAYER_COUNT - 1) / 2;
+        let out = running(&teams(), &[], &records);
+        let separation = out.totals().find(|(rule, _)| *rule == "separation");
+        assert_eq!(separation, Some(("separation", 3 * pairs)));
+        assert!(3 * pairs > RunningCheck::KEPT_PER_RULE);
+        let kept: Vec<&Violation> = out
+            .kept()
+            .iter()
+            .filter(|v| v.rule == "separation")
+            .collect();
+        assert_eq!(kept.len(), RunningCheck::KEPT_PER_RULE);
+        assert!(kept.iter().all(|v| v.tick == 1), "the first ones are kept");
+        assert_eq!(out.len(), old(&teams(), &[], &records).len());
         same(&teams(), &[], &records);
     }
 }

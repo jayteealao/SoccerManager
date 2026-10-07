@@ -2,7 +2,9 @@
 //! with one planted violation for every tick rule and every event rule, and on real
 //! matches played through the checker as a tick sink. Each planted case is first checked
 //! against the old validator (it must report the plant), then the running checker must
-//! give the same report and contain the plant.
+//! give the same report and contain the plant. The running checker keeps only the first
+//! `KEPT_PER_RULE` violations of each rule, so it is compared with the old report cut the
+//! same way, and its count of each rule with the old report's.
 
 mod common;
 
@@ -53,9 +55,34 @@ fn old(input: &Input) -> Vec<Violation> {
     out
 }
 
+/// A report as the running checker keeps it: the first `KEPT_PER_RULE` violations of each
+/// rule in report order, and each rule's total.
+type Kept = (Vec<Violation>, Vec<(&'static str, usize)>);
+
+/// The old report cut to what the running checker keeps.
+fn capped(old: &[Violation]) -> Kept {
+    let mut seen = [0usize; RunningCheck::RULES.len()];
+    let place = |rule| RunningCheck::RULES.iter().position(|r| *r == rule).unwrap();
+    let kept = old
+        .iter()
+        .filter(|v| {
+            let n = &mut seen[place(v.rule)];
+            *n += 1;
+            *n <= RunningCheck::KEPT_PER_RULE
+        })
+        .cloned()
+        .collect();
+    let totals = RunningCheck::RULES
+        .map(|rule| (rule, old.iter().filter(|v| v.rule == rule).count()))
+        .to_vec();
+    (kept, totals)
+}
+
 /// The running checker fed in tick order: before each record, every team shape and event
 /// whose tick is not after the record's, each in its own order; the rest after the last.
-fn running(input: &Input) -> Vec<Violation> {
+/// It returns the kept violations and each rule's total, and checks that its whole count is
+/// the old report's.
+fn running(input: &Input) -> Kept {
     let (timeline, events) = (&input.timeline, &input.events);
     let mut check = RunningCheck::new(
         input.tuning.clone(),
@@ -81,7 +108,9 @@ fn running(input: &Input) -> Vec<Violation> {
         check.event(e);
     }
     assert_eq!(check.ticks() as usize, input.records.len());
-    check.finish()
+    let found = check.finish();
+    assert_eq!(found.len(), old(input).len(), "the whole count");
+    (found.kept().to_vec(), found.totals().collect())
 }
 
 /// The seed-42 10-minute match: its records, recorded beside the running checker, its
@@ -102,7 +131,13 @@ fn recorded_match() -> Input {
         records: records.records,
         rules,
     };
-    assert_eq!(live, old(&input), "the live face equals the old report");
+    let old = old(&input);
+    assert_eq!(live.len(), old.len());
+    assert_eq!(
+        (live.kept().to_vec(), live.totals().collect()),
+        capped(&old),
+        "the live face equals the old report"
+    );
     input
 }
 
@@ -436,8 +471,12 @@ fn check_plant(p: &Plant) {
         p.name
     );
     let new = running(&p.input);
-    assert_eq!(new, old, "{}: the reports differ", p.name);
-    assert!(new.iter().any(expected), "{}: the plant is caught", p.name);
+    assert_eq!(new, capped(&old), "{}: the reports differ", p.name);
+    assert!(
+        new.0.iter().any(expected),
+        "{}: the plant is caught",
+        p.name
+    );
 }
 
 #[test]
@@ -463,7 +502,7 @@ fn every_planted_event_rule_gives_the_same_report() {
             rules: planted_rules(),
         };
         assert!(old(&input).is_empty(), "{:?}", old(&input));
-        assert_eq!(running(&input), old(&input));
+        assert_eq!(running(&input), capped(&old(&input)));
     }
 }
 
@@ -488,11 +527,9 @@ fn the_fixed_set_plants_every_rule() {
 }
 
 /// Plays `config` through the running checker and a record list, with `prepare` run on
-/// the match before kick-off, and returns both reports.
-fn both(
-    config: MatchConfig,
-    prepare: &dyn Fn(&mut Simulation),
-) -> (Vec<Violation>, Vec<Violation>) {
+/// the match before kick-off, and returns both reports: the old one whole, the running one
+/// as it keeps it. The running checker's whole count must be the old report's.
+fn both(config: MatchConfig, prepare: &dyn Fn(&mut Simulation)) -> (Vec<Violation>, Kept) {
     let rules = StreamRules::for_config(&config);
     let mut sim = Simulation::new(config).unwrap();
     prepare(&mut sim);
@@ -509,14 +546,16 @@ fn both(
         records: records.records,
         rules,
     };
-    (old(&input), new)
+    let old = old(&input);
+    assert_eq!(new.len(), old.len(), "the whole count");
+    (old, (new.kept().to_vec(), new.totals().collect()))
 }
 
 /// The real matches: seeds 1 to 5, 9, 11 and 38 over 90 minutes, a 10-minute match, a
 /// knockout with a shoot-out, a match with a player sent off at kick-off and cards
 /// otherwise off, and a match of two different formations. `tighten` narrows the anchor
 /// rule so the reports are not empty.
-fn real_matches(tighten: bool) -> Vec<(String, Vec<Violation>, Vec<Violation>)> {
+fn real_matches(tighten: bool) -> Vec<(String, Vec<Violation>, Kept)> {
     let content = common::content();
     let [a, b] = common::default_teams(&content);
     let formations = content.tactics.formations.len();
@@ -572,20 +611,29 @@ fn real_matches(tighten: bool) -> Vec<(String, Vec<Violation>, Vec<Violation>)> 
 fn real_matches_give_the_same_empty_report() {
     for (name, old, new) in real_matches(false) {
         assert!(old.is_empty(), "{name}: {old:?}");
-        assert_eq!(new, old, "{name}");
+        assert_eq!(new, capped(&old), "{name}");
+        assert!(new.0.is_empty(), "{name}");
     }
 }
 
+/// The tight anchor breaks its rule past the cap on a real match: the running checker
+/// keeps the first `KEPT_PER_RULE` and still counts every one the old validator reports.
 #[test]
 fn real_matches_under_a_tight_anchor_give_the_same_report() {
     let mut anchors = 0;
+    let mut past_cap = 0;
     for (name, old, new) in real_matches(true) {
         assert!(!old.is_empty(), "{name}: the tight anchor finds drift");
-        assert_eq!(new.len(), old.len(), "{name}");
-        assert_eq!(new, old, "{name}");
+        assert_eq!(new, capped(&old), "{name}");
         anchors += old.iter().filter(|v| v.rule == "anchor_tolerance").count();
+        past_cap += new
+            .1
+            .iter()
+            .filter(|(_, n)| *n > RunningCheck::KEPT_PER_RULE)
+            .count();
     }
     assert!(anchors > 0);
+    assert!(past_cap > 0, "a rule counted past the cap");
 }
 
 /// A clean match through the sink alone: the running checker reports nothing.
