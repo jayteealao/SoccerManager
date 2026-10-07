@@ -554,7 +554,7 @@ mod tests {
             let (first, second) = (arm(&picks[..n]), arm(&picks[n..2 * n]));
             let (sets, rows) = verdict::paired((&first, &keys), (&second, &keys), &per_unit);
             let (found, c) = verdict::bootstrap(&sets, &rows, 1000 + u64::from(rep), RESAMPLES);
-            let (judged, _) = verdict::judge(&sets, &rows, &found, c, Vec::new());
+            let (judged, _) = verdict::judge(&sets, &rows, &found, c, Vec::new(), &BTreeMap::new());
             for band in &equal_bands {
                 assert!(
                     judged.iter().any(|r| r.band == *band),

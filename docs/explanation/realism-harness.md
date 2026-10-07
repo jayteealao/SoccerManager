@@ -72,6 +72,14 @@ A band needs matches in proportion to the square of its error divided by its sma
 
 So the band that sets a suite's target is named beside it, in `calib.power`, in `target.json`, and on the `calibrate.power_target` line. A change run that plays far more matches than expected shows which band asked for them. Lowering that need means a different smallest shift, a band judged in another suite, a different rule for which bands set a target, or a longer run. Each is a decision about what the test must detect, not a speed-up, so the harness does not take one on its own.
 
+## Why a band far outside its range sets no target
+
+A band's power target asks how many matches it needs to see its smallest shift. That question matters only while the band could pass. A band whose value is outside its range fails, whatever its change, so playing more matches to measure its change precisely buys nothing for its word. When that band is also the one with the largest need, it alone would set the run's length. So in every suite of a change run, a band already outside its range by more than its noise sets no target.
+
+"More than its noise" uses the run's own measure of a real move. At the pilot, the band's distance from its range must be more than `c` times the band's own standard error, where `c` is the max-t threshold the run already uses to call a change real (at least 2.17). So the rule adds no new constant, and a band that is only just outside, where the pilot's noise could have put it there, still sets a target.
+
+The rule changes how long the run is, never a word. A band that set no target is judged like every other: it fails while it is outside its range, and a band without power never passes. If the pilot's noise made a band look far outside when it is not, the worst outcome is `not sure` for that band, never a false `pass`. The run reports the band, its distance, and the mark, so a person sees which bands did not size the run, and the driver shows when such a band comes back inside its range and sets the target again.
+
 ## What the time limits mean
 
 The two time limits are a change run within 10 minutes and the full evaluation (every default suite at 1,000 matches, 57,000 matches) within its measured time, at most 46 minutes; 15 minutes stays the target of later speed work, which needs about 63 matches per second. They are measured on an idle machine with every logical processor, after the old engine's results are cached. A change run plays only the changed engine: a pilot of 200 matches per suite unit, then growth to the power target.

@@ -165,7 +165,7 @@ Measurement note, taken on the 8-thread reference machine (AMD Ryzen 7 9800X3D, 
 | `--suite equal --matches 64 --jobs 1` | 64 | 23 s on one thread (about 0.36 s per match) |
 | `--suite equal --matches 64 --jobs 8` | 64 | 6 s |
 
-At that rate the realistic evaluation takes about 70 minutes. On an idle machine, one match takes about a third of a second on one thread, so with perfect scaling over 8 threads the evaluation takes about 40 minutes. A change run plays the changed engine's pilot of 11,400 matches and then grows to its power target. It judges the formations suite pooled over every pairing, but on today's engine the pooled ten-goals-or-more band still needs more than the cap of 1,000 per pairing, so a change run plays about 56,000 matches, about as many as the evaluation.
+At that rate the realistic evaluation takes about 70 minutes. On an idle machine, one match takes about a third of a second on one thread, so with perfect scaling over 8 threads the evaluation takes about 40 minutes. A change run plays the changed engine's pilot of 11,400 matches and then grows to its power target. It judges the formations suite pooled over every pairing, and a band already far outside its range sets no target. On today's engine and the default content the pilot sets the targets equal 1,000, formations 200 per pairing (the pilot itself), and strength 278, so a change run plays about 12,300 of the changed engine's matches: about 8.4 minutes at a third of a second per match over 8 threads with perfect scaling, and about 10 minutes at 85 percent scaling. This is a projection from the pilot; the measured median of three timed runs on an idle machine replaces it.
 
 ## Read why a change run plays so many matches
 
@@ -175,7 +175,21 @@ A change run names, for each suite, the band that set its power target. Read it 
 - `drivers` in `target.json` in the run folder;
 - `calib.power.<suite>.driver` in `report.json`.
 
-A suite with no driver reached power at its pilot. A driver at the cap (`target` equal to `cap`, `reached` false) is the band to look at when a change run is long: its smallest shift, measured on how rare its event is, decides the run's length. On the default content the formations suite's driver is `ten_plus_goals_share` and the equal suite's is `goalless_share`, both at the cap.
+A suite with no driver reached power at its pilot. A driver at the cap (`target` equal to `cap`, `reached` false) is the band to look at when a change run is long: its smallest shift, measured on how rare its event is, decides the run's length. On the default content the equal suite's driver is `goals_per_xg`, at the cap, and the formations suite has no driver: its pooled bands have power at the pilot once the bands far outside their range set no target.
+
+## Read a band that set no target
+
+A band that was already outside its range at the pilot by more than its noise sets no power target. Find it in the same places as the driver:
+
+- `no_target` on the `calibrate.power_target` line;
+- `no_target` in `target.json`, by suite code;
+- `calib.power.<suite>.no_target` in `report.json`;
+- its row in `calib.verdicts`, with `no_target: true` and `outside_by`, its distance from its range;
+- its line in the verdict table, which ends with `(outside its range by <distance>, beyond its noise at the pilot: set no power target)`.
+
+Such a band fails while it is outside its range. Read its distance first: the change run says the engine is far from that band, whatever the change did to it. Its `needed` note still says how many matches it would need once it is back inside.
+
+When a change brings the band back inside its range, the next change run's pilot lets it set a target again. The run can then grow, up to the cap, and the band appears as the suite's `driver`. On today's engine the pooled ten-goals-or-more share is the band to watch: inside its range, it needs about 880 matches per pairing.
 
 ## Build a faster calibrate binary
 

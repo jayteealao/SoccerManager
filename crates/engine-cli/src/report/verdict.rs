@@ -20,6 +20,10 @@
 //! its smallest shift; it **passes** when the value is inside, it did not move by its
 //! smallest shift, and it has power; otherwise it is **not sure**. A band with no power
 //! never passes.
+//!
+//! A band already outside its range at the pilot by more than its noise (`c` times the
+//! changed engine's own error of its value) sets no power target: it fails while it stays
+//! outside, so more matches would not change its word, and the other bands size the run.
 
 use std::collections::BTreeMap;
 
@@ -93,6 +97,13 @@ pub struct VerdictRow {
     /// give it power.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub needed: Option<u32>,
+    /// A change run: how far the changed engine's value is outside its range, when it is.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outside_by: Option<f64>,
+    /// A change run: the band was outside its range beyond its noise at the pilot, so it set
+    /// no power target.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub no_target: Option<bool>,
 }
 
 /// The joint verdict of a change run.
@@ -129,6 +140,8 @@ pub fn range_only(checks: &[BandCheck]) -> Vec<VerdictRow> {
             smallest_shift: None,
             power: None,
             needed: None,
+            outside_by: None,
+            no_target: None,
         })
         .collect()
 }
@@ -155,6 +168,11 @@ pub struct PairedRow {
     /// The error of the change if the two engines' matches were apart: the root of the sum
     /// of each engine's squared error. Power is judged on at least this.
     pub apart_se: f64,
+    /// The changed engine's own sampling error of the band's value.
+    pub value_se: f64,
+    /// How far the changed engine's unrounded value is outside its range; 0 when its range
+    /// check holds or it has no value.
+    pub outside: f64,
     /// Index of the row's suite set.
     pub set: usize,
 }
@@ -211,6 +229,10 @@ pub fn paired(
             let places = measures::places(&spec.def.measure);
             let value = tc.value().map(|v| round_to(v, places));
             let in_range = measures::passes(spec.def, value.unwrap_or(0.0), &tc);
+            let outside = match tc.value() {
+                Some(v) if !in_range => (spec.def.lo - v).max(v - spec.def.hi).max(0.0),
+                _ => 0.0,
+            };
             rows.push(PairedRow {
                 band: spec.def.band.clone(),
                 suite,
@@ -220,6 +242,8 @@ pub fn paired(
                 shift: spec.def.smallest_shift,
                 spread: tc.se() > 0.0 || to.se() > 0.0,
                 apart_se: tc.se().hypot(to.se()),
+                value_se: tc.se(),
+                outside,
                 changed: tc.per_match(),
                 old: to.per_match(),
                 value,
@@ -385,14 +409,31 @@ pub fn needed(per_unit: u32, se: f64, shift: f64, c: f64) -> u32 {
     }
 }
 
+/// `true` when a row is outside its range by more than its noise: its range check fails, and
+/// its value is further from the range than `critical` times its own error. Such a band
+/// fails while it stays outside, so it sets no power target. A row with no error, or one
+/// whose value fails a special range rule while numerically inside, still sets one.
+pub fn far_outside(r: &PairedRow, critical: f64) -> bool {
+    !r.in_range && r.value_se > 0.0 && r.outside > critical * r.value_se
+}
+
+/// A row's name in a suite's no-target list: the band, or `band/label` for a row of one
+/// pairing or one arm.
+pub fn target_label(band: &str, pairing: Option<&str>) -> String {
+    pairing.map_or_else(|| band.to_string(), |p| format!("{band}/{p}"))
+}
+
 /// The words of a change run's rows and its joint word. `guards` name failures outside the
-/// bands (panics, dark paths, violations); any one fails the run.
+/// bands (panics, dark paths, violations); any one fails the run. `no_target` holds, by suite
+/// code, the rows that set no power target at the pilot ([`target_label`]): it changes no
+/// word, only the marks.
 pub fn judge(
     sets: &[SuiteSet],
     rows: &[PairedRow],
     found: &[Found],
     critical: f64,
     guards: Vec<String>,
+    no_target: &BTreeMap<String, Vec<String>>,
 ) -> (Vec<VerdictRow>, Joint) {
     let mut out = Vec::with_capacity(rows.len());
     for (r, f) in rows.iter().zip(found) {
@@ -413,9 +454,12 @@ pub fn judge(
         };
         let need = (!power && r.spread && power_se > 0.0)
             .then(|| needed(per_unit, power_se, r.shift, critical));
+        let suite = r.suite.code();
+        let label = target_label(&r.band, r.pairing.as_deref());
+        let exempt = no_target.get(suite).is_some_and(|l| l.contains(&label));
         out.push(VerdictRow {
             band: r.band.clone(),
-            suite: r.suite.code().to_string(),
+            suite: suite.to_string(),
             pairing: r.pairing.clone(),
             word,
             value: r.value.unwrap_or(0.0),
@@ -427,6 +471,8 @@ pub fn judge(
             smallest_shift: Some(r.shift),
             power: Some(power),
             needed: need,
+            outside_by: (r.outside > 0.0).then(|| round_to(r.outside, 5)),
+            no_target: exempt.then_some(true),
         });
     }
     let word = if !guards.is_empty() || out.iter().any(|r| r.word == Word::Fail) {
@@ -456,11 +502,16 @@ pub struct SuiteTarget {
     /// The band that needs the most matches, when it needs more than the pilot; `None`
     /// when the pilot already gives every band power.
     pub driver: Option<String>,
+    /// The rows outside their range beyond their noise ([`far_outside`]), which set no
+    /// target, by [`target_label`].
+    pub no_target: Vec<String>,
 }
 
 /// The matches per suite unit each suite needs for every band with a spread to have power,
 /// from a judged pilot: at least `pilot`, at most `cap`, with the band that set it. The
-/// target depends on the spread alone, never on the change seen.
+/// target depends on the spread alone, never on the change seen. A row outside its range
+/// beyond its noise sets no target and is listed instead; a suite whose every row is so
+/// keeps the pilot.
 pub fn targets(
     sets: &[SuiteSet],
     rows: &[PairedRow],
@@ -472,12 +523,19 @@ pub fn targets(
     let start = || SuiteTarget {
         matches: pilot.min(cap),
         driver: None,
+        no_target: Vec::new(),
     };
     let mut out: BTreeMap<Suite, SuiteTarget> = sets.iter().map(|s| (s.suite, start())).collect();
     // The largest need of each suite so far, before the cap: the band with the largest need
     // is the driver even when several reach the cap.
     let mut most: BTreeMap<Suite, u32> = BTreeMap::new();
     for (r, f) in rows.iter().zip(found) {
+        if far_outside(r, critical) {
+            let t = out.entry(r.suite).or_insert_with(start);
+            t.no_target
+                .push(target_label(&r.band, r.pairing.as_deref()));
+            continue;
+        }
         let power_se = f.se.max(r.apart_se);
         if !r.spread || power_se <= 0.0 {
             continue;
@@ -512,10 +570,16 @@ pub fn render_table(rows: &[VerdictRow], joint: Option<&Joint>) -> String {
     }
     for r in rows {
         let pairing = r.pairing.as_deref().unwrap_or("-");
-        let need = r
+        let mut need = r
             .needed
             .map(|n| format!(" (about {n} matches per suite would give it power)"))
             .unwrap_or_default();
+        if r.no_target == Some(true) {
+            need.push_str(&format!(
+                " (outside its range by {}, beyond its noise at the pilot: set no power target)",
+                r.outside_by.unwrap_or(0.0)
+            ));
+        }
         if change {
             let opt = |v: Option<f64>| v.map_or_else(|| "-".to_string(), |v| format!("{v}"));
             out.push_str(&format!(
@@ -580,6 +644,8 @@ mod tests {
             in_range: true,
             spread: spread(&changed) || spread(&old),
             apart_se: 0.0,
+            value_se: 0.0,
+            outside: 0.0,
             changed: [changed, vec![1.0; n], vec![1.0; n], vec![1.0; n]],
             old: [old, vec![1.0; n], vec![1.0; n], vec![1.0; n]],
             set,
@@ -627,8 +693,9 @@ mod tests {
             diff: Some(diff),
             se,
         };
-        let words =
-            |r: PairedRow, found: Found| judge(&sets, &[r], &[found], 2.0, Vec::new()).0[0].word;
+        let words = |r: PairedRow, found: Found| {
+            judge(&sets, &[r], &[found], 2.0, Vec::new(), &BTreeMap::new()).0[0].word
+        };
         // Inside, no move, power: (2 + 0.8416) * 0.1 <= 0.5.
         assert_eq!(words(mk(true, true), f(0.05, 0.1)), Word::Pass);
         // The same without power: never pass.
@@ -652,6 +719,7 @@ mod tests {
             }],
             2.0,
             Vec::new(),
+            &BTreeMap::new(),
         );
         assert_eq!(rows[0].word, Word::NotSure);
         assert_eq!(joint.word, Word::NotSure);
@@ -662,9 +730,17 @@ mod tests {
             &[f(0.0, 0.1)],
             2.0,
             vec!["1 match panicked".into()],
+            &BTreeMap::new(),
         );
         assert_eq!(joint.word, Word::Fail);
-        let (_, joint) = judge(&sets, &[mk(true, true)], &[f(0.0, 0.1)], 2.0, Vec::new());
+        let (_, joint) = judge(
+            &sets,
+            &[mk(true, true)],
+            &[f(0.0, 0.1)],
+            2.0,
+            Vec::new(),
+            &BTreeMap::new(),
+        );
         assert_eq!(joint.word, Word::Pass);
     }
 
@@ -723,6 +799,125 @@ mod tests {
         }
     }
 
+    /// A row outside its range by `outside`, with its own error `value_se`.
+    fn outside_row(band: &str, shift: f64, outside: f64, value_se: f64) -> PairedRow {
+        let mut r = row(0, vec![1.0, 2.0], vec![1.0, 2.0], shift);
+        r.band = band.into();
+        r.in_range = outside == 0.0;
+        r.outside = outside;
+        r.value_se = value_se;
+        r
+    }
+
+    #[test]
+    fn a_band_far_outside_its_range_sets_no_target_and_the_others_do() {
+        let sets = [set(100)];
+        let f = Found {
+            diff: Some(0.0),
+            se: 0.2,
+        };
+        // The far band needs the most (shift 0.01) but is 1.0 outside with error 0.1, beyond
+        // c (2) times it: it sets no target, and the other band sets the target and drives.
+        let far = outside_row("far", 0.01, 1.0, 0.1);
+        let other = outside_row("other", 0.5, 0.0, 0.1);
+        let t = targets(
+            &sets,
+            &[far.clone(), other.clone()],
+            &[f, f],
+            2.0,
+            100,
+            1000,
+        );
+        let eq = &t[&Suite::Equal];
+        assert_eq!(eq.matches, 130, "set by the other band alone");
+        assert_eq!(eq.driver.as_deref(), Some("other"));
+        assert_eq!(eq.no_target, vec!["far".to_string()]);
+        // Outside by less than c times its error (0.15 < 2 * 0.1): it still sets the target.
+        let near = outside_row("near", 0.01, 0.15, 0.1);
+        let t = targets(&sets, &[near, other.clone()], &[f, f], 2.0, 100, 1000);
+        assert_eq!(t[&Suite::Equal].matches, 1000);
+        assert_eq!(t[&Suite::Equal].driver.as_deref(), Some("near"));
+        assert!(t[&Suite::Equal].no_target.is_empty());
+        // Outside with no error of its own: still sets the target.
+        let blind = outside_row("blind", 0.01, 1.0, 0.0);
+        let t = targets(&sets, &[blind, other], &[f, f], 2.0, 100, 1000);
+        assert_eq!(t[&Suite::Equal].driver.as_deref(), Some("blind"));
+        assert!(t[&Suite::Equal].no_target.is_empty());
+        // A suite whose only row is far outside keeps the pilot, with no driver.
+        let t = targets(&sets, &[far], &[f], 2.0, 100, 1000);
+        assert_eq!(t[&Suite::Equal].matches, 100);
+        assert_eq!(t[&Suite::Equal].driver, None);
+        assert_eq!(t[&Suite::Equal].no_target, vec!["far".to_string()]);
+        // A row of one pairing or arm is listed as band/label.
+        let mut armed = outside_row("far", 0.01, 1.0, 0.1);
+        armed.pairing = Some("reduced".into());
+        let t = targets(&sets, &[armed], &[f], 2.0, 100, 1000);
+        assert_eq!(t[&Suite::Equal].no_target, vec!["far/reduced".to_string()]);
+    }
+
+    #[test]
+    fn a_no_target_band_is_judged_as_any_band_and_never_passes_without_power() {
+        let sets = [set(100)];
+        let no_target: BTreeMap<String, Vec<String>> =
+            [("equal".to_string(), vec!["far".to_string()])].into();
+        let far = outside_row("far", 0.01, 1.234_567, 0.1);
+        let (rows, joint) = judge(
+            &sets,
+            std::slice::from_ref(&far),
+            &[Found {
+                diff: Some(0.0),
+                se: 0.2,
+            }],
+            2.0,
+            Vec::new(),
+            &no_target,
+        );
+        assert_eq!(rows[0].word, Word::Fail, "outside its range: fail");
+        assert_eq!(rows[0].no_target, Some(true));
+        assert_eq!(rows[0].outside_by, Some(1.23457));
+        assert_eq!(joint.word, Word::Fail);
+        let table = render_table(&rows, Some(&joint));
+        assert!(
+            table.contains(
+                "outside its range by 1.23457, beyond its noise at the pilot: set no power target"
+            ),
+            "{table}"
+        );
+        // Listed but back inside its range and without power: not sure, never pass.
+        let inside = PairedRow {
+            in_range: true,
+            outside: 0.0,
+            ..far
+        };
+        let (rows, _) = judge(
+            &sets,
+            &[inside],
+            &[Found {
+                diff: Some(0.0),
+                se: 0.2,
+            }],
+            2.0,
+            Vec::new(),
+            &no_target,
+        );
+        assert_eq!(rows[0].word, Word::NotSure);
+        assert_eq!(rows[0].no_target, Some(true));
+        assert_eq!(rows[0].outside_by, None);
+        // A row not listed carries no mark.
+        let (rows, _) = judge(
+            &sets,
+            &[outside_row("other", 0.5, 0.0, 0.1)],
+            &[Found {
+                diff: Some(0.0),
+                se: 0.01,
+            }],
+            2.0,
+            Vec::new(),
+            &no_target,
+        );
+        assert_eq!((rows[0].no_target, rows[0].outside_by), (None, None));
+    }
+
     /// An A/A comparison: both arms draw from the same correlated distribution on each
     /// fixture, so every change is noise. Over 1000 replicates of 150 paired matches and six
     /// correlated measures (means, a share, and a pooled ratio), the max-t test flags at
@@ -770,7 +965,7 @@ mod tests {
             ratio.old[1] = b.iter().map(|m| 1.0 + m[5].abs()).collect();
             rows.push(ratio);
             let (found, c) = bootstrap(&sets, &rows, 1000 + u64::from(rep), resamples);
-            let (judged, _) = judge(&sets, &rows, &found, c, Vec::new());
+            let (judged, _) = judge(&sets, &rows, &found, c, Vec::new(), &BTreeMap::new());
             assert_eq!(judged.len(), 6, "every band on its own row");
             if found.iter().any(|f| significant(f.diff.unwrap(), f.se, c)) {
                 alarms += 1;
@@ -792,7 +987,7 @@ mod tests {
         let sets = [set(n)];
         let rows = [row(0, changed, base.clone(), 0.5), row(0, same, base, 0.5)];
         let (found, c) = bootstrap(&sets, &rows, 11, 499);
-        let (judged, joint) = judge(&sets, &rows, &found, c, Vec::new());
+        let (judged, joint) = judge(&sets, &rows, &found, c, Vec::new(), &BTreeMap::new());
         assert_eq!(judged[0].word, Word::Fail);
         assert_eq!(judged[1].word, Word::Pass);
         assert_eq!(joint.word, Word::Fail);
@@ -805,7 +1000,7 @@ mod tests {
                 ..r.clone()
             })
             .collect();
-        let (judged, _) = judge(&sets, &apart, &found, c, Vec::new());
+        let (judged, _) = judge(&sets, &apart, &found, c, Vec::new(), &BTreeMap::new());
         assert_eq!(judged[0].word, Word::Fail, "a move is still a move");
         assert_eq!(judged[1].word, Word::NotSure);
         assert!(judged[1].needed.unwrap() > 300);

@@ -691,7 +691,7 @@
             }
           },
           "calib.verdicts": {
-            "description": "Each band's word. In a change run it comes from the paired max-t test: fail when the value is outside the range or the change is beyond the joint threshold and at least the band's smallest shift, pass when inside, not a fail, and with the power to see the band's smallest shift, not sure otherwise. In a run without an old engine it is the range check, without the time budget (wall_ms), which calib.pass still includes.",
+            "description": "Each band's word. In a change run it comes from the paired max-t test: fail when the value is outside the range or the change is beyond the joint threshold and at least the band's smallest shift, pass when inside, not a fail, and with the power to see the band's smallest shift, not sure otherwise. In a run without an old engine it is the range check, without the time budget (wall_ms), which calib.pass still includes. A change-run row outside its range carries outside_by; one that set no power target carries no_target.",
             "type": "array",
             "items": {
               "type": "object",
@@ -709,7 +709,16 @@
                 "se": { "type": "number", "minimum": 0 },
                 "smallest_shift": { "type": "number", "exclusiveMinimum": 0 },
                 "power": { "type": "boolean" },
-                "needed": { "type": "integer", "minimum": 0 }
+                "needed": { "type": "integer", "minimum": 0 },
+                "outside_by": {
+                  "description": "A change run: how far the changed engine's value is outside its range, when its range check fails.",
+                  "type": "number",
+                  "minimum": 0
+                },
+                "no_target": {
+                  "description": "A change run: the band was outside its range by more than its noise at the pilot (beyond the joint threshold times its own error), so it set no power target. Its word is judged as for any band.",
+                  "const": true
+                }
               }
             }
           },
@@ -727,7 +736,7 @@
             }
           },
           "calib.power": {
-            "description": "A change run, per suite: the pilot's matches per suite unit, the power target played, the cap (--matches), whether every band of the suite reached its power, and the band that set the target.",
+            "description": "A change run, per suite: the pilot's matches per suite unit, the power target played, the cap (--matches), whether every band of the suite reached its power, the band that set the target, and the bands that set none because they were outside their range by more than their noise at the pilot.",
             "type": "object",
             "additionalProperties": {
               "type": "object",
@@ -741,6 +750,11 @@
                   "description": "The band whose power needed the most matches at the pilot, which set the target. Absent when the pilot gave every band power.",
                   "type": "string",
                   "minLength": 1
+                },
+                "no_target": {
+                  "description": "The bands outside their range by more than their noise at the pilot, which set no target (band, or band/label for a row of one arm). Absent when every band set the target.",
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 }
                 }
               }
             }

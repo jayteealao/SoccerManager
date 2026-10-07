@@ -211,6 +211,9 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         selected,
         matches,
         drivers: known_change.map(|t| t.drivers.clone()).unwrap_or_default(),
+        no_target: known_change
+            .map(|t| t.no_target.clone())
+            .unwrap_or_default(),
         millis,
         run_id: String::new(),
         session: format!("{millis}-{}", std::process::id()),
@@ -609,6 +612,9 @@ struct RunCtx<'a> {
     /// A change run: the band that set each suite's power target, by suite code, from this
     /// run's pilot or the target a finished pilot left.
     drivers: BTreeMap<String, String>,
+    /// A change run: the rows outside their range beyond their noise at the pilot, which set
+    /// no power target, by suite code; kept like `drivers`.
+    no_target: BTreeMap<String, Vec<String>>,
     /// The run's start, from its `run.json`: part of every match identifier.
     millis: u64,
     run_id: String,
@@ -1173,10 +1179,12 @@ impl RunCtx<'_> {
             verdict::targets(&sets, &rows, &found, c, pilot, opts.matches)
         };
         self.drivers.clear();
+        self.no_target.clear();
         for (suite, n) in self.matches.iter_mut() {
             let t = targets.get(suite);
             *n = t.map_or(pilot, |t| t.matches);
             let driver = t.and_then(|t| t.driver.clone());
+            let no_target = t.map(|t| t.no_target.clone()).unwrap_or_default();
             tracing::info!(
                 signal = "calibrate.power_target",
                 run.id = %self.run_id,
@@ -1185,10 +1193,14 @@ impl RunCtx<'_> {
                 target = *n,
                 cap = opts.matches,
                 reached_cap = *n >= opts.matches,
-                driver = driver.as_deref()
+                driver = driver.as_deref(),
+                no_target = %no_target.join(",")
             );
             if let Some(d) = driver {
                 self.drivers.insert(suite.code().to_string(), d);
+            }
+            if !no_target.is_empty() {
+                self.no_target.insert(suite.code().to_string(), no_target);
             }
         }
     }
@@ -1222,7 +1234,8 @@ impl RunCtx<'_> {
             rows.retain(|r| opts.bands.contains(&r.band));
         }
         let (found, c) = verdict::bootstrap(&sets, &rows, opts.seed, verdict::RESAMPLES);
-        let (rows, joint) = verdict::judge(&sets, &rows, &found, c, first.guards());
+        let (rows, joint) =
+            verdict::judge(&sets, &rows, &found, c, first.guards(), &self.no_target);
         let power: BTreeMap<String, PowerInfo> = self
             .matches
             .iter()
@@ -1237,6 +1250,7 @@ impl RunCtx<'_> {
                     cap: opts.matches,
                     reached,
                     driver: self.drivers.get(s.code()).cloned(),
+                    no_target: self.no_target.get(s.code()).cloned().unwrap_or_default(),
                 };
                 (s.code().to_string(), info)
             })
@@ -1323,6 +1337,7 @@ impl RunCtx<'_> {
                     .map(|b| (b.band.clone(), b.digest()))
                     .collect(),
                 drivers: self.drivers.clone(),
+                no_target: self.no_target.clone(),
             },
         )
     }

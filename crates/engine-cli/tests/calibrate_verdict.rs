@@ -504,6 +504,16 @@ fn formations_checks(report: &Value) -> Vec<&Value> {
 fn a_change_run_judges_the_formations_suite_pooled_and_reports_pairings_as_information() {
     let data = temp("engine-cli-verdict", "pooled");
     let content = edited_content(&data, "tuning.json", |_| {});
+    // Five-minute matches score far below the shipped goals ranges, and a band that far
+    // outside its range sets no power target; widened, the goals bands size the run.
+    edit_band(&content, "goals_per_match", |b| {
+        b["lo"] = 0.0.into();
+        b["hi"] = 10.0.into();
+    });
+    edit_band(&content, "goalless_share", |b| {
+        b["lo"] = 0.0.into();
+        b["hi"] = 1.0.into();
+    });
     let run = data.join("run");
     let args = ["--matches", "8", "--pilot", "4", "--base-binary", exe()];
     let out = formations(&data, &content, &run, &args);
@@ -692,5 +702,80 @@ fn a_plain_run_keeps_the_formations_checks_per_pairing_unchanged() {
         .collect();
     assert_eq!(Value::from(rows), expected);
     assert!(r.get("calib.power").is_none());
+    // The change run's distance and no-target marks never reach a plain run's verdicts.
+    for v in r["calib.verdicts"].as_array().unwrap() {
+        assert!(v.get("outside_by").is_none(), "{v}");
+        assert!(v.get("no_target").is_none(), "{v}");
+    }
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+/// A band already outside its range by more than its noise at the pilot sets no power
+/// target: it is judged (fail), reported with its distance and the mark, kept in
+/// `target.json`, and kept when the run is judged again from its stored rows; the other
+/// bands set the target. The same band inside its range with the same tiny smallest shift
+/// sets the target at the cap.
+#[test]
+fn a_band_far_outside_its_range_sets_no_power_target() {
+    let data = temp("engine-cli-verdict", "far-outside");
+    let content = edited_content(&data, "tuning.json", |_| {});
+    let band = "passes_per_team";
+    let args = ["--pilot", "4", "--matches", "8", "--base-binary", exe()];
+    let kept = |run: &Path| -> Value {
+        serde_json::from_str(&std::fs::read_to_string(run.join("target.json")).unwrap()).unwrap()
+    };
+    let listed = |v: &Value| v.as_array().is_some_and(|l| l.iter().any(|x| x == band));
+
+    // Far: a range no five-minute match comes near, and a smallest shift only the cap
+    // could power.
+    edit_band(&content, band, |b| {
+        b["lo"] = 5000.0.into();
+        b["hi"] = 6000.0.into();
+        b["smallest_shift"] = 0.001.into();
+    });
+    let far = data.join("far");
+    let out = calibrate(&data, &content, &far, &args);
+    let text = stderr(&out);
+    let r = report(&out, &far);
+    let power = &r["calib.power"]["equal"];
+    assert!(listed(&power["no_target"]), "{power}");
+    assert_ne!(power["driver"], band, "{power}");
+    let passes = row(&r, band);
+    assert_eq!(passes["word"], "fail", "{passes}");
+    assert_eq!(passes["no_target"], true, "{passes}");
+    assert!(passes["outside_by"].as_f64().unwrap() > 4000.0, "{passes}");
+    assert!(
+        text.contains("beyond its noise at the pilot: set no power target"),
+        "{text}"
+    );
+    assert_eq!(kept(&far)["no_target"]["equal"], power["no_target"]);
+
+    // The same command again: judged from the stored rows, the marks stay.
+    let again = calibrate(&data, &content, &far, &args);
+    let text = stderr(&again);
+    let after = report(&again, &far);
+    assert!(text.contains("0 matches played"), "{text}");
+    assert_eq!(
+        after["calib.power"]["equal"]["no_target"],
+        power["no_target"]
+    );
+    assert_eq!(row(&after, band)["no_target"], true);
+    assert_eq!(kept(&far)["no_target"]["equal"], power["no_target"]);
+
+    // Control: inside a wide range, the tiny shift drives the target to the cap.
+    edit_band(&content, band, |b| {
+        b["lo"] = 0.0.into();
+        b["hi"] = 1000.0.into();
+    });
+    let control = data.join("control");
+    let out = calibrate(&data, &content, &control, &args);
+    let r = report(&out, &control);
+    let power = &r["calib.power"]["equal"];
+    assert_eq!(power["driver"], band, "{power}");
+    assert_eq!(power["target"], 8, "{power}");
+    assert!(!listed(&power["no_target"]), "{power}");
+    let passes = row(&r, band);
+    assert!(passes.get("no_target").is_none(), "{passes}");
+    assert!(passes.get("outside_by").is_none(), "{passes}");
     let _ = std::fs::remove_dir_all(&data);
 }

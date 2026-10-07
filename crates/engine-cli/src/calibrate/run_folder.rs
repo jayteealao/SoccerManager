@@ -320,6 +320,10 @@ pub struct Target {
     /// a suite whose pilot gave every band power has none.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub drivers: BTreeMap<String, String>,
+    /// A change run: the rows outside their range beyond their noise at the pilot, which set
+    /// no target, by suite code.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub no_target: BTreeMap<String, Vec<String>>,
 }
 
 /// The target of the run in `dir`, or `None` when it has none or it cannot be read (a
@@ -678,6 +682,7 @@ mod tests {
             registry: String::new(),
             bands: BTreeMap::new(),
             drivers: BTreeMap::new(),
+            no_target: BTreeMap::new(),
         };
         let resumed = phase_matches(&suites, true, Some(&kept), 200, 1000);
         assert_eq!(resumed[&Suite::Equal], 600);

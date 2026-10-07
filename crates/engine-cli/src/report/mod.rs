@@ -933,6 +933,9 @@ pub struct PowerInfo {
     /// absent when the pilot gave every band power.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub driver: Option<String>,
+    /// The bands outside their range beyond their noise at the pilot, which set no target.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub no_target: Vec<String>,
 }
 
 /// The band registry a run was judged with.
