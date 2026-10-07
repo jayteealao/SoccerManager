@@ -162,6 +162,15 @@ pub trait SteeringModule: Send + Sync + 'static {
 pub trait PreMatchModule: Send + Sync + 'static {
     /// The setup for `team`.
     fn setup(&self, team: &Team, tactics: &TacticsSchema, attrs: &AttributeSchema) -> Setup;
+    /// The setup for `team` starting with `start` (an AI-managed side started in another
+    /// formation): the lineup and bench picked for `start`'s slots and roles.
+    fn setup_for(
+        &self,
+        team: &Team,
+        start: Tactics,
+        tactics: &TacticsSchema,
+        attrs: &AttributeSchema,
+    ) -> Setup;
 }
 
 /// What happens when a period's time, added time included, has run out.

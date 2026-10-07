@@ -205,6 +205,25 @@ impl MatchConfig {
         self
     }
 
+    /// AI-managed `team` starts with `tactics` instead of the default ones, and with the
+    /// lineup and bench its pre-match module picks for them: in another formation, players
+    /// whose position suits that formation's slots. A person's side keeps its own lineup
+    /// through [`MatchConfig::with_setup`] and [`MatchConfig::with_tactics`].
+    pub fn with_ai_tactics(mut self, team: usize, tactics: Tactics) -> Self {
+        let schema = self.tactics.clone();
+        let setup =
+            self.modules
+                .pre_match
+                .setup_for(&self.teams[team], tactics, &schema, &self.attributes);
+        self.teams[team].lineup = setup.lineup;
+        self.teams[team].bench = setup.bench;
+        self.teams[team].set_tactics(setup.tactics, &schema, &self.tuning);
+        let starters = self.teams[team].starters();
+        let first = team * PLAYERS_PER_TEAM;
+        self.players[first..first + PLAYERS_PER_TEAM].clone_from_slice(&starters);
+        self
+    }
+
     /// `team` starts with `lineup` (squad indices in slot order) and `bench` instead of the
     /// AI manager's, keeping its pre-match tactics; the starters are rebuilt in slot order.
     /// The content hash is unchanged, because a lineup is not a content file.

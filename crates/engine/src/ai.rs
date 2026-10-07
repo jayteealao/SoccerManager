@@ -125,12 +125,23 @@ pub(crate) fn best_for(
         .or_else(|| pick(&|_| true))
 }
 
-/// The AI manager's pre-match setup for `team`: the tactics file's default tactics, the
-/// best-fitting player for each slot in slot order, and a bench of `bench_size` with the best
-/// remaining goalkeeper first and then the best remaining players by fit to their own
-/// position's first role.
+/// The AI manager's pre-match setup for `team` with the tactics file's default tactics:
+/// [`pre_match_for`] with [`Tactics::defaults`].
 pub fn pre_match(team: &Team, schema: &TacticsSchema, attrs: &AttributeSchema) -> Setup {
-    let tactics = Tactics::defaults(schema);
+    pre_match_for(team, Tactics::defaults(schema), schema, attrs)
+}
+
+/// The AI manager's pre-match setup for `team` starting with `tactics`: the best-fitting
+/// player for each slot's role in slot order, and a bench of `bench_size` with the best
+/// remaining goalkeeper first and then the best remaining players by fit to their own
+/// position's first role. So a side that starts in another formation fields players whose
+/// position suits that formation's slots, as it does in the default one.
+pub fn pre_match_for(
+    team: &Team,
+    tactics: Tactics,
+    schema: &TacticsSchema,
+    attrs: &AttributeSchema,
+) -> Setup {
     let mut free: Vec<usize> = (0..team.squad.len()).collect();
     let mut lineup = [0usize; PLAYERS_PER_TEAM];
     for (slot, place) in lineup.iter_mut().enumerate() {
@@ -181,10 +192,19 @@ impl PreMatchModule for PreMatchV1 {
     fn setup(&self, team: &Team, tactics: &TacticsSchema, attrs: &AttributeSchema) -> Setup {
         pre_match(team, tactics, attrs)
     }
+    fn setup_for(
+        &self,
+        team: &Team,
+        start: Tactics,
+        tactics: &TacticsSchema,
+        attrs: &AttributeSchema,
+    ) -> Setup {
+        pre_match_for(team, start, tactics, attrs)
+    }
 }
 
 pub const PRE_MATCH_V1_CARD: ModuleCard = ModuleCard {
-    purpose: "Picks each team's lineup by role fit, a bench with the best spare goalkeeper first, and the tactics file's default tactics.",
+    purpose: "Picks each team's lineup by role fit for the formation it starts in, a bench with the best spare goalkeeper first, and the tactics file's default tactics.",
     inputs: "The team's squad with positions and attributes, the tactics schema's roles and AI bench size, and the attribute schema.",
     outputs: "The setup: the tactics, the squad index of each slot, and the bench.",
     tuning: &["tactics.roles", "tactics.ai.bench_size"],
@@ -197,7 +217,16 @@ pub const PRE_MATCH_V1_CARD: ModuleCard = ModuleCard {
 pub struct PreMatchOff;
 
 impl PreMatchModule for PreMatchOff {
-    fn setup(&self, team: &Team, tactics: &TacticsSchema, _: &AttributeSchema) -> Setup {
+    fn setup(&self, team: &Team, tactics: &TacticsSchema, attrs: &AttributeSchema) -> Setup {
+        self.setup_for(team, Tactics::defaults(tactics), tactics, attrs)
+    }
+    fn setup_for(
+        &self,
+        team: &Team,
+        start: Tactics,
+        tactics: &TacticsSchema,
+        _: &AttributeSchema,
+    ) -> Setup {
         let mut lineup = [0usize; PLAYERS_PER_TEAM];
         for (slot, place) in lineup.iter_mut().enumerate() {
             *place = slot;
@@ -205,7 +234,7 @@ impl PreMatchModule for PreMatchOff {
         let size = usize::from(tactics.ai.bench_size);
         let bench = (PLAYERS_PER_TEAM..team.squad.len()).take(size).collect();
         Setup {
-            tactics: Tactics::defaults(tactics),
+            tactics: start,
             lineup,
             bench,
         }

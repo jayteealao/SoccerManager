@@ -201,6 +201,15 @@ impl PreMatchModule for StandIn<dyn PreMatchModule> {
     fn setup(&self, team: &Team, tactics: &TacticsSchema, attrs: &AttributeSchema) -> Setup {
         self.0.setup(team, tactics, attrs)
     }
+    fn setup_for(
+        &self,
+        team: &Team,
+        start: Tactics,
+        tactics: &TacticsSchema,
+        attrs: &AttributeSchema,
+    ) -> Setup {
+        self.0.setup_for(team, start, tactics, attrs)
+    }
 }
 
 impl Modifier for StandIn<dyn Modifier> {
