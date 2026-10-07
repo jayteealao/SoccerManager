@@ -60,6 +60,18 @@ The faster checker skips the exact distance of two players who are clearly more 
 
 Every speed change to the engine or the checker must keep every result the same, bit for bit. The replay gate plays fixed matches and compares them with stored hashes, and the checker's equivalence tests compare it with the earlier checker. A change that moves a result is dropped, not made the new truth. A faster run that gives a different answer is not a faster run of the same test.
 
+## Why a change run pools the formation pairings
+
+The formations suite plays every pairing of the formations in `tactics.json`: 55 pairings with the shipped file. A realistic evaluation checks each pairing against the band's range, because a formation that breaks the game should show up on its own. A change run asks a different question: did this change move the measure? Judged per pairing, each of the 55 rows needs its own power, and its own matches, to see the band's smallest shift. Pooled over every pairing, the same matches give one row with about a seventh of the error (one over the square root of 55), so the suite reaches power with far fewer matches per pairing.
+
+So a change run judges and powers each formations band once, pooled over every pairing it plays. The resamples of the max-t test still stay within each pairing, so the pooled error keeps the pairings apart. The range check of each pairing stays in the report as information. It sets no target and does not enter the joint verdict, but it still shows a change that moves one pairing one way and another pairing the other way, which a pooled row can hide. A run without an old engine judges every pairing as before.
+
+## Why a rare event can set a run's length
+
+A band needs matches in proportion to the square of its error divided by its smallest shift. For a share of rare matches the error of the share is about the square root of the share over the matches, so a small shift on a rare event needs many matches. The ten-goals-or-more share is the clearest case: its range is 0 to 0.5 percent and its smallest shift is 0.125 percentage points. At the 2.5 percent of such matches the engine produced in the pilot of a measured change run, that band needs about 5,000 matches per pairing even when pooled, and at a realistic 0.4 percent it still needs about 880. The cap of 1,000 holds every other formations band many times over.
+
+So the band that sets a suite's target is named beside it, in `calib.power`, in `target.json`, and on the `calibrate.power_target` line. A change run that plays far more matches than expected shows which band asked for them. Lowering that need means a different smallest shift, a band judged in another suite, a different rule for which bands set a target, or a longer run. Each is a decision about what the test must detect, not a speed-up, so the harness does not take one on its own.
+
 ## What the time limits mean
 
 The two time limits are a change run within 10 minutes and the full evaluation (every default suite at 1,000 matches, 57,000 matches) within its measured time, at most 46 minutes; 15 minutes stays the target of later speed work, which needs about 63 matches per second. They are measured on an idle machine with every logical processor, after the old engine's results are cached. A change run plays only the changed engine: a pilot of 200 matches per suite unit, then growth to the power target.

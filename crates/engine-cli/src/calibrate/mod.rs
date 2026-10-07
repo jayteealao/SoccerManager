@@ -210,6 +210,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         formation_names,
         selected,
         matches,
+        drivers: known_change.map(|t| t.drivers.clone()).unwrap_or_default(),
         millis,
         run_id: String::new(),
         session: format!("{millis}-{}", std::process::id()),
@@ -370,7 +371,11 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         jobs,
         suites: suite_codes(&first.figures),
         wall_ms: first.wall_ms.clone(),
-        bands: first.checks.clone(),
+        bands: if change {
+            informational(first.checks.clone())
+        } else {
+            first.checks.clone()
+        },
         formations: first.formations.clone(),
         selection: ctx.selection.clone(),
         red_card: first.red_card.clone(),
@@ -564,6 +569,17 @@ fn rows_of_every_arm(played: &[Arm]) -> Option<RowsInfo> {
         })
 }
 
+/// A change run's band checks: the formations rows of one pairing are information only,
+/// because the change run judges and powers each formations band pooled over every pairing.
+fn informational(mut checks: Vec<BandCheck>) -> Vec<BandCheck> {
+    for c in &mut checks {
+        if c.suite == Suite::Formations.code() && c.pairing.is_some() {
+            c.informational = Some(true);
+        }
+    }
+    checks
+}
+
 /// A run's verdict: each band's word, and a change run's joint word, power and rules stage.
 struct Judged {
     verdicts: Vec<verdict::VerdictRow>,
@@ -590,6 +606,9 @@ struct RunCtx<'a> {
     /// Matches per suite unit (per pairing, per arm) this phase plays: `--matches`, or a
     /// change run's pilot or power target.
     matches: BTreeMap<Suite, u32>,
+    /// A change run: the band that set each suite's power target, by suite code, from this
+    /// run's pilot or the target a finished pilot left.
+    drivers: BTreeMap<String, String>,
     /// The run's start, from its `run.json`: part of every match identifier.
     millis: u64,
     run_id: String,
@@ -1153,8 +1172,11 @@ impl RunCtx<'_> {
             let (found, c) = verdict::bootstrap(&sets, &rows, opts.seed, verdict::RESAMPLES);
             verdict::targets(&sets, &rows, &found, c, pilot, opts.matches)
         };
+        self.drivers.clear();
         for (suite, n) in self.matches.iter_mut() {
-            *n = targets.get(suite).copied().unwrap_or(pilot);
+            let t = targets.get(suite);
+            *n = t.map_or(pilot, |t| t.matches);
+            let driver = t.and_then(|t| t.driver.clone());
             tracing::info!(
                 signal = "calibrate.power_target",
                 run.id = %self.run_id,
@@ -1162,8 +1184,12 @@ impl RunCtx<'_> {
                 pilot,
                 target = *n,
                 cap = opts.matches,
-                reached_cap = *n >= opts.matches
+                reached_cap = *n >= opts.matches,
+                driver = driver.as_deref()
             );
+            if let Some(d) = driver {
+                self.drivers.insert(suite.code().to_string(), d);
+            }
         }
     }
 
@@ -1210,6 +1236,7 @@ impl RunCtx<'_> {
                     target,
                     cap: opts.matches,
                     reached,
+                    driver: self.drivers.get(s.code()).cloned(),
                 };
                 (s.code().to_string(), info)
             })
@@ -1295,6 +1322,7 @@ impl RunCtx<'_> {
                     .iter()
                     .map(|b| (b.band.clone(), b.digest()))
                     .collect(),
+                drivers: self.drivers.clone(),
             },
         )
     }

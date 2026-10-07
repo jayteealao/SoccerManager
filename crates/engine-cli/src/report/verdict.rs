@@ -448,9 +448,19 @@ pub fn judge(
     (out, joint)
 }
 
+/// One suite's power target and the band that set it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SuiteTarget {
+    /// Matches per suite unit: at least the pilot, at most the cap.
+    pub matches: u32,
+    /// The band that needs the most matches, when it needs more than the pilot; `None`
+    /// when the pilot already gives every band power.
+    pub driver: Option<String>,
+}
+
 /// The matches per suite unit each suite needs for every band with a spread to have power,
-/// from a judged pilot: at least `pilot`, at most `cap`. The target depends on the spread
-/// alone, never on the change seen.
+/// from a judged pilot: at least `pilot`, at most `cap`, with the band that set it. The
+/// target depends on the spread alone, never on the change seen.
 pub fn targets(
     sets: &[SuiteSet],
     rows: &[PairedRow],
@@ -458,16 +468,29 @@ pub fn targets(
     critical: f64,
     pilot: u32,
     cap: u32,
-) -> BTreeMap<Suite, u32> {
-    let mut out: BTreeMap<Suite, u32> = sets.iter().map(|s| (s.suite, pilot.min(cap))).collect();
+) -> BTreeMap<Suite, SuiteTarget> {
+    let start = || SuiteTarget {
+        matches: pilot.min(cap),
+        driver: None,
+    };
+    let mut out: BTreeMap<Suite, SuiteTarget> = sets.iter().map(|s| (s.suite, start())).collect();
+    // The largest need of each suite so far, before the cap: the band with the largest need
+    // is the driver even when several reach the cap.
+    let mut most: BTreeMap<Suite, u32> = BTreeMap::new();
     for (r, f) in rows.iter().zip(found) {
         let power_se = f.se.max(r.apart_se);
         if !r.spread || power_se <= 0.0 {
             continue;
         }
-        let n = needed(pilot, power_se, r.shift, critical).clamp(pilot, cap.max(pilot));
-        let t = out.entry(r.suite).or_insert(pilot);
-        *t = (*t).max(n.min(cap));
+        let need = needed(pilot, power_se, r.shift, critical);
+        let n = need.clamp(pilot, cap.max(pilot));
+        let t = out.entry(r.suite).or_insert_with(start);
+        t.matches = t.matches.max(n.min(cap));
+        let top = most.entry(r.suite).or_insert(pilot);
+        if need > *top {
+            *top = need;
+            t.driver = Some(r.band.clone());
+        }
     }
     out
 }
@@ -664,7 +687,8 @@ mod tests {
             100,
             120,
         );
-        assert_eq!(t[&Suite::Equal], 120, "capped");
+        assert_eq!(t[&Suite::Equal].matches, 120, "capped");
+        assert_eq!(t[&Suite::Equal].driver.as_deref(), Some("band0"));
         let t = targets(
             &sets,
             &rows,
@@ -676,7 +700,27 @@ mod tests {
             100,
             1000,
         );
-        assert_eq!(t[&Suite::Equal], 100, "never below the pilot");
+        assert_eq!(t[&Suite::Equal].matches, 100, "never below the pilot");
+        assert_eq!(t[&Suite::Equal].driver, None, "the pilot holds: no driver");
+    }
+
+    #[test]
+    fn the_band_that_needs_the_most_matches_is_named_beside_the_target() {
+        let sets = [set(100)];
+        let mut tight = row(0, vec![1.0, 2.0], vec![1.0, 2.0], 0.1);
+        tight.band = "tight".into();
+        let mut loose = row(0, vec![1.0, 2.0], vec![1.0, 2.0], 0.5);
+        loose.band = "loose".into();
+        let f = Found {
+            diff: Some(0.0),
+            se: 0.2,
+        };
+        // Both reach the cap of 1000; the tight band needs more and is named.
+        for rows in [[loose.clone(), tight.clone()], [tight, loose]] {
+            let t = targets(&sets, &rows, &[f, f], 2.0, 100, 1000);
+            assert_eq!(t[&Suite::Equal].matches, 1000);
+            assert_eq!(t[&Suite::Equal].driver.as_deref(), Some("tight"));
+        }
     }
 
     /// An A/A comparison: both arms draw from the same correlated distribution on each

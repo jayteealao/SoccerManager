@@ -184,6 +184,11 @@ pub struct BandCheck {
     /// The sampling error of `value`: the standard error of a mean, share, or ratio over
     /// the matches judged. 0 for the time budget.
     pub se: f64,
+    /// `true` for a row a change run reports as information only: a formations row of one
+    /// pairing, whose band the change run judges and powers pooled over every pairing. It
+    /// sets no power target and does not enter the joint verdict. Absent in a plain run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub informational: Option<bool>,
 }
 
 /// One arm of the red-card suite: mean goals per match of the full (home) side and the
@@ -619,6 +624,7 @@ impl RunBuilder {
             hi: spec.def.hi,
             pass: measures::passes(spec.def, value, &terms),
             se: round_to(terms.se(), 5),
+            informational: None,
         }
     }
 
@@ -642,6 +648,7 @@ impl RunBuilder {
                 hi: budget,
                 pass: (ms as f64) < budget,
                 se: 0.0,
+                informational: None,
             });
         }
         out.extend(rest.iter().map(|s| self.check(s)));
@@ -912,7 +919,7 @@ pub struct RulesReport {
 pub const REPORT_SCHEMA_VERSION: &str = "2";
 
 /// One suite's run length in a change run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PowerInfo {
     /// Matches per suite unit of the pilot; absent when the run resumed to a target.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -922,6 +929,10 @@ pub struct PowerInfo {
     pub cap: u32,
     /// Every band of the suite has the power to see its smallest shift.
     pub reached: bool,
+    /// The band whose power needed the most matches at the pilot, which set the target;
+    /// absent when the pilot gave every band power.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub driver: Option<String>,
 }
 
 /// The band registry a run was judged with.

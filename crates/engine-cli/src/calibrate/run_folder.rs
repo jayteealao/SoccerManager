@@ -316,6 +316,10 @@ pub struct Target {
     pub registry: String,
     /// Each band's digest at the last judgement, by band.
     pub bands: BTreeMap<String, String>,
+    /// A change run: the band that set each suite's target at the pilot, by suite code;
+    /// a suite whose pilot gave every band power has none.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub drivers: BTreeMap<String, String>,
 }
 
 /// The target of the run in `dir`, or `None` when it has none or it cannot be read (a
@@ -673,6 +677,7 @@ mod tests {
             cap: 1000,
             registry: String::new(),
             bands: BTreeMap::new(),
+            drivers: BTreeMap::new(),
         };
         let resumed = phase_matches(&suites, true, Some(&kept), 200, 1000);
         assert_eq!(resumed[&Suite::Equal], 600);

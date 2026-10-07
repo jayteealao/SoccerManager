@@ -335,6 +335,10 @@
                   "description": "The sampling error of value: the standard error of a mean, share, or ratio over the matches judged; 0 for wall_ms.",
                   "type": "number",
                   "minimum": 0
+                },
+                "informational": {
+                  "description": "A change run only: true on a formations check of one pairing. The change run judges and powers each formations band pooled over every pairing, so this row sets no power target and does not enter the joint verdict. Absent in a plain run.",
+                  "const": true
                 }
               }
             }
@@ -723,7 +727,7 @@
             }
           },
           "calib.power": {
-            "description": "A change run, per suite: the pilot's matches per suite unit, the power target played, the cap (--matches), and whether every band of the suite reached its power.",
+            "description": "A change run, per suite: the pilot's matches per suite unit, the power target played, the cap (--matches), whether every band of the suite reached its power, and the band that set the target.",
             "type": "object",
             "additionalProperties": {
               "type": "object",
@@ -732,7 +736,12 @@
                 "pilot": { "type": "integer", "minimum": 1 },
                 "target": { "type": "integer", "minimum": 1 },
                 "cap": { "type": "integer", "minimum": 1 },
-                "reached": { "type": "boolean" }
+                "reached": { "type": "boolean" },
+                "driver": {
+                  "description": "The band whose power needed the most matches at the pilot, which set the target. Absent when the pilot gave every band power.",
+                  "type": "string",
+                  "minLength": 1
+                }
               }
             }
           },

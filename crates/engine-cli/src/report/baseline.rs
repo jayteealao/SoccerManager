@@ -262,6 +262,7 @@ mod tests {
             hi: 10.0,
             pass: true,
             se,
+            informational: None,
         }
     }
 

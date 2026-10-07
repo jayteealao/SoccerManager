@@ -165,7 +165,17 @@ Measurement note, taken on the 8-thread reference machine (AMD Ryzen 7 9800X3D, 
 | `--suite equal --matches 64 --jobs 1` | 64 | 23 s on one thread (about 0.36 s per match) |
 | `--suite equal --matches 64 --jobs 8` | 64 | 6 s |
 
-At that rate the realistic evaluation takes about 70 minutes. On an idle machine, one match takes about a third of a second on one thread, so with perfect scaling over 8 threads the evaluation takes about 40 minutes. A change run plays the changed engine's pilot of 11,400 matches and then grows to its power target: with the default cap of 1,000, the formations suite reaches the cap for every pairing, so a change run plays about as many matches as the evaluation.
+At that rate the realistic evaluation takes about 70 minutes. On an idle machine, one match takes about a third of a second on one thread, so with perfect scaling over 8 threads the evaluation takes about 40 minutes. A change run plays the changed engine's pilot of 11,400 matches and then grows to its power target. It judges the formations suite pooled over every pairing, but on today's engine the pooled ten-goals-or-more band still needs more than the cap of 1,000 per pairing, so a change run plays about 56,000 matches, about as many as the evaluation.
+
+## Read why a change run plays so many matches
+
+A change run names, for each suite, the band that set its power target. Read it in one of three places:
+
+- the `calibrate.power_target` line on standard error after the pilot, in its `driver` field;
+- `drivers` in `target.json` in the run folder;
+- `calib.power.<suite>.driver` in `report.json`.
+
+A suite with no driver reached power at its pilot. A driver at the cap (`target` equal to `cap`, `reached` false) is the band to look at when a change run is long: its smallest shift, measured on how rare its event is, decides the run's length. On the default content the formations suite's driver is `ten_plus_goals_share` and the equal suite's is `goalless_share`, both at the cap.
 
 ## Build a faster calibrate binary
 

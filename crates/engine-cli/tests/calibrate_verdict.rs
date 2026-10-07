@@ -464,3 +464,233 @@ fn a_tuning_change_runs_from_start_to_verdict() {
     assert_eq!(row(&after, "goals_per_match")["hi"], 3.0);
     let _ = std::fs::remove_dir_all(&data);
 }
+
+/// Two pairings of the formations suite: enough for a pooled band over several pairings,
+/// short enough for the default test run.
+const PAIRINGS: [&str; 2] = ["4-4-2 v 4-3-3", "4-4-2 v 4-2-3-1"];
+
+/// The bands the shipped registry judges in the formations suite.
+const FORMATIONS_BANDS: [&str; 3] = ["goalless_share", "goals_per_match", "ten_plus_goals_share"];
+
+/// A short calibrate run of the formations suite on two pairings into `out`.
+fn formations(data: &Path, content: &Path, out: &Path, args: &[&str]) -> Output {
+    let mut cmd = bin(data);
+    cmd.arg("--content-dir")
+        .arg(content)
+        .arg("calibrate")
+        .args(["--seed", "9", "--suite", "formations", "--minutes", "5"])
+        .args(["--jobs", "4"]);
+    for p in PAIRINGS {
+        cmd.args(["--pairing", p]);
+    }
+    cmd.args(args).arg("--out").arg(out).output().unwrap()
+}
+
+/// The formations rows of `calib.bands`, without the time budget.
+fn formations_checks(report: &Value) -> Vec<&Value> {
+    report["calib.bands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|b| b["suite"] == "formations" && b["band"] != "wall_ms")
+        .collect()
+}
+
+/// A change run judges and powers each formations band once, pooled over every pairing:
+/// one verdict row per band with no pairing, a power target named with the band that set
+/// it, and per-pairing rows reported as information only. A per-pairing row outside its
+/// range with the pooled band inside does not fail the joint verdict.
+#[test]
+fn a_change_run_judges_the_formations_suite_pooled_and_reports_pairings_as_information() {
+    let data = temp("engine-cli-verdict", "pooled");
+    let content = edited_content(&data, "tuning.json", |_| {});
+    let run = data.join("run");
+    let args = ["--matches", "8", "--pilot", "4", "--base-binary", exe()];
+    let out = formations(&data, &content, &run, &args);
+    let r = report(&out, &run);
+
+    // One pooled verdict per formations band.
+    let verdicts = r["calib.verdicts"].as_array().unwrap();
+    for band in FORMATIONS_BANDS {
+        let rows: Vec<&Value> = verdicts.iter().filter(|v| v["band"] == band).collect();
+        assert_eq!(rows.len(), 1, "{band}: {verdicts:?}");
+        assert_eq!(rows[0]["suite"], "formations");
+        assert!(rows[0].get("pairing").is_none(), "{}", rows[0]);
+    }
+    assert_eq!(verdicts.len(), FORMATIONS_BANDS.len(), "{verdicts:?}");
+
+    // Every per-pairing row is information; the suite's time budget is not a pairing row.
+    let checks = formations_checks(&r);
+    assert_eq!(checks.len(), FORMATIONS_BANDS.len() * PAIRINGS.len());
+    for c in &checks {
+        assert!(c["pairing"].is_string(), "{c}");
+        assert_eq!(c["informational"], true, "{c}");
+    }
+    let budget = r["calib.bands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["band"] == "wall_ms" && b["suite"] == "formations")
+        .unwrap();
+    assert!(budget.get("informational").is_none(), "{budget}");
+
+    // The power target is the pooled bands', and it names the band that set it.
+    let power = &r["calib.power"]["formations"];
+    assert_eq!(power["pilot"], 4);
+    let target = power["target"].as_u64().unwrap();
+    assert!((4..=8).contains(&target), "{power}");
+    let driver = power["driver"].as_str().expect("a driver above the pilot");
+    assert!(FORMATIONS_BANDS.contains(&driver), "{power}");
+    let kept: Value =
+        serde_json::from_str(&std::fs::read_to_string(run.join("target.json")).unwrap()).unwrap();
+    assert_eq!(kept["drivers"]["formations"], driver);
+
+    // Plant a per-pairing range miss with the pooled band inside: widen the bands the short
+    // matches miss, and set the goals band's floor between the lower pairing and the pool.
+    let pooled = row(&r, "goals_per_match")["value"].as_f64().unwrap();
+    let low = checks
+        .iter()
+        .filter(|c| c["band"] == "goals_per_match")
+        .map(|c| c["value"].as_f64().unwrap())
+        .fold(f64::INFINITY, f64::min);
+    assert!(
+        low < pooled,
+        "the pairings differ on seed 9: {low} {pooled}"
+    );
+    edit_band(&content, "goals_per_match", |b| {
+        b["lo"] = ((low + pooled) / 2.0).into();
+        b["hi"] = 10.0.into();
+    });
+    edit_band(&content, "goalless_share", |b| {
+        b["lo"] = 0.0.into();
+        b["hi"] = 1.0.into();
+    });
+    edit_band(&content, "ten_plus_goals_share", |b| b["hi"] = 1.0.into());
+    let again = formations(&data, &content, &run, &args);
+    let text = stderr(&again);
+    let after = report(&again, &run);
+    assert!(text.contains("0 matches played"), "{text}");
+    let missed: Vec<&Value> = formations_checks(&after)
+        .into_iter()
+        .filter(|c| c["band"] == "goals_per_match" && c["pass"] == false)
+        .collect();
+    assert_eq!(missed.len(), 1, "one pairing below the floor: {after}");
+    assert_eq!(missed[0]["informational"], true);
+    assert!(
+        after["calib.verdicts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|v| v["word"] != "fail"),
+        "{after}"
+    );
+    assert!(after["calib.joint"].get("guards").is_none(), "no guard");
+    assert_ne!(
+        after["calib.joint"]["word"], "fail",
+        "a per-pairing miss does not fail the joint verdict"
+    );
+    assert_eq!(after["calib.power"]["formations"]["driver"], driver);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+/// A flag that moves goals per match by more than the band's smallest shift fails the
+/// pooled formations band and the joint verdict; without the flag the band does not move.
+/// The band's range is widened so that only the move can fail it.
+#[test]
+fn a_flag_that_shifts_goals_fails_the_pooled_formations_band_and_the_joint_verdict() {
+    let data = temp("engine-cli-verdict", "pooled-shift");
+    let content = edited_content(&data, "tuning.json", |tuning| {
+        tuning["flags"] = json!({
+            "open_goal": {
+                "owner": "engine team",
+                "hypothesis": "keepers save nothing, so more shots become goals",
+                "removal_condition": "a test flag; never shipped",
+                "state": "off",
+                "overrides": {
+                    "engine.keeper_catch_chance": 0.0,
+                    "engine.shots.save_high": 0.0,
+                    "engine.shots.save_low": 0.0
+                }
+            }
+        });
+    });
+    edit_band(&content, "goals_per_match", |b| {
+        b["lo"] = 0.0.into();
+        b["hi"] = 10.0.into();
+    });
+    let change = |name: &str, args: &[&str]| {
+        let run = data.join(name);
+        let all = [
+            &[
+                "--matches",
+                "24",
+                "--band",
+                "goals_per_match",
+                "--base-binary",
+                exe(),
+            ],
+            args,
+        ]
+        .concat();
+        let out = formations(&data, &content, &run, &all);
+        (report(&out, &run), out.status.code())
+    };
+    let (flagged, code) = change("flagged", &["--flag", "open_goal=on"]);
+    let goals = row(&flagged, "goals_per_match");
+    assert_eq!(goals["suite"], "formations");
+    assert!(goals.get("pairing").is_none(), "pooled: {goals}");
+    let critical = flagged["calib.joint"]["critical"].as_f64().unwrap();
+    let (diff, se) = (
+        goals["diff"].as_f64().unwrap(),
+        goals["se"].as_f64().unwrap(),
+    );
+    assert!(diff > 0.2, "above the smallest shift: {goals}");
+    assert!(diff > critical * se, "beyond the threshold: {goals}");
+    assert!(
+        goals["value"].as_f64().unwrap() <= 10.0,
+        "inside the widened range: {goals}"
+    );
+    assert_eq!(goals["word"], "fail");
+    assert_eq!(flagged["calib.joint"]["word"], "fail");
+    assert!(flagged["calib.joint"].get("guards").is_none(), "no guard");
+    assert_eq!(code, Some(2));
+
+    let (same, _) = change("same", &[]);
+    let goals = row(&same, "goals_per_match");
+    assert_eq!(goals["diff"], 0.0);
+    assert_ne!(goals["word"], "fail");
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+/// A plain run (no old engine) keeps one range check per formations pairing, exactly as
+/// before the change run pooled the suite: the rows below are the ones the program gave on
+/// this command before that change, and none carries the information mark.
+#[test]
+fn a_plain_run_keeps_the_formations_checks_per_pairing_unchanged() {
+    let data = temp("engine-cli-verdict", "plain-pairings");
+    let content = edited_content(&data, "tuning.json", |_| {});
+    let run = data.join("run");
+    let out = formations(&data, &content, &run, &["--matches", "8"]);
+    let r = report(&out, &run);
+    let expected = json!([
+        {"band": "goalless_share", "pairing": "4-4-2 v 4-2-3-1", "value": 0.75, "lo": 0.04, "hi": 0.12, "pass": false, "se": 0.15309},
+        {"band": "goalless_share", "pairing": "4-4-2 v 4-3-3", "value": 0.875, "lo": 0.04, "hi": 0.12, "pass": false, "se": 0.11693},
+        {"band": "goals_per_match", "pairing": "4-4-2 v 4-2-3-1", "value": 0.25, "lo": 2.4, "hi": 3.2, "pass": false, "se": 0.15309},
+        {"band": "goals_per_match", "pairing": "4-4-2 v 4-3-3", "value": 0.125, "lo": 2.4, "hi": 3.2, "pass": false, "se": 0.11693},
+        {"band": "ten_plus_goals_share", "pairing": "4-4-2 v 4-2-3-1", "value": 0.0, "lo": 0.0, "hi": 0.005, "pass": true, "se": 0.0},
+        {"band": "ten_plus_goals_share", "pairing": "4-4-2 v 4-3-3", "value": 0.0, "lo": 0.0, "hi": 0.005, "pass": true, "se": 0.0}
+    ]);
+    let rows: Vec<Value> = formations_checks(&r)
+        .into_iter()
+        .map(|c| {
+            assert!(c.get("informational").is_none(), "{c}");
+            json!({
+                "band": c["band"], "pairing": c["pairing"], "value": c["value"],
+                "lo": c["lo"], "hi": c["hi"], "pass": c["pass"], "se": c["se"]
+            })
+        })
+        .collect();
+    assert_eq!(Value::from(rows), expected);
+    assert!(r.get("calib.power").is_none());
+    let _ = std::fs::remove_dir_all(&data);
+}
