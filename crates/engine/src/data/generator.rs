@@ -83,6 +83,7 @@ pub fn generate_league_in_tier(
                 height: None,
                 age: None,
                 nationality: None,
+                condition: None,
             });
         }
         out.push(TeamFile {

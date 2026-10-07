@@ -279,3 +279,67 @@ fn a_ground_outside_the_laws_is_refused_naming_the_club_the_value_and_the_limit(
         assert_eq!(file.club.pitch().unwrap().length(), length);
     }
 }
+
+/// A player's match condition reads back from the file; a file without the block writes no
+/// block, so its team digest is what it was before the block existed.
+#[test]
+fn the_condition_block_reads_back_and_its_absence_writes_nothing() {
+    use engine::data::team::Condition;
+    let content = common::content();
+    let file = content
+        .team_from_bytes(
+            &fixture_bytes("teams/condition-good.json"),
+            "condition-good.json",
+        )
+        .unwrap()
+        .value;
+    assert_eq!(
+        file.players[3].condition,
+        Some(Condition {
+            sharpness: Some(60),
+            adaptation: Some(40),
+            rest_days: Some(3),
+            matches_at_club: Some(12),
+        })
+    );
+    assert_eq!(
+        file.players[4].condition,
+        Some(Condition {
+            rest_days: Some(7),
+            ..Condition::default()
+        })
+    );
+    assert_eq!(file.players[0].condition, None);
+    let plain = content
+        .team_from_bytes(&fixture_bytes("teams/v2-good.json"), "v2-good.json")
+        .unwrap()
+        .value;
+    let plain_bytes = serde_json::to_vec(&plain).unwrap();
+    assert!(!String::from_utf8_lossy(&plain_bytes).contains("condition"));
+    let mut stripped = file.clone();
+    for p in &mut stripped.players {
+        p.condition = None;
+    }
+    assert_eq!(serde_json::to_vec(&stripped).unwrap(), plain_bytes);
+    assert_ne!(serde_json::to_vec(&file).unwrap(), plain_bytes);
+}
+
+#[test]
+fn a_condition_value_out_of_range_is_refused_naming_the_player_and_the_field() {
+    let content = common::content();
+    let name = "condition-bad-sharpness.json";
+    let err = content
+        .team_from_bytes(&fixture_bytes(&format!("teams/{name}")), name)
+        .unwrap_err();
+    assert!(
+        matches!(err, EngineError::Data { kind: "team", .. }),
+        "{err}"
+    );
+    assert_eq!(
+        err.to_string(),
+        format!(
+            "content refused: team {name}: players: player p-club-00000001-00-04: \
+             condition field sharpness is 101; allowed 0 to 100"
+        )
+    );
+}

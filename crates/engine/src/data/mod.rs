@@ -398,8 +398,9 @@ pub fn load_attributes_bytes(
     }
 }
 
-/// Loads a tuning file's bytes in either version this build reads; a version 2 file is
-/// converted ([`convert::tuning_v2_to_v3`]) and checked as a current file.
+/// Loads a tuning file's bytes in any version this build reads; a version 2 file is
+/// converted to version 3 ([`convert::tuning_v2_to_v3`]), a version 3 file to version 4
+/// ([`convert::tuning_v3_to_v4`]), and the result is checked as a current file.
 pub fn load_tuning_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TuningFile>, EngineError> {
     const KIND: &str = "tuning";
     match peek_version(KIND, bytes, shown)? {
@@ -407,21 +408,18 @@ pub fn load_tuning_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TuningFile>
             let value = parse_checked::<TuningFile>(KIND, bytes, shown, &())?;
             Ok(loaded(KIND, bytes, shown, value, TUNING_VERSION, None))
         }
-        convert::TUNING_V2 => {
-            let v2: serde_json::Value = parse(KIND, bytes, shown)?;
-            let v3 = convert::tuning_v2_to_v3(v2)
+        found @ (convert::TUNING_V2 | convert::TUNING_V3) => {
+            let mut json: serde_json::Value = parse(KIND, bytes, shown)?;
+            if found == convert::TUNING_V2 {
+                json = convert::tuning_v2_to_v3(json)
+                    .map_err(|reason| refused(KIND, shown, "engine".into(), reason))?;
+            }
+            let v4 = convert::tuning_v3_to_v4(json)
                 .map_err(|reason| refused(KIND, shown, "engine".into(), reason))?;
-            let value: TuningFile = serde_json::from_value(v3)
+            let value: TuningFile = serde_json::from_value(v4)
                 .map_err(|e| refused(KIND, shown, "converted file".into(), e.to_string()))?;
             let value = checked(KIND, shown, value, &())?;
-            Ok(loaded(
-                KIND,
-                bytes,
-                shown,
-                value,
-                convert::TUNING_V2,
-                Some(convert::TUNING_V2),
-            ))
+            Ok(loaded(KIND, bytes, shown, value, found, Some(found)))
         }
         found => Err(version_refused(KIND, shown, found, TUNING_VERSION)),
     }
@@ -449,6 +447,32 @@ pub fn load_tactics_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TacticsSch
             ))
         }
         found => Err(version_refused(KIND, shown, found, TACTICS_VERSION)),
+    }
+}
+
+/// Loads a slot file's bytes in either version this build reads; a version 1 file is
+/// converted ([`convert::slots_v1_to_v2`]). The digest is that of the bytes read.
+pub fn load_slots_bytes(bytes: &[u8]) -> Result<Loaded<SlotFile>, EngineError> {
+    const KIND: &str = "slots";
+    match peek_version(KIND, bytes, SLOTS_FILE)? {
+        SLOTS_VERSION => load_json_bytes::<SlotFile>(KIND, bytes, SLOTS_FILE, SLOTS_VERSION, &()),
+        convert::SLOTS_V1 => {
+            let v1: serde_json::Value = parse(KIND, bytes, SLOTS_FILE)?;
+            let v2 = convert::slots_v1_to_v2(v1)
+                .map_err(|reason| refused(KIND, SLOTS_FILE, "slots".into(), reason))?;
+            let value: SlotFile = serde_json::from_value(v2)
+                .map_err(|e| refused(KIND, SLOTS_FILE, "converted file".into(), e.to_string()))?;
+            let value = checked(KIND, SLOTS_FILE, value, &())?;
+            Ok(loaded(
+                KIND,
+                bytes,
+                SLOTS_FILE,
+                value,
+                convert::SLOTS_V1,
+                Some(convert::SLOTS_V1),
+            ))
+        }
+        found => Err(version_refused(KIND, SLOTS_FILE, found, SLOTS_VERSION)),
     }
 }
 
@@ -521,7 +545,7 @@ impl Content {
     /// resume under another selection, and the default selection leaves every hash as it
     /// was. Call it once, on content that [`Content::from_files`] built.
     pub fn with_slots(&self, bytes: &[u8]) -> Result<Self, EngineError> {
-        let slots = load_json_bytes::<SlotFile>("slots", bytes, SLOTS_FILE, SLOTS_VERSION, &())?;
+        let slots = load_slots_bytes(bytes)?;
         let modules = crate::modules::resolve(&slots.value, REGISTRY)?;
         let mut next = Self {
             modules,

@@ -1,8 +1,9 @@
 //! The match events stay pinned: seeds 42, 1 and 7 and the change fixture, played on the
 //! shipped content and default teams, give the event lists in `tests/data/rescale-events.json`.
 //! The lists were first written by the engine before ratings moved to tenths of 1 to 20, which
-//! kept every event, and rewritten once when every action began to read the attribute
-//! contract; this test compares and names the first event that differs.
+//! kept every event, rewritten when every action began to read the attribute contract, and
+//! again when states began to move ratings within caps; this test compares and names the
+//! first event that differs.
 //!
 //! Set `SM_WRITE_RESCALE_EVENTS=1` to write the file instead of comparing. Rewrite it only in
 //! a change that regenerates the golden set.

@@ -114,6 +114,7 @@ impl MatchConfig {
         let (mut away, _) = Team::from_file(1, files[1], &content.attributes, &tuning)?;
         for team in [&mut home, &mut away] {
             team.set_pitch(pitch);
+            team.set_start_energy(&tuning, content.tuning.fatigue.recovery_per_day);
             let setup =
                 content
                     .modules
@@ -614,6 +615,12 @@ pub struct Simulation {
     /// hands it to the passes that also borrow the match mutably, so the tick copies a
     /// pointer instead of the whole tuning block.
     pub(crate) tuning: std::sync::Arc<Tuning>,
+    /// Each player's effective stage values, by roster index, blended from his effective
+    /// ratings when his state deltas last changed. Read only while his deltas are not all 0;
+    /// a player at his base reads his squad entry's.
+    pub(crate) stages: Vec<crate::contract::StageValues>,
+    /// The attribute file's stage weights, resolved once for the refresh.
+    pub(crate) blend: std::sync::Arc<crate::contract::stages::Blend>,
 }
 
 impl Simulation {
@@ -701,7 +708,12 @@ impl Simulation {
         let players = config.players.clone();
         let streams = Streams::keyed(config.seed);
         let referee = Referee::new(config.minutes, &config.rules, config.knockout);
-        Ok(Self {
+        let stages = players
+            .iter()
+            .map(|p| teams[p.team].squad[p.squad].stages)
+            .collect();
+        let blend = std::sync::Arc::new(crate::contract::stages::Blend::of(&config.attributes));
+        let mut sim = Self {
             timeline: vec![(0, teams.clone())],
             teams,
             players,
@@ -745,8 +757,13 @@ impl Simulation {
             finished: false,
             scratch: Vec::with_capacity(2 * PLAYERS_PER_TEAM),
             tuning: std::sync::Arc::new(config.tuning.clone()),
+            stages,
+            blend,
             config,
-        })
+        };
+        // Condition inputs (sharpness, adaptation, a short rest) act from kick-off.
+        sim.refresh_effective();
+        Ok(sim)
     }
 
     /// Sends player `i` off before kick-off, as a card shown would: the player loses the
@@ -809,11 +826,62 @@ impl Simulation {
         &self.teams[p.team].squad[p.squad].stages
     }
 
-    /// Player `i`'s effective stage values: his base stage values through his effective
-    /// values' group factors.
+    /// Player `i`'s effective stage values: blended from his effective ratings while his
+    /// state deltas are not all 0, his squad entry's otherwise ([`Simulation::set_deltas`]
+    /// keeps them in step).
     #[inline]
     pub fn skills(&self, i: usize) -> crate::contract::Skills<'_> {
-        crate::contract::Skills::new(self.base_stages(i), &self.players[i].derived)
+        crate::contract::Skills::new(&self.stages[i], &self.players[i].derived)
+    }
+
+    /// Player `i`'s ratings as play reads them: his base ratings moved by his state deltas,
+    /// within 1.0 to 20.0.
+    pub fn effective_ratings(&self, i: usize) -> crate::player::Attributes {
+        let p = &self.players[i];
+        crate::contract::states::effective(&p.attributes, &self.config.attributes, p.deltas)
+    }
+
+    /// Player `i`'s match condition inputs, from his squad entry.
+    #[inline]
+    pub fn condition(&self, i: usize) -> crate::data::team::Condition {
+        let p = &self.players[i];
+        self.teams[p.team].squad[p.squad].condition
+    }
+
+    /// Player `i`'s height and age, from his squad entry.
+    #[inline]
+    pub fn body(&self, i: usize) -> crate::contract::body::Body {
+        let p = &self.players[i];
+        self.teams[p.team].squad[p.squad].body
+    }
+
+    /// Sets player `i`'s state deltas and derives his effective values from them: his
+    /// squad entry's when all are 0, otherwise blended again from his effective ratings
+    /// through the contract.
+    pub(crate) fn set_deltas(
+        &mut self,
+        i: usize,
+        deltas: [i8; crate::contract::states::GROUP_COUNT],
+    ) {
+        let p = self.players[i];
+        let entry = &self.teams[p.team].squad[p.squad];
+        if deltas == [0; crate::contract::states::GROUP_COUNT] {
+            self.players[i].derived = entry.derived;
+            self.stages[i] = entry.stages;
+        } else {
+            let schema = &self.config.attributes;
+            let ratings = crate::contract::states::effective(&entry.attributes, schema, deltas);
+            let (derived, stages) = crate::player::Derived::from_blend(
+                &ratings,
+                &self.blend,
+                schema,
+                &self.config.tuning,
+                entry.body,
+            );
+            self.players[i].derived = derived;
+            self.stages[i] = stages;
+        }
+        self.players[i].deltas = deltas;
     }
 
     /// Player `i`'s fresh stage values: his base stage values with no factor.
@@ -1352,8 +1420,9 @@ mod tests {
     #[test]
     fn every_play_event_names_a_player() {
         // The seed-42 match ends 0-0 since a pressed lone forward stopped dribbling into
-        // defenders; the seed-7 match scores, so its goal events are checked too.
-        let events = full_match(7, |_| {}).take_events();
+        // defenders, and the seed-7 match since every sprint costs stamina; the seed-9 match
+        // scores, so its goal events are checked too.
+        let events = full_match(9, |_| {}).take_events();
         let goals = events
             .iter()
             .filter(|e| e.kind == EngineEventKind::Goal)

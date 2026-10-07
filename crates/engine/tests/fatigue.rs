@@ -1,20 +1,28 @@
-//! AC-4: above the fatigue threshold a player's effective values equal the base; at energy
-//! 0.5 and 0.3 the effective top speed and decision stages are the base times the curve's
-//! multiplier; a 90-minute match ends with every player's energy below 1.0 and above 0.0.
-//! The effective values reach the player through the modifiers, bit for bit as the fatigue
-//! curve gives them, and with the fatigue modifier off they stay at base.
+//! AC-4: above the fatigue threshold a player's effective values equal the base; below it the
+//! fatigue curve lowers his ratings, physical first, technical and goalkeeping by their
+//! weights, within the body cap, and his effective values are derived from those ratings; a
+//! 90-minute match ends with every player's energy below 1.0 and above 0.0. With the fatigue
+//! modifier off they stay at base.
 
 mod common;
 
 use common::{calm_match, full_match, index};
 use engine::Simulation;
-use engine::contract::Stage;
-use engine::fatigue::{effective, multiplier};
+use engine::contract::states::{self, GROUP_COUNT};
+use engine::data::FatigueTuning;
+use engine::fatigue::{delta, multiplier};
+use engine::modules::modifier::FAMILY_COUNT;
 use engine::modules::{REGISTRY, SlotEntry, SlotFile, resolve};
+use engine::player::Derived;
 use engine::record::NullSink;
 use engine::scenario::Scene;
+use engine::tuning::Tuning;
 
 const PLAYER: usize = 7;
+/// The mental group's index.
+const MENTAL: usize = 1;
+/// The physical group's index.
+const PHYSICAL: usize = 2;
 
 fn at_energy(energy: f64) -> Simulation {
     Scene::new(calm_match(90))
@@ -22,63 +30,59 @@ fn at_energy(energy: f64) -> Simulation {
         .build()
 }
 
+/// The deltas fatigue alone gives at `energy`, in tenths.
+fn fatigue_deltas(energy: f64, f: &FatigueTuning, t: &Tuning) -> [i8; GROUP_COUNT] {
+    let mut per_family = [[0.0; GROUP_COUNT]; FAMILY_COUNT];
+    per_family[0] = f
+        .group_weights
+        .by_group()
+        .map(|w| delta(energy, f, t.contract.curve.width, w));
+    states::capped(per_family, &t.contract.states)
+}
+
+/// The effective values of player `i` at `deltas`, derived from his effective ratings.
+fn derived_at(sim: &Simulation, i: usize, deltas: [i8; GROUP_COUNT]) -> Derived {
+    let p = sim.players()[i];
+    let schema = &sim.config().attributes;
+    let ratings = states::effective(&p.attributes, schema, deltas);
+    Derived::from_attributes(&ratings, schema, &sim.config().tuning).0
+}
+
 #[test]
 fn above_the_threshold_the_effective_values_equal_the_base() {
     for energy in [1.0, 0.9, 0.7] {
         let sim = at_energy(energy);
         let p = sim.players()[index(0, PLAYER)];
+        assert_eq!(p.deltas, [0; GROUP_COUNT], "energy {energy}");
         assert_eq!(&p.derived, sim.base(index(0, PLAYER)), "energy {energy}");
     }
 }
 
 #[test]
-fn below_the_threshold_the_curve_scales_the_effective_values() {
-    let f = calm_match(90).fatigue;
+fn below_the_threshold_the_curve_lowers_the_ratings_physical_first() {
+    let config = calm_match(90);
+    let (f, t) = (config.fatigue.clone(), config.tuning.clone());
     // The shipped curve passes through these points.
-    for (energy, expected) in [(0.5, 0.92), (0.3, 0.82)] {
+    for (energy, expected) in [(0.5, 0.92), (0.3, 0.82), (0.0, 0.65)] {
         let m = multiplier(energy, &f);
         assert!((m - expected).abs() < 1e-12, "energy {energy}: {m}");
         let sim = at_energy(energy);
-        let p = sim.players()[index(0, PLAYER)];
-        let base = sim.base(index(0, PLAYER));
-        let (d, b) = (
-            sim.skills(index(0, PLAYER)),
-            sim.base_skills(index(0, PLAYER)),
+        let i = index(0, PLAYER);
+        let p = sim.players()[i];
+        let deltas = fatigue_deltas(energy, &f, &t);
+        assert_eq!(p.deltas, deltas, "energy {energy}");
+        assert!(deltas[PHYSICAL] < 0, "energy {energy}: {deltas:?}");
+        assert!(
+            deltas.iter().all(|&d| d >= deltas[PHYSICAL]),
+            "physical first: {deltas:?}"
         );
-        for (name, effective, base) in [
-            ("max_speed", p.derived.max_speed, base.max_speed),
-            (
-                "pass.choose",
-                d.f(Stage::PASS_CHOOSE),
-                b.f(Stage::PASS_CHOOSE),
-            ),
-            (
-                "pass.execute",
-                d.f(Stage::PASS_EXECUTE),
-                b.f(Stage::PASS_EXECUTE),
-            ),
-            (
-                "shot.execute",
-                d.f(Stage::SHOT_EXECUTE),
-                b.f(Stage::SHOT_EXECUTE),
-            ),
-            (
-                "shot.execute share",
-                d.share(Stage::SHOT_EXECUTE),
-                b.share(Stage::SHOT_EXECUTE),
-            ),
-        ] {
-            assert!(
-                (effective - base * m).abs() < 1e-9,
-                "energy {energy} {name}: {effective} against {base} x {m}"
-            );
-        }
-        assert_eq!(
-            d.f(Stage::TACKLE_EXECUTE),
-            b.f(Stage::TACKLE_EXECUTE),
-            "tackling is not scaled"
+        assert_eq!(deltas[MENTAL], 0, "the body family leaves the mental group");
+        assert!(
+            f64::from(deltas[PHYSICAL]) >= t.contract.states.caps.body[0] * 10.0,
+            "within the body cap: {deltas:?}"
         );
-        assert!(p.max_speed() < base.max_speed);
+        assert_eq!(p.derived, derived_at(&sim, i, deltas), "energy {energy}");
+        assert!(p.max_speed() < sim.base(i).max_speed);
     }
 }
 
@@ -124,11 +128,10 @@ fn fatigue_runs_on_through_extra_time_without_a_step_at_ninety_minutes() {
         let (minute, added) = sim.minute();
         if minute == 105 && added.is_none() && sim.tick().is_multiple_of(REFRESH_TICKS) {
             let p = sim.players()[i];
-            let base = sim.base(i);
-            let m = multiplier(p.energy, &sim.config().fatigue);
-            assert!((p.derived.max_speed - base.max_speed * m).abs() < 1e-9);
-            let (d, b) = (sim.skills(i), sim.base_skills(i));
-            assert!((d.f(Stage::PASS_CHOOSE) - b.f(Stage::PASS_CHOOSE) * m).abs() < 1e-9);
+            let config = sim.config();
+            let deltas = fatigue_deltas(p.energy, &config.fatigue, &config.tuning);
+            assert_eq!(p.deltas, deltas);
+            assert_eq!(p.derived, derived_at(&sim, i, deltas));
             checked_105 = true;
         }
         assert!(sim.tick() < 200 * TICKS_PER_MINUTE, "minute 106 never came");
@@ -157,16 +160,17 @@ fn fatigue_runs_on_through_extra_time_without_a_step_at_ninety_minutes() {
 }
 
 #[test]
-fn effective_values_through_the_modifiers_equal_the_fatigue_curve() {
-    let f = calm_match(90).fatigue;
+fn effective_values_through_the_modifiers_follow_the_fatigue_curve_bit_for_bit() {
+    let config = calm_match(90);
     for energy in [1.0, 0.9, 0.7, 0.6, 0.5, 0.45, 0.3, 0.1, 0.0] {
         let sim = at_energy(energy);
-        let p = sim.players()[index(0, PLAYER)];
-        let expected = effective(sim.base(index(0, PLAYER)), energy, &f);
-        let bits = |d: &engine::player::Derived| {
-            [d.max_speed, d.max_accel, d.turn]
+        let i = index(0, PLAYER);
+        let p = sim.players()[i];
+        let deltas = fatigue_deltas(energy, &config.fatigue, &config.tuning);
+        let expected = derived_at(&sim, i, deltas);
+        let bits = |d: &Derived| {
+            [d.max_speed, d.max_accel, d.turn, d.reach_m]
                 .into_iter()
-                .chain(d.factors)
                 .map(f64::to_bits)
                 .collect::<Vec<_>>()
         };
@@ -189,5 +193,6 @@ fn fatigue_modifier_off_leaves_the_base_values() {
     let sim = Scene::new(config).energy(index(0, PLAYER), 0.3).build();
     let p = sim.players()[index(0, PLAYER)];
     assert_eq!(p.energy, 0.3);
+    assert_eq!(p.deltas, [0; GROUP_COUNT]);
     assert_eq!(&p.derived, sim.base(index(0, PLAYER)));
 }

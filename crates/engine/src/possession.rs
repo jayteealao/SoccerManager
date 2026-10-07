@@ -224,7 +224,7 @@ fn reach(
 ) -> Option<f64> {
     let t = view.tuning();
     let k = &p.derived.knobs;
-    if !p.active() || ball.z > t.reach_height * k.aerial_reach {
+    if !p.active() || ball.z > p.derived.reach_m {
         return None;
     }
     if !keeper && ball.speed > t.control_speed * k.receive {
@@ -263,7 +263,7 @@ fn loose_ball(view: &MatchView<'_>, reach_radius: f64) -> Option<LooseBall> {
     let mut any_height = false;
     for (i, p) in view.players().iter().enumerate() {
         let keeper = i == keepers[p.team];
-        if at.z <= t.reach_height * p.derived.knobs.aerial_reach {
+        if at.z <= p.derived.reach_m {
             any_height = true;
         }
         if fast && !keeper {

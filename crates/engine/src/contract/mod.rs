@@ -13,12 +13,15 @@
 //! 10. So a rating-10 player plays as every player played before the contract; the spread
 //! between players is what the curve and `k` change.
 //!
-//! The stage values are computed once per player at load ([`stage_values`]); the 50-tick
-//! refresh scales them by the modifiers; no blend runs inside a tick.
+//! The stage values are computed once per player at load ([`stage_values`]). The states move
+//! a player's ratings within caps ([`states`]); when his deltas change, the 50-tick refresh
+//! blends his stage values again from his effective ratings. No blend runs inside a tick.
 
+pub mod body;
 pub mod curve;
 pub mod params;
 pub mod stages;
+pub mod states;
 
 pub use curve::{contest, factor, logistic, logit, share};
 pub use params::{ActionMap, ActionParams, ContractTuning, CurveTuning, LapseTuning, SpeedTuning};
@@ -361,48 +364,9 @@ impl Stage {
     pub const RUSH_CHOOSE: Stage = Stage::of(ActionKind::Rush, StageKind::Choose);
 }
 
-/// The stages each modifier effect scales, in [`crate::modules::modifier::Effect`] order
-/// after top speed and acceleration: passing (the execute stage of every pass and keeper
-/// distribution), finishing (the execute stage of every shot and header), decisions (the
-/// choose stage of every on-ball action), and composure (every pressure stage). These are
-/// the carrier's values the fatigue curve lowered before the contract.
-pub const EFFECT_STAGES: [&[Stage]; 4] = [
-    &[
-        Stage::PASS_EXECUTE,
-        Stage::CHIP_EXECUTE,
-        Stage::CROSS_EXECUTE,
-        Stage::KEEPER_THROW_EXECUTE,
-        Stage::KEEPER_KICK_EXECUTE,
-    ],
-    &[
-        Stage::SHOT_EXECUTE,
-        Stage::LONG_SHOT_EXECUTE,
-        Stage::HEADER_EXECUTE,
-        Stage::PENALTY_EXECUTE,
-    ],
-    &[
-        Stage::PASS_CHOOSE,
-        Stage::CHIP_CHOOSE,
-        Stage::CROSS_CHOOSE,
-        Stage::SHOT_CHOOSE,
-        Stage::LONG_SHOT_CHOOSE,
-        Stage::DRIBBLE_CHOOSE,
-    ],
-    &[
-        Stage::PASS_PRESSURE,
-        Stage::CHIP_PRESSURE,
-        Stage::CROSS_PRESSURE,
-        Stage::SHOT_PRESSURE,
-        Stage::LONG_SHOT_PRESSURE,
-        Stage::DRIBBLE_PRESSURE,
-        Stage::PENALTY_PRESSURE,
-    ],
-];
-
-/// One player's base stage values: each stage's value on the curve (`F` of the blended
-/// rating) and its skill share (0.5 at rating 10). They live in the squad entry, computed once
-/// at load; the effective values a modifier lowers are these times the player's factor for
-/// the stage's effect group, which [`Skills`] reads.
+/// One player's stage values: each stage's value on the curve (`F` of the blended rating)
+/// and its skill share (0.5 at rating 10). His base values live in the squad entry, computed
+/// once at load; his effective values are blended the same way from his effective ratings.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StageValues {
     pub f: [f64; STAGE_COUNT],
@@ -444,33 +408,13 @@ impl StageValues {
     }
 }
 
-/// No effect group: a stage no modifier scales.
-pub const NO_GROUP: u8 = u8::MAX;
-
-/// The effect group of each stage, in [`EFFECT_STAGES`] order, or [`NO_GROUP`].
-pub const STAGE_GROUP: [u8; STAGE_COUNT] = {
-    let mut groups = [NO_GROUP; STAGE_COUNT];
-    let mut g = 0;
-    while g < EFFECT_STAGES.len() {
-        let stages = EFFECT_STAGES[g];
-        let mut k = 0;
-        while k < stages.len() {
-            groups[stages[k].index()] = g as u8;
-            k += 1;
-        }
-        g += 1;
-    }
-    groups
-};
-
-/// One player's effective stage values as play reads them: his base stage values from the
-/// squad entry, each scaled by his effective values' factor for its effect group. A factor of
-/// 1 leaves the base value bit for bit.
+/// One player's stage values as play reads them, with the values derived beside them: his
+/// effective ones in play, or his base ones fresh.
 #[derive(Debug, Clone, Copy)]
 pub struct Skills<'a> {
-    /// The base stage values.
+    /// The stage values.
     pub stages: &'a StageValues,
-    /// The effective values: the group factors, and the gates and knobs a contest reads.
+    /// The derived values: the gates and knobs a contest reads.
     pub derived: &'a crate::player::Derived,
 }
 
@@ -480,27 +424,16 @@ impl<'a> Skills<'a> {
         Self { stages, derived }
     }
 
-    #[inline]
-    fn scaled(&self, s: Stage, v: f64) -> f64 {
-        match STAGE_GROUP[s.index()] {
-            NO_GROUP => v,
-            g => {
-                let m = self.derived.factors[g as usize];
-                if m == 1.0 { v } else { v * m }
-            }
-        }
-    }
-
-    /// The stage's effective value on the curve.
+    /// The stage's value on the curve.
     #[inline]
     pub fn f(&self, s: Stage) -> f64 {
-        self.scaled(s, self.stages.f(s))
+        self.stages.f(s)
     }
 
-    /// The stage's effective skill share, 0.5 at rating 10 when fresh.
+    /// The stage's skill share, 0.5 at rating 10.
     #[inline]
     pub fn share(&self, s: Stage) -> f64 {
-        self.scaled(s, self.stages.share(s))
+        self.stages.share(s)
     }
 
     /// The stage's skill from −1 to 1: `2 · share − 1`, 0 at rating 10.

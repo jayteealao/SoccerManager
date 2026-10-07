@@ -5,7 +5,10 @@
 //!
 //! The attribute and tuning converters add the attribute contract from a frozen copy of its
 //! first tables (`contract/frozen-v1.json`), compiled into the build and never edited, so an
-//! old replay converts the same way however the shipped tables are tuned later.
+//! old replay converts the same way however the shipped tables are tuned later. A version 3
+//! tuning file takes the state caps, the body jobs, and the fatigue group weights from a
+//! second frozen copy (`contract/frozen-v2.json`), and a version 1 slot file takes the two
+//! condition modifiers in their first versions.
 
 use std::collections::BTreeMap;
 
@@ -29,8 +32,11 @@ pub const TEAM_V1: u32 = 1;
 pub const TACTICS_V1: u32 = 1;
 /// The attribute file version the converter reads.
 pub const ATTRIBUTES_V1: u32 = 1;
-/// The tuning file version the converter reads.
+/// The tuning file versions the converters read.
 pub const TUNING_V2: u32 = 2;
+pub const TUNING_V3: u32 = 3;
+/// The slot file version the converter reads.
+pub const SLOTS_V1: u32 = 1;
 
 /// The first contract tables of this build, as a version 1 attribute file and a version 2
 /// tuning file convert with them. Never edited: tuning the shipped files leaves it alone.
@@ -124,10 +130,7 @@ pub fn tuning_v2_to_v3(mut file: serde_json::Value) -> Result<serde_json::Value,
     let obj = file
         .as_object_mut()
         .ok_or_else(|| "the file is not an object".to_string())?;
-    obj.insert(
-        "schema_version".into(),
-        serde_json::Value::from(crate::data::TUNING_VERSION),
-    );
+    obj.insert("schema_version".into(), serde_json::Value::from(TUNING_V3));
     let engine = obj
         .get_mut("engine")
         .and_then(|e| e.as_object_mut())
@@ -152,6 +155,81 @@ pub fn tuning_v2_to_v3(mut file: serde_json::Value) -> Result<serde_json::Value,
     generator.remove("per_position");
     for (k, v) in frozen.generator {
         generator.insert(k, v);
+    }
+    Ok(file)
+}
+
+/// The state caps, body jobs, and fatigue group weights as they first shipped. Never edited:
+/// tuning the shipped file leaves it alone.
+pub const FROZEN_V2: &str = include_str!("../contract/frozen-v2.json");
+
+/// The second frozen copy's parts.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenV2 {
+    /// Values merged into `engine.contract`.
+    contract: serde_json::Map<String, serde_json::Value>,
+    /// Values merged into the `fatigue` block.
+    fatigue: serde_json::Map<String, serde_json::Value>,
+}
+
+/// A version 3 tuning file, as JSON, in the version 4 shape: the state caps, the body jobs,
+/// and the fatigue group weights come from the second frozen copy. The caller parses and
+/// validates the result as a current file.
+pub fn tuning_v3_to_v4(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let frozen: FrozenV2 =
+        serde_json::from_str(FROZEN_V2).expect("the second frozen copy parses; a test checks it");
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert(
+        "schema_version".into(),
+        serde_json::Value::from(crate::data::TUNING_VERSION),
+    );
+    let contract = obj
+        .get_mut("engine")
+        .and_then(|e| e.get_mut("contract"))
+        .and_then(|c| c.as_object_mut())
+        .ok_or_else(|| "engine.contract is missing".to_string())?;
+    for (k, v) in frozen.contract {
+        contract.insert(k, v);
+    }
+    let fatigue = obj
+        .get_mut("fatigue")
+        .and_then(|f| f.as_object_mut())
+        .ok_or_else(|| "fatigue is missing".to_string())?;
+    for (k, v) in frozen.fatigue {
+        fatigue.insert(k, v);
+    }
+    Ok(file)
+}
+
+/// The slots a version 2 slot file declares that version 1 did not, with the module and
+/// version each takes when a version 1 file converts.
+pub const SLOTS_V2_ADDED: [(&str, &str, u32); 2] = [
+    ("engine.modifier.sharpness", "sharpness", 1),
+    ("engine.modifier.adaptation", "adaptation", 1),
+];
+
+/// A version 1 slot file, as JSON, in the version 2 shape: the sharpness and adaptation
+/// modifier slots take their first versions. The caller parses and resolves the result.
+pub fn slots_v1_to_v2(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert(
+        "schema_version".into(),
+        serde_json::Value::from(crate::modules::SLOTS_VERSION),
+    );
+    let slots = obj
+        .get_mut("slots")
+        .and_then(|s| s.as_object_mut())
+        .ok_or_else(|| "slots is missing".to_string())?;
+    for (slot, module, version) in SLOTS_V2_ADDED {
+        slots.insert(
+            slot.into(),
+            serde_json::json!({ "module": module, "version": version }),
+        );
     }
     Ok(file)
 }
@@ -253,6 +331,7 @@ pub fn team_v1_to_v2(file: TeamFileV1) -> TeamFile {
                 height: None,
                 age: None,
                 nationality: None,
+                condition: None,
             })
             .collect(),
     }

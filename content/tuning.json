@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "engine": {
     "dt": 0.02,
     "decision_interval_ticks": 1,
@@ -273,6 +273,92 @@
         "late_from_minute": 60,
         "late_growth": 1.0,
         "ticks": 100
+      },
+      "states": {
+        "caps": {
+          "body": [
+            -2.0,
+            0.5
+          ],
+          "mind": [
+            -1.0,
+            1.0
+          ],
+          "familiarity": [
+            -1.25,
+            0.25
+          ],
+          "surroundings": [
+            -0.75,
+            0.5
+          ],
+          "total": [
+            -5.0,
+            2.25
+          ]
+        },
+        "family_groups": {
+          "body": [
+            "technical",
+            "physical",
+            "goalkeeping"
+          ],
+          "mind": [
+            "mental"
+          ],
+          "familiarity": [
+            "technical",
+            "mental"
+          ],
+          "surroundings": [
+            "technical",
+            "physical"
+          ]
+        }
+      },
+      "body": {
+        "height": {
+          "reference_cm": 181.0,
+          "reach_per_cm": 0.0133,
+          "turn_cost_per_cm": 0.002
+        },
+        "age": {
+          "reference": 28.0,
+          "late_from_minute": 60,
+          "fade_per_year": 0.04,
+          "recovery_loss_per_year": 0.03,
+          "injury_per_year": 0.03
+        },
+        "rest": {
+          "post_match_energy": 0.4,
+          "congestion_days": 4,
+          "congestion_risk": 1.0
+        },
+        "sharpness": {
+          "max_drop": 1.5
+        },
+        "adaptation": {
+          "max_drop": 1.0
+        },
+        "build": {
+          "frame_balance_weight": 0.5,
+          "slight_below": 9.0,
+          "powerful_from": 14.0
+        },
+        "jobs": {
+          "height": {
+            "statistic": "aerial balls reached per match",
+            "direction": "up"
+          },
+          "age": {
+            "statistic": "energy lost after minute 60",
+            "direction": "up"
+          },
+          "nationality": {
+            "statistic": "mental effective ratings, through adaptation",
+            "direction": "up"
+          }
+        }
       }
     }
   },
@@ -488,7 +574,13 @@
     "drain_base_per_s": 8e-05,
     "drain_effort_per_s": 0.0004,
     "half_time_recovery": 0.1,
-    "recovery_per_day": 20.0
+    "recovery_per_day": 20.0,
+    "group_weights": {
+      "physical": 1.0,
+      "technical": 0.5,
+      "goalkeeping": 0.5
+    },
+    "sprint_cap": 1.0
   },
   "stream": {
     "buffer_ticks": 500,

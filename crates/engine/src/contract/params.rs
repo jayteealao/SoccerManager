@@ -1,6 +1,6 @@
 //! The contract block of the tuning file (`engine.contract`): the curve, each action's
-//! strength and limits, the top-speed map, the acceleration anchor, and the concentration
-//! lapses.
+//! strength and limits, the top-speed map, the acceleration anchor, the concentration
+//! lapses, the state caps, and the body jobs.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -27,6 +27,12 @@ pub struct ContractTuning {
     pub accel: AccelTuning,
     #[garde(dive)]
     pub lapse: LapseTuning,
+    /// The caps on the states and the groups each state family acts on.
+    #[garde(dive)]
+    pub states: super::states::StatesTuning,
+    /// The jobs of the body fields and the match condition inputs.
+    #[garde(dive)]
+    pub body: super::body::BodyJobs,
 }
 
 /// The curve `F(r) = scale · e^((r − center) / width)`.
@@ -398,6 +404,8 @@ impl Default for ContractTuning {
                 late_growth: 1.0,
                 ticks: 100,
             },
+            states: super::states::StatesTuning::default(),
+            body: super::body::BodyJobs::default(),
         }
     }
 }

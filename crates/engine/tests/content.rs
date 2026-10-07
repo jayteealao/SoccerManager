@@ -386,3 +386,82 @@ fn the_shipped_flags_block_matches_the_code_flags() {
     );
     assert!(content.flags.is_empty());
 }
+
+/// The shipped tuning file as JSON.
+fn shipped_tuning_json() -> serde_json::Value {
+    let path = common::content_dir().path(engine::data::TUNING_FILE);
+    serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+}
+
+/// A version 3 tuning file (no state caps, body jobs, fatigue group weights or sprint cap)
+/// converts to version 4 with the values of the frozen copy, which are the shipped ones.
+#[test]
+fn a_version_3_tuning_file_converts_to_the_shipped_version_4() {
+    let mut v3 = shipped_tuning_json();
+    v3["schema_version"] = 3.into();
+    let contract = v3["engine"]["contract"].as_object_mut().unwrap();
+    contract.remove("states").unwrap();
+    contract.remove("body").unwrap();
+    let fatigue = v3["fatigue"].as_object_mut().unwrap();
+    fatigue.remove("group_weights").unwrap();
+    fatigue.remove("sprint_cap").unwrap();
+    let bytes = serde_json::to_vec(&v3).unwrap();
+    let loaded = engine::data::load_tuning_bytes(&bytes, "tuning-v3.json").unwrap();
+    assert_eq!(loaded.converted_from, Some(3));
+    let shipped = engine::data::load_tuning_bytes(
+        &serde_json::to_vec(&shipped_tuning_json()).unwrap(),
+        "tuning.json",
+    )
+    .unwrap();
+    assert_eq!(shipped.converted_from, None);
+    assert_eq!(loaded.value, shipped.value);
+}
+
+#[test]
+fn a_tuning_file_of_version_9_is_refused_naming_both_versions() {
+    let mut v9 = shipped_tuning_json();
+    v9["schema_version"] = 9.into();
+    let err =
+        engine::data::load_tuning_bytes(&serde_json::to_vec(&v9).unwrap(), "t.json").unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        format!(
+            "content refused: tuning t.json: schema_version 9; this build reads {}",
+            engine::data::TUNING_VERSION
+        )
+    );
+}
+
+/// A version 1 slot file (no sharpness or adaptation slot) converts to version 2 with both
+/// slots at their first version, and resolves to the built-in selection.
+#[test]
+fn a_version_1_slot_file_converts_and_resolves_to_the_built_in_selection() {
+    use engine::modules::{REGISTRY, ResolvedModules, SlotFile, resolve};
+    let path = common::content_dir().path(engine::data::SLOTS_FILE);
+    let mut v1: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    v1["schema_version"] = 1.into();
+    let slots = v1["slots"].as_object_mut().unwrap();
+    slots.remove("engine.modifier.sharpness").unwrap();
+    slots.remove("engine.modifier.adaptation").unwrap();
+    let loaded = engine::data::load_slots_bytes(&serde_json::to_vec(&v1).unwrap()).unwrap();
+    assert_eq!(loaded.converted_from, Some(1));
+    assert_eq!(loaded.value, SlotFile::builtin_default());
+    let resolved = resolve(&loaded.value, REGISTRY).unwrap();
+    assert_eq!(
+        resolved.picked(),
+        ResolvedModules::builtin_default().picked()
+    );
+    v1["schema_version"] = 9.into();
+    let err = engine::data::load_slots_bytes(&serde_json::to_vec(&v1).unwrap()).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            EngineError::Version {
+                found: 9,
+                expected: 2,
+                ..
+            }
+        ),
+        "{err}"
+    );
+}

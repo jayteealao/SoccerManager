@@ -58,6 +58,19 @@ impl<'a> MatchView<'a> {
         self.sim.base_skills(i)
     }
 
+    /// Player `i`'s match condition inputs (sharpness, adaptation, rest days, matches at the
+    /// club), from his squad entry.
+    #[inline]
+    pub fn condition(&self, i: usize) -> crate::data::team::Condition {
+        self.sim.condition(i)
+    }
+
+    /// Player `i`'s height and age, from his squad entry.
+    #[inline]
+    pub fn body(&self, i: usize) -> crate::contract::body::Body {
+        self.sim.body(i)
+    }
+
     /// The current tick.
     #[inline]
     pub fn tick(&self) -> u32 {

@@ -16,8 +16,11 @@ use crate::tuning::Tuning;
 /// decision weights and injury rates to the engine block. Version 3 adds the attribute
 /// contract (`engine.contract`) and the world spread of the generator (`generator.world`),
 /// and drops the linear speed fields and the per-position distributions they replace; a
-/// version 2 file converts ([`crate::data::convert::tuning_v2_to_v3`]).
-pub const TUNING_VERSION: u32 = 3;
+/// version 2 file converts ([`crate::data::convert::tuning_v2_to_v3`]). Version 4 adds the
+/// state caps and body jobs (`engine.contract.states`, `engine.contract.body`) and the
+/// fatigue weights per attribute group (`fatigue.group_weights`); a version 3 file converts
+/// ([`crate::data::convert::tuning_v3_to_v4`]).
+pub const TUNING_VERSION: u32 = 4;
 
 /// The tuning file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
@@ -229,9 +232,39 @@ pub struct FatigueTuning {
     /// Energy recovered at half-time by an average player; natural fitness scales it.
     #[garde(range(min = 0.0, max = 1.0))]
     pub half_time_recovery: f64,
-    /// Stamina points recovered per rest day. The season layer reads it.
+    /// Stamina points recovered per rest day, out of 100: the days-of-rest input sets the
+    /// energy at kick-off from it.
     #[garde(range(min = 0.0, max = 100.0))]
     pub recovery_per_day: f64,
+    /// How hard tiredness lowers each attribute group it acts on, as a share of the full
+    /// curve: physical first, technical and goalkeeping less. The body family does not act
+    /// on the mental group.
+    #[garde(dive)]
+    pub group_weights: GroupWeights,
+    /// The highest speed, as a share of the average player's top speed, at which a sprint
+    /// still costs more: the effort term reads speed over that top speed up to this share,
+    /// so a faster runner pays for his speed up to it.
+    #[garde(range(min = 1.0, max = 2.0))]
+    pub sprint_cap: f64,
+}
+
+/// The fatigue weight per attribute group the body family acts on, 0 to 1.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct GroupWeights {
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub physical: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub technical: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub goalkeeping: f64,
+}
+
+impl GroupWeights {
+    /// The weight of each group in [`crate::contract::states::GROUPS`] order; mental is 0.
+    pub fn by_group(&self) -> [f64; crate::contract::states::GROUP_COUNT] {
+        [self.technical, 0.0, self.physical, self.goalkeeping]
+    }
 }
 
 fn check_curve(curve: &[[f64; 2]], _ctx: &()) -> garde::Result {

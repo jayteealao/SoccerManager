@@ -89,6 +89,9 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         scratch: _,
         // A shared copy of `config.tuning`, constant for the match.
         tuning: _,
+        // Functions of each player's deltas (hashed in G3) and the team files.
+        stages: _,
+        blend: _,
     } = sim;
 
     use FieldKind::{Bytes, Floats};
@@ -357,6 +360,7 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
         // Functions of the squad index and the team file, whose digest is in the header.
         attributes: _,
         derived,
+        deltas,
         energy,
         pos,
         vel,
@@ -393,7 +397,7 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
     w.mark(Floats, || format!("players[{i}].energy"));
     w.f64_at(|| format!("players[{i}].energy"), *energy);
     w.mark(Floats, || format!("players[{i}].derived"));
-    w.derived(&|| format!("players[{i}].derived"), derived);
+    w.derived(&|| format!("players[{i}].derived"), derived, deltas);
 }
 
 fn change(w: &mut Writer, change: &Change) {

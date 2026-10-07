@@ -3,11 +3,14 @@
 //! `Attributes` is a fixed array in schema order so `Player` stays `Copy` and no name lookup
 //! happens during a tick. `Derived` is computed once at load through the attribute contract
 //! ([`crate::contract`]): top speed from the pace map, acceleration and turning from their
-//! stages, every stage value, and the skill gates. The modifiers lower a player's effective
-//! values from that base as energy falls.
+//! stages, every stage value, and the skill gates. The states (fatigue, sharpness,
+//! adaptation) move a player's ratings within caps ([`crate::contract::states`]), and his
+//! effective values are derived the same way from those effective ratings.
 
 use std::collections::BTreeMap;
 
+use crate::contract::body::Body;
+use crate::contract::states::GROUP_COUNT;
 use crate::contract::{self, Gates, Stage, StageValues, stages::Blend};
 use crate::data::attributes::{AttributeSchema, MAX_ATTRIBUTES};
 use crate::math::DVec2;
@@ -58,13 +61,12 @@ pub struct Derived {
     pub max_speed: f64,
     /// Maximum acceleration in metres per second squared, from the sprint stage.
     pub max_accel: f64,
-    /// The factor on the sideways part of a change of velocity, from the turn stage: 1 at
-    /// rating 10.
+    /// The factor on the sideways part of a change of velocity, from the turn stage, less
+    /// the cost of his height: 1 at rating 10 and the reference height.
     pub turn: f64,
-    /// The factor on the stage values and shares of each effect group, in
-    /// [`contract::EFFECT_STAGES`] order: 1 for a fresh player. The stage values themselves
-    /// are the squad entry's; [`contract::Skills`] reads them through these factors.
-    pub factors: [f64; 4],
+    /// How high he reaches a ball in the air, in metres: the average player's reach times
+    /// his jump (the aerial reach knob), plus the standing reach of his height.
+    pub reach_m: f64,
     /// The per-player factors on the average player's reaches and ranges.
     pub knobs: Knobs,
     /// The skill gates.
@@ -72,8 +74,8 @@ pub struct Derived {
 }
 
 /// The per-player factors on values every player had alike before the contract, each
-/// `1 + spread · (2 · share − 1)` of its stage, exactly 1 at rating 10. No modifier moves
-/// them, so they are computed once at load.
+/// `1 + spread · (2 · share − 1)` of its stage, exactly 1 at rating 10. They follow his
+/// effective ratings.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Knobs {
     /// The speed of a ball he controls on receipt (receive execute).
@@ -115,38 +117,24 @@ impl Knobs {
 }
 
 impl Derived {
-    /// Derives from a validated schema's attributes through the contract: the values and the
-    /// base stage values.
+    /// Derives from a validated schema's attributes through the contract, for a player with
+    /// no body (the reference height): the values and the stage values.
     pub fn from_attributes(
         a: &Attributes,
         schema: &AttributeSchema,
         t: &Tuning,
     ) -> (Self, StageValues) {
-        Self::from_blend(a, &Blend::of(schema), schema, t)
+        Self::from_blend(a, &Blend::of(schema), schema, t, Body::default())
     }
 
-    /// These values with the six modifier factors applied, in
-    /// [`crate::modules::modifier::Effect`] order: top speed, acceleration, then the factor of
-    /// each group of [`contract::EFFECT_STAGES`], which multiplies its curve values and
-    /// shares as play reads them. A factor of 1 leaves its values untouched, so a fresh
-    /// player's effective values are his base bit for bit; at rating 10 a share times the
-    /// factor is the old skill / 100 times it.
-    pub fn scaled(&self, factors: [f64; 6]) -> Derived {
-        let mut d = *self;
-        d.max_speed = self.max_speed * factors[0];
-        d.max_accel = self.max_accel * factors[1];
-        for (g, &m) in factors[2..].iter().enumerate() {
-            d.factors[g] = self.factors[g] * m;
-        }
-        d
-    }
-
-    /// [`Derived::from_attributes`] with the schema's blend resolved once, for a squad.
+    /// [`Derived::from_attributes`] with the schema's blend resolved once, for a squad, and
+    /// the player's body.
     pub fn from_blend(
         a: &Attributes,
         blend: &Blend,
         schema: &AttributeSchema,
         t: &Tuning,
+        body: Body,
     ) -> (Self, StageValues) {
         let c = &t.contract;
         let stages = blend.values(a, c);
@@ -163,23 +151,24 @@ impl Derived {
                 0.0
             }
         };
+        let aerial_reach = knob(A::AerialReach, Stage::AERIAL_REACH_EXECUTE);
         let derived = Self {
             max_speed: c.speed.top_speed(pace),
             max_accel: c.accel.anchor * knob(A::Sprint, Stage::SPRINT_EXECUTE),
-            turn: knob(A::Turn, Stage::TURN_EXECUTE),
+            turn: c.body.turn_factor(knob(A::Turn, Stage::TURN_EXECUTE), body),
+            reach_m: c.body.reach_m(t.reach_height, aerial_reach, body),
             knobs: Knobs {
                 receive: knob(A::Receive, Stage::RECEIVE_EXECUTE),
                 intercept: knob(A::Intercept, Stage::INTERCEPT_SEE),
                 press: knob(A::Press, Stage::PRESS_CHOOSE),
                 shape: knob(A::Shape, Stage::SHAPE_EXECUTE),
                 block: knob(A::Block, Stage::BLOCK_EXECUTE),
-                aerial_reach: knob(A::AerialReach, Stage::AERIAL_REACH_EXECUTE),
+                aerial_reach,
                 claim_reach: knob(A::Claim, Stage::CLAIM_EXECUTE),
                 claim_range: knob(A::Claim, Stage::CLAIM_CHOOSE),
                 rush: knob(A::Rush, Stage::RUSH_CHOOSE),
                 organise: knob(A::Organise, Stage::ORGANISE_EXECUTE),
             },
-            factors: [1.0; 4],
             gates: Gates {
                 chip_try: technique >= g.chip.technique_try,
                 chip_penalty: penalty(&g.chip),
@@ -217,8 +206,12 @@ pub struct Player {
     pub shirt: u8,
     pub attributes: Attributes,
     /// The effective values play reads: his base values (his squad entry's, which
-    /// [`crate::sim::Simulation::base`] reads) lowered by fatigue.
+    /// [`crate::sim::Simulation::base`] reads) derived again from his effective ratings
+    /// whenever his state deltas change.
     pub derived: Derived,
+    /// His state delta per attribute group, in tenths of a rating point, in
+    /// [`contract::states::GROUPS`] order: 0 for a player at his base.
+    pub deltas: [i8; GROUP_COUNT],
     /// Energy from 1.0 (fresh) down to 0.0.
     pub energy: f64,
     pub pos: DVec2,
@@ -286,6 +279,7 @@ pub(crate) mod test_support {
             shirt: 1,
             attributes,
             derived,
+            deltas: [0; GROUP_COUNT],
             energy: 1.0,
             pos: DVec2::ZERO,
             vel: DVec2::ZERO,

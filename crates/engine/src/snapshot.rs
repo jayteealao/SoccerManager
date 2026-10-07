@@ -38,6 +38,9 @@
 //!   Version 11 reads every action through the attribute contract: each player stores his
 //!   lapse end (u32) after the foul cooldown, and his effective values are top speed,
 //!   acceleration, and the factor of each of the four stage groups a modifier scales.
+//!   Version 12 moves the states onto the ratings: each player stores his state delta per
+//!   attribute group (four bytes, tenths of a rating point) after his energy, and his
+//!   effective values are derived again from them on restore.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -55,7 +58,7 @@ use crate::canon::{self, NONE, Writer};
 use crate::data::rules::StoppageKind;
 use crate::error::EngineError;
 use crate::math::{DVec2, DVec3};
-use crate::player::{Derived, Status};
+use crate::player::Status;
 use crate::record::TickSink;
 use crate::rules::clock::Tally;
 use crate::rules::fouls::Card;
@@ -67,7 +70,7 @@ use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 11;
+pub const VERSION: u16 = 12;
 /// The earliest layout version the strict reader still reads: version 8 has no matchday mark.
 const FIRST_READ: u16 = 8;
 /// The released builds from before the snapshot recorded its engine version: the full commit
@@ -790,13 +793,11 @@ impl<'a> Reader<'a> {
             roles,
         })
     }
-    /// The effective values over `base`, in the order [`Writer::derived`] writes them.
-    fn derived(&mut self, base: Derived) -> Decoded<Derived> {
-        let mut d = base;
-        d.max_speed = self.f64()?;
-        d.max_accel = self.f64()?;
-        for m in &mut d.factors {
-            *m = self.f64()?;
+    /// A player's state deltas, one byte per attribute group.
+    fn deltas(&mut self) -> Decoded<[i8; crate::contract::states::GROUP_COUNT]> {
+        let mut d = [0; crate::contract::states::GROUP_COUNT];
+        for g in &mut d {
+            *g = self.u8()? as i8;
         }
         Ok(d)
     }
@@ -847,7 +848,9 @@ fn encode(sim: &Simulation, w: &mut Writer) {
         w.u32(p.lapse_until);
         w.u8(p.squad as u8);
         w.f64_at(String::new, p.energy);
-        w.derived(&String::new, &p.derived);
+        for &g in &p.deltas {
+            w.u8(g as u8);
+        }
     }
     w.u32(sim.queue.next);
     // A queue holds far fewer than 4 billion changes.
@@ -1053,6 +1056,7 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
             due: r.bool()?,
         };
     }
+    let mut deltas = Vec::with_capacity(sim.players.len());
     for p in &mut sim.players {
         p.pos = r.v2()?;
         p.vel = r.v2()?;
@@ -1074,7 +1078,12 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
         p.shirt = entry.shirt;
         p.attributes = entry.attributes;
         p.energy = r.f64()?;
-        p.derived = r.derived(entry.derived)?;
+        p.derived = entry.derived;
+        p.deltas = [0; crate::contract::states::GROUP_COUNT];
+        deltas.push(r.deltas()?);
+    }
+    for (i, d) in deltas.into_iter().enumerate() {
+        sim.set_deltas(i, d);
     }
     sim.queue.next = r.u32()?;
     let pending = r.u32()?;
@@ -1307,7 +1316,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 11"),
+                .contains("unknown version 1; this build reads 12"),
             "{err}"
         );
     }

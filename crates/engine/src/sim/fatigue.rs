@@ -87,12 +87,16 @@ impl Simulation {
         }
     }
 
-    /// Recomputes every player's effective values from its base through the modifiers.
+    /// Takes every player's state deltas from the modifiers; a player whose deltas changed
+    /// has his effective values derived again ([`Simulation::set_deltas`]). Deltas move in
+    /// tenths, so most refreshes change nobody.
     pub(crate) fn refresh_effective(&mut self) {
         let modifiers = self.config.modules.modifiers;
         for i in 0..self.players.len() {
-            let derived = modifiers.effective(&self.view(), i);
-            self.players[i].derived = derived;
+            let deltas = modifiers.effective(&self.view(), i);
+            if deltas != self.players[i].deltas {
+                self.set_deltas(i, deltas);
+            }
         }
     }
 

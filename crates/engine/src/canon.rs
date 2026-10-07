@@ -155,16 +155,23 @@ impl Writer {
         }
     }
 
-    /// The effective values a modifier can move, each under `<path()>.<name>`: top speed,
-    /// acceleration, then the factor of each effect group of the stage values, in
-    /// [`crate::contract::EFFECT_STAGES`] order. The rest of the derived values, and the stage
-    /// values, are fixed by the squad entry and the team file.
-    pub(crate) fn derived(&mut self, path: &dyn Fn() -> String, d: &Derived) {
+    /// A player's state deltas, one byte per attribute group, and the effective values they
+    /// move most, each under `<path()>.<name>`: top speed, acceleration, turning, and the reach
+    /// in the air. The rest of the derived values, and the stage values, follow from the
+    /// deltas, the squad entry and the team file.
+    pub(crate) fn derived(
+        &mut self,
+        path: &dyn Fn() -> String,
+        d: &Derived,
+        deltas: &[i8; crate::contract::states::GROUP_COUNT],
+    ) {
+        for &g in deltas {
+            self.u8(g as u8);
+        }
         self.f64_at(|| format!("{}.max_speed", path()), d.max_speed);
         self.f64_at(|| format!("{}.max_accel", path()), d.max_accel);
-        for (g, &m) in d.factors.iter().enumerate() {
-            self.f64_at(|| format!("{}.factors[{g}]", path()), m);
-        }
+        self.f64_at(|| format!("{}.turn", path()), d.turn);
+        self.f64_at(|| format!("{}.reach_m", path()), d.reach_m);
     }
 
     /// A team's shape as the snapshot stores it: the attack direction, each slot's activity

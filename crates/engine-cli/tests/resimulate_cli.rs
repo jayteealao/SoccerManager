@@ -670,8 +670,8 @@ fn state_digests_give_one_line_per_tick_and_the_same_file_twice() {
     let lines = digest_lines(&a);
     let header: serde_json::Value = serde_json::from_str(&lines[0]).unwrap();
     assert_eq!(header["state_digests"], 1);
-    assert_eq!(header["inventory"], 2);
-    assert_eq!(header["gate_schema"], 2);
+    assert_eq!(header["inventory"], 3);
+    assert_eq!(header["gate_schema"], 3);
     assert_eq!(header["scheme"], header["engine"]["scheme"]);
     let ticks: Vec<&str> = lines[1..lines.len() - 2]
         .iter()

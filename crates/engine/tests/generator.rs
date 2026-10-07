@@ -130,3 +130,57 @@ fn the_same_seed_gives_the_same_league() {
     let c = generate_league(4, 4, &content);
     assert_ne!(a, c);
 }
+
+/// The body half of the world targets: over a generated top-flight league, the mean height
+/// of each position is within 2 cm of its content mean, the age mean and spread within a
+/// year of theirs, and the share of foreign players within 0.05 of its content share.
+#[test]
+fn generated_heights_ages_and_nationalities_meet_the_content_targets() {
+    let content = common::content();
+    let body = content
+        .tuning
+        .generator
+        .body
+        .as_ref()
+        .expect("the shipped generator body");
+    let league = generate_league_in_tier(11, 60, 0, &content);
+    let players: Vec<&engine::data::PlayerEntry> = league.iter().flat_map(|t| &t.players).collect();
+    for position in Position::ALL {
+        let heights: Vec<f64> = players
+            .iter()
+            .filter(|p| p.position == position)
+            .map(|p| f64::from(p.height.unwrap()))
+            .collect();
+        if heights.is_empty() {
+            continue;
+        }
+        let mean = heights.iter().sum::<f64>() / heights.len() as f64;
+        let target = body.height[position.code()].mean;
+        assert!(
+            (mean - target).abs() <= 2.0,
+            "{} mean height {mean:.1} against {target} over {}",
+            position.code(),
+            heights.len()
+        );
+    }
+    let ages: Vec<f64> = players.iter().map(|p| f64::from(p.age.unwrap())).collect();
+    let n = ages.len() as f64;
+    let mean = ages.iter().sum::<f64>() / n;
+    let spread = (ages.iter().map(|a| (a - mean) * (a - mean)).sum::<f64>() / n).sqrt();
+    assert!((mean - body.age.mean).abs() <= 1.0, "age mean {mean:.2}");
+    assert!(
+        (spread - body.age.spread).abs() <= 1.0,
+        "age spread {spread:.2}"
+    );
+    let nation = &body.nationality;
+    let foreign = players
+        .iter()
+        .filter(|p| p.nationality.as_deref() != Some(nation.home.as_str()))
+        .count() as f64
+        / n;
+    assert!(
+        (foreign - nation.foreign_share).abs() <= 0.05,
+        "foreign share {foreign:.3} against {}",
+        nation.foreign_share
+    );
+}

@@ -59,6 +59,13 @@ pub struct SquadPlayer {
     pub derived: Derived,
     /// His base stage values.
     pub stages: crate::contract::StageValues,
+    /// His height and age, as the team file gives them.
+    pub body: crate::contract::body::Body,
+    /// His match condition inputs; absent fields have no effect.
+    pub condition: crate::data::team::Condition,
+    /// His energy at kick-off, from his days of rest ([`Team::set_start_energy`]); 1.0
+    /// when none are given.
+    pub start_energy: f64,
 }
 
 /// A team: club identity, an attack direction, the squad, the lineup and bench, the
@@ -169,19 +176,36 @@ impl Team {
             .iter()
             .map(|entry| {
                 let attributes = Attributes::from_entry(&entry.attributes, schema);
-                let (derived, stages) = Derived::from_blend(&attributes, &blend, schema, tuning);
+                let body = crate::contract::body::Body {
+                    height_cm: entry.height,
+                    age: entry.age,
+                };
+                let (derived, stages) =
+                    Derived::from_blend(&attributes, &blend, schema, tuning, body);
                 SquadPlayer {
                     shirt: entry.shirt,
                     position: entry.position,
                     derived,
                     stages,
                     attributes,
+                    body,
+                    condition: entry.condition.unwrap_or_default(),
+                    start_energy: 1.0,
                 }
             })
             .collect();
         team.bench = (PLAYERS_PER_TEAM..file.players.len()).collect();
         let players = team.starters();
         Ok((team, players))
+    }
+
+    /// Sets every squad player's energy at kick-off from his days of rest, his age, and the
+    /// fatigue tuning's recovery per rest day; a player with no rest days given starts full.
+    pub fn set_start_energy(&mut self, tuning: &Tuning, recovery_per_day: f64) {
+        let jobs = &tuning.contract.body;
+        for s in &mut self.squad {
+            s.start_energy = jobs.start_energy(s.condition.rest_days, s.body, recovery_per_day);
+        }
     }
 
     /// The eleven players of the lineup, each at its slot's base position, fresh.
@@ -194,7 +218,8 @@ impl Team {
             .collect()
     }
 
-    /// Squad player `squad` in `slot`, fresh and at rest at `pos`.
+    /// Squad player `squad` in `slot`, at his base values, with his kick-off energy, and at
+    /// rest at `pos`.
     pub fn player(&self, slot: usize, squad: usize, pos: DVec2) -> Player {
         let s = &self.squad[squad];
         Player {
@@ -205,7 +230,8 @@ impl Team {
             shirt: s.shirt,
             attributes: s.attributes,
             derived: s.derived,
-            energy: 1.0,
+            deltas: [0; crate::contract::states::GROUP_COUNT],
+            energy: s.start_energy,
             pos,
             vel: DVec2::ZERO,
             target: pos,
