@@ -75,10 +75,10 @@ Every registered module, and every off version, carries a card.
 | `inputs` | What the module reads from the read-only match view. |
 | `outputs` | What the module returns: results or proposed changes. |
 | `tuning` | The tuning values the module reads, or the one entry `none`. |
-| `calibration` | A band name from `content/realism-bands.json`, or `none: <reason>`. |
+| `calibration` | The name of a band or band group from `content/realism-bands.json`, or `none: <reason>`. |
 | `keys` | The action keys whose draws the loop takes for the module. |
 
-The card check refuses a card when `purpose`, `inputs`, `outputs`, `calibration` or an entry of `tuning` is empty, when `tuning` has no entry, or when `calibration` is neither a band name nor `none:` followed by a reason.
+The card check refuses a card when `purpose`, `inputs`, `outputs`, `calibration` or an entry of `tuning` is empty, when `tuning` has no entry, or when `calibration` names no band or band group and is not `none:` followed by a reason.
 
 The key-ownership check refuses a registry in which an action key has no owner or more than one owner.
 

@@ -51,7 +51,7 @@ pub const STILL_AIR_V1_CARD: ModuleCard = ModuleCard {
 };
 ```
 
-- `calibration` names a band in `content/realism-bands.json`, or reads `none:` and a reason.
+- `calibration` names a band or band group in `content/realism-bands.json`, or reads `none:` and a reason.
 - `keys` lists the action keys whose random draws the loop takes for this module. A module that draws nothing owns no key. A key that you add must not belong to another module: the ownership check fails when a key has two owners.
 
 ## Register the module

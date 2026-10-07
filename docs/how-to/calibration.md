@@ -18,7 +18,7 @@ A baseline is the `report.json` of an earlier run on the same seed and match cou
 target/release/engine-cli calibrate --seed 42 --matches 1000 --out runs/base-42
 ```
 
-This plays every suite, 57,000 matches: see [How long the runs take](#how-long-the-runs-take). Keep `runs/base-42/report.json`; every targeted run below compares with it.
+This plays every suite, 57,000 matches: see [How long the runs take](../explanation/realism-harness.md#how-long-the-runs-take). Keep `runs/base-42/report.json`; every targeted run below compares with it.
 
 For the red-card experiment, make its own baseline:
 
@@ -153,19 +153,14 @@ target/release/engine-cli calibrate --seed 2026 --out runs/eval-2026
 
 Read `calib.pass` and the band table at the end of standard error. Read the stage table to see where the time went.
 
-## How long the runs take
+## Time a run
 
-Time a run on an idle machine: other heavy work on the processor slows every thread. Read the console total and `calib.wall_ms.total` in `report.json`, and note the number of logical processors (`--jobs` defaults to all of them).
+1. Stop other heavy work on the machine. Other heavy work slows every thread.
+2. Run the command.
+3. Read the total time on the console and `calib.wall_ms.total` in `report.json`.
+4. Note the number of logical processors. `--jobs` defaults to all of them.
 
-Measurement note, taken on the 8-thread reference machine (AMD Ryzen 7 9800X3D, simultaneous threading off) with other heavy work running:
-
-| Run | Matches played | Time |
-|---|---|---|
-| `--matches 20`, every suite | 1,140 | 86 to 91 s (about 13 matches per second) |
-| `--suite equal --matches 64 --jobs 1` | 64 | 23 s on one thread (about 0.36 s per match) |
-| `--suite equal --matches 64 --jobs 8` | 64 | 6 s |
-
-At that rate the realistic evaluation takes about 70 minutes. On an idle machine, one match takes about a third of a second on one thread, so with perfect scaling over 8 threads the evaluation takes about 40 minutes. A change run plays the changed engine's pilot of 11,400 matches and then grows to its power target. It judges the formations suite pooled over every pairing, and a band already far outside its range sets no target. On today's engine and the default content the pilot sets the targets equal 1,000, formations 200 per pairing (the pilot itself), and strength 278, so a change run plays about 12,300 of the changed engine's matches: about 8.4 minutes at a third of a second per match over 8 threads with perfect scaling, and about 10 minutes at 85 percent scaling. This is a projection from the pilot; the measured median of three timed runs on an idle machine replaces it.
+To compare your time with the measured and projected times of each run, see [How long the runs take](../explanation/realism-harness.md#how-long-the-runs-take).
 
 ## Read why a change run plays so many matches
 
@@ -193,8 +188,12 @@ When a change brings the band back inside its range, the next change run's pilot
 
 ## Build a faster calibrate binary
 
-Measure before you keep a faster build: run the same pairing with the release build and with the other build, and check that the diff between the two shows a change of exactly 0 on every row. A native CPU target (`RUSTFLAGS="-C target-cpu=native"`) is a local option only: the shipped build runs on other CPUs.
+Measure a faster build before you keep it:
 
-On the 8-core reference machine, a build with whole-program optimisation (`lto = "fat"`, `codegen-units = 1`) and one with a native CPU target gave the same figures as the release build, but neither was faster by more than the spread between two release runs. The release build is the one to use.
+1. Run the same pairing with the release build.
+2. Run the same pairing with the other build.
+3. Check that the diff between the two runs shows a change of exactly 0 on every row.
 
-A faster rule checker made the same 1,140-match run about 15 percent faster on the same machine, with every result unchanged: the checks fell from about 250 ms to about 145 ms of thread time per match.
+Use a native CPU target (`RUSTFLAGS="-C target-cpu=native"`) only on your own machine. The shipped build runs on other CPUs.
+
+Unless your measurement shows a gain, use the release build. On the reference machine, no other build was faster by more than the spread between two release runs. See [How long the runs take](../explanation/realism-harness.md#how-long-the-runs-take).
