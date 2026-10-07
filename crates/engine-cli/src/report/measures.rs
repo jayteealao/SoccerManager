@@ -333,16 +333,18 @@ pub fn terms(def: &BandDef, obs: &[Obs<'_>], scope: Scope) -> Terms {
         error: Error::Mean,
         value: None,
     };
-    let push = |t: &mut Terms, covered: bool, a: &[f64], b: &[f64]| {
+    // The scope test comes first: a match outside the scope adds zeros without reading
+    // its fields, so a per-pairing row costs its own matches, not the whole suite.
+    fn push<const N: usize>(
+        t: &mut Terms,
+        covered: bool,
+        of: impl FnOnce() -> ([f64; N], [f64; N]),
+    ) {
         t.covered.push(covered);
-        if covered {
-            t.a.extend_from_slice(a);
-            t.b.extend_from_slice(b);
-        } else {
-            t.a.extend(a.iter().map(|_| 0.0));
-            t.b.extend(b.iter().map(|_| 0.0));
-        }
-    };
+        let (a, b) = if covered { of() } else { ([0.0; N], [0.0; N]) };
+        t.a.extend_from_slice(&a);
+        t.b.extend_from_slice(&b);
+    }
     let take = |o: &Obs<'_>| o.played() && scope.holds(o);
     match &def.measure {
         Measure::Mean {
@@ -350,29 +352,34 @@ pub fn terms(def: &BandDef, obs: &[Obs<'_>], scope: Scope) -> Terms {
             of,
         } => {
             for o in obs {
-                push(&mut t, take(o), &[sum(o.stats, of, None)], &[1.0]);
+                push(&mut t, take(o), || ([sum(o.stats, of, None)], [1.0]));
             }
         }
         Measure::Mean { per: Per::Team, of } => {
             t.stride = 2;
             for o in obs {
-                let home = sum(o.stats, of, Some(0));
-                let away = sum(o.stats, of, Some(1));
-                push(&mut t, take(o), &[home, away], &[1.0, 1.0]);
+                push(&mut t, take(o), || {
+                    let home = sum(o.stats, of, Some(0));
+                    let away = sum(o.stats, of, Some(1));
+                    ([home, away], [1.0, 1.0])
+                });
             }
         }
         Measure::Share { of, op, value } => {
             t.error = Error::Share;
             for o in obs {
-                let hit = op.holds(sum(o.stats, of, None), *value);
-                push(&mut t, take(o), &[f64::from(u8::from(hit))], &[1.0]);
+                push(&mut t, take(o), || {
+                    let hit = op.holds(sum(o.stats, of, None), *value);
+                    ([f64::from(u8::from(hit))], [1.0])
+                });
             }
         }
         Measure::Ratio { num, den } => {
             t.error = Error::Ratio;
             for o in obs {
-                let (y, x) = (sum(o.stats, num, None), sum(o.stats, den, None));
-                push(&mut t, take(o), &[y], &[x]);
+                push(&mut t, take(o), || {
+                    ([sum(o.stats, num, None)], [sum(o.stats, den, None)])
+                });
             }
         }
         Measure::Builtin {
@@ -380,18 +387,22 @@ pub fn terms(def: &BandDef, obs: &[Obs<'_>], scope: Scope) -> Terms {
         } => {
             t.error = Error::Share;
             for o in obs {
-                let side = o.boosted.unwrap_or(0);
-                let win = o.stats.goals[side] > o.stats.goals[1 - side];
                 let covered = take(o) && o.boosted.is_some();
-                push(&mut t, covered, &[f64::from(u8::from(win))], &[1.0]);
+                push(&mut t, covered, || {
+                    let side = o.boosted.unwrap_or(0);
+                    let win = o.stats.goals[side] > o.stats.goals[1 - side];
+                    ([f64::from(u8::from(win))], [1.0])
+                });
             }
         }
         Measure::Builtin {
             name: Builtin::ReducedMinusFull,
         } => {
             for o in obs {
-                let g = o.stats.goals.map(f64::from);
-                push(&mut t, take(o), &[g[1] - g[0]], &[1.0]);
+                push(&mut t, take(o), || {
+                    let g = o.stats.goals.map(f64::from);
+                    ([g[1] - g[0]], [1.0])
+                });
             }
         }
         Measure::Builtin {
@@ -400,7 +411,7 @@ pub fn terms(def: &BandDef, obs: &[Obs<'_>], scope: Scope) -> Terms {
             t.error = Error::Delta;
             for (i, o) in obs.iter().enumerate() {
                 let home = f64::from(o.stats.goals[0]);
-                push(&mut t, take(o), &[home], &[1.0]);
+                push(&mut t, take(o), || ([home], [1.0]));
                 let control = o.played() && o.arm == Some(0);
                 t.c[i] = if control { home } else { 0.0 };
                 t.d[i] = f64::from(u8::from(control));
