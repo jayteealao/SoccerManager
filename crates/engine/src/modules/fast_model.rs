@@ -18,7 +18,11 @@
 //! multiplies both means, so the two scores rise and fall together as the full engine's do
 //! (a bivariate negative binomial: each side alone is negative binomial with that
 //! dispersion). The joint table over 0 to 15 goals a side then carries the Dixon-Coles
-//! factor on 0-0, 1-0, 0-1 and 1-1 and a weight on every draw, and is normalised. A goal's
+//! factor on 0-0, 1-0, 0-1 and 1-1, a weight on every draw, and the favourite's tilt: a
+//! home win's probability is multiplied by `(λ / μ)^tilt`, an away win's by `(μ / λ)^tilt`,
+//! where `λ` and `μ` are the two means, so the side with the higher mean wins a little more
+//! often and loses a little less often than the shared table alone gives, with the same
+//! draws; then the table is normalised. A goal's
 //! minute is drawn from 90 shares fitted from the full engine's goal minutes, and its scorer
 //! from the side's six most advanced outfield players by finishing. The model plays
 //! regulation time only.
@@ -46,8 +50,11 @@ use crate::validate::StreamRules;
 pub const MAX_GOALS: usize = 16;
 /// The minutes of regulation time a goal can fall in.
 pub const MINUTES: usize = 90;
-/// The fit file's layout version.
-pub const FIT_VERSION: u32 = 2;
+/// The fit file's layout version. Version 3 adds the favourite's tilt; a version 2 file
+/// reads with a tilt of 0, which plays as version 2 did.
+pub const FIT_VERSION: u32 = 3;
+/// The fit file layout before the favourite's tilt.
+pub const FIT_VERSION_2: u32 = 2;
 /// The fit file inside the content folder. `Content::load` never reads it, so it moves no
 /// content hash.
 pub const FIT_FILE: &str = "fast-model.json";
@@ -86,7 +93,7 @@ pub fn role_curve_value(stages: &StageValues, keeper: bool) -> f64 {
     sum / f64::from(count.max(1))
 }
 
-/// The seven fitted parameters.
+/// The nine fitted parameters.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FastParams {
@@ -108,6 +115,9 @@ pub struct FastParams {
     pub rho: f64,
     /// Every draw's probability is multiplied by `1 + draw` before the table is normalised.
     pub draw: f64,
+    /// The favourite's tilt: a home win's probability is multiplied by `(λ / μ)^tilt` and an
+    /// away win's by `(μ / λ)^tilt` before the table is normalised.
+    pub tilt: f64,
 }
 
 /// What the model plays from: its parameters, the share of goals in each minute, and the
@@ -136,6 +146,7 @@ impl FastFit {
             p.dispersion,
             p.rho,
             p.draw,
+            p.tilt,
         ]
         .iter()
         .all(|v| v.is_finite());
@@ -398,12 +409,16 @@ pub fn shared_pmf(lambda: f64, mu: f64, k: f64) -> [[f64; MAX_GOALS]; MAX_GOALS]
 pub fn score_table(params: &FastParams, kick_off: &KickOff) -> [[f64; MAX_GOALS]; MAX_GOALS] {
     let [lambda, mu] = means(params, kick_off);
     let mut table = shared_pmf(lambda, mu, params.dispersion);
+    // The favourite's tilt: the factor of a home win; an away win takes its inverse.
+    let favourite = libm::pow(lambda / mu, params.tilt);
     let mut sum = 0.0;
     for (h, row) in table.iter_mut().enumerate() {
         for (a, cell) in row.iter_mut().enumerate() {
             *cell *= tau(h, a, lambda, mu, params.rho);
-            if h == a {
-                *cell *= 1.0 + params.draw;
+            match h.cmp(&a) {
+                std::cmp::Ordering::Equal => *cell *= 1.0 + params.draw,
+                std::cmp::Ordering::Greater => *cell *= favourite,
+                std::cmp::Ordering::Less => *cell /= favourite,
             }
             sum += *cell;
         }
@@ -516,6 +531,7 @@ mod tests {
                 dispersion: 6.0,
                 rho: -0.08,
                 draw: 0.3,
+                tilt: 0.0,
             },
             minute_shares: vec![1.0 / MINUTES as f64; MINUTES],
             events: EventFit::plain(FitRules::standard()),
@@ -570,6 +586,41 @@ mod tests {
     fn a_stronger_side_scores_more() {
         let [h, a] = means(&fit().params, &KickOff::even([11.6, 10.0]));
         assert!(h > 2.0 * a, "{h} {a}");
+    }
+
+    /// The tilt moves wins from the weaker side to the stronger one, adds no draws, and leaves
+    /// an even match nearly alone.
+    #[test]
+    fn the_tilt_favours_the_side_with_the_higher_mean() {
+        let shares = |table: &[[f64; MAX_GOALS]; MAX_GOALS]| {
+            let mut out = [0.0; 3];
+            for (h, row) in table.iter().enumerate() {
+                for (a, p) in row.iter().enumerate() {
+                    out[usize::from(h <= a) + usize::from(h < a)] += p;
+                }
+            }
+            out
+        };
+        let uneven = KickOff::even([11.6, 10.0]);
+        let mut tilted = fit();
+        tilted.params.tilt = 0.25;
+        let [win, draw, loss] = shares(&score_table(&fit().params, &uneven));
+        let [t_win, t_draw, t_loss] = shares(&score_table(&tilted.params, &uneven));
+        assert!(
+            t_win > win && t_loss < loss,
+            "{win} {t_win} {loss} {t_loss}"
+        );
+        assert!(t_draw <= draw, "{draw} {t_draw}");
+        let even = KickOff::even([10.0, 10.0]);
+        let plain = score_table(&fit().params, &even);
+        let with = score_table(&tilted.params, &even);
+        let [lambda, mu] = means(&fit().params, &even);
+        let expect = libm::pow(lambda / mu, 0.25);
+        // At an even match the factor is the home term's alone, close to 1.
+        assert!((expect - 1.0).abs() < 0.05);
+        assert!(
+            (with[2][1] / with[1][2] - plain[2][1] / plain[1][2] * expect * expect).abs() < 1e-9
+        );
     }
 
     #[test]

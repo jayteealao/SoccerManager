@@ -23,7 +23,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
 | `realism-bands.json` | 2 | The accepted realism bands the calibration run checks: four from version 1 and eleven from real-match data. They are acceptance criteria, never tuning values |
-| `fast-model.json` | 2 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
+| `fast-model.json` | 3 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
 
 Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files and `tactics.json` are read in version 2 and in version 1, which converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 3 and in versions 2 and 1, and `tuning.json` in versions 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy. A version 1 or 2 attribute file converts to version 3 the same way (see [Version 2 files](#version-2-files)). Any other version is refused the same way.
 
@@ -408,12 +408,12 @@ The fit of the fast model, written by `engine-cli fast-model fit` (see [the comm
 
 | Field | Holds |
 |---|---|
-| `schema_version` | 2. A file of format 1 holds the score fit only; the command refuses it and names `engine-cli fast-model fit` |
+| `schema_version` | 3. A file of format 2 has no `tilt`; it reads with a tilt of 0, which plays as it did. A file of format 1 holds the score fit only; the command refuses it and names `engine-cli fast-model fit` |
 | `model` | The module the fit is for: `fitted-scores@1` |
 | `engine_id` | The engine id of the results the fit came from: `golden-<ledger index>-<build>-<digest>` |
 | `engine` | The id's parts: `id`, `ledger_index`, `build` and `digest` |
 | `fitted_by` | The `engine_version` and `build` of the program that fitted it |
-| `fit.params` | The eight parameters: `base`, `home`, `attack`, `curve`, `defence`, `dispersion` (the shape of the match factor both scores share), `rho` and `draw` |
+| `fit.params` | The nine parameters: `base`, `home`, `attack`, `curve`, `defence`, `dispersion` (the shape of the match factor both scores share), `rho`, `draw` and `tilt` (the favourite's tilt) |
 | `fit.minute_shares` | 90 shares, one per minute of regulation time, summing to 1 |
 | `fit.events.fouls`, `offsides`, `corners`, `throw_ins`, `goal_kicks`, `injuries` | One count each: the seven `coefficients` of the side's log mean over 1, the home flag, `o`, `t`, `o²`, `t²` and `o × t`, where `o` is the side's strength and `t` the other side's, each as (strength − 10) / 2, a strength being the level of the starting eleven read through the attribute contract (see [the command-line reference](cli.md#fast-model)); `dispersion` (the negative binomial's shape, or `null` for a Poisson count), and 92 `minute_shares` summing to 1, 45 per half and one for each half's added time |
 | `fit.events.advantage`, `penalty`, `yellow`, `red`, `second_yellow`, `injury_stoppage` | The four `coefficients` of each share's log over 1, the home flag, `o` and `t` of the side: the shares of fouls played on with advantage; of fouls not played on that give a penalty; of fouls booked; of fouls sent off straight; of yellow cards, while a player of the side is booked, that go to a booked player; and of injuries that stop play |

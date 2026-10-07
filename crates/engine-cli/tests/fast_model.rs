@@ -99,7 +99,8 @@ fn a_small_fit_runs_and_records_the_golden_results_id() {
     assert_eq!(report["fit"]["model"], "fitted-scores@1");
     assert_eq!(report["fit"]["batch"]["matches_per_pairing"], 4);
     assert_eq!(report["fit"]["check"]["figures"], 261);
-    assert_eq!(report["fit"]["schema_version"], 2);
+    assert_eq!(report["fit"]["schema_version"], 3);
+    assert!(report["fit"]["fit"]["params"]["tilt"].is_f64());
     let shares = report["fit"]["fit"]["minute_shares"].as_array().unwrap();
     assert_eq!(shares.len(), 90);
     let events = &report["fit"]["fit"]["events"];
@@ -111,7 +112,7 @@ fn a_small_fit_runs_and_records_the_golden_results_id() {
 }
 
 /// A fit file of format 1 (the score only) is refused with a message that names the
-/// command that writes format 2; the format-2 fit is the control.
+/// command that writes format 3; the format-3 fit is the control.
 #[test]
 fn a_format_1_fit_is_refused_and_names_the_fit_command() {
     let (dir, _) = small_fit();
@@ -129,7 +130,7 @@ fn a_format_1_fit_is_refused_and_names_the_fit_command() {
     assert_eq!(done.status.code(), Some(1), "{stderr}");
     assert!(stderr.contains("schema_version 1"), "{stderr}");
     assert!(
-        stderr.contains("this build reads 2; run engine-cli fast-model fit"),
+        stderr.contains("this build reads 3; run engine-cli fast-model fit"),
         "{stderr}"
     );
     let control = run(
@@ -137,6 +138,29 @@ fn a_format_1_fit_is_refused_and_names_the_fit_command() {
         &["fast-model", "stale", "--fit", good.to_str().unwrap()],
     );
     assert_eq!(control.status.code(), Some(0));
+}
+
+/// A fit file of format 2 (no favourite's tilt) still reads: it reads with a tilt of 0 and
+/// passes the stale check as the format-3 file it came from does.
+#[test]
+fn a_format_2_fit_reads_with_no_tilt() {
+    let (dir, _) = small_fit();
+    let good = dir.join("from-report.json");
+    let mut fit: Value = serde_json::from_str(&std::fs::read_to_string(&good).unwrap()).unwrap();
+    fit["schema_version"] = Value::from(2);
+    fit["fit"]["params"].as_object_mut().unwrap().remove("tilt");
+    let old = dir.join("format-2.json");
+    std::fs::write(&old, serde_json::to_string_pretty(&fit).unwrap()).unwrap();
+    let done = run(
+        dir,
+        &["fast-model", "stale", "--fit", old.to_str().unwrap()],
+    );
+    assert_eq!(
+        done.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&done.stderr)
+    );
 }
 
 /// A fit whose engine id differs from the golden results' id fails and names both;
@@ -326,7 +350,7 @@ fn the_shipped_fit_records_the_golden_results_id() {
         fit["check"]["pass"].as_bool().unwrap(),
         "the shipped fit passed its check"
     );
-    assert_eq!(fit["schema_version"], 2);
+    assert_eq!(fit["schema_version"], 3);
     assert_eq!(fit["check"]["figures"], 261);
     assert_eq!(fit["check"]["z"], 3.7);
     assert_eq!(fit["check"]["event_z"], 4.07);

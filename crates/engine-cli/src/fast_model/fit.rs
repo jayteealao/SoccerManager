@@ -12,8 +12,14 @@
 //! group the equations are those of the Poisson likelihood. Coordinate ascent on the
 //! likelihood of the final scores under the whole normalised table then sets the
 //! dispersion, the low-score factor and the draw weight and refines the intercept and the
-//! home term, one golden-section search at a time. No statistics crate is in the workspace,
-//! and eight parameters do not need one.
+//! home term, one golden-section search at a time. The favourite's tilt is set as the mean
+//! terms are, on the groups: so that, summed over each side of each pairing, the model's
+//! wins and losses add up to the full engine's along the group's mean log ratio of the two
+//! means. Fitted match by match, the likelihood reads the clubs' differences inside a
+//! pairing (which the levels see only in part) and pulls the tilt the wrong way; on the
+//! groups it follows the pairings the check compares. The tilt and the likelihood step
+//! alternate a few rounds. No statistics crate is in the workspace, and nine parameters do
+//! not need one.
 
 use engine::modules::fast_events::{
     BINS, COUNT_TERMS, CountFit, EventFit, FitRules, SHARE_TERMS, ShareFit, SubstitutionFit,
@@ -35,8 +41,15 @@ pub fn fit(rows: &[Row], rules: FitRules) -> FastFit {
         dispersion: 5.0,
         rho: 0.0,
         draw: 0.0,
+        tilt: 0.0,
     };
-    let params = joint(rows, params);
+    let start = params;
+    let mut params = joint(rows, params, SWEEPS);
+    // The tilt from the groups, then the likelihood step again from the start with that tilt.
+    for _ in 0..TILT_ROUNDS {
+        let tilt = tilt(rows, &params);
+        params = joint(rows, FastParams { tilt, ..start }, TILT_SWEEPS);
+    }
     FastFit {
         params,
         minute_shares: minute_shares(rows),
@@ -145,12 +158,68 @@ fn log_likelihood(rows: &[Row], params: &FastParams) -> f64 {
 
 /// Sweeps of coordinate ascent on the whole likelihood.
 const SWEEPS: usize = 4;
+/// Rounds of the tilt and the likelihood step after the first likelihood step.
+const TILT_ROUNDS: usize = 3;
+/// Sweeps of the likelihood step in each tilt round.
+const TILT_SWEEPS: usize = 2;
+
+/// The favourite's tilt that solves the grouped moment equation
+/// `Σ_g ḡ_g Σ_{i in g} (w_i − E[w_i]) = 0`, where `w_i` is +1 for a home win, −1 for an away
+/// win and 0 for a draw, `E[w_i]` the model's, and `ḡ_g` the mean of `ln(λ / μ)` over the
+/// rows of the pairing `g`. The model's side of the equation falls as the tilt rises, so a
+/// bisection on −1 to 2 finds it, or the end it lies beyond.
+fn tilt(rows: &[Row], params: &FastParams) -> f64 {
+    let log_ratio = |r: &Row| {
+        let [lambda, mu] = fast_model::means(params, &r.kick_off);
+        (lambda / mu).ln()
+    };
+    let pairings = rows.iter().map(|r| r.pairing + 1).max().unwrap_or(0);
+    let mut mean = vec![0.0; pairings];
+    let mut size = vec![0.0; pairings];
+    for r in rows {
+        mean[r.pairing] += log_ratio(r);
+        size[r.pairing] += 1.0;
+    }
+    for (m, n) in mean.iter_mut().zip(&size) {
+        if *n > 0.0 {
+            *m /= n;
+        }
+    }
+    let sign = |a: usize, b: usize| -> f64 { f64::from(a.cmp(&b) as i8) };
+    let equation = |tilt: f64| -> f64 {
+        let p = FastParams { tilt, ..*params };
+        rows.iter()
+            .map(|r| {
+                let table = score_table(&p, &r.kick_off);
+                let mut expected = 0.0;
+                for (h, row) in table.iter().enumerate() {
+                    for (a, cell) in row.iter().enumerate() {
+                        expected += cell * sign(h, a);
+                    }
+                }
+                let won = sign(r.goals[0] as usize, r.goals[1] as usize);
+                mean[r.pairing] * (won - expected)
+            })
+            .sum()
+    };
+    let (mut lo, mut hi) = (-1.0, 2.0);
+    let low = equation(lo) > 0.0;
+    for _ in 0..40 {
+        let mid = (lo + hi) / 2.0;
+        if (equation(mid) > 0.0) == low {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    (lo + hi) / 2.0
+}
 
 /// Coordinate ascent on the likelihood of the final scores: each sweep searches the
 /// dispersion (on a log scale, 0.3 to 200), the low-score factor (-0.3 to 0.3), the draw
 /// weight (-0.5 to 1.5) and then the intercept and the home term within 0.3 of their values,
-/// one at a time. The strength terms keep the moment fit's values.
-fn joint(rows: &[Row], mut params: FastParams) -> FastParams {
+/// one at a time. The strength terms and the tilt keep their values.
+fn joint(rows: &[Row], mut params: FastParams, sweeps: usize) -> FastParams {
     type Field = fn(&mut FastParams) -> &mut f64;
     let means: [Field; 2] = [|p| &mut p.base, |p| &mut p.home];
     let with = |params: &FastParams, field: Field, v: f64| {
@@ -158,7 +227,7 @@ fn joint(rows: &[Row], mut params: FastParams) -> FastParams {
         *field(&mut p) = v;
         p
     };
-    for _ in 0..SWEEPS {
+    for _ in 0..sweeps {
         let dispersion: Field = |p| &mut p.dispersion;
         let t = golden_max(
             |t| log_likelihood(rows, &with(&params, dispersion, t.exp())),
@@ -542,7 +611,7 @@ mod tests {
     use super::*;
     use engine::modules::fast_model::{FastModel, FittedScoresV1, KickOff};
 
-    use crate::fast_model::batch::tally;
+    use crate::fast_model::batch::{EventTally, tally};
 
     /// 6 000 rows drawn from a known model across strengths: the fit recovers it.
     #[test]
@@ -557,6 +626,7 @@ mod tests {
                 dispersion: 5.0,
                 rho: -0.1,
                 draw: 0.3,
+                tilt: 0.0,
             },
             minute_shares: (0..MINUTES)
                 .map(|m| (1.0 + m as f64 / 90.0) / 135.5)
@@ -601,14 +671,86 @@ mod tests {
             ("curve", t.curve, g.curve),
             ("defence", t.defence, g.defence),
             ("rho", t.rho, g.rho),
-            ("draw", t.draw, g.draw),
             ("1/dispersion", 1.0 / t.dispersion, 1.0 / g.dispersion),
         ] {
             assert!((a - b).abs() < 0.05, "{name}: truth {a}, fit {b}");
         }
+        // The draw weight and the tilt trade against each other when every row is its own
+        // group: what they must recover together is the result, each row's home win, draw
+        // and away win shares, on average over the rows.
+        let shares = |p: &FastParams| {
+            let mut out = [0.0; 3];
+            for r in &rows {
+                for (h, line) in score_table(p, &r.kick_off).iter().enumerate() {
+                    for (a, cell) in line.iter().enumerate() {
+                        out[usize::from(h <= a) + usize::from(h < a)] += cell / rows.len() as f64;
+                    }
+                }
+            }
+            out
+        };
+        for (name, a, b) in ["home win", "draw", "away win"]
+            .into_iter()
+            .zip(shares(&t))
+            .zip(shares(&g))
+            .map(|((n, a), b)| (n, a, b))
+        {
+            assert!((a - b).abs() < 0.01, "{name} share: truth {a}, fit {b}");
+        }
+        assert!(g.tilt.abs() < 0.15, "tilt {}", g.tilt);
         let sum: f64 = got.minute_shares.iter().sum();
         assert!((sum - 1.0).abs() < 1e-9);
         assert!(got.minute_shares[89] > got.minute_shares[0]);
+    }
+
+    /// 6 000 rows drawn from a model like the shipped fit with a known tilt, in nine groups of
+    /// levels with a spread inside each: the grouped equation recovers the tilt.
+    #[test]
+    fn the_tilt_solves_its_grouped_equation() {
+        let truth = FastFit {
+            params: FastParams {
+                base: -1.6,
+                home: 0.0,
+                attack: 0.32,
+                curve: 0.086,
+                defence: -0.14,
+                dispersion: 6.8,
+                rho: 0.0,
+                draw: 0.16,
+                tilt: 0.25,
+            },
+            minute_shares: vec![1.0 / MINUTES as f64; MINUTES],
+            events: EventFit::plain(FitRules::standard()),
+        };
+        let rows: Vec<Row> = (0..6_000u64)
+            .map(|i| {
+                let pairing = (i % 9) as usize;
+                let spread = |n: u64| (n % 7) as f64 / 3.0 - 1.0;
+                let level = [
+                    14.0 + 2.0 * (pairing / 3) as f64,
+                    14.0 + 2.0 * (pairing % 3) as f64,
+                ];
+                let kick_off = KickOff {
+                    attack: [level[0] + spread(i / 9), level[1] + spread(i / 63)],
+                    defence: [level[0] + spread(i / 441), level[1] + spread(i / 17)],
+                    ..KickOff::even(level)
+                };
+                let m = FittedScoresV1.play(&truth, &kick_off, i).unwrap();
+                Row {
+                    pairing,
+                    kick_off,
+                    goals: m.scores,
+                    goal_minutes: Vec::new(),
+                    tally: EventTally::default(),
+                }
+            })
+            .collect();
+        let start = FastParams {
+            tilt: 0.0,
+            ..truth.params
+        };
+        let got = tilt(&rows, &start);
+        assert!((got - 0.25).abs() < 0.08, "tilt {got}");
     }
 
     /// 20 000 fast matches drawn from known event rates, each side's strength from 35 to 65
@@ -627,6 +769,7 @@ mod tests {
                 dispersion: 5.0,
                 rho: 0.0,
                 draw: 0.0,
+                tilt: 0.0,
             },
             minute_shares: vec![1.0 / MINUTES as f64; MINUTES],
             events: EventFit::plain(FitRules::standard()),
