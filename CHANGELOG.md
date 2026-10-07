@@ -4,6 +4,10 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- Every player who played gets a match rating from 1.0 to 10.0 at full time, from what he did in the match: goals, shots, passes, tackles, saves, cards, and his side's result and clean sheet. The match record lists the ratings, and the live stream sends them after the closing statistics.
+
 ### Changed
 
 - Player ratings are on a scale of 1 to 20 with one decimal, in tenths. Every screen shows a rating as its whole number. Matches play exactly as before: a rating is the old value halved, with nothing lost.
@@ -25,6 +29,10 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 - Two new modifier slots, `engine.modifier.sharpness` and `engine.modifier.adaptation`, each with an off version. The slot file is version 2; a version 1 slot file converts as it loads.
 - The tuning file is version 4, with the state caps, the body jobs, the fatigue weights per attribute group and the sprint cap. A version 3 or 2 tuning file converts as it loads, so old replays still play.
 - The fast results model of `engine-cli fast-model` reads each side's strength through the attribute contract, as play reads the players, and fits its strength terms on the pairings it is checked on, so it follows how far a stronger side beats a weaker one on the new play.
+- Consistency and injury proneness are hidden values. Consistency sets how far a player's form moves his ratings from match to match and through a match, without making his side better or worse on average. Injury proneness replaces injury resistance: the higher it is, the more often the player is injured. No screen and no message shows either as a number: each reads as a word, with how sure the club is of it from the matches the player has played for the club, or as not yet known.
+- The attribute file is version 3 and the tuning file version 5. A version 1 team file converts injury resistance to injury proneness (21.0 less the resistance) and gives every player consistency 10.0. Older files of both convert as they load, so old replays still play.
+- The pre-match sheet's Risk column reads the injury-proneness word, and shows Not known for a player with no matches at the club.
+- The match stream protocol is version 5: a squad entry carries the hidden values as words in place of the injury-resistance figure. Replays recorded in versions 3 and 4 still open, with both hidden values shown as not yet known.
 
 ## [0.2.0-beta.3] - 2026-10-05
 

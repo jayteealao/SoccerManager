@@ -38,7 +38,7 @@ The table lists the slots in the order the engine resolves them. A required slot
 | `engine.fouls` | no | `fouls@1` | none | `off` | Tackle, FoulCard | yellow_cards_per_team |
 | `engine.offside` | no | `offside@1` | none | `off` | none | none: no offside band in realism-bands.json |
 | `engine.shot` | no | `shot@1` | none | `off` | Save, ShootoutSave | goals_per_xg |
-| `engine.fatigue` | no | `fatigue@1` | none | `off` | InjuryMinute, InjuryTackle | none: no fatigue or injury band in realism-bands.json |
+| `engine.fatigue` | no | `fatigue@1` | none | `off` | InjuryMinute, InjuryTackle, FormMatch, FormPeriod | none: no fatigue or injury band in realism-bands.json |
 | `engine.steering` | yes | `steering@1` | none | none | none | none: movement maths, no realism band |
 | `engine.pre-match` | no | `pre-match@1` | none | `off` | none | none: lineup choice, no realism band |
 | `engine.modifier.fatigue` | no | `fatigue-curve@1` | none | `off` | none | none: no fatigue band in realism-bands.json |

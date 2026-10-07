@@ -16,8 +16,8 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 
 | File | Schema version | Holds |
 |---|---|---|
-| `attributes.json` | 2 | The attribute schema: 30 to 50 names in four groups, each with its job in play, the stage tables that blend them for every action, and the skill gates |
-| `tuning.json` | 4 | Engine constants, the attribute contract with the state caps and the body jobs, decision weights, injury rates, the generator's world spread, fatigue curve, stream buffer |
+| `attributes.json` | 3 | The attribute schema: 30 to 50 names in four groups, each with its job in play (two of them hidden values), the stage tables that blend them for every action, and the skill gates |
+| `tuning.json` | 5 | Engine constants, the attribute contract with the state caps, the body jobs and consistency, decision weights, injury rates, the generator's world spread, fatigue curve, stream buffer, the hidden values' words and the match rating |
 | `rules/default.json` | 4 | The rule pack |
 | `tactics.json` | 1 | Ten formations, mentalities, team instructions, roles, duties, and the AI manager's settings |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
@@ -25,22 +25,26 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `realism-bands.json` | 2 | The accepted realism bands the calibration run checks: four from version 1 and eleven from real-match data. They are acceptance criteria, never tuning values |
 | `fast-model.json` | 2 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
 
-Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files and `tactics.json` are read in version 2 and in version 1, which converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 2 and in version 1, and `tuning.json` in versions 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy. Any other version is refused the same way.
+Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files and `tactics.json` are read in version 2 and in version 1, which converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 3 and in versions 2 and 1, and `tuning.json` in versions 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy. A version 1 or 2 attribute file converts to version 3 the same way (see [Version 2 files](#version-2-files)). Any other version is refused the same way.
 
 ## attributes.json
 
-`attributes` is a list of `{ "name", "group", "job" }`. Names are 2 to 32 characters and unique. Groups are `technical`, `mental`, `physical`, `goalkeeping`. The count is 30 to 50. Three names are required because play reads them directly rather than through a stage table: `pace` (the top-speed map), `technique` and `agility` (the skill gates). A schema without one of them is refused by name: `content refused: attributes attributes.json: attributes: required attribute agility is missing`.
+`attributes` is a list of `{ "name", "group", "job", "hidden" }`. Names are 2 to 32 characters and unique. Groups are `technical`, `mental`, `physical`, `goalkeeping`. The count is 30 to 50. Four names are required because play reads them directly rather than through a stage table: `pace` (the top-speed map), `technique` and `agility` (the skill gates), and `consistency` (the form offset). A schema without one of them is refused by name: `content refused: attributes attributes.json: attributes: required attribute agility is missing`.
 
-The shipped schema (36):
+`hidden` is optional and `false` when absent. A hidden value acts in play like any other attribute, but no screen and no message shows it as a number: a reader gets a word and how sure the club is of it (see [hidden](#hidden)). Its job is the `spread` stage or an `execute` stage. No state moves a hidden value, the league generator draws it apart from the player's level, and the club strength on the start screen leaves it out.
+
+The shipped schema (37):
 
 - technical: passing, dribbling, first_touch, finishing, crossing, heading, long_shots, tackling, technique
-- mental: positioning, vision, decisions, composure, anticipation, work_rate, aggression, concentration, teamwork
-- physical: pace, acceleration, stamina, strength, agility, balance, jumping, natural_fitness, injury_resistance
+- mental: positioning, vision, decisions, composure, anticipation, work_rate, aggression, concentration, teamwork, consistency (hidden)
+- physical: pace, acceleration, stamina, strength, agility, balance, jumping, natural_fitness, injury_proneness (hidden)
 - goalkeeping: handling, reflexes, aerial_reach, one_on_ones, kicking, throwing, command_of_area, communication, rushing_out
+
+Injury proneness leads the `injury` action's `execute` stage alone, and its direction is up: the more prone the player, the more often he is injured. Consistency is in no stage table. Its job is the `spread` stage: it sets how far the player's form moves his ratings from match to match and through a match (see [contract](#contract)).
 
 ### Jobs
 
-Every attribute has a `job`: `{ "action", "stage", "statistic", "direction" }`. `action` is one of the actions below; `stage` is `see`, `choose`, `execute`, `pressure`, or `top_speed` (pace only, with the action `sprint`); `statistic` names the match statistic the attribute moves, 3 to 120 characters; `direction` is `up` or `down`, the way the statistic moves as the rating rises. The stage tables must put the attribute in the stage its job names, or the file is refused, naming the attribute.
+Every attribute has a `job`: `{ "action", "stage", "statistic", "direction" }`. `action` is one of the actions below; `stage` is `see`, `choose`, `execute`, `pressure`, `top_speed` (pace only, with the action `sprint`), or `spread` (a hidden value only, with no `action`); a job without an action at any other stage is refused, naming the attribute; `statistic` names the match statistic the attribute moves, 3 to 120 characters; `direction` is `up` or `down`, the way the statistic moves as the rating rises. The stage tables must put the attribute in the stage its job names, or the file is refused, naming the attribute.
 
 ### Stage tables
 
@@ -60,6 +64,10 @@ A table is refused by stage, for example:
 ### Gates
 
 `gates` holds `chip` and `take_on` (a dribble with an opponent close), each `{ "technique_try", "agility_pull_off", "penalty_k" }`. A player tries the skill only from the technique rating `technique_try` (1 to 20); below the agility rating `agility_pull_off` (1 to 20) his execution loses `penalty_k` log-odds (0 to 5).
+
+### Version 2 files
+
+A version 2 attribute file has no hidden values. It still loads: `injury_resistance` becomes `injury_proneness` in the definitions and the tables, hidden, with its job turned up, and `consistency` is added from the build's third copy of the contract tables. A version 1 file converts through version 2.
 
 ### Version 1 files
 
@@ -168,7 +176,7 @@ While the other team has the ball, one back-line defender covers the ball carrie
 
 The foul chance of one tackle starts at `foul_base` and moves in log-odds: up by `foul_aggression_weight` per curve point of the tackler's commitment (the tackle `choose` stage, led by aggression) and down by `foul_tackling_weight` per curve point of his tackle `execute` stage, each measured from rating 10, inside the tackle floor and ceiling. `foul_ball_loss` is the share of fouls after which the fouled team loses the ball, for a fouled player of rating 10; a contest of his `stay_up` stage (balance) moves it. After any other foul, the referee plays advantage outside the penalty area. The yellow-card chance of a foul is `yellow_base + yellow_aggression_weight × commitment`, with commitment the share of the tackle `choose` stage (0.5 at rating 10), and the red-card chance is `red_base`. The chance that a tackle wins the ball cleanly from a standing carrier is a contest of the tackler's tackle stage against the carrier's shield stage (strength), with base `tackle_win_base / 2`: two equal players win half of `tackle_win_base`, as the old ratio `tackling / (tackling + dribbling)` gave; a tackle that neither wins the ball nor fouls misses. A player already booked fouls less: the foul chance is multiplied by `foul_booked_factor`. A player who commits a foul, advantage or not, makes no tackle attempt for `foul_cooldown_ticks`. An opponent attempts a tackle on every tick he is within `tackle_reach` of the ball. Against a carrier running with the ball, faster than 2 m/s, the contest is against the mean of his dribble `execute` and `pressure` stages instead, and gains a second contest with base `tackle_dribble_win / 2`; a carrier who stands and shields the ball does not. A runner whose agility is under the take-on gate gives the tackler the gate's penalty. A presser runs at the point where he meets the carrier's run, and at the ball itself once he is within `press_engage` of it. A tuning file without these three fields loads with `tackle_reach` 1.0, `press_engage` 3.0 and `tackle_dribble_win` 0, which reproduce play before they existed. While play goes on with advantage, the referee holds at most one card per player, the more severe, and a player is shown at most one card when play stops. A restart is taken no earlier than its `restart_delay_s`, when the taker is within `restart_ready_radius` of the spot and every opponent stands back. At three times the delay, the restart is taken whatever the players are doing. While the restarting team leads, its delay is multiplied by its time-wasting level.
 
-An injury is rolled for the tackled player on every tackle that wins the ball or is a foul (`injury_per_tackle`), and for every player on the pitch once per simulated minute (`injury_per_minute`). Both are the chances for a player of rating 10; the share of the `injury` stage (injury resistance leading) scales them by `1.5 − share`, so a share of 1 halves them and 0 makes them half again as likely. An injured player leaves play at once. In open play the referee stops play for a dropped ball at the ball (the goalkeeper's, inside its own penalty area), with every other player 4 m away, after `restart_delay_s.drop_ball`.
+An injury is rolled for the tackled player on every tackle that wins the ball or is a foul (`injury_per_tackle`), and for every player on the pitch once per simulated minute (`injury_per_minute`). Both are the chances for a player of rating 10; the share of the `injury` stage (injury proneness) scales them by `0.5 + share`, so a share of 1 makes them half again as likely and 0 halves them. An injured player leaves play at once. In open play the referee stops play for a dropped ball at the ball (the goalkeeper's, inside its own penalty area), with every other player 4 m away, after `restart_delay_s.drop_ball`.
 
 The expected goals (xG) of a shot is `1 / (1 + exp(-(xg.intercept + xg.distance_coef × d + xg.angle_coef × a)))`, where `d` is the distance from the ball to the goal centre in metres and `a` is the angle in radians that the goal mouth subtends from the ball. The match statistics sum it per team. A penalty counts `shots.penalty_xg`.
 
@@ -231,6 +239,9 @@ The attribute contract: how ratings become play.
 | lapse.late_from_minute | the minute from which that chance grows | 60 | 0 to 120 |
 | lapse.late_growth | how much it grows per 30 minutes past that minute, as a share | 1.0 | 0 to 5 |
 | lapse.ticks | how long a lapse lasts | 100 | 1 to 1000 |
+| consistency.match_max | the largest match part of a player's form, for consistency 1.0, in rating points | 1.0 | 0 to 3 |
+| consistency.period_max | the largest period part, for consistency 1.0, in rating points | 0.75 | 0 to 3 |
+| consistency.period_minutes | minutes of the match between two draws of the period part | 10 | 5 to 45 |
 
 The curve is `F(r) = scale × e^((r − center) / width)`: with the shipped values a rating of 10 gives 8.0, 18 gives 21.7, and 2 gives 2.9, so each step up the scale is worth more than the one below. A contest between two players is `σ(logit(base) + k × (F(a) − F(b)))`, inside the action's floor and ceiling, where `σ` is the logistic function. A share is `σ(k × (F − F(10)))`, 0.5 at rating 10. A per-player factor is `1 + spread × (2 × share − 1)`, 1 at rating 10; the factors scale the receive, intercept, press, shape, block, sprint, turn, aerial reach, claim, organise and rush reads.
 
@@ -263,6 +274,8 @@ A player's body acts in play from his team file. Height adds `reach_per_cm` metr
 
 While his side defends, each outfield player can lapse once per simulated minute, with the chance `lapse.per_minute` grown by `lapse.late_growth` for each 30 minutes past `lapse.late_from_minute`, and doubled for a shape `choose` share of 0 (concentration leading) or cut to nothing for a share of 1. For `lapse.ticks` he stops tracking his place.
 
+Each player carries a form offset, in tenths of a rating point, that his consistency sets. It has two parts: a match part drawn at kick-off (or as he comes on) and a period part drawn again every `consistency.period_minutes`. Each part is `max × (20 − consistency) / 19` times a draw from −1 to 1 (the sum of two uniform draws less 1), so a player of consistency 20.0 never moves and one of 1.0 swings by the whole maximum. Each part is centred over his side's players on the pitch, so a side's mean form is 0: consistency spreads a player's matches and periods without making a side better or worse. The offset is added to every rating a stage table reads, inside the total state cap; pace and the hidden values take none. A substitute's match part is drawn alone as he comes on, and his period part is 0 until the next period. The draws use the `fatigue.form_match` and `fatigue.form_period` stream keys.
+
 ### generator
 
 | Field | Meaning | Default | Bound |
@@ -274,8 +287,9 @@ While his side defends, each outfield player can lapse once per simulated minute
 | world.player_spread | the spread of a player's level around his club's | 2.35 | 0 to 6 |
 | world.attribute_spread | the spread of an attribute around the player's level plus his position offset | 2.0 | 0 to 6 |
 | world.offsets | one entry per position code: the offset of each attribute group from the player's level | see file | every one of the ten codes present; each offset -19 to 19 |
+| world.hidden | `{ "mean", "spread" }`: the bell curve every hidden value is drawn from, whatever the player's level | 10.0, 2.5 | mean 1 to 20, spread 0 to 6 |
 
-Each `world.offsets` entry holds `technical`, `mental`, `physical`, and `goalkeeping`. Every draw is a bell curve (mean plus spread times a unit normal) on the 1 to 20 scale: a club's level around its tier's mean, each player's level around his club's, and each attribute around the player's level plus his position's offset for the attribute's group, rounded to a tenth and kept to 1.0 to 20.0. `engine-cli generate` and the calibration leagues draw clubs of the top tier.
+Each `world.offsets` entry holds `technical`, `mental`, `physical`, and `goalkeeping`. Every draw is a bell curve (mean plus spread times a unit normal) on the 1 to 20 scale: a club's level around its tier's mean, each player's level around his club's, and each attribute around the player's level plus his position's offset for the attribute's group, rounded to a tenth and kept to 1.0 to 20.0. A hidden value is drawn from `world.hidden` instead, in its place in the schema; one placed after the last visible attribute (consistency) comes from a stream of its own, drawn after the league, so adding it moved no other draw. `engine-cli generate` and the calibration leagues draw clubs of the top tier.
 
 `body` is optional and draws the body fields of a version 2 team file. `engine-cli generate` needs it; without it the generated players have no body fields.
 
@@ -286,6 +300,43 @@ Each `world.offsets` entry holds `technical`, `mental`, `physical`, and `goalkee
 | body.nationality | `{ "home", "foreign", "foreign_share" }`: the club's country, the countries a foreign player comes from, and the share of foreign players | three upper-case letters each; 1 to 64 foreign codes; share 0 to 1 |
 
 The body fields are drawn from their own random stream, after every attribute of the league, so adding or changing the block never moves an attribute. The shipped values are provisional.
+
+### hidden
+
+How a reader sees a hidden value: a word, from the bands of its rating, and how sure the club is of it, from the matches the player has played for the club (`condition.matches_at_club`).
+
+| Field | Meaning | Default | Bound |
+|---|---|---|---|
+| confidence.tentative_from | matches at the club from which a word is shown, as tentative | 1 | 1 to 1000 |
+| confidence.firm_from | matches at the club from which the word is firm | 20 | `tentative_from` to 1000 |
+| words.<attribute> | for each hidden attribute, a list of `{ "from", "word" }` bands from the highest rating down; the last starts at 1.0 | see below | at least one band; `word` a lower-case key |
+
+With no matches at the club, or none given, the value is not yet known and has no word. The shipped words, from the highest rating down:
+
+| Attribute | From 15.0 | From 11.0 | From 7.0 | From 1.0 |
+|---|---|---|---|---|
+| consistency | `rarely_off` | `steady` | `has_off_days` | `erratic` |
+| injury_proneness | `injury_prone` | `picks_up_knocks` | `rarely_injured` | `hardly_ever_injured` |
+
+A schema whose hidden attribute has no word bands, or bands not falling from the highest or not ending at 1.0, is refused by name. The word is a key: the page owns its display text.
+
+### match_rating
+
+Every player who played gets a match rating at full time, from 1.0 to 10.0 with one decimal: `base` plus each count of what he did times its weight, plus the class weights below, kept to `min` to `max`.
+
+| Field | Meaning | Default |
+|---|---|---|
+| base, min, max | the rating of a player who did nothing, and its bounds | 6.0, 1.0, 10.0 |
+| goal, shot_on_target, shot_off_target, xg | per goal, per shot on or off target, per expected goal of his shots | 1.0, 0.15, −0.05, 0.5 |
+| pass_completed, pass_failed | per open-play pass a team-mate controlled next, and per other pass | 0.02, −0.04 |
+| tackle_won, interception, block, clearance, save | per ball won, pass intercepted, shot blocked, clearance, save | 0.1, 0.1, 0.15, 0.05, 0.3 |
+| foul, yellow, red | per foul and card | −0.05, −0.5, −1.5 |
+| conceded.keeper, conceded.defender | per goal his side conceded while he played, for a keeper and a listed defender | −0.3, −0.15 |
+| clean_sheet.keeper, clean_sheet.defender, clean_sheet.min_minutes | a clean sheet for a keeper or a listed defender who played at least `min_minutes` | 0.5, 0.3, 60 |
+| result.win, result.loss | his side's result, times the share of the match he played | 0.3, −0.3 |
+| defenders | the positions counted as defenders | CB, LB, RB |
+
+A shoot-out decides a knockout match but rates as a draw. The match record lists the ratings as `players.rating`; the live stream sends them in the `ratings` message.
 
 ### fatigue
 
@@ -414,7 +465,7 @@ The added time of a half is the sum of `per_kind` over the half's stoppages, plu
 
 ## teams/*.json
 
-Version 2 holds every rating in tenths of the 1 to 20 scale, written as a number with one decimal, and three body fields per player:
+Version 2 holds every rating in tenths of the 1 to 20 scale, written as a number with one decimal, and three body fields per player. Every player holds both hidden values, `consistency` and `injury_proneness`; a file still naming `injury_resistance` is refused by player and attribute:
 
 ```json
 {
@@ -469,13 +520,13 @@ A player may carry an optional `condition` block: his condition for this match. 
 | condition.sharpness | 0 to 100 percent | 100 | Below 100, his technical ratings drop, by 1.5 points at 0 (the `engine.modifier.sharpness` slot) |
 | condition.adaptation | 0 to 100 percent | 100 | Below 100, his mental ratings drop, by 1.0 point at 0 (the `engine.modifier.adaptation` slot); a player new to a country is given a low value |
 | condition.rest_days | 0 to 14 days | rested | His energy at kick-off, and a higher injury chance with fewer than 4 days |
-| condition.matches_at_club | 0 to 1000 | none | Matches he has played for the club; play does not read it |
+| condition.matches_at_club | 0 to 1000 | none | Matches he has played for the club. Play does not read it; it sets how sure a reader is of his hidden values (see [hidden](#hidden)) |
 
 An unknown field is refused, and a value out of range is refused by player and field: `content refused: team teams/x.json: players: player p-club-00000001-00-04: condition field sharpness is 101; allowed 0 to 100`.
 
 ### Version 1 files
 
-A version 1 team file holds every attribute as a whole number 1 to 100 and no body fields. It still loads, from the content folder and from the inputs a replay file embeds: each value `v` becomes `2v` tenths, so 62 becomes 12.4, and its players have no body fields. Values 1 to 4 become 1.0, the lowest rating; no player holds a rating under 1.0. A version 1 file is checked as before: `content refused: team teams/x.json: players: player p-club-00000001-00-03: attribute pace is 120; allowed 1 to 100`. The shipped team files are version 1.
+A version 1 team file holds every attribute as a whole number 1 to 100 and no body fields. It still loads, from the content folder and from the inputs a replay file embeds: each value `v` becomes `2v` tenths, so 62 becomes 12.4, and its players have no body fields. Values 1 to 4 become 1.0, the lowest rating; no player holds a rating under 1.0. Injury resistance `R` becomes injury proneness `21.0 − R` (exact on the tenths grid), and every player gets consistency 10.0. A version 1 file is checked as before: `content refused: team teams/x.json: players: player p-club-00000001-00-03: attribute pace is 120; allowed 1 to 100`. The shipped team files are version 1.
 
 A match is played on the home team's ground. `club.ground` is optional: a file without it plays on 105 by 68 metres, and the default is never written back, so a file that gives 105 by 68 and one that gives no ground hash the same. The touchlines, the goal lines, the halfway line and every spot measured from them follow the ground; the goal, the goal and penalty areas, the penalty mark, the centre circle, the corner arcs and the 9.15 m kick distance keep their sizes from the Laws. The formation slots in `tactics.json` are drawn for 105 by 68 and scale with the ground: along the touchline by its length over 105, across by its width over 68. A ground outside the Laws is refused by club: `content refused: team teams/x.json: club.ground: Oakmere Rangers: the ground is 121 m long; the Laws allow 90 to 120 m`. A touchline that is not longer than the goal line is refused the same way.
 

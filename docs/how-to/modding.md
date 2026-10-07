@@ -82,6 +82,8 @@ Each player must have every attribute of the attribute schema, and no other attr
 
 The screens show each rating as its whole number, so 12.4 shows as 12 and 12.5 as 13.
 
+Every player of a version 2 file also holds the two hidden values, `consistency` and `injury_proneness`, as ratings like the others. Consistency sets how much his form moves from match to match and through a match: at 20.0 he plays to his ratings every time, at 1.0 his form swings most. Injury proneness sets how often he is injured: 10.0 is the average, higher is more often. No screen shows them as numbers. A player shows a word for each, such as "steady" or "rarely injured", once he has played matches for the club (`matches_at_club` in his condition block); before that both read as not yet known.
+
 ### Give a player his match condition
 
 A player may carry a `condition` block for the match: his sharpness and his adaptation to the country, in percent, his days of rest since his last match, and the matches he has played for the club. Every field is optional, and a player without the block is fully sharp, fully adapted and rested.
@@ -105,7 +107,9 @@ A version 1 file (`"schema_version": 1`) holds whole numbers from 1 to 100 and n
 
 1. Set `"schema_version": 2`.
 2. Halve every attribute value: 62 becomes `12.4`, 25 becomes `12.5`. A value under 2 halves to under 1.0; write `1.0` instead. This one change plays differently from the version 1 file.
-3. Add `height`, `age`, and `nationality` to every player.
+3. Replace `injury_resistance` with `injury_proneness`: 21.0 less the halved resistance, so a resistance of 62 (12.4) becomes `8.6`. The engine converts it the same way.
+4. Add `"consistency": 10.0` to every player, as the engine does, or the value you want.
+5. Add `height`, `age`, and `nationality` to every player.
 
 A version 1 tactics file converts on load in the same way; the data-file reference lists its version 2 fields.
 

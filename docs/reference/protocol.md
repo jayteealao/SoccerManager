@@ -1,8 +1,8 @@
-# Match stream protocol, version 4
+# Match stream protocol, version 5
 
 The engine serves one viewer over a WebSocket on `127.0.0.1`. The port is chosen by the
 operating system at every run and written to `engine.port` inside the runtime data folder.
-A page connects to `ws://127.0.0.1:<port>/?v=4`.
+A page connects to `ws://127.0.0.1:<port>/?v=5`.
 
 Version 2 changed the meaning of `ticks_expected` from the exact tick count to the most ticks
 the match can last, because the time added at the end of each half is known only when the
@@ -50,6 +50,13 @@ tenths exactly. The loaded `tactics` file is version 2: each role holds `in_poss
 hello held on the role), and `teammates`, and each duty a `scale`. No message or field was
 added or removed, and the tick frames are unchanged. A page shows a rating as its whole number,
 1 to 20.
+
+Version 5 makes consistency and injury proneness hidden values. A `squad` entry loses
+`player.injury_resistance` and gains `player.consistency` and `player.injury_proneness`. Each
+is a word key and a confidence (`not_yet_known`, `tentative`, or `firm`), set by the matches the
+player has seen at the club. Neither is ever a number. Removing a field takes a new version.
+One message is added: `ratings`, which carries every player's match rating at full time,
+after the closing `stats`. The tick frames are unchanged.
 
 A test in `crates/protocol/tests/document.rs` holds this document to the code: every message
 the implementation names must appear below with every one of its fields.
@@ -150,8 +157,21 @@ Each entry of `squad` carries `player.id`, `player.name`, `player.shirt`, and
 | Field | Type | Meaning |
 |---|---|---|
 | `player.natural_fitness` | integer | the natural-fitness attribute in tenths of 1 to 20; every player is fresh before kick-off, so this is the fitness figure the editor shows |
-| `player.injury_resistance` | integer | the injury-resistance attribute in tenths of 1 to 20; 0 when an earlier build sent none |
+| `player.consistency` | object | a hidden value: how evenly the player plays from match to match, as a word and a confidence; see below |
+| `player.injury_proneness` | object | a hidden value: how easily the player is injured, as a word and a confidence; see below. The pre-match sheet's Risk column reads its word |
 | `role_fit` | array of integers | how well the player fits each role in tenths of 1 to 20 (0 to 200), one value per entry of `tactics.roles`, in that order |
+
+Each hidden value is an object:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `word` | string | a lower-case key; the page owns its display text. Absent while the confidence is `not_yet_known` |
+| `confidence` | string | `not_yet_known` when the player has seen no match at the club (or the team file gives none), `tentative` from 1 match, `firm` from 20 (the `hidden.confidence` tuning) |
+
+The consistency words, from the highest value down, are `rarely_off`, `steady`,
+`has_off_days`, and `erratic`. The injury-proneness words are `injury_prone`,
+`picks_up_knocks`, `rarely_injured`, and `hardly_ever_injured`. The bands are in the tuning
+file's `hidden.words`. No number for a hidden value is ever sent, in this message or another.
 
 `setup`:
 
@@ -393,6 +413,23 @@ its next events late.
 |---|---|---|
 | `tick` | integer | the player's tick when the progress was sent |
 | `reached` | array of integers | the tick each fixture has reached, in fixture order; a fixture that ended keeps its last tick |
+
+### ratings
+
+Sent once at full time, right after the closing `stats`. A match that stops short of full time
+sends none.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `tick` | integer | the last tick of the match |
+| `ratings` | array | one entry for every player who played, home first and in squad order; a named substitute who never came on has none |
+
+Each entry of `ratings`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `player.id` | string | the player |
+| `rating` | float | his match rating, 1.0 to 10.0 with one decimal: 6.0 plus what he did, weighted by the `match_rating` tuning |
 
 ### ack
 
@@ -694,10 +731,12 @@ All numbers are little-endian. The frame count counts tick and text frames only.
 offset 4 was the protocol version, which is also 3, so every older file reads as format 3; a
 format-3 file still says 3 there, and its `hello` names the protocol of its frames.
 
-A reader reads frames of protocol 3 and 4: the tick frames are the same, and only the scale of
-the `hello`'s ratings differs. A page doubles a protocol 3 `hello`'s ratings into tenths before
-any screen shows them, and keeps the stored frame as it is, so the file writes back byte for
-byte.
+A reader reads frames of protocol 3, 4, and 5: the tick frames are the same. Protocol 3 and 4
+differ only in the scale of the `hello`'s ratings. A page doubles a protocol 3 `hello`'s
+ratings into tenths before any screen shows them, and keeps the stored frame as it is, so the
+file writes back byte for byte. A protocol 3 or 4 `hello` carries `player.injury_resistance`
+and no hidden value. A page drops that figure and shows both hidden values as not yet known:
+no old figure is ever turned into a word.
 
 ### Inputs
 
