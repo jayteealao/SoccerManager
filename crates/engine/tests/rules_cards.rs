@@ -127,4 +127,13 @@ fn a_fifth_send_off_abandons_the_match() {
     let tick = sim.tick();
     sim.step();
     assert_eq!(sim.tick(), tick, "an abandoned match does not advance");
+    // Abandoned before the second half's added time was announced, full time carries none,
+    // as the event rules require.
+    sim.finish();
+    let full_time = sim
+        .take_events()
+        .into_iter()
+        .find(|e| e.kind == EngineEventKind::FullTime)
+        .expect("a full-time event");
+    assert_eq!(full_time.added_time_s, None);
 }

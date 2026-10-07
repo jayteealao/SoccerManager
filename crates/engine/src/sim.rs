@@ -1084,11 +1084,13 @@ impl Simulation {
         self.finished = true;
         self.streams.begin_tick(self.tick);
         self.enter_phase(Phase::FullTime, crate::rules::phases::Cause::MatchEnd);
+        // A match abandoned before its period's added time was announced has none.
         let added = self
             .referee
             .clock
             .plays_added
-            .then(|| self.period_added_s(self.referee.clock.half));
+            .then(|| self.period_added_s(self.referee.clock.half))
+            .filter(|&s| !(self.referee.abandoned && s == 0));
         let mut event = self.event_at(self.tick, EngineEventKind::FullTime, None);
         event.added_time_s = added;
         event.shootout_scores = self.summary.shootout;
