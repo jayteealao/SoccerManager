@@ -241,25 +241,27 @@ fn separated(players: &[Player], t: &Tuning, pitch: &Pitch) -> Option<[DVec2; RO
     let n = players.len().min(ROSTER);
     let skip = sq_skip_limit(t.min_player_distance);
     let overlaps = |d: DVec2| d.length_squared() < skip && d.length() < t.min_player_distance;
-    let mut first = None;
-    'scan: for i in 0..n {
-        if !players[i].active() {
-            continue;
-        }
-        for j in (i + 1)..n {
-            if players[j].active() && overlaps(players[j].pos - players[i].pos) {
-                first = Some((i, j));
-                break 'scan;
-            }
-        }
-    }
-    let (i0, j0) = first?;
+    // The scan reads positions and activity from two small arrays rather than from the
+    // players themselves, so every pair touches packed values; the arithmetic is the same.
     let mut pos = [DVec2::ZERO; ROSTER];
     let mut on = [false; ROSTER];
     for (k, p) in players.iter().take(n).enumerate() {
         pos[k] = p.pos;
         on[k] = p.active();
     }
+    let mut first = None;
+    'scan: for i in 0..n {
+        if !on[i] {
+            continue;
+        }
+        for j in (i + 1)..n {
+            if on[j] && overlaps(pos[j] - pos[i]) {
+                first = Some((i, j));
+                break 'scan;
+            }
+        }
+    }
+    let (i0, j0) = first?;
     for i in i0..ROSTER {
         if !on[i] {
             continue;
