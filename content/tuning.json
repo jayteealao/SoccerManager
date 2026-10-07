@@ -134,116 +134,116 @@
       },
       "actions": {
         "pass": {
-          "k": 0.08
+          "k": 0.054
         },
         "chip": {
-          "k": 0.08
+          "k": 0.054
         },
         "cross": {
-          "k": 0.08
+          "k": 0.054
         },
         "shot": {
-          "k": 0.03
+          "k": 0.07
         },
         "long_shot": {
-          "k": 0.03
+          "k": 0.02
         },
         "header": {
-          "k": 0.35,
+          "k": 0.21,
           "base": 0.6,
           "floor": 0.05,
           "ceiling": 0.95
         },
         "penalty": {
-          "k": 0.08
+          "k": 0.054
         },
         "dribble": {
-          "k": 0.105
+          "k": 0.071
         },
         "receive": {
-          "k": 0.08,
+          "k": 0.054,
           "spread": 0.2
         },
         "tackle": {
-          "k": 0.35,
+          "k": 0.21,
           "floor": 0.02,
           "ceiling": 0.97
         },
         "intercept": {
-          "k": 0.08,
+          "k": 0.054,
           "spread": 0.2
         },
         "press": {
-          "k": 0.08,
+          "k": 0.054,
           "spread": 0.2
         },
         "shape": {
-          "k": 0.08,
+          "k": 0.054,
           "spread": 0.2
         },
         "block": {
-          "k": 0.08,
+          "k": 0.054,
           "spread": 0.2
         },
         "sprint": {
-          "k": 0.08,
+          "k": 0.054,
           "spread": 0.2
         },
         "endure": {
-          "k": 0.08
+          "k": 0.054
         },
         "turn": {
-          "k": 0.08,
+          "k": 0.054,
           "spread": 0.2
         },
         "stay_up": {
-          "k": 0.35,
+          "k": 0.21,
           "floor": 0.02,
           "ceiling": 0.97
         },
         "aerial_reach": {
-          "k": 0.08,
+          "k": 0.054,
           "spread": 0.2
         },
         "recover": {
-          "k": 0.08
+          "k": 0.054
         },
         "injury": {
-          "k": 0.08
+          "k": 0.054
         },
         "hold": {
-          "k": 0.05,
+          "k": 0.03,
           "floor": 0.02,
           "ceiling": 0.97
         },
         "save": {
-          "k": 0.02,
+          "k": 0.012,
           "floor": 0.02,
           "ceiling": 0.97
         },
         "claim": {
-          "k": 0.2,
+          "k": 0.12,
           "floor": 0.02,
           "ceiling": 0.97,
           "spread": 0.2
         },
         "one_on_one": {
-          "k": 0.02,
+          "k": 0.012,
           "floor": 0.02,
           "ceiling": 0.97
         },
         "keeper_kick": {
-          "k": 0.08
+          "k": 0.054
         },
         "keeper_throw": {
-          "k": 0.08
+          "k": 0.054
         },
         "organise": {
-          "k": 0.08,
+          "k": 0.054,
           "spread": 0.2
         },
         "rush": {
-          "k": 0.08,
+          "k": 0.054,
           "spread": 0.2
         }
       },

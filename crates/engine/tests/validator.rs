@@ -56,8 +56,9 @@ fn engine_events(config: engine::MatchConfig) -> (Vec<engine::EngineEvent>, Stre
 
 /// The event-stream rules hold for the full engine before they judge anything else: seeds 1
 /// to 5 over 90 minutes; seeds 7, 9 and 11, which bring injuries, a substitution the rule
-/// pack refuses, straight reds and a second yellow; a 10-minute match, which adds no time;
-/// and a knockout match (seed 2) played through extra time and a shoot-out.
+/// pack refuses and a straight red; a 10-minute match, which adds no time; a knockout match
+/// (seed 2) played through extra time and a shoot-out; and seed 29 between two generated
+/// top-flight clubs (league seed 1), which brings a second yellow.
 #[test]
 fn the_full_engines_event_streams_keep_the_event_rules() {
     use engine::EngineEventKind::{Card, ChangeRejected, HalfTime, Injury, Substitution};
@@ -81,6 +82,9 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
         "the knockout match reached a shoot-out with a scored kick"
     );
     streams.push(("knockout seed 2".into(), (events, rules)));
+    let league = engine::data::generate_league(1, 2, &content);
+    let generated = engine::MatchConfig::new(29, 90, &content, [&league[0], &league[1]]).unwrap();
+    streams.push(("generated seed 29".into(), engine_events(generated)));
     let all: Vec<&engine::EngineEvent> = streams.iter().flat_map(|(_, (e, _))| e).collect();
     let has = |f: &dyn Fn(&engine::EngineEvent) -> bool| all.iter().any(|e| f(e));
     assert!(has(&|e| e.kind == Injury), "an injury is judged");

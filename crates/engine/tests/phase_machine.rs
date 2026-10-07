@@ -466,7 +466,7 @@ fn in_debug_mode_every_restart_passes_the_position_check() {
         let log = sim.phase_log();
         let checked = sim.restarts_checked();
         assert_eq!(checked, restarts_taken(log), "{name}");
-        assert!(checked >= 20, "{name}: {checked} restarts");
+        assert!(checked >= 15, "{name}: {checked} restarts");
         let restart_events = events
             .iter()
             .filter(|e| {

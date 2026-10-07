@@ -796,8 +796,8 @@ fn faulty_clock_fails_the_gate_at_a_named_window() {
 }
 
 /// A changed possession module fails the gate: an outfield player who reaches a loose ball from 1 cm further fails
-/// the gate at the first loose ball that centimetre decides (on seed 1, in the window from
-/// tick 2,000 to tick 3,000), and the report names the window.
+/// the gate at the first loose ball that centimetre decides (on seed 1, in the first window,
+/// from tick 0 to tick 1,000), and the report names the window.
 #[test]
 fn faulty_possession_fails_the_gate_at_a_named_window() {
     use engine::gate::{self, Fixture, Inputs, Verdict, compare, report_line};
@@ -830,7 +830,7 @@ fn faulty_possession_fails_the_gate_at_a_named_window() {
     let Verdict::Differs { from, to } = verdict else {
         panic!("the gate did not fail: {verdict:?}\n{report}");
     };
-    assert!(from >= 2_000, "{report}");
+    assert!(to <= 1_000, "{report}");
     assert!(
         report.contains(&format!("between tick {from} and tick {to}")),
         "{report}"

@@ -353,14 +353,14 @@ impl Default for ContractTuning {
             actions[a as usize] = match a {
                 A::Header => Some(ActionParams {
                     base: Some(0.6),
-                    ..contest(0.35, 0.05, 0.95)
+                    ..contest(0.21, 0.05, 0.95)
                 }),
-                A::Tackle | A::StayUp => Some(contest(0.35, 0.02, 0.97)),
-                A::Hold => Some(contest(0.05, 0.02, 0.97)),
-                A::Save | A::OneOnOne => Some(contest(0.02, 0.02, 0.97)),
+                A::Tackle | A::StayUp => Some(contest(0.21, 0.02, 0.97)),
+                A::Hold => Some(contest(0.03, 0.02, 0.97)),
+                A::Save | A::OneOnOne => Some(contest(0.012, 0.02, 0.97)),
                 A::Claim => Some(ActionParams {
                     spread: Some(0.2),
-                    ..contest(0.2, 0.02, 0.97)
+                    ..contest(0.12, 0.02, 0.97)
                 }),
                 A::Receive
                 | A::Intercept
@@ -371,11 +371,12 @@ impl Default for ContractTuning {
                 | A::Turn
                 | A::AerialReach
                 | A::Organise
-                | A::Rush => Some(knob(0.08, 0.2)),
+                | A::Rush => Some(knob(0.054, 0.2)),
                 A::Shield => None,
-                A::Shot | A::LongShot => Some(k_only(0.03)),
-                A::Dribble => Some(k_only(0.105)),
-                _ => Some(k_only(0.08)),
+                A::Shot => Some(k_only(0.07)),
+                A::LongShot => Some(k_only(0.02)),
+                A::Dribble => Some(k_only(0.071)),
+                _ => Some(k_only(0.054)),
             };
         }
         Self {
