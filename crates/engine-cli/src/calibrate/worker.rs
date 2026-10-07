@@ -1,7 +1,8 @@
 //! One calibration worker: the same binary started by the parent with hidden flags. It
 //! plays its share of one suite's fixtures, each with the AI manager on both sides, and
 //! writes one statistics file and one event file per match into the run folder. In the
-//! formations suite, each side starts in its pairing's formation and keeps it. In the
+//! formations suite, each side starts in its pairing's formation, with the lineup its AI
+//! picks for that formation, and keeps it. In the
 //! red-card suite, the default clubs play with cards otherwise off, in both home and away
 //! orders, and the arm's away player is sent off at kick-off.
 
@@ -215,7 +216,7 @@ fn play(
         for (team, formation) in sides.into_iter().enumerate() {
             let mut tactics = Tactics::defaults(&content.tactics);
             tactics.set_formation(formation, &content.tactics);
-            config = config.with_tactics(team, tactics);
+            config = config.with_ai_tactics(team, tactics);
         }
     }
     if red_card.is_some() {
