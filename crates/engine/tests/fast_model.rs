@@ -127,28 +127,38 @@ fn both_cards_are_complete_and_own_no_key() {
     }
 }
 
-/// A side's strength is the mean of every attribute of the eleven it starts with, so a team
-/// with every attribute times 1.15 is stronger by about 15 percent.
+/// A side's strength is the level of the eleven it starts with, read through the attribute
+/// contract: the rating whose curve value is the mean of each starter's mean curve value
+/// over the stages of his role (the keeper's stages for the keeper in slot 0). A team with
+/// every attribute times 1.15 is stronger; the other side does not move.
 #[test]
-fn the_kick_off_strength_is_the_starting_elevens_mean_attribute() {
+fn the_kick_off_strength_is_the_starting_elevens_level_through_the_contract() {
+    use engine::contract::curve::{f, f_inv};
     let content = common::content();
     let [a, b] = common::default_teams(&content);
     let config = MatchConfig::new(1, 90, &content, [&a, &b]).unwrap();
     let ko = fast_model::kick_off(&config);
+    let curve = &config.tuning.contract.curve;
     let starters: Vec<_> = config.players.iter().filter(|p| p.team == 0).collect();
     assert_eq!(starters.len(), 11);
     let values: Vec<f64> = starters
         .iter()
-        .flat_map(|p| p.attributes.iter().map(|r| r.decimal()))
+        .map(|p| {
+            let stages = &config.teams[0].squad[p.squad].stages;
+            fast_model::role_curve_value(stages, p.slot == 0)
+        })
         .collect();
     let mean = values.iter().sum::<f64>() / values.len() as f64;
-    assert!((ko.strength[0] - mean).abs() < 1e-12);
+    assert!((ko.strength[0] - f_inv(mean, curve)).abs() < 1e-12);
+    // A player rated 10 throughout has the level 10.
+    assert!((f_inv(f(10.0, curve), curve) - 10.0).abs() < 1e-12);
 
     let strong = common::stronger(&a);
     let config = MatchConfig::new(1, 90, &content, [&strong, &b]).unwrap();
     let boosted = fast_model::kick_off(&config);
-    let ratio = boosted.strength[0] / ko.strength[0];
-    assert!((1.10..1.16).contains(&ratio), "{ratio}");
+    let gain = boosted.strength[0] - ko.strength[0];
+    assert!((0.5..4.0).contains(&gain), "{gain}");
+    assert!(boosted.attack[0] > ko.attack[0] && boosted.defence[0] > ko.defence[0]);
     assert!((boosted.strength[1] - ko.strength[1]).abs() < 1e-12);
 }
 

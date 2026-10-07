@@ -1,12 +1,19 @@
-//! The maximum-likelihood fit of the fast model's eight parameters and its minute shares
-//! from the full-engine rows of the fit batch.
+//! The fit of the fast model's eight parameters and its minute shares from the full-engine
+//! rows of the fit batch.
 //!
-//! Newton steps on the Poisson likelihood of each side's goals start the five mean
-//! parameters (the means of a negative binomial are those of the Poisson); coordinate ascent
-//! on the likelihood of the final scores under the whole normalised table then sets the
-//! dispersion, the low-score factor and the draw weight and refines the means, one
-//! golden-section search at a time. No statistics crate is in the workspace, and eight
-//! parameters do not need one.
+//! The five mean parameters are set so that, for each side of each pairing, the model's
+//! goals add up to the full engine's along every covariate: the moment equations
+//! `Σ_g z̄_g Σ_{i in g} (y_i − μ_i) = 0`, where a group `g` is one side of one pairing and
+//! `z̄_g` its mean covariates. The batch plays the same sixty clubs at every strength
+//! level, and the clubs differ in ways the kick-off levels do not see (formation, the mix of
+//! their players); fitted match by match, those differences pull the strength terms away
+//! from what the levels do within one club, and the model then misses the pairings the check
+//! compares. Fitted on the groups, the terms follow the pairings. When every row is its own
+//! group the equations are those of the Poisson likelihood. Coordinate ascent on the
+//! likelihood of the final scores under the whole normalised table then sets the
+//! dispersion, the low-score factor and the draw weight and refines the intercept and the
+//! home term, one golden-section search at a time. No statistics crate is in the workspace,
+//! and eight parameters do not need one.
 
 use engine::modules::fast_events::{
     BINS, COUNT_TERMS, CountFit, EventFit, FitRules, SHARE_TERMS, ShareFit, SubstitutionFit,
@@ -40,41 +47,32 @@ pub fn fit(rows: &[Row], rules: FitRules) -> FastFit {
 /// The mean parameters: intercept, home, attack, attack squared, the other side's defence.
 const BETAS: usize = 5;
 
-/// Newton steps on the Poisson log-likelihood of every side's goals.
+/// One sample of a log-linear fit: its terms, its count and its exposure.
+type Sample<const N: usize> = ([f64; N], f64, f64);
+
+/// The group of one side of a row: that side of the row's pairing.
+fn group(row: &Row, side: usize) -> usize {
+    row.pairing * 2 + side
+}
+
+/// The mean parameters from the moment equations over every side's goals.
 fn mean_params(rows: &[Row]) -> [f64; BETAS] {
-    let total: f64 = rows
+    let (samples, groups): (Vec<_>, Vec<_>) = rows
         .iter()
-        .map(|r| f64::from(r.goals[0] + r.goals[1]))
-        .sum();
-    let mean = (total / (2.0 * rows.len().max(1) as f64)).max(0.05);
-    let mut beta = [0.0; BETAS];
-    beta[0] = mean.ln();
-    for _ in 0..100 {
-        let mut grad = [0.0; BETAS];
-        let mut info = [[0.0; BETAS]; BETAS];
-        for r in rows {
-            for (side, &y) in r.goals.iter().enumerate() {
-                let x = fast_model::covariates(&r.kick_off, side);
-                let mu = dot(&beta, &x).exp();
-                for i in 0..BETAS {
-                    grad[i] += (f64::from(y) - mu) * x[i];
-                    for j in 0..BETAS {
-                        info[i][j] += mu * x[i] * x[j];
-                    }
-                }
-            }
-        }
-        let Some(step) = solve(info, grad) else {
-            break;
-        };
-        for i in 0..BETAS {
-            beta[i] += step[i];
-        }
-        if step.iter().all(|s| s.abs() < 1e-12) {
-            break;
-        }
-    }
-    beta
+        .flat_map(|r| {
+            (0..2).map(move |side| {
+                (
+                    (
+                        fast_model::covariates(&r.kick_off, side),
+                        f64::from(r.goals[side]),
+                        1.0,
+                    ),
+                    group(r, side),
+                )
+            })
+        })
+        .unzip();
+    moments(&samples, &groups, 0.0)
 }
 
 fn dot<const N: usize>(a: &[f64; N], b: &[f64; N]) -> f64 {
@@ -150,16 +148,11 @@ const SWEEPS: usize = 4;
 
 /// Coordinate ascent on the likelihood of the final scores: each sweep searches the
 /// dispersion (on a log scale, 0.3 to 200), the low-score factor (-0.3 to 0.3), the draw
-/// weight (-0.5 to 1.5) and then each mean parameter within 0.3 of its value, one at a time.
+/// weight (-0.5 to 1.5) and then the intercept and the home term within 0.3 of their values,
+/// one at a time. The strength terms keep the moment fit's values.
 fn joint(rows: &[Row], mut params: FastParams) -> FastParams {
     type Field = fn(&mut FastParams) -> &mut f64;
-    let means: [Field; 5] = [
-        |p| &mut p.base,
-        |p| &mut p.home,
-        |p| &mut p.attack,
-        |p| &mut p.curve,
-        |p| &mut p.defence,
-    ];
+    let means: [Field; 2] = [|p| &mut p.base, |p| &mut p.home];
     let with = |params: &FastParams, field: Field, v: f64| {
         let mut p = *params;
         *field(&mut p) = v;
@@ -292,8 +285,8 @@ fn bin_shares(rows: &[Row], kind: Timed) -> Vec<f64> {
     normalised(counts)
 }
 
-/// One count's fit: Newton steps on the Poisson likelihood of every side's count for the
-/// coefficients of the count terms, then the negative binomial's shape by the method of
+/// One count's fit: the moment equations over every side's count, grouped by side and
+/// pairing as the goals are, for the coefficients of the count terms, then the negative binomial's shape by the method of
 /// moments (none, a Poisson count, when `dispersed` is false or the counts are not
 /// overdispersed).
 fn count_fit(
@@ -302,19 +295,22 @@ fn count_fit(
     kind: Timed,
     dispersed: bool,
 ) -> CountFit {
-    let samples: Vec<([f64; COUNT_TERMS], f64, f64)> = rows
+    let (samples, groups): (Vec<Sample<COUNT_TERMS>>, Vec<usize>) = rows
         .iter()
         .flat_map(|r| {
             (0..2).map(move |side| {
                 (
-                    count_terms(&r.kick_off, side),
-                    f64::from(count(&r.tally.counts[side])),
-                    1.0,
+                    (
+                        count_terms(&r.kick_off, side),
+                        f64::from(count(&r.tally.counts[side])),
+                        1.0,
+                    ),
+                    group(r, side),
                 )
             })
         })
-        .collect();
-    let beta = poisson(&samples);
+        .unzip();
+    let beta = moments(&samples, &groups, RIDGE);
     let dispersion = dispersed
         .then(|| {
             let (mut num, mut den) = (0.0, 0.0);
@@ -366,29 +362,66 @@ const RIDGE: f64 = 1e-3;
 /// Newton steps on the likelihood with a small ridge; the first term is the intercept.
 /// Samples with no exposure carry no information and are skipped.
 fn poisson<const N: usize>(samples: &[([f64; N], f64, f64)]) -> [f64; N] {
-    let samples: Vec<&([f64; N], f64, f64)> = samples.iter().filter(|s| s.2 > 0.0).collect();
-    let total: f64 = samples.iter().map(|s| s.1).sum();
-    let exposure: f64 = samples.iter().map(|s| s.2).sum();
+    let groups: Vec<usize> = (0..samples.len()).collect();
+    moments(samples, &groups, RIDGE)
+}
+
+/// The coefficients of a log-linear mean of `(terms, count, exposure)` samples that solve
+/// the moment equations `Σ_g z̄_g Σ_{i in g} (y_i − e_i μ_i) = 0`, where `groups[i]` is
+/// sample `i`'s group and `z̄_g` the mean terms of group `g`, by Newton steps with a ridge
+/// `ridge` on every coefficient but the intercept; the first term is the intercept. With
+/// every sample in its own group they are the Poisson likelihood's equations. Samples with
+/// no exposure carry no information and are skipped.
+fn moments<const N: usize>(
+    samples: &[([f64; N], f64, f64)],
+    groups: &[usize],
+    ridge: f64,
+) -> [f64; N] {
+    let kept: Vec<(&Sample<N>, usize)> = samples
+        .iter()
+        .zip(groups.iter().copied())
+        .filter(|(s, _)| s.2 > 0.0)
+        .collect();
+    let total: f64 = kept.iter().map(|(s, _)| s.1).sum();
+    let exposure: f64 = kept.iter().map(|(s, _)| s.2).sum();
     let mut beta = [0.0; N];
     beta[0] = (total / exposure.max(1.0)).max(1e-6).ln();
     if total <= 0.0 {
         return beta;
     }
+    // Each group's mean terms.
+    let count = kept.iter().map(|(_, g)| g + 1).max().unwrap_or(0);
+    let mut z = vec![[0.0; N]; count];
+    let mut size = vec![0.0; count];
+    for ((x, _, _), g) in &kept {
+        for (zi, xi) in z[*g].iter_mut().zip(x) {
+            *zi += xi;
+        }
+        size[*g] += 1.0;
+    }
+    for (zg, n) in z.iter_mut().zip(&size) {
+        if *n > 0.0 {
+            for v in zg.iter_mut() {
+                *v /= n;
+            }
+        }
+    }
     for _ in 0..100 {
         let mut grad = [0.0; N];
         let mut info = [[0.0; N]; N];
-        for (x, y, e) in &samples {
+        for ((x, y, e), g) in &kept {
             let mu = e * dot(&beta, x).exp();
+            let zg = &z[*g];
             for i in 0..N {
-                grad[i] += (y - mu) * x[i];
+                grad[i] += (y - mu) * zg[i];
                 for j in 0..N {
-                    info[i][j] += mu * x[i] * x[j];
+                    info[i][j] += mu * zg[i] * x[j];
                 }
             }
         }
         for i in 1..N {
-            grad[i] -= RIDGE * beta[i];
-            info[i][i] += RIDGE;
+            grad[i] -= ridge * beta[i];
+            info[i][i] += ridge;
         }
         let Some(step) = solve(info, grad) else {
             break;
@@ -545,7 +578,8 @@ mod tests {
                 };
                 let m = FittedScoresV1.play(&truth, &kick_off, i).unwrap();
                 Row {
-                    pairing: 0,
+                    // Each row its own group: the moment fit is the likelihood fit.
+                    pairing: i as usize,
                     kick_off,
                     goals: m.scores,
                     tally: tally(&m.events),
@@ -621,7 +655,8 @@ mod tests {
                 let kick_off = KickOff::even([level(i), level(i / 31)]);
                 let m = FittedScoresV1.play(&truth, &kick_off, i).unwrap();
                 Row {
-                    pairing: 0,
+                    // Each row its own group: the moment fit is the likelihood fit.
+                    pairing: i as usize,
                     kick_off,
                     goals: m.scores,
                     goal_minutes: Vec::new(),

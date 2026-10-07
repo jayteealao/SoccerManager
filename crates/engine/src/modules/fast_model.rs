@@ -9,7 +9,11 @@
 //!
 //! The model: each side's goals have the mean
 //! `exp(base + home * [home side] + attack * a + curve * a^2 + defence * e)`, where `a` is
-//! the side's attack and `e` the other side's defence, each as (mean rating − 10) / 2.
+//! the side's attack and `e` the other side's defence, each as (level − 10) / 2. A level is
+//! read through the attribute contract, as play reads the players: each starter's mean
+//! curve value over the stages of his role (the keeper's stages for the keeper in slot 0,
+//! every other stage for an outfielder), the mean of those over the group, and the rating
+//! whose curve value that is.
 //! Both sides share one match factor, a gamma with shape `dispersion` and mean 1 that
 //! multiplies both means, so the two scores rise and fall together as the full engine's do
 //! (a bivariate negative binomial: each side alone is negative binomial with that
@@ -28,10 +32,11 @@ use serde::{Deserialize, Serialize};
 use super::ResolvedModules;
 use super::card::ModuleCard;
 use super::fast_events::{self, EventFit};
-use crate::contract::Stage;
+use crate::contract::curve::f_inv;
+use crate::contract::{ActionKind, STAGES, Stage, StageValues};
 use crate::data::{Position, StoppageKind};
 use crate::error::EngineError;
-use crate::rating::Rating;
+use crate::player::Player;
 use crate::rng::EngineRng;
 use crate::sim::{EngineEvent, MatchConfig};
 use crate::team::PLAYERS_PER_TEAM;
@@ -49,10 +54,34 @@ pub const FIT_FILE: &str = "fast-model.json";
 /// The name of the fitted model, as the slot file and the fit file name it.
 pub const FITTED_SCORES: &str = "fitted-scores";
 
-/// The mean rating, on the 1 to 20 scale, a side's attack and defence are measured from.
+/// The level, on the 1 to 20 scale, a side's attack and defence are measured from.
 pub const REFERENCE: f64 = 10.0;
-/// Rating points per unit of a covariate: `(mean − 10) / 2` is the old `(mean − 50) / 10`.
+/// Rating points per unit of a covariate: `(level − 10) / 2`.
 pub const STEP: f64 = 2.0;
+
+/// The actions only a keeper plays: a keeper's level reads their stages, an outfielder's
+/// every other stage.
+pub const KEEPER_ACTIONS: [ActionKind; 8] = [
+    ActionKind::Hold,
+    ActionKind::Save,
+    ActionKind::Claim,
+    ActionKind::OneOnOne,
+    ActionKind::KeeperKick,
+    ActionKind::KeeperThrow,
+    ActionKind::Organise,
+    ActionKind::Rush,
+];
+
+/// A player's mean curve value over the stages of his role: the keeper's stages for a
+/// keeper, every other stage for an outfielder.
+pub fn role_curve_value(stages: &StageValues, keeper: bool) -> f64 {
+    let (sum, count) = STAGES
+        .iter()
+        .zip(stages.f.iter())
+        .filter(|((action, _), _)| KEEPER_ACTIONS.contains(action) == keeper)
+        .fold((0.0, 0u32), |(s, n), (_, v)| (s + v, n + 1));
+    sum / f64::from(count.max(1))
+}
 
 /// The seven fitted parameters.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -63,11 +92,11 @@ pub struct FastParams {
     pub base: f64,
     /// Added to the log goals of the home side.
     pub home: f64,
-    /// Log goals per unit of the side's attack, (mean rating − 10) / 2.
+    /// Log goals per unit of the side's attack, (level − 10) / 2.
     pub attack: f64,
     /// Log goals per squared unit of the side's attack.
     pub curve: f64,
-    /// Log goals per unit of the other side's defence, (mean rating − 10) / 2.
+    /// Log goals per unit of the other side's defence, (level − 10) / 2.
     pub defence: f64,
     /// The shape `k` of the shared match factor: each side's variance is
     /// `mean + mean^2 / k`.
@@ -180,11 +209,12 @@ impl Side {
 /// The two teams as they kick off, home first.
 #[derive(Debug, Clone, PartialEq)]
 pub struct KickOff {
-    /// The mean of every attribute value of the eleven players a side starts with.
+    /// The level of the eleven players a side starts with: the rating whose curve value is
+    /// the mean of their role curve values ([`role_curve_value`]).
     pub strength: [f64; 2],
-    /// The mean attribute of a side's six most advanced starters.
+    /// The level of a side's six most advanced starters.
     pub attack: [f64; 2],
-    /// The mean attribute of a side's other five starters, the keeper included.
+    /// The level of a side's other five starters, the keeper included.
     pub defence: [f64; 2],
     /// Each side's starters and bench.
     pub sides: [Side; 2],
@@ -221,15 +251,14 @@ pub fn stream_rules(fit: &FastFit, kick_off: &KickOff) -> StreamRules {
 /// The kick-off of the match `config` describes: the starting elevens the pre-match setup
 /// picked, so the fast model and the full engine start from the same teams.
 pub fn kick_off(config: &MatchConfig) -> KickOff {
-    // The mean rating on the 1 to 20 scale: tenths are summed, then divided by ten after
-    // the division.
-    let mean = |values: &mut dyn Iterator<Item = Rating>| {
-        let (sum, count) =
-            values.fold((0u64, 0u64), |(s, n), v| (s + u64::from(v.tenths()), n + 1));
+    let curve = &config.tuning.contract.curve;
+    // A group's level: the rating whose curve value is the mean of its role curve values.
+    let level = |values: &mut dyn Iterator<Item = f64>| {
+        let (sum, count) = values.fold((0.0, 0u32), |(s, n), v| (s + v, n + 1));
         if count == 0 {
             0.0
         } else {
-            sum as f64 / count as f64 / 10.0
+            f_inv(sum / f64::from(count), curve)
         }
     };
     let mut out = KickOff::even([0.0; 2]);
@@ -245,7 +274,8 @@ pub fn kick_off(config: &MatchConfig) -> KickOff {
             }
         };
         let mut starters: Vec<_> = config.players.iter().filter(|p| p.team == team).collect();
-        out.strength[team] = mean(&mut starters.iter().flat_map(|p| p.attributes.iter()));
+        let value = |p: &&Player| role_curve_value(&side.squad[p.squad].stages, p.slot == 0);
+        out.strength[team] = level(&mut starters.iter().map(value));
         // Most advanced first: the slot furthest from the own goal line, then slot order.
         let depth = |slot: usize| config.teams[team].base_formation[slot].0;
         starters.sort_by(|a, b| {
@@ -254,8 +284,8 @@ pub fn kick_off(config: &MatchConfig) -> KickOff {
                 .then(a.slot.cmp(&b.slot))
         });
         let (front, back) = starters.split_at(ATTACKERS.min(starters.len()));
-        out.attack[team] = mean(&mut front.iter().flat_map(|p| p.attributes.iter()));
-        out.defence[team] = mean(&mut back.iter().flat_map(|p| p.attributes.iter()));
+        out.attack[team] = level(&mut front.iter().map(value));
+        out.defence[team] = level(&mut back.iter().map(value));
         let mut advanced = [false; PLAYERS_PER_TEAM];
         for p in front {
             advanced[p.slot] = true;
@@ -295,7 +325,7 @@ pub fn resolve(modules: &ResolvedModules) -> &'static dyn FastModel {
 }
 
 /// A side's covariates for its goals: intercept, home, its attack, its attack squared, and
-/// the other side's defence, each measured as (mean rating − 10) / 2.
+/// the other side's defence, each measured as (level − 10) / 2.
 pub fn covariates(kick_off: &KickOff, side: usize) -> [f64; 5] {
     let a = (kick_off.attack[side] - REFERENCE) / STEP;
     let e = (kick_off.defence[1 - side] - REFERENCE) / STEP;
@@ -444,8 +474,9 @@ impl FastModel for FastModelOff {
 pub const FITTED_SCORES_V1_CARD: ModuleCard = ModuleCard {
     purpose: "A results model fitted from full-engine results: a final score and every event \
               of a 90-minute match from the two teams at kick-off, without playing a tick.",
-    inputs: "Each side's strength at kick-off (the mean rating of its starting eleven, 1 to \
-             20), its starters and bench with their foul and finishing weights from the \
+    inputs: "Each side's levels at kick-off (its starting eleven, its six most advanced \
+             starters and the other five, each read through the attribute contract's stage \
+             values on the 1 to 20 scale), its starters and bench with their foul and finishing weights from the \
              attribute contract's tackle and shot stages, and the fit file \
              content/fast-model.json.",
     outputs: "The final score and the events the full engine emits in a regulation match: \
