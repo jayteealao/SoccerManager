@@ -8,8 +8,8 @@ use std::time::Instant;
 use anyhow::{Context, bail};
 use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id, owner_bytes};
 use engine::observe::{
-    LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef, emit_line,
-    write_stats,
+    LawStats, MatchFigures, MatchStats, RatingEntry, ScriptFigures, TacticsStats, TeamRef,
+    emit_line, write_stats,
 };
 use engine::trace;
 use engine::{
@@ -143,6 +143,7 @@ pub fn run(content_dir: Option<&Path>, opts: &SimulateOpts) -> anyhow::Result<i3
         tactics: TacticsStats::new(&sim),
         figures: MatchFigures::new(&summary, sim.managers()),
         script: ScriptFigures::new(sim.plugins()),
+        ratings: RatingEntry::of_match(&sim),
     };
     write_stats(&data, &stats)?;
     emit_line(&stats)?;

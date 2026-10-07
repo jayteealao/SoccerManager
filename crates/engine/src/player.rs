@@ -138,7 +138,7 @@ impl Derived {
     ) -> (Self, StageValues) {
         let c = &t.contract;
         let stages = blend.values(a, c);
-        let [pace, technique, agility] = contract::direct_ratings(a, schema);
+        let [pace, technique, agility, _] = contract::direct_ratings(a, schema);
         let knob = |action: contract::ActionKind, s: Stage| {
             contract::factor(c.actions.of(action).spread(), stages.share(s))
         };
@@ -212,6 +212,11 @@ pub struct Player {
     /// His state delta per attribute group, in tenths of a rating point, in
     /// [`contract::states::GROUPS`] order: 0 for a player at his base.
     pub deltas: [i8; GROUP_COUNT],
+    /// His form offset in tenths of a rating point: the match part plus the period part his
+    /// consistency spreads ([`contract::consistency`]). It moves every rating a stage reads.
+    pub form: i8,
+    /// The match part of his form offset, kept for the period redraws.
+    pub form_match: i8,
     /// Energy from 1.0 (fresh) down to 0.0.
     pub energy: f64,
     pub pos: DVec2,
@@ -280,6 +285,8 @@ pub(crate) mod test_support {
             attributes,
             derived,
             deltas: [0; GROUP_COUNT],
+            form: 0,
+            form_match: 0,
             energy: 1.0,
             pos: DVec2::ZERO,
             vel: DVec2::ZERO,

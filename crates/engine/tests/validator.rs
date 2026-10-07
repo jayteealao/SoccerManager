@@ -57,7 +57,7 @@ fn engine_events(config: engine::MatchConfig) -> (Vec<engine::EngineEvent>, Stre
 /// The event-stream rules hold for the full engine before they judge anything else: seeds 1
 /// to 5 over 90 minutes; seeds 9, 11 and 24, which bring injuries, a substitution the rule
 /// pack refuses and a straight red; a 10-minute match, which adds no time; a knockout match
-/// (seed 6) played through extra time and a shoot-out; and seed 16 between two generated
+/// (seed 8) played through extra time and a shoot-out; and seed 79 between two generated
 /// top-flight clubs (league seed 1), which brings a second yellow.
 #[test]
 fn the_full_engines_event_streams_keep_the_event_rules() {
@@ -73,7 +73,7 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
         });
     let short = engine::MatchConfig::new(1, 10, &content, [&a, &b]).unwrap();
     streams.push(("10 minutes seed 1".into(), engine_events(short)));
-    let knockout = engine::MatchConfig::new(6, 90, &content, [&a, &b])
+    let knockout = engine::MatchConfig::new(8, 90, &content, [&a, &b])
         .unwrap()
         .with_knockout();
     let (events, rules) = engine_events(knockout);
@@ -81,10 +81,10 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
         events.iter().any(|e| e.shootout_scored == Some(true)),
         "the knockout match reached a shoot-out with a scored kick"
     );
-    streams.push(("knockout seed 6".into(), (events, rules)));
+    streams.push(("knockout seed 8".into(), (events, rules)));
     let league = engine::data::generate_league(1, 2, &content);
-    let generated = engine::MatchConfig::new(16, 90, &content, [&league[0], &league[1]]).unwrap();
-    streams.push(("generated seed 16".into(), engine_events(generated)));
+    let generated = engine::MatchConfig::new(79, 90, &content, [&league[0], &league[1]]).unwrap();
+    streams.push(("generated seed 79".into(), engine_events(generated)));
     let all: Vec<&engine::EngineEvent> = streams.iter().flat_map(|(_, (e, _))| e).collect();
     let has = |f: &dyn Fn(&engine::EngineEvent) -> bool| all.iter().any(|e| f(e));
     assert!(has(&|e| e.kind == Injury), "an injury is judged");

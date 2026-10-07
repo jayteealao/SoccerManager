@@ -118,7 +118,9 @@ pub trait ShotModule: Send + Sync + 'static {
 
 /// Fatigue and injury chances. The loop writes energy, and draws the `InjuryMinute` and
 /// `InjuryTackle` keys against [`FatigueModule::injury_chance`]. The effect of energy on the
-/// effective values is the fatigue modifier ([`modifier`]).
+/// effective values is the fatigue modifier ([`modifier`]). The slot also owns the
+/// `FormMatch` and `FormPeriod` keys, which the loop draws for each player's form offset
+/// beside his energy.
 pub trait FatigueModule: Send + Sync + 'static {
     /// The energy player `i` loses in one tick.
     fn drain(&self, view: &MatchView<'_>, i: usize) -> f64;

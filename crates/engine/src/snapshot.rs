@@ -41,6 +41,11 @@
 //!   Version 12 moves the states onto the ratings: each player stores his state delta per
 //!   attribute group (four bytes, tenths of a rating point) after his energy, and his
 //!   effective values are derived again from them on restore.
+//!   Version 13 adds consistency and the match rating: each player stores his form offset and
+//!   its match part (one byte each, tenths of a rating point) after his deltas, and after the
+//!   summary every player's tally by side and squad index (whether he took the pitch, fifteen
+//!   counts, and his expected goals), so a resumed match rates its players as the unbroken
+//!   match does.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -70,7 +75,7 @@ use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 12;
+pub const VERSION: u16 = 13;
 /// The earliest layout version the strict reader still reads: version 8 has no matchday mark.
 const FIRST_READ: u16 = 8;
 /// The released builds from before the snapshot recorded its engine version: the full commit
@@ -824,6 +829,7 @@ fn encode(sim: &Simulation, w: &mut Writer) {
     w.u8(u8::from(sim.keeper_beaten));
     w.index(sim.restart_taker);
     w.summary(&sim.summary);
+    w.tallies(&sim.tallies);
     for (t, team) in sim.teams.iter().enumerate() {
         w.team(&String::new, team);
         let ledger = &sim.ledgers[t];
@@ -851,6 +857,8 @@ fn encode(sim: &Simulation, w: &mut Writer) {
         for &g in &p.deltas {
             w.u8(g as u8);
         }
+        w.u8(p.form as u8);
+        w.u8(p.form_match as u8);
     }
     w.u32(sim.queue.next);
     // A queue holds far fewer than 4 billion changes.
@@ -1012,6 +1020,18 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
     sim.keeper_beaten = r.bool()?;
     sim.restart_taker = r.index(PLAYERS)?;
     sim.summary = decode_summary(r)?;
+    for t in 0..2 {
+        let n = r.u32()? as usize;
+        if n != sim.tallies[t].len() {
+            return Err(format!(
+                "malformed body: {n} tallies for a squad of {}",
+                sim.tallies[t].len()
+            ));
+        }
+        for tally in &mut sim.tallies[t] {
+            *tally = decode_tally(r)?;
+        }
+    }
     let schema = sim.config.tactics.clone();
     let tuning = sim.config.tuning.clone();
     for t in 0..2 {
@@ -1080,10 +1100,13 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
         p.energy = r.f64()?;
         p.derived = entry.derived;
         p.deltas = [0; crate::contract::states::GROUP_COUNT];
-        deltas.push(r.deltas()?);
+        let d = r.deltas()?;
+        let form = r.u8()? as i8;
+        p.form_match = r.u8()? as i8;
+        deltas.push((d, form));
     }
-    for (i, d) in deltas.into_iter().enumerate() {
-        sim.set_deltas(i, d);
+    for (i, (d, form)) in deltas.into_iter().enumerate() {
+        sim.set_state(i, d, form);
     }
     sim.queue.next = r.u32()?;
     let pending = r.u32()?;
@@ -1218,6 +1241,29 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
     Ok(())
 }
 
+/// One player's tally, in the order [`Writer::tallies`] writes it.
+fn decode_tally(r: &mut Reader<'_>) -> Decoded<crate::sim::tally::PlayerTally> {
+    Ok(crate::sim::tally::PlayerTally {
+        played: r.bool()?,
+        ticks_played: r.u32()?,
+        passes: r.u32()?,
+        passes_completed: r.u32()?,
+        shots: r.u32()?,
+        shots_on_target: r.u32()?,
+        goals: r.u32()?,
+        tackles_won: r.u32()?,
+        interceptions: r.u32()?,
+        blocks: r.u32()?,
+        clearances: r.u32()?,
+        saves: r.u32()?,
+        fouls: r.u32()?,
+        yellow: r.u32()?,
+        red: r.u32()?,
+        conceded: r.u32()?,
+        xg: r.f64()?,
+    })
+}
+
 fn decode_summary(r: &mut Reader<'_>) -> Decoded<Summary> {
     Ok(Summary {
         possession_changes: r.u32()?,
@@ -1316,7 +1362,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 12"),
+                .contains("unknown version 1; this build reads 13"),
             "{err}"
         );
     }

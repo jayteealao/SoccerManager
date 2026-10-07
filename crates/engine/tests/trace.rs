@@ -188,10 +188,10 @@ fn every_action_and_event_kind_maps_to_a_point() {
     for kind in EngineEventKind::ALL {
         assert!(!trace::points_of_event(kind).is_empty(), "{kind:?}");
     }
-    assert_eq!(Point::ALL.len(), 37);
+    assert_eq!(Point::ALL.len(), 38);
     assert_eq!(Point::ALL.iter().filter(|p| p.is_decision()).count(), 10);
     let names: std::collections::BTreeSet<_> = Point::ALL.iter().map(|p| p.name()).collect();
-    assert_eq!(names.len(), 37, "every point has its own name");
+    assert_eq!(names.len(), 38, "every point has its own name");
     assert_eq!(
         Action::ALL.iter().filter(|a| trace::is_chance(**a)).count(),
         20
@@ -296,7 +296,8 @@ fn points(records: &[TraceRecord]) -> Vec<&engine::trace::PointRecord> {
 fn a_red_card_below_the_minimum_records_the_send_off_and_the_abandonment() {
     const CARRIER: usize = 5;
     const TACKLER: usize = 16;
-    let config = common::quiet_match(90);
+    // Steady: no form draws before the trace starts, so it records every draw taken.
+    let config = common::steady(common::quiet_match(90));
     let plain = Simulation::new(config.clone()).unwrap();
     let tackler = plain.skills(TACKLER);
     let carrier = plain.skills(CARRIER);

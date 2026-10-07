@@ -231,6 +231,8 @@ impl Team {
             attributes: s.attributes,
             derived: s.derived,
             deltas: [0; crate::contract::states::GROUP_COUNT],
+            form: 0,
+            form_match: 0,
             energy: s.start_energy,
             pos,
             vel: DVec2::ZERO,

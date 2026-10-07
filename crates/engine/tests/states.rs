@@ -94,7 +94,8 @@ fn every_state_stays_within_its_cap_and_its_groups_for_a_whole_match() {
 
 #[test]
 fn a_fresh_player_with_no_inputs_plays_from_his_base_values_bit_for_bit() {
-    let sim = Simulation::new(common::full_match()).unwrap();
+    // No inputs: no states and no form offset.
+    let sim = Simulation::new(common::steady(common::full_match())).unwrap();
     for i in 0..sim.players().len() {
         let p = sim.players()[i];
         assert_eq!(p.deltas, [0; GROUP_COUNT], "player {i}");

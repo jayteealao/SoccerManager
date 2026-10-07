@@ -12,7 +12,8 @@ use std::time::Instant;
 use engine::data::{TEAM_A_FILE, TEAM_B_FILE, TeamFile};
 use engine::observe::identity::{data_dir, load_or_create_owner_id};
 use engine::observe::{
-    LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef, write_stats_at,
+    LawStats, MatchFigures, MatchStats, RatingEntry, ScriptFigures, TacticsStats, TeamRef,
+    write_stats_at,
 };
 use engine::{
     Commentary, Commentator, Content, ContentDir, EngineError, MatchConfig, Simulation, Tactics,
@@ -283,6 +284,7 @@ fn play(
         tactics: TacticsStats::new(&sim),
         figures: MatchFigures::new(&summary, sim.managers()),
         script: ScriptFigures::new(sim.plugins()),
+        ratings: RatingEntry::of_match(&sim),
     })
 }
 
@@ -334,5 +336,6 @@ fn failure(
             ..MatchFigures::default()
         },
         script: ScriptFigures::default(),
+        ratings: Vec::new(),
     }
 }

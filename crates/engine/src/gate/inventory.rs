@@ -89,9 +89,10 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         scratch: _,
         // A shared copy of `config.tuning`, constant for the match.
         tuning: _,
-        // Functions of each player's deltas (hashed in G3) and the team files.
+        // Functions of each player's deltas and form (hashed in G3) and the team files.
         stages: _,
         blend: _,
+        tallies,
     } = sim;
 
     use FieldKind::{Bytes, Floats};
@@ -141,6 +142,8 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     // G5 score and discipline.
     w.mark(Bytes, || "summary".into());
     w.summary(summary);
+    w.mark(Floats, || "tallies".into());
+    w.tallies(tallies);
     let Referee {
         phase,
         // Derived state: it equals `phases::derive(phase, shootout)` at every tick boundary,
@@ -361,6 +364,8 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
         attributes: _,
         derived,
         deltas,
+        form,
+        form_match,
         energy,
         pos,
         vel,
@@ -396,6 +401,9 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
     w.u8(*shirt);
     w.mark(Floats, || format!("players[{i}].energy"));
     w.f64_at(|| format!("players[{i}].energy"), *energy);
+    w.mark(Bytes, || format!("players[{i}].form"));
+    w.u8(*form as u8);
+    w.u8(*form_match as u8);
     w.mark(Floats, || format!("players[{i}].derived"));
     w.derived(&|| format!("players[{i}].derived"), derived, deltas);
 }

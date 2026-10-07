@@ -171,8 +171,8 @@ pub fn capped(
     })
 }
 
-/// The effective ratings of `base`: each rating plus the delta of its group, in tenths, kept
-/// inside 1.0 to 20.0.
+/// The effective ratings of `base`: each visible rating plus the delta of its group, in
+/// tenths, kept inside 1.0 to 20.0. A hidden value keeps its base: no state moves it.
 pub fn effective(
     base: &Attributes,
     schema: &AttributeSchema,
@@ -181,11 +181,52 @@ pub fn effective(
     let mut out = *base;
     for (slot, def) in out.values.iter_mut().zip(&schema.attributes) {
         let d = i16::from(deltas[def.group as usize]);
+        if d != 0 && !def.hidden {
+            *slot = moved(*slot, d);
+        }
+    }
+    out
+}
+
+/// `r` moved by `d` tenths, kept inside 1.0 to 20.0.
+fn moved(r: Rating, d: i16) -> Rating {
+    let t = (i16::from(r.tenths()) + d).clamp(i16::from(MIN_TENTHS), i16::from(MAX_TENTHS));
+    // Inside 10..=200 after the clamp.
+    Rating::from_tenths(t as u8)
+}
+
+/// The ratings play reads for a player with state `deltas` and form offset `form`, both in
+/// tenths: every rating a stage table reads takes its group's delta plus the form offset, that
+/// sum kept inside the total cap, then the rating inside 1.0 to 20.0. Pace, which only the
+/// speed map reads, takes its group's delta alone, and a hidden value keeps its base. With
+/// `form` 0 it equals [`effective`].
+pub fn effective_with_form(
+    base: &Attributes,
+    schema: &AttributeSchema,
+    deltas: [i8; GROUP_COUNT],
+    form: i8,
+    t: &StatesTuning,
+) -> Attributes {
+    if form == 0 {
+        return effective(base, schema, deltas);
+    }
+    let [lo, hi] = t.caps.total;
+    // Inside ±19 points by the cap checks, so inside ±190 tenths.
+    let (lo, hi) = ((lo * 10.0).round() as i16, (hi * 10.0).round() as i16);
+    let pace = schema.index("pace");
+    let mut out = *base;
+    for (i, (slot, def)) in out.values.iter_mut().zip(&schema.attributes).enumerate() {
+        if def.hidden {
+            continue;
+        }
+        let state = i16::from(deltas[def.group as usize]);
+        let d = if Some(i) == pace {
+            state
+        } else {
+            (state + i16::from(form)).clamp(lo, hi)
+        };
         if d != 0 {
-            let t =
-                (i16::from(slot.tenths()) + d).clamp(i16::from(MIN_TENTHS), i16::from(MAX_TENTHS));
-            // Inside 10..=200 after the clamp.
-            *slot = Rating::from_tenths(t as u8);
+            *slot = moved(*slot, d);
         }
     }
     out
@@ -277,5 +318,35 @@ mod tests {
         let high = effective(&base, schema, [10, 0, 0, 0]);
         assert_eq!(high.get(passing).tenths(), 200, "19.8 + 1.0 reads 20.0");
         assert_eq!(high.get(pace).tenths(), 15, "another group is untouched");
+    }
+
+    #[test]
+    fn hidden_values_keep_their_base_and_form_moves_every_stage_rating_but_pace() {
+        let content = shipped_content();
+        let schema = &content.attributes;
+        let t = StatesTuning::default();
+        let base = Attributes {
+            values: [Rating::from_tenths(100); crate::data::attributes::MAX_ATTRIBUTES],
+            len: schema.len() as u8,
+        };
+        let idx = |n: &str| schema.index(n).unwrap();
+        let tired = effective(&base, schema, [0, 0, -20, 0]);
+        assert_eq!(tired.get(idx("injury_proneness")).tenths(), 100);
+        assert_eq!(tired.get(idx("strength")).tenths(), 80);
+        let same = effective_with_form(&base, schema, [0, -10, 0, 0], 0, &t);
+        assert_eq!(same.values, effective(&base, schema, [0, -10, 0, 0]).values);
+        let off = effective_with_form(&base, schema, [0, -10, 0, 0], -7, &t);
+        assert_eq!(off.get(idx("passing")).tenths(), 93);
+        assert_eq!(
+            off.get(idx("decisions")).tenths(),
+            83,
+            "mental: state and form"
+        );
+        assert_eq!(off.get(idx("pace")).tenths(), 100, "pace takes no form");
+        assert_eq!(off.get(idx("consistency")).tenths(), 100);
+        assert_eq!(off.get(idx("injury_proneness")).tenths(), 100);
+        // The sum stays inside the total cap.
+        let floor = effective_with_form(&base, schema, [0, -50, 0, 0], -18, &t);
+        assert_eq!(floor.get(idx("decisions")).tenths(), 50, "10.0 − 5.0");
     }
 }

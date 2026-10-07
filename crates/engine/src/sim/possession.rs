@@ -7,6 +7,7 @@ use serde_json::json;
 use crate::modules::{Crossing, Deflection, ParrySide};
 use crate::rules::fouls::Tackle;
 use crate::sim::Simulation;
+use crate::sim::tally::Count;
 use crate::streams::{Action, Key};
 use crate::trace::Point;
 use crate::tuning::Tuning;
@@ -52,6 +53,7 @@ impl Simulation {
                 self.trace_point(Point::ShotBlock, json!({"blocker": i, "blocked": blocked}));
             }
             if blocked {
+                self.tally(i, Count::Block);
                 let angle = self.streams.draw(Key::player(Action::BlockDeflect, p));
                 self.ball.vel =
                     self.config
@@ -94,6 +96,7 @@ impl Simulation {
             self.keeper_beaten = true;
             return;
         }
+        self.tally(k, Count::Save);
         let hold = possession.save_hold(&self.view(), k);
         if self
             .streams
@@ -196,6 +199,7 @@ impl Simulation {
                 self.clearers_tried = 0;
                 self.keeper_beaten = false;
                 self.summary.clearances[cross.team] += 1;
+                self.tally(i, Count::Clearance);
                 return true;
             }
         }
@@ -369,6 +373,7 @@ impl Simulation {
                     }
                     match outcome {
                         Tackle::Win => {
+                            self.tally(i, Count::TackleWon);
                             self.gain(i, t);
                             self.tackle_injury_roll(c);
                             return;
@@ -400,8 +405,15 @@ impl Simulation {
         self.referee.offside = 0;
         self.keeper_beaten = false;
         let team = self.players[i].team;
-        if self.pass_in_flight.take() == Some(team) {
-            self.summary.passes_completed[team] += 1;
+        match self.pass_in_flight.take() {
+            Some(passing) if passing == team => {
+                self.summary.passes_completed[team] += 1;
+                if let Some(k) = self.last_kicker {
+                    self.tally(k, Count::PassCompleted);
+                }
+            }
+            Some(_) => self.tally(i, Count::Interception),
+            None => {}
         }
         self.clearers_tried = 0;
         if self.restart_taker != Some(i) {

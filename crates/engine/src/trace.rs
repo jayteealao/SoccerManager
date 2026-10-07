@@ -203,6 +203,7 @@ pub fn is_chance(action: Action) -> bool {
         | Action::InjuryTackle
         | Action::Lapse
         | Action::Header => true,
+        Action::FormMatch | Action::FormPeriod => false,
         Action::ShotScore
         | Action::PassScore
         | Action::DribbleScore
@@ -269,11 +270,14 @@ pub enum Point {
     ChangeRejected,
     SendOff,
     Abandoned,
+    /// A part of the players' form offsets is drawn: a new period, or a substitute's match
+    /// part as he comes on.
+    Form,
 }
 
 impl Point {
-    /// Every point: 10 decision points, then 27 rule outcomes.
-    pub const ALL: [Point; 37] = [
+    /// Every point: 10 decision points, then 28 rule outcomes.
+    pub const ALL: [Point; 38] = [
         Point::Carrier,
         Point::RestartPass,
         Point::Press,
@@ -311,6 +315,7 @@ impl Point {
         Point::ChangeRejected,
         Point::SendOff,
         Point::Abandoned,
+        Point::Form,
     ];
 
     /// The point's name in the trace file.
@@ -353,6 +358,7 @@ impl Point {
             Point::ChangeRejected => "change_rejected",
             Point::SendOff => "send_off",
             Point::Abandoned => "abandoned",
+            Point::Form => "form",
         }
     }
 
@@ -411,6 +417,7 @@ pub fn points_of(action: Action) -> &'static [Point] {
         // A lapse is a defender losing his place in the shape.
         Action::Lapse => &[Point::Cover],
         Action::Header => &[Point::LooseBall],
+        Action::FormMatch | Action::FormPeriod => &[Point::Form],
     }
 }
 

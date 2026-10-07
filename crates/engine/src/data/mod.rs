@@ -367,8 +367,9 @@ fn check_ratings(bytes: &[u8], shown: &str) -> Result<(), EngineError> {
     Ok(())
 }
 
-/// Loads an attribute file's bytes in either version this build reads; a version 1 file is
-/// converted with the frozen contract tables ([`convert::attributes_v1_to_v2`]) and checked
+/// Loads an attribute file's bytes in any version this build reads; a version 1 file is
+/// converted with the frozen contract tables ([`convert::attributes_v1_to_v2`]), a version 2
+/// file takes the hidden values ([`convert::attributes_v2_to_v3`]), and the result is checked
 /// as a current file. The digest is that of the bytes read.
 pub fn load_attributes_bytes(
     bytes: &[u8],
@@ -380,19 +381,16 @@ pub fn load_attributes_bytes(
             let value = parse_checked::<AttributeSchema>(KIND, bytes, shown, &())?;
             Ok(loaded(KIND, bytes, shown, value, ATTRIBUTES_VERSION, None))
         }
-        convert::ATTRIBUTES_V1 => {
-            let v1: convert::AttributeSchemaV1 = parse(KIND, bytes, shown)?;
-            let value = convert::attributes_v1_to_v2(v1)
-                .map_err(|reason| refused(KIND, shown, "attributes".into(), reason))?;
-            let value = checked(KIND, shown, value, &())?;
-            Ok(loaded(
-                KIND,
-                bytes,
-                shown,
-                value,
-                convert::ATTRIBUTES_V1,
-                Some(convert::ATTRIBUTES_V1),
-            ))
+        found @ (convert::ATTRIBUTES_V1 | convert::ATTRIBUTES_V2) => {
+            let v2 = if found == convert::ATTRIBUTES_V1 {
+                let v1: convert::AttributeSchemaV1 = parse(KIND, bytes, shown)?;
+                convert::attributes_v1_to_v2(v1)
+                    .map_err(|reason| refused(KIND, shown, "attributes".into(), reason))?
+            } else {
+                parse::<AttributeSchema>(KIND, bytes, shown)?
+            };
+            let value = checked(KIND, shown, convert::attributes_v2_to_v3(v2), &())?;
+            Ok(loaded(KIND, bytes, shown, value, found, Some(found)))
         }
         found => Err(version_refused(KIND, shown, found, ATTRIBUTES_VERSION)),
     }
@@ -400,7 +398,8 @@ pub fn load_attributes_bytes(
 
 /// Loads a tuning file's bytes in any version this build reads; a version 2 file is
 /// converted to version 3 ([`convert::tuning_v2_to_v3`]), a version 3 file to version 4
-/// ([`convert::tuning_v3_to_v4`]), and the result is checked as a current file.
+/// ([`convert::tuning_v3_to_v4`]), a version 4 file to version 5
+/// ([`convert::tuning_v4_to_v5`]), and the result is checked as a current file.
 pub fn load_tuning_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TuningFile>, EngineError> {
     const KIND: &str = "tuning";
     match peek_version(KIND, bytes, shown)? {
@@ -408,15 +407,19 @@ pub fn load_tuning_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TuningFile>
             let value = parse_checked::<TuningFile>(KIND, bytes, shown, &())?;
             Ok(loaded(KIND, bytes, shown, value, TUNING_VERSION, None))
         }
-        found @ (convert::TUNING_V2 | convert::TUNING_V3) => {
+        found @ (convert::TUNING_V2 | convert::TUNING_V3 | convert::TUNING_V4) => {
             let mut json: serde_json::Value = parse(KIND, bytes, shown)?;
             if found == convert::TUNING_V2 {
                 json = convert::tuning_v2_to_v3(json)
                     .map_err(|reason| refused(KIND, shown, "engine".into(), reason))?;
             }
-            let v4 = convert::tuning_v3_to_v4(json)
+            if found <= convert::TUNING_V3 {
+                json = convert::tuning_v3_to_v4(json)
+                    .map_err(|reason| refused(KIND, shown, "engine".into(), reason))?;
+            }
+            let v5 = convert::tuning_v4_to_v5(json)
                 .map_err(|reason| refused(KIND, shown, "engine".into(), reason))?;
-            let value: TuningFile = serde_json::from_value(v4)
+            let value: TuningFile = serde_json::from_value(v5)
                 .map_err(|e| refused(KIND, shown, "converted file".into(), e.to_string()))?;
             let value = checked(KIND, shown, value, &())?;
             Ok(loaded(KIND, bytes, shown, value, found, Some(found)))
@@ -602,6 +605,24 @@ impl Content {
             return Err(EngineError::Data {
                 kind: "tactics",
                 path: TACTICS_FILE.to_string(),
+                field,
+                reason,
+            });
+        }
+        // A hidden value reaches a page only as a word, so each one needs its word bands.
+        if let Some(name) = attributes
+            .value
+            .hidden_names()
+            .find(|n| !tuning.value.hidden.words.contains_key(*n))
+        {
+            let (field, reason) = (
+                "hidden.words".to_string(),
+                format!("hidden attribute {name} has no word bands"),
+            );
+            tracing::error!(signal = "content.refused", kind = "tuning", path = TUNING_FILE, field = %field, reason = %reason);
+            return Err(EngineError::Data {
+                kind: "tuning",
+                path: TUNING_FILE.to_string(),
                 field,
                 reason,
             });

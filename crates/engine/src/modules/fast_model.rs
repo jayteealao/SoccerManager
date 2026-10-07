@@ -73,12 +73,15 @@ pub const KEEPER_ACTIONS: [ActionKind; 8] = [
 ];
 
 /// A player's mean curve value over the stages of his role: the keeper's stages for a
-/// keeper, every other stage for an outfielder.
+/// keeper, every other stage for an outfielder. The injury stage is left out: it reads
+/// injury proneness, which rises as a player gets worse, so it is no part of his level.
 pub fn role_curve_value(stages: &StageValues, keeper: bool) -> f64 {
     let (sum, count) = STAGES
         .iter()
         .zip(stages.f.iter())
-        .filter(|((action, _), _)| KEEPER_ACTIONS.contains(action) == keeper)
+        .filter(|((action, _), _)| {
+            *action != ActionKind::Injury && KEEPER_ACTIONS.contains(action) == keeper
+        })
         .fold((0.0, 0u32), |(s, n), (_, v)| (s + v, n + 1));
     sum / f64::from(count.max(1))
 }

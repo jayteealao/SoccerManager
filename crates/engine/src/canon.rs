@@ -195,6 +195,36 @@ impl Writer {
     }
 
     /// Every counter of the match summary, in declaration order.
+    /// Every player's tally, by side and squad index: the counts, then the expected goals.
+    pub(crate) fn tallies(&mut self, tallies: &[Vec<crate::sim::tally::PlayerTally>; 2]) {
+        for (team, side) in tallies.iter().enumerate() {
+            self.count(side.len());
+            for (s, t) in side.iter().enumerate() {
+                self.u8(u8::from(t.played));
+                for c in [
+                    t.ticks_played,
+                    t.passes,
+                    t.passes_completed,
+                    t.shots,
+                    t.shots_on_target,
+                    t.goals,
+                    t.tackles_won,
+                    t.interceptions,
+                    t.blocks,
+                    t.clearances,
+                    t.saves,
+                    t.fouls,
+                    t.yellow,
+                    t.red,
+                    t.conceded,
+                ] {
+                    self.u32(c);
+                }
+                self.f64_at(|| format!("tallies[{team}][{s}].xg"), t.xg);
+            }
+        }
+    }
+
     pub(crate) fn summary(&mut self, s: &Summary) {
         self.u32(s.possession_changes);
         self.f64_at(|| "summary.ball_max_speed".into(), s.ball_max_speed);

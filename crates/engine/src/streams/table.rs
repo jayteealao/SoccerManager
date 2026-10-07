@@ -19,7 +19,7 @@ pub const SQUAD_MAX: usize = crate::data::team::MAX_SQUAD;
 /// Player slots per action in the dense key index: two squads, then the match key.
 pub(crate) const SLOTS_PER_ACTION: usize = 2 * SQUAD_MAX + 1;
 
-/// Every possible key: 38 actions times 81 player slots.
+/// Every possible key: 40 actions times 81 player slots.
 pub const KEY_COUNT: usize = Action::ALL.len() * SLOTS_PER_ACTION;
 
 /// The part of the engine a draw belongs to; the number is its stream-id code.
@@ -108,11 +108,15 @@ pub enum Action {
     InjuryTackle,
     Lapse,
     Header,
+    /// The match part of a player's form offset, drawn at kick-off or when he comes on.
+    FormMatch,
+    /// The period part of a player's form offset, drawn again every period of the match.
+    FormPeriod,
 }
 
 impl Action {
     /// Every action in table order.
-    pub const ALL: [Action; 38] = [
+    pub const ALL: [Action; 40] = [
         Action::ShotScore,
         Action::PassScore,
         Action::DribbleScore,
@@ -151,6 +155,8 @@ impl Action {
         Action::InjuryTackle,
         Action::Lapse,
         Action::Header,
+        Action::FormMatch,
+        Action::FormPeriod,
     ];
 
     /// The action's table row.
@@ -194,7 +200,7 @@ use PlayerKind::{Actor, Match};
 use Subsystem::{Ball, Decision, Fatigue, Kick, Laws, Shootout};
 
 /// The stream-id table, one row per draw call in match play, in [`Action`] order.
-pub const TABLE: [Row; 38] = [
+pub const TABLE: [Row; 40] = [
     row(
         Action::ShotScore,
         Decision,
@@ -352,6 +358,22 @@ pub const TABLE: [Row; 38] = [
     ),
     row(Action::Lapse, Decision, 6, "lapse", Actor, Unscripted),
     row(Action::Header, Ball, 13, "header", Actor, Unscripted),
+    row(
+        Action::FormMatch,
+        Fatigue,
+        3,
+        "form_match",
+        Actor,
+        Unscripted,
+    ),
+    row(
+        Action::FormPeriod,
+        Fatigue,
+        4,
+        "form_period",
+        Actor,
+        Unscripted,
+    ),
 ];
 
 /// Who a key names: `team << 8 | squad index`, or [`PlayerKey::MATCH`].
@@ -499,7 +521,7 @@ const ACTION_SHIFT: u32 = 32;
 /// keeps the scheme id and updates its digest.
 pub const SCHEME_DIGESTS: [(u8, &str); 1] = [(
     1,
-    "b8aca4c29b44416ca4114e56b06911ba45f204e38d07cdfa04c41ed7173747d0",
+    "c53b3a5d71688a6063c390de2b095097efb7faedf02fcbae9a808d699765e3fa",
 )];
 
 /// The SHA-256, as lowercase hex, of what fixes `scheme`: the scheme id, every row (the
@@ -594,7 +616,7 @@ mod tests {
         let count = |c: Class| TABLE.iter().filter(|r| r.class == c).count();
         assert_eq!(count(Class::Referee), 15);
         assert_eq!(count(Class::Injury), 2);
-        assert_eq!(count(Class::Unscripted), 21);
+        assert_eq!(count(Class::Unscripted), 23);
         let mut codes: Vec<(u8, u8)> = TABLE.iter().map(|r| (r.subsystem as u8, r.code)).collect();
         codes.sort_unstable();
         codes.dedup();

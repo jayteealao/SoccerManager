@@ -465,3 +465,80 @@ fn a_version_1_slot_file_converts_and_resolves_to_the_built_in_selection() {
         "{err}"
     );
 }
+
+/// The version 2 attribute schema (the one shipped before the hidden values, kept as a
+/// fixture) converts to version 3: injury resistance becomes injury proneness, hidden, with
+/// its job turned up, and consistency is added from the frozen copy. The result is the
+/// shipped schema.
+#[test]
+fn a_version_2_attribute_schema_converts_to_the_shipped_version_3() {
+    let bytes = std::fs::read(common::fixture_path("attributes-v2.json")).unwrap();
+    let v2: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(v2["schema_version"], 2);
+    let loaded = engine::data::load_attributes_bytes(&bytes, "attributes-v2.json").unwrap();
+    assert_eq!(loaded.converted_from, Some(2));
+    let schema = &loaded.value;
+    assert_eq!(
+        schema.schema_version,
+        engine::data::attributes::ATTRIBUTES_VERSION
+    );
+    assert!(schema.index("injury_resistance").is_none());
+    let hidden: Vec<&str> = schema.hidden_names().collect();
+    assert_eq!(hidden, ["injury_proneness", "consistency"]);
+    assert_eq!(schema, &common::content().attributes);
+}
+
+/// A version 4 tuning file (no consistency, hidden-value or match-rating block) converts to
+/// version 5 with the values of the frozen copy, which are the shipped ones.
+#[test]
+fn a_version_4_tuning_file_converts_to_the_shipped_version_5() {
+    let mut v4 = shipped_tuning_json();
+    v4["schema_version"] = 4.into();
+    v4["engine"]["contract"]
+        .as_object_mut()
+        .unwrap()
+        .remove("consistency")
+        .unwrap();
+    let top = v4.as_object_mut().unwrap();
+    top.remove("hidden").unwrap();
+    top.remove("match_rating").unwrap();
+    v4["generator"]["world"]
+        .as_object_mut()
+        .unwrap()
+        .remove("hidden")
+        .unwrap();
+    let bytes = serde_json::to_vec(&v4).unwrap();
+    let loaded = engine::data::load_tuning_bytes(&bytes, "tuning-v4.json").unwrap();
+    assert_eq!(loaded.converted_from, Some(4));
+    let shipped = engine::data::load_tuning_bytes(
+        &serde_json::to_vec(&shipped_tuning_json()).unwrap(),
+        "tuning.json",
+    )
+    .unwrap();
+    assert_eq!(loaded.value, shipped.value);
+}
+
+/// A hidden value's word bands must run from the highest down and end at 1.0, so every rating
+/// has a word; a list that does not is refused naming the attribute.
+#[test]
+fn word_bands_out_of_order_or_short_of_one_are_refused_by_name() {
+    let mut unordered = shipped_tuning_json();
+    let bands = unordered["hidden"]["words"]["consistency"]
+        .as_array_mut()
+        .unwrap();
+    bands.swap(0, 1);
+    let err = engine::data::load_tuning_bytes(&serde_json::to_vec(&unordered).unwrap(), "t.json")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("consistency"), "{err}");
+
+    let mut short = shipped_tuning_json();
+    let bands = short["hidden"]["words"]["injury_proneness"]
+        .as_array_mut()
+        .unwrap();
+    bands.last_mut().unwrap()["from"] = 3.0.into();
+    let err = engine::data::load_tuning_bytes(&serde_json::to_vec(&short).unwrap(), "t.json")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("injury_proneness"), "{err}");
+}

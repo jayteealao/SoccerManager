@@ -16,9 +16,13 @@
 //! The stage values are computed once per player at load ([`stage_values`]). The states move
 //! a player's ratings within caps ([`states`]); when his deltas change, the 50-tick refresh
 //! blends his stage values again from his effective ratings. No blend runs inside a tick.
+//! Consistency spreads each player's play within and between matches through the same
+//! rebuild ([`consistency`]); the hidden values reach a page only as words ([`hidden`]).
 
 pub mod body;
+pub mod consistency;
 pub mod curve;
+pub mod hidden;
 pub mod params;
 pub mod stages;
 pub mod states;
@@ -474,13 +478,13 @@ impl Gates {
     };
 }
 
-/// The three ratings play reads directly rather than through a stage, on the 1 to 20 scale:
-/// pace (the speed map), technique (whether a skill is tried) and agility (whether it is
-/// pulled off).
+/// The four ratings play reads directly rather than through a stage, on the 1 to 20 scale:
+/// pace (the speed map), technique (whether a skill is tried), agility (whether it is pulled
+/// off), and consistency (the spread of every action).
 pub fn direct_ratings(
     a: &crate::player::Attributes,
     schema: &crate::data::attributes::AttributeSchema,
-) -> [f64; 3] {
+) -> [f64; 4] {
     schema.required_indices().map(|i| a.get(i).decimal())
 }
 

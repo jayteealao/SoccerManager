@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 2,
   "attributes": [
     {
       "name": "passing",
@@ -262,14 +262,13 @@
       }
     },
     {
-      "name": "injury_proneness",
+      "name": "injury_resistance",
       "group": "physical",
-      "hidden": true,
       "job": {
         "action": "injury",
         "stage": "execute",
         "statistic": "injuries per 90 minutes",
-        "direction": "up"
+        "direction": "down"
       }
     },
     {
@@ -360,16 +359,6 @@
         "stage": "choose",
         "statistic": "balls swept outside the box per match",
         "direction": "up"
-      }
-    },
-    {
-      "name": "consistency",
-      "group": "mental",
-      "hidden": true,
-      "job": {
-        "stage": "spread",
-        "statistic": "spread of the player's match rating across matches",
-        "direction": "down"
       }
     }
   ],
@@ -1040,10 +1029,15 @@
     "injury": {
       "execute": {
         "main": {
-          "attribute": "injury_proneness",
+          "attribute": "injury_resistance",
           "weight": 1.0
         },
-        "supports": [],
+        "supports": [
+          {
+            "attribute": "natural_fitness",
+            "weight": 0.2
+          }
+        ],
         "source": "design"
       }
     },

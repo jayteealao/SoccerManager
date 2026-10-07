@@ -95,9 +95,10 @@ pub fn drain(
 }
 
 /// The chance that one roll injures a player of base values `base`, from a base rate for an
-/// average player, scaled by `1.5 − share` of the injury stage (injury resistance).
+/// average player, scaled by `0.5 + share` of the injury stage (injury proneness, a hidden
+/// value): the average player's chance at rating 10, rising with his proneness.
 pub fn injury_chance(base: Skills<'_>, rate: f64) -> f64 {
-    (rate * (1.5 - base.share(Stage::INJURY_EXECUTE))).clamp(0.0, 1.0)
+    (rate * (0.5 + base.share(Stage::INJURY_EXECUTE))).clamp(0.0, 1.0)
 }
 
 /// Fatigue version 1: the drain and the injury chance above. The fatigue curve's effect on
@@ -141,7 +142,7 @@ impl FatigueModule for FatigueV1 {
 
 pub const FATIGUE_V1_CARD: ModuleCard = ModuleCard {
     purpose: "Drains each player's energy by speed and stamina, faster late in a match for an older player, and sets each injury chance, higher after a short rest.",
-    inputs: "Each player's velocity, his endure and injury stages through the attribute contract (stamina and injury resistance), his age and days of rest, the top-speed map, the fatigue tuning, and the engine tuning.",
+    inputs: "Each player's velocity, his endure and injury stages through the attribute contract (stamina and injury proneness), his age and days of rest, the top-speed map, the fatigue tuning, and the engine tuning.",
     outputs: "The energy drained per tick and the injury chance of a roll.",
     tuning: &[
         "fatigue.drain_base_per_s",
@@ -155,7 +156,12 @@ pub const FATIGUE_V1_CARD: ModuleCard = ModuleCard {
         "dt",
     ],
     calibration: "none: no fatigue or injury band in realism-bands.json",
-    keys: &[Action::InjuryMinute, Action::InjuryTackle],
+    keys: &[
+        Action::InjuryMinute,
+        Action::InjuryTackle,
+        Action::FormMatch,
+        Action::FormPeriod,
+    ],
 };
 
 /// Fatigue switched off: nobody tires and nobody is injured. The loop still takes every
@@ -178,7 +184,12 @@ pub const FATIGUE_OFF_CARD: ModuleCard = ModuleCard {
     outputs: "A drain of 0 and an injury chance of 0.",
     tuning: &["none"],
     calibration: "none: off version, no fatigue",
-    keys: &[Action::InjuryMinute, Action::InjuryTackle],
+    keys: &[
+        Action::InjuryMinute,
+        Action::InjuryTackle,
+        Action::FormMatch,
+        Action::FormPeriod,
+    ],
 };
 
 /// The fatigue modifier (body family): the fatigue curve's multiplier at the player's
@@ -292,7 +303,28 @@ mod tests {
         let before = (f.drain_base_per_s + f.drain_effort_per_s * frac * frac) * t.dt * (1.5 - 0.5);
         let now = drain(&p, base, &f, &t.contract.speed, t.dt, 1.0);
         assert!((now - before).abs() < 1e-12);
-        assert!((injury_chance(base, 0.004) - 0.004 * (1.5 - 0.5)).abs() < 1e-12);
+        assert!((injury_chance(base, 0.004) - 0.004 * (0.5 + 0.5)).abs() < 1e-12);
+    }
+
+    /// Injury proneness raises the chance: a player at 16 is hurt more often than one at
+    /// 10, who is hurt more often than one at 4.
+    #[test]
+    fn injury_proneness_raises_the_injury_chance() {
+        let content = crate::data::test_support::shipped_content();
+        let (schema, t) = (&content.attributes, &content.tuning.engine);
+        let at = |tenths: u8| {
+            let mut a = crate::player::Attributes {
+                values: [crate::rating::Rating::from_tenths(100); crate::data::MAX_ATTRIBUTES],
+                len: schema.len() as u8,
+            };
+            a.values[schema.index("injury_proneness").unwrap()] =
+                crate::rating::Rating::from_tenths(tenths);
+            let (d, stages) = crate::player::Derived::from_attributes(&a, schema, t);
+            injury_chance(Skills::new(&stages, &d), 0.004)
+        };
+        let (low, mid, high) = (at(40), at(100), at(160));
+        assert!(low < mid && mid < high, "{low} {mid} {high}");
+        assert!((mid - 0.004).abs() < 1e-12);
     }
 
     /// Every sprint costs stamina: at full sprint the effort term reads speed over the

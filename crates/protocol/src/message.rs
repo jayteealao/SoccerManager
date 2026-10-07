@@ -58,13 +58,56 @@ pub struct SquadEntry {
     /// so this is the one fitness figure the engine holds. Protocol 3 sent 0 to 100.
     #[serde(rename = "player.natural_fitness")]
     pub natural_fitness: u8,
-    /// The injury-resistance attribute in tenths of the 1 to 20 scale: how well the player
-    /// stands up to knocks. A hello from an earlier build carries none and reads as 0.
-    #[serde(rename = "player.injury_resistance", default)]
-    pub injury_resistance: u8,
+    /// The player's consistency, a hidden value: never a number, only a word and how sure
+    /// the club is of it.
+    #[serde(rename = "player.consistency")]
+    pub consistency: HiddenWord,
+    /// The player's injury proneness, a hidden value: never a number, only a word and how
+    /// sure the club is of it. The prematch Risk word reads it.
+    #[serde(rename = "player.injury_proneness")]
+    pub injury_proneness: HiddenWord,
     /// How well the player fits each role in tenths of the 1 to 20 scale (0 to 200), one value
     /// per role in the order of the hello's `tactics.roles`.
     pub role_fit: Vec<u8>,
+}
+
+/// A hidden value as the club knows it. `word` is a lower-case key (for example
+/// `rarely_off` or `injury_prone`) whose display text the page owns; it is absent while the
+/// confidence is `not_yet_known`. No number for a hidden value is ever sent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HiddenWord {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub word: Option<String>,
+    pub confidence: Confidence,
+}
+
+/// How sure the club is of a hidden value: from the matches the player has seen at the club,
+/// none is `not_yet_known`, a few `tentative`, many `firm`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Confidence {
+    NotYetKnown,
+    Tentative,
+    Firm,
+}
+
+/// Every player's match rating, sent once at full time after the closing statistics.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Ratings {
+    pub tick: u32,
+    /// Every player who played, home first and in squad order.
+    pub ratings: Vec<RatingWire>,
+}
+
+/// One player's match rating: 1.0 to 10.0 with one decimal.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RatingWire {
+    #[serde(rename = "player.id")]
+    pub id: String,
+    pub rating: f64,
 }
 
 /// One slot's role and duty, as indices into the hello's `tactics.roles` and
@@ -402,6 +445,7 @@ pub enum ServerMessage {
     Matchday(Matchday),
     GroundEvent(GroundEvent),
     GroundProgress(GroundProgress),
+    Ratings(Ratings),
 }
 
 /// The playback speed a client asks for.
@@ -606,7 +650,14 @@ mod tests {
                         shirt: 1,
                         position: "GK".into(),
                         natural_fitness: 142,
-                        injury_resistance: 128,
+                        consistency: HiddenWord {
+                            word: None,
+                            confidence: Confidence::NotYetKnown,
+                        },
+                        injury_proneness: HiddenWord {
+                            word: Some("rarely_injured".into()),
+                            confidence: Confidence::Tentative,
+                        },
                         role_fit: vec![160, 24],
                     }],
                     setup: Some(TeamSetup {
@@ -982,18 +1033,46 @@ mod tests {
     fn a_hello_from_an_earlier_build_reads_without_the_newer_fields() {
         let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello())))
             .unwrap()
-            .replace(",\"player.injury_resistance\":128", "")
             .replace(",\"extra_substitutions\":1,\"extra_windows\":1", "")
             .replace(",\"windows_exempt\":[\"half_time\"]", "");
-        assert!(!json.contains("injury_resistance"), "{json}");
         assert!(!json.contains("extra_windows"), "{json}");
         let ServerMessage::Hello(back) = serde_json::from_str::<ServerMessage>(&json).unwrap()
         else {
             panic!("not a hello");
         };
-        assert_eq!(back.teams[0].squad[0].injury_resistance, 0);
         assert_eq!(back.substitutions.extra_substitutions, 0);
         assert!(back.substitutions.windows_exempt.is_empty());
+    }
+
+    /// A hidden value travels as a word key and a confidence; with no match seen there is no
+    /// word, and a squad entry still carrying the old resistance figure is refused.
+    #[test]
+    fn hidden_values_travel_as_words_and_the_old_figure_is_refused() {
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello()))).unwrap();
+        assert!(
+            json.contains(
+                "\"player.consistency\":{\"confidence\":\"not_yet_known\"},\
+                 \"player.injury_proneness\":{\"word\":\"rarely_injured\",\
+                 \"confidence\":\"tentative\"}"
+            ),
+            "{json}"
+        );
+        let old = json.replace(
+            "\"player.natural_fitness\":142,",
+            "\"player.natural_fitness\":142,\"player.injury_resistance\":128,",
+        );
+        assert!(serde_json::from_str::<ServerMessage>(&old).is_err());
+        let ratings = ServerMessage::Ratings(Ratings {
+            tick: 270_000,
+            ratings: vec![RatingWire {
+                id: "a-1".into(),
+                rating: 7.3,
+            }],
+        });
+        assert_eq!(
+            serde_json::to_string(&ratings).unwrap(),
+            "{\"type\":\"ratings\",\"tick\":270000,\"ratings\":[{\"player.id\":\"a-1\",\"rating\":7.3}]}"
+        );
     }
 
     fn bare_team(id: &str, name: &str) -> TeamRef {

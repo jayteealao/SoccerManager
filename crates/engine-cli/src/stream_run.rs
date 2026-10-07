@@ -16,9 +16,9 @@ use engine::{
     Simulation,
 };
 use protocol::{
-    CardKind, ChangeKind, ChangeOutcome, ChangeState, ChangeStateNote, Condition, EventType,
-    MatchEvent, RosterEntry, ServerMessage, SlotRole, SquadEntry, Stats, SubstitutionRules,
-    TeamRef, TeamSetup,
+    CardKind, ChangeKind, ChangeOutcome, ChangeState, ChangeStateNote, Condition, Confidence,
+    EventType, HiddenWord, MatchEvent, RatingWire, Ratings, RosterEntry, ServerMessage, SlotRole,
+    SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
 };
 use std::cell::RefCell;
 
@@ -358,6 +358,10 @@ pub fn drive<S: TickSink>(
     if let Err(err) = route(ServerMessage::Stats(stats_message(sim))) {
         return closing_or_fail(err, written).map(|written| Driven { written, full_time });
     }
+    // The ratings are final only at a real full time; a match cut short sends none.
+    if full_time && let Err(err) = route(ServerMessage::Ratings(ratings_message(sim))) {
+        return closing_or_fail(err, written).map(|written| Driven { written, full_time });
+    }
     Ok(Driven { written, full_time })
 }
 
@@ -437,7 +441,6 @@ pub(crate) fn condition_message(sim: &Simulation) -> Condition {
 pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
     let config = sim.config();
     let fitness = config.attributes.index("natural_fitness");
-    let resistance = config.attributes.index("injury_resistance");
     let mut index = 0usize;
     sim.teams().map(|team| {
         let editable = page_lineup && index == HOME;
@@ -452,7 +455,8 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
                     shirt: player.shirt,
                     position: player.position.code().to_string(),
                     natural_fitness: fitness.map_or(0, |i| player.attributes.get(i).tenths()),
-                    injury_resistance: resistance.map_or(0, |i| player.attributes.get(i).tenths()),
+                    consistency: hidden_word(config, player, "consistency"),
+                    injury_proneness: hidden_word(config, player, "injury_proneness"),
                     role_fit: (0..config.tactics.roles.len())
                         .map(|role| {
                             let fit = engine::ai::role_fit(
@@ -521,6 +525,56 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
 }
 
 /// A squad index as the wire writes it. A validated team file holds far fewer players.
+/// Hidden attribute `name` of `player` as the hello carries it: a word key and a confidence
+/// from the matches he has seen at the club, never his rating. A schema without the attribute
+/// gives "not yet known".
+fn hidden_word(
+    config: &engine::MatchConfig,
+    player: &engine::team::SquadPlayer,
+    name: &str,
+) -> HiddenWord {
+    use engine::contract::hidden::{self, Confidence as C};
+    let known = config.attributes.index(name).map(|i| {
+        hidden::hidden_word(
+            name,
+            player.attributes.get(i).decimal(),
+            player.condition.matches_at_club,
+            &config.hidden,
+        )
+    });
+    let Some(w) = known else {
+        return HiddenWord {
+            word: None,
+            confidence: Confidence::NotYetKnown,
+        };
+    };
+    HiddenWord {
+        word: w.word,
+        confidence: match w.confidence {
+            C::NotYetKnown => Confidence::NotYetKnown,
+            C::Tentative => Confidence::Tentative,
+            C::Firm => Confidence::Firm,
+        },
+    }
+}
+
+/// Every player's match rating as the `ratings` message carries it, home first and in squad
+/// order.
+pub(crate) fn ratings_message(sim: &Simulation) -> Ratings {
+    let teams = sim.teams();
+    Ratings {
+        tick: sim.tick(),
+        ratings: sim
+            .match_ratings()
+            .into_iter()
+            .map(|r| RatingWire {
+                id: teams[r.team].player_ids[r.squad].clone(),
+                rating: r.rating(),
+            })
+            .collect(),
+    }
+}
+
 fn wire_index(squad: usize) -> u16 {
     u16::try_from(squad).unwrap_or(u16::MAX)
 }
@@ -994,7 +1048,11 @@ mod tests {
             // Tenths of 1 to 20.
             assert!(entry.role_fit.iter().all(|&f| f <= 200), "{entry:?}");
             assert!(entry.natural_fitness > 0, "{entry:?}");
-            assert!(entry.injury_resistance > 0, "{entry:?}");
+            // The shipped teams give no matches at the club: nothing is known yet.
+            for hidden in [&entry.consistency, &entry.injury_proneness] {
+                assert_eq!(hidden.confidence, Confidence::NotYetKnown, "{entry:?}");
+                assert_eq!(hidden.word, None, "{entry:?}");
+            }
         }
         let setup = teams[HOME]
             .setup
@@ -1414,7 +1472,9 @@ mod tests {
             })
             .expect("energy is sent every second");
         assert_eq!(condition.subs_used[0], 1);
-        assert_eq!(condition.windows_used[0], 1);
+        // A change made at half time takes no window of its own.
+        let at_half_time = verdicts[0].change_applied_tick == Some(ticks / 2);
+        assert_eq!(condition.windows_used[0], u8::from(!at_half_time));
     }
 
     /// Waits until the producer stops moving and returns the tick it stopped on.
@@ -1566,6 +1626,125 @@ mod tests {
             assert_eq!(e.change_state, Some(ChangeState::Applied), "{e:?}");
             assert!(e.tick > paused_at, "applied on resume: {e:?}");
             assert_eq!(e.tick, next, "not at the next stoppage: {e:?}");
+        }
+    }
+
+    /// The path of the first key in `value` that names a hidden value and holds a number,
+    /// directly or anywhere beneath it. `hidden` is every name a hidden value goes by.
+    fn hidden_leaks(value: &serde_json::Value, hidden: &[String], path: &str) -> Option<String> {
+        fn holds_number(v: &serde_json::Value) -> bool {
+            match v {
+                serde_json::Value::Number(_) => true,
+                serde_json::Value::Array(a) => a.iter().any(holds_number),
+                serde_json::Value::Object(o) => o.values().any(holds_number),
+                _ => false,
+            }
+        }
+        match value {
+            serde_json::Value::Object(o) => o.iter().find_map(|(k, v)| {
+                let here = format!("{path}.{k}");
+                let named = hidden.iter().any(|h| k.contains(h.as_str()));
+                if named && holds_number(v) {
+                    Some(here)
+                } else {
+                    hidden_leaks(v, hidden, &here)
+                }
+            }),
+            serde_json::Value::Array(a) => a
+                .iter()
+                .enumerate()
+                .find_map(|(i, v)| hidden_leaks(v, hidden, &format!("{path}[{i}]"))),
+            _ => None,
+        }
+    }
+
+    /// No message of a page-managed match, its hello included, carries a number for a hidden
+    /// value; a planted figure is caught; and the full-time ratings list every player who
+    /// played, the substitute among them.
+    #[test]
+    fn no_message_carries_a_number_for_a_hidden_value() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let config = MatchConfig::new(42, 3, &loaded.content, [a, b])
+            .unwrap()
+            .with_manager(HOME, engine::Manager::Human);
+        let ticks = config.max_ticks();
+        let mut hidden: Vec<String> = config
+            .attributes
+            .hidden_names()
+            .map(str::to_string)
+            .collect();
+        hidden.push("injury_resistance".into());
+        assert!(hidden.iter().any(|h| h == "consistency"), "{hidden:?}");
+        let mut sim = Simulation::new(config).unwrap();
+        let hello = serde_json::to_value(hello_teams(&sim, true)).unwrap();
+        let inbox = Inbox::default();
+        for change in page_changes(&sim) {
+            inbox.push(change);
+        }
+        let state = MatchState::default();
+        let mut messages = Vec::new();
+        let driven = drive(
+            &mut sim,
+            &mut VecSink::default(),
+            &Drive {
+                ticks,
+                owner_id: "0123456789abcdef0123456789abcdef",
+                match_id: "000000000000002a-1",
+                club_ids: ["club-a", "club-b"],
+                state: &state,
+                gate: None,
+                commentary: &loaded.commentary,
+                inbox: Some(&inbox),
+                page_changes: None,
+                planned: &[],
+                observe: None,
+                matchday: None,
+            },
+            &mut |m: ServerMessage| {
+                messages.push(m);
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert!(driven.full_time);
+        assert_eq!(hidden_leaks(&hello, &hidden, "hello"), None);
+        assert!(
+            hello.to_string().contains("\"player.consistency\":{"),
+            "the hello names the hidden values"
+        );
+        for (i, m) in messages.iter().enumerate() {
+            let json = serde_json::to_value(m).unwrap();
+            assert_eq!(hidden_leaks(&json, &hidden, &format!("message[{i}]")), None);
+        }
+        let mut planted = hello.clone();
+        planted[0]["squad"][0]["player.consistency"] = serde_json::json!(12.5);
+        assert_eq!(
+            hidden_leaks(&planted, &hidden, "hello").as_deref(),
+            Some("hello[0].squad[0].player.consistency")
+        );
+
+        let Some(ServerMessage::Ratings(ratings)) = messages.last() else {
+            panic!("the last message is not the ratings");
+        };
+        let played: Vec<String> = sim
+            .tallies()
+            .iter()
+            .zip(sim.teams())
+            .flat_map(|(side, team)| {
+                side.iter()
+                    .zip(team.player_ids.iter())
+                    .filter(|(t, _)| t.played)
+                    .map(|(_, id)| id.clone())
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        let rated: Vec<String> = ratings.ratings.iter().map(|r| r.id.clone()).collect();
+        assert_eq!(rated, played);
+        assert_eq!(rated.len(), 23, "22 starters and the substitute");
+        for r in &ratings.ratings {
+            assert!((1.0..=10.0).contains(&r.rating), "{r:?}");
+            assert_eq!((r.rating * 10.0).round() / 10.0, r.rating, "{r:?}");
         }
     }
 }

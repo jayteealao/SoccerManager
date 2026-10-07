@@ -9,15 +9,21 @@
 //! tuning file takes the state caps, the body jobs, and the fatigue group weights from a
 //! second frozen copy (`contract/frozen-v2.json`), and a version 1 slot file takes the two
 //! condition modifiers in their first versions.
+//!
+//! A version 2 attribute file and a version 4 tuning file take the hidden values from a third
+//! frozen copy (`contract/frozen-v3.json`): injury resistance becomes injury proneness, which
+//! raises the injury chance as it rises, and consistency joins the file with its spread, its
+//! words, and the match rating's weights. A version 1 team file converts each player's injury
+//! resistance R to injury proneness 21.0 − R and gives him consistency 10.0.
 
 use std::collections::BTreeMap;
 
 use garde::Validate;
 use serde::Deserialize;
 
-use crate::contract::GateDefs;
+use crate::contract::{ActionKind, GateDefs, StageKind};
 use crate::data::attributes::{
-    ATTRIBUTES_VERSION, ActionTables, AttributeDef, AttributeSchema, Group, Job,
+    ATTRIBUTES_VERSION, ActionTables, AttributeDef, AttributeSchema, Direction, Group, Job,
 };
 use crate::data::tactics::{
     AiTuning, Duty, Formation, Instructions, Mentality, Offset, PreferredActions, Role,
@@ -30,11 +36,21 @@ use crate::rating::Rating;
 pub const TEAM_V1: u32 = 1;
 /// The tactics file version the converter reads.
 pub const TACTICS_V1: u32 = 1;
-/// The attribute file version the converter reads.
+/// The attribute file versions the converters read.
 pub const ATTRIBUTES_V1: u32 = 1;
+pub const ATTRIBUTES_V2: u32 = 2;
 /// The tuning file versions the converters read.
 pub const TUNING_V2: u32 = 2;
 pub const TUNING_V3: u32 = 3;
+pub const TUNING_V4: u32 = 4;
+
+/// The attribute version 2 name that version 3 renames: injury resistance (high is good)
+/// becomes injury proneness (high is bad), mirrored on the scale.
+pub const RESISTANCE: &str = "injury_resistance";
+/// The name injury resistance takes in version 3.
+pub const PRONENESS: &str = "injury_proneness";
+/// The hidden attribute version 3 adds.
+pub const CONSISTENCY: &str = "consistency";
 /// The slot file version the converter reads.
 pub const SLOTS_V1: u32 = 1;
 
@@ -89,9 +105,10 @@ pub struct AttributeSchemaV1 {
     pub attributes: Vec<AttributeDefV1>,
 }
 
-/// A version 1 attribute file in the current shape: each attribute takes its job, and the
+/// A version 1 attribute file in the version 2 shape: each attribute takes its job, and the
 /// file takes the stage tables and gates, from the frozen copy. A name the frozen copy has
-/// no job for is refused, naming it. The caller validates the result as a current file.
+/// no job for is refused, naming it. The caller converts the result to version 3
+/// ([`attributes_v2_to_v3`]) and validates it as a current file.
 pub fn attributes_v1_to_v2(file: AttributeSchemaV1) -> Result<AttributeSchema, String> {
     let mut frozen = frozen().attributes;
     let attributes = file
@@ -101,6 +118,7 @@ pub fn attributes_v1_to_v2(file: AttributeSchemaV1) -> Result<AttributeSchema, S
             Some(job) => Ok(AttributeDef {
                 name: a.name,
                 group: a.group,
+                hidden: false,
                 job,
             }),
             None => Err(format!(
@@ -110,11 +128,79 @@ pub fn attributes_v1_to_v2(file: AttributeSchemaV1) -> Result<AttributeSchema, S
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(AttributeSchema {
-        schema_version: ATTRIBUTES_VERSION,
+        schema_version: ATTRIBUTES_V2,
         attributes,
         actions: frozen.actions,
         gates: frozen.gates,
     })
+}
+
+/// The hidden values as they first shipped: the consistency definition, and the tuning blocks
+/// a version 4 tuning file lacks. Never edited: tuning the shipped files leaves it alone.
+pub const FROZEN_V3: &str = include_str!("../contract/frozen-v3.json");
+
+/// The third frozen copy's parts.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenV3 {
+    attributes: BTreeMap<String, AttributeDef>,
+    tuning: FrozenV3Tuning,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenV3Tuning {
+    /// Values merged into `engine.contract`.
+    contract: serde_json::Map<String, serde_json::Value>,
+    hidden: serde_json::Value,
+    match_rating: serde_json::Value,
+    /// Values merged into `generator.world`.
+    world: serde_json::Map<String, serde_json::Value>,
+}
+
+fn frozen_v3() -> FrozenV3 {
+    serde_json::from_str(FROZEN_V3).expect("the third frozen copy parses; a test checks it")
+}
+
+/// A version 2 attribute file in the current shape. Injury resistance becomes injury
+/// proneness, a hidden value whose job raises injuries as it rises; the injury stage keeps it
+/// as its main attribute and drops its supports, each of which lowered injuries. Consistency
+/// joins from the frozen copy. The caller validates the result as a current file.
+pub fn attributes_v2_to_v3(mut file: AttributeSchema) -> AttributeSchema {
+    file.schema_version = ATTRIBUTES_VERSION;
+    let mut renamed = false;
+    for def in &mut file.attributes {
+        if def.name == RESISTANCE {
+            def.name = PRONENESS.to_string();
+            def.hidden = true;
+            def.job.direction = Direction::Up;
+            renamed = true;
+        }
+    }
+    if renamed {
+        for stages in file.actions.values_mut() {
+            for table in stages.values_mut() {
+                for w in std::iter::once(&mut table.main).chain(table.supports.iter_mut()) {
+                    if w.attribute == RESISTANCE {
+                        w.attribute = PRONENESS.to_string();
+                    }
+                }
+            }
+        }
+        if let Some(table) = file
+            .actions
+            .get_mut(&ActionKind::Injury)
+            .and_then(|t| t.get_mut(&StageKind::Execute))
+        {
+            table.supports.clear();
+        }
+    }
+    if file.index(CONSISTENCY).is_none()
+        && let Some(def) = frozen_v3().attributes.remove(CONSISTENCY)
+    {
+        file.attributes.push(def);
+    }
+    file
 }
 
 /// The engine fields a version 2 tuning file holds that version 3 drops: the linear speed
@@ -182,10 +268,7 @@ pub fn tuning_v3_to_v4(mut file: serde_json::Value) -> Result<serde_json::Value,
     let obj = file
         .as_object_mut()
         .ok_or_else(|| "the file is not an object".to_string())?;
-    obj.insert(
-        "schema_version".into(),
-        serde_json::Value::from(crate::data::TUNING_VERSION),
-    );
+    obj.insert("schema_version".into(), serde_json::Value::from(TUNING_V4));
     let contract = obj
         .get_mut("engine")
         .and_then(|e| e.get_mut("contract"))
@@ -200,6 +283,39 @@ pub fn tuning_v3_to_v4(mut file: serde_json::Value) -> Result<serde_json::Value,
         .ok_or_else(|| "fatigue is missing".to_string())?;
     for (k, v) in frozen.fatigue {
         fatigue.insert(k, v);
+    }
+    Ok(file)
+}
+
+/// A version 4 tuning file, as JSON, in the version 5 shape: consistency, the words of the
+/// hidden values, the match rating, and the spread of the hidden values in the generator come
+/// from the third frozen copy. The caller parses and validates the result as a current file.
+pub fn tuning_v4_to_v5(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let frozen = frozen_v3().tuning;
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert(
+        "schema_version".into(),
+        serde_json::Value::from(crate::data::TUNING_VERSION),
+    );
+    obj.insert("hidden".into(), frozen.hidden);
+    obj.insert("match_rating".into(), frozen.match_rating);
+    let contract = obj
+        .get_mut("engine")
+        .and_then(|e| e.get_mut("contract"))
+        .and_then(|c| c.as_object_mut())
+        .ok_or_else(|| "engine.contract is missing".to_string())?;
+    for (k, v) in frozen.contract {
+        contract.insert(k, v);
+    }
+    let world = obj
+        .get_mut("generator")
+        .and_then(|g| g.get_mut("world"))
+        .and_then(|w| w.as_object_mut())
+        .ok_or_else(|| "generator.world is missing".to_string())?;
+    for (k, v) in frozen.world {
+        world.insert(k, v);
     }
     Ok(file)
 }
@@ -263,7 +379,18 @@ pub struct TeamFileV1 {
     pub players: Vec<PlayerEntryV1>,
 }
 
-/// The version 1 squad check, with its messages as version 1 gave them.
+/// The name `def` had in a version 1 team file: injury proneness was injury resistance, and
+/// consistency did not exist.
+fn v1_name(def: &AttributeDef) -> Option<&str> {
+    match def.name.as_str() {
+        CONSISTENCY => None,
+        PRONENESS => Some(RESISTANCE),
+        name => Some(name),
+    }
+}
+
+/// The version 1 squad check, with its messages as version 1 gave them, against the names the
+/// schema had then.
 fn check_squad_v1(players: &[PlayerEntryV1], schema: &AttributeSchema) -> garde::Result {
     for (i, p) in players.iter().enumerate() {
         if players[..i].iter().any(|q| q.id == p.id) {
@@ -275,25 +402,25 @@ fn check_squad_v1(players: &[PlayerEntryV1], schema: &AttributeSchema) -> garde:
                 p.id, p.shirt
             )));
         }
-        for def in &schema.attributes {
-            match p.attributes.get(&def.name) {
+        for name in schema.attributes.iter().filter_map(v1_name) {
+            match p.attributes.get(name) {
                 None => {
                     return Err(garde::Error::new(format!(
-                        "player {}: attribute {} is missing",
-                        p.id, def.name
+                        "player {}: attribute {name} is missing",
+                        p.id
                     )));
                 }
                 Some(&value) if !(1..=100).contains(&value) => {
                     return Err(garde::Error::new(format!(
-                        "player {}: attribute {} is {value}; allowed 1 to 100",
-                        p.id, def.name
+                        "player {}: attribute {name} is {value}; allowed 1 to 100",
+                        p.id
                     )));
                 }
                 Some(_) => {}
             }
         }
         for name in p.attributes.keys() {
-            if schema.index(name).is_none() {
+            if !schema.attributes.iter().any(|d| v1_name(d) == Some(name)) {
                 return Err(garde::Error::new(format!(
                     "player {}: attribute {name} is not in the schema",
                     p.id
@@ -305,7 +432,9 @@ fn check_squad_v1(players: &[PlayerEntryV1], schema: &AttributeSchema) -> garde:
 }
 
 /// A checked version 1 team file in the current shape: every value `v` becomes `2v`
-/// tenths, at least 1.0, so 1 to 4 become 1.0; no player has body fields.
+/// tenths, at least 1.0, so 1 to 4 become 1.0; injury resistance R becomes injury proneness
+/// 21.0 − R, which keeps the order of players and stays inside 1.0 to 20.0; every player gets
+/// consistency 10.0; no player has body fields.
 pub fn team_v1_to_v2(file: TeamFileV1) -> TeamFile {
     TeamFile {
         schema_version: TEAM_VERSION,
@@ -322,11 +451,18 @@ pub fn team_v1_to_v2(file: TeamFileV1) -> TeamFile {
                     .attributes
                     .into_iter()
                     .map(|(name, v)| {
-                        (
-                            name,
-                            Rating::from_tenths((2 * v).max(crate::rating::MIN_TENTHS)),
-                        )
+                        let t = (2 * v).max(crate::rating::MIN_TENTHS);
+                        if name == RESISTANCE {
+                            // 10..=200 mirrors onto 10..=200.
+                            (PRONENESS.to_string(), Rating::from_tenths(210 - t))
+                        } else {
+                            (name, Rating::from_tenths(t))
+                        }
                     })
+                    .chain(std::iter::once((
+                        CONSISTENCY.to_string(),
+                        Rating::from_tenths(100),
+                    )))
                     .collect(),
                 height: None,
                 age: None,

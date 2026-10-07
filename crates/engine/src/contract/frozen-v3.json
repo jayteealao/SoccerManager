@@ -1,0 +1,110 @@
+{
+  "attributes": {
+    "consistency": {
+      "name": "consistency",
+      "group": "mental",
+      "hidden": true,
+      "job": {
+        "stage": "spread",
+        "statistic": "spread of the player's match rating across matches",
+        "direction": "down"
+      }
+    }
+  },
+  "tuning": {
+    "contract": {
+      "consistency": {
+        "match_max": 1.0,
+        "period_max": 0.75,
+        "period_minutes": 15
+      }
+    },
+    "hidden": {
+      "confidence": {
+        "tentative_from": 1,
+        "firm_from": 20
+      },
+      "words": {
+        "consistency": [
+          {
+            "from": 15.0,
+            "word": "rarely_off"
+          },
+          {
+            "from": 11.0,
+            "word": "steady"
+          },
+          {
+            "from": 7.0,
+            "word": "has_off_days"
+          },
+          {
+            "from": 1.0,
+            "word": "erratic"
+          }
+        ],
+        "injury_proneness": [
+          {
+            "from": 15.0,
+            "word": "injury_prone"
+          },
+          {
+            "from": 11.0,
+            "word": "picks_up_knocks"
+          },
+          {
+            "from": 7.0,
+            "word": "rarely_injured"
+          },
+          {
+            "from": 1.0,
+            "word": "hardly_ever_injured"
+          }
+        ]
+      }
+    },
+    "match_rating": {
+      "base": 6.0,
+      "min": 1.0,
+      "max": 10.0,
+      "goal": 1.0,
+      "shot_on_target": 0.15,
+      "shot_off_target": -0.05,
+      "xg": 0.5,
+      "pass_completed": 0.02,
+      "pass_failed": -0.04,
+      "tackle_won": 0.1,
+      "interception": 0.1,
+      "block": 0.15,
+      "clearance": 0.05,
+      "save": 0.3,
+      "foul": -0.05,
+      "yellow": -0.5,
+      "red": -1.5,
+      "conceded": {
+        "keeper": -0.3,
+        "defender": -0.15
+      },
+      "clean_sheet": {
+        "keeper": 0.5,
+        "defender": 0.3,
+        "min_minutes": 60
+      },
+      "result": {
+        "win": 0.3,
+        "loss": -0.3
+      },
+      "defenders": [
+        "CB",
+        "LB",
+        "RB"
+      ]
+    },
+    "world": {
+      "hidden": {
+        "mean": 10.0,
+        "spread": 2.5
+      }
+    }
+  }
+}

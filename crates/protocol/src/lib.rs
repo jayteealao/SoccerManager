@@ -18,10 +18,10 @@ pub use event::{CardKind, ChangeOutcome, EventType, MatchEvent};
 pub use frame::{Frame, TickFrame};
 pub use message::{
     Advice, AdvicePick, CancelChange, ChangeDetail, ChangeStateNote, ClientCommand, Condition,
-    DEFAULT_GROUND_LENGTH, DEFAULT_GROUND_WIDTH, GroundEvent, GroundKind, GroundProgress, Hello,
-    Jump, Matchday, MatchdayFixture, PatchWire, QueueChange, RoleWire, RosterEntry, Seen,
-    ServerMessage, SetLineup, SetSpeed, Side, SlotRole, SquadEntry, Stats, SubstitutionRules,
-    TeamRef, TeamSetup,
+    Confidence, DEFAULT_GROUND_LENGTH, DEFAULT_GROUND_WIDTH, GroundEvent, GroundKind,
+    GroundProgress, Hello, HiddenWord, Jump, Matchday, MatchdayFixture, PatchWire, QueueChange,
+    RatingWire, Ratings, RoleWire, RosterEntry, Seen, ServerMessage, SetLineup, SetSpeed, Side,
+    SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
 };
 
 /// The protocol version a client must ask for. A client that asks for another version is
@@ -106,11 +106,25 @@ pub use message::{
 /// `teammates`, and each duty a `scale`. No message field was added or removed, and the
 /// tick frames are unchanged. A version 3 value `v` is `2v` tenths, so a reader of an old replay
 /// doubles them before it shows them.
-pub const PROTOCOL_VERSION: u16 = 4;
+///
+/// Version 5 makes consistency and injury proneness hidden values: a squad entry loses
+/// `player.injury_resistance` and gains `player.consistency` and `player.injury_proneness`,
+/// each a word key and a confidence (`not_yet_known`, `tentative`, `firm`) from the matches
+/// the player has seen at the club, never a number. A removed field takes a new version. One
+/// message is added: `ratings`, every player's match rating (1.0 to 10.0, one decimal) at full
+/// time, after the closing statistics. The tick frames are unchanged. A reader of an older
+/// replay shows both hidden values as not yet known: no old figure is ever turned into a
+/// word.
+pub const PROTOCOL_VERSION: u16 = 5;
 
 /// The protocol version before ratings moved to tenths. Replay readers still read its
 /// frames; a hello of this version carries ratings on the 1 to 100 scale.
 pub const PROTOCOL_V3: u16 = 3;
+
+/// The protocol version before the hidden values: a squad entry carries
+/// `player.injury_resistance` in tenths and no hidden word. Replay readers still read its
+/// frames.
+pub const PROTOCOL_V4: u16 = 4;
 
 /// Errors this crate returns.
 #[derive(Debug, Error)]
@@ -217,7 +231,10 @@ pub const MESSAGES: &[MessageSpec] = &[
             "extra_substitutions",
             "extra_windows",
             "windows_exempt",
-            "player.injury_resistance",
+            "player.consistency",
+            "player.injury_proneness",
+            "word",
+            "confidence",
             "knockout",
             "ground.length",
             "ground.width",
@@ -341,6 +358,12 @@ pub const MESSAGES: &[MessageSpec] = &[
         fields: &["tick", "reached"],
     },
     MessageSpec {
+        name: "ratings",
+        direction: Direction::ServerToClient,
+        encoding: Encoding::JsonText,
+        fields: &["tick", "ratings"],
+    },
+    MessageSpec {
         name: "ack",
         direction: Direction::ServerToClient,
         encoding: Encoding::JsonText,
@@ -452,6 +475,7 @@ mod tests {
             ServerMessage::Matchday(_) => "matchday",
             ServerMessage::GroundEvent(_) => "ground-event",
             ServerMessage::GroundProgress(_) => "ground-progress",
+            ServerMessage::Ratings(_) => "ratings",
         }
     }
 
@@ -572,6 +596,10 @@ mod tests {
             ServerMessage::GroundProgress(GroundProgress {
                 tick: 0,
                 reached: Vec::new(),
+            }),
+            ServerMessage::Ratings(Ratings {
+                tick: 0,
+                ratings: Vec::new(),
             }),
         ]
     }

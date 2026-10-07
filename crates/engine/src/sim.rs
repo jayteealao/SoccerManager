@@ -10,6 +10,7 @@ mod hooks;
 mod manager;
 mod movement;
 mod possession;
+pub mod tally;
 
 use crate::trace::Point;
 use serde_json::json;
@@ -71,6 +72,10 @@ pub struct MatchConfig {
     pub flags: ActiveFlags,
     /// The module in each slot, resolved when the content loaded. Never changes in a match.
     pub modules: ResolvedModules,
+    /// The words of the hidden values, from the tuning file. Never changes in a match.
+    pub hidden: crate::contract::hidden::HiddenTuning,
+    /// The weights of the match rating, from the tuning file. Never changes in a match.
+    pub match_rating: crate::match_rating::MatchRatingTuning,
     /// The home team's ground. Never changes in a match. Private: `set_pitch` writes it and
     /// the teams' copies together.
     pitch: Pitch,
@@ -150,6 +155,8 @@ impl MatchConfig {
             knockout: false,
             flags: content.flags.clone(),
             modules: content.modules,
+            hidden: content.tuning.hidden.clone(),
+            match_rating: content.tuning.match_rating.clone(),
             pitch,
         })
     }
@@ -621,12 +628,15 @@ pub struct Simulation {
     pub(crate) stages: Vec<crate::contract::StageValues>,
     /// The attribute file's stage weights, resolved once for the refresh.
     pub(crate) blend: std::sync::Arc<crate::contract::stages::Blend>,
+    /// What each player did, by side and squad index, for the match rating.
+    pub(crate) tallies: [Vec<tally::PlayerTally>; 2],
 }
 
 impl Simulation {
     /// Places both teams for kick-off.
     pub fn new(config: MatchConfig) -> Result<Self, EngineError> {
         let mut sim = Self::blank(config)?;
+        sim.kick_off_form();
         sim.place_kick_off(0);
         Ok(sim)
     }
@@ -666,6 +676,7 @@ impl Simulation {
     pub fn new_traced(config: MatchConfig) -> Result<Self, EngineError> {
         let mut sim = Self::blank(config)?;
         sim.streams.enable_trace(sim.tick + 1);
+        sim.kick_off_form();
         sim.place_kick_off(0);
         Ok(sim)
     }
@@ -713,6 +724,9 @@ impl Simulation {
             .map(|p| teams[p.team].squad[p.squad].stages)
             .collect();
         let blend = std::sync::Arc::new(crate::contract::stages::Blend::of(&config.attributes));
+        let tallies = teams
+            .each_ref()
+            .map(|t| vec![tally::PlayerTally::default(); t.squad.len()]);
         let mut sim = Self {
             timeline: vec![(0, teams.clone())],
             teams,
@@ -759,11 +773,25 @@ impl Simulation {
             tuning: std::sync::Arc::new(config.tuning.clone()),
             stages,
             blend,
+            tallies,
             config,
         };
-        // Condition inputs (sharpness, adaptation, a short rest) act from kick-off.
+        // Every starter plays; the condition inputs (sharpness, adaptation, a short rest)
+        // act from kick-off. Each player's form is drawn when the match starts
+        // ([`Self::kick_off_form`]), so a restored match takes no draw here.
+        for i in 0..sim.players.len() {
+            sim.tally_played(i);
+        }
         sim.refresh_effective();
         Ok(sim)
+    }
+
+    /// Draws each player's form for the match and its first period, and rebuilds those it
+    /// moved. Called once, as the match starts, after the debug trace is switched on, so the
+    /// trace records these draws as it records every other.
+    fn kick_off_form(&mut self) {
+        let changed = self.draw_form_kick_off();
+        self.refresh_marked(changed);
     }
 
     /// Sends player `i` off before kick-off, as a card shown would: the player loses the
@@ -834,8 +862,9 @@ impl Simulation {
         crate::contract::Skills::new(&self.stages[i], &self.players[i].derived)
     }
 
-    /// Player `i`'s ratings as play reads them: his base ratings moved by his state deltas,
-    /// within 1.0 to 20.0.
+    /// Player `i`'s ratings as his states move them: his base ratings moved by his state
+    /// deltas, within 1.0 to 20.0. His form offset, which his hidden consistency sets, is left
+    /// out, so the level a page shows never carries a hidden value.
     pub fn effective_ratings(&self, i: usize) -> crate::player::Attributes {
         let p = &self.players[i];
         crate::contract::states::effective(&p.attributes, &self.config.attributes, p.deltas)
@@ -855,22 +884,29 @@ impl Simulation {
         self.teams[p.team].squad[p.squad].body
     }
 
-    /// Sets player `i`'s state deltas and derives his effective values from them: his
-    /// squad entry's when all are 0, otherwise blended again from his effective ratings
-    /// through the contract.
-    pub(crate) fn set_deltas(
+    /// Sets player `i`'s state deltas and form offset and derives his effective values from
+    /// them: his squad entry's when all are 0, otherwise blended again from his ratings moved
+    /// by both ([`crate::contract::states::effective_with_form`]) through the contract.
+    pub(crate) fn set_state(
         &mut self,
         i: usize,
         deltas: [i8; crate::contract::states::GROUP_COUNT],
+        form: i8,
     ) {
         let p = self.players[i];
         let entry = &self.teams[p.team].squad[p.squad];
-        if deltas == [0; crate::contract::states::GROUP_COUNT] {
+        if deltas == [0; crate::contract::states::GROUP_COUNT] && form == 0 {
             self.players[i].derived = entry.derived;
             self.stages[i] = entry.stages;
         } else {
             let schema = &self.config.attributes;
-            let ratings = crate::contract::states::effective(&entry.attributes, schema, deltas);
+            let ratings = crate::contract::states::effective_with_form(
+                &entry.attributes,
+                schema,
+                deltas,
+                form,
+                &self.config.tuning.contract.states,
+            );
             let (derived, stages) = crate::player::Derived::from_blend(
                 &ratings,
                 &self.blend,
@@ -882,6 +918,7 @@ impl Simulation {
             self.stages[i] = stages;
         }
         self.players[i].deltas = deltas;
+        self.players[i].form = form;
     }
 
     /// Player `i`'s fresh stage values: his base stage values with no factor.
@@ -1256,6 +1293,7 @@ impl Simulation {
             let restart_kick = self.restart_taker.take() == Some(c);
             if matches!(kick, Kick::Shot { .. }) {
                 self.summary.shots[team] += 1;
+                self.tally(c, tally::Count::Shot);
                 let attack_x = self.teams[team].attack_x;
                 let from = self.ball.xy();
                 let (xg, quality) = if penalty {
@@ -1269,15 +1307,18 @@ impl Simulation {
                     )
                 };
                 self.summary.xg[team] += xg;
+                self.tally_xg(c, xg);
                 self.shot_in_flight = Some(team);
                 self.shot_quality = quality;
-                shooter = Some((team, attack_x));
+                shooter = Some((team, attack_x, c));
             } else if restart_kick {
                 self.summary.restart_kicks[team] += 1;
             } else if matches!(kick, Kick::Clear { .. }) {
                 self.summary.clearances[team] += 1;
+                self.tally(c, tally::Count::Clearance);
             } else {
                 self.summary.passes[team] += 1;
+                self.tally(c, tally::Count::Pass);
                 self.pass_in_flight = Some(team);
             }
             self.last_touch = Some(team);
@@ -1295,7 +1336,7 @@ impl Simulation {
             .modules
             .ball
             .kick(&self.view(), self.ball, dir, speed, loft);
-        if let Some((team, attack_x)) = shooter
+        if let Some((team, attack_x, c)) = shooter
             && self
                 .config
                 .modules
@@ -1304,6 +1345,7 @@ impl Simulation {
         {
             self.shot_on_target = true;
             self.summary.shots_on_target[team] += 1;
+            self.tally(c, tally::Count::ShotOnTarget);
         }
         self.carrier = None;
         self.keeper_beaten = false;

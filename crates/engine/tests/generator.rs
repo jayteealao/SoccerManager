@@ -35,7 +35,7 @@ fn twenty_clubs_have_twenty_two_players_with_legal_positions() {
 
 /// One player's measured level and his attributes' deviations from it: the mean of his
 /// outfield attributes (his goalkeeping ones for a keeper) after his position's offset for
-/// each attribute's group.
+/// each attribute's group. The hidden values are drawn apart from his level and are left out.
 fn measure(p: &engine::data::PlayerEntry, content: &engine::data::Content) -> (f64, Vec<f64>) {
     let world = &content.tuning.generator.world;
     let offsets = world.offsets[p.position.code()].clone();
@@ -44,7 +44,7 @@ fn measure(p: &engine::data::PlayerEntry, content: &engine::data::Content) -> (f
         .attributes
         .attributes
         .iter()
-        .filter(|def| (def.group == Group::Goalkeeping) == keeper)
+        .filter(|def| !def.hidden && (def.group == Group::Goalkeeping) == keeper)
         .map(|def| p.attributes[&def.name].decimal() - offsets.get(def.group))
         .collect();
     let level = values.iter().sum::<f64>() / values.len() as f64;
@@ -104,6 +104,45 @@ fn the_world_sample_meets_the_spread_targets() {
     let gaps: Vec<f64> = tier_means.windows(2).map(|w| w[0] - w[1]).collect();
     let largest = gaps.iter().copied().fold(f64::MIN, f64::max);
     assert_eq!(gaps[0], largest, "tier gaps {gaps:?}");
+}
+
+/// The hidden values are drawn around the world's hidden mean, whatever a player's level:
+/// over a world sample each centres on 10.0 within 0.3, and the strongest tier's mean is no
+/// higher than the weakest's by more than the same margin.
+#[test]
+fn hidden_values_centre_on_ten_whatever_the_level() {
+    let content = common::content();
+    let hidden: Vec<String> = content
+        .attributes
+        .hidden_names()
+        .map(str::to_string)
+        .collect();
+    assert_eq!(hidden, ["injury_proneness", "consistency"]);
+    let tiers = content.tuning.generator.world.tiers.len();
+    let mut by_tier = Vec::new();
+    for tier in 0..tiers {
+        let league = generate_league_in_tier(300 + tier as u64, 100, tier, &content);
+        let values: Vec<Vec<f64>> = hidden
+            .iter()
+            .map(|name| {
+                league
+                    .iter()
+                    .flat_map(|team| team.players.iter())
+                    .map(|p| p.attributes[name].decimal())
+                    .collect()
+            })
+            .collect();
+        for (name, v) in hidden.iter().zip(&values) {
+            let (mean, _) = mean_and_spread(v);
+            assert!(
+                (mean - 10.0).abs() <= 0.3,
+                "tier {tier} {name}: mean {mean:.2}"
+            );
+        }
+        by_tier.push(mean_and_spread(&values.concat()).0);
+    }
+    let gap = by_tier[0] - by_tier[tiers - 1];
+    assert!(gap.abs() <= 0.3, "hidden means by tier {by_tier:?}");
 }
 
 /// Ratings are drawn inside 1.0 to 20.0, so a generated file needs no lift.

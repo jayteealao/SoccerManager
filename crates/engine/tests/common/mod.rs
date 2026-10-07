@@ -112,11 +112,20 @@ pub fn spread(
 }
 
 /// A quiet match with no background or tackle injuries, so a scene stops only where the
-/// test arranges it.
+/// test arranges it, and no form offsets, so every player plays from his own ratings.
 pub fn calm_match(minutes: u32) -> MatchConfig {
-    let mut config = quiet_match(minutes);
+    let mut config = steady(quiet_match(minutes));
     config.tuning.injury_per_minute = 0.0;
     config.tuning.injury_per_tackle = 0.0;
+    config
+}
+
+/// `config` with both consistency maxima at 0: no player draws a form offset, so each plays
+/// from his ratings and his states alone.
+#[allow(dead_code)]
+pub fn steady(mut config: MatchConfig) -> MatchConfig {
+    config.tuning.contract.consistency.match_max = 0.0;
+    config.tuning.contract.consistency.period_max = 0.0;
     config
 }
 

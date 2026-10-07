@@ -48,6 +48,7 @@ fn owner_and_match_ids_round_trip_through_stats_json() {
         tactics: Default::default(),
         figures: Default::default(),
         script: Default::default(),
+        ratings: Vec::new(),
     };
     let path = write_stats(&data, &stats).unwrap();
     let read = read_stats(&path).unwrap();

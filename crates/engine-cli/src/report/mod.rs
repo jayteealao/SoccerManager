@@ -1238,6 +1238,7 @@ mod tests {
                 ..MatchFigures::default()
             },
             script: Default::default(),
+            ratings: Vec::new(),
         }
     }
 

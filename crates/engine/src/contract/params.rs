@@ -1,6 +1,6 @@
 //! The contract block of the tuning file (`engine.contract`): the curve, each action's
 //! strength and limits, the top-speed map, the acceleration anchor, the concentration
-//! lapses, the state caps, and the body jobs.
+//! lapses, the state caps, the body jobs, and consistency.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -33,6 +33,9 @@ pub struct ContractTuning {
     /// The jobs of the body fields and the match condition inputs.
     #[garde(dive)]
     pub body: super::body::BodyJobs,
+    /// The spread of each player's play around his ratings.
+    #[garde(dive)]
+    pub consistency: super::consistency::ConsistencyTuning,
 }
 
 /// The curve `F(r) = scale · e^((r − center) / width)`.
@@ -406,6 +409,11 @@ impl Default for ContractTuning {
             },
             states: super::states::StatesTuning::default(),
             body: super::body::BodyJobs::default(),
+            consistency: super::consistency::ConsistencyTuning {
+                match_max: 1.0,
+                period_max: 0.75,
+                period_minutes: 15,
+            },
         }
     }
 }

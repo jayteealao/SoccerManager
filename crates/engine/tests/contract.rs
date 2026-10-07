@@ -56,8 +56,19 @@ fn the_frozen_copy_has_a_table_for_each_stage_of_every_action() {
         .as_object()
         .expect("the frozen copy has jobs");
     let content = common::content();
+    let frozen_v3: serde_json::Value =
+        serde_json::from_str(engine::data::convert::FROZEN_V3).expect("the third copy parses");
     for def in &content.attributes.attributes {
-        assert!(jobs.contains_key(&def.name), "{}: no frozen job", def.name);
+        // Version 3 renames injury resistance and adds consistency from the third copy.
+        let first = match def.name.as_str() {
+            "injury_proneness" => "injury_resistance",
+            name => name,
+        };
+        assert!(
+            jobs.contains_key(first) || frozen_v3["attributes"].get(&def.name).is_some(),
+            "{}: no frozen job",
+            def.name
+        );
     }
 }
 
@@ -68,16 +79,22 @@ fn every_attribute_feeds_a_stage_and_has_a_job_with_a_statistic() {
     for def in &schema.attributes {
         assert!(!def.job.statistic.trim().is_empty(), "{}", def.name);
         match def.job.stage.stage() {
+            None if def.job.stage == JobStage::Spread => {
+                assert!(def.hidden, "{}: only a hidden value spreads", def.name);
+                assert_eq!(def.name, "consistency");
+            }
             None => {
                 assert_eq!(def.job.stage, JobStage::TopSpeed);
                 assert_eq!(def.name, "pace", "only pace feeds the speed map");
             }
-            Some(stage) => assert!(
-                schema.in_stage(&def.name, def.job.action, stage),
-                "{}: its job names {} {stage:?}, which it does not feed",
-                def.name,
-                def.job.action
-            ),
+            Some(stage) => {
+                let action = def.job.action.expect("a stage job names its action");
+                assert!(
+                    schema.in_stage(&def.name, action, stage),
+                    "{}: its job names {action} {stage:?}, which it does not feed",
+                    def.name,
+                )
+            }
         }
     }
 }

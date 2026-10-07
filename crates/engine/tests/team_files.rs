@@ -106,16 +106,32 @@ fn a_version_1_file_converts_to_twice_its_values_on_both_paths() {
             (p.height, p.age, p.nationality.as_deref()),
             (None, None, None)
         );
+        assert_eq!(
+            p.attributes["consistency"].tenths(),
+            100,
+            "{}: a version 1 player is of middling consistency",
+            p.id
+        );
         for (name, rating) in &p.attributes {
-            let v = raw["attributes"][name].as_u64().unwrap();
+            if name == "consistency" {
+                continue;
+            }
+            // Injury proneness is the old resistance turned over: 21.0 less the resistance.
+            let old = if name == "injury_proneness" {
+                "injury_resistance"
+            } else {
+                name.as_str()
+            };
+            let v = raw["attributes"][old].as_u64().unwrap();
             // Doubled into tenths, then held at the 1.0 floor: 1 to 4 read as 1.0.
-            assert_eq!(
-                u64::from(rating.tenths()),
-                (2 * v).max(10),
-                "{} {name}",
-                p.id
-            );
-            if v < 5 {
+            let tenths = (2 * v).max(10);
+            let want = if old == "injury_resistance" {
+                210 - tenths
+            } else {
+                tenths
+            };
+            assert_eq!(u64::from(rating.tenths()), want, "{} {name}", p.id);
+            if v < 5 && old != "injury_resistance" {
                 assert_eq!(rating.tenths(), 10);
                 low += 1;
             }
@@ -342,4 +358,23 @@ fn a_condition_value_out_of_range_is_refused_naming_the_player_and_the_field() {
              condition field sharpness is 101; allowed 0 to 100"
         )
     );
+}
+
+/// A version 2 file still naming the old injury resistance is refused naming the player and
+/// the attribute: version 2 carries both hidden values and no resistance.
+#[test]
+fn a_version_2_file_naming_injury_resistance_is_refused() {
+    let content = common::content();
+    let bytes = fixture_bytes("teams/v2-good.json");
+    let mut raw: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let first = &mut raw["players"][0]["attributes"];
+    let proneness = first["injury_proneness"].clone();
+    first.as_object_mut().unwrap().remove("injury_proneness");
+    first["injury_resistance"] = proneness;
+    let err = content
+        .team_from_bytes(&serde_json::to_vec(&raw).unwrap(), "planted.json")
+        .unwrap_err();
+    let text = err.to_string();
+    assert!(text.contains("player p-club-00000001-00-01"), "{text}");
+    assert!(text.contains("injury_"), "{text}");
 }

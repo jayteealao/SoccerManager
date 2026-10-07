@@ -74,8 +74,10 @@ fn a_back_three_puts_a_full_back_at_wing_back_not_a_winger() {
     let f = schema.formation_index("3-5-2").expect("3-5-2 ships");
     let setup = pre_match_for(&team, tactics_in(f, &content), schema, &content.attributes);
     // Slot 8 of 3-5-2 is the right-back slot; the 4-4-2 lineup put the right winger there.
+    // A full back takes it, from either flank: the wing-back role suits both.
     assert_eq!(schema.formations[f].slots[8].position, Position::RB);
-    assert_eq!(team.squad[setup.lineup[8]].position, Position::RB);
+    let at = team.squad[setup.lineup[8]].position;
+    assert!(matches!(at, Position::RB | Position::LB), "{at:?}");
 }
 
 #[test]

@@ -315,6 +315,12 @@ impl Simulation {
     /// place.
     pub(crate) fn goal(&mut self, team: usize) {
         self.summary.goals[team] += 1;
+        if let Some(k) = self.last_kicker
+            && self.players[k].team == team
+        {
+            self.tally(k, crate::sim::tally::Count::Goal);
+        }
+        self.tally_conceded(1 - team);
         #[cfg(feature = "scenario")]
         if self.shot_in_flight == Some(team) {
             self.census.scored += 1;
@@ -412,6 +418,7 @@ impl Simulation {
         let offender = self.players[i];
         let fouled_team = self.players[c].team;
         self.summary.fouls[offender.team] += 1;
+        self.tally(i, crate::sim::tally::Count::Foul);
         // The offender makes no tackle attempt until the cooldown has passed, advantage or not.
         self.players[i].foul_ready = self.tick.saturating_add(t.foul_cooldown_ticks);
         let own_end = -self.teams[offender.team].attack_x;
@@ -536,6 +543,7 @@ impl Simulation {
         let sent_off = judge.sends_off(card);
         if card != Card::Red {
             self.summary.yellow[team] += 1;
+            self.tally(i, crate::sim::tally::Count::Yellow);
         }
         self.referee.tally.cards += 1;
         let mut event = self.event(EngineEventKind::Card, Some(team));
@@ -552,6 +560,7 @@ impl Simulation {
             return;
         }
         self.summary.red[team] += 1;
+        self.tally(i, crate::sim::tally::Count::Red);
         if self.carrier == Some(i) {
             self.carrier = None;
         }

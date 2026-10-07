@@ -59,6 +59,7 @@ impl SampleTeam {
 /// name are refused, because match setup and Resume find a team by them.
 pub fn sample_teams(dir: &ContentDir, content: &Content) -> anyhow::Result<Vec<SampleTeam>> {
     let mut teams: Vec<SampleTeam> = Vec::new();
+    let hidden: Vec<&str> = content.attributes.hidden_names().collect();
     for club in round::club_files(dir, content) {
         let (id, name) = (&club.file.club.id, &club.file.club.name);
         if let Some(twin) = teams.iter().find(|t| t.id() == id || t.name() == name) {
@@ -74,7 +75,7 @@ pub fn sample_teams(dir: &ContentDir, content: &Content) -> anyhow::Result<Vec<S
             );
         }
         teams.push(SampleTeam {
-            strength: strength(&club.file),
+            strength: strength(&club.file, &hidden),
             path: club.path,
             file: club.file,
         });
@@ -83,13 +84,17 @@ pub fn sample_teams(dir: &ContentDir, content: &Content) -> anyhow::Result<Vec<S
     Ok(teams)
 }
 
-/// The mean rating of the first eleven players in the file, on the 1 to 20 scale.
-fn strength(file: &TeamFile) -> f64 {
+/// The mean visible rating of the first eleven players in the file, on the 1 to 20 scale. A
+/// hidden value never moves a figure the page shows, so consistency and injury proneness are
+/// left out.
+fn strength(file: &TeamFile, hidden: &[&str]) -> f64 {
     let (sum, count) = file
         .players
         .iter()
         .take(11)
-        .flat_map(|p| p.attributes.values())
+        .flat_map(|p| p.attributes.iter())
+        .filter(|(name, _)| !hidden.contains(&name.as_str()))
+        .map(|(_, v)| v)
         .fold((0u64, 0u64), |(s, n), v| (s + u64::from(v.tenths()), n + 1));
     if count == 0 {
         0.0

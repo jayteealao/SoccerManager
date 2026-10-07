@@ -219,7 +219,8 @@ fn adaptation_lowers_only_the_mental_ratings() {
         let (a, s) = (adapting.effective_ratings(i), settled.effective_ratings(i));
         for (k, def) in schema.attributes.iter().enumerate() {
             let (at, st) = (a.get(k).tenths(), s.get(k).tenths());
-            if def.group == Group::Mental {
+            // A hidden value keeps its base: no state moves it.
+            if def.group == Group::Mental && !def.hidden {
                 assert_eq!(at, st.saturating_sub(7).max(10), "player {i} {}", def.name);
             } else {
                 assert_eq!(at, st, "player {i} {}", def.name);

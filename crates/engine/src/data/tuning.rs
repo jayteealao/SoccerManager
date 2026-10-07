@@ -19,8 +19,12 @@ use crate::tuning::Tuning;
 /// version 2 file converts ([`crate::data::convert::tuning_v2_to_v3`]). Version 4 adds the
 /// state caps and body jobs (`engine.contract.states`, `engine.contract.body`) and the
 /// fatigue weights per attribute group (`fatigue.group_weights`); a version 3 file converts
-/// ([`crate::data::convert::tuning_v3_to_v4`]).
-pub const TUNING_VERSION: u32 = 4;
+/// ([`crate::data::convert::tuning_v3_to_v4`]). Version 5 adds consistency
+/// (`engine.contract.consistency`), the words of the hidden values (`hidden`), the match
+/// rating (`match_rating`), and the spread of the hidden values in the generator
+/// (`generator.world.hidden`); a version 4 file converts
+/// ([`crate::data::convert::tuning_v4_to_v5`]).
+pub const TUNING_VERSION: u32 = 5;
 
 /// The tuning file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
@@ -36,6 +40,12 @@ pub struct TuningFile {
     pub fatigue: FatigueTuning,
     #[garde(dive)]
     pub stream: StreamTuning,
+    /// The word bands of each hidden value and the confidence thresholds.
+    #[garde(dive)]
+    pub hidden: crate::contract::hidden::HiddenTuning,
+    /// The weights of the match rating.
+    #[garde(dive)]
+    pub match_rating: crate::match_rating::MatchRatingTuning,
     /// Feature flags that switch between a current model and a candidate. Optional: a file
     /// without the block has no flags.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -172,6 +182,19 @@ pub struct WorldTuning {
     /// one of the ten codes must be present.
     #[garde(dive, custom(every_position_present))]
     pub offsets: BTreeMap<String, GroupOffsets>,
+    /// The hidden values, drawn around their own mean, independent of the player's level.
+    #[garde(dive)]
+    pub hidden: HiddenDist,
+}
+
+/// The bell curve the hidden values are drawn from, on the 1 to 20 scale.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct HiddenDist {
+    #[garde(range(min = 1.0, max = 20.0))]
+    pub mean: f64,
+    #[garde(range(min = 0.0, max = 6.0))]
+    pub spread: f64,
 }
 
 /// One tier's mean level and the spread of its clubs around it.

@@ -3,7 +3,10 @@
 //! every action ([`crate::contract`]), and the skill gates.
 //!
 //! Version 2 adds the jobs, the stage tables, and the gates; a version 1 file converts with
-//! the first tables of this build ([`crate::data::convert::attributes_v1_to_v2`]).
+//! the first tables of this build ([`crate::data::convert::attributes_v1_to_v2`]). Version 3
+//! adds hidden attributes: consistency, whose job is the spread of every action, and injury
+//! proneness, which replaces injury resistance; a version 2 file converts
+//! ([`crate::data::convert::attributes_v2_to_v3`]).
 
 use std::collections::BTreeMap;
 
@@ -13,14 +16,15 @@ use serde::{Deserialize, Serialize};
 use crate::contract::{ActionKind, GateDefs, STAGES, StageKind, StageTable};
 
 /// Schema version this build reads.
-pub const ATTRIBUTES_VERSION: u32 = 2;
+pub const ATTRIBUTES_VERSION: u32 = 3;
 /// Upper bound on the attribute count; `Attributes` on a player is a fixed array of this size.
 pub const MAX_ATTRIBUTES: usize = 50;
 /// Lower bound on the attribute count.
 pub const MIN_ATTRIBUTES: usize = 30;
 /// Attributes play reads by name rather than through a stage table: pace through the
-/// top-speed map, technique and agility through the skill gates.
-pub const REQUIRED: [&str; 3] = ["pace", "technique", "agility"];
+/// top-speed map, technique and agility through the skill gates, and consistency through the
+/// spread of every action ([`crate::contract::consistency`]).
+pub const REQUIRED: [&str; 4] = ["pace", "technique", "agility", "consistency"];
 
 /// The four attribute groups.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -40,7 +44,8 @@ pub enum Direction {
     Down,
 }
 
-/// Where a job acts: one of the four stages of its action, or the top-speed map.
+/// Where a job acts: one of the four stages of its action, the top-speed map, or the spread
+/// of every action.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum JobStage {
@@ -50,28 +55,33 @@ pub enum JobStage {
     Pressure,
     /// The top-speed map, which only pace feeds.
     TopSpeed,
+    /// The spread of a player's play around his ratings within and between matches, which
+    /// only a hidden attribute (consistency) feeds. It names no action: it acts on all.
+    Spread,
 }
 
 impl JobStage {
-    /// The stage kind, or `None` for the top-speed map.
+    /// The stage kind, or `None` for the top-speed map and the spread.
     pub fn stage(self) -> Option<StageKind> {
         match self {
             JobStage::See => Some(StageKind::See),
             JobStage::Choose => Some(StageKind::Choose),
             JobStage::Execute => Some(StageKind::Execute),
             JobStage::Pressure => Some(StageKind::Pressure),
-            JobStage::TopSpeed => None,
+            JobStage::TopSpeed | JobStage::Spread => None,
         }
     }
 }
 
 /// An attribute's job in play: the action and stage it acts in, and the statistic of a match
-/// it moves, in which direction. The sensitivity rules read the statistic.
+/// it moves, in which direction. The sensitivity rules read the statistic. Every job names an
+/// action except the spread, which acts on every action.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct Job {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(skip)]
-    pub action: ActionKind,
+    pub action: Option<ActionKind>,
     #[garde(skip)]
     pub stage: JobStage,
     #[garde(length(min = 3, max = 120))]
@@ -88,8 +98,17 @@ pub struct AttributeDef {
     pub name: String,
     #[garde(skip)]
     pub group: Group,
+    /// A hidden value: it plays, but nothing that leaves the engine for a page carries it as
+    /// a number, only as a word with a confidence ([`crate::contract::hidden`]).
+    #[serde(default, skip_serializing_if = "is_false")]
+    #[garde(skip)]
+    pub hidden: bool,
     #[garde(dive)]
     pub job: Job,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 /// The stage tables of every action, keyed by action and stage.
@@ -137,6 +156,14 @@ impl AttributeSchema {
         out
     }
 
+    /// The names of the hidden attributes, in schema order.
+    pub fn hidden_names(&self) -> impl Iterator<Item = &str> {
+        self.attributes
+            .iter()
+            .filter(|a| a.hidden)
+            .map(|a| a.name.as_str())
+    }
+
     /// `true` when `attribute` is the main attribute or a support of `action`'s `stage`.
     pub fn in_stage(&self, attribute: &str, action: ActionKind, stage: StageKind) -> bool {
         self.actions
@@ -169,8 +196,9 @@ fn check_names(attributes: &[AttributeDef], _ctx: &()) -> garde::Result {
 
 /// Every stage play reads has a table and no other stage does; each table names attributes of
 /// the file, each once, with positive weights and the main weight the largest; every
-/// attribute other than pace is in some stage; and every job acts where the tables put its
-/// attribute.
+/// attribute other than pace and one whose job is the spread is in some stage; every job acts
+/// where the tables put its attribute; only a hidden attribute has the spread for its job, and
+/// a hidden attribute's job is the spread or an execute stage.
 fn check_tables(
     attributes: &[AttributeDef],
 ) -> impl FnOnce(&ActionTables, &()) -> garde::Result + '_ {
@@ -236,22 +264,49 @@ fn check_tables(
         };
         for def in attributes {
             let job = &def.job;
+            let action_name = job.action.map_or("(none)", ActionKind::name);
+            if job.stage == JobStage::Spread {
+                if !def.hidden {
+                    return Err(garde::Error::new(format!(
+                        "attribute {}: only a hidden attribute may have the spread for its job",
+                        def.name
+                    )));
+                }
+                if job.action.is_some() {
+                    return Err(garde::Error::new(format!(
+                        "attribute {}: the spread acts on every action; remove its action {}",
+                        def.name, action_name
+                    )));
+                }
+                continue;
+            }
+            let Some(action) = job.action else {
+                return Err(garde::Error::new(format!(
+                    "attribute {}: its job at {:?} names no action",
+                    def.name, job.stage
+                )));
+            };
+            if def.hidden && job.stage != JobStage::Execute {
+                return Err(garde::Error::new(format!(
+                    "attribute {}: a hidden attribute's job is the spread or an execute stage, \
+                     not {:?}",
+                    def.name, job.stage
+                )));
+            }
             let fits = match job.stage.stage() {
                 Some(stage) => tables
-                    .get(&job.action)
+                    .get(&action)
                     .and_then(|t| t.get(&stage))
                     .is_some_and(|t| {
                         t.main.attribute == def.name
                             || t.supports.iter().any(|s| s.attribute == def.name)
                     }),
-                None => def.name == "pace" && job.action == ActionKind::Sprint,
+                None => def.name == "pace" && action == ActionKind::Sprint,
             };
             if !fits {
                 return Err(garde::Error::new(format!(
                     "attribute {}: its job names {}.{:?}, where the tables do not put it",
-                    def.name,
-                    job.action.name(),
-                    job.stage
+                    def.name, action_name, job.stage
                 )));
             }
             if def.name != "pace" && !in_some(&def.name) {
@@ -279,13 +334,40 @@ mod tests {
     }
 
     #[test]
-    fn the_shipped_schema_validates_and_names_the_required_three() {
+    fn the_shipped_schema_validates_and_names_the_required_four() {
         let s = shipped();
         assert!(s.validate().is_ok());
-        let [pace, technique, agility] = s.required_indices();
+        let [pace, technique, agility, consistency] = s.required_indices();
         assert_eq!(s.attributes[pace].name, "pace");
         assert_eq!(s.attributes[technique].name, "technique");
         assert_eq!(s.attributes[agility].name, "agility");
+        assert_eq!(s.attributes[consistency].name, "consistency");
+        let hidden: Vec<_> = s.hidden_names().collect();
+        assert_eq!(hidden, ["injury_proneness", "consistency"]);
+    }
+
+    #[test]
+    fn the_spread_belongs_to_a_hidden_attribute_only() {
+        let mut s = shipped();
+        let i = s.index("consistency").unwrap();
+        s.attributes[i].hidden = false;
+        let text = refusal(&s);
+        assert!(
+            text.contains("only a hidden attribute may have the spread"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_job_with_no_action_outside_the_spread_is_refused() {
+        let mut s = shipped();
+        let i = s.index("passing").unwrap();
+        s.attributes[i].job.action = None;
+        let text = refusal(&s);
+        assert!(
+            text.contains("attribute passing: its job at Execute names no action"),
+            "{text}"
+        );
     }
 
     #[test]
