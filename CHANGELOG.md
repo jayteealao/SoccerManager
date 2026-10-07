@@ -11,6 +11,12 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 - `engine-cli generate` writes version 2 team files with height, age, and nationality, and reports how many ratings under 1.0 it raised to 1.0.
 - Tactics files are version 2: each role has positions in and out of possession, preferred actions, and a long-ball target, and each duty a scale. The shipped values play as before, and a version 1 tactics file converts as it loads.
 - The match stream protocol is version 4: the squad's ratings are sent in tenths. Replays recorded in version 3 still open, with their ratings shown on the new scale.
+- Every action reads a player's ratings through one attribute contract. Each attribute has a job in play, and each stage of an action (seeing, choosing, carrying out, and carrying out under pressure) blends a main attribute with up to three supports. Ratings pass through an exponential curve, so each step up the scale is worth more than the one below, and two players meet in a contest whose chance follows their difference on the curve.
+- Twenty-one attributes that did nothing now play: among them heading wins aerial balls, concentration keeps defenders in place late in a match, handling holds saves, one-on-ones and command of area help keepers, and technique and agility decide who tries a chip or a take-on and who pulls it off.
+- Top speed follows real sprint speeds by pace, from 29 km/h at pace 1 to 35.5 km/h at pace 20.
+- The attribute file is version 2, with each attribute's job, the stage tables, and the skill gates. The tuning file is version 3, with the contract block in place of the old speed fields and the world spread of generated players in place of the per-position distributions. Older files of both convert as they load, so old replays still play.
+- Generated players follow the world spread: five tiers of clubs, with players and attributes spread around their club's level. A converted rating under 1.0 now reads as 1.0.
+- Matches play differently from earlier builds for the same seed.
 
 ## [0.2.0-beta.3] - 2026-10-05
 

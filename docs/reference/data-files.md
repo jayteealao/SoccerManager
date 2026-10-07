@@ -16,8 +16,8 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 
 | File | Schema version | Holds |
 |---|---|---|
-| `attributes.json` | 1 | The attribute schema: 30 to 50 names in four groups |
-| `tuning.json` | 2 | Engine constants, decision weights, injury rates, generator distributions, fatigue curve, stream buffer |
+| `attributes.json` | 2 | The attribute schema: 30 to 50 names in four groups, each with its job in play, the stage tables that blend them for every action, and the skill gates |
+| `tuning.json` | 3 | Engine constants, the attribute contract, decision weights, injury rates, the generator's world spread, fatigue curve, stream buffer |
 | `rules/default.json` | 4 | The rule pack |
 | `tactics.json` | 1 | Ten formations, mentalities, team instructions, roles, duties, and the AI manager's settings |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
@@ -25,11 +25,11 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `realism-bands.json` | 2 | The accepted realism bands the calibration run checks: four from version 1 and eleven from real-match data. They are acceptance criteria, never tuning values |
 | `fast-model.json` | 2 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
 
-Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files and `tactics.json` are read in version 2 and in version 1, which converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)); any other version is refused the same way.
+Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files and `tactics.json` are read in version 2 and in version 1, which converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 2 and in version 1, and `tuning.json` in version 3 and in version 2; the older version converts on load with the first contract tables of the build, a copy compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. Any other version is refused the same way.
 
 ## attributes.json
 
-`attributes` is a list of `{ "name", "group" }`. Names are 2 to 32 characters and unique. Groups are `technical`, `mental`, `physical`, `goalkeeping`. The count is 30 to 50. Fourteen names are required because the engine reads them: `pace`, `acceleration`, `passing`, `dribbling`, `tackling`, `positioning`, `aggression`, `finishing`, `vision`, `decisions`, `composure`, `stamina`, `natural_fitness`, `injury_resistance`. A schema without one of them is refused by name.
+`attributes` is a list of `{ "name", "group", "job" }`. Names are 2 to 32 characters and unique. Groups are `technical`, `mental`, `physical`, `goalkeeping`. The count is 30 to 50. Three names are required because play reads them directly rather than through a stage table: `pace` (the top-speed map), `technique` and `agility` (the skill gates). A schema without one of them is refused by name: `content refused: attributes attributes.json: attributes: required attribute agility is missing`.
 
 The shipped schema (36):
 
@@ -37,6 +37,33 @@ The shipped schema (36):
 - mental: positioning, vision, decisions, composure, anticipation, work_rate, aggression, concentration, teamwork
 - physical: pace, acceleration, stamina, strength, agility, balance, jumping, natural_fitness, injury_resistance
 - goalkeeping: handling, reflexes, aerial_reach, one_on_ones, kicking, throwing, command_of_area, communication, rushing_out
+
+### Jobs
+
+Every attribute has a `job`: `{ "action", "stage", "statistic", "direction" }`. `action` is one of the actions below; `stage` is `see`, `choose`, `execute`, `pressure`, or `top_speed` (pace only, with the action `sprint`); `statistic` names the match statistic the attribute moves, 3 to 120 characters; `direction` is `up` or `down`, the way the statistic moves as the rating rises. The stage tables must put the attribute in the stage its job names, or the file is refused, naming the attribute.
+
+### Stage tables
+
+Each action plays in up to four stages: seeing the option (`see`), choosing it (`choose`), carrying it out (`execute`), and carrying it out with an opponent close (`pressure`). `actions` maps each action to its stages, and each stage to a table `{ "main", "supports", "source" }`: `main` and each of up to three `supports` are `{ "attribute", "weight" }`, weights above 0 and up to 10, every support lighter than the main attribute. `source` is `design`, or `fitted:<reference>` for weights fitted from real data.
+
+A player's value in a stage is the weighted mean of his attributes' values on the curve (see [contract](#contract)), so a player rated 10 throughout has the value 8.0 in every stage. Play reads the stage value in a contest against an opponent, or as a share from 0 to 1 that is 0.5 at rating 10.
+
+The actions are `pass`, `chip` (a pass longer than 25 m), `cross` (a pass from wider than 20 m into the penalty area), `shot`, `long_shot` (from outside the penalty area), `header`, `penalty`, `dribble`, `receive`, `tackle`, `shield`, `intercept`, `press`, `shape`, `block`, `sprint`, `endure`, `turn`, `stay_up`, `aerial_reach`, `recover`, `injury`, `hold`, `save`, `claim`, `one_on_one` (a shot from within 12 m of the keeper), `keeper_kick`, `keeper_throw`, `organise`, and `rush`. Which stages each action has is fixed by the build: a stage play reads needs a table, and a table for any other stage is refused. Every attribute other than pace is in at least one table.
+
+A table is refused by stage, for example:
+
+- a missing table: `content refused: attributes attributes.json: actions: pass.see has no table`
+- a stage play does not read: `content refused: attributes attributes.json: actions: sprint.see is not a stage play reads; remove it`
+- a name that is not in the file: `content refused: attributes attributes.json: actions: tackle.choose: attribute aggression is not in the file`
+- a support as heavy as the main attribute: `content refused: attributes attributes.json: actions: pass.execute: support technique weighs 3, not below the main weight 3`
+
+### Gates
+
+`gates` holds `chip` and `take_on` (a dribble with an opponent close), each `{ "technique_try", "agility_pull_off", "penalty_k" }`. A player tries the skill only from the technique rating `technique_try` (1 to 20); below the agility rating `agility_pull_off` (1 to 20) his execution loses `penalty_k` log-odds (0 to 5).
+
+### Version 1 files
+
+A version 1 attribute file holds `{ "name", "group" }` only. It still loads: each attribute takes its job, and the file its stage tables and gates, from the build's first contract tables. A name those tables have no job for is refused by name.
 
 ## tuning.json
 
@@ -48,10 +75,6 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 |---|---|---|---|
 | dt | s per tick | 0.02 | exactly 0.02: the match clock runs at 50 ticks per second |
 | decision_interval_ticks | ticks | 1 | 1 to 50 |
-| base_speed | m/s | 5.0 | 0 to 50 |
-| pace_speed | m/s | 4.0 | 0 to 40 |
-| base_accel | m/s² | 3.0 | 0 to 30 |
-| accel_bonus | m/s² | 5.0 | 0 to 50 |
 | arrive_radius | m | 3.0 | 0 to 30 |
 | separation_radius | m | 1.5 | 0 to 15 |
 | separation_strength | m/s | 6.0 | 0 to 60 |
@@ -86,15 +109,15 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 | anchor_ball_distance | m | 30.0 | 0 to 300 |
 | anchor_grace_ticks | ticks | 100 | 0 to 1000 |
 | foul_base | probability per tackle | 0.1 | 0 to 1 |
-| foul_aggression_weight | ratio | 1.0 | 0 to 4 |
-| foul_tackling_weight | ratio | 0.5 | 0 to 1 |
+| foul_aggression_weight | log-odds per curve point | 0.05 | 0 to 4 |
+| foul_tackling_weight | log-odds per curve point | 0.025 | 0 to 1 |
 | foul_ball_loss | ratio | 0.6 | 0 to 1 |
 | yellow_base | probability per foul | 0.05 | 0 to 1 |
-| yellow_aggression_weight | probability per foul | 0.15 | 0 to 1 |
+| yellow_aggression_weight | probability per foul at a commitment share of 1 | 0.15 | 0 to 1 |
 | red_base | probability per foul | 0.005 | 0 to 1 |
 | foul_cooldown_ticks | ticks | 150 | 0 to 1000 |
 | foul_booked_factor | ratio | 0.15 | 0 to 1 |
-| tackle_win_base | probability per tackle | 0.5 | 0 to 0.5 |
+| tackle_win_base | twice the even tackle's win chance | 0.5 | 0 to 0.5 |
 | tackle_reach | m | 1.0 | 0.5 to 3 |
 | press_engage | m | 3.0 | 0 to 10 |
 | tackle_dribble_win | probability per tackle | 0.0 | 0 to 1 |
@@ -110,6 +133,7 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 | injury_per_tackle | probability per tackle | 0.004 | 0 to 0.2 |
 | injury_per_minute | probability per player per minute | 0.0002 | 0 to 0.01 |
 | decision.* | weight | see below | see below |
+| contract.* | see below | see below | see below |
 | clearances.aim_spread | rad | 0.6 | 0 to 1.6 |
 | clearances.cross_reach | m | 2.0 | 0 to 3 |
 | clearances.cross_chance | probability | 0.0 | 0 to 1 |
@@ -142,13 +166,13 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 
 While the other team has the ball, one back-line defender covers the ball carrier, or else the most advanced attacker, when that player is in the defending half and within `cover_channel` of the middle of the pitch: a carrier is tracked `cover_distance` goal-side of him, and any other attacker is covered from the defender's place in the line. No two neighbours in the back line stand more than `back_line_gap` apart, so the line narrows as players leave it.
 
-The foul chance of one tackle is `foul_base`, multiplied by `1 + foul_aggression_weight × (aggression − 0.5)` and by `1 − foul_tackling_weight × (tackling − 0.5)`, with both attributes on a 0 to 1 scale. `foul_ball_loss` is the share of fouls after which the fouled team loses the ball. After any other foul, the referee plays advantage outside the penalty area. The yellow-card chance of a foul is `yellow_base + yellow_aggression_weight × aggression`, and the red-card chance is `red_base`. The chance that a tackle wins the ball cleanly is `tackle_win_base × tackling / (tackling + dribbling)`, with the tackler's tackling and the carrier's dribbling; a tackle that neither wins the ball nor fouls misses. A player already booked fouls less: the foul chance is multiplied by `foul_booked_factor`. A player who commits a foul, advantage or not, makes no tackle attempt for `foul_cooldown_ticks`. An opponent attempts a tackle on every tick he is within `tackle_reach` of the ball. Against a carrier running with the ball, faster than 2 m/s, the win chance gains `tackle_dribble_win × tackling / (tackling + dribbling)`; a carrier who stands and shields the ball does not. A presser runs at the point where he meets the carrier's run, and at the ball itself once he is within `press_engage` of it. A tuning file without these three fields loads with `tackle_reach` 1.0, `press_engage` 3.0 and `tackle_dribble_win` 0, which reproduce play before they existed. While play goes on with advantage, the referee holds at most one card per player, the more severe, and a player is shown at most one card when play stops. A restart is taken no earlier than its `restart_delay_s`, when the taker is within `restart_ready_radius` of the spot and every opponent stands back. At three times the delay, the restart is taken whatever the players are doing. While the restarting team leads, its delay is multiplied by its time-wasting level.
+The foul chance of one tackle starts at `foul_base` and moves in log-odds: up by `foul_aggression_weight` per curve point of the tackler's commitment (the tackle `choose` stage, led by aggression) and down by `foul_tackling_weight` per curve point of his tackle `execute` stage, each measured from rating 10, inside the tackle floor and ceiling. `foul_ball_loss` is the share of fouls after which the fouled team loses the ball, for a fouled player of rating 10; a contest of his `stay_up` stage (balance) moves it. After any other foul, the referee plays advantage outside the penalty area. The yellow-card chance of a foul is `yellow_base + yellow_aggression_weight × commitment`, with commitment the share of the tackle `choose` stage (0.5 at rating 10), and the red-card chance is `red_base`. The chance that a tackle wins the ball cleanly from a standing carrier is a contest of the tackler's tackle stage against the carrier's shield stage (strength), with base `tackle_win_base / 2`: two equal players win half of `tackle_win_base`, as the old ratio `tackling / (tackling + dribbling)` gave; a tackle that neither wins the ball nor fouls misses. A player already booked fouls less: the foul chance is multiplied by `foul_booked_factor`. A player who commits a foul, advantage or not, makes no tackle attempt for `foul_cooldown_ticks`. An opponent attempts a tackle on every tick he is within `tackle_reach` of the ball. Against a carrier running with the ball, faster than 2 m/s, the contest is against the mean of his dribble `execute` and `pressure` stages instead, and gains a second contest with base `tackle_dribble_win / 2`; a carrier who stands and shields the ball does not. A runner whose agility is under the take-on gate gives the tackler the gate's penalty. A presser runs at the point where he meets the carrier's run, and at the ball itself once he is within `press_engage` of it. A tuning file without these three fields loads with `tackle_reach` 1.0, `press_engage` 3.0 and `tackle_dribble_win` 0, which reproduce play before they existed. While play goes on with advantage, the referee holds at most one card per player, the more severe, and a player is shown at most one card when play stops. A restart is taken no earlier than its `restart_delay_s`, when the taker is within `restart_ready_radius` of the spot and every opponent stands back. At three times the delay, the restart is taken whatever the players are doing. While the restarting team leads, its delay is multiplied by its time-wasting level.
 
-An injury is rolled for the tackled player on every tackle that wins the ball or is a foul (`injury_per_tackle`), and for every player on the pitch once per simulated minute (`injury_per_minute`). Both are the chances for an average player; injury resistance 100 halves them and 0 makes them half again as likely. An injured player leaves play at once. In open play the referee stops play for a dropped ball at the ball (the goalkeeper's, inside its own penalty area), with every other player 4 m away, after `restart_delay_s.drop_ball`.
+An injury is rolled for the tackled player on every tackle that wins the ball or is a foul (`injury_per_tackle`), and for every player on the pitch once per simulated minute (`injury_per_minute`). Both are the chances for a player of rating 10; the share of the `injury` stage (injury resistance leading) scales them by `1.5 − share`, so a share of 1 halves them and 0 makes them half again as likely. An injured player leaves play at once. In open play the referee stops play for a dropped ball at the ball (the goalkeeper's, inside its own penalty area), with every other player 4 m away, after `restart_delay_s.drop_ball`.
 
 The expected goals (xG) of a shot is `1 / (1 + exp(-(xg.intercept + xg.distance_coef × d + xg.angle_coef × a)))`, where `d` is the distance from the ball to the goal centre in metres and `a` is the angle in radians that the goal mouth subtends from the ball. The match statistics sum it per team. A penalty counts `shots.penalty_xg`.
 
-A shot leaves at `shot_speed` with a vertical speed drawn from 0 to `shots.loft_max`, aimed with a spread of up to `shot_noise × (1.5 − finishing)` radians either side; a kick from the penalty mark multiplies the spread by `shots.penalty_spread`. As the shot is struck, the engine follows a copy of the ball with the match physics: the shot is on target when that flight crosses the goal line between the posts and under the bar, and the match statistics count it then. While a shot is in flight and faster than `control_speed`, each outfield defender within `shots.block_reach` of a ball under `reach_height` has one chance per shot, `shots.block_chance`, to block it. A blocked ball keeps `shots.block_speed` of its speed and goes back the way it came, turned by up to `shots.block_spread` either side. Only a shot on target can be saved: the acting keeper, within `keeper_reach` of a ball under the bar, has one save roll per shot. The save chance is `shots.save_high` for a shot of quality 0.05 or less, `shots.save_low` for quality 0.40 or more, and a straight line between, where the quality is the expected goals of the fixed `shots.quality` model (a penalty uses `shots.penalty_xg`), so refitting `xg` never moves the saves. The keeper holds `shots.save_hold` of his saves and parries the rest: the ball keeps `shots.parry_speed` of its speed and goes along the goal line away from the goal centre, turned by up to `shots.parry_spread` either way, with a vertical speed of up to `shots.parry_loft`. After a block or a parry the defending side touched the ball last, so it gives a corner only if it then crosses the goal line. A shot off target is never saved. `keeper_catch_chance` applies only to a fast ball that is not a shot, such as a pass or a clearance, and that no defender cleared.
+A shot leaves at `shot_speed` with a vertical speed drawn from 0 to `shots.loft_max`, aimed with a spread of up to `shot_noise × (1.5 − finishing)` radians either side, where `finishing` is the share of the shooter's shot `execute` stage (blended with its `pressure` stage when an opponent is close); a kick from the penalty mark multiplies the spread by `shots.penalty_spread`. As the shot is struck, the engine follows a copy of the ball with the match physics: the shot is on target when that flight crosses the goal line between the posts and under the bar, and the match statistics count it then. While a shot is in flight and faster than `control_speed`, each outfield defender within `shots.block_reach` of a ball under `reach_height` has one chance per shot, `shots.block_chance`, to block it. A blocked ball keeps `shots.block_speed` of its speed and goes back the way it came, turned by up to `shots.block_spread` either side. Only a shot on target can be saved: the acting keeper, within `keeper_reach` of a ball under the bar, has one save roll per shot. The save chance is `shots.save_high` for a shot of quality 0.05 or less, `shots.save_low` for quality 0.40 or more, and a straight line between, where the quality is the expected goals of the fixed `shots.quality` model (a penalty uses `shots.penalty_xg`), so refitting `xg` never moves the saves. That line is the base of a contest between the keeper's `save` stage (his `one_on_one` stage when the shooter is within 12 m of him) and the shooter's `shot` stage, or `long_shot` from outside the penalty area: a rating-10 keeper against a rating-10 shooter leaves it as it is. The keeper holds his saves with a contest of his `hold` stage (handling) against rating 10, based on `shots.save_hold`, and parries the rest: the ball keeps `shots.parry_speed` of its speed and goes along the goal line away from the goal centre, turned by up to `shots.parry_spread` either way, with a vertical speed of up to `shots.parry_loft`. After a block or a parry the defending side touched the ball last, so it gives a corner only if it then crosses the goal line. A shot off target is never saved. `keeper_catch_chance` applies only to a fast ball that is not a shot, such as a pass or a clearance, and that no defender cleared; the keeper's `claim` factor multiplies it, inside the claim floor and ceiling.
 
 A carrier's clearance goes toward the far half, turned by up to `clearances.aim_spread` either way. While an open-play pass faster than `control_speed` and under `reach_height` is inside the penalty area of the side that did not play it, each outfield player of that side within `clearances.cross_reach` of the ball has one chance per flight, `clearances.cross_chance`, to clear it. The cleared ball keeps `clearances.cross_speed` of its speed and goes away from his goal centre, turned by up to `clearances.cross_spread` either way, with a vertical speed of up to `clearances.cross_loft`. His side touched the ball last, so it gives a corner only if it then crosses the goal line. At 0, `clearances.cross_chance` turns the cross clearance off. A cleared fast pass, or a carrier's clearance within `clearances.wide_depth` of his own goal line, goes wide with `clearances.wide_chance` instead: toward his own goal line on the ball's side, turned by up to 0.35 rad either way, so the ball may go behind for a corner. At 0, `clearances.wide_chance` turns the wide clearance off and takes no draw. A tuning file without the `clearances` block loads with the values in the table. In a shoot-out the keeper dives `shots.keeper_dive_m` along the goal line to one side, or stays in the middle for `shots.keeper_stays` of the kicks, and saves with the same model at the penalty quality; a held kick is a miss and a parried one plays on.
 
@@ -182,8 +206,39 @@ The ball carrier scores every option and takes the highest: a pass to each team-
 | lone_dribble | -0.5 | for a lone carrier who is pressed, the bonus on a dribble (a negative value is a cost) |
 | carry_s | 0.0 | the carry window in seconds after the carrier gains the ball (0 to 5) |
 | carry_cost | 0.0 | the cost on a pass and a clearance inside the carry window when no opponent is within 2.5 m; a shot is never charged (0 to 5) |
+| teamwork_bonus | 0.1 | the weight of the carrier's pass `choose` stage (decisions, with teamwork and vision supporting) on a pass: `teamwork_bonus × (2 × share − 1)`, 0 at rating 10 (0 to 5) |
 
 A carrier is lone when no active outfield team-mate stands nearer the opponents' goal than he does; a goalkeeper is never lone. A team's lone forward is its one active player, other than the one keeping goal, in the formation's front line: the outfield slots less than 4 m behind the most advanced one. While his team has the ball and someone else carries it, he moves from his formation place toward the onside line, 0.5 m short of the second-last opponent, by the share `lone_line_hold`, and never past that line. With these weights a pressed lone forward holds the ball or lays it off rather than dribbling into the defender, so a side with one forward does not outscore 4-4-2. A tuning file without these five fields loads with the values that reproduce play before they existed: `tackle_win_base` 0.05 and 0 for the other four. A tuning file without `carry_s` and `carry_cost` loads with 0 for both, which turns the carry window off.
+
+#### contract
+
+The attribute contract: how ratings become play.
+
+| Field | Meaning | Default | Bound |
+|---|---|---|---|
+| curve.scale | the curve's value at its centre | 8.0 | 0.1 to 100 |
+| curve.center | the rating at the centre | 10.0 | 1 to 20 |
+| curve.width | the rating gap that multiplies the value by e | 8.0 | 1 to 100 |
+| actions.<action>.k | log-odds per curve point, in a contest and in a share | see file | 0 to 5 |
+| actions.<action>.base | a contest's chance between two equal players | see file | 0 to 1 |
+| actions.<action>.floor, .ceiling | the lowest and highest chance a contest may give | see file | 0 to 1, floor below ceiling |
+| actions.<action>.spread | how far a per-player factor moves an average player's value, either way | 0.2 | 0 to 1 |
+| speed.kmh | `[pace, km/h]` points of real sprint speed, straight lines between | `[1, 29]`, `[10, 32]`, `[20, 35.5]` | 2 to 8 points; pace 1 to 20 rising, 10 to 50 km/h not falling |
+| speed.amplification | how many times the real difference from a pace-10 player the engine speed differs | 2.0 | 0 to 10 |
+| speed.anchor_ms | the engine top speed of a pace-10 player, m/s | 7.0 | 1 to 15 |
+| accel.anchor | the acceleration of a player whose sprint stage is rating 10, m/s² | 5.5 | 0.5 to 30 |
+| lapse.per_minute | the chance per minute that an average defender loses his place | 0.01 | 0 to 0.2 |
+| lapse.late_from_minute | the minute from which that chance grows | 60 | 0 to 120 |
+| lapse.late_growth | how much it grows per 30 minutes past that minute, as a share | 1.0 | 0 to 5 |
+| lapse.ticks | how long a lapse lasts | 100 | 1 to 1000 |
+
+The curve is `F(r) = scale × e^((r − center) / width)`: with the shipped values a rating of 10 gives 8.0, 18 gives 21.7, and 2 gives 2.9, so each step up the scale is worth more than the one below. A contest between two players is `σ(logit(base) + k × (F(a) − F(b)))`, inside the action's floor and ceiling, where `σ` is the logistic function. A share is `σ(k × (F − F(10)))`, 0.5 at rating 10. A per-player factor is `1 + spread × (2 × share − 1)`, 1 at rating 10; the factors scale the receive, intercept, press, shape, block, sprint, turn, aerial reach, claim, organise and rush reads.
+
+Each action carries exactly the fields play reads of it. A missing field or one play does not read is refused by action, for example `content refused: tuning tuning.json: engine.contract.actions: action save: floor is missing`, and so is an action play reads nothing of.
+
+Top speed reads pace directly, not through the curve: the real speed of the player's pace from `speed.kmh`, its difference from a pace-10 player times `speed.amplification`, in metres per second, added to `speed.anchor_ms`. Acceleration is `accel.anchor` times the sprint factor.
+
+While his side defends, each outfield player can lapse once per simulated minute, with the chance `lapse.per_minute` grown by `lapse.late_growth` for each 30 minutes past `lapse.late_from_minute`, and doubled for a shape `choose` share of 0 (concentration leading) or cut to nothing for a share of 1. For `lapse.ticks` he stops tracking his place.
 
 ### generator
 
@@ -192,9 +247,12 @@ A carrier is lone when no active outfield team-mate stands nearer the opponents'
 | squad_size | players per generated club | 22 | 11 to 40; equals 11 plus the bench length |
 | slot_positions | position of each formation slot, slot order | GK LB CB CB RB LW CM CM RW ST ST | 11 position codes |
 | bench_positions | positions of the bench, in order | GK CB LB RB DM CM AM LW RW ST ST | `squad_size - 11` codes |
-| per_position | one entry per position code | see file | every one of the ten codes present |
+| world.tiers | from the top flight down, each `{ "mean", "club_spread" }`: the tier's mean level and the spread of its clubs' levels | 14.0, 11.2, 9.8, 8.6, 7.0, each with club spread 1.0 | 1 to 10 tiers; mean 1 to 20, club spread 0 to 6 |
+| world.player_spread | the spread of a player's level around his club's | 2.35 | 0 to 6 |
+| world.attribute_spread | the spread of an attribute around the player's level plus his position offset | 2.0 | 0 to 6 |
+| world.offsets | one entry per position code: the offset of each attribute group from the player's level | see file | every one of the ten codes present; each offset -19 to 19 |
 
-Each `per_position` entry holds `technical`, `mental`, `physical`, and `goalkeeping`, each `{ "mean", "spread" }`. `mean` is 1 to 100; `spread` is 0 to 40. A generated value is a bell-curve draw (mean plus spread times a unit normal) on the 1 to 100 scale, rounded, clamped to 1 to 100, and stored as twice that many tenths of the 1 to 20 scale, so a value of 62 is the rating 12.4.
+Each `world.offsets` entry holds `technical`, `mental`, `physical`, and `goalkeeping`. Every draw is a bell curve (mean plus spread times a unit normal) on the 1 to 20 scale: a club's level around its tier's mean, each player's level around his club's, and each attribute around the player's level plus his position's offset for the attribute's group, rounded to a tenth and kept to 1.0 to 20.0. `engine-cli generate` and the calibration leagues draw clubs of the top tier.
 
 `body` is optional and draws the body fields of a version 2 team file. `engine-cli generate` needs it; without it the generated players have no body fields.
 
@@ -375,7 +433,7 @@ Before kick-off the AI manager picks the best-fitting player for each formation 
 
 ### Version 1 files
 
-A version 1 team file holds every attribute as a whole number 1 to 100 and no body fields. It still loads, from the content folder and from the inputs a replay file embeds: each value `v` becomes `2v` tenths exactly, so 62 becomes 12.4, and its players have no body fields. Values 1 to 4 become 0.2 to 0.8. Only a converted file may hold a rating under 1.0; this is a temporary floor, and a version 2 file is refused for it. A version 1 file is checked as before: `content refused: team teams/x.json: players: player p-club-00000001-00-03: attribute pace is 120; allowed 1 to 100`. The shipped team files are version 1.
+A version 1 team file holds every attribute as a whole number 1 to 100 and no body fields. It still loads, from the content folder and from the inputs a replay file embeds: each value `v` becomes `2v` tenths, so 62 becomes 12.4, and its players have no body fields. Values 1 to 4 become 1.0, the lowest rating; no player holds a rating under 1.0. A version 1 file is checked as before: `content refused: team teams/x.json: players: player p-club-00000001-00-03: attribute pace is 120; allowed 1 to 100`. The shipped team files are version 1.
 
 A match is played on the home team's ground. `club.ground` is optional: a file without it plays on 105 by 68 metres, and the default is never written back, so a file that gives 105 by 68 and one that gives no ground hash the same. The touchlines, the goal lines, the halfway line and every spot measured from them follow the ground; the goal, the goal and penalty areas, the penalty mark, the centre circle, the corner arcs and the 9.15 m kick distance keep their sizes from the Laws. The formation slots in `tactics.json` are drawn for 105 by 68 and scale with the ground: along the touchline by its length over 105, across by its width over 68. A ground outside the Laws is refused by club: `content refused: team teams/x.json: club.ground: Oakmere Rangers: the ground is 121 m long; the Laws allow 90 to 120 m`. A touchline that is not longer than the goal line is refused the same way.
 
@@ -489,7 +547,7 @@ lines.
 engine-cli generate --seed 7 --clubs 20 --out my-league
 ```
 
-Writes one version 2 file per club, named by club id. The same seed and the same content give the same files. Pass `--force` to overwrite. The tuning file must hold the `generator.body` block. A generated value can be under 1.0 (a goalkeeping attribute on an outfield player); the written file holds 1.0 instead, and the command prints how many values it lifted: `lifted 31 values below 1.0 to 1.0`.
+Writes one version 2 file per club, named by club id. The same seed and the same content give the same files. Pass `--force` to overwrite. The tuning file must hold the `generator.body` block. Every generated value is drawn on 1.0 to 20.0, so the command lifts nothing; it still prints the count it would lift: `lifted 0 values below 1.0 to 1.0`.
 
 ## Runtime files
 
