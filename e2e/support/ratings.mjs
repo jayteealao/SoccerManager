@@ -44,10 +44,15 @@ export async function expectStarLabels(page) {
   console.log(`star labels: ${[...new Set(labels)].join('; ')}`);
 }
 
-/// Every Risk cell of the home line-up holds one of the three words.
+/// Every Risk cell of the home line-up holds one of the four words, read from injury
+/// proneness; neither the cell nor its label carries a number.
 export async function expectRiskWords(page) {
-  const words = (await page.locator('td.risk').allTextContents()).map((w) => w.trim());
+  const cells = page.locator('td.risk');
+  const words = (await cells.allTextContents()).map((w) => w.trim());
   expect(words.length).toBeGreaterThan(0);
-  for (const w of words) expect(['Low', 'Raised', 'High']).toContain(w);
+  for (const w of words) expect(['Low', 'Raised', 'High', 'Not known']).toContain(w);
+  for (const label of await cells.evaluateAll((tds) => tds.map((td) => td.getAttribute('aria-label') ?? ''))) {
+    expect(label).not.toMatch(/\d/);
+  }
   console.log(`risk words: ${words.join(' ')}`);
 }
