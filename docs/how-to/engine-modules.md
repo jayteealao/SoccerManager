@@ -6,7 +6,7 @@ You need a checkout of the repository and the pinned Rust toolchain (see `CONTRI
 
 ## Write the module
 
-A module implements the trait of its slot. It reads the match only through the read-only view (`MatchView`) and returns a result or proposed changes; it never writes match state. A modifier implements `Modifier`: it names its family and returns one factor for each effective value.
+A module implements the trait of its slot. It reads the match only through the read-only view (`MatchView`) and returns a result or proposed changes; it never writes match state. A modifier implements `Modifier`: it names its family and returns an `Effect`, one delta in rating points for each attribute group (technical, mental, physical and goalkeeping). A family acts only on the groups it owns, and the engine clamps each family to its cap before the families combine; the module reference lists the groups and the caps. `Effect::NEUTRAL`, every delta 0, is no effect.
 
 1. Create `crates/engine/src/modules/modifier/still_air.rs`:
 
@@ -44,7 +44,7 @@ Every module carries a card. Add it to `still_air.rs`:
 pub const STILL_AIR_V1_CARD: ModuleCard = ModuleCard {
     purpose: "Still air around a player (surroundings family): calm weather with no effect.",
     inputs: "Nothing.",
-    outputs: "A factor of 1.0 on every effective value.",
+    outputs: "A delta of 0 on every attribute group.",
     tuning: &["none"],
     calibration: "none: no effect",
     keys: &[],
@@ -83,7 +83,7 @@ Registration gives the module a name and a version in its slot. In `crates/engin
    ],
    ```
 
-3. The test `every_modifier_slot_names_its_family` in `crates/engine/tests/modules.rs` counts the modifier registrations, off versions included. Raise the count from `8` to `9`.
+3. The test `every_modifier_slot_names_its_family` in `crates/engine/tests/modules.rs` counts the modifier registrations, off versions included. Raise the count from `12` to `13`.
 
 4. Add the new version to the slot table of [the module reference](../reference/engine-modules.md): `still-air@1` in the "Other versions" column of `engine.modifier.weather`. A documentation test compares that table with the registry.
 

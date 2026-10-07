@@ -17,7 +17,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | File | Schema version | Holds |
 |---|---|---|
 | `attributes.json` | 2 | The attribute schema: 30 to 50 names in four groups, each with its job in play, the stage tables that blend them for every action, and the skill gates |
-| `tuning.json` | 3 | Engine constants, the attribute contract, decision weights, injury rates, the generator's world spread, fatigue curve, stream buffer |
+| `tuning.json` | 4 | Engine constants, the attribute contract with the state caps and the body jobs, decision weights, injury rates, the generator's world spread, fatigue curve, stream buffer |
 | `rules/default.json` | 4 | The rule pack |
 | `tactics.json` | 1 | Ten formations, mentalities, team instructions, roles, duties, and the AI manager's settings |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
@@ -25,7 +25,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `realism-bands.json` | 2 | The accepted realism bands the calibration run checks: four from version 1 and eleven from real-match data. They are acceptance criteria, never tuning values |
 | `fast-model.json` | 2 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
 
-Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files and `tactics.json` are read in version 2 and in version 1, which converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 2 and in version 1, and `tuning.json` in version 3 and in version 2; the older version converts on load with the first contract tables of the build, a copy compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. Any other version is refused the same way.
+Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files and `tactics.json` are read in version 2 and in version 1, which converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 2 and in version 1, and `tuning.json` in versions 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy. Any other version is refused the same way.
 
 ## attributes.json
 
@@ -238,6 +238,29 @@ Each action carries exactly the fields play reads of it. A missing field or one 
 
 Top speed reads pace directly, not through the curve: the real speed of the player's pace from `speed.kmh`, its difference from a pace-10 player times `speed.amplification`, in metres per second, added to `speed.anchor_ms`. Acceleration is `accel.anchor` times the sprint factor.
 
+| states.caps.body, .mind, .familiarity, .surroundings | `[lowest, highest]` change of a rating a state family may make, in rating points | `[-2.0, 0.5]`, `[-1.0, 1.0]`, `[-1.25, 0.25]`, `[-0.75, 0.5]` | lowest −19 to 0, highest 0 to 19 |
+| states.caps.total | `[lowest, highest]` change of a rating all families together may make | `[-5.0, 2.25]` | as above |
+| states.family_groups.body, .mind, .familiarity, .surroundings | the attribute groups each family acts on | body: technical, physical, goalkeeping; mind: mental; familiarity: technical, mental; surroundings: technical, physical | each group at most once |
+| body.height.reference_cm | the height at which height changes nothing, cm | 181 | |
+| body.height.reach_per_cm | standing reach added per centimetre above the reference, m | 0.0133 | |
+| body.height.turn_cost_per_cm | the share of turning lost per centimetre above the reference | 0.002 | |
+| body.age.reference | the age from which age acts, years | 28 | |
+| body.age.late_from_minute | the minute from which an older player's drain grows | 60 | |
+| body.age.fade_per_year | the extra drain per year above the reference, reached 30 minutes after `late_from_minute` | 0.04 | |
+| body.age.recovery_loss_per_year | the share of rest-day recovery lost per year above the reference | 0.03 | |
+| body.age.injury_per_year | the extra congestion risk per year above the reference | 0.03 | |
+| body.rest.post_match_energy | a player's energy just after a match | 0.4 | |
+| body.rest.congestion_days | fewer rest days than this raise the injury chance | 4 | |
+| body.rest.congestion_risk | the extra injury chance with no rest day, as a share | 1.0 | |
+| body.sharpness.max_drop | the technical drop at sharpness 0, rating points | 1.5 | |
+| body.adaptation.max_drop | the mental drop at adaptation 0, rating points | 1.0 | |
+| body.build.frame_balance_weight, .slight_below, .powerful_from | the build word's frame and its thresholds | 0.5, 9.0, 14.0 | |
+| body.jobs.height, .age, .nationality | each body field's job: the `statistic` it moves and the `direction` (`up` or `down`) | see file | |
+
+A state changes a player's ratings, not his values directly: see [modifier slots](engine-modules.md#modifier-slots) for the order of the caps. While a state moves his ratings, his stage values, top speed, acceleration, turning, reach and knobs are blended again from his effective ratings.
+
+A player's body acts in play from his team file. Height adds `reach_per_cm` metres of standing reach per centimetre above the reference to the reach his jump gives (2.0 m times his aerial reach factor), and takes `turn_cost_per_cm` of his turning per centimetre; a shorter player gains the same. After `late_from_minute`, an older player's drain grows over 30 minutes to `1 + fade_per_year` per year above the reference. His days of rest set his energy at kick-off, `post_match_energy` plus each day's `fatigue.recovery_per_day`, less `recovery_loss_per_year` of it per year above the reference, at most 1.0; fewer than `congestion_days` raise his injury chance by up to `congestion_risk`, more for an older player. A player with no height, no age or no rest days given plays as the reference: a converted version 1 player has no body. Nationality acts through the adaptation input. The build word reads `frame = strength − frame_balance_weight × (balance − 10)`: below `slight_below` it is slight, from `powerful_from` powerful, between them athletic. It is shown, never stored, and play does not read it.
+
 While his side defends, each outfield player can lapse once per simulated minute, with the chance `lapse.per_minute` grown by `lapse.late_growth` for each 30 minutes past `lapse.late_from_minute`, and doubled for a shape `choose` share of 0 (concentration leading) or cut to nothing for a share of 1. For `lapse.ticks` he stops tracking his place.
 
 ### generator
@@ -274,8 +297,10 @@ The body fields are drawn from their own random stream, after every attribute of
 | drain_effort_per_s | energy per s at full speed | 0.0004 | 0 to 0.05 |
 | half_time_recovery | energy | 0.1 | 0 to 1 |
 | recovery_per_day | points | 20.0 | 0 to 100 |
+| group_weights.physical, .technical, .goalkeeping | the share of the fatigue delta each group takes | 1.0, 0.5, 0.5 | 0 to 1 |
+| sprint_cap | the most the effort term counts a player's speed, as a share of a pace-10 player's top speed | 1.0 | 1 to 2 |
 
-Every player starts a match at energy 1.0. Each tick drains `drain_base_per_s` plus `drain_effort_per_s` times the square of the player's speed as a share of their top speed; stamina 100 halves the drain and 0 makes it half again as fast. At and above `threshold` a player plays at full strength. Below it, top speed, acceleration, passing, finishing, decisions, and composure are the unfatigued values times the curve's multiplier, read on the straight line between the two points around the energy; they are refreshed once a second. Half-time gives back `half_time_recovery`, scaled by natural fitness. `recovery_per_day` is for the season between matches; a match does not read it.
+A player starts a match at energy 1.0, or at the energy his days of rest give (see [contract](#contract)). Each tick drains `drain_base_per_s` plus `drain_effort_per_s` times the square of the player's speed as a share of a pace-10 player's top speed (`contract.speed.anchor_ms`), counted at most as `sprint_cap`: every sprint costs stamina, and a slower runner at full sprint drains less than an average one. The highest stamina nearly halves the drain and the lowest makes it nearly half again as fast. At and above `threshold` a player plays at full strength. Below it, the curve's multiplier at his energy, read on the straight line between the two points around it, lowers his ratings by `curve.width × ln(multiplier)` rating points times each group's weight: physical first, technical and goalkeeping by half; his mental ratings are not touched. The body cap holds the change, with sharpness, to −2.0. The ratings are refreshed once a second. Half-time gives back `half_time_recovery`, scaled by natural fitness. `recovery_per_day` sets the energy at kick-off from the days of rest; carrying energy between matches is the season's.
 
 ### stream
 
@@ -430,6 +455,23 @@ Before kick-off the AI manager picks the best-fitting player for each slot of th
 - a rating out of range: `content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 20.5; allowed 1.0 to 20.0`
 - a rating off the tenth grid: `content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 12.34; not on a tenth`
 - a missing body field: `content refused: team teams/x.json: players: player p-club-00000001-00-04: body field height is missing`
+
+### Match condition
+
+A player may carry an optional `condition` block: his condition for this match. Every field is optional; an absent field has no effect, and a file without the block hashes as it did before the block existed. The season carries these between matches later; until then the team file gives them.
+
+```json
+"condition": { "sharpness": 60, "adaptation": 40, "rest_days": 3, "matches_at_club": 12 }
+```
+
+| Field | Bound | Absent reads | Job |
+|---|---|---|---|
+| condition.sharpness | 0 to 100 percent | 100 | Below 100, his technical ratings drop, by 1.5 points at 0 (the `engine.modifier.sharpness` slot) |
+| condition.adaptation | 0 to 100 percent | 100 | Below 100, his mental ratings drop, by 1.0 point at 0 (the `engine.modifier.adaptation` slot); a player new to a country is given a low value |
+| condition.rest_days | 0 to 14 days | rested | His energy at kick-off, and a higher injury chance with fewer than 4 days |
+| condition.matches_at_club | 0 to 1000 | none | Matches he has played for the club; play does not read it |
+
+An unknown field is refused, and a value out of range is refused by player and field: `content refused: team teams/x.json: players: player p-club-00000001-00-04: condition field sharpness is 101; allowed 0 to 100`.
 
 ### Version 1 files
 

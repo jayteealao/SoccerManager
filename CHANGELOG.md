@@ -18,6 +18,12 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 - Generated players follow the world spread: five tiers of clubs, with players and attributes spread around their club's level. A converted rating under 1.0 now reads as 1.0.
 - Matches play differently from earlier builds for the same seed.
 - An AI-managed side that starts in a formation other than the default one fields the lineup its AI manager picks for that formation's slots, so a full back plays at wing back and not a winger. `engine-cli calibrate` starts the sides of the formations suite this way.
+- A player's state changes his ratings within caps. Tiredness lowers his physical ratings first and his technical and goalkeeping ratings by half, and no longer his mental ones; each kind of state may move a rating only so far (a tired body at most 2 points down), all of them together at most 5 down and 2.25 up, and no rating leaves 1 to 20.
+- Every sprint costs stamina: a player's drain reads his running speed against an average player's top speed, so a slow runner at full sprint tires less than an average one.
+- A player's height and age play. Height adds reach in the air and costs a little turning; an older player tires faster after the hour.
+- A team file may give a player his condition for the match: sharpness, adaptation to the country, days of rest, and matches played for the club. A player short of sharpness plays his technical ratings lower, one new to a country his mental ratings, and one with little rest starts tired and is a little more likely to be injured. A value out of range is refused with the player and the field named.
+- Two new modifier slots, `engine.modifier.sharpness` and `engine.modifier.adaptation`, each with an off version. The slot file is version 2; a version 1 slot file converts as it loads.
+- The tuning file is version 4, with the state caps, the body jobs, the fatigue weights per attribute group and the sprint cap. A version 3 or 2 tuning file converts as it loads, so old replays still play.
 - The fast results model of `engine-cli fast-model` reads each side's strength through the attribute contract, as play reads the players, and fits its strength terms on the pairings it is checked on, so it follows how far a stronger side beats a weaker one on the new play.
 
 ## [0.2.0-beta.3] - 2026-10-05

@@ -82,6 +82,23 @@ Each player must have every attribute of the attribute schema, and no other attr
 
 The screens show each rating as its whole number, so 12.4 shows as 12 and 12.5 as 13.
 
+### Give a player his match condition
+
+A player may carry a `condition` block for the match: his sharpness and his adaptation to the country, in percent, his days of rest since his last match, and the matches he has played for the club. Every field is optional, and a player without the block is fully sharp, fully adapted and rested.
+
+1. Add the block to the player:
+
+   ```json
+   { "id": "p-club-00000007-00-04", "name": "Jon Ashby", "shirt": 4, "position": "CB",
+     "attributes": { "acceleration": 12.4, "pace": 11.0, "...": 1.0 },
+     "height": 187, "age": 26, "nationality": "ENG",
+     "condition": { "sharpness": 60, "adaptation": 50, "rest_days": 2 } }
+   ```
+
+2. Play the match with the file as before. At sharpness 60 his technical ratings play 0.6 lower; at adaptation 50 his mental ratings play 0.5 lower; two days of rest start him at energy 0.8 and raise his injury chance by half.
+
+A value out of range stops the load with the player and the field named, for example `player p-club-00000007-00-04: condition field sharpness is 101; allowed 0 to 100`. The data-file reference lists every field and its range.
+
 ### Convert a version 1 file by hand
 
 A version 1 file (`"schema_version": 1`) holds whole numbers from 1 to 100 and no body fields. The engine still reads it and converts it as it loads: each value is halved, so 62 plays as 12.4, exactly as it played before. To write it as version 2:
