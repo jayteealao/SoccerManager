@@ -425,7 +425,7 @@ Version 2 holds every rating in tenths of the 1 to 20 scale, written as a number
 
 The screens show a rating as its whole number, 1 to 20: 12.5 shows as 13.
 
-Before kick-off the AI manager picks the best-fitting player for each formation slot in slot order, by the slot role's attribute weights in `tactics.json`, and names a bench of up to `ai.bench_size` from the rest, the best remaining goalkeeper first. File order breaks ties. A bad value is refused by player and field:
+Before kick-off the AI manager picks the best-fitting player for each slot of the formation the side starts in, in slot order, by the slot role's attribute weights in `tactics.json`, and names a bench of up to `ai.bench_size` from the rest, the best remaining goalkeeper first. File order breaks ties. A bad value is refused by player and field:
 
 - a rating out of range: `content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 20.5; allowed 1.0 to 20.0`
 - a rating off the tenth grid: `content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 12.34; not on a tenth`

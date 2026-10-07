@@ -17,6 +17,7 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 - The attribute file is version 2, with each attribute's job, the stage tables, and the skill gates. The tuning file is version 3, with the contract block in place of the old speed fields and the world spread of generated players in place of the per-position distributions. Older files of both convert as they load, so old replays still play.
 - Generated players follow the world spread: five tiers of clubs, with players and attributes spread around their club's level. A converted rating under 1.0 now reads as 1.0.
 - Matches play differently from earlier builds for the same seed.
+- An AI-managed side that starts in a formation other than the default one fields the lineup its AI manager picks for that formation's slots, so a full back plays at wing back and not a winger. `engine-cli calibrate` starts the sides of the formations suite this way.
 - The fast results model of `engine-cli fast-model` reads each side's strength through the attribute contract, as play reads the players, and fits its strength terms on the pairings it is checked on, so it follows how far a stronger side beats a weaker one on the new play.
 
 ## [0.2.0-beta.3] - 2026-10-05

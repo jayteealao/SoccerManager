@@ -93,7 +93,7 @@ A targeted run is an inner loop. Before a change is accepted, run the full gate:
    done
    ```
 
-2. Run the formations suite on one seed:
+2. Run the formations suite on one seed. Each side starts in its pairing's formation with the lineup its AI manager picks for that formation:
 
    ```bash
    target/release/engine-cli calibrate --suite formations --seed 42 --matches 1000 --out runs/gate-formations-42
