@@ -114,7 +114,7 @@ pub struct Joint {
     pub critical: f64,
     pub resamples: usize,
     pub false_alarm: f64,
-    /// Fixtures both engines finished.
+    /// Fixtures both engines played.
     pub pairs: u32,
     /// Why a fail comes from outside the bands: panics, dark paths, rule violations.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -187,7 +187,7 @@ pub struct SuiteSet {
 }
 
 /// The paired rows of a change run: for every suite both builders planned, the fixtures
-/// both finished, joined on key. `keys` give each builder's matches' fixture keys, suite by
+/// both played, joined on key. `keys` give each builder's matches' fixture keys, suite by
 /// suite, in the order the builder holds them; `per_unit` the matches per suite unit.
 pub fn paired(
     changed: (&RunBuilder, &BTreeMap<Suite, Vec<u64>>),
@@ -205,11 +205,15 @@ pub fn paired(
         };
         let o_obs = ob.observations(suite);
         let at: BTreeMap<u64, usize> = old_keys.iter().enumerate().map(|(i, k)| (*k, i)).collect();
+        // A pair is kept only when both engines played its fixture. A failed match on
+        // either side would leave the two sides measured over different fixtures.
+        let played = |o: &measures::Obs<'_>| o.stats.outcome == "success";
         let pairs: Vec<(usize, usize)> = keys
             .iter()
             .enumerate()
             .filter_map(|(i, k)| at.get(k).map(|&j| (i, j)))
             .filter(|&(i, j)| i < c_obs.len() && j < o_obs.len())
+            .filter(|&(i, j)| played(&c_obs[i]) && played(&o_obs[j]))
             .collect();
         let c_sub: Vec<_> = pairs.iter().map(|&(i, _)| c_obs[i]).collect();
         let o_sub: Vec<_> = pairs.iter().map(|&(_, j)| o_obs[j]).collect();
@@ -974,6 +978,84 @@ mod tests {
         let rate = f64::from(alarms) / f64::from(replicates);
         eprintln!("A/A rate {rate} over {replicates} replicates of {n} pairs");
         assert!(rate <= FALSE_ALARM, "joint false-alarm rate {rate}");
+    }
+
+    /// A match of the equal suite with these goals; `played` false makes it a failed match.
+    fn stats(goals: [u32; 2], played: bool) -> engine::observe::MatchStats {
+        use engine::observe::{MatchFigures, MatchStats, TeamRef};
+        let team = |id: &str| TeamRef {
+            id: id.into(),
+            name: id.into(),
+        };
+        MatchStats {
+            owner_id: "0123456789abcdef0123456789abcdef".into(),
+            match_id: "0000000000000001-1".into(),
+            seed: 1,
+            content_hash: "abcdef012345".into(),
+            teams: [team("a"), team("b")],
+            duration_ms: 400,
+            outcome: if played { "success" } else { "error" }.into(),
+            ticks_per_s: 1.0,
+            ticks_written: 1,
+            validate_ran: true,
+            validate_violations: 0,
+            possession_changes: 0,
+            ball_max_speed: 0.0,
+            ball_idle_ticks: 0,
+            goals,
+            flags_on: Vec::new(),
+            laws: Default::default(),
+            tactics: Default::default(),
+            figures: MatchFigures {
+                goals,
+                ..MatchFigures::default()
+            },
+            script: Default::default(),
+        }
+    }
+
+    #[test]
+    fn a_pair_is_kept_only_when_both_engines_played_its_fixture() {
+        let dir = engine::ContentDir::at(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content"),
+        );
+        let registry = || super::super::bands::Registry::load(&dir).unwrap();
+        // Four fixtures. The old engine failed fixture 30 and the changed engine failed
+        // fixture 40: only fixtures 10 and 20 were played by both.
+        let goals = [[1, 0], [2, 1], [5, 4], [0, 0]];
+        let mut cb = RunBuilder::new(registry());
+        let mut ob = RunBuilder::new(registry());
+        cb.plan(Suite::Equal, 4);
+        ob.plan(Suite::Equal, 4);
+        for (i, g) in goals.iter().enumerate() {
+            cb.add(Suite::Equal, stats(*g, i != 3), None);
+            ob.add(Suite::Equal, stats(*g, i != 2), None);
+        }
+        let keys: BTreeMap<Suite, Vec<u64>> = [(Suite::Equal, vec![10, 20, 30, 40])].into();
+        let per_unit: BTreeMap<Suite, u32> = [(Suite::Equal, 4)].into();
+        let (sets, rows) = paired((&cb, &keys), (&ob, &keys), &per_unit);
+        assert_eq!(
+            sets[0].strata.len(),
+            2,
+            "only the fixtures both engines played"
+        );
+        let goals_row = rows
+            .iter()
+            .find(|r| r.band == "goals_per_match")
+            .expect("the equal suite judges goals per match");
+        // Both sides over fixtures 10 and 20: (1 + 3) / 2 goals per match.
+        assert_eq!(goals_row.value, Some(2.0));
+        assert_eq!(goals_row.base_value, Some(2.0));
+        assert_eq!(goals_row.changed[0].len(), 2);
+        assert_eq!(goals_row.old[0].len(), 2);
+        let (found, _) = bootstrap(&sets, &rows, 3, 19);
+        let at = rows
+            .iter()
+            .position(|r| r.band == "goals_per_match")
+            .unwrap();
+        assert_eq!(found[at].diff, Some(0.0), "the same fixtures on both sides");
+        let (_, joint) = judge(&sets, &rows, &found, 2.0, Vec::new(), &BTreeMap::new());
+        assert_eq!(joint.pairs, 2);
     }
 
     #[test]
