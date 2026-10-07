@@ -49,7 +49,8 @@ const squad = (team) =>
     'player.shirt': i + 1,
     'player.position': position,
     'player.natural_fitness': 140,
-    'player.injury_resistance': 120,
+    'player.consistency': { confidence: 'not_yet_known' },
+    'player.injury_proneness': { word: 'rarely_injured', confidence: 'tentative' },
     role_fit: SCHEMA.roles.map(() => 100),
   }));
 

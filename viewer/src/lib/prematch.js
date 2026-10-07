@@ -7,24 +7,26 @@
 // have no function here.
 
 import { LENGTH, WIDTH } from './pitch.js';
-import { wholeOf } from './scale.js';
 import { words } from './tactics-panel.js';
 
 export const STARTERS = 11;
 
-/// The injury-risk word for an injury-resistance figure in tenths of 1 to 20: the one figure
-/// the engine holds that moves a player's chance of injury (injury chance scales with 1.5
-/// less the resistance). The word reads the whole number a screen would show. Each word
-/// carries its state token; the word, never the colour, is the state.
-export function riskWord(injuryResistance) {
-  const value = wholeOf(injuryResistance);
-  if (value < 8) {
-    return { word: 'High', tone: 'bad' };
+/// The injury-risk word for a player's injury proneness, a hidden value the hello carries as
+/// a word key and a confidence, never a number. The word follows the proneness word; with no
+/// word yet (no match seen at the club) the risk is not known. Each word carries its state
+/// token; the word, never the colour, is the state.
+export function riskWord(proneness) {
+  switch (proneness?.word) {
+    case 'injury_prone':
+      return { word: 'High', tone: 'bad' };
+    case 'picks_up_knocks':
+      return { word: 'Raised', tone: 'warn' };
+    case 'rarely_injured':
+    case 'hardly_ever_injured':
+      return { word: 'Low', tone: 'good' };
+    default:
+      return { word: 'Not known', tone: 'muted' };
   }
-  if (value < 12) {
-    return { word: 'Raised', tone: 'warn' };
-  }
-  return { word: 'Low', tone: 'good' };
 }
 
 /// Where each slot of a formation stands at kick-off, in percent of a pitch drawn with the
@@ -76,7 +78,7 @@ export function squadSheet(squad, lineup, bench) {
       surname: surname(p['player.name']),
       position: p['player.position'],
       squad: i,
-      risk: riskWord(p['player.injury_resistance']),
+      risk: riskWord(p['player.injury_proneness']),
     };
   };
   return {

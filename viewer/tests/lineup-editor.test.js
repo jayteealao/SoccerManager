@@ -23,7 +23,8 @@ function squad() {
     'player.shirt': i + 1,
     'player.position': position,
     'player.natural_fitness': 80 + 2 * i,
-    'player.injury_resistance': 120,
+    'player.consistency': { confidence: 'not_yet_known' },
+    'player.injury_proneness': { word: 'rarely_injured', confidence: 'tentative' },
     role_fit: SCHEMA.roles.map(() => 100),
   }));
 }

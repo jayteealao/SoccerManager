@@ -7,7 +7,7 @@ import path from 'node:path';
 import { test } from 'vitest';
 
 import { readReplay } from '../src/lib/replay-file.js';
-import { liftHello, TENTHS_PROTOCOL, wholeOf } from '../src/lib/scale.js';
+import { HIDDEN_KEYS, liftHello, TENTHS_PROTOCOL, WORDS_PROTOCOL, wholeOf } from '../src/lib/scale.js';
 import { REPO_ROOT } from './helpers.js';
 
 const OLD_HELLO = path.join(REPO_ROOT, 'viewer/tests/data/hello-protocol-3.json');
@@ -31,13 +31,17 @@ test('a protocol 3 hello is lifted to tenths, and every squad value shows on 1 t
   assert.equal(JSON.stringify(hello), before, 'the hello itself is never changed');
   const [keeper, back] = lifted.teams[0].squad;
   assert.equal(keeper['player.natural_fitness'], 142);
-  assert.equal(keeper['player.injury_resistance'], 128);
+  // The old resistance figure is dropped; the hidden values are not yet known.
+  assert.ok(!('player.injury_resistance' in keeper));
+  for (const key of HIDDEN_KEYS) {
+    assert.deepEqual(keeper[key], { confidence: 'not_yet_known' });
+  }
   assert.deepEqual(keeper.role_fit, [160, 24]);
   assert.deepEqual(back.role_fit, [8, 194]);
   // The lifted copy keeps the protocol its frames were written in.
   assert.equal(lifted['protocol.version'], 3);
   for (const p of lifted.teams[0].squad) {
-    for (const v of [p['player.natural_fitness'], p['player.injury_resistance'], ...p.role_fit]) {
+    for (const v of [p['player.natural_fitness'], ...p.role_fit]) {
       const shown = wholeOf(v);
       assert.ok(Number.isInteger(shown) && shown >= 1 && shown <= 20, `${v} shows as ${shown}`);
     }
@@ -46,9 +50,25 @@ test('a protocol 3 hello is lifted to tenths, and every squad value shows on 1 t
   assert.equal(wholeOf(back['player.natural_fitness']), 1);
 });
 
-test('a protocol 4 hello is already in tenths and is returned as it is', () => {
+test('a protocol 4 hello keeps its tenths and shows no number under a hidden key', () => {
   const hello = JSON.parse(fs.readFileSync(OLD_HELLO, 'utf8'));
   hello['protocol.version'] = TENTHS_PROTOCOL;
+  const lifted = liftHello(hello);
+  const [keeper, back] = lifted.teams[0].squad;
+  // Already in tenths: nothing is doubled.
+  assert.equal(keeper['player.natural_fitness'], 71);
+  assert.deepEqual(back.role_fit, [4, 97]);
+  for (const p of lifted.teams[0].squad) {
+    assert.ok(!('player.injury_resistance' in p), 'the old figure is dropped');
+    for (const key of HIDDEN_KEYS) {
+      assert.deepEqual(p[key], { confidence: 'not_yet_known' }, 'no figure becomes a word');
+    }
+  }
+});
+
+test('a protocol 5 hello is returned as it is', () => {
+  const hello = JSON.parse(fs.readFileSync(OLD_HELLO, 'utf8'));
+  hello['protocol.version'] = WORDS_PROTOCOL;
   assert.equal(liftHello(hello), hello);
 });
 

@@ -23,11 +23,16 @@
 import { liftHello } from './scale.js';
 
 /// The protocol version of the frames this page receives and writes.
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 /// The frame protocols this page reads from a file. Protocol 4 changed only the scale of the
-/// hello's ratings, so a protocol 3 file still plays; its hello is lifted to tenths when read
-/// (`liftHello`).
-export const READS_PROTOCOLS = Object.freeze([3, 4]);
+/// hello's ratings, and protocol 5 only the hello's squad entries and one added message, so a
+/// protocol 3 or 4 file still plays; its hello is lifted when read (`liftHello`).
+export const READS_PROTOCOLS = Object.freeze([3, 4, 5]);
+
+/// The protocols this page reads, as words: "3, 4 and 5".
+function readsWords() {
+  return `${READS_PROTOCOLS.slice(0, -1).join(', ')} and ${READS_PROTOCOLS.at(-1)}`;
+}
 /// The file format that holds frames only. Its format field was also its frames' protocol;
 /// the page still writes 3 there, and a hello names its own protocol.
 export const LEGACY_VERSION = 3;
@@ -184,7 +189,7 @@ function inputPayload({ name, bytes }) {
 export async function writeReplay(store, { matchId, version = store.protocol, record = null }) {
   if (!READS_PROTOCOLS.includes(version)) {
     throw new ReplayRefused(
-      `cannot write frames protocol version ${version}; this page writes ${READS_PROTOCOLS.join(' and ')}`
+      `cannot write frames protocol version ${version}; this page writes ${readsWords()}`
     );
   }
   const { seed, millis } = matchIdentity(matchId);
@@ -452,7 +457,7 @@ async function decodeEntries(raw, format) {
   const protocol = format === LEGACY_VERSION ? raw.format : raw.protocol;
   if (!READS_PROTOCOLS.includes(protocol)) {
     throw new ReplayRefused(
-      `frames protocol version ${protocol}; this page reads ${READS_PROTOCOLS.join(' and ')}`
+      `frames protocol version ${protocol}; this page reads ${readsWords()}`
     );
   }
   const frames = [];

@@ -21,15 +21,16 @@ import { REPO_ROOT } from './helpers.js';
 
 const SCHEMA = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'content/tactics.json'), 'utf8'));
 
-test('the risk word follows injury resistance on 1 to 20: High below 8, Raised to 11, Low from 12', () => {
-  // The figure arrives in tenths; the word reads the whole number a screen shows.
-  assert.deepEqual(riskWord(0), { word: 'High', tone: 'bad' });
-  assert.deepEqual(riskWord(74), { word: 'High', tone: 'bad' });
-  assert.deepEqual(riskWord(75), { word: 'Raised', tone: 'warn' });
-  assert.deepEqual(riskWord(114), { word: 'Raised', tone: 'warn' });
-  assert.deepEqual(riskWord(115), { word: 'Low', tone: 'good' });
-  assert.deepEqual(riskWord(200), { word: 'Low', tone: 'good' });
-  assert.equal(riskWord(undefined).word, 'High', 'no figure reads as the worst case');
+test('the risk word follows the injury-proneness word, and with no word it is not known', () => {
+  const w = (word) => ({ word, confidence: 'tentative' });
+  assert.deepEqual(riskWord(w('injury_prone')), { word: 'High', tone: 'bad' });
+  assert.deepEqual(riskWord(w('picks_up_knocks')), { word: 'Raised', tone: 'warn' });
+  assert.deepEqual(riskWord(w('rarely_injured')), { word: 'Low', tone: 'good' });
+  assert.deepEqual(riskWord(w('hardly_ever_injured')), { word: 'Low', tone: 'good' });
+  assert.deepEqual(riskWord({ confidence: 'not_yet_known' }), { word: 'Not known', tone: 'muted' });
+  assert.equal(riskWord(undefined).word, 'Not known', 'an earlier engine sent no word');
+  // A number is never read as a risk.
+  assert.equal(riskWord(40).word, 'Not known');
 });
 
 /// The engine's kick-off places (crates/engine/src/rules/restart.rs, kick_off_position) in
@@ -69,7 +70,10 @@ function squad() {
     'player.name': `Home Player${i}`,
     'player.shirt': i + 1,
     'player.position': i === 0 ? 'GK' : 'CM',
-    'player.injury_resistance': [140, 100, 40][i % 3],
+    'player.injury_proneness': {
+      word: ['rarely_injured', 'picks_up_knocks', 'injury_prone'][i % 3],
+      confidence: 'firm',
+    },
   }));
 }
 

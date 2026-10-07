@@ -10,17 +10,27 @@ export function wholeOf(tenths) {
   return Math.max(1, Math.min(20, Math.round(Number(tenths ?? 0) / 10)));
 }
 
-/// The hello with its ratings in tenths. A hello of protocol 3 or earlier carries ratings on
-/// 1 to 100: every rating of the squad (`player.natural_fitness`,
-/// `player.injury_resistance`, and each `role_fit`) is doubled into tenths, since a
-/// protocol 3 rating `v` is `2v` tenths exactly. A later hello is returned as it is. The
-/// hello is never changed; a lifted copy keeps its `protocol.version`, so a replay written
-/// back still names the protocol of its frames.
+/// The protocol version whose hello carries the hidden values as words.
+export const WORDS_PROTOCOL = 5;
+
+/// The hidden values a squad entry carries as a word and a confidence, never a number.
+export const HIDDEN_KEYS = Object.freeze(['player.consistency', 'player.injury_proneness']);
+
+/// The hello as this page reads it. A hello of protocol 3 or earlier carries ratings on
+/// 1 to 100: every rating of the squad (`player.natural_fitness` and each `role_fit`) is
+/// doubled into tenths, since a protocol 3 rating `v` is `2v` tenths exactly. A hello before
+/// protocol 5 carries `player.injury_resistance` as a figure and no hidden value: the figure
+/// is dropped and both hidden values read as not yet known, since an old figure is never
+/// turned into a word. A later hello is returned as it is. The hello is never changed; a
+/// lifted copy keeps its `protocol.version`, so a replay written back still names the
+/// protocol of its frames.
 export function liftHello(hello) {
-  if (!(Number(hello?.['protocol.version']) < TENTHS_PROTOCOL)) {
+  const version = Number(hello?.['protocol.version']);
+  if (!(version < WORDS_PROTOCOL)) {
     return hello;
   }
-  const lift = (v) => (typeof v === 'number' ? v * 2 : v);
+  const tenths = version < TENTHS_PROTOCOL;
+  const lift = (v) => (tenths && typeof v === 'number' ? v * 2 : v);
   const teams = (hello?.teams ?? []).map((team) => {
     if (!Array.isArray(team?.squad) || team.squad.length === 0) {
       return team;
@@ -29,13 +39,15 @@ export function liftHello(hello) {
       ...team,
       squad: team.squad.map((p) => {
         const out = { ...p };
-        for (const key of ['player.natural_fitness', 'player.injury_resistance']) {
-          if (key in out) {
-            out[key] = lift(out[key]);
-          }
+        if ('player.natural_fitness' in out) {
+          out['player.natural_fitness'] = lift(out['player.natural_fitness']);
         }
         if (Array.isArray(out.role_fit)) {
           out.role_fit = out.role_fit.map(lift);
+        }
+        delete out['player.injury_resistance'];
+        for (const key of HIDDEN_KEYS) {
+          out[key] = { confidence: 'not_yet_known' };
         }
         return out;
       }),
