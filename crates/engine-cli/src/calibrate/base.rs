@@ -13,6 +13,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::Instant;
 
 use anyhow::Context;
 use sha2::{Digest, Sha256};
@@ -37,6 +38,8 @@ pub enum Source {
 
 /// What the old engine plays.
 pub struct Request<'a> {
+    /// The id of the change run the old engine plays for: its events name it.
+    pub run_id: &'a str,
     pub source: Source,
     pub data: &'a Path,
     /// The run's content folder: the content of a ready binary.
@@ -114,8 +117,9 @@ pub fn run(req: &Request<'_>) -> anyhow::Result<BaseRun> {
             (Source::Rev(_), None) => unreachable!("a revision is resolved"),
         };
         probe(&exe, &content_dir, &dir)?;
+        let mut done = hits;
         for &suite in req.suites {
-            play(req, &exe, &content_dir, &dir, suite)?;
+            done = play(req, &exe, &content_dir, &dir, suite, (hits, done))?;
         }
         let now = self::hits(&dir, req.planned)?;
         if (now as usize) < req.planned.len() {
@@ -319,14 +323,39 @@ fn refuse_rows(exe: &Path, format: Option<u64>) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Plays `suite` with the old engine into the cache folder, which it resumes.
+/// The id of the run that the run folder `dir` holds, when its `run.json` names one.
+pub fn run_id_in(dir: &Path) -> Option<String> {
+    let text = fs::read_to_string(dir.join(run_folder::RUN_FILE)).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&text).ok()?;
+    value["run.id"].as_str().map(str::to_string)
+}
+
+/// Plays `suite` with the old engine into the cache folder, which it resumes, and returns
+/// how many planned fixtures the folder holds after it. `counts` are the planned fixtures
+/// the cache held before the old engine started, and those it holds before this suite.
+/// One `calibrate.base_play` event marks the start and one the end of each suite: the old
+/// engine's own `calibrate.progress` events come between them.
 fn play(
     req: &Request<'_>,
     exe: &Path,
     content: &Path,
     dir: &Path,
     suite: Suite,
-) -> anyhow::Result<()> {
+    counts: (u32, u32),
+) -> anyhow::Result<u32> {
+    let (hits, before) = counts;
+    let planned = u32::try_from(req.planned.len()).unwrap_or(u32::MAX);
+    let started = Instant::now();
+    tracing::info!(
+        signal = "calibrate.base_play",
+        phase = "start",
+        run.id = %req.run_id,
+        base.run_id = run_id_in(dir).as_deref().unwrap_or(""),
+        suite = suite.code(),
+        planned,
+        cache_hits = hits,
+        to_play = planned.saturating_sub(before)
+    );
     let mut cmd = calibrate(exe, content);
     cmd.args(["--seed", &req.seed.to_string()])
         .args([
@@ -346,17 +375,45 @@ fn play(
     let status = cmd
         .status()
         .with_context(|| format!("cannot start the old engine {}", exe.display()))?;
-    if !matches!(status.code(), Some(0 | 2)) {
+    // A ledger that cannot be read counts no fixture played here; the caller reads it
+    // again and reports the error.
+    let now = self::hits(dir, req.planned).unwrap_or(before);
+    let elapsed = started.elapsed().as_secs_f64();
+    let ok = matches!(status.code(), Some(0 | 2));
+    tracing::info!(
+        signal = "calibrate.base_play",
+        phase = "end",
+        run.id = %req.run_id,
+        base.run_id = run_id_in(dir).as_deref().unwrap_or(""),
+        suite = suite.code(),
+        planned,
+        cache_hits = hits,
+        played = now.saturating_sub(before),
+        elapsed_s = (elapsed * 10.0).round() / 10.0,
+        exit = status.code(),
+        ok
+    );
+    if !ok {
         anyhow::bail!(
             "the old engine stopped with exit {:?} in the {} suite",
             status.code(),
             suite.code()
         );
     }
-    Ok(())
+    Ok(now)
 }
 
-/// The old engine's `calibrate` command on `content`: warnings only, no standard output.
+/// The log filter of the old engine when the parent sets none: warnings, and the runner's
+/// `calibrate.progress` events, the only info events the runner logs. A long base play
+/// shows its progress and time left this way.
+pub const CHILD_LOG: &str = concat!(
+    "warn,",
+    env!("CARGO_CRATE_NAME"),
+    "::calibrate::runner=info"
+);
+
+/// The old engine's `calibrate` command on `content`: warnings and progress only, no
+/// standard output.
 fn calibrate(exe: &Path, content: &Path) -> Command {
     let mut cmd = Command::new(exe);
     cmd.arg("--content-dir")
@@ -366,7 +423,7 @@ fn calibrate(exe: &Path, content: &Path) -> Command {
         .stdout(Stdio::null())
         .stderr(Stdio::inherit());
     if std::env::var_os("SM_LOG").is_none() {
-        cmd.env("SM_LOG", "warn");
+        cmd.env("SM_LOG", CHILD_LOG);
     }
     cmd.env(super::QUIET_ENV, "1");
     cmd
@@ -474,6 +531,22 @@ mod tests {
         let err = refuse_rows(exe, Some(9)).unwrap_err().to_string();
         assert!(err.contains("compact rows of format 9"), "{err}");
         refuse_rows(exe, Some(u64::from(ROWS_FORMAT))).unwrap();
+    }
+
+    #[test]
+    fn the_old_engine_logs_warnings_and_the_runner_progress() {
+        let runner = module_path!().replace("base::tests", "runner");
+        assert_eq!(CHILD_LOG, format!("warn,{runner}=info"));
+        tracing_subscriber::EnvFilter::try_new(CHILD_LOG).unwrap();
+    }
+
+    #[test]
+    fn the_run_id_of_a_folder_comes_from_its_run_file() {
+        let dir = temp("run-id");
+        assert_eq!(run_id_in(&dir), None);
+        fs::write(dir.join(run_folder::RUN_FILE), r#"{"run.id": "calib-7"}"#).unwrap();
+        assert_eq!(run_id_in(&dir).as_deref(), Some("calib-7"));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

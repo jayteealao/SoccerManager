@@ -221,6 +221,12 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
 
     // The old engine's results come before the run folder exists and before any match of
     // the changed engine plays, so a base that cannot build stops the run with nothing done.
+    // Its events name the run id the folder holds once it opens: the resumed run's, or the
+    // fresh one.
+    ctx.run_id = run_folder::holds(&run_dir, &identity)
+        .then(|| base::run_id_in(&run_dir))
+        .flatten()
+        .unwrap_or_else(|| fresh_id.clone());
     let mut old = ctx.old_engine(&data)?;
 
     let session = run_folder::open(&run_dir, &identity, &fresh_id, millis)?;
@@ -240,6 +246,45 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     let (total, finished_before) = ctx.progress(&arm_dirs)?;
     // The old engine's own runs, started by a change run, leave their console to the parent.
     let quiet = std::env::var_os(QUIET_ENV).is_some();
+    let mode = if change {
+        "change"
+    } else if opts.pair.is_some() {
+        "pair"
+    } else {
+        "evaluation"
+    };
+    tracing::info!(
+        signal = "calibrate.run_started",
+        run.id = %run_id,
+        mode,
+        seed = opts.seed,
+        matches = opts.matches,
+        threads = jobs,
+        resumed = session.opened == Opened::Resumed,
+        fixtures_total = total,
+        fixtures_done = finished_before
+    );
+    if let Opened::Superseded { old_run_id, .. } = &session.opened {
+        tracing::warn!(
+            signal = "calibrate.run_superseded",
+            run.id = %run_id,
+            old_run_id = %old_run_id,
+            moved_to = %run_dir.join(run_folder::SUPERSEDED).join(old_run_id).display()
+        );
+    }
+    // The end of a run that did not fail: its outcome, exit code and wall time.
+    let finished = |outcome: &str, pass: Option<bool>, verdict: Option<&str>, code: i32| {
+        tracing::info!(
+            signal = "calibrate.run_finished",
+            run.id = %run_id,
+            mode,
+            outcome,
+            pass,
+            verdict,
+            exit = code,
+            elapsed_s = (run_started.elapsed().as_secs_f64() * 10.0).round() / 10.0
+        );
+    };
     match &session.opened {
         Opened::New => {}
         Opened::Resumed if quiet => {}
@@ -264,6 +309,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             "stopped after {} work units; run the same command again to resume",
             opts.stop_after_units.unwrap_or(0)
         );
+        finished("stopped", None, None, 1);
         Ok(1)
     };
     let inputs = arms
@@ -321,7 +367,9 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         finished_before,
         played: finished_after.saturating_sub(finished_before),
     };
-    if session.opened == Opened::Resumed && units.played == 0 && finished_before == total {
+    let rejudged =
+        session.opened == Opened::Resumed && units.played == 0 && finished_before == total;
+    if rejudged {
         eprintln!("judged again from {total} stored rows; 0 matches played");
         let changed = ctx.changed_bands(known.as_ref());
         if !changed.is_empty() {
@@ -453,6 +501,12 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         &report,
     )?;
     emit_line(&report)?;
+    finished(
+        if rejudged { "judged again" } else { "judged" },
+        Some(report.pass),
+        report.joint.as_ref().map(|j| j.word.code()),
+        code,
+    );
     Ok(code)
 }
 
@@ -897,6 +951,7 @@ impl RunCtx<'_> {
             .map(|k| (k.key, k.engine_seed))
             .collect();
         let old = base::run(&base::Request {
+            run_id: &self.run_id,
             source,
             data,
             content_dir: self.dir.root(),
@@ -1175,8 +1230,7 @@ impl RunCtx<'_> {
         let targets = {
             let _judge = stages::enter(Stage::Judge);
             let (sets, rows) = self.paired(first, old);
-            let (found, c) = verdict::bootstrap(&sets, &rows, opts.seed, verdict::RESAMPLES);
-            verdict::targets(&sets, &rows, &found, c, pilot, opts.matches)
+            power_targets(&sets, rows, &opts.bands, opts.seed, pilot, opts.matches)
         };
         self.drivers.clear();
         self.no_target.clear();
@@ -1230,9 +1284,7 @@ impl RunCtx<'_> {
             };
         }
         let (sets, mut rows) = self.paired(first, old);
-        if !opts.bands.is_empty() {
-            rows.retain(|r| opts.bands.contains(&r.band));
-        }
+        keep_bands(&mut rows, &opts.bands);
         let (found, c) = verdict::bootstrap(&sets, &rows, opts.seed, verdict::RESAMPLES);
         let (rows, joint) =
             verdict::judge(&sets, &rows, &found, c, first.guards(), &self.no_target);
@@ -1365,6 +1417,29 @@ impl RunCtx<'_> {
     }
 }
 
+/// Keeps the rows of the bands `--band` selects; every row when it selects none.
+fn keep_bands(rows: &mut Vec<verdict::PairedRow>, bands: &[String]) {
+    if !bands.is_empty() {
+        rows.retain(|r| bands.contains(&r.band));
+    }
+}
+
+/// Each suite's power target from a change run's pilot rows. Only the bands `--band`
+/// selects take part, as in the verdict: a band the run does not judge sets no target and
+/// does not raise the threshold `c`.
+fn power_targets(
+    sets: &[verdict::SuiteSet],
+    mut rows: Vec<verdict::PairedRow>,
+    bands: &[String],
+    seed: u64,
+    pilot: u32,
+    cap: u32,
+) -> BTreeMap<Suite, verdict::SuiteTarget> {
+    keep_bands(&mut rows, bands);
+    let (found, c) = verdict::bootstrap(sets, &rows, seed, verdict::RESAMPLES);
+    verdict::targets(sets, &rows, &found, c, pilot, cap)
+}
+
 fn suite_codes(figures: &BTreeMap<Suite, SuiteFigures>) -> BTreeMap<String, SuiteFigures> {
     figures
         .iter()
@@ -1447,6 +1522,73 @@ mod tests {
             fixtures_hash(&tuning, &teams).unwrap(),
             "an engine value"
         );
+    }
+
+    /// A paired row of the equal suite whose changed values are `changed` and whose old
+    /// values are all `old`.
+    fn paired_row(band: &str, changed: Vec<f64>, old: f64, shift: f64) -> verdict::PairedRow {
+        let n = changed.len();
+        verdict::PairedRow {
+            band: band.into(),
+            suite: Suite::Equal,
+            pairing: None,
+            lo: -1e9,
+            hi: 1e9,
+            shift,
+            value: None,
+            base_value: None,
+            in_range: true,
+            spread: true,
+            apart_se: 0.0,
+            value_se: 0.0,
+            outside: 0.0,
+            changed: [changed, vec![1.0; n], vec![1.0; n], vec![1.0; n]],
+            old: [vec![old; n], vec![1.0; n], vec![1.0; n], vec![1.0; n]],
+            set: 0,
+        }
+    }
+
+    #[test]
+    fn a_band_left_out_by_band_sets_no_power_target() {
+        let n = 20;
+        let sets = [verdict::SuiteSet {
+            suite: Suite::Equal,
+            strata: vec![0; n],
+            per_unit: 20,
+        }];
+        let wave: Vec<f64> = (0..n)
+            .map(|i| if i % 2 == 0 { 1.0 } else { -1.0 })
+            .collect();
+        // `steady` has power at the pilot; `noisy` needs far more matches than the cap.
+        let rows = vec![
+            paired_row(
+                "steady",
+                wave.iter().map(|x| 5.0 + 0.01 * x).collect(),
+                5.0,
+                10.0,
+            ),
+            paired_row(
+                "noisy",
+                wave.iter().map(|x| 5.0 + 3.0 * x).collect(),
+                5.0,
+                0.01,
+            ),
+        ];
+        let every = power_targets(&sets, rows.clone(), &[], 9, 20, 1000);
+        let equal = &every[&Suite::Equal];
+        assert_eq!(
+            equal.matches, 1000,
+            "without --band the noisy band sets the target"
+        );
+        assert_eq!(equal.driver.as_deref(), Some("noisy"));
+
+        let steady = power_targets(&sets, rows, &["steady".to_string()], 9, 20, 1000);
+        let equal = &steady[&Suite::Equal];
+        assert_eq!(
+            equal.matches, 20,
+            "a band left out by --band sets no target"
+        );
+        assert_eq!(equal.driver, None);
     }
 
     #[test]
