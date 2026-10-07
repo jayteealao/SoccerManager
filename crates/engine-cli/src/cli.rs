@@ -857,7 +857,11 @@ pub struct CalibrateOpts {
         long_help = "Compare the run with an earlier report.json, band by band.\n\n\
                      The baseline must have the same seed, match count, and\n\
                      fixtures hash, or the run stops before it plays. A change\n\
-                     inside two sampling errors is marked as noise."
+                     inside two sampling errors is marked as noise.\n\n\
+                     With --base, the match count checked is --matches, the cap.\n\
+                     The run may stop growing below it, so the diff can set the\n\
+                     baseline's matches against fewer matches of this build; each\n\
+                     side's sampling error covers its own count."
     )]
     pub baseline: Option<PathBuf>,
     /// Run folder; default SM_DATA_DIR/runs/<run.id>.
@@ -923,7 +927,9 @@ pub struct CalibrateOpts {
                      for 80 percent power to see each band's smallest shift, the\n\
                      run grows to it (at most --matches), and each band reports\n\
                      pass, fail or not sure, with one joint verdict. Needs a git\n\
-                     checkout of this repository as the working folder."
+                     checkout of this repository as the working folder.\n\n\
+                     --baseline still works here: its match count must equal\n\
+                     --matches, and its diff uses the matches this run played."
     )]
     pub base: Option<String>,
     /// A change run's pilot, in matches per suite unit; a test seam (default 200).

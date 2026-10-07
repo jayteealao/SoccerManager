@@ -399,6 +399,38 @@ fn a_failed_bench_prints_one_error_record() {
         .unwrap_or_else(|e| panic!("{e}\n{rec}"));
 }
 
+#[test]
+fn a_failed_calibrate_prints_one_error_record() {
+    // An undeclared flag stops the run before any match plays.
+    let (rec, stderr) = failed_run(
+        &[
+            "calibrate",
+            "--seed",
+            "7",
+            "--matches",
+            "2",
+            "--suite",
+            "equal",
+            "--flag",
+            "no_such_flag=on",
+        ],
+        None,
+    );
+    assert!(
+        stderr.contains("not declared in tuning.json"),
+        "stderr: {stderr}"
+    );
+    assert_eq!(rec["record.kind"], "run-report");
+    assert_eq!(rec["operation"], "calibrate");
+    assert_error_keys(&rec, "content");
+    assert_eq!(rec["error.code"], "content-refused");
+    assert_eq!(rec["error.retriable"], false);
+    assert!(rec.get("calib.bands").is_none(), "{rec}");
+    RecordSchemas::load()
+        .report(&rec)
+        .unwrap_or_else(|e| panic!("{e}\n{rec}"));
+}
+
 /// A two-match calibration run of the equal suite on one thread, with a failure injected.
 fn calibrate_with(inject: &str, extra: &[&str]) -> (std::process::Output, PathBuf, PathBuf) {
     let data = common::temp("engine-cli-inject", inject);

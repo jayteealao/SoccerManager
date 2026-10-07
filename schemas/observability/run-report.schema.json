@@ -585,7 +585,14 @@
                 "darkpath.match_without_stats",
                 "validate.violations",
                 "bench.match_wall_ms"
-              ]
+              ],
+              "properties": {
+                "calib.workers_failed": {
+                  "description": "Always 0. Matches no longer run in worker processes, so no worker can fail. The field is kept so saved reports stay readable.",
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
             }
           },
           "calib.compare": {

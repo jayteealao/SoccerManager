@@ -112,7 +112,7 @@ pub enum Builtin {
 }
 
 /// A band's measure, over the per-match fields of the field catalog
-/// ([`super::measures::FIELDS`]).
+/// ([`super::measures::SIDED`] and [`super::measures::MATCH`]).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Measure {
