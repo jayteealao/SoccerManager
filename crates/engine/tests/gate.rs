@@ -604,8 +604,9 @@ fn committed() -> GoldenFile {
 
 /// The recorded result changes: entry 2, whose reason names the maths change and the keyed
 /// split, entry 3, whose reason names the restart position check and the fixes it forced, and
-/// entry 4, whose reason names the ratings in tenths and the unchanged play. Each candidate is a clean commit, and each band result holds a verdict for each band of
-/// `content/realism-bands.json`.
+/// entry 4, whose reason names the ratings in tenths and the unchanged play, and entry 5,
+/// whose reason names the stage blend and the curve. Each candidate is a clean commit, and
+/// each band result holds a verdict for each band of `content/realism-bands.json`.
 #[test]
 fn each_result_change_is_one_regenerate_entry_with_its_band_result() {
     let file = committed();
@@ -618,13 +619,14 @@ fn each_result_change_is_one_regenerate_entry_with_its_band_result() {
         .collect();
     assert_eq!(
         regenerations,
-        [2, 3, 4],
-        "three regenerate entries, entries 2, 3 and 4"
+        [2, 3, 4, 5],
+        "four regenerate entries, entries 2 to 5"
     );
-    let named: [(usize, &[&str]); 3] = [
+    let named: [(usize, &[&str]); 4] = [
         (2, &["libm", "keyed"]),
         (3, &["restart position check", "Law 8", "goal line"]),
         (4, &["tenths", "version 2", "every tick of play unchanged"]),
+        (5, &["stage blend", "exponential curve", "1.0"]),
     ];
     for (index, words) in named {
         let entry = &file.ledger[index];
