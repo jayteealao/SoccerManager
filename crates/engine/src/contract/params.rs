@@ -412,7 +412,7 @@ impl Default for ContractTuning {
             consistency: super::consistency::ConsistencyTuning {
                 match_max: 1.0,
                 period_max: 0.75,
-                period_minutes: 15,
+                period_minutes: 10,
             },
         }
     }
