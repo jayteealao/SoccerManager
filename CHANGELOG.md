@@ -4,6 +4,10 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.2.0-beta.4] - 2026-10-08
+
+A prerelease for testers. Matches play differently from 0.2.0-beta.3 for the same seed: every action reads the players' ratings through the new attribute contract, on a scale of 1 to 20 in tenths, and a player's condition, height and age now play.
+
 ### Added
 
 - The sensitivity rules check that every attribute, and height, age and nationality, moves the match statistic its job names, by at least a set amount from rating 8 to 16 and without carrying more than its share of the result; and that a top player beats an average one in about two of three runs of five matches. The rules and their thresholds are in `content/sensitivity.json`. A small batch of the rules runs on every pull request; the full run takes about 6,400 matches and is run by hand, with the check that a job planted at zero weight fails its rule (see the calibration guide). The full run records 12 of 40 rules passing, 13 failing and 15 not sure, and the five-match figure at 0.815 against its target of about two in three: the failing rules are kept red as the work still to do in play, mostly for actions play makes rarely or not at all, such as crosses and aerial balls. The rules and the counters they read build only with the engine's `sensitivity` feature, so a normal build plays its matches without them.
