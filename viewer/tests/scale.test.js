@@ -7,7 +7,17 @@ import path from 'node:path';
 import { test } from 'vitest';
 
 import { readReplay } from '../src/lib/replay-file.js';
-import { HIDDEN_KEYS, liftHello, TENTHS_PROTOCOL, WORDS_PROTOCOL, wholeOf } from '../src/lib/scale.js';
+import {
+  bandOf,
+  HIDDEN_KEYS,
+  LEVELS_PROTOCOL,
+  liftHello,
+  ratingBand,
+  ratingText,
+  TENTHS_PROTOCOL,
+  WORDS_PROTOCOL,
+  wholeOf,
+} from '../src/lib/scale.js';
 import { REPO_ROOT } from './helpers.js';
 
 const OLD_HELLO = path.join(REPO_ROOT, 'viewer/tests/data/hello-protocol-3.json');
@@ -89,4 +99,16 @@ test('the committed version-4 replay opens with its protocol 3 hello and plays',
       }
     }
   }
+});
+
+test('the bands and the match-rating chips follow the sketch thresholds', () => {
+  assert.deepEqual([20, 15, 14, 11, 10, 7, 6, 1].map(bandOf), ['v4', 'v4', 'v3', 'v3', 'v2', 'v2', 'v1', 'v1']);
+  assert.deepEqual([8.2, 7.5, 7.4, 6.8, 6.7, 6.5, 6.4].map(ratingBand), ['a', 'a', 'b', 'b', 'c', 'c', 'd']);
+  assert.equal(ratingText(7), '7.0');
+  assert.equal(LEVELS_PROTOCOL, 6);
+});
+
+test('a protocol 6 hello is returned as it is', () => {
+  const hello = { 'protocol.version': 6, teams: [{ squad: [{ 'player.attributes': { pace: 145 }, 'player.level': 150 }] }] };
+  assert.equal(liftHello(hello), hello);
 });

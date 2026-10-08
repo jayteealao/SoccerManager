@@ -222,7 +222,7 @@ fn every_damaged_or_inconsistent_file_is_refused_by_name() {
     protocol[6..8].copy_from_slice(&9u16.to_le_bytes());
     let err = refused(&dir, "protocol.smfx", &protocol);
     assert!(
-        err.contains("frames protocol version 9; this build reads 3, 4 and 5"),
+        err.contains("frames protocol version 9; this build reads 3, 4, 5 and 6"),
         "{err}"
     );
 

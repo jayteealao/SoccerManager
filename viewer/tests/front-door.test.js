@@ -9,6 +9,7 @@ import { FLOOR_MS, FrontDoor, READY_HOLD_MS, REVEAL_MS } from '../src/lib/front-
 import {
   savedClock,
   closedModel,
+  convertedNotice,
   licenceFacts,
   savedLine,
   settingsFacts,
@@ -333,7 +334,15 @@ test('the menu pauses the match; Esc and Resume match close it and play on', asy
   session.view = 'report';
   d.closeMenu();
   d.openMenu();
-  assert.equal(d.overlay, null, 'the menu opens on the match, Tactics and Touchline views only');
+  assert.equal(d.overlay, null, 'the menu opens on the match views only, not the report');
+
+  session.view = 'squad';
+  d.openMenu();
+  assert.equal(d.overlay, 'menu', 'the Squad screen opens the menu too');
+  d.closeMenu();
+  session.view = 'player';
+  d.openMenu();
+  assert.equal(d.overlay, 'menu', 'and so does the player panel');
 });
 
 test('Settings over the paused match returns to it with the menu open', async () => {
@@ -587,4 +596,12 @@ test('at full time the quit button says Quit, since nothing is saved', async () 
   assert.equal(d.quitPrimary, 'Quit');
   const early = await finished({ ready: false });
   assert.equal(early.d.quitPrimary, 'Save and quit');
+});
+
+test('a converted team file shows its notice, and a current one shows none', () => {
+  assert.equal(convertedNotice({ name: 'Current', converted: null }), null);
+  assert.equal(convertedNotice(null), null);
+  const notice = convertedNotice({ name: 'Old Town', converted: 1 });
+  assert.equal(notice.club, 'Old Town');
+  assert.match(notice.text, /converted to the 1-20 scale/);
 });

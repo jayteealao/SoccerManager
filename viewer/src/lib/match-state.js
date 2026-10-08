@@ -80,6 +80,10 @@ function emptyView() {
     /// message at the tick; null before the first one or from an engine that sends none.
     subsUsed: null,
     windowsUsed: null,
+    /// Each wire slot's overall level now and fresh, in tenths, from the newest condition
+    /// message at the tick; null before the first one or from an engine before protocol 6.
+    level: null,
+    base: null,
   };
 }
 
@@ -166,6 +170,8 @@ export class MatchState {
     view.energyTick = c < 0 ? null : this.conditions[c].tick;
     view.subsUsed = c < 0 ? null : (this.conditions[c].subs_used ?? null);
     view.windowsUsed = c < 0 ? null : (this.conditions[c].windows_used ?? null);
+    view.level = c < 0 ? null : (this.conditions[c].level ?? null);
+    view.base = c < 0 ? null : (this.conditions[c].base ?? null);
     return view;
   }
 

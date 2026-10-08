@@ -22,6 +22,19 @@ export function teamOf(sample) {
   };
 }
 
+/// The setup notice for a home team loaded from an older team file, naming the club; null for
+/// a team of the current file version or no team. `/engine.json` marks such a team
+/// `converted`.
+export function convertedNotice(team) {
+  if (!team?.converted) {
+    return null;
+  }
+  return {
+    club: team.name,
+    text: 'an older team file. Its ratings were converted to the 1-20 scale when it loaded; nothing else changed.',
+  };
+}
+
 /// The match clock a save stopped at, `52:10`, from its tick.
 export function savedClock(saved) {
   return clockAt(saved?.tick ?? 0);

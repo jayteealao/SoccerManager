@@ -321,7 +321,7 @@ fn a_refused_pick_starts_nothing() {
     );
     assert_eq!(code, 400);
     assert!(body.contains("club-nowhere"), "{body}");
-    let (code, _) = post(&launched, "/engine/settings", &" ".repeat(5000));
+    let (code, _) = post(&launched, "/engine/settings", &" ".repeat(33_000));
     assert_eq!(code, 413);
     let (code, _) = http(
         launched.port,
@@ -582,4 +582,54 @@ fn the_settings_hold_across_launches() {
     std::fs::write(data.join("settings.json"), "{ not json").unwrap();
     let launched = launch(&data, &["--seed", "42"]);
     assert_eq!(status(launched.port)["settings"]["speed"], 1);
+}
+
+/// The squad screen's views save through the launcher, read back by club across launches,
+/// and refuse another site and a read that names no club; a damaged store starts empty.
+#[test]
+fn the_squad_views_hold_across_launches() {
+    let data = temp("views");
+    let body = r#"{"club":"club-a","active":"Mine","views":[{"name":"Mine","columns":["age","height"],"sort":{"column":"height","direction":"down"}}]}"#;
+    {
+        let launched = launch(&data, &["--seed", "42"]);
+        let (code, read) = http(launched.port, "GET", "/engine/views?club=club-a", false, "");
+        assert_eq!(code, 200, "{read}");
+        assert_eq!(
+            serde_json::from_str::<Value>(&read).unwrap(),
+            serde_json::json!({"views": [], "ratings": {}})
+        );
+        let (code, _) = http(launched.port, "GET", "/engine/views", false, "");
+        assert_eq!(code, 400, "a read names a club");
+        let (code, _) = http(launched.port, "POST", "/engine/views", false, body);
+        assert_eq!(code, 403, "another site may not save");
+        let (code, refused) = post(
+            &launched,
+            "/engine/views",
+            r#"{"club":"club-a","views":[{"name":"A","columns":[]}]}"#,
+        );
+        assert_eq!(code, 400);
+        assert!(refused.contains("has no columns"), "{refused}");
+        let (code, saved) = post(&launched, "/engine/views", body);
+        assert_eq!(code, 202, "{saved}");
+        assert!(data.join("views.json").is_file());
+    }
+    let launched = launch(&data, &["--seed", "42"]);
+    let (code, read) = http(launched.port, "GET", "/engine/views?club=club-a", false, "");
+    assert_eq!(code, 200);
+    let read: Value = serde_json::from_str(&read).unwrap();
+    assert_eq!(read["active"], "Mine");
+    assert_eq!(
+        read["views"][0]["columns"],
+        serde_json::json!(["age", "height"])
+    );
+    assert_eq!(read["views"][0]["sort"]["direction"], "down");
+    drop(launched);
+    std::fs::write(data.join("views.json"), "{ not json").unwrap();
+    let launched = launch(&data, &["--seed", "42"]);
+    let (code, read) = http(launched.port, "GET", "/engine/views?club=club-a", false, "");
+    assert_eq!(code, 200);
+    assert_eq!(
+        serde_json::from_str::<Value>(&read).unwrap()["views"],
+        serde_json::json!([])
+    );
 }

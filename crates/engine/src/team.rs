@@ -87,6 +87,9 @@ pub struct Team {
     pub player_ids: Vec<String>,
     /// Every player's display name in the team file, in file order (the squad index).
     pub player_names: Vec<String>,
+    /// Every player's nationality in the team file (three upper-case letters), in file order;
+    /// `None` where the file gives none. Shown on the page only; play never reads it.
+    pub player_nationalities: Vec<Option<String>>,
     /// The squad, in file order.
     pub squad: Vec<SquadPlayer>,
     /// The squad index of the player in each formation slot.
@@ -118,6 +121,7 @@ impl Team {
             kit,
             player_ids: Vec::new(),
             player_names: Vec::new(),
+            player_nationalities: Vec::new(),
             squad: Vec::new(),
             lineup: std::array::from_fn(|slot| slot),
             bench: Vec::new(),
@@ -170,6 +174,7 @@ impl Team {
         );
         team.player_ids = file.players.iter().map(|p| p.id.clone()).collect();
         team.player_names = file.players.iter().map(|p| p.name.clone()).collect();
+        team.player_nationalities = file.players.iter().map(|p| p.nationality.clone()).collect();
         let blend = crate::contract::stages::Blend::of(schema);
         team.squad = file
             .players

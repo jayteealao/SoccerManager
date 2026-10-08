@@ -651,6 +651,7 @@ The engine writes these files to the data folder. The data folder is `SM_DATA_DI
 | `owner.id` | every command, once | 32 hexadecimal characters that name the owner of every match on this machine |
 | `engine.port` | `serve`, while it serves a match | the socket port, as one line |
 | `settings.json` | `launch`, when the player saves the settings | the player's three settings; see below |
+| `views.json` | `launch`, when the player saves a squad view, and when the Squad screen first reads a club after a match | each club's named squad views and its players' last ten match ratings; see below |
 | `matches/<match.id>/events.jsonl` | `simulate`, `serve`, `resume` | one match event per line, as the `match-event` record |
 | `matches/<match.id>/stats.json` | `simulate`, `serve`, `resume` | the statistics of the match, as the `match-stats` record |
 | `matches/<match.id>/snapshot.smsn` | `simulate`, `serve` | the newest snapshot of the match; `resume` and `serve --resume` read it |
@@ -712,6 +713,25 @@ The start screen's Resume continues the newest match folder that holds a `snapsh
 | `commentary` | whether the match screen shows the commentary column | `true` |
 
 A missing file gives the defaults. A file that does not read, has another field, or holds a value outside the table gives the defaults and logs the `launch.settings_refused` signal; the launcher refuses the same values from the page with the reason. The launcher writes the file through a temporary file, so a crash never leaves half of one.
+
+### The views file
+
+`views.json` holds the named views of the Squad screen, by club id, and the match ratings its Rating column averages. Like the settings, it lives in the data folder so the views outlast the page's port. Under `serve --web` or `replay --web` nothing is written; the page keeps its views for the session.
+
+| Field | Values |
+|---|---|
+| `schema_version` | 1 |
+| `clubs` | an object from club id to that club's part |
+
+Each club's part:
+
+| Field | Values |
+|---|---|
+| `active` | the name of the view the screen opens on, or null for the first |
+| `views` | at most 20 views, each `name` (1 to 40 characters), `columns` (1 to 64 column ids, in order; the No and Player columns are always shown and never listed) and `sort` (`{"column", "direction"}` with direction `up` or `down`, or null) |
+| `ratings` | from player id to his newest 10 match ratings, oldest first, each `{"match", "rating"}` with the rating from 1.0 to 10.0 |
+
+The launcher adds the ratings of the home side of the last match it ran, read from that match's `stats.json`, when the page next reads the club, once per match. Saving views keeps the club's ratings. A column id the page does not know is dropped when the page reads it, so a view from a later release still opens. A missing file is empty. A file that does not read, has another field, or breaks a limit is read as empty and logs the `launch.views_refused` signal; the launcher refuses the same values from the page with the reason. The launcher writes the file through a temporary file.
 
 ### The matchday bug report
 

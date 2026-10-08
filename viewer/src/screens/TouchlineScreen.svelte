@@ -26,7 +26,7 @@
     { id: 'match', label: 'Match' },
     { id: 'touchline', label: 'Touchline', active: true },
     { id: 'tactics', label: 'Tactics', menu: true },
-    { id: 'squad', label: 'Squad', menu: true, stub: true },
+    { id: 'squad', label: 'Squad', menu: true },
     { id: 'stats', label: 'Stats', menu: true, stub: true },
     { id: 'analysis', label: 'Analysis', menu: true, stub: true },
     { id: 'other-grounds', label: 'Other grounds', menu: true, stub: true },
@@ -84,7 +84,7 @@
   onaction={() => session.act()}
   busy={session.actionBusy}
   tabs={TABS}
-  ontab={(id) => session.show(id)}
+  ontab={(id) => (id === 'squad' ? session.openSquad() : session.show(id))}
   menu={session.onMenu}
   menuOpen={session.menuOpen}
 >

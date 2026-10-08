@@ -23,13 +23,14 @@
 import { liftHello } from './scale.js';
 
 /// The protocol version of the frames this page receives and writes.
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 /// The frame protocols this page reads from a file. Protocol 4 changed only the scale of the
-/// hello's ratings, and protocol 5 only the hello's squad entries and one added message, so a
-/// protocol 3 or 4 file still plays; its hello is lifted when read (`liftHello`).
-export const READS_PROTOCOLS = Object.freeze([3, 4, 5]);
+/// hello's ratings, protocol 5 only the hello's squad entries and one added message, and
+/// protocol 6 only optional fields, so a protocol 3, 4 or 5 file still plays; its hello is
+/// lifted when read (`liftHello`).
+export const READS_PROTOCOLS = Object.freeze([3, 4, 5, 6]);
 
-/// The protocols this page reads, as words: "3, 4 and 5".
+/// The protocols this page reads, as words: "3, 4, 5 and 6".
 function readsWords() {
   return `${READS_PROTOCOLS.slice(0, -1).join(', ')} and ${READS_PROTOCOLS.at(-1)}`;
 }

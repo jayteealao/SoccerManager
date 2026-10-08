@@ -419,8 +419,10 @@ pub(crate) fn stats_message(sim: &Simulation) -> Stats {
     }
 }
 
-/// Every wire slot's energy at the current tick, home first, three decimals.
+/// Every wire slot's energy at the current tick, home first, three decimals, with each
+/// slot's overall level now and fresh in tenths ([`Simulation::overall_levels`]).
 pub(crate) fn condition_message(sim: &Simulation) -> Condition {
+    let (level, base) = sim.overall_levels();
     Condition {
         tick: sim.tick(),
         energy: sim
@@ -430,6 +432,8 @@ pub(crate) fn condition_message(sim: &Simulation) -> Condition {
             .collect(),
         subs_used: sim.ledgers().map(|l| l.used),
         windows_used: sim.ledgers().map(|l| l.windows),
+        level,
+        base,
     }
 }
 
@@ -440,7 +444,10 @@ pub(crate) fn condition_message(sim: &Simulation) -> Condition {
 /// player's fit to every role, and the computer manager's setup to start the editor from.
 pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
     let config = sim.config();
-    let fitness = config.attributes.index("natural_fitness");
+    let schema = &config.attributes;
+    let fitness = schema.index("natural_fitness");
+    let build = schema.index("strength").zip(schema.index("balance"));
+    let jobs = &config.tuning.contract.body;
     let mut index = 0usize;
     sim.teams().map(|team| {
         let editable = page_lineup && index == HOME;
@@ -449,7 +456,8 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
             team.squad
                 .iter()
                 .enumerate()
-                .map(|(s, player)| SquadEntry {
+                .map(|(s, player)| (s, player, sim.squad_level_range(HOME, s)))
+                .map(|(s, player, range)| SquadEntry {
                     id: team.player_ids[s].clone(),
                     name: team.player_names[s].clone(),
                     shirt: player.shirt,
@@ -470,6 +478,29 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
                             (fit * 10.0).round().clamp(0.0, 200.0) as u8
                         })
                         .collect(),
+                    // Visible attributes only: a hidden value never leaves as a number.
+                    attributes: schema
+                        .attributes
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, def)| !def.hidden)
+                        .map(|(i, def)| (def.name.clone(), player.attributes.get(i).tenths()))
+                        .collect(),
+                    height: player.body.height_cm,
+                    age: player.body.age,
+                    nationality: team.player_nationalities.get(s).cloned().flatten(),
+                    build: build.map(|(st, ba)| {
+                        jobs.build_word(
+                            player.attributes.get(st).decimal(),
+                            player.attributes.get(ba).decimal(),
+                        )
+                        .to_string()
+                    }),
+                    condition: Some((player.start_energy * 100.0).round().clamp(0.0, 100.0) as u8),
+                    sharpness: player.condition.sharpness,
+                    matches_at_club: player.condition.matches_at_club,
+                    level: Some(range[1]),
+                    plays_between: Some(range),
                 })
                 .collect()
         } else {
@@ -1053,7 +1084,37 @@ mod tests {
                 assert_eq!(hidden.confidence, Confidence::NotYetKnown, "{entry:?}");
                 assert_eq!(hidden.word, None, "{entry:?}");
             }
+            // Protocol 6: every visible attribute in tenths, no hidden one; the shipped teams
+            // are version 1 files, so a value may sit under the 1.0 floor (2 to 8 tenths).
+            let schema = &sim.config().attributes;
+            let visible = schema.attributes.iter().filter(|d| !d.hidden).count();
+            assert_eq!(entry.attributes.len(), visible, "{entry:?}");
+            assert!(
+                entry.attributes.values().all(|&t| (2..=200).contains(&t)),
+                "{entry:?}"
+            );
+            assert!(!entry.attributes.contains_key("consistency"));
+            assert!(!entry.attributes.contains_key("injury_proneness"));
+            // A version 1 file carries no body; the build word derives from the attributes.
+            assert_eq!(
+                (entry.height, entry.age, entry.nationality.as_deref()),
+                (None, None, None)
+            );
+            assert!(
+                matches!(
+                    entry.build.as_deref(),
+                    Some("slight" | "athletic" | "powerful")
+                ),
+                "{entry:?}"
+            );
+            assert_eq!(entry.condition, Some(100), "no rest days: fresh");
+            assert_eq!((entry.sharpness, entry.matches_at_club), (None, None));
+            let level = entry.level.expect("a level");
+            assert!((10..=200).contains(&level), "{entry:?}");
+            // No condition inputs: today's level is the fresh one.
+            assert_eq!(entry.plays_between, Some([level, level]), "{entry:?}");
         }
+        assert_eq!(protocol::PROTOCOL_VERSION, 6);
         let setup = teams[HOME]
             .setup
             .as_ref()
@@ -1092,6 +1153,55 @@ mod tests {
             )
         );
         assert_eq!(subs.windows_exempt, ["half_time"]);
+    }
+
+    /// The condition message carries each slot's overall level now and fresh; a player who
+    /// tires late in a seeded match plays below his fresh level, and the levels read the match
+    /// without moving it.
+    #[test]
+    fn the_condition_message_carries_levels_and_a_tired_player_falls_below_base() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let config = MatchConfig::new(42, 90, &loaded.content, [a, b]).unwrap();
+        let mut sim = Simulation::new(config).unwrap();
+        let mut twin =
+            Simulation::new(MatchConfig::new(42, 90, &loaded.content, [a, b]).unwrap()).unwrap();
+        let first = condition_message(&sim);
+        assert_eq!(first.level.len(), 22);
+        assert_eq!(first.base.len(), 22);
+        assert_eq!(
+            first.level, first.base,
+            "fresh at kick-off with no condition inputs"
+        );
+        let minute_75 = (75.0 * 60.0 / sim.tuning().dt).round() as u32;
+        for _ in 0..minute_75 {
+            sim.step();
+            twin.step();
+            if sim.tick().is_multiple_of(20) {
+                let _ = condition_message(&sim);
+            }
+        }
+        let late = condition_message(&sim);
+        assert!(
+            late.level.iter().zip(&late.base).any(|(l, b)| l < b),
+            "someone has tired by minute 75: {:?} against {:?}",
+            late.level,
+            late.base
+        );
+        assert!(
+            late.level
+                .iter()
+                .chain(&late.base)
+                .all(|t| (2..=200).contains(t)),
+            "tenths of 1 to 20"
+        );
+        // Reading the levels changed nothing: the same match without the reads is at the
+        // same state.
+        assert_eq!(sim.players().len(), twin.players().len());
+        for (p, q) in sim.players().iter().zip(twin.players()) {
+            assert_eq!(p.pos, q.pos);
+            assert_eq!(p.energy.to_bits(), q.energy.to_bits());
+        }
     }
 
     /// Keeps the tick and kind of every stoppage the match opened.
@@ -1722,6 +1832,13 @@ mod tests {
         assert_eq!(
             hidden_leaks(&planted, &hidden, "hello").as_deref(),
             Some("hello[0].squad[0].player.consistency")
+        );
+        // A hidden value planted among the protocol 6 attributes is caught too.
+        let mut planted = hello.clone();
+        planted[0]["squad"][0]["player.attributes"]["injury_proneness"] = serde_json::json!(120);
+        assert_eq!(
+            hidden_leaks(&planted, &hidden, "hello").as_deref(),
+            Some("hello[0].squad[0].player.attributes.injury_proneness")
         );
 
         let Some(ServerMessage::Ratings(ratings)) = messages.last() else {

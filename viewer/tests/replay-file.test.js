@@ -243,8 +243,8 @@ test('a loaded version-4 file saved the way the viewer saves it keeps its protoc
 
 test('writing refuses a protocol version that is not one this page reads', async () => {
   const read = await readReplay(golden());
-  assert.equal(PROTOCOL_VERSION, 5);
-  for (const version of [0, 2, 6, 9]) {
+  assert.equal(PROTOCOL_VERSION, 6);
+  for (const version of [0, 2, 7, 9]) {
     await assert.rejects(
       writeReplay(read.store, { matchId: read.hello['match.id'], version }),
       (error) => error.reason.includes('protocol version')

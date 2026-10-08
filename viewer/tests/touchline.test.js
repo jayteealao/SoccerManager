@@ -9,6 +9,7 @@ import { test } from 'vitest';
 import { MatchState } from '../src/lib/match-state.js';
 import {
   benchRows,
+  levelCell,
   NO_PICK,
   pickDetail,
   pickKey,
@@ -118,4 +119,11 @@ test('the strip names the ball state, the next stoppage and the counts', () => {
   const stopped = touchlineFacts({ score: [0, 0], clock: '10:00', play: { stopped: true, nextIn: null }, subsUsed: 0, windowsUsed: 0, limit: 5, windows: 3, mentality: 'Positive' });
   assert.equal(stopped[0].value, 'Play stopped');
   assert.equal(stopped[0].label, 'Queued changes apply at the next stoppage');
+});
+
+test('the level reads now of fresh when below, an equals sign when not, and a dash when unknown', () => {
+  assert.deepEqual([levelCell(126, 150).text, levelCell(126, 150).below, levelCell(126, 150).tone], ['13 of 15', true, 'warn']);
+  assert.equal(levelCell(150, 150).text, '=');
+  assert.equal(levelCell(146, 150).text, '=', 'the same whole number is no change');
+  assert.equal(levelCell(undefined, 150).text, '—');
 });

@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
-import { fetchEarlierEvents, newMatch, resume } from '../src/lib/launcher.js';
+import { fetchEarlierEvents, newMatch, readViews, resume, saveViews } from '../src/lib/launcher.js';
 
 function answering(status, body) {
   return async () => ({
@@ -43,4 +43,21 @@ test('the earlier events are the launcher list, and empty when nothing answers',
     }),
     [],
   );
+});
+
+test('the squad views read by club and a refused save hands its reason on', async () => {
+  const seen = [];
+  const fetcher = async (url, init = {}) => {
+    seen.push([url, init.method ?? 'GET', init.body ?? null]);
+    return { ok: true, status: 200, json: async () => ({ active: 'Default', views: [], ratings: {} }) };
+  };
+  assert.deepEqual(await readViews(fetcher, 'north end'), { active: 'Default', views: [], ratings: {} });
+  await saveViews(fetcher, 'north end', { active: 'Mine', views: [] });
+  assert.deepEqual(seen[0].slice(0, 2), ['engine/views?club=north%20end', 'GET']);
+  assert.deepEqual(seen[1].slice(0, 2), ['engine/views', 'POST']);
+  assert.deepEqual(JSON.parse(seen[1][2]), { club: 'north end', active: 'Mine', views: [] });
+  let reason = null;
+  assert.equal(await saveViews(answering(400, 'too many views\n'), 'a', { views: [] }, (t) => (reason = t)), null);
+  assert.equal(reason, 'too many views');
+  assert.equal(await readViews(answering(400, 'no'), 'a'), null);
 });

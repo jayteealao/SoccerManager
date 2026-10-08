@@ -27,6 +27,8 @@ pub struct Club {
     pub digest: [u8; 32],
     /// The file the club was loaded from.
     pub path: PathBuf,
+    /// The version the file was written in, when it was older and converted on load.
+    pub converted_from: Option<u32>,
 }
 
 /// One background match.
@@ -178,6 +180,7 @@ pub(crate) fn club_files(dir: &ContentDir, content: &Content) -> Vec<Club> {
             Ok(loaded) => clubs.push(Club {
                 file: loaded.value,
                 digest: loaded.digest,
+                converted_from: loaded.converted_from,
                 path,
             }),
             Err(err) => {

@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 
 use engine::data::hex12;
 use engine::{AppliedChange, Change, Manager, RoleDuty, Simulation, TacticsPatch};
-use protocol::{Frame, PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_VERSION, TickFrame};
+use protocol::{Frame, PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_V5, PROTOCOL_VERSION, TickFrame};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -45,8 +45,9 @@ pub const FORMAT_VERSION: u16 = 4;
 /// hello's ratings, so a file of protocol 3 frames still decodes; a reader that shows those
 /// ratings doubles them. Protocol 5 changed only the hello's squad entries and added one
 /// message, so a file of protocol 4 frames still decodes; a reader shows its hidden values as
-/// not yet known.
-pub const READS_PROTOCOLS: [u16; 3] = [PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_VERSION];
+/// not yet known. Protocol 6 only added optional fields, so a file of protocol 5 frames still
+/// decodes; a reader shows the fields it lacks as unknown.
+pub const READS_PROTOCOLS: [u16; 4] = [PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_V5, PROTOCOL_VERSION];
 /// Header offset of the frame count.
 const FRAMES_AT: u64 = 16;
 /// A binary tick frame.
@@ -695,8 +696,8 @@ fn decode_entries(raw: RawReplay, format: u16) -> Result<Fixture, StreamError> {
     };
     if !READS_PROTOCOLS.contains(&protocol_version) {
         return Err(refuse(format!(
-            "frames protocol version {protocol_version}; this build reads {}, {} and {}",
-            READS_PROTOCOLS[0], READS_PROTOCOLS[1], READS_PROTOCOLS[2]
+            "frames protocol version {protocol_version}; this build reads {}, {}, {} and {}",
+            READS_PROTOCOLS[0], READS_PROTOCOLS[1], READS_PROTOCOLS[2], READS_PROTOCOLS[3]
         )));
     }
     let mut frames = Vec::with_capacity(raw.entries.len());

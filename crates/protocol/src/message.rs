@@ -2,6 +2,8 @@
 //! positions travel as binary frames instead (see `frame.rs`). Every payload refuses an
 //! unknown field, so a viewer built against a later protocol cannot be misread as this one.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::command::{Ack, Reject};
@@ -69,6 +71,81 @@ pub struct SquadEntry {
     /// How well the player fits each role in tenths of the 1 to 20 scale (0 to 200), one value
     /// per role in the order of the hello's `tactics.roles`.
     pub role_fit: Vec<u8>,
+    /// Every visible attribute in tenths of the 1 to 20 scale, by its name in the attribute
+    /// file. A hidden value is never listed. Protocol 6; an older hello carries none.
+    #[serde(
+        rename = "player.attributes",
+        default,
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    pub attributes: BTreeMap<String, u8>,
+    /// Height in centimetres, when the team file gives it.
+    #[serde(
+        rename = "player.height",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub height: Option<u8>,
+    /// Age in years, when the team file gives it.
+    #[serde(
+        rename = "player.age",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub age: Option<u8>,
+    /// Nationality, three upper-case letters, when the team file gives it.
+    #[serde(
+        rename = "player.nationality",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub nationality: Option<String>,
+    /// The build word key (`slight`, `athletic` or `powerful`), derived from the attributes and
+    /// never stored in a team file. Absent when the schema lacks the attributes it reads.
+    #[serde(
+        rename = "player.build",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub build: Option<String>,
+    /// His energy at kick-off from his days of rest, in percent (100 when none are given).
+    #[serde(
+        rename = "player.condition",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub condition: Option<u8>,
+    /// Match sharpness in percent, when the team file gives it.
+    #[serde(
+        rename = "player.sharpness",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub sharpness: Option<u8>,
+    /// Matches he has played for the club, when the team file gives it. The confidence of
+    /// the hidden words is read from it.
+    #[serde(
+        rename = "player.matches_at_club",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub matches_at_club: Option<u16>,
+    /// His overall level fresh, in tenths of the 1 to 20 scale: the mean of the visible
+    /// attributes of the groups his position plays.
+    #[serde(
+        rename = "player.level",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub level: Option<u8>,
+    /// The range his overall level plays in, in tenths: from his level with today's condition
+    /// inputs (sharpness, adaptation) to his fresh level. A hidden value never moves it.
+    #[serde(
+        rename = "player.plays_between",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub plays_between: Option<[u8; 2]>,
 }
 
 /// A hidden value as the club knows it. `word` is a lower-case key (for example
@@ -301,6 +378,14 @@ pub struct Condition {
     /// Substitution windows each team has used, home first.
     #[serde(default)]
     pub windows_used: [u8; 2],
+    /// Each wire slot's overall level now, in tenths of the 1 to 20 scale: the mean of the
+    /// visible attributes of the groups his position plays, as his states move them. A hidden
+    /// value never moves it. Protocol 6; an older message carries none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub level: Vec<u8>,
+    /// Each wire slot's overall level fresh, in tenths, beside `level`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub base: Vec<u8>,
 }
 
 /// A queued change that the stoppage now opening takes. It is not a match event: it is sent
@@ -659,6 +744,16 @@ mod tests {
                             confidence: Confidence::Tentative,
                         },
                         role_fit: vec![160, 24],
+                        attributes: BTreeMap::from([("pace".to_string(), 142)]),
+                        height: Some(188),
+                        age: Some(24),
+                        nationality: Some("ENG".into()),
+                        build: Some("athletic".into()),
+                        condition: Some(100),
+                        sharpness: Some(90),
+                        matches_at_club: Some(9),
+                        level: Some(130),
+                        plays_between: Some([124, 130]),
                     }],
                     setup: Some(TeamSetup {
                         lineup: (0..11).collect(),
@@ -827,6 +922,8 @@ mod tests {
                 energy: vec![0.998; 22],
                 subs_used: [2, 0],
                 windows_used: [1, 0],
+                level: vec![130; 22],
+                base: vec![132; 22],
             }),
             ServerMessage::Ack(Ack {
                 command: "queue-change".into(),
@@ -945,6 +1042,8 @@ mod tests {
             energy: vec![1.0, 0.5],
             subs_used: [1, 0],
             windows_used: [1, 0],
+            level: Vec::new(),
+            base: Vec::new(),
         }))
         .unwrap();
         assert_eq!(

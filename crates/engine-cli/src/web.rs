@@ -24,7 +24,7 @@ use anyhow::Context;
 const MAX_REQUEST_BYTES: u64 = 8 * 1024;
 /// The largest POST body an action may carry. The bodies are a team pair or three settings;
 /// a larger one is refused before any of it is read.
-pub const MAX_BODY_BYTES: usize = 4 * 1024;
+pub const MAX_BODY_BYTES: usize = 32 * 1024;
 /// The most connections served at once. A page load asks for about twenty files; a client
 /// that opens many more and sends nothing must not pile up threads in the process.
 const MAX_CONNECTIONS: usize = 64;
@@ -56,6 +56,9 @@ const RESUME: &str = "/engine/resume";
 const STOP: &str = "/engine/stop";
 const QUIT: &str = "/engine/quit";
 const SETTINGS: &str = "/engine/settings";
+/// The squad screen's store: a POST saves one club's named views; a GET with `?club=<id>`
+/// reads that club's views and match ratings.
+const VIEWS: &str = "/engine/views";
 /// A read-only question besides `/engine.json`: the round match setup would form.
 const ROUND: &str = "/engine/round";
 /// A read-only question besides `/engine.json`: the events a resumed match played before
@@ -80,6 +83,8 @@ pub enum Action {
     Quit,
     /// Save the player's settings (the body).
     Settings(String),
+    /// Save one club's named views (the body: `{"club", "active", "views"}`).
+    Views(String),
 }
 
 /// Where `/engine.json` comes from, and who answers the actions.
@@ -97,6 +102,11 @@ pub trait Status: Send + Sync {
     /// The events a resumed match played up to its save, as a JSON array in tick order (empty
     /// for a match that was not resumed); `None` when this server resumes no matches.
     fn earlier_events(&self) -> Option<String> {
+        None
+    }
+    /// One club's named views and its players' match ratings, as JSON; `None` when this
+    /// server keeps no store.
+    fn views(&self, _club: &str) -> Option<String> {
         None
     }
 }
@@ -266,7 +276,9 @@ fn answer(
     let method = parts.next().unwrap_or_default().to_string();
     let target = parts.next().unwrap_or_default().to_string();
     let path = target.split(['?', '#']).next().unwrap_or_default();
-    let posts = [RESTART, ABANDON, NEW_MATCH, RESUME, STOP, QUIT, SETTINGS];
+    let posts = [
+        RESTART, ABANDON, NEW_MATCH, RESUME, STOP, QUIT, SETTINGS, VIEWS,
+    ];
     if method == "POST" && posts.contains(&path) {
         // Only the page this server serves may ask. A page on any other site sends its own
         // origin, or none, and is refused before anything happens.
@@ -296,6 +308,7 @@ fn answer(
             STOP => Action::Stop,
             QUIT => Action::Quit,
             SETTINGS => Action::Settings(text.unwrap_or_default()),
+            VIEWS => Action::Views(text.unwrap_or_default()),
             _ => Action::NewMatch(text),
         };
         return match status.act(action) {
@@ -351,6 +364,35 @@ fn answer(
                 write_response(&mut stream, 400, "text/plain", reason.as_bytes(), head_only)
             }
             None => write_response(&mut stream, 404, "text/plain", b"not found", head_only),
+        };
+    }
+
+    if path == VIEWS {
+        let query = target.split_once('?').map_or("", |(_, q)| q);
+        let club = query
+            .split('&')
+            .filter_map(|pair| pair.split_once('='))
+            .find(|(k, _)| *k == "club")
+            .map(|(_, v)| percent_decode(v))
+            .unwrap_or_default();
+        if club.trim().is_empty() {
+            return write_response(&mut stream, 400, "text/plain", b"name a club", head_only);
+        }
+        return match status.views(&club) {
+            Some(body) => write_response(
+                &mut stream,
+                200,
+                "application/json; charset=utf-8",
+                body.as_bytes(),
+                head_only,
+            ),
+            None => write_response(
+                &mut stream,
+                405,
+                "text/plain",
+                b"this engine keeps no views; start it with engine-cli launch",
+                head_only,
+            ),
         };
     }
 

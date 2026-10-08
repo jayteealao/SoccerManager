@@ -115,7 +115,17 @@ pub use message::{
 /// time, after the closing statistics. The tick frames are unchanged. A reader of an older
 /// replay shows both hidden values as not yet known: no old figure is ever turned into a
 /// word.
-pub const PROTOCOL_VERSION: u16 = 5;
+///
+/// Version 6 sends what the squad and player screens show: a squad entry gains
+/// `player.attributes` (every visible attribute in tenths, by name), `player.height`,
+/// `player.age`, `player.nationality`, `player.build` (a word key derived from the
+/// attributes), `player.condition` and `player.sharpness` (percent), `player.matches_at_club`,
+/// `player.level` (the overall level fresh, in tenths) and `player.plays_between` (the range,
+/// in tenths, from today's condition to fresh). The `condition` message gains `level` and
+/// `base`, each wire slot's overall level now and fresh. Every added field is optional, so an
+/// older message still reads; no field was removed and the tick frames are unchanged. A hidden
+/// value is never part of a level.
+pub const PROTOCOL_VERSION: u16 = 6;
 
 /// The protocol version before ratings moved to tenths. Replay readers still read its
 /// frames; a hello of this version carries ratings on the 1 to 100 scale.
@@ -125,6 +135,11 @@ pub const PROTOCOL_V3: u16 = 3;
 /// `player.injury_resistance` in tenths and no hidden word. Replay readers still read its
 /// frames.
 pub const PROTOCOL_V4: u16 = 4;
+
+/// The protocol version before the squad and player screens: a squad entry carries no
+/// attributes, body fields or levels, and the `condition` message no levels. Replay readers
+/// still read its frames.
+pub const PROTOCOL_V5: u16 = 5;
 
 /// Errors this crate returns.
 #[derive(Debug, Error)]
@@ -235,6 +250,16 @@ pub const MESSAGES: &[MessageSpec] = &[
             "player.injury_proneness",
             "word",
             "confidence",
+            "player.attributes",
+            "player.height",
+            "player.age",
+            "player.nationality",
+            "player.build",
+            "player.condition",
+            "player.sharpness",
+            "player.matches_at_club",
+            "player.level",
+            "player.plays_between",
             "knockout",
             "ground.length",
             "ground.width",
@@ -311,7 +336,14 @@ pub const MESSAGES: &[MessageSpec] = &[
         name: "condition",
         direction: Direction::ServerToClient,
         encoding: Encoding::JsonText,
-        fields: &["tick", "energy", "subs_used", "windows_used"],
+        fields: &[
+            "tick",
+            "energy",
+            "subs_used",
+            "windows_used",
+            "level",
+            "base",
+        ],
     },
     MessageSpec {
         name: "change-state",
@@ -556,6 +588,8 @@ mod tests {
                 energy: Vec::new(),
                 subs_used: [0; 2],
                 windows_used: [0; 2],
+                level: Vec::new(),
+                base: Vec::new(),
             }),
             ServerMessage::Ack(Ack {
                 command: String::new(),

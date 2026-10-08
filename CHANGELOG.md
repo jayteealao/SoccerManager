@@ -6,6 +6,10 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 
 ### Added
 
+- A Squad screen lists the whole squad in a table: age, nationality, height, condition, sharpness, attributes as whole numbers 1 to 20 in their colour bands, the hidden values in words, and the match rating averages over the last 3 and 10 matches. Select a header to sort, and a second time to reverse. Columns can be added, removed and reordered by dragging or with the keyboard, and saved as named views that the launcher keeps between launches.
+- Selecting a player opens his panel: his attributes by group, the hidden values in words with how sure the club is, his body and age in words, the range his level plays between today, and his match ratings.
+- The Touchline's player state shows each player's level now against his level fresh, such as 13 of 15 when tiredness has taken him down.
+- Match setup notes when a club's team file is an older one whose ratings were converted to the 1 to 20 scale as it loaded.
 - Every player who played gets a match rating from 1.0 to 10.0 at full time, from what he did in the match: goals, shots, passes, tackles, saves, cards, and his side's result and clean sheet. The match record lists the ratings, and the live stream sends them after the closing statistics.
 
 ### Changed
@@ -33,6 +37,8 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 - The attribute file is version 3 and the tuning file version 5. A version 1 team file converts injury resistance to injury proneness (21.0 less the resistance) and gives every player consistency 10.0. Older files of both convert as they load, so old replays still play.
 - The pre-match sheet's Risk column reads the injury-proneness word, and shows Not known for a player with no matches at the club.
 - The match stream protocol is version 5: a squad entry carries the hidden values as words in place of the injury-resistance figure. Replays recorded in versions 3 and 4 still open, with both hidden values shown as not yet known.
+- The match stream protocol is version 6: a squad entry carries the player's visible attributes, height, age, nationality, build, condition, sharpness, matches for the club and his level, and the condition message each player's level now and fresh. Replays recorded in versions 3, 4 and 5 still open; their Squad screen shows what those versions sent. Matches play exactly as before.
+- A request to the launcher may now carry up to 32 KiB.
 
 ## [0.2.0-beta.3] - 2026-10-05
 

@@ -23,6 +23,7 @@ pub mod body;
 pub mod consistency;
 pub mod curve;
 pub mod hidden;
+pub mod level;
 pub mod params;
 pub mod stages;
 pub mod states;

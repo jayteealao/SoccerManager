@@ -18,6 +18,7 @@ use sha2::{Digest, Sha256};
 
 use crate::ai::{AiCode, AiState, Manager};
 use crate::ball::Ball;
+use crate::contract::level::overall_level;
 use crate::data::attributes::AttributeSchema;
 use crate::data::rules::{RulePack, StoppageKind};
 use crate::data::tactics::TacticsSchema;
@@ -870,6 +871,49 @@ impl Simulation {
         crate::contract::states::effective(&p.attributes, &self.config.attributes, p.deltas)
     }
 
+    /// Every wire slot's overall level now and fresh, in tenths of the 1 to 20 scale, home
+    /// first: `(now, fresh)`. Now reads his state-moved ratings ([`Self::effective_ratings`]),
+    /// fresh his base ratings; both through [`overall_level`]. Reads the match and writes
+    /// nothing, so no tick and no digest changes.
+    pub fn overall_levels(&self) -> (Vec<u8>, Vec<u8>) {
+        let schema = &self.config.attributes;
+        (0..self.players.len())
+            .map(|i| {
+                let p = &self.players[i];
+                let position = self.teams[p.team].squad[p.squad].position;
+                (
+                    overall_level(&self.effective_ratings(i), schema, position),
+                    overall_level(&p.attributes, schema, position),
+                )
+            })
+            .unzip()
+    }
+
+    /// Squad player `squad` of team `team`: his overall level with his match condition inputs
+    /// (sharpness on the technical group, adaptation on the mental group, capped as in play)
+    /// and fresh, in tenths: `[today, fresh]`. Reads the squad entry only; it writes nothing.
+    /// A hidden value never moves it.
+    pub fn squad_level_range(&self, team: usize, squad: usize) -> [u8; 2] {
+        use crate::contract::body::BodyJobs;
+        use crate::contract::states::{self, GROUP_COUNT};
+        use crate::data::attributes::Group;
+        use crate::modules::modifier::{FAMILY_COUNT, Family};
+        let entry = &self.teams[team].squad[squad];
+        let schema = &self.config.attributes;
+        let body = &self.config.tuning.contract.body;
+        let mut families = [[0.0; GROUP_COUNT]; FAMILY_COUNT];
+        families[Family::Body as usize][Group::Technical as usize] =
+            BodyJobs::drop(&body.sharpness, entry.condition.sharpness);
+        families[Family::Mind as usize][Group::Mental as usize] =
+            BodyJobs::drop(&body.adaptation, entry.condition.adaptation);
+        let deltas = states::capped(families, &self.config.tuning.contract.states);
+        let today = states::effective(&entry.attributes, schema, deltas);
+        [
+            overall_level(&today, schema, entry.position),
+            overall_level(&entry.attributes, schema, entry.position),
+        ]
+    }
+
     /// Player `i`'s match condition inputs, from his squad entry.
     #[inline]
     pub fn condition(&self, i: usize) -> crate::data::team::Condition {
@@ -1374,6 +1418,47 @@ pub(crate) fn wide_of_goal(ball: DVec2, own_goal_x: f64) -> DVec2 {
 mod tests {
     use super::*;
     use crate::data::test_support::shipped_config;
+
+    /// The overall level is the mean of the visible attributes of the groups the position
+    /// plays: a keeper's goalkeeping, mental and physical; an outfield player's technical,
+    /// mental and physical. A hidden value never counts.
+    #[test]
+    fn the_overall_level_reads_the_groups_the_position_plays_and_no_hidden_value() {
+        use crate::data::attributes::Group;
+        use crate::data::team::Position;
+        let config = shipped_config(42, 90).unwrap();
+        let schema = &config.attributes;
+        let mut ratings = crate::player::Attributes::from_entry(&Default::default(), schema);
+        for (i, def) in schema.attributes.iter().enumerate() {
+            let tenths = match (def.hidden, def.group) {
+                (true, _) => 200,
+                (false, Group::Technical) => 160,
+                (false, Group::Goalkeeping) => 40,
+                (false, _) => 120,
+            };
+            ratings.values[i] = crate::Rating::from_tenths(tenths);
+        }
+        let mean = |keeper: bool| {
+            let picked: Vec<u32> = schema
+                .attributes
+                .iter()
+                .filter(|d| !d.hidden)
+                .filter_map(|d| match d.group {
+                    Group::Technical if keeper => None,
+                    Group::Goalkeeping if !keeper => None,
+                    Group::Technical => Some(160),
+                    Group::Goalkeeping => Some(40),
+                    _ => Some(120),
+                })
+                .collect();
+            let n = u32::try_from(picked.len()).unwrap();
+            u8::try_from((picked.iter().sum::<u32>() + n / 2) / n).unwrap()
+        };
+        assert_eq!(overall_level(&ratings, schema, Position::CM), mean(false));
+        assert_eq!(overall_level(&ratings, schema, Position::GK), mean(true));
+        assert!(overall_level(&ratings, schema, Position::CM) > 120);
+        assert!(overall_level(&ratings, schema, Position::GK) < 120);
+    }
     use crate::record::VecSink;
 
     #[test]

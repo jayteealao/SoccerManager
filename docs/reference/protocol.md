@@ -1,8 +1,8 @@
-# Match stream protocol, version 5
+# Match stream protocol, version 6
 
 The engine serves one viewer over a WebSocket on `127.0.0.1`. The port is chosen by the
 operating system at every run and written to `engine.port` inside the runtime data folder.
-A page connects to `ws://127.0.0.1:<port>/?v=5`.
+A page connects to `ws://127.0.0.1:<port>/?v=6`.
 
 Version 2 changed the meaning of `ticks_expected` from the exact tick count to the most ticks
 the match can last, because the time added at the end of each half is known only when the
@@ -57,6 +57,16 @@ is a word key and a confidence (`not_yet_known`, `tentative`, or `firm`), set by
 player has seen at the club. Neither is ever a number. Removing a field takes a new version.
 One message is added: `ratings`, which carries every player's match rating at full time,
 after the closing `stats`. The tick frames are unchanged.
+
+Version 6 carries the player record the Squad screen and the player panel show. A `squad`
+entry gains ten optional fields: `player.attributes` (every visible attribute by name, in
+tenths), `player.height`, `player.age`, `player.nationality`, `player.build`,
+`player.condition`, `player.sharpness`, `player.matches_at_club`, `player.level` and
+`player.plays_between`. Each is left out when the team file does not give it, so a version 1
+team file sends none of the body fields. The `condition` message gains `level` and `base`,
+each slot's overall level now and fresh. No field was removed and none changed meaning; a hidden
+value is still never a number, and no number under a hidden attribute's name is ever sent.
+The tick frames are unchanged.
 
 A test in `crates/protocol/tests/document.rs` holds this document to the code: every message
 the implementation names must appear below with every one of its fields.
@@ -160,6 +170,16 @@ Each entry of `squad` carries `player.id`, `player.name`, `player.shirt`, and
 | `player.consistency` | object | a hidden value: how evenly the player plays from match to match, as a word and a confidence; see below |
 | `player.injury_proneness` | object | a hidden value: how easily the player is injured, as a word and a confidence; see below. The pre-match sheet's Risk column reads its word |
 | `role_fit` | array of integers | how well the player fits each role in tenths of 1 to 20 (0 to 200), one value per entry of `tactics.roles`, in that order |
+| `player.attributes` | object | every visible attribute, by its name in the attribute file, in tenths of 1 to 20 (10 to 200). A hidden attribute is never in it. Absent before version 6 |
+| `player.height` | integer | height in centimetres; absent when the team file gives none |
+| `player.age` | integer | age in years; absent when the team file gives none |
+| `player.nationality` | string | the nationality code the team file gives; absent when it gives none |
+| `player.build` | string | `slight`, `athletic` or `powerful`, from strength and balance (the `engine.contract.body.build` tuning); absent for a version 1 team file |
+| `player.condition` | integer | the energy he starts the match with, as a percentage |
+| `player.sharpness` | integer | match sharpness as a percentage; absent when the team file gives none |
+| `player.matches_at_club` | integer | the matches he has played for the club, which set the hidden values' confidence; absent when the team file gives none |
+| `player.level` | integer | his overall level fresh, in tenths: the mean of the visible attributes of the groups his position plays (a keeper's goalkeeping, mental and physical; anyone else's technical, mental and physical) |
+| `player.plays_between` | array of two integers | the range his level runs today, in tenths: with his sharpness and his adaptation to the country taken off, then fresh. Equal when nothing takes off. A hidden value never moves it |
 
 Each hidden value is an object:
 
@@ -314,6 +334,8 @@ Sent right after each periodic `stats` message, not at full time.
 | `energy` | array of 22 floats | each wire slot's energy, home slots first, from 0.0 (spent) to 1.0 (fresh), three decimals. A substitute takes the slot of the player who left |
 | `subs_used` | array of two integers | substitutions each team has made, home first; `[0, 0]` when an earlier build sent none |
 | `windows_used` | array of two integers | substitution windows each team has used, home first; `[0, 0]` when an earlier build sent none |
+| `level` | array of 22 integers | each wire slot's overall level now, in tenths of 1 to 20, with his tiredness and the other states taken in; absent before version 6 |
+| `base` | array of 22 integers | each wire slot's overall level fresh, in tenths, beside `level`; the Touchline's Level column reads `13 of 15` when the shown whole number of `level` is below that of `base` |
 
 ### change-state
 
@@ -660,10 +682,13 @@ engine as a worker, so it can report `crashed` and act on it:
 | `POST /engine/stop` | stops the running match, keeps its snapshot for Resume and goes back to `idle` | `202` with the new `/engine.json` body |
 | `POST /engine/quit` | stops the running match, keeps its snapshot, and ends `launch` shortly after the answer | `202` with the `/engine.json` body in state `closed`, plus `closed` |
 | `POST /engine/settings` | checks and saves the settings in the body (`schema_version` 1, `speed` 1, 2, 4 or 8, `motion` `follow`, `reduce` or `full`, `commentary` true or false) to `settings.json` | `202` with the new `/engine.json` body |
+| `POST /engine/views` | checks and saves one club's named squad views (`{"club": <club id>, "active": <name or null>, "views": [{"name", "columns", "sort"}]}`, at most 20 views of at most 64 columns, names up to 40 characters) to `views.json`; the club's stored match ratings are kept | `202` with the new `/engine.json` body |
 
-A body is at most 4 KiB; a longer one is `413`, and one that is not UTF-8 text is `400`. An action that cannot be carried out is `400` with the reason as plain text, for example `a match is already running`, `no saved match yet`, `<club> cannot play itself; choose another team` or `speed 3 is not one of 1, 2, 4 or 8`. `restart`, `abandon`, `resume`, `stop` and `quit` ignore any body.
+A body is at most 32 KiB; a longer one is `413`, and one that is not UTF-8 text is `400`. An action that cannot be carried out is `400` with the reason as plain text, for example `a match is already running`, `no saved match yet`, `<club> cannot play itself; choose another team` or `speed 3 is not one of 1, 2, 4 or 8`. `restart`, `abandon`, `resume`, `stop` and `quit` ignore any body.
 
 `GET /engine/round?home=<club id>&away=<club id>` answers the other fixtures of the round that match would meet, as `{"fixtures": [{"home": <team>, "away": <team>}]}` with each team as in `teams`; an unknown club or the same club twice is `400` with the reason. It is `404` when the launch did not open on the start screen.
+
+`GET /engine/views?club=<club id>` answers that club's squad views and stored match ratings, as `{"active": <name or null>, "views": [...], "ratings": {<player id>: [{"match", "rating"}]}}`, with each player's newest 10 ratings, oldest first. Before it answers, it adds the ratings of the last match the launcher ran, read from that match's `stats.json`, once per match. A club with nothing stored answers empty lists; no club is `400`. Served by `serve --web` or `replay --web` it is `405`, and the page keeps its views for the session only.
 
 Each action requires an `Origin` header equal to the page's own origin,
 `http://127.0.0.1:<page port>`; any other origin, or none, is `403`, so a page on another

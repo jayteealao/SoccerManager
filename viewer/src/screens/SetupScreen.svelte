@@ -16,7 +16,7 @@
   import SectionLabel from '../components/SectionLabel.svelte';
   import TouchlineMark from '../components/TouchlineMark.svelte';
   import { PLAY } from '../components/icons.js';
-  import { groundName, groundSize, setupFacts, teamOf, versions } from '../lib/front-door-model.js';
+  import { convertedNotice, groundName, groundSize, setupFacts, teamOf, versions } from '../lib/front-door-model.js';
 
   let { door } = $props();
 
@@ -31,6 +31,7 @@
     { id: 'kickoff', label: '3 Kick off', active: !same },
   ]);
   let others = $derived(door.round?.fixtures ?? []);
+  let converted = $derived(convertedNotice(home));
 
   function tab(id) {
     globalThis.document?.querySelector(`[data-column="${id}"] button`)?.focus();
@@ -70,6 +71,11 @@
           picked={door.picks.home}
           onpick={(id) => door.pick('home', id)}
         />
+        {#if converted}
+          <p class="converted" role="status" data-converted={converted.club}>
+            <b>{converted.club}:</b> {converted.text}
+          </p>
+        {/if}
       </div>
       <div data-column="away">
         <SectionLabel label="2 · Away team" note="{door.teams.length} sample teams" />
@@ -188,6 +194,23 @@
 
   .alert b {
     color: var(--bad);
+  }
+
+  /* The converted-file notice (board 5): a full cyan hairline, never a side stripe. */
+  .converted {
+    margin: 10px 0 0;
+    padding: 7px 10px;
+    background: var(--new-goal-ground);
+    box-shadow: inset 0 0 0 1px var(--cyan);
+    border-radius: var(--radius-sm);
+    font-size: 10px;
+    line-height: 1.45;
+    color: var(--ink-2);
+  }
+
+  .converted b {
+    color: var(--ink);
+    font-weight: 600;
   }
 
   .versus {
