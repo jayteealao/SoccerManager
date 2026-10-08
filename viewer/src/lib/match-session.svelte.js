@@ -780,9 +780,33 @@ export class MatchSession {
     }
     this.squadViews = { ...(this.squadViews ?? { ratings: {} }), active, views };
     this.viewsSaved = 'saving';
-    const ok = await this.viewsAdapter.save(club, { active, views });
+    // One save at a time: a change made while one is on its way waits, and only the latest
+    // waiting change is sent, so the last change made is the one that stays stored.
+    this.#viewsNext = { club, adapter: this.viewsAdapter, body: { active, views } };
+    this.#viewsSaving ??= this.#sendViews();
+    return this.#viewsSaving;
+  }
+
+  /// The latest views change waiting to be saved, or null.
+  #viewsNext = null;
+  /// The saves on their way, or null when none is.
+  #viewsSaving = null;
+
+  /// Sends the waiting views changes one at a time until none waits; answers whether the
+  /// last one was saved.
+  async #sendViews() {
+    let ok = false;
+    try {
+      while (this.#viewsNext) {
+        const { club, adapter, body } = this.#viewsNext;
+        this.#viewsNext = null;
+        ok = await adapter.save(club, body);
+        signal('viewer.views_saved', { club, views: body.views.length, saved: ok, store: adapter.kind });
+      }
+    } finally {
+      this.#viewsSaving = null;
+    }
     this.viewsSaved = ok ? 'saved' : 'not-saved';
-    signal('viewer.views_saved', { club, views: views.length, saved: ok, store: this.viewsAdapter.kind });
     return ok;
   }
 
