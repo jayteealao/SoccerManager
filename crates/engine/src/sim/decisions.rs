@@ -140,6 +140,7 @@ impl Simulation {
         }
         let carrier = crate::streams::PlayerKey::of(&self.players[c]);
         let plan = decision.plan(&self.view(), c, &o, choice);
+        #[cfg(feature = "sensitivity")]
         if self.probe.is_some() {
             self.probe_plan(c, choice, plan);
         }

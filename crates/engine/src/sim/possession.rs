@@ -102,6 +102,7 @@ impl Simulation {
             .streams
             .tested(Key::player(Action::SaveHold, keeper), &[hold])
             < hold;
+        #[cfg(feature = "sensitivity")]
         if let Some(p) = self.probe.as_deref_mut() {
             p.saved(held);
         }
@@ -297,6 +298,7 @@ impl Simulation {
                             .streams
                             .tested(Key::player(Action::Header, p), &[chance]);
                         let won = draw < chance;
+                        #[cfg(feature = "sensitivity")]
                         if let Some(probe) = self.probe.as_deref_mut() {
                             probe.header(self.players[i].team, won);
                         }
@@ -341,6 +343,7 @@ impl Simulation {
                             return;
                         }
                     }
+                    #[cfg(feature = "sensitivity")]
                     if self.probe.is_some() {
                         self.probe_loose(i);
                     }
@@ -362,6 +365,7 @@ impl Simulation {
                         .streams
                         .tested(Key::player(Action::Tackle, p), &[p_win, p_win + p_foul]);
                     let outcome = fouls.tackle_outcome(&chances, draw);
+                    #[cfg(feature = "sensitivity")]
                     if self.probe.is_some() {
                         self.probe_tackle(i, c, outcome);
                     }
@@ -417,6 +421,7 @@ impl Simulation {
         self.referee.offside = 0;
         self.keeper_beaten = false;
         let team = self.players[i].team;
+        #[cfg(feature = "sensitivity")]
         if self.probe.is_some() {
             let (at, tick) = (self.players[i].pos, self.tick);
             if let Some(p) = self.probe.as_deref_mut() {

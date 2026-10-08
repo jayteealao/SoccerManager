@@ -321,6 +321,7 @@ impl Simulation {
             self.tally(k, crate::sim::tally::Count::Goal);
         }
         self.tally_conceded(1 - team);
+        #[cfg(feature = "sensitivity")]
         if self.shot_in_flight == Some(team)
             && let Some(p) = self.probe.as_deref_mut()
         {

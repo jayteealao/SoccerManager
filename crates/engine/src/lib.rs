@@ -30,6 +30,7 @@ pub mod rng;
 pub mod rules;
 #[cfg(feature = "scenario")]
 pub mod scenario;
+#[cfg(feature = "sensitivity")]
 pub mod sensitivity;
 pub mod shot;
 pub mod sim;
