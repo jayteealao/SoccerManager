@@ -726,11 +726,15 @@ The engine writes these files to the data folder. The data folder is `SM_DATA_DI
 | `matches/<match.id>/stats.json` | `simulate`, `serve`, `resume` | the statistics of the match, as the `match-stats` record |
 | `matches/<match.id>/snapshot.smsn` | `simulate`, `serve` | the newest snapshot of the match; `resume` and `serve --resume` read it |
 | `matches/<match.id>/matchday-bug-<fixture>.json` | `serve` | the bug report of a background match that failed; see below |
+| `runs/<run.id>/run.json` | `calibrate`, when it opens the run folder | the run's identity: its `run.id`, its start in Unix milliseconds, and the build, content, fixtures hash, flags, paired flag, seed, minutes, strength boost, random-number scheme, fixture scheme, measures version, and band registry version. A run into the same folder resumes only when its identity is the same |
 | `runs/<run.id>/report.json` | `calibrate` | the run report, as the `run-report` record |
 | `runs/<run.id>/target.json` | `calibrate` | the run's matches per suite, the pilot and cap of a change run, and the digest of each band it was last judged with |
 | `runs/<run.id>/rows/<session>-<thread>.rows` | `calibrate` | one compact row per match of the run; see "The row file" below |
+| `runs/<run.id>/ledger/<session>-<suite>-<thread>.jsonl` | `calibrate`, after each finished work unit | one JSON line per finished work unit: the `suite`, the `unit`'s place among its suite's units in the session, and the `fixtures`, each with its fixture `key`, engine `seed`, and `match` identifier. A run into the same folder plays only the fixtures that have no line |
 | `runs/<run.id>/stats/<match.id>.json` | `calibrate` | the statistics record of each recorded match: about 1 in 16 and every outlier, or every match with `--keep-events all` |
 | `runs/<run.id>/events/<match.id>.jsonl` | `calibrate` | the event rows, with commentary, of each recorded match that played to full time |
+| `runs/<run.id>/arms/<arm>/` | `calibrate --pair` | the `ledger/`, `rows/`, `stats/`, and `events/` of each arm, `off` and `on`; `run.json`, `report.json`, and `target.json` stay in the run folder |
+| `runs/<run.id>/superseded/<old run.id>/` | `calibrate`, when the folder holds a run of another identity | the old run's `run.json`, `ledger/`, `rows/`, `stats/`, `events/`, `arms/`, `report.json`, and `target.json`, moved there before the new run starts |
 | `calibrate/base/v2/<build id>/<content hash>/seed-<S>-minutes-<M>/` | `calibrate` with an old engine | the old engine's run folder: its rows are the cache of its results. `v1` folders, from before rows, are never read and can be deleted |
 
 A `match.id` is `<seed as 16 hexadecimal characters>-<start time in milliseconds>`.

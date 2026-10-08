@@ -123,7 +123,7 @@ To judge a finished run again, for example after editing a band in `realism-band
 
 ## Read the stage table
 
-Every run ends with the time and memory of each stage: `play`, `checks`, `commentary`, `writing`, `disk`, `judge`, and `total`. Use it to find where a slow run spends its time before you optimise. The times are thread time summed over the threads, so on 16 threads `play` can read sixteen times the run's wall time. The `checks` time is estimated from every 16th call of the rule checker.
+Every run ends with the time and memory of each stage: `play`, `checks`, `commentary`, `writing`, `disk`, `judge`, and `total`. Use it to find where a slow run spends its time before you optimise. The times are thread time summed over the threads, so on the 8 threads of the reference machine `play` can read up to eight times the run's wall time. The `total` row is the wall time of the whole command. The `checks` time is estimated from every 16th call of the rule checker.
 
 ## Resume or grow a run
 
@@ -157,8 +157,10 @@ Read `calib.pass` and the band table at the end of standard error. Read the stag
 
 1. Stop other heavy work on the machine. Other heavy work slows every thread.
 2. Run the command.
-3. Read the total time on the console and `calib.wall_ms.total` in `report.json`.
+3. Read the `total` row of the stage table at the end of standard error, or `calib.stages.total.ms` in `report.json`. It is the time of the whole command in milliseconds, for every kind of run.
 4. Note the number of logical processors. `--jobs` defaults to all of them.
+
+Do not use `calib.wall_ms.total` as the time of a run. It is only the time the threads took to play the last list of matches. It leaves out the single-thread benchmark and the judging. In a change run, it also leaves out the old engine and the pilot when the run grows to its power target. In a resumed run, it holds only the matches that this command played.
 
 To compare your time with the measured and projected times of each run, see [How long the runs take](../explanation/realism-harness.md#how-long-the-runs-take).
 

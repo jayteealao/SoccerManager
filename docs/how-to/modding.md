@@ -135,10 +135,41 @@ A version 1 tactics file converts on load in the same way; the data-file referen
 ## Change the attribute schema
 
 1. Open `my-content/attributes.json`.
-2. Add an attribute as `{ "name": "flair", "group": "technical" }`, or remove one that the engine does not require.
-3. Add the new attribute to every player in every team file you use, with a rating from 1.0 to 20.0 (or a value from 1 to 100 in a version 1 file). Remove a removed attribute from every player.
+2. Add the attribute to `attributes` with its job: the action and the stage it acts in, the statistic it moves, and the direction:
 
-The schema holds 30 to 50 attributes. The engine requires 14 attributes by name, and refuses a schema without one of them. The list is in the data-file reference.
+   ```json
+   {
+     "name": "flair",
+     "group": "technical",
+     "job": {
+       "action": "dribble",
+       "stage": "choose",
+       "statistic": "take-ons attempted per match",
+       "direction": "up"
+     }
+   }
+   ```
+
+3. Put the attribute in the stage table that its job names. Add it to `supports` of `actions.dribble.choose`, with a weight above 0 and below the main weight:
+
+   ```json
+   "choose": {
+     "main": { "attribute": "decisions", "weight": 1.0 },
+     "supports": [
+       { "attribute": "dribbling", "weight": 0.3 },
+       { "attribute": "vision", "weight": 0.1 },
+       { "attribute": "flair", "weight": 0.2 }
+     ],
+     "source": "design"
+   }
+   ```
+
+   A table holds at most 3 supports. The engine refuses an attribute that is in no stage table, and a job that names a stage whose table does not hold the attribute.
+4. Add the new attribute to every player in every team file you use, with a rating from 1.0 to 20.0 (or a value from 1 to 100 in a version 1 file).
+
+To remove an attribute that the engine does not require, remove it from `attributes`, from every stage table, from every role in `tactics.json`, and from every player. When it is the main attribute of a stage table, give that table another main attribute.
+
+The schema holds 30 to 50 attributes. The engine requires 4 attributes by name, because play reads them directly: `pace`, `technique`, `agility`, and `consistency`. It refuses a schema without one of them. The sensitivity rules refuse a job that has no rule: add a rule for the new job to `sensitivity.json` before you run them.
 
 ## Compare two models with a flag
 
@@ -154,7 +185,7 @@ Use a feature flag to decide between the current model and a candidate on the re
    The run plays every fixture twice: once with the flag off, into `arms/off/`, and once with it on, into `arms/on/`. Use `--suite equal` or `--suite strength` to play one suite only. Use `--flag other_flag=on` to hold another flag in one state for both arms.
 3. Read the table on standard error, or `calib.compare` and `calib.verdict` in `report.json`. Each row shows one band of one suite with the off value, the on value, and the difference. A star marks a value outside its band.
 4. Act on the verdict:
-   - `on-rejected`: the on arm had a missing statistics record, a change left unapplied, a validator violation, a stronger club that did not win more than half its matches, or a single-thread match time more than 10 percent slower. Remove the candidate.
+   - `on-rejected`: the on arm had a match without its statistics record, a match that panicked, a change left unapplied, a rule violation, a `stronger_team_win_rate` outside its band (in the shipped file, a stronger club that won less than half its matches), or a single-thread match time more than 10 percent slower. Remove the candidate.
    - `on-better`: the on arm passes more bands, or as many and sits closer to the band centres by more than 0.05. Keep the candidate as the only model.
    - `off-better`: remove the candidate.
    - `no-difference`: run once more on a second seed, for example `--seed 2027`. If the verdict is still `no-difference`, remove the candidate.
