@@ -45,6 +45,9 @@ use crate::session::MatchState;
 /// Players in a lineup.
 const STARTERS: usize = 11;
 
+/// The longest a held producer waits before it looks again at work its hold leaves undone.
+pub const HOLD_POLL: std::time::Duration = std::time::Duration::from_millis(20);
+
 /// Start and pause, shared between the socket thread and the simulation thread.
 pub struct Gate {
     state: Mutex<GateState>,
@@ -157,6 +160,23 @@ impl Gate {
                 .changed
                 .wait(state)
                 .expect("the gate lock is never poisoned");
+        }
+        !state.stopped
+    }
+
+    /// As [`Gate::wait_for_room`], and while it holds, runs `on_hold` after each wake and at
+    /// least every [`HOLD_POLL`], outside the lock. A held producer runs no tick, so work that
+    /// waits on the socket (a save the page has now been sent) is done here instead.
+    pub fn wait_for_room_and(&self, tick: u32, mut on_hold: impl FnMut()) -> bool {
+        let mut state = self.state.lock().expect("the gate lock is never poisoned");
+        while !state.stopped && state.holds(tick) {
+            let (woken, _) = self
+                .changed
+                .wait_timeout(state, HOLD_POLL)
+                .expect("the gate lock is never poisoned");
+            drop(woken);
+            on_hold();
+            state = self.state.lock().expect("the gate lock is never poisoned");
         }
         !state.stopped
     }

@@ -177,6 +177,11 @@ pub trait TickSink {
     fn on_trace(&mut self, _records: &[TraceRecord]) -> Result<(), EngineError> {
         Ok(())
     }
+
+    /// The hold hook: called now and then while the driver waits before the tick after `tick`
+    /// (a pause, or a viewer too far behind), so a sink can finish work that waited on another
+    /// thread without a further tick. The default does nothing.
+    fn on_hold(&mut self, _tick: u32) {}
 }
 
 /// Discards every record (benchmarks).
@@ -239,6 +244,11 @@ impl<A: TickSink, B: TickSink> TickSink for FanoutSink<A, B> {
         self.a.on_trace(records)?;
         self.b.on_trace(records)
     }
+
+    fn on_hold(&mut self, tick: u32) {
+        self.a.on_hold(tick);
+        self.b.on_hold(tick);
+    }
 }
 
 /// An absent sink discards every record, so a caller can hold an optional second sink
@@ -269,6 +279,12 @@ impl<S: TickSink> TickSink for Option<S> {
         match self {
             Some(sink) => sink.on_trace(records),
             None => Ok(()),
+        }
+    }
+
+    fn on_hold(&mut self, tick: u32) {
+        if let Some(sink) = self {
+            sink.on_hold(tick);
         }
     }
 }

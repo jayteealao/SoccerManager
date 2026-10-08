@@ -167,8 +167,9 @@ pub fn drive<S: TickSink>(
     while !sim.is_over() && (written < opts.ticks || sim.in_shootout()) {
         // A stopped gate means the viewer left: the match did not end, so no full-time
         // event or closing statistics are written for it.
+        // While held, the sink may finish work that waited on the socket (a save).
         if let Some(gate) = opts.gate
-            && !gate.wait_for_room(sim.tick())
+            && !gate.wait_for_room_and(sim.tick(), || sink.on_hold(sim.tick()))
         {
             tracing::info!(
                 signal = "socket.client_gone",
@@ -1655,6 +1656,100 @@ mod tests {
             gate.stop();
             run.join().unwrap().unwrap();
         });
+    }
+
+    /// A save taken at a stoppage reaches disk once the socket passes it, even when the engine
+    /// is already holding and runs no further tick: a paused or lead-bound match keeps it.
+    #[test]
+    fn a_stoppage_save_the_socket_passes_while_the_engine_holds_is_written_once() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let config = MatchConfig::new(42, 3, &loaded.content, [a, b]).unwrap();
+        let ticks = config.max_ticks();
+        // The first stoppage of the match, read from a twin.
+        let mut twin = Simulation::new(config.clone()).unwrap();
+        while twin.stoppage().is_none() {
+            twin.step();
+        }
+        let stoppage = twin.tick();
+        let mut sim = Simulation::new(config).unwrap();
+        let data =
+            std::env::temp_dir().join(format!("engine-cli-held-save-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&data);
+        let state = std::sync::Arc::new(MatchState::default());
+        let mut gated =
+            stream::GatedSnapshots::new(&data, "m", [7; 16], 1, std::sync::Arc::clone(&state));
+        let path = gated.path().to_path_buf();
+        // The engine holds 20 ticks past the stoppage; the socket has sent nothing yet.
+        let held_at = stoppage + 20;
+        let gate = Gate::new();
+        gate.set_lead_bound(20);
+        gate.set_seen(stoppage);
+        std::thread::scope(|scope| {
+            let run = scope.spawn(|| {
+                drive(
+                    &mut sim,
+                    &mut gated,
+                    &Drive {
+                        ticks,
+                        owner_id: "0123456789abcdef0123456789abcdef",
+                        match_id: "000000000000002a-1",
+                        club_ids: ["club-a", "club-b"],
+                        state: &state,
+                        gate: Some(&gate),
+                        commentary: &loaded.commentary,
+                        inbox: None,
+                        page_changes: None,
+                        planned: &[],
+                        observe: None,
+                        matchday: None,
+                    },
+                    &mut |_: ServerMessage| Ok(()),
+                )
+            });
+            while state.tick() < held_at {
+                std::thread::yield_now();
+            }
+            assert_eq!(settled(&state), held_at, "the engine holds");
+            assert!(
+                !path.exists(),
+                "nothing is saved before the socket passes it"
+            );
+            // The socket flushes the stoppage tick and the tick after it.
+            state.set_sent_tick(stoppage + 1);
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while !path.exists() && std::time::Instant::now() < deadline {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            let reached = path.exists();
+            // Several more waits at the hold write nothing more.
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            assert_eq!(state.tick(), held_at, "the engine ran no further tick");
+            gate.stop();
+            run.join().unwrap().unwrap();
+            assert!(
+                reached,
+                "the stoppage save never reached disk while the engine held"
+            );
+        });
+        assert_eq!(gated.writes, 1, "the save is written exactly once");
+        let saved = std::fs::read(&path).unwrap();
+        let expected = data.join("expected.smsn");
+        gated
+            .newest_before(stoppage + 1)
+            .expect("the stoppage was captured")
+            .write_atomic(&expected)
+            .unwrap();
+        assert_eq!(
+            saved,
+            std::fs::read(&expected).unwrap(),
+            "the stoppage save"
+        );
+        assert_eq!(
+            engine::Snapshot::read(&path, "snapshot").unwrap().tick(),
+            stoppage
+        );
+        let _ = std::fs::remove_dir_all(&data);
     }
 
     #[test]
