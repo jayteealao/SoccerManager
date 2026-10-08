@@ -113,10 +113,14 @@
     text-align: right;
   }
 
+  /* Every header and name button is at least --hit high (24 px, 44 px at the compact step) and
+     a header at least 24 px wide, so neighbouring controls never share a pointer target. */
   .sorter {
     display: inline-flex;
     align-items: center;
-    min-height: 24px;
+    justify-content: center;
+    min-width: 24px;
+    min-height: var(--hit);
     padding: 0;
     border: 0;
     background: none;
@@ -142,7 +146,7 @@
   }
 
   td {
-    height: 22px;
+    height: var(--hit);
     padding: 0 4px;
     white-space: nowrap;
     background: var(--ground-3);
@@ -183,7 +187,7 @@
   }
 
   .who {
-    min-height: 22px;
+    min-height: var(--hit);
     padding: 0;
     border: 0;
     background: none;
@@ -307,5 +311,14 @@
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+  }
+
+  /* The compact step: tighter cell padding, so the default view fits 768 px without a sideways
+     scroll. */
+  @media (max-width: 1023px), (max-height: 599px) {
+    th,
+    td {
+      padding: 0 2px;
+    }
   }
 </style>

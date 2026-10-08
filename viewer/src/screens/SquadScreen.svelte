@@ -286,6 +286,13 @@
     min-width: 210px;
   }
 
+  /* A label grows round its select, which keeps the smallest hit area itself. */
+  label.sel,
+  label.chip {
+    height: auto;
+    min-height: max(22px, var(--hit));
+  }
+
   button.chip {
     cursor: pointer;
   }
@@ -295,7 +302,11 @@
     color: var(--cyan);
   }
 
+  /* The select fills its chip, so the whole chip is its hit area. */
   select {
+    align-self: stretch;
+    min-width: var(--hit);
+    min-height: var(--hit);
     border: 0;
     background: transparent;
     color: var(--ink);
@@ -311,7 +322,7 @@
     align-items: center;
     margin-left: auto;
     width: 170px;
-    height: max(24px, var(--hit));
+    min-height: max(24px, var(--hit));
     padding: 0 8px;
     border-radius: var(--radius-sm);
     background: var(--toggle-ground);
@@ -319,6 +330,8 @@
   }
 
   .inp input {
+    align-self: stretch;
+    min-height: var(--hit);
     width: 100%;
     border: 0;
     background: transparent;
