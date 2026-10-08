@@ -20,9 +20,22 @@
 // lifted to the newest format through the same steps as the engine's reader
 // (`viewer/tests/data/replay-steps.json` lists both); version-3 files are never lifted.
 
-/// The protocol version of the frames this page reads.
-export const PROTOCOL_VERSION = 3;
-/// The file format that holds frames only; its format field is the protocol version.
+import { liftHello } from './scale.js';
+
+/// The protocol version of the frames this page receives and writes.
+export const PROTOCOL_VERSION = 6;
+/// The frame protocols this page reads from a file. Protocol 4 changed only the scale of the
+/// hello's ratings, protocol 5 only the hello's squad entries and one added message, and
+/// protocol 6 only optional fields, so a protocol 3, 4 or 5 file still plays; its hello is
+/// lifted when read (`liftHello`).
+export const READS_PROTOCOLS = Object.freeze([3, 4, 5, 6]);
+
+/// The protocols this page reads, as words: "3, 4, 5 and 6".
+function readsWords() {
+  return `${READS_PROTOCOLS.slice(0, -1).join(', ')} and ${READS_PROTOCOLS.at(-1)}`;
+}
+/// The file format that holds frames only. Its format field was also its frames' protocol;
+/// the page still writes 3 there, and a hello names its own protocol.
 export const LEGACY_VERSION = 3;
 /// The file format that also holds the match's inputs and its record.
 export const FORMAT_VERSION = 4;
@@ -52,6 +65,9 @@ export class FrameStore {
     this.tickFrames = 0;
     this.lastTick = 0;
     this.helloStored = false;
+    /// The protocol of the frames: set when a file is read, so the file writes back with the
+    /// protocol it was read with; a live match's store holds this page's own.
+    this.protocol = PROTOCOL_VERSION;
   }
 
   /// Bytes of payload held.
@@ -171,10 +187,10 @@ function inputPayload({ name, bytes }) {
 /// watched. With `record` (as `readReplay` returns it) the file is version 4, in the engine's
 /// entry order: the inputs, the frames, then the record, kept as its original bytes, so a
 /// file the engine wrote is written back byte for byte.
-export async function writeReplay(store, { matchId, version = PROTOCOL_VERSION, record = null }) {
-  if (version !== PROTOCOL_VERSION) {
+export async function writeReplay(store, { matchId, version = store.protocol, record = null }) {
+  if (!READS_PROTOCOLS.includes(version)) {
     throw new ReplayRefused(
-      `cannot write frames protocol version ${version}; this page writes ${PROTOCOL_VERSION}`
+      `cannot write frames protocol version ${version}; this page writes ${readsWords()}`
     );
   }
   const { seed, millis } = matchIdentity(matchId);
@@ -190,7 +206,8 @@ export async function writeReplay(store, { matchId, version = PROTOCOL_VERSION, 
     view.setUint16(4, FORMAT_VERSION, true);
     view.setUint16(6, version, true);
   } else {
-    view.setUint16(4, version, true);
+    // A frames-only file has no protocol field: offset 4 says 3, the format.
+    view.setUint16(4, LEGACY_VERSION, true);
   }
   view.setBigUint64(8, millis, true);
   view.setUint32(16, store.count, true);
@@ -439,9 +456,9 @@ export function storeFrames(raw, entries) {
 
 async function decodeEntries(raw, format) {
   const protocol = format === LEGACY_VERSION ? raw.format : raw.protocol;
-  if (protocol !== PROTOCOL_VERSION) {
+  if (!READS_PROTOCOLS.includes(protocol)) {
     throw new ReplayRefused(
-      `frames protocol version ${protocol}; this page reads ${PROTOCOL_VERSION}`
+      `frames protocol version ${protocol}; this page reads ${readsWords()}`
     );
   }
   const frames = [];
@@ -471,6 +488,7 @@ async function decodeEntries(raw, format) {
     }
   }
   const store = storeFrames(raw, frames);
+  store.protocol = protocol;
   let record = null;
   if (format === FORMAT_VERSION) {
     if (!recordBytes) {
@@ -535,7 +553,9 @@ export async function readReplay(input, { chain = productionChain } = {}) {
   store.helloStored = true;
   return {
     store,
-    hello,
+    // The stored frame keeps its bytes; the hello the screens read has its ratings in
+    // tenths.
+    hello: liftHello(hello),
     version,
     frames: raw.frames,
     ticks: raw.ticks,

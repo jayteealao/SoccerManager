@@ -2,6 +2,8 @@
 //! positions travel as binary frames instead (see `frame.rs`). Every payload refuses an
 //! unknown field, so a viewer built against a later protocol cannot be misread as this one.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::command::{Ack, Reject};
@@ -53,17 +55,136 @@ pub struct SquadEntry {
     /// The position code, such as `GK` or `CB`.
     #[serde(rename = "player.position")]
     pub position: String,
-    /// The natural-fitness attribute, 0 to 100. Before kick-off every player is fresh, so
-    /// this is the one fitness figure the engine holds.
+    /// The natural-fitness attribute in tenths of the 1 to 20 scale (10 to 200; a team
+    /// converted from an old file may hold 2 to 8). Before kick-off every player is fresh,
+    /// so this is the one fitness figure the engine holds. Protocol 3 sent 0 to 100.
     #[serde(rename = "player.natural_fitness")]
     pub natural_fitness: u8,
-    /// The injury-resistance attribute, 0 to 100: how well the player stands up to knocks.
-    /// A hello from an earlier build carries none and reads as 0.
-    #[serde(rename = "player.injury_resistance", default)]
-    pub injury_resistance: u8,
-    /// How well the player fits each role, 0 to 100, one value per role in the order of the
-    /// hello's `tactics.roles`.
+    /// The player's consistency, a hidden value: never a number, only a word and how sure
+    /// the club is of it.
+    #[serde(rename = "player.consistency")]
+    pub consistency: HiddenWord,
+    /// The player's injury proneness, a hidden value: never a number, only a word and how
+    /// sure the club is of it. The prematch Risk word reads it.
+    #[serde(rename = "player.injury_proneness")]
+    pub injury_proneness: HiddenWord,
+    /// How well the player fits each role in tenths of the 1 to 20 scale (0 to 200), one value
+    /// per role in the order of the hello's `tactics.roles`.
     pub role_fit: Vec<u8>,
+    /// Every visible attribute in tenths of the 1 to 20 scale, by its name in the attribute
+    /// file. A hidden value is never listed. Protocol 6; an older hello carries none.
+    #[serde(
+        rename = "player.attributes",
+        default,
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    pub attributes: BTreeMap<String, u8>,
+    /// Height in centimetres, when the team file gives it.
+    #[serde(
+        rename = "player.height",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub height: Option<u8>,
+    /// Age in years, when the team file gives it.
+    #[serde(
+        rename = "player.age",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub age: Option<u8>,
+    /// Nationality, three upper-case letters, when the team file gives it.
+    #[serde(
+        rename = "player.nationality",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub nationality: Option<String>,
+    /// The build word key (`slight`, `athletic` or `powerful`), derived from the attributes and
+    /// never stored in a team file. Absent when the schema lacks the attributes it reads.
+    #[serde(
+        rename = "player.build",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub build: Option<String>,
+    /// His energy at kick-off from his days of rest, in percent (100 when none are given).
+    #[serde(
+        rename = "player.condition",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub condition: Option<u8>,
+    /// Match sharpness in percent, when the team file gives it.
+    #[serde(
+        rename = "player.sharpness",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub sharpness: Option<u8>,
+    /// Matches he has played for the club, when the team file gives it. The confidence of
+    /// the hidden words is read from it.
+    #[serde(
+        rename = "player.matches_at_club",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub matches_at_club: Option<u16>,
+    /// His overall level fresh, in tenths of the 1 to 20 scale: the mean of the visible
+    /// attributes of the groups his position plays.
+    #[serde(
+        rename = "player.level",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub level: Option<u8>,
+    /// The range his overall level plays in, in tenths: from his level with today's condition
+    /// inputs (sharpness, adaptation) to his fresh level. A hidden value never moves it.
+    #[serde(
+        rename = "player.plays_between",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub plays_between: Option<[u8; 2]>,
+}
+
+/// A hidden value as the club knows it. `word` is a lower-case key (for example
+/// `rarely_off` or `injury_prone`) whose display text the page owns; it is absent while the
+/// confidence is `not_yet_known`. No number for a hidden value is ever sent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HiddenWord {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub word: Option<String>,
+    pub confidence: Confidence,
+}
+
+/// How sure the club is of a hidden value: from the matches the player has seen at the club,
+/// none is `not_yet_known`, a few `tentative`, many `firm`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Confidence {
+    NotYetKnown,
+    Tentative,
+    Firm,
+}
+
+/// Every player's match rating, sent once at full time after the closing statistics.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Ratings {
+    pub tick: u32,
+    /// Every player who played, home first and in squad order.
+    pub ratings: Vec<RatingWire>,
+}
+
+/// One player's match rating: 1.0 to 10.0 with one decimal.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RatingWire {
+    #[serde(rename = "player.id")]
+    pub id: String,
+    pub rating: f64,
 }
 
 /// One slot's role and duty, as indices into the hello's `tactics.roles` and
@@ -257,6 +378,14 @@ pub struct Condition {
     /// Substitution windows each team has used, home first.
     #[serde(default)]
     pub windows_used: [u8; 2],
+    /// Each wire slot's overall level now, in tenths of the 1 to 20 scale: the mean of the
+    /// visible attributes of the groups his position plays, as his states move them. A hidden
+    /// value never moves it. Protocol 6; an older message carries none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub level: Vec<u8>,
+    /// Each wire slot's overall level fresh, in tenths, beside `level`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub base: Vec<u8>,
 }
 
 /// A queued change that the stoppage now opening takes. It is not a match event: it is sent
@@ -401,6 +530,7 @@ pub enum ServerMessage {
     Matchday(Matchday),
     GroundEvent(GroundEvent),
     GroundProgress(GroundProgress),
+    Ratings(Ratings),
 }
 
 /// The playback speed a client asks for.
@@ -604,9 +734,26 @@ mod tests {
                         name: "Keeper One".into(),
                         shirt: 1,
                         position: "GK".into(),
-                        natural_fitness: 71,
-                        injury_resistance: 64,
-                        role_fit: vec![80, 12],
+                        natural_fitness: 142,
+                        consistency: HiddenWord {
+                            word: None,
+                            confidence: Confidence::NotYetKnown,
+                        },
+                        injury_proneness: HiddenWord {
+                            word: Some("rarely_injured".into()),
+                            confidence: Confidence::Tentative,
+                        },
+                        role_fit: vec![160, 24],
+                        attributes: BTreeMap::from([("pace".to_string(), 142)]),
+                        height: Some(188),
+                        age: Some(24),
+                        nationality: Some("ENG".into()),
+                        build: Some("athletic".into()),
+                        condition: Some(100),
+                        sharpness: Some(90),
+                        matches_at_club: Some(9),
+                        level: Some(130),
+                        plays_between: Some([124, 130]),
                     }],
                     setup: Some(TeamSetup {
                         lineup: (0..11).collect(),
@@ -737,7 +884,7 @@ mod tests {
         let hello = serde_json::to_string(&ServerMessage::Hello(Box::new(hello()))).unwrap();
         assert_eq!(hello.matches("\"squad\":").count(), 1, "{hello}");
         assert_eq!(hello.matches("\"setup\":").count(), 1, "{hello}");
-        assert!(hello.contains("\"player.natural_fitness\":71"), "{hello}");
+        assert!(hello.contains("\"player.natural_fitness\":142"), "{hello}");
     }
 
     #[test]
@@ -775,6 +922,8 @@ mod tests {
                 energy: vec![0.998; 22],
                 subs_used: [2, 0],
                 windows_used: [1, 0],
+                level: vec![130; 22],
+                base: vec![132; 22],
             }),
             ServerMessage::Ack(Ack {
                 command: "queue-change".into(),
@@ -893,6 +1042,8 @@ mod tests {
             energy: vec![1.0, 0.5],
             subs_used: [1, 0],
             windows_used: [1, 0],
+            level: Vec::new(),
+            base: Vec::new(),
         }))
         .unwrap();
         assert_eq!(
@@ -981,18 +1132,46 @@ mod tests {
     fn a_hello_from_an_earlier_build_reads_without_the_newer_fields() {
         let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello())))
             .unwrap()
-            .replace(",\"player.injury_resistance\":64", "")
             .replace(",\"extra_substitutions\":1,\"extra_windows\":1", "")
             .replace(",\"windows_exempt\":[\"half_time\"]", "");
-        assert!(!json.contains("injury_resistance"), "{json}");
         assert!(!json.contains("extra_windows"), "{json}");
         let ServerMessage::Hello(back) = serde_json::from_str::<ServerMessage>(&json).unwrap()
         else {
             panic!("not a hello");
         };
-        assert_eq!(back.teams[0].squad[0].injury_resistance, 0);
         assert_eq!(back.substitutions.extra_substitutions, 0);
         assert!(back.substitutions.windows_exempt.is_empty());
+    }
+
+    /// A hidden value travels as a word key and a confidence; with no match seen there is no
+    /// word, and a squad entry still carrying the old resistance figure is refused.
+    #[test]
+    fn hidden_values_travel_as_words_and_the_old_figure_is_refused() {
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello()))).unwrap();
+        assert!(
+            json.contains(
+                "\"player.consistency\":{\"confidence\":\"not_yet_known\"},\
+                 \"player.injury_proneness\":{\"word\":\"rarely_injured\",\
+                 \"confidence\":\"tentative\"}"
+            ),
+            "{json}"
+        );
+        let old = json.replace(
+            "\"player.natural_fitness\":142,",
+            "\"player.natural_fitness\":142,\"player.injury_resistance\":128,",
+        );
+        assert!(serde_json::from_str::<ServerMessage>(&old).is_err());
+        let ratings = ServerMessage::Ratings(Ratings {
+            tick: 270_000,
+            ratings: vec![RatingWire {
+                id: "a-1".into(),
+                rating: 7.3,
+            }],
+        });
+        assert_eq!(
+            serde_json::to_string(&ratings).unwrap(),
+            "{\"type\":\"ratings\",\"tick\":270000,\"ratings\":[{\"player.id\":\"a-1\",\"rating\":7.3}]}"
+        );
     }
 
     fn bare_team(id: &str, name: &str) -> TeamRef {

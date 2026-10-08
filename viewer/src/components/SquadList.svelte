@@ -8,6 +8,7 @@
 <script>
   import SectionLabel from './SectionLabel.svelte';
   import StubSection from './StubSection.svelte';
+  import { bandOf } from '../lib/scale.js';
 
   let {
     list,
@@ -98,7 +99,7 @@
         </span>
         <!-- STUB: the player's grasp of the tactic. -->
         <StubSection note="tactic column" inline><i class="track"></i></StubSection>
-        <b class="num r">{row.fitness}</b>
+        <b class="num r {bandOf(row.fitness)}">{row.fitness}</b>
         <!-- STUB: match sharpness. -->
         <StubSection note="sharpness column" inline><b class="num r">—</b></StubSection>
       </button>
@@ -394,5 +395,22 @@
 
   .icon {
     flex: none;
+  }
+
+  /* The fitness number in its band, as the squad table draws every 1 to 20 value. */
+  .v4 {
+    color: var(--good);
+  }
+
+  .v3 {
+    color: var(--mid);
+  }
+
+  .v2 {
+    color: var(--warn);
+  }
+
+  .v1 {
+    color: var(--bad);
   }
 </style>

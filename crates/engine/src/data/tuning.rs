@@ -12,9 +12,19 @@ use crate::flags::{FlagDef, each_flag_switches_something};
 use crate::team::PLAYERS_PER_TEAM;
 use crate::tuning::Tuning;
 
-/// Schema version this build reads. Version 2 rewrites the fatigue block, which the engine
-/// now reads, and adds the decision weights and injury rates to the engine block.
-pub const TUNING_VERSION: u32 = 2;
+/// Schema version this build reads. Version 2 rewrote the fatigue block and added the
+/// decision weights and injury rates to the engine block. Version 3 adds the attribute
+/// contract (`engine.contract`) and the world spread of the generator (`generator.world`),
+/// and drops the linear speed fields and the per-position distributions they replace; a
+/// version 2 file converts ([`crate::data::convert::tuning_v2_to_v3`]). Version 4 adds the
+/// state caps and body jobs (`engine.contract.states`, `engine.contract.body`) and the
+/// fatigue weights per attribute group (`fatigue.group_weights`); a version 3 file converts
+/// ([`crate::data::convert::tuning_v3_to_v4`]). Version 5 adds consistency
+/// (`engine.contract.consistency`), the words of the hidden values (`hidden`), the match
+/// rating (`match_rating`), and the spread of the hidden values in the generator
+/// (`generator.world.hidden`); a version 4 file converts
+/// ([`crate::data::convert::tuning_v4_to_v5`]).
+pub const TUNING_VERSION: u32 = 5;
 
 /// The tuning file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
@@ -30,6 +40,12 @@ pub struct TuningFile {
     pub fatigue: FatigueTuning,
     #[garde(dive)]
     pub stream: StreamTuning,
+    /// The word bands of each hidden value and the confidence thresholds.
+    #[garde(dive)]
+    pub hidden: crate::contract::hidden::HiddenTuning,
+    /// The weights of the match rating.
+    #[garde(dive)]
+    pub match_rating: crate::match_rating::MatchRatingTuning,
     /// Feature flags that switch between a current model and a candidate. Optional: a file
     /// without the block has no flags.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -63,45 +79,158 @@ pub struct GeneratorTuning {
     /// The positions of the bench, in order; its length plus eleven is `squad_size`.
     #[garde(custom(bench_matches_squad(self.squad_size)))]
     pub bench_positions: Vec<Position>,
-    /// One distribution per position code; every one of the ten codes must be present.
-    #[garde(dive, custom(every_position_present))]
-    pub per_position: BTreeMap<String, GroupDist>,
+    /// The world spread: tier levels, club, player and attribute spreads, and each
+    /// position's offsets per attribute group.
+    #[garde(dive)]
+    pub world: WorldTuning,
+    /// What the body fields are drawn from. Optional, so a tuning file written before body
+    /// fields (as an old replay embeds it) still loads; `engine-cli generate` needs it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub body: Option<BodyTuning>,
 }
 
-/// A mean and spread per attribute group.
+/// The body-field distributions: height per position, age, and nationality.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
-pub struct GroupDist {
+pub struct BodyTuning {
+    /// Height in centimetres per position code; every one of the ten codes must be present.
+    #[garde(dive, custom(every_height_present))]
+    pub height: BTreeMap<String, HeightDist>,
     #[garde(dive)]
-    pub technical: Dist,
+    pub age: AgeDist,
     #[garde(dive)]
-    pub mental: Dist,
-    #[garde(dive)]
-    pub physical: Dist,
-    #[garde(dive)]
-    pub goalkeeping: Dist,
+    pub nationality: NationalityDist,
 }
 
-impl GroupDist {
-    /// The distribution for `group`.
-    pub fn get(&self, group: Group) -> &Dist {
-        match group {
-            Group::Technical => &self.technical,
-            Group::Mental => &self.mental,
-            Group::Physical => &self.physical,
-            Group::Goalkeeping => &self.goalkeeping,
-        }
+/// A height bell curve in centimetres; draws are rounded and kept to 150 to 215.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct HeightDist {
+    #[garde(range(min = 150.0, max = 215.0))]
+    pub mean: f64,
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub spread: f64,
+}
+
+/// An age bell curve in years; draws are rounded and kept to `min` to `max`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct AgeDist {
+    #[garde(range(min = 15.0, max = 45.0))]
+    pub mean: f64,
+    #[garde(range(min = 0.0, max = 15.0))]
+    pub spread: f64,
+    #[garde(range(min = 15, max = 45))]
+    pub min: u8,
+    #[garde(range(min = self.min, max = 45))]
+    pub max: u8,
+}
+
+/// Nationality: the club's country, the others a foreign player comes from, and the share
+/// of foreign players. Codes are three upper-case letters.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct NationalityDist {
+    #[garde(custom(nation_code))]
+    pub home: String,
+    #[garde(length(min = 1, max = 64), inner(custom(nation_code)))]
+    pub foreign: Vec<String>,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub foreign_share: f64,
+}
+
+fn nation_code(code: &str, _ctx: &()) -> garde::Result {
+    if code.len() == 3 && code.bytes().all(|b| b.is_ascii_uppercase()) {
+        Ok(())
+    } else {
+        Err(garde::Error::new(format!(
+            "{code} is not three upper-case letters"
+        )))
     }
 }
 
-/// A bell-curve centre and half-width on the 1 to 100 scale.
+fn every_height_present(map: &BTreeMap<String, HeightDist>, _ctx: &()) -> garde::Result {
+    for p in Position::ALL {
+        if !map.contains_key(p.code()) {
+            return Err(garde::Error::new(format!(
+                "position {} has no height",
+                p.code()
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// The world spread, on the 1 to 20 scale. Each club's level is drawn around its tier's
+/// mean, each player's level around his club's, and each attribute around the player's level
+/// plus his position's offset for the attribute's group.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
-pub struct Dist {
-    #[garde(range(min = 1.0, max = 100.0))]
+pub struct WorldTuning {
+    /// The tiers, from the top flight down: each with its mean level and the spread of its
+    /// clubs' levels around it.
+    #[garde(length(min = 1, max = 10), dive)]
+    pub tiers: Vec<TierDist>,
+    /// The spread of a player's level around his club's.
+    #[garde(range(min = 0.0, max = 6.0))]
+    pub player_spread: f64,
+    /// The spread of an attribute around the player's level plus his position offset.
+    #[garde(range(min = 0.0, max = 6.0))]
+    pub attribute_spread: f64,
+    /// Per position code, the offset of each attribute group from the player's level; every
+    /// one of the ten codes must be present.
+    #[garde(dive, custom(every_position_present))]
+    pub offsets: BTreeMap<String, GroupOffsets>,
+    /// The hidden values, drawn around their own mean, independent of the player's level.
+    #[garde(dive)]
+    pub hidden: HiddenDist,
+}
+
+/// The bell curve the hidden values are drawn from, on the 1 to 20 scale.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct HiddenDist {
+    #[garde(range(min = 1.0, max = 20.0))]
     pub mean: f64,
-    #[garde(range(min = 0.0, max = 40.0))]
+    #[garde(range(min = 0.0, max = 6.0))]
     pub spread: f64,
+}
+
+/// One tier's mean level and the spread of its clubs around it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct TierDist {
+    #[garde(range(min = 1.0, max = 20.0))]
+    pub mean: f64,
+    #[garde(range(min = 0.0, max = 6.0))]
+    pub club_spread: f64,
+}
+
+/// A position's offset per attribute group, in 1 to 20 units.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct GroupOffsets {
+    #[garde(range(min = -19.0, max = 19.0))]
+    pub technical: f64,
+    #[garde(range(min = -19.0, max = 19.0))]
+    pub mental: f64,
+    #[garde(range(min = -19.0, max = 19.0))]
+    pub physical: f64,
+    #[garde(range(min = -19.0, max = 19.0))]
+    pub goalkeeping: f64,
+}
+
+impl GroupOffsets {
+    /// The offset for `group`.
+    pub fn get(&self, group: Group) -> f64 {
+        match group {
+            Group::Technical => self.technical,
+            Group::Mental => self.mental,
+            Group::Physical => self.physical,
+            Group::Goalkeeping => self.goalkeeping,
+        }
+    }
 }
 
 /// Fatigue: how fast energy drains, and how far low energy lowers pace and decisions.
@@ -126,9 +255,39 @@ pub struct FatigueTuning {
     /// Energy recovered at half-time by an average player; natural fitness scales it.
     #[garde(range(min = 0.0, max = 1.0))]
     pub half_time_recovery: f64,
-    /// Stamina points recovered per rest day. The season layer reads it.
+    /// Stamina points recovered per rest day, out of 100: the days-of-rest input sets the
+    /// energy at kick-off from it.
     #[garde(range(min = 0.0, max = 100.0))]
     pub recovery_per_day: f64,
+    /// How hard tiredness lowers each attribute group it acts on, as a share of the full
+    /// curve: physical first, technical and goalkeeping less. The body family does not act
+    /// on the mental group.
+    #[garde(dive)]
+    pub group_weights: GroupWeights,
+    /// The highest speed, as a share of the average player's top speed, at which a sprint
+    /// still costs more: the effort term reads speed over that top speed up to this share,
+    /// so a faster runner pays for his speed up to it.
+    #[garde(range(min = 1.0, max = 2.0))]
+    pub sprint_cap: f64,
+}
+
+/// The fatigue weight per attribute group the body family acts on, 0 to 1.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct GroupWeights {
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub physical: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub technical: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub goalkeeping: f64,
+}
+
+impl GroupWeights {
+    /// The weight of each group in [`crate::contract::states::GROUPS`] order; mental is 0.
+    pub fn by_group(&self) -> [f64; crate::contract::states::GROUP_COUNT] {
+        [self.technical, 0.0, self.physical, self.goalkeeping]
+    }
 }
 
 fn check_curve(curve: &[[f64; 2]], _ctx: &()) -> garde::Result {
@@ -171,7 +330,7 @@ fn bench_matches_squad(squad_size: usize) -> impl FnOnce(&Vec<Position>, &()) ->
     }
 }
 
-fn every_position_present(map: &BTreeMap<String, GroupDist>, _ctx: &()) -> garde::Result {
+fn every_position_present(map: &BTreeMap<String, GroupOffsets>, _ctx: &()) -> garde::Result {
     for code in Position::ALL.iter().map(Position::code) {
         if !map.contains_key(code) {
             return Err(garde::Error::new(format!("position {code} is missing")));

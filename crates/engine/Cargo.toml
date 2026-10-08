@@ -31,6 +31,10 @@ debug-trace = []
 # The test scene builder and scripted referee draws. Only this crate's own tests enable it,
 # so a release build never contains either.
 scenario = []
+# The sensitivity rules and the job probe they count with. Off by default, so no match of a
+# normal build pays for the probe's count sites. The rules' tests need it:
+# `cargo test -p engine --features sensitivity --test sensitivity`.
+sensitivity = []
 
 [dev-dependencies]
 criterion = { workspace = true }
@@ -43,3 +47,12 @@ engine = { path = ".", default-features = false, features = ["scenario"] }
 [[bench]]
 name = "tick_step"
 harness = false
+
+# The sensitivity rules' tests build only with the probe: a plain `cargo test` skips them.
+[[test]]
+name = "sensitivity"
+required-features = ["sensitivity"]
+
+[[test]]
+name = "sensitivity_full"
+required-features = ["sensitivity"]

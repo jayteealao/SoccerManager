@@ -6,6 +6,7 @@ use garde::Validate;
 use serde::{Deserialize, Serialize};
 
 use crate::TICKS_PER_SECOND;
+use crate::contract::ContractTuning;
 
 /// Refuses a physics step that is not one tick of the match clock: the clock, the minute, and
 /// the viewer all count `TICKS_PER_SECOND` ticks to the second, and a different step would
@@ -31,16 +32,6 @@ pub struct Tuning {
     /// Ticks between two decisions of the same agent. 1 means every tick.
     #[garde(range(min = 1, max = 50))]
     pub decision_interval_ticks: u32,
-    /// Player speed at pace 0 and the extra speed at pace 100.
-    #[garde(range(min = 0.0, max = 50.0))]
-    pub base_speed: f64,
-    #[garde(range(min = 0.0, max = 40.0))]
-    pub pace_speed: f64,
-    /// Player acceleration at acceleration 0 and the extra at acceleration 100.
-    #[garde(range(min = 0.0, max = 30.0))]
-    pub base_accel: f64,
-    #[garde(range(min = 0.0, max = 50.0))]
-    pub accel_bonus: f64,
     /// Steering: slow-down radius for arrive, neighbour radius and strength for separation.
     #[garde(range(min = 0.0, max = 30.0))]
     pub arrive_radius: f64,
@@ -132,9 +123,11 @@ pub struct Tuning {
     pub anchor_ball_distance: f64,
     #[garde(range(min = 0, max = 1000))]
     pub anchor_grace_ticks: u32,
-    /// Fouls: the chance that a tackle attempt is a foul for an average tackler, how much
-    /// aggression raises it, how much tackling skill lowers it, and the share of fouls after
-    /// which the fouled team loses the ball (the rest play on with advantage).
+    /// Fouls: the chance that a tackle attempt is a foul for an average tackler; the
+    /// log-odds it rises per curve point of the tackler's commitment (the tackle choose stage,
+    /// led by aggression) and falls per curve point of his tackling (the tackle execute
+    /// stage), each measured from rating 10; and the share of fouls after which the fouled
+    /// team loses the ball for a fouled player of rating 10 (the rest play on with advantage).
     #[garde(range(min = 0.0, max = 1.0))]
     pub foul_base: f64,
     #[garde(range(min = 0.0, max = 4.0))]
@@ -143,8 +136,8 @@ pub struct Tuning {
     pub foul_tackling_weight: f64,
     #[garde(range(min = 0.0, max = 1.0))]
     pub foul_ball_loss: f64,
-    /// Cards per foul: the yellow chance at aggression 0, the extra at aggression 100, and the
-    /// straight red chance.
+    /// Cards per foul: the yellow chance at a commitment share of 0, the extra at a share of
+    /// 1 (0.5 at rating 10), and the straight red chance.
     #[garde(range(min = 0.0, max = 1.0))]
     pub yellow_base: f64,
     #[garde(range(min = 0.0, max = 1.0))]
@@ -159,8 +152,10 @@ pub struct Tuning {
     #[serde(default = "default_foul_booked_factor")]
     #[garde(range(min = 0.0, max = 1.0))]
     pub foul_booked_factor: f64,
-    /// The chance that a tackle attempt wins the ball cleanly for a tackler whose tackling
-    /// equals the carrier's dribbling; it scales with `tackling / (tackling + dribbling)`.
+    /// Twice the chance that a tackle attempt wins the ball cleanly when the tackler's
+    /// tackle stage equals the carrier's dribble or shield stage: the even contest is
+    /// `tackle_win_base / 2`, as the ratio `tackling / (tackling + dribbling)` gave before the
+    /// contract.
     #[serde(default = "default_tackle_win_base")]
     #[garde(range(min = 0.0, max = 0.5))]
     pub tackle_win_base: f64,
@@ -212,6 +207,10 @@ pub struct Tuning {
     #[serde(default)]
     #[garde(dive)]
     pub clearances: ClearanceTuning,
+    /// The attribute contract: the curve, each action's strength and limits, top speed,
+    /// acceleration, and concentration lapses.
+    #[garde(dive)]
+    pub contract: ContractTuning,
 }
 
 /// How a clearance flies. A carrier's clearance goes toward the far half, turned by up to
@@ -450,6 +449,10 @@ pub struct DecisionWeights {
     #[serde(default)]
     #[garde(range(min = 0.0, max = 5.0))]
     pub carry_cost: f64,
+    /// The weight of a pass candidate's choose stage (decisions, with teamwork and vision
+    /// supporting): `teamwork_bonus · (2 · share − 1)`, 0 at rating 10.
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub teamwork_bonus: f64,
 }
 
 /// Seconds between the ball going dead and the restart, per restart kind. Play restarts
@@ -479,10 +482,6 @@ impl Default for Tuning {
         Self {
             dt: 0.02,
             decision_interval_ticks: 1,
-            base_speed: 5.0,
-            pace_speed: 4.0,
-            base_accel: 3.0,
-            accel_bonus: 5.0,
             arrive_radius: 3.0,
             separation_radius: 1.5,
             separation_strength: 6.0,
@@ -517,8 +516,8 @@ impl Default for Tuning {
             anchor_ball_distance: 30.0,
             anchor_grace_ticks: 100,
             foul_base: FOUL_BASE,
-            foul_aggression_weight: 1.0,
-            foul_tackling_weight: 0.5,
+            foul_aggression_weight: 0.05,
+            foul_tackling_weight: 0.025,
             foul_ball_loss: 0.6,
             yellow_base: 0.05,
             yellow_aggression_weight: 0.15,
@@ -565,6 +564,7 @@ impl Default for Tuning {
                 lone_dribble: -0.5,
                 carry_s: 0.0,
                 carry_cost: 0.0,
+                teamwork_bonus: 0.1,
             },
             injury_per_tackle: INJURY_PER_TACKLE,
             injury_per_minute: INJURY_PER_MINUTE,
@@ -575,6 +575,7 @@ impl Default for Tuning {
             },
             shots: ShotTuning::default(),
             clearances: ClearanceTuning::default(),
+            contract: ContractTuning::default(),
         }
     }
 }

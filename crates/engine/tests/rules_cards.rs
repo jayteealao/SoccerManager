@@ -20,10 +20,10 @@ const TACKLER: usize = 16;
 fn foul(card_draw: impl Fn(&Simulation) -> f64, arrange: impl Fn(Scene) -> Scene) -> Simulation {
     let config = quiet_match(90);
     let plain = Simulation::new(config.clone()).unwrap();
-    let tackler = plain.players()[TACKLER].derived;
-    let carrier = plain.players()[CARRIER].derived;
-    let p_win = engine::rules::fouls::win_chance(&tackler, &carrier, &config.tuning);
-    let p_foul = foul_chance(&tackler, 0, &config.tuning);
+    let tackler = plain.skills(TACKLER);
+    let carrier = plain.skills(CARRIER);
+    let p_win = engine::rules::fouls::win_chance(tackler, carrier, &config.tuning);
+    let p_foul = foul_chance(tackler, 0, &config.tuning);
     let at = DVec2::new(0.0, 10.0);
     let scene = spread(Scene::new(config), -30.0, 30.0)
         .place(CARRIER, at)
@@ -127,4 +127,13 @@ fn a_fifth_send_off_abandons_the_match() {
     let tick = sim.tick();
     sim.step();
     assert_eq!(sim.tick(), tick, "an abandoned match does not advance");
+    // Abandoned before the second half's added time was announced, full time carries none,
+    // as the event rules require.
+    sim.finish();
+    let full_time = sim
+        .take_events()
+        .into_iter()
+        .find(|e| e.kind == EngineEventKind::FullTime)
+        .expect("a full-time event");
+    assert_eq!(full_time.added_time_s, None);
 }

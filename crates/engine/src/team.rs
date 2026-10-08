@@ -55,7 +55,17 @@ pub struct SquadPlayer {
     pub shirt: u8,
     pub position: Position,
     pub attributes: Attributes,
+    /// What his attributes give him fresh.
     pub derived: Derived,
+    /// His base stage values.
+    pub stages: crate::contract::StageValues,
+    /// His height and age, as the team file gives them.
+    pub body: crate::contract::body::Body,
+    /// His match condition inputs; absent fields have no effect.
+    pub condition: crate::data::team::Condition,
+    /// His energy at kick-off, from his days of rest ([`Team::set_start_energy`]); 1.0
+    /// when none are given.
+    pub start_energy: f64,
 }
 
 /// A team: club identity, an attack direction, the squad, the lineup and bench, the
@@ -77,6 +87,9 @@ pub struct Team {
     pub player_ids: Vec<String>,
     /// Every player's display name in the team file, in file order (the squad index).
     pub player_names: Vec<String>,
+    /// Every player's nationality in the team file (three upper-case letters), in file order;
+    /// `None` where the file gives none. Shown on the page only; play never reads it.
+    pub player_nationalities: Vec<Option<String>>,
     /// The squad, in file order.
     pub squad: Vec<SquadPlayer>,
     /// The squad index of the player in each formation slot.
@@ -108,6 +121,7 @@ impl Team {
             kit,
             player_ids: Vec::new(),
             player_names: Vec::new(),
+            player_nationalities: Vec::new(),
             squad: Vec::new(),
             lineup: std::array::from_fn(|slot| slot),
             bench: Vec::new(),
@@ -160,22 +174,43 @@ impl Team {
         );
         team.player_ids = file.players.iter().map(|p| p.id.clone()).collect();
         team.player_names = file.players.iter().map(|p| p.name.clone()).collect();
+        team.player_nationalities = file.players.iter().map(|p| p.nationality.clone()).collect();
+        let blend = crate::contract::stages::Blend::of(schema);
         team.squad = file
             .players
             .iter()
             .map(|entry| {
                 let attributes = Attributes::from_entry(&entry.attributes, schema);
+                let body = crate::contract::body::Body {
+                    height_cm: entry.height,
+                    age: entry.age,
+                };
+                let (derived, stages) =
+                    Derived::from_blend(&attributes, &blend, schema, tuning, body);
                 SquadPlayer {
                     shirt: entry.shirt,
                     position: entry.position,
-                    derived: Derived::from_attributes(&attributes, schema, tuning),
+                    derived,
+                    stages,
                     attributes,
+                    body,
+                    condition: entry.condition.unwrap_or_default(),
+                    start_energy: 1.0,
                 }
             })
             .collect();
         team.bench = (PLAYERS_PER_TEAM..file.players.len()).collect();
         let players = team.starters();
         Ok((team, players))
+    }
+
+    /// Sets every squad player's energy at kick-off from his days of rest, his age, and the
+    /// fatigue tuning's recovery per rest day; a player with no rest days given starts full.
+    pub fn set_start_energy(&mut self, tuning: &Tuning, recovery_per_day: f64) {
+        let jobs = &tuning.contract.body;
+        for s in &mut self.squad {
+            s.start_energy = jobs.start_energy(s.condition.rest_days, s.body, recovery_per_day);
+        }
     }
 
     /// The eleven players of the lineup, each at its slot's base position, fresh.
@@ -188,7 +223,8 @@ impl Team {
             .collect()
     }
 
-    /// Squad player `squad` in `slot`, fresh and at rest at `pos`.
+    /// Squad player `squad` in `slot`, at his base values, with his kick-off energy, and at
+    /// rest at `pos`.
     pub fn player(&self, slot: usize, squad: usize, pos: DVec2) -> Player {
         let s = &self.squad[squad];
         Player {
@@ -199,8 +235,10 @@ impl Team {
             shirt: s.shirt,
             attributes: s.attributes,
             derived: s.derived,
-            base: s.derived,
-            energy: 1.0,
+            deltas: [0; crate::contract::states::GROUP_COUNT],
+            form: 0,
+            form_match: 0,
+            energy: s.start_energy,
             pos,
             vel: DVec2::ZERO,
             target: pos,
@@ -208,6 +246,7 @@ impl Team {
             status: Status::OnPitch,
             yellow: 0,
             foul_ready: 0,
+            lapse_until: 0,
         }
     }
 
@@ -259,7 +298,12 @@ impl Team {
         let mut back: Vec<usize> = self.back_line();
         back.retain(|&s| !out(s));
         back.sort_by(|a, b| self.formation[*a].1.total_cmp(&self.formation[*b].1));
-        let gap = self.plan.back_line_gap;
+        // The acting keeper organises the line: a better organiser keeps it tighter.
+        let organise = self
+            .squad
+            .get(self.lineup[self.keeper_slot()])
+            .map_or(1.0, |k| k.derived.knobs.organise);
+        let gap = self.plan.back_line_gap / organise;
         let too_wide = back
             .windows(2)
             .any(|w| self.formation[w[1]].1 - self.formation[w[0]].1 > gap);
@@ -390,8 +434,9 @@ impl Team {
     }
 
     /// The formation anchor for `slot` given the ball position: the slot moved up by the
-    /// plan's block depth and the slot's duty, widened by the plan, plus the ball shift.
-    pub fn anchor(&self, slot: usize, ball: DVec2, t: &Tuning) -> DVec2 {
+    /// plan's block depth, the slot's duty, and the role's offset for the phase (the team has
+    /// the ball when `in_possession`), widened by the plan, plus the ball shift.
+    pub fn anchor(&self, slot: usize, ball: DVec2, in_possession: bool, t: &Tuning) -> DVec2 {
         if slot == self.keeper_slot() {
             // The keeper stands on the line from the goal centre toward the ball.
             let goal = self.own_goal();
@@ -401,10 +446,19 @@ impl Team {
         }
         let (fx, fy) = self.formation[slot];
         let (sx, sy) = self.pitch.scale();
-        let depth = (fx + self.plan.block_depth + self.plan.slots[slot].depth) * sx;
+        let plan = &self.plan.slots[slot];
+        let offset = if in_possession {
+            plan.in_possession
+        } else {
+            plan.out_of_possession
+        };
+        // The role's offset comes after the existing sums, so an offset of 0 keeps every
+        // anchor's bits.
+        let depth = (fx + self.plan.block_depth + plan.depth + offset.x) * sx;
+        let side = if fy < 0.0 { -1.0 } else { 1.0 };
         let base = DVec2::new(
             (depth - self.pitch.half_length()) * self.attack_x,
-            fy * self.plan.width * sy,
+            (fy * self.plan.width + side * offset.y) * sy,
         );
         let shift = DVec2::new(ball.x * t.compactness_x, ball.y * t.compactness_y);
         self.pitch.clamp(base + shift, 0.5)
@@ -447,7 +501,7 @@ mod tests {
                 DVec2::new(-52.5, -34.0),
             ] {
                 for slot in 0..PLAYERS_PER_TEAM {
-                    assert!(Pitch::DEFAULT.contains(team.anchor(slot, ball, &t)));
+                    assert!(Pitch::DEFAULT.contains(team.anchor(slot, ball, false, &t)));
                 }
             }
         }
@@ -479,7 +533,9 @@ mod tests {
                                 DVec2::ZERO,
                             ] {
                                 for slot in 0..PLAYERS_PER_TEAM {
-                                    assert!(Pitch::DEFAULT.contains(team.anchor(slot, ball, t)));
+                                    assert!(
+                                        Pitch::DEFAULT.contains(team.anchor(slot, ball, false, t))
+                                    );
                                 }
                             }
                         }
@@ -508,7 +564,7 @@ mod tests {
         assert!(!team.active[2]);
         let t = Tuning::default();
         for slot in [1, 3, 4] {
-            assert!(Pitch::DEFAULT.contains(team.anchor(slot, DVec2::ZERO, &t)));
+            assert!(Pitch::DEFAULT.contains(team.anchor(slot, DVec2::ZERO, false, &t)));
         }
         team.reshape(9);
         assert_eq!(

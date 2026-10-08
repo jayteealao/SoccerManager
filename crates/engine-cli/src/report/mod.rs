@@ -1165,6 +1165,7 @@ mod tests {
                 ..MatchFigures::default()
             },
             script: Default::default(),
+            ratings: Vec::new(),
         }
     }
 
@@ -1642,6 +1643,7 @@ pub mod tests_support {
             tactics: Default::default(),
             figures: Default::default(),
             script: Default::default(),
+            ratings: Vec::new(),
         }
     }
 }

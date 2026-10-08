@@ -5,7 +5,7 @@
 use super::card::ModuleCard;
 use super::fast_model::{self, FastModel};
 use super::game::{self, PeopleModule, PresentationModule, SeasonModule, WorldModule};
-use super::modifier::{Modifier, stand_ins};
+use super::modifier::{Modifier, condition, stand_ins};
 use super::viewer::{self, SkinModule};
 use super::{
     BallModule, ChangesModule, ClockModule, CommentaryHookModule, DecisionHookModule,
@@ -20,7 +20,7 @@ use crate::{ai, ball, decision, fatigue, hook_slots, possession, shot, steering}
 /// Every typed slot kind once: its `ModuleRef` variant, its `ResolvedModules` field, and its
 /// slot trait. `ModuleRef` and the resolver's builder are both generated from this one list,
 /// so a new kind is written here once, and the compiler then checks the `ResolvedModules`
-/// struct against it. The modifier kind is not listed: its four slots share one list.
+/// struct against it. The modifier kind is not listed: its six slots share one list.
 macro_rules! for_each_slot_kind {
     ($callback:ident) => {
         $callback! {
@@ -138,6 +138,11 @@ pub const MODIFIER_FATIGUE: Slot = Slot {
     required: false,
 };
 
+pub const MODIFIER_SHARPNESS: Slot = Slot {
+    id: "engine.modifier.sharpness",
+    required: false,
+};
+
 pub const MODIFIER_PRESSURE: Slot = Slot {
     id: "engine.modifier.pressure",
     required: false,
@@ -145,6 +150,11 @@ pub const MODIFIER_PRESSURE: Slot = Slot {
 
 pub const MODIFIER_MOMENTUM: Slot = Slot {
     id: "engine.modifier.momentum",
+    required: false,
+};
+
+pub const MODIFIER_ADAPTATION: Slot = Slot {
+    id: "engine.modifier.adaptation",
     required: false,
 };
 
@@ -275,7 +285,7 @@ pub const FAST_MODEL: Slot = Slot {
 pub const SLOT_COUNT: usize = DECLS.len();
 
 /// The number of modifier slots.
-pub const MODIFIER_COUNT: usize = 4;
+pub const MODIFIER_COUNT: usize = 6;
 
 const FOULS_REGISTRATIONS: &[Registration] = &[Registration {
     name: "fouls",
@@ -466,6 +476,21 @@ const DECLS: &[SlotDecl] = &[
         }),
     },
     SlotDecl {
+        slot: MODIFIER_SHARPNESS,
+        registrations: &[Registration {
+            name: "sharpness",
+            version: 1,
+            module: ModuleRef::Modifier(&condition::SharpnessV1),
+            card: &condition::SHARPNESS_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::Modifier(&condition::SHARPNESS_OFF),
+            card: &condition::SHARPNESS_OFF_CARD,
+        }),
+    },
+    SlotDecl {
         slot: MODIFIER_PRESSURE,
         registrations: &[Registration {
             name: "pressure",
@@ -493,6 +518,21 @@ const DECLS: &[SlotDecl] = &[
             version: 0,
             module: ModuleRef::Modifier(&stand_ins::MOMENTUM_OFF),
             card: &stand_ins::MOMENTUM_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: MODIFIER_ADAPTATION,
+        registrations: &[Registration {
+            name: "adaptation",
+            version: 1,
+            module: ModuleRef::Modifier(&condition::AdaptationV1),
+            card: &condition::ADAPTATION_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::Modifier(&condition::ADAPTATION_OFF),
+            card: &condition::ADAPTATION_OFF_CARD,
         }),
     },
     SlotDecl {

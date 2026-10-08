@@ -20,6 +20,7 @@ import { contrastReport } from '../support/contrast.mjs';
 import { VIEWER, contentWithSkin, fastForward, startEngine } from '../support/engine.mjs';
 import { everyMessage, injectingRelay, managerCommand, recordClientMessages } from '../support/messages.mjs';
 import { chooseIndex, clickClear, playUntil, snap } from '../support/page.mjs';
+import { expectRiskWords } from '../support/ratings.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
 /// Minute 60 at 50 ticks a second: the Touchline fixture.
@@ -131,6 +132,7 @@ for (const skin of SKINS) {
         await tactics(page, engine, skin);
         await continueToPrematch(page);
         await expect(page.getByRole('heading', { name: 'Starting line-ups' })).toBeVisible();
+        await expectRiskWords(page);
         await snap(page, `prematch-${skin}.png`);
       } finally {
         engine.cleanUp();

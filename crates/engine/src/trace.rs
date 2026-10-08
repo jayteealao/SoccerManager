@@ -178,7 +178,7 @@ impl Trace {
     }
 }
 
-/// `true` for the 18 actions whose draw is tested against a probability. The other 18 are
+/// `true` for the 20 actions whose draw is tested against a probability. The other 18 are
 /// value draws: score noise, aims, angles, lofts, the keeper's dive, and added time. The
 /// list is outside the stream table, so the scheme digest does not change.
 pub fn is_chance(action: Action) -> bool {
@@ -200,7 +200,10 @@ pub fn is_chance(action: Action) -> bool {
         | Action::ShootoutSave
         | Action::ShootoutSaveHold
         | Action::InjuryMinute
-        | Action::InjuryTackle => true,
+        | Action::InjuryTackle
+        | Action::Lapse
+        | Action::Header => true,
+        Action::FormMatch | Action::FormPeriod => false,
         Action::ShotScore
         | Action::PassScore
         | Action::DribbleScore
@@ -267,11 +270,14 @@ pub enum Point {
     ChangeRejected,
     SendOff,
     Abandoned,
+    /// A part of the players' form offsets is drawn: a new period, or a substitute's match
+    /// part as he comes on.
+    Form,
 }
 
 impl Point {
-    /// Every point: 10 decision points, then 27 rule outcomes.
-    pub const ALL: [Point; 37] = [
+    /// Every point: 10 decision points, then 28 rule outcomes.
+    pub const ALL: [Point; 38] = [
         Point::Carrier,
         Point::RestartPass,
         Point::Press,
@@ -309,6 +315,7 @@ impl Point {
         Point::ChangeRejected,
         Point::SendOff,
         Point::Abandoned,
+        Point::Form,
     ];
 
     /// The point's name in the trace file.
@@ -351,6 +358,7 @@ impl Point {
             Point::ChangeRejected => "change_rejected",
             Point::SendOff => "send_off",
             Point::Abandoned => "abandoned",
+            Point::Form => "form",
         }
     }
 
@@ -406,6 +414,10 @@ pub fn points_of(action: Action) -> &'static [Point] {
         Action::KeeperDive => &[Point::RestartTaken],
         Action::ShootoutSave | Action::ShootoutSaveHold => &[Point::ShootoutSave],
         Action::InjuryMinute | Action::InjuryTackle => &[Point::Injury],
+        // A lapse is a defender losing his place in the shape.
+        Action::Lapse => &[Point::Cover],
+        Action::Header => &[Point::LooseBall],
+        Action::FormMatch | Action::FormPeriod => &[Point::Form],
     }
 }
 
@@ -648,7 +660,7 @@ pub fn note_points(seen: &mut std::collections::BTreeSet<Point>, records: &[Trac
 /// The points the 22 gate matches never reach. Each has a scene test in
 /// `crates/engine/tests/trace.rs` that forces it and checks its record.
 #[cfg(feature = "scenario")]
-pub const SCENE_ONLY: &[Point] = &[Point::CrossClear, Point::Abandoned];
+pub const SCENE_ONLY: &[Point] = &[Point::CrossClear, Point::Abandoned, Point::Offside];
 
 /// Checks the partition: the points the gate matches reached plus [`SCENE_ONLY`] are
 /// exactly [`Point::ALL`]. Returns the missing points by name, or the scene-only points the

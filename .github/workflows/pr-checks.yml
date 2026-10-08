@@ -48,6 +48,23 @@ jobs:
       - name: Engine tests (ignored slow tests excluded)
         run: cargo test --workspace --locked
 
+  # The sensitivity rules and their job probe build only with the engine's `sensitivity`
+  # feature, so the steps above never compile them. This job lints and tests that build.
+  sensitivity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+      - name: Fetch every crate
+        run: cargo fetch --locked
+      - name: clippy with the probe
+        run: cargo clippy -p engine --all-targets --locked --features sensitivity -- -D warnings
+      - name: The rules' unit tests
+        run: "cargo test --locked -p engine --features sensitivity --lib -- sensitivity::"
+      - name: The rules on small batches (ignored full run excluded)
+        run: cargo test --locked -p engine --features sensitivity --test sensitivity
+
   # A match saved by the previous release finishes on that release's engine, built from its
   # tag (packaging/previous-engine.json), with the result the previous build reaches.
   previous-engine:

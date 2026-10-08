@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "slots": {
     "engine.fouls": { "module": "fouls", "version": 1 },
     "engine.offside": { "module": "offside", "version": 1 },
@@ -8,8 +8,10 @@
     "engine.steering": { "module": "steering", "version": 1 },
     "engine.pre-match": { "module": "pre-match", "version": 1 },
     "engine.modifier.fatigue": { "module": "fatigue-curve", "version": 1 },
+    "engine.modifier.sharpness": { "module": "sharpness", "version": 1 },
     "engine.modifier.pressure": { "module": "pressure", "version": 1 },
     "engine.modifier.momentum": { "module": "momentum", "version": 1 },
+    "engine.modifier.adaptation": { "module": "adaptation", "version": 1 },
     "engine.modifier.weather": { "module": "weather", "version": 1 },
     "engine.clock": { "module": "clock", "version": 1 },
     "engine.restarts": { "module": "restarts", "version": 1 },

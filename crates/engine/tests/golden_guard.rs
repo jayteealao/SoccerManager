@@ -133,7 +133,9 @@ fn a_fixture_list_change_with_no_schema_increase_fails() {
 #[test]
 fn an_inventory_version_change_with_no_schema_increase_fails() {
     let parent = first();
-    let child = regenerated(&parent, |v| v["inventory_version"] = 2.into());
+    let child = regenerated(&parent, |v| {
+        v["inventory_version"] = (gate::INVENTORY_VERSION + 1).into()
+    });
     let found = faults(Some(&parent.to_text()), Some(&child));
     assert!(
         has(
@@ -146,7 +148,11 @@ fn an_inventory_version_change_with_no_schema_increase_fails() {
     let child = regenerated(&parent, |v| v["gate_schema"] = 0.into());
     let found = faults(Some(&parent.to_text()), Some(&child));
     assert!(
-        has(&found, 4, "the gate schema decreases from 1 to 0"),
+        has(
+            &found,
+            4,
+            &format!("the gate schema decreases from {} to 0", gate::GATE_SCHEMA)
+        ),
         "{found:?}"
     );
 }
@@ -257,7 +263,7 @@ fn a_bootstrap_an_added_set_and_a_regeneration_with_a_schema_increase_pass() {
     );
 
     let regen = regenerated(&two, |v| {
-        v["gate_schema"] = 2.into();
+        v["gate_schema"] = (gate::GATE_SCHEMA + 1).into();
         v["fixtures"][0]["minutes"] = 45.into();
     });
     assert_eq!(faults(Some(&two.to_text()), Some(&regen)), Vec::new());

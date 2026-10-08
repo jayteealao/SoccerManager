@@ -28,10 +28,10 @@ const MISS: f64 = 0.99;
 /// The win and foul chances of player `i` tackling the carrier, unbooked.
 fn bands(config: &MatchConfig, i: usize) -> (f64, f64) {
     let sim = Simulation::new(config.clone()).unwrap();
-    let tackler = sim.players()[i].derived;
-    let carrier = sim.players()[CARRIER].derived;
-    let p_win = engine::rules::fouls::win_chance(&tackler, &carrier, &config.tuning);
-    (p_win, foul_chance(&tackler, 0, &config.tuning))
+    let tackler = sim.skills(i);
+    let carrier = sim.skills(CARRIER);
+    let p_win = engine::rules::fouls::win_chance(tackler, carrier, &config.tuning);
+    (p_win, foul_chance(tackler, 0, &config.tuning))
 }
 
 /// A foul draw after which the fouled team keeps the ball: advantage.

@@ -58,6 +58,7 @@ import { ReportClock, reportModel } from './report.js';
 import { Scheduler, TICKS_PER_SECOND } from './schedule.js';
 import { fixtureTitle, scorerLines } from './scoreboard.js';
 import { signal } from './signal.js';
+import { adapterFor, memoryAdapter, mergeRatings, readPart } from './views.js';
 import { TICKS_PER_MINUTE, totalMinutes } from './skip.js';
 import { MatchSocket, socketAddress } from './socket.js';
 import { Stoppages, stopsPlay } from './stoppages.js';
@@ -136,9 +137,19 @@ export class MatchSession {
   engineVersion = $state(null);
   stored = $state(false);
   busy = $state(false);
-  /// The view the tabs show: `tactics`, `prematch`, `match`, `touchline`, `report` or
-  /// `replay`.
+  /// The view the tabs show: `tactics`, `prematch`, `match`, `touchline`, `report`,
+  /// `replay`, `squad` or `player`.
   view = $state('match');
+  /// The squad index of the player whose panel is open, or null.
+  panelPlayer = $state(null);
+  /// The home club's squad views and stored match ratings (`{ active, views, ratings }`,
+  /// `views.js`), or null before they are read.
+  squadViews = $state.raw(null);
+  /// How the squad views stand in their store: `saved`, `saving` or `not-saved`.
+  viewsSaved = $state('saved');
+  /// The match ratings of this match as they arrived at full time (`{ match, ratings }`), or
+  /// null before full time.
+  liveRatings = $state.raw(null);
   /// The report on show or last shown: `{ kind, tick, state, model }`, where `kind` is
   /// `half-time` or `full-time` and `state` is `loading` or `ready`. Null before the first.
   report = $state.raw(null);
@@ -237,6 +248,11 @@ export class MatchSession {
     /// The view a report returns to, and the view the replay returns to.
     this.reportFrom = 'match';
     this.replayFrom = 'match';
+    /// The view the Squad screen goes back to, and the view the player panel goes back to.
+    this.squadFrom = 'tactics';
+    this.panelFrom = 'squad';
+    /// Where the squad views are kept: the launcher's store or the page's memory.
+    this.viewsAdapter = memoryAdapter();
     /// `true` once the engine closed the socket after full time: every frame is stored.
     this.streamEnded = false;
     this.lastSaved = null;
@@ -596,6 +612,12 @@ export class MatchSession {
     this.streamEnded = false;
     this.matchday = null;
     this.groundSeeks = [];
+    this.liveRatings = null;
+    this.squadViews = null;
+    this.panelPlayer = null;
+    // A replay keeps its views in the page's memory; a live match in the launcher's store
+    // when the launcher serves the page.
+    this.viewsAdapter = stored ? memoryAdapter() : adapterFor(this.status, this.fetcher);
     this.teams = hello.teams;
     this.hello = hello;
     this.ground = groundOf(hello);
@@ -687,6 +709,81 @@ export class MatchSession {
   /// CONTINUE.
   show(view) {
     this.view = view === 'tactics' || view === 'touchline' ? view : 'match';
+  }
+
+  /// The home squad as the hello lists it: every player in file order.
+  get squad() {
+    return this.dugout.squad ?? [];
+  }
+
+  /// The home club's id, under which its squad views are kept.
+  get homeClub() {
+    return this.teams?.[0]?.['team.id'] ?? null;
+  }
+
+  /// Every home player's match ratings, oldest first: the stored ones merged with this
+  /// match's, by match id (`views.js`).
+  get squadRatings() {
+    return mergeRatings(this.squadViews?.ratings ?? {}, this.liveRatings);
+  }
+
+  /// Opens the Squad screen from the view on show; it goes back there.
+  openSquad() {
+    if (this.view !== 'squad' && this.view !== 'player') {
+      this.squadFrom = ['tactics', 'report', 'touchline'].includes(this.view) ? this.view : 'match';
+    }
+    this.view = 'squad';
+    this.loadViews();
+  }
+
+  /// Back from the Squad screen to the view it opened from.
+  closeSquad() {
+    this.view = this.squadFrom === 'report' && !this.report ? 'match' : this.squadFrom;
+  }
+
+  /// Opens the panel of squad player `index`.
+  openPlayer(index) {
+    if (!this.squad[index]) {
+      return;
+    }
+    if (this.view !== 'player') {
+      this.panelFrom = this.view === 'squad' ? 'squad' : this.view;
+    }
+    this.panelPlayer = index;
+    this.view = 'player';
+    this.loadViews();
+  }
+
+  /// Back from the player panel.
+  closePlayer() {
+    this.view = this.panelFrom === 'squad' ? 'squad' : this.panelFrom;
+  }
+
+  /// Reads the home club's views and stored ratings once per match; the launcher adds the
+  /// ratings of a match it ran as it answers.
+  async loadViews({ again = false } = {}) {
+    const club = this.homeClub;
+    if (!club || (this.squadViews && !again)) {
+      return;
+    }
+    const part = await this.viewsAdapter.read(club);
+    if (club === this.homeClub) {
+      this.squadViews = readPart(part);
+    }
+  }
+
+  /// Keeps the home club's views (`{ active, views }`) and saves them in their store.
+  async saveViews({ active, views }) {
+    const club = this.homeClub;
+    if (!club) {
+      return false;
+    }
+    this.squadViews = { ...(this.squadViews ?? { ratings: {} }), active, views };
+    this.viewsSaved = 'saving';
+    const ok = await this.viewsAdapter.save(club, { active, views });
+    this.viewsSaved = ok ? 'saved' : 'not-saved';
+    signal('viewer.views_saved', { club, views: views.length, saved: ok, store: this.viewsAdapter.kind });
+    return ok;
   }
 
   /// CONTINUE on Tactics: with a legal lineup before kick-off, opens the Pre-match line-ups.
@@ -821,6 +918,10 @@ export class MatchSession {
       if (!this.stored) {
         this.dugout.onAdvice(message);
       }
+      return;
+    }
+    if (message.type === 'ratings') {
+      this.liveRatings = { match: this.matchId, ratings: message.ratings ?? [] };
       return;
     }
     if (message.type === 'event' && message['event.type'] === KIND.tacticsChange) {

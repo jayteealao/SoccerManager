@@ -67,7 +67,7 @@
       return;
     }
     if (event.key === 'Escape' && door.view === 'match' && !event.defaultPrevented) {
-      if (door.overlay || ['match', 'tactics', 'touchline'].includes(door.session?.view)) {
+      if (door.overlay || ['match', 'tactics', 'touchline', 'squad', 'player'].includes(door.session?.view)) {
         if (door.session?.onMenu || door.overlay) {
           event.preventDefault();
           door.escape();

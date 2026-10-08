@@ -92,8 +92,8 @@ fn sequences(keys: &[Key], skip: Option<Key>, extra: usize) -> Vec<Vec<u64>> {
 #[test]
 fn extra_draws_on_one_key_leave_every_other_key_unchanged() {
     let keys = sample_keys();
-    // 5 match rows and 31 player rows.
-    assert_eq!(keys.len(), 5 + 2 * 31);
+    // 5 match rows and 35 player rows.
+    assert_eq!(keys.len(), 5 + 2 * 35);
     let control = sequences(&keys, None, 0);
     for (x, &key) in keys.iter().enumerate() {
         let disturbed = sequences(&keys, Some(key), 100);
@@ -195,9 +195,12 @@ fn a_substitute_draws_on_his_own_key() {
             })
             .collect()
     };
-    assert!(
-        of(&at_sub, on).is_empty(),
-        "the substitute had drawn nothing"
+    // Coming on, he drew only the match part of his form: two draws on its key.
+    let form = Key::player(Action::FormMatch, PlayerKey::of_squad(0, on)).stream_id();
+    assert_eq!(
+        of(&at_sub, on),
+        vec![(form, 4)],
+        "the substitute had drawn only his form on entry"
     );
     assert!(
         !of(&end, on).is_empty(),
@@ -305,10 +308,12 @@ fn no_draw_bypasses_the_registry() {
         "next_u32",
         "next_u64",
     ];
-    // Offline generation, a maths test's input sampler, and the fast model and its events,
-    // which play no match stream, keep their own generator.
-    const ALLOWED: [&str; 7] = [
+    // Offline generation, a maths test's input sampler, the fast model and its events, which
+    // play no match stream, and the sensitivity rules' design and bootstrap, which choose
+    // matches and resample results outside any match, keep their own generator.
+    const ALLOWED: [&str; 8] = [
         "streams/",
+        "sensitivity/",
         "rng.rs",
         "data/generator.rs",
         "data/names.rs",

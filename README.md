@@ -63,7 +63,7 @@ To compare a candidate model with the current one, declare a flag in the `flags`
 - Tutorial: [Play your first match](docs/tutorials/first-match.md)
 - How-to: [Tune the engine and add a rule pack](docs/how-to/modding.md), [Write and register an engine module](docs/how-to/engine-modules.md)
 - Reference: [Command line](docs/reference/cli.md), [Data files](docs/reference/data-files.md), [Socket protocol](docs/reference/protocol.md), [Engine modules and slot configuration](docs/reference/engine-modules.md)
-- Explanation: [How the engine works](docs/explanation/engine.md), [The plugin contract](docs/explanation/plugin-contract.md), [How the realism harness judges a change](docs/explanation/realism-harness.md)
+- Explanation: [How the engine works](docs/explanation/engine.md), [The plugin contract](docs/explanation/plugin-contract.md), [How the realism harness judges a change](docs/explanation/realism-harness.md), [The player contract](docs/explanation/player-contract.md)
 
 ## Test
 

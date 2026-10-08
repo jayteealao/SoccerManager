@@ -482,9 +482,12 @@ impl RunningCheck {
             }
             let team = i / PLAYERS_PER_TEAM;
             let slot = i % PLAYERS_PER_TEAM;
-            let anchor = teams[team].anchor(slot, ball, &self.tuning);
+            // The record does not say which team has the ball, so the nearer of the slot's
+            // two anchors counts.
+            let d_anchor = [true, false]
+                .map(|has| (*p - teams[team].anchor(slot, ball, has, &self.tuning)).length());
+            let d_anchor = d_anchor[0].min(d_anchor[1]);
             let d_ball = (*p - ball).length();
-            let d_anchor = (*p - anchor).length();
             let prev_dist = self.prev_dist[i];
             let closing = d_ball < prev_dist[0] - 1e-3 || d_anchor < prev_dist[1] - 1e-3;
             self.prev_dist[i] = [d_ball, d_anchor];

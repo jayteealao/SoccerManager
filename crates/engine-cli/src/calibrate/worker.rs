@@ -1,15 +1,17 @@
 //! One calibration match, as the one-process runner plays it: [`play_match`] plays the
 //! match with the AI manager on both sides, checks its rules as it plays, and gives its
 //! statistics record and compact row. In the formations suite, each side starts in its
-//! pairing's formation and keeps it. In the red-card suite, the default clubs play with
-//! cards otherwise off, in both home and away orders, and the arm's away player is sent off
-//! at kick-off.
+//! pairing's formation, with the lineup its AI picks for that formation, and keeps it. In
+//! the red-card suite, the default clubs play with cards otherwise off, in both home and
+//! away orders, and the arm's away player is sent off at kick-off.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use engine::data::{TEAM_A_FILE, TEAM_B_FILE, TeamFile};
-use engine::observe::{LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef};
+use engine::observe::{
+    LawStats, MatchFigures, MatchStats, RatingEntry, ScriptFigures, TacticsStats, TeamRef,
+};
 use engine::{
     Commentary, Commentator, Content, ContentDir, EngineError, MatchConfig, RunningCheck,
     Simulation, StreamRules, Tactics, TickRecord, TickSink,
@@ -115,7 +117,7 @@ pub fn play_match(
         for (team, formation) in sides.into_iter().enumerate() {
             let mut tactics = Tactics::defaults(&content.tactics);
             tactics.set_formation(formation, &content.tactics);
-            config = config.with_tactics(team, tactics);
+            config = config.with_ai_tactics(team, tactics);
         }
     }
     if m.red_card.is_some() {
@@ -198,6 +200,7 @@ pub fn play_match(
         tactics,
         figures: MatchFigures::new(&summary, sim.managers()),
         script: ScriptFigures::new(sim.plugins()),
+        ratings: RatingEntry::of_match(&sim),
     };
     Ok(Played { stats, row })
 }
@@ -325,6 +328,7 @@ pub fn failure(
             ..MatchFigures::default()
         },
         script: ScriptFigures::default(),
+        ratings: Vec::new(),
     }
 }
 

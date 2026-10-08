@@ -419,7 +419,7 @@ mod tests {
             .flat_map(|p| {
                 (0..per).map(move |k| Row {
                     pairing: p,
-                    kick_off: KickOff::even([50.0, 50.0]),
+                    kick_off: KickOff::even([10.0, 10.0]),
                     goals: scores(p, k),
                     goal_minutes: Vec::new(),
                     tally: tally_of(6 + (k % 3) as u32),

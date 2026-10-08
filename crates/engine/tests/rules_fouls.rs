@@ -20,10 +20,10 @@ const NO_CARD: f64 = 0.99;
 /// The win chance and the foul chance of the tackle in these scenes.
 fn bands(config: &MatchConfig) -> (f64, f64) {
     let sim = Simulation::new(config.clone()).unwrap();
-    let tackler = sim.players()[TACKLER].derived;
-    let carrier = sim.players()[CARRIER].derived;
-    let p_win = engine::rules::fouls::win_chance(&tackler, &carrier, &config.tuning);
-    (p_win, foul_chance(&tackler, 0, &config.tuning))
+    let tackler = sim.skills(TACKLER);
+    let carrier = sim.skills(CARRIER);
+    let p_win = engine::rules::fouls::win_chance(tackler, carrier, &config.tuning);
+    (p_win, foul_chance(tackler, 0, &config.tuning))
 }
 
 /// The home carrier holds the ball at `at` and the tackler stands 0.3 m from it. The first

@@ -148,7 +148,7 @@ fn unbundle(payload: &[u8]) -> Result<Vec<(String, Vec<u8>)>, StreamError> {
 /// production decode applies: the frames, the required record fields, and the inputs.
 fn decode_v6(raw: RawReplay) -> Result<Fixture, StreamError> {
     assert_eq!(raw.format, 6);
-    if raw.protocol != protocol::PROTOCOL_VERSION {
+    if !stream::record::READS_PROTOCOLS.contains(&raw.protocol) {
         return Err(fault(format!("frames protocol version {}", raw.protocol)));
     }
     let mut engine = None;

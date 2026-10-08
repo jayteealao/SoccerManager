@@ -8,6 +8,7 @@ pub mod ai;
 pub mod ball;
 mod canon;
 pub mod commentary;
+pub mod contract;
 pub mod data;
 pub mod decision;
 pub mod error;
@@ -15,6 +16,7 @@ pub mod fatigue;
 pub mod flags;
 pub mod gate;
 pub mod hook_slots;
+pub mod match_rating;
 pub mod math;
 pub mod modules;
 pub mod observe;
@@ -22,11 +24,14 @@ pub mod pitch;
 pub mod player;
 pub mod plugin;
 pub mod possession;
+pub mod rating;
 pub mod record;
 pub mod rng;
 pub mod rules;
 #[cfg(feature = "scenario")]
 pub mod scenario;
+#[cfg(feature = "sensitivity")]
+pub mod sensitivity;
 pub mod shot;
 pub mod sim;
 pub mod snapshot;
@@ -45,6 +50,7 @@ pub use error::EngineError;
 pub use fatigue::InjurySource;
 pub use flags::{ActiveFlags, CODE_FLAGS, FlagSetting, FlagState, FlagStates};
 pub use plugin::{PLUGIN_API_VERSION, Plugins};
+pub use rating::Rating;
 pub use record::{
     FanoutSink, FileSink, NullSink, TickHeader, TickRecord, TickSink, VecSink, read_ticks,
 };

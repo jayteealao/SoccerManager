@@ -225,7 +225,7 @@ fn tick_plants() -> Vec<Plant> {
         &|r| r[k].ball[0] += 1.0,
     ));
 
-    // One outfield player held at the pitch corner farthest from the ball and its anchor
+    // One outfield player held at the pitch corner farthest from the ball and its anchors
     // while the ball lies still, for the grace period and ten ticks more.
     let grace = base.tuning.anchor_grace_ticks as usize;
     let still = (1..base.records.len() - grace - 10)
@@ -249,13 +249,17 @@ fn tick_plants() -> Vec<Plant> {
         .1;
     let ball = base.records[still].ball;
     let ball = DVec2::new(f64::from(ball[0]), f64::from(ball[1]));
-    let anchor = teams[team].anchor(slot, ball, &base.tuning);
+    let anchors = [true, false].map(|has| teams[team].anchor(slot, ball, has, &base.tuning));
     let (hx, hy) = (pitch.half_length() - 1.0, pitch.half_width() - 1.0);
     let corner = [(hx, hy), (hx, -hy), (-hx, hy), (-hx, -hy)]
         .map(|(x, y)| DVec2::new(x, y))
         .into_iter()
         .max_by(|a, b| {
-            let far = |p: &DVec2| (*p - ball).length().min((*p - anchor).length());
+            let far = |p: &DVec2| {
+                anchors
+                    .iter()
+                    .fold((*p - ball).length(), |d, a| d.min((*p - *a).length()))
+            };
             far(a).total_cmp(&far(b))
         })
         .unwrap();

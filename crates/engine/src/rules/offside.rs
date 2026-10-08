@@ -160,7 +160,7 @@ mod tests {
         .into_iter()
         .enumerate()
         {
-            let mut p = flat_player(i, 50, &t);
+            let mut p = flat_player(i, 100, &t);
             p.team = team;
             p.pos = DVec2::new(x, 0.0);
             players.push(p);

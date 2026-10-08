@@ -8,6 +8,7 @@
 
 import { KIND } from './match-state.js';
 import { surname } from './prematch.js';
+import { wholeOf } from './scale.js';
 import { instructionNames, words } from './tactics-panel.js';
 
 /// The assistant's reason, in words, per `ai.decision` code.
@@ -26,6 +27,21 @@ export const NO_PICK = 'No pick open. The assistant checks every 30 seconds of p
 function minuteText(event) {
   const added = event['minute.added'];
   return added ? `${event.minute}+${added}'` : `${event.minute}'`;
+}
+
+/// The Level cell of a player: his overall level now, of his level when fresh, in whole
+/// numbers. "13 of 15" in the warning tone when now is below fresh; "=" when they round to one
+/// number; "—" before the first condition message or from an engine that sends no levels.
+export function levelCell(level, base) {
+  if (typeof level !== 'number' || typeof base !== 'number') {
+    return { text: '—', now: null, fresh: null, below: false, label: 'Level not known' };
+  }
+  const now = wholeOf(level);
+  const fresh = wholeOf(base);
+  if (now < fresh) {
+    return { text: `${now} of ${fresh}`, now, fresh, below: true, tone: 'warn', label: `Level ${now} of ${fresh}: below his fresh level` };
+  }
+  return { text: '=', now, fresh, below: false, label: `Level ${fresh}: no change` };
 }
 
 /// The player-state rows of the home eleven at the rendered tick. `rows` are the home rows of
@@ -50,6 +66,7 @@ export function playerStateRows(rows, entries) {
       band: row.band,
       token: row.token,
       condition: row.condition,
+      level: levelCell(row.level, row.base),
       card: card
         ? {
             kind: card.kind === 'yellow' ? 'yellow' : 'red',

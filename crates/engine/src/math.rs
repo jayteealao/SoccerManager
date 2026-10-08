@@ -1,5 +1,5 @@
 //! Vector types, small helpers, and the engine maths functions. All simulation maths is
-//! `f64`. Every sine, cosine, exponent, arctangent, and integer power in the engine goes
+//! `f64`. Every sine, cosine, exponent, logarithm, arctangent, and integer power in the engine goes
 //! through the functions below, which call the pure-Rust `libm` crate: the same bits on every
 //! machine. A clippy rule (`crates/engine/clippy.toml`) refuses the platform maths methods in
 //! the engine crate.
@@ -28,6 +28,12 @@ pub fn sin_cos(x: f64) -> (f64, f64) {
 #[inline]
 pub fn exp(x: f64) -> f64 {
     libm::exp(x)
+}
+
+/// The natural logarithm of `x`.
+#[inline]
+pub fn ln(x: f64) -> f64 {
+    libm::log(x)
 }
 
 /// The four-quadrant arctangent of `y / x`.

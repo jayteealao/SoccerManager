@@ -1,6 +1,7 @@
 <!-- The player-state table of the Touchline, ported from the sketch: our eleven at the rendered
      tick, each with the slow reserve (the engine's one energy figure) as a bar, a number and
-     its band word, and the last card with its minute. The sprint reserve, the mind and whether
+     its band word, his level now of his level when fresh ("13 of 15" when below, "=" when
+     not), and the last card with its minute. The sprint reserve, the mind and whether
      the player has taken up the last shout need models the engine does not have: those columns
      are LATER stubs. The word, never the colour, carries each state. -->
 <script>
@@ -13,7 +14,7 @@
 <section aria-label="Player state">
   <SectionLabel label="Player state" note="true figures · {clock}" />
   <table>
-    <caption class="sr">Our eleven at {clock}: the slow reserve and cards of each player</caption>
+    <caption class="sr">Our eleven at {clock}: the slow reserve, level and cards of each player</caption>
     <thead>
       <tr>
         <th scope="col" class="n">#</th>
@@ -26,6 +27,7 @@
         <th scope="col" class="stubcol mind" aria-hidden="true">
           <StubSection note="mind" inline>Mind</StubSection>
         </th>
+        <th scope="col" class="lv">Level</th>
         <th scope="col" class="card">Card</th>
         <th scope="col" class="stubcol taken" aria-hidden="true">
           <StubSection note="taken up" inline>Taken up</StubSection>
@@ -48,6 +50,13 @@
           <td class="stubcol mind" aria-hidden="true">
             <StubSection note="mind: {row.surname}" inline>—</StubSection>
           </td>
+          <td class="lv" data-level={row.level.below ? 'below' : row.level.now === null ? 'unknown' : 'equal'} aria-label={row.level.label}>
+            {#if row.level.below}
+              <b class="num warn">{row.level.now}</b> <span class="of">of {row.level.fresh}</span>
+            {:else}
+              <span class="num">{row.level.text}</span>
+            {/if}
+          </td>
           <td class="card">
             {#if row.card}
               <span class="cm {row.card.kind}" aria-hidden="true"></span><span class="num">{row.card.minute}</span>
@@ -64,8 +73,9 @@
     </tbody>
   </table>
   <p class="foot">
-    The slow reserve is each player's energy: it drains through the match. A tired player is
-    the usual reason the assistant proposes a substitution.
+    The slow reserve is each player's energy: it drains through the match. Level: the
+    player's effective ability now, of his level when fresh; tiredness lowers it, and = means
+    no change. A tired player is the usual reason the assistant proposes a substitution.
   </p>
 </section>
 
@@ -140,8 +150,23 @@
   }
 
   .mind,
-  .taken {
+  .taken,
+  .lv {
     text-align: center;
+  }
+
+  td.lv {
+    white-space: nowrap;
+  }
+
+  .lv .warn {
+    color: var(--warn);
+    font-weight: 600;
+  }
+
+  .lv .of {
+    color: var(--ink-3);
+    font-size: 9px;
   }
 
   .cm {

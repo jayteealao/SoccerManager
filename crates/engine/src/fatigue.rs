@@ -1,23 +1,28 @@
 //! Fatigue and injuries.
 //!
 //! Energy runs from 1.0 (fresh) down to 0.0. Every tick it drains by a base rate plus an
-//! effort term that grows with the square of the player's speed fraction, scaled by stamina.
-//! Every 50 ticks each player's effective values are recomputed from the unfatigued base
-//! through the modifiers: the fatigue modifier multiplies pace (maximum speed and
-//! acceleration) and the decision values (passing, finishing, decisions, composure) by the
-//! fatigue curve, a piecewise-linear lookup that is 1.0 at and above the threshold. Half-time gives some energy back, scaled by natural
-//! fitness.
+//! effort term that grows with the square of the player's speed over the average player's
+//! top speed, so every sprint costs stamina and a fast runner pays more for his speed; the
+//! drain is scaled by stamina, and late in a match by age. Every 50 ticks the modifiers set
+//! each player's state deltas: the fatigue modifier lowers his ratings by the fatigue curve,
+//! a piecewise-linear lookup that is 1.0 at and above the threshold, read as a delta on the
+//! rating curve and weighted per group (physical first). Half-time gives some energy back,
+//! scaled by natural fitness.
 //!
 //! Injuries roll once for the tackled player on every tackle that wins the ball or is a foul,
-//! and once per simulated minute for every player on the pitch, scaled by injury resistance.
+//! and once per simulated minute for every player on the pitch, scaled by injury resistance
+//! and, after a short rest, by congestion.
 //! The rolls draw through the stream registry on the rolling player's injury keys, which a
 //! test scene may script.
 
 use crate::TICKS_PER_SECOND;
+use crate::contract::Skills;
+use crate::contract::Stage;
+use crate::contract::params::SpeedTuning;
 use crate::data::tuning::FatigueTuning;
 use crate::modules::modifier::{Effect, Family, Modifier, Neutral};
 use crate::modules::{FatigueModule, MatchView, ModuleCard};
-use crate::player::{Derived, Player};
+use crate::player::Player;
 use crate::streams::Action;
 
 /// Ticks between two recomputations of the effective values.
@@ -60,31 +65,40 @@ pub fn multiplier(energy: f64, f: &FatigueTuning) -> f64 {
     f.curve.last().map_or(1.0, |p| p[1])
 }
 
-/// The effective values of `base` at `energy`.
-pub fn effective(base: &Derived, energy: f64, f: &FatigueTuning) -> Derived {
+/// The fatigue modifier's delta in rating points on a group of weight `weight` at `energy`:
+/// the fatigue curve's multiplier read on the rating curve, `width · ln(multiplier)`. 0 at
+/// and above the threshold, with no logarithm taken.
+pub fn delta(energy: f64, f: &FatigueTuning, width: f64, weight: f64) -> f64 {
     let m = multiplier(energy, f);
-    Derived {
-        max_speed: base.max_speed * m,
-        max_accel: base.max_accel * m,
-        passing: base.passing * m,
-        finishing: base.finishing * m,
-        decisions: base.decisions * m,
-        composure: base.composure * m,
-        ..*base
+    if m == 1.0 || weight == 0.0 {
+        return 0.0;
     }
+    width * crate::math::ln(m) * weight
 }
 
-/// Energy one player loses in one tick of `dt` seconds.
-pub fn drain(p: &Player, f: &FatigueTuning, dt: f64) -> f64 {
-    let top = p.base.max_speed.max(1e-6);
-    let frac = (p.vel.length() / top).min(1.0);
-    let stamina_scale = 1.5 - p.base.stamina;
-    (f.drain_base_per_s + f.drain_effort_per_s * frac * frac) * dt * stamina_scale
+/// Energy player `p`, of base values `base`, loses in one tick of `dt` seconds. The effort
+/// term reads his speed over the average player's top speed, up to `sprint_cap` times it: a
+/// pace-10 player drains as before the contract, and a faster player at full sprint pays
+/// for his speed. The endure stage (stamina) scales it by `1.5 − share`: an average player's
+/// drain, half of it at the top of the scale. `fade` is the late-match factor of his age.
+pub fn drain(
+    p: &Player,
+    base: Skills<'_>,
+    f: &FatigueTuning,
+    speed: &SpeedTuning,
+    dt: f64,
+    fade: f64,
+) -> f64 {
+    let frac = (p.vel.length() / speed.anchor_ms).min(f.sprint_cap);
+    let stamina_scale = 1.5 - base.share(Stage::ENDURE_EXECUTE);
+    (f.drain_base_per_s + f.drain_effort_per_s * frac * frac) * dt * stamina_scale * fade
 }
 
-/// The chance that one roll injures `p`, from a base rate for an average player.
-pub fn injury_chance(p: &Player, rate: f64) -> f64 {
-    (rate * (1.5 - p.base.injury_resistance)).clamp(0.0, 1.0)
+/// The chance that one roll injures a player of base values `base`, from a base rate for an
+/// average player, scaled by `0.5 + share` of the injury stage (injury proneness, a hidden
+/// value): the average player's chance at rating 10, rising with his proneness.
+pub fn injury_chance(base: Skills<'_>, rate: f64) -> f64 {
+    (rate * (0.5 + base.share(Stage::INJURY_EXECUTE))).clamp(0.0, 1.0)
 }
 
 /// Fatigue version 1: the drain and the injury chance above. The fatigue curve's effect on
@@ -93,7 +107,23 @@ pub struct FatigueV1;
 
 impl FatigueModule for FatigueV1 {
     fn drain(&self, view: &MatchView<'_>, i: usize) -> f64 {
-        drain(view.player(i), view.fatigue(), view.tuning().dt)
+        let t = view.tuning();
+        let minute = f64::from(view.tick()) / f64::from(crate::rules::clock::TICKS_PER_MINUTE);
+        let body = &t.contract.body;
+        // Before the late minute the fade is 1 for every age, so his age is not read.
+        let fade = if minute > f64::from(body.age.late_from_minute) {
+            body.late_fade(view.body(i), minute)
+        } else {
+            1.0
+        };
+        drain(
+            view.player(i),
+            view.base_skills(i),
+            view.fatigue(),
+            &t.contract.speed,
+            t.dt,
+            fade,
+        )
     }
 
     fn injury_chance(&self, view: &MatchView<'_>, i: usize, source: InjurySource) -> f64 {
@@ -102,23 +132,36 @@ impl FatigueModule for FatigueV1 {
             InjurySource::Tackle => t.injury_per_tackle,
             InjurySource::Background => t.injury_per_minute,
         };
-        injury_chance(view.player(i), rate)
+        let congestion = t
+            .contract
+            .body
+            .congestion(view.condition(i).rest_days, view.body(i));
+        injury_chance(view.base_skills(i), rate * congestion)
     }
 }
 
 pub const FATIGUE_V1_CARD: ModuleCard = ModuleCard {
-    purpose: "Drains each player's energy by speed and stamina and sets each injury chance.",
-    inputs: "Each player's velocity and base values, the fatigue tuning, and the engine tuning.",
+    purpose: "Drains each player's energy by speed and stamina, faster late in a match for an older player, and sets each injury chance, higher after a short rest.",
+    inputs: "Each player's velocity, his endure and injury stages through the attribute contract (stamina and injury proneness), his age and days of rest, the top-speed map, the fatigue tuning, and the engine tuning.",
     outputs: "The energy drained per tick and the injury chance of a roll.",
     tuning: &[
         "fatigue.drain_base_per_s",
         "fatigue.drain_effort_per_s",
+        "fatigue.sprint_cap",
+        "contract.speed",
+        "contract.body.age",
+        "contract.body.rest",
         "injury_per_minute",
         "injury_per_tackle",
         "dt",
     ],
     calibration: "none: no fatigue or injury band in realism-bands.json",
-    keys: &[Action::InjuryMinute, Action::InjuryTackle],
+    keys: &[
+        Action::InjuryMinute,
+        Action::InjuryTackle,
+        Action::FormMatch,
+        Action::FormPeriod,
+    ],
 };
 
 /// Fatigue switched off: nobody tires and nobody is injured. The loop still takes every
@@ -141,11 +184,17 @@ pub const FATIGUE_OFF_CARD: ModuleCard = ModuleCard {
     outputs: "A drain of 0 and an injury chance of 0.",
     tuning: &["none"],
     calibration: "none: off version, no fatigue",
-    keys: &[Action::InjuryMinute, Action::InjuryTackle],
+    keys: &[
+        Action::InjuryMinute,
+        Action::InjuryTackle,
+        Action::FormMatch,
+        Action::FormPeriod,
+    ],
 };
 
 /// The fatigue modifier (body family): the fatigue curve's multiplier at the player's
-/// energy, on every value the curve scales.
+/// energy, as a delta on the rating curve, on each group by its weight: physical first,
+/// technical and goalkeeping less, mental not at all.
 pub struct FatigueCurveV1;
 
 impl Modifier for FatigueCurveV1 {
@@ -154,15 +203,27 @@ impl Modifier for FatigueCurveV1 {
     }
 
     fn effect(&self, view: &MatchView<'_>, i: usize) -> Effect {
-        Effect::all(multiplier(view.player(i).energy, view.fatigue()))
+        let f = view.fatigue();
+        let width = view.tuning().contract.curve.width;
+        let energy = view.player(i).energy;
+        Effect {
+            groups: f
+                .group_weights
+                .by_group()
+                .map(|w| delta(energy, f, width, w)),
+        }
     }
 }
 
 pub const FATIGUE_CURVE_V1_CARD: ModuleCard = ModuleCard {
-    purpose: "Scales pace and the decision values by the fatigue curve at the player's energy (body family).",
-    inputs: "Each player's energy and the fatigue tuning.",
-    outputs: "One factor on max speed, max acceleration, passing, finishing, decisions, and composure.",
-    tuning: &["fatigue.threshold", "fatigue.curve"],
+    purpose: "Lowers a tired player's ratings by the fatigue curve at his energy (body family): physical first, technical and goalkeeping less.",
+    inputs: "Each player's energy, the fatigue tuning, and the curve width.",
+    outputs: "A delta on the technical, physical and goalkeeping groups, each the curve's multiplier read on the rating curve times the group's weight.",
+    tuning: &[
+        "fatigue.threshold",
+        "fatigue.curve",
+        "fatigue.group_weights",
+    ],
     calibration: "none: no fatigue band in realism-bands.json",
     keys: &[],
 };
@@ -173,7 +234,7 @@ pub const FATIGUE_CURVE_OFF: Neutral = Neutral(Family::Body);
 pub const FATIGUE_CURVE_OFF_CARD: ModuleCard = ModuleCard {
     purpose: "The fatigue modifier switched off (body family): no effect at any energy.",
     inputs: "Nothing.",
-    outputs: "A factor of 1.0 on every effective value.",
+    outputs: "A delta of 0 on every attribute group.",
     tuning: &["none"],
     calibration: "none: off version, no fatigue effect",
     keys: &[],
@@ -183,7 +244,7 @@ pub const FATIGUE_CURVE_OFF_CARD: ModuleCard = ModuleCard {
 mod tests {
     use super::*;
     use crate::data::test_support::shipped_content;
-    use crate::player::test_support::flat_player;
+    use crate::player::test_support::{flat, flat_player};
     use crate::tuning::Tuning;
 
     fn fatigue() -> FatigueTuning {
@@ -214,14 +275,110 @@ mod tests {
     fn a_player_standing_still_drains_only_the_base_rate() {
         let f = fatigue();
         let t = Tuning::default();
-        let mut p = flat_player(0, 50, &t);
-        let still = drain(&p, &f, t.dt);
+        let speed = &t.contract.speed;
+        let mut p = flat_player(0, 100, &t);
+        let (d, stages) = flat(100, &t);
+        let base = Skills::new(&stages, &d);
+        let still = drain(&p, base, &f, speed, t.dt, 1.0);
         assert!((still - f.drain_base_per_s * t.dt * 1.0).abs() < 1e-15);
-        p.vel = crate::math::DVec2::new(p.base.max_speed, 0.0);
-        let running = drain(&p, &f, t.dt);
+        p.vel = crate::math::DVec2::new(d.max_speed, 0.0);
+        let running = drain(&p, base, &f, speed, t.dt, 1.0);
         assert!(
             (running - (f.drain_base_per_s + f.drain_effort_per_s) * t.dt).abs() < 1e-15,
             "{running}"
         );
+    }
+
+    /// At rating 10 the drain and the injury chance read exactly what they read before the
+    /// contract at the old value 50.
+    #[test]
+    fn a_rating_ten_player_drains_and_is_injured_as_before() {
+        let f = fatigue();
+        let t = Tuning::default();
+        let mut p = flat_player(0, 100, &t);
+        p.vel = crate::math::DVec2::new(3.0, 0.0);
+        let (d, stages) = flat(100, &t);
+        let base = Skills::new(&stages, &d);
+        let frac: f64 = 3.0 / d.max_speed;
+        let before = (f.drain_base_per_s + f.drain_effort_per_s * frac * frac) * t.dt * (1.5 - 0.5);
+        let now = drain(&p, base, &f, &t.contract.speed, t.dt, 1.0);
+        assert!((now - before).abs() < 1e-12);
+        assert!((injury_chance(base, 0.004) - 0.004 * (0.5 + 0.5)).abs() < 1e-12);
+    }
+
+    /// Injury proneness raises the chance: a player at 16 is hurt more often than one at
+    /// 10, who is hurt more often than one at 4.
+    #[test]
+    fn injury_proneness_raises_the_injury_chance() {
+        let content = crate::data::test_support::shipped_content();
+        let (schema, t) = (&content.attributes, &content.tuning.engine);
+        let at = |tenths: u8| {
+            let mut a = crate::player::Attributes {
+                values: [crate::rating::Rating::from_tenths(100); crate::data::MAX_ATTRIBUTES],
+                len: schema.len() as u8,
+            };
+            a.values[schema.index("injury_proneness").unwrap()] =
+                crate::rating::Rating::from_tenths(tenths);
+            let (d, stages) = crate::player::Derived::from_attributes(&a, schema, t);
+            injury_chance(Skills::new(&stages, &d), 0.004)
+        };
+        let (low, mid, high) = (at(40), at(100), at(160));
+        assert!(low < mid && mid < high, "{low} {mid} {high}");
+        assert!((mid - 0.004).abs() < 1e-12);
+    }
+
+    /// Every sprint costs stamina: at full sprint the effort term reads speed over the
+    /// average top speed, up to the cap, so a faster runner drains more than a slower one.
+    #[test]
+    fn a_faster_runner_at_full_sprint_drains_more() {
+        let f = fatigue();
+        let t = Tuning::default();
+        let speed = &t.contract.speed;
+        let (d, stages) = flat(100, &t);
+        let base = Skills::new(&stages, &d);
+        let effort = |r: f64| f.drain_base_per_s + f.drain_effort_per_s * r * r;
+        let mut p = flat_player(0, 100, &t);
+        p.vel = crate::math::DVec2::new(speed.top_speed(10.0), 0.0);
+        let average = drain(&p, base, &f, speed, t.dt, 1.0);
+        p.vel = crate::math::DVec2::new(speed.top_speed(4.0), 0.0);
+        let slow = drain(&p, base, &f, speed, t.dt, 1.0);
+        let slow_ratio = speed.top_speed(4.0) / speed.anchor_ms;
+        assert!(slow < average, "a slower runner at full sprint drains less");
+        assert!((slow / average - effort(slow_ratio) / effort(1.0)).abs() < 1e-12);
+        p.vel = crate::math::DVec2::new(speed.top_speed(20.0), 0.0);
+        let fast = drain(&p, base, &f, speed, t.dt, 1.0);
+        let ratio = (speed.top_speed(20.0) / speed.anchor_ms).min(f.sprint_cap);
+        assert!((fast / average - effort(ratio) / effort(1.0)).abs() < 1e-12);
+        assert!(fast >= average);
+        // A cap above 1 lets a runner faster than the average pay more than him.
+        let mut wide = f.clone();
+        wide.sprint_cap = 1.5;
+        assert!(drain(&p, base, &wide, speed, t.dt, 1.0) > average);
+        // Faster than the cap counts as the cap.
+        p.vel = crate::math::DVec2::new(speed.anchor_ms * f.sprint_cap, 0.0);
+        let capped = drain(&p, base, &f, speed, t.dt, 1.0);
+        p.vel = crate::math::DVec2::new(speed.anchor_ms * f.sprint_cap * 2.0, 0.0);
+        assert_eq!(drain(&p, base, &f, speed, t.dt, 1.0), capped);
+        // The late fade of age multiplies it.
+        assert!((drain(&p, base, &f, speed, t.dt, 1.2) - fast * 1.2).abs() < 1e-15);
+    }
+
+    /// The fatigue curve reads as a delta on the rating curve: `width · ln(multiplier)`,
+    /// times the group weight, and nothing at or above the threshold.
+    #[test]
+    fn the_fatigue_delta_is_the_curve_read_on_the_rating_curve() {
+        let f = fatigue();
+        let width = Tuning::default().contract.curve.width;
+        assert_eq!(delta(0.9, &f, width, 1.0), 0.0);
+        let m = multiplier(0.4, &f);
+        assert!((delta(0.4, &f, width, 1.0) - width * crate::math::ln(m)).abs() < 1e-15);
+        assert!((delta(0.4, &f, width, 0.5) - 0.5 * width * crate::math::ln(m)).abs() < 1e-15);
+        assert_eq!(delta(0.0, &f, width, 0.0), 0.0);
+        // On the rating curve a delta d is the factor e^(d / width): the old multiplier.
+        let c = &Tuning::default().contract.curve;
+        let r: f64 = 12.0;
+        let f_r = crate::contract::curve::f(r, c);
+        let f_d = crate::contract::curve::f(r + delta(0.4, &f, width, 1.0), c);
+        assert!((f_d / f_r - m).abs() < 1e-12);
     }
 }

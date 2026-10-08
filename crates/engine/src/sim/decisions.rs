@@ -89,22 +89,22 @@ impl Simulation {
     pub(crate) fn options(&mut self, c: usize) -> Options {
         let decision = self.config.modules.decision;
         let draft = decision.options(&self.view(), c);
-        let carrier = self.players[c];
+        let carrier = crate::streams::PlayerKey::of(&self.players[c]);
         let mut draws = OptionDraws::default();
         if draft.shot.is_some() {
-            draws.shot = self.streams.draw(Key::player(Action::ShotScore, &carrier));
+            draws.shot = self.streams.draw(Key::player(Action::ShotScore, carrier));
         }
         for draw in &mut draws.passes[..draft.pass_count] {
-            *draw = self.streams.draw(Key::player(Action::PassScore, &carrier));
+            *draw = self.streams.draw(Key::player(Action::PassScore, carrier));
         }
         if draft.dribble_hold.is_some() {
             let dribble = self
                 .streams
-                .draw(Key::player(Action::DribbleScore, &carrier));
-            let hold = self.streams.draw(Key::player(Action::HoldScore, &carrier));
+                .draw(Key::player(Action::DribbleScore, carrier));
+            let hold = self.streams.draw(Key::player(Action::HoldScore, carrier));
             draws.dribble_hold = (dribble, hold);
         }
-        draws.clear = self.streams.draw(Key::player(Action::ClearScore, &carrier));
+        draws.clear = self.streams.draw(Key::player(Action::ClearScore, carrier));
         let scored = decision.scored(&draft, &draws);
         if let Some(trace) = self.streams.trace_mut() {
             for &(j, score) in &scored.candidates[..scored.count] {
@@ -138,20 +138,25 @@ impl Simulation {
             });
             trace.push_point(Point::Carrier, detail);
         }
-        let carrier = self.players[c];
-        match decision.plan(&self.view(), c, &o, choice) {
+        let carrier = crate::streams::PlayerKey::of(&self.players[c]);
+        let plan = decision.plan(&self.view(), c, &o, choice);
+        #[cfg(feature = "sensitivity")]
+        if self.probe.is_some() {
+            self.probe_plan(c, choice, plan);
+        }
+        match plan {
             CarrierPlan::Shot { goal, keeper } => Some(self.shot_kick(c, goal, keeper, 1.0)),
             CarrierPlan::Pass { j } => {
-                let aim = self.streams.draw(Key::player(Action::PassAim, &carrier));
+                let aim = self.streams.draw(Key::player(Action::PassAim, carrier));
                 Some(decision.pass_kick(&self.view(), c, j, aim))
             }
             CarrierPlan::Clear { wide_chance } => {
                 let wide = wide_chance.is_some_and(|p| {
                     self.streams
-                        .tested(Key::player(Action::ClearWide, &carrier), &[p])
+                        .tested(Key::player(Action::ClearWide, carrier), &[p])
                         < p
                 });
-                let aim = self.streams.draw(Key::player(Action::ClearAim, &carrier));
+                let aim = self.streams.draw(Key::player(Action::ClearAim, carrier));
                 Some(decision.clear_kick(&self.view(), c, wide, aim))
             }
             CarrierPlan::Move { target } => {
@@ -176,14 +181,14 @@ impl Simulation {
         spread_scale: f64,
     ) -> Kick {
         let decision = self.config.modules.decision;
-        let carrier = self.players[c];
+        let carrier = crate::streams::PlayerKey::of(&self.players[c]);
         let side = decision.shot_draws_side(&self.view(), keeper).then(|| {
             self.streams
-                .chance(Key::player(Action::ShotSide, &carrier), 0.5)
+                .chance(Key::player(Action::ShotSide, carrier), 0.5)
         });
-        let aim = self.streams.draw(Key::player(Action::ShotAim, &carrier));
-        let spread = self.streams.draw(Key::player(Action::ShotSpread, &carrier));
-        let loft = self.streams.draw(Key::player(Action::ShotLoft, &carrier));
+        let aim = self.streams.draw(Key::player(Action::ShotAim, carrier));
+        let spread = self.streams.draw(Key::player(Action::ShotSpread, carrier));
+        let loft = self.streams.draw(Key::player(Action::ShotLoft, carrier));
         let draws = ShotDraws {
             side,
             aim,

@@ -30,7 +30,9 @@ const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 test('the golden file reads and writes back byte for byte', async () => {
   const bytes = golden();
   const read = await readReplay(bytes);
-  assert.equal(read.version, PROTOCOL_VERSION);
+  // A version-3 file: its frames are protocol 3, and it writes back as it was.
+  assert.equal(read.version, LEGACY_VERSION);
+  assert.equal(read.store.protocol, 3);
   assert.equal(read.ticks, 3000);
   assert.equal(read.frames, read.store.count);
   assert.equal(read.hello.type, 'hello');
@@ -231,15 +233,18 @@ test('a loaded version-4 file saved the way the viewer saves it keeps its protoc
   });
   const again = await readReplay(saved.bytes);
   assert.equal(again.version, FORMAT_VERSION);
-  assert.equal(again.hello['protocol.version'], PROTOCOL_VERSION);
+  // The committed file was recorded with protocol 3, and keeps it.
+  assert.equal(again.hello['protocol.version'], 3);
+  assert.deepEqual(saved.bytes, goldenV4());
   assert.ok(read.record.inputs.length > 0);
   assert.deepEqual(again.record.inputs, read.record.inputs);
   assert.deepEqual(again.record.meta, read.record.meta);
 });
 
-test('writing refuses a protocol version that is not the one this page reads', async () => {
+test('writing refuses a protocol version that is not one this page reads', async () => {
   const read = await readReplay(golden());
-  for (const version of [FORMAT_VERSION, 0, 9]) {
+  assert.equal(PROTOCOL_VERSION, 6);
+  for (const version of [0, 2, 7, 9]) {
     await assert.rejects(
       writeReplay(read.store, { matchId: read.hello['match.id'], version }),
       (error) => error.reason.includes('protocol version')

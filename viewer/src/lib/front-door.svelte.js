@@ -29,8 +29,8 @@ export const READY_HOLD_MS = 1500;
 /// The screens of the front door, and `match` for the match views of the session.
 export const VIEWS = Object.freeze(['splash', 'start', 'setup', 'settings', 'licences', 'match', 'closed']);
 
-/// The match views the in-match menu opens over.
-const MENU_VIEWS = new Set(['match', 'tactics', 'touchline']);
+/// The match views the in-match menu opens over, the Squad screen and the player panel among them.
+const MENU_VIEWS = new Set(['match', 'tactics', 'touchline', 'squad', 'player']);
 
 /// How long a next step after full time waits for the finished match's worker to end.
 const WORKER_END_MS = 10_000;

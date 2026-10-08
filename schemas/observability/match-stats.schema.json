@@ -338,6 +338,34 @@
       "enum": [
         "slow script"
       ]
+    },
+    "players.rating": {
+      "description": "Every player who played, with his match rating, home first and in squad order. Absent from a record of a match that did not play.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "player.id",
+          "team",
+          "rating"
+        ],
+        "properties": {
+          "player.id": {
+            "type": "string"
+          },
+          "team": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "rating": {
+            "type": "number",
+            "minimum": 1.0,
+            "maximum": 10.0
+          }
+        },
+        "additionalProperties": false
+      }
     }
   },
   "allOf": [

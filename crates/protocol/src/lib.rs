@@ -18,10 +18,10 @@ pub use event::{CardKind, ChangeOutcome, EventType, MatchEvent};
 pub use frame::{Frame, TickFrame};
 pub use message::{
     Advice, AdvicePick, CancelChange, ChangeDetail, ChangeStateNote, ClientCommand, Condition,
-    DEFAULT_GROUND_LENGTH, DEFAULT_GROUND_WIDTH, GroundEvent, GroundKind, GroundProgress, Hello,
-    Jump, Matchday, MatchdayFixture, PatchWire, QueueChange, RoleWire, RosterEntry, Seen,
-    ServerMessage, SetLineup, SetSpeed, Side, SlotRole, SquadEntry, Stats, SubstitutionRules,
-    TeamRef, TeamSetup,
+    Confidence, DEFAULT_GROUND_LENGTH, DEFAULT_GROUND_WIDTH, GroundEvent, GroundKind,
+    GroundProgress, Hello, HiddenWord, Jump, Matchday, MatchdayFixture, PatchWire, QueueChange,
+    RatingWire, Ratings, RoleWire, RosterEntry, Seen, ServerMessage, SetLineup, SetSpeed, Side,
+    SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
 };
 
 /// The protocol version a client must ask for. A client that asks for another version is
@@ -96,7 +96,50 @@ pub use message::{
 /// answered with the existing `ack` or `reject` and refused unless the engine was started
 /// with `--test-jump`. Like a skip it changes only when ticks are sent, never the match, and
 /// a client that never sends it gets exactly the answers it got before.
-pub const PROTOCOL_VERSION: u16 = 3;
+///
+/// Version 4 moves every rating the hello carries to tenths of the 1 to 20 scale: a squad
+/// entry's `player.natural_fitness`, `player.injury_resistance`, and `role_fit` values are
+/// tenths (10 to 200 for 1.0 to 20.0; a team converted from an old file may hold 2 to 8),
+/// where version 3 sent whole numbers 1 to 100. The hello's `tactics` is the version 2
+/// tactics file: each role carries `in_possession`, `out_of_possession`,
+/// `preferred_actions` (which holds the old `shoot`, `dribble`, and `progress`), and
+/// `teammates`, and each duty a `scale`. No message field was added or removed, and the
+/// tick frames are unchanged. A version 3 value `v` is `2v` tenths, so a reader of an old replay
+/// doubles them before it shows them.
+///
+/// Version 5 makes consistency and injury proneness hidden values: a squad entry loses
+/// `player.injury_resistance` and gains `player.consistency` and `player.injury_proneness`,
+/// each a word key and a confidence (`not_yet_known`, `tentative`, `firm`) from the matches
+/// the player has seen at the club, never a number. A removed field takes a new version. One
+/// message is added: `ratings`, every player's match rating (1.0 to 10.0, one decimal) at full
+/// time, after the closing statistics. The tick frames are unchanged. A reader of an older
+/// replay shows both hidden values as not yet known: no old figure is ever turned into a
+/// word.
+///
+/// Version 6 sends what the squad and player screens show: a squad entry gains
+/// `player.attributes` (every visible attribute in tenths, by name), `player.height`,
+/// `player.age`, `player.nationality`, `player.build` (a word key derived from the
+/// attributes), `player.condition` and `player.sharpness` (percent), `player.matches_at_club`,
+/// `player.level` (the overall level fresh, in tenths) and `player.plays_between` (the range,
+/// in tenths, from today's condition to fresh). The `condition` message gains `level` and
+/// `base`, each wire slot's overall level now and fresh. Every added field is optional, so an
+/// older message still reads; no field was removed and the tick frames are unchanged. A hidden
+/// value is never part of a level.
+pub const PROTOCOL_VERSION: u16 = 6;
+
+/// The protocol version before ratings moved to tenths. Replay readers still read its
+/// frames; a hello of this version carries ratings on the 1 to 100 scale.
+pub const PROTOCOL_V3: u16 = 3;
+
+/// The protocol version before the hidden values: a squad entry carries
+/// `player.injury_resistance` in tenths and no hidden word. Replay readers still read its
+/// frames.
+pub const PROTOCOL_V4: u16 = 4;
+
+/// The protocol version before the squad and player screens: a squad entry carries no
+/// attributes, body fields or levels, and the `condition` message no levels. Replay readers
+/// still read its frames.
+pub const PROTOCOL_V5: u16 = 5;
 
 /// Errors this crate returns.
 #[derive(Debug, Error)]
@@ -203,7 +246,20 @@ pub const MESSAGES: &[MessageSpec] = &[
             "extra_substitutions",
             "extra_windows",
             "windows_exempt",
-            "player.injury_resistance",
+            "player.consistency",
+            "player.injury_proneness",
+            "word",
+            "confidence",
+            "player.attributes",
+            "player.height",
+            "player.age",
+            "player.nationality",
+            "player.build",
+            "player.condition",
+            "player.sharpness",
+            "player.matches_at_club",
+            "player.level",
+            "player.plays_between",
             "knockout",
             "ground.length",
             "ground.width",
@@ -280,7 +336,14 @@ pub const MESSAGES: &[MessageSpec] = &[
         name: "condition",
         direction: Direction::ServerToClient,
         encoding: Encoding::JsonText,
-        fields: &["tick", "energy", "subs_used", "windows_used"],
+        fields: &[
+            "tick",
+            "energy",
+            "subs_used",
+            "windows_used",
+            "level",
+            "base",
+        ],
     },
     MessageSpec {
         name: "change-state",
@@ -325,6 +388,12 @@ pub const MESSAGES: &[MessageSpec] = &[
         direction: Direction::ServerToClient,
         encoding: Encoding::JsonText,
         fields: &["tick", "reached"],
+    },
+    MessageSpec {
+        name: "ratings",
+        direction: Direction::ServerToClient,
+        encoding: Encoding::JsonText,
+        fields: &["tick", "ratings"],
     },
     MessageSpec {
         name: "ack",
@@ -438,6 +507,7 @@ mod tests {
             ServerMessage::Matchday(_) => "matchday",
             ServerMessage::GroundEvent(_) => "ground-event",
             ServerMessage::GroundProgress(_) => "ground-progress",
+            ServerMessage::Ratings(_) => "ratings",
         }
     }
 
@@ -518,6 +588,8 @@ mod tests {
                 energy: Vec::new(),
                 subs_used: [0; 2],
                 windows_used: [0; 2],
+                level: Vec::new(),
+                base: Vec::new(),
             }),
             ServerMessage::Ack(Ack {
                 command: String::new(),
@@ -558,6 +630,10 @@ mod tests {
             ServerMessage::GroundProgress(GroundProgress {
                 tick: 0,
                 reached: Vec::new(),
+            }),
+            ServerMessage::Ratings(Ratings {
+                tick: 0,
+                ratings: Vec::new(),
             }),
         ]
     }

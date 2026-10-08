@@ -21,7 +21,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::RulesModule;
-use super::fast_model::{FastPlayer, KickOff, REFERENCE, Side};
+use super::fast_model::{FastPlayer, KickOff, REFERENCE, STEP, Side};
 use crate::ai::AiCode;
 use crate::data::RulePack;
 use crate::data::rules::{AddedTime, StoppageKind, Substitutions};
@@ -141,9 +141,10 @@ impl SubstitutionFit {
     }
 }
 
-/// The strength of `side` and of the other side, each as (strength − 50) / 10.
+/// The strength of `side` and of the other side, each as (strength − 10) / 2 on the 1 to 20
+/// scale.
 pub fn strengths(kick_off: &KickOff, side: usize) -> [f64; 2] {
-    [side, 1 - side].map(|s| (kick_off.strength[s] - REFERENCE) / 10.0)
+    [side, 1 - side].map(|s| (kick_off.strength[s] - REFERENCE) / STEP)
 }
 
 /// The terms of a count's log mean for `side`: 1, the home flag, its strength `o`, the other

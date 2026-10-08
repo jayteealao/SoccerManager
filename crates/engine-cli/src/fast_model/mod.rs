@@ -13,7 +13,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, bail};
 use engine::modules::fast_events::FitRules;
-use engine::modules::fast_model::{self, FIT_FILE, FIT_VERSION, FITTED_SCORES, FastFit};
+use engine::modules::fast_model::{
+    self, FIT_FILE, FIT_VERSION, FIT_VERSION_2, FITTED_SCORES, FastFit,
+};
 use engine::{Content, ContentDir};
 use serde::{Deserialize, Serialize};
 
@@ -81,15 +83,25 @@ pub struct CheckRecord {
 }
 
 impl FitFile {
+    /// Reads a fit file of this build's layout, or of version 2, whose model had no
+    /// favourite's tilt: it reads with a tilt of 0, which plays as it did.
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         let text = std::fs::read_to_string(path)
             .with_context(|| format!("cannot read the fit file {}", path.display()))?;
-        let value: serde_json::Value = serde_json::from_str(&text)
+        let mut value: serde_json::Value = serde_json::from_str(&text)
             .with_context(|| format!("the fit file {} is malformed", path.display()))?;
         let version = value
             .get("schema_version")
             .and_then(serde_json::Value::as_u64);
-        if version != Some(u64::from(FIT_VERSION)) {
+        if version == Some(u64::from(FIT_VERSION_2)) {
+            if let Some(params) = value
+                .pointer_mut("/fit/params")
+                .and_then(serde_json::Value::as_object_mut)
+            {
+                params.insert("tilt".into(), 0.0.into());
+            }
+            value["schema_version"] = FIT_VERSION.into();
+        } else if version != Some(u64::from(FIT_VERSION)) {
             bail!(
                 "the fit file {} has schema_version {}; this build reads {FIT_VERSION}; \
                  run engine-cli fast-model fit",
@@ -308,8 +320,8 @@ fn print_report(file: &FitFile, figures: &[Figure]) {
     let p = &file.fit.params;
     println!("fast-model {} for {}", file.model, file.engine_id);
     println!(
-        "params: base {:.4} home {:.4} attack {:.4} curve {:.4} defence {:.4} dispersion {:.3} rho {:.4} draw {:.4}",
-        p.base, p.home, p.attack, p.curve, p.defence, p.dispersion, p.rho, p.draw
+        "params: base {:.4} home {:.4} attack {:.4} curve {:.4} defence {:.4} dispersion {:.3} rho {:.4} draw {:.4} tilt {:.4}",
+        p.base, p.home, p.attack, p.curve, p.defence, p.dispersion, p.rho, p.draw, p.tilt
     );
     println!(
         "{:<14} {:<30} {:>9} {:>9} {:>9} {:>9} {:>5}  verdict  band",

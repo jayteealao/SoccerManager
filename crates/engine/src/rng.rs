@@ -79,10 +79,14 @@ impl EngineRng {
         mean + spread * (sum - 6.0)
     }
 
-    /// A bell-curve draw rounded and clamped to the 1 to 100 attribute scale.
-    pub fn attribute(&mut self, mean: f64, spread: f64) -> u8 {
-        // The clamp keeps the value inside 1..=100, so the cast cannot truncate.
-        self.bell(mean, spread).round().clamp(1.0, 100.0) as u8
+    /// A bell-curve draw on the 1 to 20 scale, rounded to a tenth and kept to 1.0 to 20.0.
+    pub fn rating(&mut self, mean: f64, spread: f64) -> crate::rating::Rating {
+        let tenths = (self.bell(mean, spread) * 10.0).round().clamp(
+            f64::from(crate::rating::MIN_TENTHS),
+            f64::from(crate::rating::MAX_TENTHS),
+        );
+        // The clamp keeps the value inside 10..=200, so the cast cannot truncate.
+        crate::rating::Rating::from_tenths(tenths as u8)
     }
 }
 
@@ -120,15 +124,15 @@ mod tests {
     }
 
     #[test]
-    fn attribute_draws_centre_on_the_mean_and_stay_in_range() {
+    fn rating_draws_centre_on_the_mean_and_stay_in_range() {
         let mut rng = EngineRng::from_seed(7);
         let mut sum = 0.0;
         for _ in 0..10_000 {
-            let v = rng.attribute(50.0, 10.0);
-            assert!((1..=100).contains(&v));
-            sum += f64::from(v);
+            let v = rng.rating(10.0, 2.0);
+            assert!((10..=200).contains(&v.tenths()));
+            sum += v.decimal();
         }
         let mean = sum / 10_000.0;
-        assert!((49.0..=51.0).contains(&mean), "sample mean {mean}");
+        assert!((9.9..=10.1).contains(&mean), "sample mean {mean}");
     }
 }

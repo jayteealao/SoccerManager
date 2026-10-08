@@ -52,6 +52,8 @@ export function lineupModel(rosters, teamIds, state) {
       const id = player['player.id'];
       const wire = team * PLAYERS_PER_TEAM + slot;
       const energy = state.energy ? state.energy[wire] : null;
+      const level = state.level?.[wire] ?? null;
+      const base = state.base?.[wire] ?? null;
       const band = energyBand(energy);
       const card = state.cards.get(id) ?? null;
       const sentOff = state.sentOff.has(id);
@@ -70,6 +72,8 @@ export function lineupModel(rosters, teamIds, state) {
         position: player['player.position'],
         squad: player['player.squad_index'] ?? null,
         energy: energy ?? 1,
+        level,
+        base,
         band: band.word,
         token: band.token,
         condition,

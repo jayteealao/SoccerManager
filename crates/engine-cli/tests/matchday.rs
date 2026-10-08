@@ -386,7 +386,7 @@ fn a_reconnecting_page_catches_up_on_every_ground_event_up_to_the_resume_tick() 
         &content(),
         &[
             "--seed",
-            "25",
+            "26",
             "--minutes",
             "10",
             "--reconnect-wait",

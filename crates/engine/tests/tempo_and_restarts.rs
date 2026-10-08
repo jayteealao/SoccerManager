@@ -228,12 +228,9 @@ fn running(speed: f64) -> Simulation {
     let mut config = calm_match(90);
     config.tuning.tackle_dribble_win = 0.5;
     let sim = Simulation::new(config.clone()).unwrap();
-    let (tackler, carrier) = (
-        sim.players()[index(1, 5)].derived,
-        sim.players()[index(0, 5)].derived,
-    );
-    let base = engine::rules::fouls::win_chance(&tackler, &carrier, &config.tuning);
-    let extra = engine::rules::fouls::dribble_win_chance(&tackler, &carrier, &config.tuning);
+    let (tackler, carrier) = (sim.skills(index(1, 5)), sim.skills(index(0, 5)));
+    let base = engine::rules::fouls::win_chance(tackler, carrier, &config.tuning);
+    let extra = engine::rules::fouls::dribble_win_chance(tackler, carrier, &config.tuning);
     let at = DVec2::new(0.0, 10.0);
     let mut sim = spread(Scene::new(config), -30.0, 30.0)
         .place(index(0, 5), at)

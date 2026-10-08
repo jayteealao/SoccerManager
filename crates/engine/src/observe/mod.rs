@@ -105,6 +105,40 @@ pub struct MatchStats {
     pub figures: MatchFigures,
     #[serde(flatten, default)]
     pub script: ScriptFigures,
+    /// Every player who played, with his match rating, home first and in squad order. An
+    /// additive extra; absent from a record of a match that did not play.
+    #[serde(
+        rename = "players.rating",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub ratings: Vec<RatingEntry>,
+}
+
+/// One player's match rating as the match record lists it: 1.0 to 10.0 with one decimal.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RatingEntry {
+    #[serde(rename = "player.id")]
+    pub id: String,
+    /// His side: 0 home, 1 away.
+    pub team: usize,
+    pub rating: f64,
+}
+
+impl RatingEntry {
+    /// Every player of `sim` who played, with his rating, home first and in squad order:
+    /// final once the match is over.
+    pub fn of_match(sim: &crate::sim::Simulation) -> Vec<Self> {
+        let teams = sim.teams();
+        sim.match_ratings()
+            .into_iter()
+            .map(|r| Self {
+                id: teams[r.team].player_ids[r.squad].clone(),
+                team: r.team,
+                rating: r.rating(),
+            })
+            .collect()
+    }
 }
 
 /// The script pack a match ran with and its hook counters. Every key is absent from a match
@@ -663,6 +697,7 @@ mod tests {
                 ..MatchFigures::default()
             },
             script: ScriptFigures::default(),
+            ratings: Vec::new(),
         }
     }
 

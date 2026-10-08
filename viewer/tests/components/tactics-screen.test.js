@@ -25,7 +25,7 @@ test('before kick-off the Tactics screen opens with the squad list and eleven sl
   const slot = root.querySelector('button[data-slot="0"]');
   assert.match(
     slot.getAttribute('aria-label'),
-    /^Slot 1, GK: Player 0-1, GK, role fit 50 Fair, fitness 70/
+    /^Slot 1, GK: Player 0-1, GK, role fit 10 Fair, fitness 14/
   );
   assert.equal(root.querySelectorAll('button[data-squad]').length, 22);
   assert.equal(verdict(), 'READY');

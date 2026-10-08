@@ -43,6 +43,10 @@ pub const MOVED_KEYS: &[Action] = &[
     Action::ShotAim,
     Action::ShotSpread,
     Action::ShotLoft,
+    Action::Lapse,
+    Action::Header,
+    Action::FormMatch,
+    Action::FormPeriod,
 ];
 
 /// What one module is.

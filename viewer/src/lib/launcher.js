@@ -1,7 +1,7 @@
 // The page's side of the launcher: read the engine's state, and ask for a restart, to
 // abandon the match, for a new match, for the saved match, to stop or quit, or to save the
-// settings. Each request is a POST; the launcher checks that it comes from this page's own
-// origin, and a body is JSON of at most 4 KiB.
+// settings or a club's squad views. Each request is a POST; the launcher checks that it comes
+// from this page's own origin, and a body is JSON of at most 32 KiB.
 
 /// Calls `fetch` on the global object, never as a detached function.
 const defaultFetch = (...args) => globalThis.fetch(...args);
@@ -81,6 +81,25 @@ export const quit = (fetcher = defaultFetch) => act('engine/quit', fetcher);
 
 /// Saves the player's settings (`{ speed, motion, commentary }`).
 export const saveSettings = (fetcher = defaultFetch, settings) => act('engine/settings', fetcher, settings);
+
+/// One club's squad views and its players' match ratings from the launcher's store
+/// (`{ active, views, ratings }`), or null when nothing answers or the server keeps no store.
+export async function readViews(fetcher = defaultFetch, club) {
+  try {
+    const response = await fetcher(`engine/views?club=${encodeURIComponent(club)}`, { cache: 'no-store' });
+    if (!response.ok) {
+      return null;
+    }
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+/// Saves one club's named views (`{ active, views }`) in the launcher's store. On a refusal
+/// `onRefused` receives the reason.
+export const saveViews = (fetcher = defaultFetch, club, body, onRefused = undefined) =>
+  act('engine/views', fetcher, { club, active: body.active ?? null, views: body.views }, onRefused);
 
 /// The other fixtures of the round a match between two clubs would meet, or null.
 export async function fetchRound(fetcher = defaultFetch, home, away) {

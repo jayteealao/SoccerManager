@@ -88,13 +88,18 @@ impl RuleHookModule for RuleHookV1 {
     ) -> Option<FoulContext> {
         let offender = view.player(offender);
         let tick = view.tick();
+        // The hook's aggression stays the rating as a share, as hooks saw it before the
+        // contract: tenths / 200.
+        let aggression = view.attributes().index("aggression").map_or(0.5, |i| {
+            crate::contract::share_of(offender.attributes.get(i))
+        });
         Some(FoulContext {
             tick,
             minute: view.referee().clock.minute(tick).0,
             team: offender.team,
             slot: offender.slot,
             yellows: offender.yellow,
-            aggression: offender.derived.aggression,
+            aggression,
             advantage,
             penalty,
         })

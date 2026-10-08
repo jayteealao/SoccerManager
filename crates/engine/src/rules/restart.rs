@@ -260,7 +260,8 @@ pub fn target(
     let away = DVec2::new(-team.attack_x, 0.0);
     let base = match dead.kind {
         StoppageKind::KickOff => kick_off_position(team, p.slot),
-        _ => team.anchor(p.slot, dead.spot, t),
+        // The team that takes the restart has the ball.
+        _ => team.anchor(p.slot, dead.spot, !opponent, t),
     };
     let keep = KICK_DISTANCE + TARGET_MARGIN;
     let at = match dead.kind {
