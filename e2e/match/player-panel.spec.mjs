@@ -6,7 +6,8 @@
 // yet known"), "Plays between" in whole numbers, and this match's rating in one decimal.
 // Back returns to the squad. On the next launch on the same data folder, the stored rating is
 // read back. Also: a Tab walk never lands in a stub, and the rendered contrast check.
-// Screenshots are kept as evidence (no baseline yet).
+// Screenshots are kept as evidence; the panel before any match is compared with its baseline
+// at each window size in the @sizes test.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -15,6 +16,7 @@ import { expect, test } from '@playwright/test';
 import { contrastReport } from '../support/contrast.mjs';
 import { frontDoor, tempDir } from '../support/engine.mjs';
 import { kickOffFromStart, open, settled, toFullTime } from '../support/front.mjs';
+import { clearPointer, snap } from '../support/page.mjs';
 
 /// Past the end of any match: a match with this fast-forward plays straight through.
 const PAST_THE_END = 1_000_000;
@@ -119,6 +121,9 @@ test('the panel: a Tab walk never lands in a stub, and the rendered contrast pas
     await openPanel(page);
     await expect(panel(page).locator('[data-ratings]')).toHaveAttribute('data-ratings', 'none');
     await page.screenshot({ path: evidence(info, 'panel-new-signing.png') });
+    // The panel before any match (board 3), against its baseline at each window size.
+    await clearPointer(page);
+    await snap(page, 'panel-new-signing.png');
     const walk = [];
     for (let n = 0; n < 40; n += 1) {
       await page.keyboard.press('Tab');

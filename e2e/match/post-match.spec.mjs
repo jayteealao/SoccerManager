@@ -273,7 +273,8 @@ for (const skin of SKINS) {
           5 * 60_000
         );
         await waitForGrounds(page, Number.MAX_SAFE_INTEGER, 180_000);
-        await expect(page.locator('.strip:visible')).toContainText('1.43');
+        // The whole match's expected goals, as the full-time screen shows them.
+        await expect(page.locator('.strip:visible')).toContainText('0.11 – 0.22');
         expect(await hook(page, () => window.__touchline.report().next)).toEqual({ offered: true, ready: false });
         await expect(action(page)).toHaveText('New match');
         await expect(action(page)).toBeDisabled();
