@@ -1,7 +1,12 @@
 //! The sensitivity rules on small batches: every job has one rule, the job probe changes no
 //! tick, a working job passes its rule, a job planted at zero weight fails it, amplified pace
 //! does not pass its ceiling, and the five-match rule returns a share and a word. The full
-//! run of every rule is `sensitivity_full.rs`.
+//! run of every rule is `sensitivity_full.rs`. The working, planted and amplified-pace check
+//! plays about 2,600 matches, so it is ignored and runs with the full run:
+//!
+//! ```text
+//! cargo test --release -p engine --features sensitivity --test sensitivity --test sensitivity_full -- --ignored --nocapture
+//! ```
 
 mod common;
 
@@ -124,6 +129,7 @@ fn the_job_probe_leaves_every_tick_the_same() {
 /// weight of 0) fails tackling's rule. With the pace flag on, pace's rule does not pass and
 /// its share of the outcome is larger than with the flag off and above the ceiling.
 #[test]
+#[ignore = "about 2,600 matches; run it with the full sensitivity run"]
 fn a_working_job_passes_a_planted_job_fails_and_amplified_pace_does_not_pass() {
     let content = common::content();
     let shipped = run(&content, &["tackling", "pace"], 400, Some(250));

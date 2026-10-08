@@ -1,8 +1,9 @@
 //! Every sensitivity rule and the five-match rule at the size `content/sensitivity.json` sets:
-//! about 6,400 matches, a few minutes on all cores of a release build. Run it with
+//! about 6,400 matches, a few minutes on all cores of a release build. Run it, with the
+//! ignored planted-job check of `sensitivity.rs`, with
 //!
 //! ```text
-//! cargo test --release -p engine --features sensitivity --test sensitivity_full -- --ignored --nocapture
+//! cargo test --release -p engine --features sensitivity --test sensitivity --test sensitivity_full -- --ignored --nocapture
 //! ```
 //!
 //! It prints one line per rule (job, statistic, low, high, move and its interval, share and

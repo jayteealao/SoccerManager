@@ -193,10 +193,10 @@ When a change brings the band back inside its range, the next change run's pilot
 The sensitivity rules check that every attribute and body job still moves its own statistic, and that a top player still beats an average one in about two of three runs of five matches (see [The player contract](../explanation/player-contract.md#every-rating-has-a-job)). Run them after a change to the attribute file's stage tables, the curve strengths in `engine.contract.actions`, or the match rating:
 
 ```bash
-cargo test --release -p engine --features sensitivity --test sensitivity_full -- --ignored --nocapture
+cargo test --release -p engine --features sensitivity --test sensitivity --test sensitivity_full -- --ignored --nocapture
 ```
 
-The rules and the counters they read build only with the engine's `sensitivity` feature, which the command turns on; a normal build has neither, so its matches pay nothing for them. The run plays the balanced design, the two arms and the five-match rule at the size `content/sensitivity.json` sets, about 6,400 matches, a few minutes on an 8-core machine. It prints one line per rule and the five-match shares, and writes the same to `target/sensitivity/rules.json`. The test passes only when every rule and the five-match rule pass.
+The rules and the counters they read build only with the engine's `sensitivity` feature, which the command turns on; a normal build has neither, so its matches pay nothing for them. The run plays the balanced design, the two arms and the five-match rule at the size `content/sensitivity.json` sets, about 6,400 matches, a few minutes on an 8-core machine. It also runs the check that a working job passes its rule, a job planted at zero weight fails it and amplified pace does not pass its ceiling, about 2,600 more matches. It prints one line per rule and the five-match shares, and writes the same to `target/sensitivity/rules.json`. The test passes only when every rule and the five-match rule pass.
 
 Read each line:
 
