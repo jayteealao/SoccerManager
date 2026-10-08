@@ -61,7 +61,7 @@ jobs:
       - name: clippy with the probe
         run: cargo clippy -p engine --all-targets --locked --features sensitivity -- -D warnings
       - name: The rules' unit tests
-        run: cargo test --locked -p engine --features sensitivity --lib -- sensitivity::
+        run: "cargo test --locked -p engine --features sensitivity --lib -- sensitivity::"
       - name: The rules on small batches (ignored full run excluded)
         run: cargo test --locked -p engine --features sensitivity --test sensitivity
 
