@@ -116,21 +116,32 @@
               {/each}
             </dl>
             {#if g === model.groups.length - 1}
-              <SectionLabel label="Hidden values" />
-              {#each model.hidden as value (value.name)}
-                <p class="hidden" data-hidden={value.name} data-confidence={value.confidence}>
-                  <b>{value.label}:</b>
-                  {#if value.known}
-                    <span class="known">“{value.text}” — {value.line}</span>
-                  {:else}
-                    <span class="unknown">{value.full}</span>
-                  {/if}
-                </p>
-              {/each}
-              <p class="note">Hidden: shown in words only. Words sharpen with matches at the club.</p>
+              {@render hiddenValues()}
             {/if}
           </div>
         {/each}
+        <!-- An older replay carries the hidden values but no attributes: they get a column of
+             their own. -->
+        {#if model.groups.length === 0}
+          <div class="col">
+            {@render hiddenValues()}
+          </div>
+        {/if}
+
+        {#snippet hiddenValues()}
+          <SectionLabel label="Hidden values" />
+          {#each model.hidden as value (value.name)}
+            <p class="hidden" data-hidden={value.name} data-confidence={value.confidence}>
+              <b>{value.label}:</b>
+              {#if value.known}
+                <span class="known">“{value.text}” — {value.line}</span>
+              {:else}
+                <span class="unknown">{value.full}</span>
+              {/if}
+            </p>
+          {/each}
+          <p class="note">Hidden: shown in words only. Words sharpen with matches at the club.</p>
+        {/snippet}
 
         <div class="col">
           <!-- STUB: personality needs a model the engine does not have yet. -->

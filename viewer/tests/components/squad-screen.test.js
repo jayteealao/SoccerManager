@@ -183,3 +183,28 @@ test('a match with no squad list says so under the empty table', async () => {
   assert.equal(root.querySelectorAll('[data-squad-table] tbody tr[data-row]').length, 0);
   assert.match(root.querySelector('[data-squad-empty]').textContent, /no squad list/);
 });
+
+test('a protocol 5 player with no attributes still shows his hidden values in words', async () => {
+  const hello5 = {
+    ...HELLO,
+    'protocol.version': 5,
+    teams: [
+      {
+        ...HELLO.teams[0],
+        squad: HELLO.teams[0].squad.map((p, i) => ({
+          ...p,
+          ...(i === 1 ? { 'player.consistency': { word: 'rarely_off', confidence: 'firm' } } : {}),
+        })),
+      },
+      HELLO.teams[1],
+    ],
+  };
+  await openSquad(hello5);
+  squadRoot().querySelector('tr[data-row="1"] button.who').click();
+  await settle();
+  const panel = document.querySelector('[data-screen="player"]');
+  assert.equal(panel.querySelectorAll('[data-attr]').length, 0, 'a protocol 5 player has no attributes');
+  assert.match(panel.querySelector('[data-hidden="consistency"]').textContent, /Rarely has an off day/);
+  assert.ok(panel.querySelector('[data-hidden="injury_proneness"]'));
+  assert.match(panel.textContent, /Hidden values/);
+});
