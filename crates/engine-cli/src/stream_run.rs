@@ -555,7 +555,6 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
     })
 }
 
-/// A squad index as the wire writes it. A validated team file holds far fewer players.
 /// Hidden attribute `name` of `player` as the hello carries it: a word key and a confidence
 /// from the matches he has seen at the club, never his rating. A schema without the attribute
 /// gives "not yet known".
@@ -606,6 +605,7 @@ pub(crate) fn ratings_message(sim: &Simulation) -> Ratings {
     }
 }
 
+/// A squad index as the wire writes it. A validated team file holds far fewer players.
 fn wire_index(squad: usize) -> u16 {
     u16::try_from(squad).unwrap_or(u16::MAX)
 }

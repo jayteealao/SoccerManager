@@ -73,7 +73,7 @@
         />
         {#if converted}
           <p class="converted" role="status" data-converted={converted.club}>
-            <b>{converted.club}:</b> {converted.text}
+            <b>{converted.club}</b> {converted.text}
           </p>
         {/if}
       </div>

@@ -34,6 +34,12 @@ esac
 
 # (a) The base build, in its own worktree and target folder.
 base_dir="$work/base"
+# A folder left by an earlier run that git no longer knows as a worktree is removed, so the
+# base is always checked out in a real worktree.
+git worktree prune
+if [ -d "$base_dir" ] && ! git -C "$base_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  rm -rf "$base_dir"
+fi
 if [ ! -d "$base_dir" ]; then
   git worktree add --detach "$base_dir" "$base_rev" >/dev/null 2>&1 || {
     echo "FAIL: cannot add a worktree for $base_rev"
@@ -77,10 +83,14 @@ JSON
   --script-pack "$base_content/scripts/sample" --out "$work/fixtures/knockout.smfx" \
   >/dev/null 2>&1 || fail "record knockout"
 
-# (c) Every tick's full state on both builds: bisect exits 0 when no tick differs.
+# (c) Every tick's full state on both builds: bisect exits 0 when no tick differs. Every
+# fixture must be there: 20 seeds, the change and the knockout, and the version 4 file.
+expected_fixtures=23
+bisected=0
 for f in "$work"/fixtures/*.smfx "$root/viewer/tests/data/one-minute-v4.smfx"; do
   name=$(basename "$f")
-  [ -f "$f" ] || continue
+  [ -f "$f" ] || { fail "fixture $name is missing"; continue; }
+  bisected=$((bisected + 1))
   out=$("$this_bin" bisect --fixture "$f" \
     --a-binary "$base_bin" --b-binary "$this_bin" 2>&1)
   code=$?
@@ -90,6 +100,7 @@ for f in "$work"/fixtures/*.smfx "$root/viewer/tests/data/one-minute-v4.smfx"; d
     fail "bisect $name: exit $code: $(echo "$out" | head -n 3 | tr '\n' ' ')"
   fi
 done
+[ "$bisected" -eq "$expected_fixtures" ] || fail "bisected $bisected fixtures; expected $expected_fixtures"
 echo "skip: viewer/tests/data/one-minute.smfx is a version-3 file of frames only and cannot be re-simulated"
 
 # (d) The planted control. A version 1 copy of the home team with every value under 5
@@ -99,6 +110,10 @@ echo "skip: viewer/tests/data/one-minute.smfx is a version-3 file of frames only
 # kick-off of this match. The exact copy's tick digests must equal the base's, and the
 # planted copy's must not.
 python_bin=$(command -v python3 || command -v python)
+if [ -z "$python_bin" ]; then
+  echo "FAIL: the planted control needs python3 or python on the path"
+  exit 1
+fi
 "$python_bin" - "$base_content/teams/default-a.json" "$work/control" <<'PY'
 import json, sys
 src, out = sys.argv[1], sys.argv[2]

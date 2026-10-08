@@ -49,14 +49,21 @@ const settle = async () => {
   }
 };
 
-async function openSquad() {
-  const opening = await opened(HELLO6);
+async function openSquad(hello = HELLO6) {
+  const opening = await opened(hello);
   const tab = [...document.querySelectorAll('nav.subnav button.tab')].find((b) => b.textContent.trim() === 'Squad');
   assert.ok(tab, 'the Tactics screen has a live Squad tab');
   tab.click();
   await settle();
   assert.equal(opening.s.view, 'squad');
   return opening;
+}
+
+/// A cell's drawn text, without the screen reader's text kept out of sight beside it.
+function drawn(cell) {
+  const copy = cell.cloneNode(true);
+  for (const sr of copy.querySelectorAll('.sr')) sr.remove();
+  return copy.textContent.trim();
 }
 
 test('the Squad tab opens the table with the default view and every player', async () => {
@@ -66,12 +73,15 @@ test('the Squad tab opens the table with the default view and every player', asy
   assert.deepEqual(headers.slice(0, 2 + DEFAULT_COLUMNS.length), ['no', 'player', ...DEFAULT_COLUMNS]);
   assert.equal(root.querySelectorAll('[data-squad-table] tbody tr[data-row]').length, 22);
   const pace = root.querySelector('tr[data-row="0"] td[data-cell="attr:pace"]');
-  assert.equal(pace.textContent.trim(), '15');
+  assert.equal(drawn(pace), '15');
+  // A screen reader hears the number with its band word as real text, not a label on a span.
+  assert.equal(pace.querySelector('.sr').textContent, '15, good');
+  assert.equal(pace.querySelector('[aria-label]'), null);
   // No number under a hidden column, and no attribute cell with a decimal.
   for (const cell of root.querySelectorAll('td[data-cell^="attr:"]')) {
     assert.ok(!/\./.test(cell.textContent), cell.textContent);
   }
-  assert.equal(root.querySelector('tr[data-row="0"] td[data-cell="consistency"]').textContent.trim(), 'Not yet known');
+  assert.equal(drawn(root.querySelector('tr[data-row="0"] td[data-cell="consistency"]')), 'Not yet known');
   assert.deepEqual(stubFaults(root), []);
 });
 
@@ -87,6 +97,11 @@ test('a header sorts, a second select reverses, and the view says it changed', a
   await settle();
   assert.equal(table().dataset.sort, 'height:up');
   assert.equal(table().querySelector('tbody tr[data-row]').dataset.row, '0');
+  // The view's state is announced in a status region, not inside the View select's name.
+  const status = root.querySelector('[data-view-status]');
+  assert.equal(status.getAttribute('role'), 'status');
+  assert.match(status.textContent, /^View .+, .+\. Showing 22 of 22 players\.$/);
+  assert.equal(root.querySelector('[data-view-state]').getAttribute('aria-hidden'), 'true');
 });
 
 test('the column menu moves a row by keyboard, keeps its focus, and Escape returns to the chip', async () => {
@@ -109,14 +124,22 @@ test('the column menu moves a row by keyboard, keeps its focus, and Escape retur
   root.querySelector('[data-column-menu] button[data-add="build"]').click();
   await settle();
   assert.ok(root.querySelector('[data-column-menu] li[data-shown="build"]'));
+  assert.equal(document.activeElement?.closest('li')?.dataset.shown, 'build', 'the added row takes focus');
   assert.equal(root.querySelector('[data-column-menu] button[data-add="morale"]'), null);
+  // A removed row hands focus to the row after it, so focus never falls out of the menu.
+  const shownIds = () => [...root.querySelectorAll('[data-column-menu] li[data-shown]')].map((li) => li.dataset.shown);
+  const after = shownIds()[1];
+  root.querySelector(`[data-column-menu] li[data-shown="${shownIds()[0]}"] [data-control="remove"]`).click();
+  await settle();
+  assert.equal(document.activeElement?.closest('li')?.dataset.shown, after, 'the next row takes focus');
+  assert.equal(document.activeElement?.dataset.control, 'remove');
   assert.deepEqual(stubFaults(root.querySelector('[data-column-menu]')), []);
   root.querySelector('[data-column-menu]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await settle();
   assert.equal(root.querySelector('[data-column-menu]'), null);
   assert.equal(document.activeElement, root.querySelector('[data-columns-chip]'));
   const headers = [...root.querySelectorAll('thead th[data-col]')].map((th) => th.dataset.col);
-  assert.equal(headers[2], 'nat');
+  assert.equal(headers[2], 'age');
   assert.ok(headers.includes('build'));
 });
 
@@ -151,4 +174,12 @@ test('the views are kept for the session: a saved copy is offered again', async 
   const names = [...squadRoot().querySelectorAll('select[data-view] option')].map((o) => o.value);
   assert.ok(names.length >= 2, names.join(', '));
   assert.ok(s.squadViews.views.length >= 2);
+});
+
+test('a match with no squad list says so under the empty table', async () => {
+  const bare = { ...HELLO6, teams: [{ ...HELLO6.teams[0], squad: [] }, HELLO6.teams[1]] };
+  await openSquad(bare);
+  const root = squadRoot();
+  assert.equal(root.querySelectorAll('[data-squad-table] tbody tr[data-row]').length, 0);
+  assert.match(root.querySelector('[data-squad-empty]').textContent, /no squad list/);
 });

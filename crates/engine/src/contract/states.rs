@@ -70,11 +70,15 @@ impl Caps {
     }
 }
 
+/// The largest change a cap may allow, in rating points. A capped delta is stored in tenths
+/// in an `i8`, which holds -12.8 to 12.7 points, so a wider cap could not be kept.
+const CAP_LIMIT: f64 = 12.7;
+
 fn check_cap(cap: &[f64; 2], _ctx: &()) -> garde::Result {
     let [lo, hi] = *cap;
-    if !(-19.0..=0.0).contains(&lo) || !(0.0..=19.0).contains(&hi) {
+    if !(-CAP_LIMIT..=0.0).contains(&lo) || !(0.0..=CAP_LIMIT).contains(&hi) {
         return Err(garde::Error::new(format!(
-            "[{lo}, {hi}]; the lowest must be -19 to 0 and the highest 0 to 19"
+            "[{lo}, {hi}]; the lowest must be -12.7 to 0 and the highest 0 to 12.7"
         )));
     }
     Ok(())
@@ -118,7 +122,7 @@ fn check_groups(groups: &[Group], _ctx: &()) -> garde::Result {
 }
 
 impl Default for StatesTuning {
-    /// The shipped caps (the person's research caps) and family groups.
+    /// The shipped caps and family groups, as the player contract page sets them out.
     fn default() -> Self {
         use Group::*;
         Self {
@@ -166,7 +170,8 @@ pub fn capped(
             per_family[f][g].clamp(flo, fhi)
         });
         let d = soft_combine(deltas).clamp(lo, hi);
-        // Inside ±19 by the cap checks, so it fits an `i8` in tenths.
+        // Inside the total cap, which the cap check keeps within ±12.7, so it fits an `i8`
+        // in tenths.
         (d * 10.0).round() as i8
     })
 }
@@ -260,6 +265,25 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_cap_wider_than_a_tenths_delta_can_hold_is_refused() {
+        let mut t = StatesTuning::default();
+        t.caps.total = [-15.0, 2.25];
+        assert!(t.validate().is_err(), "a lowest of -15 must be refused");
+        t.caps.total = [-12.7, 12.7];
+        assert!(t.validate().is_ok());
+        // At the widest cap the stored delta is the cap itself, not a saturated value.
+        let d = capped([[-50.0; GROUP_COUNT]; FAMILY_COUNT], &{
+            let mut w = t.clone();
+            w.caps.body = [-12.7, 0.5];
+            w.caps.mind = [-12.7, 1.0];
+            w.caps.familiarity = [-12.7, 0.25];
+            w.caps.surroundings = [-12.7, 0.5];
+            w
+        });
+        assert!(d.contains(&-127), "{d:?}");
     }
 
     #[test]

@@ -86,6 +86,17 @@ export function playsBetween(range) {
   };
 }
 
+/// The scale of the effective-ability graphic: 12 to 20, reaching lower in steps of four
+/// when the lowest of `values` (whole numbers) sits below 12, so every player's range shows.
+/// Returns the first number and the five ticks, evenly spaced up to 20.
+export function abilityAxis(...values) {
+  const known = values.filter((v) => typeof v === 'number' && Number.isFinite(v));
+  const low = known.length ? Math.min(...known) : 12;
+  const from = low >= 12 ? 12 : Math.max(0, 20 - 4 * Math.ceil((20 - low) / 4));
+  const step = (20 - from) / 4;
+  return { from, ticks: [0, 1, 2, 3, 4].map((i) => from + i * step) };
+}
+
 /// The match-rating lines of the panel: the chips of the newest matches, the last, and the
 /// averages of the last 3 and the last 10 with how many matches each covers.
 export function ratingLines(list) {

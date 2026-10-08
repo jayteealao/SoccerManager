@@ -88,7 +88,8 @@ pub fn role_fit(
     let mut sum = 0.0;
     let mut weight = 0.0;
     for (name, w) in &schema.roles[role].attributes {
-        if let Some(i) = attrs.index(name) {
+        // A hidden value never counts: the fit reaches the page as a number.
+        if let Some(i) = attrs.index(name).filter(|&i| !attrs.attributes[i].hidden) {
             sum += w * p.attributes.get(i).decimal();
             weight += w;
         }

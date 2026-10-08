@@ -392,11 +392,21 @@ impl TacticsSchema {
         }
         for role in &self.roles {
             for name in role.attributes.keys() {
-                if attributes.index(name).is_none() {
+                let Some(idx) = attributes.index(name) else {
                     return Err((
                         format!("roles.{}.attributes", role.name),
                         format!(
                             "role {} names attribute {name}, which is not in the attribute schema",
+                            role.name
+                        ),
+                    ));
+                };
+                // A role's fit reaches the page as a number, and a hidden value never does.
+                if attributes.attributes[idx].hidden {
+                    return Err((
+                        format!("roles.{}.attributes", role.name),
+                        format!(
+                            "role {} names attribute {name}, which is hidden; a role may name only visible attributes",
                             role.name
                         ),
                     ));
@@ -538,6 +548,19 @@ mod tests {
             err.to_string(),
             "content refused: tactics tactics.json: roles.central_defender.attributes: \
              role central_defender names attribute telepathy, which is not in the attribute schema"
+        );
+    }
+
+    #[test]
+    fn a_role_naming_a_hidden_attribute_is_refused() {
+        let err = with_tactics(|v| {
+            v["roles"][1]["attributes"]["injury_proneness"] = 1.0.into();
+        });
+        assert_eq!(
+            err.to_string(),
+            "content refused: tactics tactics.json: roles.central_defender.attributes: \
+             role central_defender names attribute injury_proneness, which is hidden; a role may \
+             name only visible attributes"
         );
     }
 

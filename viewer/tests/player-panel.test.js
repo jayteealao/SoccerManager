@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'vitest';
 
-import { ageWords, BODY_REFERENCE, heightWords, panelModel, playsBetween, ratingLines } from '../src/lib/player-panel.js';
+import { abilityAxis, ageWords, BODY_REFERENCE, heightWords, panelModel, playsBetween, ratingLines } from '../src/lib/player-panel.js';
 import { REPO_ROOT } from './helpers.js';
 
 const TUNING = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'content/tuning.json'), 'utf8'));
@@ -110,4 +110,11 @@ test('height and age read against the references', () => {
   assert.match(ageWords(30), /a little more slowly/);
   assert.match(ageWords(34), /fades late/);
   assert.equal(heightWords(undefined), null);
+});
+
+test('the effective-ability scale reaches below 12 for a player who plays below it', () => {
+  assert.deepEqual(abilityAxis(14, 16), { from: 12, ticks: [12, 14, 16, 18, 20] });
+  assert.deepEqual(abilityAxis(9, 11), { from: 8, ticks: [8, 11, 14, 17, 20] });
+  assert.deepEqual(abilityAxis(1, null), { from: 0, ticks: [0, 5, 10, 15, 20] });
+  assert.deepEqual(abilityAxis(undefined, null), { from: 12, ticks: [12, 14, 16, 18, 20] });
 });

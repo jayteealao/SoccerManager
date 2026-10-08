@@ -28,7 +28,9 @@ Every attribute the engine reads goes through the blend, with four exceptions th
 
 ## The curve
 
-A rating passes through the curve `F(r) = 8·e^((r−10)/8)` before the blend, and the blend's result is the stage value. At rating 10 the curve gives 8; each step up is worth more than the one below it. A contest between two players is decided in log-odds: the action's base chance, moved by `k × (F(attacker) − F(defender))`, with a floor and a ceiling on every chance.
+A rating passes through the curve `F(r) = 8·e^((r−10)/8)` before the blend, and the blend's result, averaged on the curve, is the stage value. At rating 10 the curve gives 8; each step up is worth more than the one below it.
+
+The curve is not applied a second time to the stage value. On the stage side, the stage value is read in log-odds and scaled by the action's strength `k`. A contest between two players is decided in log-odds: the action's base chance, moved by `k × (F(attacker) − F(defender))`, with a floor and a ceiling on every chance. An action with no opponent reads the stage's share, `σ(k × (F − F(10)))`: 0.5 for an average player, and a logistic in the same log-odds as a contest. A second exponential on the stage value would make the top of the scale count twice; the log-odds scaling keeps the convexity in one place, the curve, and keeps `k` the only strength of an action.
 
 The curve makes the top of the scale matter. In a linear model, the step from 16 to 18 is worth the same as the step from 8 to 10, and a squad of solid players is as good as a squad with stars. Real football is not like that: a top player changes matches. The strength `k` of each action sets how much the gap counts. It is a design value, and the five-match rule (below) is its target.
 
@@ -36,7 +38,9 @@ Top speed does not go through the curve. Pace maps to a real sprint speed in kil
 
 ## States, caps and effective ability
 
-A player's condition moves his ratings during a match: tiredness and knocks the physical group, morale and adaptation to a new country the mental group, match sharpness the timing of technical actions. These are the four families of state: body, mind, familiarity and surroundings. The result is his effective ability, which play reads; his base ratings never change during a match.
+A player's condition moves his ratings during a match. The engine groups state into four families: body, mind, familiarity and surroundings. Each family owns its attribute groups: body the physical group, mind the mental group, familiarity the timing of technical actions. Tiredness moves the body family, adaptation to a new country the mind family, and match sharpness the familiarity family. The result is his effective ability, which play reads; his base ratings never change during a match.
+
+Morale and knocks are not built yet. Their families, groups and caps are in place: a knock will move the body family and morale the mind family. Neither has an input until the parts of the game that own morale and injuries add one, and pressure, momentum and weather are still stand-ins that move nothing.
 
 Each family has a cap, and all families together have a total cap:
 
@@ -70,7 +74,15 @@ A rule's word comes from the uncertainty of the measure, not only its value. A b
 
 The curve's strength is set against one target: a top player looks clearly better than an average player in the same role in about two of three runs of five matches. One player of a fixed team is replaced by a copy with every visible attribute at 16 or at 10, and each copy plays the same five matches. The top copy should have the higher mean match rating in about two of three runs.
 
-The target is about what a manager sees. Over one match, luck hides most differences between players. Over a season, a top player is plainly better. Five matches is the span over which a manager judges a new signing, and two of three is clear but not certain. A curve that is too weak makes stars invisible; one that is too strong makes every match a foregone conclusion. The target is met by the curve's strength, not by the weights of the match rating, which would only change the measure.
+The target is about what a manager sees. Over one match, luck hides most differences between players. Over a season, a top player is plainly better. Five matches is the span over which a manager judges a new signing, and two of three is clear but not certain. A curve that is too weak makes stars invisible; one that is too strong makes every match a foregone conclusion. The target is to be met by the curve's strength, not by the weights of the match rating, which would only change the measure.
+
+It is not met yet. The full run measures 0.815 (0.775 to 0.853) pooled over four roles, against the target of 0.667 ± 0.07. By role it reads goalkeeper 0.920, centre back 0.355, central midfielder 1.000 and striker 0.985. The pooled figure hides a role the other way round: a top centre back has the higher match rating in only about one run in three, because the match rating does not yet reward much of what a centre back does. Tuning `k` alone cannot fix both ends at once, so the target is carried to the later work on how each action is resolved, which changes what a centre back's attributes move.
+
+## Where the rules stand
+
+The full run of the rules records 12 passes, 13 fails and 15 not sure of 40. The rules are kept as they are, red where they fail, so each fail stays visible: a fail is a job the engine does not yet do, not a rule to soften. Most of the fails and not-sure words belong to actions that play rarely or not at all: play makes no crosses, and aerial balls and offsides are rare, so the crossing, command-of-area, heading, jumping, height and communication rules cannot pass until play makes those actions.
+
+One attribute breaks the ceiling. Decisions is the main attribute of the choose stage of the pass, chip, cross, shot, long shot and dribble, and it carries 0.474 (0.331 to 0.674) of the outcome against the ceiling of 0.20, while its own statistic, expected goals per shot, does not move. Composure (0.193), agility (0.186), nationality (0.189) and strength (0.144) sit near the ceiling. The share of decisions is the named fail that the later work on how players choose their actions must bring under the ceiling, by spreading the choose stages over vision and anticipation; the weights are not cut here, because a cut that only lowers the share would hide the job decisions does not do.
 
 ## The wider kinds of data
 

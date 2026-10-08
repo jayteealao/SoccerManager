@@ -343,6 +343,10 @@ pub const MAX_VIEWS: usize = 20;
 pub const MAX_COLUMNS: usize = 64;
 /// The longest view name and column id, in characters.
 const MAX_NAME_CHARS: usize = 40;
+/// The longest club id the page may save views for, in characters.
+const MAX_CLUB_CHARS: usize = 64;
+/// The most clubs the store keeps views for.
+pub const MAX_CLUBS: usize = 500;
 /// The match ratings kept per player: the newest ten.
 pub const KEPT_RATINGS: usize = 10;
 
@@ -535,6 +539,14 @@ impl Views {
             serde_json::from_str(body).map_err(|e| format!("the views do not read: {e}"))?;
         if save.club.trim().is_empty() {
             return Err("the views name no club".into());
+        }
+        if save.club.chars().count() > MAX_CLUB_CHARS {
+            return Err(format!(
+                "the club id is longer than {MAX_CLUB_CHARS} characters"
+            ));
+        }
+        if !self.clubs.contains_key(&save.club) && self.clubs.len() >= MAX_CLUBS {
+            return Err(format!("the views already hold {MAX_CLUBS} clubs"));
         }
         check_views(&save.club, save.active.as_ref(), &save.views)?;
         let part = self.clubs.entry(save.club.clone()).or_default();
@@ -863,6 +875,28 @@ mod tests {
             store
                 .set_views(r#"{"club":"club-a","views":[],"x":1}"#)
                 .is_err()
+        );
+        let long = format!(r#"{{"club":"{}","views":[]}}"#, "c".repeat(65));
+        assert!(
+            store
+                .set_views(&long)
+                .unwrap_err()
+                .contains("longer than 64")
+        );
+        for i in 0..MAX_CLUBS {
+            store
+                .set_views(&format!(r#"{{"club":"club-{i}","views":[]}}"#))
+                .unwrap();
+        }
+        assert!(
+            store
+                .set_views(r#"{"club":"one-more","views":[]}"#)
+                .unwrap_err()
+                .contains("500 clubs")
+        );
+        assert!(
+            store.set_views(r#"{"club":"club-0","views":[]}"#).is_ok(),
+            "a club the store holds may still save"
         );
     }
 

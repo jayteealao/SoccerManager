@@ -31,7 +31,7 @@ export function convertedNotice(team) {
   }
   return {
     club: team.name,
-    text: 'an older team file. Its ratings were converted to the 1-20 scale when it loaded; nothing else changed.',
+    text: 'uses an older team file. Its ratings were converted to the 1 to 20 scale as it loaded; ratings that came out below 1.0 are now 1.0.',
   };
 }
 

@@ -174,8 +174,9 @@
             <option value={view.name}>{view.name}</option>
           {/each}
         </select>
-        <span class="g" data-view-state={viewWord}>· {viewWord}</span>
+        <span class="g" aria-hidden="true" data-view-state={viewWord}>· {viewWord}</span>
       </label>
+      <span class="sr" role="status" aria-live="polite" data-view-status>View {working.name}, {viewWord}. Showing {rows.length} of {squad.length} players.</span>
       <span class="chip on">First team + bench</span>
       <label class="chip">
         <span>Position:</span>
@@ -216,7 +217,7 @@
       <StubSection note="compare two players" inline><span class="btn gh">Compare 2</span></StubSection>
     </div>
 
-    <div class="table">
+    <div class="table" data-may-scroll-x>
       <SquadTable
         {rows}
         {columns}
@@ -227,6 +228,9 @@
         onsort={sortBy}
         onopen={(i) => session.openPlayer(i)}
       />
+      {#if squad.length === 0}
+        <p class="g empty" data-squad-empty>This match carries no squad list: it was recorded before the game sent one.</p>
+      {/if}
     </div>
 
     <div class="notes">
@@ -389,6 +393,11 @@
     overflow: auto;
   }
 
+  .empty {
+    margin: 10px 0 0;
+    font-size: 10px;
+  }
+
   .notes {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -422,6 +431,16 @@
 
     .inp {
       margin-left: 0;
+    }
+
+    /* The toolbar wraps here: the column menu hangs under the whole toolbar, not its chip, so
+       it stays inside the window wherever the chip lands. */
+    .bar {
+      position: relative;
+    }
+
+    .anchor {
+      position: static;
     }
   }
 </style>

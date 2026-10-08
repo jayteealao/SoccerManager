@@ -125,7 +125,7 @@ export function ratingFigures(list) {
   return { last: values.at(-1), avg3: mean(3), avg10: mean(10), count: values.length };
 }
 
-/// A match-rating chip: one decimal, as the person chose for match ratings.
+/// A match-rating chip: one decimal, unlike attributes, which show whole numbers.
 export function ratingChip(value) {
   return { text: ratingText(value), band: ratingBand(value) };
 }

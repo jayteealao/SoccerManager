@@ -250,7 +250,7 @@ Each action carries exactly the fields play reads of it. A missing field or one 
 
 Top speed reads pace directly, not through the curve: the real speed of the player's pace from `speed.kmh`, its difference from a pace-10 player times `speed.amplification`, in metres per second, added to `speed.anchor_ms`. Acceleration is `accel.anchor` times the sprint factor.
 
-| states.caps.body, .mind, .familiarity, .surroundings | `[lowest, highest]` change of a rating a state family may make, in rating points | `[-2.0, 0.5]`, `[-1.0, 1.0]`, `[-1.25, 0.25]`, `[-0.75, 0.5]` | lowest −19 to 0, highest 0 to 19 |
+| states.caps.body, .mind, .familiarity, .surroundings | `[lowest, highest]` change of a rating a state family may make, in rating points | `[-2.0, 0.5]`, `[-1.0, 1.0]`, `[-1.25, 0.25]`, `[-0.75, 0.5]` | lowest −12.7 to 0, highest 0 to 12.7 |
 | states.caps.total | `[lowest, highest]` change of a rating all families together may make | `[-5.0, 2.25]` | as above |
 | states.family_groups.body, .mind, .familiarity, .surroundings | the attribute groups each family acts on | body: technical, physical, goalkeeping; mind: mental; familiarity: technical, mental; surroundings: technical, physical | each group at most once |
 | body.height.reference_cm | the height at which height changes nothing, cm | 181 | |

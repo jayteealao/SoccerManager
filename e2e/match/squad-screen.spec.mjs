@@ -65,13 +65,16 @@ async function scaleScan(page) {
     const values = [];
     const bad = [];
     for (const td of root.querySelectorAll('td[data-cell^="attr:"], td[data-cell="level"]')) {
-      const text = td.textContent.trim();
+      // The drawn number, without the screen reader's text beside it.
+      const drawn = td.cloneNode(true);
+      for (const sr of drawn.querySelectorAll('.sr')) sr.remove();
+      const text = drawn.textContent.trim();
       if (text === '—') continue;
       values.push(text);
       if (!/^\d+$/.test(text) || Number(text) < 1 || Number(text) > 20) bad.push(`${td.dataset.cell}: ${text}`);
     }
-    for (const el of root.querySelectorAll('[aria-label], [title]')) {
-      const label = `${el.getAttribute('aria-label') ?? ''} ${el.getAttribute('title') ?? ''}`;
+    for (const el of root.querySelectorAll('[aria-label], [title], .sr')) {
+      const label = `${el.getAttribute('aria-label') ?? ''} ${el.getAttribute('title') ?? ''} ${el.classList.contains('sr') ? el.textContent : ''}`;
       if (/\b\d+\.\d\b/.test(label) && !/rating|average|last match/i.test(label)) bad.push(`label: ${label}`);
     }
     return { values, bad };
@@ -181,11 +184,8 @@ test('a named view is built, sorted and saved, and reads back after a reload and
 
 test('the Squad screen: a Tab walk never lands in a stub, and the rendered contrast passes', { tag: '@sizes' }, async ({ page }, info) => {
   test.setTimeout(4 * 60_000);
-  // Known at the compact step: the default view's 19 columns cannot each keep a 44 px header
-  // in the 696 px a 768 px window leaves, so the table scrolls sideways and its headers miss
-  // the compact hit area. The compact Squad table waits for a design decision (fewer columns
-  // at that step, or a table that may scroll sideways); this marks it until then.
-  test.fail(info.project.name === 'layout-768x1024', 'the compact Squad table needs a design decision');
+  // At the compact step the default view's columns, each with a 44 px header, are wider than
+  // a 768 px window: the table scrolls sideways in its own box, with the Player column fixed.
   const engine = await frontDoor();
   try {
     await toTactics(page, engine.url);

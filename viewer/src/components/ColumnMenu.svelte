@@ -3,7 +3,10 @@
      move has a keyboard path; "Add a column" lists the columns not shown, by group; the greyed
      Later group names the columns the engine has no model for yet. Reset to default and Done
      close it. Focus moves into the menu when it opens and back to the Columns chip when it
-     closes; Escape closes it; a moved row keeps focus. It opens in 150 ms with the product
+     closes; Escape closes it; a moved row keeps focus, a removed row hands focus to the row
+     after it (or before it), and an added column's new row takes focus. At the compact step,
+     where the toolbar wraps, it hangs under the whole toolbar (SquadScreen makes the toolbar
+     its box), no wider than it, with its two lists stacked. It opens in 150 ms with the product
      ease, and not at all under reduced motion (skins/base.css). -->
 <script>
   import { tick } from 'svelte';
@@ -32,6 +35,13 @@
     box?.querySelector('button')?.focus();
     return () => restoreFocus(before);
   });
+
+  /// Removes `column`, then hands focus to the row after it, or the one before it if it was
+  /// the last: the button that had focus leaves with its row.
+  function remove(column, i) {
+    const next = shown[i + 1] ?? shown[i - 1];
+    change(removeColumn(view, column.id), next?.id ?? null, 'remove');
+  }
 
   /// Applies a change, then puts focus back on the same control of the row it moved.
   async function change(next, id = null, control = null) {
@@ -102,7 +112,7 @@
             <span class="name">{column.name}{#if view.sort?.column === column.id}<span class="cy"> sorted {view.sort.direction === 'down' ? '▼' : '▲'}</span>{/if}</span>
             <button type="button" data-control="up" aria-label="Move {column.name} up" disabled={i === 0} onclick={() => change(moveColumn(view, column.id, -1), column.id, 'up')}>↑</button>
             <button type="button" data-control="down" aria-label="Move {column.name} down" disabled={i === shown.length - 1} onclick={() => change(moveColumn(view, column.id, 1), column.id, 'down')}>↓</button>
-            <button type="button" data-control="remove" aria-label="Remove {column.name}" disabled={shown.length <= 1} onclick={() => change(removeColumn(view, column.id))}>✕</button>
+            <button type="button" data-control="remove" aria-label="Remove {column.name}" disabled={shown.length <= 1} onclick={() => remove(column, i)}>✕</button>
           </li>
         {/each}
       </ol>
@@ -115,7 +125,7 @@
           <b class="w">+ {group.label}</b>
           <div class="adds">
             {#each group.columns as column (column.id)}
-              <button type="button" class="add" data-add={column.id} onclick={() => change(addColumn(view, column.id))}>{column.name}</button>
+              <button type="button" class="add" data-add={column.id} onclick={() => change(addColumn(view, column.id), column.id, 'remove')}>{column.name}</button>
             {/each}
           </div>
         </div>
@@ -194,7 +204,7 @@
     display: flex;
     align-items: center;
     gap: 2px;
-    height: 24px;
+    min-height: var(--hit);
     border-bottom: 1px solid var(--rule-2);
   }
 
@@ -224,8 +234,8 @@
   .shown button {
     display: inline-grid;
     place-items: center;
-    width: 24px;
-    height: 24px;
+    width: max(24px, var(--hit));
+    height: var(--hit);
     padding: 0;
     border: 0;
     border-radius: var(--radius-sm);
@@ -274,7 +284,8 @@
   }
 
   .add {
-    min-height: 24px;
+    min-width: var(--hit);
+    min-height: var(--hit);
     padding: 0 3px;
     border: 0;
     border-radius: var(--radius-sm);
@@ -333,6 +344,17 @@
     background: transparent;
     box-shadow: inset 0 0 0 1px var(--control-edge);
     color: var(--ghost-ink);
+  }
+
+  @media (max-width: 1023px), (max-height: 599px) {
+    .pop {
+      top: calc(100% + 4px);
+      width: min(470px, 100%);
+    }
+
+    .cols {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 
   @keyframes open {

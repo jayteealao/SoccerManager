@@ -1054,5 +1054,11 @@
     "bg": "--navy-900",
     "kind": "text",
     "where": "the full-time tag under the score and on the pitch"
+  },
+  {
+    "fg": "--cyan-ink",
+    "bg": "--cyan",
+    "kind": "text",
+    "where": "Squad screen: the selected row's numbers in every band, position rings and words"
   }
 ]

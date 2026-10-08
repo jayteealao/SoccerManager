@@ -13,7 +13,7 @@
   import InfoStrip from '../components/InfoStrip.svelte';
   import SectionLabel from '../components/SectionLabel.svelte';
   import StubSection from '../components/StubSection.svelte';
-  import { panelModel } from '../lib/player-panel.js';
+  import { abilityAxis, panelModel } from '../lib/player-panel.js';
 
   let { session } = $props();
 
@@ -45,9 +45,10 @@
       : []
   );
 
-  /// Where a whole number sits on the 12 to 20 band of the effective-ability graphic, in
-  /// percent.
-  const at = (n) => `${Math.max(0, Math.min(100, ((n - 12) / 8) * 100))}%`;
+  /// The scale of the effective-ability graphic: 12 to 20, or lower for a player below 12.
+  let axis = $derived(abilityAxis(model?.plays?.lo, model?.level));
+  /// Where a whole number sits on the graphic's scale, in percent.
+  const at = (n) => `${Math.max(0, Math.min(100, ((n - axis.from) / (20 - axis.from)) * 100))}%`;
 
   function tab(id) {
     if (id === 'back') {
@@ -109,8 +110,8 @@
             <dl class="attrs">
               {#each group.rows as row (row.name)}
                 <div class="attr" data-attr={row.name}>
-                  <dt>{row.label}</dt>
-                  <dd class="num {row.band}" aria-label="{row.value}, {row.word}">{row.value}</dd>
+                  <dt>{row.label}<span class="sr"> ({row.word})</span></dt>
+                  <dd class="num {row.band}">{row.value}</dd>
                 </div>
               {/each}
             </dl>
@@ -153,7 +154,7 @@
               <i style:left={at(model.plays.lo)} style:width="calc({at(model.plays.hi)} - {at(model.plays.lo)} + 4px)"></i>
               {#if model.level !== null}<s style:left={at(model.level)}></s>{/if}
             </div>
-            <div class="scale num" aria-hidden="true"><span>12</span><span>14</span><span>16</span><span>18</span><span>20</span></div>
+            <div class="scale num" aria-hidden="true">{#each axis.ticks as tick (tick)}<span>{tick}</span>{/each}</div>
             <p class="note">The white line is his level when fresh. Tiredness, a lack of sharpness or a new country lower it; a hidden value never does.</p>
           {:else}
             <p class="g">Not known for this team file.</p>
@@ -328,6 +329,15 @@
 
   .num {
     font-variant-numeric: tabular-nums;
+  }
+
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .range {

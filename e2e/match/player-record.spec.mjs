@@ -57,8 +57,14 @@ async function scaleScan(page) {
   const found = await squad(page).evaluate((root) => {
     const values = [];
     const bad = [];
+    // The drawn number, without the screen reader's text kept out of sight beside it.
+    const drawn = (td) => {
+      const copy = td.cloneNode(true);
+      for (const sr of copy.querySelectorAll('.sr')) sr.remove();
+      return copy.textContent.trim();
+    };
     for (const td of root.querySelectorAll('td[data-cell^="attr:"], td[data-cell="level"]')) {
-      const text = td.textContent.trim();
+      const text = drawn(td);
       if (text === '—') continue;
       values.push(Number(text));
       const banded = td.querySelector('.v1, .v2, .v3, .v4') ?? (td.matches('.v1, .v2, .v3, .v4') ? td : null);
@@ -131,7 +137,8 @@ test('the scenario on the shipped teams: notice, squad columns, panel, a tired p
     const notice = page.locator('[data-converted]');
     await expect(notice).toHaveCount(1);
     await expect(notice).toHaveAttribute('data-converted', 'Oakmere Rangers');
-    await expect(notice).toContainText('converted to the 1-20 scale');
+    await expect(notice).toContainText('Oakmere Rangers uses an older team file');
+    await expect(notice).toContainText('converted to the 1 to 20 scale');
     await settled(page);
     await page.screenshot({ path: evidence(info, 'step1-setup-converted.png') });
 

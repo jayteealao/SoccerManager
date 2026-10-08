@@ -603,5 +603,5 @@ test('a converted team file shows its notice, and a current one shows none', () 
   assert.equal(convertedNotice(null), null);
   const notice = convertedNotice({ name: 'Old Town', converted: 1 });
   assert.equal(notice.club, 'Old Town');
-  assert.match(notice.text, /converted to the 1-20 scale/);
+  assert.match(notice.text, /^uses an older team file\. .*converted to the 1 to 20 scale/);
 });

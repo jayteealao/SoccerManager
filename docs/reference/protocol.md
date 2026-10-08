@@ -76,7 +76,7 @@ the implementation names must appear below with every one of its fields.
 | Step | Rule |
 |---|---|
 | Address | `ws://127.0.0.1:<port>/?v=<protocol version>` |
-| Version | `v` must equal `4`. Any other value, or no value, is refused with both versions named. |
+| Version | `v` must equal `6`. Any other value, or no value, is refused with both versions named. |
 | Origin | Any port of `http://localhost` or `http://127.0.0.1`, or no `Origin` header at all. Any other origin is refused, including `null` (a sandboxed frame or a `data:` document) and a `file://` page. |
 | Clients | One viewer per match. |
 | First message | `hello`, always before the first tick frame. |
@@ -106,7 +106,7 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 
 | Field | Type | Meaning |
 |---|---|---|
-| `protocol.version` | integer | always 4 in this build |
+| `protocol.version` | integer | always 6 in this build |
 | `engine.version` | string | the engine crate version |
 | `build.hash` | string | the git hash the engine was built from |
 | `owner.id` | string | 32 hex characters, created once per machine |
@@ -650,7 +650,7 @@ guess the WebSocket port on another and the operating system chooses both at eve
 |---|---|---|
 | `engine.state` | string | `idle` (the start screen, no match running), `starting`, `running`, `finished`, `crashed`, `refused`, `abandoned`, `not-found`, or `closed` (the player quit; launcher only) |
 | `socket.port` | int or null | the WebSocket port; present only while `running` |
-| `protocol.version` | int | the protocol version the engine speaks, `4` |
+| `protocol.version` | int | the protocol version the engine speaks, `6` |
 | `engine.pid` | int or null | the process identifier of the engine serving the match |
 | `engine.path` | string or null | the engine program the launcher runs; null when the engine serves the page itself |
 | `engine.reason` | string or null | the engine's own words when `refused`, for example `snapshot refused: <path>: checksum mismatch: the file is corrupt` |
@@ -756,12 +756,12 @@ All numbers are little-endian. The frame count counts tick and text frames only.
 offset 4 was the protocol version, which is also 3, so every older file reads as format 3; a
 format-3 file still says 3 there, and its `hello` names the protocol of its frames.
 
-A reader reads frames of protocol 3, 4, and 5: the tick frames are the same. Protocol 3 and 4
+A reader reads frames of protocol 3, 4, 5 and 6: the tick frames are the same. Protocol 3 and 4
 differ only in the scale of the `hello`'s ratings. A page doubles a protocol 3 `hello`'s
 ratings into tenths before any screen shows them, and keeps the stored frame as it is, so the
 file writes back byte for byte. A protocol 3 or 4 `hello` carries `player.injury_resistance`
 and no hidden value. A page drops that figure and shows both hidden values as not yet known:
-no old figure is ever turned into a word.
+no old figure is ever turned into a word. A protocol 5 `hello` carries the hidden values as words but none of the squad entry's attributes, body fields or condition, so a page shows its hidden values and leaves the Squad screen's other columns empty.
 
 ### Inputs
 
@@ -814,7 +814,7 @@ which the log does not keep. The script runs with no wall-clock limit, so the re
 mark is reported, not made again.
 
 A reader refuses a file with the wrong magic, a format newer than the reader knows or older
-than 3, frames of a protocol version other than 3 and 4, a count mismatch, a truncated entry, an input or
+than 3, frames of a protocol version other than 3, 4, 5 and 6, a count mismatch, a truncated entry, an input or
 record entry in a format-3 file, an input entry after the frames, an entry after the record, a
 format-4 file with no record or with two, a record without one of its fields or with a field
 it does not define, a field of the wrong type or outside its values, a header tick count that

@@ -222,6 +222,20 @@ impl Simulation {
         self.end_shot();
     }
 
+    /// Player `i` lost a header and the ball glanced off him. On a pass in flight the passer
+    /// stays the last kicker, so the pass is credited to him if his side gains the ball.
+    fn header_lost_by(&mut self, i: usize) {
+        if self.pass_in_flight.is_none() {
+            self.deflected_by(i);
+            return;
+        }
+        if self.ball.vel.z > 0.0 && self.ball.pos.z <= 0.0 {
+            self.ball.pos.z = 0.001;
+        }
+        self.last_touch = Some(self.players[i].team);
+        self.end_shot();
+    }
+
     /// The ball pass: the ball module carries the ball at the carrier's feet, or moves it one
     /// tick in flight and says which line it crossed.
     pub(crate) fn move_ball(&mut self, t: &Tuning) {
@@ -319,7 +333,7 @@ impl Simulation {
                                 angle,
                                 0.0,
                             );
-                            self.deflected_by(i);
+                            self.header_lost_by(i);
                             return;
                         }
                     }

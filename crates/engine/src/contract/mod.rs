@@ -444,14 +444,14 @@ impl<'a> Skills<'a> {
     /// The stage's skill from −1 to 1: `2 · share − 1`, 0 at rating 10.
     #[inline]
     pub fn skill(&self, s: Stage) -> f64 {
-        2.0 * self.share(s) - 1.0
+        self.stages.skill(s)
     }
 
     /// The mean of two stages' shares: an execution read with an opponent close blends the
     /// execute stage with the pressure stage.
     #[inline]
     pub fn pressed_share(&self, execute: Stage, pressure: Stage) -> f64 {
-        (self.share(execute) + self.share(pressure)) / 2.0
+        self.stages.pressed_share(execute, pressure)
     }
 }
 

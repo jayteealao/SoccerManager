@@ -103,11 +103,11 @@ A value out of range stops the load with the player and the field named, for exa
 
 ### Convert a version 1 file by hand
 
-A version 1 file (`"schema_version": 1`) holds whole numbers from 1 to 100 and no body fields. The engine still reads it and converts it as it loads: each value is halved, so 62 plays as 12.4, exactly as it played before. To write it as version 2:
+A version 1 file (`"schema_version": 1`) holds whole numbers from 1 to 100 and no body fields. The engine still reads it and converts it as it loads: each value is divided by 5, so 62 plays as 12.4, exactly as it played before. To write it as version 2:
 
 1. Set `"schema_version": 2`.
-2. Halve every attribute value: 62 becomes `12.4`, 25 becomes `12.5`. A value under 2 halves to under 1.0; write `1.0` instead. This one change plays differently from the version 1 file.
-3. Replace `injury_resistance` with `injury_proneness`: 21.0 less the halved resistance, so a resistance of 62 (12.4) becomes `8.6`. The engine converts it the same way.
+2. Divide every attribute value by 5: 62 becomes `12.4`, 25 becomes `5.0`. A value of 1 to 4 divides to under 1.0; write `1.0` instead. This one change plays differently from the version 1 file.
+3. Replace `injury_resistance` with `injury_proneness`: 21.0 less the converted resistance, so a resistance of 62 (12.4) becomes `8.6`. The engine converts it the same way.
 4. Add `"consistency": 10.0` to every player, as the engine does, or the value you want.
 5. Add `height`, `age`, and `nationality` to every player.
 
