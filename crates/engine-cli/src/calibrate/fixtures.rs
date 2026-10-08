@@ -1,13 +1,213 @@
 //! The fixture list of a calibration run: generated leagues of 20 clubs, each playing a
-//! double round-robin, with a seed per match, the stronger club of the strength suite, and
-//! the formation pairing of the formations suite.
+//! double round-robin, the stronger club of the strength suite, and the formation pairing
+//! of the formations suite.
+//!
+//! Every fixture has a key: a hash of what the fixture is (its scenario, its world, the two
+//! clubs, both formations, and a repeat number), never of its place in the run. So a run
+//! with more matches keeps every earlier fixture's key and engine seed, and a new formation
+//! leaves the other pairings' matches alone.
+
+use std::fmt;
 
 use engine::Content;
 use engine::data::TeamFile;
 use engine::data::generator::generate_league;
 use engine::observe::identity::MatchId;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use sha2::{Digest, Sha256};
 
-use crate::report::Suite;
+use crate::report::{RED_CARD_ARMS, Suite};
+
+/// The scheme fixture keys are made by. Reports and run folders carry it, so a report
+/// from the earlier scheme (seeds from the fixture's place in the run) is told apart.
+pub const FIXTURE_SCHEME: &str = "fixture-key-1";
+
+/// A fixture's key: the first 8 bytes of the SHA-256 of what the fixture is, shown as 16
+/// hex characters.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FixtureKey(u64);
+
+impl FixtureKey {
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+
+    /// The key whose 64 bits are `v`, as a row file stores it.
+    pub fn from_u64(v: u64) -> Self {
+        Self(v)
+    }
+
+    /// The key a 16-hex-character text names.
+    pub fn parse(text: &str) -> Option<Self> {
+        (text.len() == 16)
+            .then(|| u64::from_str_radix(text, 16).ok())
+            .flatten()
+            .map(Self)
+    }
+}
+
+impl fmt::Display for FixtureKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:016x}", self.0)
+    }
+}
+
+impl Serialize for FixtureKey {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.collect_str(self)
+    }
+}
+
+impl<'de> Deserialize<'de> for FixtureKey {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let text = String::deserialize(d)?;
+        Self::parse(&text)
+            .ok_or_else(|| serde::de::Error::custom(format!("{text} is not a fixture key")))
+    }
+}
+
+/// The key of a fixture, and the engine seed the digest gives it: SHA-256 over the
+/// length-prefixed scheme, scenario, world, two clubs (home first), two formations (home
+/// first), and repeat number. The key is the digest's first 8 bytes, the seed the next 8.
+pub fn key_of(
+    scenario: &str,
+    world: &str,
+    clubs: [&str; 2],
+    formations: [&str; 2],
+    repeat: u64,
+) -> (FixtureKey, u64) {
+    let mut hasher = Sha256::new();
+    let repeat = repeat.to_string();
+    for part in [
+        FIXTURE_SCHEME,
+        scenario,
+        world,
+        clubs[0],
+        clubs[1],
+        formations[0],
+        formations[1],
+        &repeat,
+    ] {
+        hasher.update((part.len() as u64).to_le_bytes());
+        hasher.update(part.as_bytes());
+    }
+    let digest = hasher.finalize();
+    let word = |at: usize| {
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(&digest[at..at + 8]);
+        u64::from_be_bytes(bytes)
+    };
+    (FixtureKey(word(0)), word(8))
+}
+
+/// One match of a run with its key: what the parent plans and a worker plays.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Keyed {
+    pub key: FixtureKey,
+    /// The seed the engine plays the match with, stored beside the key.
+    pub engine_seed: u64,
+    /// The league and the clubs. The red-card suite plays the default clubs: league 0,
+    /// clubs `[0, 1]`, or `[1, 0]` in the swapped order.
+    pub fixture: Fixture,
+    /// The strength suite: the side of the boosted club.
+    pub boosted: Option<usize>,
+    /// The formations suite: the pairing's number in [`pairings`], and the side of its
+    /// first formation.
+    pub pairing: Option<(usize, usize)>,
+    /// The red-card suite: the arm's number in [`RED_CARD_ARMS`].
+    pub arm: Option<usize>,
+}
+
+/// Every match `suite` plays with `matches` matches per suite, pairing, or arm, in fixture
+/// order, each with its key and engine seed. `formations` names the formations of the
+/// tactics file in order; `selected` holds the numbers of the pairings the formations suite
+/// plays.
+pub fn keyed(
+    suite: Suite,
+    seed: u64,
+    matches: u32,
+    formations: &[String],
+    selected: &[usize],
+) -> Vec<Keyed> {
+    const DEFAULT: [&str; 2] = ["default", "default"];
+    let league = |f: &Fixture| format!("league:{}", seed.wrapping_add(u64::from(f.league)));
+    let clubs = |f: &Fixture| f.clubs.map(|c| c.to_string());
+    match suite {
+        Suite::Equal | Suite::Strength => fixtures(matches)
+            .into_iter()
+            .map(|f| {
+                let boosted = (suite == Suite::Strength).then(|| f.boosted_side());
+                let scenario = match boosted {
+                    None => "equal",
+                    Some(0) => "strength/boost-home",
+                    Some(_) => "strength/boost-away",
+                };
+                let [home, away] = clubs(&f);
+                let (key, engine_seed) = key_of(scenario, &league(&f), [&home, &away], DEFAULT, 0);
+                Keyed {
+                    key,
+                    engine_seed,
+                    fixture: f,
+                    boosted,
+                    pairing: None,
+                    arm: None,
+                }
+            })
+            .collect(),
+        Suite::Formations => {
+            let all = pairings(formations.len());
+            formation_fixtures_for(matches, all.len(), selected)
+                .into_iter()
+                .map(|f| {
+                    let [first, second] = all[f.pairing].map(|i| formations[i].as_str());
+                    let sides = if f.first_side == 0 {
+                        [first, second]
+                    } else {
+                        [second, first]
+                    };
+                    let [home, away] = clubs(&f.fixture);
+                    let (key, engine_seed) =
+                        key_of("formations", &league(&f.fixture), [&home, &away], sides, 0);
+                    Keyed {
+                        key,
+                        engine_seed,
+                        fixture: f.fixture,
+                        boosted: None,
+                        pairing: Some((f.pairing, f.first_side)),
+                        arm: None,
+                    }
+                })
+                .collect()
+        }
+        Suite::RedCard => {
+            let world = format!("default-clubs:{seed}");
+            red_card_fixtures(seed, matches)
+                .into_iter()
+                .map(|f| {
+                    let k = f.index - f.arm as u32 * matches;
+                    let clubs: [usize; 2] = if f.swapped { [1, 0] } else { [0, 1] };
+                    let [home, away] = clubs.map(|c| c.to_string());
+                    let scenario = format!("red-card/{}", RED_CARD_ARMS[f.arm].0);
+                    let (key, _) =
+                        key_of(&scenario, &world, [&home, &away], DEFAULT, u64::from(k / 2));
+                    Keyed {
+                        key,
+                        // The slow test's experiment plays these seeds; they stay.
+                        engine_seed: f.engine_seed,
+                        fixture: Fixture {
+                            index: f.index,
+                            league: 0,
+                            clubs,
+                        },
+                        boosted: None,
+                        pairing: None,
+                        arm: Some(f.arm),
+                    }
+                })
+                .collect()
+        }
+    }
+}
 
 /// Clubs per generated league.
 pub const CLUBS: u32 = 20;
@@ -156,15 +356,11 @@ pub fn splitmix64(x: u64) -> u64 {
     z ^ (z >> 31)
 }
 
-/// The engine seed of fixture `index` in `suite`.
-pub fn match_seed(run_seed: u64, suite: Suite, index: u32) -> u64 {
-    splitmix64(run_seed ^ (suite.number() << 32) ^ u64::from(index))
-}
-
-/// The match identifier of fixture `index` in `suite`; `millis` is the run's start.
-pub fn match_id(run_seed: u64, suite: Suite, index: u32, millis: u64) -> String {
+/// The match identifier of the fixture `key`; `millis` is the run's start. Red-card arms
+/// that share an engine seed still get distinct identifiers.
+pub fn match_id(key: FixtureKey, millis: u64) -> String {
     MatchId {
-        seed: match_seed(run_seed, suite, index),
+        seed: key.as_u64(),
         millis,
     }
     .to_string()
@@ -246,18 +442,124 @@ mod tests {
         assert_eq!(f[379].league, 0);
         assert_eq!(f[380].league, 1);
         assert_eq!(f[999].league, 2);
+        let names = formation_names(10);
+        for suite in [
+            Suite::Equal,
+            Suite::Strength,
+            Suite::Formations,
+            Suite::RedCard,
+        ] {
+            assert_eq!(
+                keyed(suite, 7, 50, &names, &all(10)),
+                keyed(suite, 7, 50, &names, &all(10))
+            );
+        }
+        assert_ne!(
+            keyed(Suite::Equal, 7, 1, &names, &[])[0].key,
+            keyed(Suite::Strength, 7, 1, &names, &[])[0].key
+        );
+        assert_ne!(
+            keyed(Suite::Equal, 7, 1, &names, &[])[0].key,
+            keyed(Suite::Equal, 8, 1, &names, &[])[0].key
+        );
+    }
+
+    fn formation_names(n: usize) -> Vec<String> {
+        (0..n).map(|i| format!("f{i}")).collect()
+    }
+
+    fn all(n: usize) -> Vec<usize> {
+        (0..pairings(n).len()).collect()
+    }
+
+    #[test]
+    fn a_bigger_run_keeps_every_earlier_key_and_seed() {
+        let names = formation_names(10);
+        for suite in [
+            Suite::Equal,
+            Suite::Strength,
+            Suite::Formations,
+            Suite::RedCard,
+        ] {
+            let small = keyed(suite, 3, 7, &names, &all(10));
+            let big = keyed(suite, 3, 14, &names, &all(10));
+            let seeds: std::collections::BTreeMap<_, _> =
+                big.iter().map(|k| (k.key, k.engine_seed)).collect();
+            for k in &small {
+                assert_eq!(seeds.get(&k.key), Some(&k.engine_seed), "{suite:?} {k:?}");
+            }
+            assert_eq!(big.len(), small.len() * 2, "{suite:?}");
+        }
+        // In the equal and strength suites the bigger list starts with the smaller one.
+        let small = keyed(Suite::Strength, 3, 7, &names, &[]);
+        assert_eq!(small[..], keyed(Suite::Strength, 3, 14, &names, &[])[..7]);
+    }
+
+    #[test]
+    fn a_new_formation_leaves_the_other_pairings_keys_alone() {
+        let ten = formation_names(10);
+        let mut eleven = ten.clone();
+        eleven.push("new".into());
+        let keys = |names: &[String], n: usize| -> std::collections::BTreeSet<(FixtureKey, u64)> {
+            keyed(Suite::Formations, 3, 4, names, &all(n))
+                .iter()
+                .map(|k| (k.key, k.engine_seed))
+                .collect()
+        };
+        let before = keys(&ten, 10);
+        let after = keys(&eleven, 11);
+        assert!(before.is_subset(&after));
+        assert_eq!(after.len() - before.len(), 11 * 4);
+    }
+
+    #[test]
+    fn keys_are_unique_over_every_suite_of_a_thousand_matches() {
+        let names = formation_names(10);
+        let mut seen = std::collections::BTreeSet::new();
+        for suite in [
+            Suite::Equal,
+            Suite::Strength,
+            Suite::Formations,
+            Suite::RedCard,
+        ] {
+            for k in keyed(suite, 42, 1000, &names, &all(10)) {
+                assert!(seen.insert(k.key), "{suite:?}: {} twice", k.key);
+            }
+        }
+        // Equal and strength, 55 pairings, and four red-card arms.
+        assert_eq!(seen.len(), 1000 * (2 + 55 + 4));
+    }
+
+    #[test]
+    fn the_red_card_suite_keeps_its_engine_seeds_and_every_list_keeps_its_balance() {
+        let names = formation_names(10);
+        let red = keyed(Suite::RedCard, 1, 240, &names, &[]);
+        let plain = red_card_fixtures(1, 240);
+        for (k, f) in red.iter().zip(&plain) {
+            assert_eq!(k.engine_seed, f.engine_seed);
+            assert_eq!(k.arm, Some(f.arm));
+            assert_eq!(k.fixture.clubs, if f.swapped { [1, 0] } else { [0, 1] });
+        }
+        let strength = keyed(Suite::Strength, 1, 4, &names, &[]);
+        let sides: Vec<Option<usize>> = strength.iter().map(|k| k.boosted).collect();
+        assert_eq!(sides, [Some(0), Some(1), Some(0), Some(1)]);
+        let formations = keyed(Suite::Formations, 1, 4, &names, &[2]);
+        let firsts: Vec<Option<(usize, usize)>> = formations.iter().map(|k| k.pairing).collect();
         assert_eq!(
-            match_seed(7, Suite::Equal, 3),
-            match_seed(7, Suite::Equal, 3)
+            firsts,
+            [Some((2, 0)), Some((2, 1)), Some((2, 0)), Some((2, 1))]
         );
-        assert_ne!(
-            match_seed(7, Suite::Equal, 3),
-            match_seed(7, Suite::Strength, 3)
-        );
-        assert_ne!(
-            match_seed(7, Suite::Equal, 3),
-            match_seed(7, Suite::Equal, 4)
-        );
+    }
+
+    #[test]
+    fn a_key_reads_back_from_its_text() {
+        let (key, _) = key_of("equal", "league:1", ["0", "1"], ["a", "b"], 0);
+        let text = key.to_string();
+        assert_eq!(text.len(), 16);
+        assert_eq!(FixtureKey::parse(&text), Some(key));
+        assert_eq!(FixtureKey::parse("xyz"), None);
+        let json = serde_json::to_string(&key).unwrap();
+        assert_eq!(serde_json::from_str::<FixtureKey>(&json).unwrap(), key);
     }
 
     #[test]

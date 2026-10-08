@@ -22,6 +22,9 @@ use crate::sim::{EngineEvent, EngineEventKind, EventDetail, MatchConfig};
 use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::Tuning;
 
+mod running;
+pub use running::RunningCheck;
+
 /// Minimum distance between two players.
 pub const MIN_SEPARATION: f64 = 0.1;
 /// Maximum ball speed in metres per second.

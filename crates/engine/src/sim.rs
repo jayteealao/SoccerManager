@@ -937,6 +937,7 @@ impl Simulation {
         while !self.is_over() {
             self.step();
             self.drain_trace(sink)?;
+            sink.on_step(self)?;
             sink.on_tick(&self.record())?;
             if let Some(stoppage) = self.stoppage {
                 sink.on_stoppage(&stoppage, self)?;
@@ -986,6 +987,11 @@ impl Simulation {
                 }),
             );
         }
+    }
+
+    /// Every event not yet taken, in tick order.
+    pub fn events(&self) -> &[EngineEvent] {
+        &self.events
     }
 
     /// Takes every event recorded since the last call, in tick order.

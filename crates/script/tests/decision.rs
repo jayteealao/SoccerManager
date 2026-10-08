@@ -117,12 +117,13 @@ fn content_path(name: &str) -> std::path::PathBuf {
 fn the_rhai_adapter_card_is_complete() {
     let text = std::fs::read_to_string(content_path("realism-bands.json")).unwrap();
     let bands: serde_json::Value = serde_json::from_str(&text).unwrap();
-    let names: Vec<&str> = bands
-        .as_object()
+    // Every band of the registry by name, and every group of bands too.
+    let names: Vec<&str> = bands["bands"]
+        .as_array()
         .unwrap()
         .iter()
-        .filter(|(_, v)| v.is_object())
-        .map(|(k, _)| k.as_str())
+        .flat_map(|b| [b["band"].as_str(), b["group"].as_str()])
+        .flatten()
         .collect();
     assert!(!names.is_empty());
     check_card(&RHAI_ADAPTER_CARD, &names).unwrap();

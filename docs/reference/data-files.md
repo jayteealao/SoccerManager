@@ -22,10 +22,10 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `tactics.json` | 1 | Ten formations, mentalities, team instructions, roles, duties, and the AI manager's settings |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
-| `realism-bands.json` | 2 | The accepted realism bands the calibration run checks: four from version 1 and eleven from real-match data. They are acceptance criteria, never tuning values |
+| `realism-bands.json` | 3 | The band registry: every realism band the calibration run judges, with its measure, range, and smallest shift. Version 2 still loads. They are acceptance criteria, never tuning values |
 | `fast-model.json` | 2 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
 
-Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`.
+Every file starts with `"schema_version"`. A file with another version is refused, except `realism-bands.json`, which also reads version 2: `content refused: rules rules/default.json: schema_version 7; this build reads 4`.
 
 ## attributes.json
 
@@ -258,6 +258,40 @@ Rules:
 
 Every statistics record carries `tuning.flags_on`, the flags that were on. To compare a candidate and remove the loser, follow [the modding how-to](../how-to/modding.md#compare-two-models-with-a-flag).
 
+## realism-bands.json
+
+The band registry: every realism band the calibration run judges. The bands are acceptance criteria, never tuning values. A band is added, moved, or removed by editing this file; no code changes.
+
+| Field | Holds |
+|---|---|
+| `schema_version` | 3 |
+| `sample_size` | the match count the time budget is set for: 1000 |
+| `wall_minutes_per_sample` | the time budget of a suite of `sample_size` matches, in minutes; each suite's `wall_ms` check scales it to the run's match count |
+| `stronger_team.attribute_boost` | the factor the strength suite raises every attribute of the stronger club by |
+| `bands` | the bands, in the order the run shows them |
+
+Each band:
+
+| Field | Holds |
+|---|---|
+| `band` | its name, unique in the file |
+| `suites` | the suites that judge it: `equal`, `strength`, `formations`, `red-card` |
+| `measure` | what it measures; see below |
+| `lo`, `hi` | its range, both ends included; `hi` is at least `lo` |
+| `smallest_shift` | the smallest change a change run must have the power to see, above 0 |
+| `group` | optional: a name the report gives bands of one figure, such as `possession_pct` for the home and away bands |
+
+A measure is one of four kinds. Its fields come from a closed list. Each side has `goals`, `shots`, `shots_on_target`, `xg`, `passes`, `passes_completed`, `pass_accuracy_pct`, `possession_pct`, `fouls`, `offsides`, `corners`, `throw_ins`, `goal_kicks`, `yellow`, `red`, and `substitutions`, named as `goals.home`, `goals.away`, or `goals.{side}` for each side in turn; each match has `injuries` and `ball_in_play_s`.
+
+- `{"kind": "mean", "per": "match", "of": [...]}`: the mean over matches of the sum of the fields, such as goals per match. With `"per": "team"` and `{side}` fields, the mean over each team of each match.
+- `{"kind": "share", "of": [...], "op": ">=", "value": 10}`: the share of matches whose sum of the fields holds against the value; `op` is `>=`, `==`, or `<=`.
+- `{"kind": "ratio", "num": [...], "den": [...]}`: the sum of the numerator fields over the sum of the denominator fields, pooled over the matches.
+- `{"kind": "builtin", "name": ...}`: a measure of a whole suite: `stronger_team_win_rate` (strength), `reduced_minus_full` and `full_over_control` (red-card).
+
+A field outside the list, a measure without fields, a range with `hi` below `lo`, a `smallest_shift` that is not above 0, an unknown suite, and a band name used twice are refused, and the message names the band and the field, for example `content refused: realism bands realism-bands.json: bands[0] (goals_per_match).hi: hi 2 is below lo 2.4`.
+
+A file of version 2, with one fixed field per band, still loads: it is read as version 3 in memory, with each band's smallest shift a quarter of its range, and the report's `calib.registry.migrated_from` says `2`. The file is not rewritten. A file of version 1 is refused.
+
 ## fast-model.json
 
 The fit of the fast model, written by `engine-cli fast-model fit` (see [the command-line reference](cli.md#fast-model)). The engine never reads it to play a match, and the content hash does not include it, so a new fit changes no save, replay or gate hash. The release ships it with the rest of the content folder.
@@ -469,8 +503,11 @@ The engine writes these files to the data folder. The data folder is `SM_DATA_DI
 | `matches/<match.id>/snapshot.smsn` | `simulate`, `serve` | the newest snapshot of the match; `resume` and `serve --resume` read it |
 | `matches/<match.id>/matchday-bug-<fixture>.json` | `serve` | the bug report of a background match that failed; see below |
 | `runs/<run.id>/report.json` | `calibrate` | the run report, as the `run-report` record |
-| `runs/<run.id>/stats/<match.id>.json` | `calibrate` | the statistics record of each match in the run |
-| `runs/<run.id>/events/<match.id>.jsonl` | `calibrate` | the event rows of each match the run keeps |
+| `runs/<run.id>/target.json` | `calibrate` | the run's matches per suite, the pilot and cap of a change run, and the digest of each band it was last judged with |
+| `runs/<run.id>/rows/<session>-<thread>.rows` | `calibrate` | one compact row per match of the run; see "The row file" below |
+| `runs/<run.id>/stats/<match.id>.json` | `calibrate` | the statistics record of each recorded match: about 1 in 16 and every outlier, or every match with `--keep-events all` |
+| `runs/<run.id>/events/<match.id>.jsonl` | `calibrate` | the event rows, with commentary, of each recorded match that played to full time |
+| `calibrate/base/v2/<build id>/<content hash>/seed-<S>-minutes-<M>/` | `calibrate` with an old engine | the old engine's run folder: its rows are the cache of its results. `v1` folders, from before rows, are never read and can be deleted |
 
 A `match.id` is `<seed as 16 hexadecimal characters>-<start time in milliseconds>`.
 
@@ -485,6 +522,57 @@ The records are JSON objects with flat, dotted keys. Every record carries `recor
 | `run-report` | `run-report.schema.json` | `report.json` at the end of a calibration run, and the one line `bench` prints |
 
 The engine writes a record at each stoppage snapshot and at the end of the match. A match that stops early keeps every record up to the newest stoppage.
+
+### The row file
+
+A calibration run writes one compact row per match into `rows/` of its run folder (of each arm's folder in a paired run). Each thread of each session writes its own file, `<session>-<thread>.rows`. A row holds the match's unrounded counts, numerators and denominators, keyed by fixture; it holds no event and no commentary. All numbers are little-endian.
+
+The file starts with a header:
+
+| Bytes | Field |
+|---|---|
+| 6 | the magic `SMROWS` |
+| 4 | the format version: 1 |
+| 4 | the measures version (`run.identity.measures`) |
+| 4 | the number of columns |
+| per column | 1 byte name length, the name, 1 byte type: 1 is an 8-bit integer, 4 a 32-bit integer, 8 a 64-bit integer, 9 a 64-bit float |
+
+Blocks follow, one per finished work unit:
+
+| Bytes | Field |
+|---|---|
+| 1 + n | the suite code, length first |
+| 4 | the unit's place among its suite's units in the session |
+| 4 | the row count |
+| per column | the column's value for every row of the block, in row order |
+| 8 | the first 8 bytes of the SHA-256 of the block's bytes before them |
+
+The columns of format 1, in file order (a `.home` and `.away` pair is one column per team):
+
+| Column | Type | Holds |
+|---|---|---|
+| `fixture.key` | 64-bit | the fixture key; its 16 hexadecimal characters start the match identifier |
+| `engine.seed` | 64-bit | the seed the engine played the match with |
+| `outcome` | 8-bit | 0 played to full time, 1 the engine returned an error, 2 the match panicked |
+| `record.reasons` | 8-bit | why the match has a statistics and an event file, as bits: 1 the 1-in-16 sample (the key is a multiple of 16), 2 failed, panicked or a dark-path hit, 4 a violation the running rule checker found, 8 a measure outside the 1st to 99th percentile of its suite so far, 16 `--keep-events all`; 0 for none |
+| `goals`, `shots`, `shots_on_target` | 32-bit pairs | counts |
+| `xg` | float pair | expected goals, unrounded |
+| `passes`, `passes_completed` | 32-bit pairs | open-play passes played and completed |
+| `possession_ticks` | 32-bit pair | open-play ticks credited to each team |
+| `live_ticks` | 32-bit | ticks with the ball in play |
+| `fouls`, `offsides`, `corners`, `throw_ins`, `goal_kicks`, `yellow`, `red` | 32-bit pairs | counts |
+| `injuries` | 32-bit | injuries, both teams |
+| `substitutions` | 32-bit pair | substitutions made |
+| `change_never_applied`, `change_expired_at_full_time` | 32-bit | the two change counters of the statistics record |
+| `validate.violations` | 32-bit | the violations the running rule checker found while the match played: the tick rules and the event rules |
+| `ticks` | 32-bit | ticks played |
+| `duration_us` | 64-bit | the match's wall time in microseconds |
+
+A failed or panicked match has a row with its key, its seed, its outcome and zero counts.
+
+The statistics file rounds what the row keeps unrounded: `stats.xg` is `xg` to 2 decimals, `stats.pass_accuracy_pct` is `100 x passes_completed / passes` to 1 decimal (0 with no pass), `stats.possession_pct` is each team's `possession_ticks` over both teams' to 1 decimal, and `stats.ball_in_play_s` is `(live_ticks + 25) / 50`, rounded down. The bands read these rounded figures, rebuilt from the rows with the same functions, so a run's bands do not depend on which matches have a statistics file.
+
+A block is written and synced before its unit's ledger line. A row counts only when the ledger line of its key was written by the session in the file's name, with the same engine seed; the rows of a unit cut off before its ledger line are never read, and the unit plays again. Reading a file stops at a block cut off part-way or with a wrong checksum, which only a stopped run leaves at the end of a file. A file of another format version is refused by name. `calib.results_digest` hashes, for every arm in key order, each row's key and its columns except `record.reasons` and `duration_us`.
 
 ### The snapshot file
 

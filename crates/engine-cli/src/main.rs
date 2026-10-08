@@ -38,6 +38,11 @@ use engine::observe::identity::{MatchId, data_dir, load_or_create_owner_id};
 use engine::observe::{FailureRecord, emit_line, machine_hash, unix_millis};
 use tracing_subscriber::EnvFilter;
 
+/// The system allocator, counting each thread's heap for calibrate's stage costs; it counts
+/// only once `calibrate` turns it on, so the other commands pay one relaxed load.
+#[global_allocator]
+static ALLOCATOR: calibrate::stages::CountingAlloc = calibrate::stages::CountingAlloc;
+
 fn main() {
     // A usage error exits 1, like any other run error: exit 2 is only a verdict (frames
     // differ, builds differ, hashes differ, a rule broken). `--help` and `--version` exit 0.
@@ -59,10 +64,12 @@ fn main() {
         .with_ansi(std::io::stderr().is_terminal())
         .init();
     let content_dir = args.content_dir.as_deref();
-    // `simulate` and `bench` print a structured record when they fail; the rest print prose.
+    // `simulate`, `bench` and `calibrate` print a structured record when they fail; the rest
+    // print prose.
     let on_failure = match &args.command {
         cli::Command::Simulate(opts) => Some(("match-stats", "simulate", opts.seed)),
         cli::Command::Bench(opts) => Some(("run-report", "benchmark", opts.seed)),
+        cli::Command::Calibrate(opts) => Some(("run-report", "calibrate", opts.seed)),
         _ => None,
     };
     let started = Instant::now();
@@ -96,9 +103,9 @@ fn main() {
     }
 }
 
-/// Prints the failure record of a `simulate` or `bench` run on stdout. It is not saved under
-/// the data folder. Without an owner identity, or when stdout fails, it logs one warning and
-/// prints nothing.
+/// Prints the failure record of a `simulate`, `bench` or `calibrate` run on stdout. It is not
+/// saved under the data folder. Without an owner identity, or when stdout fails, it logs one
+/// warning and prints nothing.
 fn emit_failure(
     kind: &'static str,
     operation: &'static str,
@@ -119,14 +126,19 @@ fn emit_failure(
             return;
         }
     };
-    let bench = kind == "run-report";
+    let run = kind == "run-report";
+    let prefix = if operation == "calibrate" {
+        "calib"
+    } else {
+        "bench"
+    };
     let record = FailureRecord {
         kind,
         operation,
         owner_id,
-        match_id: (!bench).then(|| MatchId::now(seed).to_string()),
-        run_id: bench.then(|| format!("bench-{}", unix_millis())),
-        machine_hash: bench.then(machine_hash),
+        match_id: (!run).then(|| MatchId::now(seed).to_string()),
+        run_id: run.then(|| format!("{prefix}-{}", unix_millis())),
+        machine_hash: run.then(machine_hash),
         seed,
         content_hash: String::new(),
         duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),

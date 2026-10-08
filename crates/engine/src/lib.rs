@@ -60,7 +60,7 @@ pub use tactics::change::{
 };
 pub use tactics::{RoleDuty, Tactics, TacticsPatch};
 pub use tuning::Tuning;
-pub use validate::{StreamRules, Validator, Violation};
+pub use validate::{RunningCheck, StreamRules, Validator, Violation};
 
 /// Ticks per simulated second.
 pub const TICKS_PER_SECOND: u32 = 50;

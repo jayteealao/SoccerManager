@@ -2,9 +2,11 @@
 //! played on other fixtures, and the diff that prints each band's change with its sampling
 //! error and marks a change inside two errors as noise.
 //!
-//! A baseline must share the run's seed, match count, and fixtures hash. A different
-//! content hash (tuning values or flag states) is the change under test, so it is allowed
-//! and named in the diff's header.
+//! A baseline must share the run's fixture scheme, seed, match count, and fixtures hash. A
+//! report from the old seeding scheme, whose match seeds came from the fixture's place in
+//! the run, played other matches, so it is refused first, by name. A different content hash
+//! (tuning values or flag states) is the change under test, so it is allowed and named in
+//! the diff's header.
 
 use std::path::Path;
 
@@ -42,11 +44,13 @@ pub struct Identity<'a> {
     pub seed: u64,
     pub matches: u32,
     pub fixtures_hash: &'a str,
+    /// The run's fixture scheme: a baseline of another scheme played other matches.
+    pub fixtures_scheme: &'a str,
 }
 
 /// Reads the report at `path` and refuses it, naming every difference, when it is not a
-/// calibrate run report, was made before sampling errors or fixtures hashes, or differs
-/// from `run` in seed, match count, or fixtures hash.
+/// calibrate run report, was made by another fixture scheme, was made before sampling
+/// errors or fixtures hashes, or differs from `run` in seed, match count, or fixtures hash.
 pub fn load(path: &Path, run: Identity<'_>) -> anyhow::Result<Baseline> {
     let shown = path.display();
     let text = std::fs::read_to_string(path)
@@ -76,6 +80,24 @@ fn check(report: &Value, run: Identity<'_>) -> Result<(), String> {
     let Some(bands) = report["calib.bands"].as_array().filter(|_| calibrate) else {
         return Err("it is not the run report of a calibrate run".into());
     };
+    let ours = run.fixtures_scheme;
+    match report["fixtures.scheme"].as_str() {
+        Some(scheme) if scheme == ours => {}
+        Some(scheme) => {
+            return Err(format!(
+                "it was made with the fixture scheme {scheme}; this run uses fixture keys \
+                 ({ours}), so the two runs played different matches; make a new \
+                 baseline"
+            ));
+        }
+        None => {
+            return Err(format!(
+                "it was made with the old seeding scheme (match seeds from the fixture's \
+                 place in the run); this run uses fixture keys ({ours}), so the \
+                 two runs played different matches; make a new baseline"
+            ));
+        }
+    }
     if bands.iter().any(|b| b.get("se").is_none()) {
         return Err("the baseline was made before sampling errors; make a new one".into());
     }
@@ -240,6 +262,7 @@ mod tests {
             hi: 10.0,
             pass: true,
             se,
+            informational: None,
         }
     }
 
@@ -251,15 +274,20 @@ mod tests {
             "seed": seed,
             "content.hash": "aaaaaaaaaaaa",
             "fixtures.hash": fixtures,
+            "fixtures.scheme": FIXTURE_SCHEME,
             "calib.matches": matches,
             "calib.bands": [row("goals_per_match", 2.8, 0.05)],
         })
     }
 
+    /// The fixture scheme of the run under test.
+    const FIXTURE_SCHEME: &str = "fixture-key-1";
+
     const RUN: Identity<'static> = Identity {
         seed: 42,
         matches: 1000,
         fixtures_hash: "0c44e1a9f2b3",
+        fixtures_scheme: FIXTURE_SCHEME,
     };
 
     #[test]
@@ -301,6 +329,22 @@ mod tests {
                 .unwrap_err()
                 .contains("not the run report")
         );
+    }
+
+    #[test]
+    fn a_report_of_the_old_seeding_scheme_or_another_scheme_is_refused_by_name() {
+        let mut old = report(42, 1000, "0c44e1a9f2b3");
+        old.as_object_mut().unwrap().remove("fixtures.scheme");
+        // The other differences are not reached: the scheme alone is named.
+        old["seed"] = json!(7);
+        let why = check(&old, RUN).unwrap_err();
+        assert!(why.contains("old seeding scheme"), "{why}");
+        assert!(why.contains(FIXTURE_SCHEME), "{why}");
+        assert!(!why.contains("seed 42"), "{why}");
+        let mut other = report(42, 1000, "0c44e1a9f2b3");
+        other["fixtures.scheme"] = json!("fixture-key-0");
+        let why = check(&other, RUN).unwrap_err();
+        assert!(why.contains("fixture scheme fixture-key-0"), "{why}");
     }
 
     fn baseline(bands: Vec<BandCheck>) -> Baseline {

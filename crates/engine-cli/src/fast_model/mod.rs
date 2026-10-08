@@ -18,7 +18,7 @@ use engine::{Content, ContentDir};
 use serde::{Deserialize, Serialize};
 
 use crate::cli::{FastModelAction, FastModelOpts};
-use crate::report::bands::Bands;
+use crate::report::bands::Registry;
 use batch::{LEAGUE_SEED, LEVELS, Spec};
 use check::{Figure, Range};
 use id::EngineId;
@@ -159,53 +159,27 @@ fn load_content(dir: &ContentDir) -> anyhow::Result<Content> {
     Ok(Content::load(dir)?)
 }
 
-/// The season figures' band ranges from the bands file, for information.
+/// The season figures' band ranges from the band registry, for information.
 fn band_ranges(dir: &ContentDir) -> check::Bands {
-    let bands = Bands::load(dir).ok();
-    let range = |f: &dyn Fn(&Bands) -> (f64, f64)| {
-        bands.as_ref().map(|b| {
-            let (lo, hi) = f(b);
-            Range { lo, hi }
-        })
-    };
+    let registry = Registry::load(dir).ok();
     [
-        (
-            "goals_per_match",
-            range(&|b| (b.goals_per_match.lo, b.goals_per_match.hi)),
-        ),
-        (
-            "goalless_share",
-            range(&|b| (b.goalless_share.lo, b.goalless_share.hi)),
-        ),
-        (
-            "ten_plus_goals_share",
-            range(&|b| (b.ten_plus_goals_share.lo, b.ten_plus_goals_share.hi)),
-        ),
-        (
-            "stronger_team_win_rate",
-            range(&|b| (b.stronger_team.min_win_rate, 1.0)),
-        ),
-        (
-            "sending_off_share",
-            range(&|b| (b.sending_off_share.lo, b.sending_off_share.hi)),
-        ),
-        (
-            "yellow_cards_per_team",
-            range(&|b| (b.yellow_cards_per_team.lo, b.yellow_cards_per_team.hi)),
-        ),
-        (
-            "corners_per_team",
-            range(&|b| (b.corners_per_team.lo, b.corners_per_team.hi)),
-        ),
-        (
-            "throw_ins_per_match",
-            range(&|b| (b.throw_ins_per_match.lo, b.throw_ins_per_match.hi)),
-        ),
-        (
-            "goal_kicks_per_match",
-            range(&|b| (b.goal_kicks_per_match.lo, b.goal_kicks_per_match.hi)),
-        ),
+        "goals_per_match",
+        "goalless_share",
+        "ten_plus_goals_share",
+        "stronger_team_win_rate",
+        "sending_off_share",
+        "yellow_cards_per_team",
+        "corners_per_team",
+        "throw_ins_per_match",
+        "goal_kicks_per_match",
     ]
+    .map(|name| {
+        let range = registry
+            .as_ref()
+            .and_then(|r| r.range(name))
+            .map(|b| Range { lo: b.lo, hi: b.hi });
+        (name, range)
+    })
 }
 
 fn fit_action(

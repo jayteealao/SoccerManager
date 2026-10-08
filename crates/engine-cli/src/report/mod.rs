@@ -7,16 +7,23 @@
 pub mod bands;
 pub mod baseline;
 pub mod compare;
+pub mod measures;
+pub mod verdict;
 
 use std::collections::BTreeMap;
 
 use engine::observe::{MatchStats, Record, round_to};
 use serde::{Deserialize, Serialize};
 
-use bands::Bands;
+use bands::{BandDef, Registry};
+use measures::{Obs, Scope};
 
 /// Matches slower than this, in milliseconds, are outliers (the contract's slow threshold).
 pub const SLOW_MATCH_MS: u64 = 2000;
+
+/// The version of the measure definitions: how a match's figures are counted. A change to a
+/// measure raises it, so a run folder made under the old definitions is not resumed.
+pub const MEASURES_VERSION: u32 = 1;
 
 /// One suite of a calibration run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -45,14 +52,16 @@ impl Suite {
         }
     }
 
-    /// The suite's number in match seeds and match identifiers.
-    pub fn number(self) -> u64 {
-        match self {
-            Suite::Equal => 0,
-            Suite::Strength => 1,
-            Suite::Formations => 2,
-            Suite::RedCard => 3,
-        }
+    /// The suite a code names.
+    pub fn parse(code: &str) -> Option<Self> {
+        [
+            Suite::Equal,
+            Suite::Strength,
+            Suite::Formations,
+            Suite::RedCard,
+        ]
+        .into_iter()
+        .find(|s| s.code() == code)
     }
 }
 
@@ -65,58 +74,24 @@ pub const RED_CARD_ARMS: [(&str, Option<usize>); 4] = [
     ("striker", Some(21)),
 ];
 
-/// The full side may score at most this multiple of the control's home mean.
+/// The full side may score at most this multiple of the control's home mean: the version 2
+/// migration's `full_over_control` top.
 pub const RED_CARD_LIMIT: f64 = 1.6;
 
 /// The lowest value a red-card `reduced_minus_full` row shows; only its top (0) is judged.
 const RED_CARD_FLOOR: f64 = -10.0;
 
-/// The suites that check `band`, or `None` for a band no suite checks. `--band` narrows a
-/// run to these suites.
-pub fn band_suites(band: &str) -> Option<&'static [Suite]> {
-    const EQUAL: &[Suite] = &[Suite::Equal];
-    const GOALS: &[Suite] = &[Suite::Equal, Suite::Formations];
-    Some(match band {
-        "goals_per_match" | "ten_plus_goals_share" | "goalless_share" => GOALS,
-        "shots_per_team"
-        | "possession_home_pct"
-        | "possession_away_pct"
-        | "sending_off_share"
-        | "yellow_cards_per_team"
-        | "shots_on_target_share"
-        | "goals_per_xg"
-        | "passes_per_team"
-        | "pass_accuracy_pct"
-        | "corners_per_team"
-        | "throw_ins_per_match"
-        | "goal_kicks_per_match" => EQUAL,
-        "stronger_team_win_rate" => &[Suite::Strength],
-        "reduced_minus_full" | "full_over_control" => &[Suite::RedCard],
-        _ => return None,
-    })
+/// The rows a run judges for each band: one per suite that judges it, one per formation
+/// pairing in the formations suite (or one over every pairing, `pooled`), and one per arm
+/// in the red-card suite; in [`Suite`] order, then pairing or arm, then registry order.
+#[derive(Debug, Clone)]
+pub struct RowSpec<'a> {
+    pub def: &'a BandDef,
+    pub suite: Suite,
+    pub scope: Scope,
+    /// The pairing or arm, as a band check names it.
+    pub label: Option<String>,
 }
-
-/// Every band name `--band` accepts.
-pub const BAND_NAMES: [&str; 18] = [
-    "goals_per_match",
-    "ten_plus_goals_share",
-    "goalless_share",
-    "shots_per_team",
-    "possession_home_pct",
-    "possession_away_pct",
-    "sending_off_share",
-    "yellow_cards_per_team",
-    "shots_on_target_share",
-    "goals_per_xg",
-    "passes_per_team",
-    "pass_accuracy_pct",
-    "corners_per_team",
-    "throw_ins_per_match",
-    "goal_kicks_per_match",
-    "stronger_team_win_rate",
-    "reduced_minus_full",
-    "full_over_control",
-];
 
 /// The stronger club's results in the strength suite.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize)]
@@ -186,6 +161,7 @@ pub struct PairingFigures {
 
 impl PairingFigures {
     /// The label of the pairing in a band check, for example `4-3-3 v 4-4-2`.
+    #[cfg(test)]
     pub fn label(&self) -> String {
         format!("{} v {}", self.pairing[0], self.pairing[1])
     }
@@ -208,6 +184,11 @@ pub struct BandCheck {
     /// The sampling error of `value`: the standard error of a mean, share, or ratio over
     /// the matches judged. 0 for the time budget.
     pub se: f64,
+    /// `true` for a row a change run reports as information only: a formations row of one
+    /// pairing, whose band the change run judges and powers pooled over every pairing. It
+    /// sets no power target and does not enter the joint verdict. Absent in a plain run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub informational: Option<bool>,
 }
 
 /// One arm of the red-card suite: mean goals per match of the full (home) side and the
@@ -259,7 +240,7 @@ struct SuiteAcc {
 /// The run-scoped builder.
 #[derive(Debug)]
 pub struct RunBuilder {
-    bands: Bands,
+    bands: Registry,
     suites: BTreeMap<Suite, SuiteAcc>,
     /// The formation names of each pairing of the formations suite.
     pairing_names: Vec<[String; 2]>,
@@ -270,7 +251,7 @@ pub struct RunBuilder {
 }
 
 impl RunBuilder {
-    pub fn new(bands: Bands) -> Self {
+    pub fn new(bands: Registry) -> Self {
         Self {
             bands,
             suites: BTreeMap::new(),
@@ -339,22 +320,26 @@ impl RunBuilder {
         self.missing += 1;
     }
 
+    /// Sets the outlier count of `suite`: the one-process runner judges outliers when it
+    /// plays, by the rule of its full recording.
+    pub fn set_outliers(&mut self, suite: Suite, outliers: u32) {
+        self.suites.entry(suite).or_default().outliers = outliers;
+    }
+
     /// `true` for a failed match, a match with validator violations, a slow match, a
     /// dark-path hit, and a match with a possession or a team's shots outside its band.
     pub fn outlier(&self, s: &MatchStats) -> bool {
-        let b = &self.bands;
+        let outside = |band: &str, v: f64| self.bands.range(band).is_some_and(|r| !r.contains(v));
         s.outcome != "success"
             || s.validate_violations > 0
             || s.duration_ms > SLOW_MATCH_MS
             || s.tactics.change_never_applied > 0
-            || s.figures
-                .possession_pct
-                .iter()
-                .any(|&p| !b.possession_pct.contains(p))
+            || outside("possession_home_pct", s.figures.possession_pct[0])
+            || outside("possession_away_pct", s.figures.possession_pct[1])
             || s.tactics
                 .shots
                 .iter()
-                .any(|&n| !b.shots_per_team.contains(f64::from(n)))
+                .any(|&n| outside("shots_per_team", f64::from(n)))
     }
 
     /// The aggregate figures of every planned suite.
@@ -389,10 +374,11 @@ impl RunBuilder {
                     .collect::<Vec<f64>>(),
             )
         };
-        let band = self.bands.possession_pct;
+        let inside = |band: &str, v: f64| self.bands.range(band).is_none_or(|r| r.contains(v));
         let in_band = per_match(&|r| {
             f64::from(u8::from(
-                r.figures.possession_pct.iter().all(|&p| band.contains(p)),
+                inside("possession_home_pct", r.figures.possession_pct[0])
+                    && inside("possession_away_pct", r.figures.possession_pct[1]),
             ))
         });
         let stronger = acc.boosted.iter().any(Option::is_some).then(|| {
@@ -530,7 +516,11 @@ impl RunBuilder {
         let goals = self.red_card_goals()?;
         let side = |g: &[[f64; 2]], t: usize| mean(&g.iter().map(|m| m[t]).collect::<Vec<_>>());
         let control_home = side(&goals[0], 0);
-        let limit = RED_CARD_LIMIT * control_home;
+        let top = self
+            .bands
+            .band("full_over_control")
+            .map_or(RED_CARD_LIMIT, |b| b.hi);
+        let limit = top * control_home;
         let arms: Vec<RedCardArm> = RED_CARD_ARMS
             .iter()
             .zip(&goals)
@@ -558,344 +548,110 @@ impl RunBuilder {
         })
     }
 
-    /// The two rows of each red-card arm: `reduced_minus_full` (at most 0) and
-    /// `full_over_control` (at most [`RED_CARD_LIMIT`]), each with its sampling error.
-    fn red_card_checks(&self) -> Vec<BandCheck> {
-        let Some(goals) = self.red_card_goals() else {
+    /// Every match of `suite` as the measures see it, in the order they were folded in.
+    pub fn observations(&self, suite: Suite) -> Vec<Obs<'_>> {
+        let Some(acc) = self.suites.get(&suite) else {
             return Vec::new();
         };
-        let control: Vec<f64> = goals[0].iter().map(|g| g[0]).collect();
-        let (c, se_c) = (mean(&control), se_mean(&control));
+        (0..acc.records.len())
+            .map(|i| Obs {
+                stats: &acc.records[i],
+                boosted: acc.boosted[i],
+                pairing: acc.pairings[i].map(|(p, _)| p),
+                arm: acc.arms[i],
+            })
+            .collect()
+    }
+
+    /// The rows the planned suites judge, in report order; `pooled` gives the formations
+    /// suite one row per band over every pairing instead of one per pairing.
+    pub fn row_specs(&self, pooled: bool) -> Vec<RowSpec<'_>> {
         let mut out = Vec::new();
-        for ((name, player), g) in RED_CARD_ARMS.iter().zip(&goals) {
-            if player.is_none() {
-                continue;
+        for &suite in self.suites.keys() {
+            let defs = || self.bands.bands.iter().filter(move |d| d.judged_in(suite));
+            let mut push = |def, scope, label| {
+                out.push(RowSpec {
+                    def,
+                    suite,
+                    scope,
+                    label,
+                });
+            };
+            match suite {
+                Suite::Formations if !pooled => {
+                    for (i, names) in self.pairing_names.iter().enumerate() {
+                        let label = format!("{} v {}", names[0], names[1]);
+                        for def in defs() {
+                            push(def, Scope::Pairing(i), Some(label.clone()));
+                        }
+                    }
+                }
+                Suite::RedCard => {
+                    for (arm, (name, player)) in RED_CARD_ARMS.iter().enumerate() {
+                        if player.is_none() {
+                            continue;
+                        }
+                        for def in defs() {
+                            push(def, Scope::Arm(arm), Some((*name).to_string()));
+                        }
+                    }
+                }
+                _ => {
+                    for def in defs() {
+                        push(def, Scope::All, None);
+                    }
+                }
             }
-            let full: Vec<f64> = g.iter().map(|m| m[0]).collect();
-            let diff: Vec<f64> = g.iter().map(|m| m[1] - m[0]).collect();
-            let (f, se_f) = (mean(&full), se_mean(&full));
-            let d = mean(&diff);
-            let row = |band: &str, value: f64, lo: f64, hi: f64, pass: bool, se: f64| BandCheck {
-                band: band.to_string(),
-                suite: Suite::RedCard.code().to_string(),
-                pairing: Some((*name).to_string()),
-                value: round_to(value, 4),
-                lo,
-                hi,
-                pass,
-                se: round_to(se, 5),
-            };
-            out.push(row(
-                "reduced_minus_full",
-                d,
-                RED_CARD_FLOOR,
-                0.0,
-                d <= 0.0,
-                se_mean(&diff),
-            ));
-            let r = ratio(f, c);
-            // The delta-method error of a ratio of two means.
-            let se_r = if f > 0.0 && c > 0.0 {
-                r * ((se_f / f).powi(2) + (se_c / c).powi(2)).sqrt()
-            } else {
-                0.0
-            };
-            out.push(row(
-                "full_over_control",
-                r,
-                0.0,
-                RED_CARD_LIMIT,
-                f <= RED_CARD_LIMIT * c,
-                se_r,
-            ));
         }
         out
     }
 
-    /// The finished records of `suite`.
-    fn played(&self, suite: Suite) -> Vec<&MatchStats> {
-        self.suites.get(&suite).map_or_else(Vec::new, |acc| {
-            acc.records
-                .iter()
-                .filter(|r| r.outcome == "success")
-                .collect()
-        })
+    /// One band row judged by its range: its value, rounded as the figures are, and its
+    /// sampling error.
+    pub fn check(&self, spec: &RowSpec<'_>) -> BandCheck {
+        let obs = self.observations(spec.suite);
+        let terms = measures::terms(spec.def, &obs, spec.scope);
+        let value = round_to(
+            terms.value().unwrap_or(0.0),
+            measures::places(&spec.def.measure),
+        );
+        BandCheck {
+            band: spec.def.band.clone(),
+            suite: spec.suite.code().to_string(),
+            pairing: spec.label.clone(),
+            value,
+            lo: spec.def.lo,
+            hi: spec.def.hi,
+            pass: measures::passes(spec.def, value, &terms),
+            se: round_to(terms.se(), 5),
+            informational: None,
+        }
     }
 
-    /// The sampling error of each band of the equal suite.
-    fn equal_errors(&self) -> BTreeMap<&'static str, f64> {
-        let played = self.played(Suite::Equal);
-        let n = played.len();
-        let per_match = |f: &dyn Fn(&MatchStats) -> f64| -> f64 {
-            se_mean(&played.iter().map(|r| f(r)).collect::<Vec<_>>())
-        };
-        let per_team = |f: &dyn Fn(&MatchStats, usize) -> f64| -> f64 {
-            per_match(&|r| (f(r, 0) + f(r, 1)) / 2.0)
-        };
-        let share = |f: &dyn Fn(&MatchStats) -> bool| -> f64 {
-            let hits: Vec<f64> = played.iter().map(|r| f64::from(u8::from(f(r)))).collect();
-            se_share(mean(&hits), n)
-        };
-        let both = |a: [u32; 2]| f64::from(a[0] + a[1]);
-        let pooled = |y: &dyn Fn(&MatchStats) -> f64, x: &dyn Fn(&MatchStats) -> f64| -> f64 {
-            let ys: Vec<f64> = played.iter().map(|r| y(r)).collect();
-            let xs: Vec<f64> = played.iter().map(|r| x(r)).collect();
-            se_ratio(&ys, &xs)
-        };
-        BTreeMap::from([
-            (
-                "goals_per_match",
-                per_match(&|r| f64::from(r.goals[0] + r.goals[1])),
-            ),
-            (
-                "shots_per_team",
-                per_team(&|r, t| f64::from(r.tactics.shots[t])),
-            ),
-            (
-                "possession_home_pct",
-                per_match(&|r| r.figures.possession_pct[0]),
-            ),
-            (
-                "possession_away_pct",
-                per_match(&|r| r.figures.possession_pct[1]),
-            ),
-            (
-                "ten_plus_goals_share",
-                share(&|r| r.goals[0] + r.goals[1] >= 10),
-            ),
-            (
-                "sending_off_share",
-                share(&|r| r.laws.red[0] + r.laws.red[1] > 0),
-            ),
-            (
-                "yellow_cards_per_team",
-                per_team(&|r, t| f64::from(r.laws.yellow[t])),
-            ),
-            (
-                "shots_on_target_share",
-                pooled(&|r| both(r.figures.shots_on_target), &|r| {
-                    both(r.tactics.shots)
-                }),
-            ),
-            (
-                "goals_per_xg",
-                pooled(&|r| both(r.goals), &|r| r.figures.xg[0] + r.figures.xg[1]),
-            ),
-            (
-                "passes_per_team",
-                per_team(&|r, t| f64::from(r.figures.passes[t])),
-            ),
-            // The figure is a mean of each team's percentage, so its error is a mean's.
-            (
-                "pass_accuracy_pct",
-                per_team(&|r, t| r.figures.pass_accuracy_pct[t]),
-            ),
-            (
-                "corners_per_team",
-                per_team(&|r, t| f64::from(r.laws.corners[t])),
-            ),
-            (
-                "throw_ins_per_match",
-                per_match(&|r| both(r.laws.throw_ins)),
-            ),
-            (
-                "goal_kicks_per_match",
-                per_match(&|r| both(r.laws.goal_kicks)),
-            ),
-            ("goalless_share", share(&|r| r.goals == [0, 0])),
-        ])
-    }
-
-    /// The band checks of the planned suites, given each suite's wall time.
-    pub fn checks(
-        &self,
-        figures: &BTreeMap<Suite, SuiteFigures>,
-        pairings: &[PairingFigures],
-        wall_ms: &BTreeMap<Suite, u64>,
-    ) -> Vec<BandCheck> {
-        let b = &self.bands;
-        let errors = self.equal_errors();
-        let mut out = Vec::new();
-        let mut check = |band: &str, suite: Suite, value: f64, lo: f64, hi: f64, pass: bool| {
-            let se = match suite {
-                Suite::Equal => errors.get(band).copied().unwrap_or(0.0),
-                _ => 0.0,
-            };
+    /// The band checks of the planned suites, from the registry, given each suite's wall
+    /// time: the equal suite's bands, each suite's time budget, then the other suites'.
+    pub fn checks(&self, wall_ms: &BTreeMap<Suite, u64>) -> Vec<BandCheck> {
+        let (equal, rest): (Vec<_>, Vec<_>) = self
+            .row_specs(false)
+            .into_iter()
+            .partition(|s| s.suite == Suite::Equal);
+        let mut out: Vec<BandCheck> = equal.iter().map(|s| self.check(s)).collect();
+        for (&suite, &ms) in wall_ms {
+            let matches = self.suites.get(&suite).map_or(0, |a| a.matches);
+            let budget = self.bands.wall_budget_ms(matches) as f64;
             out.push(BandCheck {
-                band: band.to_string(),
+                band: "wall_ms".to_string(),
                 suite: suite.code().to_string(),
                 pairing: None,
-                value,
-                lo,
-                hi,
-                pass,
-                se: round_to(se, 5),
-            });
-        };
-        if let Some(f) = figures.get(&Suite::Equal) {
-            let within = |band: bands::Band, v: f64| band.contains(v);
-            let g = b.goals_per_match;
-            check(
-                "goals_per_match",
-                Suite::Equal,
-                f.goals_per_match_mean,
-                g.lo,
-                g.hi,
-                within(g, f.goals_per_match_mean),
-            );
-            let s = b.shots_per_team;
-            check(
-                "shots_per_team",
-                Suite::Equal,
-                f.shots_per_team_mean,
-                s.lo,
-                s.hi,
-                within(s, f.shots_per_team_mean),
-            );
-            let p = b.possession_pct;
-            check(
-                "possession_home_pct",
-                Suite::Equal,
-                f.possession_home_mean,
-                p.lo,
-                p.hi,
-                within(p, f.possession_home_mean),
-            );
-            check(
-                "possession_away_pct",
-                Suite::Equal,
-                f.possession_away_mean,
-                p.lo,
-                p.hi,
-                within(p, f.possession_away_mean),
-            );
-            // The bands of version 2, in the order of the bands file.
-            for (name, band, value) in [
-                (
-                    "ten_plus_goals_share",
-                    b.ten_plus_goals_share,
-                    f.ten_plus_goals_share,
-                ),
-                (
-                    "sending_off_share",
-                    b.sending_off_share,
-                    f.sending_off_share,
-                ),
-                (
-                    "yellow_cards_per_team",
-                    b.yellow_cards_per_team,
-                    f.yellow_cards_per_team_mean,
-                ),
-                (
-                    "shots_on_target_share",
-                    b.shots_on_target_share,
-                    f.shots_on_target_share,
-                ),
-                ("goals_per_xg", b.goals_per_xg, f.goals_per_xg),
-                ("passes_per_team", b.passes_per_team, f.passes_per_team_mean),
-                (
-                    "pass_accuracy_pct",
-                    b.pass_accuracy_pct,
-                    f.pass_accuracy_pct_mean,
-                ),
-                (
-                    "corners_per_team",
-                    b.corners_per_team,
-                    f.corners_per_team_mean,
-                ),
-                (
-                    "throw_ins_per_match",
-                    b.throw_ins_per_match,
-                    f.throw_ins_per_match_mean,
-                ),
-                (
-                    "goal_kicks_per_match",
-                    b.goal_kicks_per_match,
-                    f.goal_kicks_per_match_mean,
-                ),
-                ("goalless_share", b.goalless_share, f.goalless_share),
-            ] {
-                check(
-                    name,
-                    Suite::Equal,
-                    value,
-                    band.lo,
-                    band.hi,
-                    within(band, value),
-                );
-            }
-        }
-        let mut paired = Vec::new();
-        if let Some(rec) = figures.get(&Suite::Strength).and_then(|f| f.stronger) {
-            let lo = b.stronger_team.min_win_rate;
-            let n = (rec.wins + rec.draws + rec.losses) as usize;
-            // After the time budgets; the parent sorts every row by suite, band and pairing.
-            paired.push(BandCheck {
-                band: "stronger_team_win_rate".to_string(),
-                suite: Suite::Strength.code().to_string(),
-                pairing: None,
-                value: rec.win_rate,
-                lo,
-                hi: 1.0,
-                pass: rec.win_rate > lo,
-                se: round_to(se_share(rec.win_rate, n), 5),
+                value: ms as f64,
+                lo: 0.0,
+                hi: budget,
+                pass: (ms as f64) < budget,
+                se: 0.0,
+                informational: None,
             });
         }
-        let formations = self.suites.get(&Suite::Formations);
-        for (i, p) in pairings.iter().enumerate() {
-            let label = p.label();
-            let played = formations.map_or_else(Vec::new, |acc| pairing_records(acc, i));
-            let n = played.len();
-            let goals: Vec<f64> = played
-                .iter()
-                .map(|(r, _)| f64::from(r.goals[0] + r.goals[1]))
-                .collect();
-            for (name, band, value, se) in [
-                (
-                    "goals_per_match",
-                    b.goals_per_match,
-                    p.goals_per_match_mean,
-                    se_mean(&goals),
-                ),
-                (
-                    "ten_plus_goals_share",
-                    b.ten_plus_goals_share,
-                    p.ten_plus_goals_share,
-                    se_share(p.ten_plus_goals_share, n),
-                ),
-                (
-                    "goalless_share",
-                    b.goalless_share,
-                    p.goalless_share,
-                    se_share(p.goalless_share, n),
-                ),
-            ] {
-                paired.push(BandCheck {
-                    band: name.to_string(),
-                    suite: Suite::Formations.code().to_string(),
-                    pairing: Some(label.clone()),
-                    value,
-                    lo: band.lo,
-                    hi: band.hi,
-                    pass: band.contains(value),
-                    se: round_to(se, 5),
-                });
-            }
-        }
-        paired.extend(self.red_card_checks());
-        for (&suite, &ms) in wall_ms {
-            let matches = figures.get(&suite).map_or(0, |f| f.matches);
-            let budget = b.wall_budget_ms(matches) as f64;
-            check(
-                "wall_ms",
-                suite,
-                ms as f64,
-                0.0,
-                budget,
-                (ms as f64) < budget,
-            );
-        }
-        out.extend(paired);
+        out.extend(rest.iter().map(|s| self.check(s)));
         out
     }
 
@@ -1002,6 +758,12 @@ pub struct CalibrationReport {
     /// content, the generator block, and the two default clubs. A baseline must share it.
     #[serde(rename = "fixtures.hash")]
     pub fixtures_hash: String,
+    /// The scheme the fixtures' keys and engine seeds are made by.
+    #[serde(rename = "fixtures.scheme")]
+    pub fixtures_scheme: &'static str,
+    /// Everything that makes the run's results what they are, as the run folder holds it.
+    #[serde(rename = "run.identity")]
+    pub identity: serde_json::Value,
     pub outcome: &'static str,
     /// Present only when `outcome` is `error`.
     #[serde(rename = "error.type", skip_serializing_if = "Option::is_none")]
@@ -1040,7 +802,8 @@ pub struct CalibrationReport {
     /// One row per band both runs judged, with its change and sampling error.
     #[serde(rename = "calib.diff", skip_serializing_if = "Option::is_none")]
     pub diff: Option<baseline::Diff>,
-    /// Every band, both dark paths, and the time budget pass.
+    /// The run's answer, as the exit code gives it: a change run's joint word is `pass`;
+    /// any other run's bands, dark paths, and time budget pass.
     #[serde(rename = "calib.pass")]
     pub pass: bool,
     #[serde(rename = "bench.matches")]
@@ -1064,12 +827,22 @@ pub struct CalibrationReport {
     pub change_expired_at_full_time: u32,
     #[serde(rename = "darkpath.match_without_stats")]
     pub match_without_stats: u32,
+    /// Matches that panicked; the run caught each one and recorded it as failed.
+    #[serde(rename = "darkpath.match_panicked")]
+    pub match_panicked: u32,
     #[serde(rename = "validate.violations")]
     pub violations: usize,
     #[serde(rename = "events.files_written")]
     pub events_written: u32,
     #[serde(rename = "events.files_kept")]
     pub events_kept: u32,
+    /// `threads`: the one-process runner. Reports of earlier builds can say `processes`,
+    /// the worker-process runner they also had.
+    #[serde(rename = "calib.runner")]
+    pub runner: &'static str,
+    /// The compact rows of every arm; absent in reports of the earlier worker processes.
+    #[serde(rename = "calib.rows", skip_serializing_if = "Option::is_none")]
+    pub rows: Option<RowsInfo>,
     #[serde(rename = "machine.hash")]
     pub machine_hash: String,
     #[serde(rename = "machine.cpu_model")]
@@ -1089,6 +862,154 @@ pub struct CalibrationReport {
     pub compare: Option<Vec<compare::CompareRow>>,
     #[serde(rename = "calib.verdict", skip_serializing_if = "Option::is_none")]
     pub verdict: Option<compare::Verdict>,
+    /// The fixtures of the run, those an earlier session finished, and those played now.
+    #[serde(rename = "calib.units")]
+    pub units: Units,
+    /// SHA-256 over the compact rows' result columns in key order. Reports of the earlier
+    /// worker processes hashed every match's statistics, identifiers and timing left out.
+    #[serde(rename = "calib.results_digest")]
+    pub results_digest: String,
+    /// The old engine's results on the same fixtures; absent without an old engine.
+    #[serde(rename = "calib.base", skip_serializing_if = "Option::is_none")]
+    pub base: Option<BaseReport>,
+    /// Each band's word: in a change run from the paired max-t test, otherwise from its
+    /// range. Absent in a paired flag run, which has `calib.verdict`.
+    #[serde(rename = "calib.verdicts", skip_serializing_if = "Vec::is_empty")]
+    pub verdicts: Vec<verdict::VerdictRow>,
+    /// A change run's joint verdict.
+    #[serde(rename = "calib.joint", skip_serializing_if = "Option::is_none")]
+    pub joint: Option<verdict::Joint>,
+    /// A change run: each suite's pilot, power target and cap, and whether every band of
+    /// the suite reached its power.
+    #[serde(rename = "calib.power", skip_serializing_if = "Option::is_none")]
+    pub power: Option<BTreeMap<String, PowerInfo>>,
+    /// The band registry the run was judged with.
+    #[serde(rename = "calib.registry")]
+    pub registry: RegistryInfo,
+    /// The time and memory of each stage, and the run's total.
+    #[serde(rename = "calib.stages")]
+    pub stages: BTreeMap<String, StageCost>,
+    /// A change run's rules stage.
+    #[serde(rename = "calib.rules", skip_serializing_if = "Option::is_none")]
+    pub rules: Option<RulesReport>,
+}
+
+/// One stage's cost in a report.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct StageCost {
+    pub ms: u64,
+    /// The largest heap growth of one thread in the stage, in mebibytes; for `total`, the
+    /// process's peak working set where the platform gives it.
+    pub peak_mb: Option<f64>,
+}
+
+/// What a change run's rules stage did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct RulesReport {
+    /// Touched rules checked.
+    pub checked: u32,
+    /// Levels checked, over every rule.
+    pub levels: u32,
+    /// Levels at which a rule failed.
+    pub failed: u32,
+}
+
+/// The schema version of the calibrate run report: 2 since the registry, the verdicts and
+/// the stage costs; every key of version 1 stays.
+pub const REPORT_SCHEMA_VERSION: &str = "2";
+
+/// One suite's run length in a change run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PowerInfo {
+    /// Matches per suite unit of the pilot; absent when the run resumed to a target.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pilot: Option<u32>,
+    /// Matches per suite unit played: the power target, at most the cap.
+    pub target: u32,
+    pub cap: u32,
+    /// Every band of the suite has the power to see its smallest shift.
+    pub reached: bool,
+    /// The band whose power needed the most matches at the pilot, which set the target;
+    /// absent when the pilot gave every band power.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub driver: Option<String>,
+    /// The bands outside their range beyond their noise at the pilot, which set no target.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub no_target: Vec<String>,
+}
+
+/// The band registry a run was judged with.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RegistryInfo {
+    pub version: u32,
+    /// SHA-256 of the bands, 12 hex characters.
+    pub digest: String,
+    /// The layout version the file was migrated from, when it was.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub migrated_from: Option<u32>,
+}
+
+/// The compact rows of a run, over every arm: the row format, the row files, the rows the
+/// ledger counts, and the matches with a full recording, by reason. A match can have more
+/// than one reason.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct RowsInfo {
+    pub format: u32,
+    pub files: u32,
+    pub rows: u32,
+    pub recorded: Recorded,
+}
+
+/// Matches with a full recording (a statistics file and an event file), and why.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct Recorded {
+    pub matches: u32,
+    /// About 1 in 16, chosen by fixture key.
+    pub sample: u32,
+    /// Failed, panicked, or a dark-path hit.
+    pub error: u32,
+    pub violation: u32,
+    /// A measure outside the 1st to 99th percentile of its suite so far.
+    pub extreme: u32,
+    /// `--keep-events all`.
+    pub all: u32,
+}
+
+/// The fixtures of a run, counted over every arm and suite.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct Units {
+    pub total: u32,
+    /// Fixtures an earlier session of the run had finished.
+    pub finished_before: u32,
+    /// Fixtures this session played to the end.
+    pub played: u32,
+}
+
+/// The old engine of a change run and its results on the run's fixtures.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct BaseReport {
+    /// `rev` for a built revision, `binary` for a ready executable.
+    pub source: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rev: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commit: Option<String>,
+    #[serde(rename = "build.id")]
+    pub build_id: String,
+    #[serde(rename = "content.hash")]
+    pub content_hash: String,
+    pub cache: BaseCache,
+    #[serde(rename = "calib.bands")]
+    pub bands: Vec<BandCheck>,
+}
+
+/// Where the old engine's results came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct BaseCache {
+    /// Fixtures whose result the cache held.
+    pub hits: u32,
+    /// Fixtures the old engine played now.
+    pub played: u32,
 }
 
 /// What a calibration run selected: the suites played, the formation pairings of the
@@ -1146,8 +1067,11 @@ pub struct ArmReport {
     pub change_expired_at_full_time: u32,
     #[serde(rename = "darkpath.match_without_stats")]
     pub match_without_stats: u32,
+    #[serde(rename = "darkpath.match_panicked")]
+    pub match_panicked: u32,
     #[serde(rename = "validate.violations")]
     pub violations: usize,
+    /// Always 0 since the worker processes are gone; kept for readers of earlier reports.
     #[serde(rename = "calib.workers_failed")]
     pub workers_failed: u32,
     #[serde(rename = "bench.match_wall_ms")]
@@ -1172,6 +1096,9 @@ impl Record for CalibrationReport {
     fn owner_id(&self) -> &str {
         &self.owner_id
     }
+    fn schema_version(&self) -> &'static str {
+        REPORT_SCHEMA_VERSION
+    }
 }
 
 #[cfg(test)]
@@ -1180,10 +1107,10 @@ mod tests {
     use engine::observe::{LawStats, MatchFigures, TacticsStats, TeamRef};
     use std::path::Path;
 
-    fn bands() -> Bands {
+    fn bands() -> Registry {
         let dir =
             engine::ContentDir::at(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content"));
-        Bands::load(&dir).unwrap()
+        Registry::load(&dir).unwrap()
     }
 
     /// A finished match with these goals, shots, and possessions. Every other figure is a
@@ -1306,7 +1233,7 @@ mod tests {
         assert_eq!(f.goal_kicks_per_match_mean, 16.0);
         assert_eq!(b.missing, 1);
         let wall = BTreeMap::from([(Suite::Equal, 1_000)]);
-        let checks = b.checks(&figures, &[], &wall);
+        let checks = b.checks(&wall);
         let names: Vec<&str> = checks.iter().map(|c| c.band.as_str()).collect();
         let mut expected = vec![
             "goals_per_match",
@@ -1358,7 +1285,7 @@ mod tests {
         assert_eq!(pairings[1].goals_per_match_mean, 5.5);
         assert_eq!(pairings[1].ten_plus_goals_share, 0.5);
         assert_eq!(pairings[1].goalless_share, 0.5);
-        let checks = b.checks(&figures, &pairings, &BTreeMap::new());
+        let checks = b.checks(&BTreeMap::new());
         let rows: Vec<(&str, Option<&str>, bool)> = checks
             .iter()
             .map(|c| (c.band.as_str(), c.pairing.as_deref(), c.pass))
@@ -1384,7 +1311,7 @@ mod tests {
         // Six shots and 70 percent possession: an outlier, and both bands miss.
         assert!(b.add(Suite::Equal, record([5, 1], [6, 6], [70.0, 30.0]), None));
         let figures = b.figures();
-        let checks = b.checks(&figures, &[], &BTreeMap::new());
+        let checks = b.checks(&BTreeMap::new());
         let failed: Vec<&str> = checks
             .iter()
             .filter(|c| !c.pass)
@@ -1432,7 +1359,7 @@ mod tests {
         assert_eq!((rec.wins, rec.draws, rec.losses), (1, 1, 1));
         assert_eq!(rec.win_rate, 0.3333);
         assert_eq!(figures[&Suite::Strength].failures, 1);
-        let checks = b.checks(&figures, &[], &BTreeMap::new());
+        let checks = b.checks(&BTreeMap::new());
         assert_eq!(checks.len(), 1);
         assert!(!checks[0].pass);
     }
@@ -1441,9 +1368,8 @@ mod tests {
     fn a_suite_slower_than_its_budget_fails_the_wall_band() {
         let mut b = RunBuilder::new(bands());
         b.plan(Suite::Equal, 1000);
-        let figures = b.figures();
         let wall = BTreeMap::from([(Suite::Equal, 1_800_001)]);
-        let checks = b.checks(&figures, &[], &wall);
+        let checks = b.checks(&wall);
         let time = checks.iter().find(|c| c.band == "wall_ms").unwrap();
         assert_eq!(time.hi, 1_800_000.0);
         assert!(!time.pass);
@@ -1468,9 +1394,8 @@ mod tests {
         for goals in [[1, 1], [2, 1], [0, 0], [3, 3]] {
             b.add(Suite::Equal, record(goals, [10, 10], [50.0, 50.0]), None);
         }
-        let figures = b.figures();
         let wall = BTreeMap::from([(Suite::Equal, 1_000)]);
-        let checks = b.checks(&figures, &[], &wall);
+        let checks = b.checks(&wall);
         let se = |band: &str| checks.iter().find(|c| c.band == band).unwrap().se;
         // Goals 2, 3, 0, 6: mean 2.75, population variance 4.6875.
         assert_eq!(se("goals_per_match"), round_to(4.6875f64.sqrt() / 2.0, 5));
@@ -1510,7 +1435,7 @@ mod tests {
         assert!(arm("keeper").pass && arm("centre-back").pass);
         assert!(!arm("striker").pass, "the full side scored 2.0 against 1.6");
         assert!(!f.pass);
-        let checks = b.checks(&b.figures(), &[], &BTreeMap::new());
+        let checks = b.checks(&BTreeMap::new());
         let rows: Vec<(&str, Option<&str>, f64, bool)> = checks
             .iter()
             .filter(|c| c.suite == "red-card")
@@ -1531,10 +1456,192 @@ mod tests {
 
     #[test]
     fn every_band_belongs_to_a_suite_and_the_red_card_suite_is_not_in_all() {
-        for band in BAND_NAMES {
-            assert!(band_suites(band).is_some(), "{band}");
+        let r = bands();
+        for band in r.names() {
+            assert!(!r.suites_of(band).unwrap().is_empty(), "{band}");
         }
-        assert!(band_suites("no_such_band").is_none());
+        assert!(r.suites_of("no_such_band").is_none());
         assert!(!Suite::ALL.contains(&Suite::RedCard));
+        assert_eq!(
+            r.suites_of("goals_per_match").unwrap(),
+            [Suite::Equal, Suite::Formations]
+        );
+    }
+
+    /// Varied matches: goals, shots, possession, cards, passes and set pieces all change
+    /// from match to match, and one match fails.
+    fn varied(n: u32) -> Vec<MatchStats> {
+        (0..n)
+            .map(|i| {
+                let mut r = record(
+                    [i % 4, (i * 7 + 1) % 3],
+                    [8 + i % 9, 6 + (i * 5) % 11],
+                    [
+                        40.0 + f64::from(i % 21) * 0.7,
+                        60.0 - f64::from(i % 21) * 0.7,
+                    ],
+                );
+                r.laws.yellow = [i % 5, (i + 2) % 4];
+                r.laws.red = [u32::from(i % 13 == 0), 0];
+                r.laws.corners = [3 + i % 6, 2 + (i * 3) % 7];
+                r.laws.throw_ins = [18 + i % 9, 20 + i % 5];
+                r.laws.goal_kicks = [6 + i % 7, 5 + i % 4];
+                r.figures.passes = [380 + (i * 13) % 90, 350 + (i * 17) % 120];
+                r.figures.pass_accuracy_pct = [
+                    76.3 + f64::from(i % 11) * 0.9,
+                    81.7 - f64::from(i % 7) * 1.1,
+                ];
+                r.figures.xg = [0.37 * f64::from(i % 5), 1.13 + 0.21 * f64::from(i % 3)];
+                if i == 5 {
+                    r.outcome = "error".into();
+                }
+                r
+            })
+            .collect()
+    }
+
+    /// The registry's checks equal the hard-coded figures they replaced, value for value,
+    /// on the same matches: the equal suite's figures, each pairing's, the stronger club's
+    /// win rate, and the red-card arms.
+    #[test]
+    fn the_registry_checks_equal_the_hard_coded_figures() {
+        let mut b = RunBuilder::new(bands());
+        b.plan(Suite::Equal, 60);
+        b.plan(Suite::Strength, 60);
+        b.plan_pairings(
+            30,
+            vec![
+                ["4-4-2".into(), "4-3-3".into()],
+                ["4-3-3".into(), "3-5-2".into()],
+            ],
+        );
+        b.plan(Suite::RedCard, 40);
+        for (i, r) in varied(60).into_iter().enumerate() {
+            b.add(Suite::Equal, r.clone(), None);
+            b.add(Suite::Strength, r.clone(), Some(i % 2));
+            b.add_pairing(r.clone(), i % 2, (i / 2) % 2);
+            if i < 40 {
+                b.add_red_card(r, (i / 3) % 4);
+            }
+        }
+        let figures = b.figures();
+        let checks = b.checks(&BTreeMap::new());
+        let value = |band: &str, suite: &str, pairing: Option<&str>| {
+            checks
+                .iter()
+                .find(|c| c.band == band && c.suite == suite && c.pairing.as_deref() == pairing)
+                .unwrap_or_else(|| panic!("{band} {suite} {pairing:?}"))
+                .value
+        };
+        let f = &figures[&Suite::Equal];
+        for (band, hard) in [
+            ("goals_per_match", f.goals_per_match_mean),
+            ("shots_per_team", f.shots_per_team_mean),
+            ("possession_home_pct", f.possession_home_mean),
+            ("possession_away_pct", f.possession_away_mean),
+            ("ten_plus_goals_share", f.ten_plus_goals_share),
+            ("sending_off_share", f.sending_off_share),
+            ("yellow_cards_per_team", f.yellow_cards_per_team_mean),
+            ("shots_on_target_share", f.shots_on_target_share),
+            ("goals_per_xg", f.goals_per_xg),
+            ("passes_per_team", f.passes_per_team_mean),
+            ("pass_accuracy_pct", f.pass_accuracy_pct_mean),
+            ("corners_per_team", f.corners_per_team_mean),
+            ("throw_ins_per_match", f.throw_ins_per_match_mean),
+            ("goal_kicks_per_match", f.goal_kicks_per_match_mean),
+            ("goalless_share", f.goalless_share),
+        ] {
+            assert_eq!(
+                value(band, "equal", None).to_bits(),
+                hard.to_bits(),
+                "{band}"
+            );
+        }
+        let stronger = figures[&Suite::Strength].stronger.unwrap();
+        assert_eq!(
+            value("stronger_team_win_rate", "strength", None),
+            stronger.win_rate
+        );
+        for p in b.pairing_figures() {
+            let label = p.label();
+            let at = Some(label.as_str());
+            assert_eq!(
+                value("goals_per_match", "formations", at),
+                p.goals_per_match_mean
+            );
+            assert_eq!(
+                value("ten_plus_goals_share", "formations", at),
+                p.ten_plus_goals_share
+            );
+            assert_eq!(value("goalless_share", "formations", at), p.goalless_share);
+        }
+        let red = b.red_card_figures().unwrap();
+        for arm in &red.arms {
+            let at = Some(arm.arm.as_str());
+            // The arm figures are rounded to 4 places before this arithmetic.
+            let reduced = value("reduced_minus_full", "red-card", at);
+            assert!(
+                (reduced - (arm.reduced - arm.full)).abs() < 2e-4,
+                "{reduced} {arm:?}"
+            );
+            let ratio = value("full_over_control", "red-card", at);
+            assert!(
+                (ratio - arm.full / red.control[0]).abs() < 1e-3,
+                "{ratio} {arm:?}"
+            );
+        }
+        // Every row's pass is its range check, and its sampling error is a real one.
+        for c in &checks {
+            if ![
+                "stronger_team_win_rate",
+                "reduced_minus_full",
+                "full_over_control",
+            ]
+            .contains(&c.band.as_str())
+            {
+                assert_eq!(c.pass, (c.lo..=c.hi).contains(&c.value), "{c:?}");
+            }
+        }
+        assert!(
+            checks
+                .iter()
+                .filter(|c| c.suite == "equal")
+                .all(|c| c.se > 0.0 || c.band == "ten_plus_goals_share")
+        );
+    }
+}
+
+/// Helpers the report's unit tests share.
+#[cfg(test)]
+pub mod tests_support {
+    use engine::observe::{MatchStats, TeamRef};
+
+    /// A finished match with every figure 0.
+    pub fn blank_stats() -> MatchStats {
+        MatchStats {
+            owner_id: String::new(),
+            match_id: String::new(),
+            seed: 1,
+            content_hash: String::new(),
+            teams: [0, 1].map(|_| TeamRef {
+                id: String::new(),
+                name: String::new(),
+            }),
+            duration_ms: 0,
+            outcome: "success".into(),
+            ticks_per_s: 0.0,
+            ticks_written: 0,
+            validate_ran: true,
+            validate_violations: 0,
+            possession_changes: 0,
+            ball_max_speed: 0.0,
+            ball_idle_ticks: 0,
+            goals: [0, 0],
+            flags_on: Vec::new(),
+            laws: Default::default(),
+            tactics: Default::default(),
+            figures: Default::default(),
+            script: Default::default(),
+        }
     }
 }
