@@ -362,6 +362,12 @@ fn the_single_thread_peak_memory_leaves_out_the_matches_of_the_threads() {
         ],
     );
     assert!(matches!(out.status.code(), Some(0 | 2)), "{}", stderr(&out));
+    if !cfg!(windows) {
+        // Peak memory is measured only on Windows; elsewhere the figure is null.
+        assert!(report(&dir)["bench.peak_mem_mb"].is_null());
+        let _ = std::fs::remove_dir_all(&data);
+        return;
+    }
     let threads = report(&dir)["bench.peak_mem_mb"]
         .as_f64()
         .expect("a peak memory figure");
