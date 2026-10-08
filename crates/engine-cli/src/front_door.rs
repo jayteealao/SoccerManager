@@ -7,6 +7,7 @@
 //! is written exactly at full time. The settings live in `settings.json` in the data folder:
 //! the page's port, and with it the browser's own storage, changes at every launch.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use engine::data::TeamFile;
@@ -28,8 +29,11 @@ pub struct SampleTeam {
     pub file: TeamFile,
     /// The team file, as the worker's `--team-a` or `--team-b` receives it.
     pub path: PathBuf,
-    /// The mean attribute of the file's first eleven players, from 0 to 100.
+    /// The mean visible rating of the file's first eleven players, on the 1 to 20 scale.
     pub strength: f64,
+    /// The version the file was written in, when it was older and converted on load: setup
+    /// names the club in a notice.
+    pub converted_from: Option<u32>,
 }
 
 impl SampleTeam {
@@ -51,6 +55,7 @@ impl SampleTeam {
             "kit": [club.kit.primary, club.kit.secondary],
             "ground": [club.ground.length, club.ground.width],
             "strength": (self.strength * 10.0).round() / 10.0,
+            "converted": self.converted_from.is_some(),
         })
     }
 }
@@ -59,6 +64,7 @@ impl SampleTeam {
 /// name are refused, because match setup and Resume find a team by them.
 pub fn sample_teams(dir: &ContentDir, content: &Content) -> anyhow::Result<Vec<SampleTeam>> {
     let mut teams: Vec<SampleTeam> = Vec::new();
+    let hidden: Vec<&str> = content.attributes.hidden_names().collect();
     for club in round::club_files(dir, content) {
         let (id, name) = (&club.file.club.id, &club.file.club.name);
         if let Some(twin) = teams.iter().find(|t| t.id() == id || t.name() == name) {
@@ -74,7 +80,8 @@ pub fn sample_teams(dir: &ContentDir, content: &Content) -> anyhow::Result<Vec<S
             );
         }
         teams.push(SampleTeam {
-            strength: strength(&club.file),
+            strength: strength(&club.file, &hidden),
+            converted_from: club.converted_from,
             path: club.path,
             file: club.file,
         });
@@ -83,18 +90,22 @@ pub fn sample_teams(dir: &ContentDir, content: &Content) -> anyhow::Result<Vec<S
     Ok(teams)
 }
 
-/// The mean attribute of the first eleven players in the file.
-fn strength(file: &TeamFile) -> f64 {
+/// The mean visible rating of the first eleven players in the file, on the 1 to 20 scale. A
+/// hidden value never moves a figure the page shows, so consistency and injury proneness are
+/// left out.
+fn strength(file: &TeamFile, hidden: &[&str]) -> f64 {
     let (sum, count) = file
         .players
         .iter()
         .take(11)
-        .flat_map(|p| p.attributes.values())
-        .fold((0u64, 0u64), |(s, n), v| (s + u64::from(*v), n + 1));
+        .flat_map(|p| p.attributes.iter())
+        .filter(|(name, _)| !hidden.contains(&name.as_str()))
+        .map(|(_, v)| v)
+        .fold((0u64, 0u64), |(s, n), v| (s + u64::from(v.tenths()), n + 1));
     if count == 0 {
         0.0
     } else {
-        sum as f64 / count as f64
+        sum as f64 / count as f64 / 10.0
     }
 }
 
@@ -322,6 +333,260 @@ impl Settings {
     }
 }
 
+/// The squad screen's store in the data folder: named views and match ratings, per club.
+pub const VIEWS_FILE: &str = "views.json";
+/// The views file layout this build reads and writes.
+const VIEWS_SCHEMA: u32 = 1;
+/// The most named views a club keeps.
+pub const MAX_VIEWS: usize = 20;
+/// The most columns one view lists.
+pub const MAX_COLUMNS: usize = 64;
+/// The longest view name and column id, in characters.
+const MAX_NAME_CHARS: usize = 40;
+/// The longest club id the page may save views for, in characters.
+const MAX_CLUB_CHARS: usize = 64;
+/// The most clubs the store keeps views for.
+pub const MAX_CLUBS: usize = 500;
+/// The match ratings kept per player: the newest ten.
+pub const KEPT_RATINGS: usize = 10;
+
+/// Which way a view sorts its column.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Direction {
+    Up,
+    Down,
+}
+
+/// The column a view sorts by, and which way.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Sort {
+    pub column: String,
+    pub direction: Direction,
+}
+
+/// One named view: the columns shown, in order, and the sort. The column ids are the page's;
+/// the store keeps them as text, and the page drops an id it does not know.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct View {
+    pub name: String,
+    pub columns: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sort: Option<Sort>,
+}
+
+/// One match rating of a player: the match it was earned in and the rating, 1.0 to 10.0.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Rated {
+    #[serde(rename = "match")]
+    pub match_id: String,
+    pub rating: f64,
+}
+
+/// One club's part of the store: its views, the active one, and its players' newest match
+/// ratings, oldest first.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClubViews {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active: Option<String>,
+    #[serde(default)]
+    pub views: Vec<View>,
+    #[serde(default)]
+    pub ratings: BTreeMap<String, Vec<Rated>>,
+}
+
+/// The squad screen's store, `views.json` in the data folder. A stand-in for the saved game,
+/// which does not exist yet: when careers exist, it moves into the saved game. Local only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Views {
+    pub schema_version: u32,
+    #[serde(default)]
+    pub clubs: BTreeMap<String, ClubViews>,
+}
+
+impl Default for Views {
+    fn default() -> Self {
+        Self {
+            schema_version: VIEWS_SCHEMA,
+            clubs: BTreeMap::new(),
+        }
+    }
+}
+
+/// What the page sends to save one club's views.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SaveViews {
+    club: String,
+    #[serde(default)]
+    active: Option<String>,
+    views: Vec<View>,
+}
+
+/// The first thing wrong with one club's `views` and `active` view, named.
+fn check_views(club: &str, active: Option<&String>, views: &[View]) -> Result<(), String> {
+    if views.len() > MAX_VIEWS {
+        return Err(format!(
+            "club {club}: {} views; at most {MAX_VIEWS}",
+            views.len()
+        ));
+    }
+    for (i, view) in views.iter().enumerate() {
+        if view.name.trim().is_empty() {
+            return Err(format!("club {club}: view {} has no name", i + 1));
+        }
+        if view.name.chars().count() > MAX_NAME_CHARS {
+            return Err(format!(
+                "club {club}: the name of view {} is longer than {MAX_NAME_CHARS} characters",
+                i + 1
+            ));
+        }
+        if view.columns.is_empty() {
+            return Err(format!("club {club}: view {:?} has no columns", view.name));
+        }
+        if view.columns.len() > MAX_COLUMNS {
+            return Err(format!(
+                "club {club}: view {:?} has {} columns; at most {MAX_COLUMNS}",
+                view.name,
+                view.columns.len()
+            ));
+        }
+        if let Some(bad) = view
+            .columns
+            .iter()
+            .find(|c| c.is_empty() || c.chars().count() > MAX_NAME_CHARS)
+        {
+            return Err(format!(
+                "club {club}: view {:?} has the column id {bad:?}",
+                view.name
+            ));
+        }
+    }
+    if let Some(active) = active
+        && !views.iter().any(|v| &v.name == active)
+    {
+        return Err(format!(
+            "club {club}: the active view {active:?} is not one of its views"
+        ));
+    }
+    Ok(())
+}
+
+impl Views {
+    /// Reads `body` and checks every value, naming the first that is wrong.
+    pub fn parse(body: &str) -> Result<Views, String> {
+        let views: Views =
+            serde_json::from_str(body).map_err(|e| format!("the views do not read: {e}"))?;
+        if views.schema_version != VIEWS_SCHEMA {
+            return Err(format!(
+                "views schema_version {} is not {VIEWS_SCHEMA}",
+                views.schema_version
+            ));
+        }
+        for (club, part) in &views.clubs {
+            check_views(club, part.active.as_ref(), &part.views)?;
+            for (player, list) in &part.ratings {
+                if list.len() > KEPT_RATINGS {
+                    return Err(format!(
+                        "club {club}: player {player} has {} ratings; at most {KEPT_RATINGS}",
+                        list.len()
+                    ));
+                }
+                if let Some(r) = list.iter().find(|r| !(1.0..=10.0).contains(&r.rating)) {
+                    return Err(format!(
+                        "club {club}: player {player} has the rating {} in match {}; allowed 1.0 to 10.0",
+                        r.rating, r.match_id
+                    ));
+                }
+            }
+        }
+        Ok(views)
+    }
+
+    /// The store in `data`. A missing file gives an empty store; a file that does not read
+    /// gives an empty store and says so in a signal. Never fails the launch.
+    pub fn load(data: &Path) -> Views {
+        let path = data.join(VIEWS_FILE);
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            return Views::default();
+        };
+        Views::parse(&text).unwrap_or_else(|reason| {
+            tracing::warn!(signal = "launch.views_refused", reason = %reason);
+            Views::default()
+        })
+    }
+
+    /// Writes the store to `data` through a temporary file, so a crash never leaves half a
+    /// file.
+    pub fn save(&self, data: &Path) -> std::io::Result<()> {
+        std::fs::create_dir_all(data)?;
+        let path = data.join(VIEWS_FILE);
+        let temporary = data.join(format!("{VIEWS_FILE}.tmp"));
+        let text = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
+        std::fs::write(&temporary, text + "\n")?;
+        std::fs::rename(&temporary, &path)
+    }
+
+    /// Replaces one club's views and active view from the page's `body`
+    /// (`{"club", "active", "views"}`), keeping its ratings. Returns the club id.
+    pub fn set_views(&mut self, body: &str) -> Result<String, String> {
+        let save: SaveViews =
+            serde_json::from_str(body).map_err(|e| format!("the views do not read: {e}"))?;
+        if save.club.trim().is_empty() {
+            return Err("the views name no club".into());
+        }
+        if save.club.chars().count() > MAX_CLUB_CHARS {
+            return Err(format!(
+                "the club id is longer than {MAX_CLUB_CHARS} characters"
+            ));
+        }
+        if !self.clubs.contains_key(&save.club) && self.clubs.len() >= MAX_CLUBS {
+            return Err(format!("the views already hold {MAX_CLUBS} clubs"));
+        }
+        check_views(&save.club, save.active.as_ref(), &save.views)?;
+        let part = self.clubs.entry(save.club.clone()).or_default();
+        part.views = save.views;
+        part.active = save.active;
+        Ok(save.club)
+    }
+
+    /// Adds the home side's match ratings of one finished match to the home club's ratings:
+    /// a match it already holds is skipped, and each player keeps his newest ten. Returns how
+    /// many ratings were added.
+    pub fn ingest(&mut self, stats: &engine::observe::MatchStats) -> usize {
+        let club = &stats.teams[0].id;
+        let part = self.clubs.entry(club.clone()).or_default();
+        let mut added = 0;
+        for entry in stats.ratings.iter().filter(|r| r.team == 0) {
+            let list = part.ratings.entry(entry.id.clone()).or_default();
+            if list.iter().any(|r| r.match_id == stats.match_id) {
+                continue;
+            }
+            list.push(Rated {
+                match_id: stats.match_id.clone(),
+                rating: entry.rating.clamp(1.0, 10.0),
+            });
+            if list.len() > KEPT_RATINGS {
+                list.drain(..list.len() - KEPT_RATINGS);
+            }
+            added += 1;
+        }
+        added
+    }
+
+    /// One club's part as the page reads it, `{"active", "views", "ratings"}`; empty when the
+    /// store holds nothing for the club.
+    pub fn club_json(&self, club: &str) -> serde_json::Value {
+        let part = self.clubs.get(club).cloned().unwrap_or_default();
+        serde_json::to_value(part).expect("views always serialize")
+    }
+}
+
 /// `name` as a snapshot header keeps it: cut to the header's width at a character boundary.
 fn as_saved(name: &str) -> &str {
     let mut end = name.len().min(engine::snapshot::TEAM_BYTES);
@@ -332,7 +597,7 @@ fn as_saved(name: &str) -> &str {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// A long club name is matched as the header keeps it: its first 44 bytes, never cut
@@ -431,5 +696,229 @@ mod tests {
             Some(open.join(engine::snapshot::FILE_NAME))
         );
         let _ = std::fs::remove_dir_all(&data);
+    }
+
+    /// The shipped team files are version 1: each lists as converted, so setup names the
+    /// club in its notice; a file of this version lists as not converted.
+    #[test]
+    fn a_converted_team_file_lists_as_converted_and_a_current_one_does_not() {
+        let dir = shipped();
+        let content = Content::load(&dir).unwrap();
+        let teams = sample_teams(&dir, &content).unwrap();
+        for team in &teams {
+            assert_eq!(team.converted_from, Some(1), "{}", team.name());
+            assert_eq!(team.json()["converted"], true);
+        }
+        let current = SampleTeam {
+            converted_from: None,
+            ..teams[0].clone()
+        };
+        assert_eq!(current.json()["converted"], false);
+    }
+
+    fn view(name: &str, columns: &[&str]) -> View {
+        View {
+            name: name.into(),
+            columns: columns.iter().map(|c| (*c).to_string()).collect(),
+            sort: Some(Sort {
+                column: columns[0].into(),
+                direction: Direction::Down,
+            }),
+        }
+    }
+
+    pub(crate) fn stats(
+        match_id: &str,
+        ratings: &[(&str, usize, f64)],
+    ) -> engine::observe::MatchStats {
+        use engine::observe::{
+            LawStats, MatchFigures, MatchStats, RatingEntry, ScriptFigures, TacticsStats, TeamRef,
+        };
+        let team = |id: &str| TeamRef {
+            id: id.into(),
+            name: id.into(),
+        };
+        MatchStats {
+            owner_id: "0123456789abcdef0123456789abcdef".into(),
+            match_id: match_id.into(),
+            seed: 42,
+            content_hash: "abcdef012345".into(),
+            teams: [team("club-a"), team("club-b")],
+            duration_ms: 1,
+            outcome: "success".into(),
+            ticks_per_s: 1.0,
+            ticks_written: 1,
+            validate_ran: false,
+            validate_violations: 0,
+            possession_changes: 0,
+            ball_max_speed: 0.0,
+            ball_idle_ticks: 0,
+            goals: [0, 0],
+            flags_on: Vec::new(),
+            laws: LawStats::default(),
+            tactics: TacticsStats::default(),
+            figures: MatchFigures::default(),
+            script: ScriptFigures::default(),
+            ratings: ratings
+                .iter()
+                .map(|(id, team, rating)| RatingEntry {
+                    id: (*id).into(),
+                    team: *team,
+                    rating: *rating,
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn the_views_save_and_read_back_and_a_damaged_file_starts_empty() {
+        let data = temp("views");
+        assert_eq!(Views::load(&data), Views::default());
+        let mut views = Views::default();
+        let body = serde_json::json!({
+            "club": "club-a",
+            "active": "Before Kelder",
+            "views": [view("Before Kelder", &["age", "height", "attr:pace"])],
+        })
+        .to_string();
+        assert_eq!(views.set_views(&body).unwrap(), "club-a");
+        views.ingest(&stats("m-1", &[("a-1", 0, 7.4)]));
+        views.save(&data).unwrap();
+        assert!(
+            !data.join(format!("{VIEWS_FILE}.tmp")).exists(),
+            "the temporary file is renamed"
+        );
+        let back = Views::load(&data);
+        assert_eq!(back, views);
+        assert_eq!(back.club_json("club-a")["active"], "Before Kelder");
+        assert_eq!(
+            back.club_json("club-a")["views"][0]["columns"][2],
+            "attr:pace"
+        );
+        assert_eq!(back.club_json("club-a")["ratings"]["a-1"][0]["rating"], 7.4);
+        assert_eq!(
+            back.club_json("club-nowhere"),
+            serde_json::json!({"views": [], "ratings": {}})
+        );
+        // Saving views again keeps the ratings.
+        let mut again = back.clone();
+        again
+            .set_views(
+                &serde_json::json!({"club": "club-a", "views": [view("Wide", &["age"])]})
+                    .to_string(),
+            )
+            .unwrap();
+        assert_eq!(again.clubs["club-a"].ratings, back.clubs["club-a"].ratings);
+        assert_eq!(again.clubs["club-a"].active, None);
+        std::fs::write(data.join(VIEWS_FILE), "{ not json").unwrap();
+        assert_eq!(Views::load(&data), Views::default());
+        let _ = std::fs::remove_dir_all(&data);
+    }
+
+    #[test]
+    fn a_bad_view_store_is_refused_by_its_first_wrong_value() {
+        let refused = |body: serde_json::Value| Views::parse(&body.to_string()).unwrap_err();
+        assert!(refused(serde_json::json!({"schema_version": 2})).contains("schema_version 2"));
+        assert!(
+            refused(serde_json::json!({"schema_version": 1, "clubs": {}, "theme": 1}))
+                .contains("theme")
+        );
+        let club = |part: serde_json::Value| serde_json::json!({"schema_version": 1, "clubs": {"club-a": part}});
+        assert!(
+            refused(club(
+                serde_json::json!({"views": [{"name": " ", "columns": ["age"]}]})
+            ))
+            .contains("view 1 has no name")
+        );
+        assert!(
+            refused(club(
+                serde_json::json!({"views": [{"name": "A", "columns": []}]})
+            ))
+            .contains("\"A\" has no columns")
+        );
+        let many: Vec<serde_json::Value> = (0..=MAX_VIEWS)
+            .map(|i| serde_json::json!({"name": format!("V{i}"), "columns": ["age"]}))
+            .collect();
+        assert!(refused(club(serde_json::json!({"views": many}))).contains("21 views"));
+        assert!(
+            refused(club(serde_json::json!({
+                "active": "B",
+                "views": [{"name": "A", "columns": ["age"]}]
+            })))
+            .contains("active view \"B\"")
+        );
+        assert!(
+            refused(club(serde_json::json!({
+                "ratings": {"a-1": [{"match": "m-1", "rating": 11.0}]}
+            })))
+            .contains("player a-1 has the rating 11")
+        );
+        let kept = Views::parse(
+            &club(serde_json::json!({
+                "active": "A",
+                "views": [{"name": "A", "columns": ["age", "a-column-a-later-build-retired"]}],
+                "ratings": {"a-1": [{"match": "m-1", "rating": 6.5}]}
+            }))
+            .to_string(),
+        )
+        .unwrap();
+        assert_eq!(
+            kept.clubs["club-a"].views[0].columns.len(),
+            2,
+            "unknown ids are the page's to drop"
+        );
+        let mut store = Views::default();
+        assert!(
+            store
+                .set_views(r#"{"club":"","views":[]}"#)
+                .unwrap_err()
+                .contains("no club")
+        );
+        assert!(
+            store
+                .set_views(r#"{"club":"club-a","views":[],"x":1}"#)
+                .is_err()
+        );
+        let long = format!(r#"{{"club":"{}","views":[]}}"#, "c".repeat(65));
+        assert!(
+            store
+                .set_views(&long)
+                .unwrap_err()
+                .contains("longer than 64")
+        );
+        for i in 0..MAX_CLUBS {
+            store
+                .set_views(&format!(r#"{{"club":"club-{i}","views":[]}}"#))
+                .unwrap();
+        }
+        assert!(
+            store
+                .set_views(r#"{"club":"one-more","views":[]}"#)
+                .unwrap_err()
+                .contains("500 clubs")
+        );
+        assert!(
+            store.set_views(r#"{"club":"club-0","views":[]}"#).is_ok(),
+            "a club the store holds may still save"
+        );
+    }
+
+    #[test]
+    fn the_ingest_keeps_ten_home_ratings_and_skips_a_match_it_holds() {
+        let mut views = Views::default();
+        let first = stats("m-0", &[("a-1", 0, 6.8), ("b-1", 1, 8.0)]);
+        assert_eq!(views.ingest(&first), 1, "the away side is not the club's");
+        assert_eq!(views.ingest(&first), 0, "a match already held is skipped");
+        for m in 1..=11 {
+            views.ingest(&stats(
+                &format!("m-{m}"),
+                &[("a-1", 0, 5.0 + f64::from(m) / 10.0)],
+            ));
+        }
+        let kept = &views.clubs["club-a"].ratings["a-1"];
+        assert_eq!(kept.len(), KEPT_RATINGS);
+        assert_eq!(kept[0].match_id, "m-2", "the oldest go first");
+        assert_eq!(kept.last().unwrap().match_id, "m-11");
+        assert!(!views.clubs.contains_key("club-b"));
     }
 }

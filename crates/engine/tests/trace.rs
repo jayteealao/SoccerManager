@@ -188,13 +188,13 @@ fn every_action_and_event_kind_maps_to_a_point() {
     for kind in EngineEventKind::ALL {
         assert!(!trace::points_of_event(kind).is_empty(), "{kind:?}");
     }
-    assert_eq!(Point::ALL.len(), 37);
+    assert_eq!(Point::ALL.len(), 38);
     assert_eq!(Point::ALL.iter().filter(|p| p.is_decision()).count(), 10);
     let names: std::collections::BTreeSet<_> = Point::ALL.iter().map(|p| p.name()).collect();
-    assert_eq!(names.len(), 37, "every point has its own name");
+    assert_eq!(names.len(), 38, "every point has its own name");
     assert_eq!(
         Action::ALL.iter().filter(|a| trace::is_chance(**a)).count(),
-        18
+        20
     );
 }
 
@@ -296,12 +296,13 @@ fn points(records: &[TraceRecord]) -> Vec<&engine::trace::PointRecord> {
 fn a_red_card_below_the_minimum_records_the_send_off_and_the_abandonment() {
     const CARRIER: usize = 5;
     const TACKLER: usize = 16;
-    let config = common::quiet_match(90);
+    // Steady: no form draws before the trace starts, so it records every draw taken.
+    let config = common::steady(common::quiet_match(90));
     let plain = Simulation::new(config.clone()).unwrap();
-    let tackler = plain.players()[TACKLER].derived;
-    let carrier = plain.players()[CARRIER].derived;
-    let p_win = engine::rules::fouls::win_chance(&tackler, &carrier, &config.tuning);
-    let p_foul = engine::rules::fouls::foul_chance(&tackler, 0, &config.tuning);
+    let tackler = plain.skills(TACKLER);
+    let carrier = plain.skills(CARRIER);
+    let p_win = engine::rules::fouls::win_chance(tackler, carrier, &config.tuning);
+    let p_foul = engine::rules::fouls::foul_chance(tackler, 0, &config.tuning);
     let at = DVec2::new(0.0, 10.0);
     let scene = [12, 13, 14, 15].into_iter().fold(
         common::spread(Scene::new(config), -30.0, 30.0),
@@ -377,4 +378,33 @@ fn a_cleared_cross_records_the_defender_and_the_clearance() {
     let json = TraceRecord::Point(clear.clone()).to_json();
     assert_eq!(json["k"], "rule");
     assert_eq!(json["point"], "cross_clear");
+}
+
+/// Scene-only point `offside` (since every sprint costs stamina, none of the 22 gate matches
+/// has an offside): an attacker beyond the second-last defender is penalised at his first
+/// touch of a team-mate's pass.
+#[test]
+fn an_attacker_beyond_the_defenders_records_the_offside() {
+    use engine::math::{DVec2, DVec3};
+    const PASSER: usize = 9;
+    const ATTACKER: usize = 10;
+    let mut sim = common::spread(Scene::new(common::quiet_match(90)), -30.0, 20.0)
+        .traced()
+        .place(PASSER, DVec2::new(25.8, 0.0))
+        .place(ATTACKER, DVec2::new(29.8, 0.0))
+        .carrier(Some(PASSER))
+        .ball(DVec3::new(29.0, 0.0, 0.0))
+        .tick(1_001)
+        .kick(DVec2::X, 1.0, 0.0)
+        .build();
+    sim.step();
+    let records = sim.take_trace();
+    let events = sim.take_events();
+    trace::check_tick(&records, &events).unwrap();
+    let offside = points(&records)
+        .into_iter()
+        .find(|p| p.point == Point::Offside)
+        .expect("an offside record");
+    assert_eq!(offside.detail["player"], ATTACKER);
+    assert_eq!(offside.detail["team"], 0);
 }

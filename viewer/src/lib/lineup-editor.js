@@ -9,6 +9,7 @@
 // swap by pointer, never the only way.
 
 import { checkLineup, fitWord, fitnessWord, lineupMessage, STARTERS } from './lineup.js';
+import { wholeOf } from './scale.js';
 import { LENGTH, WIDTH } from './pitch.js';
 import { positionsFor } from './positions.js';
 
@@ -238,8 +239,9 @@ export class LineupEditor {
           label: `Slot ${n + 1}, ${spot.position}, empty`,
         };
       }
-      const fit = player.role_fit[roleOf(n)] ?? 0;
-      const fitness = player['player.natural_fitness'];
+      // The hello sends tenths; the screen shows the whole number 1 to 20.
+      const fit = wholeOf(player.role_fit[roleOf(n)] ?? 0);
+      const fitness = wholeOf(player['player.natural_fitness']);
       return {
         n,
         position: spot.position,
@@ -282,7 +284,7 @@ export class LineupEditor {
       } else if (first?.kind === 'bench') {
         chipKind = 'bench';
       }
-      const fitness = player['player.natural_fitness'];
+      const fitness = wholeOf(player['player.natural_fitness']);
       const picked = this.selection?.kind === 'squad' && this.selection.index === index;
       let where = 'not picked';
       if (first?.kind === 'slot') {

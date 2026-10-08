@@ -155,26 +155,23 @@ impl Writer {
         }
     }
 
-    /// The 14 derived values, each under `<path()>.<name>`.
-    pub(crate) fn derived(&mut self, path: &dyn Fn() -> String, d: &Derived) {
-        for (name, v) in [
-            ("max_speed", d.max_speed),
-            ("max_accel", d.max_accel),
-            ("passing", d.passing),
-            ("dribbling", d.dribbling),
-            ("tackling", d.tackling),
-            ("positioning", d.positioning),
-            ("aggression", d.aggression),
-            ("finishing", d.finishing),
-            ("vision", d.vision),
-            ("decisions", d.decisions),
-            ("composure", d.composure),
-            ("stamina", d.stamina),
-            ("natural_fitness", d.natural_fitness),
-            ("injury_resistance", d.injury_resistance),
-        ] {
-            self.f64_at(|| format!("{}.{name}", path()), v);
+    /// A player's state deltas, one byte per attribute group, and the effective values they
+    /// move most, each under `<path()>.<name>`: top speed, acceleration, turning, and the reach
+    /// in the air. The rest of the derived values, and the stage values, follow from the
+    /// deltas, the squad entry and the team file.
+    pub(crate) fn derived(
+        &mut self,
+        path: &dyn Fn() -> String,
+        d: &Derived,
+        deltas: &[i8; crate::contract::states::GROUP_COUNT],
+    ) {
+        for &g in deltas {
+            self.u8(g as u8);
         }
+        self.f64_at(|| format!("{}.max_speed", path()), d.max_speed);
+        self.f64_at(|| format!("{}.max_accel", path()), d.max_accel);
+        self.f64_at(|| format!("{}.turn", path()), d.turn);
+        self.f64_at(|| format!("{}.reach_m", path()), d.reach_m);
     }
 
     /// A team's shape as the snapshot stores it: the attack direction, each slot's activity
@@ -198,6 +195,36 @@ impl Writer {
     }
 
     /// Every counter of the match summary, in declaration order.
+    /// Every player's tally, by side and squad index: the counts, then the expected goals.
+    pub(crate) fn tallies(&mut self, tallies: &[Vec<crate::sim::tally::PlayerTally>; 2]) {
+        for (team, side) in tallies.iter().enumerate() {
+            self.count(side.len());
+            for (s, t) in side.iter().enumerate() {
+                self.u8(u8::from(t.played));
+                for c in [
+                    t.ticks_played,
+                    t.passes,
+                    t.passes_completed,
+                    t.shots,
+                    t.shots_on_target,
+                    t.goals,
+                    t.tackles_won,
+                    t.interceptions,
+                    t.blocks,
+                    t.clearances,
+                    t.saves,
+                    t.fouls,
+                    t.yellow,
+                    t.red,
+                    t.conceded,
+                ] {
+                    self.u32(c);
+                }
+                self.f64_at(|| format!("tallies[{team}][{s}].xg"), t.xg);
+            }
+        }
+    }
+
     pub(crate) fn summary(&mut self, s: &Summary) {
         self.u32(s.possession_changes);
         self.f64_at(|| "summary.ball_max_speed".into(), s.ball_max_speed);

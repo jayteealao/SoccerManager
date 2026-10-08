@@ -10,6 +10,17 @@ description = "Headless command line for the football match engine: simulate and
 name = "engine-cli"
 path = "src/main.rs"
 
+[features]
+# The rules stage of a change run: the engine's sensitivity rules and the job probe they
+# count with. Off by default, so no match of a normal build pays for the probe's count sites;
+# build `engine-cli` with `--features sensitivity` to check the rules in `calibrate --base`.
+sensitivity = ["engine/sensitivity"]
+
+# The rules stage's own test builds only with the rules.
+[[test]]
+name = "calibrate_rules"
+required-features = ["sensitivity"]
+
 [dependencies]
 engine = { path = "../engine" }
 protocol = { path = "../protocol" }

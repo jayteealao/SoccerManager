@@ -24,12 +24,17 @@ fn the_shipped_attribute_schema_has_thirty_to_fifty_grouped_names() {
         // The group is an enum: every loaded definition carries one of the four.
         let _ = def.group;
     }
-    // Every generated value on every default player lies on the 1 to 100 scale.
+    // The default teams are version 1 files: every value converts to 2 to 200 tenths
+    // (0.2 to 20.0), and only a converted value may sit under 1.0.
     for team in common::default_teams(&content) {
         for p in &team.players {
             assert_eq!(p.attributes.len(), n, "player {} attribute count", p.id);
             for (name, v) in &p.attributes {
-                assert!((1..=100).contains(v), "player {} {name} = {v}", p.id);
+                assert!(
+                    (2..=200).contains(&v.tenths()) && v.tenths() % 2 == 0,
+                    "player {} {name} = {v}",
+                    p.id
+                );
             }
         }
     }
@@ -135,7 +140,7 @@ fn a_schema_without_aggression_is_refused_naming_it() {
     std::fs::remove_file(&path).unwrap();
     assert_eq!(
         err.to_string(),
-        "content refused: attributes attributes.json: attributes: required attribute aggression is missing"
+        "content refused: attributes attributes.json: actions: tackle.choose: attribute aggression is not in the file"
     );
 }
 
@@ -380,4 +385,160 @@ fn the_shipped_flags_block_matches_the_code_flags() {
         "the shipped file declares {declared:?}"
     );
     assert!(content.flags.is_empty());
+}
+
+/// The shipped tuning file as JSON.
+fn shipped_tuning_json() -> serde_json::Value {
+    let path = common::content_dir().path(engine::data::TUNING_FILE);
+    serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+}
+
+/// A version 3 tuning file (no state caps, body jobs, fatigue group weights or sprint cap)
+/// converts to version 4 with the values of the frozen copy, which are the shipped ones.
+#[test]
+fn a_version_3_tuning_file_converts_to_the_shipped_version_4() {
+    let mut v3 = shipped_tuning_json();
+    v3["schema_version"] = 3.into();
+    let contract = v3["engine"]["contract"].as_object_mut().unwrap();
+    contract.remove("states").unwrap();
+    contract.remove("body").unwrap();
+    let fatigue = v3["fatigue"].as_object_mut().unwrap();
+    fatigue.remove("group_weights").unwrap();
+    fatigue.remove("sprint_cap").unwrap();
+    let bytes = serde_json::to_vec(&v3).unwrap();
+    let loaded = engine::data::load_tuning_bytes(&bytes, "tuning-v3.json").unwrap();
+    assert_eq!(loaded.converted_from, Some(3));
+    let shipped = engine::data::load_tuning_bytes(
+        &serde_json::to_vec(&shipped_tuning_json()).unwrap(),
+        "tuning.json",
+    )
+    .unwrap();
+    assert_eq!(shipped.converted_from, None);
+    assert_eq!(loaded.value, shipped.value);
+}
+
+#[test]
+fn a_tuning_file_of_version_9_is_refused_naming_both_versions() {
+    let mut v9 = shipped_tuning_json();
+    v9["schema_version"] = 9.into();
+    let err =
+        engine::data::load_tuning_bytes(&serde_json::to_vec(&v9).unwrap(), "t.json").unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        format!(
+            "content refused: tuning t.json: schema_version 9; this build reads {}",
+            engine::data::TUNING_VERSION
+        )
+    );
+}
+
+/// A version 1 slot file (no sharpness or adaptation slot) converts to version 2 with both
+/// slots at their first version, and resolves to the built-in selection.
+#[test]
+fn a_version_1_slot_file_converts_and_resolves_to_the_built_in_selection() {
+    use engine::modules::{REGISTRY, ResolvedModules, SlotFile, resolve};
+    let path = common::content_dir().path(engine::data::SLOTS_FILE);
+    let mut v1: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    v1["schema_version"] = 1.into();
+    let slots = v1["slots"].as_object_mut().unwrap();
+    slots.remove("engine.modifier.sharpness").unwrap();
+    slots.remove("engine.modifier.adaptation").unwrap();
+    let loaded = engine::data::load_slots_bytes(&serde_json::to_vec(&v1).unwrap()).unwrap();
+    assert_eq!(loaded.converted_from, Some(1));
+    assert_eq!(loaded.value, SlotFile::builtin_default());
+    let resolved = resolve(&loaded.value, REGISTRY).unwrap();
+    assert_eq!(
+        resolved.picked(),
+        ResolvedModules::builtin_default().picked()
+    );
+    v1["schema_version"] = 9.into();
+    let err = engine::data::load_slots_bytes(&serde_json::to_vec(&v1).unwrap()).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            EngineError::Version {
+                found: 9,
+                expected: 2,
+                ..
+            }
+        ),
+        "{err}"
+    );
+}
+
+/// The version 2 attribute schema (the one shipped before the hidden values, kept as a
+/// fixture) converts to version 3: injury resistance becomes injury proneness, hidden, with
+/// its job turned up, and consistency is added from the frozen copy. The result is the
+/// shipped schema.
+#[test]
+fn a_version_2_attribute_schema_converts_to_the_shipped_version_3() {
+    let bytes = std::fs::read(common::fixture_path("attributes-v2.json")).unwrap();
+    let v2: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(v2["schema_version"], 2);
+    let loaded = engine::data::load_attributes_bytes(&bytes, "attributes-v2.json").unwrap();
+    assert_eq!(loaded.converted_from, Some(2));
+    let schema = &loaded.value;
+    assert_eq!(
+        schema.schema_version,
+        engine::data::attributes::ATTRIBUTES_VERSION
+    );
+    assert!(schema.index("injury_resistance").is_none());
+    let hidden: Vec<&str> = schema.hidden_names().collect();
+    assert_eq!(hidden, ["injury_proneness", "consistency"]);
+    assert_eq!(schema, &common::content().attributes);
+}
+
+/// A version 4 tuning file (no consistency, hidden-value or match-rating block) converts to
+/// version 5 with the values of the frozen copy, which are the shipped ones.
+#[test]
+fn a_version_4_tuning_file_converts_to_the_shipped_version_5() {
+    let mut v4 = shipped_tuning_json();
+    v4["schema_version"] = 4.into();
+    v4["engine"]["contract"]
+        .as_object_mut()
+        .unwrap()
+        .remove("consistency")
+        .unwrap();
+    let top = v4.as_object_mut().unwrap();
+    top.remove("hidden").unwrap();
+    top.remove("match_rating").unwrap();
+    v4["generator"]["world"]
+        .as_object_mut()
+        .unwrap()
+        .remove("hidden")
+        .unwrap();
+    let bytes = serde_json::to_vec(&v4).unwrap();
+    let loaded = engine::data::load_tuning_bytes(&bytes, "tuning-v4.json").unwrap();
+    assert_eq!(loaded.converted_from, Some(4));
+    let shipped = engine::data::load_tuning_bytes(
+        &serde_json::to_vec(&shipped_tuning_json()).unwrap(),
+        "tuning.json",
+    )
+    .unwrap();
+    assert_eq!(loaded.value, shipped.value);
+}
+
+/// A hidden value's word bands must run from the highest down and end at 1.0, so every rating
+/// has a word; a list that does not is refused naming the attribute.
+#[test]
+fn word_bands_out_of_order_or_short_of_one_are_refused_by_name() {
+    let mut unordered = shipped_tuning_json();
+    let bands = unordered["hidden"]["words"]["consistency"]
+        .as_array_mut()
+        .unwrap();
+    bands.swap(0, 1);
+    let err = engine::data::load_tuning_bytes(&serde_json::to_vec(&unordered).unwrap(), "t.json")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("consistency"), "{err}");
+
+    let mut short = shipped_tuning_json();
+    let bands = short["hidden"]["words"]["injury_proneness"]
+        .as_array_mut()
+        .unwrap();
+    bands.last_mut().unwrap()["from"] = 3.0.into();
+    let err = engine::data::load_tuning_bytes(&serde_json::to_vec(&short).unwrap(), "t.json")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("injury_proneness"), "{err}");
 }

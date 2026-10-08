@@ -219,6 +219,14 @@
     color: var(--bad);
   }
 
+  /* Not known: a new signing's hidden value no match has shown; one line, in the muted ink
+     (board 6). */
+  .risk.muted {
+    color: var(--ink-3);
+    font-size: 8.5px;
+    white-space: nowrap;
+  }
+
   .note {
     margin: 6px 0 0;
     font-size: 9.5px;

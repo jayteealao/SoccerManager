@@ -517,7 +517,9 @@ export class Dugout {
   /// changes.
   refreshTouchline(rows, otherBench, state) {
     const cards = state.entries ? state.entries.filter((e) => e['event.type'] === 'card').length : 0;
-    const key = rows.map((r) => `${r.wire}:${Math.round(r.energy * 100)}:${r.condition}`).join(',') + `|${cards}`;
+    const key =
+      rows.map((r) => `${r.wire}:${Math.round(r.energy * 100)}:${r.condition}:${r.level}:${r.base}`).join(',') +
+      `|${cards}`;
     if (key !== this.stateKey) {
       this.stateKey = key;
       this.playerState = playerStateRows(rows, state.entries);

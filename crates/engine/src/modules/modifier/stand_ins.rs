@@ -16,7 +16,7 @@ const fn stand_in_card(purpose: &'static str) -> ModuleCard {
     ModuleCard {
         purpose,
         inputs: "Nothing.",
-        outputs: "A factor of 1.0 on every effective value.",
+        outputs: "A delta of 0 on every attribute group.",
         tuning: &["none"],
         calibration: "none: no-op stand-in, no effect until its own piece",
         keys: &[],

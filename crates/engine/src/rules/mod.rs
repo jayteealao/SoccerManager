@@ -315,6 +315,18 @@ impl Simulation {
     /// place.
     pub(crate) fn goal(&mut self, team: usize) {
         self.summary.goals[team] += 1;
+        if let Some(k) = self.last_kicker
+            && self.players[k].team == team
+        {
+            self.tally(k, crate::sim::tally::Count::Goal);
+        }
+        self.tally_conceded(1 - team);
+        #[cfg(feature = "sensitivity")]
+        if self.shot_in_flight == Some(team)
+            && let Some(p) = self.probe.as_deref_mut()
+        {
+            p.scored(team);
+        }
         #[cfg(feature = "scenario")]
         if self.shot_in_flight == Some(team) {
             self.census.scored += 1;
@@ -412,6 +424,7 @@ impl Simulation {
         let offender = self.players[i];
         let fouled_team = self.players[c].team;
         self.summary.fouls[offender.team] += 1;
+        self.tally(i, crate::sim::tally::Count::Foul);
         // The offender makes no tackle attempt until the cooldown has passed, advantage or not.
         self.players[i].foul_ready = self.tick.saturating_add(t.foul_cooldown_ticks);
         let own_end = -self.teams[offender.team].attack_x;
@@ -536,6 +549,7 @@ impl Simulation {
         let sent_off = judge.sends_off(card);
         if card != Card::Red {
             self.summary.yellow[team] += 1;
+            self.tally(i, crate::sim::tally::Count::Yellow);
         }
         self.referee.tally.cards += 1;
         let mut event = self.event(EngineEventKind::Card, Some(team));
@@ -552,6 +566,7 @@ impl Simulation {
             return;
         }
         self.summary.red[team] += 1;
+        self.tally(i, crate::sim::tally::Count::Red);
         if self.carrier == Some(i) {
             self.carrier = None;
         }
@@ -1167,10 +1182,10 @@ impl Simulation {
         let goal = self.config.pitch().goal_centre(end);
         self.enter_phase(Phase::Live, Cause::ShootoutKickTaken);
         let kick = self.shot_kick(dead.taker, goal, keeper, t.shots.penalty_spread);
-        let diver = self.players[keeper];
+        let diver = crate::streams::PlayerKey::of(&self.players[keeper]);
         let dive = self
             .streams
-            .range(Key::player(Action::KeeperDive, &diver), -1.0, 1.0);
+            .range(Key::player(Action::KeeperDive, diver), -1.0, 1.0);
         let side = self.config.modules.clock.keeper_dive(&self.view(), dive);
         if self.trace_on() {
             self.trace_point(
@@ -1240,25 +1255,30 @@ impl Simulation {
             if self.keeper_beaten || !self.shot_on_target {
                 return;
             }
-            let save = self
-                .config
-                .modules
-                .shot
-                .save_chance(&self.view(), t.shots.penalty_xg);
-            let k = self.players[keeper];
+            let save = self.config.modules.shot.save_chance(
+                &self.view(),
+                t.shots.penalty_xg,
+                keeper,
+                self.last_kicker,
+            );
+            let k = crate::streams::PlayerKey::of(&self.players[keeper]);
             if self
                 .streams
-                .tested(Key::player(Action::ShootoutSave, &k), &[save])
+                .tested(Key::player(Action::ShootoutSave, k), &[save])
                 >= save
             {
                 self.trace_save(Point::ShootoutSave, keeper, "beaten");
                 self.keeper_beaten = true;
                 return;
             }
-            let hold = self.config.modules.clock.shootout_save_hold(&self.view());
+            let hold = self
+                .config
+                .modules
+                .clock
+                .shootout_save_hold(&self.view(), keeper);
             if self
                 .streams
-                .tested(Key::player(Action::ShootoutSaveHold, &k), &[hold])
+                .tested(Key::player(Action::ShootoutSaveHold, k), &[hold])
                 >= hold
             {
                 self.trace_save(Point::ShootoutSave, keeper, "parried");

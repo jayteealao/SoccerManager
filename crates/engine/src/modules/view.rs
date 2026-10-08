@@ -7,7 +7,7 @@ use crate::data::rules::RulePack;
 use crate::data::tactics::TacticsSchema;
 use crate::data::tuning::FatigueTuning;
 use crate::pitch::Pitch;
-use crate::player::Player;
+use crate::player::{Derived, Player};
 use crate::rules::Referee;
 use crate::sim::{Simulation, Summary};
 use crate::tactics::change::{ChangeQueue, SubLedger};
@@ -38,6 +38,37 @@ impl<'a> MatchView<'a> {
     #[inline]
     pub fn player(&self, i: usize) -> &'a Player {
         &self.sim.players[i]
+    }
+
+    /// Player `i`'s base values: what his attributes give him fresh, from his squad entry.
+    #[inline]
+    pub fn base(&self, i: usize) -> &'a Derived {
+        self.sim.base(i)
+    }
+
+    /// Player `i`'s effective stage values, as play reads them.
+    #[inline]
+    pub fn skills(&self, i: usize) -> crate::contract::Skills<'a> {
+        self.sim.skills(i)
+    }
+
+    /// Player `i`'s fresh stage values.
+    #[inline]
+    pub fn base_skills(&self, i: usize) -> crate::contract::Skills<'a> {
+        self.sim.base_skills(i)
+    }
+
+    /// Player `i`'s match condition inputs (sharpness, adaptation, rest days, matches at the
+    /// club), from his squad entry.
+    #[inline]
+    pub fn condition(&self, i: usize) -> crate::data::team::Condition {
+        self.sim.condition(i)
+    }
+
+    /// Player `i`'s height and age, from his squad entry.
+    #[inline]
+    pub fn body(&self, i: usize) -> crate::contract::body::Body {
+        self.sim.body(i)
     }
 
     /// The current tick.
@@ -116,6 +147,12 @@ impl<'a> MatchView<'a> {
     #[inline]
     pub fn last_touch(&self) -> Option<usize> {
         self.sim.last_touch
+    }
+
+    /// The player who kicked the ball in flight, while play is live.
+    #[inline]
+    pub fn last_kicker(&self) -> Option<usize> {
+        self.sim.last_kicker
     }
 
     /// The attribute schema of the match.

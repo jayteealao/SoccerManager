@@ -13,12 +13,14 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, bail};
 use engine::modules::fast_events::FitRules;
-use engine::modules::fast_model::{self, FIT_FILE, FIT_VERSION, FITTED_SCORES, FastFit};
+use engine::modules::fast_model::{
+    self, FIT_FILE, FIT_VERSION, FIT_VERSION_2, FITTED_SCORES, FastFit,
+};
 use engine::{Content, ContentDir};
 use serde::{Deserialize, Serialize};
 
 use crate::cli::{FastModelAction, FastModelOpts};
-use crate::report::bands::Bands;
+use crate::report::bands::Registry;
 use batch::{LEAGUE_SEED, LEVELS, Spec};
 use check::{Figure, Range};
 use id::EngineId;
@@ -81,15 +83,25 @@ pub struct CheckRecord {
 }
 
 impl FitFile {
+    /// Reads a fit file of this build's layout, or of version 2, whose model had no
+    /// favourite's tilt: it reads with a tilt of 0, which plays as it did.
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         let text = std::fs::read_to_string(path)
             .with_context(|| format!("cannot read the fit file {}", path.display()))?;
-        let value: serde_json::Value = serde_json::from_str(&text)
+        let mut value: serde_json::Value = serde_json::from_str(&text)
             .with_context(|| format!("the fit file {} is malformed", path.display()))?;
         let version = value
             .get("schema_version")
             .and_then(serde_json::Value::as_u64);
-        if version != Some(u64::from(FIT_VERSION)) {
+        if version == Some(u64::from(FIT_VERSION_2)) {
+            if let Some(params) = value
+                .pointer_mut("/fit/params")
+                .and_then(serde_json::Value::as_object_mut)
+            {
+                params.insert("tilt".into(), 0.0.into());
+            }
+            value["schema_version"] = FIT_VERSION.into();
+        } else if version != Some(u64::from(FIT_VERSION)) {
             bail!(
                 "the fit file {} has schema_version {}; this build reads {FIT_VERSION}; \
                  run engine-cli fast-model fit",
@@ -159,53 +171,27 @@ fn load_content(dir: &ContentDir) -> anyhow::Result<Content> {
     Ok(Content::load(dir)?)
 }
 
-/// The season figures' band ranges from the bands file, for information.
+/// The season figures' band ranges from the band registry, for information.
 fn band_ranges(dir: &ContentDir) -> check::Bands {
-    let bands = Bands::load(dir).ok();
-    let range = |f: &dyn Fn(&Bands) -> (f64, f64)| {
-        bands.as_ref().map(|b| {
-            let (lo, hi) = f(b);
-            Range { lo, hi }
-        })
-    };
+    let registry = Registry::load(dir).ok();
     [
-        (
-            "goals_per_match",
-            range(&|b| (b.goals_per_match.lo, b.goals_per_match.hi)),
-        ),
-        (
-            "goalless_share",
-            range(&|b| (b.goalless_share.lo, b.goalless_share.hi)),
-        ),
-        (
-            "ten_plus_goals_share",
-            range(&|b| (b.ten_plus_goals_share.lo, b.ten_plus_goals_share.hi)),
-        ),
-        (
-            "stronger_team_win_rate",
-            range(&|b| (b.stronger_team.min_win_rate, 1.0)),
-        ),
-        (
-            "sending_off_share",
-            range(&|b| (b.sending_off_share.lo, b.sending_off_share.hi)),
-        ),
-        (
-            "yellow_cards_per_team",
-            range(&|b| (b.yellow_cards_per_team.lo, b.yellow_cards_per_team.hi)),
-        ),
-        (
-            "corners_per_team",
-            range(&|b| (b.corners_per_team.lo, b.corners_per_team.hi)),
-        ),
-        (
-            "throw_ins_per_match",
-            range(&|b| (b.throw_ins_per_match.lo, b.throw_ins_per_match.hi)),
-        ),
-        (
-            "goal_kicks_per_match",
-            range(&|b| (b.goal_kicks_per_match.lo, b.goal_kicks_per_match.hi)),
-        ),
+        "goals_per_match",
+        "goalless_share",
+        "ten_plus_goals_share",
+        "stronger_team_win_rate",
+        "sending_off_share",
+        "yellow_cards_per_team",
+        "corners_per_team",
+        "throw_ins_per_match",
+        "goal_kicks_per_match",
     ]
+    .map(|name| {
+        let range = registry
+            .as_ref()
+            .and_then(|r| r.range(name))
+            .map(|b| Range { lo: b.lo, hi: b.hi });
+        (name, range)
+    })
 }
 
 fn fit_action(
@@ -334,8 +320,8 @@ fn print_report(file: &FitFile, figures: &[Figure]) {
     let p = &file.fit.params;
     println!("fast-model {} for {}", file.model, file.engine_id);
     println!(
-        "params: base {:.4} home {:.4} attack {:.4} curve {:.4} defence {:.4} dispersion {:.3} rho {:.4} draw {:.4}",
-        p.base, p.home, p.attack, p.curve, p.defence, p.dispersion, p.rho, p.draw
+        "params: base {:.4} home {:.4} attack {:.4} curve {:.4} defence {:.4} dispersion {:.3} rho {:.4} draw {:.4} tilt {:.4}",
+        p.base, p.home, p.attack, p.curve, p.defence, p.dispersion, p.rho, p.draw, p.tilt
     );
     println!(
         "{:<14} {:<30} {:>9} {:>9} {:>9} {:>9} {:>5}  verdict  band",

@@ -13,6 +13,8 @@ const DOOR = Object.freeze({
 const MATCH = Object.freeze({
   match: 'Match',
   tactics: 'Tactics',
+  squad: 'Squad',
+  player: 'Player',
   prematch: 'Pre-match line-ups',
   touchline: 'Touchline',
   skip: 'Skip to result',

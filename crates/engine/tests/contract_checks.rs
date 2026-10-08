@@ -41,12 +41,14 @@ fn default_with(changes: &[(&str, &str, Option<u32>)]) -> SlotFile {
 fn band_names() -> Vec<String> {
     let text = std::fs::read_to_string(common::content_dir().path("realism-bands.json")).unwrap();
     let bands: serde_json::Value = serde_json::from_str(&text).unwrap();
-    bands
-        .as_object()
+    // Every band of the registry by name, and every group of bands (possession_pct) too.
+    bands["bands"]
+        .as_array()
         .unwrap()
         .iter()
-        .filter(|(_, v)| v.is_object())
-        .map(|(k, _)| k.clone())
+        .flat_map(|b| [b["band"].as_str(), b["group"].as_str()])
+        .flatten()
+        .map(str::to_string)
         .collect()
 }
 

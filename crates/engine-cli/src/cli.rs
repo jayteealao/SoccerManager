@@ -801,16 +801,20 @@ pub struct CalibrateOpts {
     #[arg(
         long,
         default_value_t = 1000,
-        long_help = "Matches in each suite and in each formation pairing."
+        long_help = "Matches in each suite and in each formation pairing.\n\n\
+                     In a change run (--base) it is the cap: the run plays a pilot,\n\
+                     sizes each suite for the power to see each band's smallest\n\
+                     shift, and plays at most this many."
     )]
     pub matches: u32,
     /// Minutes of play per match.
     #[arg(long, default_value_t = 90)]
     pub minutes: u32,
-    /// Worker processes; default one per core.
+    /// Matches played at once; default one per core.
     #[arg(
         long,
-        long_help = "Worker processes; default the number of logical cores."
+        long_help = "Matches played at once, each on its own thread; default the number\n\
+                     of logical cores."
     )]
     pub jobs: Option<u32>,
     /// Suites to run.
@@ -841,7 +845,9 @@ pub struct CalibrateOpts {
         long = "band",
         value_name = "NAME",
         long_help = "Judge and show only this realism band; repeatable.\n\n\
-                     The run plays only the suites that check the band."
+                     The bands are those of the band registry, realism-bands.json\n\
+                     in the content folder; an unknown name is refused with the\n\
+                     list. The run plays only the suites that check the band."
     )]
     pub bands: Vec<String>,
     /// Compare with an earlier run report.
@@ -851,11 +857,22 @@ pub struct CalibrateOpts {
         long_help = "Compare the run with an earlier report.json, band by band.\n\n\
                      The baseline must have the same seed, match count, and\n\
                      fixtures hash, or the run stops before it plays. A change\n\
-                     inside two sampling errors is marked as noise."
+                     inside two sampling errors is marked as noise.\n\n\
+                     With --base, the match count checked is --matches, the cap.\n\
+                     The run may stop growing below it, so the diff can set the\n\
+                     baseline's matches against fewer matches of this build; each\n\
+                     side's sampling error covers its own count."
     )]
     pub baseline: Option<PathBuf>,
     /// Run folder; default SM_DATA_DIR/runs/<run.id>.
-    #[arg(long, value_name = "DIR")]
+    #[arg(
+        long,
+        value_name = "DIR",
+        long_help = "Run folder; default SM_DATA_DIR/runs/<run.id>.\n\n\
+                     Run again into the same folder to resume a stopped run or\n\
+                     grow it with a larger --matches; a run with another\n\
+                     identity moves the old files to superseded/."
+    )]
     pub out: Option<PathBuf>,
     /// Event files to keep.
     #[arg(
@@ -863,10 +880,13 @@ pub struct CalibrateOpts {
         value_enum,
         default_value = "outliers",
         hide_possible_values = true,
-        long_help = "Event files to keep at the end of the run.\n\n\
-                     Values: outliers, all. outliers keeps the files of failed,\n\
-                     slow, and out-of-band matches and of dark-path hits; all\n\
-                     keeps every file."
+        long_help = "Matches whose statistics and event files are written.\n\n\
+                     Values: outliers, all. outliers (default) keeps the files of\n\
+                     about 1 in 16 matches, chosen by fixture key, and of every\n\
+                     failed, panicked or violating match, dark-path hit, and match\n\
+                     with a band measure outside the 1st to 99th percentile of its\n\
+                     suite so far; all keeps every match's files. Every match has\n\
+                     its compact row either way."
     )]
     pub keep_events: KeepEvents,
     /// Set a tuning-file feature flag; repeatable.
@@ -888,41 +908,45 @@ pub struct CalibrateOpts {
                      holds both arms, a row per band, and a verdict."
     )]
     pub pair: Option<String>,
-    /// Run as a worker of a calibration run (set by the parent process).
-    #[arg(long, hide = true)]
-    pub worker: bool,
-    #[arg(long, hide = true, default_value_t = 0)]
-    pub shard: u32,
-    #[arg(long, hide = true, default_value_t = 1)]
-    pub shards: u32,
-    #[arg(long, hide = true, value_name = "DIR")]
-    pub run_dir: Option<PathBuf>,
-    #[arg(long, hide = true, default_value_t = 0)]
-    pub run_millis: u64,
-    /// A worker of the formations suite plays only these pairings, by number.
-    #[arg(long = "pairing-numbers", hide = true, value_delimiter = ',')]
-    pub pairing_numbers: Vec<usize>,
-    /// Make one match or one worker fail, to exercise the error records; a test seam.
+    /// Make one match or the old engine's build fail, to exercise the error records; a
+    /// test seam.
     #[arg(long, hide = true, value_enum, value_name = "WHAT")]
     pub inject_failure: Option<InjectFailure>,
+    /// Stop after this many work units, leaving the next one half played; a test seam.
+    #[arg(long, hide = true, value_name = "K")]
+    pub stop_after_units: Option<u32>,
+    /// Judge a change against the old engine of REV.
+    #[arg(
+        long,
+        value_name = "REV",
+        conflicts_with_all = ["pair", "base_binary"],
+        long_help = "Make it a change run: compare this build with the old engine\n\
+                     of REV (a branch, tag or commit of this repository), built once\n\
+                     and cached with its results.\n\n\
+                     Both engines play the same fixtures. A pilot sizes each suite\n\
+                     for 80 percent power to see each band's smallest shift, the\n\
+                     run grows to it (at most --matches), and each band reports\n\
+                     pass, fail or not sure, with one joint verdict. Needs a git\n\
+                     checkout of this repository as the working folder.\n\n\
+                     --baseline still works here: its match count must equal\n\
+                     --matches, and its diff uses the matches this run played."
+    )]
+    pub base: Option<String>,
+    /// A change run's pilot, in matches per suite unit; a test seam (default 200).
+    #[arg(long, hide = true, value_name = "N", default_value_t = 200)]
+    pub pilot: u32,
+    /// The old engine of a change run: a ready executable, played on the run's content.
+    #[arg(long, hide = true, value_name = "EXE", conflicts_with = "pair")]
+    pub base_binary: Option<PathBuf>,
 }
 
-/// The failure `calibrate --inject-failure` makes: the first match of the first worker, or
-/// the first worker before it plays.
+/// The failure `calibrate --inject-failure` makes: an error in the first match of the work
+/// list, a panic in it, or the build of the old engine (`--base`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum InjectFailure {
     Match,
-    Worker,
-}
-
-impl InjectFailure {
-    /// The value as the command line spells it.
-    pub fn code(self) -> &'static str {
-        match self {
-            Self::Match => "match",
-            Self::Worker => "worker",
-        }
-    }
+    Panic,
+    BaseBuild,
 }
 
 /// The suites a calibration run plays.

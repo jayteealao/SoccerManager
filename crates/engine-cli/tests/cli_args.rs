@@ -3,7 +3,7 @@
 //! `simulate --team-a --team-b` on them completes with the tick count. Plus: a missing
 //! content folder exits 1 naming every path tried; help stays within 80 columns; the JSON
 //! dump path, the operating-system error text, and redirected stderr; and the one error
-//! record a failed `simulate`, `bench`, or calibration match or worker writes.
+//! record a failed `simulate`, `bench`, or calibration match writes.
 
 mod common;
 
@@ -399,8 +399,40 @@ fn a_failed_bench_prints_one_error_record() {
         .unwrap_or_else(|e| panic!("{e}\n{rec}"));
 }
 
-/// A two-match calibration run of the equal suite on one worker, with a failure injected.
-fn calibrate_with(inject: &str) -> (std::process::Output, PathBuf, PathBuf) {
+#[test]
+fn a_failed_calibrate_prints_one_error_record() {
+    // An undeclared flag stops the run before any match plays.
+    let (rec, stderr) = failed_run(
+        &[
+            "calibrate",
+            "--seed",
+            "7",
+            "--matches",
+            "2",
+            "--suite",
+            "equal",
+            "--flag",
+            "no_such_flag=on",
+        ],
+        None,
+    );
+    assert!(
+        stderr.contains("not declared in tuning.json"),
+        "stderr: {stderr}"
+    );
+    assert_eq!(rec["record.kind"], "run-report");
+    assert_eq!(rec["operation"], "calibrate");
+    assert_error_keys(&rec, "content");
+    assert_eq!(rec["error.code"], "content-refused");
+    assert_eq!(rec["error.retriable"], false);
+    assert!(rec.get("calib.bands").is_none(), "{rec}");
+    RecordSchemas::load()
+        .report(&rec)
+        .unwrap_or_else(|e| panic!("{e}\n{rec}"));
+}
+
+/// A two-match calibration run of the equal suite on one thread, with a failure injected.
+fn calibrate_with(inject: &str, extra: &[&str]) -> (std::process::Output, PathBuf, PathBuf) {
     let data = common::temp("engine-cli-inject", inject);
     let run = data.join("run");
     let out = common::bin(&data)
@@ -420,8 +452,9 @@ fn calibrate_with(inject: &str) -> (std::process::Output, PathBuf, PathBuf) {
             "all",
             "--inject-failure",
             inject,
-            "--out",
         ])
+        .args(extra)
+        .arg("--out")
         .arg(&run)
         .output()
         .unwrap();
@@ -431,7 +464,7 @@ fn calibrate_with(inject: &str) -> (std::process::Output, PathBuf, PathBuf) {
 #[test]
 fn a_failed_calibration_match_writes_an_error_record() {
     let schemas = RecordSchemas::load();
-    let (out, data, run) = calibrate_with("match");
+    let (out, data, run) = calibrate_with("match", &[]);
     let mut records = Vec::new();
     for entry in std::fs::read_dir(run.join("stats")).unwrap() {
         let text = std::fs::read_to_string(entry.unwrap().path()).unwrap();
@@ -470,29 +503,12 @@ fn a_failed_calibration_match_writes_an_error_record() {
     let errors: Vec<&Value> = records.iter().filter(|r| r["outcome"] == "error").collect();
     assert_eq!(errors.len(), 1);
     assert_error_keys(errors[0], "invalid-config");
-    // One failed match is not a failed run: every worker finished.
+    // One failed match is not a failed run: every other match finished.
     assert_eq!(report["outcome"], "success", "{report}");
     assert!(report.get("error.type").is_none(), "{report}");
     schemas
         .report(&report)
         .unwrap_or_else(|e| panic!("{e}\n{report}"));
-}
-
-#[test]
-fn a_failed_calibration_worker_makes_the_report_an_error() {
-    let (out, data, run) = calibrate_with("worker");
-    let printed = record(&String::from_utf8_lossy(&out.stdout));
-    let saved = record(&std::fs::read_to_string(run.join("report.json")).unwrap());
-    let _ = std::fs::remove_dir_all(&data);
-    assert_eq!(out.status.code(), Some(2));
-    assert_eq!(printed, saved);
-    assert_eq!(saved["outcome"], "error", "{saved}");
-    assert_eq!(saved["error.type"], "worker");
-    assert_eq!(saved["error.code"], "worker-failed");
-    assert_eq!(saved["error.retriable"], false);
-    RecordSchemas::load()
-        .report(&saved)
-        .unwrap_or_else(|e| panic!("{e}\n{saved}"));
 }
 
 #[test]
@@ -508,12 +524,10 @@ fn the_test_seams_stay_out_of_the_help() {
         let out = bin().args(["calibrate", flag]).output().unwrap();
         let stdout = String::from_utf8_lossy(&out.stdout);
         for hidden in [
-            "--worker",
-            "--shard",
-            "--run-dir",
-            "--run-millis",
             "--inject-failure",
-            "--pairing-numbers",
+            "--stop-after-units",
+            "--pilot",
+            "--base-binary",
         ] {
             assert!(!stdout.contains(hidden), "calibrate {flag} shows {hidden}");
         }

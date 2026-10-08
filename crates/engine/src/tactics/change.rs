@@ -507,6 +507,8 @@ impl Simulation {
         let mut incoming = side.player(slot, on, at);
         incoming.target = self.players[i].target;
         self.players[i] = incoming;
+        self.stages[i] = side.squad[on].stages;
+        self.draw_form_on_entry(i);
         // A goalkeeper coming on for an outfield player keeping goal takes over the goal, so
         // every line is laid out again after any substitution.
         let side = &mut self.teams[team];

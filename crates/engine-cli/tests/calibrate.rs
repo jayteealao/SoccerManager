@@ -1,5 +1,6 @@
-//! `engine-cli calibrate`: many AI-managed matches in worker processes, one statistics record
-//! and one event file per match, and one run report checked against the realism bands.
+//! `engine-cli calibrate`: many AI-managed matches on threads of one process, one compact row
+//! per match, statistics and event files for the sample and the outliers (or every match
+//! with `--keep-events all`), and one run report checked against the realism bands.
 //!
 //! The smoke test runs every suite: equal clubs, a stronger club, and the 55 formation
 //! pairings of the ten shipped formations. The slow test plays 1000 matches per suite and per
@@ -79,6 +80,11 @@ fn a_small_run_writes_a_record_per_match_and_a_report_that_validate() {
     assert_eq!(saved["darkpath.match_without_stats"], 0);
     assert_eq!(saved["events.files_written"], played);
     assert_eq!(saved["events.files_kept"], played);
+    assert_eq!(saved["calib.runner"], "threads");
+    assert_eq!(saved["calib.rows"]["rows"], played);
+    assert_eq!(saved["calib.rows"]["recorded"]["matches"], played);
+    assert_eq!(saved["calib.rows"]["recorded"]["all"], played);
+    assert_eq!(saved["darkpath.match_panicked"], 0);
     let suites: Vec<&String> = saved["calib.suites"].as_object().unwrap().keys().collect();
     assert_eq!(suites, ["equal", "formations", "strength"]);
     assert_eq!(
@@ -139,7 +145,7 @@ fn a_small_run_writes_a_record_per_match_and_a_report_that_validate() {
 }
 
 #[test]
-fn a_run_keeps_only_the_event_files_of_outliers_by_default() {
+fn a_run_writes_the_files_of_the_sample_and_the_outliers_only_by_default() {
     let data = temp("engine-cli-calibrate", "prune");
     let run = data.join("run");
     let out = bin(&data)
@@ -162,13 +168,24 @@ fn a_run_keeps_only_the_event_files_of_outliers_by_default() {
         .unwrap();
     assert!(matches!(out.status.code(), Some(0 | 2)));
     let report = record(&std::fs::read_to_string(run.join("report.json")).unwrap());
-    assert_eq!(report["events.files_written"], 2);
+    // Both matches have a row; only the recorded ones have files, written once.
+    assert_eq!(report["calib.rows"]["rows"], 2);
+    let recorded = report["calib.rows"]["recorded"]["matches"]
+        .as_u64()
+        .unwrap();
+    let sampled = common::read_rows(&run)
+        .iter()
+        .filter(|r| r.get("fixture.key").int() % 16 == 0)
+        .count() as u64;
+    assert!(recorded >= sampled && recorded <= 2, "{report}");
+    assert_eq!(report["events.files_written"], recorded);
+    assert_eq!(report["events.files_kept"], recorded);
+    assert_eq!(files(&run.join("events")).len() as u64, recorded);
+    assert_eq!(files(&run.join("stats")).len() as u64, recorded);
     let outliers = report["calib.suites"]["equal"]["outliers"]
         .as_u64()
         .unwrap();
-    assert_eq!(report["events.files_kept"], outliers);
-    assert_eq!(files(&run.join("events")).len() as u64, outliers);
-    assert_eq!(files(&run.join("stats")).len(), 2);
+    assert!(outliers <= recorded, "{report}");
     assert!(report["calib.suites"].get("strength").is_none());
     let _ = std::fs::remove_dir_all(&data);
 }

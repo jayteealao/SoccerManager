@@ -48,7 +48,8 @@ When the engine stops in mid-match, the page offers to restart from the last sto
 ```bash
 target/release/engine-cli simulate --seed 42 --ticks-out match.ticks   # one match, no viewer
 target/release/engine-cli bench --seed 42 --matches 5 --json           # time the engine
-target/release/engine-cli calibrate --seed 2026 --matches 1000         # check the realism bands
+target/release/engine-cli calibrate --seed 2026                        # the full evaluation of the realism bands
+target/release/engine-cli calibrate --seed 2026 --base main --out runs/change  # judge a change against main
 target/release/engine-cli record --seed 7 --out match.smfx             # record a replay file
 target/release/engine-cli replay --fixture match.smfx --web viewer/dist # play a replay file
 ```
@@ -62,7 +63,7 @@ To compare a candidate model with the current one, declare a flag in the `flags`
 - Tutorial: [Play your first match](docs/tutorials/first-match.md)
 - How-to: [Tune the engine and add a rule pack](docs/how-to/modding.md), [Write and register an engine module](docs/how-to/engine-modules.md)
 - Reference: [Command line](docs/reference/cli.md), [Data files](docs/reference/data-files.md), [Socket protocol](docs/reference/protocol.md), [Engine modules and slot configuration](docs/reference/engine-modules.md)
-- Explanation: [How the engine works](docs/explanation/engine.md), [The plugin contract](docs/explanation/plugin-contract.md)
+- Explanation: [How the engine works](docs/explanation/engine.md), [The plugin contract](docs/explanation/plugin-contract.md), [How the realism harness judges a change](docs/explanation/realism-harness.md), [The player contract](docs/explanation/player-contract.md)
 
 ## Test
 

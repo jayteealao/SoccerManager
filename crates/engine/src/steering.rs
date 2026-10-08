@@ -122,7 +122,14 @@ fn steer(p: &Player, push: DVec2, t: &Tuning) -> DVec2 {
     let max_speed = p.max_speed();
     let max_accel = p.max_accel();
     let desired = arrive(p.pos, p.target, max_speed, max_accel, t.arrive_radius) + push;
-    let change = clamp_len(desired - p.vel, max_accel * t.dt);
+    let mut change = clamp_len(desired - p.vel, max_accel * t.dt);
+    // The turn factor scales the part of the change across the way he faces (a unit vector);
+    // the average player's factor is exactly 1, which leaves the change as it is.
+    let turn = p.derived.turn;
+    if turn != 1.0 {
+        let along = change.dot(p.facing);
+        change = change * turn + p.facing * (along * (1.0 - turn));
+    }
     clamp_len(p.vel + change, max_speed)
 }
 
@@ -234,25 +241,27 @@ fn separated(players: &[Player], t: &Tuning, pitch: &Pitch) -> Option<[DVec2; RO
     let n = players.len().min(ROSTER);
     let skip = sq_skip_limit(t.min_player_distance);
     let overlaps = |d: DVec2| d.length_squared() < skip && d.length() < t.min_player_distance;
-    let mut first = None;
-    'scan: for i in 0..n {
-        if !players[i].active() {
-            continue;
-        }
-        for j in (i + 1)..n {
-            if players[j].active() && overlaps(players[j].pos - players[i].pos) {
-                first = Some((i, j));
-                break 'scan;
-            }
-        }
-    }
-    let (i0, j0) = first?;
+    // The scan reads positions and activity from two small arrays rather than from the
+    // players themselves, so every pair touches packed values; the arithmetic is the same.
     let mut pos = [DVec2::ZERO; ROSTER];
     let mut on = [false; ROSTER];
     for (k, p) in players.iter().take(n).enumerate() {
         pos[k] = p.pos;
         on[k] = p.active();
     }
+    let mut first = None;
+    'scan: for i in 0..n {
+        if !on[i] {
+            continue;
+        }
+        for j in (i + 1)..n {
+            if on[j] && overlaps(pos[j] - pos[i]) {
+                first = Some((i, j));
+                break 'scan;
+            }
+        }
+    }
+    let (i0, j0) = first?;
     for i in i0..ROSTER {
         if !on[i] {
             continue;
@@ -288,7 +297,7 @@ mod tests {
     use crate::player::test_support::flat_player;
 
     fn player(id: usize, pos: DVec2, target: DVec2) -> Player {
-        let mut p = flat_player(id, 50, &Tuning::default());
+        let mut p = flat_player(id, 100, &Tuning::default());
         p.pos = pos;
         p.target = target;
         p

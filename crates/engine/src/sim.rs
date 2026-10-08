@@ -10,6 +10,7 @@ mod hooks;
 mod manager;
 mod movement;
 mod possession;
+pub mod tally;
 
 use crate::trace::Point;
 use serde_json::json;
@@ -17,6 +18,7 @@ use sha2::{Digest, Sha256};
 
 use crate::ai::{AiCode, AiState, Manager};
 use crate::ball::Ball;
+use crate::contract::level::overall_level;
 use crate::data::attributes::AttributeSchema;
 use crate::data::rules::{RulePack, StoppageKind};
 use crate::data::tactics::TacticsSchema;
@@ -71,6 +73,10 @@ pub struct MatchConfig {
     pub flags: ActiveFlags,
     /// The module in each slot, resolved when the content loaded. Never changes in a match.
     pub modules: ResolvedModules,
+    /// The words of the hidden values, from the tuning file. Never changes in a match.
+    pub hidden: crate::contract::hidden::HiddenTuning,
+    /// The weights of the match rating, from the tuning file. Never changes in a match.
+    pub match_rating: crate::match_rating::MatchRatingTuning,
     /// The home team's ground. Never changes in a match. Private: `set_pitch` writes it and
     /// the teams' copies together.
     pitch: Pitch,
@@ -114,6 +120,7 @@ impl MatchConfig {
         let (mut away, _) = Team::from_file(1, files[1], &content.attributes, &tuning)?;
         for team in [&mut home, &mut away] {
             team.set_pitch(pitch);
+            team.set_start_energy(&tuning, content.tuning.fatigue.recovery_per_day);
             let setup =
                 content
                     .modules
@@ -149,6 +156,8 @@ impl MatchConfig {
             knockout: false,
             flags: content.flags.clone(),
             modules: content.modules,
+            hidden: content.tuning.hidden.clone(),
+            match_rating: content.tuning.match_rating.clone(),
             pitch,
         })
     }
@@ -199,6 +208,25 @@ impl MatchConfig {
     pub fn with_tactics(mut self, team: usize, tactics: Tactics) -> Self {
         let schema = self.tactics.clone();
         self.teams[team].set_tactics(tactics, &schema, &self.tuning);
+        let starters = self.teams[team].starters();
+        let first = team * PLAYERS_PER_TEAM;
+        self.players[first..first + PLAYERS_PER_TEAM].clone_from_slice(&starters);
+        self
+    }
+
+    /// AI-managed `team` starts with `tactics` instead of the default ones, and with the
+    /// lineup and bench its pre-match module picks for them: in another formation, players
+    /// whose position suits that formation's slots. A person's side keeps its own lineup
+    /// through [`MatchConfig::with_setup`] and [`MatchConfig::with_tactics`].
+    pub fn with_ai_tactics(mut self, team: usize, tactics: Tactics) -> Self {
+        let schema = self.tactics.clone();
+        let setup =
+            self.modules
+                .pre_match
+                .setup_for(&self.teams[team], tactics, &schema, &self.attributes);
+        self.teams[team].lineup = setup.lineup;
+        self.teams[team].bench = setup.bench;
+        self.teams[team].set_tactics(setup.tactics, &schema, &self.tuning);
         let starters = self.teams[team].starters();
         let first = team * PLAYERS_PER_TEAM;
         self.players[first..first + PLAYERS_PER_TEAM].clone_from_slice(&starters);
@@ -591,12 +619,30 @@ pub struct Simulation {
     pub(crate) script_cache: Option<ScriptCache>,
     pub(crate) finished: bool,
     pub(crate) scratch: Vec<DVec2>,
+    /// A shared copy of `config.tuning`, which no code changes during a match: each tick
+    /// hands it to the passes that also borrow the match mutably, so the tick copies a
+    /// pointer instead of the whole tuning block.
+    pub(crate) tuning: std::sync::Arc<Tuning>,
+    /// Each player's effective stage values, by roster index, blended from his effective
+    /// ratings when his state deltas last changed. Read only while his deltas are not all 0;
+    /// a player at his base reads his squad entry's.
+    pub(crate) stages: Vec<crate::contract::StageValues>,
+    /// The attribute file's stage weights, resolved once for the refresh.
+    pub(crate) blend: std::sync::Arc<crate::contract::stages::Blend>,
+    /// What each player did, by side and squad index, for the match rating.
+    pub(crate) tallies: [Vec<tally::PlayerTally>; 2],
+    /// Test seam for the sensitivity rules: the job counters, absent unless a sensitivity
+    /// run attaches them ([`Simulation::with_probe`]). Never hashed and never stored. Only a
+    /// build with the `sensitivity` feature has it, so a normal match pays for no count site.
+    #[cfg(feature = "sensitivity")]
+    pub(crate) probe: Option<Box<crate::sensitivity::probe::JobProbe>>,
 }
 
 impl Simulation {
     /// Places both teams for kick-off.
     pub fn new(config: MatchConfig) -> Result<Self, EngineError> {
         let mut sim = Self::blank(config)?;
+        sim.kick_off_form();
         sim.place_kick_off(0);
         Ok(sim)
     }
@@ -636,6 +682,7 @@ impl Simulation {
     pub fn new_traced(config: MatchConfig) -> Result<Self, EngineError> {
         let mut sim = Self::blank(config)?;
         sim.streams.enable_trace(sim.tick + 1);
+        sim.kick_off_form();
         sim.place_kick_off(0);
         Ok(sim)
     }
@@ -678,7 +725,15 @@ impl Simulation {
         let players = config.players.clone();
         let streams = Streams::keyed(config.seed);
         let referee = Referee::new(config.minutes, &config.rules, config.knockout);
-        Ok(Self {
+        let stages = players
+            .iter()
+            .map(|p| teams[p.team].squad[p.squad].stages)
+            .collect();
+        let blend = std::sync::Arc::new(crate::contract::stages::Blend::of(&config.attributes));
+        let tallies = teams
+            .each_ref()
+            .map(|t| vec![tally::PlayerTally::default(); t.squad.len()]);
+        let mut sim = Self {
             timeline: vec![(0, teams.clone())],
             teams,
             players,
@@ -721,8 +776,30 @@ impl Simulation {
             script_cache: None,
             finished: false,
             scratch: Vec::with_capacity(2 * PLAYERS_PER_TEAM),
+            tuning: std::sync::Arc::new(config.tuning.clone()),
+            stages,
+            blend,
+            tallies,
+            #[cfg(feature = "sensitivity")]
+            probe: None,
             config,
-        })
+        };
+        // Every starter plays; the condition inputs (sharpness, adaptation, a short rest)
+        // act from kick-off. Each player's form is drawn when the match starts
+        // ([`Self::kick_off_form`]), so a restored match takes no draw here.
+        for i in 0..sim.players.len() {
+            sim.tally_played(i);
+        }
+        sim.refresh_effective();
+        Ok(sim)
+    }
+
+    /// Draws each player's form for the match and its first period, and rebuilds those it
+    /// moved. Called once, as the match starts, after the debug trace is switched on, so the
+    /// trace records these draws as it records every other.
+    fn kick_off_form(&mut self) {
+        let changed = self.draw_form_kick_off();
+        self.refresh_marked(changed);
     }
 
     /// Sends player `i` off before kick-off, as a card shown would: the player loses the
@@ -749,6 +826,19 @@ impl Simulation {
         &self.config.tuning
     }
 
+    /// Attaches the job probe of the sensitivity rules: from now on the count sites fill it.
+    /// It reads the match and writes nothing else, so every tick stays as it would be.
+    #[cfg(feature = "sensitivity")]
+    pub fn with_probe(&mut self) {
+        self.probe = Some(Box::default());
+    }
+
+    /// The job probe, when a sensitivity run attached one.
+    #[cfg(feature = "sensitivity")]
+    pub fn probe(&self) -> Option<&crate::sensitivity::probe::JobProbe> {
+        self.probe.as_deref()
+    }
+
     /// The roster index of the player keeping goal for `team`: slot 0, a goalkeeper who came
     /// on, or an outfield player standing in (`Team::keeper_slot`).
     pub fn keeper(&self, team: usize) -> usize {
@@ -768,6 +858,137 @@ impl Simulation {
 
     pub fn config(&self) -> &MatchConfig {
         &self.config
+    }
+
+    /// Player `i`'s base values: what his attributes give him fresh. They live in his squad
+    /// entry, not in the player, which keeps the player small for the hot loops.
+    #[inline]
+    pub fn base(&self, i: usize) -> &crate::player::Derived {
+        let p = &self.players[i];
+        &self.teams[p.team].squad[p.squad].derived
+    }
+
+    /// Player `i`'s base stage values, from his squad entry.
+    #[inline]
+    pub fn base_stages(&self, i: usize) -> &crate::contract::StageValues {
+        let p = &self.players[i];
+        &self.teams[p.team].squad[p.squad].stages
+    }
+
+    /// Player `i`'s effective stage values: blended from his effective ratings while his
+    /// state deltas are not all 0, his squad entry's otherwise ([`Simulation::set_deltas`]
+    /// keeps them in step).
+    #[inline]
+    pub fn skills(&self, i: usize) -> crate::contract::Skills<'_> {
+        crate::contract::Skills::new(&self.stages[i], &self.players[i].derived)
+    }
+
+    /// Player `i`'s ratings as his states move them: his base ratings moved by his state
+    /// deltas, within 1.0 to 20.0. His form offset, which his hidden consistency sets, is left
+    /// out, so the level a page shows never carries a hidden value.
+    pub fn effective_ratings(&self, i: usize) -> crate::player::Attributes {
+        let p = &self.players[i];
+        crate::contract::states::effective(&p.attributes, &self.config.attributes, p.deltas)
+    }
+
+    /// Every wire slot's overall level now and fresh, in tenths of the 1 to 20 scale, home
+    /// first: `(now, fresh)`. Now reads his state-moved ratings ([`Self::effective_ratings`]),
+    /// fresh his base ratings; both through [`overall_level`]. Reads the match and writes
+    /// nothing, so no tick and no digest changes.
+    pub fn overall_levels(&self) -> (Vec<u8>, Vec<u8>) {
+        let schema = &self.config.attributes;
+        (0..self.players.len())
+            .map(|i| {
+                let p = &self.players[i];
+                let position = self.teams[p.team].squad[p.squad].position;
+                (
+                    overall_level(&self.effective_ratings(i), schema, position),
+                    overall_level(&p.attributes, schema, position),
+                )
+            })
+            .unzip()
+    }
+
+    /// Squad player `squad` of team `team`: his overall level with his match condition inputs
+    /// (sharpness on the technical group, adaptation on the mental group, capped as in play)
+    /// and fresh, in tenths: `[today, fresh]`. Reads the squad entry only; it writes nothing.
+    /// A hidden value never moves it.
+    pub fn squad_level_range(&self, team: usize, squad: usize) -> [u8; 2] {
+        use crate::contract::body::BodyJobs;
+        use crate::contract::states::{self, GROUP_COUNT};
+        use crate::data::attributes::Group;
+        use crate::modules::modifier::{FAMILY_COUNT, Family};
+        let entry = &self.teams[team].squad[squad];
+        let schema = &self.config.attributes;
+        let body = &self.config.tuning.contract.body;
+        let mut families = [[0.0; GROUP_COUNT]; FAMILY_COUNT];
+        families[Family::Body as usize][Group::Technical as usize] =
+            BodyJobs::drop(&body.sharpness, entry.condition.sharpness);
+        families[Family::Mind as usize][Group::Mental as usize] =
+            BodyJobs::drop(&body.adaptation, entry.condition.adaptation);
+        let deltas = states::capped(families, &self.config.tuning.contract.states);
+        let today = states::effective(&entry.attributes, schema, deltas);
+        [
+            overall_level(&today, schema, entry.position),
+            overall_level(&entry.attributes, schema, entry.position),
+        ]
+    }
+
+    /// Player `i`'s match condition inputs, from his squad entry.
+    #[inline]
+    pub fn condition(&self, i: usize) -> crate::data::team::Condition {
+        let p = &self.players[i];
+        self.teams[p.team].squad[p.squad].condition
+    }
+
+    /// Player `i`'s height and age, from his squad entry.
+    #[inline]
+    pub fn body(&self, i: usize) -> crate::contract::body::Body {
+        let p = &self.players[i];
+        self.teams[p.team].squad[p.squad].body
+    }
+
+    /// Sets player `i`'s state deltas and form offset and derives his effective values from
+    /// them: his squad entry's when all are 0, otherwise blended again from his ratings moved
+    /// by both ([`crate::contract::states::effective_with_form`]) through the contract.
+    pub(crate) fn set_state(
+        &mut self,
+        i: usize,
+        deltas: [i8; crate::contract::states::GROUP_COUNT],
+        form: i8,
+    ) {
+        let p = self.players[i];
+        let entry = &self.teams[p.team].squad[p.squad];
+        if deltas == [0; crate::contract::states::GROUP_COUNT] && form == 0 {
+            self.players[i].derived = entry.derived;
+            self.stages[i] = entry.stages;
+        } else {
+            let schema = &self.config.attributes;
+            let ratings = crate::contract::states::effective_with_form(
+                &entry.attributes,
+                schema,
+                deltas,
+                form,
+                &self.config.tuning.contract.states,
+            );
+            let (derived, stages) = crate::player::Derived::from_blend(
+                &ratings,
+                &self.blend,
+                schema,
+                &self.config.tuning,
+                entry.body,
+            );
+            self.players[i].derived = derived;
+            self.stages[i] = stages;
+        }
+        self.players[i].deltas = deltas;
+        self.players[i].form = form;
+    }
+
+    /// Player `i`'s fresh stage values: his base stage values with no factor.
+    #[inline]
+    pub fn base_skills(&self, i: usize) -> crate::contract::Skills<'_> {
+        crate::contract::Skills::new(self.base_stages(i), self.base(i))
     }
 
     pub fn teams(&self) -> [Team; 2] {
@@ -937,6 +1158,7 @@ impl Simulation {
         while !self.is_over() {
             self.step();
             self.drain_trace(sink)?;
+            sink.on_step(self)?;
             sink.on_tick(&self.record())?;
             if let Some(stoppage) = self.stoppage {
                 sink.on_stoppage(&stoppage, self)?;
@@ -964,11 +1186,13 @@ impl Simulation {
         self.finished = true;
         self.streams.begin_tick(self.tick);
         self.enter_phase(Phase::FullTime, crate::rules::phases::Cause::MatchEnd);
+        // A match abandoned before its period's added time was announced has none.
         let added = self
             .referee
             .clock
             .plays_added
-            .then(|| self.period_added_s(self.referee.clock.half));
+            .then(|| self.period_added_s(self.referee.clock.half))
+            .filter(|&s| !(self.referee.abandoned && s == 0));
         let mut event = self.event_at(self.tick, EngineEventKind::FullTime, None);
         event.added_time_s = added;
         event.shootout_scores = self.summary.shootout;
@@ -988,6 +1212,11 @@ impl Simulation {
         }
     }
 
+    /// Every event not yet taken, in tick order.
+    pub fn events(&self) -> &[EngineEvent] {
+        &self.events
+    }
+
     /// Takes every event recorded since the last call, in tick order.
     pub fn take_events(&mut self) -> Vec<EngineEvent> {
         std::mem::take(&mut self.events)
@@ -1001,7 +1230,7 @@ impl Simulation {
         self.streams.begin_tick(self.tick + 1);
         self.restart = false;
         self.stoppage = None;
-        let t = self.config.tuning.clone();
+        let t = std::sync::Arc::clone(&self.tuning);
         match self.referee.phase {
             // During a shoot-out kick nobody decides: every player keeps the target the kick
             // was set up with, and the keeper the dive it committed to.
@@ -1134,6 +1363,7 @@ impl Simulation {
             let restart_kick = self.restart_taker.take() == Some(c);
             if matches!(kick, Kick::Shot { .. }) {
                 self.summary.shots[team] += 1;
+                self.tally(c, tally::Count::Shot);
                 let attack_x = self.teams[team].attack_x;
                 let from = self.ball.xy();
                 let (xg, quality) = if penalty {
@@ -1147,16 +1377,38 @@ impl Simulation {
                     )
                 };
                 self.summary.xg[team] += xg;
+                self.tally_xg(c, xg);
+                #[cfg(feature = "sensitivity")]
+                if self.probe.is_some() {
+                    self.probe_shot(c, team, from, attack_x, penalty, xg);
+                }
                 self.shot_in_flight = Some(team);
                 self.shot_quality = quality;
-                shooter = Some((team, attack_x));
+                shooter = Some((team, attack_x, c));
             } else if restart_kick {
                 self.summary.restart_kicks[team] += 1;
+                #[cfg(feature = "sensitivity")]
+                if let Some(p) = self.probe.as_deref_mut() {
+                    p.kicked_other();
+                }
             } else if matches!(kick, Kick::Clear { .. }) {
                 self.summary.clearances[team] += 1;
+                self.tally(c, tally::Count::Clearance);
+                #[cfg(feature = "sensitivity")]
+                if let Some(p) = self.probe.as_deref_mut() {
+                    p.kicked_other();
+                }
             } else {
                 self.summary.passes[team] += 1;
+                self.tally(c, tally::Count::Pass);
                 self.pass_in_flight = Some(team);
+                #[cfg(feature = "sensitivity")]
+                if self.probe.is_some() {
+                    let (from, attack_x) = (self.ball.xy(), self.teams[team].attack_x);
+                    if let Some(p) = self.probe.as_deref_mut() {
+                        p.kicked_pass(c, team, from, attack_x);
+                    }
+                }
             }
             self.last_touch = Some(team);
             self.last_kicker = Some(c);
@@ -1173,7 +1425,7 @@ impl Simulation {
             .modules
             .ball
             .kick(&self.view(), self.ball, dir, speed, loft);
-        if let Some((team, attack_x)) = shooter
+        if let Some((team, attack_x, c)) = shooter
             && self
                 .config
                 .modules
@@ -1182,6 +1434,11 @@ impl Simulation {
         {
             self.shot_on_target = true;
             self.summary.shots_on_target[team] += 1;
+            self.tally(c, tally::Count::ShotOnTarget);
+            #[cfg(feature = "sensitivity")]
+            if let Some(p) = self.probe.as_deref_mut() {
+                p.on_target();
+            }
         }
         self.carrier = None;
         self.keeper_beaten = false;
@@ -1210,6 +1467,47 @@ pub(crate) fn wide_of_goal(ball: DVec2, own_goal_x: f64) -> DVec2 {
 mod tests {
     use super::*;
     use crate::data::test_support::shipped_config;
+
+    /// The overall level is the mean of the visible attributes of the groups the position
+    /// plays: a keeper's goalkeeping, mental and physical; an outfield player's technical,
+    /// mental and physical. A hidden value never counts.
+    #[test]
+    fn the_overall_level_reads_the_groups_the_position_plays_and_no_hidden_value() {
+        use crate::data::attributes::Group;
+        use crate::data::team::Position;
+        let config = shipped_config(42, 90).unwrap();
+        let schema = &config.attributes;
+        let mut ratings = crate::player::Attributes::from_entry(&Default::default(), schema);
+        for (i, def) in schema.attributes.iter().enumerate() {
+            let tenths = match (def.hidden, def.group) {
+                (true, _) => 200,
+                (false, Group::Technical) => 160,
+                (false, Group::Goalkeeping) => 40,
+                (false, _) => 120,
+            };
+            ratings.values[i] = crate::Rating::from_tenths(tenths);
+        }
+        let mean = |keeper: bool| {
+            let picked: Vec<u32> = schema
+                .attributes
+                .iter()
+                .filter(|d| !d.hidden)
+                .filter_map(|d| match d.group {
+                    Group::Technical if keeper => None,
+                    Group::Goalkeeping if !keeper => None,
+                    Group::Technical => Some(160),
+                    Group::Goalkeeping => Some(40),
+                    _ => Some(120),
+                })
+                .collect();
+            let n = u32::try_from(picked.len()).unwrap();
+            u8::try_from((picked.iter().sum::<u32>() + n / 2) / n).unwrap()
+        };
+        assert_eq!(overall_level(&ratings, schema, Position::CM), mean(false));
+        assert_eq!(overall_level(&ratings, schema, Position::GK), mean(true));
+        assert!(overall_level(&ratings, schema, Position::CM) > 120);
+        assert!(overall_level(&ratings, schema, Position::GK) < 120);
+    }
     use crate::record::VecSink;
 
     #[test]
@@ -1300,8 +1598,9 @@ mod tests {
     #[test]
     fn every_play_event_names_a_player() {
         // The seed-42 match ends 0-0 since a pressed lone forward stopped dribbling into
-        // defenders; the seed-7 match scores, so its goal events are checked too.
-        let events = full_match(7, |_| {}).take_events();
+        // defenders, and the seed-7 match since every sprint costs stamina; the seed-9 match
+        // scores, so its goal events are checked too.
+        let events = full_match(9, |_| {}).take_events();
         let goals = events
             .iter()
             .filter(|e| e.kind == EngineEventKind::Goal)

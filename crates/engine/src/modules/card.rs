@@ -43,6 +43,10 @@ pub const MOVED_KEYS: &[Action] = &[
     Action::ShotAim,
     Action::ShotSpread,
     Action::ShotLoft,
+    Action::Lapse,
+    Action::Header,
+    Action::FormMatch,
+    Action::FormPeriod,
 ];
 
 /// What one module is.
@@ -56,7 +60,8 @@ pub struct ModuleCard {
     pub outputs: &'static str,
     /// The tuning values it reads, or the one entry `"none"`.
     pub tuning: &'static [&'static str],
-    /// A band name from `content/realism-bands.json`, or `none: <reason>`.
+    /// A band (or band group) name from the registry `content/realism-bands.json`, or
+    /// `none: <reason>`.
     pub calibration: &'static str,
     /// The action keys whose draws the loop takes for this module.
     pub keys: &'static [Action],
@@ -73,8 +78,8 @@ pub enum CardError {
     Calibration { value: String },
 }
 
-/// Checks that every field of `card` is filled. `band_names` are the band keys of
-/// `content/realism-bands.json`.
+/// Checks that every field of `card` is filled. `band_names` are the band and group names
+/// of the registry `content/realism-bands.json`.
 pub fn check_card(card: &ModuleCard, band_names: &[&str]) -> Result<(), CardError> {
     for (field, value) in [
         ("purpose", card.purpose),

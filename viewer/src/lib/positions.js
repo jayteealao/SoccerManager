@@ -3,8 +3,11 @@
 // position shows when the player's best fit among its roles is at least `POSITION_FIT`.
 // Pure: no DOM.
 
-/// The best role fit, out of 100, at which a position shows as a chip.
-export const POSITION_FIT = 70;
+import { wholeOf } from './scale.js';
+
+/// The best role fit, as the whole number 1 to 20 a screen shows, at which a position shows
+/// as a chip.
+export const POSITION_FIT = 14;
 
 /// The most chips a squad row shows; the row is 20 px tall and shares its width.
 export const MOST_CHIPS = 3;
@@ -26,7 +29,7 @@ export const POSITION_ORDER = Object.freeze([
 /// The player's positions: the team-file `position` first, then every other position whose
 /// best fit among `roles` (the tactics file's roles, each with its `positions`) reaches
 /// `POSITION_FIT`, best fit first and then in team-sheet order. `roleFit` holds one fit per
-/// role, in the order of `roles`.
+/// role in tenths of 1 to 20, in the order of `roles`.
 export function positionsFor(roleFit, roles, position) {
   const best = new Map();
   (roles ?? []).forEach((role, r) => {
@@ -40,7 +43,7 @@ export function positionsFor(roleFit, roles, position) {
     return i < 0 ? POSITION_ORDER.length : i;
   };
   const others = [...best.entries()]
-    .filter(([p, fit]) => p !== position && fit >= POSITION_FIT)
+    .filter(([p, fit]) => p !== position && wholeOf(fit) >= POSITION_FIT)
     .sort((a, b) => b[1] - a[1] || order(a[0]) - order(b[0]))
     .map(([p]) => p);
   const out = position ? [position, ...others] : others;

@@ -3,6 +3,7 @@
 //! caller takes the random draws and passes them in.
 
 use crate::ball::Ball;
+use crate::contract::{ActionKind, ONE_ON_ONE_M, Skills, Stage, curve};
 use crate::math::{self, DVec2, DVec3};
 use crate::modules::{MatchView, ModuleCard, ShotModule};
 use crate::pitch::Pitch;
@@ -50,6 +51,45 @@ pub fn save_chance(quality: f64, t: &Tuning) -> f64 {
     s.save_high + (s.save_low - s.save_high) * k
 }
 
+/// The keeper's save chance against one shooter: the quality line above is the base of a
+/// contest between the keeper's save stage (his one-on-one stage when the shooter is within
+/// [`ONE_ON_ONE_M`] of him) and the shooter's shot or long-shot execute stage. Two rating-10
+/// players, or a shot with no known shooter against a rating-10 keeper, leave the line as it
+/// is.
+pub fn contest_save(
+    line: f64,
+    keeper: (DVec2, Skills),
+    shooter: Option<(DVec2, Skills)>,
+    attack_x: f64,
+    t: &Tuning,
+    pitch: &Pitch,
+) -> f64 {
+    let c = &t.contract;
+    let close = shooter.is_some_and(|(at, _)| (at - keeper.0).length() <= ONE_ON_ONE_M);
+    let (action, stage) = if close {
+        (ActionKind::OneOnOne, Stage::ONE_ON_ONE_EXECUTE)
+    } else {
+        (ActionKind::Save, Stage::SAVE_EXECUTE)
+    };
+    let p = c.actions.of(action);
+    let strike = shooter.map_or(curve::f(10.0, &c.curve), |(at, s)| {
+        let shot = if pitch.in_penalty_area(at, attack_x) {
+            Stage::SHOT_EXECUTE
+        } else {
+            Stage::LONG_SHOT_EXECUTE
+        };
+        s.f(shot)
+    });
+    curve::contest(
+        line,
+        p.k(),
+        keeper.1.f(stage),
+        strike,
+        p.floor(),
+        p.ceiling(),
+    )
+}
+
 /// The velocity of a ball moving at `vel` after it is deflected toward `away`: turned by up
 /// to `spread` radians either side (`draw_angle` in `[0, 1)` picks the angle), with
 /// `speed_share` of its speed, and a vertical speed of up to `loft` (`draw_loft` in `[0, 1)`).
@@ -89,8 +129,23 @@ impl ShotModule for ShotV1 {
         on_target(ball, attack_x, view.tuning(), view.pitch())
     }
 
-    fn save_chance(&self, view: &MatchView<'_>, quality: f64) -> f64 {
-        save_chance(quality, view.tuning())
+    fn save_chance(
+        &self,
+        view: &MatchView<'_>,
+        quality: f64,
+        keeper: usize,
+        shooter: Option<usize>,
+    ) -> f64 {
+        let line = save_chance(quality, view.tuning());
+        let attack_x = view.attack_x(1 - view.player(keeper).team);
+        contest_save(
+            line,
+            (view.player(keeper).pos, view.skills(keeper)),
+            shooter.map(|s| (view.player(s).pos, view.skills(s))),
+            attack_x,
+            view.tuning(),
+            view.pitch(),
+        )
     }
 }
 
@@ -128,7 +183,7 @@ impl ShotModule for ShotOff {
         false
     }
 
-    fn save_chance(&self, _: &MatchView<'_>, _: f64) -> f64 {
+    fn save_chance(&self, _: &MatchView<'_>, _: f64, _: usize, _: Option<usize>) -> f64 {
         0.0
     }
 }
@@ -162,8 +217,14 @@ impl ShotModule for ShotFaulty {
         ShotV1.on_target(view, ball, attack_x)
     }
 
-    fn save_chance(&self, view: &MatchView<'_>, quality: f64) -> f64 {
-        ShotV1.save_chance(view, quality)
+    fn save_chance(
+        &self,
+        view: &MatchView<'_>,
+        quality: f64,
+        keeper: usize,
+        shooter: Option<usize>,
+    ) -> f64 {
+        ShotV1.save_chance(view, quality, keeper, shooter)
     }
 }
 

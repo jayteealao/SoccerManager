@@ -33,7 +33,7 @@ use stream::events::EVENTS_FILE;
 
 use crate::cli::LaunchOpts;
 use crate::engines::{Choice, PreviousEngine, Refusal};
-use crate::front_door::{SampleTeam, SavedMatch, Settings};
+use crate::front_door::{SampleTeam, SavedMatch, Settings, Views};
 use crate::matchday::round::Round;
 use crate::web::{Action, Status};
 
@@ -112,6 +112,8 @@ struct Worker {
     saved: Option<SavedMatch>,
     /// The player's settings.
     settings: Settings,
+    /// The squad screen's store: named views and match ratings per club.
+    views: Views,
 }
 
 /// The program that plays the match: this program, or the previous release's program with
@@ -244,6 +246,7 @@ pub fn run(content_dir: Option<&Path>, opts: &LaunchOpts) -> anyhow::Result<i32>
             teams,
             saved,
             settings: Settings::load(&data),
+            views: Views::load(&data),
         }),
         engine,
         previous: PreviousEngine::locate(opts.previous.as_deref()),
@@ -404,6 +407,8 @@ impl Launcher {
         let (choice, identity) = crate::engines::resolve(file, &self.previous);
         {
             let mut worker = self.lock();
+            // The match before this one keeps its ratings before its folder is forgotten.
+            self.ingest_last_match(&mut worker);
             worker.refusal = None;
             worker.resumed_from = None;
             if let Some(id) = &identity {
@@ -635,6 +640,8 @@ impl Launcher {
         );
         if worker.state == State::Finished {
             self.after_match(&mut worker);
+            // The ratings are kept at full time, whether or not the squad screen is read.
+            self.ingest_last_match(&mut worker);
         }
     }
 
@@ -747,6 +754,8 @@ impl Launcher {
                     seed = worker.seed
                 );
             }
+            // The match before this one keeps its ratings before its folder is forgotten.
+            self.ingest_last_match(&mut worker);
             let fresh = MatchId::now(worker.seed);
             worker.match_id = fresh.to_string();
             worker.snapshot = snapshot_of(&worker.match_id);
@@ -856,6 +865,47 @@ impl Launcher {
         Ok(())
     }
 
+    /// Saves one club's named views from `body`, keeping the club's match ratings.
+    fn save_views(&self, body: &str) -> Result<(), String> {
+        let mut worker = self.lock();
+        let mut views = worker.views.clone();
+        let club = views.set_views(body)?;
+        views
+            .save(&self.data)
+            .map_err(|e| format!("cannot save the views: {e}"))?;
+        worker.views = views;
+        tracing::info!(signal = "launch.views_saved", club = %club);
+        Ok(())
+    }
+
+    /// Adds the home ratings of the match the launcher last ran, once its record exists, and
+    /// saves the store when anything was added. A record that is missing or refused adds
+    /// nothing; a refused one says why.
+    fn ingest_last_match(&self, worker: &mut Worker) {
+        let Some(folder) = worker.snapshot.parent() else {
+            return;
+        };
+        let file = folder.join("stats.json");
+        if !file.is_file() {
+            return;
+        }
+        match engine::observe::read_stats(&file) {
+            Ok(stats) => {
+                if worker.views.ingest(&stats) > 0 {
+                    if let Err(e) = worker.views.save(&self.data) {
+                        tracing::warn!(signal = "launch.views_refused", reason = %e);
+                    } else {
+                        tracing::info!(
+                            signal = "launch.views_rated",
+                            match_id = %stats.match_id
+                        );
+                    }
+                }
+            }
+            Err(e) => tracing::warn!(signal = "launch.views_refused", reason = %e),
+        }
+    }
+
     /// The `/engine.json` body, under the lock the caller holds.
     fn json_locked(&self, worker: &mut Worker) -> String {
         let (port, reason, code) = match &worker.state {
@@ -944,6 +994,7 @@ impl Status for Arc<Launcher> {
             }
             Action::Quit => return Some(Ok(self.quit())),
             Action::Settings(body) => self.save_settings(&body),
+            Action::Views(body) => self.save_views(&body),
         };
         Some(done.map(|()| self.json()))
     }
@@ -961,6 +1012,12 @@ impl Status for Arc<Launcher> {
             _ => Vec::new(),
         };
         Some(serde_json::Value::Array(rows).to_string())
+    }
+
+    fn views(&self, club: &str) -> Option<String> {
+        let mut worker = self.lock();
+        self.ingest_last_match(&mut worker);
+        Some(worker.views.club_json(club).to_string())
     }
 
     fn round(&self, home: &str, away: &str) -> Option<Result<String, String>> {
@@ -1016,5 +1073,60 @@ mod tests {
         assert_eq!(ticks, [0, 900]);
         assert!(earlier_events(&dir.join("missing.jsonl"), 1000).is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A match that reached full time keeps its ratings when the next match starts, though
+    /// the squad screen was not read in between; reading it later adds them once.
+    #[test]
+    fn a_finished_match_keeps_its_ratings_when_the_next_match_starts() {
+        let data = std::env::temp_dir().join(format!("launch_ratings_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&data);
+        let missing = data.join("no-engine");
+        let stats = crate::front_door::tests::stats("m-done", &[("a-1", 0, 7.2)]);
+        let file = engine::observe::write_stats(&data, &stats).unwrap();
+        let launcher = Arc::new(Launcher {
+            worker: Mutex::new(Worker {
+                state: State::Finished,
+                child: None,
+                pid: None,
+                generation: 1,
+                snapshot_tick: None,
+                match_id: "m-done".into(),
+                snapshot: file.with_file_name(engine::snapshot::FILE_NAME),
+                match_millis: 0,
+                program: Program::Current,
+                resumed_from: None,
+                refusal: None,
+                seed: 1,
+                teams: Vec::new(),
+                saved: None,
+                settings: Settings::default(),
+                views: Views::default(),
+            }),
+            engine: missing.clone(),
+            previous: PreviousEngine {
+                program: missing.clone(),
+                content: missing,
+            },
+            content_dir: None,
+            skin: "",
+            fixed_seed: None,
+            minutes: 1,
+            data: data.clone(),
+            front_door: None,
+            drop_client_at: Mutex::new(None),
+            fast_forward_to: None,
+            test_jump: false,
+        });
+        launcher.new_match(None).unwrap();
+        let club: serde_json::Value =
+            serde_json::from_str(&launcher.views("club-a").unwrap()).unwrap();
+        let kept = club["ratings"]["a-1"]
+            .as_array()
+            .unwrap_or_else(|| panic!("the finished match's ratings are lost: {club}"));
+        assert_eq!(kept.len(), 1, "the match is added once: {club}");
+        assert_eq!(kept[0]["match"], "m-done");
+        assert_eq!(Views::load(&data).club_json("club-a"), club);
+        let _ = std::fs::remove_dir_all(&data);
     }
 }

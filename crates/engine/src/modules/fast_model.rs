@@ -9,12 +9,20 @@
 //!
 //! The model: each side's goals have the mean
 //! `exp(base + home * [home side] + attack * a + curve * a^2 + defence * e)`, where `a` is
-//! the side's attack and `e` the other side's defence, each as (mean attribute - 50) / 10.
+//! the side's attack and `e` the other side's defence, each as (level − 10) / 2. A level is
+//! read through the attribute contract, as play reads the players: each starter's mean
+//! curve value over the stages of his role (the keeper's stages for the keeper in slot 0,
+//! every other stage for an outfielder), the mean of those over the group, and the rating
+//! whose curve value that is.
 //! Both sides share one match factor, a gamma with shape `dispersion` and mean 1 that
 //! multiplies both means, so the two scores rise and fall together as the full engine's do
 //! (a bivariate negative binomial: each side alone is negative binomial with that
 //! dispersion). The joint table over 0 to 15 goals a side then carries the Dixon-Coles
-//! factor on 0-0, 1-0, 0-1 and 1-1 and a weight on every draw, and is normalised. A goal's
+//! factor on 0-0, 1-0, 0-1 and 1-1, a weight on every draw, and the favourite's tilt: a
+//! home win's probability is multiplied by `(λ / μ)^tilt`, an away win's by `(μ / λ)^tilt`,
+//! where `λ` and `μ` are the two means, so the side with the higher mean wins a little more
+//! often and loses a little less often than the shared table alone gives, with the same
+//! draws; then the table is normalised. A goal's
 //! minute is drawn from 90 shares fitted from the full engine's goal minutes, and its scorer
 //! from the side's six most advanced outfield players by finishing. The model plays
 //! regulation time only.
@@ -28,8 +36,11 @@ use serde::{Deserialize, Serialize};
 use super::ResolvedModules;
 use super::card::ModuleCard;
 use super::fast_events::{self, EventFit};
+use crate::contract::curve::f_inv;
+use crate::contract::{ActionKind, STAGES, Stage, StageValues};
 use crate::data::{Position, StoppageKind};
 use crate::error::EngineError;
+use crate::player::Player;
 use crate::rng::EngineRng;
 use crate::sim::{EngineEvent, MatchConfig};
 use crate::team::PLAYERS_PER_TEAM;
@@ -39,18 +50,50 @@ use crate::validate::StreamRules;
 pub const MAX_GOALS: usize = 16;
 /// The minutes of regulation time a goal can fall in.
 pub const MINUTES: usize = 90;
-/// The fit file's layout version.
-pub const FIT_VERSION: u32 = 2;
+/// The fit file's layout version. Version 3 adds the favourite's tilt; a version 2 file
+/// reads with a tilt of 0, which plays as version 2 did.
+pub const FIT_VERSION: u32 = 3;
+/// The fit file layout before the favourite's tilt.
+pub const FIT_VERSION_2: u32 = 2;
 /// The fit file inside the content folder. `Content::load` never reads it, so it moves no
 /// content hash.
 pub const FIT_FILE: &str = "fast-model.json";
 /// The name of the fitted model, as the slot file and the fit file name it.
 pub const FITTED_SCORES: &str = "fitted-scores";
 
-/// The mean attribute a side's attack and defence are measured from.
-pub const REFERENCE: f64 = 50.0;
+/// The level, on the 1 to 20 scale, a side's attack and defence are measured from.
+pub const REFERENCE: f64 = 10.0;
+/// Rating points per unit of a covariate: `(level − 10) / 2`.
+pub const STEP: f64 = 2.0;
 
-/// The seven fitted parameters.
+/// The actions only a keeper plays: a keeper's level reads their stages, an outfielder's
+/// every other stage.
+pub const KEEPER_ACTIONS: [ActionKind; 8] = [
+    ActionKind::Hold,
+    ActionKind::Save,
+    ActionKind::Claim,
+    ActionKind::OneOnOne,
+    ActionKind::KeeperKick,
+    ActionKind::KeeperThrow,
+    ActionKind::Organise,
+    ActionKind::Rush,
+];
+
+/// A player's mean curve value over the stages of his role: the keeper's stages for a
+/// keeper, every other stage for an outfielder. The injury stage is left out: it reads
+/// injury proneness, which rises as a player gets worse, so it is no part of his level.
+pub fn role_curve_value(stages: &StageValues, keeper: bool) -> f64 {
+    let (sum, count) = STAGES
+        .iter()
+        .zip(stages.f.iter())
+        .filter(|((action, _), _)| {
+            *action != ActionKind::Injury && KEEPER_ACTIONS.contains(action) == keeper
+        })
+        .fold((0.0, 0u32), |(s, n), (_, v)| (s + v, n + 1));
+    sum / f64::from(count.max(1))
+}
+
+/// The nine fitted parameters.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FastParams {
@@ -59,11 +102,11 @@ pub struct FastParams {
     pub base: f64,
     /// Added to the log goals of the home side.
     pub home: f64,
-    /// Log goals per unit of the side's attack, (mean attribute - 50) / 10.
+    /// Log goals per unit of the side's attack, (level − 10) / 2.
     pub attack: f64,
     /// Log goals per squared unit of the side's attack.
     pub curve: f64,
-    /// Log goals per unit of the other side's defence, (mean attribute - 50) / 10.
+    /// Log goals per unit of the other side's defence, (level − 10) / 2.
     pub defence: f64,
     /// The shape `k` of the shared match factor: each side's variance is
     /// `mean + mean^2 / k`.
@@ -72,6 +115,9 @@ pub struct FastParams {
     pub rho: f64,
     /// Every draw's probability is multiplied by `1 + draw` before the table is normalised.
     pub draw: f64,
+    /// The favourite's tilt: a home win's probability is multiplied by `(λ / μ)^tilt` and an
+    /// away win's by `(μ / λ)^tilt` before the table is normalised.
+    pub tilt: f64,
 }
 
 /// What the model plays from: its parameters, the share of goals in each minute, and the
@@ -100,6 +146,7 @@ impl FastFit {
             p.dispersion,
             p.rho,
             p.draw,
+            p.tilt,
         ]
         .iter()
         .all(|v| v.is_finite());
@@ -131,9 +178,11 @@ impl FastFit {
 pub struct FastPlayer {
     pub squad: usize,
     pub keeper: bool,
-    /// The weight of committing a foul: aggression times tackling.
+    /// The weight of committing a foul: the shares of his tackle choose and execute stages
+    /// (aggression, tackling), multiplied.
     pub foul: f64,
-    /// The weight of scoring a goal and of taking a penalty: finishing.
+    /// The weight of scoring a goal and of taking a penalty: the share of his shot execute
+    /// stage (finishing).
     pub attack: f64,
 }
 
@@ -174,11 +223,12 @@ impl Side {
 /// The two teams as they kick off, home first.
 #[derive(Debug, Clone, PartialEq)]
 pub struct KickOff {
-    /// The mean of every attribute value of the eleven players a side starts with.
+    /// The level of the eleven players a side starts with: the rating whose curve value is
+    /// the mean of their role curve values ([`role_curve_value`]).
     pub strength: [f64; 2],
-    /// The mean attribute of a side's six most advanced starters.
+    /// The level of a side's six most advanced starters.
     pub attack: [f64; 2],
-    /// The mean attribute of a side's other five starters, the keeper included.
+    /// The level of a side's other five starters, the keeper included.
     pub defence: [f64; 2],
     /// Each side's starters and bench.
     pub sides: [Side; 2],
@@ -215,28 +265,31 @@ pub fn stream_rules(fit: &FastFit, kick_off: &KickOff) -> StreamRules {
 /// The kick-off of the match `config` describes: the starting elevens the pre-match setup
 /// picked, so the fast model and the full engine start from the same teams.
 pub fn kick_off(config: &MatchConfig) -> KickOff {
-    let mean = |values: &mut dyn Iterator<Item = u8>| {
-        let (sum, count) = values.fold((0u64, 0u64), |(s, n), v| (s + u64::from(v), n + 1));
+    let curve = &config.tuning.contract.curve;
+    // A group's level: the rating whose curve value is the mean of its role curve values.
+    let level = |values: &mut dyn Iterator<Item = f64>| {
+        let (sum, count) = values.fold((0.0, 0u32), |(s, n), v| (s + v, n + 1));
         if count == 0 {
             0.0
         } else {
-            sum as f64 / count as f64
+            f_inv(sum / f64::from(count), curve)
         }
     };
     let mut out = KickOff::even([0.0; 2]);
     for team in 0..2 {
         let side = &config.teams[team];
         let player = |squad: usize, keeper: bool| {
-            let d = &side.squad[squad].derived;
+            let s = &side.squad[squad].stages;
             FastPlayer {
                 squad,
                 keeper,
-                foul: d.aggression * d.tackling,
-                attack: d.finishing,
+                foul: s.share(Stage::TACKLE_CHOOSE) * s.share(Stage::TACKLE_EXECUTE),
+                attack: s.share(Stage::SHOT_EXECUTE),
             }
         };
         let mut starters: Vec<_> = config.players.iter().filter(|p| p.team == team).collect();
-        out.strength[team] = mean(&mut starters.iter().flat_map(|p| p.attributes.iter()));
+        let value = |p: &&Player| role_curve_value(&side.squad[p.squad].stages, p.slot == 0);
+        out.strength[team] = level(&mut starters.iter().map(value));
         // Most advanced first: the slot furthest from the own goal line, then slot order.
         let depth = |slot: usize| config.teams[team].base_formation[slot].0;
         starters.sort_by(|a, b| {
@@ -245,8 +298,8 @@ pub fn kick_off(config: &MatchConfig) -> KickOff {
                 .then(a.slot.cmp(&b.slot))
         });
         let (front, back) = starters.split_at(ATTACKERS.min(starters.len()));
-        out.attack[team] = mean(&mut front.iter().flat_map(|p| p.attributes.iter()));
-        out.defence[team] = mean(&mut back.iter().flat_map(|p| p.attributes.iter()));
+        out.attack[team] = level(&mut front.iter().map(value));
+        out.defence[team] = level(&mut back.iter().map(value));
         let mut advanced = [false; PLAYERS_PER_TEAM];
         for p in front {
             advanced[p.slot] = true;
@@ -286,10 +339,10 @@ pub fn resolve(modules: &ResolvedModules) -> &'static dyn FastModel {
 }
 
 /// A side's covariates for its goals: intercept, home, its attack, its attack squared, and
-/// the other side's defence, each measured as (mean attribute - 50) / 10.
+/// the other side's defence, each measured as (level − 10) / 2.
 pub fn covariates(kick_off: &KickOff, side: usize) -> [f64; 5] {
-    let a = (kick_off.attack[side] - REFERENCE) / 10.0;
-    let e = (kick_off.defence[1 - side] - REFERENCE) / 10.0;
+    let a = (kick_off.attack[side] - REFERENCE) / STEP;
+    let e = (kick_off.defence[1 - side] - REFERENCE) / STEP;
     [1.0, if side == 0 { 1.0 } else { 0.0 }, a, a * a, e]
 }
 
@@ -356,12 +409,16 @@ pub fn shared_pmf(lambda: f64, mu: f64, k: f64) -> [[f64; MAX_GOALS]; MAX_GOALS]
 pub fn score_table(params: &FastParams, kick_off: &KickOff) -> [[f64; MAX_GOALS]; MAX_GOALS] {
     let [lambda, mu] = means(params, kick_off);
     let mut table = shared_pmf(lambda, mu, params.dispersion);
+    // The favourite's tilt: the factor of a home win; an away win takes its inverse.
+    let favourite = libm::pow(lambda / mu, params.tilt);
     let mut sum = 0.0;
     for (h, row) in table.iter_mut().enumerate() {
         for (a, cell) in row.iter_mut().enumerate() {
             *cell *= tau(h, a, lambda, mu, params.rho);
-            if h == a {
-                *cell *= 1.0 + params.draw;
+            match h.cmp(&a) {
+                std::cmp::Ordering::Equal => *cell *= 1.0 + params.draw,
+                std::cmp::Ordering::Greater => *cell *= favourite,
+                std::cmp::Ordering::Less => *cell /= favourite,
             }
             sum += *cell;
         }
@@ -435,8 +492,10 @@ impl FastModel for FastModelOff {
 pub const FITTED_SCORES_V1_CARD: ModuleCard = ModuleCard {
     purpose: "A results model fitted from full-engine results: a final score and every event \
               of a 90-minute match from the two teams at kick-off, without playing a tick.",
-    inputs: "Each side's strength at kick-off (the mean attribute of its starting eleven), its \
-             starters and bench with their foul and finishing weights, and the fit file \
+    inputs: "Each side's levels at kick-off (its starting eleven, its six most advanced \
+             starters and the other five, each read through the attribute contract's stage \
+             values on the 1 to 20 scale), its starters and bench with their foul and finishing weights from the \
+             attribute contract's tackle and shot stages, and the fit file \
              content/fast-model.json.",
     outputs: "The final score and the events the full engine emits in a regulation match: \
               kick-offs, goals, fouls, offsides, cards, restarts, injuries, substitutions with \
@@ -472,6 +531,7 @@ mod tests {
                 dispersion: 6.0,
                 rho: -0.08,
                 draw: 0.3,
+                tilt: 0.0,
             },
             minute_shares: vec![1.0 / MINUTES as f64; MINUTES],
             events: EventFit::plain(FitRules::standard()),
@@ -509,7 +569,7 @@ mod tests {
 
     #[test]
     fn the_table_is_normalised_and_the_factor_lifts_the_draws() {
-        let ko = KickOff::even([50.0, 50.0]);
+        let ko = KickOff::even([10.0, 10.0]);
         let table = score_table(&fit().params, &ko);
         let sum: f64 = table.iter().flatten().sum();
         assert!((sum - 1.0).abs() < 1e-12);
@@ -524,13 +584,48 @@ mod tests {
 
     #[test]
     fn a_stronger_side_scores_more() {
-        let [h, a] = means(&fit().params, &KickOff::even([58.0, 50.0]));
+        let [h, a] = means(&fit().params, &KickOff::even([11.6, 10.0]));
         assert!(h > 2.0 * a, "{h} {a}");
+    }
+
+    /// The tilt moves wins from the weaker side to the stronger one, adds no draws, and leaves
+    /// an even match nearly alone.
+    #[test]
+    fn the_tilt_favours_the_side_with_the_higher_mean() {
+        let shares = |table: &[[f64; MAX_GOALS]; MAX_GOALS]| {
+            let mut out = [0.0; 3];
+            for (h, row) in table.iter().enumerate() {
+                for (a, p) in row.iter().enumerate() {
+                    out[usize::from(h <= a) + usize::from(h < a)] += p;
+                }
+            }
+            out
+        };
+        let uneven = KickOff::even([11.6, 10.0]);
+        let mut tilted = fit();
+        tilted.params.tilt = 0.25;
+        let [win, draw, loss] = shares(&score_table(&fit().params, &uneven));
+        let [t_win, t_draw, t_loss] = shares(&score_table(&tilted.params, &uneven));
+        assert!(
+            t_win > win && t_loss < loss,
+            "{win} {t_win} {loss} {t_loss}"
+        );
+        assert!(t_draw <= draw, "{draw} {t_draw}");
+        let even = KickOff::even([10.0, 10.0]);
+        let plain = score_table(&fit().params, &even);
+        let with = score_table(&tilted.params, &even);
+        let [lambda, mu] = means(&fit().params, &even);
+        let expect = libm::pow(lambda / mu, 0.25);
+        // At an even match the factor is the home term's alone, close to 1.
+        assert!((expect - 1.0).abs() < 0.05);
+        assert!(
+            (with[2][1] / with[1][2] - plain[2][1] / plain[1][2] * expect * expect).abs() < 1e-9
+        );
     }
 
     #[test]
     fn a_seed_plays_the_same_match_and_the_goals_match_the_score() {
-        let ko = KickOff::even([55.0, 50.0]);
+        let ko = KickOff::even([11.0, 10.0]);
         let one = FittedScoresV1.play(&fit(), &ko, 9).unwrap();
         assert_eq!(one, FittedScoresV1.play(&fit(), &ko, 9).unwrap());
         for seed in 0..500 {
@@ -548,7 +643,7 @@ mod tests {
 
     #[test]
     fn the_off_version_refuses_and_a_bad_fit_is_refused() {
-        let ko = KickOff::even([50.0, 50.0]);
+        let ko = KickOff::even([10.0, 10.0]);
         let err = FastModelOff.play(&fit(), &ko, 1).unwrap_err().to_string();
         assert!(err.contains("the fast-model slot is off"), "{err}");
         let mut bad = fit();
@@ -572,7 +667,7 @@ mod tests {
     /// the score draws alone give, and the events come after them on the generator.
     #[test]
     fn the_events_follow_the_score_on_the_generator() {
-        let ko = KickOff::even([55.0, 50.0]);
+        let ko = KickOff::even([11.0, 10.0]);
         for seed in 0..200 {
             let m = FittedScoresV1.play(&fit(), &ko, seed).unwrap();
             let table = score_table(&fit().params, &ko);

@@ -167,6 +167,12 @@ impl TickSink for GatedSnapshots {
         self.capture(sim);
         Ok(())
     }
+
+    /// A paused or held match runs no tick, so a capture the socket passes meanwhile is
+    /// written here.
+    fn on_hold(&mut self, tick: u32) {
+        self.persist(tick);
+    }
 }
 
 /// The sink outlives each connection of a match that reconnects, so a session borrows it.
@@ -177,5 +183,9 @@ impl TickSink for &mut GatedSnapshots {
 
     fn on_stoppage(&mut self, stoppage: &Stoppage, sim: &Simulation) -> Result<(), EngineError> {
         (**self).on_stoppage(stoppage, sim)
+    }
+
+    fn on_hold(&mut self, tick: u32) {
+        (**self).on_hold(tick);
     }
 }

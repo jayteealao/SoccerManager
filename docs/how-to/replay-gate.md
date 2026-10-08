@@ -48,7 +48,7 @@ If the change also changes what the gate measures (the fixture list, the state i
    The fit takes about 25 minutes on 8 cores, and writes `content/fast-model.json` only when the fast model passes its check. See [`fast-model`](../reference/cli.md#fast-model) in the command-line reference.
 5. Commit `gate/golden.json` in its own commit, then commit `content/fast-model.json` in the same change.
 
-The entry's `band_result` path, `gate/bands/ledger-<index>.json`, is where the realism band run for this regeneration is saved later. Never edit the entry to fill it in.
+The entry's `band_result` path, `gate/bands/ledger-<index>.json`, is where the realism band run for this regeneration is saved later. Never edit the entry to fill it in. A report saved now has `schema.version` `2`, with a verdict for each band and the band registry it was judged with; the saved reports of `schema.version` `1` still load and show.
 
 ## Machine hash sets (history)
 

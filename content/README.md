@@ -28,7 +28,7 @@ Compare a candidate with `calibrate --pair <name>`, then remove the flag with th
 
 ## Realism bands
 
-`realism-bands.json` holds the acceptance criteria that `engine-cli calibrate` checks. It is at version 2; the engine refuses a file of version 1. The bands are criteria, never tuning values: change a band only by a recorded product-owner decision.
+`realism-bands.json` holds the acceptance criteria that `engine-cli calibrate` checks. It is at version 3. A version 2 file still loads, and the engine migrates it to version 3 in memory. The engine refuses a file of version 1. The bands are criteria, never tuning values: change a band only by a recorded product-owner decision.
 
 Version 1 set four bands: goals per match 2.4 to 3.2, shots per team 8 to 16, possession 35 to 65 percent for each side, and a stronger club (every attribute times 1.15) winning more than half its matches. Version 2 adds eleven bands, checked in the equal suite:
 

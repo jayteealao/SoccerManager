@@ -40,7 +40,26 @@ To see the effect over many matches, run a calibration run:
 target/release/engine-cli calibrate --seed 2026 --matches 200 --content-dir my-content
 ```
 
-The run report compares every realism band, and the goal bands of every formation pairing, against `realism-bands.json`. Standard error names each band that fails, and the exit code is 2 when a band fails. Add `--suite equal` to skip the formations suite, which plays 55 pairings. A `realism-bands.json` of version 1 is refused: copy the shipped file of version 2.
+The run report compares every realism band, and the goal bands of every formation pairing, against `realism-bands.json`. Standard error names each band that fails, and the exit code is 2 when a band fails. Add `--suite equal` to skip the formations suite, which plays 55 pairings. A `realism-bands.json` of version 2 still loads; one of version 1 is refused: copy the shipped file of version 3.
+
+To judge the change against the engine before it, add `--base main` from your git checkout: each band then reads `pass`, `fail`, or `not sure`. See [Measure a tuning change](calibration.md).
+
+## Add a realism band
+
+Every band is an entry of `bands` in `realism-bands.json`, so a new band needs no code. To check the fouls of each team in the equal suite, add:
+
+```json
+{
+  "band": "fouls_per_team",
+  "suites": ["equal"],
+  "measure": { "kind": "mean", "per": "team", "of": ["fouls.{side}"] },
+  "lo": 8.0,
+  "hi": 14.0,
+  "smallest_shift": 1.5
+}
+```
+
+The next calibration run judges it. The measure's fields come from a closed list, and a mistake is refused with the band and the field named; see [`realism-bands.json`](../reference/data-files.md#realism-bandsjson) for the list and the four kinds of measure. Set `smallest_shift` to the smallest change that should matter: a change run sizes itself to see it.
 
 ## Add a rule pack
 
@@ -65,22 +84,92 @@ The rule pack decides how long each half lasts, how many substitutions each team
    target/release/engine-cli generate --seed 7 --clubs 2 --out my-teams
    ```
 
-2. Open a team file. Change the club name, the kit colours, or a player's name, shirt, position, or attributes.
+2. Open a team file. Change the club name, the kit colours, or a player's name, shirt, position, attributes, height, age, or nationality.
 3. Pass the file to the engine with `--team-a` or `--team-b`:
 
    ```bash
    target/release/engine-cli simulate --seed 1 --ticks-out check.ticks --team-a my-teams/club-00000007-00.json
    ```
 
-Each player must have every attribute of the attribute schema, and no other attribute. Each attribute value is from 1 to 100.
+Each player must have every attribute of the attribute schema, and no other attribute. A version 2 file, which `generate` writes, holds each attribute as a rating from 1.0 to 20.0 with at most one decimal, for example `12.4`, and each player's `height` in centimetres (150 to 215), `age` in years (15 to 45), and `nationality` as three upper-case letters:
+
+```json
+{ "id": "p-club-00000007-00-04", "name": "Jon Ashby", "shirt": 4, "position": "CB",
+  "attributes": { "acceleration": 12.4, "pace": 11.0, "...": 1.0 },
+  "height": 187, "age": 26, "nationality": "ENG" }
+```
+
+The screens show each rating as its whole number, so 12.4 shows as 12 and 12.5 as 13.
+
+Every player of a version 2 file also holds the two hidden values, `consistency` and `injury_proneness`, as ratings like the others. Consistency sets how much his form moves from match to match and through a match: at 20.0 he plays to his ratings every time, at 1.0 his form swings most. Injury proneness sets how often he is injured: 10.0 is the average, higher is more often. No screen shows them as numbers. A player shows a word for each, such as "steady" or "rarely injured", once he has played matches for the club (`matches_at_club` in his condition block); before that both read as not yet known.
+
+### Give a player his match condition
+
+A player may carry a `condition` block for the match: his sharpness and his adaptation to the country, in percent, his days of rest since his last match, and the matches he has played for the club. Every field is optional, and a player without the block is fully sharp, fully adapted and rested.
+
+1. Add the block to the player:
+
+   ```json
+   { "id": "p-club-00000007-00-04", "name": "Jon Ashby", "shirt": 4, "position": "CB",
+     "attributes": { "acceleration": 12.4, "pace": 11.0, "...": 1.0 },
+     "height": 187, "age": 26, "nationality": "ENG",
+     "condition": { "sharpness": 60, "adaptation": 50, "rest_days": 2 } }
+   ```
+
+2. Play the match with the file as before. At sharpness 60 his technical ratings play 0.6 lower; at adaptation 50 his mental ratings play 0.5 lower; two days of rest start him at energy 0.8 and raise his injury chance by half.
+
+A value out of range stops the load with the player and the field named, for example `player p-club-00000007-00-04: condition field sharpness is 101; allowed 0 to 100`. The data-file reference lists every field and its range.
+
+### Convert a version 1 file by hand
+
+A version 1 file (`"schema_version": 1`) holds whole numbers from 1 to 100 and no body fields. The engine still reads it and converts it as it loads: each value is divided by 5, so 62 plays as 12.4, exactly as it played before. To write it as version 2:
+
+1. Set `"schema_version": 2`.
+2. Divide every attribute value by 5: 62 becomes `12.4`, 25 becomes `5.0`. A value of 1 to 4 divides to under 1.0; write `1.0` instead. This one change plays differently from the version 1 file.
+3. Replace `injury_resistance` with `injury_proneness`: 21.0 less the converted resistance, so a resistance of 62 (12.4) becomes `8.6`. The engine converts it the same way.
+4. Add `"consistency": 10.0` to every player, as the engine does, or the value you want.
+5. Add `height`, `age`, and `nationality` to every player.
+
+A version 1 tactics file converts on load in the same way; the data-file reference lists its version 2 fields.
 
 ## Change the attribute schema
 
 1. Open `my-content/attributes.json`.
-2. Add an attribute as `{ "name": "flair", "group": "technical" }`, or remove one that the engine does not require.
-3. Add the new attribute to every player in every team file you use, with a value from 1 to 100. Remove a removed attribute from every player.
+2. Add the attribute to `attributes` with its job: the action and the stage it acts in, the statistic it moves, and the direction:
 
-The schema holds 30 to 50 attributes. The engine requires 14 attributes by name, and refuses a schema without one of them. The list is in the data-file reference.
+   ```json
+   {
+     "name": "flair",
+     "group": "technical",
+     "job": {
+       "action": "dribble",
+       "stage": "choose",
+       "statistic": "take-ons attempted per match",
+       "direction": "up"
+     }
+   }
+   ```
+
+3. Put the attribute in the stage table that its job names. Add it to `supports` of `actions.dribble.choose`, with a weight above 0 and below the main weight:
+
+   ```json
+   "choose": {
+     "main": { "attribute": "decisions", "weight": 1.0 },
+     "supports": [
+       { "attribute": "dribbling", "weight": 0.3 },
+       { "attribute": "vision", "weight": 0.1 },
+       { "attribute": "flair", "weight": 0.2 }
+     ],
+     "source": "design"
+   }
+   ```
+
+   A table holds at most 3 supports. The engine refuses an attribute that is in no stage table, and a job that names a stage whose table does not hold the attribute.
+4. Add the new attribute to every player in every team file you use, with a rating from 1.0 to 20.0 (or a value from 1 to 100 in a version 1 file).
+
+To remove an attribute that the engine does not require, remove it from `attributes`, from every stage table, from every role in `tactics.json`, and from every player. When it is the main attribute of a stage table, give that table another main attribute.
+
+The schema holds 30 to 50 attributes. The engine requires 4 attributes by name, because play reads them directly: `pace`, `technique`, `agility`, and `consistency`. It refuses a schema without one of them. The sensitivity rules refuse a job that has no rule: add a rule for the new job to `sensitivity.json` before you run them.
 
 ## Compare two models with a flag
 
@@ -96,7 +185,7 @@ Use a feature flag to decide between the current model and a candidate on the re
    The run plays every fixture twice: once with the flag off, into `arms/off/`, and once with it on, into `arms/on/`. Use `--suite equal` or `--suite strength` to play one suite only. Use `--flag other_flag=on` to hold another flag in one state for both arms.
 3. Read the table on standard error, or `calib.compare` and `calib.verdict` in `report.json`. Each row shows one band of one suite with the off value, the on value, and the difference. A star marks a value outside its band.
 4. Act on the verdict:
-   - `on-rejected`: the on arm had a missing statistics record, a change left unapplied, a validator violation, a stronger club that did not win more than half its matches, or a single-thread match time more than 10 percent slower. Remove the candidate.
+   - `on-rejected`: the on arm had a match without its statistics record, a match that panicked, a change left unapplied, a rule violation, a `stronger_team_win_rate` outside its band (in the shipped file, a stronger club that won less than half its matches), or a single-thread match time more than 10 percent slower. Remove the candidate.
    - `on-better`: the on arm passes more bands, or as many and sits closer to the band centres by more than 0.05. Keep the candidate as the only model.
    - `off-better`: remove the candidate.
    - `no-difference`: run once more on a second seed, for example `--seed 2027`. If the verdict is still `no-difference`, remove the candidate.
@@ -120,7 +209,10 @@ When a file has a bad value, the engine does not start the match. It prints one 
 
 ```text
 error: content refused: tuning tuning.json: engine.keeper_catch_chance: greater than 1
-error: content refused: team teams/x.json: players: player p-club-00000001-00-03: attribute pace is 120; allowed 1 to 100
+error: content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 20.5; allowed 1.0 to 20.0
+error: content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 12.34; not on a tenth
+error: content refused: team teams/x.json: players: player p-club-00000001-00-04: body field height is missing
+error: content refused: team teams/x.json: schema_version 3; this build reads 2
 error: content refused: rules rules/default.json: schema_version 7; this build reads 3
 ```
 

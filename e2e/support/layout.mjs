@@ -4,8 +4,8 @@
 //
 //   1. fill: the page's root box equals the window (no empty band beside or below it);
 //   2. sideways scroll: the page, or any box that scrolls sideways (overflow-x auto or scroll),
-//      is wider than its window; the tab row at the compact step is the one drawn sideways
-//      scroll and is allowed;
+//      is wider than its window; the tab row at the compact step, and a data table in a box
+//      marked `data-may-scroll-x`, are drawn to scroll sideways and are allowed;
 //   3. clipped text: a text run that does not fit its own box or is cut by a box that clips
 //      (overflow hidden or clip). An ellipsis is allowed only where `data-may-truncate` marks
 //      the text or a box around it (the header title, club and player names);
@@ -50,6 +50,8 @@ export async function layoutReport(page, { minControl = 24 } = {}) {
     const scrolls = (cs, axis) => ['auto', 'scroll'].includes(axis === 'x' ? cs.overflowX : cs.overflowY);
     const mayTruncate = (el) => Boolean(el.closest('[data-may-truncate]'));
     const tabRow = (el) => Boolean(el.closest('nav.subnav'));
+    // A data table may scroll sideways in its own box (WCAG 1.4.10 exempts it).
+    const mayScrollX = (el) => Boolean(el.closest('[data-may-scroll-x]'));
 
     // While a dialog is open, the page under its scrim is out of reach: check the dialog only.
     const dialog = [...document.querySelectorAll('[role="dialog"], [role="alertdialog"]')].find(shown) ?? null;
@@ -83,7 +85,7 @@ export async function layoutReport(page, { minControl = 24 } = {}) {
     }
     for (const el of all) {
       const cs = getComputedStyle(el);
-      if (scrolls(cs, 'x') && el.scrollWidth > el.clientWidth + 1 && shown(el) && !tabRow(el) && inScope(el)) {
+      if (scrolls(cs, 'x') && el.scrollWidth > el.clientWidth + 1 && shown(el) && !tabRow(el) && !mayScrollX(el) && inScope(el)) {
         add('sideways scroll', el, el.getBoundingClientRect(), `${el.scrollWidth} px in ${el.clientWidth} px`);
       }
     }
@@ -231,7 +233,7 @@ export async function layoutReport(page, { minControl = 24 } = {}) {
       const v = onShow(el, r);
       const inScroller =
         v !== null && v.left <= r.left + 1 && v.right >= r.right - 1 && v.top <= r.top + 1 && v.bottom >= r.bottom - 1;
-      if (!across && !(scroller && tabRow(el))) {
+      if (!across && !(scroller && (tabRow(el) || mayScrollX(el)))) {
         add('cut off', el, r, 'outside the window across');
       } else if (!down && !scroller) {
         add('cut off', el, r, 'outside the window down, with no box that scrolls to it');

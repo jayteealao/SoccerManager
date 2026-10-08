@@ -8,7 +8,7 @@
 //! re-simulate options, crashes, hangs, or stops early makes the result incomplete (exit 3),
 //! never "no difference".
 
-mod cache;
+pub(crate) mod cache;
 mod report;
 mod runs;
 

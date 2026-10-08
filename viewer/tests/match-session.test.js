@@ -200,7 +200,7 @@ test('loading, then kick-off on the hello, then live once the kick-off is sent',
 
 test('with a lineup to pick, CONTINUE opens the Pre-match line-ups, which send nothing until KICK OFF', async () => {
   const { session, socket } = await started(RUNNING);
-  const squad = roster(0).map((p) => ({ ...p, 'player.natural_fitness': 60, role_fit: [] }));
+  const squad = roster(0).map((p) => ({ ...p, 'player.natural_fitness': 120, role_fit: [] }));
   const setup = {
     lineup: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     bench: [11, 12, 13, 14, 15, 16, 17],
@@ -1236,4 +1236,45 @@ test('a canvas that takes a new size redraws its pitch there, and a later pitch 
   session.resizeCanvas(other, replayBox);
   assert.deepEqual(calls, [], 'a canvas with no pitch only keeps its box');
   assert.equal(session.boxes.get(other), replayBox);
+});
+
+test('two quick squad view changes save one at a time, and the newer one is what stays saved', async () => {
+  const { session, socket } = await started(RUNNING);
+  socket.deliver(hello());
+  const stored = [];
+  const waiting = [];
+  let mostAtOnce = 0;
+  session.viewsAdapter = {
+    kind: 'launcher',
+    async read() {
+      return { views: [], ratings: {} };
+    },
+    save(club, body) {
+      return new Promise((resolve) => {
+        waiting.push(() => {
+          stored.push(body);
+          resolve(true);
+        });
+        mostAtOnce = Math.max(mostAtOnce, waiting.length);
+      });
+    },
+  };
+  const older = { active: 'Older', views: [{ name: 'Older' }] };
+  const newer = { active: 'Newer', views: [{ name: 'Newer' }] };
+  const saves = [session.saveViews(older), session.saveViews(newer)];
+  assert.equal(session.viewsSaved, 'saving');
+
+  // The launcher answers the latest request it holds first, so an older one lands last.
+  while (waiting.length) {
+    waiting.pop()();
+    await new Promise((r) => setTimeout(r, 0));
+    if (session.viewsSaved === 'saved') {
+      assert.deepEqual(stored.at(-1), newer, 'saved is shown only once the newer view is stored');
+    }
+  }
+  await Promise.all(saves);
+  assert.deepEqual(stored.at(-1), newer, 'the newer view is the last one stored');
+  assert.equal(session.viewsSaved, 'saved');
+  assert.equal(session.squadViews.active, 'Newer');
+  assert.equal(mostAtOnce, 1, 'one save at a time');
 });

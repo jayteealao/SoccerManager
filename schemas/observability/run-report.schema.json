@@ -24,7 +24,8 @@
       "const": "run-report"
     },
     "schema.version": {
-      "const": "1"
+      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows. Every key of an older version stays.",
+      "enum": ["1", "2", "3"]
     },
     "owner.id": {
       "type": "string",
@@ -67,6 +68,15 @@
       "description": "A calibration run: SHA-256 (12 hex characters) over the inputs that decide the fixtures: the attributes, rules and tactics content, the generator block after flag states, and the two default clubs. A baseline must share it.",
       "type": "string",
       "pattern": "^[0-9a-f]{12}$"
+    },
+    "fixtures.scheme": {
+      "description": "A calibration run: the scheme its fixture keys and engine seeds are made by. A report without it is from the old seeding scheme, whose match seeds came from the fixture's place in the run; it cannot be a baseline.",
+      "type": "string",
+      "minLength": 1
+    },
+    "run.identity": {
+      "description": "A calibration run: everything that makes its results what they are (build, content, fixtures, flags, paired flag, seed, minutes, strength boost, random-number scheme, fixture scheme, measures version, registry version), as the run folder's run.json holds it.",
+      "type": "object"
     },
     "outcome": {
       "description": "error marks a run or match that failed; it then carries the three error.* keys and need not carry statistics.",
@@ -116,6 +126,18 @@
     "bench.matches": {
       "type": "integer",
       "minimum": 1
+    }
+  },
+  "$defs": {
+    "ruleInterval": {
+      "description": "An estimate and its 95 percent interval.",
+      "type": "object",
+      "required": ["est", "lo", "hi"],
+      "properties": {
+        "est": { "type": "number" },
+        "lo": { "type": "number" },
+        "hi": { "type": "number" }
+      }
     }
   },
   "allOf": [
@@ -325,6 +347,10 @@
                   "description": "The sampling error of value: the standard error of a mean, share, or ratio over the matches judged; 0 for wall_ms.",
                   "type": "number",
                   "minimum": 0
+                },
+                "informational": {
+                  "description": "A change run only: true on a formations check of one pairing. The change run judges and powers each formations band pooled over every pairing, so this row sets no power target and does not enter the joint verdict. Absent in a plain run.",
+                  "const": true
                 }
               }
             }
@@ -363,6 +389,7 @@
             }
           },
           "calib.pass": {
+            "description": "The run's answer, as the exit code gives it: in a change run, true only when calib.joint.word is pass; otherwise every band check, the time budget included, passes and no dark-path counter is set.",
             "type": "boolean"
           },
           "calib.selection": {
@@ -570,7 +597,14 @@
                 "darkpath.match_without_stats",
                 "validate.violations",
                 "bench.match_wall_ms"
-              ]
+              ],
+              "properties": {
+                "calib.workers_failed": {
+                  "description": "Always 0. Matches no longer run in worker processes, so no worker can fail. The field is kept so saved reports stay readable.",
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
             }
           },
           "calib.compare": {
@@ -635,6 +669,195 @@
               "off-better",
               "no-difference"
             ]
+          },
+          "calib.units": {
+            "description": "The run's fixtures over every arm and suite, those an earlier session of the run had finished, and those this session played.",
+            "type": "object",
+            "required": ["total", "finished_before", "played"],
+            "properties": {
+              "total": { "type": "integer", "minimum": 0 },
+              "finished_before": { "type": "integer", "minimum": 0 },
+              "played": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "calib.results_digest": {
+            "description": "SHA-256 over every arm's compact rows in fixture-key order: each row's key and its columns except record.reasons and duration_us. A resumed run gives the same digest as an uninterrupted one. Reports of earlier builds hashed each match's statistics instead, so their digests are not comparable with these.",
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "darkpath.match_panicked": {
+            "description": "Matches that panicked; the run caught each one, recorded it as failed, and went on.",
+            "type": "integer",
+            "minimum": 0
+          },
+          "calib.runner": {
+            "description": "threads: the one-process runner. processes appears only in reports of earlier builds, which also had worker processes.",
+            "enum": ["threads", "processes"]
+          },
+          "calib.rows": {
+            "description": "The compact rows of every arm: the row format, the row files, the rows the ledger counts, and the matches with a full recording (statistics and event file), by reason; a match can have more than one reason.",
+            "type": "object",
+            "required": ["format", "files", "rows", "recorded"],
+            "properties": {
+              "format": { "type": "integer", "minimum": 1 },
+              "files": { "type": "integer", "minimum": 0 },
+              "rows": { "type": "integer", "minimum": 0 },
+              "recorded": {
+                "type": "object",
+                "required": ["matches", "sample", "error", "violation", "extreme", "all"],
+                "additionalProperties": { "type": "integer", "minimum": 0 }
+              }
+            }
+          },
+          "calib.verdicts": {
+            "description": "Each band's word. In a change run it comes from the paired max-t test: fail when the value is outside the range or the change is beyond the joint threshold and at least the band's smallest shift, pass when inside, not a fail, and with the power to see the band's smallest shift, not sure otherwise. In a run without an old engine it is the range check, without the time budget (wall_ms), which calib.pass still includes. A change-run row outside its range carries outside_by; one that set no power target carries no_target.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["band", "suite", "word", "value", "lo", "hi"],
+              "properties": {
+                "band": { "type": "string", "minLength": 1 },
+                "suite": { "enum": ["equal", "strength", "formations", "red-card"] },
+                "pairing": { "type": "string" },
+                "word": { "enum": ["pass", "fail", "not sure"] },
+                "value": { "type": "number" },
+                "lo": { "type": "number" },
+                "hi": { "type": "number" },
+                "base_value": { "type": "number" },
+                "diff": { "type": "number" },
+                "se": { "type": "number", "minimum": 0 },
+                "smallest_shift": { "type": "number", "exclusiveMinimum": 0 },
+                "power": { "type": "boolean" },
+                "needed": { "type": "integer", "minimum": 0 },
+                "outside_by": {
+                  "description": "A change run: how far the changed engine's value is outside its range, when its range check fails.",
+                  "type": "number",
+                  "minimum": 0
+                },
+                "no_target": {
+                  "description": "A change run: the band was outside its range by more than its noise at the pilot (beyond the joint threshold times its own error), so it set no power target. Its word is judged as for any band.",
+                  "const": true
+                }
+              }
+            }
+          },
+          "calib.joint": {
+            "description": "A change run's joint verdict: fail when any band fails or any match panicked, missed its result, left a change unapplied, or broke a rule; pass when every band passes; not sure otherwise. critical is the max-t threshold over the resamples.",
+            "type": "object",
+            "required": ["word", "critical", "resamples", "false_alarm", "pairs"],
+            "properties": {
+              "word": { "enum": ["pass", "fail", "not sure"] },
+              "critical": { "type": "number", "minimum": 0 },
+              "resamples": { "type": "integer", "minimum": 1 },
+              "false_alarm": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 },
+              "pairs": { "type": "integer", "minimum": 0 },
+              "guards": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "calib.power": {
+            "description": "A change run, per suite: the pilot's matches per suite unit, the power target played, the cap (--matches), whether every band of the suite reached its power, the band that set the target, and the bands that set none because they were outside their range by more than their noise at the pilot.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": ["target", "cap", "reached"],
+              "properties": {
+                "pilot": { "type": "integer", "minimum": 1 },
+                "target": { "type": "integer", "minimum": 1 },
+                "cap": { "type": "integer", "minimum": 1 },
+                "reached": { "type": "boolean" },
+                "driver": {
+                  "description": "The band whose power needed the most matches at the pilot, which set the target. Absent when the pilot gave every band power.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "no_target": {
+                  "description": "The bands outside their range by more than their noise at the pilot, which set no target (band, or band/label for a row of one arm). Absent when every band set the target.",
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          },
+          "calib.registry": {
+            "description": "The band registry the run was judged with: its layout version, the digest of its bands, and the version it was migrated from when it was.",
+            "type": "object",
+            "required": ["version", "digest"],
+            "properties": {
+              "version": { "type": "integer", "minimum": 3 },
+              "digest": { "type": "string", "pattern": "^[0-9a-f]{12}$" },
+              "migrated_from": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "calib.stages": {
+            "description": "Time and memory of each stage: play, checks, commentary, writing, disk and judge, as thread time summed over the threads and the largest heap growth of one thread in the stage, and total, the run's wall time and the process's peak working set where the platform gives it.",
+            "type": "object",
+            "required": ["play", "checks", "commentary", "writing", "disk", "judge", "total"],
+            "additionalProperties": {
+              "type": "object",
+              "required": ["ms", "peak_mb"],
+              "properties": {
+                "ms": { "type": "integer", "minimum": 0 },
+                "peak_mb": { "type": ["number", "null"], "minimum": 0 }
+              }
+            }
+          },
+          "calib.rules": {
+            "description": "A change run's rules stage: the touched sensitivity rules checked, the levels checked over every rule (two per rule), and the rules judged fail. Since version 3 also the rules judged not sure, whether the build carries the rules (the sensitivity feature), the stage's wall time, and one row per rule with the five-match rule last.",
+            "type": "object",
+            "required": ["checked", "levels", "failed"],
+            "properties": {
+              "checked": { "type": "integer", "minimum": 0 },
+              "levels": { "type": "integer", "minimum": 0 },
+              "failed": { "type": "integer", "minimum": 0 },
+              "not_sure": { "type": "integer", "minimum": 0 },
+              "built": { "type": "boolean" },
+              "ms": { "type": "integer", "minimum": 0 },
+              "rows": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["job", "statistic", "levels", "word"],
+                  "properties": {
+                    "job": { "type": "string", "minLength": 1 },
+                    "statistic": { "type": "string", "minLength": 1 },
+                    "levels": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+                    "low": { "type": "number" },
+                    "high": { "type": "number" },
+                    "move": { "$ref": "#/$defs/ruleInterval" },
+                    "share": { "$ref": "#/$defs/ruleInterval" },
+                    "roles": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 } },
+                    "word": { "enum": ["pass", "fail", "not_sure"] }
+                  }
+                }
+              }
+            }
+          },
+          "calib.base": {
+            "description": "The old engine of a change run: where it came from, its build and content, how many of its results came from the cache and how many it played, and its band rows on the run's fixtures.",
+            "type": "object",
+            "required": ["source", "build.id", "content.hash", "cache", "calib.bands"],
+            "properties": {
+              "source": { "enum": ["rev", "binary"] },
+              "rev": { "type": "string" },
+              "commit": { "type": "string" },
+              "build.id": { "type": "string", "minLength": 1 },
+              "content.hash": { "type": "string" },
+              "cache": {
+                "type": "object",
+                "required": ["hits", "played"],
+                "properties": {
+                  "hits": { "type": "integer", "minimum": 0 },
+                  "played": { "type": "integer", "minimum": 0 }
+                }
+              },
+              "calib.bands": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["band", "suite", "value", "pass"]
+                }
+              }
+            }
           }
         },
         "dependentRequired": {
@@ -642,8 +865,27 @@
             "calib.arms",
             "calib.compare",
             "calib.verdict"
+          ],
+          "calib.joint": [
+            "calib.verdicts",
+            "calib.power",
+            "calib.rules",
+            "calib.base"
           ]
         }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": { "const": "calibrate" },
+          "schema.version": { "enum": ["2", "3"] },
+          "outcome": { "not": { "const": "error" } }
+        },
+        "required": ["operation", "schema.version"]
+      },
+      "then": {
+        "required": ["calib.registry", "calib.stages"]
       }
     }
   ],

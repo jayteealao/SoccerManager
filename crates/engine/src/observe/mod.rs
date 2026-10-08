@@ -50,6 +50,10 @@ pub trait Record: Serialize {
     fn kind(&self) -> &'static str;
     fn operation(&self) -> &'static str;
     fn owner_id(&self) -> &str;
+    /// The record's `schema.version`: [`SCHEMA_VERSION`] unless a kind has moved on.
+    fn schema_version(&self) -> &'static str {
+        SCHEMA_VERSION
+    }
 }
 
 /// One club as `match-stats` names it.
@@ -101,6 +105,40 @@ pub struct MatchStats {
     pub figures: MatchFigures,
     #[serde(flatten, default)]
     pub script: ScriptFigures,
+    /// Every player who played, with his match rating, home first and in squad order. An
+    /// additive extra; absent from a record of a match that did not play.
+    #[serde(
+        rename = "players.rating",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub ratings: Vec<RatingEntry>,
+}
+
+/// One player's match rating as the match record lists it: 1.0 to 10.0 with one decimal.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RatingEntry {
+    #[serde(rename = "player.id")]
+    pub id: String,
+    /// His side: 0 home, 1 away.
+    pub team: usize,
+    pub rating: f64,
+}
+
+impl RatingEntry {
+    /// Every player of `sim` who played, with his rating, home first and in squad order:
+    /// final once the match is over.
+    pub fn of_match(sim: &crate::sim::Simulation) -> Vec<Self> {
+        let teams = sim.teams();
+        sim.match_ratings()
+            .into_iter()
+            .map(|r| Self {
+                id: teams[r.team].player_ids[r.squad].clone(),
+                team: r.team,
+                rating: r.rating(),
+            })
+            .collect()
+    }
 }
 
 /// The script pack a match ran with and its hook counters. Every key is absent from a match
@@ -192,25 +230,17 @@ impl MatchFigures {
     /// The figures of a match from its summary and its managers.
     pub fn new(s: &Summary, managers: [crate::Manager; 2]) -> Self {
         let possession: u32 = s.possession_ticks[0] + s.possession_ticks[1];
-        let share = |part: u32, whole: u32| {
-            if whole == 0 {
-                0.0
-            } else {
-                round_to(100.0 * f64::from(part) / f64::from(whole), 1)
-            }
-        };
         Self {
             goals: s.goals,
             shots_on_target: s.shots_on_target,
-            xg: s.xg.map(|x| round_to(x, 2)),
+            xg: s.xg.map(round_xg),
             passes: s.passes,
             passes_completed: s.passes_completed,
-            pass_accuracy_pct: [0, 1].map(|t| share(s.passes_completed[t], s.passes[t])),
+            pass_accuracy_pct: [0, 1].map(|t| share_pct(s.passes_completed[t], s.passes[t])),
             clearances: s.clearances,
             restart_kicks: s.restart_kicks,
-            // 50 ticks a second.
-            ball_in_play_s: (s.live_ticks + 25) / 50,
-            possession_pct: [0, 1].map(|t| share(s.possession_ticks[t], possession)),
+            ball_in_play_s: ball_in_play_s(s.live_ticks),
+            possession_pct: [0, 1].map(|t| share_pct(s.possession_ticks[t], possession)),
             manager_kind: managers.map(|m| {
                 match m {
                     crate::Manager::Ai => "ai",
@@ -223,6 +253,28 @@ impl MatchFigures {
             error_retriable: None,
         }
     }
+}
+
+/// `part` over `whole` as a percentage with one decimal, as the per-match figures show it;
+/// 0 when `whole` is 0. Calibration rebuilds a match's figures from its unrounded counts
+/// with this function, so both give the same value.
+pub fn share_pct(part: u32, whole: u32) -> f64 {
+    if whole == 0 {
+        0.0
+    } else {
+        round_to(100.0 * f64::from(part) / f64::from(whole), 1)
+    }
+}
+
+/// Expected goals as the per-match figures show them: two decimals.
+pub fn round_xg(xg: f64) -> f64 {
+    round_to(xg, 2)
+}
+
+/// Whole seconds with the ball in play from ticks with the ball in play: 50 ticks a second,
+/// rounded to the nearest second.
+pub fn ball_in_play_s(live_ticks: u32) -> u32 {
+    (live_ticks + 25) / 50
 }
 
 /// `x` rounded to `places` decimals.
@@ -511,7 +563,7 @@ impl Record for FailureRecord {
 pub fn to_json<R: Record>(record: &R) -> Result<String, EngineError> {
     let mut map = serde_json::Map::new();
     map.insert("record.kind".into(), record.kind().into());
-    map.insert("schema.version".into(), SCHEMA_VERSION.into());
+    map.insert("schema.version".into(), record.schema_version().into());
     map.insert("owner.id".into(), record.owner_id().into());
     map.insert("service".into(), SERVICE.into());
     map.insert("version".into(), crate::version().into());
@@ -645,6 +697,7 @@ mod tests {
                 ..MatchFigures::default()
             },
             script: ScriptFigures::default(),
+            ratings: Vec::new(),
         }
     }
 

@@ -8,7 +8,7 @@ pub mod planned;
 pub mod verdict;
 
 use crate::data::tactics::{
-    DIRECTNESS, LINE_HEIGHT, PRESSING, TEMPO, TIME_WASTING, TacticsSchema, WIDTH,
+    DIRECTNESS, LINE_HEIGHT, Offset, PRESSING, TEMPO, TIME_WASTING, TacticsSchema, WIDTH,
 };
 use crate::team::PLAYERS_PER_TEAM;
 use crate::tuning::Tuning;
@@ -154,6 +154,11 @@ pub struct SlotPlan {
     pub dribble: f64,
     /// Added to a forward pass in proportion to its progress.
     pub progress: f64,
+    /// Metres the anchor moves while the team has the ball, and while it does not.
+    pub in_possession: Offset,
+    pub out_of_possession: Offset,
+    /// Added to a teammate's pass to this slot in proportion to the pass length.
+    pub long_ball_target: f64,
 }
 
 /// The numbers play reads from a team's tactics.
@@ -189,11 +194,15 @@ impl TeamPlan {
         for (plan, rd) in slots.iter_mut().zip(&tactics.roles) {
             let role = &schema.roles[usize::from(rd.role)];
             let duty = &schema.duties[usize::from(rd.duty)];
+            let actions = &role.preferred_actions;
             *plan = SlotPlan {
                 depth: duty.depth,
-                shoot: role.shoot,
-                dribble: role.dribble + duty.risk,
-                progress: role.progress + duty.risk,
+                shoot: actions.shoot * duty.scale,
+                dribble: actions.dribble * duty.scale + duty.risk,
+                progress: actions.progress * duty.scale + duty.risk,
+                in_possession: role.in_possession,
+                out_of_possession: role.out_of_possession,
+                long_ball_target: role.teammates.long_ball_target,
             };
         }
         Self {

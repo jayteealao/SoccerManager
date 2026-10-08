@@ -96,12 +96,12 @@ fn a_penalty_admits_no_change_so_the_change_waits_through_it() {
     let config = calm_match(90);
     let bands = {
         let sim = Simulation::new(config.clone()).unwrap();
-        let tackler = sim.players()[TACKLER].derived;
-        let carrier = sim.players()[CARRIER].derived;
-        let p_win = engine::rules::fouls::win_chance(&tackler, &carrier, &config.tuning);
+        let tackler = sim.skills(TACKLER);
+        let carrier = sim.skills(CARRIER);
+        let p_win = engine::rules::fouls::win_chance(tackler, carrier, &config.tuning);
         (
             p_win,
-            engine::rules::fouls::foul_chance(&tackler, 0, &config.tuning),
+            engine::rules::fouls::foul_chance(tackler, 0, &config.tuning),
         )
     };
     let at = DVec2::new(45.0, 0.0);

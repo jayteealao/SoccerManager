@@ -21,11 +21,12 @@
 
   let { session } = $props();
 
-  /// The sub-navigation: Match goes back to the pitch; Shapes is the one Tactics view built,
-  /// the others are stubs until their screens are ported.
+  /// The sub-navigation: Match goes back to the pitch; Shapes is the one Tactics view built;
+  /// Squad opens the Squad screen; the others are stubs until their screens are ported.
   const TABS = [
     { id: 'match', label: 'Match' },
     { id: 'shapes', label: 'Shapes', active: true },
+    { id: 'squad', label: 'Squad' },
     { id: 'roles', label: 'Roles', stub: true },
     { id: 'instructions', label: 'Instructions', menu: true, stub: true },
     { id: 'plans', label: 'Plans & opposition', menu: true, stub: true },
@@ -162,7 +163,7 @@
   onaction={() => session.act()}
   busy={session.actionBusy}
   tabs={TABS}
-  ontab={(id) => session.show(id === 'match' ? 'match' : 'tactics')}
+  ontab={(id) => (id === 'squad' ? session.openSquad() : session.show(id === 'match' ? 'match' : 'tactics'))}
   menu={session.onMenu}
   menuOpen={session.menuOpen}
 >

@@ -7,11 +7,13 @@
 //! the stream table has an owner; and the three hook slots are optional, their adapters own
 //! no key, and a match with each switched off plays to the end.
 
-/// The four modifier slots, in registry order.
-const MODIFIER_SLOTS: [&str; 4] = [
+/// The six modifier slots, in registry order.
+const MODIFIER_SLOTS: [&str; 6] = [
     MODIFIER_FATIGUE.id,
+    MODIFIER_SHARPNESS.id,
     MODIFIER_PRESSURE.id,
     MODIFIER_MOMENTUM.id,
+    MODIFIER_ADAPTATION.id,
     MODIFIER_WEATHER.id,
 ];
 
@@ -22,9 +24,10 @@ use std::collections::BTreeMap;
 use engine::modules::modifier::Family;
 use engine::modules::registry::{
     BALL, CHANGES, CLOCK, DECISION, DISCIPLINE, FAST_MODEL, FATIGUE, FOULS, HOOK_COMMENTARY,
-    HOOK_DECISION, HOOK_RULE, INJURIES, MANAGER, MODIFIER_FATIGUE, MODIFIER_MOMENTUM,
-    MODIFIER_PRESSURE, MODIFIER_WEATHER, ModuleRef, OFFSIDE, PEOPLE, POSSESSION, PRE_MATCH,
-    PRESENTATION, RESTARTS, RULES, SEASON, SHOT, SKIN, STEERING, WORLD,
+    HOOK_DECISION, HOOK_RULE, INJURIES, MANAGER, MODIFIER_ADAPTATION, MODIFIER_FATIGUE,
+    MODIFIER_MOMENTUM, MODIFIER_PRESSURE, MODIFIER_SHARPNESS, MODIFIER_WEATHER, ModuleRef, OFFSIDE,
+    PEOPLE, POSSESSION, PRE_MATCH, PRESENTATION, RESTARTS, RULES, SEASON, SHOT, SKIN, STEERING,
+    WORLD,
 };
 use engine::modules::{
     CardError, MOVED_KEYS, ModuleCard, OwnershipError, REGISTRY, Registration, SlotDecl, SlotEntry,
@@ -82,12 +85,14 @@ fn refusal(slots: &SlotFile, registry: &[SlotDecl]) -> (String, String, String, 
 fn band_names() -> Vec<String> {
     let text = std::fs::read_to_string(common::content_dir().path("realism-bands.json")).unwrap();
     let bands: serde_json::Value = serde_json::from_str(&text).unwrap();
-    bands
-        .as_object()
+    // Every band of the registry by name, and every group of bands (possession_pct) too.
+    bands["bands"]
+        .as_array()
         .unwrap()
         .iter()
-        .filter(|(_, v)| v.is_object())
-        .map(|(k, _)| k.clone())
+        .flat_map(|b| [b["band"].as_str(), b["group"].as_str()])
+        .flatten()
+        .map(str::to_string)
         .collect()
 }
 
@@ -125,8 +130,10 @@ fn default_selection_resolves_and_a_match_finishes() {
             "engine.steering=steering@1",
             "engine.pre-match=pre-match@1",
             "engine.modifier.fatigue=fatigue-curve@1",
+            "engine.modifier.sharpness=sharpness@1",
             "engine.modifier.pressure=pressure@1",
             "engine.modifier.momentum=momentum@1",
+            "engine.modifier.adaptation=adaptation@1",
             "engine.modifier.weather=weather@1",
             "engine.clock=clock@1",
             "engine.restarts=restarts@1",
@@ -307,8 +314,9 @@ fn an_undeclared_or_missing_slot_is_refused() {
     assert_eq!(
         valid,
         "engine.fouls, engine.offside, engine.shot, engine.fatigue, engine.steering, \
-         engine.pre-match, engine.modifier.fatigue, engine.modifier.pressure, \
-         engine.modifier.momentum, engine.modifier.weather, engine.clock, engine.restarts, \
+         engine.pre-match, engine.modifier.fatigue, engine.modifier.sharpness, \
+         engine.modifier.pressure, engine.modifier.momentum, engine.modifier.adaptation, \
+         engine.modifier.weather, engine.clock, engine.restarts, \
          engine.discipline, engine.injuries, engine.ball, engine.possession, engine.decision, \
          engine.manager, engine.changes, engine.hook.decision, engine.hook.rule, \
          engine.hook.commentary, game.rules, game.world, game.season, game.people, \
@@ -403,7 +411,7 @@ fn every_registered_card_is_complete() {
     assert!(names.contains(&"yellow_cards_per_team"), "{names:?}");
     assert!(names.contains(&"goals_per_xg"), "{names:?}");
     let registrations = every_registration();
-    // Fouls, offside, shot, fatigue, pre-match, the four modifiers, discipline, injuries,
+    // Fouls, offside, shot, fatigue, pre-match, the six modifiers, discipline, injuries,
     // the manager, changes, and the three hook slots each have version 1 and off; steering,
     // the clock, restarts, ball physics, possession, and the decision maker have version 1
     // only.
@@ -521,28 +529,28 @@ fn the_registry_declares_the_moved_slots_in_order() {
     assert!(matches!(default(3), ModuleRef::Fatigue(_)));
     assert!(matches!(default(4), ModuleRef::Steering(_)));
     assert!(matches!(default(5), ModuleRef::PreMatch(_)));
-    for i in 6..10 {
+    for i in 6..12 {
         assert!(matches!(default(i), ModuleRef::Modifier(_)), "{i}");
     }
-    assert!(matches!(default(10), ModuleRef::Clock(_)));
-    assert!(matches!(default(11), ModuleRef::Restarts(_)));
-    assert!(matches!(default(12), ModuleRef::Discipline(_)));
-    assert!(matches!(default(13), ModuleRef::Injuries(_)));
-    assert!(matches!(default(14), ModuleRef::Ball(_)));
-    assert!(matches!(default(15), ModuleRef::Possession(_)));
-    assert!(matches!(default(16), ModuleRef::Decision(_)));
-    assert!(matches!(default(17), ModuleRef::Manager(_)));
-    assert!(matches!(default(18), ModuleRef::Changes(_)));
-    assert!(matches!(default(19), ModuleRef::DecisionHook(_)));
-    assert!(matches!(default(20), ModuleRef::RuleHook(_)));
-    assert!(matches!(default(21), ModuleRef::CommentaryHook(_)));
-    assert!(matches!(default(22), ModuleRef::Rules(_)));
-    assert!(matches!(default(23), ModuleRef::World(_)));
-    assert!(matches!(default(24), ModuleRef::Season(_)));
-    assert!(matches!(default(25), ModuleRef::People(_)));
-    assert!(matches!(default(26), ModuleRef::Presentation(_)));
-    assert!(matches!(default(27), ModuleRef::Skin(_)));
-    assert!(matches!(default(28), ModuleRef::FastModel(_)));
+    assert!(matches!(default(12), ModuleRef::Clock(_)));
+    assert!(matches!(default(13), ModuleRef::Restarts(_)));
+    assert!(matches!(default(14), ModuleRef::Discipline(_)));
+    assert!(matches!(default(15), ModuleRef::Injuries(_)));
+    assert!(matches!(default(16), ModuleRef::Ball(_)));
+    assert!(matches!(default(17), ModuleRef::Possession(_)));
+    assert!(matches!(default(18), ModuleRef::Decision(_)));
+    assert!(matches!(default(19), ModuleRef::Manager(_)));
+    assert!(matches!(default(20), ModuleRef::Changes(_)));
+    assert!(matches!(default(21), ModuleRef::DecisionHook(_)));
+    assert!(matches!(default(22), ModuleRef::RuleHook(_)));
+    assert!(matches!(default(23), ModuleRef::CommentaryHook(_)));
+    assert!(matches!(default(24), ModuleRef::Rules(_)));
+    assert!(matches!(default(25), ModuleRef::World(_)));
+    assert!(matches!(default(26), ModuleRef::Season(_)));
+    assert!(matches!(default(27), ModuleRef::People(_)));
+    assert!(matches!(default(28), ModuleRef::Presentation(_)));
+    assert!(matches!(default(29), ModuleRef::Skin(_)));
+    assert!(matches!(default(30), ModuleRef::FastModel(_)));
     // The hook adapters, the game-wide modules, the skins, and the fast model draw nothing on
     // a match stream, so none of their cards owns an action key.
     for decl in &REGISTRY[19..] {
@@ -560,8 +568,10 @@ fn every_modifier_slot_names_its_family() {
     };
     let expected = [
         (MODIFIER_FATIGUE.id, Family::Body),
+        (MODIFIER_SHARPNESS.id, Family::Body),
         (MODIFIER_PRESSURE.id, Family::Mind),
         (MODIFIER_MOMENTUM.id, Family::Mind),
+        (MODIFIER_ADAPTATION.id, Family::Mind),
         (MODIFIER_WEATHER.id, Family::Surroundings),
     ];
     for (slot, want) in expected {
@@ -578,8 +588,8 @@ fn every_modifier_slot_names_its_family() {
         .filter(|r| matches!(r.module, ModuleRef::Modifier(_)));
     assert_eq!(
         modifiers.clone().count(),
-        8,
-        "four modifiers, each with an off version"
+        12,
+        "six modifiers, each with an off version"
     );
     assert!(
         modifiers
@@ -603,7 +613,7 @@ fn each_modifier_switched_off_plays_a_batch_the_validator_accepts() {
             off
         })
         .collect();
-    let results = common::run_many(0..=11, |k| {
+    let results = common::run_many(0..=17, |k| {
         let (slot, seed) = (MODIFIER_SLOTS[k as usize / 3], k % 3 + 1);
         let config = MatchConfig::new(seed, 90, &selections[k as usize / 3], [&a, &b]).unwrap();
         let mut sim = Simulation::new(config.clone()).unwrap();
@@ -620,7 +630,7 @@ fn each_modifier_switched_off_plays_a_batch_the_validator_accepts() {
             format!("{:?}", violations.first()),
         )
     });
-    assert_eq!(results.len(), 12);
+    assert_eq!(results.len(), 18);
     for (slot, seed, over, violations, first) in results {
         assert!(over, "{slot} off, seed {seed}: the match reaches full time");
         assert_eq!(
@@ -796,8 +806,8 @@ fn faulty_clock_fails_the_gate_at_a_named_window() {
 }
 
 /// A changed possession module fails the gate: an outfield player who reaches a loose ball from 1 cm further fails
-/// the gate at the first loose ball that centimetre decides (on seed 1, in the window from
-/// tick 2,000 to tick 3,000), and the report names the window.
+/// the gate at the first loose ball that centimetre decides (on seed 1, in the first window,
+/// from tick 0 to tick 1,000), and the report names the window.
 #[test]
 fn faulty_possession_fails_the_gate_at_a_named_window() {
     use engine::gate::{self, Fixture, Inputs, Verdict, compare, report_line};
@@ -830,7 +840,7 @@ fn faulty_possession_fails_the_gate_at_a_named_window() {
     let Verdict::Differs { from, to } = verdict else {
         panic!("the gate did not fail: {verdict:?}\n{report}");
     };
-    assert!(from >= 2_000, "{report}");
+    assert!(to <= 1_000, "{report}");
     assert!(
         report.contains(&format!("between tick {from} and tick {to}")),
         "{report}"

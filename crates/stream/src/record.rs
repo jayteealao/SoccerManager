@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 
 use engine::data::hex12;
 use engine::{AppliedChange, Change, Manager, RoleDuty, Simulation, TacticsPatch};
-use protocol::{Frame, PROTOCOL_VERSION, TickFrame};
+use protocol::{Frame, PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_V5, PROTOCOL_VERSION, TickFrame};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -41,6 +41,13 @@ pub const FIXTURE_TRAILER_BYTES: usize = 16;
 pub const FORMAT_LEGACY: u16 = 3;
 /// The format this build writes for a recorded match: frames, inputs, and the record.
 pub const FORMAT_VERSION: u16 = 4;
+/// The frame protocols a replay file may hold. Protocol 4 changed only the scale of the
+/// hello's ratings, so a file of protocol 3 frames still decodes; a reader that shows those
+/// ratings doubles them. Protocol 5 changed only the hello's squad entries and added one
+/// message, so a file of protocol 4 frames still decodes; a reader shows its hidden values as
+/// not yet known. Protocol 6 only added optional fields, so a file of protocol 5 frames still
+/// decodes; a reader shows the fields it lacks as unknown.
+pub const READS_PROTOCOLS: [u16; 4] = [PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_V5, PROTOCOL_VERSION];
 /// Header offset of the frame count.
 const FRAMES_AT: u64 = 16;
 /// A binary tick frame.
@@ -405,11 +412,13 @@ pub struct Recorder {
 
 impl Recorder {
     /// Creates `path` and writes the header of a format-3 file, which holds frames only.
-    /// The frame and tick counts are filled in when the recording finishes.
+    /// The frame and tick counts are filled in when the recording finishes. Offset 4 of a
+    /// format-3 file is both its format and its protocol, so it always says 3; only tests
+    /// write this format.
     pub fn create(path: &Path, match_millis: u64, seed: u64) -> Result<Self, StreamError> {
         Self::open(
             path,
-            &header(FORMAT_LEGACY, PROTOCOL_VERSION, match_millis, seed),
+            &header(FORMAT_LEGACY, PROTOCOL_V3, match_millis, seed),
             None,
         )
     }
@@ -685,9 +694,10 @@ fn decode_entries(raw: RawReplay, format: u16) -> Result<Fixture, StreamError> {
     } else {
         raw.protocol
     };
-    if protocol_version != PROTOCOL_VERSION {
+    if !READS_PROTOCOLS.contains(&protocol_version) {
         return Err(refuse(format!(
-            "frames protocol version {protocol_version}; this build speaks {PROTOCOL_VERSION}"
+            "frames protocol version {protocol_version}; this build reads {}, {}, {} and {}",
+            READS_PROTOCOLS[0], READS_PROTOCOLS[1], READS_PROTOCOLS[2], READS_PROTOCOLS[3]
         )));
     }
     let mut frames = Vec::with_capacity(raw.entries.len());
@@ -1082,7 +1092,7 @@ mod tests {
         let fixture = read_fixture(&path).unwrap();
         std::fs::remove_file(&path).unwrap();
         assert_eq!(fixture.format, FORMAT_LEGACY);
-        assert_eq!(fixture.protocol_version, PROTOCOL_VERSION);
+        assert_eq!(fixture.protocol_version, PROTOCOL_V3);
         assert!(fixture.record.is_none() && fixture.inputs.is_empty());
     }
 }

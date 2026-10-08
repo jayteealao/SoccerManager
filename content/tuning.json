@@ -1,12 +1,8 @@
 {
-  "schema_version": 2,
+  "schema_version": 5,
   "engine": {
     "dt": 0.02,
     "decision_interval_ticks": 1,
-    "base_speed": 5.0,
-    "pace_speed": 4.0,
-    "base_accel": 3.0,
-    "accel_bonus": 5.0,
     "arrive_radius": 3.0,
     "separation_radius": 1.5,
     "separation_strength": 6.0,
@@ -41,8 +37,8 @@
     "anchor_ball_distance": 30.0,
     "anchor_grace_ticks": 100,
     "foul_base": 0.1,
-    "foul_aggression_weight": 1.0,
-    "foul_tackling_weight": 0.5,
+    "foul_aggression_weight": 0.05,
+    "foul_tackling_weight": 0.025,
     "foul_ball_loss": 0.6,
     "yellow_base": 0.05,
     "yellow_aggression_weight": 0.15,
@@ -88,7 +84,8 @@
       "lone_hold": 0.5,
       "lone_dribble": -0.5,
       "carry_s": 0.0,
-      "carry_cost": 0.0
+      "carry_cost": 0.0,
+      "teamwork_bonus": 0.1
     },
     "injury_per_tackle": 0.004,
     "injury_per_minute": 0.0002,
@@ -128,86 +125,556 @@
       "cross_loft": 4.0,
       "wide_chance": 0.0,
       "wide_depth": 16.5
+    },
+    "contract": {
+      "curve": {
+        "scale": 8.0,
+        "center": 10.0,
+        "width": 8.0
+      },
+      "actions": {
+        "pass": {
+          "k": 0.054
+        },
+        "chip": {
+          "k": 0.054
+        },
+        "cross": {
+          "k": 0.054
+        },
+        "shot": {
+          "k": 0.07
+        },
+        "long_shot": {
+          "k": 0.02
+        },
+        "header": {
+          "k": 0.21,
+          "base": 0.6,
+          "floor": 0.05,
+          "ceiling": 0.95
+        },
+        "penalty": {
+          "k": 0.054
+        },
+        "dribble": {
+          "k": 0.071
+        },
+        "receive": {
+          "k": 0.054,
+          "spread": 0.2
+        },
+        "tackle": {
+          "k": 0.21,
+          "floor": 0.02,
+          "ceiling": 0.97
+        },
+        "intercept": {
+          "k": 0.054,
+          "spread": 0.2
+        },
+        "press": {
+          "k": 0.054,
+          "spread": 0.2
+        },
+        "shape": {
+          "k": 0.054,
+          "spread": 0.2
+        },
+        "block": {
+          "k": 0.054,
+          "spread": 0.2
+        },
+        "sprint": {
+          "k": 0.054,
+          "spread": 0.2
+        },
+        "endure": {
+          "k": 0.054
+        },
+        "turn": {
+          "k": 0.054,
+          "spread": 0.2
+        },
+        "stay_up": {
+          "k": 0.21,
+          "floor": 0.02,
+          "ceiling": 0.97
+        },
+        "aerial_reach": {
+          "k": 0.054,
+          "spread": 0.2
+        },
+        "recover": {
+          "k": 0.054
+        },
+        "injury": {
+          "k": 0.054
+        },
+        "hold": {
+          "k": 0.03,
+          "floor": 0.02,
+          "ceiling": 0.97
+        },
+        "save": {
+          "k": 0.012,
+          "floor": 0.02,
+          "ceiling": 0.97
+        },
+        "claim": {
+          "k": 0.12,
+          "floor": 0.02,
+          "ceiling": 0.97,
+          "spread": 0.2
+        },
+        "one_on_one": {
+          "k": 0.012,
+          "floor": 0.02,
+          "ceiling": 0.97
+        },
+        "keeper_kick": {
+          "k": 0.054
+        },
+        "keeper_throw": {
+          "k": 0.054
+        },
+        "organise": {
+          "k": 0.054,
+          "spread": 0.2
+        },
+        "rush": {
+          "k": 0.054,
+          "spread": 0.2
+        }
+      },
+      "speed": {
+        "kmh": [
+          [
+            1.0,
+            29.0
+          ],
+          [
+            10.0,
+            32.0
+          ],
+          [
+            20.0,
+            35.5
+          ]
+        ],
+        "amplification": 2.0,
+        "anchor_ms": 7.0
+      },
+      "accel": {
+        "anchor": 5.5
+      },
+      "lapse": {
+        "per_minute": 0.01,
+        "late_from_minute": 60,
+        "late_growth": 1.0,
+        "ticks": 100
+      },
+      "states": {
+        "caps": {
+          "body": [
+            -2.0,
+            0.5
+          ],
+          "mind": [
+            -1.0,
+            1.0
+          ],
+          "familiarity": [
+            -1.25,
+            0.25
+          ],
+          "surroundings": [
+            -0.75,
+            0.5
+          ],
+          "total": [
+            -5.0,
+            2.25
+          ]
+        },
+        "family_groups": {
+          "body": [
+            "technical",
+            "physical",
+            "goalkeeping"
+          ],
+          "mind": [
+            "mental"
+          ],
+          "familiarity": [
+            "technical",
+            "mental"
+          ],
+          "surroundings": [
+            "technical",
+            "physical"
+          ]
+        }
+      },
+      "body": {
+        "height": {
+          "reference_cm": 181.0,
+          "reach_per_cm": 0.0133,
+          "turn_cost_per_cm": 0.002
+        },
+        "age": {
+          "reference": 28.0,
+          "late_from_minute": 60,
+          "fade_per_year": 0.04,
+          "recovery_loss_per_year": 0.03,
+          "injury_per_year": 0.03
+        },
+        "rest": {
+          "post_match_energy": 0.4,
+          "congestion_days": 4,
+          "congestion_risk": 1.0
+        },
+        "sharpness": {
+          "max_drop": 1.5
+        },
+        "adaptation": {
+          "max_drop": 1.0
+        },
+        "build": {
+          "frame_balance_weight": 0.5,
+          "slight_below": 9.0,
+          "powerful_from": 14.0
+        },
+        "jobs": {
+          "height": {
+            "statistic": "aerial balls reached per match",
+            "direction": "up"
+          },
+          "age": {
+            "statistic": "energy lost after minute 60",
+            "direction": "up"
+          },
+          "nationality": {
+            "statistic": "mental effective ratings, through adaptation",
+            "direction": "up"
+          }
+        }
+      },
+      "consistency": {
+        "match_max": 1.0,
+        "period_max": 0.75,
+        "period_minutes": 10
+      }
     }
   },
   "generator": {
     "squad_size": 22,
-    "slot_positions": ["GK", "LB", "CB", "CB", "RB", "LW", "CM", "CM", "RW", "ST", "ST"],
-    "bench_positions": ["GK", "CB", "LB", "RB", "DM", "CM", "AM", "LW", "RW", "ST", "ST"],
-    "per_position": {
-      "GK": {
-        "technical": { "mean": 40.0, "spread": 8.0 },
-        "mental": { "mean": 50.0, "spread": 8.0 },
-        "physical": { "mean": 50.0, "spread": 8.0 },
-        "goalkeeping": { "mean": 62.0, "spread": 8.0 }
+    "slot_positions": [
+      "GK",
+      "LB",
+      "CB",
+      "CB",
+      "RB",
+      "LW",
+      "CM",
+      "CM",
+      "RW",
+      "ST",
+      "ST"
+    ],
+    "bench_positions": [
+      "GK",
+      "CB",
+      "LB",
+      "RB",
+      "DM",
+      "CM",
+      "AM",
+      "LW",
+      "RW",
+      "ST",
+      "ST"
+    ],
+    "world": {
+      "tiers": [
+        {
+          "mean": 14.0,
+          "club_spread": 1.0
+        },
+        {
+          "mean": 11.2,
+          "club_spread": 1.0
+        },
+        {
+          "mean": 9.8,
+          "club_spread": 1.0
+        },
+        {
+          "mean": 8.6,
+          "club_spread": 1.0
+        },
+        {
+          "mean": 7.0,
+          "club_spread": 1.0
+        }
+      ],
+      "player_spread": 2.35,
+      "attribute_spread": 2.0,
+      "offsets": {
+        "GK": {
+          "technical": -3.1,
+          "mental": -1.1,
+          "physical": -1.1,
+          "goalkeeping": 1.3
+        },
+        "CB": {
+          "technical": -1.5,
+          "mental": -0.1,
+          "physical": 0.9,
+          "goalkeeping": -8.1
+        },
+        "LB": {
+          "technical": -0.7,
+          "mental": -0.7,
+          "physical": 1.3,
+          "goalkeeping": -8.1
+        },
+        "RB": {
+          "technical": -0.7,
+          "mental": -0.7,
+          "physical": 1.3,
+          "goalkeeping": -8.1
+        },
+        "DM": {
+          "technical": -0.3,
+          "mental": 0.5,
+          "physical": 0.5,
+          "goalkeeping": -8.1
+        },
+        "CM": {
+          "technical": 0.5,
+          "mental": 0.5,
+          "physical": 0.1,
+          "goalkeeping": -8.1
+        },
+        "AM": {
+          "technical": 1.3,
+          "mental": 0.5,
+          "physical": -0.3,
+          "goalkeeping": -8.1
+        },
+        "LW": {
+          "technical": 1.3,
+          "mental": -0.7,
+          "physical": 1.7,
+          "goalkeeping": -8.1
+        },
+        "RW": {
+          "technical": 1.3,
+          "mental": -0.7,
+          "physical": 1.7,
+          "goalkeeping": -8.1
+        },
+        "ST": {
+          "technical": 1.3,
+          "mental": -0.3,
+          "physical": 0.9,
+          "goalkeeping": -8.1
+        }
       },
-      "CB": {
-        "technical": { "mean": 48.0, "spread": 8.0 },
-        "mental": { "mean": 55.0, "spread": 8.0 },
-        "physical": { "mean": 60.0, "spread": 8.0 },
-        "goalkeeping": { "mean": 15.0, "spread": 5.0 }
+      "hidden": {
+        "mean": 10.0,
+        "spread": 2.5
+      }
+    },
+    "body": {
+      "height": {
+        "GK": {
+          "mean": 189.0,
+          "spread": 4.0
+        },
+        "CB": {
+          "mean": 187.0,
+          "spread": 4.5
+        },
+        "LB": {
+          "mean": 178.0,
+          "spread": 4.5
+        },
+        "RB": {
+          "mean": 178.0,
+          "spread": 4.5
+        },
+        "DM": {
+          "mean": 181.0,
+          "spread": 4.5
+        },
+        "CM": {
+          "mean": 179.0,
+          "spread": 4.5
+        },
+        "AM": {
+          "mean": 177.0,
+          "spread": 4.5
+        },
+        "LW": {
+          "mean": 175.0,
+          "spread": 4.5
+        },
+        "RW": {
+          "mean": 175.0,
+          "spread": 4.5
+        },
+        "ST": {
+          "mean": 183.0,
+          "spread": 5.0
+        }
       },
-      "LB": {
-        "technical": { "mean": 52.0, "spread": 8.0 },
-        "mental": { "mean": 52.0, "spread": 8.0 },
-        "physical": { "mean": 62.0, "spread": 8.0 },
-        "goalkeeping": { "mean": 15.0, "spread": 5.0 }
+      "age": {
+        "mean": 26.0,
+        "spread": 4.0,
+        "min": 17,
+        "max": 38
       },
-      "RB": {
-        "technical": { "mean": 52.0, "spread": 8.0 },
-        "mental": { "mean": 52.0, "spread": 8.0 },
-        "physical": { "mean": 62.0, "spread": 8.0 },
-        "goalkeeping": { "mean": 15.0, "spread": 5.0 }
-      },
-      "DM": {
-        "technical": { "mean": 54.0, "spread": 8.0 },
-        "mental": { "mean": 58.0, "spread": 8.0 },
-        "physical": { "mean": 58.0, "spread": 8.0 },
-        "goalkeeping": { "mean": 15.0, "spread": 5.0 }
-      },
-      "CM": {
-        "technical": { "mean": 58.0, "spread": 8.0 },
-        "mental": { "mean": 58.0, "spread": 8.0 },
-        "physical": { "mean": 56.0, "spread": 8.0 },
-        "goalkeeping": { "mean": 15.0, "spread": 5.0 }
-      },
-      "AM": {
-        "technical": { "mean": 62.0, "spread": 8.0 },
-        "mental": { "mean": 58.0, "spread": 8.0 },
-        "physical": { "mean": 54.0, "spread": 8.0 },
-        "goalkeeping": { "mean": 15.0, "spread": 5.0 }
-      },
-      "LW": {
-        "technical": { "mean": 62.0, "spread": 8.0 },
-        "mental": { "mean": 52.0, "spread": 8.0 },
-        "physical": { "mean": 64.0, "spread": 8.0 },
-        "goalkeeping": { "mean": 15.0, "spread": 5.0 }
-      },
-      "RW": {
-        "technical": { "mean": 62.0, "spread": 8.0 },
-        "mental": { "mean": 52.0, "spread": 8.0 },
-        "physical": { "mean": 64.0, "spread": 8.0 },
-        "goalkeeping": { "mean": 15.0, "spread": 5.0 }
-      },
-      "ST": {
-        "technical": { "mean": 62.0, "spread": 8.0 },
-        "mental": { "mean": 54.0, "spread": 8.0 },
-        "physical": { "mean": 60.0, "spread": 8.0 },
-        "goalkeeping": { "mean": 15.0, "spread": 5.0 }
+      "nationality": {
+        "home": "ENG",
+        "foreign": [
+          "FRA",
+          "ESP",
+          "GER",
+          "NED",
+          "BRA",
+          "ARG",
+          "POR",
+          "BEL",
+          "IRL",
+          "SCO",
+          "WAL",
+          "NOR"
+        ],
+        "foreign_share": 0.35
       }
     }
   },
   "fatigue": {
     "threshold": 0.7,
-    "curve": [[1.0, 1.0], [0.7, 1.0], [0.5, 0.92], [0.3, 0.82], [0.0, 0.65]],
-    "drain_base_per_s": 0.00008,
+    "curve": [
+      [
+        1.0,
+        1.0
+      ],
+      [
+        0.7,
+        1.0
+      ],
+      [
+        0.5,
+        0.92
+      ],
+      [
+        0.3,
+        0.82
+      ],
+      [
+        0.0,
+        0.65
+      ]
+    ],
+    "drain_base_per_s": 8e-05,
     "drain_effort_per_s": 0.0004,
     "half_time_recovery": 0.1,
-    "recovery_per_day": 20.0
+    "recovery_per_day": 20.0,
+    "group_weights": {
+      "physical": 1.0,
+      "technical": 0.5,
+      "goalkeeping": 0.5
+    },
+    "sprint_cap": 1.0
   },
   "stream": {
     "buffer_ticks": 500,
     "keyframe_interval": 50
+  },
+  "hidden": {
+    "confidence": {
+      "tentative_from": 1,
+      "firm_from": 20
+    },
+    "words": {
+      "consistency": [
+        {
+          "from": 15.0,
+          "word": "rarely_off"
+        },
+        {
+          "from": 11.0,
+          "word": "steady"
+        },
+        {
+          "from": 7.0,
+          "word": "has_off_days"
+        },
+        {
+          "from": 1.0,
+          "word": "erratic"
+        }
+      ],
+      "injury_proneness": [
+        {
+          "from": 15.0,
+          "word": "injury_prone"
+        },
+        {
+          "from": 11.0,
+          "word": "picks_up_knocks"
+        },
+        {
+          "from": 7.0,
+          "word": "rarely_injured"
+        },
+        {
+          "from": 1.0,
+          "word": "hardly_ever_injured"
+        }
+      ]
+    }
+  },
+  "match_rating": {
+    "base": 6.0,
+    "min": 1.0,
+    "max": 10.0,
+    "goal": 1.0,
+    "shot_on_target": 0.15,
+    "shot_off_target": -0.05,
+    "xg": 0.5,
+    "pass_completed": 0.02,
+    "pass_failed": -0.04,
+    "tackle_won": 0.1,
+    "interception": 0.1,
+    "block": 0.15,
+    "clearance": 0.05,
+    "save": 0.3,
+    "foul": -0.05,
+    "yellow": -0.5,
+    "red": -1.5,
+    "conceded": {
+      "keeper": -0.3,
+      "defender": -0.15
+    },
+    "clean_sheet": {
+      "keeper": 0.5,
+      "defender": 0.3,
+      "min_minutes": 60
+    },
+    "result": {
+      "win": 0.3,
+      "loss": -0.3
+    },
+    "defenders": [
+      "CB",
+      "LB",
+      "RB"
+    ]
   },
   "flags": {}
 }

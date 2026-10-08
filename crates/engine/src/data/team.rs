@@ -1,6 +1,14 @@
-//! The team data file: club identity, kit, and a squad with positions and attributes.
-//! Validation runs with the attribute schema as context so a value of 120 is refused by
-//! player and attribute name.
+//! The team data file: club identity, kit, and a squad with positions, ratings, and body
+//! fields. Validation runs with the attribute schema as context so a rating of 20.5 is
+//! refused by player and attribute name.
+//!
+//! Version 2 holds every rating in tenths of the 1 to 20 scale, written with one decimal,
+//! and three body fields per player: height, age, and nationality. A version 1 file (whole
+//! numbers 1 to 100, no body fields) converts on load; see [`crate::data::convert`].
+//!
+//! A player may also carry a `condition` block: his match sharpness, his adaptation to the
+//! country, the days of rest before the match, and the matches he has played for the club.
+//! These are per-match inputs; a file without the block re-serializes, and hashes, as before.
 
 use std::collections::BTreeMap;
 
@@ -9,9 +17,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::data::attributes::AttributeSchema;
 use crate::pitch::Pitch;
+use crate::rating::{MAX_TENTHS, MIN_TENTHS, Rating};
 
-/// Schema version this build reads.
-pub const TEAM_VERSION: u32 = 1;
+/// Schema version this build reads and writes. Version 1 files convert on load.
+pub const TEAM_VERSION: u32 = 2;
+
+/// Height in whole centimetres a version 2 file may give.
+pub const HEIGHT_CM: std::ops::RangeInclusive<u8> = 150..=215;
+/// Age in whole years a version 2 file may give.
+pub const AGE_YEARS: std::ops::RangeInclusive<u8> = 15..=45;
 
 /// The largest squad a team file may hold. The random streams size their dense key index
 /// from it (`streams::table::SQUAD_MAX`), so the two can never disagree.
@@ -137,10 +151,57 @@ pub struct PlayerEntry {
     pub shirt: u8,
     #[garde(skip)]
     pub position: Position,
-    /// Attribute name to value; the squad check compares it with the schema.
+    /// Attribute name to rating; the squad check compares it with the schema.
     #[garde(skip)]
-    pub attributes: BTreeMap<String, u8>,
+    pub attributes: BTreeMap<String, Rating>,
+    /// Height in whole centimetres, 150 to 215. Required in a version 2 file; a player
+    /// converted from version 1 has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(skip)]
+    pub height: Option<u8>,
+    /// Age in whole years, 15 to 45. Required in a version 2 file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(skip)]
+    pub age: Option<u8>,
+    /// Nationality as three upper-case letters, for example `ENG`. Required in a version 2
+    /// file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(skip)]
+    pub nationality: Option<String>,
+    /// The player's match condition, every field optional. Absent: fully sharp, fully
+    /// adapted, rested.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(skip)]
+    pub condition: Option<Condition>,
 }
+
+/// A player's condition for one match. The season piece carries these between matches; until
+/// then the team file or the match setup gives them. An absent field has no effect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Condition {
+    /// Match sharpness, 0 to 100 percent: below 100 his technical ratings drop.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sharpness: Option<u8>,
+    /// Adaptation to the country he plays in, 0 to 100 percent: below 100 his mental
+    /// ratings drop.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adaptation: Option<u8>,
+    /// Days of rest since his last match, 0 to 14: they set his energy at kick-off and, when
+    /// short, raise his injury chance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rest_days: Option<u8>,
+    /// Matches he has played for the club, 0 to 1000.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub matches_at_club: Option<u16>,
+}
+
+/// Sharpness and adaptation a file may give, in percent.
+pub const CONDITION_PERCENT: std::ops::RangeInclusive<u8> = 0..=100;
+/// Days of rest a file may give.
+pub const REST_DAYS: std::ops::RangeInclusive<u8> = 0..=14;
+/// Matches at the club a file may give.
+pub const MATCHES_AT_CLUB: std::ops::RangeInclusive<u16> = 0..=1000;
 
 /// The team data file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
@@ -196,15 +257,17 @@ fn check_squad(players: &[PlayerEntry], schema: &AttributeSchema) -> garde::Resu
                         p.id, def.name
                     )));
                 }
-                Some(&value) if !(1..=100).contains(&value) => {
+                Some(&value) if !(MIN_TENTHS..=MAX_TENTHS).contains(&value.tenths()) => {
                     return Err(garde::Error::new(format!(
-                        "player {}: attribute {} is {value}; allowed 1 to 100",
+                        "player {}: attribute {} is {value}; allowed 1.0 to 20.0",
                         p.id, def.name
                     )));
                 }
                 Some(_) => {}
             }
         }
+        check_body(p)?;
+        check_condition(p)?;
         for name in p.attributes.keys() {
             if schema.index(name).is_none() {
                 return Err(garde::Error::new(format!(
@@ -213,6 +276,78 @@ fn check_squad(players: &[PlayerEntry], schema: &AttributeSchema) -> garde::Resu
                 )));
             }
         }
+    }
+    Ok(())
+}
+
+/// Refuses a condition field out of its range, naming the player, the field, and the range.
+fn check_condition(p: &PlayerEntry) -> garde::Result {
+    let Some(c) = p.condition else {
+        return Ok(());
+    };
+    let refuse = |field: &str, v: u16, range: &str| {
+        Err(garde::Error::new(format!(
+            "player {}: condition field {field} is {v}; allowed {range}",
+            p.id
+        )))
+    };
+    for (field, v) in [("sharpness", c.sharpness), ("adaptation", c.adaptation)] {
+        if let Some(v) = v
+            && !CONDITION_PERCENT.contains(&v)
+        {
+            return refuse(field, v.into(), "0 to 100");
+        }
+    }
+    if let Some(v) = c.rest_days
+        && !REST_DAYS.contains(&v)
+    {
+        return refuse("rest_days", v.into(), "0 to 14");
+    }
+    if let Some(v) = c.matches_at_club
+        && !MATCHES_AT_CLUB.contains(&v)
+    {
+        return refuse("matches_at_club", v, "0 to 1000");
+    }
+    Ok(())
+}
+
+/// Refuses a missing or out-of-range body field, naming the player and the field.
+fn check_body(p: &PlayerEntry) -> garde::Result {
+    let missing = |field: &str| {
+        Err(garde::Error::new(format!(
+            "player {}: body field {field} is missing",
+            p.id
+        )))
+    };
+    match p.height {
+        None => return missing("height"),
+        Some(h) if !HEIGHT_CM.contains(&h) => {
+            return Err(garde::Error::new(format!(
+                "player {}: body field height is {h}; allowed 150 to 215 cm",
+                p.id
+            )));
+        }
+        Some(_) => {}
+    }
+    match p.age {
+        None => return missing("age"),
+        Some(a) if !AGE_YEARS.contains(&a) => {
+            return Err(garde::Error::new(format!(
+                "player {}: body field age is {a}; allowed 15 to 45 years",
+                p.id
+            )));
+        }
+        Some(_) => {}
+    }
+    match &p.nationality {
+        None => return missing("nationality"),
+        Some(n) if !(n.len() == 3 && n.bytes().all(|b| b.is_ascii_uppercase())) => {
+            return Err(garde::Error::new(format!(
+                "player {}: body field nationality is {n}; allowed three upper-case letters",
+                p.id
+            )));
+        }
+        Some(_) => {}
     }
     Ok(())
 }

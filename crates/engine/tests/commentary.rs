@@ -254,10 +254,10 @@ fn a_full_seeded_match_fills_every_placeholder_and_names_every_player() {
             roster[slot] = names.squads[team][on].clone();
         }
     }
-    // The seed-7 match gives 75 lines (84 before a keeper saved only shots on target and
-    // shots could go wide; the seed-42 match gave 90 before a pressed lone forward stopped
-    // dribbling into defenders, and now scores no goal); the floor only guards against an
-    // empty check.
+    // The seed-9 match gives more than 70 lines (the seed-7 match gave 75, and scores no goal
+    // since every sprint costs stamina; the seed-42 match gave 90 before a pressed lone
+    // forward stopped dribbling into defenders, and now scores no goal); the floor only
+    // guards against an empty check.
     assert!(lines > 70, "only {lines} lines");
     assert!(
         events.iter().any(|e| e.kind == EngineEventKind::Goal),

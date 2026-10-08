@@ -124,7 +124,7 @@ fn the_lone_forward_holds_the_onside_line_while_his_side_has_the_ball() {
         // The striker starts well past the line, where his anchor also is.
         scene = scene.place(striker, DVec2::new(15.0, 0.0));
         let mut sim = scene.build();
-        let anchor = sim.teams()[0].anchor(STRIKER, DVec2::new(-20.0, 0.0), sim.tuning());
+        let anchor = sim.teams()[0].anchor(STRIKER, DVec2::new(-20.0, 0.0), false, sim.tuning());
         assert!(anchor.x > line, "the anchor {anchor} is past the line");
         sim.step();
         let target = sim.players()[striker].target;
@@ -150,10 +150,10 @@ fn contact(draw: impl Fn(f64, f64) -> f64) -> (Simulation, Vec<engine::EngineEve
     const TACKLER: usize = 16;
     let config = quiet_match(90);
     let plain = Simulation::new(config.clone()).unwrap();
-    let tackler = plain.players()[TACKLER].derived;
-    let carrier = plain.players()[CARRIER].derived;
-    let p_win = win_chance(&tackler, &carrier, &config.tuning);
-    let p_foul = foul_chance(&tackler, 0, &config.tuning);
+    let tackler = plain.skills(TACKLER);
+    let carrier = plain.skills(CARRIER);
+    let p_win = win_chance(tackler, carrier, &config.tuning);
+    let p_foul = foul_chance(tackler, 0, &config.tuning);
     let at = DVec2::new(0.0, 10.0);
     let mut sim = spread(Scene::new(config), -30.0, 30.0)
         .place(CARRIER, at)

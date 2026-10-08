@@ -26,7 +26,8 @@ use engine::observe::identity::{
     DATA_DIR_ENV, MatchId, data_dir, load_or_create_owner_id, owner_bytes, owner_hex,
 };
 use engine::observe::{
-    LawStats, MatchFigures, MatchStats, ScriptFigures, TacticsStats, TeamRef, write_stats,
+    LawStats, MatchFigures, MatchStats, RatingEntry, ScriptFigures, TacticsStats, TeamRef,
+    write_stats,
 };
 use engine::snapshot::MatchdayMark;
 use engine::{
@@ -102,6 +103,7 @@ fn match_stats(
         tactics: TacticsStats::new(sim),
         figures: MatchFigures::new(&summary, sim.managers()),
         script: ScriptFigures::new(sim.plugins()),
+        ratings: RatingEntry::of_match(sim),
     }
 }
 

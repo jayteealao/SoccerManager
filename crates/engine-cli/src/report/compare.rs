@@ -191,6 +191,7 @@ mod tests {
                 (lo..=hi).contains(&value)
             },
             se: 0.0,
+            informational: None,
         }
     }
 

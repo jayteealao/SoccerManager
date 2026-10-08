@@ -13,8 +13,8 @@ use crate::data::attributes::AttributeSchema;
 use crate::data::team::Position;
 use crate::team::PLAYERS_PER_TEAM;
 
-/// Schema version this build reads.
-pub const TACTICS_VERSION: u32 = 1;
+/// Schema version this build reads and writes. Version 1 files convert on load.
+pub const TACTICS_VERSION: u32 = 2;
 
 /// The six team instructions, in the order a [`crate::tactics::Tactics`] stores their levels.
 pub const INSTRUCTIONS: [&str; 6] = [
@@ -214,7 +214,8 @@ impl Named for PressLevel {
 }
 
 /// A role: the positions it suits, the attribute weights that measure how well a player
-/// fits it, and the offsets it adds to the carrier's shoot, dribble, and forward-pass scores.
+/// fits it, and its three behaviours: where the player stands in and out of possession,
+/// which actions the player prefers, and how teammates treat the player.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct Role {
@@ -225,6 +226,34 @@ pub struct Role {
     /// Attribute name to weight, 0 to 10.
     #[garde(length(min = 1, max = 12), custom(weights_in_range))]
     pub attributes: BTreeMap<String, f64>,
+    /// Metres the player's anchor moves while the team has the ball: `x` up the pitch, `y`
+    /// away from the centre line on the slot's side.
+    #[garde(dive)]
+    pub in_possession: Offset,
+    /// Metres the anchor moves while the other team has the ball.
+    #[garde(dive)]
+    pub out_of_possession: Offset,
+    #[garde(dive)]
+    pub preferred_actions: PreferredActions,
+    #[garde(dive)]
+    pub teammates: Teammates,
+}
+
+/// An anchor offset in metres, each part from -15 to 15.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct Offset {
+    #[garde(range(min = -15.0, max = 15.0))]
+    pub x: f64,
+    #[garde(range(min = -15.0, max = 15.0))]
+    pub y: f64,
+}
+
+/// The offsets a role adds to the carrier's shoot, dribble, and forward-pass scores, each
+/// -2 to 2.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct PreferredActions {
     #[garde(range(min = -2.0, max = 2.0))]
     pub shoot: f64,
     #[garde(range(min = -2.0, max = 2.0))]
@@ -233,8 +262,19 @@ pub struct Role {
     pub progress: f64,
 }
 
-/// A duty: metres the player's anchor moves up (negative drops it), and the risk offset it
-/// adds to forward passes and dribbles.
+/// How teammates treat the player.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct Teammates {
+    /// Added to a teammate's pass to this player in proportion to the pass length, 0 to 2:
+    /// a target forward draws long balls.
+    #[garde(range(min = 0.0, max = 2.0))]
+    pub long_ball_target: f64,
+}
+
+/// A duty: metres the player's anchor moves up (negative drops it), the risk offset it
+/// adds to forward passes and dribbles, and the scale it puts on the role's preferred
+/// actions (0.5 to 1.5).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct Duty {
@@ -244,6 +284,8 @@ pub struct Duty {
     pub depth: f64,
     #[garde(range(min = -2.0, max = 2.0))]
     pub risk: f64,
+    #[garde(range(min = 0.5, max = 1.5))]
+    pub scale: f64,
 }
 
 /// What the AI manager reads: its default setup and its in-match thresholds.
@@ -350,11 +392,21 @@ impl TacticsSchema {
         }
         for role in &self.roles {
             for name in role.attributes.keys() {
-                if attributes.index(name).is_none() {
+                let Some(idx) = attributes.index(name) else {
                     return Err((
                         format!("roles.{}.attributes", role.name),
                         format!(
                             "role {} names attribute {name}, which is not in the attribute schema",
+                            role.name
+                        ),
+                    ));
+                };
+                // A role's fit reaches the page as a number, and a hidden value never does.
+                if attributes.attributes[idx].hidden {
+                    return Err((
+                        format!("roles.{}.attributes", role.name),
+                        format!(
+                            "role {} names attribute {name}, which is hidden; a role may name only visible attributes",
                             role.name
                         ),
                     ));
@@ -496,6 +548,19 @@ mod tests {
             err.to_string(),
             "content refused: tactics tactics.json: roles.central_defender.attributes: \
              role central_defender names attribute telepathy, which is not in the attribute schema"
+        );
+    }
+
+    #[test]
+    fn a_role_naming_a_hidden_attribute_is_refused() {
+        let err = with_tactics(|v| {
+            v["roles"][1]["attributes"]["injury_proneness"] = 1.0.into();
+        });
+        assert_eq!(
+            err.to_string(),
+            "content refused: tactics tactics.json: roles.central_defender.attributes: \
+             role central_defender names attribute injury_proneness, which is hidden; a role may \
+             name only visible attributes"
         );
     }
 

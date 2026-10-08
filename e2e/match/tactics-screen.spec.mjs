@@ -24,6 +24,7 @@ import { contrastReport } from '../support/contrast.mjs';
 import { VIEWER, contentWithSkin, fastForward, startEngine } from '../support/engine.mjs';
 import { managerCommand, recordClientMessages } from '../support/messages.mjs';
 import { chooseIndex, clickClear, snap } from '../support/page.mjs';
+import { expectRatingsOnTwenty } from '../support/ratings.mjs';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
 /// Minute 10 at 50 ticks a second.
@@ -123,6 +124,7 @@ for (const skin of SKINS) {
       try {
         await preMatch(page, engine, skin);
         await expect(page.getByRole('status').filter({ hasText: 'READY' }).first()).toBeVisible();
+        await expectRatingsOnTwenty(page);
         await snap(page, `tactics-prematch-${skin}.png`);
       } finally {
         engine.cleanUp();

@@ -87,6 +87,16 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         finished: _,
         // Rewritten before every use.
         scratch: _,
+        // A shared copy of `config.tuning`, constant for the match.
+        tuning: _,
+        // Functions of each player's deltas and form (hashed in G3) and the team files.
+        stages: _,
+        blend: _,
+        tallies,
+        // The sensitivity rules' job counters: a read-only seam, absent in every gated match
+        // and in every build without the `sensitivity` feature.
+        #[cfg(feature = "sensitivity")]
+            probe: _,
     } = sim;
 
     use FieldKind::{Bytes, Floats};
@@ -136,6 +146,8 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     // G5 score and discipline.
     w.mark(Bytes, || "summary".into());
     w.summary(summary);
+    w.mark(Floats, || "tallies".into());
+    w.tallies(tallies);
     let Referee {
         phase,
         // Derived state: it equals `phases::derive(phase, shootout)` at every tick boundary,
@@ -354,8 +366,10 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
         shirt,
         // Functions of the squad index and the team file, whose digest is in the header.
         attributes: _,
-        base: _,
         derived,
+        deltas,
+        form,
+        form_match,
         energy,
         pos,
         vel,
@@ -364,6 +378,7 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
         status,
         yellow,
         foul_ready,
+        lapse_until,
     } = p;
     use FieldKind::{Bytes, Floats};
     w.mark(Floats, || format!("players[{i}].pos"));
@@ -380,6 +395,8 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
     w.u8(*yellow);
     w.mark(Bytes, || format!("players[{i}].foul_ready"));
     w.u32(*foul_ready);
+    w.mark(Bytes, || format!("players[{i}].lapse_until"));
+    w.u32(*lapse_until);
     w.mark(Bytes, || format!("players[{i}].slot"));
     w.u8(*slot as u8);
     w.mark(Bytes, || format!("players[{i}].squad"));
@@ -388,8 +405,11 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
     w.u8(*shirt);
     w.mark(Floats, || format!("players[{i}].energy"));
     w.f64_at(|| format!("players[{i}].energy"), *energy);
+    w.mark(Bytes, || format!("players[{i}].form"));
+    w.u8(*form as u8);
+    w.u8(*form_match as u8);
     w.mark(Floats, || format!("players[{i}].derived"));
-    w.derived(&|| format!("players[{i}].derived"), derived);
+    w.derived(&|| format!("players[{i}].derived"), derived, deltas);
 }
 
 fn change(w: &mut Writer, change: &Change) {

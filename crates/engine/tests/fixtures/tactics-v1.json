@@ -1,0 +1,318 @@
+{
+  "schema_version": 1,
+  "formations": [
+    {
+      "name": "4-4-2",
+      "slots": [
+        { "x": 5.0, "y": 0.0, "position": "GK" },
+        { "x": 25.0, "y": -22.0, "position": "LB" },
+        { "x": 25.0, "y": -8.0, "position": "CB" },
+        { "x": 25.0, "y": 8.0, "position": "CB" },
+        { "x": 25.0, "y": 22.0, "position": "RB" },
+        { "x": 45.0, "y": -24.0, "position": "LW" },
+        { "x": 45.0, "y": -8.0, "position": "CM" },
+        { "x": 45.0, "y": 8.0, "position": "CM" },
+        { "x": 45.0, "y": 24.0, "position": "RW" },
+        { "x": 65.0, "y": -8.0, "position": "ST" },
+        { "x": 65.0, "y": 8.0, "position": "ST" }
+      ]
+    },
+    {
+      "name": "4-3-3",
+      "slots": [
+        { "x": 5.0, "y": 0.0, "position": "GK" },
+        { "x": 25.0, "y": -22.0, "position": "LB" },
+        { "x": 25.0, "y": -8.0, "position": "CB" },
+        { "x": 25.0, "y": 8.0, "position": "CB" },
+        { "x": 25.0, "y": 22.0, "position": "RB" },
+        { "x": 43.0, "y": -15.0, "position": "CM" },
+        { "x": 38.0, "y": 0.0, "position": "DM" },
+        { "x": 43.0, "y": 15.0, "position": "CM" },
+        { "x": 62.0, "y": -22.0, "position": "LW" },
+        { "x": 62.0, "y": 22.0, "position": "RW" },
+        { "x": 66.0, "y": 0.0, "position": "ST" }
+      ]
+    },
+    {
+      "name": "4-2-3-1",
+      "slots": [
+        { "x": 5.0, "y": 0.0, "position": "GK" },
+        { "x": 25.0, "y": -22.0, "position": "LB" },
+        { "x": 25.0, "y": -8.0, "position": "CB" },
+        { "x": 25.0, "y": 8.0, "position": "CB" },
+        { "x": 25.0, "y": 22.0, "position": "RB" },
+        { "x": 52.0, "y": -22.0, "position": "LW" },
+        { "x": 38.0, "y": -8.0, "position": "DM" },
+        { "x": 38.0, "y": 8.0, "position": "DM" },
+        { "x": 52.0, "y": 22.0, "position": "RW" },
+        { "x": 54.0, "y": 0.0, "position": "AM" },
+        { "x": 66.0, "y": 0.0, "position": "ST" }
+      ]
+    },
+    {
+      "name": "3-5-2",
+      "slots": [
+        { "x": 5.0, "y": 0.0, "position": "GK" },
+        { "x": 24.0, "y": -14.0, "position": "CB" },
+        { "x": 22.0, "y": 0.0, "position": "CB" },
+        { "x": 24.0, "y": 14.0, "position": "CB" },
+        { "x": 42.0, "y": -28.0, "position": "LB" },
+        { "x": 44.0, "y": -10.0, "position": "CM" },
+        { "x": 38.0, "y": 0.0, "position": "DM" },
+        { "x": 44.0, "y": 10.0, "position": "CM" },
+        { "x": 42.0, "y": 28.0, "position": "RB" },
+        { "x": 64.0, "y": -8.0, "position": "ST" },
+        { "x": 64.0, "y": 8.0, "position": "ST" }
+      ]
+    },
+    {
+      "name": "4-1-4-1",
+      "slots": [
+        { "x": 5.0, "y": 0.0, "position": "GK" },
+        { "x": 25.0, "y": -22.0, "position": "LB" },
+        { "x": 25.0, "y": -8.0, "position": "CB" },
+        { "x": 25.0, "y": 8.0, "position": "CB" },
+        { "x": 25.0, "y": 22.0, "position": "RB" },
+        { "x": 36.0, "y": 0.0, "position": "DM" },
+        { "x": 48.0, "y": -24.0, "position": "LW" },
+        { "x": 48.0, "y": -8.0, "position": "CM" },
+        { "x": 48.0, "y": 8.0, "position": "CM" },
+        { "x": 48.0, "y": 24.0, "position": "RW" },
+        { "x": 66.0, "y": 0.0, "position": "ST" }
+      ]
+    },
+    {
+      "name": "4-4-1-1",
+      "slots": [
+        { "x": 5.0, "y": 0.0, "position": "GK" },
+        { "x": 25.0, "y": -22.0, "position": "LB" },
+        { "x": 25.0, "y": -8.0, "position": "CB" },
+        { "x": 25.0, "y": 8.0, "position": "CB" },
+        { "x": 25.0, "y": 22.0, "position": "RB" },
+        { "x": 45.0, "y": -24.0, "position": "LW" },
+        { "x": 45.0, "y": -8.0, "position": "CM" },
+        { "x": 45.0, "y": 8.0, "position": "CM" },
+        { "x": 45.0, "y": 24.0, "position": "RW" },
+        { "x": 57.0, "y": 0.0, "position": "AM" },
+        { "x": 66.0, "y": 0.0, "position": "ST" }
+      ]
+    },
+    {
+      "name": "4-1-2-1-2",
+      "slots": [
+        { "x": 5.0, "y": 0.0, "position": "GK" },
+        { "x": 25.0, "y": -22.0, "position": "LB" },
+        { "x": 25.0, "y": -8.0, "position": "CB" },
+        { "x": 25.0, "y": 8.0, "position": "CB" },
+        { "x": 25.0, "y": 22.0, "position": "RB" },
+        { "x": 36.0, "y": 0.0, "position": "DM" },
+        { "x": 45.0, "y": -14.0, "position": "CM" },
+        { "x": 45.0, "y": 14.0, "position": "CM" },
+        { "x": 55.0, "y": 0.0, "position": "AM" },
+        { "x": 65.0, "y": -8.0, "position": "ST" },
+        { "x": 65.0, "y": 8.0, "position": "ST" }
+      ]
+    },
+    {
+      "name": "3-4-3",
+      "slots": [
+        { "x": 5.0, "y": 0.0, "position": "GK" },
+        { "x": 24.0, "y": -14.0, "position": "CB" },
+        { "x": 22.0, "y": 0.0, "position": "CB" },
+        { "x": 24.0, "y": 14.0, "position": "CB" },
+        { "x": 44.0, "y": -26.0, "position": "LB" },
+        { "x": 44.0, "y": -8.0, "position": "CM" },
+        { "x": 44.0, "y": 8.0, "position": "CM" },
+        { "x": 44.0, "y": 26.0, "position": "RB" },
+        { "x": 62.0, "y": -22.0, "position": "LW" },
+        { "x": 66.0, "y": 0.0, "position": "ST" },
+        { "x": 62.0, "y": 22.0, "position": "RW" }
+      ]
+    },
+    {
+      "name": "5-3-2",
+      "slots": [
+        { "x": 5.0, "y": 0.0, "position": "GK" },
+        { "x": 30.0, "y": -26.0, "position": "LB" },
+        { "x": 23.0, "y": -14.0, "position": "CB" },
+        { "x": 21.0, "y": 0.0, "position": "CB" },
+        { "x": 23.0, "y": 14.0, "position": "CB" },
+        { "x": 30.0, "y": 26.0, "position": "RB" },
+        { "x": 43.0, "y": -15.0, "position": "CM" },
+        { "x": 38.0, "y": 0.0, "position": "DM" },
+        { "x": 43.0, "y": 15.0, "position": "CM" },
+        { "x": 63.0, "y": -8.0, "position": "ST" },
+        { "x": 63.0, "y": 8.0, "position": "ST" }
+      ]
+    },
+    {
+      "name": "5-4-1",
+      "slots": [
+        { "x": 5.0, "y": 0.0, "position": "GK" },
+        { "x": 30.0, "y": -26.0, "position": "LB" },
+        { "x": 23.0, "y": -14.0, "position": "CB" },
+        { "x": 21.0, "y": 0.0, "position": "CB" },
+        { "x": 23.0, "y": 14.0, "position": "CB" },
+        { "x": 30.0, "y": 26.0, "position": "RB" },
+        { "x": 46.0, "y": -24.0, "position": "LW" },
+        { "x": 44.0, "y": -8.0, "position": "CM" },
+        { "x": 44.0, "y": 8.0, "position": "CM" },
+        { "x": 46.0, "y": 24.0, "position": "RW" },
+        { "x": 64.0, "y": 0.0, "position": "ST" }
+      ]
+    }
+  ],
+  "mentalities": [
+    { "name": "defensive", "block_depth": -8.0, "shoot": -0.3, "progress": -0.3, "hold": 0.2 },
+    { "name": "cautious", "block_depth": -4.0, "shoot": -0.15, "progress": -0.15, "hold": 0.1 },
+    { "name": "balanced", "block_depth": 0.0, "shoot": 0.0, "progress": 0.0, "hold": 0.0 },
+    { "name": "positive", "block_depth": 4.0, "shoot": 0.15, "progress": 0.15, "hold": -0.1 },
+    { "name": "attacking", "block_depth": 8.0, "shoot": 0.3, "progress": 0.3, "hold": -0.2 }
+  ],
+  "instructions": {
+    "pressing": {
+      "default": "mid",
+      "levels": [
+        { "name": "low", "press_count": 1, "press_distance_scale": 0.8 },
+        { "name": "mid", "press_count": 2, "press_distance_scale": 1.0 },
+        { "name": "high", "press_count": 3, "press_distance_scale": 1.3 }
+      ]
+    },
+    "width": {
+      "default": "normal",
+      "levels": [
+        { "name": "narrow", "value": 0.85 },
+        { "name": "normal", "value": 1.0 },
+        { "name": "wide", "value": 1.15 }
+      ]
+    },
+    "tempo": {
+      "default": "normal",
+      "levels": [
+        { "name": "slower", "value": -0.15 },
+        { "name": "normal", "value": 0.0 },
+        { "name": "faster", "value": 0.15 }
+      ]
+    },
+    "line_height": {
+      "default": "normal",
+      "levels": [
+        { "name": "deep", "value": -5.0 },
+        { "name": "normal", "value": 0.0 },
+        { "name": "high", "value": 5.0 }
+      ]
+    },
+    "passing_directness": {
+      "default": "mixed",
+      "levels": [
+        { "name": "short", "value": -0.2 },
+        { "name": "mixed", "value": 0.0 },
+        { "name": "direct", "value": 0.2 }
+      ]
+    },
+    "time_wasting": {
+      "default": "off",
+      "levels": [
+        { "name": "off", "value": 1.0 },
+        { "name": "on", "value": 1.5 }
+      ]
+    }
+  },
+  "roles": [
+    {
+      "name": "goalkeeper",
+      "positions": ["GK"],
+      "attributes": { "reflexes": 3.0, "handling": 2.0, "one_on_ones": 1.0, "command_of_area": 1.0 },
+      "shoot": 0.0, "dribble": 0.0, "progress": 0.0
+    },
+    {
+      "name": "central_defender",
+      "positions": ["CB"],
+      "attributes": { "tackling": 3.0, "positioning": 3.0, "heading": 2.0, "strength": 1.0 },
+      "shoot": -0.2, "dribble": -0.2, "progress": 0.0
+    },
+    {
+      "name": "ball_playing_defender",
+      "positions": ["CB"],
+      "attributes": { "passing": 3.0, "tackling": 2.0, "positioning": 2.0, "vision": 1.0 },
+      "shoot": -0.2, "dribble": -0.1, "progress": 0.1
+    },
+    {
+      "name": "full_back",
+      "positions": ["LB", "RB"],
+      "attributes": { "tackling": 2.0, "pace": 2.0, "positioning": 2.0, "stamina": 1.0 },
+      "shoot": -0.1, "dribble": 0.0, "progress": 0.0
+    },
+    {
+      "name": "wing_back",
+      "positions": ["LB", "RB"],
+      "attributes": { "pace": 2.0, "crossing": 2.0, "stamina": 2.0, "dribbling": 1.0 },
+      "shoot": -0.1, "dribble": 0.1, "progress": 0.1
+    },
+    {
+      "name": "defensive_midfielder",
+      "positions": ["DM", "CM"],
+      "attributes": { "tackling": 3.0, "positioning": 2.0, "passing": 2.0, "teamwork": 1.0 },
+      "shoot": -0.1, "dribble": -0.05, "progress": 0.0
+    },
+    {
+      "name": "central_midfielder",
+      "positions": ["CM", "DM", "AM"],
+      "attributes": { "passing": 3.0, "decisions": 2.0, "stamina": 1.0, "vision": 1.0 },
+      "shoot": 0.0, "dribble": 0.0, "progress": 0.0
+    },
+    {
+      "name": "playmaker",
+      "positions": ["CM", "AM", "DM"],
+      "attributes": { "passing": 3.0, "vision": 3.0, "technique": 2.0, "decisions": 1.0 },
+      "shoot": 0.0, "dribble": 0.0, "progress": 0.15
+    },
+    {
+      "name": "attacking_midfielder",
+      "positions": ["AM", "CM"],
+      "attributes": { "passing": 2.0, "long_shots": 2.0, "dribbling": 2.0, "vision": 2.0 },
+      "shoot": 0.1, "dribble": 0.05, "progress": 0.05
+    },
+    {
+      "name": "winger",
+      "positions": ["LW", "RW"],
+      "attributes": { "pace": 2.0, "dribbling": 3.0, "crossing": 2.0, "acceleration": 1.0 },
+      "shoot": 0.0, "dribble": 0.15, "progress": 0.05
+    },
+    {
+      "name": "inside_forward",
+      "positions": ["LW", "RW"],
+      "attributes": { "dribbling": 2.0, "finishing": 3.0, "pace": 2.0, "composure": 1.0 },
+      "shoot": 0.15, "dribble": 0.1, "progress": 0.0
+    },
+    {
+      "name": "striker",
+      "positions": ["ST"],
+      "attributes": { "finishing": 3.0, "composure": 2.0, "positioning": 2.0, "pace": 1.0 },
+      "shoot": 0.15, "dribble": 0.0, "progress": 0.0
+    },
+    {
+      "name": "target_forward",
+      "positions": ["ST"],
+      "attributes": { "heading": 3.0, "strength": 3.0, "finishing": 2.0, "jumping": 1.0 },
+      "shoot": 0.05, "dribble": -0.1, "progress": 0.0
+    }
+  ],
+  "duties": [
+    { "name": "defend", "depth": -4.0, "risk": -0.1 },
+    { "name": "support", "depth": 0.0, "risk": 0.0 },
+    { "name": "attack", "depth": 4.0, "risk": 0.1 }
+  ],
+  "ai": {
+    "formation": "4-4-2",
+    "mentality": "balanced",
+    "duty": "support",
+    "trailing_minute": 70,
+    "leading_minute": 80,
+    "check_interval_s": 30,
+    "fatigue_energy": 0.55,
+    "fatigue_from_minute": 55,
+    "keep_for_injury_until_minute": 80,
+    "bench_size": 7
+  }
+}

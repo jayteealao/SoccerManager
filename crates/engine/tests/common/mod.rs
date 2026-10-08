@@ -44,12 +44,12 @@ pub fn full_match() -> MatchConfig {
     MatchConfig::new(SEED, 90, &content, [&a, &b]).unwrap()
 }
 
-/// The seed-7, 90-minute match on the shipped content and default teams. Unlike the seed-42
+/// The seed-9, 90-minute match on the shipped content and default teams. Unlike the seed-42
 /// match, which ends 0-0, it scores, and its AI managers change tactics in the second half.
 pub fn scoring_match() -> MatchConfig {
     let content = content();
     let [a, b] = default_teams(&content);
-    MatchConfig::new(7, 90, &content, [&a, &b]).unwrap()
+    MatchConfig::new(9, 90, &content, [&a, &b]).unwrap()
 }
 
 /// A seed-42 match of `minutes` on the shipped content and default teams. Shorter than the
@@ -112,11 +112,20 @@ pub fn spread(
 }
 
 /// A quiet match with no background or tackle injuries, so a scene stops only where the
-/// test arranges it.
+/// test arranges it, and no form offsets, so every player plays from his own ratings.
 pub fn calm_match(minutes: u32) -> MatchConfig {
-    let mut config = quiet_match(minutes);
+    let mut config = steady(quiet_match(minutes));
     config.tuning.injury_per_minute = 0.0;
     config.tuning.injury_per_tackle = 0.0;
+    config
+}
+
+/// `config` with both consistency maxima at 0: no player draws a form offset, so each plays
+/// from his ratings and his states alone.
+#[allow(dead_code)]
+pub fn steady(mut config: MatchConfig) -> MatchConfig {
+    config.tuning.contract.consistency.match_max = 0.0;
+    config.tuning.contract.consistency.period_max = 0.0;
     config
 }
 
@@ -125,15 +134,16 @@ pub fn kinds(events: &[engine::EngineEvent]) -> Vec<engine::EngineEventKind> {
     events.iter().map(|e| e.kind).collect()
 }
 
-/// A copy of `file` with every attribute times 1.15, rounded and clamped to 100, under a new
-/// club id.
+/// A copy of `file` with every attribute's tenths times 1.15, rounded and clamped to the 1.0
+/// to 20.0 range, under a new club id.
 pub fn stronger(file: &engine::data::TeamFile) -> engine::data::TeamFile {
     let mut out = file.clone();
     out.club.id = format!("{}-strong", file.club.id);
     out.club.name = format!("{} Strong", file.club.name);
     for p in &mut out.players {
         for v in p.attributes.values_mut() {
-            *v = (f64::from(*v) * 1.15).round().min(100.0) as u8;
+            let tenths = (f64::from(v.tenths()) * 1.15).round().clamp(10.0, 200.0) as u8;
+            *v = engine::Rating::from_tenths(tenths);
         }
     }
     out

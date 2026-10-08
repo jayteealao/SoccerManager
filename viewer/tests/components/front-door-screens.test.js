@@ -20,8 +20,8 @@ import SplashScreen from '../../src/screens/SplashScreen.svelte';
 import StartScreen from '../../src/screens/StartScreen.svelte';
 
 const TEAMS = [
-  { id: 'club-00000001-00', name: 'Oakmere Rangers', short_name: 'OAK', kit: ['#1d4ed8', '#ffffff'], ground: [105, 68], strength: 62 },
-  { id: 'club-00000002-00', name: 'Eldstead City', short_name: 'ELD', kit: ['#b91c1c', '#ffffff'], ground: [100, 64], strength: 55 },
+  { id: 'club-00000001-00', name: 'Oakmere Rangers', short_name: 'OAK', kit: ['#1d4ed8', '#ffffff'], ground: [105, 68], strength: 12.4 },
+  { id: 'club-00000002-00', name: 'Eldstead City', short_name: 'ELD', kit: ['#b91c1c', '#ffffff'], ground: [100, 64], strength: 9.0 },
 ];
 
 const SAVED = {
@@ -167,6 +167,11 @@ test('match setup shows both tables, the ground and the round; the same team twi
   await flush();
   const { container } = render(SetupScreen, { door });
   assert.equal(container.querySelectorAll('[data-column="home"] tbody tr').length, 2);
+  // Strength is on 1 to 20; the stars say their count in words, with no decimal.
+  const stars = [...container.querySelectorAll('[data-column="home"] .stars')].map((s) =>
+    s.getAttribute('aria-label')
+  );
+  assert.deepEqual(stars, ['3 of 5 stars', '2 and a half of 5 stars']);
   assert.ok(screen.getAllByText('105 × 68 m').length >= 1);
   assert.equal(container.querySelector('[data-round]').dataset.round, '1');
   assert.equal(container.querySelector('[data-kickoff]').disabled, false);

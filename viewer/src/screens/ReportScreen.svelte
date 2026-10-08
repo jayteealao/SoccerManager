@@ -81,11 +81,12 @@
     playingRest ? skipSteps(skippedFrom, session.skip?.newest ?? skippedFrom, total, 'playing') : []
   );
 
-  /// The sub-navigation: Report is this view; Replay opens the replay at full time. The rest
-  /// are stubs until their screens are built.
+  /// The sub-navigation: Report is this view; Squad opens the Squad screen and Replay the
+  /// replay at full time. The rest are stubs until their screens are built.
   let tabs = $derived([
     { id: 'report', label: 'Report', active: true },
     { id: 'ratings', label: 'Ratings', stub: true },
+    { id: 'squad', label: 'Squad', stub: !full || playingRest || storing || !session.squad?.length },
     { id: 'causes', label: 'Causes', menu: true, stub: true },
     { id: 'highlights', label: 'Highlights', menu: true, stub: true },
     { id: 'stats', label: 'Stats', menu: true, stub: true },
@@ -185,6 +186,8 @@
   function tab(id) {
     if (id === 'replay') {
       session.showReplay();
+    } else if (id === 'squad') {
+      session.openSquad();
     }
   }
 </script>

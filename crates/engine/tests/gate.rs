@@ -94,7 +94,9 @@ fn a_fault_in_each_inventory_group_fails_at_its_window() {
             delta: -0.01,
         },
         FaultKind::Card { player: 3 },
-        FaultKind::Restart { player: 3 },
+        // Open play at the fault tick: the taker named is cleared by the next kick unless he
+        // takes it, and roster player 20 kicks next in seed 42.
+        FaultKind::Restart { player: 20 },
         FaultKind::PendingChange,
     ] {
         let (report, verdict) = faulted(kind);
@@ -234,10 +236,14 @@ fn a_broken_golden_file_is_refused_naming_the_fault() {
     );
 
     let mut schema = base.clone();
-    schema["gate_schema"] = 2.into();
+    schema["gate_schema"] = (gate::GATE_SCHEMA + 1).into();
     assert_eq!(
         refused(&schema, &fixtures),
-        "golden file has gate schema 2; this build reads gate schema 1"
+        format!(
+            "golden file has gate schema {}; this build reads gate schema {}",
+            gate::GATE_SCHEMA + 1,
+            gate::GATE_SCHEMA
+        )
     );
 
     let why = golden::parse(&text[..text.len() / 2], &fixtures)
@@ -599,9 +605,10 @@ fn committed() -> GoldenFile {
 }
 
 /// The recorded result changes: entry 2, whose reason names the maths change and the keyed
-/// split, and entry 3, whose reason names the restart position check and the fixes it forced.
-/// Each candidate is a clean commit, and each band result holds a verdict for each band of
-/// `content/realism-bands.json`.
+/// split, entry 3, whose reason names the restart position check and the fixes it forced, and
+/// entry 4, whose reason names the ratings in tenths and the unchanged play, and entry 5,
+/// whose reason names the stage blend and the curve. Each candidate is a clean commit, and
+/// each band result holds a verdict for each band of `content/realism-bands.json`.
 #[test]
 fn each_result_change_is_one_regenerate_entry_with_its_band_result() {
     let file = committed();
@@ -614,12 +621,16 @@ fn each_result_change_is_one_regenerate_entry_with_its_band_result() {
         .collect();
     assert_eq!(
         regenerations,
-        [2, 3],
-        "two regenerate entries, entries 2 and 3"
+        [2, 3, 4, 5, 6, 7],
+        "six regenerate entries, entries 2 to 7"
     );
-    let named: [(usize, &[&str]); 2] = [
+    let named: [(usize, &[&str]); 6] = [
         (2, &["libm", "keyed"]),
         (3, &["restart position check", "Law 8", "goal line"]),
+        (4, &["tenths", "version 2", "every tick of play unchanged"]),
+        (5, &["stage blend", "exponential curve", "1.0"]),
+        (6, &["caps", "sharpness", "every sprint costs stamina"]),
+        (7, &["Consistency", "injury proneness", "match rating"]),
     ];
     for (index, words) in named {
         let entry = &file.ledger[index];
@@ -664,9 +675,9 @@ fn band_result_holds_every_band(entry: &golden::LedgerEntry, index: usize) {
         assert_eq!(s["matches"], want, "{suite}");
         assert_eq!(s["recorded"], want, "{suite}");
     }
-    // Each band of the content file has a verdict. Three bands report under other names:
-    // possession as the home and away shares, the stronger team as its win rate, and the
-    // wall time per sample as `wall_ms`.
+    // Each band of the registry that the three suites of a band run judge has a verdict,
+    // under its own name, and each suite's time budget has one as `wall_ms`. The red-card
+    // bands belong to the red-card suite, which a band run does not play.
     let judged: Vec<&str> = report["calib.bands"]
         .as_array()
         .unwrap()
@@ -674,35 +685,40 @@ fn band_result_holds_every_band(entry: &golden::LedgerEntry, index: usize) {
         .filter(|b| b["pass"].is_boolean())
         .map(|b| b["band"].as_str().unwrap())
         .collect();
-    let bands = read("content/realism-bands.json");
-    let names: Vec<&String> = bands
-        .as_object()
-        .unwrap()
-        .keys()
-        .filter(|k| !["schema_version", "sample_size"].contains(&k.as_str()))
+    let registry = read("content/realism-bands.json");
+    let bands = registry["bands"].as_array().unwrap();
+    assert_eq!(bands.len(), 18, "the registry holds 18 bands");
+    let played = ["equal", "strength", "formations"];
+    let names: Vec<&str> = bands
+        .iter()
+        .filter(|b| {
+            b["suites"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|s| played.contains(&s.as_str().unwrap()))
+        })
+        .map(|b| b["band"].as_str().unwrap())
+        .chain(["wall_ms"])
         .collect();
-    assert_eq!(names.len(), 16, "the content file holds 16 bands");
-    for name in names {
-        let reported: &[&str] = match name.as_str() {
-            "possession_pct" => &["possession_home_pct", "possession_away_pct"],
-            "stronger_team" => &["stronger_team_win_rate"],
-            "wall_minutes_per_sample" => &["wall_ms"],
-            other => &[other][..],
-        };
-        for band in reported {
-            assert!(judged.contains(band), "no verdict for band {name} ({band})");
-        }
+    assert_eq!(
+        names.len(),
+        17,
+        "16 bands of the three suites and the time budget"
+    );
+    for band in names {
+        assert!(judged.contains(&band), "no verdict for band {band}");
     }
 }
 
-/// The regeneration kept what the gate measures: gate schema 1, state inventory 1, and the
-/// fixture list of the golden-file guard, by its digest at the guard's commit.
+/// The regeneration kept what the gate measures: gate schema 4 with state inventory 4, and
+/// the fixture list of the golden-file guard, by its digest at the guard's commit.
 #[test]
 fn the_regeneration_kept_the_gate_schema_and_the_fixture_list() {
     use sha2::{Digest, Sha256};
     let file = committed();
-    assert_eq!(file.gate_schema, 1);
-    assert_eq!(file.inventory_version, 1);
+    assert_eq!(file.gate_schema, 4);
+    assert_eq!(file.inventory_version, 4);
     let list = serde_json::to_string(&file.fixtures).unwrap();
     let hex: String = Sha256::digest(list.as_bytes())
         .iter()

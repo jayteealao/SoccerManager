@@ -1,0 +1,432 @@
+{
+  "schema_version": 1,
+  "design": {
+    "matches": 2000,
+    "arm_matches": 200,
+    "seed": 42,
+    "resamples": 999
+  },
+  "defaults": {
+    "min_move": 0.05,
+    "ceiling": 0.2
+  },
+  "rules": [
+    {
+      "job": "passing",
+      "kind": "attribute",
+      "measure": "pass_completion",
+      "statistic": "pass completion share",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "dribbling",
+      "kind": "attribute",
+      "measure": "take_on_completion",
+      "statistic": "take-ons completed share",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "first_touch",
+      "kind": "attribute",
+      "measure": "receipt_loss",
+      "statistic": "balls lost within 1 s of receipt",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "finishing",
+      "kind": "attribute",
+      "measure": "box_finishing",
+      "statistic": "goals per on-target shot inside the box",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "crossing",
+      "kind": "attribute",
+      "measure": "cross_completion",
+      "statistic": "crosses completed share",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "heading",
+      "kind": "attribute",
+      "measure": "headers_won",
+      "statistic": "headers won share",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "long_shots",
+      "kind": "attribute",
+      "measure": "long_shots_on_target",
+      "statistic": "on-target share of shots from outside the box",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "tackling",
+      "kind": "attribute",
+      "measure": "tackles_won",
+      "statistic": "tackle win share",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "technique",
+      "kind": "attribute",
+      "measure": "skill_attempts",
+      "statistic": "chips and take-ons attempted per match",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "positioning",
+      "kind": "attribute",
+      "measure": "blocks",
+      "statistic": "shots blocked per match",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "vision",
+      "kind": "attribute",
+      "measure": "pass_progress",
+      "statistic": "mean forward progress of completed passes",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "decisions",
+      "kind": "attribute",
+      "measure": "xg_per_shot",
+      "statistic": "expected goals per shot",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "composure",
+      "kind": "attribute",
+      "measure": "pressed_completion",
+      "statistic": "pass completion when pressed",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "anticipation",
+      "kind": "attribute",
+      "measure": "loose_ball_share",
+      "statistic": "loose balls won share",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "work_rate",
+      "kind": "attribute",
+      "measure": "tackle_attempts",
+      "statistic": "tackle attempts per match",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "aggression",
+      "kind": "attribute",
+      "measure": "fouls",
+      "statistic": "fouls per match",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "concentration",
+      "kind": "attribute",
+      "measure": "lapses",
+      "statistic": "lapses per match",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "teamwork",
+      "kind": "attribute",
+      "measure": "anchor_distance",
+      "statistic": "mean distance from anchor out of possession",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "pace",
+      "kind": "attribute",
+      "measure": "top_speed",
+      "statistic": "top speed reached per match",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "acceleration",
+      "kind": "attribute",
+      "measure": "close_loose_balls",
+      "statistic": "loose balls won within 5 m",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "stamina",
+      "kind": "attribute",
+      "measure": "full_time_energy",
+      "statistic": "energy at full time",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "strength",
+      "kind": "attribute",
+      "measure": "standing_tackles_lost",
+      "statistic": "tackles won against him while he stands",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "agility",
+      "kind": "attribute",
+      "measure": "take_on_completion",
+      "statistic": "take-on success share",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "balance",
+      "kind": "attribute",
+      "measure": "fouled_kept",
+      "statistic": "fouls after which his team keeps the ball, share",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "jumping",
+      "kind": "attribute",
+      "measure": "aerial_balls_reached",
+      "statistic": "aerial balls reached per match",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "natural_fitness",
+      "kind": "attribute",
+      "measure": "half_time_gain",
+      "statistic": "energy gained at half time",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "injury_proneness",
+      "kind": "attribute",
+      "measure": "injuries",
+      "statistic": "injuries per 90 minutes",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "handling",
+      "kind": "attribute",
+      "measure": "saves_held",
+      "statistic": "saves held share",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "reflexes",
+      "kind": "attribute",
+      "measure": "far_saves",
+      "statistic": "save share of on-target shots from beyond 12 m",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "aerial_reach",
+      "kind": "attribute",
+      "measure": "high_claims",
+      "statistic": "high balls claimed per match",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "one_on_ones",
+      "kind": "attribute",
+      "measure": "near_saves",
+      "statistic": "save share of on-target shots within 12 m",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "kicking",
+      "kind": "attribute",
+      "measure": "keeper_kicks",
+      "statistic": "keeper kicks reaching a team-mate, share",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "throwing",
+      "kind": "attribute",
+      "measure": "keeper_throws",
+      "statistic": "keeper throws completed, share",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "command_of_area",
+      "kind": "attribute",
+      "measure": "crosses_claimed",
+      "statistic": "crosses claimed per match",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "communication",
+      "kind": "attribute",
+      "measure": "offsides_won",
+      "statistic": "offsides won by his side per match",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "rushing_out",
+      "kind": "attribute",
+      "measure": "sweeps",
+      "statistic": "balls swept outside the box per match",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "consistency",
+      "kind": "attribute",
+      "measure": "rating_spread",
+      "statistic": "spread of the player's match rating across matches",
+      "levels": [
+        8.0,
+        16.0
+      ]
+    },
+    {
+      "job": "height",
+      "kind": "body",
+      "measure": "aerial_balls_reached",
+      "statistic": "aerial balls reached per match",
+      "levels": [
+        172.0,
+        192.0
+      ]
+    },
+    {
+      "job": "age",
+      "kind": "body",
+      "measure": "late_energy_loss",
+      "statistic": "energy lost after minute 60",
+      "levels": [
+        22.0,
+        34.0
+      ]
+    },
+    {
+      "job": "nationality",
+      "kind": "body",
+      "measure": "mental_rating",
+      "statistic": "mental effective ratings, through adaptation",
+      "levels": [
+        20.0,
+        100.0
+      ]
+    }
+  ],
+  "derived": [
+    "build"
+  ],
+  "five_match": {
+    "roles": [
+      "GK",
+      "CB",
+      "CM",
+      "ST"
+    ],
+    "runs": 100,
+    "matches_per_run": 5,
+    "top": 16.0,
+    "average": 10.0,
+    "target": 0.6667,
+    "tolerance": 0.07
+  }
+}

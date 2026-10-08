@@ -16,9 +16,9 @@ use engine::{
     Simulation,
 };
 use protocol::{
-    CardKind, ChangeKind, ChangeOutcome, ChangeState, ChangeStateNote, Condition, EventType,
-    MatchEvent, RosterEntry, ServerMessage, SlotRole, SquadEntry, Stats, SubstitutionRules,
-    TeamRef, TeamSetup,
+    CardKind, ChangeKind, ChangeOutcome, ChangeState, ChangeStateNote, Condition, Confidence,
+    EventType, HiddenWord, MatchEvent, RatingWire, Ratings, RosterEntry, ServerMessage, SlotRole,
+    SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
 };
 use std::cell::RefCell;
 
@@ -167,8 +167,9 @@ pub fn drive<S: TickSink>(
     while !sim.is_over() && (written < opts.ticks || sim.in_shootout()) {
         // A stopped gate means the viewer left: the match did not end, so no full-time
         // event or closing statistics are written for it.
+        // While held, the sink may finish work that waited on the socket (a save).
         if let Some(gate) = opts.gate
-            && !gate.wait_for_room(sim.tick())
+            && !gate.wait_for_room_and(sim.tick(), || sink.on_hold(sim.tick()))
         {
             tracing::info!(
                 signal = "socket.client_gone",
@@ -358,6 +359,10 @@ pub fn drive<S: TickSink>(
     if let Err(err) = route(ServerMessage::Stats(stats_message(sim))) {
         return closing_or_fail(err, written).map(|written| Driven { written, full_time });
     }
+    // The ratings are final only at a real full time; a match cut short sends none.
+    if full_time && let Err(err) = route(ServerMessage::Ratings(ratings_message(sim))) {
+        return closing_or_fail(err, written).map(|written| Driven { written, full_time });
+    }
     Ok(Driven { written, full_time })
 }
 
@@ -415,8 +420,10 @@ pub(crate) fn stats_message(sim: &Simulation) -> Stats {
     }
 }
 
-/// Every wire slot's energy at the current tick, home first, three decimals.
+/// Every wire slot's energy at the current tick, home first, three decimals, with each
+/// slot's overall level now and fresh in tenths ([`Simulation::overall_levels`]).
 pub(crate) fn condition_message(sim: &Simulation) -> Condition {
+    let (level, base) = sim.overall_levels();
     Condition {
         tick: sim.tick(),
         energy: sim
@@ -426,6 +433,8 @@ pub(crate) fn condition_message(sim: &Simulation) -> Condition {
             .collect(),
         subs_used: sim.ledgers().map(|l| l.used),
         windows_used: sim.ledgers().map(|l| l.windows),
+        level,
+        base,
     }
 }
 
@@ -436,8 +445,10 @@ pub(crate) fn condition_message(sim: &Simulation) -> Condition {
 /// player's fit to every role, and the computer manager's setup to start the editor from.
 pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
     let config = sim.config();
-    let fitness = config.attributes.index("natural_fitness");
-    let resistance = config.attributes.index("injury_resistance");
+    let schema = &config.attributes;
+    let fitness = schema.index("natural_fitness");
+    let build = schema.index("strength").zip(schema.index("balance"));
+    let jobs = &config.tuning.contract.body;
     let mut index = 0usize;
     sim.teams().map(|team| {
         let editable = page_lineup && index == HOME;
@@ -446,13 +457,15 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
             team.squad
                 .iter()
                 .enumerate()
-                .map(|(s, player)| SquadEntry {
+                .map(|(s, player)| (s, player, sim.squad_level_range(HOME, s)))
+                .map(|(s, player, range)| SquadEntry {
                     id: team.player_ids[s].clone(),
                     name: team.player_names[s].clone(),
                     shirt: player.shirt,
                     position: player.position.code().to_string(),
-                    natural_fitness: fitness.map_or(0, |i| player.attributes.get(i)),
-                    injury_resistance: resistance.map_or(0, |i| player.attributes.get(i)),
+                    natural_fitness: fitness.map_or(0, |i| player.attributes.get(i).tenths()),
+                    consistency: hidden_word(config, player, "consistency"),
+                    injury_proneness: hidden_word(config, player, "injury_proneness"),
                     role_fit: (0..config.tactics.roles.len())
                         .map(|role| {
                             let fit = engine::ai::role_fit(
@@ -461,9 +474,34 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
                                 &config.tactics,
                                 &config.attributes,
                             );
-                            fit.round().clamp(0.0, 100.0) as u8
+                            // The fit is a weighted mean on the 1 to 20 scale; times ten,
+                            // it is in tenths.
+                            (fit * 10.0).round().clamp(0.0, 200.0) as u8
                         })
                         .collect(),
+                    // Visible attributes only: a hidden value never leaves as a number.
+                    attributes: schema
+                        .attributes
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, def)| !def.hidden)
+                        .map(|(i, def)| (def.name.clone(), player.attributes.get(i).tenths()))
+                        .collect(),
+                    height: player.body.height_cm,
+                    age: player.body.age,
+                    nationality: team.player_nationalities.get(s).cloned().flatten(),
+                    build: build.map(|(st, ba)| {
+                        jobs.build_word(
+                            player.attributes.get(st).decimal(),
+                            player.attributes.get(ba).decimal(),
+                        )
+                        .to_string()
+                    }),
+                    condition: Some((player.start_energy * 100.0).round().clamp(0.0, 100.0) as u8),
+                    sharpness: player.condition.sharpness,
+                    matches_at_club: player.condition.matches_at_club,
+                    level: Some(range[1]),
+                    plays_between: Some(range),
                 })
                 .collect()
         } else {
@@ -516,6 +554,56 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
             },
         }
     })
+}
+
+/// Hidden attribute `name` of `player` as the hello carries it: a word key and a confidence
+/// from the matches he has seen at the club, never his rating. A schema without the attribute
+/// gives "not yet known".
+fn hidden_word(
+    config: &engine::MatchConfig,
+    player: &engine::team::SquadPlayer,
+    name: &str,
+) -> HiddenWord {
+    use engine::contract::hidden::{self, Confidence as C};
+    let known = config.attributes.index(name).map(|i| {
+        hidden::hidden_word(
+            name,
+            player.attributes.get(i).decimal(),
+            player.condition.matches_at_club,
+            &config.hidden,
+        )
+    });
+    let Some(w) = known else {
+        return HiddenWord {
+            word: None,
+            confidence: Confidence::NotYetKnown,
+        };
+    };
+    HiddenWord {
+        word: w.word,
+        confidence: match w.confidence {
+            C::NotYetKnown => Confidence::NotYetKnown,
+            C::Tentative => Confidence::Tentative,
+            C::Firm => Confidence::Firm,
+        },
+    }
+}
+
+/// Every player's match rating as the `ratings` message carries it, home first and in squad
+/// order.
+pub(crate) fn ratings_message(sim: &Simulation) -> Ratings {
+    let teams = sim.teams();
+    Ratings {
+        tick: sim.tick(),
+        ratings: sim
+            .match_ratings()
+            .into_iter()
+            .map(|r| RatingWire {
+                id: teams[r.team].player_ids[r.squad].clone(),
+                rating: r.rating(),
+            })
+            .collect(),
+    }
 }
 
 /// A squad index as the wire writes it. A validated team file holds far fewer players.
@@ -989,10 +1077,45 @@ mod tests {
         let roles = sim.config().tactics.roles.len();
         for entry in &teams[HOME].squad {
             assert_eq!(entry.role_fit.len(), roles);
-            assert!(entry.role_fit.iter().all(|&f| f <= 100), "{entry:?}");
+            // Tenths of 1 to 20.
+            assert!(entry.role_fit.iter().all(|&f| f <= 200), "{entry:?}");
             assert!(entry.natural_fitness > 0, "{entry:?}");
-            assert!(entry.injury_resistance > 0, "{entry:?}");
+            // The shipped teams give no matches at the club: nothing is known yet.
+            for hidden in [&entry.consistency, &entry.injury_proneness] {
+                assert_eq!(hidden.confidence, Confidence::NotYetKnown, "{entry:?}");
+                assert_eq!(hidden.word, None, "{entry:?}");
+            }
+            // Protocol 6: every visible attribute in tenths, no hidden one; the shipped teams
+            // are version 1 files, so a value may sit under the 1.0 floor (2 to 8 tenths).
+            let schema = &sim.config().attributes;
+            let visible = schema.attributes.iter().filter(|d| !d.hidden).count();
+            assert_eq!(entry.attributes.len(), visible, "{entry:?}");
+            assert!(
+                entry.attributes.values().all(|&t| (2..=200).contains(&t)),
+                "{entry:?}"
+            );
+            assert!(!entry.attributes.contains_key("consistency"));
+            assert!(!entry.attributes.contains_key("injury_proneness"));
+            // A version 1 file carries no body; the build word derives from the attributes.
+            assert_eq!(
+                (entry.height, entry.age, entry.nationality.as_deref()),
+                (None, None, None)
+            );
+            assert!(
+                matches!(
+                    entry.build.as_deref(),
+                    Some("slight" | "athletic" | "powerful")
+                ),
+                "{entry:?}"
+            );
+            assert_eq!(entry.condition, Some(100), "no rest days: fresh");
+            assert_eq!((entry.sharpness, entry.matches_at_club), (None, None));
+            let level = entry.level.expect("a level");
+            assert!((10..=200).contains(&level), "{entry:?}");
+            // No condition inputs: today's level is the fresh one.
+            assert_eq!(entry.plays_between, Some([level, level]), "{entry:?}");
         }
+        assert_eq!(protocol::PROTOCOL_VERSION, 6);
         let setup = teams[HOME]
             .setup
             .as_ref()
@@ -1031,6 +1154,55 @@ mod tests {
             )
         );
         assert_eq!(subs.windows_exempt, ["half_time"]);
+    }
+
+    /// The condition message carries each slot's overall level now and fresh; a player who
+    /// tires late in a seeded match plays below his fresh level, and the levels read the match
+    /// without moving it.
+    #[test]
+    fn the_condition_message_carries_levels_and_a_tired_player_falls_below_base() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let config = MatchConfig::new(42, 90, &loaded.content, [a, b]).unwrap();
+        let mut sim = Simulation::new(config).unwrap();
+        let mut twin =
+            Simulation::new(MatchConfig::new(42, 90, &loaded.content, [a, b]).unwrap()).unwrap();
+        let first = condition_message(&sim);
+        assert_eq!(first.level.len(), 22);
+        assert_eq!(first.base.len(), 22);
+        assert_eq!(
+            first.level, first.base,
+            "fresh at kick-off with no condition inputs"
+        );
+        let minute_75 = (75.0 * 60.0 / sim.tuning().dt).round() as u32;
+        for _ in 0..minute_75 {
+            sim.step();
+            twin.step();
+            if sim.tick().is_multiple_of(20) {
+                let _ = condition_message(&sim);
+            }
+        }
+        let late = condition_message(&sim);
+        assert!(
+            late.level.iter().zip(&late.base).any(|(l, b)| l < b),
+            "someone has tired by minute 75: {:?} against {:?}",
+            late.level,
+            late.base
+        );
+        assert!(
+            late.level
+                .iter()
+                .chain(&late.base)
+                .all(|t| (2..=200).contains(t)),
+            "tenths of 1 to 20"
+        );
+        // Reading the levels changed nothing: the same match without the reads is at the
+        // same state.
+        assert_eq!(sim.players().len(), twin.players().len());
+        for (p, q) in sim.players().iter().zip(twin.players()) {
+            assert_eq!(p.pos, q.pos);
+            assert_eq!(p.energy.to_bits(), q.energy.to_bits());
+        }
     }
 
     /// Keeps the tick and kind of every stoppage the match opened.
@@ -1411,7 +1583,9 @@ mod tests {
             })
             .expect("energy is sent every second");
         assert_eq!(condition.subs_used[0], 1);
-        assert_eq!(condition.windows_used[0], 1);
+        // A change made at half time takes no window of its own.
+        let at_half_time = verdicts[0].change_applied_tick == Some(ticks / 2);
+        assert_eq!(condition.windows_used[0], u8::from(!at_half_time));
     }
 
     /// Waits until the producer stops moving and returns the tick it stopped on.
@@ -1482,6 +1656,100 @@ mod tests {
             gate.stop();
             run.join().unwrap().unwrap();
         });
+    }
+
+    /// A save taken at a stoppage reaches disk once the socket passes it, even when the engine
+    /// is already holding and runs no further tick: a paused or lead-bound match keeps it.
+    #[test]
+    fn a_stoppage_save_the_socket_passes_while_the_engine_holds_is_written_once() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let config = MatchConfig::new(42, 3, &loaded.content, [a, b]).unwrap();
+        let ticks = config.max_ticks();
+        // The first stoppage of the match, read from a twin.
+        let mut twin = Simulation::new(config.clone()).unwrap();
+        while twin.stoppage().is_none() {
+            twin.step();
+        }
+        let stoppage = twin.tick();
+        let mut sim = Simulation::new(config).unwrap();
+        let data =
+            std::env::temp_dir().join(format!("engine-cli-held-save-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&data);
+        let state = std::sync::Arc::new(MatchState::default());
+        let mut gated =
+            stream::GatedSnapshots::new(&data, "m", [7; 16], 1, std::sync::Arc::clone(&state));
+        let path = gated.path().to_path_buf();
+        // The engine holds 20 ticks past the stoppage; the socket has sent nothing yet.
+        let held_at = stoppage + 20;
+        let gate = Gate::new();
+        gate.set_lead_bound(20);
+        gate.set_seen(stoppage);
+        std::thread::scope(|scope| {
+            let run = scope.spawn(|| {
+                drive(
+                    &mut sim,
+                    &mut gated,
+                    &Drive {
+                        ticks,
+                        owner_id: "0123456789abcdef0123456789abcdef",
+                        match_id: "000000000000002a-1",
+                        club_ids: ["club-a", "club-b"],
+                        state: &state,
+                        gate: Some(&gate),
+                        commentary: &loaded.commentary,
+                        inbox: None,
+                        page_changes: None,
+                        planned: &[],
+                        observe: None,
+                        matchday: None,
+                    },
+                    &mut |_: ServerMessage| Ok(()),
+                )
+            });
+            while state.tick() < held_at {
+                std::thread::yield_now();
+            }
+            assert_eq!(settled(&state), held_at, "the engine holds");
+            assert!(
+                !path.exists(),
+                "nothing is saved before the socket passes it"
+            );
+            // The socket flushes the stoppage tick and the tick after it.
+            state.set_sent_tick(stoppage + 1);
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while !path.exists() && std::time::Instant::now() < deadline {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            let reached = path.exists();
+            // Several more waits at the hold write nothing more.
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            assert_eq!(state.tick(), held_at, "the engine ran no further tick");
+            gate.stop();
+            run.join().unwrap().unwrap();
+            assert!(
+                reached,
+                "the stoppage save never reached disk while the engine held"
+            );
+        });
+        assert_eq!(gated.writes, 1, "the save is written exactly once");
+        let saved = std::fs::read(&path).unwrap();
+        let expected = data.join("expected.smsn");
+        gated
+            .newest_before(stoppage + 1)
+            .expect("the stoppage was captured")
+            .write_atomic(&expected)
+            .unwrap();
+        assert_eq!(
+            saved,
+            std::fs::read(&expected).unwrap(),
+            "the stoppage save"
+        );
+        assert_eq!(
+            engine::Snapshot::read(&path, "snapshot").unwrap().tick(),
+            stoppage
+        );
+        let _ = std::fs::remove_dir_all(&data);
     }
 
     #[test]
@@ -1563,6 +1831,132 @@ mod tests {
             assert_eq!(e.change_state, Some(ChangeState::Applied), "{e:?}");
             assert!(e.tick > paused_at, "applied on resume: {e:?}");
             assert_eq!(e.tick, next, "not at the next stoppage: {e:?}");
+        }
+    }
+
+    /// The path of the first key in `value` that names a hidden value and holds a number,
+    /// directly or anywhere beneath it. `hidden` is every name a hidden value goes by.
+    fn hidden_leaks(value: &serde_json::Value, hidden: &[String], path: &str) -> Option<String> {
+        fn holds_number(v: &serde_json::Value) -> bool {
+            match v {
+                serde_json::Value::Number(_) => true,
+                serde_json::Value::Array(a) => a.iter().any(holds_number),
+                serde_json::Value::Object(o) => o.values().any(holds_number),
+                _ => false,
+            }
+        }
+        match value {
+            serde_json::Value::Object(o) => o.iter().find_map(|(k, v)| {
+                let here = format!("{path}.{k}");
+                let named = hidden.iter().any(|h| k.contains(h.as_str()));
+                if named && holds_number(v) {
+                    Some(here)
+                } else {
+                    hidden_leaks(v, hidden, &here)
+                }
+            }),
+            serde_json::Value::Array(a) => a
+                .iter()
+                .enumerate()
+                .find_map(|(i, v)| hidden_leaks(v, hidden, &format!("{path}[{i}]"))),
+            _ => None,
+        }
+    }
+
+    /// No message of a page-managed match, its hello included, carries a number for a hidden
+    /// value; a planted figure is caught; and the full-time ratings list every player who
+    /// played, the substitute among them.
+    #[test]
+    fn no_message_carries_a_number_for_a_hidden_value() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let config = MatchConfig::new(42, 3, &loaded.content, [a, b])
+            .unwrap()
+            .with_manager(HOME, engine::Manager::Human);
+        let ticks = config.max_ticks();
+        let mut hidden: Vec<String> = config
+            .attributes
+            .hidden_names()
+            .map(str::to_string)
+            .collect();
+        hidden.push("injury_resistance".into());
+        assert!(hidden.iter().any(|h| h == "consistency"), "{hidden:?}");
+        let mut sim = Simulation::new(config).unwrap();
+        let hello = serde_json::to_value(hello_teams(&sim, true)).unwrap();
+        let inbox = Inbox::default();
+        for change in page_changes(&sim) {
+            inbox.push(change);
+        }
+        let state = MatchState::default();
+        let mut messages = Vec::new();
+        let driven = drive(
+            &mut sim,
+            &mut VecSink::default(),
+            &Drive {
+                ticks,
+                owner_id: "0123456789abcdef0123456789abcdef",
+                match_id: "000000000000002a-1",
+                club_ids: ["club-a", "club-b"],
+                state: &state,
+                gate: None,
+                commentary: &loaded.commentary,
+                inbox: Some(&inbox),
+                page_changes: None,
+                planned: &[],
+                observe: None,
+                matchday: None,
+            },
+            &mut |m: ServerMessage| {
+                messages.push(m);
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert!(driven.full_time);
+        assert_eq!(hidden_leaks(&hello, &hidden, "hello"), None);
+        assert!(
+            hello.to_string().contains("\"player.consistency\":{"),
+            "the hello names the hidden values"
+        );
+        for (i, m) in messages.iter().enumerate() {
+            let json = serde_json::to_value(m).unwrap();
+            assert_eq!(hidden_leaks(&json, &hidden, &format!("message[{i}]")), None);
+        }
+        let mut planted = hello.clone();
+        planted[0]["squad"][0]["player.consistency"] = serde_json::json!(12.5);
+        assert_eq!(
+            hidden_leaks(&planted, &hidden, "hello").as_deref(),
+            Some("hello[0].squad[0].player.consistency")
+        );
+        // A hidden value planted among the protocol 6 attributes is caught too.
+        let mut planted = hello.clone();
+        planted[0]["squad"][0]["player.attributes"]["injury_proneness"] = serde_json::json!(120);
+        assert_eq!(
+            hidden_leaks(&planted, &hidden, "hello").as_deref(),
+            Some("hello[0].squad[0].player.attributes.injury_proneness")
+        );
+
+        let Some(ServerMessage::Ratings(ratings)) = messages.last() else {
+            panic!("the last message is not the ratings");
+        };
+        let played: Vec<String> = sim
+            .tallies()
+            .iter()
+            .zip(sim.teams())
+            .flat_map(|(side, team)| {
+                side.iter()
+                    .zip(team.player_ids.iter())
+                    .filter(|(t, _)| t.played)
+                    .map(|(_, id)| id.clone())
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        let rated: Vec<String> = ratings.ratings.iter().map(|r| r.id.clone()).collect();
+        assert_eq!(rated, played);
+        assert_eq!(rated.len(), 23, "22 starters and the substitute");
+        for r in &ratings.ratings {
+            assert!((1.0..=10.0).contains(&r.rating), "{r:?}");
+            assert_eq!((r.rating * 10.0).round() / 10.0, r.rating, "{r:?}");
         }
     }
 }

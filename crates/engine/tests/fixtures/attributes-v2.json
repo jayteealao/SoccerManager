@@ -1,0 +1,1214 @@
+{
+  "schema_version": 2,
+  "attributes": [
+    {
+      "name": "passing",
+      "group": "technical",
+      "job": {
+        "action": "pass",
+        "stage": "execute",
+        "statistic": "pass completion share",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "dribbling",
+      "group": "technical",
+      "job": {
+        "action": "dribble",
+        "stage": "execute",
+        "statistic": "take-ons completed share",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "first_touch",
+      "group": "technical",
+      "job": {
+        "action": "receive",
+        "stage": "execute",
+        "statistic": "balls lost within 1 s of receipt",
+        "direction": "down"
+      }
+    },
+    {
+      "name": "finishing",
+      "group": "technical",
+      "job": {
+        "action": "shot",
+        "stage": "execute",
+        "statistic": "goals per on-target shot inside the box",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "crossing",
+      "group": "technical",
+      "job": {
+        "action": "cross",
+        "stage": "execute",
+        "statistic": "crosses completed share",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "heading",
+      "group": "technical",
+      "job": {
+        "action": "header",
+        "stage": "execute",
+        "statistic": "headers won share",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "long_shots",
+      "group": "technical",
+      "job": {
+        "action": "long_shot",
+        "stage": "execute",
+        "statistic": "on-target share of shots from outside the box",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "tackling",
+      "group": "technical",
+      "job": {
+        "action": "tackle",
+        "stage": "execute",
+        "statistic": "tackle win share",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "technique",
+      "group": "technical",
+      "job": {
+        "action": "chip",
+        "stage": "execute",
+        "statistic": "chips and take-ons attempted per match",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "positioning",
+      "group": "mental",
+      "job": {
+        "action": "block",
+        "stage": "execute",
+        "statistic": "shots blocked per match",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "vision",
+      "group": "mental",
+      "job": {
+        "action": "pass",
+        "stage": "see",
+        "statistic": "mean forward progress of completed passes",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "decisions",
+      "group": "mental",
+      "job": {
+        "action": "shot",
+        "stage": "choose",
+        "statistic": "expected goals per shot",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "composure",
+      "group": "mental",
+      "job": {
+        "action": "pass",
+        "stage": "pressure",
+        "statistic": "pass completion when pressed",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "anticipation",
+      "group": "mental",
+      "job": {
+        "action": "intercept",
+        "stage": "see",
+        "statistic": "loose balls won share",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "work_rate",
+      "group": "mental",
+      "job": {
+        "action": "press",
+        "stage": "choose",
+        "statistic": "tackle attempts per match",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "aggression",
+      "group": "mental",
+      "job": {
+        "action": "tackle",
+        "stage": "choose",
+        "statistic": "fouls per match",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "concentration",
+      "group": "mental",
+      "job": {
+        "action": "shape",
+        "stage": "choose",
+        "statistic": "lapses per match",
+        "direction": "down"
+      }
+    },
+    {
+      "name": "teamwork",
+      "group": "mental",
+      "job": {
+        "action": "shape",
+        "stage": "execute",
+        "statistic": "mean distance from anchor out of possession",
+        "direction": "down"
+      }
+    },
+    {
+      "name": "pace",
+      "group": "physical",
+      "job": {
+        "action": "sprint",
+        "stage": "top_speed",
+        "statistic": "top speed reached per match",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "acceleration",
+      "group": "physical",
+      "job": {
+        "action": "sprint",
+        "stage": "execute",
+        "statistic": "loose balls won within 5 m",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "stamina",
+      "group": "physical",
+      "job": {
+        "action": "endure",
+        "stage": "execute",
+        "statistic": "energy at full time",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "strength",
+      "group": "physical",
+      "job": {
+        "action": "shield",
+        "stage": "execute",
+        "statistic": "tackles won against him while he stands",
+        "direction": "down"
+      }
+    },
+    {
+      "name": "agility",
+      "group": "physical",
+      "job": {
+        "action": "turn",
+        "stage": "execute",
+        "statistic": "take-on success share",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "balance",
+      "group": "physical",
+      "job": {
+        "action": "stay_up",
+        "stage": "execute",
+        "statistic": "fouls after which his team keeps the ball, share",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "jumping",
+      "group": "physical",
+      "job": {
+        "action": "aerial_reach",
+        "stage": "execute",
+        "statistic": "aerial balls reached per match",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "natural_fitness",
+      "group": "physical",
+      "job": {
+        "action": "recover",
+        "stage": "execute",
+        "statistic": "energy gained at half time",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "injury_resistance",
+      "group": "physical",
+      "job": {
+        "action": "injury",
+        "stage": "execute",
+        "statistic": "injuries per 90 minutes",
+        "direction": "down"
+      }
+    },
+    {
+      "name": "handling",
+      "group": "goalkeeping",
+      "job": {
+        "action": "hold",
+        "stage": "execute",
+        "statistic": "saves held share",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "reflexes",
+      "group": "goalkeeping",
+      "job": {
+        "action": "save",
+        "stage": "execute",
+        "statistic": "save share of on-target shots from beyond 12 m",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "aerial_reach",
+      "group": "goalkeeping",
+      "job": {
+        "action": "claim",
+        "stage": "execute",
+        "statistic": "high balls claimed per match",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "one_on_ones",
+      "group": "goalkeeping",
+      "job": {
+        "action": "one_on_one",
+        "stage": "execute",
+        "statistic": "save share of on-target shots within 12 m",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "kicking",
+      "group": "goalkeeping",
+      "job": {
+        "action": "keeper_kick",
+        "stage": "execute",
+        "statistic": "keeper kicks reaching a team-mate, share",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "throwing",
+      "group": "goalkeeping",
+      "job": {
+        "action": "keeper_throw",
+        "stage": "execute",
+        "statistic": "keeper throws completed, share",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "command_of_area",
+      "group": "goalkeeping",
+      "job": {
+        "action": "claim",
+        "stage": "choose",
+        "statistic": "crosses claimed per match",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "communication",
+      "group": "goalkeeping",
+      "job": {
+        "action": "organise",
+        "stage": "execute",
+        "statistic": "offsides won by his side per match",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "rushing_out",
+      "group": "goalkeeping",
+      "job": {
+        "action": "rush",
+        "stage": "choose",
+        "statistic": "balls swept outside the box per match",
+        "direction": "up"
+      }
+    }
+  ],
+  "actions": {
+    "pass": {
+      "see": {
+        "main": {
+          "attribute": "vision",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "anticipation",
+            "weight": 0.25
+          },
+          {
+            "attribute": "teamwork",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      },
+      "choose": {
+        "main": {
+          "attribute": "decisions",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "teamwork",
+            "weight": 0.3
+          },
+          {
+            "attribute": "vision",
+            "weight": 0.2
+          }
+        ],
+        "source": "design"
+      },
+      "execute": {
+        "main": {
+          "attribute": "passing",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "technique",
+            "weight": 0.3
+          },
+          {
+            "attribute": "vision",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      },
+      "pressure": {
+        "main": {
+          "attribute": "composure",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "technique",
+            "weight": 0.2
+          },
+          {
+            "attribute": "balance",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "chip": {
+      "choose": {
+        "main": {
+          "attribute": "decisions",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "vision",
+            "weight": 0.3
+          },
+          {
+            "attribute": "technique",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      },
+      "execute": {
+        "main": {
+          "attribute": "technique",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "passing",
+            "weight": 0.5
+          },
+          {
+            "attribute": "vision",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      },
+      "pressure": {
+        "main": {
+          "attribute": "composure",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "technique",
+            "weight": 0.2
+          },
+          {
+            "attribute": "balance",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "cross": {
+      "choose": {
+        "main": {
+          "attribute": "decisions",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "vision",
+            "weight": 0.2
+          },
+          {
+            "attribute": "teamwork",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      },
+      "execute": {
+        "main": {
+          "attribute": "crossing",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "technique",
+            "weight": 0.3
+          },
+          {
+            "attribute": "balance",
+            "weight": 0.1
+          }
+        ],
+        "source": "design"
+      },
+      "pressure": {
+        "main": {
+          "attribute": "composure",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "technique",
+            "weight": 0.2
+          },
+          {
+            "attribute": "balance",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "shot": {
+      "choose": {
+        "main": {
+          "attribute": "decisions",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "finishing",
+            "weight": 0.3
+          },
+          {
+            "attribute": "anticipation",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      },
+      "execute": {
+        "main": {
+          "attribute": "finishing",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "technique",
+            "weight": 0.3
+          },
+          {
+            "attribute": "balance",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      },
+      "pressure": {
+        "main": {
+          "attribute": "composure",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "finishing",
+            "weight": 0.2
+          },
+          {
+            "attribute": "balance",
+            "weight": 0.1
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "long_shot": {
+      "choose": {
+        "main": {
+          "attribute": "decisions",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "long_shots",
+            "weight": 0.3
+          },
+          {
+            "attribute": "vision",
+            "weight": 0.1
+          }
+        ],
+        "source": "design"
+      },
+      "execute": {
+        "main": {
+          "attribute": "long_shots",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "technique",
+            "weight": 0.4
+          },
+          {
+            "attribute": "strength",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      },
+      "pressure": {
+        "main": {
+          "attribute": "composure",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "technique",
+            "weight": 0.2
+          },
+          {
+            "attribute": "balance",
+            "weight": 0.1
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "header": {
+      "execute": {
+        "main": {
+          "attribute": "heading",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "jumping",
+            "weight": 0.3
+          },
+          {
+            "attribute": "strength",
+            "weight": 0.2
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "penalty": {
+      "execute": {
+        "main": {
+          "attribute": "finishing",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "technique",
+            "weight": 0.3
+          },
+          {
+            "attribute": "composure",
+            "weight": 0.2
+          }
+        ],
+        "source": "design"
+      },
+      "pressure": {
+        "main": {
+          "attribute": "composure",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "concentration",
+            "weight": 0.2
+          },
+          {
+            "attribute": "finishing",
+            "weight": 0.1
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "dribble": {
+      "choose": {
+        "main": {
+          "attribute": "decisions",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "dribbling",
+            "weight": 0.3
+          },
+          {
+            "attribute": "vision",
+            "weight": 0.1
+          }
+        ],
+        "source": "design"
+      },
+      "execute": {
+        "main": {
+          "attribute": "dribbling",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "agility",
+            "weight": 0.3
+          },
+          {
+            "attribute": "balance",
+            "weight": 0.2
+          },
+          {
+            "attribute": "technique",
+            "weight": 0.2
+          }
+        ],
+        "source": "design"
+      },
+      "pressure": {
+        "main": {
+          "attribute": "composure",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "balance",
+            "weight": 0.2
+          },
+          {
+            "attribute": "strength",
+            "weight": 0.1
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "receive": {
+      "execute": {
+        "main": {
+          "attribute": "first_touch",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "technique",
+            "weight": 0.3
+          },
+          {
+            "attribute": "balance",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "tackle": {
+      "choose": {
+        "main": {
+          "attribute": "aggression",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "decisions",
+            "weight": 0.2
+          },
+          {
+            "attribute": "anticipation",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      },
+      "execute": {
+        "main": {
+          "attribute": "tackling",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "strength",
+            "weight": 0.25
+          },
+          {
+            "attribute": "agility",
+            "weight": 0.2
+          },
+          {
+            "attribute": "balance",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "intercept": {
+      "see": {
+        "main": {
+          "attribute": "anticipation",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "positioning",
+            "weight": 0.3
+          },
+          {
+            "attribute": "concentration",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "press": {
+      "choose": {
+        "main": {
+          "attribute": "work_rate",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "aggression",
+            "weight": 0.2
+          },
+          {
+            "attribute": "stamina",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "shape": {
+      "choose": {
+        "main": {
+          "attribute": "concentration",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "positioning",
+            "weight": 0.2
+          },
+          {
+            "attribute": "decisions",
+            "weight": 0.1
+          }
+        ],
+        "source": "design"
+      },
+      "execute": {
+        "main": {
+          "attribute": "teamwork",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "positioning",
+            "weight": 0.4
+          },
+          {
+            "attribute": "work_rate",
+            "weight": 0.2
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "block": {
+      "execute": {
+        "main": {
+          "attribute": "positioning",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "anticipation",
+            "weight": 0.3
+          },
+          {
+            "attribute": "agility",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "sprint": {
+      "execute": {
+        "main": {
+          "attribute": "acceleration",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "agility",
+            "weight": 0.2
+          },
+          {
+            "attribute": "balance",
+            "weight": 0.1
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "endure": {
+      "execute": {
+        "main": {
+          "attribute": "stamina",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "natural_fitness",
+            "weight": 0.2
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "shield": {
+      "execute": {
+        "main": {
+          "attribute": "strength",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "balance",
+            "weight": 0.3
+          },
+          {
+            "attribute": "technique",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "turn": {
+      "execute": {
+        "main": {
+          "attribute": "agility",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "balance",
+            "weight": 0.3
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "stay_up": {
+      "execute": {
+        "main": {
+          "attribute": "balance",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "strength",
+            "weight": 0.3
+          },
+          {
+            "attribute": "agility",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "aerial_reach": {
+      "execute": {
+        "main": {
+          "attribute": "jumping",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "strength",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "recover": {
+      "execute": {
+        "main": {
+          "attribute": "natural_fitness",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "stamina",
+            "weight": 0.2
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "injury": {
+      "execute": {
+        "main": {
+          "attribute": "injury_resistance",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "natural_fitness",
+            "weight": 0.2
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "hold": {
+      "execute": {
+        "main": {
+          "attribute": "handling",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "concentration",
+            "weight": 0.2
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "save": {
+      "execute": {
+        "main": {
+          "attribute": "reflexes",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "agility",
+            "weight": 0.3
+          },
+          {
+            "attribute": "concentration",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "claim": {
+      "choose": {
+        "main": {
+          "attribute": "command_of_area",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "decisions",
+            "weight": 0.2
+          },
+          {
+            "attribute": "communication",
+            "weight": 0.1
+          }
+        ],
+        "source": "design"
+      },
+      "execute": {
+        "main": {
+          "attribute": "aerial_reach",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "handling",
+            "weight": 0.3
+          },
+          {
+            "attribute": "jumping",
+            "weight": 0.2
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "one_on_one": {
+      "execute": {
+        "main": {
+          "attribute": "one_on_ones",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "reflexes",
+            "weight": 0.3
+          },
+          {
+            "attribute": "composure",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "keeper_kick": {
+      "execute": {
+        "main": {
+          "attribute": "kicking",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "technique",
+            "weight": 0.2
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "keeper_throw": {
+      "execute": {
+        "main": {
+          "attribute": "throwing",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "vision",
+            "weight": 0.2
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "organise": {
+      "execute": {
+        "main": {
+          "attribute": "communication",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "command_of_area",
+            "weight": 0.2
+          },
+          {
+            "attribute": "concentration",
+            "weight": 0.1
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "rush": {
+      "choose": {
+        "main": {
+          "attribute": "rushing_out",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "anticipation",
+            "weight": 0.3
+          },
+          {
+            "attribute": "decisions",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    }
+  },
+  "gates": {
+    "chip": {
+      "technique_try": 8.0,
+      "agility_pull_off": 7.0,
+      "penalty_k": 0.6
+    },
+    "take_on": {
+      "technique_try": 7.0,
+      "agility_pull_off": 8.0,
+      "penalty_k": 0.6
+    }
+  }
+}
