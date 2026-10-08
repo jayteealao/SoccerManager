@@ -101,6 +101,25 @@ A targeted run is an inner loop. Before a change is accepted, run the full gate:
 
 3. Read `calib.pass` and the failing bands in each report.
 
+## Run the sensitivity rules
+
+The sensitivity rules check that every attribute and body job still moves its own statistic, and that a top player still beats an average one in about two of three runs of five matches (see [The player contract](../explanation/player-contract.md#every-rating-has-a-job)). Run them after a change to the attribute file's stage tables, the curve strengths in `engine.contract.actions`, or the match rating:
+
+```bash
+cargo test --release -p engine --test sensitivity_full -- --ignored --nocapture
+```
+
+The run plays the balanced design, the two arms and the five-match rule at the size `content/sensitivity.json` sets, about 6,400 matches, a few minutes on an 8-core machine. It prints one line per rule and the five-match shares, and writes the same to `target/sensitivity/rules.json`. The test passes only when every rule and the five-match rule pass.
+
+Read each line:
+
+- **fail** with a move whose interval lies below `min_move`: the job barely moves its statistic. Raise the job's own lever, its main weight in its stage table or its action's `k`, and run again. Never lower the threshold to let it pass.
+- **fail** with a share whose interval lies above `ceiling`: the job carries too much of the outcome. Lower its weight or `k`; for pace, its speed amplification.
+- **not sure**: the run cannot tell. A rare statistic needs more matches: raise `design.matches` and run again.
+- A five-match share above the band means a top player separates too much from an average one: lower the curve strengths by one common factor. Below it, raise them. Do not change the match rating's weights to move it.
+
+A change that moves play still needs the full suites below: a tuning that passes the rules must keep the bands.
+
 ## Build a faster calibrate binary
 
 Measure before you keep a faster build: run the same pairing with the release build and with the other build, and check that the diff between the two shows a change of exactly 0 on every row. A native CPU target (`RUSTFLAGS="-C target-cpu=native"`) is a local option only: the shipped build runs on other CPUs.

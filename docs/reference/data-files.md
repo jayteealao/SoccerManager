@@ -24,6 +24,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
 | `realism-bands.json` | 2 | The accepted realism bands the calibration run checks: four from version 1 and eleven from real-match data. They are acceptance criteria, never tuning values |
 | `fast-model.json` | 3 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
+| `sensitivity.json` | 1 | The sensitivity rules: one rule per attribute job and per body job, the thresholds they are judged by, the size of a run, and the five-match rule. Only the sensitivity run reads it; the content hash does not |
 
 Every file starts with `"schema_version"`. A file with another version is refused: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files and `tactics.json` are read in version 2 and in version 1, which converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 3 and in versions 2 and 1, and `tuning.json` in versions 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy. A version 1 or 2 attribute file converts to version 3 the same way (see [Version 2 files](#version-2-files)). Any other version is refused the same way.
 
@@ -427,6 +428,41 @@ The fit of the fast model, written by `engine-cli fast-model fit` (see [the comm
 CI fails when `engine_id` is not the id of `gate/golden.json`: a Rust test runs in every test job, and `engine-cli fast-model stale` runs in the gate job and before every release.
 
 The slot file's `engine.fast-model` entry picks the module: `{"module": "fitted-scores", "version": 1}`, or `{"module": "off"}`, which refuses to play. The slot never enters the content hash. Only the `fast-model` command reaches the module; a test fails the build when anything else does.
+
+## sensitivity.json
+
+The sensitivity rules, which prove that every job moves its own statistic (see [The player contract](../explanation/player-contract.md#every-rating-has-a-job)). Only the sensitivity run reads the file; no match reads it, and the content hash does not include it.
+
+| Field | Holds |
+|---|---|
+| `schema_version` | 1 |
+| `design` | The size of a run: `matches` of the balanced design (an even number, 2 to 100,000), `arm_matches` of each arm (every job low, every job high), the `seed`, and the bootstrap `resamples` per interval (99 to 99,999) |
+| `defaults` | The thresholds of every rule: `min_move`, the least relative move of the statistic from the low to the high level in the job's direction (0 to 10), and `ceiling`, the largest share of the outcome move of all jobs together one job may carry (0 to 1) |
+| `rules` | One rule per job: `job` (an attribute or `height`, `age`, `nationality`), `kind` (`attribute` or `body`), `measure` (the counter the run reads), `statistic` (the job's statistic, word for word), and `levels`, the low and the high level. A rule may override `min_move` or `ceiling`, with a `reason` |
+| `derived` | Fields with no job in play, proven by their own derivation test: `build` |
+| `five_match` | The five-match rule: the `roles` (position codes), `runs` per role, `matches_per_run`, the `top` and `average` rating of every visible attribute of the two copies, and the `target` share of runs the top copy wins with its `tolerance` |
+
+An attribute's levels are ratings, 1.0 to 20.0 on the tenth grid. A body job's levels are centimetres for `height` (150 to 215), years for `age` (15 to 45), and percent of adaptation for `nationality` (0 to 100), since nationality acts through adaptation. The direction of each statistic comes from the job, in `attributes.json` or in `engine.contract.body.jobs` of `tuning.json`; the rules file does not repeat it.
+
+The measures are `pass_completion`, `take_on_completion`, `receipt_loss`, `box_finishing`, `cross_completion`, `headers_won`, `long_shots_on_target`, `tackles_won`, `skill_attempts`, `blocks`, `pass_progress`, `xg_per_shot`, `pressed_completion`, `loose_ball_share`, `tackle_attempts`, `fouls`, `lapses`, `anchor_distance`, `top_speed`, `close_loose_balls`, `full_time_energy`, `standing_tackles_lost`, `fouled_kept`, `aerial_balls_reached`, `half_time_gain`, `injuries`, `saves_held`, `far_saves`, `high_claims`, `near_saves`, `keeper_kicks`, `keeper_throws`, `crosses_claimed`, `offsides_won`, `sweeps`, `rating_spread`, `late_energy_loss` and `mental_rating`. Two jobs may share a measure: dribbling and agility both read `take_on_completion`, and jumping and height both read `aerial_balls_reached`.
+
+The file is refused, naming the field, for:
+
+- a job with no rule: `content refused: sensitivity sensitivity.json: rules: job vision has no rule`
+- a rule with no job, or a second rule for a job
+- a `statistic` that differs from the job's own words
+- a `measure` that is not in the list above
+- a `min_move` or `ceiling` override without a `reason`
+- a level outside its range or off the tenth grid, or a low level not below the high one
+- a `derived` field that has a job
+
+Each rule reads one of three words:
+
+- **pass**: the lower end of the move's 95 percent interval reaches `min_move`, and the upper end of the share's interval stays within `ceiling`.
+- **fail**: the upper end of the move's interval is below `min_move` (too small, or the wrong way), or the lower end of the share's interval is above `ceiling`.
+- **not sure**: anything else. Not sure is never a pass.
+
+The five-match rule passes when the 95 percent interval of the pooled share of runs lies within `target` plus or minus `tolerance`, fails when it lies wholly outside, and is not sure otherwise.
 
 ## Position codes
 
