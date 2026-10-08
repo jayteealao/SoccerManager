@@ -597,7 +597,7 @@ fn as_saved(name: &str) -> &str {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// A long club name is matched as the header keeps it: its first 44 bytes, never cut
@@ -727,7 +727,10 @@ mod tests {
         }
     }
 
-    fn stats(match_id: &str, ratings: &[(&str, usize, f64)]) -> engine::observe::MatchStats {
+    pub(crate) fn stats(
+        match_id: &str,
+        ratings: &[(&str, usize, f64)],
+    ) -> engine::observe::MatchStats {
         use engine::observe::{
             LawStats, MatchFigures, MatchStats, RatingEntry, ScriptFigures, TacticsStats, TeamRef,
         };
