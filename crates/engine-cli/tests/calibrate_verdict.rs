@@ -48,7 +48,7 @@ fn report(out: &Output, run: &Path) -> Value {
     RecordSchemas::load()
         .report(&report)
         .unwrap_or_else(|e| panic!("{e}\n{report}"));
-    assert_eq!(report["schema.version"], "2");
+    assert_eq!(report["schema.version"], "3");
     report
 }
 
@@ -106,7 +106,8 @@ fn edit_band(content: &Path, name: &str, edit: impl FnOnce(&mut Value)) {
 
 /// A change run whose cap is too small for power reports every band
 /// without power as not sure or fail, never pass; its report and its console hold the time
-/// and memory of each stage; and its rules stage checks zero rules without error.
+/// and memory of each stage; and, in a build without the sensitivity rules, its rules stage
+/// checks no rule and says how to build them in.
 #[test]
 fn a_change_run_without_power_never_passes_and_reports_its_stages_and_rules() {
     let data = temp("engine-cli-verdict", "power");
@@ -166,13 +167,16 @@ fn a_change_run_without_power_never_passes_and_reports_its_stages_and_rules() {
         "{text}"
     );
 
-    // The rules stage runs, with no rule yet.
+    // The rules stage runs; this build has no rule (see `calibrate_rules.rs` for the rows).
     assert_eq!(
         report["calib.rules"],
-        json!({ "checked": 0, "levels": 0, "failed": 0 })
+        json!({
+            "checked": 0, "levels": 0, "failed": 0, "not_sure": 0,
+            "built": false, "ms": 0, "rows": []
+        })
     );
     assert!(
-        text.contains("rules stage: 0 touched sensitivity rules checked at 0 levels, 0 failed"),
+        text.contains("rules stage: this build has no sensitivity rules; build engine-cli with --features sensitivity to check them"),
         "{text}"
     );
     let _ = std::fs::remove_dir_all(&data);

@@ -24,8 +24,8 @@
       "const": "run-report"
     },
     "schema.version": {
-      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs. Every key of 1 stays in 2.",
-      "enum": ["1", "2"]
+      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows. Every key of an older version stays.",
+      "enum": ["1", "2", "3"]
     },
     "owner.id": {
       "type": "string",
@@ -126,6 +126,18 @@
     "bench.matches": {
       "type": "integer",
       "minimum": 1
+    }
+  },
+  "$defs": {
+    "ruleInterval": {
+      "description": "An estimate and its 95 percent interval.",
+      "type": "object",
+      "required": ["est", "lo", "hi"],
+      "properties": {
+        "est": { "type": "number" },
+        "lo": { "type": "number" },
+        "hi": { "type": "number" }
+      }
     }
   },
   "allOf": [
@@ -790,10 +802,35 @@
             }
           },
           "calib.rules": {
-            "description": "A change run's rules stage: the touched sensitivity rules checked, the levels checked over every rule, and the levels at which a rule failed.",
+            "description": "A change run's rules stage: the touched sensitivity rules checked, the levels checked over every rule (two per rule), and the rules judged fail. Since version 3 also the rules judged not sure, whether the build carries the rules (the sensitivity feature), the stage's wall time, and one row per rule with the five-match rule last.",
             "type": "object",
             "required": ["checked", "levels", "failed"],
-            "additionalProperties": { "type": "integer", "minimum": 0 }
+            "properties": {
+              "checked": { "type": "integer", "minimum": 0 },
+              "levels": { "type": "integer", "minimum": 0 },
+              "failed": { "type": "integer", "minimum": 0 },
+              "not_sure": { "type": "integer", "minimum": 0 },
+              "built": { "type": "boolean" },
+              "ms": { "type": "integer", "minimum": 0 },
+              "rows": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["job", "statistic", "levels", "word"],
+                  "properties": {
+                    "job": { "type": "string", "minLength": 1 },
+                    "statistic": { "type": "string", "minLength": 1 },
+                    "levels": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+                    "low": { "type": "number" },
+                    "high": { "type": "number" },
+                    "move": { "$ref": "#/$defs/ruleInterval" },
+                    "share": { "$ref": "#/$defs/ruleInterval" },
+                    "roles": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 } },
+                    "word": { "enum": ["pass", "fail", "not_sure"] }
+                  }
+                }
+              }
+            }
           },
           "calib.base": {
             "description": "The old engine of a change run: where it came from, its build and content, how many of its results came from the cache and how many it played, and its band rows on the run's fixtures.",
@@ -842,7 +879,7 @@
       "if": {
         "properties": {
           "operation": { "const": "calibrate" },
-          "schema.version": { "const": "2" },
+          "schema.version": { "enum": ["2", "3"] },
           "outcome": { "not": { "const": "error" } }
         },
         "required": ["operation", "schema.version"]

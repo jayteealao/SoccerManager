@@ -24,7 +24,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
 | `realism-bands.json` | 3 | The band registry: every realism band the calibration run judges, with its measure, range, and smallest shift. Version 2 still loads. They are acceptance criteria, never tuning values |
 | `fast-model.json` | 3 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
-| `sensitivity.json` | 1 | The sensitivity rules: one rule per attribute job and per body job, the thresholds they are judged by, the size of a run, and the five-match rule. Only the sensitivity run reads it; the content hash does not |
+| `sensitivity.json` | 1 | The sensitivity rules: one rule per attribute job and per body job, the thresholds they are judged by, the size of a run, and the five-match rule. Only the sensitivity run and the rules stage of a change run read it; the content hash does not |
 
 Every file starts with `"schema_version"`. A file with another version is refused, except `realism-bands.json`, which also reads version 2: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files and `tactics.json` are read in version 2 and in version 1, which converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 3 and in versions 2 and 1, and `tuning.json` in versions 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy. A version 1 or 2 attribute file converts to version 3 the same way (see [Version 2 files](#version-2-files)). Any other version is refused the same way.
 
@@ -465,7 +465,7 @@ The slot file's `engine.fast-model` entry picks the module: `{"module": "fitted-
 
 ## sensitivity.json
 
-The sensitivity rules, which prove that every job moves its own statistic (see [The player contract](../explanation/player-contract.md#every-rating-has-a-job)). Only the sensitivity run reads the file; no match reads it, and the content hash does not include it.
+The sensitivity rules, which prove that every job moves its own statistic (see [The player contract](../explanation/player-contract.md#every-rating-has-a-job)). Only the sensitivity run and the rules stage of `engine-cli calibrate --base` read the file, and both only in a build with the `sensitivity` feature; no match reads it, and the content hash does not include it.
 
 | Field | Holds |
 |---|---|

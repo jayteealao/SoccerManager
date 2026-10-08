@@ -64,6 +64,10 @@ jobs:
         run: "cargo test --locked -p engine --features sensitivity --lib -- sensitivity::"
       - name: The rules on small batches (ignored full run excluded)
         run: cargo test --locked -p engine --features sensitivity --test sensitivity
+      - name: clippy of calibrate with the rules stage
+        run: cargo clippy -p engine-cli --all-targets --locked --features sensitivity -- -D warnings
+      - name: The rules stage of a change run
+        run: cargo test --locked -p engine-cli --features sensitivity --test calibrate_rules
 
   # A match saved by the previous release finishes on that release's engine, built from its
   # tag (packaging/previous-engine.json), with the result the previous build reaches.

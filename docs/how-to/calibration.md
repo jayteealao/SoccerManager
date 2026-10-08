@@ -205,6 +205,15 @@ Read each line:
 - **not sure**: the run cannot tell. A rare statistic needs more matches: raise `design.matches` and run again.
 - A five-match share above the band means a top player separates too much from an average one: lower the curve strengths by one common factor. Below it, raise them. Do not change the match rating's weights to move it.
 
+A change run (`engine-cli calibrate --base <rev>`) checks the same rules in its rules stage, after the joint verdict, in a build with the feature:
+
+```bash
+cargo build --release -p engine-cli --features sensitivity
+target/release/engine-cli calibrate --base main --suite equal
+```
+
+The stage adds the rules' 6,400 matches to the change run, a few minutes on an 8-core machine. It prints the same table and the line `rules stage: 41 touched sensitivity rules checked at 82 levels, <failed> failed, <not sure> not sure`, and writes the rows to `calib.rules` in `report.json`. The words are information and do not change the joint verdict. A build without the feature prints that it has no sensitivity rules.
+
 A change that moves play still needs the full suites below: a tuning that passes the rules must keep the bands.
 
 ## Build a faster calibrate binary

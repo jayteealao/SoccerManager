@@ -174,6 +174,12 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         &bands,
     )?;
     let change = opts.pair.is_none() && (opts.base.is_some() || opts.base_binary.is_some());
+    // A change run checks the sensitivity rules last; a refused rules file stops it here.
+    let rule_set = if change {
+        Some(rules::load(&loaded.content, &dir)?)
+    } else {
+        None
+    };
     let fresh_id = format!("calib-{:016x}-{millis}", opts.seed);
     let run_dir = opts
         .out
@@ -394,12 +400,15 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         verdicts,
         joint,
         power,
-        rules,
     } = ctx.judge_run(first, old.as_ref().map(|(_, f)| f), change, pilot_used);
     if !verdicts.is_empty() && !quiet {
         eprint!("{}", verdict::render_table(&verdicts, joint.as_ref()));
     }
+    let rules = rule_set.map(|set| rules::run(&loaded.content, &set));
     if let Some(r) = &rules {
+        if !quiet && !r.rows.is_empty() {
+            eprint!("{}", rules::render_table(r));
+        }
         eprintln!("{}", rules::line(r));
     }
     ctx.write_target(&run_dir, change, pilot_used)?;
@@ -637,12 +646,11 @@ fn informational(mut checks: Vec<BandCheck>) -> Vec<BandCheck> {
     checks
 }
 
-/// A run's verdict: each band's word, and a change run's joint word, power and rules stage.
+/// A run's verdict: each band's word, and a change run's joint word and power.
 struct Judged {
     verdicts: Vec<verdict::VerdictRow>,
     joint: Option<verdict::Joint>,
     power: Option<BTreeMap<String, PowerInfo>>,
-    rules: Option<rules::RulesReport>,
 }
 
 /// What every arm of a run shares.
@@ -1280,7 +1288,6 @@ impl RunCtx<'_> {
                 verdicts,
                 joint: None,
                 power: None,
-                rules: None,
             };
         }
         let (sets, mut rows) = self.paired(first, old);
@@ -1307,13 +1314,11 @@ impl RunCtx<'_> {
                 (s.code().to_string(), info)
             })
             .collect();
-        let rules = rules::run(rules::RULES, &|_| true);
         self.log_verdict(&rows, &joint);
         Judged {
             verdicts: rows,
             joint: Some(joint),
             power: Some(power),
-            rules: Some(rules),
         }
     }
 

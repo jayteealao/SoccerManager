@@ -904,19 +904,65 @@ pub struct StageCost {
 }
 
 /// What a change run's rules stage did.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct RulesReport {
     /// Touched rules checked.
     pub checked: u32,
     /// Levels checked, over every rule.
     pub levels: u32,
-    /// Levels at which a rule failed.
+    /// Rules judged fail.
     pub failed: u32,
+    /// Rules judged not sure.
+    pub not_sure: u32,
+    /// Whether this build carries the sensitivity rules (the `sensitivity` feature).
+    pub built: bool,
+    /// The stage's wall time.
+    pub ms: u64,
+    /// One row per rule, in the rules file's order, then the five-match rule.
+    pub rows: Vec<RuleRow>,
+}
+
+/// One rule of the rules stage.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct RuleRow {
+    /// The job, or `five-match` for the five-match rule.
+    pub job: String,
+    pub statistic: String,
+    /// The low and the high level: ratings, centimetres, years or percent of adaptation;
+    /// for the five-match rule, the average and the top copy's rating.
+    pub levels: [f64; 2],
+    /// The statistic at the low and at the high level; absent for the five-match rule.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub low: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub high: Option<f64>,
+    /// The relative move from low to high in the job's direction; absent for the five-match
+    /// rule, or when it is not finite.
+    #[serde(rename = "move", skip_serializing_if = "Option::is_none")]
+    pub mv: Option<RuleInterval>,
+    /// The job's share of the outcome move; for the five-match rule, the pooled share of
+    /// runs the top copy won. Absent when no arm was played, or when the arms' outcome did
+    /// not move, so the share has no finite value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub share: Option<RuleInterval>,
+    /// The five-match rule's share of runs per role.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub roles: Option<BTreeMap<String, f64>>,
+    /// `pass`, `fail` or `not_sure`.
+    pub word: &'static str,
+}
+
+/// An estimate and its 95 percent interval.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct RuleInterval {
+    pub est: f64,
+    pub lo: f64,
+    pub hi: f64,
 }
 
 /// The schema version of the calibrate run report: 2 since the registry, the verdicts and
-/// the stage costs; every key of version 1 stays.
-pub const REPORT_SCHEMA_VERSION: &str = "2";
+/// the stage costs; 3 since the rules stage's rows. Every key of an older version stays.
+pub const REPORT_SCHEMA_VERSION: &str = "3";
 
 /// One suite's run length in a change run.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
