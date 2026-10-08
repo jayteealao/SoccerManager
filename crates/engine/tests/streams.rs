@@ -308,10 +308,12 @@ fn no_draw_bypasses_the_registry() {
         "next_u32",
         "next_u64",
     ];
-    // Offline generation, a maths test's input sampler, and the fast model and its events,
-    // which play no match stream, keep their own generator.
-    const ALLOWED: [&str; 7] = [
+    // Offline generation, a maths test's input sampler, the fast model and its events, which
+    // play no match stream, and the sensitivity rules' design and bootstrap, which choose
+    // matches and resample results outside any match, keep their own generator.
+    const ALLOWED: [&str; 8] = [
         "streams/",
+        "sensitivity/",
         "rng.rs",
         "data/generator.rs",
         "data/names.rs",

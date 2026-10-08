@@ -321,6 +321,11 @@ impl Simulation {
             self.tally(k, crate::sim::tally::Count::Goal);
         }
         self.tally_conceded(1 - team);
+        if self.shot_in_flight == Some(team)
+            && let Some(p) = self.probe.as_deref_mut()
+        {
+            p.scored(team);
+        }
         #[cfg(feature = "scenario")]
         if self.shot_in_flight == Some(team) {
             self.census.scored += 1;

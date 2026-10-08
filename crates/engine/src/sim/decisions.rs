@@ -139,7 +139,11 @@ impl Simulation {
             trace.push_point(Point::Carrier, detail);
         }
         let carrier = crate::streams::PlayerKey::of(&self.players[c]);
-        match decision.plan(&self.view(), c, &o, choice) {
+        let plan = decision.plan(&self.view(), c, &o, choice);
+        if self.probe.is_some() {
+            self.probe_plan(c, choice, plan);
+        }
+        match plan {
             CarrierPlan::Shot { goal, keeper } => Some(self.shot_kick(c, goal, keeper, 1.0)),
             CarrierPlan::Pass { j } => {
                 let aim = self.streams.draw(Key::player(Action::PassAim, carrier));

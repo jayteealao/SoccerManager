@@ -93,6 +93,8 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         stages: _,
         blend: _,
         tallies,
+        // The sensitivity rules' job counters: a read-only seam, absent in every gated match.
+        probe: _,
     } = sim;
 
     use FieldKind::{Bytes, Floats};

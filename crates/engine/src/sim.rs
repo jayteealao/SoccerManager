@@ -631,6 +631,9 @@ pub struct Simulation {
     pub(crate) blend: std::sync::Arc<crate::contract::stages::Blend>,
     /// What each player did, by side and squad index, for the match rating.
     pub(crate) tallies: [Vec<tally::PlayerTally>; 2],
+    /// Test seam for the sensitivity rules: the job counters, absent unless a sensitivity
+    /// run attaches them ([`Simulation::with_probe`]). Never hashed and never stored.
+    pub(crate) probe: Option<Box<crate::sensitivity::probe::JobProbe>>,
 }
 
 impl Simulation {
@@ -775,6 +778,7 @@ impl Simulation {
             stages,
             blend,
             tallies,
+            probe: None,
             config,
         };
         // Every starter plays; the condition inputs (sharpness, adaptation, a short rest)
@@ -817,6 +821,17 @@ impl Simulation {
 
     pub fn tuning(&self) -> &Tuning {
         &self.config.tuning
+    }
+
+    /// Attaches the job probe of the sensitivity rules: from now on the count sites fill it.
+    /// It reads the match and writes nothing else, so every tick stays as it would be.
+    pub fn with_probe(&mut self) {
+        self.probe = Some(Box::default());
+    }
+
+    /// The job probe, when a sensitivity run attached one.
+    pub fn probe(&self) -> Option<&crate::sensitivity::probe::JobProbe> {
+        self.probe.as_deref()
     }
 
     /// The roster index of the player keeping goal for `team`: slot 0, a goalkeeper who came
@@ -1352,18 +1367,33 @@ impl Simulation {
                 };
                 self.summary.xg[team] += xg;
                 self.tally_xg(c, xg);
+                if self.probe.is_some() {
+                    self.probe_shot(c, team, from, attack_x, penalty, xg);
+                }
                 self.shot_in_flight = Some(team);
                 self.shot_quality = quality;
                 shooter = Some((team, attack_x, c));
             } else if restart_kick {
                 self.summary.restart_kicks[team] += 1;
+                if let Some(p) = self.probe.as_deref_mut() {
+                    p.kicked_other();
+                }
             } else if matches!(kick, Kick::Clear { .. }) {
                 self.summary.clearances[team] += 1;
                 self.tally(c, tally::Count::Clearance);
+                if let Some(p) = self.probe.as_deref_mut() {
+                    p.kicked_other();
+                }
             } else {
                 self.summary.passes[team] += 1;
                 self.tally(c, tally::Count::Pass);
                 self.pass_in_flight = Some(team);
+                if self.probe.is_some() {
+                    let (from, attack_x) = (self.ball.xy(), self.teams[team].attack_x);
+                    if let Some(p) = self.probe.as_deref_mut() {
+                        p.kicked_pass(c, team, from, attack_x);
+                    }
+                }
             }
             self.last_touch = Some(team);
             self.last_kicker = Some(c);
@@ -1390,6 +1420,9 @@ impl Simulation {
             self.shot_on_target = true;
             self.summary.shots_on_target[team] += 1;
             self.tally(c, tally::Count::ShotOnTarget);
+            if let Some(p) = self.probe.as_deref_mut() {
+                p.on_target();
+            }
         }
         self.carrier = None;
         self.keeper_beaten = false;

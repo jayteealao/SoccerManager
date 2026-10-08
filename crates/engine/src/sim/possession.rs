@@ -98,11 +98,14 @@ impl Simulation {
         }
         self.tally(k, Count::Save);
         let hold = possession.save_hold(&self.view(), k);
-        if self
+        let held = self
             .streams
             .tested(Key::player(Action::SaveHold, keeper), &[hold])
-            < hold
-        {
+            < hold;
+        if let Some(p) = self.probe.as_deref_mut() {
+            p.saved(held);
+        }
+        if held {
             #[cfg(feature = "scenario")]
             {
                 self.census.held += 1;
@@ -294,6 +297,9 @@ impl Simulation {
                             .streams
                             .tested(Key::player(Action::Header, p), &[chance]);
                         let won = draw < chance;
+                        if let Some(probe) = self.probe.as_deref_mut() {
+                            probe.header(self.players[i].team, won);
+                        }
                         if self.trace_on() {
                             self.trace_point(
                                 Point::LooseBall,
@@ -335,6 +341,9 @@ impl Simulation {
                             return;
                         }
                     }
+                    if self.probe.is_some() {
+                        self.probe_loose(i);
+                    }
                     self.gain(i, t);
                 }
             }
@@ -353,6 +362,9 @@ impl Simulation {
                         .streams
                         .tested(Key::player(Action::Tackle, p), &[p_win, p_win + p_foul]);
                     let outcome = fouls.tackle_outcome(&chances, draw);
+                    if self.probe.is_some() {
+                        self.probe_tackle(i, c, outcome);
+                    }
                     if self.trace_on() {
                         let label = match outcome {
                             Tackle::Win => "win",
@@ -405,6 +417,12 @@ impl Simulation {
         self.referee.offside = 0;
         self.keeper_beaten = false;
         let team = self.players[i].team;
+        if self.probe.is_some() {
+            let (at, tick) = (self.players[i].pos, self.tick);
+            if let Some(p) = self.probe.as_deref_mut() {
+                p.gained(team, at, tick);
+            }
+        }
         match self.pass_in_flight.take() {
             Some(passing) if passing == team => {
                 self.summary.passes_completed[team] += 1;

@@ -31,3 +31,21 @@ pub fn overall_level(ratings: &Attributes, schema: &AttributeSchema, position: P
     }
     u8::try_from((sum + count / 2) / count).unwrap_or(u8::MAX)
 }
+
+/// The mean of the visible ratings of `group` in `ratings`, on the 1 to 20 scale: the
+/// sensitivity rules read the mental group to see adaptation act. 0 when the group is empty.
+pub fn group_mean(ratings: &Attributes, schema: &AttributeSchema, group: Group) -> f64 {
+    let (sum, count) = schema
+        .attributes
+        .iter()
+        .enumerate()
+        .filter(|(_, def)| !def.hidden && def.group == group)
+        .fold((0.0, 0u32), |(s, n), (i, _)| {
+            (s + ratings.get(i).decimal(), n + 1)
+        });
+    if count == 0 {
+        0.0
+    } else {
+        sum / f64::from(count)
+    }
+}
