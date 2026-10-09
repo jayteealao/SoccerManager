@@ -4,6 +4,14 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- `engine-cli calibrate` reads each realism band's value measured on real matches, in place from the measured results (`--real-data`, by default `.scratch/out` in the main checkout), and prints it beside the verdict with its distance from the run's value. A headline before the table says which folder it read and how many bands have no real value there; a missing folder or file reads "no real data here" and the run goes on. The real values never change a verdict. The report adds `calib.real` and `calib.realism`, and is at schema version 4.
+
+### Changed
+
+- Content: the band file `realism-bands.json` is version 4. Each band keeps its range and smallest shift under `design`, and gains its record: where its real value is measured, the sample size and date, a calibration or validation label, its confidence counts, its condition (`dry`), and whether it gates (every band does). The three bands that measure engine experiments say they have no real counterpart. Version 3 and 2 files still load, and the 18 bands judge exactly as before.
+
 ## [0.2.0-beta.4] - 2026-10-08
 
 A prerelease for testers. Matches play differently from 0.2.0-beta.3 for the same seed: every action reads the players' ratings through the new attribute contract, on a scale of 1 to 20 in tenths, and a player's condition, height and age now play.

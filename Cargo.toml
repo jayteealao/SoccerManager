@@ -40,6 +40,8 @@ rhai = { version = "1.26", features = ["sync"] }
 libm = { version = "0.2.16", default-features = false }
 # Compile-fail tests: the module contract refuses a module that writes match state.
 trybuild = "1.0.119"
+# Reads the compressed real-data files of the realism bands (pure-Rust back end, no C build).
+flate2 = "1.1"
 
 [profile.release]
 debug = 1
@@ -65,4 +67,10 @@ opt-level = 3
 opt-level = 3
 
 [profile.dev.package.protocol]
+opt-level = 3
+
+# The realism bands' real data includes a compressed events file of about 66 MB that each
+# judgement streams; an optimized inflater keeps a debug-build test run from waiting on it.
+# It cannot change a result: it reads the real data, never a match.
+[profile.dev.package.miniz_oxide]
 opt-level = 3

@@ -514,6 +514,13 @@ mod tests {
             hi: 1.0,
             smallest_shift: 0.1,
             group: None,
+            real: None,
+            evidence: None,
+            confidence: None,
+            condition: crate::report::bands::Condition::Dry,
+            max_from_dry: None,
+            gates: true,
+            report_only: None,
         }
     }
 

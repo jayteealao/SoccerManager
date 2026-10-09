@@ -22,11 +22,11 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `tactics.json` | 1 | Ten formations, mentalities, team instructions, roles, duties, and the AI manager's settings |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
-| `realism-bands.json` | 3 | The band registry: every realism band the calibration run judges, with its measure, range, and smallest shift. Version 2 still loads. They are acceptance criteria, never tuning values |
+| `realism-bands.json` | 4 | The band registry: every realism band the calibration run judges, with its measure, design range, smallest shift, and its record (where its real value is measured, the evidence label, the confidence counts, the condition, and whether it gates). Versions 3 and 2 still load. They are acceptance criteria, never tuning values |
 | `fast-model.json` | 3 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
 | `sensitivity.json` | 1 | The sensitivity rules: one rule per attribute job and per body job, the thresholds they are judged by, the size of a run, and the five-match rule. Only the sensitivity run and the rules stage of a change run read it; the content hash does not |
 
-Every file starts with `"schema_version"`. A file with another version is refused, except `realism-bands.json`, which also reads version 2: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files and `tactics.json` are read in version 2 and in version 1, which converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 3 and in versions 2 and 1, and `tuning.json` in versions 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy. A version 1 or 2 attribute file converts to version 3 the same way (see [Version 2 files](#version-2-files)). Any other version is refused the same way.
+Every file starts with `"schema_version"`. A file with another version is refused, except `realism-bands.json`, which also reads versions 3 and 2: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files and `tactics.json` are read in version 2 and in version 1, which converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 3 and in versions 2 and 1, and `tuning.json` in versions 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy. A version 1 or 2 attribute file converts to version 3 the same way (see [Version 2 files](#version-2-files)). Any other version is refused the same way.
 
 ## attributes.json
 
@@ -409,10 +409,11 @@ The band registry: every realism band the calibration run judges. The bands are 
 
 | Field | Holds |
 |---|---|
-| `schema_version` | 3 |
+| `schema_version` | 4 |
 | `sample_size` | the match count the time budget is set for: 1000 |
 | `wall_minutes_per_sample` | the time budget of a suite of `sample_size` matches, in minutes; each suite's `wall_ms` check scales it to the run's match count |
 | `stronger_team.attribute_boost` | the factor the strength suite raises every attribute of the stronger club by |
+| `generalisation_floor` | the least competitions times seasons a band with a real counterpart needs to gate: 2. A band under it only reports |
 | `bands` | the bands, in the order the run shows them |
 
 Each band:
@@ -422,9 +423,29 @@ Each band:
 | `band` | its name, unique in the file |
 | `suites` | the suites that judge it: `equal`, `strength`, `formations`, `red-card` |
 | `measure` | what it measures; see below |
-| `lo`, `hi` | its range, both ends included; `hi` is at least `lo` |
-| `smallest_shift` | the smallest change a change run must have the power to see, above 0 |
+| `design.lo`, `design.hi` | its design range, both ends included; `hi` is at least `lo`. The band passes on it |
+| `design.smallest_shift` | the smallest change a change run must have the power to see, above 0 |
 | `group` | optional: a name the report gives bands of one figure, such as `possession_pct` for the home and away bands |
+| `real.source` | where the real value is measured: a pointer into the real-data folder, or `{"none": "<reason>"}` for a band with no real counterpart; see below |
+| `real.sample` | the sample size behind the real value, such as 1826 matches; 0, and only 0, for a band with no real counterpart |
+| `real.date` | the date the real value was measured, such as `2026-09-22`; for a band with no real counterpart, the date of that decision |
+| `real.floor` | optional: the least real sample the band needs; never on a band with no real counterpart |
+| `evidence` | `calibration` (tuning may read it) or `validation` (nothing was tuned on it). Only validation bands count toward a realism claim |
+| `confidence.measurement.count` | the units behind the real value: matches, team-matches or shots |
+| `confidence.generalisation` | `competitions`, `seasons` (distinct seasons in the pool) and `clubs` behind the real value |
+| `condition` | the pitch and weather the band holds for: `dry`, `wet`, `worn` or `windy`. Every shipped band is `dry` |
+| `max_from_dry` | optional: the most a band of another condition may sit from its dry band; refused on a `dry` band |
+| `gates` | `true` when the band changes the verdict; `false` when it only reports. No default |
+
+The file holds no real value. The calibrate command reads each value in place from the real-data folder (`--real-data`, by default the main checkout's `.scratch/out`) at each judgement, with its standard error from the same rows, and reports it beside the verdict; it never changes the verdict. A pointer has `dataset` (the pool, in words), `file` (a file of the folder; a name ending in `.gz` is decompressed), and `key`, read by one of these kinds:
+
+- A JSON file: `key` is a dotted path, such as `shot.goals`; a `*` part takes the mean over every child, such as `*.shots` over the five leagues, and the spread of the children gives the standard error. `den` names a second path and makes the value the ratio (no standard error). `"reduce": "share"` marks a share from 0 to 1, whose error comes from `real.sample`.
+- A CSV file with no quoted field: `"reduce": "mean"` is the mean over the kept rows of the sum of the `+`-joined columns of `key`, such as `hg+ag`; `"reduce": "share"` is the share of kept rows whose sum holds `op` against `value`. `where` keeps the rows whose columns hold one of the listed values, such as `{"comp": ["England", "France"]}`.
+- A group share: `"reduce": "group_share"`, `group_by` and `tokens`: the share of distinct `group_by` values with at least one row whose `key` column, split on spaces, holds a listed token. `sending_off_share` reads it over `wy2_events.csv.gz`: the matches with tag 1701 or 1703 over all matches.
+
+`scale` multiplies the value and its error, such as 0.5 for a per-match rate per team. The three bands of the strength and red-card suites measure engine experiments that no real match repeats, so their `real.source` is `{"none": "<reason>"}`: the report says `no real counterpart` and counts them apart from the bands without a real value.
+
+The report derives two words from the numbers by fixed rules. Measurement: `precise` when the real value's standard error is at most a quarter of the smallest shift, `fair` when it is at most the smallest shift, `rough` above, `unknown` without an error, `n/a` with no real counterpart. Generalisation, competitions times seasons against `generalisation_floor`: `broad` at twice the floor or more, `narrow` at the floor or more, `thin` under it, `n/a` with no real counterpart. A `thin` band, and a band with `gates: false`, prints `report only`: its word shows, but it is left out of the joint verdict and of `calib.pass`. The floor never applies to a band with no real counterpart.
 
 A measure is one of four kinds. Its fields come from a closed list. Each side has `goals`, `shots`, `shots_on_target`, `xg`, `passes`, `passes_completed`, `pass_accuracy_pct`, `possession_pct`, `fouls`, `offsides`, `corners`, `throw_ins`, `goal_kicks`, `yellow`, `red`, and `substitutions`, named as `goals.home`, `goals.away`, or `goals.{side}` for each side in turn; each match has `injuries` and `ball_in_play_s`.
 
@@ -433,9 +454,9 @@ A measure is one of four kinds. Its fields come from a closed list. Each side ha
 - `{"kind": "ratio", "num": [...], "den": [...]}`: the sum of the numerator fields over the sum of the denominator fields, pooled over the matches.
 - `{"kind": "builtin", "name": ...}`: a measure of a whole suite: `stronger_team_win_rate` (strength), `reduced_minus_full` and `full_over_control` (red-card).
 
-A field outside the list, a measure without fields, a range with `hi` below `lo`, a `smallest_shift` that is not above 0, an unknown suite, and a band name used twice are refused, and the message names the band and the field, for example `content refused: realism bands realism-bands.json: bands[0] (goals_per_match).hi: hi 2 is below lo 2.4`.
+A field outside the list, a measure without fields, a range with `hi` below `lo`, a `smallest_shift` that is not above 0, an unknown suite, and a band name used twice are refused, and the message names the band and the field, for example `content refused: realism bands realism-bands.json: bands[0] (goals_per_match).design.hi: hi 2 is below lo 2.4`. A band without one of `design.lo`, `design.hi`, `design.smallest_shift`, `real.source`, `real.sample`, `real.date`, `evidence`, `confidence.measurement`, `confidence.generalisation`, `condition` and `gates` is refused by name, for example `bands[11] (corners_per_team).gates: is required`; so are a source that holds both `none` and a pointer, a pointer without `dataset`, `file` and `key`, a blank reason, a pointer with `real.sample` 0, a band with no counterpart and a sample above 0 or a `real.floor`, an `evidence` other than the two words, and `max_from_dry` on a `dry` band.
 
-A file of version 2, with one fixed field per band, still loads: it is read as version 3 in memory, with each band's smallest shift a quarter of its range, and the report's `calib.registry.migrated_from` says `2`. The file is not rewritten. A file of version 1 is refused.
+A file of version 3, with the range flat on each band and no record, still loads: in memory each band gates, its condition is `dry`, and it has no real record, so the report counts it as without a real value (`no real record`). Its bands judge as the version 4 file's: the digests hash only what decides a verdict. A file of version 2, with one fixed field per band, migrates through version 3, with each band's smallest shift a quarter of its range. The report's `calib.registry.migrated_from` says `3` or `2`. The file is not rewritten. A file of version 1 is refused.
 
 ## fast-model.json
 

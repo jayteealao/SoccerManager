@@ -932,6 +932,21 @@ pub struct CalibrateOpts {
                      --matches, and its diff uses the matches this run played."
     )]
     pub base: Option<String>,
+    /// The measured real data the bands read.
+    #[arg(
+        long = "real-data",
+        value_name = "DIR",
+        long_help = "The folder of measured real data that each band's real record\n\
+                     points into; default the main checkout's .scratch/out, found\n\
+                     through the git folder of the content folder's checkout.\n\n\
+                     Each band's real value is read in place at each judgement and\n\
+                     reported beside its verdict with its distance from the run's\n\
+                     value; it never changes a verdict. When the folder, a file or\n\
+                     a key is not there, the band reads \"no real data here\", the\n\
+                     run goes on, and the headline states how many bands have no\n\
+                     real value."
+    )]
+    pub real_data: Option<PathBuf>,
     /// A change run's pilot, in matches per suite unit; a test seam (default 200).
     #[arg(long, hide = true, value_name = "N", default_value_t = 200)]
     pub pilot: u32,

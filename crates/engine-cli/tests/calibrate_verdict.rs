@@ -48,7 +48,7 @@ fn report(out: &Output, run: &Path) -> Value {
     RecordSchemas::load()
         .report(&report)
         .unwrap_or_else(|e| panic!("{e}\n{report}"));
-    assert_eq!(report["schema.version"], "3");
+    assert_eq!(report["schema.version"], "4");
     report
 }
 
@@ -90,7 +90,8 @@ fn ledger_lines(run: &Path) -> usize {
         .sum()
 }
 
-/// Edits the band `name` of the registry in `content`.
+/// Edits the band `name` of the registry in `content`: `edit` gets the band, whose design
+/// range is under `design`.
 fn edit_band(content: &Path, name: &str, edit: impl FnOnce(&mut Value)) {
     let path = content.join("realism-bands.json");
     let mut doc: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
@@ -253,8 +254,8 @@ fn a_changed_range_is_judged_again_from_the_stored_rows() {
     let before = report(&first, &run);
     let lines = ledger_lines(&run);
     edit_band(&content, "corners_per_team", |b| {
-        b["lo"] = 0.0.into();
-        b["hi"] = 1.0.into();
+        b["design"]["lo"] = 0.0.into();
+        b["design"]["hi"] = 1.0.into();
     });
     let again = calibrate(&data, &content, &run, &["--matches", "8"]);
     let text = stderr(&again);
@@ -295,7 +296,19 @@ fn a_new_band_in_the_content_file_is_judged_and_a_version_two_file_loads() {
             "band": "fouls_per_team",
             "suites": ["equal"],
             "measure": { "kind": "mean", "per": "team", "of": ["fouls.{side}"] },
-            "lo": 0.0, "hi": 30.0, "smallest_shift": 2.5
+            "design": { "lo": 0.0, "hi": 30.0, "smallest_shift": 2.5 },
+            "real": {
+                "source": { "none": "a test band with no real counterpart" },
+                "sample": 0,
+                "date": "2026-10-09"
+            },
+            "evidence": "calibration",
+            "confidence": {
+                "measurement": { "count": 0 },
+                "generalisation": { "competitions": 0, "seasons": 0, "clubs": 0 }
+            },
+            "condition": "dry",
+            "gates": true
         }));
     });
     let run = data.join("run");
@@ -354,7 +367,7 @@ fn a_new_band_in_the_content_file_is_judged_and_a_version_two_file_loads() {
             .unwrap_or_else(|| panic!("no {}", b["band"]));
         assert_eq!(
             (&check["lo"], &check["hi"]),
-            (&b["lo"], &b["hi"]),
+            (&b["design"]["lo"], &b["design"]["hi"]),
             "{}",
             b["band"]
         );
@@ -448,7 +461,9 @@ fn a_tuning_change_runs_from_start_to_verdict() {
     let lines = ledger_lines(&run);
 
     // Step 6: a narrowed range, judged again from the stored rows.
-    edit_band(&content, "goals_per_match", |b| b["hi"] = 3.0.into());
+    edit_band(&content, "goals_per_match", |b| {
+        b["design"]["hi"] = 3.0.into()
+    });
     let again = calibrate(&data, &content, &run, &args);
     let text = stderr(&again);
     let after = report(&again, &run);
@@ -511,12 +526,12 @@ fn a_change_run_judges_the_formations_suite_pooled_and_reports_pairings_as_infor
     // Five-minute matches score far below the shipped goals ranges, and a band that far
     // outside its range sets no power target; widened, the goals bands size the run.
     edit_band(&content, "goals_per_match", |b| {
-        b["lo"] = 0.0.into();
-        b["hi"] = 10.0.into();
+        b["design"]["lo"] = 0.0.into();
+        b["design"]["hi"] = 10.0.into();
     });
     edit_band(&content, "goalless_share", |b| {
-        b["lo"] = 0.0.into();
-        b["hi"] = 1.0.into();
+        b["design"]["lo"] = 0.0.into();
+        b["design"]["hi"] = 1.0.into();
     });
     let run = data.join("run");
     let args = ["--matches", "8", "--pilot", "4", "--base-binary", exe()];
@@ -572,14 +587,16 @@ fn a_change_run_judges_the_formations_suite_pooled_and_reports_pairings_as_infor
         "the pairings differ on seed 9: {low} {pooled}"
     );
     edit_band(&content, "goals_per_match", |b| {
-        b["lo"] = ((low + pooled) / 2.0).into();
-        b["hi"] = 10.0.into();
+        b["design"]["lo"] = ((low + pooled) / 2.0).into();
+        b["design"]["hi"] = 10.0.into();
     });
     edit_band(&content, "goalless_share", |b| {
-        b["lo"] = 0.0.into();
-        b["hi"] = 1.0.into();
+        b["design"]["lo"] = 0.0.into();
+        b["design"]["hi"] = 1.0.into();
     });
-    edit_band(&content, "ten_plus_goals_share", |b| b["hi"] = 1.0.into());
+    edit_band(&content, "ten_plus_goals_share", |b| {
+        b["design"]["hi"] = 1.0.into()
+    });
     let again = formations(&data, &content, &run, &args);
     let text = stderr(&again);
     let after = report(&again, &run);
@@ -629,8 +646,8 @@ fn a_flag_that_shifts_goals_fails_the_pooled_formations_band_and_the_joint_verdi
         });
     });
     edit_band(&content, "goals_per_match", |b| {
-        b["lo"] = 0.0.into();
-        b["hi"] = 10.0.into();
+        b["design"]["lo"] = 0.0.into();
+        b["design"]["hi"] = 10.0.into();
     });
     let change = |name: &str, args: &[&str]| {
         let run = data.join(name);
@@ -733,9 +750,9 @@ fn a_band_far_outside_its_range_sets_no_power_target() {
     // Far: a range no five-minute match comes near, and a smallest shift only the cap
     // could power.
     edit_band(&content, band, |b| {
-        b["lo"] = 5000.0.into();
-        b["hi"] = 6000.0.into();
-        b["smallest_shift"] = 0.001.into();
+        b["design"]["lo"] = 5000.0.into();
+        b["design"]["hi"] = 6000.0.into();
+        b["design"]["smallest_shift"] = 0.001.into();
     });
     let far = data.join("far");
     let out = calibrate(&data, &content, &far, &args);
@@ -768,8 +785,8 @@ fn a_band_far_outside_its_range_sets_no_power_target() {
 
     // Control: inside a wide range, the tiny shift drives the target to the cap.
     edit_band(&content, band, |b| {
-        b["lo"] = 0.0.into();
-        b["hi"] = 1000.0.into();
+        b["design"]["lo"] = 0.0.into();
+        b["design"]["hi"] = 1000.0.into();
     });
     let control = data.join("control");
     let out = calibrate(&data, &content, &control, &args);

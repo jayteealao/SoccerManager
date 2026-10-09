@@ -8,6 +8,7 @@ pub mod bands;
 pub mod baseline;
 pub mod compare;
 pub mod measures;
+pub mod real;
 pub mod verdict;
 
 use std::collections::BTreeMap;
@@ -886,6 +887,13 @@ pub struct CalibrationReport {
     /// The band registry the run was judged with.
     #[serde(rename = "calib.registry")]
     pub registry: RegistryInfo,
+    /// The real-data folder, the bands without a real value, and every band's real value
+    /// and record; absent in the old engine's own quiet run.
+    #[serde(rename = "calib.real", skip_serializing_if = "Option::is_none")]
+    pub real: Option<real::RealInfo>,
+    /// The realism claim, from validation bands with a real counterpart only.
+    #[serde(rename = "calib.realism", skip_serializing_if = "Option::is_none")]
+    pub realism: Option<real::Realism>,
     /// The time and memory of each stage, and the run's total.
     #[serde(rename = "calib.stages")]
     pub stages: BTreeMap<String, StageCost>,
@@ -961,8 +969,10 @@ pub struct RuleInterval {
 }
 
 /// The schema version of the calibrate run report: 2 since the registry, the verdicts and
-/// the stage costs; 3 since the rules stage's rows. Every key of an older version stays.
-pub const REPORT_SCHEMA_VERSION: &str = "3";
+/// the stage costs; 3 since the rules stage's rows; 4 since the real values of the bands
+/// (`calib.real`, `calib.realism`, and the real columns of each verdict). Every key of an
+/// older version stays.
+pub const REPORT_SCHEMA_VERSION: &str = "4";
 
 /// One suite's run length in a change run.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

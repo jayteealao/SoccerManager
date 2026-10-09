@@ -121,6 +121,33 @@ The last line is the joint verdict. It passes only when every band passes and no
 
 To judge a finished run again, for example after editing a band in `realism-bands.json`, run the same command into the same folder. Nothing plays; the run says `judged again from <n> stored rows; 0 matches played` and names the bands that changed since it was last judged.
 
+## Read the real values beside the verdict
+
+Every run reads each band's real value from the measured real data and prints it beside the verdict. The line before the table says which folder it read and how many bands have no real value:
+
+```text
+real data: C:\Users\you\SoccerManager\.scratch\out (default); 0 of 18 bands without a real value; 3 with no real counterpart
+```
+
+- `real` is the value measured on real matches; `distance` is the run's value minus it. A band inside its design range can still sit far from real football: the distance says how far.
+- `no real data here` means the folder, the file or the key is not there. `calib.real.bands` in `report.json` names the file and the reason.
+- `no real counterpart` marks the three bands of the strength and red-card suites: they measure engine experiments that no real match repeats, so they have no real value by design and are never counted as missing.
+- `(report only: ...)` at the end of a line marks a band that does not change the verdict: its band file says `gates: false`, or its real value comes from too few competitions and seasons.
+
+The last line after the table is the realism claim. Only bands labelled `validation` in the band file count toward it; every shipped band is `calibration`, so today the claim says `none`.
+
+The real values never change a verdict, `calib.pass` or the exit code.
+
+## Point at another real-data folder
+
+By default the run reads `.scratch/out` in the main checkout, also from a linked worktree. To read another folder, name it:
+
+```bash
+target/release/engine-cli calibrate --suite equal --seed 42 --matches 200 --real-data D:/realism/out
+```
+
+A checkout without the measured data, such as a CI runner, reads `no real data here` for every band with a real counterpart, and the run goes on.
+
 ## Read the stage table
 
 Every run ends with the time and memory of each stage: `play`, `checks`, `commentary`, `writing`, `disk`, `judge`, and `total`. Use it to find where a slow run spends its time before you optimise. The times are thread time summed over the threads, so on the 8 threads of the reference machine `play` can read up to eight times the run's wall time. The `total` row is the wall time of the whole command. The `checks` time is estimated from every 16th call of the rule checker.

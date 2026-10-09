@@ -104,6 +104,68 @@ pub struct VerdictRow {
     /// no power target.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub no_target: Option<bool>,
+    /// The band's real value, read in place from the real-data folder; absent when it has
+    /// none here. It never changes the word.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub real: Option<f64>,
+    /// The run's value minus the real value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub distance: Option<f64>,
+    /// Why the band only reports: its word is shown, but it is left out of the joint word
+    /// and of `calib.pass`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub report_only: Option<String>,
+    /// What the console's real columns read when there is no real value.
+    #[serde(skip)]
+    pub real_note: Option<&'static str>,
+}
+
+impl VerdictRow {
+    /// The run's value is inside the design range: a change row is inside when it carries no
+    /// distance outside, a plain row when its range check passed.
+    pub fn inside(&self) -> bool {
+        if self.power.is_some() {
+            self.outside_by.is_none()
+        } else {
+            self.word == Word::Pass
+        }
+    }
+
+    /// Sets the row's real value and its distance from the run's value, or the note the
+    /// console prints in their place.
+    pub fn set_real(&mut self, real: Option<f64>, note: &'static str) {
+        self.real = real.map(|r| round_to(r, 5));
+        self.distance = real.map(|r| round_to(self.value - r, 5));
+        self.real_note = real.is_none().then_some(note);
+    }
+}
+
+/// The joint word over the rows that gate: fail on any guard or any failed row, pass when
+/// every row passes, not sure otherwise. A report-only row never counts.
+pub fn joint_word(rows: &[VerdictRow], guards: &[String]) -> Word {
+    let gating: Vec<&VerdictRow> = rows.iter().filter(|r| r.report_only.is_none()).collect();
+    if !guards.is_empty() || gating.iter().any(|r| r.word == Word::Fail) {
+        Word::Fail
+    } else if !gating.is_empty() && gating.iter().all(|r| r.word == Word::Pass) {
+        Word::Pass
+    } else {
+        Word::NotSure
+    }
+}
+
+/// Marks the rows of the bands that only report, with the reason `why` gives, and sets the
+/// joint word again over the rows that gate.
+pub fn mark_report_only<'a>(
+    rows: &mut [VerdictRow],
+    joint: Option<&mut Joint>,
+    why: impl Fn(&str) -> Option<&'a str>,
+) {
+    for r in rows.iter_mut() {
+        r.report_only = why(&r.band).map(str::to_string);
+    }
+    if let Some(j) = joint {
+        j.word = joint_word(rows, &j.guards);
+    }
 }
 
 /// The joint verdict of a change run.
@@ -142,6 +204,10 @@ pub fn range_only(checks: &[BandCheck]) -> Vec<VerdictRow> {
             needed: None,
             outside_by: None,
             no_target: None,
+            real: None,
+            distance: None,
+            report_only: None,
+            real_note: None,
         })
         .collect()
 }
@@ -477,15 +543,13 @@ pub fn judge(
             needed: need,
             outside_by: (r.outside > 0.0).then(|| round_to(r.outside, 5)),
             no_target: exempt.then_some(true),
+            real: None,
+            distance: None,
+            report_only: None,
+            real_note: None,
         });
     }
-    let word = if !guards.is_empty() || out.iter().any(|r| r.word == Word::Fail) {
-        Word::Fail
-    } else if !out.is_empty() && out.iter().all(|r| r.word == Word::Pass) {
-        Word::Pass
-    } else {
-        Word::NotSure
-    };
+    let word = joint_word(&out, &guards);
     let pairs = sets.iter().map(|s| s.strata.len()).sum::<usize>();
     let joint = Joint {
         word,
@@ -563,13 +627,23 @@ pub fn render_table(rows: &[VerdictRow], joint: Option<&Joint>) -> String {
     let change = joint.is_some();
     if change {
         out.push_str(&format!(
-            "{:<24} {:<10} {:<14} {:>10} {:>10} {:>10} {:>9} {:>6}  {}\n",
-            "band", "suite", "pairing", "value", "old", "change", "se", "power", "verdict"
+            "{:<24} {:<10} {:<14} {:>10} {:>10} {:>10} {:>9} {:>6} {:>19} {:>10}  {}\n",
+            "band",
+            "suite",
+            "pairing",
+            "value",
+            "old",
+            "change",
+            "se",
+            "power",
+            "real",
+            "distance",
+            "verdict"
         ));
     } else {
         out.push_str(&format!(
-            "{:<24} {:<10} {:<14} {:>10} {:>21}  {}\n",
-            "band", "suite", "pairing", "value", "range", "verdict"
+            "{:<24} {:<10} {:<14} {:>10} {:>21} {:>19} {:>10}  {}\n",
+            "band", "suite", "pairing", "value", "range", "real", "distance", "verdict"
         ));
     }
     for r in rows {
@@ -584,10 +658,17 @@ pub fn render_table(rows: &[VerdictRow], joint: Option<&Joint>) -> String {
                 r.outside_by.unwrap_or(0.0)
             ));
         }
+        if let Some(why) = &r.report_only {
+            need.push_str(&format!(" (report only: {why})"));
+        }
+        let (real, distance) = match (r.real, r.distance) {
+            (Some(v), Some(d)) => (format!("{v}"), format!("{d}")),
+            _ => (r.real_note.unwrap_or("-").to_string(), "-".to_string()),
+        };
         if change {
             let opt = |v: Option<f64>| v.map_or_else(|| "-".to_string(), |v| format!("{v}"));
             out.push_str(&format!(
-                "{:<24} {:<10} {:<14} {:>10} {:>10} {:>10} {:>9} {:>6}  {}{need}\n",
+                "{:<24} {:<10} {:<14} {:>10} {:>10} {:>10} {:>9} {:>6} {:>19} {:>10}  {}{need}\n",
                 r.band,
                 r.suite,
                 pairing,
@@ -596,16 +677,20 @@ pub fn render_table(rows: &[VerdictRow], joint: Option<&Joint>) -> String {
                 opt(r.diff),
                 opt(r.se),
                 if r.power == Some(true) { "yes" } else { "no" },
+                real,
+                distance,
                 r.word.code()
             ));
         } else {
             out.push_str(&format!(
-                "{:<24} {:<10} {:<14} {:>10} {:>21}  {}\n",
+                "{:<24} {:<10} {:<14} {:>10} {:>21} {:>19} {:>10}  {}{need}\n",
                 r.band,
                 r.suite,
                 pairing,
                 r.value,
                 format!("{} to {}", r.lo, r.hi),
+                real,
+                distance,
                 r.word.code()
             ));
         }

@@ -29,6 +29,12 @@
 //! bootstrap gives each band pass, fail or not sure, and one joint verdict. The target is
 //! kept in `target.json`; a run into a finished folder plays nothing and judges again from
 //! the stored rows. Every run reports the time and memory of each stage.
+//!
+//! Each judgement also reads every band's real value in place from the real-data folder
+//! (`--real-data`, default the main checkout's `.scratch/out`) and reports it beside the
+//! verdict with its distance from the run's value; it never changes a verdict. A band that
+//! only reports (`gates: false`, or a generalisation under the floor) is shown but left out
+//! of the joint word and of `calib.pass`.
 
 pub mod base;
 pub mod fixtures;
@@ -56,12 +62,12 @@ use crate::cli::{CalibrateOpts, InjectFailure, SuiteArg};
 use crate::report::bands::{REGISTRY_VERSION, Registry};
 use crate::report::baseline::{self, Identity};
 use crate::report::compare::{self, Guard};
-use crate::report::verdict;
 use crate::report::{
     ArmReport, BandCheck, BaseCache, BaseReport, CalibrationReport, FlagEntry, MEASURES_VERSION,
     PairInfo, PairingFigures, PowerInfo, RED_CARD_ARMS, Recorded, RedCardFigures, RegistryInfo,
     RowsInfo, RunBuilder, Selection, Suite, SuiteFigures, Units,
 };
+use crate::report::{real, verdict};
 use fixtures::{FIXTURE_SCHEME, FixtureKey, Keyed};
 use rows::{Outcome, ROWS_FORMAT, Row, reason};
 use run_folder::{Opened, RunIdentity, TARGET_VERSION, Target};
@@ -127,6 +133,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         .collect();
     let registry = Registry::load(&dir)?;
     let (suites, selected) = select(&requested, opts, &pairings, &registry)?;
+    let real_folder = real::resolve(opts.real_data.as_deref(), dir.root());
 
     // The baseline is checked before the run folder exists and before any match plays.
     let fixtures_hash = fixtures_hash(&loaded.content.with_flags(&arms[0].1)?, &loaded.teams)?;
@@ -397,12 +404,38 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
 
     // The verdict: a change run's paired max-t test, or each band's range check.
     let Judged {
-        verdicts,
+        mut verdicts,
         joint,
         power,
     } = ctx.judge_run(first, old.as_ref().map(|(_, f)| f), change, pilot_used);
+    // The real values, read in place at each judgement; the old engine's own quiet run
+    // leaves them to the parent.
+    let real_info = (!quiet).then(|| {
+        let _judge = stages::enter(Stage::Judge);
+        let info = real::read_all(&real_folder, &ctx.bands);
+        attach_real(&mut verdicts, &info);
+        info
+    });
+    let realism = real_info
+        .as_ref()
+        .map(|_| real::realism(&ctx.bands, &verdicts));
+    if let Some(info) = &real_info {
+        eprint!("{}", info.headline());
+        tracing::info!(
+            signal = "calibrate.real_data",
+            run.id = %run_id,
+            folder = info.folder.as_deref(),
+            from = info.from,
+            present = info.present,
+            missing = info.missing,
+            no_counterpart = info.no_counterpart
+        );
+    }
     if !verdicts.is_empty() && !quiet {
         eprint!("{}", verdict::render_table(&verdicts, joint.as_ref()));
+    }
+    if let Some(r) = &realism {
+        eprintln!("{}", r.claim);
     }
     let rules = rule_set.map(|set| rules::run(&loaded.content, &set));
     if let Some(r) = &rules {
@@ -478,6 +511,8 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             digest: ctx.bands.digest(),
             migrated_from: ctx.bands.migrated_from,
         },
+        real: real_info,
+        realism,
         stages: stages::snapshot(run_started.elapsed()),
         rules,
     };
@@ -644,6 +679,20 @@ fn informational(mut checks: Vec<BandCheck>) -> Vec<BandCheck> {
         }
     }
     checks
+}
+
+/// Sets each verdict row's real value and distance from the band's real entry, or the note
+/// the console prints in their place.
+fn attach_real(rows: &mut [verdict::VerdictRow], info: &real::RealInfo) {
+    for r in rows.iter_mut() {
+        let entry = info.band(&r.band);
+        let note = match entry.map(|e| e.status) {
+            Some("no_counterpart") => "no real counterpart",
+            Some("no_record") => "no real record",
+            _ => "no real data here",
+        };
+        r.set_real(entry.and_then(|e| e.value), note);
+    }
 }
 
 /// A run's verdict: each band's word, and a change run's joint word and power.
@@ -1149,7 +1198,10 @@ impl RunCtx<'_> {
                 tracing::warn!(signal = "calibrate.darkpath", run.id = %self.run_id, counter, value);
             }
         }
-        let pass = checks.iter().all(|c| c.pass)
+        // A band that only reports never fails the run.
+        let pass = checks
+            .iter()
+            .all(|c| c.pass || self.bands.report_only(&c.band).is_some())
             && change_never_applied == 0
             && match_without_stats == 0
             && match_panicked == 0;
@@ -1279,11 +1331,12 @@ impl RunCtx<'_> {
         let opts = self.opts;
         let _judge = stages::enter(Stage::Judge);
         if !change {
-            let verdicts = if opts.pair.is_none() {
+            let mut verdicts = if opts.pair.is_none() {
                 verdict::range_only(&first.checks)
             } else {
                 Vec::new()
             };
+            verdict::mark_report_only(&mut verdicts, None, |b| self.bands.report_only(b));
             return Judged {
                 verdicts,
                 joint: None,
@@ -1293,8 +1346,9 @@ impl RunCtx<'_> {
         let (sets, mut rows) = self.paired(first, old);
         keep_bands(&mut rows, &opts.bands);
         let (found, c) = verdict::bootstrap(&sets, &rows, opts.seed, verdict::RESAMPLES);
-        let (rows, joint) =
+        let (mut rows, mut joint) =
             verdict::judge(&sets, &rows, &found, c, first.guards(), &self.no_target);
+        verdict::mark_report_only(&mut rows, Some(&mut joint), |b| self.bands.report_only(b));
         let power: BTreeMap<String, PowerInfo> = self
             .matches
             .iter()
