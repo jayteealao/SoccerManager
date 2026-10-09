@@ -253,7 +253,7 @@ pub(super) fn run_arms(
     let opts = ctx.opts;
     let dirs: Vec<&Path> = arms.iter().map(|a| a.dir).collect();
     let list = work_list(&dirs, &ctx.suites, ctx.jobs, &|dir, suite| {
-        worker::remaining(dir, &ctx.session, ctx.keyed(suite))
+        worker::remaining(dir, &ctx.session, ctx.own_keyed(suite))
     })?;
     let commentary = Commentary::load(ctx.dir)?;
     let defaults: Vec<Option<[TeamFile; 2]>> = arms

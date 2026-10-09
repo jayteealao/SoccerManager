@@ -801,3 +801,268 @@ fn a_band_far_outside_its_range_sets_no_power_target() {
     assert!(passes.get("outside_by").is_none(), "{passes}");
     let _ = std::fs::remove_dir_all(&data);
 }
+
+/// The broken copies of `content/gate-proof.json`.
+fn broken_copies() -> Vec<Value> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content/gate-proof.json");
+    let file: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    file["copies"].as_array().unwrap().clone()
+}
+
+/// The shipped content with each broken copy of the gate proof declared as a flag, off.
+fn proof_content(data: &Path) -> PathBuf {
+    edited_content(data, "tuning.json", |tuning| {
+        for copy in broken_copies() {
+            let mut body = copy["flag"].clone();
+            body["state"] = "off".into();
+            tuning["flags"][copy["name"].as_str().unwrap()] = body;
+        }
+    })
+}
+
+/// The value of `band` in a plain run's gating or reported checks.
+fn band_value(report: &Value, band: &str) -> f64 {
+    report["calib.bands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .chain(report["calib.reported"].as_array().unwrap())
+        .find(|c| c["band"] == band && c.get("pairing").is_none())
+        .and_then(|c| c["value"].as_f64())
+        .unwrap_or_else(|| panic!("no value for {band}: {report}"))
+}
+
+/// Each broken copy of the gate proof, as a content flag, moves the measure it names in one
+/// short run of whole matches: the same fixtures and seeds with the flag off and on.
+#[test]
+fn each_broken_copy_moves_the_measure_it_names() {
+    let data = temp("engine-cli-verdict", "copies");
+    let content = proof_content(&data);
+    let value = |copy: &str, state: &str, band: &str| {
+        let run = data.join(format!("{copy}-{state}"));
+        let out = bin(&data)
+            .arg("--content-dir")
+            .arg(&content)
+            .arg("calibrate")
+            .args(["--seed", "9", "--suite", "equal", "--matches", "40"])
+            .args(["--jobs", "4", "--flag", &format!("{copy}={state}")])
+            .arg("--out")
+            .arg(&run)
+            .output()
+            .unwrap();
+        band_value(&report(&out, &run), band)
+    };
+    let copies = broken_copies();
+    let names: Vec<&str> = copies.iter().map(|c| c["name"].as_str().unwrap()).collect();
+    assert_eq!(
+        names,
+        [
+            "shots_up",
+            "fouls_halved",
+            "card_storm",
+            "pass_completion_down"
+        ]
+    );
+    for copy in &copies {
+        let (name, band) = (
+            copy["name"].as_str().unwrap(),
+            copy["measure"].as_str().unwrap(),
+        );
+        let (off, on) = (value(name, "off", band), value(name, "on", band));
+        let moved = match name {
+            "shots_up" => (1.05..=1.15).contains(&(on / off)),
+            "fouls_halved" => (0.35..=0.65).contains(&(on / off)),
+            "card_storm" => on - off > 0.35,
+            "pass_completion_down" => (-7.0..=-3.0).contains(&(on - off)),
+            other => panic!("an unknown copy {other}"),
+        };
+        assert!(moved, "{name} moved {band} from {off} to {on}");
+    }
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+/// Writes a proof of the gate `(registry, measures, verdict_code)` into `content`.
+fn write_proof(content: &Path, registry: &str, measures: u64, verdict_code: &str) {
+    let path = content.join("gate-proof.json");
+    let mut file: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    file["proof"] = json!({
+        "gate": { "registry": registry, "measures": measures, "verdict_code": verdict_code },
+        "made_at": "2026-10-09T00:00:00Z",
+        "build": { "hash": "test", "measures": true },
+        "seed": 1, "matches": 1, "minutes": 5,
+        "self": { "runs": [], "pass_rate": 0.0, "fail_rate": 0.0, "not_sure_rate": 0.0 },
+        "copies": [],
+        "distribution_bands": [],
+        "counts": { "runs": 0, "total_matches": 0, "pairs": 0, "observations": {} }
+    });
+    std::fs::write(&path, serde_json::to_string_pretty(&file).unwrap()).unwrap();
+}
+
+/// The current value of `part` from its line `gate changed since the last proof: <part> <was>
+/// -> <now>`.
+fn current_part(text: &str, part: &str) -> String {
+    let head = format!("gate changed since the last proof: {part} ");
+    let line = text
+        .lines()
+        .find(|l| l.starts_with(&head))
+        .unwrap_or_else(|| panic!("no {part} line: {text}"));
+    line.rsplit(" -> ").next().unwrap().trim().to_string()
+}
+
+/// A proof file of another gate makes every run say so, part by part; a proof of this gate
+/// makes it say nothing; a file without a proof and a folder without the file each say so.
+#[test]
+fn a_changed_gate_prints_the_warning_and_a_matching_one_prints_nothing() {
+    let data = temp("engine-cli-verdict", "gate");
+    let content = edited_content(&data, "tuning.json", |_| {});
+    let run = |name: &str| {
+        let out = calibrate(&data, &content, &data.join(name), &["--matches", "2"]);
+        report(&out, &data.join(name));
+        stderr(&out)
+    };
+    // The shipped file before its first proof, or a proof of this gate.
+    write_proof(&content, "000000000000", 999, "000000000000");
+    let path = content.join("gate-proof.json");
+    let mut file: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    file["proof"] = Value::Null;
+    std::fs::write(&path, serde_json::to_string_pretty(&file).unwrap()).unwrap();
+    let text = run("none");
+    assert!(
+        text.contains("gate changed since the last proof: no proof recorded in gate-proof.json"),
+        "{text}"
+    );
+
+    write_proof(&content, "000000000000", 999, "000000000000");
+    let text = run("other");
+    let registry = current_part(&text, "registry");
+    let measures = current_part(&text, "measures");
+    let code = current_part(&text, "verdict code");
+    assert!(
+        text.contains(&format!(
+            "gate changed since the last proof: registry 000000000000 -> {registry}"
+        )),
+        "{text}"
+    );
+    assert_eq!(registry.len(), 12, "{text}");
+    assert_eq!(code.len(), 12, "{text}");
+
+    write_proof(&content, &registry, measures.parse().unwrap(), &code);
+    let text = run("same");
+    assert!(!text.contains("gate changed"), "{text}");
+    assert!(!text.contains("no gate proof"), "{text}");
+
+    std::fs::remove_file(&path).unwrap();
+    let text = run("gone");
+    assert!(
+        text.contains("no gate proof in this content folder"),
+        "{text}"
+    );
+    assert!(!text.contains("gate changed"), "{text}");
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+/// A tiny proof: one self run and one run of each copy. It writes the proof of the current
+/// gate with its rates, the bands each copy moved and a line for every whole-distribution
+/// band; the self run is not degenerate; and a run after it prints no warning.
+#[cfg(feature = "measures")]
+#[test]
+fn a_tiny_proof_writes_the_file_and_silences_the_warning() {
+    let data = temp("engine-cli-verdict", "proof");
+    let content = edited_content(&data, "tuning.json", |_| {});
+    let runs = data.join("proof");
+    let out = bin(&data)
+        .arg("--content-dir")
+        .arg(&content)
+        .args(["calibrate", "proof", "--seed", "3", "--matches", "8"])
+        .args(["--minutes", "5", "--self-runs", "1", "--copy-runs", "1"])
+        .arg("--out")
+        .arg(&runs)
+        .output()
+        .unwrap();
+    let text = stderr(&out);
+    assert_eq!(out.status.code(), Some(0), "{text}");
+    assert!(text.contains("gate proof run 5 of 5"), "{text}");
+    let file: Value =
+        serde_json::from_str(&std::fs::read_to_string(content.join("gate-proof.json")).unwrap())
+            .unwrap();
+    let proof = &file["proof"];
+    assert_eq!(file["copies"].as_array().unwrap().len(), 4);
+    let selfs = proof["self"]["runs"].as_array().unwrap();
+    assert_eq!(selfs.len(), 1);
+    assert_eq!(selfs[0]["reseed"], 1);
+    assert!(selfs[0]["word"].is_string(), "{proof}");
+    for key in ["pass_rate", "fail_rate", "not_sure_rate"] {
+        assert!(proof["self"][key].is_f64(), "{key}: {proof}");
+    }
+    let copies = proof["copies"].as_array().unwrap();
+    assert_eq!(copies.len(), 4);
+    for c in copies {
+        assert_eq!(c["runs"].as_array().unwrap().len(), 1, "{c}");
+        assert!(c["fail_rate"].is_f64(), "{c}");
+        assert!(c["moved"].is_object(), "{c}");
+    }
+    let bands: Vec<&str> = proof["distribution_bands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["band"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        bands,
+        [
+            "goals_distribution",
+            "scoreline_cells",
+            "passes_per_team_distribution",
+            "shot_distance_distribution",
+            "chain_passes_distribution",
+            "chain_seconds_distribution"
+        ]
+    );
+    assert_eq!(proof["counts"]["runs"], 5);
+    assert!(proof["counts"]["observations"]["changed"].as_u64().unwrap() > 0);
+    assert_eq!(proof["build"]["measures"], true);
+
+    // The reseeded self run: the two engines played other matches on the same fixtures.
+    let self_report =
+        record(&std::fs::read_to_string(runs.join("self-0").join("report.json")).unwrap());
+    let moved = self_report["calib.verdicts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["diff"].as_f64().is_some_and(|d| d != 0.0))
+        .count();
+    assert!(
+        moved > 0,
+        "a reseeded self run is not degenerate: {self_report}"
+    );
+    // A copy run is not reseeded: its old engine's matches are the self run's, from the cache.
+    let copy_text = std::fs::read_to_string(runs.join("card_storm-0.log")).unwrap();
+    assert!(copy_text.contains("0 played"), "{copy_text}");
+
+    // The written proof measured this gate: the next run prints no warning.
+    let check = calibrate(&data, &content, &data.join("check"), &["--matches", "2"]);
+    let check_text = stderr(&check);
+    report(&check, &data.join("check"));
+    assert!(!check_text.contains("gate changed"), "{check_text}");
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+/// A build without the measures cannot prove the gate: it cannot judge every
+/// whole-distribution band.
+#[cfg(not(feature = "measures"))]
+#[test]
+fn a_proof_needs_the_measures_build() {
+    let data = temp("engine-cli-verdict", "proof-plain");
+    let out = bin(&data)
+        .args(["calibrate", "proof", "--seed", "3"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let text = stderr(&out);
+    assert!(text.contains("this build has no measures"), "{text}");
+    assert!(
+        text.contains("calibrate proof needs a build with the measures feature"),
+        "{text}"
+    );
+    let _ = std::fs::remove_dir_all(&data);
+}

@@ -11,6 +11,7 @@ pub mod compare;
 pub mod distribution;
 pub mod measures;
 pub mod nash;
+pub mod proof;
 pub mod real;
 pub mod verdict;
 

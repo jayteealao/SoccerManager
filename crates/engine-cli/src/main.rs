@@ -69,7 +69,8 @@ fn main() {
     let on_failure = match &args.command {
         cli::Command::Simulate(opts) => Some(("match-stats", "simulate", opts.seed)),
         cli::Command::Bench(opts) => Some(("run-report", "benchmark", opts.seed)),
-        // `calibrate accept` writes no run report, so it prints none when it fails.
+        // `calibrate accept` and `calibrate proof` write no run report, so they print none
+        // when they fail.
         cli::Command::Calibrate(opts) if opts.action.is_none() => {
             Some(("run-report", "calibrate", opts.seed()))
         }
@@ -89,6 +90,28 @@ fn main() {
         cli::Command::Resume(opts) => resume::run(content_dir, &opts),
         cli::Command::Calibrate(opts) => match &opts.action {
             Some(cli::CalibrateAction::Accept { band, run }) => report::accepted::accept(band, run),
+            Some(cli::CalibrateAction::Proof {
+                seed,
+                matches,
+                out,
+                write,
+                real_data,
+                self_runs,
+                copy_runs,
+                minutes,
+            }) => calibrate::gate_proof::run(
+                content_dir,
+                &calibrate::gate_proof::Opts {
+                    seed: *seed,
+                    matches: *matches,
+                    out: out.clone(),
+                    write: write.clone(),
+                    real_data: real_data.clone(),
+                    self_runs: *self_runs,
+                    copy_runs: *copy_runs,
+                    minutes: *minutes,
+                },
+            ),
             None => calibrate::run(content_dir, &opts),
         },
         cli::Command::Gate(opts) => gate::run(content_dir, &opts),

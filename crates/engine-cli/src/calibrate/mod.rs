@@ -44,6 +44,7 @@
 
 pub mod base;
 pub mod fixtures;
+pub mod gate_proof;
 #[cfg(feature = "measures")]
 pub mod physical;
 pub mod rows;
@@ -77,7 +78,7 @@ use crate::report::{
     MEASURES_VERSION, Observations, PairInfo, PairingFigures, PowerInfo, RED_CARD_ARMS, Recorded,
     RedCardFigures, RegistryInfo, RowsInfo, RunBuilder, Selection, Suite, SuiteFigures, Units,
 };
-use crate::report::{accepted, nash, real, verdict};
+use crate::report::{accepted, nash, proof, real, verdict};
 use fixtures::{FIXTURE_SCHEME, FixtureKey, Keyed};
 use rows::{Outcome, ROWS_FORMAT, Row, reason};
 use run_folder::{Opened, RunIdentity, TARGET_VERSION, Target};
@@ -335,6 +336,24 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
 
     if !quiet && !cfg!(feature = "measures") {
         eprintln!("{NO_MEASURES}");
+    }
+    // Whether the gate proof in the content folder measured this gate; it decides nothing.
+    if !quiet {
+        let gate = proof::current(&ctx.bands);
+        let check = proof::check(&dir, &gate);
+        if let Some(lines) = check.lines() {
+            eprint!("{lines}");
+        }
+        let state = check.state();
+        if check == proof::Check::Matches {
+            tracing::info!(signal = "calibrate.gate_proof", run.id = %run_id, state,
+                registry = %gate.registry, measures = gate.measures,
+                verdict_code = %gate.verdict_code);
+        } else {
+            tracing::warn!(signal = "calibrate.gate_proof", run.id = %run_id, state,
+                registry = %gate.registry, measures = gate.measures,
+                verdict_code = %gate.verdict_code);
+        }
     }
     let started = Instant::now();
     let stopped = || {
@@ -684,6 +703,7 @@ fn run_identity(
         fixture_scheme: FIXTURE_SCHEME.to_string(),
         measures: MEASURES_VERSION,
         registry: REGISTRY_VERSION,
+        reseed: opts.reseed.filter(|&s| s != 0),
     })
 }
 
@@ -1131,6 +1151,18 @@ impl RunCtx<'_> {
         )
     }
 
+    /// Every match `suite` plays on this engine: [`Self::keyed`], each engine seed re-derived
+    /// under `--reseed` when it is set. The old engine always plays [`Self::keyed`].
+    fn own_keyed(&self, suite: Suite) -> Vec<Keyed> {
+        let mut list = self.keyed(suite);
+        if let Some(salt) = self.opts.reseed {
+            for k in &mut list {
+                k.engine_seed = fixtures::reseeded(k.engine_seed, salt);
+            }
+        }
+        list
+    }
+
     /// Matches per suite unit `suite` plays in this phase.
     fn matches_for(&self, suite: Suite) -> u32 {
         self.matches
@@ -1146,7 +1178,7 @@ impl RunCtx<'_> {
         for arm_dir in arm_dirs {
             let finished = run_folder::finished(arm_dir, None)?;
             for &suite in &self.suites {
-                for k in self.keyed(suite) {
+                for k in self.own_keyed(suite) {
                     total += 1;
                     if finished
                         .get(&k.key)
@@ -1294,7 +1326,12 @@ impl RunCtx<'_> {
         let mut panicked = 0;
         for &suite in &self.suites {
             let mut outliers = 0;
-            for k in self.keyed(suite) {
+            let list = if old {
+                self.keyed(suite)
+            } else {
+                self.own_keyed(suite)
+            };
+            for k in list {
                 let row = done
                     .get(&k.key)
                     .filter(|d| d.seed == k.engine_seed)

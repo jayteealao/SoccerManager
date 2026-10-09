@@ -960,6 +960,10 @@ pub struct CalibrateOpts {
     /// The old engine of a change run: a ready executable, played on the run's content.
     #[arg(long, hide = true, value_name = "EXE", conflicts_with = "pair")]
     pub base_binary: Option<PathBuf>,
+    /// The changed engine plays every match on a new engine seed derived with SALT; the old
+    /// engine keeps the planned seeds. A test seam of the gate proof's self runs.
+    #[arg(long, hide = true, value_name = "SALT")]
+    pub reseed: Option<u64>,
 }
 
 impl CalibrateOpts {
@@ -988,6 +992,44 @@ pub enum CalibrateAction {
         /// The run folder whose report.json holds the band's row.
         #[arg(long, value_name = "DIR")]
         run: PathBuf,
+    },
+    /// Measure the gate: the engine against itself and four broken copies.
+    #[command(
+        long_about = "Measure the gate's pass and fail rates and write them to gate-proof.json.
+
+                      Plays about 30 change runs of this build against itself: 10 with new
+                      match seeds on the changed side, and 5 of each broken copy that
+                      gate-proof.json declares (a content flag turned on). It takes hours
+                      on a full machine; run the same command again to resume. Needs a
+                      build with the measures feature. Then writes the pass rate of the
+                      self runs, each copy's fail rate, the bands each copy moved, whether
+                      any copy moved each whole-distribution band, and the gate it measured."
+    )]
+    Proof {
+        /// The first run seed: self run i plays SEED+i, copy run j plays SEED+j.
+        #[arg(long, value_name = "SEED")]
+        seed: u64,
+        /// The cap of each change run, as calibrate --matches.
+        #[arg(long, default_value_t = 1000)]
+        matches: u32,
+        /// Folder of the proof's runs; default SM_DATA_DIR/proofs/<registry>-<verdict code>.
+        #[arg(long, value_name = "DIR")]
+        out: Option<PathBuf>,
+        /// The proof file to write; default gate-proof.json in the content folder.
+        #[arg(long, value_name = "FILE")]
+        write: Option<PathBuf>,
+        /// The measured real data every run reads, as calibrate --real-data.
+        #[arg(long = "real-data", value_name = "DIR")]
+        real_data: Option<PathBuf>,
+        /// Self runs; a test seam (default 10).
+        #[arg(long, hide = true, default_value_t = 10)]
+        self_runs: u32,
+        /// Runs of each copy; a test seam (default 5).
+        #[arg(long, hide = true, default_value_t = 5)]
+        copy_runs: u32,
+        /// Minutes of each match; a test seam (default 90).
+        #[arg(long, hide = true, default_value_t = 90)]
+        minutes: u32,
     },
 }
 
@@ -1062,7 +1104,7 @@ mod tests {
             Some(CalibrateAction::Accept { band, run }) => {
                 assert_eq!((band.as_str(), run), ("b", PathBuf::from("d")));
             }
-            None => panic!("no action"),
+            other => panic!("{other:?}"),
         }
         let err = calibrate(&["calibrate"]).unwrap_err();
         assert!(err.to_string().contains("--seed"), "{err}");
@@ -1071,6 +1113,40 @@ mod tests {
         assert!(
             calibrate(&["calibrate", "accept", "b"]).is_err(),
             "--run is required"
+        );
+    }
+
+    #[test]
+    fn proof_takes_its_seed_and_defaults_and_reseed_stays_hidden() {
+        let proof = calibrate(&["calibrate", "proof", "--seed", "2027"]).unwrap();
+        match proof.action {
+            Some(CalibrateAction::Proof {
+                seed,
+                matches,
+                out,
+                write,
+                real_data,
+                self_runs,
+                copy_runs,
+                minutes,
+            }) => {
+                assert_eq!(
+                    (seed, matches, self_runs, copy_runs, minutes),
+                    (2027, 1000, 10, 5, 90)
+                );
+                assert_eq!((out, write, real_data), (None, None, None));
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(
+            calibrate(&["calibrate", "proof"]).is_err(),
+            "--seed is required"
+        );
+        let run = calibrate(&["calibrate", "--seed", "1", "--reseed", "3"]).unwrap();
+        assert_eq!(run.reseed, Some(3));
+        assert_eq!(
+            calibrate(&["calibrate", "--seed", "1"]).unwrap().reseed,
+            None
         );
     }
 }

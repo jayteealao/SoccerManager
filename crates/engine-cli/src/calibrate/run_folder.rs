@@ -81,6 +81,10 @@ pub struct RunIdentity {
     pub measures: u32,
     /// The band registry's version: the bands file's `schema_version`.
     pub registry: u32,
+    /// The salt of the changed engine's new match seeds in a gate proof's self run; absent
+    /// in every other run, so their identities are unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reseed: Option<u64>,
 }
 
 /// The program that plays the run.
@@ -144,6 +148,8 @@ impl RunIdentity {
             self.registry.to_string(),
             new.registry.to_string(),
         );
+        let reseed = |r: Option<u64>| r.map_or_else(|| "none".into(), |s| s.to_string());
+        part("reseed", reseed(self.reseed), reseed(new.reseed));
         out
     }
 }
@@ -524,7 +530,22 @@ mod tests {
             fixture_scheme: "fixture-key-1".into(),
             measures: 1,
             registry: 2,
+            reseed: None,
         }
+    }
+
+    #[test]
+    fn an_identity_without_a_reseed_serializes_as_before_and_one_with_it_differs() {
+        let plain = serde_json::to_value(identity()).unwrap();
+        assert!(plain.get("reseed").is_none(), "{plain}");
+        let back: RunIdentity = serde_json::from_value(plain).unwrap();
+        assert_eq!(back, identity());
+        let salted = RunIdentity {
+            reseed: Some(3),
+            ..identity()
+        };
+        assert_eq!(serde_json::to_value(&salted).unwrap()["reseed"], 3);
+        assert_eq!(identity().differences(&salted), ["reseed none -> 3"]);
     }
 
     fn temp(name: &str) -> PathBuf {

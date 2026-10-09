@@ -432,7 +432,8 @@ fn calibrate(exe: &Path, content: &Path) -> Command {
 /// SHA-256, as 12 hex characters, over every file of a folder: its path inside the folder
 /// and its bytes, in path order. The band registry counts only by the strength suite's
 /// attribute boost, the one value in it a match plays with: a changed range or shift is
-/// judged again, so the old engine's results stay in the cache.
+/// judged again, so the old engine's results stay in the cache. The gate proof file decides
+/// no match, so writing a proof keeps the cache too.
 pub fn folder_hash(dir: &Path) -> anyhow::Result<String> {
     fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) -> std::io::Result<()> {
         for entry in fs::read_dir(dir)? {
@@ -451,7 +452,7 @@ pub fn folder_hash(dir: &Path) -> anyhow::Result<String> {
     files.sort();
     let mut hasher = Sha256::new();
     for (name, path) in files {
-        if name == ".complete" {
+        if name == ".complete" || name == crate::report::proof::PROOF_FILE {
             continue;
         }
         let mut bytes =
@@ -565,6 +566,19 @@ mod tests {
             first,
             "the marker is not content"
         );
+        fs::write(dir.join("gate-proof.json"), "{}").unwrap();
+        assert_eq!(
+            folder_hash(&dir).unwrap(),
+            first,
+            "the gate proof decides no match"
+        );
+        fs::write(dir.join("sub/gate-proof.json"), "{}").unwrap();
+        assert_ne!(
+            folder_hash(&dir).unwrap(),
+            first,
+            "only the top-level proof file is left out"
+        );
+        fs::remove_file(dir.join("sub/gate-proof.json")).unwrap();
         fs::write(dir.join("sub/b.json"), "3").unwrap();
         assert_ne!(folder_hash(&dir).unwrap(), first);
         let _ = fs::remove_dir_all(&dir);
