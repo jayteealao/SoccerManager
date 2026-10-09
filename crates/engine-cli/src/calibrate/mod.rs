@@ -77,7 +77,7 @@ use crate::report::{
     MEASURES_VERSION, Observations, PairInfo, PairingFigures, PowerInfo, RED_CARD_ARMS, Recorded,
     RedCardFigures, RegistryInfo, RowsInfo, RunBuilder, Selection, Suite, SuiteFigures, Units,
 };
-use crate::report::{accepted, real, verdict};
+use crate::report::{accepted, nash, real, verdict};
 use fixtures::{FIXTURE_SCHEME, FixtureKey, Keyed};
 use rows::{Outcome, ROWS_FORMAT, Row, reason};
 use run_folder::{Opened, RunIdentity, TARGET_VERSION, Target};
@@ -486,9 +486,35 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     if !verdicts.is_empty() && !quiet {
         eprint!("{}", verdict::render_table(&verdicts, joint.as_ref()));
     }
+    // The formation field rating: report only, read by nothing that decides the verdict.
+    // It describes the same arm as `calib.formations`, and needs every pairing.
+    let nash_rating = (!quiet && ctx.suites.contains(&Suite::Formations)).then(|| {
+        if ctx.selected.len() < ctx.pairings.len() {
+            Err((ctx.selected.len(), ctx.pairings.len()))
+        } else {
+            first
+                .builder
+                .formation_table()
+                .map(|(names, wins, matches)| nash::rate(&names, &wins, matches))
+        }
+    });
     if !quiet {
         eprint!("{}", verdict::render_reported(&reported, joint.is_some()));
+        match &nash_rating {
+            Some(Ok(r)) => eprint!("{}", nash::render(r)),
+            Some(Err((played, total))) => eprint!("{}", nash::incomplete_line(*played, *total)),
+            None => {}
+        }
         eprint!("{}", counts.line());
+    }
+    if let Some(Ok(r)) = &nash_rating {
+        tracing::info!(
+            signal = "calibrate.nash",
+            run.id = %run_id,
+            formations = r.formations.len(),
+            flagged = r.formations.iter().filter(|f| f.flagged).count(),
+            converged = r.converged
+        );
     }
     if !reported.is_empty() {
         let count = |w: verdict::Word| reported.iter().filter(|r| r.word == w).count();
@@ -538,6 +564,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             first.checks.clone()
         },
         formations: first.formations.clone(),
+        nash: nash_rating.and_then(Result::ok),
         selection: ctx.selection.clone(),
         red_card: first.red_card.clone(),
         baseline: None,

@@ -130,7 +130,7 @@ fn report(out: &Output, run: &Path) -> Value {
     RecordSchemas::load()
         .report(&report)
         .unwrap_or_else(|e| panic!("{e}\n{report}"));
-    assert_eq!(report["schema.version"], "6");
+    assert_eq!(report["schema.version"], "7");
     report
 }
 

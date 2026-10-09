@@ -169,6 +169,25 @@ goals_distribution       equal      -                 0.84013            0 to 0.
 
 `calib.real` gives the mean of each real sample beside its record, and `calib.reported` holds each row's `upper` and `noise_floor`.
 
+## Read the formation field rating
+
+A run of the formations suite that finished every pairing prints, after the reported bands, a rating of each formation against the field:
+
+```text
+formation field rating (report only; it never changes the verdict), 2 matches per pairing:
+formation       win rate  field rating   weight  nash average  flag
+4-4-2             0.0500        0.0000   0.2500        0.0000  -
+...
+field rating: 0 of 10 formations flagged (field rating above win rate by more than 0.10); it never changes the verdict
+```
+
+- The win rate is the formation's share of wins over every formation of the field, itself included, each counted once. A draw is not a win.
+- The field rating is the same share of wins, but against the field as its Nash equilibrium weighs it: formations no equilibrium plays weigh nothing, and copies of one style share their weight. The weight column gives each formation's weight in that equilibrium.
+- The Nash average is wins minus losses against that field. It is 0 for a formation the equilibrium plays and at most 0 for one it does not.
+- `flagged` marks a formation whose field rating exceeds its win rate by more than 0.10: it loses mostly to formations the field does not play, and its win rate undersells it.
+
+The rating never changes a band, the verdict, `calib.pass` or the exit code. Read a flag as a question about the formations, not as a failure. With few matches per pairing each share is 0, 0.5 or 1, and the equilibrium can jump from run to run: read a flag only from a run with many matches per pairing. A run that played only some pairings (`--pairing`), or in which a pairing finished no match, prints `formation field rating: needs every pairing (<k> of <n> played)` instead and writes no `calib.nash`.
+
 ## Accept a not-sure band
 
 A reported or gating band can stay `not sure` however many matches you play, for example a band whose real value is too uncertain to separate pass from fail. Once you have looked at it, accept it for this run:

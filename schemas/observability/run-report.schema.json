@@ -24,8 +24,8 @@
       "const": "run-report"
     },
     "schema.version": {
-      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict); 5 for a calibrate run that reports the bands that only report apart (calib.reported), the developer's acceptances (calib.accepted), the match counts (calib.counts), and how each verdict row was judged; 6 for a calibrate run with the whole-distribution bands (upper and noise_floor on a verdict row). Every key of an older version stays.",
-      "enum": ["1", "2", "3", "4", "5", "6"]
+      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict); 5 for a calibrate run that reports the bands that only report apart (calib.reported), the developer's acceptances (calib.accepted), the match counts (calib.counts), and how each verdict row was judged; 6 for a calibrate run with the whole-distribution bands (upper and noise_floor on a verdict row); 7 for a calibrate run with the formation field rating (calib.nash). Every key of an older version stays.",
+      "enum": ["1", "2", "3", "4", "5", "6", "7"]
     },
     "owner.id": {
       "type": "string",
@@ -449,6 +449,34 @@
                 },
                 "ten_plus_goals_share": { "type": "number", "minimum": 0, "maximum": 1 },
                 "goalless_share": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          },
+          "calib.nash": {
+            "description": "Since version 7: the formation field rating of the formations suite, report only; it never changes the verdict, calib.pass or the exit code. Each formation's win_rate is its mean win share over every formation of the field, itself included (a draw is not a win); its field_rating is the same win share weighted by the maximum-entropy Nash equilibrium of the payoff table wins minus losses (weight); nash_average is that table times the equilibrium, as Nash averaging defines it (0 inside the equilibrium's support, at most 0 outside it). A formation is flagged when its field rating exceeds its win rate by more than flag_margin. converged is false when the solve stopped at its iteration cap; matches_per_pairing is the fewest finished matches of a pairing. Absent unless every pairing of the formations suite finished a match, and in a paired run it describes the off arm, as calib.formations does.",
+            "type": "object",
+            "required": ["flag_margin", "converged", "iterations", "matches_per_pairing", "formations"],
+            "additionalProperties": false,
+            "properties": {
+              "flag_margin": { "type": "number", "minimum": 0 },
+              "converged": { "type": "boolean" },
+              "iterations": { "type": "integer", "minimum": 0 },
+              "matches_per_pairing": { "type": "integer", "minimum": 0 },
+              "formations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["formation", "weight", "win_rate", "field_rating", "nash_average", "flagged"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "formation": { "type": "string", "minLength": 1 },
+                    "weight": { "type": "number", "minimum": 0, "maximum": 1 },
+                    "win_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+                    "field_rating": { "type": "number", "minimum": 0, "maximum": 1 },
+                    "nash_average": { "type": "number" },
+                    "flagged": { "type": "boolean" }
+                  }
+                }
               }
             }
           },
@@ -1023,7 +1051,7 @@
       "if": {
         "properties": {
           "operation": { "const": "calibrate" },
-          "schema.version": { "enum": ["2", "3", "4", "5", "6"] },
+          "schema.version": { "enum": ["2", "3", "4", "5", "6", "7"] },
           "outcome": { "not": { "const": "error" } }
         },
         "required": ["operation", "schema.version"]

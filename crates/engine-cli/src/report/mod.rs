@@ -10,6 +10,7 @@ pub mod baseline;
 pub mod compare;
 pub mod distribution;
 pub mod measures;
+pub mod nash;
 pub mod real;
 pub mod verdict;
 
@@ -151,6 +152,10 @@ pub struct SuiteFigures {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stronger: Option<StrongerRecord>,
 }
+
+/// The formations of the formations suite, the share of the matches between each two that
+/// the first won, and the fewest finished matches of a pairing.
+pub type WinTable = (Vec<String>, Vec<Vec<f64>>, u32);
 
 /// The figures of one formation pairing of the formations suite. `pairing` names the two
 /// formations; `goals_for_mean` is the goals each one scored per match, in the same order.
@@ -558,6 +563,63 @@ impl RunBuilder {
             .collect()
     }
 
+    /// The win-share table of the formations suite: the formations in the tactics file's
+    /// order (the order `pairings` gives), `W[i][j]` the share of the finished matches
+    /// between `i` and `j` that `i` won (a draw is not a win; a mirror pairing counts the
+    /// wins of either side over twice its matches), and the fewest finished matches of a
+    /// pairing. `Err((played, total))` when a pairing has no finished match or is missing.
+    pub fn formation_table(&self) -> Result<WinTable, (usize, usize)> {
+        let mut names: Vec<String> = Vec::new();
+        for name in self.pairing_names.iter().flatten() {
+            if !names.contains(name) {
+                names.push(name.clone());
+            }
+        }
+        let n = names.len();
+        let total = n * (n + 1) / 2;
+        let at = |name: &String| names.iter().position(|x| x == name).unwrap_or(0);
+        let mut wins = vec![vec![0.0; n]; n];
+        let mut seen = vec![vec![false; n]; n];
+        let mut fewest = u32::MAX;
+        let acc = self.suites.get(&Suite::Formations);
+        for (k, pair) in self.pairing_names.iter().enumerate() {
+            let played = acc.map(|acc| pairing_records(acc, k)).unwrap_or_default();
+            if played.is_empty() {
+                continue;
+            }
+            let (a, b) = (at(&pair[0]), at(&pair[1]));
+            let won = |first: bool| {
+                played
+                    .iter()
+                    .filter(|(r, side)| {
+                        let (us, them) = if first {
+                            (*side, 1 - side)
+                        } else {
+                            (1 - side, *side)
+                        };
+                        r.goals[us] > r.goals[them]
+                    })
+                    .count() as f64
+            };
+            let m = played.len() as f64;
+            if a == b {
+                wins[a][a] = (won(true) + won(false)) / (2.0 * m);
+            } else {
+                wins[a][b] = won(true) / m;
+                wins[b][a] = won(false) / m;
+            }
+            seen[a][b] = true;
+            seen[b][a] = true;
+            // A pairing holds at most 100 000 matches.
+            fewest = fewest.min(played.len() as u32);
+        }
+        let played = (0..n).map(|a| (a..n).filter(|&b| seen[a][b]).count()).sum();
+        if n == 0 || played < total {
+            return Err((played, total.max(self.pairing_names.len())));
+        }
+        Ok((names, wins, fewest))
+    }
+
     /// The finished records of each red-card arm, as goals per match, home then away.
     fn red_card_goals(&self) -> Option<[Vec<[f64; 2]>; 4]> {
         let acc = self.suites.get(&Suite::RedCard)?;
@@ -947,6 +1009,11 @@ pub struct CalibrationReport {
     /// The figures of every formation pairing; absent when the formations suite did not run.
     #[serde(rename = "calib.formations", skip_serializing_if = "Vec::is_empty")]
     pub formations: Vec<PairingFigures>,
+    /// Each formation's field rating against the maximum-entropy Nash equilibrium beside
+    /// its win rate, and the flag; report only. Absent unless every pairing of the
+    /// formations suite finished a match.
+    #[serde(rename = "calib.nash", skip_serializing_if = "Option::is_none")]
+    pub nash: Option<nash::NashReport>,
     /// The suites, pairings, and bands the run selected.
     #[serde(rename = "calib.selection")]
     pub selection: Selection,
@@ -1141,8 +1208,9 @@ pub struct RuleInterval {
 /// that only report (`calib.reported`), the developer's acceptances (`calib.accepted`), the
 /// match counts (`calib.counts`), and how each verdict row was judged (`judged`, `note`,
 /// `accepted`); 6 since the whole-distribution bands (`upper` and `noise_floor` on a
-/// verdict row). Every key of an older version stays.
-pub const REPORT_SCHEMA_VERSION: &str = "6";
+/// verdict row); 7 since the formation field rating (`calib.nash`). Every key of an older
+/// version stays.
+pub const REPORT_SCHEMA_VERSION: &str = "7";
 
 /// The matches a run judged: every engine's rows, the fixtures both engines of a change run
 /// played, and the matches of each engine.
@@ -1522,6 +1590,49 @@ mod tests {
         assert_eq!(f.goals_per_xg, 0.0);
         let json = serde_json::to_string(f).unwrap();
         assert!(!json.contains("null"), "{json}");
+    }
+
+    #[test]
+    fn the_win_share_table_counts_wins_by_formation_and_a_mirror_from_both_sides() {
+        let mut b = RunBuilder::new(bands());
+        let names = vec![
+            ["4-4-2".to_string(), "4-4-2".to_string()],
+            ["4-4-2".to_string(), "4-3-3".to_string()],
+            ["4-3-3".to_string(), "4-3-3".to_string()],
+        ];
+        b.plan_pairings(2, names);
+        // The 4-4-2 mirror: one side wins, then a draw.
+        b.add_pairing(record([3, 0], [12, 10], [50.0, 50.0]), 0, 0);
+        b.add_pairing(record([1, 1], [12, 10], [50.0, 50.0]), 0, 1);
+        // 4-4-2 v 4-3-3: the 4-4-2 wins at home, then the 4-3-3 wins at home (the 4-4-2
+        // away on side 1), then a draw.
+        b.add_pairing(record([2, 1], [12, 10], [50.0, 50.0]), 1, 0);
+        b.add_pairing(record([3, 0], [12, 10], [50.0, 50.0]), 1, 1);
+        b.add_pairing(record([0, 0], [12, 10], [50.0, 50.0]), 1, 0);
+        // The 4-3-3 mirror: two decisive matches.
+        b.add_pairing(record([1, 0], [12, 10], [50.0, 50.0]), 2, 0);
+        b.add_pairing(record([0, 2], [12, 10], [50.0, 50.0]), 2, 1);
+        let (names, w, fewest) = b.formation_table().unwrap();
+        assert_eq!(names, ["4-4-2", "4-3-3"]);
+        assert_eq!(w[0][0], 0.25);
+        assert_eq!(w[0][1], 1.0 / 3.0);
+        assert_eq!(w[1][0], 1.0 / 3.0);
+        assert_eq!(w[1][1], 0.5);
+        assert_eq!(fewest, 2);
+
+        // A pairing with no finished match: no table.
+        let mut partial = RunBuilder::new(bands());
+        partial.plan_pairings(
+            1,
+            vec![
+                ["4-4-2".to_string(), "4-4-2".to_string()],
+                ["4-4-2".to_string(), "4-3-3".to_string()],
+                ["4-3-3".to_string(), "4-3-3".to_string()],
+            ],
+        );
+        partial.add_pairing(record([1, 0], [12, 10], [50.0, 50.0]), 0, 0);
+        partial.add_pairing(record([1, 0], [12, 10], [50.0, 50.0]), 2, 0);
+        assert_eq!(partial.formation_table(), Err((2, 3)));
     }
 
     #[test]

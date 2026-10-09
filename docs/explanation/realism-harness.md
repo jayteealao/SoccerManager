@@ -74,6 +74,14 @@ The formations suite plays every pairing of the formations in `tactics.json`: 55
 
 So a change run judges and powers each formations band once, pooled over every pairing it plays. The resamples of the max-t test still stay within each pairing, so the pooled error keeps the pairings apart. The range check of each pairing stays in the report as information. It sets no target and does not enter the joint verdict, but it still shows a change that moves one pairing one way and another pairing the other way, which a pooled row can hide. A run without an old engine judges every pairing as before.
 
+## Why the formations are also rated against a Nash field
+
+A formation's win rate averages its results over every formation with equal weight. That can mislead in two ways. Formations can beat each other in a cycle, as rock, paper and scissors do, so every win rate looks the same while each formation has a clear weakness. And a formation can lose to formations that no sensible manager picks, which pulls its win rate down although it holds its own against every formation worth playing. Weak or copied formations in the file change the win rates without changing which formation is good.
+
+The field rating asks how a formation does against the field a manager would actually face. It weighs the field by a Nash equilibrium of the payoff table, wins minus losses: a mix of formations that no single formation beats. A formation outside that mix weighs nothing, so losing to it costs no rating. A table can have many such mixes; the rating takes the one with the most entropy, as Nash averaging defines it (Balduzzi and others, "Re-evaluating Evaluation", 2018). That mix is unique, and it splits its weight evenly over copies of one formation, so adding a copy cannot shift the field.
+
+The field rating is a share of wins, like the win rate, so the two compare on one scale, and a formation whose field rating is more than 0.10 above its win rate is flagged. The rating only reports, beside the plain win rate and never in its place: it describes the formations, not whether a change broke the engine, and with few matches per pairing its equilibrium is noisy. The equilibrium is found in two steps. A small linear programme per formation finds the formations that some equilibrium plays; the most even mix over them is then solved through its dual, which converges quickly because every formation left in the mix keeps a positive weight.
+
 ## Why a rare event can set a run's length
 
 A band sets a suite's power target only while the band is inside its range, or outside the range by no more than its noise. A band far outside its range sets no target, as [the next section](#why-a-band-far-outside-its-range-sets-no-target) explains. Within that condition, a rare event can set the length of a whole run.
