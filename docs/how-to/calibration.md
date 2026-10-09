@@ -165,7 +165,13 @@ Then run the same calibrate command again. Nothing plays; the band's row reads `
 
 ## Promote a reported band to gate
 
-A band gates once you trust its range: its real value is measured, its range starts at least two real standard errors either side of the real value, and a full run has judged the engine against it. Set its `gates` to `true` in `content/realism-bands.json`, then run a finished run's command again into its folder: the band now sits in the verdict table, and the joint word counts it. Promote a band only by a recorded product-owner decision, as for any band change.
+A band gates once you trust its range: its real value is measured, its range starts at least two real standard errors either side of the real value, and a full run has judged the engine against it. Set its `gates` to `true` in `content/realism-bands.json`, then run a finished run's command again into its folder: the band now sits in the verdict table, and the joint word counts it. Promote a band only by a recorded product-owner decision, as for any band change, and add a Content entry to `CHANGELOG.md` that names the band.
+
+Some promoted bands still do not gate as you might expect:
+
+- A band whose real sample is under its own floor (`real.floor`) stays in the reported table, with `report only: real sample too small to gate (sample <s> under floor <f>)`. The running bands are in this state: their real value comes from 7 tracked matches.
+- A band of the measures is judged by its range alone while the old engine of a change run has no measures (`range only: base has no measures`).
+- A promotion changes the gate, so run the gate proof again.
 
 ## Point at another real-data folder
 
