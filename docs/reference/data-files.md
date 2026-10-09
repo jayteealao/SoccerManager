@@ -25,6 +25,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `realism-bands.json` | 4 | The band registry: every realism band the calibration run judges, with its measure, design range, smallest shift, and its record (where its real value is measured, the evidence label, the confidence counts, the condition, and whether it gates). Versions 3 and 2 still load. They are acceptance criteria, never tuning values |
 | `fast-model.json` | 3 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
 | `sensitivity.json` | 1 | The sensitivity rules: one rule per attribute job and per body job, the thresholds they are judged by, the size of a run, and the five-match rule. Only the sensitivity run and the rules stage of a change run read it; the content hash does not |
+| `gate-proof.json` | 1 | The gate proof: the broken copies of the engine that `engine-cli calibrate proof` plays, and the pass and fail rates of the last proof with the gate it measured. No match reads it; neither the content hash nor the old engine's cache key includes it |
 
 Every file starts with `"schema_version"`. A file with another version is refused, except `realism-bands.json`, which also reads versions 3 and 2: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files and `tactics.json` are read in version 2 and in version 1, which converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 3 and in versions 2 and 1, and `tuning.json` in versions 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy. A version 1 or 2 attribute file converts to version 3 the same way (see [Version 2 files](#version-2-files)). Any other version is refused the same way.
 
@@ -550,6 +551,40 @@ Each rule reads one of three words:
 - **not sure**: anything else. Not sure is never a pass.
 
 The five-match rule passes when the 95 percent interval of the pooled share of runs lies within `target` plus or minus `tolerance`, fails when it lies wholly outside, and is not sure otherwise.
+
+## gate-proof.json
+
+The gate proof (see [Run the gate proof](../how-to/calibration.md#run-the-gate-proof)). `engine-cli calibrate proof` reads the copies and writes `proof`; every `calibrate` run compares `proof.gate` with its own gate and says when they differ. An unknown field is refused by name.
+
+| Field | Holds |
+|---|---|
+| `schema_version` | 1 |
+| `copies` | The broken copies, each with `name` (the flag's name in the proof's content folder), `measure` (the band whose measure it moves), `move` (the expected move, in words), and `flag`, a flag body as in [flags](#flags) without `state`: `owner`, `hypothesis`, `removal_condition`, and `overrides` |
+| `proof` | `null` until a proof runs; then the last proof, below |
+
+The shipped copies:
+
+| Copy | Band it moves | Overrides | Expected move |
+|---|---|---|---|
+| `shots_up` | `shots_per_team` | `engine.shot_range` 22.4 | up about 10 percent |
+| `fouls_halved` | `fouls_per_team` | `engine.foul_base` 0.05, `engine.foul_aggression_weight` 0.025, `engine.foul_tackling_weight` 0.0125 | about half |
+| `card_storm` | `yellow_cards_per_team` | `engine.foul_base` 1.0, `engine.yellow_base` 1.0 | far up: every tackle a foul, every foul booked |
+| `pass_completion_down` | `pass_accuracy_pct` | `engine.aim_noise` 0.18 | down about 5 points |
+
+`proof` holds:
+
+| Field | Holds |
+|---|---|
+| `gate` | The gate the proof measured: `registry` (the band registry's digest), `measures` (the measures version), and `verdict_code` (the digest of the judging code) |
+| `made_at` | When the proof was written, in UTC |
+| `build` | The build that played it: `hash` (the commit, `-dirty` when the tree held changes) and `measures` (`true`) |
+| `seed`, `matches`, `minutes` | The first run seed, the cap of each change run, and the minutes of each match |
+| `self` | The self runs, each with `name`, `seed`, `reseed` (the salt of the changed engine's new match seeds), `word` (the joint word), `matches`, `failed` and `not_sure` (the bands with that word in either table); and `pass_rate`, `fail_rate` and `not_sure_rate`, each over the self runs. A `not sure` run is not a pass |
+| `copies` | One entry per copy: `name`; `runs`, each with `seed`, `word`, `matches` and `moved` (the bands that read `fail`, empty for a missed detection); `fail_rate` (runs whose joint word is `fail`, over the runs); `missed` (runs in which no band read `fail`); and `moved`, each band that read `fail` with the number of runs it did |
+| `distribution_bands` | One entry per whole-distribution band: `band` and `moved_by`, the copies that moved it in any run; empty when no copy did |
+| `counts` | Over every run: `runs`, `total_matches`, `pairs`, and `observations`, the matches of each engine (`changed`, `old`) |
+
+The file holds engine results and band names only, never a real value.
 
 ## Position codes
 

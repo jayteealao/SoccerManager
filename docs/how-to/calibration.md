@@ -206,7 +206,32 @@ Some promoted bands still do not gate as you might expect:
 
 - A band whose real sample is under its own floor (`real.floor`) stays in the reported table, with `report only: real sample too small to gate (sample <s> under floor <f>)`. The running bands are in this state: their real value comes from 7 tracked matches.
 - A band of the measures is judged by its range alone while the old engine of a change run has no measures (`range only: base has no measures`).
-- A promotion changes the gate, so run the gate proof again.
+- A promotion changes the gate, so [run the gate proof](#run-the-gate-proof) again.
+
+## Run the gate proof
+
+The gate proof measures how often the gate passes an unchanged engine and how often it catches a broken one. Run it again whenever the gate changes: after a promotion or any other band edit, a change of the realism measures, or a change of the judging code. Until then, every calibrate run prints `gate changed since the last proof: <part> <proof value> -> <current value>` for each part that differs.
+
+Build `engine-cli` with the measures, then start the proof on an idle machine:
+
+```bash
+cargo build --release -p engine-cli --features measures
+target/release/engine-cli calibrate proof --seed 2027
+```
+
+It plays about 30 change runs of this build against itself: 10 self runs on new seeds, and 5 runs of each of the four broken copies that `content/gate-proof.json` declares. On an 8-thread machine it takes several hours. Each run's log is in `<out>/<run>.log`, and the default `<out>` is `SM_DATA_DIR/proofs/<registry>-<verdict code>`. If the proof stops, run the same command again: each finished run is judged again from its stored rows, and nothing plays twice. When it ends, it writes the rates into `content/gate-proof.json`. Commit that file, with a Content entry in `CHANGELOG.md`.
+
+A build without the measures refuses the proof with `this build has no measures`, because only the measures build judges every whole-distribution band.
+
+## Read the gate proof
+
+The proof prints its summary and writes it under `proof` in `content/gate-proof.json`:
+
+- `gate`: the band registry digest, the measures version and the judging-code digest that the proof measured. A calibrate run compares them with its own gate.
+- `self`: the 10 self runs, each with its joint word and the bands that read fail or not sure, and the pass, fail and not-sure rates. A `not sure` run is not a pass.
+- `copies`: for each broken copy, its fail rate (runs whose joint word is `fail`), `missed` (runs in which no band read `fail`), and `moved` (each band that read `fail`, with the number of runs it did). A copy with misses is a broken engine that the gate did not catch every time.
+- `distribution_bands`: for each whole-distribution band, the copies that moved it. An empty list means that no copy moved it, so the proof does not show that this band catches a broken engine.
+- `counts`: the total matches, the pairs, and the matches of each engine over every run.
 
 ## Point at another real-data folder
 

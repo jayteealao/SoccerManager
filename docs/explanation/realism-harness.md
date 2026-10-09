@@ -52,6 +52,32 @@ A distance is never negative, so even an engine that plays exactly like real foo
 
 A promoted distribution band joins the joint test as one more coordinate. Its change is the distance between the two engines' samples over the paired matches. In each resample of the max-t test it is computed on the same resampled pairs, centred on the observed difference, and divided by the root mean square of those centred replicates, so it moves with the other bands as they move together. It draws no random number of its own: with no distribution band in the family, the threshold is exactly what it was. The two A/A tests of the verdict code, with this coordinate among six others and on its own, keep the false-alarm rate at or under 3 percent. A shot or chain band stays judged by its range alone until the old engine carries the measures.
 
+## Why new bands report first
+
+A new band starts with `gates: false`. It is judged in every run, by the same rules as a gating band, but in a table of its own, and it never changes the joint word, its threshold, a suite's power target, `calib.pass` or the exit code. Two things are unknown about a new band until it has run for a while. Its range may be wrong: a range set from a real value can still sit where the engine cannot reach, and a band that fails every run teaches nothing but to ignore the verdict. And the gate's error rates with the band in it are unmeasured: each new coordinate in the joint test changes how often an unchanged engine fails. A report-first band shows how it would judge before it can block a change.
+
+A band moves into the gate only when the person promotes it, by editing the band file with a recorded decision. A developer who sees `not sure` on a reported band can accept it for one run folder. The acceptance records "accepted, not shown equivalent", and it is never counted as a pass: a run too small to show a band equivalent has shown nothing, and calling that a pass would hide the gap.
+
+## Why the real values are read in place
+
+Each band names where its real value is measured: a data set, a file and a key under the real-data folder, with the sample size and the date. The run reads the value from that folder at each judgement, and the band file never holds it. The measured results come from licensed data, and the derived figures stay on the machine that holds the data. A pointer keeps every band's source in git without the data. It also keeps the real values current: a re-measured file changes the distances the next run reports, with no edit of the band file.
+
+When the folder or a file is not there, for example in a fresh checkout or a CI runner, the run goes on and says so. Every real column reads `no real data here`, and the headline counts the bands without a real value. A real value never changes a word, so a missing one cannot hide a failure. It only removes the distance from real football beside the verdict.
+
+## How the gate is proven
+
+The gate makes two claims, and they are measured apart. The joint test claims that an engine that did not change fails at most 3 percent of change runs: it controls false alarms. And a sound engine, whose true value lies within half of each band's margin, should pass at least 97 percent of change runs: the bands' match counts are sized for that. The gate proof checks both claims on the finished gate with whole change runs, not with the verdict code's unit tests alone.
+
+The proof plays two kinds of change run. A self run plays this build against itself. On the same seeds, the two engines would play the same matches, every difference would be 0, and the run would pass by construction. So the changed side plays every fixture on a new match seed, derived from the planned seed and a salt, while the old side keeps the planned seeds. The two engines are then fully independent samples of one engine, which is the hardest case for a paired test. So the self runs' pass rate is a floor for an unchanged engine. A copy run plays a deliberately broken copy of the engine against the engine: shots up about 10 percent, fouls halved, every foul booked, or pass accuracy down about 5 points. Each copy is a content flag, on in the changed engine and off in the old one, on the same seeds, as a developer's change run plays. A copy run in which no band reads `fail` is a missed detection, a broken engine the gate let through.
+
+A miss is a finding, not a fault to tune away. The shots copy moves shots per team by about 1.3 shots, under that band's smallest shift of 2.0, so the gate may rightly pass it: a move smaller than the shift that matters is not a change of the band. The proof records such a miss, so the person can see what the gate does not catch.
+
+The proof also says, for each whole-distribution band, whether any copy moved it. A distribution band that no copy moved has not shown that it catches a broken engine. That matters before the band is promoted.
+
+Ten self runs cannot show a pass rate of 97 percent: one fail in ten is 90 percent, well inside the noise of so few runs. What they can show is a gross breach. At a true false-alarm rate of 3 percent, three or more fails in ten runs happen less than 0.3 percent of the time. So the proof is a check against a broken gate, and the 97 percent claim rests on the power calculation.
+
+The proof file names the gate it measured: the band file's digest, which changes with any range, shift, suite or `gates` edit; the measures version; and a digest of the judging code. Every run compares them with its own gate and prints `gate changed since the last proof` when they differ. The proof takes hours, so a stale proof is never silently quoted for a gate it did not measure: the run says so until the proof runs again.
+
 ## Rules are checked while a match plays
 
 The rule checker sees every tick and every event of every match while it plays. It keeps only small state: the team shapes in force, the previous ball position, each player's drift count, and the violations found. The earlier checker stored every tick of the match and checked the list at the end. That cost about 450 MB of memory over eight threads and the time to build the list. The running checker gives exactly the same violations as the earlier one on a fixed set of planted violations and real matches, and it replaced it only after that equivalence held.

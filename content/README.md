@@ -1,6 +1,6 @@
 # Content files
 
-This folder holds the content files the engine reads: the attribute schema, the tuning constants, the rule pack, the tactics file, the commentary lines, the realism bands, ten sample clubs, and the fast model's fit.
+This folder holds the content files the engine reads: the attribute schema, the tuning constants, the rule pack, the tactics file, the commentary lines, the realism bands and their gate proof, ten sample clubs, and the fast model's fit.
 
 Every field of every file, with its unit, its default, and its bound, is in [the data-file reference](../docs/reference/data-files.md). To change a value, follow [the modding how-to](../docs/how-to/modding.md).
 
@@ -112,6 +112,12 @@ Wyscout figures cover the 2017/18 season of England, France, Germany, Italy, and
 | `goalless_share` | Wyscout, five leagues | Matches that end 0-0, over the 1,826 league matches | Matches that end 0-0 | Calibration; pools the German league |
 
 The formations suite plays every pairing of the formations in `tactics.json`, a formation against itself included: ten formations give 55 pairings. Each pairing is checked against `goals_per_match`, `ten_plus_goals_share`, and `goalless_share`.
+
+## Gate proof
+
+`gate-proof.json` records how the gate of the realism bands was proven. It declares four broken copies of the engine, each a content flag that moves one measure: `shots_up` (shots per team up about 10 percent), `fouls_halved` (fouls per team about half), `card_storm` (every tackle a foul and every foul booked), and `pass_completion_down` (pass accuracy down about 5 points). `engine-cli calibrate proof` plays the engine against itself and each copy against the engine, and writes under `proof` the pass rate of the self runs, each copy's fail rate, the bands each copy moved, whether any copy moved each whole-distribution band, and the gate it measured: the band file's digest, the measures version, and the judging code's digest. The copies are declared as flags only in the proof's own copy of this folder, so the `flags` block of `tuning.json` still ships empty.
+
+Every calibrate run compares its gate with the proof's and prints `gate changed since the last proof` when they differ, for example after a band is promoted. Run the proof again then, and commit the new file: see [Run the gate proof](../docs/how-to/calibration.md#run-the-gate-proof). No match reads the file, and it holds no real value.
 
 ## The fast model's fit
 
