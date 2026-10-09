@@ -24,8 +24,8 @@
       "const": "run-report"
     },
     "schema.version": {
-      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict). Every key of an older version stays.",
-      "enum": ["1", "2", "3", "4"]
+      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict); 5 for a calibrate run that reports the bands that only report apart (calib.reported), the developer's acceptances (calib.accepted), the match counts (calib.counts), and how each verdict row was judged. Every key of an older version stays.",
+      "enum": ["1", "2", "3", "4", "5"]
     },
     "owner.id": {
       "type": "string",
@@ -129,6 +129,60 @@
     }
   },
   "$defs": {
+    "verdictRow": {
+      "type": "object",
+      "required": ["band", "suite", "word", "value", "lo", "hi"],
+      "properties": {
+        "band": { "type": "string", "minLength": 1 },
+        "suite": { "enum": ["equal", "strength", "formations", "red-card"] },
+        "pairing": { "type": "string" },
+        "word": { "enum": ["pass", "fail", "not sure"] },
+        "value": { "type": "number" },
+        "lo": { "type": "number" },
+        "hi": { "type": "number" },
+        "base_value": { "type": "number" },
+        "diff": { "type": "number" },
+        "se": { "type": "number", "minimum": 0 },
+        "smallest_shift": { "type": "number", "exclusiveMinimum": 0 },
+        "power": { "type": "boolean" },
+        "needed": { "type": "integer", "minimum": 0 },
+        "outside_by": {
+          "description": "A change run: how far the changed engine's value is outside its range, when its range check fails.",
+          "type": "number",
+          "minimum": 0
+        },
+        "no_target": {
+          "description": "A change run: the band was outside its range by more than its noise at the pilot (beyond the joint threshold times its own error), so it set no power target. Its word is judged as for any band.",
+          "const": true
+        },
+        "real": {
+          "description": "The band's real value, read in place from the real-data folder; absent when the band has none here. It never changes the word.",
+          "type": "number"
+        },
+        "distance": {
+          "description": "The run's value minus the real value.",
+          "type": "number"
+        },
+        "report_only": {
+          "description": "Why the band only reports (gates false in the band file, a real sample under its floor, or a generalisation under the floor): its word is shown, but it is left out of the joint word and of calib.pass.",
+          "type": "string",
+          "minLength": 1
+        },
+        "judged": {
+          "description": "Since version 5: paired, by the paired max-t test against the old engine; or range, by its range on this engine alone, with se its own standard error: fail outside the range, pass inside with the nearest edge at least 2.1701 errors away, not sure otherwise. Absent for a gating row of a run without an old engine.",
+          "enum": ["paired", "range"]
+        },
+        "note": {
+          "description": "Since version 5: why the row was judged as it was, or has no value (range only: base has no measures; range only: a per-club spread has no paired test; this build has no measures; no value: ...; acceptance no longer applies: ...).",
+          "type": "string",
+          "minLength": 1
+        },
+        "accepted": {
+          "description": "Since version 5: the developer accepted this not-sure row in the run folder's accepted.json. It is accepted, not shown equivalent: its word stays not sure and it never counts as a pass.",
+          "const": true
+        }
+      }
+    },
     "ruleInterval": {
       "description": "An estimate and its 95 percent interval.",
       "type": "object",
@@ -716,44 +770,40 @@
           "calib.verdicts": {
             "description": "Each band's word. In a change run it comes from the paired max-t test: fail when the value is outside the range or the change is beyond the joint threshold and at least the band's smallest shift, pass when inside, not a fail, and with the power to see the band's smallest shift, not sure otherwise. In a run without an old engine it is the range check, without the time budget (wall_ms), which calib.pass still includes. A change-run row outside its range carries outside_by; one that set no power target carries no_target.",
             "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["band", "suite", "word", "value", "lo", "hi"],
-              "properties": {
-                "band": { "type": "string", "minLength": 1 },
-                "suite": { "enum": ["equal", "strength", "formations", "red-card"] },
-                "pairing": { "type": "string" },
-                "word": { "enum": ["pass", "fail", "not sure"] },
-                "value": { "type": "number" },
-                "lo": { "type": "number" },
-                "hi": { "type": "number" },
-                "base_value": { "type": "number" },
-                "diff": { "type": "number" },
-                "se": { "type": "number", "minimum": 0 },
-                "smallest_shift": { "type": "number", "exclusiveMinimum": 0 },
-                "power": { "type": "boolean" },
-                "needed": { "type": "integer", "minimum": 0 },
-                "outside_by": {
-                  "description": "A change run: how far the changed engine's value is outside its range, when its range check fails.",
-                  "type": "number",
-                  "minimum": 0
-                },
-                "no_target": {
-                  "description": "A change run: the band was outside its range by more than its noise at the pilot (beyond the joint threshold times its own error), so it set no power target. Its word is judged as for any band.",
-                  "const": true
-                },
-                "real": {
-                  "description": "The band's real value, read in place from the real-data folder; absent when the band has none here. It never changes the word.",
-                  "type": "number"
-                },
-                "distance": {
-                  "description": "The run's value minus the real value.",
-                  "type": "number"
-                },
-                "report_only": {
-                  "description": "Why the band only reports (gates false in the band file, or a generalisation under the floor): its word is shown, but it is left out of the joint word and of calib.pass.",
-                  "type": "string",
-                  "minLength": 1
+            "items": { "$ref": "#/$defs/verdictRow" }
+          },
+          "calib.reported": {
+            "description": "Since version 5: the rows of the bands that only report (gates false, a real sample under its floor, or a generalisation under the floor), each judged by the same rules as a gating band, with the same keys as calib.verdicts. They never enter the joint word, calib.pass, calib.bands or a suite's power target.",
+            "type": "array",
+            "items": { "$ref": "#/$defs/verdictRow" }
+          },
+          "calib.accepted": {
+            "description": "Since version 5: the run folder's accepted.json, the bands it accepts, and why it was ignored when it was (another run or identity, or a file that cannot be read).",
+            "type": "object",
+            "required": ["file", "bands"],
+            "properties": {
+              "file": { "type": "string", "minLength": 1 },
+              "bands": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+              "ignored": { "type": "string", "minLength": 1 }
+            }
+          },
+          "calib.counts": {
+            "description": "Since version 5: the matches the run judged: every engine's rows in total, the fixtures both engines of a change run played (0 otherwise), and each engine's matches: changed and old in a change run, this otherwise, each with its build.",
+            "type": "object",
+            "required": ["total_matches", "pairs", "observations"],
+            "properties": {
+              "total_matches": { "type": "integer", "minimum": 0 },
+              "pairs": { "type": "integer", "minimum": 0 },
+              "observations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["engine", "build", "matches"],
+                  "properties": {
+                    "engine": { "enum": ["changed", "old", "this"] },
+                    "build": { "type": "string", "minLength": 1 },
+                    "matches": { "type": "integer", "minimum": 0 }
+                  }
                 }
               }
             }
@@ -963,7 +1013,7 @@
       "if": {
         "properties": {
           "operation": { "const": "calibrate" },
-          "schema.version": { "enum": ["2", "3", "4"] },
+          "schema.version": { "enum": ["2", "3", "4", "5"] },
           "outcome": { "not": { "const": "error" } }
         },
         "required": ["operation", "schema.version"]

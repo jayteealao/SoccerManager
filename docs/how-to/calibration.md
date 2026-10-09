@@ -126,17 +126,46 @@ To judge a finished run again, for example after editing a band in `realism-band
 Every run reads each band's real value from the measured real data and prints it beside the verdict. The line before the table says which folder it read and how many bands have no real value:
 
 ```text
-real data: C:\Users\you\SoccerManager\.scratch\out (default); 0 of 18 bands without a real value; 3 with no real counterpart
+real data: C:\Users\you\SoccerManager\.scratch\out (default); 0 of 42 bands without a real value; 3 with no real counterpart
 ```
 
 - `real` is the value measured on real matches; `distance` is the run's value minus it. A band inside its design range can still sit far from real football: the distance says how far.
 - `no real data here` means the folder, the file or the key is not there. `calib.real.bands` in `report.json` names the file and the reason.
 - `no real counterpart` marks the three bands of the strength and red-card suites: they measure engine experiments that no real match repeats, so they have no real value by design and are never counted as missing.
-- `(report only: ...)` at the end of a line marks a band that does not change the verdict: its band file says `gates: false`, or its real value comes from too few competitions and seasons.
+- `(report only: ...)` at the end of a line marks a band that does not change the verdict: its band file says `gates: false`, its real sample is under its own floor, or its real value comes from too few competitions and seasons.
 
 The last line after the table is the realism claim. Only bands labelled `validation` in the band file count toward it; every shipped band is `calibration`, so today the claim says `none`.
 
 The real values never change a verdict, `calib.pass` or the exit code.
+
+## Read the reported bands
+
+Most bands only report: they are measured and judged, but never change the verdict. Their table follows the verdict table:
+
+```text
+reported bands (they never change the verdict):
+...
+reported: <p> pass, <f> fail, <n> not sure (<a> accepted, not shown equivalent); they never change the verdict
+matches: <total> in total; <pairs> pairs; observations: changed engine <n>, old engine <m>
+```
+
+Each row has a word by the same rules as a gating band. A change run judges a reported band by the paired test where it can, and by its range on this engine alone where it cannot; the row then says why, for example `range only: base has no measures` when the old engine was built without the measures. A band of the measures (shot distance, passes by kind and length, goals by phase, possession by third, running) needs a build with them: build with `--features measures` (see "Record the realism measures"). The per-club spread, `worst_to_best_spread`, takes each club that plays 34 matches in the run; a run where none does reads `no value: no club has 34 matches in this run`.
+
+The reported bands never move the joint word, its threshold, `calib.pass` or the exit code. Read a `fail` there as a gap between the engine and real football to look into, not as a broken change.
+
+## Accept a not-sure band
+
+A reported or gating band can stay `not sure` however many matches you play, for example a band whose real value is too uncertain to separate pass from fail. Once you have looked at it, accept it for this run:
+
+```bash
+target/release/engine-cli calibrate accept goals_poisson_ratio --run runs/change-42
+```
+
+Then run the same calibrate command again. Nothing plays; the band's row reads `not sure (accepted, not shown equivalent)`. An accepted band is not shown to match real football: it is never counted as a pass, and it never changes the verdict or the exit code. Only a band that reads `not sure` can be accepted; a `pass` or `fail` band is refused by name. The acceptance belongs to the run in that folder: a new run there (another identity) ignores it, and says `acceptances ignored: ...`.
+
+## Promote a reported band to gate
+
+A band gates once you trust its range: its real value is measured, its range starts at least two real standard errors either side of the real value, and a full run has judged the engine against it. Set its `gates` to `true` in `content/realism-bands.json`, then run a finished run's command again into its folder: the band now sits in the verdict table, and the joint word counts it. Promote a band only by a recorded product-owner decision, as for any band change.
 
 ## Point at another real-data folder
 

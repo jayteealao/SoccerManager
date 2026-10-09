@@ -17,8 +17,8 @@ use serde_json::Value;
 
 const LINE: &str = "this build has no measures";
 
-/// The band names of the shipped band file.
-fn shipped_bands() -> BTreeSet<String> {
+/// The band names of the shipped band file, all of them or only those that gate.
+fn shipped_bands(gating: bool) -> BTreeSet<String> {
     let path =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content/realism-bands.json");
     let file: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
@@ -26,6 +26,7 @@ fn shipped_bands() -> BTreeSet<String> {
         .as_array()
         .unwrap()
         .iter()
+        .filter(|b| !gating || b["gates"] != false)
         .map(|b| b["band"].as_str().unwrap().to_string())
         .collect()
 }
@@ -67,9 +68,10 @@ fn the_build_says_whether_it_records_the_measures() {
     assert_eq!(report["calib.rows"]["measures"], measured);
     assert_eq!(report["calib.rows"]["format"], 2);
 
-    // The bands judged are those of the band file: the 18 bands, no other, beside the run's
-    // own time budget.
-    let shipped = shipped_bands();
+    // The bands judged are those of the band file: the 18 that gate, no other, beside the
+    // run's own time budget; the 24 that only report are reported apart.
+    assert_eq!(shipped_bands(false).len(), 18 + 24);
+    let shipped = shipped_bands(true);
     assert_eq!(shipped.len(), 18);
     let judged: BTreeSet<String> = report["calib.bands"]
         .as_array()

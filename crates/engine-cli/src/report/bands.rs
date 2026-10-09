@@ -150,6 +150,33 @@ pub enum Measure {
     Builtin {
         name: Builtin,
     },
+    /// The per-match mean of the sum of `of` minus the sum of `minus`, such as the home
+    /// side's goals minus the away side's.
+    Difference {
+        of: Vec<String>,
+        minus: Vec<String>,
+    },
+    /// The share of matches whose final score is one of `scores`, either side first.
+    Scoreline {
+        scores: Vec<[u32; 2]>,
+    },
+    /// The factorial-moment ratio `E[X(X-1)] / E[X]^2` of the per-team sum of `of` (each
+    /// field as `<field>.{side}`): 1 for a Poisson count, above 1 for a count more spread.
+    #[serde(rename = "factorial_ratio")]
+    FactorialRatio {
+        of: Vec<String>,
+    },
+    /// For each club with at least `window` matches, the best minus the worst per-match
+    /// value of its `of` minus its opponent's `minus` (each field as `<field>.{side}`, the
+    /// `minus` fields read for the other side) over its first `window` matches in fixture
+    /// order; the mean over those clubs. It has no paired form, so a change run judges it
+    /// on its range only.
+    #[serde(rename = "club_range")]
+    ClubRange {
+        of: Vec<String>,
+        minus: Vec<String>,
+        window: u32,
+    },
 }
 
 /// How a real value is reduced from its file.
@@ -164,6 +191,22 @@ pub enum Reduce {
     /// A CSV file: the share of distinct `group_by` values with at least one row whose key
     /// column, split on spaces, holds one of `tokens`.
     GroupShare,
+    /// A CSV file: the share of the kept rows (by `weight`, when it names a column) whose
+    /// key lies in `bins`, `lo` included and `hi` not.
+    BinShare,
+    /// A CSV file: the mean distance from the point the key names as `x:y` to `goal`.
+    GoalDistance,
+    /// A CSV file: the share of kept rows whose two key columns (`a:b`) hold one of
+    /// `scores`, either way round.
+    Scoreline,
+    /// A CSV file: `n * sum(x(x-1)) / sum(x)^2` over the kept rows: 1 for a Poisson count.
+    FactorialRatio,
+    /// A CSV file: for each `group_by` value with at least `window` kept rows, the largest
+    /// minus the smallest key over its first `window` rows; the mean over those groups.
+    GroupRange,
+    /// A CSV file: for each `group_by` value (columns joined by `+`), the largest key; the
+    /// mean over the groups.
+    GroupMax,
 }
 
 /// Where a band's real value is measured: a file of the real-data folder and how to read it.
@@ -196,6 +239,32 @@ pub struct Pointer {
     pub group_by: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tokens: Option<Vec<String>>,
+    /// A CSV file: the column a mean or a bin share is weighted by.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weight: Option<String>,
+    /// A CSV file: the rows kept, by numeric column and the half-open range `[lo, hi)` its
+    /// value lies in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub range: Option<BTreeMap<String, [f64; 2]>>,
+    /// A CSV file: only the rows whose two columns hold the same text are kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub same: Option<[String; 2]>,
+    /// A bin share: the half-open range `[lo, hi)` of the key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bins: Option<[f64; 2]>,
+    /// A goal distance: the point measured to, in the file's own units.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub goal: Option<[f64; 2]>,
+    /// A scoreline share: the scores counted, such as `5-1`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scores: Option<Vec<String>>,
+    /// A group range: the rows of each group it reads.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window: Option<u32>,
+    /// A CSV file: a kept row whose key, weight or denominator cell is blank is left out,
+    /// where the file leaves a value unmeasured (such as an event without a duration).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub skip_blank: bool,
 }
 
 /// A band that measures an engine experiment no real match repeats.
@@ -210,7 +279,7 @@ pub struct NoCounterpart {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RealSource {
-    Pointer(Pointer),
+    Pointer(Box<Pointer>),
     NoCounterpart(NoCounterpart),
 }
 
@@ -315,8 +384,8 @@ pub struct BandDef {
     pub max_from_dry: Option<f64>,
     /// The band changes the verdict. A band with `gates: false` only reports.
     pub gates: bool,
-    /// Why the band only reports and never changes the verdict: `gates: false`, or a
-    /// generalisation under the file's floor. Derived on load.
+    /// Why the band only reports and never changes the verdict: `gates: false`, a real
+    /// sample under its floor, or a generalisation under the file's floor. Derived on load.
     pub report_only: Option<String>,
 }
 
@@ -352,6 +421,19 @@ impl BandDef {
     /// `true` when `suite` judges the band.
     pub fn judged_in(&self, suite: Suite) -> bool {
         self.suites.iter().any(|s| s == suite.code())
+    }
+
+    /// `true` when the band reads a field only a `measures` build records.
+    pub fn needs_measures(&self) -> bool {
+        super::measures::fields_of(&self.measure)
+            .into_iter()
+            .any(super::measures::is_measure_field)
+    }
+
+    /// `true` when the band reads a match's extras: a measures field, or the clubs of a
+    /// club range.
+    pub fn needs_extras(&self) -> bool {
+        self.needs_measures() || matches!(self.measure, Measure::ClubRange { .. })
     }
 
     fn judgement(&self) -> Judgement<'_> {
@@ -550,9 +632,10 @@ impl Registry {
     }
 }
 
-/// Why a band only reports: it does not gate, or it has a real counterpart whose
-/// generalisation is under the floor. A band with no counterpart has no generalisation to
-/// judge, so the floor never applies to it.
+/// Why a band only reports, in this order: it does not gate; its real sample is under its
+/// own floor, so the real data sets its uncertainty and more matches cannot shrink it; or it
+/// has a real counterpart whose generalisation is under the file's floor. A band with no
+/// counterpart has no sample and no generalisation to judge, so neither floor applies.
 fn report_only(b: &BandDef, floor: u64) -> Option<String> {
     if !b.gates {
         return Some("gates: false in the band file".into());
@@ -560,6 +643,12 @@ fn report_only(b: &BandDef, floor: u64) -> Option<String> {
     let real = b.real.as_ref()?;
     if real.no_counterpart().is_some() {
         return None;
+    }
+    if let Some(f) = real.floor.filter(|f| real.sample < *f) {
+        return Some(format!(
+            "real sample too small to gate (sample {} under floor {f})",
+            real.sample
+        ));
     }
     let units = b.confidence?.generalisation.units();
     (units < floor).then(|| {
@@ -583,9 +672,27 @@ const REQUIRED: [&str; 11] = [
 ];
 
 /// The keys a real source may hold.
-const SOURCE_KEYS: [&str; 12] = [
-    "none", "dataset", "file", "key", "reduce", "op", "value", "where", "den", "scale", "group_by",
+const SOURCE_KEYS: [&str; 20] = [
+    "none",
+    "dataset",
+    "file",
+    "key",
+    "reduce",
+    "op",
+    "value",
+    "where",
+    "den",
+    "scale",
+    "group_by",
     "tokens",
+    "weight",
+    "range",
+    "same",
+    "bins",
+    "goal",
+    "scores",
+    "window",
+    "skip_blank",
 ];
 
 /// The record rules of a version 4 file, checked on the raw document before the typed
@@ -1122,7 +1229,8 @@ mod tests {
         assert_eq!(r.schema_version, REGISTRY_VERSION);
         assert_eq!(r.migrated_from, None);
         assert_confirmed(&r);
-        assert_eq!(r.bands.len(), 18);
+        assert_eq!(r.bands.len(), 18 + REPORTED.len());
+        assert_eq!(r.bands.iter().filter(|b| b.gates).count(), 18);
         assert_eq!(
             r.band("possession_home_pct").unwrap().group.as_deref(),
             Some("possession_pct")
@@ -1161,6 +1269,42 @@ mod tests {
         assert_eq!(a.digest(), b.digest());
     }
 
+    /// The bands of `r` that gate: the shipped file's 18, which the report-first bands
+    /// added after them must leave as they were.
+    fn gating(r: &Registry) -> Registry {
+        let mut g = r.clone();
+        g.bands.retain(|b| b.gates);
+        g
+    }
+
+    /// The bands the shipped file adds with `gates: false`, in file order.
+    const REPORTED: [&str; 24] = [
+        "fouls_per_team",
+        "offsides_per_team",
+        "home_goal_difference",
+        "five_one_share",
+        "worst_to_best_spread",
+        "goals_poisson_ratio",
+        "shot_distance_mean",
+        "possession_own_third_share",
+        "possession_middle_third_share",
+        "possession_final_third_share",
+        "goals_open_play_share",
+        "goals_corner_share",
+        "goals_free_kick_share",
+        "goals_penalty_share",
+        "goals_throw_in_share",
+        "pass_completion_ground_lt10",
+        "pass_completion_ground_10_25",
+        "pass_completion_chip_10_25",
+        "pass_completion_chip_gt25",
+        "pass_completion_cross_10_25",
+        "pass_completion_cross_gt25",
+        "distance_per_minute",
+        "high_speed_share",
+        "peak_speed_mean",
+    ];
+
     #[test]
     fn a_version_two_file_migrates_to_the_same_bands_as_the_shipped_registry() {
         let migrated = Registry::from_bytes(V2.as_bytes()).unwrap();
@@ -1168,7 +1312,7 @@ mod tests {
         assert_eq!(migrated.schema_version, REGISTRY_VERSION);
         assert_confirmed(&migrated);
         let shipped = Registry::load(&shipped()).unwrap();
-        assert_same_judgement(&migrated, &shipped);
+        assert_same_judgement(&migrated, &gating(&shipped));
     }
 
     /// The version 3 file as it shipped before the band record, kept as the migration's
@@ -1214,9 +1358,10 @@ mod tests {
             assert_eq!(b.report_only, None, "{}", b.band);
         }
         // The same digests, registry and per band: the 18 bands judge as before, and a
-        // folder judged under version 3 names no band as changed.
+        // folder judged under version 3 names no band as changed. The report-first bands
+        // that follow them leave every one of their digests as it was.
         let shipped = Registry::load(&shipped()).unwrap();
-        assert_same_judgement(&migrated, &shipped);
+        assert_same_judgement(&migrated, &gating(&shipped));
         assert_confirmed(&migrated);
     }
 
@@ -1235,8 +1380,23 @@ mod tests {
             assert!(b.evidence.is_some(), "{}", b.band);
             let c = b.confidence.unwrap_or_else(|| panic!("{}", b.band));
             assert_eq!(b.condition, Condition::Dry, "{}", b.band);
-            assert!(b.gates, "{}", b.band);
-            assert_eq!(b.report_only, None, "{}: every band gates", b.band);
+            let reported = REPORTED.contains(&b.band.as_str());
+            assert_eq!(b.gates, !reported, "{}", b.band);
+            if reported {
+                assert_eq!(
+                    b.report_only.as_deref(),
+                    Some("gates: false in the band file"),
+                    "{}",
+                    b.band
+                );
+                assert_eq!(b.evidence, Some(Evidence::Calibration), "{}", b.band);
+            } else {
+                assert_eq!(
+                    b.report_only, None,
+                    "{}: every band of the 18 gates",
+                    b.band
+                );
+            }
             match &real.source {
                 RealSource::NoCounterpart(n) => {
                     assert!(experiments.contains(&b.band.as_str()), "{}", b.band);
@@ -1388,6 +1548,133 @@ mod tests {
                 .unwrap()
                 .contains("gates: false")
         );
+    }
+
+    #[test]
+    fn a_real_sample_under_its_floor_only_reports_and_the_reasons_keep_their_order() {
+        // A gating band whose real sample is under its own floor: report-only, by name.
+        let floored = |extra: &dyn Fn(&mut Value)| {
+            Registry::from_bytes(
+                edited("corners_per_team", |b| {
+                    b["real"]["floor"] = 5000.into();
+                    extra(b);
+                })
+                .as_bytes(),
+            )
+            .unwrap()
+        };
+        let r = floored(&|_| {});
+        assert_eq!(
+            r.report_only("corners_per_team"),
+            Some("real sample too small to gate (sample 1826 under floor 5000)")
+        );
+        // The sample floor comes before the generalisation floor, and gates: false first.
+        let thin = floored(&|b| {
+            b["confidence"]["generalisation"] =
+                serde_json::json!({"competitions": 1, "seasons": 1, "clubs": 20});
+        });
+        assert!(
+            thin.report_only("corners_per_team")
+                .unwrap()
+                .starts_with("real sample too small to gate")
+        );
+        let off = floored(&|b| b["gates"] = false.into());
+        assert_eq!(
+            off.report_only("corners_per_team"),
+            Some("gates: false in the band file")
+        );
+        // A sample at its floor gates; so does a band with no counterpart and no floor.
+        let at = Registry::from_bytes(
+            edited("corners_per_team", |b| b["real"]["floor"] = 1826.into()).as_bytes(),
+        )
+        .unwrap();
+        assert_eq!(at.report_only("corners_per_team"), None);
+        assert_eq!(at.report_only("stronger_team_win_rate"), None);
+        // The shipped running bands sit under their floor of 30 tracked matches, so they
+        // would stay report-only after a promotion.
+        let shipped = Registry::load(&shipped()).unwrap();
+        for name in ["distance_per_minute", "high_speed_share", "peak_speed_mean"] {
+            let promoted =
+                Registry::from_bytes(edited(name, |b| b["gates"] = true.into()).as_bytes())
+                    .unwrap();
+            assert_eq!(
+                promoted.report_only(name),
+                Some("real sample too small to gate (sample 7 under floor 30)"),
+                "{name}"
+            );
+            assert!(shipped.band(name).unwrap().needs_measures(), "{name}");
+        }
+    }
+
+    #[test]
+    fn the_new_measure_kinds_parse_and_a_malformed_one_is_refused_by_name() {
+        let r = Registry::load(&shipped()).unwrap();
+        let kind = |name: &str| r.band(name).unwrap().measure.clone();
+        assert!(matches!(
+            kind("home_goal_difference"),
+            Measure::Difference { .. }
+        ));
+        assert_eq!(
+            kind("five_one_share"),
+            Measure::Scoreline {
+                scores: vec![[5, 1]]
+            }
+        );
+        assert!(matches!(
+            kind("goals_poisson_ratio"),
+            Measure::FactorialRatio { .. }
+        ));
+        assert!(matches!(
+            kind("worst_to_best_spread"),
+            Measure::ClubRange { window: 34, .. }
+        ));
+        // Which bands read the measures, and which read a match's extras at all.
+        assert!(!r.band("worst_to_best_spread").unwrap().needs_measures());
+        assert!(r.band("worst_to_best_spread").unwrap().needs_extras());
+        assert!(r.band("shot_distance_mean").unwrap().needs_measures());
+        assert!(!r.band("fouls_per_team").unwrap().needs_extras());
+        let cases: [(&str, Value, &str); 6] = [
+            (
+                "five_one_share",
+                serde_json::json!({"kind": "scoreline", "scores": [[21, 1]]}),
+                "score 21-1",
+            ),
+            (
+                "five_one_share",
+                serde_json::json!({"kind": "scoreline", "scores": []}),
+                "scores names no score",
+            ),
+            (
+                "worst_to_best_spread",
+                serde_json::json!({"kind": "club_range", "of": ["goals.{side}"], "minus": ["goals.{side}"], "window": 1}),
+                "window 1",
+            ),
+            (
+                "goals_poisson_ratio",
+                serde_json::json!({"kind": "factorial_ratio", "of": ["goals.home"]}),
+                "{side}",
+            ),
+            (
+                "home_goal_difference",
+                serde_json::json!({"kind": "difference", "of": ["goals.home"], "minus": ["dribbles.away"]}),
+                "dribbles.away",
+            ),
+            (
+                "shot_distance_mean",
+                serde_json::json!({"kind": "ratio", "num": ["pass_attempts.volley_gt25.home"], "den": ["shots.home"]}),
+                "pass_attempts.volley_gt25.home",
+            ),
+        ];
+        for (band, measure, named) in cases {
+            let err = refusal(&edited(band, |b| b["measure"] = measure));
+            assert!(err.contains(&format!("({band}).measure")), "{err}");
+            assert!(err.contains(named), "{named}: {err}");
+        }
+        // An unknown pointer field is refused by name; the new ones are taken.
+        let err = refusal(&edited("fouls_per_team", |b| {
+            b["real"]["source"]["axes"] = serde_json::json!([1.0, 1.0]);
+        }));
+        assert!(err.contains("(fouls_per_team).real.source.axes"), "{err}");
     }
 
     fn refusal(text: &str) -> String {

@@ -48,7 +48,7 @@ fn report(out: &Output, run: &Path) -> Value {
     RecordSchemas::load()
         .report(&report)
         .unwrap_or_else(|e| panic!("{e}\n{report}"));
-    assert_eq!(report["schema.version"], "4");
+    assert_eq!(report["schema.version"], "5");
     report
 }
 
@@ -293,7 +293,7 @@ fn a_new_band_in_the_content_file_is_judged_and_a_version_two_file_loads() {
     let data = temp("engine-cli-verdict", "registry");
     let content = edited_content(&data, "realism-bands.json", |doc| {
         doc["bands"].as_array_mut().unwrap().push(json!({
-            "band": "fouls_per_team",
+            "band": "probe_fouls_per_team",
             "suites": ["equal"],
             "measure": { "kind": "mean", "per": "team", "of": ["fouls.{side}"] },
             "design": { "lo": 0.0, "hi": 30.0, "smallest_shift": 2.5 },
@@ -318,11 +318,11 @@ fn a_new_band_in_the_content_file_is_judged_and_a_version_two_file_loads() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|b| b["band"] == "fouls_per_team")
+        .find(|b| b["band"] == "probe_fouls_per_team")
         .expect("the new band is checked");
     assert!(check["value"].as_f64().unwrap() >= 0.0);
     assert!(check["pass"].is_boolean());
-    assert!(row(&r, "fouls_per_team")["word"].is_string());
+    assert!(row(&r, "probe_fouls_per_team")["word"].is_string());
 
     // The version 2 file as it shipped before the registry.
     let v2 = json!({
@@ -358,7 +358,8 @@ fn a_new_band_in_the_content_file_is_judged_and_a_version_two_file_loads() {
     );
     let bands = old["calib.bands"].as_array().unwrap();
     for b in shipped["bands"].as_array().unwrap() {
-        if !b["suites"].as_array().unwrap().contains(&json!("equal")) {
+        // The bands that only report came after version 2.
+        if !b["suites"].as_array().unwrap().contains(&json!("equal")) || b["gates"] == false {
             continue;
         }
         let check = bands

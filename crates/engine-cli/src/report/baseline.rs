@@ -263,6 +263,8 @@ mod tests {
             pass: true,
             se,
             informational: None,
+            why_none: None,
+            unjudged: false,
         }
     }
 

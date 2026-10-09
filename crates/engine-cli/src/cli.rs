@@ -790,13 +790,20 @@ pub struct BenchOpts {
 }
 
 #[derive(Debug, Args)]
+#[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
 pub struct CalibrateOpts {
+    /// Another action on a run folder instead of a run.
+    #[command(subcommand)]
+    pub action: Option<CalibrateAction>,
     /// Seed of the run and of every match.
     #[arg(
-        long,
-        long_help = "Seed of the run: the leagues, the fixtures, and every match seed."
+        long = "seed",
+        value_name = "SEED",
+        required = true,
+        long_help = "Seed of the run: the leagues, the fixtures, and every match seed.\n\n\
+                     Required for a run; not taken by calibrate accept."
     )]
-    pub seed: u64,
+    pub seed_arg: Option<u64>,
     /// Matches per suite or pairing.
     #[arg(
         long,
@@ -955,13 +962,44 @@ pub struct CalibrateOpts {
     pub base_binary: Option<PathBuf>,
 }
 
+impl CalibrateOpts {
+    /// The run's seed; clap requires it whenever no subcommand runs.
+    pub fn seed(&self) -> u64 {
+        self.seed_arg.unwrap_or_default()
+    }
+}
+
+/// What `calibrate` does with a run folder instead of a run.
+#[derive(Debug, Subcommand)]
+pub enum CalibrateAction {
+    /// Accept a not-sure band of a run folder: accepted, not shown equivalent.
+    #[command(
+        long_about = "Accept a band that reads not sure in a run folder's last judgement.\n\n\
+                      The acceptance is written to accepted.json in the folder. Run the\n\
+                      same calibrate command again: the band's row then reads not sure\n\
+                      (accepted, not shown equivalent). It never counts as a pass and\n\
+                      never changes the verdict. A band that reads pass or fail is\n\
+                      refused."
+    )]
+    Accept {
+        /// The band to accept, as the run's verdict rows name it.
+        #[arg(value_name = "BAND")]
+        band: String,
+        /// The run folder whose report.json holds the band's row.
+        #[arg(long, value_name = "DIR")]
+        run: PathBuf,
+    },
+}
+
 /// The failure `calibrate --inject-failure` makes: an error in the first match of the work
-/// list, a panic in it, or the build of the old engine (`--base`).
+/// list, a panic in it, the build of the old engine (`--base`), or an old engine whose rows
+/// carry no measures (its folded rows lose them, as rows of a build without the feature).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum InjectFailure {
     Match,
     Panic,
     BaseBuild,
+    BaseWithoutMeasures,
 }
 
 /// The suites a calibration run plays.
@@ -998,4 +1036,41 @@ pub struct GenerateOpts {
     /// Overwrite team files that already exist.
     #[arg(long)]
     pub force: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
+        Cli::try_parse_from(std::iter::once("engine-cli").chain(args.iter().copied()))
+    }
+
+    fn calibrate(args: &[&str]) -> Result<CalibrateOpts, clap::Error> {
+        parse(args).map(|cli| match cli.command {
+            Command::Calibrate(opts) => opts,
+            other => panic!("{other:?}"),
+        })
+    }
+
+    #[test]
+    fn a_run_needs_its_seed_and_accept_takes_none() {
+        let run = calibrate(&["calibrate", "--seed", "1"]).unwrap();
+        assert_eq!((run.seed(), run.action.is_none()), (1, true));
+        let accept = calibrate(&["calibrate", "accept", "b", "--run", "d"]).unwrap();
+        match accept.action {
+            Some(CalibrateAction::Accept { band, run }) => {
+                assert_eq!((band.as_str(), run), ("b", PathBuf::from("d")));
+            }
+            None => panic!("no action"),
+        }
+        let err = calibrate(&["calibrate"]).unwrap_err();
+        assert!(err.to_string().contains("--seed"), "{err}");
+        assert!(calibrate(&["calibrate", "accept", "b", "--run", "d", "--seed", "1"]).is_err());
+        assert!(calibrate(&["calibrate", "--seed", "1", "accept", "b", "--run", "d"]).is_err());
+        assert!(
+            calibrate(&["calibrate", "accept", "b"]).is_err(),
+            "--run is required"
+        );
+    }
 }

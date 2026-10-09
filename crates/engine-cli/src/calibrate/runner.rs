@@ -296,7 +296,7 @@ pub(super) fn run_arms(
                 let mut state: Vec<ArmState<'_>> = arms
                     .iter()
                     .map(|a| ArmState {
-                        leagues: Leagues::new(opts.seed, &a.content),
+                        leagues: Leagues::new(opts.seed(), &a.content),
                         rows: None,
                         ledgers: BTreeMap::new(),
                     })

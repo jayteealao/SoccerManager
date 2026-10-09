@@ -130,7 +130,7 @@ fn report(out: &Output, run: &Path) -> Value {
     RecordSchemas::load()
         .report(&report)
         .unwrap_or_else(|e| panic!("{e}\n{report}"));
-    assert_eq!(report["schema.version"], "4");
+    assert_eq!(report["schema.version"], "5");
     report
 }
 
@@ -159,9 +159,12 @@ fn line<'a>(text: &'a str, band: &str) -> &'a str {
         .unwrap_or_else(|| panic!("no table line for {band}: {text}"))
 }
 
-/// Bands with a pointer: the shipped file's 18, less the three engine experiments and the
+/// The shipped file's bands: the 18 that gate and the 24 that only report.
+const BANDS: u64 = 18 + 24;
+
+/// Bands with a pointer: the shipped file's, less the three engine experiments and the
 /// test's own band with no counterpart.
-const POINTER_BANDS: u64 = 18 - 3 - 1;
+const POINTER_BANDS: u64 = BANDS - 3 - 1;
 
 #[test]
 fn the_real_values_come_from_the_named_folder_and_an_absent_folder_is_stated() {
@@ -219,7 +222,7 @@ fn the_real_values_come_from_the_named_folder_and_an_absent_folder_is_stated() {
     );
     assert!(
         text.contains(&format!(
-            "real data: {} (flag); {} of 18 bands without a real value; 4 with no real counterpart",
+            "real data: {} (flag); {} of {BANDS} bands without a real value; 4 with no real counterpart",
             real.display(),
             POINTER_BANDS - READ.len() as u64
         )),
@@ -248,7 +251,9 @@ fn the_real_values_come_from_the_named_folder_and_an_absent_folder_is_stated() {
     assert_eq!(info2["missing"].as_u64(), Some(POINTER_BANDS), "{info2}");
     assert_eq!(info2["no_counterpart"], 4);
     assert!(
-        text2.contains(&format!("{POINTER_BANDS} of 18 bands without a real value")),
+        text2.contains(&format!(
+            "{POINTER_BANDS} of {BANDS} bands without a real value"
+        )),
         "{text2}"
     );
     assert!(

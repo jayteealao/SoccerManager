@@ -118,6 +118,20 @@ pub struct VerdictRow {
     /// What the console's real columns read when there is no real value.
     #[serde(skip)]
     pub real_note: Option<&'static str>,
+    /// How the row was judged: `paired`, by the paired max-t test against the old engine, or
+    /// `range`, by its range on this engine alone with its own error. Absent for a gating
+    /// row of a run without an old engine, whose word is its plain range check.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub judged: Option<&'static str>,
+    /// Why the row was judged as it was, or has no value: `range only: base has no
+    /// measures`, `range only: a per-club spread has no paired test`, `this build has no
+    /// measures`, `no value: <why>`, or `acceptance no longer applies: it reads <word>`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    /// `true` when the developer accepted this not-sure row in the run folder: it is
+    /// accepted, not shown equivalent, and its word stays not sure.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accepted: Option<bool>,
 }
 
 impl VerdictRow {
@@ -183,31 +197,106 @@ pub struct Joint {
     pub guards: Vec<String>,
 }
 
-/// The rows of a run without an old engine: each band's word is its range check.
+/// The note of a row whose band reads measures the run's matches do not carry.
+pub const NO_MEASURES_NOTE: &str = "this build has no measures";
+/// The note of a measures band in a change run whose old engine has no measures.
+pub const BASE_WITHOUT_MEASURES: &str = "range only: base has no measures";
+/// The note of a per-club spread in a change run.
+pub const PER_CLUB: &str = "range only: a per-club spread has no paired test";
+
+/// A row of `c` with `word` and nothing judged beyond it.
+fn plain_row(c: &BandCheck, word: Word) -> VerdictRow {
+    VerdictRow {
+        band: c.band.clone(),
+        suite: c.suite.clone(),
+        pairing: c.pairing.clone(),
+        word,
+        value: c.value,
+        lo: c.lo,
+        hi: c.hi,
+        base_value: None,
+        diff: None,
+        se: None,
+        smallest_shift: None,
+        power: None,
+        needed: None,
+        outside_by: None,
+        no_target: None,
+        real: None,
+        distance: None,
+        report_only: None,
+        real_note: None,
+        judged: None,
+        note: None,
+        accepted: None,
+    }
+}
+
+/// The note a check carries of itself: no measures, or no value.
+fn own_note(c: &BandCheck) -> Option<String> {
+    if c.unjudged {
+        Some(NO_MEASURES_NOTE.into())
+    } else {
+        c.why_none.as_ref().map(|w| format!("no value: {w}"))
+    }
+}
+
+/// The rows of a run without an old engine: each band's word is its range check. A band
+/// that reads measures the run's matches do not carry is not sure.
 pub fn range_only(checks: &[BandCheck]) -> Vec<VerdictRow> {
     checks
         .iter()
         .filter(|c| c.band != "wall_ms")
-        .map(|c| VerdictRow {
-            band: c.band.clone(),
-            suite: c.suite.clone(),
-            pairing: c.pairing.clone(),
-            word: if c.pass { Word::Pass } else { Word::Fail },
-            value: c.value,
-            lo: c.lo,
-            hi: c.hi,
-            base_value: None,
-            diff: None,
-            se: None,
-            smallest_shift: None,
-            power: None,
-            needed: None,
-            outside_by: None,
-            no_target: None,
-            real: None,
-            distance: None,
-            report_only: None,
-            real_note: None,
+        .map(|c| {
+            let word = match (c.unjudged, c.pass) {
+                (true, _) => Word::NotSure,
+                (false, true) => Word::Pass,
+                (false, false) => Word::Fail,
+            };
+            let mut r = plain_row(c, word);
+            r.note = c.unjudged.then(|| NO_MEASURES_NOTE.into());
+            r
+        })
+        .collect()
+}
+
+/// The word of a row judged on its range alone, with its own error: fail outside the range;
+/// pass inside with the nearest edge at least [`ONE_BAND`] errors away (the bottom of a
+/// floor band, which starts at 0, is no edge); not sure otherwise, as a band with no power
+/// never passes. A row with no error passes inside; a row with no value is not sure.
+pub fn range_word(c: &BandCheck) -> Word {
+    if c.unjudged || c.why_none.is_some() {
+        return Word::NotSure;
+    }
+    if !c.pass {
+        return Word::Fail;
+    }
+    let range = super::bands::Band { lo: c.lo, hi: c.hi };
+    let low = if range.is_floor() {
+        f64::INFINITY
+    } else {
+        c.value - c.lo
+    };
+    let margin = low.min(c.hi - c.value);
+    if c.se == 0.0 || margin >= ONE_BAND * c.se {
+        Word::Pass
+    } else {
+        Word::NotSure
+    }
+}
+
+/// The rows judged on their range alone, each with the noise-aware word of [`range_word`],
+/// its own error, and `note` unless the check carries a note of its own.
+pub fn range_rows(checks: &[BandCheck], note: Option<&str>) -> Vec<VerdictRow> {
+    checks
+        .iter()
+        .filter(|c| c.band != "wall_ms")
+        .map(|c| {
+            let mut r = plain_row(c, range_word(c));
+            r.se = Some(c.se);
+            r.judged = Some("range");
+            r.note = own_note(c).or_else(|| note.map(str::to_string));
+            r
         })
         .collect()
 }
@@ -547,6 +636,9 @@ pub fn judge(
             distance: None,
             report_only: None,
             real_note: None,
+            judged: Some("paired"),
+            note: None,
+            accepted: None,
         });
     }
     let word = joint_word(&out, &guards);
@@ -623,8 +715,45 @@ pub fn targets(
 
 /// The console table of a run's verdicts, and its joint word when it has one.
 pub fn render_table(rows: &[VerdictRow], joint: Option<&Joint>) -> String {
+    let mut out = table(rows, joint.is_some());
+    if let Some(j) = joint {
+        out.push_str(&format!(
+            "joint verdict: {} (max-t threshold {} over {} resamples, {} percent false-alarm \
+             limit, {} paired matches)\n",
+            j.word.code(),
+            j.critical,
+            j.resamples,
+            j.false_alarm * 100.0,
+            j.pairs
+        ));
+        for g in &j.guards {
+            out.push_str(&format!("  fails: {g}\n"));
+        }
+    }
+    out
+}
+
+/// The console table of the bands that only report, under its title, and its line of
+/// counts; nothing when no band only reports. `change` gives the change run's columns.
+pub fn render_reported(rows: &[VerdictRow], change: bool) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+    let count = |w: Word| rows.iter().filter(|r| r.word == w).count();
+    let accepted = rows.iter().filter(|r| r.accepted == Some(true)).count();
+    format!(
+        "reported bands (they never change the verdict):\n{}reported: {} pass, {} fail, {} not \
+         sure ({accepted} accepted, not shown equivalent); they never change the verdict\n",
+        table(rows, change),
+        count(Word::Pass),
+        count(Word::Fail),
+        count(Word::NotSure)
+    )
+}
+
+/// The rows of a verdict table, under its header.
+fn table(rows: &[VerdictRow], change: bool) -> String {
     let mut out = String::new();
-    let change = joint.is_some();
     if change {
         out.push_str(&format!(
             "{:<24} {:<10} {:<14} {:>10} {:>10} {:>10} {:>9} {:>6} {:>19} {:>10}  {}\n",
@@ -661,6 +790,12 @@ pub fn render_table(rows: &[VerdictRow], joint: Option<&Joint>) -> String {
         if let Some(why) = &r.report_only {
             need.push_str(&format!(" (report only: {why})"));
         }
+        if let Some(note) = &r.note {
+            need.insert_str(0, &format!(" ({note})"));
+        }
+        if r.accepted == Some(true) {
+            need.insert_str(0, " (accepted, not shown equivalent)");
+        }
         let (real, distance) = match (r.real, r.distance) {
             (Some(v), Some(d)) => (format!("{v}"), format!("{d}")),
             _ => (r.real_note.unwrap_or("-").to_string(), "-".to_string()),
@@ -693,20 +828,6 @@ pub fn render_table(rows: &[VerdictRow], joint: Option<&Joint>) -> String {
                 distance,
                 r.word.code()
             ));
-        }
-    }
-    if let Some(j) = joint {
-        out.push_str(&format!(
-            "joint verdict: {} (max-t threshold {} over {} resamples, {} percent false-alarm \
-             limit, {} paired matches)\n",
-            j.word.code(),
-            j.critical,
-            j.resamples,
-            j.false_alarm * 100.0,
-            j.pairs
-        ));
-        for g in &j.guards {
-            out.push_str(&format!("  fails: {g}\n"));
         }
     }
     out
@@ -1172,5 +1293,105 @@ mod tests {
         assert_eq!(judged[0].word, Word::Fail, "a move is still a move");
         assert_eq!(judged[1].word, Word::NotSure);
         assert!(judged[1].needed.unwrap() > 300);
+    }
+
+    /// A band check of `value` in 1 to 3 with its own error `se`.
+    fn check(value: f64, se: f64) -> BandCheck {
+        BandCheck {
+            band: "b".into(),
+            suite: "equal".into(),
+            pairing: None,
+            value,
+            lo: 1.0,
+            hi: 3.0,
+            pass: (1.0..=3.0).contains(&value),
+            se,
+            informational: None,
+            why_none: None,
+            unjudged: false,
+        }
+    }
+
+    #[test]
+    fn a_range_only_row_passes_only_clear_of_its_edges_by_its_noise() {
+        // ONE_BAND * 0.1 = 0.217: the nearest edge must be at least that far.
+        assert_eq!(range_word(&check(2.0, 0.1)), Word::Pass);
+        assert_eq!(range_word(&check(1.22, 0.1)), Word::Pass);
+        assert_eq!(range_word(&check(1.2, 0.1)), Word::NotSure);
+        assert_eq!(range_word(&check(2.9, 0.1)), Word::NotSure);
+        assert_eq!(range_word(&check(3.1, 0.1)), Word::Fail);
+        assert_eq!(range_word(&check(0.9, 0.0)), Word::Fail);
+        // No error at all: inside is a pass.
+        assert_eq!(range_word(&check(1.0, 0.0)), Word::Pass);
+        // A floor band has no bottom edge: 0 is clear of it.
+        let floor = BandCheck {
+            lo: 0.0,
+            hi: 0.016,
+            pass: true,
+            ..check(0.0, 0.004)
+        };
+        assert_eq!(range_word(&floor), Word::Pass);
+        // No value, or no measures: not sure, with the reason as the note.
+        let none = BandCheck {
+            why_none: Some("no club has 34 matches in this run".into()),
+            ..check(0.0, 0.0)
+        };
+        let rows = range_rows(&[none], Some(PER_CLUB));
+        assert_eq!(rows[0].word, Word::NotSure);
+        assert_eq!(
+            rows[0].note.as_deref(),
+            Some("no value: no club has 34 matches in this run")
+        );
+        let unjudged = BandCheck {
+            unjudged: true,
+            pass: false,
+            ..check(2.0, 0.1)
+        };
+        assert_eq!(
+            range_rows(std::slice::from_ref(&unjudged), None)[0].word,
+            Word::NotSure
+        );
+        let plain = range_only(&[unjudged]);
+        assert_eq!(plain[0].word, Word::NotSure);
+        assert_eq!(plain[0].note.as_deref(), Some(NO_MEASURES_NOTE));
+        // A row with its own note keeps the run's note otherwise.
+        let rows = range_rows(&[check(2.0, 0.1)], Some(BASE_WITHOUT_MEASURES));
+        assert_eq!(rows[0].judged, Some("range"));
+        assert_eq!(rows[0].note.as_deref(), Some(BASE_WITHOUT_MEASURES));
+        assert_eq!(rows[0].se, Some(0.1));
+    }
+
+    #[test]
+    fn the_reported_table_counts_an_accepted_row_apart_and_never_moves_the_joint_word() {
+        let sets = [set(10)];
+        let wave: Vec<f64> = (0..10).map(f64::from).collect();
+        let gating = row(0, wave.clone(), wave, 0.5);
+        let found = [Found {
+            diff: Some(0.0),
+            se: 0.1,
+        }];
+        let (rows, joint) = judge(&sets, &[gating], &found, 2.0, Vec::new(), &BTreeMap::new());
+        assert_eq!(joint.word, Word::Pass);
+        // Reported rows of any word leave the gating word as it is.
+        let mut reported = range_rows(&[check(2.0, 0.1), check(5.0, 0.1), check(1.1, 0.1)], None);
+        assert_eq!(joint_word(&rows, &joint.guards), Word::Pass);
+        reported[2].accepted = Some(true);
+        let text = render_reported(&reported, true);
+        assert!(
+            text.starts_with("reported bands (they never change the verdict):"),
+            "{text}"
+        );
+        assert!(
+            text.contains(
+                "reported: 1 pass, 1 fail, 1 not sure (1 accepted, not shown equivalent); \
+                 they never change the verdict"
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains("not sure (accepted, not shown equivalent)"),
+            "{text}"
+        );
+        assert_eq!(render_reported(&[], false), "");
     }
 }

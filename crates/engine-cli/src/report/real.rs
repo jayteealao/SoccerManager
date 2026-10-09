@@ -18,7 +18,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::bands::{BandDef, Evidence, Pointer, RealSource, Reduce, Registry};
-use super::{se_mean, se_share};
+use super::{se_mean, se_ratio, se_share};
 
 /// Where the real-data folder came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -201,16 +201,26 @@ fn lines(path: &Path) -> Result<Box<dyn BufRead>, String> {
 }
 
 /// A JSON file: the value at the dotted key (`*` is the mean over every child, whose spread
-/// gives the error), over `den` when it names one (no error), and a share over `sample`.
+/// gives the error; keys joined by `+` are summed), over `den` when it names one (no error),
+/// and a share over `sample`.
 fn read_json(path: &Path, p: &Pointer, sample: u64) -> Result<(f64, Option<f64>), String> {
     let mut text = String::new();
     lines(path)?
         .read_to_string(&mut text)
         .map_err(|e| format!("cannot read: {e}"))?;
     let doc: Value = serde_json::from_str(&text).map_err(|e| format!("not JSON: {e}"))?;
-    let num = values(&doc, &p.key)?;
+    // Terms joined by `+` are summed: each term's value (its mean, for a `*` term) added.
+    let terms = p
+        .key
+        .split('+')
+        .map(|k| values(&doc, k))
+        .collect::<Result<Vec<_>, _>>()?;
+    let num: Vec<f64> = match terms.as_slice() {
+        [one] => one.clone(),
+        many => vec![many.iter().map(|t| mean(t)).sum()],
+    };
     let value = mean(&num);
-    let spread = p.key.split('.').any(|s| s == "*");
+    let spread = terms.len() == 1 && p.key.split('.').any(|s| s == "*");
     if let Some(den) = &p.den {
         let d = mean(&values(&doc, den)?);
         if d == 0.0 {
@@ -273,7 +283,46 @@ fn mean(xs: &[f64]) -> f64 {
     }
 }
 
-/// A CSV file without quoted fields: a mean, a share or a group share over the kept rows.
+/// The columns of a key written as columns joined by `+` or `-`, each with its sign.
+fn signed_columns(
+    key: &str,
+    column: &dyn Fn(&str) -> Result<usize, String>,
+) -> Result<Vec<(usize, f64)>, String> {
+    let mut out = Vec::new();
+    let mut sign = 1.0;
+    let mut start = 0;
+    for (i, ch) in key.char_indices().chain([(key.len(), '+')]) {
+        if ch == '+' || ch == '-' {
+            out.push((column(&key[start..i])?, sign));
+            sign = if ch == '-' { -1.0 } else { 1.0 };
+            start = i + 1;
+        }
+    }
+    Ok(out)
+}
+
+/// A score such as `5-1`.
+fn score(text: &str) -> Result<[f64; 2], String> {
+    let parse = |s: &str| s.trim().parse::<f64>().ok();
+    match text.split_once('-').map(|(a, b)| (parse(a), parse(b))) {
+        Some((Some(a), Some(b))) => Ok([a, b]),
+        _ => Err(format!("score {text} is not two numbers joined by -")),
+    }
+}
+
+/// What a CSV pointer reads from each kept row.
+enum Key {
+    /// The signed sum of columns.
+    Sum(Vec<(usize, f64)>),
+    /// Two columns: a point (`x:y`) or a score (`home:away`).
+    Pair(usize, usize),
+    /// One column of tokens split on spaces.
+    Tokens(usize),
+}
+
+/// A CSV file without quoted fields, streamed line by line: the kept rows (by `where`,
+/// `range`, `same` and `skip_blank`), reduced as the pointer says. A mean is weighted by `weight` or
+/// divided by the sum of `den` when the pointer names one.
 fn read_csv(path: &Path, p: &Pointer) -> Result<(f64, Option<f64>), String> {
     let mut rows = lines(path)?.lines();
     let header = match rows.next() {
@@ -294,26 +343,62 @@ fn read_csv(path: &Path, p: &Pointer) -> Result<(f64, Option<f64>), String> {
         .flatten()
         .map(|(c, vals)| column(c).map(|i| (i, vals)))
         .collect::<Result<_, _>>()?;
-    let (sum_cols, tokens, group) = if reduce == Reduce::GroupShare {
-        let group = p
-            .group_by
-            .as_deref()
-            .ok_or("a group share needs group_by")?;
-        let tokens: BTreeSet<&str> = p.tokens.iter().flatten().map(String::as_str).collect();
-        if tokens.is_empty() {
-            return Err("a group share needs tokens".into());
-        }
-        (vec![column(&p.key)?], tokens, Some(column(group)?))
-    } else {
-        let cols = p.key.split('+').map(column).collect::<Result<_, _>>()?;
-        (cols, BTreeSet::new(), None)
+    let ranges: Vec<(usize, [f64; 2])> = p
+        .range
+        .iter()
+        .flatten()
+        .map(|(c, r)| column(c).map(|i| (i, *r)))
+        .collect::<Result<_, _>>()?;
+    let same = match &p.same {
+        Some([a, b]) => Some((column(a)?, column(b)?)),
+        None => None,
     };
-    let (op, target) = (p.op, p.value);
-    if reduce == Reduce::Share && (op.is_none() || target.is_none()) {
-        return Err("a share needs op and value".into());
+    let weight = p.weight.as_deref().map(column).transpose()?;
+    let den = match &p.den {
+        Some(d) => Some(signed_columns(d, &column)?),
+        None => None,
+    };
+    let group: Option<Vec<usize>> = match &p.group_by {
+        Some(g) => Some(g.split('+').map(column).collect::<Result<_, _>>()?),
+        None => None,
+    };
+    let need = |what: &str| format!("a {} needs {what}", reduce_name(reduce));
+    let key = match reduce {
+        Reduce::GroupShare => Key::Tokens(column(&p.key)?),
+        Reduce::GoalDistance | Reduce::Scoreline => {
+            let (a, b) = p
+                .key
+                .split_once(':')
+                .ok_or_else(|| need("its key as two columns joined by :"))?;
+            Key::Pair(column(a)?, column(b)?)
+        }
+        _ => Key::Sum(signed_columns(&p.key, &column)?),
+    };
+    let tokens: BTreeSet<&str> = p.tokens.iter().flatten().map(String::as_str).collect();
+    let scores: Vec<[f64; 2]> = p
+        .scores
+        .iter()
+        .flatten()
+        .map(|s| score(s))
+        .collect::<Result<_, _>>()?;
+    match reduce {
+        Reduce::GroupShare if tokens.is_empty() => return Err(need("tokens")),
+        Reduce::Share if p.op.is_none() || p.value.is_none() => return Err(need("op and value")),
+        Reduce::BinShare if p.bins.is_none() => return Err(need("bins")),
+        Reduce::GoalDistance if p.goal.is_none() => return Err(need("goal")),
+        Reduce::Scoreline if scores.is_empty() => return Err(need("scores")),
+        Reduce::GroupRange if p.window.is_none_or(|w| w < 2) => {
+            return Err(need("a window of at least 2"));
+        }
+        Reduce::GroupShare | Reduce::GroupRange | Reduce::GroupMax if group.is_none() => {
+            return Err(need("group_by"));
+        }
+        _ => {}
     }
-    let mut sums = Vec::new();
-    let mut groups: BTreeMap<String, bool> = BTreeMap::new();
+    // The kept rows' values, weights and denominators, and each group's values in file order.
+    let (mut xs, mut ws, mut ds) = (Vec::new(), Vec::new(), Vec::new());
+    let mut groups: BTreeMap<String, Vec<f64>> = BTreeMap::new();
+    let mut hits: BTreeMap<String, bool> = BTreeMap::new();
     for (n, line) in rows.enumerate() {
         let line = line.map_err(|e| format!("cannot read line {}: {e}", n + 2))?;
         let line = line.trim_end_matches('\r');
@@ -333,50 +418,160 @@ fn read_csv(path: &Path, p: &Pointer) -> Result<(f64, Option<f64>), String> {
                 .copied()
                 .ok_or_else(|| format!("line {} has no column {}", n + 2, names[i]))
         };
+        let number = |i: usize| -> Result<f64, String> {
+            let text = cell(i)?;
+            text.trim()
+                .parse::<f64>()
+                .map_err(|_| format!("line {} column {}: {text} is not a number", n + 2, names[i]))
+        };
+        let sum = |cols: &[(usize, f64)]| -> Result<f64, String> {
+            cols.iter()
+                .try_fold(0.0, |acc, &(i, s)| Ok(acc + s * number(i)?))
+        };
         let mut kept = true;
         for (i, vals) in &filter {
             kept &= vals.iter().any(|v| v == cell(*i).unwrap_or(""));
         }
+        if let Some((a, b)) = same {
+            kept &= cell(a)? == cell(b)?;
+        }
+        for &(i, [lo, hi]) in &ranges {
+            if !kept {
+                break;
+            }
+            let v = number(i)?;
+            kept &= lo <= v && v < hi;
+        }
         if !kept {
             continue;
         }
-        if let Some(g) = group {
-            let hit = cell(sum_cols[0])?
-                .split_whitespace()
-                .any(|t| tokens.contains(t));
-            *groups.entry(cell(g)?.to_string()).or_default() |= hit;
+        if p.skip_blank {
+            let used = match &key {
+                Key::Sum(cols) => cols.iter().map(|c| c.0).collect(),
+                Key::Pair(a, b) => vec![*a, *b],
+                Key::Tokens(i) => vec![*i],
+            };
+            let blank = used
+                .into_iter()
+                .chain(weight)
+                .chain(den.iter().flatten().map(|c| c.0))
+                .any(|i| cell(i).is_ok_and(|t| t.trim().is_empty()));
+            if blank {
+                continue;
+            }
+        }
+        let name = |cols: &[usize]| -> Result<String, String> {
+            Ok(cols
+                .iter()
+                .map(|&i| cell(i))
+                .collect::<Result<Vec<_>, _>>()?
+                .join("+"))
+        };
+        let x = match &key {
+            Key::Tokens(i) => {
+                let hit = cell(*i)?.split_whitespace().any(|t| tokens.contains(t));
+                *hits
+                    .entry(name(group.as_deref().unwrap_or(&[]))?)
+                    .or_default() |= hit;
+                continue;
+            }
+            Key::Pair(a, b) => {
+                let (u, v) = (number(*a)?, number(*b)?);
+                match (reduce, p.goal) {
+                    (Reduce::GoalDistance, Some([gx, gy])) => (gx - u).hypot(gy - v),
+                    _ => f64::from(u8::from(
+                        scores.iter().any(|s| *s == [u, v] || *s == [v, u]),
+                    )),
+                }
+            }
+            Key::Sum(cols) => sum(cols)?,
+        };
+        if let Some(g) = &group {
+            groups.entry(name(g)?).or_default().push(x);
             continue;
         }
-        let mut sum = 0.0;
-        for &i in &sum_cols {
-            let text = cell(i)?;
-            sum += text.trim().parse::<f64>().map_err(|_| {
-                format!("line {} column {}: {text} is not a number", n + 2, names[i])
-            })?;
+        xs.push(match (reduce, p.bins) {
+            (Reduce::BinShare, Some([lo, hi])) => f64::from(u8::from(lo <= x && x < hi)),
+            _ => x,
+        });
+        ws.push(weight.map_or(Ok(1.0), number)?);
+        if let Some(d) = &den {
+            ds.push(sum(d)?);
         }
-        sums.push(sum);
     }
+    let per_group = |f: &dyn Fn(&[f64]) -> Option<f64>| -> Result<(f64, Option<f64>), String> {
+        let values: Vec<f64> = groups.values().filter_map(|v| f(v)).collect();
+        if values.is_empty() {
+            return Err("no group has enough rows".into());
+        }
+        Ok((mean(&values), Some(se_mean(&values))))
+    };
+    let largest = |v: &[f64]| v.iter().copied().fold(f64::MIN, f64::max);
+    let smallest = |v: &[f64]| v.iter().copied().fold(f64::MAX, f64::min);
     match reduce {
         Reduce::GroupShare => {
-            if groups.is_empty() {
+            if hits.is_empty() {
                 return Err("no row kept".into());
             }
-            let hit = groups.values().filter(|h| **h).count();
-            let p = hit as f64 / groups.len() as f64;
-            Ok((p, Some(se_share(p, groups.len()))))
+            let hit = hits.values().filter(|h| **h).count();
+            let p = hit as f64 / hits.len() as f64;
+            Ok((p, Some(se_share(p, hits.len()))))
         }
-        _ if sums.is_empty() => Err("no row kept".into()),
-        Reduce::Mean => Ok((mean(&sums), Some(se_mean(&sums)))),
+        Reduce::GroupRange => {
+            let window = p.window.unwrap_or(2) as usize;
+            per_group(&|v| {
+                let first = &v[..window.min(v.len())];
+                (v.len() >= window).then(|| largest(first) - smallest(first))
+            })
+        }
+        Reduce::GroupMax => per_group(&|v| (!v.is_empty()).then(|| largest(v))),
+        _ if xs.is_empty() => Err("no row kept".into()),
+        Reduce::Mean if !ds.is_empty() => {
+            let d: f64 = ds.iter().sum();
+            if d == 0.0 {
+                return Err(format!("{} sums to 0", p.den.as_deref().unwrap_or("den")));
+            }
+            Ok((xs.iter().sum::<f64>() / d, None))
+        }
+        Reduce::Mean | Reduce::BinShare if weight.is_some() => {
+            let w: f64 = ws.iter().sum();
+            if w <= 0.0 {
+                return Err("the weights sum to 0".into());
+            }
+            let wx: Vec<f64> = xs.iter().zip(&ws).map(|(x, w)| x * w).collect();
+            Ok((wx.iter().sum::<f64>() / w, Some(se_ratio(&wx, &ws))))
+        }
+        Reduce::Mean | Reduce::GoalDistance => Ok((mean(&xs), Some(se_mean(&xs)))),
+        Reduce::BinShare | Reduce::Scoreline => {
+            let p = mean(&xs);
+            Ok((p, Some(se_share(p, xs.len()))))
+        }
         Reduce::Share => {
             let (op, target) = (
-                op.unwrap_or(super::bands::Op::AtLeast),
-                target.unwrap_or(0.0),
+                p.op.unwrap_or(super::bands::Op::AtLeast),
+                p.value.unwrap_or(0.0),
             );
-            let hit = sums.iter().filter(|s| op.holds(**s, target)).count();
-            let p = hit as f64 / sums.len() as f64;
-            Ok((p, Some(se_share(p, sums.len()))))
+            let hit = xs.iter().filter(|s| op.holds(**s, target)).count();
+            let p = hit as f64 / xs.len() as f64;
+            Ok((p, Some(se_share(p, xs.len()))))
+        }
+        Reduce::FactorialRatio => {
+            let s: f64 = xs.iter().sum();
+            if s <= 0.0 {
+                return Err(format!("{} sums to 0", p.key));
+            }
+            let f: f64 = xs.iter().map(|x| x * (x - 1.0)).sum();
+            Ok((xs.len() as f64 * f / (s * s), None))
         }
     }
+}
+
+/// The name of a reduction, as the band file writes it.
+fn reduce_name(r: Reduce) -> String {
+    serde_json::to_value(r)
+        .ok()
+        .and_then(|v| v.as_str().map(|s| s.replace('_', " ")))
+        .unwrap_or_default()
 }
 
 /// The file's modified date, as `YYYY-MM-DD` in UTC.
@@ -696,6 +891,14 @@ mod tests {
             scale: None,
             group_by: None,
             tokens: None,
+            weight: None,
+            range: None,
+            same: None,
+            bins: None,
+            goal: None,
+            scores: None,
+            window: None,
+            skip_blank: false,
         }
     }
 
@@ -798,26 +1001,26 @@ mod tests {
         // A `*` mean: the mean of the children, the spread of the children as its error.
         let mut p = pointer("rates.json", "*.shots");
         p.scale = Some(0.5);
-        let (v, se) = value(read(&f, &band(RealSource::Pointer(p), 10, 1.0)));
+        let (v, se) = value(read(&f, &band(RealSource::Pointer(Box::new(p)), 10, 1.0)));
         assert_eq!(v, 11.0);
         assert!((se.unwrap() - se_mean(&[20.0, 24.0]) * 0.5).abs() < 1e-12);
         // A ratio: no error.
         let mut p = pointer("sb.json", "s.g");
         p.den = Some("s.xg".into());
         assert_eq!(
-            value(read(&f, &band(RealSource::Pointer(p), 10, 1.0))),
+            value(read(&f, &band(RealSource::Pointer(Box::new(p)), 10, 1.0))),
             (1.5, None)
         );
         // A JSON share: its error over the sample.
         let mut p = pointer("sb.json", "s.on");
         p.reduce = Some(Reduce::Share);
-        let (v, se) = value(read(&f, &band(RealSource::Pointer(p), 300, 1.0)));
+        let (v, se) = value(read(&f, &band(RealSource::Pointer(Box::new(p)), 300, 1.0)));
         assert_eq!((v, se), (0.25, Some(se_share(0.25, 300))));
         // A CSV mean of summed columns over the kept rows.
         let mut p = pointer("m.csv", "hg+ag");
         p.reduce = Some(Reduce::Mean);
         p.filter = Some(BTreeMap::from([("comp".into(), vec!["X".into()])]));
-        let (v, se) = value(read(&f, &band(RealSource::Pointer(p), 3, 1.0)));
+        let (v, se) = value(read(&f, &band(RealSource::Pointer(Box::new(p)), 3, 1.0)));
         assert_eq!(v, 7.0 / 3.0);
         assert_eq!(se, Some(se_mean(&[3.0, 0.0, 4.0])));
         // A CSV share.
@@ -825,7 +1028,7 @@ mod tests {
         p.reduce = Some(Reduce::Share);
         p.op = Some(crate::report::bands::Op::Equal);
         p.value = Some(0.0);
-        let (v, se) = value(read(&f, &band(RealSource::Pointer(p), 4, 1.0)));
+        let (v, se) = value(read(&f, &band(RealSource::Pointer(Box::new(p)), 4, 1.0)));
         assert_eq!((v, se), (0.25, Some(se_share(0.25, 4))));
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -844,7 +1047,10 @@ mod tests {
         p.reduce = Some(Reduce::GroupShare);
         p.group_by = Some("match".into());
         p.tokens = Some(vec!["1701".into(), "1703".into()]);
-        let (v, se) = value(read(&at(&dir), &band(RealSource::Pointer(p), 3, 1.0)));
+        let (v, se) = value(read(
+            &at(&dir),
+            &band(RealSource::Pointer(Box::new(p)), 3, 1.0),
+        ));
         assert_eq!(v, 2.0 / 3.0);
         assert_eq!(se, Some(se_share(2.0 / 3.0, 3)));
         // A corrupt stream is not here, by name.
@@ -854,7 +1060,7 @@ mod tests {
         p.group_by = Some("match".into());
         p.tokens = Some(vec!["1701".into()]);
         assert!(matches!(
-            read(&at(&dir), &band(RealSource::Pointer(p), 3, 1.0)),
+            read(&at(&dir), &band(RealSource::Pointer(Box::new(p)), 3, 1.0)),
             Outcome::NotHere { .. }
         ));
         let _ = std::fs::remove_dir_all(&dir);
@@ -866,11 +1072,13 @@ mod tests {
         std::fs::write(dir.join("r.json"), r#"{"a": {"b": "text"}}"#).unwrap();
         std::fs::write(dir.join("q.csv"), "a,b\n\"1\",2\n").unwrap();
         let f = at(&dir);
-        let not_here =
-            |p: Pointer, f: &RealFolder| match read(f, &band(RealSource::Pointer(p), 5, 1.0)) {
-                Outcome::NotHere { path, reason } => format!("{path}: {reason}"),
-                other => panic!("{other:?}"),
-            };
+        let not_here = |p: Pointer, f: &RealFolder| match read(
+            f,
+            &band(RealSource::Pointer(Box::new(p)), 5, 1.0),
+        ) {
+            Outcome::NotHere { path, reason } => format!("{path}: {reason}"),
+            other => panic!("{other:?}"),
+        };
         assert!(not_here(pointer("r.json", "a.b"), &f).contains("not a number"));
         assert!(not_here(pointer("r.json", "a.c"), &f).contains("no value at a.c"));
         assert!(not_here(pointer("gone.json", "a"), &f).contains("does not exist"));
@@ -958,6 +1166,9 @@ mod tests {
             distance: None,
             report_only: None,
             real_note: None,
+            judged: None,
+            note: None,
+            accepted: None,
         }
     }
 
@@ -1030,7 +1241,7 @@ mod tests {
             ("n/a", "n/a")
         );
         assert_eq!(strong.report_only, None);
-        assert_eq!((info.missing, info.no_counterpart), (15, 3));
+        assert_eq!((info.missing, info.no_counterpart), (15 + 24, 3));
 
         let mut joint = Joint {
             word: Word::Fail,
@@ -1057,5 +1268,151 @@ mod tests {
             Word::Fail,
             "a no-counterpart band stays in the word"
         );
+    }
+
+    /// The value and error `p` reads from `dir`.
+    fn read_at(dir: &Path, p: Pointer) -> (f64, Option<f64>) {
+        value(read(
+            &at(dir),
+            &band(RealSource::Pointer(Box::new(p)), 10, 1.0),
+        ))
+    }
+
+    #[test]
+    fn each_new_csv_reduction_reads_its_hand_value() {
+        let dir = temp("reductions");
+        std::fs::write(
+            dir.join("m.csv"),
+            "comp,hg,ag\nX,5,1\nX,1,5\nX,4,1\nX,0,0\nY,5,1\n",
+        )
+        .unwrap();
+        // Signed key terms: 4, -4, 3, 0 over competition X.
+        let mut p = pointer("m.csv", "hg-ag");
+        p.filter = Some(BTreeMap::from([("comp".into(), vec!["X".into()])]));
+        assert_eq!(
+            read_at(&dir, p.clone()),
+            (0.75, Some(se_mean(&[4.0, -4.0, 3.0, 0.0])))
+        );
+        // A scoreline share, either way round.
+        p.key = "hg:ag".into();
+        p.reduce = Some(Reduce::Scoreline);
+        p.scores = Some(vec!["5-1".into()]);
+        assert_eq!(read_at(&dir, p.clone()), (0.5, Some(se_share(0.5, 4))));
+        // A factorial ratio over the home goals 5, 1, 4, 0: 4 * (20 + 0 + 12 + 0) / 10^2.
+        let mut p = pointer("m.csv", "hg");
+        p.filter = Some(BTreeMap::from([("comp".into(), vec!["X".into()])]));
+        p.reduce = Some(Reduce::FactorialRatio);
+        assert_eq!(read_at(&dir, p), (1.28, None));
+
+        std::fs::write(
+            dir.join("e.csv"),
+            "type,team,poss,x,y,dur,len\nPass,A,A,10,34,2,5\nPass,A,B,90,34,4,12\n\
+             Carry,A,A,50,34,6,30\nPass,B,B,80,30,,8\nShot,A,A,95,34,,\n",
+        )
+        .unwrap();
+        // A bin share weighted by duration, of the possession team's rows: 2 of 2 + 6 in
+        // the own third; the blank duration is skipped.
+        let mut p = pointer("e.csv", "x");
+        p.reduce = Some(Reduce::BinShare);
+        p.bins = Some([0.0, 35.0]);
+        p.weight = Some("dur".into());
+        p.same = Some(["team".into(), "poss".into()]);
+        p.filter = Some(BTreeMap::from([(
+            "type".into(),
+            vec!["Pass".into(), "Carry".into()],
+        )]));
+        p.skip_blank = true;
+        let (v, se) = read_at(&dir, p.clone());
+        assert_eq!(v, 0.25);
+        assert_eq!(se, Some(se_ratio(&[2.0, 0.0], &[2.0, 6.0])));
+        // Without skip_blank, the blank weight is not a number, by line.
+        p.skip_blank = false;
+        let why = match read(&at(&dir), &band(RealSource::Pointer(Box::new(p)), 10, 1.0)) {
+            Outcome::NotHere { reason, .. } => reason,
+            other => panic!("{other:?}"),
+        };
+        assert!(why.contains("line 5 column dur"), "{why}");
+        // A goal distance from the shot at (95, 34) to (105, 34).
+        let mut p = pointer("e.csv", "x:y");
+        p.reduce = Some(Reduce::GoalDistance);
+        p.goal = Some([105.0, 34.0]);
+        p.filter = Some(BTreeMap::from([("type".into(), vec!["Shot".into()])]));
+        assert_eq!(read_at(&dir, p), (10.0, Some(0.0)));
+        // A range on a numeric column, half-open: lengths 10 to 25 keep the 12 m pass only.
+        let mut p = pointer("e.csv", "x");
+        p.range = Some(BTreeMap::from([("len".into(), [10.0, 25.0])]));
+        p.filter = Some(BTreeMap::from([(
+            "type".into(),
+            vec!["Pass".into(), "Carry".into()],
+        )]));
+        assert_eq!(read_at(&dir, p).0, 90.0);
+        // A weighted mean and a ratio of sums.
+        let mut p = pointer("e.csv", "x");
+        p.filter = Some(BTreeMap::from([("team".into(), vec!["A".into()])]));
+        p.filter
+            .as_mut()
+            .unwrap()
+            .insert("type".into(), vec!["Pass".into(), "Carry".into()]);
+        p.weight = Some("dur".into());
+        assert_eq!(read_at(&dir, p.clone()).0, (20.0 + 360.0 + 300.0) / 12.0);
+        p.weight = None;
+        p.den = Some("dur".into());
+        assert_eq!(read_at(&dir, p), ((10.0 + 90.0 + 50.0) / 12.0, None));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_group_range_and_a_group_max_reduce_per_group() {
+        let dir = temp("groups");
+        std::fs::write(
+            dir.join("t.csv"),
+            "team,goals,conceded,mid,name,top\nA,3,1,m1,p,8.5\nB,1,3,m1,q,7.0\nA,0,1,m1,p,9.0\n\
+             B,1,0,m2,q,7.5\nA,3,0,m2,p,8.0\nB,0,3,m2,r,6.0\nA,0,0,m3,p,1.0\n",
+        )
+        .unwrap();
+        // The first 3 goal differences of A: +2, -1, +3, range 4; of B: -2, +1, -3, range 4.
+        let mut p = pointer("t.csv", "goals-conceded");
+        p.reduce = Some(Reduce::GroupRange);
+        p.group_by = Some("team".into());
+        p.window = Some(3);
+        assert_eq!(read_at(&dir, p.clone()), (4.0, Some(0.0)));
+        p.window = Some(5);
+        let why = match read(&at(&dir), &band(RealSource::Pointer(Box::new(p)), 10, 1.0)) {
+            Outcome::NotHere { reason, .. } => reason,
+            other => panic!("{other:?}"),
+        };
+        assert!(why.contains("no group has enough rows"), "{why}");
+        // The largest top speed per match and player: m1+p 9, m1+q 7, m2+q 7.5, m2+p 8,
+        // m2+r 6, m3+p 1.
+        let mut p = pointer("t.csv", "top");
+        p.reduce = Some(Reduce::GroupMax);
+        p.group_by = Some("mid+name".into());
+        let maxes = [9.0, 7.0, 8.0, 7.5, 6.0, 1.0];
+        let (v, se) = read_at(&dir, p);
+        assert!((v - maxes.iter().sum::<f64>() / 6.0).abs() < 1e-12);
+        assert!((se.unwrap() - se_mean(&maxes)).abs() < 1e-12);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn json_keys_joined_by_plus_are_summed() {
+        let dir = temp("json-sum");
+        std::fs::write(
+            dir.join("g.json"),
+            r#"{"goal_origin": {"Regular Play": 0.3, "From Counter": 0.06, "Other": 0.01, "Penalty": 0.08}}"#,
+        )
+        .unwrap();
+        let mut p = pointer(
+            "g.json",
+            "goal_origin.Regular Play+goal_origin.From Counter+goal_origin.Other",
+        );
+        p.reduce = Some(Reduce::Share);
+        let (v, se) = value(read(
+            &at(&dir),
+            &band(RealSource::Pointer(Box::new(p)), 600, 1.0),
+        ));
+        assert!((v - 0.37).abs() < 1e-12);
+        assert!((se.unwrap() - se_share(v, 600)).abs() < 1e-12);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

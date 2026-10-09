@@ -4,6 +4,7 @@
 //! suite is also folded per formation pairing, and the red-card suite per arm. Every band
 //! check carries its sampling error.
 
+pub mod accepted;
 pub mod bands;
 pub mod baseline;
 pub mod compare;
@@ -17,7 +18,7 @@ use engine::observe::{MatchStats, Record, round_to};
 use serde::{Deserialize, Serialize};
 
 use bands::{BandDef, Registry};
-use measures::{Obs, Scope};
+use measures::{Extras, Obs, Scope};
 
 /// Matches slower than this, in milliseconds, are outliers (the contract's slow threshold).
 pub const SLOW_MATCH_MS: u64 = 2000;
@@ -193,6 +194,13 @@ pub struct BandCheck {
     /// sets no power target and does not enter the joint verdict. Absent in a plain run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub informational: Option<bool>,
+    /// Why the row has no value, when it has none; its word is then not sure. Shown in the
+    /// verdict row's note, never in `calib.bands`.
+    #[serde(skip)]
+    pub why_none: Option<String>,
+    /// The band reads measures this run's matches do not carry: its word is not sure.
+    #[serde(skip)]
+    pub unjudged: bool,
 }
 
 /// One arm of the red-card suite: mean goals per match of the full (home) side and the
@@ -238,6 +246,10 @@ struct SuiteAcc {
     pairings: Vec<Option<(usize, usize)>>,
     /// For each record of the red-card suite: the arm's number in [`RED_CARD_ARMS`].
     arms: Vec<Option<usize>>,
+    /// For each record: its extras, kept only in a suite that judges a band reading them.
+    extras: Vec<Option<Box<Extras>>>,
+    /// A record of the suite carries the realism measures.
+    measures: bool,
     outliers: u32,
 }
 
@@ -316,7 +328,32 @@ impl RunBuilder {
         acc.boosted.push(boosted);
         acc.pairings.push(pairing);
         acc.arms.push(arm);
+        acc.extras.push(None);
         outlier
+    }
+
+    /// Gives the record of `suite` folded in last its extras: its measures, its players'
+    /// running and its clubs. They are kept only when a band the suite judges reads them.
+    pub fn set_extras(&mut self, suite: Suite, extras: Extras) {
+        let keep = self
+            .bands
+            .bands
+            .iter()
+            .any(|b| b.judged_in(suite) && b.needs_extras());
+        let Some(acc) = self.suites.get_mut(&suite) else {
+            return;
+        };
+        acc.measures |= extras.measures.present;
+        if keep {
+            if let Some(last) = acc.extras.last_mut() {
+                *last = Some(Box::new(extras));
+            }
+        }
+    }
+
+    /// `true` when a record of `suite` carries the realism measures.
+    pub fn has_measures(&self, suite: Suite) -> bool {
+        self.suites.get(&suite).is_some_and(|a| a.measures)
     }
 
     /// A planned record that never appeared.
@@ -563,6 +600,7 @@ impl RunBuilder {
                 boosted: acc.boosted[i],
                 pairing: acc.pairings[i].map(|(p, _)| p),
                 arm: acc.arms[i],
+                extras: acc.extras[i].as_deref(),
             })
             .collect()
     }
@@ -611,7 +649,8 @@ impl RunBuilder {
     }
 
     /// One band row judged by its range: its value, rounded as the figures are, and its
-    /// sampling error.
+    /// sampling error. A band that reads measures the suite's matches do not carry is
+    /// unjudged: it does not pass.
     pub fn check(&self, spec: &RowSpec<'_>) -> BandCheck {
         let obs = self.observations(spec.suite);
         let terms = measures::terms(spec.def, &obs, spec.scope);
@@ -619,6 +658,7 @@ impl RunBuilder {
             terms.value().unwrap_or(0.0),
             measures::places(&spec.def.measure),
         );
+        let unjudged = spec.def.needs_measures() && !self.has_measures(spec.suite);
         BandCheck {
             band: spec.def.band.clone(),
             suite: spec.suite.code().to_string(),
@@ -626,18 +666,34 @@ impl RunBuilder {
             value,
             lo: spec.def.lo,
             hi: spec.def.hi,
-            pass: measures::passes(spec.def, value, &terms),
+            pass: !unjudged && measures::passes(spec.def, value, &terms),
             se: round_to(terms.se(), 5),
             informational: None,
+            why_none: terms.why_none().map(str::to_string),
+            unjudged,
         }
+    }
+
+    /// The checks of the bands that only report: every row of a band with a reason in
+    /// `report_only`, in report order. A band that reads measures the suite's matches do not
+    /// carry is left out: a build without the measures judges the bands of the file only.
+    pub fn reported_checks(&self) -> Vec<BandCheck> {
+        self.row_specs(false)
+            .iter()
+            .filter(|s| s.def.report_only.is_some())
+            .filter(|s| !s.def.needs_measures() || self.has_measures(s.suite))
+            .map(|s| self.check(s))
+            .collect()
     }
 
     /// The band checks of the planned suites, from the registry, given each suite's wall
     /// time: the equal suite's bands, each suite's time budget, then the other suites'.
+    /// Only the bands that gate: a band that only reports is in [`Self::reported_checks`].
     pub fn checks(&self, wall_ms: &BTreeMap<Suite, u64>) -> Vec<BandCheck> {
         let (equal, rest): (Vec<_>, Vec<_>) = self
             .row_specs(false)
             .into_iter()
+            .filter(|s| s.def.report_only.is_none())
             .partition(|s| s.suite == Suite::Equal);
         let mut out: Vec<BandCheck> = equal.iter().map(|s| self.check(s)).collect();
         for (&suite, &ms) in wall_ms {
@@ -653,6 +709,8 @@ impl RunBuilder {
                 pass: (ms as f64) < budget,
                 se: 0.0,
                 informational: None,
+                why_none: None,
+                unjudged: false,
             });
         }
         out.extend(rest.iter().map(|s| self.check(s)));
@@ -887,6 +945,17 @@ pub struct CalibrationReport {
     /// the suite reached its power.
     #[serde(rename = "calib.power", skip_serializing_if = "Option::is_none")]
     pub power: Option<BTreeMap<String, PowerInfo>>,
+    /// The bands that only report: each row's word, judged as a gating band's is, but never
+    /// in the joint word, `calib.pass` or `calib.bands`. Absent when no band only reports.
+    #[serde(rename = "calib.reported", skip_serializing_if = "Vec::is_empty")]
+    pub reported: Vec<verdict::VerdictRow>,
+    /// The developer's acceptances of not-sure bands in the run folder; absent without an
+    /// `accepted.json`.
+    #[serde(rename = "calib.accepted", skip_serializing_if = "Option::is_none")]
+    pub accepted: Option<accepted::AcceptedInfo>,
+    /// The matches the run judged: in total, in pairs, and per engine.
+    #[serde(rename = "calib.counts")]
+    pub counts: Counts,
     /// The band registry the run was judged with.
     #[serde(rename = "calib.registry")]
     pub registry: RegistryInfo,
@@ -973,9 +1042,46 @@ pub struct RuleInterval {
 
 /// The schema version of the calibrate run report: 2 since the registry, the verdicts and
 /// the stage costs; 3 since the rules stage's rows; 4 since the real values of the bands
-/// (`calib.real`, `calib.realism`, and the real columns of each verdict). Every key of an
-/// older version stays.
-pub const REPORT_SCHEMA_VERSION: &str = "4";
+/// (`calib.real`, `calib.realism`, and the real columns of each verdict); 5 since the bands
+/// that only report (`calib.reported`), the developer's acceptances (`calib.accepted`), the
+/// match counts (`calib.counts`), and how each verdict row was judged (`judged`, `note`,
+/// `accepted`). Every key of an older version stays.
+pub const REPORT_SCHEMA_VERSION: &str = "5";
+
+/// The matches a run judged: every engine's rows, the fixtures both engines of a change run
+/// played, and the matches of each engine.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct Counts {
+    pub total_matches: u32,
+    pub pairs: u32,
+    pub observations: Vec<Observations>,
+}
+
+/// One engine's matches in a run: `changed` and `old` in a change run, `this` otherwise.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Observations {
+    pub engine: &'static str,
+    /// The engine's build: the first 16 hex characters of its executable's SHA-256.
+    pub build: String,
+    pub matches: u32,
+}
+
+impl Counts {
+    /// The console line: `matches: T in total; P pairs; observations: ...`.
+    pub fn line(&self) -> String {
+        let per: Vec<String> = self
+            .observations
+            .iter()
+            .map(|o| format!("{} engine {}", o.engine, o.matches))
+            .collect();
+        format!(
+            "matches: {} in total; {} pairs; observations: {}\n",
+            self.total_matches,
+            self.pairs,
+            per.join(", ")
+        )
+    }
+}
 
 /// One suite's run length in a change run.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
