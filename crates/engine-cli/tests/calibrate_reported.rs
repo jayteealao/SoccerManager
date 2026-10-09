@@ -149,6 +149,7 @@ fn a_reported_band_never_moves_the_verdict_of_a_change_run() {
     assert_eq!(after["calib.power"], before["calib.power"]);
     let probe = row(&after, "calib.reported", "probe_fail").expect("a reported row");
     assert_eq!(probe["report_only"], "gates: false in the band file");
+    assert_eq!(probe["word"], "fail", "{probe}");
     assert!(row(&after, "calib.verdicts", "probe_fail").is_none());
     assert!(
         text.contains("reported bands (they never change the verdict):"),
@@ -161,10 +162,14 @@ fn a_reported_band_never_moves_the_verdict_of_a_change_run() {
 
     // Set to gate, the same band is judged with the others and leaves the reported list.
     add(true);
-    let gated = calibrate(&data, &content, &run, &args);
-    let gated = report(&gated, &run);
-    assert!(row(&gated, "calib.verdicts", "probe_fail").is_some());
+    let gated_out = calibrate(&data, &content, &run, &args);
+    let gated = report(&gated_out, &run);
+    let probe = row(&gated, "calib.verdicts", "probe_fail").expect("a gating row");
+    assert_eq!(probe["word"], "fail", "{probe}");
     assert!(row(&gated, "calib.reported", "probe_fail").is_none());
+    assert_eq!(gated["calib.joint"]["word"], "fail");
+    assert_eq!(gated["calib.pass"], false);
+    assert_eq!(gated_out.status.code(), Some(2));
     let _ = std::fs::remove_dir_all(&data);
 }
 
