@@ -10,6 +10,7 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 
 ### Changed
 
+- `engine-cli calibrate`: a build with the `measures` feature records, for every match, where shots come from, passes by kind and length, how each goal began, possession by third, possession chains in passes and in seconds, and each player's distance, time in each speed zone and peak speed, in the compact rows. The measures change no match. A build without the feature says so as a run starts and judges the bands as before. The rows are format 2; an old engine's format 1 rows are still read in a change run. The report adds `calib.rows.measures`.
 - Content: the band file `realism-bands.json` is version 4. Each band keeps its range and smallest shift under `design`, and gains its record: where its real value is measured, the sample size and date, a calibration or validation label, its confidence counts, its condition (`dry`), and whether it gates (every band does). The three bands that measure engine experiments say they have no real counterpart. Version 3 and 2 files still load, and the 18 bands judge exactly as before.
 
 ## [0.2.0-beta.4] - 2026-10-08

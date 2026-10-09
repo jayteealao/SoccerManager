@@ -12,6 +12,11 @@
 //! damaged block, which only a stopped run leaves at the end of a file. A file of another
 //! format version is refused by name.
 //!
+//! Format 2 appends the realism measures to the columns of format 1: shot distance bins,
+//! passes by kind and length, goals by phase, possession by third, possession chains and
+//! each player's running. A build without the `measures` feature writes them as zeros with
+//! `measures.present` 0. Files of format 1 (an old engine's) are read too, without measures.
+//!
 //! The rows keep no rounded value. [`Row::band_record`] rebuilds the per-match figures the
 //! bands read with the same rounding functions the statistics files use, so the bands of a
 //! run from rows equal the bands of a run from statistics files.
@@ -32,8 +37,12 @@ use super::fixtures::FixtureKey;
 use super::run_folder::Done;
 use crate::report::MEASURES_VERSION;
 
-/// The row file format this program writes and reads.
-pub const ROWS_FORMAT: u32 = 1;
+/// The row file format this program writes.
+pub const ROWS_FORMAT: u32 = 2;
+/// The row file formats this program reads: format 1 has no measures.
+pub const READ_FORMATS: [u32; 2] = [1, 2];
+/// The measures version of every file of format 1.
+const FORMAT_1_MEASURES: u32 = 1;
 /// The first bytes of every row file.
 const MAGIC: &[u8; 6] = b"SMROWS";
 /// The folder of the row files in a run or arm folder.
@@ -122,6 +131,280 @@ pub struct Row {
     pub ticks: u32,
     /// The match's wall time in microseconds; not part of its result.
     pub duration_us: u64,
+    /// The realism measures; not part of its result.
+    pub measures: Measures,
+    /// Each player's running, by side and slot in order of first appearance; not part of
+    /// its result.
+    pub physical: [[PlayerRow; PLAYER_SLOTS]; 2],
+    /// Players of a side beyond [`PLAYER_SLOTS`], whose running no slot holds.
+    pub physical_overflow: [u32; 2],
+}
+
+/// Shot distance bins: 1 m each from 0 m to 40 m, then 40 m and over.
+pub const SHOT_BINS: usize = 41;
+/// Pass cells: ground pass, long pass or chip, cross, each under 10 m, 10 to 25 m and over
+/// 25 m, then keeper throw, keeper kick, and a pass without a plan.
+pub const PASS_CELL_NAMES: [&str; 12] = [
+    "ground_lt10",
+    "ground_10_25",
+    "ground_gt25",
+    "chip_lt10",
+    "chip_10_25",
+    "chip_gt25",
+    "cross_lt10",
+    "cross_10_25",
+    "cross_gt25",
+    "keeper_throw",
+    "keeper_kick",
+    "unknown",
+];
+const PASS_CELLS: usize = PASS_CELL_NAMES.len();
+/// The phases a goal can take.
+pub const PHASES: [&str; 7] = [
+    "open_play",
+    "corner",
+    "free_kick",
+    "penalty",
+    "throw_in",
+    "kick_off",
+    "goal_kick",
+];
+/// The thirds of the pitch, from a side's own goal line.
+const THIRDS: [&str; 3] = ["own", "middle", "final"];
+/// Chain length bins in passes: 0 to 14, then 15 and over.
+pub const CHAIN_PASS_BINS: usize = 16;
+/// Chain length bins in seconds: 2 s each up to 60 s, then 60 s and over.
+pub const CHAIN_SECOND_BINS: usize = 31;
+/// Physical record slots per side: eleven starters and five substitutes.
+pub const PLAYER_SLOTS: usize = 16;
+/// The speed zones of the real player file, in m/s: walk under 2, jog 2 to 4, run 4 to 5.5,
+/// high intensity 5.5 to 7, sprint 7 and over.
+pub const ZONES: [&str; 5] = ["walk", "jog", "run", "hi", "sprint"];
+const SIDES: [&str; 2] = ["home", "away"];
+
+// The engine's measures and the rows agree on every size.
+#[cfg(feature = "measures")]
+const _: () = assert!(
+    SHOT_BINS == engine::measures::SHOT_BINS
+        && PASS_CELLS == engine::measures::PASS_CELLS
+        && PHASES.len() == engine::measures::PHASE_COUNT
+        && CHAIN_PASS_BINS == engine::measures::CHAIN_PASS_BINS
+        && CHAIN_SECOND_BINS == engine::measures::CHAIN_SECOND_BINS
+);
+
+/// The realism measures of one match, as the rows keep them. Per-side arrays are home
+/// first; the fields are those of the engine's measures.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Measures {
+    /// `true` when a measures build played the match; every other field is 0 otherwise.
+    pub present: bool,
+    pub shot_bins: [[u32; SHOT_BINS]; 2],
+    pub shot_distance_m: [f64; 2],
+    pub pass_attempts: [[u32; PASS_CELLS]; 2],
+    pub pass_completed: [[u32; PASS_CELLS]; 2],
+    pub goals_by_phase: [[u32; PHASES.len()]; 2],
+    pub third_ticks: [[u32; 3]; 2],
+    pub chains: [u32; 2],
+    pub chain_pass_bins: [[u32; CHAIN_PASS_BINS]; 2],
+    pub chain_second_bins: [[u32; CHAIN_SECOND_BINS]; 2],
+    pub chain_passes: [u32; 2],
+    pub chain_ticks: [u64; 2],
+}
+
+impl Default for Measures {
+    fn default() -> Self {
+        Self {
+            present: false,
+            shot_bins: [[0; SHOT_BINS]; 2],
+            shot_distance_m: [0.0; 2],
+            pass_attempts: [[0; PASS_CELLS]; 2],
+            pass_completed: [[0; PASS_CELLS]; 2],
+            goals_by_phase: [[0; PHASES.len()]; 2],
+            third_ticks: [[0; 3]; 2],
+            chains: [0; 2],
+            chain_pass_bins: [[0; CHAIN_PASS_BINS]; 2],
+            chain_second_bins: [[0; CHAIN_SECOND_BINS]; 2],
+            chain_passes: [0; 2],
+            chain_ticks: [0; 2],
+        }
+    }
+}
+
+#[cfg(feature = "measures")]
+impl From<&engine::measures::MatchMeasures> for Measures {
+    fn from(m: &engine::measures::MatchMeasures) -> Self {
+        Self {
+            present: true,
+            shot_bins: m.shot_bins,
+            shot_distance_m: m.shot_distance_m,
+            pass_attempts: m.pass_attempts,
+            pass_completed: m.pass_completed,
+            goals_by_phase: m.goals_by_phase,
+            third_ticks: m.third_ticks,
+            chains: m.chains,
+            chain_pass_bins: m.chain_pass_bins,
+            chain_second_bins: m.chain_second_bins,
+            chain_passes: m.chain_passes,
+            chain_ticks: m.chain_ticks,
+        }
+    }
+}
+
+/// One player's running in one match.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct PlayerRow {
+    /// His place in his team file.
+    pub squad: u8,
+    /// Ticks on the pitch, the ball in play or not: his minutes played.
+    pub ticks_on: u32,
+    /// Metres covered: his speed times the tick, over every tick on the pitch.
+    pub distance_m: f64,
+    /// Ball-in-play ticks in each speed zone, in [`ZONES`] order.
+    pub zone_ticks: [u32; 5],
+    /// His highest speed, in m/s.
+    pub peak_mps: f64,
+}
+
+/// A measure column's value in a row, as the walk over the measure columns hands it out.
+enum Slot<'a> {
+    Bool(&'a mut bool),
+    U8(&'a mut u8),
+    U32(&'a mut u32),
+    U64(&'a mut u64),
+    F64(&'a mut f64),
+}
+
+impl Slot<'_> {
+    fn kind(&self) -> Kind {
+        match self {
+            Self::Bool(_) | Self::U8(_) => Kind::U8,
+            Self::U32(_) => Kind::U32,
+            Self::U64(_) => Kind::U64,
+            Self::F64(_) => Kind::F64,
+        }
+    }
+
+    fn get(&self) -> u64 {
+        match self {
+            Self::Bool(v) => u64::from(**v),
+            Self::U8(v) => u64::from(**v),
+            Self::U32(v) => u64::from(**v),
+            Self::U64(v) => **v,
+            Self::F64(v) => v.to_bits(),
+        }
+    }
+
+    fn set(self, v: u64) {
+        match self {
+            Self::Bool(x) => *x = v != 0,
+            Self::U8(x) => *x = u8::try_from(v).unwrap_or(u8::MAX),
+            Self::U32(x) => *x = u32_of(v),
+            Self::U64(x) => *x = v,
+            Self::F64(x) => *x = f64::from_bits(v),
+        }
+    }
+}
+
+/// Every measure column of `row`, in file order: its name (built only when `f` asks) and its
+/// value. The one place the measure columns are listed, so the header, the writer and the
+/// reader cannot disagree.
+fn walk(row: &mut Row, f: &mut dyn FnMut(&dyn Fn() -> String, Slot<'_>)) {
+    let m = &mut row.measures;
+    f(&|| "measures.present".into(), Slot::Bool(&mut m.present));
+    for (s, side) in SIDES.iter().enumerate() {
+        for (b, v) in m.shot_bins[s].iter_mut().enumerate() {
+            f(&|| format!("shot_bin.{side}.{b:02}"), Slot::U32(v));
+        }
+    }
+    for (s, side) in SIDES.iter().enumerate() {
+        f(
+            &|| format!("shot_distance_m.{side}"),
+            Slot::F64(&mut m.shot_distance_m[s]),
+        );
+    }
+    for (group, cells) in [
+        ("pass_attempts", &mut m.pass_attempts),
+        ("pass_completed", &mut m.pass_completed),
+    ] {
+        for (s, side) in SIDES.iter().enumerate() {
+            for (cell, v) in PASS_CELL_NAMES.iter().zip(cells[s].iter_mut()) {
+                f(&|| format!("{group}.{side}.{cell}"), Slot::U32(v));
+            }
+        }
+    }
+    for (s, side) in SIDES.iter().enumerate() {
+        for (phase, v) in PHASES.iter().zip(m.goals_by_phase[s].iter_mut()) {
+            f(&|| format!("goals_phase.{side}.{phase}"), Slot::U32(v));
+        }
+    }
+    for (s, side) in SIDES.iter().enumerate() {
+        for (third, v) in THIRDS.iter().zip(m.third_ticks[s].iter_mut()) {
+            f(&|| format!("third_ticks.{side}.{third}"), Slot::U32(v));
+        }
+    }
+    for (s, side) in SIDES.iter().enumerate() {
+        f(&|| format!("chains.{side}"), Slot::U32(&mut m.chains[s]));
+    }
+    for (s, side) in SIDES.iter().enumerate() {
+        for (b, v) in m.chain_pass_bins[s].iter_mut().enumerate() {
+            f(&|| format!("chain_passes_bin.{side}.{b:02}"), Slot::U32(v));
+        }
+    }
+    for (s, side) in SIDES.iter().enumerate() {
+        for (b, v) in m.chain_second_bins[s].iter_mut().enumerate() {
+            f(&|| format!("chain_seconds_bin.{side}.{b:02}"), Slot::U32(v));
+        }
+    }
+    for (s, side) in SIDES.iter().enumerate() {
+        f(
+            &|| format!("chain_passes.{side}"),
+            Slot::U32(&mut m.chain_passes[s]),
+        );
+    }
+    for (s, side) in SIDES.iter().enumerate() {
+        f(
+            &|| format!("chain_ticks.{side}"),
+            Slot::U64(&mut m.chain_ticks[s]),
+        );
+    }
+    for (s, side) in SIDES.iter().enumerate() {
+        for (n, p) in row.physical[s].iter_mut().enumerate() {
+            let at = |field: &str| format!("player.{side}.{n:02}.{field}");
+            f(&|| at("squad"), Slot::U8(&mut p.squad));
+            f(&|| at("ticks_on"), Slot::U32(&mut p.ticks_on));
+            f(&|| at("distance_m"), Slot::F64(&mut p.distance_m));
+            for (zone, v) in ZONES.iter().zip(p.zone_ticks.iter_mut()) {
+                f(&|| at(zone), Slot::U32(v));
+            }
+            f(&|| at("peak_mps"), Slot::F64(&mut p.peak_mps));
+        }
+    }
+    for (s, side) in SIDES.iter().enumerate() {
+        f(
+            &|| format!("physical_overflow.{side}"),
+            Slot::U32(&mut row.physical_overflow[s]),
+        );
+    }
+}
+
+/// The measure columns, in file order: each one's name and type. Built once.
+fn measure_columns() -> &'static [(String, Kind)] {
+    static COLUMNS: std::sync::OnceLock<Vec<(String, Kind)>> = std::sync::OnceLock::new();
+    COLUMNS.get_or_init(|| {
+        let mut out = Vec::new();
+        walk(&mut Row::default(), &mut |name, slot| {
+            out.push((name(), slot.kind()));
+        });
+        out
+    })
+}
+
+/// The measure columns' values of `row`, in file order.
+fn measure_values(row: &Row) -> Vec<u64> {
+    let mut copy = *row;
+    let mut out = Vec::with_capacity(measure_columns().len());
+    walk(&mut copy, &mut |_, slot| out.push(slot.get()));
+    out
 }
 
 /// A column's type: its width in the file.
@@ -182,7 +465,8 @@ fn u32_of(v: u64) -> u32 {
     u32::try_from(v).unwrap_or(u32::MAX)
 }
 
-/// Every column of format 1, in file order.
+/// Every column of format 1, in file order: the first columns of format 2, which appends
+/// the measure columns. Only these are part of a match's result.
 const COLUMNS: &[Column] = &[
     col(
         "fixture.key",
@@ -495,7 +779,22 @@ impl Row {
             violations: u32::try_from(violations).unwrap_or(u32::MAX),
             ticks,
             duration_us,
+            ..Self::default()
         }
+    }
+
+    /// The row with the measures of a measures build: the engine's match measures and each
+    /// player's running.
+    #[cfg(feature = "measures")]
+    pub fn with_measures(
+        mut self,
+        measures: &engine::measures::MatchMeasures,
+        physical: &super::physical::Physical,
+    ) -> Self {
+        self.measures = Measures::from(measures);
+        self.physical = physical.players;
+        self.physical_overflow = physical.overflow;
+        self
     }
 
     /// The row of a match that failed or panicked: zero figures.
@@ -570,8 +869,9 @@ impl Row {
         }
     }
 
-    /// The row's result columns as bytes, in column order: the record reasons and the wall
-    /// time left out, so equal results give equal bytes however the run was played.
+    /// The row's result columns as bytes, in column order: the record reasons, the wall
+    /// time and the measures left out, so equal results give equal bytes however the run was
+    /// played, with or without the measures.
     pub fn canonical_bytes(&self) -> Vec<u8> {
         let mut out = Vec::new();
         for c in COLUMNS.iter().filter(|c| c.result) {
@@ -587,15 +887,36 @@ fn put(out: &mut Vec<u8>, kind: Kind, v: u64) {
 
 /// The header of a row file of this program's format.
 fn header() -> Vec<u8> {
+    header_of(ROWS_FORMAT)
+}
+
+/// The header of a row file of `format`: format 1 (an old engine's, measures version 1) has
+/// the format-1 columns only; format 2 appends the measure columns.
+fn header_of(format: u32) -> Vec<u8> {
+    let measures = format >= 2;
     let mut out = MAGIC.to_vec();
-    out.extend_from_slice(&ROWS_FORMAT.to_le_bytes());
-    out.extend_from_slice(&MEASURES_VERSION.to_le_bytes());
-    out.extend_from_slice(&(COLUMNS.len() as u32).to_le_bytes());
-    for c in COLUMNS {
+    out.extend_from_slice(&format.to_le_bytes());
+    let version = if measures {
+        MEASURES_VERSION
+    } else {
+        FORMAT_1_MEASURES
+    };
+    out.extend_from_slice(&version.to_le_bytes());
+    let extra = if measures { measure_columns().len() } else { 0 };
+    out.extend_from_slice(&((COLUMNS.len() + extra) as u32).to_le_bytes());
+    let mut column = |name: &str, kind: Kind| {
         // Every column name is shorter than 256 bytes.
-        out.push(c.name.len() as u8);
-        out.extend_from_slice(c.name.as_bytes());
-        out.push(c.kind.code());
+        out.push(name.len() as u8);
+        out.extend_from_slice(name.as_bytes());
+        out.push(kind.code());
+    };
+    for c in COLUMNS {
+        column(c.name, c.kind);
+    }
+    if measures {
+        for (name, kind) in measure_columns() {
+            column(name, *kind);
+        }
     }
     out
 }
@@ -647,6 +968,12 @@ impl RowsWriter {
                 put(&mut block, c.kind, (c.get)(row));
             }
         }
+        let values: Vec<Vec<u64>> = rows.iter().map(measure_values).collect();
+        for (j, (_, kind)) in measure_columns().iter().enumerate() {
+            for row in &values {
+                put(&mut block, *kind, row[j]);
+            }
+        }
         let sum = checksum(&block);
         block.extend_from_slice(&sum);
         drop(writing);
@@ -690,7 +1017,8 @@ impl Reader<'_> {
 }
 
 /// The rows of one file, block by block, up to the first partial or damaged block. A file
-/// of another format version, or of this version with other columns, is refused by name.
+/// of a format version this program does not read, or of a format it reads with other
+/// columns, is refused by name. A file of format 1 reads without measures.
 fn read_file(path: &Path) -> anyhow::Result<Vec<Row>> {
     let bytes = fs::read(path).with_context(|| format!("cannot read {}", path.display()))?;
     let refuse = |why: String| anyhow::anyhow!("the row file {} {why}", path.display());
@@ -708,26 +1036,28 @@ fn read_file(path: &Path) -> anyhow::Result<Vec<Row>> {
     let Some(format) = r.u32() else {
         return Ok(Vec::new());
     };
-    if format != ROWS_FORMAT {
+    if !READ_FORMATS.contains(&format) {
         return Err(refuse(format!(
-            "is row format version {format}, and this program reads version {ROWS_FORMAT}"
+            "is row format version {format}, and this program reads versions 1 and \
+             {ROWS_FORMAT}"
         )));
     }
-    let expected = header();
+    let expected = header_of(format);
     if bytes.len() < expected.len() {
         return Ok(Vec::new());
     }
     if bytes[..expected.len()] != expected[..] {
         return Err(refuse(format!(
             "has another measures version or column list than row format version \
-             {ROWS_FORMAT} of this program"
+             {format} of this program"
         )));
     }
     r.at = expected.len();
+    let measures = format >= 2;
     let mut out = Vec::new();
     while r.at < bytes.len() {
         let start = r.at;
-        let Some(block) = read_block(&mut r) else {
+        let Some(block) = read_block(&mut r, measures) else {
             break;
         };
         let end = r.at;
@@ -740,15 +1070,18 @@ fn read_file(path: &Path) -> anyhow::Result<Vec<Row>> {
     Ok(out)
 }
 
-/// One block's rows, or `None` when the block is cut off.
-fn read_block(r: &mut Reader<'_>) -> Option<Vec<Row>> {
+/// One block's rows, with the measure columns when `measures`, or `None` when the block is
+/// cut off.
+fn read_block(r: &mut Reader<'_>, measures: bool) -> Option<Vec<Row>> {
     let suite_len = r.u8()? as usize;
     r.take(suite_len)?;
     let _place = r.u32()?;
     let count = r.u32()? as usize;
     // A damaged count cannot ask for more rows than the bytes left could hold: every row
     // takes the width of every column, so the rows allocated never outgrow the file.
-    let row_bytes: usize = COLUMNS.iter().map(|c| c.kind.width()).sum();
+    let extra: &[(String, Kind)] = if measures { measure_columns() } else { &[] };
+    let row_bytes: usize = COLUMNS.iter().map(|c| c.kind.width()).sum::<usize>()
+        + extra.iter().map(|(_, k)| k.width()).sum::<usize>();
     let left = r.bytes.len().saturating_sub(r.at);
     if count.checked_mul(row_bytes).is_none_or(|need| need > left) {
         return None;
@@ -758,6 +1091,22 @@ fn read_block(r: &mut Reader<'_>) -> Option<Vec<Row>> {
         for row in &mut rows {
             (c.set)(row, r.value(c.kind)?);
         }
+    }
+    if extra.is_empty() {
+        return Some(rows);
+    }
+    // Column by column, as the file holds them; then each row takes its values in the walk.
+    let mut values = Vec::with_capacity(extra.len());
+    for (_, kind) in extra {
+        let column: Option<Vec<u64>> = (0..count).map(|_| r.value(*kind)).collect();
+        values.push(column?);
+    }
+    for (i, row) in rows.iter_mut().enumerate() {
+        let mut j = 0;
+        walk(row, &mut |_, slot| {
+            slot.set(values[j][i]);
+            j += 1;
+        });
     }
     Some(rows)
 }
@@ -946,7 +1295,9 @@ mod tests {
             bytes: &block,
             at: 0,
         };
-        assert!(read_block(&mut r).is_none());
+        assert!(read_block(&mut r, false).is_none());
+        r.at = 0;
+        assert!(read_block(&mut r, true).is_none());
     }
 
     #[test]
@@ -960,7 +1311,131 @@ mod tests {
         let err = read_rows(&dir, &BTreeMap::new()).unwrap_err().to_string();
         assert!(err.contains("row format version 7"), "{err}");
         assert!(
-            err.contains(&format!("reads version {ROWS_FORMAT}")),
+            err.contains(&format!("reads versions 1 and {ROWS_FORMAT}")),
+            "{err}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A row with every measure set to a value of its own.
+    fn measured(n: u64) -> Row {
+        let mut r = row(n);
+        let mut v = 0u64;
+        walk(&mut r, &mut |_, slot| {
+            v += 1;
+            match slot {
+                Slot::Bool(x) => *x = true,
+                Slot::F64(x) => *x = v as f64 + 0.25,
+                other => other.set(v % 200 + 1),
+            }
+        });
+        r
+    }
+
+    /// Every measure column round-trips through a block, field by field, and the column list
+    /// holds each group once with its expected size.
+    #[test]
+    fn a_row_with_measures_round_trips_field_by_field() {
+        let cols = measure_columns();
+        // 1 + 82 + 2 + 24 + 24 + 14 + 6 + 2 + 32 + 62 + 2 + 2 + 2 x 16 x 9 + 2.
+        assert_eq!(cols.len(), 543);
+        let names: std::collections::BTreeSet<&str> =
+            cols.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names.len(), cols.len(), "every name once");
+        for name in [
+            "measures.present",
+            "shot_bin.home.00",
+            "shot_bin.away.40",
+            "pass_attempts.home.chip_10_25",
+            "pass_completed.away.unknown",
+            "goals_phase.home.corner",
+            "third_ticks.away.final",
+            "chain_passes_bin.home.15",
+            "chain_seconds_bin.away.30",
+            "chain_ticks.home",
+            "player.away.15.peak_mps",
+            "player.home.00.sprint",
+            "physical_overflow.away",
+        ] {
+            assert!(names.contains(name), "{name}");
+        }
+        let dir = temp("measures");
+        let mut w = RowsWriter::open(&dir, "1-1", 0).unwrap();
+        let rows = [measured(1), measured(2), row(3)];
+        w.append_block("equal", 0, &rows).unwrap();
+        let finished: BTreeMap<_, _> = [done(1, "1-1"), done(2, "1-1"), done(3, "1-1")]
+            .into_iter()
+            .collect();
+        let read = read_rows(&dir, &finished).unwrap();
+        for r in &rows {
+            assert_eq!(read.rows[&r.key], *r, "key {:?}", r.key);
+        }
+        assert!(read.rows[&FixtureKey::from_u64(1)].measures.present);
+        assert!(!read.rows[&FixtureKey::from_u64(3)].measures.present);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// An old engine's file of format 1 reads back without measures, its base columns
+    /// equal.
+    #[test]
+    fn a_format_1_file_reads_back_without_measures() {
+        let dir = temp("format1");
+        fs::create_dir_all(dir.join(ROWS_DIR)).unwrap();
+        let rows = [row(1), row(2)];
+        let mut bytes = header_of(1);
+        let mut block = vec![5u8];
+        block.extend_from_slice(b"equal");
+        block.extend_from_slice(&0u32.to_le_bytes());
+        block.extend_from_slice(&2u32.to_le_bytes());
+        for c in COLUMNS {
+            for r in &rows {
+                put(&mut block, c.kind, (c.get)(r));
+            }
+        }
+        let sum = checksum(&block);
+        bytes.extend_from_slice(&block);
+        bytes.extend_from_slice(&sum);
+        fs::write(dir.join("rows/1-1-0.rows"), &bytes).unwrap();
+        let finished: BTreeMap<_, _> = [done(1, "1-1"), done(2, "1-1")].into_iter().collect();
+        let read = read_rows(&dir, &finished).unwrap();
+        assert_eq!(read.rows.len(), 2);
+        for r in &rows {
+            let got = read.rows[&r.key];
+            assert!(!got.measures.present);
+            assert_eq!(got, *r);
+            assert_eq!(got.canonical_bytes(), r.canonical_bytes());
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// The measures never enter the result bytes: a row with them equals the same row
+    /// without them, so the results digest is the same in both builds.
+    #[test]
+    fn the_canonical_bytes_leave_out_the_measures() {
+        let plain = row(5);
+        let with = measured(5);
+        assert_ne!(plain, with);
+        assert_eq!(plain.canonical_bytes(), with.canonical_bytes());
+    }
+
+    /// A file of format 2 whose measure columns differ from this program's is refused by
+    /// name.
+    #[test]
+    fn a_changed_measure_column_is_refused_by_name() {
+        let dir = temp("renamed");
+        RowsWriter::open(&dir, "1-1", 0).unwrap();
+        let path = dir.join("rows/1-1-0.rows");
+        let bytes = fs::read(&path).unwrap();
+        let at = bytes
+            .windows(b"shot_bin.home.00".len())
+            .position(|w| w == b"shot_bin.home.00")
+            .unwrap();
+        let mut changed = bytes.clone();
+        changed[at] = b'S';
+        fs::write(&path, changed).unwrap();
+        let err = read_rows(&dir, &BTreeMap::new()).unwrap_err().to_string();
+        assert!(
+            err.contains("another measures version or column list than row format version 2"),
             "{err}"
         );
         let _ = fs::remove_dir_all(&dir);

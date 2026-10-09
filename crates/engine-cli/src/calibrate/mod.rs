@@ -38,6 +38,8 @@
 
 pub mod base;
 pub mod fixtures;
+#[cfg(feature = "measures")]
+pub mod physical;
 pub mod rows;
 pub mod rules;
 pub mod run_folder;
@@ -77,6 +79,10 @@ use stages::Stage;
 const BENCH_MATCHES: u32 = 5;
 /// Set by a change run on the old engine's own `calibrate`: no verdict or stage table.
 pub const QUIET_ENV: &str = "SM_CALIBRATE_QUIET";
+/// The line a build without the `measures` feature prints as a run starts: it records no
+/// realism measures and judges the bands of the band file only.
+pub const NO_MEASURES: &str =
+    "this build has no measures; build engine-cli with --features measures to record them";
 
 pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i32> {
     let run_started = Instant::now();
@@ -316,6 +322,9 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         ),
     }
 
+    if !quiet && !cfg!(feature = "measures") {
+        eprintln!("{NO_MEASURES}");
+    }
     let started = Instant::now();
     let stopped = || {
         eprintln!(
@@ -657,6 +666,7 @@ fn rows_of_every_arm(played: &[Arm]) -> Option<RowsInfo> {
         .filter_map(|a| a.rows_info)
         .reduce(|a, b| RowsInfo {
             format: a.format,
+            measures: a.measures,
             files: a.files + b.files,
             rows: a.rows + b.rows,
             recorded: Recorded {
@@ -1131,6 +1141,7 @@ impl RunCtx<'_> {
         }
         let rows_info = RowsInfo {
             format: ROWS_FORMAT,
+            measures: cfg!(feature = "measures"),
             files: read.files,
             rows: u32::try_from(planned.len()).unwrap_or(u32::MAX),
             recorded,

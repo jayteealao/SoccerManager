@@ -781,7 +781,7 @@ The file starts with a header:
 | Bytes | Field |
 |---|---|
 | 6 | the magic `SMROWS` |
-| 4 | the format version: 1 |
+| 4 | the format version: 2 (format 1, written before the realism measures, is still read) |
 | 4 | the measures version (`run.identity.measures`) |
 | 4 | the number of columns |
 | per column | 1 byte name length, the name, 1 byte type: 1 is an 8-bit integer, 4 a 32-bit integer, 8 a 64-bit integer, 9 a 64-bit float |
@@ -796,7 +796,7 @@ Blocks follow, one per finished work unit:
 | per column | the column's value for every row of the block, in row order |
 | 8 | the first 8 bytes of the SHA-256 of the block's bytes before them |
 
-The columns of format 1, in file order (a `.home` and `.away` pair is one column per team):
+The columns of format 1, which open format 2, in file order (a `.home` and `.away` pair is one column per team):
 
 | Column | Type | Holds |
 |---|---|---|
@@ -817,11 +817,32 @@ The columns of format 1, in file order (a `.home` and `.away` pair is one column
 | `ticks` | 32-bit | ticks played |
 | `duration_us` | 64-bit | the match's wall time in microseconds |
 
+Format 2 appends the realism measures. A build without the `measures` feature writes them as zeros, with `measures.present` 0. Each `<side>` is `home` or `away`:
+
+| Column | Type | Holds |
+|---|---|---|
+| `measures.present` | 8-bit | 1 when a `measures` build played the match |
+| `shot_bin.<side>.00` to `.40` | 32-bit | shots by distance from the ball at the kick to the centre of the goal attacked, in 1 m bins (`00` is under 1 m), `40` for 40 m and over; penalties included, so the bins sum to `shots` |
+| `shot_distance_m.<side>` | float | the sum of those distances, in metres |
+| `pass_attempts.<side>.<cell>`, `pass_completed.<side>.<cell>` | 32-bit | open-play passes played and completed, by cell: `ground_`, `chip_` (a long pass or chip) and `cross_`, each `lt10` (under 10 m), `10_25` or `gt25` (over 25 m), then `keeper_throw`, `keeper_kick`, and `unknown` (a pass kicked without a plan, 0 in a sound build); they sum to `passes` and `passes_completed` |
+| `goals_phase.<side>.<phase>` | 32-bit | goals by phase: `open_play`, `corner`, `free_kick`, `penalty`, `throw_in`, `kick_off`, `goal_kick`, the restart that began the scoring side's possession chain; they sum to `goals` |
+| `third_ticks.<side>.own`, `.middle`, `.final` | 32-bit | open-play ticks credited to the side with the ball in each third, counted from its own goal line; they sum to `possession_ticks` |
+| `chains.<side>` | 32-bit | possession chains: from a gain or a restart taken to an opponent's touch, the ball going dead, a goal or full time |
+| `chain_passes_bin.<side>.00` to `.15` | 32-bit | chains by passes, the side's open-play passes and restart kicks; `15` for 15 and over |
+| `chain_seconds_bin.<side>.00` to `.30` | 32-bit | chains by length in 2-second bins; `30` for 60 s and over |
+| `chain_passes.<side>`, `chain_ticks.<side>` | 32-bit, 64-bit | the sums of the chains' passes and ticks |
+| `player.<side>.00` to `.15` `.squad` | 8-bit | the player's place in his team file, slots in order of first appearance |
+| `player.<side>.<slot>.ticks_on` | 32-bit | ticks on the pitch: his minutes played, times 3,000 |
+| `player.<side>.<slot>.distance_m` | float | metres covered: speed times the tick over every tick on the pitch |
+| `player.<side>.<slot>.walk`, `.jog`, `.run`, `.hi`, `.sprint` | 32-bit | ball-in-play ticks in each speed zone: under 2 m/s, 2 to 4, 4 to 5.5, 5.5 to 7, 7 and over |
+| `player.<side>.<slot>.peak_mps` | float | his highest speed, m/s |
+| `physical_overflow.<side>` | 32-bit | players of the side beyond the 16 slots |
+
 A failed or panicked match has a row with its key, its seed, its outcome and zero counts.
 
 The statistics file rounds what the row keeps unrounded: `stats.xg` is `xg` to 2 decimals, `stats.pass_accuracy_pct` is `100 x passes_completed / passes` to 1 decimal (0 with no pass), `stats.possession_pct` is each team's `possession_ticks` over both teams' to 1 decimal, and `stats.ball_in_play_s` is `(live_ticks + 25) / 50`, rounded down. The bands read these rounded figures, rebuilt from the rows with the same functions, so a run's bands do not depend on which matches have a statistics file.
 
-A block is written and synced before its unit's ledger line. A row counts only when the ledger line of its key was written by the session in the file's name, with the same engine seed; the rows of a unit cut off before its ledger line are never read, and the unit plays again. Reading a file stops at a block cut off part-way or with a wrong checksum, which only a stopped run leaves at the end of a file. A file of another format version is refused by name. `calib.results_digest` hashes, for every arm in key order, each row's key and its columns except `record.reasons` and `duration_us`.
+A block is written and synced before its unit's ledger line. A row counts only when the ledger line of its key was written by the session in the file's name, with the same engine seed; the rows of a unit cut off before its ledger line are never read, and the unit plays again. Reading a file stops at a block cut off part-way or with a wrong checksum, which only a stopped run leaves at the end of a file. A file of another format version, or of format 1 or 2 with another measures version or column list, is refused by name. `calib.results_digest` hashes, for every arm in key order, each row's key and its format 1 columns except `record.reasons` and `duration_us`, so it is the same with or without the measures.
 
 ### The snapshot file
 

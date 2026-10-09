@@ -19,7 +19,7 @@ use anyhow::Context;
 use sha2::{Digest, Sha256};
 
 use super::fixtures::{FIXTURE_SCHEME, FixtureKey};
-use super::rows::ROWS_FORMAT;
+use super::rows::{READ_FORMATS, ROWS_FORMAT};
 use super::run_folder;
 use crate::bisect::cache::{self, Builder, CacheKey};
 use crate::report::Suite;
@@ -305,13 +305,13 @@ fn probe(exe: &Path, content: &Path, dir: &Path) -> anyhow::Result<()> {
     refuse_rows(exe, format)
 }
 
-/// Refuses an old engine whose probe report names no row format, or another one than
-/// this program reads.
+/// Refuses an old engine whose probe report names no row format, or one this program does
+/// not read. An old engine of format 1 writes rows without the measures.
 fn refuse_rows(exe: &Path, format: Option<u64>) -> anyhow::Result<()> {
-    if format != Some(u64::from(ROWS_FORMAT)) {
+    if !format.is_some_and(|f| READ_FORMATS.iter().any(|&r| u64::from(r) == f)) {
         anyhow::bail!(
-            "the old engine {} writes {}, and this run reads compact rows of format \
-             {ROWS_FORMAT}; it was built before that row format, so its results cannot be \
+            "the old engine {} writes {}, and this run reads compact rows of format 1 or \
+             {ROWS_FORMAT}; it was built before those row formats, so its results cannot be \
              cached",
             exe.display(),
             format.map_or_else(
@@ -530,6 +530,8 @@ mod tests {
         assert!(err.contains("no compact rows"), "{err}");
         let err = refuse_rows(exe, Some(9)).unwrap_err().to_string();
         assert!(err.contains("compact rows of format 9"), "{err}");
+        assert!(err.contains("format 1 or 2"), "{err}");
+        refuse_rows(exe, Some(1)).unwrap();
         refuse_rows(exe, Some(u64::from(ROWS_FORMAT))).unwrap();
     }
 

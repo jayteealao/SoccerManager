@@ -243,6 +243,26 @@ The stage adds the rules' 6,400 matches to the change run, a few minutes on an 8
 
 A change that moves play still needs the full suites below: a tuning that passes the rules must keep the bands.
 
+## Record the realism measures
+
+The realism measures describe the shape of play beside the bands' averages: where shots come from, passes by kind and length, how goals began, where each side has the ball, and how long its possessions last. They also record how far and how fast each player ran. Build `engine-cli` with the `measures` feature to record them:
+
+```bash
+cargo build --release -p engine-cli --features measures
+target/release/engine-cli calibrate --suite equal
+```
+
+Each match's row then holds, per side:
+
+- the shots in 1 m bins of distance from the centre of the goal attacked, to 40 m and over, penalties included;
+- the open-play passes played and completed, by kind (ground pass, long pass or chip, cross) and length (under 10 m, 10 to 25 m, over 25 m), with the keeper's throws and kicks apart;
+- the goals by phase: open play, or the corner, free kick, penalty, throw-in, kick-off or goal kick that began the scoring side's possession;
+- the open-play ticks with the ball in each third, counted from the side's own goal line;
+- the possession chains, by length in passes and in 2-second bins of time;
+- each player's ticks on the pitch, metres covered, ball-in-play time in each speed zone (walk under 2 m/s, jog 2 to 4, run 4 to 5.5, high intensity 5.5 to 7, sprint 7 and over) and peak speed.
+
+The measures read the match and change nothing: a seed plays the same match with or without them, and `calib.results_digest` is the same. A build without the feature prints that it has no measures as the run starts, writes zeros in the measure columns, and judges the bands of the band file only. `calib.rows.measures` in `report.json` says which build ran.
+
 ## Build a faster calibrate binary
 
 Measure a faster build before you keep it:

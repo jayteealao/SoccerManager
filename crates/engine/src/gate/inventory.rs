@@ -97,6 +97,10 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         // and in every build without the `sensitivity` feature.
         #[cfg(feature = "sensitivity")]
             probe: _,
+        // The realism measures: a read-only seam, absent in every gated match and in every
+        // build without the `measures` feature.
+        #[cfg(feature = "measures")]
+            measures: _,
     } = sim;
 
     use FieldKind::{Bytes, Floats};

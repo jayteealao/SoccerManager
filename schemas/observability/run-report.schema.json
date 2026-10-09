@@ -700,6 +700,10 @@
             "required": ["format", "files", "rows", "recorded"],
             "properties": {
               "format": { "type": "integer", "minimum": 1 },
+              "measures": {
+                "description": "true when the build records the realism measures (built with the measures feature); absent in reports of earlier builds.",
+                "type": "boolean"
+              },
               "files": { "type": "integer", "minimum": 0 },
               "rows": { "type": "integer", "minimum": 0 },
               "recorded": {

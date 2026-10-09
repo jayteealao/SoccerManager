@@ -24,7 +24,10 @@ pub const SLOW_MATCH_MS: u64 = 2000;
 
 /// The version of the measure definitions: how a match's figures are counted. A change to a
 /// measure raises it, so a run folder made under the old definitions is not resumed.
-pub const MEASURES_VERSION: u32 = 1;
+/// Version 2 adds the realism measures of a `measures` build to the rows: shot distance,
+/// pass kind and length, goal phase, possession by third, possession chains, and each
+/// player's running.
+pub const MEASURES_VERSION: u32 = 2;
 
 /// One suite of a calibration run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -1011,6 +1014,8 @@ pub struct RegistryInfo {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 pub struct RowsInfo {
     pub format: u32,
+    /// `true` when this build records the realism measures (the `measures` feature).
+    pub measures: bool,
     pub files: u32,
     pub rows: u32,
     pub recorded: Recorded,

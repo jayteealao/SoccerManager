@@ -144,6 +144,25 @@ impl Simulation {
         if self.probe.is_some() {
             self.probe_plan(c, choice, plan);
         }
+        #[cfg(feature = "measures")]
+        if self.measures.is_some()
+            && let CarrierPlan::Pass { j } = plan
+        {
+            let team = self.players[c].team;
+            let (from, to) = (self.players[c].pos, self.players[j].pos);
+            let d = (to - from).length();
+            let kind = crate::decision::PassKind::of(
+                from,
+                to,
+                d,
+                self.teams[team].attack_x,
+                c == self.keeper(team),
+                self.config.pitch(),
+            );
+            if let Some(m) = self.measures.as_deref_mut() {
+                m.planned_pass(c, crate::measures::pass_cell(kind, d));
+            }
+        }
         match plan {
             CarrierPlan::Shot { goal, keeper } => Some(self.shot_kick(c, goal, keeper, 1.0)),
             CarrierPlan::Pass { j } => {
