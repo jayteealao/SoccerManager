@@ -244,6 +244,9 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         millis,
         run_id: String::new(),
         session: format!("{millis}-{}", std::process::id()),
+        real_folder: real_folder.clone(),
+        quiet: std::env::var_os(QUIET_ENV).is_some(),
+        samples: std::sync::OnceLock::new(),
     };
 
     // The old engine's results come before the run folder exists and before any match of
@@ -430,9 +433,9 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     // leaves them to the parent.
     let real_info = (!quiet).then(|| {
         let _judge = stages::enter(Stage::Judge);
-        let info = real::read_all(&real_folder, &ctx.bands);
-        attach_real(&mut verdicts, &info);
-        attach_real(&mut reported, &info);
+        let info = real::read_all(&real_folder, &ctx.bands, &ctx.real_samples());
+        attach_real(&mut verdicts, &info, &ctx.bands);
+        attach_real(&mut reported, &info, &ctx.bands);
         info
     });
     let identity_value = serde_json::to_value(&identity)?;
@@ -803,8 +806,9 @@ fn match_counts(
 }
 
 /// Sets each verdict row's real value and distance from the band's real entry, or the note
-/// the console prints in their place.
-fn attach_real(rows: &mut [verdict::VerdictRow], info: &real::RealInfo) {
+/// the console prints in their place. A whole-distribution band whose real sample was read
+/// reads "whole sample", its distance its value.
+fn attach_real(rows: &mut [verdict::VerdictRow], info: &real::RealInfo, bands: &Registry) {
     for r in rows.iter_mut() {
         let entry = info.band(&r.band);
         let note = match entry.map(|e| e.status) {
@@ -812,7 +816,14 @@ fn attach_real(rows: &mut [verdict::VerdictRow], info: &real::RealInfo) {
             Some("no_record") => "no real record",
             _ => "no real data here",
         };
-        r.set_real(entry.and_then(|e| e.value), note);
+        let whole = bands.band(&r.band).is_some_and(BandDef::is_distribution);
+        if whole && entry.is_some_and(|e| e.status == "read") {
+            r.set_whole_sample();
+        } else if whole {
+            r.set_real(None, note);
+        } else {
+            r.set_real(entry.and_then(|e| e.value), note);
+        }
     }
 }
 
@@ -854,6 +865,12 @@ struct RunCtx<'a> {
     run_id: String,
     /// This invocation: the ledger files its threads write carry it.
     session: String,
+    /// The real-data folder the distribution bands' samples are read from.
+    real_folder: real::RealFolder,
+    /// The old engine's own run, started by a change run: it reads no real data.
+    quiet: bool,
+    /// The distribution bands' real samples, read once, in the judge stage, on first use.
+    samples: std::sync::OnceLock<std::sync::Arc<real::Samples>>,
 }
 
 /// The suites a run plays, and the numbers of the formation pairings it plays: `--suite`
@@ -1175,10 +1192,26 @@ impl RunCtx<'_> {
         Ok(Some((report, folded)))
     }
 
-    /// A builder with every selected suite planned.
+    /// The distribution bands' real samples, read on the first call and kept for the run;
+    /// none in the old engine's own run, which judges nothing shown. Every caller is in the
+    /// judge stage (folding the rows, or reading the real values), so the read is its time.
+    fn real_samples(&self) -> std::sync::Arc<real::Samples> {
+        self.samples
+            .get_or_init(|| {
+                std::sync::Arc::new(if self.quiet {
+                    real::Samples::new()
+                } else {
+                    real::samples(&self.real_folder, &self.bands)
+                })
+            })
+            .clone()
+    }
+
+    /// A builder with every selected suite planned, holding the real samples.
     fn planned_builder(&self) -> RunBuilder {
         let opts = self.opts;
         let mut builder = RunBuilder::new(self.bands.clone());
+        builder.set_real_samples(self.real_samples(), opts.seed());
         builder.minutes = opts.minutes;
         for &suite in &self.suites {
             let matches = self.matches_for(suite);
@@ -1825,6 +1858,7 @@ mod tests {
             changed: [changed, vec![1.0; n], vec![1.0; n], vec![1.0; n]],
             old: [vec![old; n], vec![1.0; n], vec![1.0; n], vec![1.0; n]],
             set: 0,
+            dist: None,
         }
     }
 

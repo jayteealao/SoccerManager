@@ -31,6 +31,7 @@ use engine::observe::round_to;
 use engine::rng::EngineRng;
 use serde::Serialize;
 
+use super::distribution::PairedHist;
 use super::measures;
 use super::{BandCheck, RunBuilder, Suite};
 
@@ -108,9 +109,18 @@ pub struct VerdictRow {
     /// none here. It never changes the word.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub real: Option<f64>,
-    /// The run's value minus the real value.
+    /// The run's value minus the real value; for a whole-distribution band, the distance of
+    /// the run's whole sample from the real one, which is also its value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub distance: Option<f64>,
+    /// A whole-distribution band: the one-sided upper bound of its distance, the 97th
+    /// percentile of the whole-match resampled distance.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upper: Option<f64>,
+    /// A whole-distribution band: the noise floor, the 97th percentile of the centred
+    /// resampled distance; a margin at or under it can never pass.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub noise_floor: Option<f64>,
     /// Why the band only reports: its word is shown, but it is left out of the joint word
     /// and of `calib.pass`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -151,6 +161,14 @@ impl VerdictRow {
         self.real = real.map(|r| round_to(r, 5));
         self.distance = real.map(|r| round_to(self.value - r, 5));
         self.real_note = real.is_none().then_some(note);
+    }
+
+    /// Marks a whole-distribution row whose real sample was read: its real column reads
+    /// "whole sample", and its distance is its value when it has one (a bound).
+    pub fn set_whole_sample(&mut self) {
+        self.real = None;
+        self.distance = self.upper.map(|_| self.value);
+        self.real_note = Some("whole sample");
     }
 }
 
@@ -224,6 +242,8 @@ fn plain_row(c: &BandCheck, word: Word) -> VerdictRow {
         no_target: None,
         real: None,
         distance: None,
+        upper: c.dist.as_ref().map(|d| round_to(d.upper, 5)),
+        noise_floor: c.dist.as_ref().map(|d| round_to(d.floor, 5)),
         report_only: None,
         real_note: None,
         judged: None,
@@ -242,19 +262,22 @@ fn own_note(c: &BandCheck) -> Option<String> {
 }
 
 /// The rows of a run without an old engine: each band's word is its range check. A band
-/// that reads measures the run's matches do not carry is not sure.
+/// that reads measures the run's matches do not carry is not sure. A whole-distribution
+/// band takes the word of its bounds ([`range_word`]), so it never passes without its upper
+/// bound inside the margin.
 pub fn range_only(checks: &[BandCheck]) -> Vec<VerdictRow> {
     checks
         .iter()
         .filter(|c| c.band != "wall_ms")
         .map(|c| {
             let word = match (c.unjudged, c.pass) {
+                _ if c.whole => range_word(c),
                 (true, _) => Word::NotSure,
                 (false, true) => Word::Pass,
                 (false, false) => Word::Fail,
             };
             let mut r = plain_row(c, word);
-            r.note = c.unjudged.then(|| NO_MEASURES_NOTE.into());
+            r.note = own_note(c).or_else(|| c.dist.as_ref().map(|d| d.note.clone()));
             r
         })
         .collect()
@@ -263,10 +286,14 @@ pub fn range_only(checks: &[BandCheck]) -> Vec<VerdictRow> {
 /// The word of a row judged on its range alone, with its own error: fail outside the range;
 /// pass inside with the nearest edge at least [`ONE_BAND`] errors away (the bottom of a
 /// floor band, which starts at 0, is no edge); not sure otherwise, as a band with no power
-/// never passes. A row with no error passes inside; a row with no value is not sure.
+/// never passes. A row with no error passes inside; a row with no value is not sure. A
+/// whole-distribution row takes the word of its bounds and noise floor.
 pub fn range_word(c: &BandCheck) -> Word {
     if c.unjudged || c.why_none.is_some() {
         return Word::NotSure;
+    }
+    if let Some(d) = &c.dist {
+        return d.word;
     }
     if !c.pass {
         return Word::Fail;
@@ -295,7 +322,11 @@ pub fn range_rows(checks: &[BandCheck], note: Option<&str>) -> Vec<VerdictRow> {
             let mut r = plain_row(c, range_word(c));
             r.se = Some(c.se);
             r.judged = Some("range");
-            r.note = own_note(c).or_else(|| note.map(str::to_string));
+            let bounds = c.dist.as_ref().map(|d| d.note.as_str());
+            r.note = own_note(c).or_else(|| match (note, bounds) {
+                (Some(n), Some(b)) => Some(format!("{n}; {b}")),
+                (n, b) => n.or(b).map(str::to_string),
+            });
             r
         })
         .collect()
@@ -330,6 +361,9 @@ pub struct PairedRow {
     pub outside: f64,
     /// Index of the row's suite set.
     pub set: usize,
+    /// A whole-distribution band: both engines' histograms per pair. Its per-match sums
+    /// above are 0, and its change is the distance between the two engines.
+    pub dist: Option<Box<PairedHist>>,
 }
 
 /// The pairs of one suite: each pair's stratum, and the matches per suite unit (per
@@ -383,6 +417,10 @@ pub fn paired(
             per_unit: per_unit.get(&suite).copied().unwrap_or(0),
         });
         for spec in specs.iter().filter(|s| s.suite == suite) {
+            if spec.def.is_distribution() {
+                rows.push(paired_distribution(cb, spec, (&c_sub, &o_sub), set));
+                continue;
+            }
             let tc = measures::terms(spec.def, &c_sub, spec.scope);
             let to = measures::terms(spec.def, &o_sub, spec.scope);
             let places = measures::places(&spec.def.measure);
@@ -409,10 +447,69 @@ pub fn paired(
                 base_value: to.value().map(|v| round_to(v, places)),
                 in_range,
                 set,
+                dist: None,
             });
         }
     }
     (sets, rows)
+}
+
+/// A whole-distribution band's paired row: each engine's histogram per pair, and each
+/// engine's distance from the real sample (the changed engine's is the row's value), from
+/// the changed builder's real samples. A pair a band does not cover holds an empty
+/// histogram on that side.
+fn paired_distribution(
+    cb: &RunBuilder,
+    spec: &super::RowSpec<'_>,
+    (c_sub, o_sub): (&[measures::Obs<'_>], &[measures::Obs<'_>]),
+    set: usize,
+) -> PairedRow {
+    let def = spec.def;
+    let cc = cb.distribution_check(spec, c_sub);
+    let oc = cb.distribution_check(spec, o_sub);
+    let value_of = |c: &BandCheck| c.dist.as_ref().map(|_| c.value);
+    let value = value_of(&cc);
+    let (width, bins) = measures::hist_bins(&def.measure).unwrap_or((1.0, 2));
+    let side = |obs: &[measures::Obs<'_>]| -> Vec<super::distribution::Hist> {
+        measures::histograms(def, obs, spec.scope)
+            .into_iter()
+            .map(Option::unwrap_or_default)
+            .collect()
+    };
+    let hist = PairedHist {
+        changed: side(c_sub),
+        old: side(o_sub),
+        metric: measures::metric(&def.measure),
+        width,
+        bins,
+        upper: cc.dist.as_ref().map(|d| d.upper),
+        floor: cc.dist.as_ref().map(|d| d.floor),
+    };
+    let n = c_sub.len();
+    let zeros = || std::array::from_fn(|_| vec![0.0; n]);
+    let in_range = value.is_some_and(|v| def.range().contains(v));
+    PairedRow {
+        band: def.band.clone(),
+        suite: spec.suite,
+        pairing: spec.label.clone(),
+        lo: def.lo,
+        hi: def.hi,
+        shift: def.smallest_shift,
+        changed: zeros(),
+        old: zeros(),
+        value,
+        base_value: value_of(&oc),
+        in_range,
+        spread: hist.observed().is_some(),
+        apart_se: cc.se.hypot(oc.se),
+        value_se: cc.se,
+        outside: match value {
+            Some(v) if !in_range => (v - def.hi).max(def.lo - v).max(0.0),
+            _ => 0.0,
+        },
+        set,
+        dist: Some(Box::new(hist)),
+    }
 }
 
 /// What the bootstrap found for one row.
@@ -499,8 +596,19 @@ pub fn bootstrap(
     let ones: Vec<Vec<u32>> = sets.iter().map(|s| vec![1; s.strata.len()]).collect();
     let observed: Vec<Option<(f64, f64)>> = rows
         .iter()
-        .map(|r| change(r, &ones[r.set], &members[r.set]))
+        .map(|r| match &r.dist {
+            Some(d) => d.observed().map(|o| (o, 0.0)),
+            None => change(r, &ones[r.set], &members[r.set]),
+        })
         .collect();
+    // A whole-distribution row: its observed difference of profiles, and its centred
+    // replicate in each resample. It draws no random number, so the scalar rows' resamples
+    // are the same with or without it.
+    let diffs: Vec<Option<Vec<f64>>> = rows
+        .iter()
+        .map(|r| r.dist.as_ref().and_then(|d| d.diff(None)))
+        .collect();
+    let mut centred: Vec<Vec<f64>> = vec![Vec::new(); rows.len()];
     let mut rng = EngineRng::from_seed(seed ^ STREAM_LABEL);
     let mut stats = Vec::with_capacity(resamples);
     for _ in 0..resamples {
@@ -520,6 +628,7 @@ pub fn bootstrap(
         let t = rows
             .iter()
             .zip(&observed)
+            .filter(|(r, _)| r.dist.is_none())
             .filter_map(|(r, o)| {
                 let (d, _) = (*o)?;
                 let (d_star, se_star) = change(r, &weights[r.set], &members[r.set])?;
@@ -527,6 +636,32 @@ pub fn bootstrap(
             })
             .fold(0.0, f64::max);
         stats.push(t);
+        for (k, r) in rows.iter().enumerate() {
+            if let (Some(d), Some(o)) = (&r.dist, &diffs[k]) {
+                if let Some(c) = d.centred(&weights[r.set], o) {
+                    centred[k].push(c);
+                }
+            }
+        }
+    }
+    // Each whole-distribution row's error: the root mean square of its centred replicates.
+    // Its standardized replicate joins each resample's maximum.
+    let dist_se: Vec<f64> = centred
+        .iter()
+        .map(|c| {
+            if c.is_empty() {
+                0.0
+            } else {
+                (c.iter().map(|x| x * x).sum::<f64>() / c.len() as f64).sqrt()
+            }
+        })
+        .collect();
+    for (k, list) in centred.iter().enumerate() {
+        if dist_se[k] > 0.0 && list.len() == stats.len() {
+            for (t, c) in stats.iter_mut().zip(list) {
+                *t = t.max(c / dist_se[k]);
+            }
+        }
     }
     stats.sort_by(f64::total_cmp);
     let critical = if stats.is_empty() {
@@ -539,9 +674,15 @@ pub fn bootstrap(
     .max(ONE_BAND);
     let found = observed
         .into_iter()
-        .map(|o| Found {
+        .zip(rows)
+        .zip(dist_se)
+        .map(|((o, r), dse)| Found {
             diff: o.map(|(d, _)| d),
-            se: o.map_or(0.0, |(_, se)| se),
+            se: if r.dist.is_some() {
+                dse
+            } else {
+                o.map_or(0.0, |(_, se)| se)
+            },
         })
         .collect();
     (found, critical)
@@ -634,6 +775,16 @@ pub fn judge(
             no_target: exempt.then_some(true),
             real: None,
             distance: None,
+            upper: r
+                .dist
+                .as_ref()
+                .and_then(|d| d.upper)
+                .map(|u| round_to(u, 5)),
+            noise_floor: r
+                .dist
+                .as_ref()
+                .and_then(|d| d.floor)
+                .map(|f| round_to(f, 5)),
             report_only: None,
             real_note: None,
             judged: Some("paired"),
@@ -796,10 +947,13 @@ fn table(rows: &[VerdictRow], change: bool) -> String {
         if r.accepted == Some(true) {
             need.insert_str(0, " (accepted, not shown equivalent)");
         }
-        let (real, distance) = match (r.real, r.distance) {
-            (Some(v), Some(d)) => (format!("{v}"), format!("{d}")),
-            _ => (r.real_note.unwrap_or("-").to_string(), "-".to_string()),
-        };
+        let real = r.real.map_or_else(
+            || r.real_note.unwrap_or("-").to_string(),
+            |v| format!("{v}"),
+        );
+        let distance = r
+            .distance
+            .map_or_else(|| "-".to_string(), |d| format!("{d}"));
         if change {
             let opt = |v: Option<f64>| v.map_or_else(|| "-".to_string(), |v| format!("{v}"));
             out.push_str(&format!(
@@ -859,6 +1013,52 @@ mod tests {
             changed: [changed, vec![1.0; n], vec![1.0; n], vec![1.0; n]],
             old: [old, vec![1.0; n], vec![1.0; n], vec![1.0; n]],
             set,
+            dist: None,
+        }
+    }
+
+    /// A whole-distribution paired row from each pair's draws, binned by 1 over 0 to 9.
+    fn dist_row(set: usize, changed: &[Vec<f64>], old: &[Vec<f64>], shift: f64) -> PairedRow {
+        use super::super::distribution::{Hist, Metric, bin_of};
+        let hist = |draws: &[Vec<f64>]| -> Vec<Hist> {
+            draws
+                .iter()
+                .map(|d| {
+                    let mut h: BTreeMap<u32, f64> = BTreeMap::new();
+                    for x in d {
+                        *h.entry(bin_of(*x, 1.0, 10)).or_default() += 1.0;
+                    }
+                    h.into_iter().collect()
+                })
+                .collect()
+        };
+        let n = changed.len();
+        PairedRow {
+            band: format!("dist{set}"),
+            suite: Suite::Equal,
+            pairing: None,
+            lo: 0.0,
+            hi: 1e9,
+            shift,
+            value: Some(0.0),
+            base_value: Some(0.0),
+            in_range: true,
+            spread: true,
+            apart_se: 0.0,
+            value_se: 0.0,
+            outside: 0.0,
+            changed: std::array::from_fn(|_| vec![0.0; n]),
+            old: std::array::from_fn(|_| vec![0.0; n]),
+            set,
+            dist: Some(Box::new(PairedHist {
+                changed: hist(changed),
+                old: hist(old),
+                metric: Metric::W1,
+                width: 1.0,
+                bins: 10,
+                upper: None,
+                floor: None,
+            })),
         }
     }
 
@@ -1138,12 +1338,13 @@ mod tests {
         let mut rng = EngineRng::from_seed(2026);
         let mut alarms = 0;
         for rep in 0..replicates {
-            // Six measures with a shared match factor (correlation about 0.5).
-            let mut arm = || -> Vec<[f64; 6]> {
+            // Six measures with a shared match factor (correlation about 0.5), and three
+            // draws of a whole distribution from the same factor.
+            let mut arm = || -> Vec<[f64; 9]> {
                 (0..n)
                     .map(|_| {
                         let common = normal(&mut rng);
-                        let x: [f64; 6] = std::array::from_fn(|_| common + normal(&mut rng));
+                        let x: [f64; 9] = std::array::from_fn(|_| common + normal(&mut rng));
                         x
                     })
                     .collect()
@@ -1174,9 +1375,16 @@ mod tests {
             ratio.old[0] = b.iter().map(|m| m[5] * m[5]).collect();
             ratio.old[1] = b.iter().map(|m| 1.0 + m[5].abs()).collect();
             rows.push(ratio);
+            // A whole distribution: each match's three draws, about 4.5 apart from 0.
+            let draws = |arm: &[[f64; 9]]| -> Vec<Vec<f64>> {
+                arm.iter()
+                    .map(|m| m[6..].iter().map(|x| 4.5 + 1.5 * x).collect())
+                    .collect()
+            };
+            rows.push(dist_row(0, &draws(&a), &draws(&b), 0.5));
             let (found, c) = bootstrap(&sets, &rows, 1000 + u64::from(rep), resamples);
             let (judged, _) = judge(&sets, &rows, &found, c, Vec::new(), &BTreeMap::new());
-            assert_eq!(judged.len(), 6, "every band on its own row");
+            assert_eq!(judged.len(), 7, "every band on its own row");
             if found.iter().any(|f| significant(f.diff.unwrap(), f.se, c)) {
                 alarms += 1;
             }
@@ -1184,6 +1392,77 @@ mod tests {
         let rate = f64::from(alarms) / f64::from(replicates);
         eprintln!("A/A rate {rate} over {replicates} replicates of {n} pairs");
         assert!(rate <= FALSE_ALARM, "joint false-alarm rate {rate}");
+    }
+
+    /// The A/A comparison with the whole-distribution coordinate alone: at most 3 percent of
+    /// replicates flag it.
+    #[test]
+    fn an_a_a_comparison_of_a_whole_distribution_alone_flags_at_most_three_percent() {
+        let (replicates, n, resamples) = (1000u32, 150, 199);
+        let mut rng = EngineRng::from_seed(2027);
+        let mut alarms = 0;
+        for rep in 0..replicates {
+            let mut arm = || -> Vec<Vec<f64>> {
+                (0..n)
+                    .map(|_| {
+                        let common = normal(&mut rng);
+                        (0..3)
+                            .map(|_| 4.5 + 1.5 * (common + normal(&mut rng)))
+                            .collect()
+                    })
+                    .collect()
+            };
+            let (a, b) = (arm(), arm());
+            let sets = [set(n)];
+            let rows = [dist_row(0, &a, &b, 0.5)];
+            let (found, c) = bootstrap(&sets, &rows, 5000 + u64::from(rep), resamples);
+            assert!(found[0].se > 0.0);
+            if significant(found[0].diff.unwrap(), found[0].se, c) {
+                alarms += 1;
+            }
+        }
+        let rate = f64::from(alarms) / f64::from(replicates);
+        eprintln!("A/A rate of the distribution alone {rate}");
+        assert!(rate <= FALSE_ALARM, "false-alarm rate {rate}");
+    }
+
+    /// A whole distribution moved by twice its smallest shift fails the joint word of a
+    /// family of it and one unchanged scalar band; the coordinate draws no random number, so
+    /// the scalar band's change and error are the same with it or without it, and the
+    /// threshold never falls.
+    #[test]
+    fn a_shifted_distribution_fails_the_joint_word_and_leaves_the_scalar_draws() {
+        let mut rng = EngineRng::from_seed(9);
+        let n = 300;
+        let base: Vec<Vec<f64>> = (0..n)
+            .map(|_| (0..3).map(|_| 4.0 + 1.5 * normal(&mut rng)).collect())
+            .collect();
+        let moved: Vec<Vec<f64>> = base
+            .iter()
+            .map(|d| d.iter().map(|x| x + 1.0).collect())
+            .collect();
+        let scalar_c: Vec<f64> = (0..n).map(|_| 5.0 + normal(&mut rng)).collect();
+        let scalar_o: Vec<f64> = scalar_c
+            .iter()
+            .map(|x| x + 0.01 * normal(&mut rng))
+            .collect();
+        let sets = [set(n)];
+        let scalar = row(0, scalar_c, scalar_o, 0.5);
+        let shifted = dist_row(0, &moved, &base, 0.5);
+        let rows = [scalar.clone(), shifted];
+        let (found, c) = bootstrap(&sets, &rows, 13, 499);
+        let (judged, joint) = judge(&sets, &rows, &found, c, Vec::new(), &BTreeMap::new());
+        assert!(found[1].diff.unwrap() >= 2.0 * 0.5 - 0.15, "{:?}", found[1]);
+        assert_eq!(judged[1].word, Word::Fail, "{:?} c {c}", found[1]);
+        assert_eq!(joint.word, Word::Fail);
+        // The scalar row alone: the same change and error, and a threshold no higher.
+        let (alone, c_alone) = bootstrap(&sets, std::slice::from_ref(&scalar), 13, 499);
+        assert_eq!(alone[0], found[0]);
+        assert!(c >= c_alone);
+        // An unmoved distribution: the same draws, so its change is 0.
+        let still = dist_row(0, &base, &base, 0.5);
+        let (f, _) = bootstrap(&sets, &[scalar, still], 13, 499);
+        assert_eq!(f[1].diff, Some(0.0));
     }
 
     /// A match of the equal suite with these goals; `played` false makes it a failed match.
@@ -1309,6 +1588,8 @@ mod tests {
             informational: None,
             why_none: None,
             unjudged: false,
+            whole: false,
+            dist: None,
         }
     }
 

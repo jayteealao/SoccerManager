@@ -482,6 +482,72 @@
       "confidence": {"measurement": {"count": 7}, "generalisation": {"competitions": 2, "seasons": 1, "clubs": 10}},
       "condition": "dry",
       "gates": false
+    },
+    {
+      "band": "goals_distribution",
+      "suites": ["equal"],
+      "measure": {"kind": "distribution", "of": "goals", "width": 1.0, "bins": 11},
+      "design": {"lo": 0.0, "hi": 0.42, "smallest_shift": 0.105},
+      "real": {"source": {"dataset": "Wyscout 2017/18, five leagues (England, France, Germany, Italy, Spain), 1,826 matches; each match's goals, both sides, 10 or more as one bin", "file": "wy2_matches.csv", "key": "hg+ag", "reduce": "histogram", "group_by": "match", "where": {"comp": ["England", "France", "Germany", "Italy", "Spain"]}}, "sample": 1826, "date": "2026-09-22"},
+      "evidence": "calibration",
+      "confidence": {"measurement": {"count": 1826}, "generalisation": {"competitions": 5, "seasons": 1, "clubs": 98}},
+      "condition": "dry",
+      "gates": false
+    },
+    {
+      "band": "scoreline_cells",
+      "suites": ["equal"],
+      "measure": {"kind": "cells", "max": 5},
+      "design": {"lo": 0.0, "hi": 0.26, "smallest_shift": 0.065},
+      "real": {"source": {"dataset": "Wyscout 2017/18, five leagues (England, France, Germany, Italy, Spain), 1,826 matches; each match's score, each side's goals 5 or more as one", "file": "wy2_matches.csv", "key": "hg:ag", "reduce": "cells", "group_by": "match", "where": {"comp": ["England", "France", "Germany", "Italy", "Spain"]}}, "sample": 1826, "date": "2026-09-22"},
+      "evidence": "calibration",
+      "confidence": {"measurement": {"count": 1826}, "generalisation": {"competitions": 5, "seasons": 1, "clubs": 98}},
+      "condition": "dry",
+      "gates": false
+    },
+    {
+      "band": "passes_per_team_distribution",
+      "suites": ["equal"],
+      "measure": {"kind": "distribution", "of": "passes", "width": 1.0, "bins": 1500},
+      "design": {"lo": 0.0, "hi": 20.3, "smallest_shift": 5.075},
+      "real": {"source": {"dataset": "Wyscout 2017/18, five leagues (England, France, Germany, Italy, Spain), 1,826 matches; each team's passes in a match, every pass Wyscout records (the engine counts open-play passes, as passes_per_team does)", "file": "wy2_team_matches.csv", "key": "passes", "reduce": "histogram", "group_by": "match"}, "sample": 1826, "date": "2026-09-22"},
+      "evidence": "calibration",
+      "confidence": {"measurement": {"count": 3652}, "generalisation": {"competitions": 5, "seasons": 1, "clubs": 98}},
+      "condition": "dry",
+      "gates": false
+    },
+    {
+      "band": "shot_distance_distribution",
+      "suites": ["equal"],
+      "measure": {"kind": "distribution", "of": "shot_distance", "width": 1.0, "bins": 41},
+      "design": {"lo": 0.0, "hi": 0.51, "smallest_shift": 0.1275},
+      "real": {"source": {"dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24); metres from each shot to the centre of the goal, 1 m bins, 40 m and over as one, the file's coordinates in metres on a 105 by 68 pitch", "file": "sb_events.csv.gz", "key": "x:y", "reduce": "histogram", "goal": [105.0, 34.0], "group_by": "mid", "where": {"type": ["Shot"]}}, "sample": 200, "date": "2026-09-22"},
+      "evidence": "calibration",
+      "confidence": {"measurement": {"count": 5039}, "generalisation": {"competitions": 3, "seasons": 4, "clubs": 66}},
+      "condition": "dry",
+      "gates": false
+    },
+    {
+      "band": "chain_passes_distribution",
+      "suites": ["equal"],
+      "measure": {"kind": "distribution", "of": "chain_passes", "width": 1.0, "bins": 16},
+      "design": {"lo": 0.0, "hi": 0.42, "smallest_shift": 0.105},
+      "real": {"source": {"dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24); each StatsBomb possession as a chain, its passes by the team in possession, 15 or more as one bin (StatsBomb's possession rules, not the engine's chain rule: both start a chain at a gain or a restart)", "file": "sb2_events.csv.gz", "key": "type", "reduce": "chains", "group_by": "mid", "chain": "poss", "count": "passes", "tokens": ["Pass"], "same": ["team", "poss_team"]}, "sample": 200, "date": "2026-09-22"},
+      "evidence": "calibration",
+      "confidence": {"measurement": {"count": 33550}, "generalisation": {"competitions": 3, "seasons": 4, "clubs": 66}},
+      "condition": "dry",
+      "gates": false
+    },
+    {
+      "band": "chain_seconds_distribution",
+      "suites": ["equal"],
+      "measure": {"kind": "distribution", "of": "chain_seconds", "width": 2.0, "bins": 31},
+      "design": {"lo": 0.0, "hi": 1.03, "smallest_shift": 0.2575},
+      "real": {"source": {"dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24); each StatsBomb possession as a chain, its seconds from its first event to the end of its last event within one period, 2-second bins, 60 s and over as one (StatsBomb's possession rules, not the engine's chain rule)", "file": "sb2_events.csv.gz", "key": "dur", "reduce": "chains", "group_by": "mid", "chain": "poss", "count": "seconds", "time": "ts", "period": "period"}, "sample": 200, "date": "2026-09-22"},
+      "evidence": "calibration",
+      "confidence": {"measurement": {"count": 33550}, "generalisation": {"competitions": 3, "seasons": 4, "clubs": 66}},
+      "condition": "dry",
+      "gates": false
     }
   ]
 }

@@ -69,8 +69,8 @@ fn the_build_says_whether_it_records_the_measures() {
     assert_eq!(report["calib.rows"]["format"], 2);
 
     // The bands judged are those of the band file: the 18 that gate, no other, beside the
-    // run's own time budget; the 24 that only report are reported apart.
-    assert_eq!(shipped_bands(false).len(), 18 + 24);
+    // run's own time budget; the 30 that only report are reported apart.
+    assert_eq!(shipped_bands(false).len(), 18 + 30);
     let shipped = shipped_bands(true);
     assert_eq!(shipped.len(), 18);
     let judged: BTreeSet<String> = report["calib.bands"]

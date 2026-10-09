@@ -24,8 +24,8 @@
       "const": "run-report"
     },
     "schema.version": {
-      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict); 5 for a calibrate run that reports the bands that only report apart (calib.reported), the developer's acceptances (calib.accepted), the match counts (calib.counts), and how each verdict row was judged. Every key of an older version stays.",
-      "enum": ["1", "2", "3", "4", "5"]
+      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict); 5 for a calibrate run that reports the bands that only report apart (calib.reported), the developer's acceptances (calib.accepted), the match counts (calib.counts), and how each verdict row was judged; 6 for a calibrate run with the whole-distribution bands (upper and noise_floor on a verdict row). Every key of an older version stays.",
+      "enum": ["1", "2", "3", "4", "5", "6"]
     },
     "owner.id": {
       "type": "string",
@@ -160,8 +160,18 @@
           "type": "number"
         },
         "distance": {
-          "description": "The run's value minus the real value.",
+          "description": "The run's value minus the real value; for a whole-distribution band (its real column reads whole sample), the distance of the run's whole sample from the real one, which is also its value.",
           "type": "number"
+        },
+        "upper": {
+          "description": "Since version 6: a whole-distribution band's one-sided upper bound, the 97th percentile of its whole-match resampled distance; the band passes when it is within the margin (hi).",
+          "type": "number",
+          "minimum": 0
+        },
+        "noise_floor": {
+          "description": "Since version 6: a whole-distribution band's noise floor, the 97th percentile of its centred resampled distance: about the distance a perfect engine shows at these sample sizes. A margin at or under it can never pass (margin below noise floor).",
+          "type": "number",
+          "minimum": 0
         },
         "report_only": {
           "description": "Why the band only reports (gates false in the band file, a real sample under its floor, or a generalisation under the floor): its word is shown, but it is left out of the joint word and of calib.pass.",
@@ -1013,7 +1023,7 @@
       "if": {
         "properties": {
           "operation": { "const": "calibrate" },
-          "schema.version": { "enum": ["2", "3", "4", "5"] },
+          "schema.version": { "enum": ["2", "3", "4", "5", "6"] },
           "outcome": { "not": { "const": "error" } }
         },
         "required": ["operation", "schema.version"]

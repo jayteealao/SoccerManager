@@ -153,6 +153,22 @@ Each row has a word by the same rules as a gating band. A change run judges a re
 
 The reported bands never move the joint word, its threshold, `calib.pass` or the exit code. Read a `fail` there as a gap between the engine and real football to look into, not as a broken change.
 
+## Read a distribution band
+
+Six reported bands judge a whole distribution: goals per match, the scoreline table, passes per team, and in a measures build shot distance and possession chains in passes and in seconds. Their rows read differently:
+
+```text
+goals_distribution       equal      -                 0.84013            0 to 0.42        whole sample    0.84013  fail (upper bound 1.01768, noise floor 0.20984)
+```
+
+- The value is a distance: how far the run's whole sample sits from the real sample (Wasserstein-1, in goals here; total variation, a share, for `scoreline_cells`). The distance column repeats it, and the real column reads `whole sample`, because the real side is a whole sample, not one value.
+- The range runs from 0 to the band's margin: the largest distance that still counts as the same distribution.
+- The upper bound is how far the distance could be, given the matches on both sides. The band passes when the upper bound is within the margin, and fails when even the low end of the distance is beyond it. In between it is `not sure`: play more matches, or accept that the real sample is too small to tell.
+- The noise floor is the distance a perfect engine would still show at these sample sizes. When the margin is at or under it the band can never pass, and the row says `margin below noise floor (floor <f>)`. For the shot and chain bands, whose real sample is 200 matches, the floor comes mostly from the real side; more engine matches cannot lower it.
+- With no real data here the band has no value: `no value: no real data here: <path>: <reason>`.
+
+`calib.real` gives the mean of each real sample beside its record, and `calib.reported` holds each row's `upper` and `noise_floor`.
+
 ## Accept a not-sure band
 
 A reported or gating band can stay `not sure` however many matches you play, for example a band whose real value is too uncertain to separate pass from fail. Once you have looked at it, accept it for this run:

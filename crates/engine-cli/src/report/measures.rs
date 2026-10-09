@@ -18,7 +18,8 @@ use std::collections::BTreeMap;
 
 use engine::observe::MatchStats;
 
-use super::bands::{BandDef, Builtin, Measure, Per};
+use super::bands::{BandDef, Builtin, Measure, Per, Source};
+use super::distribution::{Hist, Metric, bin_of};
 use super::{se_mean, se_ratio, se_share};
 use crate::calibrate::rows::{Measures, PASS_CELL_NAMES, PHASES, PLAYER_SLOTS, PlayerRow, ZONES};
 
@@ -131,7 +132,10 @@ pub fn fields_of(m: &Measure) -> Vec<&str> {
         Measure::Difference { of, minus } | Measure::ClubRange { of, minus, .. } => {
             all(&[of, minus])
         }
-        Measure::Scoreline { .. } | Measure::Builtin { .. } => Vec::new(),
+        Measure::Scoreline { .. }
+        | Measure::Builtin { .. }
+        | Measure::Distribution { .. }
+        | Measure::Cells { .. } => Vec::new(),
     }
 }
 
@@ -315,8 +319,34 @@ pub fn check(m: &Measure) -> Result<(), String> {
             }
             Ok(())
         }
+        Measure::Distribution { of, width, bins } => {
+            if !(width.is_finite() && *width > 0.0) {
+                return Err(format!("width {width} is not above 0"));
+            }
+            if !(2..=MAX_BINS).contains(bins) {
+                return Err(format!("bins {bins}: a histogram has 2 to {MAX_BINS} bins"));
+            }
+            match of.row_bins() {
+                Some((w, b)) if (w, b) != (*width, *bins) => Err(format!(
+                    "width {width} and bins {bins}: the rows hold {} in {b} bins of {w}",
+                    of.code()
+                )),
+                _ => Ok(()),
+            }
+        }
+        Measure::Cells { max } => {
+            if !(1..=MAX_SCORE).contains(max) {
+                return Err(format!(
+                    "max {max}: each side's cap must be 1 to {MAX_SCORE}"
+                ));
+            }
+            Ok(())
+        }
     }
 }
+
+/// The most bins a distribution band may name.
+const MAX_BINS: u32 = 100_000;
 
 /// The most goals one side of a scoreline band may name.
 const MAX_SCORE: u32 = 20;
@@ -696,6 +726,16 @@ pub fn terms(def: &BandDef, obs: &[Obs<'_>], scope: Scope) -> Terms {
             }
             return t;
         }
+        // A whole distribution has no per-match terms: it is judged by its distance, from
+        // [`histograms`].
+        Measure::Distribution { .. } | Measure::Cells { .. } => {
+            t.error = Error::Fixed;
+            for _ in obs {
+                push(&mut t, false, || ([0.0], [0.0]));
+            }
+            t.why_none = Some("a whole distribution is judged by its distance".into());
+            return t;
+        }
         Measure::Builtin {
             name: Builtin::StrongerTeamWinRate,
         } => {
@@ -755,12 +795,95 @@ pub fn terms(def: &BandDef, obs: &[Obs<'_>], scope: Scope) -> Terms {
     t
 }
 
-/// The places a value is shown to: a mean to 3, a share or a ratio to 4.
+/// The places a value is shown to: a mean to 3, a share or a ratio to 4, a distance to 5.
 pub fn places(m: &Measure) -> i32 {
     match m {
         Measure::Mean { .. } | Measure::Difference { .. } | Measure::ClubRange { .. } => 3,
+        Measure::Distribution { .. } | Measure::Cells { .. } => 5,
         _ => 4,
     }
+}
+
+/// The metric of a distribution band: total variation for cells, Wasserstein-1 otherwise.
+pub fn metric(m: &Measure) -> Metric {
+    match m {
+        Measure::Cells { .. } => Metric::Tv,
+        _ => Metric::W1,
+    }
+}
+
+/// The `(width, bins)` of a distribution band's histograms; `None` for any other band.
+pub fn hist_bins(m: &Measure) -> Option<(f64, u32)> {
+    match m {
+        Measure::Distribution { width, bins, .. } => Some((*width, *bins)),
+        Measure::Cells { max } => Some((1.0, (max + 1) * (max + 1))),
+        _ => None,
+    }
+}
+
+/// The cell of a score with each side capped at `max`: home times `max + 1` plus away.
+pub fn cell(home: u32, away: u32, max: u32) -> u32 {
+    home.min(max) * (max + 1) + away.min(max)
+}
+
+/// The histogram of `def`'s distribution in each match of `obs`, in their order: `None` for
+/// a match the band does not cover (outside `scope`, not played, or without the measures a
+/// measures source needs), so the list stays aligned with the matches. A measures source
+/// copies the rows' bins as they are; goals and passes are binned by `width`.
+pub fn histograms(def: &BandDef, obs: &[Obs<'_>], scope: Scope) -> Vec<Option<Hist>> {
+    let needs = def.needs_measures();
+    let Some((width, bins)) = hist_bins(&def.measure) else {
+        return vec![None; obs.len()];
+    };
+    let sparse = |dense: &mut dyn Iterator<Item = (usize, u32)>| -> Hist {
+        let mut h: BTreeMap<u32, f64> = BTreeMap::new();
+        for (k, n) in dense {
+            if n > 0 {
+                // At most a few dozen bins.
+                *h.entry(k as u32).or_default() += f64::from(n);
+            }
+        }
+        h.into_iter().collect()
+    };
+    obs.iter()
+        .map(|o| {
+            let measures = o.extras.map(|e| &e.measures).filter(|m| m.present);
+            if !(o.played() && scope.holds(o)) || (needs && measures.is_none()) {
+                return None;
+            }
+            let pair = |a: &[u32], b: &[u32]| -> Hist {
+                sparse(&mut a.iter().zip(b).map(|(x, y)| x + y).enumerate())
+            };
+            let points = |xs: &[f64]| -> Hist {
+                let mut h: BTreeMap<u32, f64> = BTreeMap::new();
+                for x in xs {
+                    *h.entry(bin_of(*x, width, bins)).or_default() += 1.0;
+                }
+                h.into_iter().collect()
+            };
+            let s = o.stats;
+            Some(match &def.measure {
+                Measure::Cells { max } => vec![(cell(s.goals[0], s.goals[1], *max), 1.0)],
+                Measure::Distribution { of, .. } => match of {
+                    Source::Goals => points(&[f64::from(s.goals[0] + s.goals[1])]),
+                    Source::Passes => points(&s.figures.passes.map(f64::from)),
+                    Source::ShotDistance => {
+                        let m = measures?;
+                        pair(&m.shot_bins[0], &m.shot_bins[1])
+                    }
+                    Source::ChainPasses => {
+                        let m = measures?;
+                        pair(&m.chain_pass_bins[0], &m.chain_pass_bins[1])
+                    }
+                    Source::ChainSeconds => {
+                        let m = measures?;
+                        pair(&m.chain_second_bins[0], &m.chain_second_bins[1])
+                    }
+                },
+                _ => return None,
+            })
+        })
+        .collect()
 }
 
 /// The row's range check, as the hard-coded checks made it: the rounded value inside the
@@ -1148,6 +1271,61 @@ mod tests {
         // The paired form gives the same value with every weight 1.
         assert_eq!(weighted(&t.per_match(), &[1; 5]), t.value());
         assert_eq!(places(&ratio.measure), 4);
+    }
+
+    #[test]
+    fn each_distribution_source_gives_each_match_its_histogram() {
+        use crate::report::bands::{Measure, Source};
+        let dist = |of, width, bins| band(Measure::Distribution { of, width, bins });
+        let mut a = stats([2, 1], [0, 0], [0, 0]);
+        a.figures.passes = [400, 500];
+        let b = stats([0, 0], [0, 0], [0, 0]);
+        let pair = [a.clone(), b];
+        let o = obs(&pair);
+        let h = histograms(&dist(Source::Goals, 1.0, 11), &o, Scope::All);
+        assert_eq!(h, vec![Some(vec![(3, 1.0)]), Some(vec![(0, 1.0)])]);
+        let h = histograms(&dist(Source::Passes, 1.0, 1500), &o, Scope::All);
+        assert_eq!(h[0], Some(vec![(400, 1.0), (500, 1.0)]));
+        // 10 goals or more is the last bin; the cells cap each side.
+        let mut many = stats([7, 6], [0, 0], [0, 0]);
+        many.figures.passes = [2000, 0];
+        let one = [many.clone()];
+        let h = histograms(&dist(Source::Goals, 1.0, 11), &obs(&one), Scope::All);
+        assert_eq!(h[0], Some(vec![(10, 1.0)]));
+        let cells = band(Measure::Cells { max: 5 });
+        let two = [a.clone(), many];
+        let h = histograms(&cells, &obs(&two), Scope::All);
+        assert_eq!(h, vec![Some(vec![(13, 1.0)]), Some(vec![(35, 1.0)])]);
+        // A measures source copies the rows' bins, both sides summed.
+        let mut e = extras([(0, 1), (0, 2)]);
+        e.measures.shot_bins[0][11] = 2;
+        e.measures.shot_bins[1][11] = 1;
+        e.measures.shot_bins[1][40] = 1;
+        e.measures.chain_second_bins[0][3] = 4;
+        let with_measures = [with(&a, &e), obs(std::slice::from_ref(&a))[0]];
+        let shots = dist(Source::ShotDistance, 1.0, 41);
+        let h = histograms(&shots, &with_measures, Scope::All);
+        assert_eq!(h[0], Some(vec![(11, 3.0), (40, 1.0)]));
+        assert_eq!(h[1], None, "a match without the measures is left out");
+        let h = histograms(
+            &dist(Source::ChainSeconds, 2.0, 31),
+            &with_measures,
+            Scope::All,
+        );
+        assert_eq!(h[0], Some(vec![(3, 4.0)]));
+        // Out of scope or not played: none.
+        let h = histograms(&shots, &with_measures, Scope::Arm(1));
+        assert_eq!(h, vec![None, None]);
+        assert!(
+            check(&Measure::Distribution {
+                of: Source::Goals,
+                width: 1.0,
+                bins: 11
+            })
+            .is_ok()
+        );
+        assert_eq!(places(&cells.measure), 5);
+        assert_eq!(metric(&cells.measure), Metric::Tv);
     }
 
     #[test]

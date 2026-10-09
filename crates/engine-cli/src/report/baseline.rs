@@ -265,6 +265,8 @@ mod tests {
             informational: None,
             why_none: None,
             unjudged: false,
+            whole: false,
+            dist: None,
         }
     }
 

@@ -8,6 +8,7 @@ pub mod accepted;
 pub mod bands;
 pub mod baseline;
 pub mod compare;
+pub mod distribution;
 pub mod measures;
 pub mod real;
 pub mod verdict;
@@ -201,6 +202,13 @@ pub struct BandCheck {
     /// The band reads measures this run's matches do not carry: its word is not sure.
     #[serde(skip)]
     pub unjudged: bool,
+    /// A whole-distribution band's row: its word comes from its bounds, never from `pass`.
+    #[serde(skip)]
+    pub whole: bool,
+    /// A whole-distribution band with a value: its distance from the real sample with its
+    /// bounds and word.
+    #[serde(skip)]
+    pub dist: Option<distribution::DistCheck>,
 }
 
 /// One arm of the red-card suite: mean goals per match of the full (home) side and the
@@ -264,6 +272,10 @@ pub struct RunBuilder {
     pub missing: u32,
     /// The length of every match, in minutes.
     pub minutes: u32,
+    /// The real samples of the distribution bands, read once per judgement, and the run
+    /// seed their range tests draw from.
+    real: std::sync::Arc<real::Samples>,
+    seed: u64,
 }
 
 impl RunBuilder {
@@ -274,7 +286,16 @@ impl RunBuilder {
             pairing_names: Vec::new(),
             missing: 0,
             minutes: 90,
+            real: std::sync::Arc::default(),
+            seed: 0,
         }
+    }
+
+    /// Gives the builder the real samples its distribution bands are judged against, and
+    /// the run seed of their range tests.
+    pub fn set_real_samples(&mut self, samples: std::sync::Arc<real::Samples>, seed: u64) {
+        self.real = samples;
+        self.seed = seed;
     }
 
     /// The formations suite plays `names.len()` pairings of `matches` matches each.
@@ -653,6 +674,9 @@ impl RunBuilder {
     /// unjudged: it does not pass.
     pub fn check(&self, spec: &RowSpec<'_>) -> BandCheck {
         let obs = self.observations(spec.suite);
+        if spec.def.is_distribution() {
+            return self.distribution_check(spec, &obs);
+        }
         let terms = measures::terms(spec.def, &obs, spec.scope);
         let value = round_to(
             terms.value().unwrap_or(0.0),
@@ -671,7 +695,76 @@ impl RunBuilder {
             informational: None,
             why_none: terms.why_none().map(str::to_string),
             unjudged,
+            whole: false,
+            dist: None,
         }
+    }
+
+    /// A distribution band's row over the matches `obs`: its distance from the real sample,
+    /// rounded to 5 places, in the range 0 to its margin, with its bootstrap error, bounds,
+    /// noise floor and word. Without a real sample, or with fewer than two matches, it has
+    /// no value and says why.
+    pub fn distribution_check(&self, spec: &RowSpec<'_>, obs: &[Obs<'_>]) -> BandCheck {
+        let def = spec.def;
+        let unjudged = def.needs_measures() && !self.has_measures(spec.suite);
+        let mut c = BandCheck {
+            band: def.band.clone(),
+            suite: spec.suite.code().to_string(),
+            pairing: spec.label.clone(),
+            value: 0.0,
+            lo: def.lo,
+            hi: def.hi,
+            pass: false,
+            se: 0.0,
+            informational: None,
+            why_none: None,
+            unjudged,
+            whole: true,
+            dist: None,
+        };
+        if unjudged {
+            return c;
+        }
+        let real = match self.real.get(&def.band) {
+            Some(Ok(sample)) => sample,
+            Some(Err(why)) => {
+                c.why_none = Some(format!("no real data here: {why}"));
+                return c;
+            }
+            None => {
+                c.why_none = Some("no real data here: the real sample was not read".into());
+                return c;
+            }
+        };
+        let Some((width, bins)) = measures::hist_bins(&def.measure) else {
+            return c;
+        };
+        let engine = distribution::Sample {
+            per_match: measures::histograms(def, obs, spec.scope)
+                .into_iter()
+                .flatten()
+                .collect(),
+            bins,
+            width,
+        };
+        let seed = distribution::stream(self.seed, &def.band);
+        match distribution::judge_to_real(
+            &engine,
+            real,
+            measures::metric(&def.measure),
+            def.hi,
+            seed,
+            verdict::RESAMPLES,
+        ) {
+            Ok(d) => {
+                c.value = round_to(d.distance, 5);
+                c.pass = def.range().contains(c.value);
+                c.se = round_to(d.se, 5);
+                c.dist = Some(d);
+            }
+            Err(why) => c.why_none = Some(why),
+        }
+        c
     }
 
     /// The checks of the bands that only report: every row of a band with a reason in
@@ -711,6 +804,8 @@ impl RunBuilder {
                 informational: None,
                 why_none: None,
                 unjudged: false,
+                whole: false,
+                dist: None,
             });
         }
         out.extend(rest.iter().map(|s| self.check(s)));
@@ -1045,8 +1140,9 @@ pub struct RuleInterval {
 /// (`calib.real`, `calib.realism`, and the real columns of each verdict); 5 since the bands
 /// that only report (`calib.reported`), the developer's acceptances (`calib.accepted`), the
 /// match counts (`calib.counts`), and how each verdict row was judged (`judged`, `note`,
-/// `accepted`). Every key of an older version stays.
-pub const REPORT_SCHEMA_VERSION: &str = "5";
+/// `accepted`); 6 since the whole-distribution bands (`upper` and `noise_floor` on a
+/// verdict row). Every key of an older version stays.
+pub const REPORT_SCHEMA_VERSION: &str = "6";
 
 /// The matches a run judged: every engine's rows, the fixtures both engines of a change run
 /// played, and the matches of each engine.

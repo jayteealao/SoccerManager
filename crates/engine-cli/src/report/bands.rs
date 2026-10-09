@@ -177,6 +177,61 @@ pub enum Measure {
         minus: Vec<String>,
         window: u32,
     },
+    /// A whole distribution, judged by its Wasserstein-1 distance from the real sample: each
+    /// match's histogram of `of` over `bins` bins of `width`, the last bin holding everything
+    /// above it.
+    Distribution {
+        of: Source,
+        width: f64,
+        bins: u32,
+    },
+    /// The scoreline table, judged by its total-variation distance from the real one: one
+    /// cell per match, each side's goals capped at `max` as "max or more".
+    Cells {
+        max: u32,
+    },
+}
+
+/// What a distribution band takes from each match.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Source {
+    /// The match's goals, both sides summed: one point per match.
+    Goals,
+    /// Each side's passes: two points per match.
+    Passes,
+    /// The distance of each shot from the goal, both sides: a measures build's shot bins.
+    ShotDistance,
+    /// The passes of each possession chain, both sides: a measures build's chain bins.
+    ChainPasses,
+    /// The seconds of each possession chain, both sides: a measures build's chain bins.
+    ChainSeconds,
+}
+
+impl Source {
+    /// The source's name, as the band file writes it.
+    pub fn code(self) -> &'static str {
+        match self {
+            Source::Goals => "goals",
+            Source::Passes => "passes",
+            Source::ShotDistance => "shot_distance",
+            Source::ChainPasses => "chain_passes",
+            Source::ChainSeconds => "chain_seconds",
+        }
+    }
+
+    /// The bins of a measures build's rows, as `(width, bins)`, for the sources read from
+    /// them; `None` for a source binned from the band record.
+    pub fn row_bins(self) -> Option<(f64, u32)> {
+        use crate::calibrate::rows::{CHAIN_PASS_BINS, CHAIN_SECOND_BINS, SHOT_BINS};
+        // At most a few dozen bins.
+        match self {
+            Source::Goals | Source::Passes => None,
+            Source::ShotDistance => Some((1.0, SHOT_BINS as u32)),
+            Source::ChainPasses => Some((1.0, CHAIN_PASS_BINS as u32)),
+            Source::ChainSeconds => Some((2.0, CHAIN_SECOND_BINS as u32)),
+        }
+    }
 }
 
 /// How a real value is reduced from its file.
@@ -207,6 +262,27 @@ pub enum Reduce {
     /// A CSV file: for each `group_by` value (columns joined by `+`), the largest key; the
     /// mean over the groups.
     GroupMax,
+    /// A CSV file, for a distribution band: each `group_by` value is a match, and each kept
+    /// row adds its key (a sum of columns, or a point `x:y` measured to `goal`) to the
+    /// match's histogram.
+    Histogram,
+    /// A CSV file, for a cells band: each kept row is a match, its key the score `home:away`.
+    Cells,
+    /// A CSV file, for a distribution band of possession chains: the rows of each `group_by`
+    /// value (a match) and `chain` value (a possession) are one chain, every row counted; its
+    /// length is the rows whose key holds one of `tokens` (and whose `same` columns agree)
+    /// when `count` is `passes`, or the seconds from its first row's `time` to its last
+    /// row's `time` plus that row's key (a duration), within the first row's `period`, when
+    /// `count` is `seconds`.
+    Chains,
+}
+
+/// What a chains reduction measures of each chain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChainCount {
+    Passes,
+    Seconds,
 }
 
 /// Where a band's real value is measured: a file of the real-data folder and how to read it.
@@ -265,6 +341,19 @@ pub struct Pointer {
     /// where the file leaves a value unmeasured (such as an event without a duration).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub skip_blank: bool,
+    /// A chains reduction: the column naming each row's possession.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain: Option<String>,
+    /// A chains reduction of seconds: the column of each row's time, in seconds or as
+    /// `HH:MM:SS.mmm`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time: Option<String>,
+    /// A chains reduction of seconds: the column of each row's period.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub period: Option<String>,
+    /// A chains reduction: what it measures of each chain.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub count: Option<ChainCount>,
 }
 
 /// A band that measures an engine experiment no real match repeats.
@@ -425,6 +514,9 @@ impl BandDef {
 
     /// `true` when the band reads a field only a `measures` build records.
     pub fn needs_measures(&self) -> bool {
+        if let Measure::Distribution { of, .. } = &self.measure {
+            return of.row_bins().is_some();
+        }
         super::measures::fields_of(&self.measure)
             .into_iter()
             .any(super::measures::is_measure_field)
@@ -434,6 +526,14 @@ impl BandDef {
     /// club range.
     pub fn needs_extras(&self) -> bool {
         self.needs_measures() || matches!(self.measure, Measure::ClubRange { .. })
+    }
+
+    /// `true` for a band judged as a whole distribution: a distribution or a cells band.
+    pub fn is_distribution(&self) -> bool {
+        matches!(
+            self.measure,
+            Measure::Distribution { .. } | Measure::Cells { .. }
+        )
     }
 
     fn judgement(&self) -> Judgement<'_> {
@@ -672,7 +772,7 @@ const REQUIRED: [&str; 11] = [
 ];
 
 /// The keys a real source may hold.
-const SOURCE_KEYS: [&str; 20] = [
+const SOURCE_KEYS: [&str; 24] = [
     "none",
     "dataset",
     "file",
@@ -693,6 +793,10 @@ const SOURCE_KEYS: [&str; 20] = [
     "scores",
     "window",
     "skip_blank",
+    "chain",
+    "time",
+    "period",
+    "count",
 ];
 
 /// The record rules of a version 4 file, checked on the raw document before the typed
@@ -1278,7 +1382,7 @@ mod tests {
     }
 
     /// The bands the shipped file adds with `gates: false`, in file order.
-    const REPORTED: [&str; 24] = [
+    const REPORTED: [&str; 30] = [
         "fouls_per_team",
         "offsides_per_team",
         "home_goal_difference",
@@ -1303,7 +1407,112 @@ mod tests {
         "distance_per_minute",
         "high_speed_share",
         "peak_speed_mean",
+        "goals_distribution",
+        "scoreline_cells",
+        "passes_per_team_distribution",
+        "shot_distance_distribution",
+        "chain_passes_distribution",
+        "chain_seconds_distribution",
     ];
+
+    /// The registry digest of the 18 gating bands, as it stood before the distribution bands: the
+    /// whole-distribution bands that follow them change none of their judgement.
+    const GATING_DIGEST: &str = "2cdb3c309f21";
+
+    #[test]
+    fn the_whole_distribution_bands_parse_and_leave_the_gating_digest_as_it_was() {
+        let r = Registry::load(&shipped()).unwrap();
+        assert_eq!(gating(&r).digest(), GATING_DIGEST);
+        let kind = |name: &str| r.band(name).unwrap().measure.clone();
+        assert_eq!(
+            kind("goals_distribution"),
+            Measure::Distribution {
+                of: Source::Goals,
+                width: 1.0,
+                bins: 11
+            }
+        );
+        assert_eq!(kind("scoreline_cells"), Measure::Cells { max: 5 });
+        for name in [
+            "goals_distribution",
+            "scoreline_cells",
+            "passes_per_team_distribution",
+            "shot_distance_distribution",
+            "chain_passes_distribution",
+            "chain_seconds_distribution",
+        ] {
+            let b = r.band(name).unwrap();
+            assert!(b.is_distribution(), "{name}");
+            assert!(!b.gates, "{name}");
+            assert_eq!(b.lo, 0.0, "{name}");
+            assert!((b.smallest_shift - b.hi / 4.0).abs() < 1e-9, "{name}");
+            let RealSource::Pointer(p) = &b.real.as_ref().unwrap().source else {
+                panic!("{name}");
+            };
+            assert!(
+                matches!(
+                    p.reduce,
+                    Some(Reduce::Histogram | Reduce::Cells | Reduce::Chains)
+                ),
+                "{name}"
+            );
+        }
+        // Which read the measures: the three read from a measures build's rows.
+        let needs: Vec<&str> = r
+            .bands
+            .iter()
+            .filter(|b| b.is_distribution() && b.needs_measures())
+            .map(|b| b.band.as_str())
+            .collect();
+        assert_eq!(
+            needs,
+            [
+                "shot_distance_distribution",
+                "chain_passes_distribution",
+                "chain_seconds_distribution"
+            ]
+        );
+        // An unknown source is refused by the parse, naming the file and the source.
+        let err = refusal(&edited("goals_distribution", |b| {
+            b["measure"]["of"] = "corners".into();
+        }));
+        assert!(err.contains(BANDS_FILE) && err.contains("corners"), "{err}");
+        let cases: [(&str, Value, &str); 4] = [
+            (
+                "goals_distribution",
+                serde_json::json!({"kind": "distribution", "of": "goals", "width": 0.0, "bins": 11}),
+                "width 0",
+            ),
+            (
+                "goals_distribution",
+                serde_json::json!({"kind": "distribution", "of": "goals", "width": 1.0, "bins": 1}),
+                "bins 1",
+            ),
+            (
+                "shot_distance_distribution",
+                serde_json::json!({"kind": "distribution", "of": "shot_distance", "width": 2.0, "bins": 41}),
+                "the rows hold shot_distance in 41 bins of 1",
+            ),
+            (
+                "scoreline_cells",
+                serde_json::json!({"kind": "cells", "max": 0}),
+                "max 0",
+            ),
+        ];
+        for (band, measure, named) in cases {
+            let err = refusal(&edited(band, |b| b["measure"] = measure));
+            assert!(err.contains(&format!("({band}).measure")), "{err}");
+            assert!(err.contains(named), "{named}: {err}");
+        }
+        // An unknown chain count is refused (the pointer then matches no source).
+        let err = refusal(&edited("chain_passes_distribution", |b| {
+            b["real"]["source"]["count"] = "touches".into();
+        }));
+        assert!(
+            err.contains(BANDS_FILE) && err.contains("RealSource"),
+            "{err}"
+        );
+    }
 
     #[test]
     fn a_version_two_file_migrates_to_the_same_bands_as_the_shipped_registry() {

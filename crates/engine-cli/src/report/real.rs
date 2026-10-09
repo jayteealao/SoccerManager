@@ -17,7 +17,8 @@ use engine::observe::round_to;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::bands::{BandDef, Evidence, Pointer, RealSource, Reduce, Registry};
+use super::bands::{BandDef, ChainCount, Evidence, Measure, Pointer, RealSource, Reduce, Registry};
+use super::distribution::{Sample, bin_of};
 use super::{se_mean, se_ratio, se_share};
 
 /// Where the real-data folder came from.
@@ -337,6 +338,9 @@ fn read_csv(path: &Path, p: &Pointer) -> Result<(f64, Option<f64>), String> {
             .ok_or_else(|| format!("no column {name}"))
     };
     let reduce = p.reduce.unwrap_or(Reduce::Mean);
+    if matches!(reduce, Reduce::Histogram | Reduce::Cells | Reduce::Chains) {
+        return Err(WHOLE_SAMPLE.into());
+    }
     let filter: Vec<(usize, &Vec<String>)> = p
         .filter
         .iter()
@@ -563,7 +567,437 @@ fn read_csv(path: &Path, p: &Pointer) -> Result<(f64, Option<f64>), String> {
             let f: f64 = xs.iter().map(|x| x * (x - 1.0)).sum();
             Ok((xs.len() as f64 * f / (s * s), None))
         }
+        Reduce::Histogram | Reduce::Cells | Reduce::Chains => Err(WHOLE_SAMPLE.into()),
     }
+}
+
+/// Why a whole-sample reduction gives no single value.
+const WHOLE_SAMPLE: &str = "a whole sample is read by the distribution test, not as one value";
+
+/// The real samples of the distribution bands, by band: the whole sample, or why it is not
+/// here (the path and the reason).
+pub type Samples = BTreeMap<String, Result<Sample, String>>;
+
+/// What one distribution band's reader does with each row of its file.
+enum Take {
+    /// A histogram of the key: the signed sum of columns, or a point measured to `goal`.
+    Histogram(Key, Option<[f64; 2]>),
+    /// A cells table of the score in two columns, each side capped at `max`.
+    Cells(usize, usize, u32),
+    /// Possession chains of the `chain` column: passes counted by the key's tokens, or
+    /// seconds from the `time` column with the key as the duration, within one `period`.
+    Chains {
+        chain: usize,
+        count: ChainCount,
+        key: usize,
+        tokens: BTreeSet<String>,
+        time: Option<usize>,
+        period: Option<usize>,
+    },
+}
+
+/// One chain as its rows arrive: its first time and period, the end of its last row in
+/// that period, and its counted rows.
+#[derive(Default)]
+struct ChainAcc {
+    start: f64,
+    period: String,
+    end: f64,
+    passes: u32,
+}
+
+/// One distribution band reading its file: its rules, and what it has read so far.
+struct Reader {
+    band: String,
+    width: f64,
+    bins: u32,
+    take: Take,
+    filter: Vec<(usize, Vec<String>)>,
+    ranges: Vec<(usize, [f64; 2])>,
+    same: Option<(usize, usize)>,
+    group: Vec<usize>,
+    skip_blank: bool,
+    /// Each match's histogram, by its group value.
+    hists: BTreeMap<String, BTreeMap<u32, f64>>,
+    chains: BTreeMap<(String, String), ChainAcc>,
+    error: Option<String>,
+}
+
+/// A time cell: seconds, or `HH:MM:SS.mmm`.
+fn seconds(text: &str) -> Option<f64> {
+    let text = text.trim();
+    if let Ok(v) = text.parse::<f64>() {
+        return Some(v);
+    }
+    text.split(':').try_fold(0.0, |acc, part| {
+        Some(acc * 60.0 + part.parse::<f64>().ok()?)
+    })
+}
+
+impl Reader {
+    /// A reader of `def` over a file with the columns `names`; `Err` names what the pointer
+    /// lacks or the file does not hold.
+    fn new(def: &BandDef, p: &Pointer, names: &[&str]) -> Result<Self, String> {
+        let column = |name: &str| {
+            names
+                .iter()
+                .position(|n| *n == name)
+                .ok_or_else(|| format!("no column {name}"))
+        };
+        let (width, bins) = super::measures::hist_bins(&def.measure)
+            .ok_or_else(|| "the band is not a whole distribution".to_string())?;
+        let reduce = p.reduce.ok_or_else(|| {
+            "a whole distribution needs reduce histogram, cells or chains".to_string()
+        })?;
+        let need = |what: &str| format!("a {} needs {what}", reduce_name(reduce));
+        let pair = || -> Result<(usize, usize), String> {
+            let (a, b) = p
+                .key
+                .split_once(':')
+                .ok_or_else(|| need("its key as two columns joined by :"))?;
+            Ok((column(a)?, column(b)?))
+        };
+        let take = match (reduce, &def.measure) {
+            (Reduce::Histogram, Measure::Distribution { .. }) => {
+                if p.key.contains(':') {
+                    let (a, b) = pair()?;
+                    Take::Histogram(Key::Pair(a, b), Some(p.goal.ok_or_else(|| need("goal"))?))
+                } else {
+                    Take::Histogram(Key::Sum(signed_columns(&p.key, &column)?), None)
+                }
+            }
+            (Reduce::Cells, Measure::Cells { max }) => {
+                let (a, b) = pair()?;
+                Take::Cells(a, b, *max)
+            }
+            (Reduce::Chains, Measure::Distribution { .. }) => {
+                let count = p.count.ok_or_else(|| need("count (passes or seconds)"))?;
+                let chain = column(p.chain.as_deref().ok_or_else(|| need("chain"))?)?;
+                let (time, period) = match count {
+                    ChainCount::Passes => (None, None),
+                    ChainCount::Seconds => (
+                        Some(column(p.time.as_deref().ok_or_else(|| need("time"))?)?),
+                        Some(column(p.period.as_deref().ok_or_else(|| need("period"))?)?),
+                    ),
+                };
+                let tokens: BTreeSet<String> = p.tokens.iter().flatten().cloned().collect();
+                if count == ChainCount::Passes && tokens.is_empty() {
+                    return Err(need("tokens"));
+                }
+                Take::Chains {
+                    chain,
+                    count,
+                    key: column(&p.key)?,
+                    tokens,
+                    time,
+                    period,
+                }
+            }
+            (r, _) => {
+                return Err(format!(
+                    "reduce {} does not read this band's kind",
+                    reduce_name(r)
+                ));
+            }
+        };
+        let group = match &p.group_by {
+            Some(g) => g.split('+').map(column).collect::<Result<_, _>>()?,
+            None => return Err(need("group_by")),
+        };
+        Ok(Reader {
+            band: def.band.clone(),
+            width,
+            bins,
+            take,
+            filter: p
+                .filter
+                .iter()
+                .flatten()
+                .map(|(c, vals)| column(c).map(|i| (i, vals.clone())))
+                .collect::<Result<_, _>>()?,
+            ranges: p
+                .range
+                .iter()
+                .flatten()
+                .map(|(c, r)| column(c).map(|i| (i, *r)))
+                .collect::<Result<_, _>>()?,
+            same: match &p.same {
+                Some([a, b]) => Some((column(a)?, column(b)?)),
+                None => None,
+            },
+            group,
+            skip_blank: p.skip_blank,
+            hists: BTreeMap::new(),
+            chains: BTreeMap::new(),
+            error: None,
+        })
+    }
+
+    /// Reads one row, `n` its line number.
+    fn row(&mut self, cells: &[&str], names: &[&str], n: usize) -> Result<(), String> {
+        let cell = |i: usize| {
+            cells
+                .get(i)
+                .copied()
+                .ok_or_else(|| format!("line {n} has no column {}", names[i]))
+        };
+        let number = |i: usize| -> Result<f64, String> {
+            let text = cell(i)?;
+            text.trim()
+                .parse::<f64>()
+                .map_err(|_| format!("line {n} column {}: {text} is not a number", names[i]))
+        };
+        let group = self
+            .group
+            .iter()
+            .map(|&i| cell(i))
+            .collect::<Result<Vec<_>, _>>()?
+            .join("+");
+        // A chain is every row of its possession; the filters choose the rows it counts.
+        let mut kept = true;
+        for (i, vals) in &self.filter {
+            kept &= vals.iter().any(|v| v == cell(*i).unwrap_or(""));
+        }
+        if let Some((a, b)) = self.same {
+            kept &= cell(a)? == cell(b)?;
+        }
+        for &(i, [lo, hi]) in &self.ranges {
+            if !kept {
+                break;
+            }
+            let v = number(i)?;
+            kept &= lo <= v && v < hi;
+        }
+        let (width, bins) = (self.width, self.bins);
+        match &self.take {
+            Take::Chains {
+                chain,
+                count,
+                key,
+                tokens,
+                time,
+                period,
+            } => {
+                let id = (group, cell(*chain)?.to_string());
+                let fresh = !self.chains.contains_key(&id);
+                let acc = self.chains.entry(id).or_default();
+                match (count, time, period) {
+                    (ChainCount::Seconds, Some(t), Some(p)) => {
+                        let at = seconds(cell(*t)?)
+                            .ok_or_else(|| format!("line {n} column {}: not a time", names[*t]))?;
+                        let dur_text = cell(*key)?.trim();
+                        let dur = if dur_text.is_empty() {
+                            0.0
+                        } else {
+                            number(*key)?
+                        };
+                        let per = cell(*p)?;
+                        if fresh {
+                            acc.start = at;
+                            acc.period = per.to_string();
+                        }
+                        if per == acc.period {
+                            acc.end = at + dur;
+                        }
+                    }
+                    _ => {
+                        let hit = cell(*key)?.split_whitespace().any(|t| tokens.contains(t));
+                        acc.passes += u32::from(kept && hit);
+                    }
+                }
+                return Ok(());
+            }
+            _ if !kept => return Ok(()),
+            Take::Cells(a, b, max) => {
+                let (h, w) = (number(*a)?, number(*b)?);
+                if h < 0.0 || w < 0.0 {
+                    return Err(format!("line {n}: a score below 0"));
+                }
+                // A score of whole goals, capped at `max`.
+                let k = super::measures::cell(h as u32, w as u32, *max);
+                *self.hists.entry(group).or_default().entry(k).or_default() += 1.0;
+            }
+            Take::Histogram(key, goal) => {
+                if self.skip_blank {
+                    let used = match key {
+                        Key::Sum(cols) => cols.iter().map(|c| c.0).collect(),
+                        Key::Pair(a, b) => vec![*a, *b],
+                        Key::Tokens(i) => vec![*i],
+                    };
+                    if used
+                        .into_iter()
+                        .any(|i| cell(i).is_ok_and(|t| t.trim().is_empty()))
+                    {
+                        return Ok(());
+                    }
+                }
+                let x = match (key, goal) {
+                    (Key::Pair(a, b), Some([gx, gy])) => (gx - number(*a)?).hypot(gy - number(*b)?),
+                    (Key::Sum(cols), _) => cols
+                        .iter()
+                        .try_fold(0.0, |acc, &(i, s)| Ok::<_, String>(acc + s * number(i)?))?,
+                    _ => return Err("a histogram key is columns or a point".into()),
+                };
+                let k = bin_of(x, width, bins);
+                *self.hists.entry(group).or_default().entry(k).or_default() += 1.0;
+            }
+        }
+        Ok(())
+    }
+
+    /// The whole sample: one histogram per match, in the order of their group values.
+    fn finish(mut self) -> Result<Sample, String> {
+        if let Some(e) = self.error {
+            return Err(e);
+        }
+        if let Take::Chains { count, .. } = &self.take {
+            for ((group, _), acc) in std::mem::take(&mut self.chains) {
+                let v = match count {
+                    ChainCount::Passes => f64::from(acc.passes),
+                    ChainCount::Seconds => (acc.end - acc.start).max(0.0),
+                };
+                let k = bin_of(v, self.width, self.bins);
+                *self.hists.entry(group).or_default().entry(k).or_default() += 1.0;
+            }
+        }
+        if self.hists.is_empty() {
+            return Err("no row kept".into());
+        }
+        Ok(Sample {
+            per_match: self
+                .hists
+                .into_values()
+                .map(|h| h.into_iter().collect())
+                .collect(),
+            bins: self.bins,
+            width: self.width,
+        })
+    }
+}
+
+/// Reads the real sample of every distribution band of `registry` from `folder`: each file
+/// once, streamed line by line, even when several bands point into it. A band whose folder,
+/// file, columns or rows are not there is `Err` with the path and the reason, and the others
+/// read on.
+pub fn samples(folder: &RealFolder, registry: &Registry) -> Samples {
+    let mut out = Samples::new();
+    let mut by_file: BTreeMap<&str, Vec<(&BandDef, &Pointer)>> = BTreeMap::new();
+    for def in registry.bands.iter().filter(|d| d.is_distribution()) {
+        match def.real.as_ref().map(|r| &r.source) {
+            Some(RealSource::Pointer(p)) => by_file.entry(&p.file).or_default().push((def, p)),
+            Some(RealSource::NoCounterpart(n)) => {
+                out.insert(
+                    def.band.clone(),
+                    Err(format!("no real counterpart: {}", n.none)),
+                );
+            }
+            None => {
+                out.insert(def.band.clone(), Err("no real record".into()));
+            }
+        }
+    }
+    for (file, bands) in by_file {
+        let read = read_file(folder, file, &bands);
+        for (def, _) in &bands {
+            let got = match &read {
+                Ok(map) => map
+                    .get(&def.band)
+                    .cloned()
+                    .unwrap_or_else(|| Err("not read".into())),
+                Err(e) => Err(e.clone()),
+            };
+            out.insert(def.band.clone(), got);
+        }
+    }
+    out
+}
+
+/// The samples of `bands` from one file of `folder`; `Err` when the folder or the file is
+/// not there, or its header cannot be read.
+fn read_file(
+    folder: &RealFolder,
+    file: &str,
+    bands: &[(&BandDef, &Pointer)],
+) -> Result<BTreeMap<String, Result<Sample, String>>, String> {
+    let Some(dir) = &folder.path else {
+        return Err(
+            "no real-data folder: the content folder is in no git checkout; pass --real-data"
+                .into(),
+        );
+    };
+    if !dir.is_dir() {
+        return Err(format!("{}: the folder does not exist", dir.display()));
+    }
+    let path = dir.join(file);
+    let at = |why: String| format!("{}: {why}", path.display());
+    if !path.is_file() {
+        return Err(at("the file does not exist".into()));
+    }
+    let mut rows = lines(&path).map_err(at)?.lines();
+    let header = match rows.next() {
+        Some(line) => line.map_err(|e| at(format!("cannot read: {e}")))?,
+        None => return Err(at("the file is empty".into())),
+    };
+    let names: Vec<&str> = header.trim_end_matches('\r').split(',').collect();
+    let mut out = BTreeMap::new();
+    let mut readers = Vec::new();
+    for (def, p) in bands {
+        match Reader::new(def, p, &names) {
+            Ok(r) => readers.push(r),
+            Err(why) => {
+                out.insert(def.band.clone(), Err(at(why)));
+            }
+        }
+    }
+    for (n, line) in rows.enumerate() {
+        let line = line.map_err(|e| at(format!("cannot read line {}: {e}", n + 2)))?;
+        let line = line.trim_end_matches('\r');
+        if line.is_empty() {
+            continue;
+        }
+        if line.contains('"') {
+            return Err(at(format!(
+                "line {} holds a quoted field; this reader takes none",
+                n + 2
+            )));
+        }
+        let cells: Vec<&str> = line.split(',').collect();
+        for r in readers.iter_mut().filter(|r| r.error.is_none()) {
+            if let Err(e) = r.row(&cells, &names, n + 2) {
+                r.error = Some(e);
+            }
+        }
+    }
+    for r in readers {
+        let band = r.band.clone();
+        out.insert(band, r.finish().map_err(at));
+    }
+    Ok(out)
+}
+
+/// The value `calib.real` shows for a whole sample, which has no single value: the mean of
+/// its points (each bin at `k · width`; for a cells table, home plus away goals as capped)
+/// and its standard error over matches, as a pooled ratio.
+pub fn sample_mean(def: &BandDef, s: &Sample) -> (f64, f64) {
+    let point = |k: u32| match &def.measure {
+        Measure::Cells { max } => f64::from(k / (max + 1) + k % (max + 1)),
+        _ => f64::from(k) * s.width,
+    };
+    let (ys, xs): (Vec<f64>, Vec<f64>) = s
+        .per_match
+        .iter()
+        .map(|h| {
+            h.iter()
+                .fold((0.0, 0.0), |(y, x), &(k, n)| (y + n * point(k), x + n))
+        })
+        .unzip();
+    let total: f64 = xs.iter().sum();
+    let mean = if total > 0.0 {
+        ys.iter().sum::<f64>() / total
+    } else {
+        0.0
+    };
+    (mean, se_ratio(&ys, &xs))
 }
 
 /// The name of a reduction, as the band file writes it.
@@ -697,8 +1131,9 @@ pub struct GeneralisationInfo {
     pub word: &'static str,
 }
 
-/// Reads every band's real value from `folder`.
-pub fn read_all(folder: &RealFolder, registry: &Registry) -> RealInfo {
+/// Reads every band's real value from `folder`; a distribution band's comes from its whole
+/// sample in `samples`, read once for the judgement.
+pub fn read_all(folder: &RealFolder, registry: &Registry, samples: &Samples) -> RealInfo {
     let floor = u64::from(registry.generalisation_floor);
     let present = folder.path.as_ref().is_some_and(|p| p.is_dir());
     let mut info = RealInfo {
@@ -715,7 +1150,44 @@ pub fn read_all(folder: &RealFolder, registry: &Registry) -> RealInfo {
         bands: Vec::with_capacity(registry.bands.len()),
     };
     for def in &registry.bands {
-        let outcome = read(folder, def);
+        let whole = def.is_distribution().then(|| samples.get(&def.band));
+        let outcome = match whole {
+            Some(Some(Ok(sample))) => {
+                let (value, se) = sample_mean(def, sample);
+                Outcome::Read {
+                    value,
+                    se: Some(se),
+                    file_date: def.real.as_ref().and_then(|r| match &r.source {
+                        RealSource::Pointer(p) => folder
+                            .path
+                            .as_ref()
+                            .and_then(|d| modified_date(&d.join(&p.file)))
+                            .filter(|d| *d > r.date),
+                        RealSource::NoCounterpart(_) => None,
+                    }),
+                }
+            }
+            Some(Some(Err(why)))
+                if def
+                    .real
+                    .as_ref()
+                    .is_some_and(|r| r.no_counterpart().is_none()) =>
+            {
+                Outcome::NotHere {
+                    path: String::new(),
+                    reason: why.clone(),
+                }
+            }
+            Some(None) => Outcome::NotHere {
+                path: String::new(),
+                reason: "the whole sample was not read".into(),
+            },
+            _ => read(folder, def),
+        };
+        let matches = match whole {
+            Some(Some(Ok(sample))) => Some(sample.per_match.len() as u64),
+            _ => None,
+        };
         let nc = matches!(outcome, Outcome::NoCounterpart { .. });
         let (status, value, se, file_date, reason) = match outcome {
             Outcome::Read {
@@ -759,7 +1231,7 @@ pub fn read_all(folder: &RealFolder, registry: &Registry) -> RealInfo {
             date: def.real.as_ref().map(|r| r.date.clone()),
             evidence: def.evidence,
             measurement: MeasurementInfo {
-                count: def.confidence.map(|c| c.measurement.count),
+                count: matches.or(def.confidence.map(|c| c.measurement.count)),
                 se: se.map(|s| round_to(s, 6)),
                 word: measurement_word(se, def.smallest_shift, nc),
             },
@@ -868,6 +1340,7 @@ pub fn realism(registry: &Registry, rows: &[super::verdict::VerdictRow]) -> Real
 mod tests {
     use super::*;
     use crate::report::bands::{BandDef, Condition, Confidence, Generalisation, Measurement};
+    use crate::report::distribution::Hist;
     use std::io::Write;
 
     fn temp(name: &str) -> PathBuf {
@@ -899,6 +1372,10 @@ mod tests {
             scores: None,
             window: None,
             skip_blank: false,
+            chain: None,
+            time: None,
+            period: None,
+            count: None,
         }
     }
 
@@ -1164,6 +1641,8 @@ mod tests {
             no_target: None,
             real: None,
             distance: None,
+            upper: None,
+            noise_floor: None,
             report_only: None,
             real_note: None,
             judged: None,
@@ -1215,6 +1694,7 @@ mod tests {
         let info = read_all(
             &at(&std::env::temp_dir().join("engine-cli-real-absent")),
             &r,
+            &Samples::new(),
         );
         let corners = info.band("corners_per_team").unwrap();
         assert_eq!(corners.generalisation.units, Some(1));
@@ -1241,7 +1721,7 @@ mod tests {
             ("n/a", "n/a")
         );
         assert_eq!(strong.report_only, None);
-        assert_eq!((info.missing, info.no_counterpart), (15 + 24, 3));
+        assert_eq!((info.missing, info.no_counterpart), (15 + 30, 3));
 
         let mut joint = Joint {
             word: Word::Fail,
@@ -1413,6 +1893,115 @@ mod tests {
         ));
         assert!((v - 0.37).abs() < 1e-12);
         assert!((se.unwrap() - se_share(v, 600)).abs() < 1e-12);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn gz(path: &Path, text: &str) {
+        let file = File::create(path).unwrap();
+        let mut gz = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+        gz.write_all(text.as_bytes()).unwrap();
+        gz.finish().unwrap();
+    }
+
+    /// The shipped distribution bands' pointers over small synthetic files: histograms
+    /// grouped by match, cells from a score, shot distances from a compressed file, and
+    /// possession chains in passes and seconds from one compressed file read once.
+    #[test]
+    fn each_whole_sample_reads_one_histogram_per_match() {
+        let dir = temp("samples");
+        std::fs::write(
+            dir.join("wy2_matches.csv"),
+            "comp,match,hg,ag\nEngland,1,2,1\nFrance,2,0,0\nGermany,3,6,6\nOther,4,9,9\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("wy2_team_matches.csv"),
+            "match,team,passes\n1,10,400\n1,11,500\n2,12,1600\n",
+        )
+        .unwrap();
+        gz(
+            &dir.join("sb_events.csv.gz"),
+            "mid,type,x,y\n7,Shot,93,34\n7,Pass,10,10\n8,Shot,105,0\n8,Shot,50,34\n",
+        );
+        gz(
+            &dir.join("sb2_events.csv.gz"),
+            "mid,period,ts,type,team,poss,poss_team,dur\n\
+             5,1,00:00:00.000,Starting XI,A,1,A,0.0\n\
+             5,1,00:00:01.000,Pass,A,1,A,1.5\n\
+             5,1,00:00:03.000,Pass,A,1,A,2.0\n\
+             5,1,00:00:05.500,Pass,B,1,A,1.0\n\
+             5,1,00:00:06.000,Pass,A,1,A,0.5\n\
+             5,1,00:00:10.000,Carry,B,2,B,4.0\n\
+             6,1,00:44:50.000,Pass,A,1,A,1.0\n\
+             6,2,00:00:05.000,Pass,A,1,A,\n",
+        );
+        let r = registry(&[]);
+        let got = samples(&at(&dir), &r);
+        assert_eq!(got.len(), 6, "{got:?}");
+        let hist = |band: &str| -> Vec<Hist> {
+            got[band]
+                .as_ref()
+                .unwrap_or_else(|e| panic!("{band}: {e}"))
+                .per_match
+                .clone()
+        };
+        // Matches 1, 2 and 3 of the five leagues: 3 goals, 0, and 12 as "10 or more".
+        assert_eq!(
+            hist("goals_distribution"),
+            [vec![(3, 1.0)], vec![(0, 1.0)], vec![(10, 1.0)]]
+        );
+        // 2-1 is cell 2 * 6 + 1; 6-6 is capped to 5-5, cell 35.
+        assert_eq!(
+            hist("scoreline_cells"),
+            [vec![(13, 1.0)], vec![(0, 1.0)], vec![(35, 1.0)]]
+        );
+        assert_eq!(
+            hist("passes_per_team_distribution"),
+            [vec![(400, 1.0), (500, 1.0)], vec![(1499, 1.0)]]
+        );
+        // Shots 12 m, 34 m and 55 m from the goal; the pass is not a shot.
+        assert_eq!(
+            hist("shot_distance_distribution"),
+            [vec![(12, 1.0)], vec![(34, 1.0), (40, 1.0)]]
+        );
+        // Match 5: a chain of 3 passes by the team in possession (the other team's pass
+        // is not one of them), from 0 s to 6.5 s; and a chain of a carry, 4 s. Match 6: one
+        // chain of 2 passes whose seconds stay in its first period: 1 s.
+        assert_eq!(
+            hist("chain_passes_distribution"),
+            [vec![(0, 1.0), (3, 1.0)], vec![(2, 1.0)]]
+        );
+        assert_eq!(
+            hist("chain_seconds_distribution"),
+            [vec![(2, 1.0), (3, 1.0)], vec![(0, 1.0)]]
+        );
+        // calib.real shows a whole sample's mean and its error over matches.
+        let info = read_all(&at(&dir), &r, &got);
+        let goals = info.band("goals_distribution").unwrap();
+        assert_eq!(goals.status, "read");
+        assert_eq!(goals.value, Some(round_to(13.0 / 3.0, 6)));
+        assert_eq!(goals.measurement.count, Some(3));
+        let cells = info.band("scoreline_cells").unwrap();
+        assert_eq!(cells.value, Some(round_to(13.0 / 3.0, 6)));
+        // A missing file: not here, by path, and the other bands read on.
+        std::fs::remove_file(dir.join("wy2_team_matches.csv")).unwrap();
+        let got = samples(&at(&dir), &r);
+        let why = got["passes_per_team_distribution"].as_ref().unwrap_err();
+        assert!(
+            why.ends_with("wy2_team_matches.csv: the file does not exist"),
+            "{why}"
+        );
+        assert!(got["goals_distribution"].is_ok());
+        let info = read_all(&at(&dir), &r, &got);
+        let passes = info.band("passes_per_team_distribution").unwrap();
+        assert_eq!(passes.status, "not_here");
+        // An absent folder: every band not here.
+        let none = samples(&at(&dir.join("absent")), &r);
+        assert!(none.values().all(|s| {
+            s.as_ref()
+                .unwrap_err()
+                .ends_with("the folder does not exist")
+        }));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
