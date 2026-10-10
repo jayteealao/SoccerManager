@@ -32,7 +32,7 @@ fn record_writes_a_fixture_and_prints_its_counts() {
     let dir = temp("record");
     let fixture = dir.join("match.smfx");
     let out = bin(&dir)
-        .args(["record", "--seed", "9", "--minutes", "1", "--out"])
+        .args(["record", "--seed", "6", "--minutes", "1", "--out"])
         .arg(&fixture)
         .output()
         .unwrap();
@@ -44,7 +44,7 @@ fn record_writes_a_fixture_and_prints_its_counts() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("\"ticks\":3000"), "stdout: {stdout}");
     // The hello, 3,000 tick frames, four events (the two kick-offs, half-time and full
-    // time), 60 running statistics and 60 condition messages
+    // time; seed 6 has no other event in a one-minute match), 60 running statistics and 60 condition messages
     // (one of each every simulated second), the closing statistics, and the full-time
     // ratings. The hello is stored so a replay forwards the recorded match rather than
     // describing the replaying build.
@@ -52,7 +52,7 @@ fn record_writes_a_fixture_and_prints_its_counts() {
     assert!(stdout.contains("\"hash\":\""), "stdout: {stdout}");
 
     let read = stream::read_fixture(&fixture).unwrap();
-    assert_eq!(read.seed, 9);
+    assert_eq!(read.seed, 6);
     assert_eq!(read.ticks, 3_000);
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -145,7 +145,7 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
         .args([
             "serve",
             "--seed",
-            "41",
+            "28",
             "--minutes",
             "2",
             "--reconnect-wait",
@@ -214,7 +214,7 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
         }
     }
     let first_tick = first_tick.expect("the match goes on after the reconnect");
-    // Seed 41 stops play at ticks 2,292 and 3,000 (half-time of a two-minute match), so the
+    // Seed 28 stops play at ticks 2,357 and 3,000 (half-time of a two-minute match), so the
     // match goes back to a stoppage the viewer held, never to kick-off and never past it.
     assert!(
         first_tick > 2_000 && first_tick <= last_tick + 1,
@@ -237,7 +237,7 @@ fn a_drop_before_the_first_stoppage_goes_back_to_kick_off() {
         .args([
             "serve",
             "--seed",
-            "42",
+            "20",
             "--minutes",
             "2",
             "--reconnect-wait",
@@ -269,7 +269,8 @@ fn a_drop_before_the_first_stoppage_goes_back_to_kick_off() {
             Incoming::Closed => panic!("the match closed before it resumed"),
         }
     };
-    // The capture taken at kick-off, with the same seed and lineup, is the restart point.
+    // Seed 20 first stops play at tick 2,123, after the drop, so the capture taken at
+    // kick-off, with the same seed and lineup, is the restart point.
     assert_eq!(first, 1);
     drop(client);
     let _ = child.kill();

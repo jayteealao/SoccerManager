@@ -272,7 +272,7 @@ fn counter_fixtures() -> [Fixture; 2] {
         Fixture::seed(42),
         Fixture {
             pack: None,
-            ..Fixture::knockout(12)
+            ..Fixture::knockout(11)
         },
     ]
 }
