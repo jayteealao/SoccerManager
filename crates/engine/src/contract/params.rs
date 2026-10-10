@@ -122,6 +122,11 @@ pub fn uses(action: ActionKind) -> [bool; 4] {
         | A::Organise
         | A::Rush => [true, false, false, true],
         A::Shield => [false, false, false, false],
+        // The five actions the record added: their stages are blended, but play reads none of
+        // their values yet, so they carry no tuning entry.
+        A::Mark | A::OffBallRun | A::Corner | A::FreeKick | A::LongThrow => {
+            [false, false, false, false]
+        }
         A::Pass
         | A::Chip
         | A::Cross
@@ -381,7 +386,9 @@ impl Default for ContractTuning {
                 | A::AerialReach
                 | A::Organise
                 | A::Rush => Some(knob(0.054, 0.2)),
-                A::Shield => None,
+                A::Shield | A::Mark | A::OffBallRun | A::Corner | A::FreeKick | A::LongThrow => {
+                    None
+                }
                 A::Shot => Some(k_only(0.07)),
                 A::LongShot => Some(k_only(0.02)),
                 A::Dribble => Some(k_only(0.071)),

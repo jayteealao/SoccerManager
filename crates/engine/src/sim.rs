@@ -1611,15 +1611,12 @@ mod tests {
 
     #[test]
     fn every_play_event_names_a_player() {
-        // The seed-42 match ends 0-0 since a pressed lone forward stopped dribbling into
-        // defenders, and the seed-7 match since every sprint costs stamina; the seed-9 match
-        // scores, so its goal events are checked too.
-        let events = full_match(9, |_| {}).take_events();
-        let goals = events
-            .iter()
-            .filter(|e| e.kind == EngineEventKind::Goal)
-            .count();
-        assert!(goals > 0, "the match scored no goal");
+        // The first match from seed 9 that scores, so its goal events are checked too: which
+        // seeds score moves whenever play changes on purpose.
+        let events = (9..40)
+            .map(|seed| full_match(seed, |_| {}).take_events())
+            .find(|events| events.iter().any(|e| e.kind == EngineEventKind::Goal))
+            .expect("a match from seeds 9 to 39 scores");
         for e in &events {
             // The manager's own events and the whistles at the end of a half name nobody.
             let named = !matches!(

@@ -1,0 +1,601 @@
+{
+  "attributes": {
+    "marking": {
+      "name": "marking",
+      "group": "technical",
+      "job": {
+        "action": "mark",
+        "stage": "execute",
+        "statistic": "distance kept from the attacker he covers",
+        "direction": "down"
+      }
+    },
+    "off_ball_movement": {
+      "name": "off_ball_movement",
+      "group": "technical",
+      "job": {
+        "action": "off_ball_run",
+        "stage": "execute",
+        "statistic": "runs timed onside against the line per match",
+        "direction": "up"
+      }
+    },
+    "corners": {
+      "name": "corners",
+      "group": "technical",
+      "job": {
+        "action": "corner",
+        "stage": "execute",
+        "statistic": "corner deliveries reaching a team-mate, share",
+        "direction": "up"
+      }
+    },
+    "free_kicks": {
+      "name": "free_kicks",
+      "group": "technical",
+      "job": {
+        "action": "free_kick",
+        "stage": "execute",
+        "statistic": "direct free kicks on target or reaching a team-mate, share",
+        "direction": "up"
+      }
+    },
+    "penalties": {
+      "name": "penalties",
+      "group": "technical",
+      "job": {
+        "action": "penalty",
+        "stage": "execute",
+        "statistic": "penalties scored share",
+        "direction": "up"
+      }
+    },
+    "long_throws": {
+      "name": "long_throws",
+      "group": "technical",
+      "job": {
+        "action": "long_throw",
+        "stage": "execute",
+        "statistic": "mean long-throw distance",
+        "direction": "up"
+      }
+    },
+    "flair": {
+      "name": "flair",
+      "group": "technical",
+      "job": {
+        "action": "pass",
+        "stage": "choose",
+        "statistic": "killer passes and take-ons tried per match",
+        "direction": "up"
+      }
+    },
+    "determination": {
+      "name": "determination",
+      "group": "mental",
+      "job": {
+        "action": "press",
+        "stage": "choose",
+        "statistic": "presses per match when behind",
+        "direction": "up"
+      }
+    },
+    "bravery": {
+      "name": "bravery",
+      "group": "mental",
+      "job": {
+        "action": "header",
+        "stage": "execute",
+        "statistic": "headers won in traffic share",
+        "direction": "up"
+      }
+    },
+    "eccentricity": {
+      "name": "eccentricity",
+      "group": "goalkeeping",
+      "job": {
+        "action": "rush",
+        "stage": "choose",
+        "statistic": "rash keeper actions per match",
+        "direction": "up"
+      }
+    },
+    "professionalism": {
+      "name": "professionalism",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "occasion",
+        "statistic": "concentration lapses",
+        "direction": "down"
+      }
+    },
+    "temperament": {
+      "name": "temperament",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "occasion",
+        "statistic": "reactions to fouls, cards and provocation",
+        "direction": "down"
+      }
+    },
+    "pressure_handling": {
+      "name": "pressure_handling",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "occasion",
+        "statistic": "penalties and late close games under pressure",
+        "direction": "up"
+      }
+    },
+    "sportsmanship": {
+      "name": "sportsmanship",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "occasion",
+        "statistic": "dives and cynical fouls",
+        "direction": "down"
+      }
+    },
+    "leadership": {
+      "name": "leadership",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "occasion",
+        "statistic": "weight in team mood",
+        "direction": "up"
+      }
+    },
+    "adaptability": {
+      "name": "adaptability",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "occasion",
+        "statistic": "familiarity cost of new conditions",
+        "direction": "down"
+      }
+    },
+    "versatility": {
+      "name": "versatility",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "occasion",
+        "statistic": "out-of-position familiarity cost",
+        "direction": "down"
+      }
+    },
+    "ambition": {
+      "name": "ambition",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "occasion",
+        "statistic": "season-goal weight at kick-off",
+        "direction": "up"
+      }
+    },
+    "loyalty": {
+      "name": "loyalty",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "inert",
+        "statistic": "inert in a match",
+        "direction": "up"
+      }
+    },
+    "money_motivation": {
+      "name": "money_motivation",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "inert",
+        "statistic": "inert in a match",
+        "direction": "up"
+      }
+    },
+    "controversy": {
+      "name": "controversy",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "inert",
+        "statistic": "inert in a match",
+        "direction": "up"
+      }
+    }
+  },
+  "moved": {
+    "communication": "mental"
+  },
+  "tables": {
+    "mark": {
+      "execute": {
+        "main": {
+          "attribute": "marking",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "positioning",
+            "weight": 0.3
+          },
+          {
+            "attribute": "concentration",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "off_ball_run": {
+      "execute": {
+        "main": {
+          "attribute": "off_ball_movement",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "anticipation",
+            "weight": 0.3
+          },
+          {
+            "attribute": "decisions",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "corner": {
+      "execute": {
+        "main": {
+          "attribute": "corners",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "crossing",
+            "weight": 0.3
+          },
+          {
+            "attribute": "technique",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "free_kick": {
+      "execute": {
+        "main": {
+          "attribute": "free_kicks",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "crossing",
+            "weight": 0.25
+          },
+          {
+            "attribute": "technique",
+            "weight": 0.2
+          },
+          {
+            "attribute": "finishing",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "long_throw": {
+      "execute": {
+        "main": {
+          "attribute": "long_throws",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "strength",
+            "weight": 0.3
+          },
+          {
+            "attribute": "technique",
+            "weight": 0.1
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "penalty": {
+      "execute": {
+        "main": {
+          "attribute": "penalties",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "finishing",
+            "weight": 0.3
+          },
+          {
+            "attribute": "composure",
+            "weight": 0.2
+          }
+        ],
+        "minor": [
+          {
+            "attribute": "technique",
+            "weight": 0.1
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "pass": {
+      "choose": {
+        "main": {
+          "attribute": "decisions",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "teamwork",
+            "weight": 0.3
+          },
+          {
+            "attribute": "vision",
+            "weight": 0.2
+          },
+          {
+            "attribute": "flair",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "dribble": {
+      "choose": {
+        "main": {
+          "attribute": "decisions",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "dribbling",
+            "weight": 0.3
+          },
+          {
+            "attribute": "vision",
+            "weight": 0.1
+          },
+          {
+            "attribute": "flair",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      },
+      "execute": {
+        "main": {
+          "attribute": "dribbling",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "agility",
+            "weight": 0.3
+          },
+          {
+            "attribute": "balance",
+            "weight": 0.2
+          },
+          {
+            "attribute": "technique",
+            "weight": 0.2
+          }
+        ],
+        "minor": [
+          {
+            "attribute": "flair",
+            "weight": 0.05
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "receive": {
+      "execute": {
+        "main": {
+          "attribute": "first_touch",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "technique",
+            "weight": 0.3
+          },
+          {
+            "attribute": "balance",
+            "weight": 0.15
+          }
+        ],
+        "minor": [
+          {
+            "attribute": "flair",
+            "weight": 0.05
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "rush": {
+      "choose": {
+        "main": {
+          "attribute": "rushing_out",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "anticipation",
+            "weight": 0.3
+          },
+          {
+            "attribute": "decisions",
+            "weight": 0.15
+          },
+          {
+            "attribute": "eccentricity",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "press": {
+      "choose": {
+        "main": {
+          "attribute": "work_rate",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "aggression",
+            "weight": 0.2
+          },
+          {
+            "attribute": "stamina",
+            "weight": 0.15
+          },
+          {
+            "attribute": "determination",
+            "weight": 0.1
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "header": {
+      "execute": {
+        "main": {
+          "attribute": "heading",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "jumping",
+            "weight": 0.3
+          },
+          {
+            "attribute": "strength",
+            "weight": 0.2
+          },
+          {
+            "attribute": "bravery",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "tackle": {
+      "execute": {
+        "main": {
+          "attribute": "tackling",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "strength",
+            "weight": 0.25
+          },
+          {
+            "attribute": "agility",
+            "weight": 0.2
+          },
+          {
+            "attribute": "balance",
+            "weight": 0.15
+          }
+        ],
+        "minor": [
+          {
+            "attribute": "bravery",
+            "weight": 0.05
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "block": {
+      "execute": {
+        "main": {
+          "attribute": "positioning",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "anticipation",
+            "weight": 0.3
+          },
+          {
+            "attribute": "agility",
+            "weight": 0.15
+          }
+        ],
+        "minor": [
+          {
+            "attribute": "bravery",
+            "weight": 0.05
+          }
+        ],
+        "source": "design"
+      }
+    }
+  },
+  "consistency_degrees": {
+    "pass": 1.0,
+    "chip": 1.0,
+    "cross": 1.0,
+    "shot": 1.0,
+    "long_shot": 1.0,
+    "header": 1.0,
+    "penalty": 1.0,
+    "dribble": 1.0,
+    "receive": 1.0,
+    "tackle": 1.0,
+    "intercept": 1.0,
+    "press": 1.0,
+    "shape": 1.0,
+    "block": 1.0,
+    "sprint": 1.0,
+    "endure": 1.0,
+    "shield": 1.0,
+    "turn": 1.0,
+    "stay_up": 1.0,
+    "aerial_reach": 1.0,
+    "recover": 1.0,
+    "injury": 1.0,
+    "hold": 1.0,
+    "save": 1.0,
+    "claim": 1.0,
+    "one_on_one": 1.0,
+    "keeper_kick": 1.0,
+    "keeper_throw": 1.0,
+    "organise": 1.0,
+    "rush": 1.0,
+    "mark": 1.0,
+    "off_ball_run": 1.0,
+    "corner": 1.0,
+    "free_kick": 1.0,
+    "long_throw": 1.0
+  }
+}

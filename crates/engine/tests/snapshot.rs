@@ -16,7 +16,7 @@ use engine::{
 };
 use sha2::{Digest, Sha256};
 
-/// The continuation test resumes the seed-9 match from the first stoppage at or after this
+/// The continuation test resumes the seed-40 match from the first stoppage at or after this
 /// tick, early in the second half, before the AI manager's substitutions and tactics changes.
 const FROM_TICK: u32 = 50 * TICKS_PER_MINUTE;
 const OWNER: [u8; 16] = [7; 16];

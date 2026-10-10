@@ -9,6 +9,7 @@ pub mod names;
 pub mod rules;
 pub mod tactics;
 pub mod team;
+pub mod traits;
 pub mod tuning;
 
 use std::path::{Path, PathBuf};
@@ -307,7 +308,8 @@ fn loaded<T>(
 /// Loads a team file's bytes in either version this build reads. A version 2 file has its
 /// ratings checked first, so a value off the tenth grid or outside 1.0 to 20.0 is refused
 /// naming the player and the attribute; a version 1 file is checked as version 1 and
-/// converted ([`convert::team_v1_to_v2`]). The digest is that of the bytes read.
+/// converted ([`convert::team_v1_to_v2`]). Either way a player without a version 4 attribute
+/// reads it as 10.0 for now ([`convert::fill_v4_added`]). The digest is that of the bytes read.
 pub fn load_team_bytes(
     bytes: &[u8],
     shown: &str,
@@ -317,7 +319,11 @@ pub fn load_team_bytes(
     match peek_version(KIND, bytes, shown)? {
         TEAM_VERSION => {
             check_ratings(bytes, shown)?;
-            let value = parse_checked::<TeamFile>(KIND, bytes, shown, schema)?;
+            let mut value: TeamFile = parse(KIND, bytes, shown)?;
+            for p in &mut value.players {
+                convert::fill_v4_added(p);
+            }
+            let value = checked(KIND, shown, value, schema)?;
             Ok(loaded(KIND, bytes, shown, value, TEAM_VERSION, None))
         }
         convert::TEAM_V1 => {
@@ -369,7 +375,8 @@ fn check_ratings(bytes: &[u8], shown: &str) -> Result<(), EngineError> {
 
 /// Loads an attribute file's bytes in any version this build reads; a version 1 file is
 /// converted with the frozen contract tables ([`convert::attributes_v1_to_v2`]), a version 2
-/// file takes the hidden values ([`convert::attributes_v2_to_v3`]), and the result is checked
+/// file takes the hidden values ([`convert::attributes_v2_to_v3`]), a version 3 file takes
+/// the version 4 additions ([`convert::attributes_v3_to_v4`]), and the result is checked once
 /// as a current file. The digest is that of the bytes read.
 pub fn load_attributes_bytes(
     bytes: &[u8],
@@ -381,15 +388,20 @@ pub fn load_attributes_bytes(
             let value = parse_checked::<AttributeSchema>(KIND, bytes, shown, &())?;
             Ok(loaded(KIND, bytes, shown, value, ATTRIBUTES_VERSION, None))
         }
-        found @ (convert::ATTRIBUTES_V1 | convert::ATTRIBUTES_V2) => {
-            let v2 = if found == convert::ATTRIBUTES_V1 {
-                let v1: convert::AttributeSchemaV1 = parse(KIND, bytes, shown)?;
-                convert::attributes_v1_to_v2(v1)
-                    .map_err(|reason| refused(KIND, shown, "attributes".into(), reason))?
-            } else {
-                parse::<AttributeSchema>(KIND, bytes, shown)?
+        found @ (convert::ATTRIBUTES_V1 | convert::ATTRIBUTES_V2 | convert::ATTRIBUTES_V3) => {
+            let v3 = match found {
+                convert::ATTRIBUTES_V1 => {
+                    let v1: convert::AttributeSchemaV1 = parse(KIND, bytes, shown)?;
+                    let v2 = convert::attributes_v1_to_v2(v1)
+                        .map_err(|reason| refused(KIND, shown, "attributes".into(), reason))?;
+                    convert::attributes_v2_to_v3(v2)
+                }
+                convert::ATTRIBUTES_V2 => {
+                    convert::attributes_v2_to_v3(parse::<AttributeSchema>(KIND, bytes, shown)?)
+                }
+                _ => parse::<AttributeSchema>(KIND, bytes, shown)?,
             };
-            let value = checked(KIND, shown, convert::attributes_v2_to_v3(v2), &())?;
+            let value = checked(KIND, shown, convert::attributes_v3_to_v4(v3), &())?;
             Ok(loaded(KIND, bytes, shown, value, found, Some(found)))
         }
         found => Err(version_refused(KIND, shown, found, ATTRIBUTES_VERSION)),
@@ -609,10 +621,14 @@ impl Content {
                 reason,
             });
         }
-        // A hidden value reaches a page only as a word, so each one needs its word bands.
+        // A hidden value reaches a page only as a word, so each one needs its word bands. A
+        // personality value reaches a page through the summary-word rule of the panel instead.
         if let Some(name) = attributes
             .value
-            .hidden_names()
+            .attributes
+            .iter()
+            .filter(|d| d.hidden && !d.is_personality())
+            .map(|d| d.name.as_str())
             .find(|n| !tuning.value.hidden.words.contains_key(*n))
         {
             let (field, reason) = (

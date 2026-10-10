@@ -113,6 +113,11 @@ impl FamilyGroups {
 }
 
 fn check_groups(groups: &[Group], _ctx: &()) -> garde::Result {
+    if groups.contains(&Group::Personality) {
+        return Err(garde::Error::new(
+            "Personality is not a state group; no state family acts on it",
+        ));
+    }
     for (i, g) in groups.iter().enumerate() {
         if groups[..i].contains(g) {
             return Err(garde::Error::new(format!("{g:?} appears twice")));
@@ -177,7 +182,8 @@ pub fn capped(
 }
 
 /// The effective ratings of `base`: each visible rating plus the delta of its group, in
-/// tenths, kept inside 1.0 to 20.0. A hidden value keeps its base: no state moves it.
+/// tenths, kept inside 1.0 to 20.0. A hidden value, personality included, keeps its base: no
+/// state moves it, and personality has no delta to read.
 pub fn effective(
     base: &Attributes,
     schema: &AttributeSchema,
@@ -185,8 +191,12 @@ pub fn effective(
 ) -> Attributes {
     let mut out = *base;
     for (slot, def) in out.values.iter_mut().zip(&schema.attributes) {
-        let d = i16::from(deltas[def.group as usize]);
-        if d != 0 && !def.hidden {
+        // Before the delta index: a personality value has no state group.
+        let Some(g) = def.group.state_index().filter(|_| !def.hidden) else {
+            continue;
+        };
+        let d = i16::from(deltas[g]);
+        if d != 0 {
             *slot = moved(*slot, d);
         }
     }
@@ -221,10 +231,10 @@ pub fn effective_with_form(
     let pace = schema.index("pace");
     let mut out = *base;
     for (i, (slot, def)) in out.values.iter_mut().zip(&schema.attributes).enumerate() {
-        if def.hidden {
+        let Some(g) = def.group.state_index().filter(|_| !def.hidden) else {
             continue;
-        }
-        let state = i16::from(deltas[def.group as usize]);
+        };
+        let state = i16::from(deltas[g]);
         let d = if Some(i) == pace {
             state
         } else {
@@ -372,5 +382,13 @@ mod tests {
         // The sum stays inside the total cap.
         let floor = effective_with_form(&base, schema, [0, -50, 0, 0], -18, &t);
         assert_eq!(floor.get(idx("decisions")).tenths(), 50, "10.0 − 5.0");
+    }
+
+    #[test]
+    fn a_family_acting_on_personality_is_refused() {
+        let mut t = StatesTuning::default();
+        t.family_groups.mind.push(Group::Personality);
+        let text = t.validate().unwrap_err().to_string();
+        assert!(text.contains("Personality is not a state group"), "{text}");
     }
 }

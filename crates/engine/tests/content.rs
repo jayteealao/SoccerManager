@@ -18,7 +18,13 @@ use engine::{ContentDir, Tuning};
 fn the_shipped_attribute_schema_has_thirty_to_fifty_grouped_names() {
     let content = common::content();
     let n = content.attributes.len();
-    assert!((30..=50).contains(&n), "{n} attributes");
+    let performance = content
+        .attributes
+        .attributes
+        .iter()
+        .filter(|d| !d.is_personality())
+        .count();
+    assert!((30..=50).contains(&performance), "{performance} attributes");
     for def in &content.attributes.attributes {
         assert!(!def.name.is_empty());
         // The group is an enum: every loaded definition carries one of the four.
@@ -467,11 +473,11 @@ fn a_version_1_slot_file_converts_and_resolves_to_the_built_in_selection() {
 }
 
 /// The version 2 attribute schema (the one shipped before the hidden values, kept as a
-/// fixture) converts to version 3: injury resistance becomes injury proneness, hidden, with
-/// its job turned up, and consistency is added from the frozen copy. The result is the
-/// shipped schema.
+/// fixture) converts through version 3: injury resistance becomes injury proneness, hidden,
+/// with its job turned up, and consistency is added from the frozen copy. The result is the
+/// version 3 file the build shipped before (`attributes-v3.json`), converted the same way.
 #[test]
-fn a_version_2_attribute_schema_converts_to_the_shipped_version_3() {
+fn a_version_2_attribute_schema_converts_as_the_shipped_version_3_did() {
     let bytes = std::fs::read(common::fixture_path("attributes-v2.json")).unwrap();
     let v2: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(v2["schema_version"], 2);
@@ -483,9 +489,270 @@ fn a_version_2_attribute_schema_converts_to_the_shipped_version_3() {
         engine::data::attributes::ATTRIBUTES_VERSION
     );
     assert!(schema.index("injury_resistance").is_none());
-    let hidden: Vec<&str> = schema.hidden_names().collect();
+    let hidden: Vec<&str> = schema
+        .attributes
+        .iter()
+        .filter(|d| d.hidden && !d.is_personality())
+        .map(|d| d.name.as_str())
+        .collect();
     assert_eq!(hidden, ["injury_proneness", "consistency"]);
-    assert_eq!(schema, &common::content().attributes);
+    let v3 = std::fs::read(common::fixture_path("attributes-v3.json")).unwrap();
+    let v3 = engine::data::load_attributes_bytes(&v3, "attributes-v3.json").unwrap();
+    assert_eq!(schema, &v3.value);
+}
+
+// --- The version 4 record: counts, groups, jobs, the version 3 conversion, the traits.
+
+/// The shipped catalogue as JSON, edited by `edit`, loaded.
+fn edited_catalogue(
+    edit: impl FnOnce(&mut serde_json::Value),
+) -> Result<AttributeSchema, EngineError> {
+    let path = common::content_dir().path("attributes.json");
+    let mut v: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    edit(&mut v);
+    engine::data::load_attributes_bytes(&serde_json::to_vec(&v).unwrap(), "attributes.json")
+        .map(|l| l.value)
+}
+
+fn def_of<'a>(v: &'a mut serde_json::Value, name: &str) -> &'a mut serde_json::Value {
+    v["attributes"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|a| a["name"] == name)
+        .unwrap()
+}
+
+/// `count` copies of the hidden consistency value under new names: each counts toward the 50
+/// and, with the spread for its job, needs no stage table.
+fn add_copies(v: &mut serde_json::Value, count: usize) {
+    let consistency = def_of(v, "consistency").clone();
+    let list = v["attributes"].as_array_mut().unwrap();
+    for i in 0..count {
+        let mut copy = consistency.clone();
+        copy["name"] = format!("consistency_copy_{i}").into();
+        list.push(copy);
+    }
+}
+
+/// Shape AC-1: 45 visible and 2 hidden attributes, 11 personality values; communication,
+/// determination and bravery in the mental group, eccentricity in goalkeeping.
+#[test]
+fn the_shipped_catalogue_holds_forty_five_visible_two_hidden_and_eleven_personality_values() {
+    use engine::data::attributes::Group;
+    let content = common::content();
+    let s = &content.attributes;
+    assert_eq!(s.schema_version, ATTRIBUTES_VERSION);
+    assert_eq!(ATTRIBUTES_VERSION, 4);
+    let visible = s.attributes.iter().filter(|d| !d.hidden).count();
+    let hidden = s
+        .attributes
+        .iter()
+        .filter(|d| d.hidden && !d.is_personality())
+        .count();
+    let personality: Vec<&str> = s
+        .attributes
+        .iter()
+        .filter(|d| d.is_personality())
+        .map(|d| d.name.as_str())
+        .collect();
+    assert_eq!((visible, hidden, personality.len()), (45, 2, 11));
+    assert!(visible + hidden <= 50);
+    assert!(s.len() <= engine::data::MAX_ATTRIBUTES);
+    let group = |n: &str| s.attributes[s.index(n).unwrap()].group;
+    for n in ["communication", "determination", "bravery"] {
+        assert_eq!(group(n), Group::Mental, "{n}");
+    }
+    assert_eq!(group("eccentricity"), Group::Goalkeeping);
+    assert_eq!(
+        personality,
+        [
+            "professionalism",
+            "temperament",
+            "pressure_handling",
+            "sportsmanship",
+            "leadership",
+            "adaptability",
+            "versatility",
+            "ambition",
+            "loyalty",
+            "money_motivation",
+            "controversy"
+        ]
+    );
+    for d in s.attributes.iter().filter(|d| d.is_personality()) {
+        assert!(d.hidden, "{}", d.name);
+    }
+    // The hidden-name list carries the personality values too, so no page shows them.
+    let hidden_names: Vec<&str> = s.hidden_names().collect();
+    assert_eq!(hidden_names.len(), 13);
+    assert!(hidden_names.contains(&"temperament"));
+}
+
+/// Shape AC-2: 51 visible and hidden attributes are refused with the count; 50 load.
+#[test]
+fn a_catalogue_with_fifty_one_visible_and_hidden_attributes_is_refused_with_the_count() {
+    let err = edited_catalogue(|v| add_copies(v, 4))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("51 visible and hidden attributes; at most 50"),
+        "{err}"
+    );
+    let fifty = edited_catalogue(|v| add_copies(v, 3)).unwrap();
+    assert_eq!(fifty.len(), 50 + 11);
+}
+
+/// A fifteenth personality value is refused with the count.
+#[test]
+fn a_fifteenth_personality_value_is_refused() {
+    let err = edited_catalogue(|v| {
+        let loyalty = def_of(v, "loyalty").clone();
+        let list = v["attributes"].as_array_mut().unwrap();
+        for i in 0..4 {
+            let mut copy = loyalty.clone();
+            copy["name"] = format!("character_{i}").into();
+            list.push(copy);
+        }
+    })
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("15 personality values; at most 14"), "{err}");
+}
+
+/// Shape AC-9: every attribute added in version 4 names a stage job, and every personality
+/// value an occasion job or "inert in a match".
+#[test]
+fn every_new_attribute_names_a_stage_job_and_every_personality_value_an_occasion() {
+    use engine::data::attributes::JobStage;
+    use engine::data::convert::V4_ADDED;
+    let content = common::content();
+    let s = &content.attributes;
+    for name in V4_ADDED {
+        let def = &s.attributes[s.index(name).unwrap_or_else(|| panic!("{name} missing"))];
+        if def.is_personality() {
+            assert!(def.job.action.is_none(), "{name}");
+            match def.job.stage {
+                JobStage::Occasion => assert!(!def.job.statistic.is_empty(), "{name}"),
+                JobStage::Inert => assert_eq!(def.job.statistic, "inert in a match", "{name}"),
+                other => panic!("{name}: {other:?}"),
+            }
+        } else {
+            let stage = def
+                .job
+                .stage
+                .stage()
+                .unwrap_or_else(|| panic!("{name}: no stage"));
+            let action = def
+                .job
+                .action
+                .unwrap_or_else(|| panic!("{name}: no action"));
+            assert!(s.in_stage(name, action, stage), "{name}");
+        }
+    }
+    let inert: Vec<&str> = s
+        .attributes
+        .iter()
+        .filter(|d| d.job.stage == JobStage::Inert)
+        .map(|d| d.name.as_str())
+        .collect();
+    assert_eq!(inert, ["loyalty", "money_motivation", "controversy"]);
+}
+
+/// A personality value given a stage job, an action, a table place, or `hidden: false` is
+/// refused, naming it.
+#[test]
+fn a_personality_value_outside_its_rules_is_refused_by_name() {
+    let refusal = |edit: &dyn Fn(&mut serde_json::Value)| {
+        edited_catalogue(|v| edit(v)).unwrap_err().to_string()
+    };
+    let err = refusal(&|v| {
+        let d = def_of(v, "temperament");
+        d["job"]["stage"] = "execute".into();
+        d["job"]["action"] = "tackle".into();
+    });
+    assert!(err.contains("personality value temperament"), "{err}");
+    let err = refusal(&|v| def_of(v, "temperament")["job"]["action"] = "tackle".into());
+    assert!(
+        err.contains("personality value temperament: it acts on an occasion"),
+        "{err}"
+    );
+    let err = refusal(&|v| {
+        v["actions"]["tackle"]["choose"]["minor"] =
+            serde_json::json!([{ "attribute": "temperament", "weight": 0.05 }]);
+    });
+    assert!(
+        err.contains("personality value temperament: it is in a stage table"),
+        "{err}"
+    );
+    let err = refusal(&|v| def_of(v, "temperament")["hidden"] = false.into());
+    assert!(
+        err.contains("personality value temperament: a personality value is hidden"),
+        "{err}"
+    );
+    let err = refusal(&|v| def_of(v, "loyalty")["job"]["statistic"] = "transfer requests".into());
+    assert!(
+        err.contains("personality value loyalty: an inert job"),
+        "{err}"
+    );
+}
+
+/// The version 3 file the build shipped before converts to version 4 with the same names,
+/// groups, jobs, tables, consistency degrees and gates as the shipped file; only the order of
+/// the attributes differs, as the new ones are appended.
+#[test]
+fn the_version_3_catalogue_converts_to_the_shipped_version_4() {
+    let bytes = std::fs::read(common::fixture_path("attributes-v3.json")).unwrap();
+    let v3: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(v3["schema_version"], 3);
+    let loaded = engine::data::load_attributes_bytes(&bytes, "attributes-v3.json").unwrap();
+    assert_eq!(loaded.converted_from, Some(3));
+    let converted = &loaded.value;
+    let content = common::content();
+    let shipped = &content.attributes;
+    assert_eq!(converted.schema_version, shipped.schema_version);
+    let by_name = |s: &AttributeSchema| {
+        let mut defs = s.attributes.clone();
+        defs.sort_by(|a, b| a.name.cmp(&b.name));
+        defs
+    };
+    assert_eq!(by_name(converted), by_name(shipped));
+    assert_eq!(converted.actions, shipped.actions);
+    assert_eq!(converted.consistency_degrees, shipped.consistency_degrees);
+    assert_eq!(converted.gates, shipped.gates);
+}
+
+/// Every action with a table has a consistency degree, 1.0 in this build.
+#[test]
+fn every_action_has_a_consistency_degree_of_one() {
+    let content = common::content();
+    let degrees = &content.attributes.consistency_degrees;
+    assert_eq!(degrees.len(), engine::contract::ACTION_COUNT);
+    assert!(degrees.values().all(|&d| d == 1.0), "{degrees:?}");
+}
+
+/// The trait catalogue loads with its 31 traits, nine opposite pairs named from both sides,
+/// and a hook each; a broken opposite is refused naming the trait.
+#[test]
+fn the_trait_catalogue_loads_with_thirty_one_traits() {
+    use engine::data::traits::load_traits_bytes;
+    let path = common::content_dir().path("traits.json");
+    let bytes = std::fs::read(path).unwrap();
+    let c = load_traits_bytes(&bytes, "traits.json").unwrap().value;
+    assert_eq!(c.traits.len(), 31);
+    let pairs = c.traits.iter().filter(|t| t.opposite.is_some()).count() / 2;
+    assert_eq!(pairs, 9);
+    assert!(c.traits.iter().all(|t| !t.hook.is_empty()));
+    let mut v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    for t in v["traits"].as_array_mut().unwrap() {
+        if t["name"] == "kicks_long" {
+            t["opposite"] = "plays_out".into();
+        }
+    }
+    let err = load_traits_bytes(&serde_json::to_vec(&v).unwrap(), "traits.json")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("trait kicks_long"), "{err}");
 }
 
 /// A version 4 tuning file (no consistency, hidden-value or match-rating block) converts to

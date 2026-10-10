@@ -17,7 +17,9 @@ use crate::math::DVec2;
 use crate::rating::{MIN_TENTHS, Rating};
 use crate::tuning::Tuning;
 
-/// Attribute ratings in tenths of the 1 to 20 scale, in schema order.
+/// Attribute ratings in tenths of the 1 to 20 scale, in schema order: one array of 64 slots
+/// for the visible and hidden attributes (at most 50 by the schema rule) and the personality
+/// values (at most 14).
 #[derive(Debug, Clone, Copy)]
 pub struct Attributes {
     pub values: [Rating; MAX_ATTRIBUTES],
@@ -37,7 +39,7 @@ impl Attributes {
         }
         Self {
             values,
-            // The schema holds at most MAX_ATTRIBUTES (50) entries.
+            // The schema holds at most MAX_ATTRIBUTES (64) entries.
             len: schema.len() as u8,
         }
     }

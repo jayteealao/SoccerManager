@@ -117,7 +117,9 @@ fn hidden_values_centre_on_ten_whatever_the_level() {
         .hidden_names()
         .map(str::to_string)
         .collect();
-    assert_eq!(hidden, ["injury_proneness", "consistency"]);
+    // The two hidden attributes, then the eleven personality values, all hidden.
+    assert_eq!(hidden.len(), 13, "{hidden:?}");
+    assert_eq!(hidden[..2], ["injury_proneness", "consistency"]);
     let tiers = content.tuning.generator.world.tiers.len();
     let mut by_tier = Vec::new();
     for tier in 0..tiers {

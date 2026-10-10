@@ -19,8 +19,9 @@ pub struct Weighted {
     pub weight: f64,
 }
 
-/// One stage of an action: the main attribute, up to three supports with smaller weights,
-/// and where the weights come from: `design`, or `fitted:<reference>` for weights fitted from
+/// One stage of an action: the main attribute, up to three shown supports with smaller
+/// weights, up to four small weights lighter than every shown support (they act in play but no
+/// screen lists them), and where the weights come from: `design`, or `fitted:<reference>` for weights fitted from
 /// real data.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
@@ -28,8 +29,11 @@ pub struct StageTable {
     #[garde(dive)]
     pub main: Weighted,
     #[serde(default)]
-    #[garde(length(max = 3), dive)]
+    #[garde(length(max = MAX_SUPPORTS), dive)]
     pub supports: Vec<Weighted>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[garde(length(max = MAX_MINOR), dive)]
+    pub minor: Vec<Weighted>,
     #[garde(custom(check_source))]
     pub source: String,
 }
@@ -73,11 +77,18 @@ pub struct GateDefs {
     pub take_on: GateDef,
 }
 
+/// The most shown supports a stage has.
+pub const MAX_SUPPORTS: usize = 3;
+/// The most small weights a stage has.
+pub const MAX_MINOR: usize = 4;
+/// The most parts a stage blends: the main attribute, the shown supports, the small weights.
+const BLEND_PARTS: usize = 1 + MAX_SUPPORTS + MAX_MINOR;
+
 /// The weights of every stage, resolved to attribute indices once per schema.
 #[derive(Debug, Clone)]
 pub struct Blend {
-    /// Per stage: up to four `(attribute index, weight)`, and the total weight.
-    parts: [[(usize, f64); 4]; STAGE_COUNT],
+    /// Per stage: up to [`BLEND_PARTS`] `(attribute index, weight)`, and the total weight.
+    parts: [[(usize, f64); BLEND_PARTS]; STAGE_COUNT],
     counts: [usize; STAGE_COUNT],
     totals: [f64; STAGE_COUNT],
 }
@@ -85,13 +96,14 @@ pub struct Blend {
 impl Blend {
     /// The blend of a validated schema.
     pub fn of(schema: &AttributeSchema) -> Self {
-        let mut parts = [[(0usize, 0.0f64); 4]; STAGE_COUNT];
+        let mut parts = [[(0usize, 0.0f64); BLEND_PARTS]; STAGE_COUNT];
         let mut counts = [0usize; STAGE_COUNT];
         let mut totals = [0.0; STAGE_COUNT];
         for (i, &(action, stage)) in STAGES.iter().enumerate() {
             let table = &schema.actions[&action][&stage];
             let all: Vec<&Weighted> = std::iter::once(&table.main)
                 .chain(table.supports.iter())
+                .chain(table.minor.iter())
                 .collect();
             for (slot, w) in parts[i].iter_mut().zip(&all) {
                 let index = schema

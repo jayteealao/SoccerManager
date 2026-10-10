@@ -1,8 +1,9 @@
 //! The attribute contract: the one place play reads a player's attributes.
 //!
 //! Every action the engine has runs in stages (see, choose, execute, under pressure). Each
-//! stage blends one main attribute and up to three supporting ones, with weights from the
-//! attribute file ([`stages`]). Each rating passes through the exponential curve
+//! stage blends one main attribute, up to three shown supporting ones, and up to four small
+//! weights lighter than every shown support, with weights from the attribute file
+//! ([`stages`]). Each rating passes through the exponential curve
 //! `F(r) = 8 · e^((r − 10) / 8)` before the blend ([`curve`]), and the stage value is the
 //! weighted mean of those `F` values, which is `F` of the stage's blended rating, so the curve
 //! acts on the stage result as well.
@@ -70,10 +71,20 @@ pub enum ActionKind {
     KeeperThrow,
     Organise,
     Rush,
+    /// Staying tight to the attacker a defender covers. Play reads no stage of it yet.
+    Mark,
+    /// An attacker's run against the offside line. Play reads no stage of it yet.
+    OffBallRun,
+    /// The delivery of a corner. Play reads no stage of it yet.
+    Corner,
+    /// The strike or delivery of a direct free kick. Play reads no stage of it yet.
+    FreeKick,
+    /// A long throw-in. Play reads no stage of it yet.
+    LongThrow,
 }
 
 /// The number of action kinds.
-pub const ACTION_COUNT: usize = 30;
+pub const ACTION_COUNT: usize = 35;
 
 impl ActionKind {
     /// Every action, in declaration order.
@@ -108,6 +119,11 @@ impl ActionKind {
         ActionKind::KeeperThrow,
         ActionKind::Organise,
         ActionKind::Rush,
+        ActionKind::Mark,
+        ActionKind::OffBallRun,
+        ActionKind::Corner,
+        ActionKind::FreeKick,
+        ActionKind::LongThrow,
     ];
 
     /// The action's name in the content files.
@@ -143,6 +159,11 @@ impl ActionKind {
             ActionKind::KeeperThrow => "keeper_throw",
             ActionKind::Organise => "organise",
             ActionKind::Rush => "rush",
+            ActionKind::Mark => "mark",
+            ActionKind::OffBallRun => "off_ball_run",
+            ActionKind::Corner => "corner",
+            ActionKind::FreeKick => "free_kick",
+            ActionKind::LongThrow => "long_throw",
         }
     }
 
@@ -272,11 +293,16 @@ pub const STAGES: [(ActionKind, StageKind); STAGE_COUNT] = {
         (A::KeeperThrow, S::Execute),
         (A::Organise, S::Execute),
         (A::Rush, S::Choose),
+        (A::Mark, S::Execute),
+        (A::OffBallRun, S::Execute),
+        (A::Corner, S::Execute),
+        (A::FreeKick, S::Execute),
+        (A::LongThrow, S::Execute),
     ]
 };
 
 /// The number of stages play reads.
-pub const STAGE_COUNT: usize = 47;
+pub const STAGE_COUNT: usize = 52;
 
 /// One stage play reads: an index into [`STAGES`] and into [`StageValues`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -367,6 +393,11 @@ impl Stage {
     pub const KEEPER_THROW_EXECUTE: Stage = Stage::of(ActionKind::KeeperThrow, StageKind::Execute);
     pub const ORGANISE_EXECUTE: Stage = Stage::of(ActionKind::Organise, StageKind::Execute);
     pub const RUSH_CHOOSE: Stage = Stage::of(ActionKind::Rush, StageKind::Choose);
+    pub const MARK_EXECUTE: Stage = Stage::of(ActionKind::Mark, StageKind::Execute);
+    pub const OFF_BALL_RUN_EXECUTE: Stage = Stage::of(ActionKind::OffBallRun, StageKind::Execute);
+    pub const CORNER_EXECUTE: Stage = Stage::of(ActionKind::Corner, StageKind::Execute);
+    pub const FREE_KICK_EXECUTE: Stage = Stage::of(ActionKind::FreeKick, StageKind::Execute);
+    pub const LONG_THROW_EXECUTE: Stage = Stage::of(ActionKind::LongThrow, StageKind::Execute);
 }
 
 /// One player's stage values: each stage's value on the curve (`F` of the blended rating)
