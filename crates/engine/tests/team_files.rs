@@ -64,6 +64,13 @@ fn a_version_2_file_loads_and_reads_back_every_value_unchanged() {
     let doc: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     for (p, raw) in file.players.iter().zip(doc["players"].as_array().unwrap()) {
         for (name, rating) in &p.attributes {
+            // A version 4 attribute the file lacks reads 10.0 until team files carry it.
+            if engine::data::convert::V4_ADDED.contains(&name.as_str())
+                && raw["attributes"].get(name).is_none()
+            {
+                assert_eq!(rating.tenths(), 100, "{} {name}", p.id);
+                continue;
+            }
             let written = raw["attributes"][name].as_f64().unwrap();
             assert_eq!(rating.decimal(), written, "{} {name}", p.id);
             assert_eq!(Rating::from_decimal(written).unwrap(), *rating);
@@ -114,6 +121,10 @@ fn a_version_1_file_converts_to_twice_its_values_on_both_paths() {
         );
         for (name, rating) in &p.attributes {
             if name == "consistency" {
+                continue;
+            }
+            if engine::data::convert::V4_ADDED.contains(&name.as_str()) {
+                assert_eq!(rating.tenths(), 100, "{} {name}: the interim fill", p.id);
                 continue;
             }
             // Injury proneness is the old resistance turned over: 21.0 less the resistance.

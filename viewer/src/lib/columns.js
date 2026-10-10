@@ -12,10 +12,16 @@ import { BAND_WORDS, bandOf, ratingBand, ratingText, wholeOf } from './scale.js'
 /// The visible attributes by group, as `content/attributes.json` groups them, in file order.
 /// A test checks this list against the file, so the two never drift apart.
 export const ATTRIBUTE_GROUPS = Object.freeze({
-  technical: ['passing', 'dribbling', 'first_touch', 'finishing', 'crossing', 'heading', 'long_shots', 'tackling', 'technique'],
-  mental: ['positioning', 'vision', 'decisions', 'composure', 'anticipation', 'work_rate', 'aggression', 'concentration', 'teamwork'],
+  technical: [
+    'passing', 'dribbling', 'first_touch', 'finishing', 'crossing', 'heading', 'long_shots', 'tackling', 'technique',
+    'marking', 'off_ball_movement', 'corners', 'free_kicks', 'penalties', 'long_throws', 'flair',
+  ],
+  mental: [
+    'positioning', 'vision', 'decisions', 'composure', 'anticipation', 'work_rate', 'aggression', 'concentration', 'teamwork',
+    'determination', 'bravery', 'communication',
+  ],
   physical: ['pace', 'acceleration', 'stamina', 'strength', 'agility', 'balance', 'jumping', 'natural_fitness'],
-  goalkeeping: ['handling', 'reflexes', 'aerial_reach', 'one_on_ones', 'kicking', 'throwing', 'command_of_area', 'communication', 'rushing_out'],
+  goalkeeping: ['handling', 'reflexes', 'aerial_reach', 'one_on_ones', 'kicking', 'throwing', 'command_of_area', 'rushing_out', 'eccentricity'],
 });
 
 /// The header label of each attribute: three letters, as the genre writes them.
@@ -27,7 +33,9 @@ const SHORT = Object.freeze({
   stamina: 'Sta', strength: 'Str', agility: 'Agi', balance: 'Bal', jumping: 'Jum',
   natural_fitness: 'Fit', handling: 'Han', reflexes: 'Ref', aerial_reach: 'Aer',
   one_on_ones: '1v1', kicking: 'Kic', throwing: 'Thr', command_of_area: 'Cmd',
-  communication: 'Com', rushing_out: 'Rus',
+  communication: 'Com', rushing_out: 'Rus', marking: 'Mar', off_ball_movement: 'OtB',
+  corners: 'Cor', free_kicks: 'Fre', penalties: 'Pen', long_throws: 'LTh', flair: 'Fla',
+  eccentricity: 'Ecc', determination: 'Det', bravery: 'Bra',
 });
 
 /// The menu groups, in menu order.

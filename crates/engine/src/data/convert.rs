@@ -15,6 +15,12 @@
 //! raises the injury chance as it rises, and consistency joins the file with its spread, its
 //! words, and the match rating's weights. A version 1 team file converts each player's injury
 //! resistance R to injury proneness 21.0 − R and gives him consistency 10.0.
+//!
+//! A version 3 attribute file takes the version 4 additions from a fourth frozen copy
+//! (`contract/frozen-v4.json`): the new performance attributes and the personality values,
+//! communication moved to the mental group, the new and changed stage tables, and a
+//! consistency degree per action. Until team files carry the version 4 attributes, a team file
+//! without one reads it as 10.0 ([`fill_v4_added`]).
 
 use std::collections::BTreeMap;
 
@@ -39,6 +45,7 @@ pub const TACTICS_V1: u32 = 1;
 /// The attribute file versions the converters read.
 pub const ATTRIBUTES_V1: u32 = 1;
 pub const ATTRIBUTES_V2: u32 = 2;
+pub const ATTRIBUTES_V3: u32 = 3;
 /// The tuning file versions the converters read.
 pub const TUNING_V2: u32 = 2;
 pub const TUNING_V3: u32 = 3;
@@ -131,6 +138,7 @@ pub fn attributes_v1_to_v2(file: AttributeSchemaV1) -> Result<AttributeSchema, S
         schema_version: ATTRIBUTES_V2,
         attributes,
         actions: frozen.actions,
+        consistency_degrees: BTreeMap::new(),
         gates: frozen.gates,
     })
 }
@@ -167,7 +175,7 @@ fn frozen_v3() -> FrozenV3 {
 /// as its main attribute and drops its supports, each of which lowered injuries. Consistency
 /// joins from the frozen copy. The caller validates the result as a current file.
 pub fn attributes_v2_to_v3(mut file: AttributeSchema) -> AttributeSchema {
-    file.schema_version = ATTRIBUTES_VERSION;
+    file.schema_version = ATTRIBUTES_V3;
     let mut renamed = false;
     for def in &mut file.attributes {
         if def.name == RESISTANCE {
@@ -199,6 +207,77 @@ pub fn attributes_v2_to_v3(mut file: AttributeSchema) -> AttributeSchema {
         && let Some(def) = frozen_v3().attributes.remove(CONSISTENCY)
     {
         file.attributes.push(def);
+    }
+    file
+}
+
+/// The version 4 additions as they first shipped: the new definitions, the group moves, the
+/// new and changed stage tables, and the consistency degrees. Never edited: tuning the shipped
+/// file leaves it alone.
+pub const FROZEN_V4: &str = include_str!("../contract/frozen-v4.json");
+
+/// The attributes version 4 adds, in the order a converted file appends them: the new
+/// performance attributes, then the personality values.
+pub const V4_ADDED: [&str; 21] = [
+    "marking",
+    "off_ball_movement",
+    "corners",
+    "free_kicks",
+    "penalties",
+    "long_throws",
+    "flair",
+    "determination",
+    "bravery",
+    "eccentricity",
+    "professionalism",
+    "temperament",
+    "pressure_handling",
+    "sportsmanship",
+    "leadership",
+    "adaptability",
+    "versatility",
+    "ambition",
+    "loyalty",
+    "money_motivation",
+    "controversy",
+];
+
+/// The fourth frozen copy's parts.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenV4 {
+    attributes: BTreeMap<String, AttributeDef>,
+    moved: BTreeMap<String, Group>,
+    tables: ActionTables,
+    consistency_degrees: BTreeMap<ActionKind, f64>,
+}
+
+/// A version 3 attribute file in the version 4 shape: each version 4 attribute it lacks is
+/// appended in [`V4_ADDED`] order, communication moves to the mental group, each frozen table
+/// replaces or adds its stage, and each missing consistency degree is added. The caller
+/// validates the result as a current file.
+pub fn attributes_v3_to_v4(mut file: AttributeSchema) -> AttributeSchema {
+    let mut frozen: FrozenV4 =
+        serde_json::from_str(FROZEN_V4).expect("the fourth frozen copy parses; a test checks it");
+    file.schema_version = ATTRIBUTES_VERSION;
+    for name in V4_ADDED {
+        if file.index(name).is_none()
+            && let Some(def) = frozen.attributes.remove(name)
+        {
+            file.attributes.push(def);
+        }
+    }
+    for def in &mut file.attributes {
+        if let Some(&group) = frozen.moved.get(&def.name) {
+            def.group = group;
+        }
+    }
+    for (action, stages) in frozen.tables {
+        let tables = file.actions.entry(action).or_default();
+        tables.extend(stages);
+    }
+    for (action, degree) in frozen.consistency_degrees {
+        file.consistency_degrees.entry(action).or_insert(degree);
     }
     file
 }
@@ -380,12 +459,27 @@ pub struct TeamFileV1 {
 }
 
 /// The name `def` had in a version 1 team file: injury proneness was injury resistance, and
-/// consistency did not exist.
+/// consistency and the version 4 attributes did not exist.
 fn v1_name(def: &AttributeDef) -> Option<&str> {
     match def.name.as_str() {
         CONSISTENCY => None,
+        name if V4_ADDED.contains(&name) => None,
         PRONENESS => Some(RESISTANCE),
         name => Some(name),
+    }
+}
+
+/// Gives `player` 10.0 for each version 4 attribute he lacks.
+///
+/// sdlc-debt: an interim neutral fill so the shipped version 1 and 2 team files load against
+/// the version 4 catalogue; the team-file conversion replaces it with values drawn from
+/// related attributes before this ships.
+pub fn fill_v4_added(player: &mut PlayerEntry) {
+    for name in V4_ADDED {
+        player
+            .attributes
+            .entry(name.to_string())
+            .or_insert(Rating::from_tenths(100));
     }
 }
 
@@ -434,7 +528,8 @@ fn check_squad_v1(players: &[PlayerEntryV1], schema: &AttributeSchema) -> garde:
 /// A checked version 1 team file in the current shape: every value `v` becomes `2v`
 /// tenths, at least 1.0, so 1 to 4 become 1.0; injury resistance R becomes injury proneness
 /// 21.0 − R, which keeps the order of players and stays inside 1.0 to 20.0; every player gets
-/// consistency 10.0; no player has body fields.
+/// consistency 10.0 and, for now, 10.0 for each version 4 attribute ([`fill_v4_added`]); no
+/// player has body fields.
 pub fn team_v1_to_v2(file: TeamFileV1) -> TeamFile {
     TeamFile {
         schema_version: TEAM_VERSION,
@@ -442,32 +537,36 @@ pub fn team_v1_to_v2(file: TeamFileV1) -> TeamFile {
         players: file
             .players
             .into_iter()
-            .map(|p| PlayerEntry {
-                id: p.id,
-                name: p.name,
-                shirt: p.shirt,
-                position: p.position,
-                attributes: p
-                    .attributes
-                    .into_iter()
-                    .map(|(name, v)| {
-                        let t = (2 * v).max(crate::rating::MIN_TENTHS);
-                        if name == RESISTANCE {
-                            // 10..=200 mirrors onto 10..=200.
-                            (PRONENESS.to_string(), Rating::from_tenths(210 - t))
-                        } else {
-                            (name, Rating::from_tenths(t))
-                        }
-                    })
-                    .chain(std::iter::once((
-                        CONSISTENCY.to_string(),
-                        Rating::from_tenths(100),
-                    )))
-                    .collect(),
-                height: None,
-                age: None,
-                nationality: None,
-                condition: None,
+            .map(|p| {
+                let mut entry = PlayerEntry {
+                    id: p.id,
+                    name: p.name,
+                    shirt: p.shirt,
+                    position: p.position,
+                    attributes: p
+                        .attributes
+                        .into_iter()
+                        .map(|(name, v)| {
+                            let t = (2 * v).max(crate::rating::MIN_TENTHS);
+                            if name == RESISTANCE {
+                                // 10..=200 mirrors onto 10..=200.
+                                (PRONENESS.to_string(), Rating::from_tenths(210 - t))
+                            } else {
+                                (name, Rating::from_tenths(t))
+                            }
+                        })
+                        .chain(std::iter::once((
+                            CONSISTENCY.to_string(),
+                            Rating::from_tenths(100),
+                        )))
+                        .collect(),
+                    height: None,
+                    age: None,
+                    nationality: None,
+                    condition: None,
+                };
+                fill_v4_added(&mut entry);
+                entry
             })
             .collect(),
     }

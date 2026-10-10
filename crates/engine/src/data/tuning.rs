@@ -229,6 +229,9 @@ impl GroupOffsets {
             Group::Mental => self.mental,
             Group::Physical => self.physical,
             Group::Goalkeeping => self.goalkeeping,
+            // A personality value is hidden and drawn around the hidden mean of the world,
+            // never around the level of the player, so no position moves it.
+            Group::Personality => 0.0,
         }
     }
 }

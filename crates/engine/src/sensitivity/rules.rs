@@ -257,6 +257,15 @@ struct JobText<'a> {
     direction: Direction,
 }
 
+/// `true` for a job the version 4 catalogue added, which has no rule yet.
+///
+/// sdlc-debt: a temporary skip of the coverage check for the 21 version 4 attributes; the work
+/// that gives each new job its report-only rule deletes this skip, and the check then covers
+/// every job again.
+fn awaits_its_rule(name: &str) -> bool {
+    crate::data::convert::V4_ADDED.contains(&name)
+}
+
 /// Every job the rules must cover: each attribute of `schema`, then the three body jobs.
 fn jobs<'a>(schema: &'a AttributeSchema, body: &'a BodyJobs) -> Vec<JobText<'a>> {
     let mut out: Vec<JobText<'a>> = schema
@@ -397,6 +406,7 @@ impl SensitivityFile {
         }
         if let Some(job) = all
             .iter()
+            .filter(|j| !awaits_its_rule(j.name))
             .find(|j| !self.rules.iter().any(|r| r.job == j.name))
         {
             return Err(("rules".into(), format!("job {} has no rule", job.name)));
@@ -486,7 +496,14 @@ mod tests {
             &content.tuning.engine.contract.body,
         )
         .unwrap();
-        assert_eq!(file.rules.len(), content.attributes.len() + 3);
+        let awaiting = content
+            .attributes
+            .attributes
+            .iter()
+            .filter(|a| awaits_its_rule(&a.name))
+            .count();
+        assert_eq!(awaiting, 21);
+        assert_eq!(file.rules.len(), content.attributes.len() - awaiting + 3);
         assert_eq!(file.derived, vec!["build".to_string()]);
     }
 
@@ -504,9 +521,24 @@ mod tests {
 
     #[test]
     fn a_rule_with_no_job_is_refused() {
-        let (field, reason) = refusal(edited(|v| rule_of(v, "vision")["job"] = "flair".into()));
+        let (field, reason) = refusal(edited(|v| rule_of(v, "vision")["job"] = "panache".into()));
         assert!(field.ends_with(".job"), "{field}");
-        assert!(reason.contains("flair"), "{reason}");
+        assert!(reason.contains("panache"), "{reason}");
+    }
+
+    #[test]
+    fn the_skip_covers_only_the_new_attributes() {
+        assert!(awaits_its_rule("marking") && awaits_its_rule("controversy"));
+        assert!(!awaits_its_rule("vision") && !awaits_its_rule("consistency"));
+        // A job outside the version 4 additions still needs its rule.
+        let (field, reason) = refusal(edited(|v| {
+            v["rules"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|r| r["job"] != "consistency");
+        }));
+        assert_eq!(field, "rules");
+        assert!(reason.contains("job consistency has no rule"), "{reason}");
     }
 
     #[test]

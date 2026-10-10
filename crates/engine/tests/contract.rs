@@ -35,21 +35,23 @@ fn every_action_has_a_table_for_each_of_its_stages_in_the_shipped_content() {
 }
 
 #[test]
-fn the_frozen_copy_has_a_table_for_each_stage_of_every_action() {
+fn the_frozen_copies_have_a_table_for_each_stage_of_every_action() {
     let frozen: serde_json::Value =
         serde_json::from_str(engine::data::convert::FROZEN_V1).expect("the frozen copy parses");
+    let frozen_v4: serde_json::Value =
+        serde_json::from_str(engine::data::convert::FROZEN_V4).expect("the fourth copy parses");
     let actions = frozen["attributes"]["actions"]
         .as_object()
         .expect("the frozen copy has action tables");
     for action in ActionKind::ALL {
-        let tables = actions[action.name()]
-            .as_object()
-            .unwrap_or_else(|| panic!("{action}: no frozen tables"));
         for stage in action.stages() {
-            assert!(
-                tables.contains_key(stage.name()),
-                "{action}: no frozen {stage:?} table"
-            );
+            let in_v1 = actions
+                .get(action.name())
+                .is_some_and(|t| t.get(stage.name()).is_some());
+            let in_v4 = frozen_v4["tables"]
+                .get(action.name())
+                .is_some_and(|t| t.get(stage.name()).is_some());
+            assert!(in_v1 || in_v4, "{action}: no frozen {stage:?} table");
         }
     }
     let jobs = frozen["attributes"]["jobs"]
@@ -65,7 +67,9 @@ fn the_frozen_copy_has_a_table_for_each_stage_of_every_action() {
             name => name,
         };
         assert!(
-            jobs.contains_key(first) || frozen_v3["attributes"].get(&def.name).is_some(),
+            jobs.contains_key(first)
+                || frozen_v3["attributes"].get(&def.name).is_some()
+                || frozen_v4["attributes"].get(&def.name).is_some(),
             "{}: no frozen job",
             def.name
         );
@@ -83,6 +87,10 @@ fn every_attribute_feeds_a_stage_and_has_a_job_with_a_statistic() {
                 assert!(def.hidden, "{}: only a hidden value spreads", def.name);
                 assert_eq!(def.name, "consistency");
             }
+            None if matches!(def.job.stage, JobStage::Occasion | JobStage::Inert) => {
+                assert!(def.is_personality(), "{}: only personality", def.name);
+                assert!(def.job.action.is_none(), "{}", def.name);
+            }
             None => {
                 assert_eq!(def.job.stage, JobStage::TopSpeed);
                 assert_eq!(def.name, "pace", "only pace feeds the speed map");
@@ -97,6 +105,109 @@ fn every_attribute_feeds_a_stage_and_has_a_job_with_a_statistic() {
             }
         }
     }
+}
+
+// --- Personality and the small weights.
+
+/// Shape AC-4 of the record: no state family moves a personality value, and nothing panics,
+/// with deltas on every state group and a form offset.
+#[test]
+fn no_state_moves_a_personality_value_and_nothing_panics() {
+    use engine::contract::states::{StatesTuning, effective, effective_with_form};
+    let content = common::content();
+    let schema = &content.attributes;
+    let mut base = engine::player::Attributes {
+        values: [Rating::from_tenths(100); engine::data::MAX_ATTRIBUTES],
+        len: schema.len() as u8,
+    };
+    let personality: Vec<usize> = schema
+        .attributes
+        .iter()
+        .enumerate()
+        .filter(|(_, d)| d.is_personality())
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(personality.len(), 11);
+    for &i in &personality {
+        base.values[i] = Rating::from_tenths(30);
+    }
+    let deltas = [-20, -10, -5, 5];
+    let t = StatesTuning::default();
+    for moved in [
+        effective(&base, schema, deltas),
+        effective_with_form(&base, schema, deltas, -7, &t),
+        effective_with_form(&base, schema, deltas, 6, &t),
+    ] {
+        for &i in &personality {
+            assert_eq!(moved.get(i).tenths(), 30, "{}", schema.attributes[i].name);
+        }
+        let passing = schema.index("passing").unwrap();
+        assert_ne!(
+            moved.get(passing).tenths(),
+            100,
+            "a visible value still moves"
+        );
+    }
+}
+
+/// Shape AC-5 of the record: in every stage with small weights, each small weight is lighter
+/// than the lightest shown support, the main is the heaviest, and the blend reads them; a
+/// small weight as heavy as a shown support is refused.
+#[test]
+fn small_weights_are_lighter_than_every_shown_support_and_blend_into_the_stage() {
+    use engine::contract::{Stage, StageKind, stage_values};
+    let content = common::content();
+    let schema = &content.attributes;
+    let mut with_minor = 0;
+    for stages in schema.actions.values() {
+        for t in stages.values() {
+            if t.minor.is_empty() {
+                continue;
+            }
+            with_minor += 1;
+            let lightest = t
+                .supports
+                .iter()
+                .map(|s| s.weight)
+                .fold(t.main.weight, f64::min);
+            for m in &t.minor {
+                assert!(m.weight < lightest, "{} {}", m.attribute, m.weight);
+            }
+            for w in t.supports.iter().chain(&t.minor) {
+                assert!(w.weight < t.main.weight);
+            }
+        }
+    }
+    assert_eq!(with_minor, 5, "penalty, dribble, receive, tackle, block");
+    // The blend reads a small weight: flair moves the receive stage, a little.
+    let tuning = Tuning::default();
+    let mut ratings = engine::player::Attributes {
+        values: [Rating::from_tenths(100); engine::data::MAX_ATTRIBUTES],
+        len: schema.len() as u8,
+    };
+    let receive = Stage::find(ActionKind::Receive, StageKind::Execute).unwrap();
+    let before = stage_values(&ratings, schema, &tuning.contract).f(receive);
+    ratings.values[schema.index("flair").unwrap()] = Rating::from_tenths(200);
+    let flair = stage_values(&ratings, schema, &tuning.contract).f(receive) - before;
+    ratings.values[schema.index("flair").unwrap()] = Rating::from_tenths(100);
+    ratings.values[schema.index("balance").unwrap()] = Rating::from_tenths(200);
+    let support = stage_values(&ratings, schema, &tuning.contract).f(receive) - before;
+    assert!(
+        flair > 0.0 && flair < support,
+        "flair {flair}, support {support}"
+    );
+    // A planted small weight as heavy as a shown support is refused.
+    let mut planted = schema.clone();
+    let t = planted
+        .actions
+        .get_mut(&ActionKind::Receive)
+        .unwrap()
+        .get_mut(&StageKind::Execute)
+        .unwrap();
+    t.minor[0].weight = t.supports.iter().map(|s| s.weight).fold(f64::MAX, f64::min);
+    use garde::Validate;
+    let err = planted.validate().unwrap_err().to_string();
+    assert!(err.contains("receive.execute: small weight flair"), "{err}");
 }
 
 // --- One door to the ratings.
