@@ -223,7 +223,7 @@ impl Source {
     /// The bins of a measures build's rows, as `(width, bins)`, for the sources read from
     /// them; `None` for a source binned from the band record.
     pub fn row_bins(self) -> Option<(f64, u32)> {
-        use crate::calibrate::rows::{CHAIN_PASS_BINS, CHAIN_SECOND_BINS, SHOT_BINS};
+        use crate::measure_rows::{CHAIN_PASS_BINS, CHAIN_SECOND_BINS, SHOT_BINS};
         // At most a few dozen bins.
         match self {
             Source::Goals | Source::Passes => None,
@@ -1382,7 +1382,7 @@ mod tests {
     }
 
     /// The bands the shipped file adds with `gates: false`, in file order.
-    const REPORTED: [&str; 30] = [
+    const REPORTED: [&str; 35] = [
         "fouls_per_team",
         "offsides_per_team",
         "home_goal_difference",
@@ -1406,6 +1406,11 @@ mod tests {
         "pass_completion_cross_gt25",
         "distance_per_minute",
         "high_speed_share",
+        "speed_walk_share",
+        "speed_jog_share",
+        "speed_run_share",
+        "speed_hi_share",
+        "speed_sprint_share",
         "peak_speed_mean",
         "goals_distribution",
         "scoreline_cells",
@@ -1802,7 +1807,16 @@ mod tests {
         // The shipped running bands sit under their floor of 30 tracked matches, so they
         // would stay report-only after a promotion.
         let shipped = Registry::load(&shipped()).unwrap();
-        for name in ["distance_per_minute", "high_speed_share", "peak_speed_mean"] {
+        for name in [
+            "distance_per_minute",
+            "high_speed_share",
+            "speed_walk_share",
+            "speed_jog_share",
+            "speed_run_share",
+            "speed_hi_share",
+            "speed_sprint_share",
+            "peak_speed_mean",
+        ] {
             let promoted =
                 Registry::from_bytes(edited(name, |b| b["gates"] = true.into()).as_bytes())
                     .unwrap();

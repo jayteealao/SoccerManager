@@ -15,6 +15,7 @@ mod generate;
 mod guard;
 mod launch;
 mod matchday;
+mod measure_rows;
 mod record;
 mod replay;
 mod replay_inputs;

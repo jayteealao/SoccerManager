@@ -5,7 +5,7 @@
 
 use engine::{EngineError, Simulation, TickRecord, TickSink};
 
-use super::rows::{PLAYER_SLOTS, PlayerRow};
+use crate::measure_rows::{PLAYER_SLOTS, PlayerRow};
 
 /// The upper bounds of the walk, jog, run and high-intensity zones in m/s; sprint is 7 and
 /// over (the zones of `idsse_players.csv`).

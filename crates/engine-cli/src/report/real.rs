@@ -131,8 +131,19 @@ pub enum Outcome {
     NoRecord,
 }
 
-/// The real value of `def` from `folder`.
+/// The real value of `def` from `folder`, the file read for this band alone.
+#[cfg(test)]
 pub fn read(folder: &RealFolder, def: &BandDef) -> Outcome {
+    read_with(folder, def, None)
+}
+
+/// The real value of `def` from `folder`; `csv` is the reduction of its CSV file when one pass
+/// over the file already read it for several bands.
+fn read_with(
+    folder: &RealFolder,
+    def: &BandDef,
+    csv: Option<Result<(f64, Option<f64>), String>>,
+) -> Outcome {
     let Some(real) = &def.real else {
         return Outcome::NoRecord;
     };
@@ -169,7 +180,7 @@ pub fn read(folder: &RealFolder, def: &BandDef) -> Outcome {
     let read = if is_json(&pointer.file) {
         read_json(&path, pointer, real.sample)
     } else {
-        read_csv(&path, pointer)
+        csv.unwrap_or_else(|| read_csv(&path, pointer))
     };
     match read {
         Ok((value, se)) => {
@@ -325,97 +336,195 @@ enum Key {
 /// `range`, `same` and `skip_blank`), reduced as the pointer says. A mean is weighted by `weight` or
 /// divided by the sum of `den` when the pointer names one.
 fn read_csv(path: &Path, p: &Pointer) -> Result<(f64, Option<f64>), String> {
-    let mut rows = lines(path)?.lines();
+    read_csv_all(path, &[p])
+        .pop()
+        .unwrap_or_else(|| Err("no pointer".into()))
+}
+
+/// Every pointer of `pointers` over one CSV file, in one pass over its lines: each pointer's
+/// reduction, in their order, as [`read_csv`] gives it alone. A file read once serves every
+/// band that points into it, so a large compressed file is inflated once per judgement.
+fn read_csv_all(path: &Path, pointers: &[&Pointer]) -> Vec<Result<(f64, Option<f64>), String>> {
+    let fail = |e: String| pointers.iter().map(|_| Err(e.clone())).collect();
+    let mut rows = match lines(path) {
+        Ok(r) => r.lines(),
+        Err(e) => return fail(e),
+    };
     let header = match rows.next() {
-        Some(line) => line.map_err(|e| format!("cannot read: {e}"))?,
-        None => return Err("the file is empty".into()),
+        Some(Ok(line)) => line,
+        Some(Err(e)) => return fail(format!("cannot read: {e}")),
+        None => return fail("the file is empty".into()),
     };
     let names: Vec<&str> = header.trim_end_matches('\r').split(',').collect();
-    let column = |name: &str| {
-        names
-            .iter()
-            .position(|n| *n == name)
-            .ok_or_else(|| format!("no column {name}"))
-    };
-    let reduce = p.reduce.unwrap_or(Reduce::Mean);
-    if matches!(reduce, Reduce::Histogram | Reduce::Cells | Reduce::Chains) {
-        return Err(WHOLE_SAMPLE.into());
-    }
-    let filter: Vec<(usize, &Vec<String>)> = p
-        .filter
-        .iter()
-        .flatten()
-        .map(|(c, vals)| column(c).map(|i| (i, vals)))
-        .collect::<Result<_, _>>()?;
-    let ranges: Vec<(usize, [f64; 2])> = p
-        .range
-        .iter()
-        .flatten()
-        .map(|(c, r)| column(c).map(|i| (i, *r)))
-        .collect::<Result<_, _>>()?;
-    let same = match &p.same {
-        Some([a, b]) => Some((column(a)?, column(b)?)),
-        None => None,
-    };
-    let weight = p.weight.as_deref().map(column).transpose()?;
-    let den = match &p.den {
-        Some(d) => Some(signed_columns(d, &column)?),
-        None => None,
-    };
-    let group: Option<Vec<usize>> = match &p.group_by {
-        Some(g) => Some(g.split('+').map(column).collect::<Result<_, _>>()?),
-        None => None,
-    };
-    let need = |what: &str| format!("a {} needs {what}", reduce_name(reduce));
-    let key = match reduce {
-        Reduce::GroupShare => Key::Tokens(column(&p.key)?),
-        Reduce::GoalDistance | Reduce::Scoreline => {
-            let (a, b) = p
-                .key
-                .split_once(':')
-                .ok_or_else(|| need("its key as two columns joined by :"))?;
-            Key::Pair(column(a)?, column(b)?)
+    let mut accs: Vec<Result<CsvAcc<'_>, String>> =
+        pointers.iter().map(|p| CsvAcc::new(&names, p)).collect();
+    // A reason that ends every pointer still reading: the line cannot be read or holds a
+    // quoted field.
+    let stop_all = |accs: &mut Vec<Result<CsvAcc<'_>, String>>, why: String| {
+        for a in accs.iter_mut().filter(|a| a.is_ok()) {
+            *a = Err(why.clone());
         }
-        _ => Key::Sum(signed_columns(&p.key, &column)?),
     };
-    let tokens: BTreeSet<&str> = p.tokens.iter().flatten().map(String::as_str).collect();
-    let scores: Vec<[f64; 2]> = p
-        .scores
-        .iter()
-        .flatten()
-        .map(|s| score(s))
-        .collect::<Result<_, _>>()?;
-    match reduce {
-        Reduce::GroupShare if tokens.is_empty() => return Err(need("tokens")),
-        Reduce::Share if p.op.is_none() || p.value.is_none() => return Err(need("op and value")),
-        Reduce::BinShare if p.bins.is_none() => return Err(need("bins")),
-        Reduce::GoalDistance if p.goal.is_none() => return Err(need("goal")),
-        Reduce::Scoreline if scores.is_empty() => return Err(need("scores")),
-        Reduce::GroupRange if p.window.is_none_or(|w| w < 2) => {
-            return Err(need("a window of at least 2"));
-        }
-        Reduce::GroupShare | Reduce::GroupRange | Reduce::GroupMax if group.is_none() => {
-            return Err(need("group_by"));
-        }
-        _ => {}
-    }
-    // The kept rows' values, weights and denominators, and each group's values in file order.
-    let (mut xs, mut ws, mut ds) = (Vec::new(), Vec::new(), Vec::new());
-    let mut groups: BTreeMap<String, Vec<f64>> = BTreeMap::new();
-    let mut hits: BTreeMap<String, bool> = BTreeMap::new();
     for (n, line) in rows.enumerate() {
-        let line = line.map_err(|e| format!("cannot read line {}: {e}", n + 2))?;
+        let line = match line {
+            Ok(line) => line,
+            Err(e) => {
+                stop_all(&mut accs, format!("cannot read line {}: {e}", n + 2));
+                break;
+            }
+        };
         let line = line.trim_end_matches('\r');
         if line.is_empty() {
             continue;
         }
         if line.contains('"') {
-            return Err(format!(
-                "line {} holds a quoted field; this reader takes none",
-                n + 2
-            ));
+            stop_all(
+                &mut accs,
+                format!(
+                    "line {} holds a quoted field; this reader takes none",
+                    n + 2
+                ),
+            );
+            break;
         }
         let cells: Vec<&str> = line.split(',').collect();
+        let mut reading = false;
+        for a in &mut accs {
+            let fed = match a {
+                Ok(acc) => acc.feed(n, &names, &cells),
+                Err(_) => continue,
+            };
+            match fed {
+                Ok(()) => reading = true,
+                Err(e) => *a = Err(e),
+            }
+        }
+        if !reading {
+            break;
+        }
+    }
+    accs.into_iter()
+        .map(|a| a.and_then(CsvAcc::finish))
+        .collect()
+}
+
+/// One CSV pointer's reading: its columns, found from the header, and the kept rows' values,
+/// weights, denominators and groups so far.
+struct CsvAcc<'a> {
+    p: &'a Pointer,
+    reduce: Reduce,
+    filter: Vec<(usize, &'a Vec<String>)>,
+    ranges: Vec<(usize, [f64; 2])>,
+    same: Option<(usize, usize)>,
+    weight: Option<usize>,
+    den: Option<Vec<(usize, f64)>>,
+    group: Option<Vec<usize>>,
+    key: Key,
+    tokens: BTreeSet<&'a str>,
+    scores: Vec<[f64; 2]>,
+    xs: Vec<f64>,
+    ws: Vec<f64>,
+    ds: Vec<f64>,
+    groups: BTreeMap<String, Vec<f64>>,
+    hits: BTreeMap<String, bool>,
+}
+
+impl<'a> CsvAcc<'a> {
+    /// The reading of `p` over a file of the columns `names`, or why it cannot read it.
+    fn new(names: &[&str], p: &'a Pointer) -> Result<Self, String> {
+        let column = |name: &str| {
+            names
+                .iter()
+                .position(|n| *n == name)
+                .ok_or_else(|| format!("no column {name}"))
+        };
+        let reduce = p.reduce.unwrap_or(Reduce::Mean);
+        if matches!(reduce, Reduce::Histogram | Reduce::Cells | Reduce::Chains) {
+            return Err(WHOLE_SAMPLE.into());
+        }
+        let filter: Vec<(usize, &Vec<String>)> = p
+            .filter
+            .iter()
+            .flatten()
+            .map(|(c, vals)| column(c).map(|i| (i, vals)))
+            .collect::<Result<_, _>>()?;
+        let ranges: Vec<(usize, [f64; 2])> = p
+            .range
+            .iter()
+            .flatten()
+            .map(|(c, r)| column(c).map(|i| (i, *r)))
+            .collect::<Result<_, _>>()?;
+        let same = match &p.same {
+            Some([a, b]) => Some((column(a)?, column(b)?)),
+            None => None,
+        };
+        let weight = p.weight.as_deref().map(column).transpose()?;
+        let den = match &p.den {
+            Some(d) => Some(signed_columns(d, &column)?),
+            None => None,
+        };
+        let group: Option<Vec<usize>> = match &p.group_by {
+            Some(g) => Some(g.split('+').map(column).collect::<Result<_, _>>()?),
+            None => None,
+        };
+        let need = |what: &str| format!("a {} needs {what}", reduce_name(reduce));
+        let key = match reduce {
+            Reduce::GroupShare => Key::Tokens(column(&p.key)?),
+            Reduce::GoalDistance | Reduce::Scoreline => {
+                let (a, b) = p
+                    .key
+                    .split_once(':')
+                    .ok_or_else(|| need("its key as two columns joined by :"))?;
+                Key::Pair(column(a)?, column(b)?)
+            }
+            _ => Key::Sum(signed_columns(&p.key, &column)?),
+        };
+        let tokens: BTreeSet<&str> = p.tokens.iter().flatten().map(String::as_str).collect();
+        let scores: Vec<[f64; 2]> = p
+            .scores
+            .iter()
+            .flatten()
+            .map(|s| score(s))
+            .collect::<Result<_, _>>()?;
+        match reduce {
+            Reduce::GroupShare if tokens.is_empty() => return Err(need("tokens")),
+            Reduce::Share if p.op.is_none() || p.value.is_none() => {
+                return Err(need("op and value"));
+            }
+            Reduce::BinShare if p.bins.is_none() => return Err(need("bins")),
+            Reduce::GoalDistance if p.goal.is_none() => return Err(need("goal")),
+            Reduce::Scoreline if scores.is_empty() => return Err(need("scores")),
+            Reduce::GroupRange if p.window.is_none_or(|w| w < 2) => {
+                return Err(need("a window of at least 2"));
+            }
+            Reduce::GroupShare | Reduce::GroupRange | Reduce::GroupMax if group.is_none() => {
+                return Err(need("group_by"));
+            }
+            _ => {}
+        }
+        Ok(Self {
+            p,
+            reduce,
+            filter,
+            ranges,
+            same,
+            weight,
+            den,
+            group,
+            key,
+            tokens,
+            scores,
+            xs: Vec::new(),
+            ws: Vec::new(),
+            ds: Vec::new(),
+            groups: BTreeMap::new(),
+            hits: BTreeMap::new(),
+        })
+    }
+
+    /// Takes line `n` (0 for the first after the header), split into `cells`, when the
+    /// pointer keeps it.
+    fn feed(&mut self, n: usize, names: &[&str], cells: &[&str]) -> Result<(), String> {
         let cell = |i: usize| {
             cells
                 .get(i)
@@ -433,13 +542,13 @@ fn read_csv(path: &Path, p: &Pointer) -> Result<(f64, Option<f64>), String> {
                 .try_fold(0.0, |acc, &(i, s)| Ok(acc + s * number(i)?))
         };
         let mut kept = true;
-        for (i, vals) in &filter {
+        for (i, vals) in &self.filter {
             kept &= vals.iter().any(|v| v == cell(*i).unwrap_or(""));
         }
-        if let Some((a, b)) = same {
+        if let Some((a, b)) = self.same {
             kept &= cell(a)? == cell(b)?;
         }
-        for &(i, [lo, hi]) in &ranges {
+        for &(i, [lo, hi]) in &self.ranges {
             if !kept {
                 break;
             }
@@ -447,21 +556,21 @@ fn read_csv(path: &Path, p: &Pointer) -> Result<(f64, Option<f64>), String> {
             kept &= lo <= v && v < hi;
         }
         if !kept {
-            continue;
+            return Ok(());
         }
-        if p.skip_blank {
-            let used = match &key {
+        if self.p.skip_blank {
+            let used = match &self.key {
                 Key::Sum(cols) => cols.iter().map(|c| c.0).collect(),
                 Key::Pair(a, b) => vec![*a, *b],
                 Key::Tokens(i) => vec![*i],
             };
             let blank = used
                 .into_iter()
-                .chain(weight)
-                .chain(den.iter().flatten().map(|c| c.0))
+                .chain(self.weight)
+                .chain(self.den.iter().flatten().map(|c| c.0))
                 .any(|i| cell(i).is_ok_and(|t| t.trim().is_empty()));
             if blank {
-                continue;
+                return Ok(());
             }
         }
         let name = |cols: &[usize]| -> Result<String, String> {
@@ -471,104 +580,153 @@ fn read_csv(path: &Path, p: &Pointer) -> Result<(f64, Option<f64>), String> {
                 .collect::<Result<Vec<_>, _>>()?
                 .join("+"))
         };
-        let x = match &key {
+        let x = match &self.key {
             Key::Tokens(i) => {
-                let hit = cell(*i)?.split_whitespace().any(|t| tokens.contains(t));
-                *hits
-                    .entry(name(group.as_deref().unwrap_or(&[]))?)
+                let hit = cell(*i)?
+                    .split_whitespace()
+                    .any(|t| self.tokens.contains(t));
+                *self
+                    .hits
+                    .entry(name(self.group.as_deref().unwrap_or(&[]))?)
                     .or_default() |= hit;
-                continue;
+                return Ok(());
             }
             Key::Pair(a, b) => {
                 let (u, v) = (number(*a)?, number(*b)?);
-                match (reduce, p.goal) {
+                match (self.reduce, self.p.goal) {
                     (Reduce::GoalDistance, Some([gx, gy])) => (gx - u).hypot(gy - v),
                     _ => f64::from(u8::from(
-                        scores.iter().any(|s| *s == [u, v] || *s == [v, u]),
+                        self.scores.iter().any(|s| *s == [u, v] || *s == [v, u]),
                     )),
                 }
             }
             Key::Sum(cols) => sum(cols)?,
         };
-        if let Some(g) = &group {
-            groups.entry(name(g)?).or_default().push(x);
-            continue;
+        if let Some(g) = &self.group {
+            self.groups.entry(name(g)?).or_default().push(x);
+            return Ok(());
         }
-        xs.push(match (reduce, p.bins) {
+        self.xs.push(match (self.reduce, self.p.bins) {
             (Reduce::BinShare, Some([lo, hi])) => f64::from(u8::from(lo <= x && x < hi)),
             _ => x,
         });
-        ws.push(weight.map_or(Ok(1.0), number)?);
-        if let Some(d) = &den {
-            ds.push(sum(d)?);
+        self.ws.push(self.weight.map_or(Ok(1.0), number)?);
+        if let Some(d) = &self.den {
+            self.ds.push(sum(d)?);
+        }
+        Ok(())
+    }
+
+    /// The reduction of the kept rows, with its standard error when the reduction gives one.
+    fn finish(self) -> Result<(f64, Option<f64>), String> {
+        let Self {
+            p,
+            reduce,
+            weight,
+            xs,
+            ws,
+            ds,
+            groups,
+            hits,
+            ..
+        } = self;
+        let per_group = |f: &dyn Fn(&[f64]) -> Option<f64>| -> Result<(f64, Option<f64>), String> {
+            let values: Vec<f64> = groups.values().filter_map(|v| f(v)).collect();
+            if values.is_empty() {
+                return Err("no group has enough rows".into());
+            }
+            Ok((mean(&values), Some(se_mean(&values))))
+        };
+        let largest = |v: &[f64]| v.iter().copied().fold(f64::MIN, f64::max);
+        let smallest = |v: &[f64]| v.iter().copied().fold(f64::MAX, f64::min);
+        match reduce {
+            Reduce::GroupShare => {
+                if hits.is_empty() {
+                    return Err("no row kept".into());
+                }
+                let hit = hits.values().filter(|h| **h).count();
+                let p = hit as f64 / hits.len() as f64;
+                Ok((p, Some(se_share(p, hits.len()))))
+            }
+            Reduce::GroupRange => {
+                let window = p.window.unwrap_or(2) as usize;
+                per_group(&|v| {
+                    let first = &v[..window.min(v.len())];
+                    (v.len() >= window).then(|| largest(first) - smallest(first))
+                })
+            }
+            Reduce::GroupMax => per_group(&|v| (!v.is_empty()).then(|| largest(v))),
+            _ if xs.is_empty() => Err("no row kept".into()),
+            Reduce::Mean if !ds.is_empty() => {
+                let d: f64 = ds.iter().sum();
+                if d == 0.0 {
+                    return Err(format!("{} sums to 0", p.den.as_deref().unwrap_or("den")));
+                }
+                Ok((xs.iter().sum::<f64>() / d, None))
+            }
+            Reduce::Mean | Reduce::BinShare if weight.is_some() => {
+                let w: f64 = ws.iter().sum();
+                if w <= 0.0 {
+                    return Err("the weights sum to 0".into());
+                }
+                let wx: Vec<f64> = xs.iter().zip(&ws).map(|(x, w)| x * w).collect();
+                Ok((wx.iter().sum::<f64>() / w, Some(se_ratio(&wx, &ws))))
+            }
+            Reduce::Mean | Reduce::GoalDistance => Ok((mean(&xs), Some(se_mean(&xs)))),
+            Reduce::BinShare | Reduce::Scoreline => {
+                let p = mean(&xs);
+                Ok((p, Some(se_share(p, xs.len()))))
+            }
+            Reduce::Share => {
+                let (op, target) = (
+                    p.op.unwrap_or(super::bands::Op::AtLeast),
+                    p.value.unwrap_or(0.0),
+                );
+                let hit = xs.iter().filter(|s| op.holds(**s, target)).count();
+                let p = hit as f64 / xs.len() as f64;
+                Ok((p, Some(se_share(p, xs.len()))))
+            }
+            Reduce::FactorialRatio => {
+                let s: f64 = xs.iter().sum();
+                if s <= 0.0 {
+                    return Err(format!("{} sums to 0", p.key));
+                }
+                let f: f64 = xs.iter().map(|x| x * (x - 1.0)).sum();
+                Ok((xs.len() as f64 * f / (s * s), None))
+            }
+            Reduce::Histogram | Reduce::Cells | Reduce::Chains => Err(WHOLE_SAMPLE.into()),
         }
     }
-    let per_group = |f: &dyn Fn(&[f64]) -> Option<f64>| -> Result<(f64, Option<f64>), String> {
-        let values: Vec<f64> = groups.values().filter_map(|v| f(v)).collect();
-        if values.is_empty() {
-            return Err("no group has enough rows".into());
-        }
-        Ok((mean(&values), Some(se_mean(&values))))
-    };
-    let largest = |v: &[f64]| v.iter().copied().fold(f64::MIN, f64::max);
-    let smallest = |v: &[f64]| v.iter().copied().fold(f64::MAX, f64::min);
-    match reduce {
-        Reduce::GroupShare => {
-            if hits.is_empty() {
-                return Err("no row kept".into());
+}
+
+/// The reductions of every band with a single value read from a CSV file of `folder`, by
+/// band: each file is streamed once for all the bands that point into it.
+fn csv_values<'r>(
+    folder: &RealFolder,
+    registry: &'r Registry,
+) -> BTreeMap<&'r str, Result<(f64, Option<f64>), String>> {
+    let mut by_file: BTreeMap<PathBuf, Vec<(&'r str, &'r Pointer)>> = BTreeMap::new();
+    if let Some(dir) = folder.path.as_ref().filter(|d| d.is_dir()) {
+        for def in registry.bands.iter().filter(|d| !d.is_distribution()) {
+            if let Some(RealSource::Pointer(p)) = def.real.as_ref().map(|r| &r.source) {
+                let path = dir.join(&p.file);
+                if !is_json(&p.file) && path.is_file() {
+                    by_file
+                        .entry(path)
+                        .or_default()
+                        .push((def.band.as_str(), &**p));
+                }
             }
-            let hit = hits.values().filter(|h| **h).count();
-            let p = hit as f64 / hits.len() as f64;
-            Ok((p, Some(se_share(p, hits.len()))))
         }
-        Reduce::GroupRange => {
-            let window = p.window.unwrap_or(2) as usize;
-            per_group(&|v| {
-                let first = &v[..window.min(v.len())];
-                (v.len() >= window).then(|| largest(first) - smallest(first))
-            })
-        }
-        Reduce::GroupMax => per_group(&|v| (!v.is_empty()).then(|| largest(v))),
-        _ if xs.is_empty() => Err("no row kept".into()),
-        Reduce::Mean if !ds.is_empty() => {
-            let d: f64 = ds.iter().sum();
-            if d == 0.0 {
-                return Err(format!("{} sums to 0", p.den.as_deref().unwrap_or("den")));
-            }
-            Ok((xs.iter().sum::<f64>() / d, None))
-        }
-        Reduce::Mean | Reduce::BinShare if weight.is_some() => {
-            let w: f64 = ws.iter().sum();
-            if w <= 0.0 {
-                return Err("the weights sum to 0".into());
-            }
-            let wx: Vec<f64> = xs.iter().zip(&ws).map(|(x, w)| x * w).collect();
-            Ok((wx.iter().sum::<f64>() / w, Some(se_ratio(&wx, &ws))))
-        }
-        Reduce::Mean | Reduce::GoalDistance => Ok((mean(&xs), Some(se_mean(&xs)))),
-        Reduce::BinShare | Reduce::Scoreline => {
-            let p = mean(&xs);
-            Ok((p, Some(se_share(p, xs.len()))))
-        }
-        Reduce::Share => {
-            let (op, target) = (
-                p.op.unwrap_or(super::bands::Op::AtLeast),
-                p.value.unwrap_or(0.0),
-            );
-            let hit = xs.iter().filter(|s| op.holds(**s, target)).count();
-            let p = hit as f64 / xs.len() as f64;
-            Ok((p, Some(se_share(p, xs.len()))))
-        }
-        Reduce::FactorialRatio => {
-            let s: f64 = xs.iter().sum();
-            if s <= 0.0 {
-                return Err(format!("{} sums to 0", p.key));
-            }
-            let f: f64 = xs.iter().map(|x| x * (x - 1.0)).sum();
-            Ok((xs.len() as f64 * f / (s * s), None))
-        }
-        Reduce::Histogram | Reduce::Cells | Reduce::Chains => Err(WHOLE_SAMPLE.into()),
     }
+    let mut out = BTreeMap::new();
+    for (path, bands) in &by_file {
+        let pointers: Vec<&Pointer> = bands.iter().map(|(_, p)| *p).collect();
+        for ((band, _), value) in bands.iter().zip(read_csv_all(path, &pointers)) {
+            out.insert(*band, value);
+        }
+    }
+    out
 }
 
 /// Why a whole-sample reduction gives no single value.
@@ -1149,6 +1307,7 @@ pub fn read_all(folder: &RealFolder, registry: &Registry, samples: &Samples) -> 
             .map(|p| p.display().to_string()),
         bands: Vec::with_capacity(registry.bands.len()),
     };
+    let mut csv = csv_values(folder, registry);
     for def in &registry.bands {
         let whole = def.is_distribution().then(|| samples.get(&def.band));
         let outcome = match whole {
@@ -1182,7 +1341,7 @@ pub fn read_all(folder: &RealFolder, registry: &Registry, samples: &Samples) -> 
                 path: String::new(),
                 reason: "the whole sample was not read".into(),
             },
-            _ => read(folder, def),
+            _ => read_with(folder, def, csv.remove(def.band.as_str())),
         };
         let matches = match whole {
             Some(Some(Ok(sample))) => Some(sample.per_match.len() as u64),
@@ -1424,6 +1583,45 @@ mod tests {
             Outcome::Read { value, se, .. } => (value, se),
             other => panic!("{other:?}"),
         }
+    }
+
+    /// One pass over a file reads every pointer into it as each reads alone, a pointer that
+    /// does not fit the file included.
+    #[test]
+    fn one_pass_reads_every_pointer_into_a_file_as_each_alone() {
+        let dir = temp("one-pass");
+        let path = dir.join("m.csv");
+        std::fs::write(
+            &path,
+            "comp,hg,ag
+A,1,0
+B,3,2
+A,0,0
+",
+        )
+        .unwrap();
+        let mean = pointer("m.csv", "hg+ag");
+        let share = Pointer {
+            reduce: Some(Reduce::Share),
+            op: Some(super::super::bands::Op::AtLeast),
+            value: Some(1.0),
+            ..pointer("m.csv", "hg")
+        };
+        let only_a = Pointer {
+            filter: Some(BTreeMap::from([(
+                "comp".to_string(),
+                vec!["A".to_string()],
+            )])),
+            ..pointer("m.csv", "hg")
+        };
+        let broken = pointer("m.csv", "no_such_column");
+        let all = read_csv_all(&path, &[&mean, &share, &only_a, &broken]);
+        for (p, got) in [&mean, &share, &only_a, &broken].into_iter().zip(&all) {
+            assert_eq!(*got, read_csv(&path, p));
+        }
+        assert_eq!(all[0].as_ref().unwrap().0, 2.0);
+        assert!(all[3].as_ref().unwrap_err().contains("no_such_column"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -1721,7 +1919,7 @@ mod tests {
             ("n/a", "n/a")
         );
         assert_eq!(strong.report_only, None);
-        assert_eq!((info.missing, info.no_counterpart), (15 + 30, 3));
+        assert_eq!((info.missing, info.no_counterpart), (15 + 35, 3));
 
         let mut joint = Joint {
             word: Word::Fail,

@@ -146,12 +146,22 @@ pub struct VerdictRow {
 
 impl VerdictRow {
     /// The run's value is inside the design range: a change row is inside when it carries no
-    /// distance outside, a plain row when its range check passed.
+    /// distance outside; a row judged on its range alone when it has a value and that value
+    /// lies in the range, a not-sure word near an edge included.
     pub fn inside(&self) -> bool {
         if self.power.is_some() {
-            self.outside_by.is_none()
-        } else {
-            self.word == Word::Pass
+            return self.outside_by.is_none();
+        }
+        match self.word {
+            Word::Pass => true,
+            Word::Fail => false,
+            Word::NotSure => {
+                let valueless = self
+                    .note
+                    .as_deref()
+                    .is_some_and(|n| n.starts_with("no value") || n == NO_MEASURES_NOTE);
+                !valueless && (self.lo..=self.hi).contains(&self.value)
+            }
         }
     }
 
@@ -689,7 +699,7 @@ pub fn bootstrap(
 }
 
 /// `true` when a change of `diff` with error `se` is beyond the threshold `c`.
-fn significant(diff: f64, se: f64, c: f64) -> bool {
+pub(crate) fn significant(diff: f64, se: f64, c: f64) -> bool {
     if se > 0.0 {
         diff.abs() > c * se
     } else {
@@ -1674,5 +1684,21 @@ mod tests {
             "{text}"
         );
         assert_eq!(render_reported(&[], false), "");
+    }
+
+    /// A range row near an edge reads not sure and still lies inside its range; a row with
+    /// no value or outside the range never does.
+    #[test]
+    fn a_not_sure_range_row_near_an_edge_is_inside_and_one_with_no_value_is_not() {
+        let rows = range_rows(&[check(1.2, 0.1), check(3.1, 0.1), check(2.0, 0.1)], None);
+        assert_eq!(rows[0].word, Word::NotSure);
+        assert!(rows[0].inside());
+        assert!(!rows[1].inside());
+        assert!(rows[2].inside());
+        let none = BandCheck {
+            why_none: Some("no real data here".into()),
+            ..check(2.0, 0.0)
+        };
+        assert!(!range_rows(&[none], None)[0].inside());
     }
 }

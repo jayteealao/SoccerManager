@@ -126,7 +126,7 @@ To judge a finished run again, for example after editing a band in `realism-band
 Every run reads each band's real value from the measured real data and prints it beside the verdict. The line before the table says which folder it read and how many bands have no real value:
 
 ```text
-real data: C:\Users\you\SoccerManager\.scratch\out (default); 0 of 42 bands without a real value; 3 with no real counterpart
+real data: C:\Users\you\SoccerManager\.scratch\out (default); 0 of 53 bands without a real value; 3 with no real counterpart
 ```
 
 - `real` is the value measured on real matches; `distance` is the run's value minus it. A band inside its design range can still sit far from real football: the distance says how far.

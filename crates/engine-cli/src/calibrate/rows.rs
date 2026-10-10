@@ -35,6 +35,8 @@ use sha2::{Digest, Sha256};
 
 use super::fixtures::FixtureKey;
 use super::run_folder::Done;
+pub use crate::measure_rows::{MeasureBlock, Measures, PASS_CELL_NAMES, PHASES, ZONES};
+use crate::measure_rows::{SIDES, THIRDS};
 use crate::report::MEASURES_VERSION;
 
 /// The row file format this program writes.
@@ -95,7 +97,7 @@ pub mod reason {
 }
 
 /// One match's compact row. Per-team pairs are home first.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Row {
     pub key: FixtureKey,
     /// The engine seed the match was played with.
@@ -131,138 +133,10 @@ pub struct Row {
     pub ticks: u32,
     /// The match's wall time in microseconds; not part of its result.
     pub duration_us: u64,
-    /// The realism measures; not part of its result.
-    pub measures: Measures,
-    /// Each player's running, by side and slot in order of first appearance; not part of
-    /// its result.
-    pub physical: [[PlayerRow; PLAYER_SLOTS]; 2],
-    /// Players of a side beyond [`PLAYER_SLOTS`], whose running no slot holds.
-    pub physical_overflow: [u32; 2],
-}
-
-/// Shot distance bins: 1 m each from 0 m to 40 m, then 40 m and over.
-pub const SHOT_BINS: usize = 41;
-/// Pass cells: ground pass, long pass or chip, cross, each under 10 m, 10 to 25 m and over
-/// 25 m, then keeper throw, keeper kick, and a pass without a plan.
-pub const PASS_CELL_NAMES: [&str; 12] = [
-    "ground_lt10",
-    "ground_10_25",
-    "ground_gt25",
-    "chip_lt10",
-    "chip_10_25",
-    "chip_gt25",
-    "cross_lt10",
-    "cross_10_25",
-    "cross_gt25",
-    "keeper_throw",
-    "keeper_kick",
-    "unknown",
-];
-const PASS_CELLS: usize = PASS_CELL_NAMES.len();
-/// The phases a goal can take.
-pub const PHASES: [&str; 7] = [
-    "open_play",
-    "corner",
-    "free_kick",
-    "penalty",
-    "throw_in",
-    "kick_off",
-    "goal_kick",
-];
-/// The thirds of the pitch, from a side's own goal line.
-const THIRDS: [&str; 3] = ["own", "middle", "final"];
-/// Chain length bins in passes: 0 to 14, then 15 and over.
-pub const CHAIN_PASS_BINS: usize = 16;
-/// Chain length bins in seconds: 2 s each up to 60 s, then 60 s and over.
-pub const CHAIN_SECOND_BINS: usize = 31;
-/// Physical record slots per side: eleven starters and five substitutes.
-pub const PLAYER_SLOTS: usize = 16;
-/// The speed zones of the real player file, in m/s: walk under 2, jog 2 to 4, run 4 to 5.5,
-/// high intensity 5.5 to 7, sprint 7 and over.
-pub const ZONES: [&str; 5] = ["walk", "jog", "run", "hi", "sprint"];
-const SIDES: [&str; 2] = ["home", "away"];
-
-// The engine's measures and the rows agree on every size.
-#[cfg(feature = "measures")]
-const _: () = assert!(
-    SHOT_BINS == engine::measures::SHOT_BINS
-        && PASS_CELLS == engine::measures::PASS_CELLS
-        && PHASES.len() == engine::measures::PHASE_COUNT
-        && CHAIN_PASS_BINS == engine::measures::CHAIN_PASS_BINS
-        && CHAIN_SECOND_BINS == engine::measures::CHAIN_SECOND_BINS
-);
-
-/// The realism measures of one match, as the rows keep them. Per-side arrays are home
-/// first; the fields are those of the engine's measures.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Measures {
-    /// `true` when a measures build played the match; every other field is 0 otherwise.
-    pub present: bool,
-    pub shot_bins: [[u32; SHOT_BINS]; 2],
-    pub shot_distance_m: [f64; 2],
-    pub pass_attempts: [[u32; PASS_CELLS]; 2],
-    pub pass_completed: [[u32; PASS_CELLS]; 2],
-    pub goals_by_phase: [[u32; PHASES.len()]; 2],
-    pub third_ticks: [[u32; 3]; 2],
-    pub chains: [u32; 2],
-    pub chain_pass_bins: [[u32; CHAIN_PASS_BINS]; 2],
-    pub chain_second_bins: [[u32; CHAIN_SECOND_BINS]; 2],
-    pub chain_passes: [u32; 2],
-    pub chain_ticks: [u64; 2],
-}
-
-impl Default for Measures {
-    fn default() -> Self {
-        Self {
-            present: false,
-            shot_bins: [[0; SHOT_BINS]; 2],
-            shot_distance_m: [0.0; 2],
-            pass_attempts: [[0; PASS_CELLS]; 2],
-            pass_completed: [[0; PASS_CELLS]; 2],
-            goals_by_phase: [[0; PHASES.len()]; 2],
-            third_ticks: [[0; 3]; 2],
-            chains: [0; 2],
-            chain_pass_bins: [[0; CHAIN_PASS_BINS]; 2],
-            chain_second_bins: [[0; CHAIN_SECOND_BINS]; 2],
-            chain_passes: [0; 2],
-            chain_ticks: [0; 2],
-        }
-    }
-}
-
-#[cfg(feature = "measures")]
-impl From<&engine::measures::MatchMeasures> for Measures {
-    fn from(m: &engine::measures::MatchMeasures) -> Self {
-        Self {
-            present: true,
-            shot_bins: m.shot_bins,
-            shot_distance_m: m.shot_distance_m,
-            pass_attempts: m.pass_attempts,
-            pass_completed: m.pass_completed,
-            goals_by_phase: m.goals_by_phase,
-            third_ticks: m.third_ticks,
-            chains: m.chains,
-            chain_pass_bins: m.chain_pass_bins,
-            chain_second_bins: m.chain_second_bins,
-            chain_passes: m.chain_passes,
-            chain_ticks: m.chain_ticks,
-        }
-    }
-}
-
-/// One player's running in one match.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub struct PlayerRow {
-    /// His place in his team file.
-    pub squad: u8,
-    /// Ticks on the pitch, the ball in play or not: his minutes played.
-    pub ticks_on: u32,
-    /// Metres covered: his speed times the tick, over every tick on the pitch.
-    pub distance_m: f64,
-    /// Ball-in-play ticks in each speed zone, in [`ZONES`] order.
-    pub zone_ticks: [u32; 5],
-    /// His highest speed, in m/s.
-    pub peak_mps: f64,
+    /// The realism measures and each player's running when a measures build played the
+    /// match, `None` otherwise; not part of its result. Boxed, so a row without them stays
+    /// small in memory.
+    pub measured: Option<Box<MeasureBlock>>,
 }
 
 /// A measure column's value in a row, as the walk over the measure columns hands it out.
@@ -305,11 +179,11 @@ impl Slot<'_> {
     }
 }
 
-/// Every measure column of `row`, in file order: its name (built only when `f` asks) and its
-/// value. The one place the measure columns are listed, so the header, the writer and the
+/// Every measure column of `block`, in file order: its name (built only when `f` asks) and
+/// its value. The one place the measure columns are listed, so the header, the writer and the
 /// reader cannot disagree.
-fn walk(row: &mut Row, f: &mut dyn FnMut(&dyn Fn() -> String, Slot<'_>)) {
-    let m = &mut row.measures;
+fn walk(block: &mut MeasureBlock, f: &mut dyn FnMut(&dyn Fn() -> String, Slot<'_>)) {
+    let m = &mut block.measures;
     f(&|| "measures.present".into(), Slot::Bool(&mut m.present));
     for (s, side) in SIDES.iter().enumerate() {
         for (b, v) in m.shot_bins[s].iter_mut().enumerate() {
@@ -368,7 +242,7 @@ fn walk(row: &mut Row, f: &mut dyn FnMut(&dyn Fn() -> String, Slot<'_>)) {
         );
     }
     for (s, side) in SIDES.iter().enumerate() {
-        for (n, p) in row.physical[s].iter_mut().enumerate() {
+        for (n, p) in block.physical[s].iter_mut().enumerate() {
             let at = |field: &str| format!("player.{side}.{n:02}.{field}");
             f(&|| at("squad"), Slot::U8(&mut p.squad));
             f(&|| at("ticks_on"), Slot::U32(&mut p.ticks_on));
@@ -382,7 +256,7 @@ fn walk(row: &mut Row, f: &mut dyn FnMut(&dyn Fn() -> String, Slot<'_>)) {
     for (s, side) in SIDES.iter().enumerate() {
         f(
             &|| format!("physical_overflow.{side}"),
-            Slot::U32(&mut row.physical_overflow[s]),
+            Slot::U32(&mut block.physical_overflow[s]),
         );
     }
 }
@@ -392,19 +266,20 @@ fn measure_columns() -> &'static [(String, Kind)] {
     static COLUMNS: std::sync::OnceLock<Vec<(String, Kind)>> = std::sync::OnceLock::new();
     COLUMNS.get_or_init(|| {
         let mut out = Vec::new();
-        walk(&mut Row::default(), &mut |name, slot| {
+        walk(&mut MeasureBlock::default(), &mut |name, slot| {
             out.push((name(), slot.kind()));
         });
         out
     })
 }
 
-/// The measure columns' values of `row`, in file order.
-fn measure_values(row: &Row) -> Vec<u64> {
-    let mut copy = *row;
+/// The measure columns' values of `row`, in file order; `None` for a row without measures,
+/// whose columns are all 0.
+fn measure_values(row: &Row) -> Option<Vec<u64>> {
+    let mut copy = (**row.measured.as_ref()?).clone();
     let mut out = Vec::with_capacity(measure_columns().len());
     walk(&mut copy, &mut |_, slot| out.push(slot.get()));
-    out
+    Some(out)
 }
 
 /// A column's type: its width in the file.
@@ -791,9 +666,11 @@ impl Row {
         measures: &engine::measures::MatchMeasures,
         physical: &super::physical::Physical,
     ) -> Self {
-        self.measures = Measures::from(measures);
-        self.physical = physical.players;
-        self.physical_overflow = physical.overflow;
+        self.measured = Some(Box::new(MeasureBlock {
+            measures: Measures::from(measures),
+            physical: physical.players,
+            physical_overflow: physical.overflow,
+        }));
         self
     }
 
@@ -968,10 +845,11 @@ impl RowsWriter {
                 put(&mut block, c.kind, (c.get)(row));
             }
         }
-        let values: Vec<Vec<u64>> = rows.iter().map(measure_values).collect();
+        // A row without measures writes 0 in each measure column, with nothing allocated.
+        let values: Vec<Option<Vec<u64>>> = rows.iter().map(measure_values).collect();
         for (j, (_, kind)) in measure_columns().iter().enumerate() {
             for row in &values {
-                put(&mut block, *kind, row[j]);
+                put(&mut block, *kind, row.as_ref().map_or(0, |v| v[j]));
             }
         }
         let sum = checksum(&block);
@@ -1101,12 +979,17 @@ fn read_block(r: &mut Reader<'_>, measures: bool) -> Option<Vec<Row>> {
         let column: Option<Vec<u64>> = (0..count).map(|_| r.value(*kind)).collect();
         values.push(column?);
     }
+    // A row keeps its measures only when a measures build played it.
     for (i, row) in rows.iter_mut().enumerate() {
+        let mut block = MeasureBlock::default();
         let mut j = 0;
-        walk(row, &mut |_, slot| {
+        walk(&mut block, &mut |_, slot| {
             slot.set(values[j][i]);
             j += 1;
         });
+        if block.measures.present {
+            row.measured = Some(Box::new(block));
+        }
     }
     Some(rows)
 }
@@ -1320,8 +1203,9 @@ mod tests {
     /// A row with every measure set to a value of its own.
     fn measured(n: u64) -> Row {
         let mut r = row(n);
+        let mut block = MeasureBlock::default();
         let mut v = 0u64;
-        walk(&mut r, &mut |_, slot| {
+        walk(&mut block, &mut |_, slot| {
             v += 1;
             match slot {
                 Slot::Bool(x) => *x = true,
@@ -1329,6 +1213,7 @@ mod tests {
                 other => other.set(v % 200 + 1),
             }
         });
+        r.measured = Some(Box::new(block));
         r
     }
 
@@ -1370,8 +1255,14 @@ mod tests {
         for r in &rows {
             assert_eq!(read.rows[&r.key], *r, "key {:?}", r.key);
         }
-        assert!(read.rows[&FixtureKey::from_u64(1)].measures.present);
-        assert!(!read.rows[&FixtureKey::from_u64(3)].measures.present);
+        assert!(
+            read.rows[&FixtureKey::from_u64(1)]
+                .measured
+                .as_ref()
+                .is_some_and(|m| m.measures.present)
+        );
+        // A row without measures keeps none in memory once read back.
+        assert!(read.rows[&FixtureKey::from_u64(3)].measured.is_none());
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -1400,9 +1291,9 @@ mod tests {
         let read = read_rows(&dir, &finished).unwrap();
         assert_eq!(read.rows.len(), 2);
         for r in &rows {
-            let got = read.rows[&r.key];
-            assert!(!got.measures.present);
-            assert_eq!(got, *r);
+            let got = &read.rows[&r.key];
+            assert!(got.measured.is_none());
+            assert_eq!(got, r);
             assert_eq!(got.canonical_bytes(), r.canonical_bytes());
         }
         let _ = fs::remove_dir_all(&dir);
@@ -1444,11 +1335,11 @@ mod tests {
     #[test]
     fn the_canonical_bytes_leave_out_the_reasons_and_the_wall_time() {
         let a = row(4);
-        let mut b = a;
+        let mut b = a.clone();
         b.reasons = reason::EXTREME;
         b.duration_us += 99;
         assert_eq!(a.canonical_bytes(), b.canonical_bytes());
-        let mut c = a;
+        let mut c = a.clone();
         c.xg[0] += 1e-12;
         assert_ne!(a.canonical_bytes(), c.canonical_bytes());
         let one = BTreeMap::from([(a.key, a)]);

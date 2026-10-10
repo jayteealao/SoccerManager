@@ -473,6 +473,61 @@
       "gates": false
     },
     {
+      "band": "speed_walk_share",
+      "suites": ["equal"],
+      "measure": {"kind": "ratio", "num": ["zone_ticks.walk.home", "zone_ticks.walk.away"], "den": ["zone_ticks.walk.home", "zone_ticks.walk.away", "zone_ticks.jog.home", "zone_ticks.jog.away", "zone_ticks.run.home", "zone_ticks.run.away", "zone_ticks.hi.home", "zone_ticks.hi.away", "zone_ticks.sprint.home", "zone_ticks.sprint.away"]},
+      "design": {"lo": 0.4, "hi": 0.59, "smallest_shift": 0.0475},
+      "real": {"source": {"dataset": "DFL tracking, 7 matches (Bundesliga and 2. Bundesliga), one row per player and half; the share of ball-in-play time walking, under 2 m/s", "file": "idsse_players.csv", "key": "walk", "reduce": "mean", "weight": "live_min"}, "sample": 7, "date": "2026-09-22", "floor": 30},
+      "evidence": "calibration",
+      "confidence": {"measurement": {"count": 7}, "generalisation": {"competitions": 2, "seasons": 1, "clubs": 10}},
+      "condition": "dry",
+      "gates": false
+    },
+    {
+      "band": "speed_jog_share",
+      "suites": ["equal"],
+      "measure": {"kind": "ratio", "num": ["zone_ticks.jog.home", "zone_ticks.jog.away"], "den": ["zone_ticks.walk.home", "zone_ticks.walk.away", "zone_ticks.jog.home", "zone_ticks.jog.away", "zone_ticks.run.home", "zone_ticks.run.away", "zone_ticks.hi.home", "zone_ticks.hi.away", "zone_ticks.sprint.home", "zone_ticks.sprint.away"]},
+      "design": {"lo": 0.29, "hi": 0.43, "smallest_shift": 0.035},
+      "real": {"source": {"dataset": "DFL tracking, 7 matches (Bundesliga and 2. Bundesliga), one row per player and half; the share of ball-in-play time jogging, 2 to 4 m/s", "file": "idsse_players.csv", "key": "jog", "reduce": "mean", "weight": "live_min"}, "sample": 7, "date": "2026-09-22", "floor": 30},
+      "evidence": "calibration",
+      "confidence": {"measurement": {"count": 7}, "generalisation": {"competitions": 2, "seasons": 1, "clubs": 10}},
+      "condition": "dry",
+      "gates": false
+    },
+    {
+      "band": "speed_run_share",
+      "suites": ["equal"],
+      "measure": {"kind": "ratio", "num": ["zone_ticks.run.home", "zone_ticks.run.away"], "den": ["zone_ticks.walk.home", "zone_ticks.walk.away", "zone_ticks.jog.home", "zone_ticks.jog.away", "zone_ticks.run.home", "zone_ticks.run.away", "zone_ticks.hi.home", "zone_ticks.hi.away", "zone_ticks.sprint.home", "zone_ticks.sprint.away"]},
+      "design": {"lo": 0.08, "hi": 0.13, "smallest_shift": 0.0125},
+      "real": {"source": {"dataset": "DFL tracking, 7 matches (Bundesliga and 2. Bundesliga), one row per player and half; the share of ball-in-play time running, 4 to 5.5 m/s", "file": "idsse_players.csv", "key": "run", "reduce": "mean", "weight": "live_min"}, "sample": 7, "date": "2026-09-22", "floor": 30},
+      "evidence": "calibration",
+      "confidence": {"measurement": {"count": 7}, "generalisation": {"competitions": 2, "seasons": 1, "clubs": 10}},
+      "condition": "dry",
+      "gates": false
+    },
+    {
+      "band": "speed_hi_share",
+      "suites": ["equal"],
+      "measure": {"kind": "ratio", "num": ["zone_ticks.hi.home", "zone_ticks.hi.away"], "den": ["zone_ticks.walk.home", "zone_ticks.walk.away", "zone_ticks.jog.home", "zone_ticks.jog.away", "zone_ticks.run.home", "zone_ticks.run.away", "zone_ticks.hi.home", "zone_ticks.hi.away", "zone_ticks.sprint.home", "zone_ticks.sprint.away"]},
+      "design": {"lo": 0.0, "hi": 0.061, "smallest_shift": 0.01525},
+      "real": {"source": {"dataset": "DFL tracking, 7 matches (Bundesliga and 2. Bundesliga), one row per player and half; the share of ball-in-play time at high intensity, 5.5 to 7 m/s", "file": "idsse_players.csv", "key": "hi", "reduce": "mean", "weight": "live_min"}, "sample": 7, "date": "2026-09-22", "floor": 30},
+      "evidence": "calibration",
+      "confidence": {"measurement": {"count": 7}, "generalisation": {"competitions": 2, "seasons": 1, "clubs": 10}},
+      "condition": "dry",
+      "gates": false
+    },
+    {
+      "band": "speed_sprint_share",
+      "suites": ["equal"],
+      "measure": {"kind": "ratio", "num": ["zone_ticks.sprint.home", "zone_ticks.sprint.away"], "den": ["zone_ticks.walk.home", "zone_ticks.walk.away", "zone_ticks.jog.home", "zone_ticks.jog.away", "zone_ticks.run.home", "zone_ticks.run.away", "zone_ticks.hi.home", "zone_ticks.hi.away", "zone_ticks.sprint.home", "zone_ticks.sprint.away"]},
+      "design": {"lo": 0.0, "hi": 0.014, "smallest_shift": 0.0035},
+      "real": {"source": {"dataset": "DFL tracking, 7 matches (Bundesliga and 2. Bundesliga), one row per player and half; the share of ball-in-play time sprinting, 7 m/s and over", "file": "idsse_players.csv", "key": "sprint", "reduce": "mean", "weight": "live_min"}, "sample": 7, "date": "2026-09-22", "floor": 30},
+      "evidence": "calibration",
+      "confidence": {"measurement": {"count": 7}, "generalisation": {"competitions": 2, "seasons": 1, "clubs": 10}},
+      "condition": "dry",
+      "gates": false
+    },
+    {
       "band": "peak_speed_mean",
       "suites": ["equal"],
       "measure": {"kind": "ratio", "num": ["peak_mps.home", "peak_mps.away"], "den": ["players_used.home", "players_used.away"]},

@@ -159,8 +159,8 @@ fn line<'a>(text: &'a str, band: &str) -> &'a str {
         .unwrap_or_else(|| panic!("no table line for {band}: {text}"))
 }
 
-/// The shipped file's bands: the 18 that gate and the 30 that only report.
-const BANDS: u64 = 18 + 30;
+/// The shipped file's bands: the 18 that gate and the 35 that only report.
+const BANDS: u64 = 18 + 35;
 
 /// Bands with a pointer: the shipped file's, less the three engine experiments and the
 /// test's own band with no counterpart.

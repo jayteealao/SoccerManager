@@ -21,7 +21,7 @@ use engine::observe::MatchStats;
 use super::bands::{BandDef, Builtin, Measure, Per, Source};
 use super::distribution::{Hist, Metric, bin_of};
 use super::{se_mean, se_ratio, se_share};
-use crate::calibrate::rows::{Measures, PASS_CELL_NAMES, PHASES, PLAYER_SLOTS, PlayerRow, ZONES};
+use crate::measure_rows::{Measures, PASS_CELL_NAMES, PHASES, PLAYER_SLOTS, PlayerRow, ZONES};
 
 /// The per-team fields of the catalog. A band names one as `<field>.home`, `<field>.away`,
 /// or, in a per-team mean, `<field>.{side}`.

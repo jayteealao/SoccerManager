@@ -1352,19 +1352,19 @@ impl RunCtx<'_> {
                 keys.entry(suite).or_default().push(k.key.as_u64());
                 self.add(&mut builder, suite, &k, row.band_record());
                 let club = |c: usize| (k.fixture.league, u32::try_from(c).unwrap_or(u32::MAX));
+                let measured = row.measured.as_deref();
                 builder.set_extras(
                     suite,
                     Extras {
-                        measures: if drop_measures {
-                            rows::Measures::default()
-                        } else {
-                            row.measures
+                        measures: match measured {
+                            Some(m) if !drop_measures => m.measures,
+                            _ => rows::Measures::default(),
                         },
-                        physical: row.physical,
+                        physical: measured.map(|m| m.physical).unwrap_or_default(),
                         clubs: k.fixture.clubs.map(club),
                     },
                 );
-                planned.insert(k.key, *row);
+                planned.insert(k.key, row.clone());
             }
             builder.set_outliers(suite, outliers);
         }

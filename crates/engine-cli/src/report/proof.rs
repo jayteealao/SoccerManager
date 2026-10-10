@@ -4,8 +4,10 @@
 //!
 //! The gate's identity has three parts: the band registry's digest (what decides each band's
 //! verdict, including `gates`), the measures version, and a digest of the judging source
-//! files. Every calibrate run compares it with the proof's and says when they differ; the
-//! comparison never changes a verdict, a count or an exit code.
+//! files: every file whose code decides which rows gate, how each band is measured and
+//! judged, and how the real samples are read. Every calibrate run compares it with the
+//! proof's and says when they differ; the comparison never changes a verdict, a count or an
+//! exit code.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -22,13 +24,22 @@ pub const PROOF_FILE: &str = "gate-proof.json";
 /// The layout version of the proof file.
 pub const PROOF_VERSION: u32 = 1;
 
-/// The source files that judge a band, in the order they are hashed.
-const JUDGING: [&str; 4] = [
+/// The source files that judge a band, in the order they are hashed: the verdict rules, the
+/// whole-distribution test, the measures and the band record; the report's checks (which pick
+/// each band's margin and resamples) and the real samples they read; and the run's judgement
+/// (which rows gate, how each is judged, and the pass rule).
+const JUDGING: [&str; 7] = [
     include_str!("verdict.rs"),
     include_str!("distribution.rs"),
     include_str!("measures.rs"),
     include_str!("bands.rs"),
+    include_str!("mod.rs"),
+    include_str!("real.rs"),
+    include_str!("../calibrate/mod.rs"),
 ];
+
+/// The line that starts a judging file's unit tests, which close every one of those files.
+const TESTS_START: &str = "\n#[cfg(test)]\nmod tests";
 
 /// What the gate is: the parts a proof's rates hold for.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -56,14 +67,18 @@ pub fn verdict_code() -> String {
     source_digest(&JUDGING)
 }
 
-/// SHA-256, as 12 hex characters, over each text with its carriage returns removed and its
-/// length first, in order: a checkout with other line endings gives the same digest.
+/// SHA-256, as 12 hex characters, over each text with its carriage returns removed, its unit
+/// tests cut off and its length first, in order: a checkout with other line endings gives the
+/// same digest, and an edit of a test alone does not move it.
 fn source_digest(texts: &[&str]) -> String {
     let mut hasher = Sha256::new();
     for text in texts {
         let text = text.replace('\r', "");
-        hasher.update((text.len() as u64).to_le_bytes());
-        hasher.update(text.as_bytes());
+        let code = text
+            .find(TESTS_START)
+            .map_or(text.as_str(), |at| &text[..at]);
+        hasher.update((code.len() as u64).to_le_bytes());
+        hasher.update(code.as_bytes());
     }
     engine::data::hex12(&hasher.finalize())
 }
@@ -356,7 +371,7 @@ fn read_report(report: &Value) -> Read {
             // has no change.
             let change = (row["diff"].as_f64(), row["se"].as_f64(), critical);
             if let (Some(diff), Some(se), Some(c)) = change {
-                if se > 0.0 && diff.abs() / se > c {
+                if super::verdict::significant(diff, se, c) {
                     significant.insert(band.clone());
                     if diff.abs() >= row["smallest_shift"].as_f64().unwrap_or(f64::INFINITY) {
                         moved.insert(band.clone());
@@ -627,6 +642,51 @@ mod tests {
             source_digest(&["a\nb\n", "c"])
         );
         assert_ne!(source_digest(&["ab", "c"]), source_digest(&["a", "bc"]));
+        // The unit tests at a file's end never move the digest; its code does.
+        let with_tests =
+            |code: &str, tests: &str| format!("{code}\n#[cfg(test)]\nmod tests {{{tests}}}\n");
+        assert_eq!(
+            source_digest(&[&with_tests("fn a() {}", "x")]),
+            source_digest(&[&with_tests("fn a() {}", "y")])
+        );
+        assert_ne!(
+            source_digest(&[&with_tests("fn a() {}", "x")]),
+            source_digest(&[&with_tests("fn b() {}", "x")])
+        );
+    }
+
+    /// Every judging file's tests close it: nothing but test code follows the cut.
+    #[test]
+    fn every_judging_file_ends_with_its_tests() {
+        for text in JUDGING {
+            let text = text.replace('\r', "");
+            let at = text
+                .find(TESTS_START)
+                .expect("a judging file has unit tests");
+            for line in text[at..].lines() {
+                assert!(
+                    !line.starts_with("pub fn ") && !line.starts_with("fn "),
+                    "code after the tests: {line}"
+                );
+            }
+        }
+    }
+
+    /// A change with no error is a move whenever it is not 0, as the gate's own rule has it.
+    #[test]
+    fn a_change_with_no_error_counts_as_the_gate_counts_it() {
+        let report = json!({
+            "calib.joint": { "word": "fail", "critical": 2.0 },
+            "calib.verdicts": [
+                { "band": "a", "word": "fail", "diff": 3.0, "se": 0.0, "smallest_shift": 2.5 },
+                { "band": "b", "word": "pass", "diff": 0.0, "se": 0.0, "smallest_shift": 2.5 }
+            ],
+            "calib.reported": [],
+            "calib.counts": { "total_matches": 2, "pairs": 1, "observations": [] }
+        });
+        let read = read_report(&report);
+        assert_eq!(read.significant, ["a"]);
+        assert_eq!(read.moved, ["a"]);
     }
 
     #[test]
