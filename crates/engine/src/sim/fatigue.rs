@@ -39,6 +39,7 @@ impl Simulation {
                 0
             };
             self.tally_ticks(REFRESH_TICKS);
+            self.drift_moods();
             self.refresh_marked(changed);
         }
         // No injury roll during the shoot-out: an injury would stop a kick for a dropped ball.
@@ -224,6 +225,7 @@ impl Simulation {
             form = form_match;
         }
         self.players[i].form_match = form_match;
+        self.enter_mood(i);
         self.set_state(i, p.deltas, form);
         self.tally_played(i);
         if self.trace_on() {

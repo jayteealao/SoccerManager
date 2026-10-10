@@ -225,3 +225,83 @@ fn generated_heights_ages_and_nationalities_meet_the_content_targets() {
         nation.foreign_share
     );
 }
+
+/// The person fields: one seed gives the same positions, feet and traits twice; every player
+/// has ten position ratings with his natural one highest, a foot, the eleven personality
+/// values, and at most 8 traits with no opposite pair and keeper traits on keepers only;
+/// across a 20-club league most players carry 0 to 2 traits and some carry 3 or more.
+#[test]
+fn every_player_is_drawn_a_person_and_traits_are_few_and_never_opposite() {
+    let content = common::content();
+    let person = content
+        .tuning
+        .generator
+        .person
+        .as_ref()
+        .expect("the shipped tuning draws the person fields");
+    let league = generate_league(11, 20, &content);
+    assert_eq!(league, generate_league(11, 20, &content));
+    let keeper_only = &person.traits.keeper_only;
+    let personality: Vec<&str> = content
+        .attributes
+        .attributes
+        .iter()
+        .filter(|d| d.is_personality())
+        .map(|d| d.name.as_str())
+        .collect();
+    assert_eq!(personality.len(), 11);
+    let (mut players, mut few, mut many, mut left, mut good_weaker) = (0, 0, 0, 0, 0);
+    for team in &league {
+        for p in &team.players {
+            players += 1;
+            let positions = p.positions.as_ref().expect("positions drawn");
+            assert_eq!(positions.len(), 10, "{}", p.id);
+            let natural = positions[&p.position];
+            assert!(positions.values().all(|v| *v <= natural), "{}", p.id);
+            assert!(positions.values().all(|v| v.tenths() >= 10), "{}", p.id);
+            let foot = p.foot.expect("a foot drawn");
+            assert!((1..=100).contains(&foot.weaker), "{}", p.id);
+            if foot.strong == engine::data::team::Side::Left {
+                left += 1;
+            }
+            if foot.weaker >= 75 {
+                good_weaker += 1;
+            }
+            for name in &personality {
+                assert!(p.attributes.contains_key(*name), "{} {name}", p.id);
+            }
+            let n = p.traits.len();
+            assert!(n <= 8, "{} has {n} traits", p.id);
+            if n <= 2 {
+                few += 1;
+            } else {
+                many += 1;
+            }
+            for name in p.traits.keys() {
+                assert!(content.traits.get(name).is_some(), "{name}");
+                if let Some(opposite) = content.traits.opposite(name) {
+                    assert!(
+                        !p.traits.contains_key(opposite),
+                        "{}: {name} and {opposite}",
+                        p.id
+                    );
+                }
+                let keeper_trait = keeper_only.iter().any(|k| k == name);
+                assert_eq!(keeper_trait, p.position == Position::GK, "{}: {name}", p.id);
+            }
+        }
+    }
+    assert!(
+        f64::from(few) >= 0.7 * f64::from(players),
+        "{few} of {players} carry 0 to 2 traits"
+    );
+    assert!(many > 0, "some players carry 3 or more traits");
+    assert!(
+        left > 0 && left < players / 2,
+        "{left} of {players} left-footed"
+    );
+    assert!(
+        good_weaker < players / 5,
+        "a good weaker foot is rare: {good_weaker} of {players}"
+    );
+}

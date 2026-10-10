@@ -189,7 +189,7 @@ struct Watched {
 }
 
 /// The `--fast-forward-to` tick of the launches whose match is left running. Their seed (3)
-/// stops play at ticks 1,989 and 2,450, before it, so the worker has a save past kick-off
+/// stops play at ticks 1,620 and 3,816, before it, so the worker has a save past kick-off
 /// once the page passes it.
 const FAST_FORWARD: u32 = 4_000;
 

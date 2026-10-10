@@ -54,6 +54,12 @@ export const WORDS_PROTOCOL = 5;
 /// hello lacks those fields: every screen shows them as unknown ("—"), never as a guess.
 export const LEVELS_PROTOCOL = 6;
 
+/// The protocol version whose hello carries each squad player's person: his rating at every
+/// position, his strong foot and weaker-foot percent, his traits of play, and his personality
+/// as words with a confidence (never a number). An older hello lacks those fields: the screens
+/// show them as unknown, never as a guess.
+export const PERSON_PROTOCOL = 7;
+
 /// The hidden values a squad entry carries as a word and a confidence, never a number.
 export const HIDDEN_KEYS = Object.freeze(['player.consistency', 'player.injury_proneness']);
 
@@ -62,8 +68,10 @@ export const HIDDEN_KEYS = Object.freeze(['player.consistency', 'player.injury_p
 /// doubled into tenths, since a protocol 3 rating `v` is `2v` tenths exactly. A hello before
 /// protocol 5 carries `player.injury_resistance` as a figure and no hidden value: the figure
 /// is dropped and both hidden values read as not yet known, since an old figure is never
-/// turned into a word. A hello of protocol 5 or later is returned as it is: protocol 6 only
-/// added optional fields, which a protocol 5 hello lacks and the screens show as unknown. The hello is never changed; a
+/// turned into a word. A hello of protocol 5 or later is returned as it is: protocols 6 and 7
+/// only added optional fields, which an older hello lacks and the screens show as unknown (a
+/// protocol 6 hello has no position ratings, feet, traits or personality). The hello is never
+/// changed; a
 /// lifted copy keeps its `protocol.version`, so a replay written back still names the
 /// protocol of its frames.
 export function liftHello(hello) {

@@ -31,7 +31,7 @@ The Windows program links the C runtime statically (`.cargo/config.toml`), so it
 - Node 22.12 or later, with `npm`. Both build scripts run `npm ci` and `npm run build:release` in `viewer/` and copy `viewer/dist-release/` to `web/`.
 - Windows: NSIS 3 (`makensis` on `PATH`, or installed in `Program Files (x86)\NSIS`), and PowerShell 7 or Windows PowerShell 5.1.
 - Linux archive: a Linux shell with Rust, `tar`, `curl`, and `sha256sum`. On Windows, WSL with Ubuntu 24.04 works.
-- Git, with the previous release's tag fetched (`git fetch origin tag v0.2.0-beta.1`). The tag, its commit and its version are pinned in `packaging/previous-engine.json`.
+- Git, with the previous release's tag fetched (`git fetch origin tag v0.2.0-beta.4`). The tag, its commit and its version are pinned in `packaging/previous-engine.json`.
 
 ## The previous release's engine
 

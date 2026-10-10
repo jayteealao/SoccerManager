@@ -94,6 +94,8 @@ pub struct Blend {
     /// The indices of work rate, determination and professionalism, which the pace selector
     /// reads as rating shares; `None` for one the schema does not hold.
     pace: [Option<usize>; 3],
+    /// Per stage: the consistency degree of its action, how far a form offset moves it.
+    degrees: [f64; STAGE_COUNT],
 }
 
 impl Blend {
@@ -102,7 +104,15 @@ impl Blend {
         let mut parts = [[(0usize, 0.0f64); BLEND_PARTS]; STAGE_COUNT];
         let mut counts = [0usize; STAGE_COUNT];
         let mut totals = [0.0; STAGE_COUNT];
+        let mut degrees = [1.0; STAGE_COUNT];
         for (i, &(action, stage)) in STAGES.iter().enumerate() {
+            // A validated schema gives every action a degree; one built in code without them
+            // reads the uniform 1.0.
+            degrees[i] = schema
+                .consistency_degrees
+                .get(&action)
+                .copied()
+                .unwrap_or(1.0);
             let table = &schema.actions[&action][&stage];
             let all: Vec<&Weighted> = std::iter::once(&table.main)
                 .chain(table.supports.iter())
@@ -122,6 +132,7 @@ impl Blend {
             counts,
             totals,
             pace: ["work_rate", "determination", "professionalism"].map(|name| schema.index(name)),
+            degrees,
         }
     }
 
@@ -142,11 +153,40 @@ impl Blend {
         )
     }
 
+    /// The consistency degree of stage `i`.
+    pub fn degree(&self, i: usize) -> f64 {
+        self.degrees[i]
+    }
+
     /// The stage values of a player with ratings `a`: per stage, the weighted mean of the
     /// curve value of each attribute in it, and that value's skill share with the action's
     /// strength. The sum is divided by the total weight once, at the end: scaling by the
     /// curve's 8 is exact, so a player rated 10 throughout has stage values of exactly 8.
     pub fn values(&self, a: &Attributes, c: &ContractTuning) -> StageValues {
+        self.values_with_form(a, c, 0)
+    }
+
+    /// [`Blend::values`] with the form offset `form`, in tenths of a rating point, applied
+    /// after the blend: each stage's value is multiplied by `e^(d · o / width)`, where `o` is
+    /// the offset in rating points and `d` the degree of the stage's action, and its share is
+    /// taken from the moved value. Since `F(r + o) = F(r) · e^(o / width)`, degree 1.0 moves a
+    /// stage as the offset on its ratings did; a higher degree widens the swing, a lower one
+    /// narrows it, and degree 0 leaves the stage still.
+    pub fn values_with_form(&self, a: &Attributes, c: &ContractTuning, form: i8) -> StageValues {
+        self.values_floored(a, c, form, None)
+    }
+
+    /// [`Blend::values_with_form`] with the shared floor: given `(base, drop)`, each stage's
+    /// value after the form factor is kept at or above its base value less `drop` rating
+    /// points ([`super::states::floored`]), before its share is taken.
+    pub fn values_floored(
+        &self,
+        a: &Attributes,
+        c: &ContractTuning,
+        form: i8,
+        floor: Option<(&StageValues, f64)>,
+    ) -> StageValues {
+        let o = f64::from(form) / 10.0;
         let mut on_curve = [f64::NAN; crate::data::attributes::MAX_ATTRIBUTES];
         let mut out = StageValues::flat(0.0, 0.5);
         for (i, &(action, _)) in STAGES.iter().enumerate() {
@@ -157,7 +197,13 @@ impl Blend {
                 }
                 v += w * on_curve[index];
             }
-            let v = v / self.totals[i];
+            let mut v = v / self.totals[i];
+            if form != 0 {
+                v *= super::consistency::stage_factor(self.degrees[i], o, c.curve.width);
+            }
+            if let Some((base, drop)) = floor {
+                v = super::states::floored(v, base.f[i], drop, c.curve.width);
+            }
             out.f[i] = v;
             out.share[i] = curve::share(c.actions.of(action).k(), v, &c.curve);
         }

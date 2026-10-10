@@ -19,7 +19,7 @@ const GOALKEEPING: usize = 3;
 const EVERY: u32 = 50;
 
 /// The seed-42 match of the default teams, the home side given no sharpness and no
-/// adaptation.
+/// adaptation, without the person block so mood and familiarity stay out of the groups checked.
 fn unsharp_unadapted_home() -> Simulation {
     let content = common::content();
     let [mut a, b] = common::default_teams(&content);
@@ -30,7 +30,9 @@ fn unsharp_unadapted_home() -> Simulation {
             ..Condition::default()
         });
     }
-    Simulation::new(MatchConfig::new(common::SEED, 90, &content, [&a, &b]).unwrap()).unwrap()
+    let mut config = MatchConfig::new(common::SEED, 90, &content, [&a, &b]).unwrap();
+    config.tuning.contract.person = None;
+    Simulation::new(config).unwrap()
 }
 
 #[test]
@@ -94,8 +96,11 @@ fn every_state_stays_within_its_cap_and_its_groups_for_a_whole_match() {
 
 #[test]
 fn a_fresh_player_with_no_inputs_plays_from_his_base_values_bit_for_bit() {
-    // No inputs: no states and no form offset.
-    let sim = Simulation::new(common::steady(common::full_match())).unwrap();
+    // No inputs: no states and no form offset. Without the person block, as a default player
+    // the lineup puts away from his listed position is an input (familiarity).
+    let mut config = common::steady(common::full_match());
+    config.tuning.contract.person = None;
+    let sim = Simulation::new(config).unwrap();
     for i in 0..sim.players().len() {
         let p = sim.players()[i];
         assert_eq!(p.deltas, [0; GROUP_COUNT], "player {i}");

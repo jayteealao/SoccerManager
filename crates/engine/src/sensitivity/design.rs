@@ -272,6 +272,7 @@ fn read(sim: &Simulation, side: usize, w: &Watch, high: Vec<bool>) -> MatchRow {
         }
     }
     let blocks: u32 = sim.tallies[side].iter().map(|t| t.blocks).sum();
+    let match_ticks = f64::from(90 * crate::rules::clock::TICKS_PER_MINUTE);
     let top: f64 = w.top_speed.iter().sum::<f64>() / 11.0;
     let parts = Measure::ALL
         .iter()
@@ -315,6 +316,17 @@ fn read(sim: &Simulation, side: usize, w: &Watch, high: Vec<bool>) -> MatchRow {
             Measure::RatingSpread => [0.0, 0.0],
             Measure::LateEnergyLoss => [late.0, late.1],
             Measure::MentalRating => [w.mental, w.mental_n],
+            Measure::CoverDistance => [s.cover_m, s.cover_n],
+            Measure::TimedRuns => [s.timed_runs, 1.0],
+            Measure::CornerDelivery => [s.corners_reached, s.corners],
+            Measure::FreeKickSuccess => [s.free_kicks_success, s.free_kicks],
+            Measure::PenaltiesScored => [s.penalties_scored, s.penalties],
+            Measure::ThrowDistance => [s.throw_m, s.throws_in],
+            Measure::FlairAttempts => [s.take_ons + s.flair_passes, 1.0],
+            Measure::RashChases => [s.rash_chases, 1.0],
+            // Presses started while behind, per 90 minutes of trailing out of possession.
+            Measure::PressesBehind => [s.presses_behind, s.behind_ticks / match_ticks],
+            Measure::HeadersInTraffic => [s.headers_traffic_won, s.headers_traffic],
         })
         .collect();
     let hour = 60 * crate::rules::clock::TICKS_PER_MINUTE;

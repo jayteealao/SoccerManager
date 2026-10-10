@@ -62,6 +62,7 @@ pub fn run(content: &Content, set: &RuleSet) -> RulesReport {
             share: r.share.and_then(interval),
             roles: None,
             word: word(r.word),
+            report_only: r.report_only,
         })
         .collect();
     rows.push(RuleRow {
@@ -80,6 +81,7 @@ pub fn run(content: &Content, set: &RuleSet) -> RulesReport {
                 .collect::<std::collections::BTreeMap<_, _>>(),
         ),
         word: word(five.word),
+        report_only: false,
     });
     report(rows, true, started.elapsed())
 }
@@ -167,7 +169,11 @@ pub fn render_table(r: &RulesReport) -> String {
             fig(row.high),
             iv(row.mv),
             iv(row.share),
-            row.word.replace('_', " ")
+            if row.report_only {
+                format!("{} report", row.word.replace('_', " "))
+            } else {
+                row.word.replace('_', " ")
+            }
         ));
     }
     out
@@ -192,6 +198,7 @@ mod tests {
             share: None,
             roles: None,
             word,
+            report_only: false,
         }
     }
 
@@ -201,7 +208,10 @@ mod tests {
             vec![
                 row("passing", "pass"),
                 row("vision", "fail"),
-                row("flair", "not_sure"),
+                RuleRow {
+                    report_only: true,
+                    ..row("flair", "not_sure")
+                },
             ],
             true,
             std::time::Duration::from_millis(1_500),
@@ -214,7 +224,15 @@ mod tests {
         );
         let table = render_table(&r);
         assert!(table.contains("flair"), "{table}");
-        assert!(table.contains("not sure"), "{table}");
+        assert!(table.contains("not sure report"), "{table}");
+        let json = serde_json::to_value(&r.rows[2]).unwrap();
+        assert_eq!(json["report_only"], true);
+        assert!(
+            serde_json::to_value(&r.rows[0])
+                .unwrap()
+                .get("report_only")
+                .is_none()
+        );
         assert!(table.contains("+0.075 [+0.060, +0.090]"), "{table}");
     }
 

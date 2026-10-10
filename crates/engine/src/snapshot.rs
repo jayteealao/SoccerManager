@@ -49,6 +49,10 @@
 //!   Version 14 adds the pace selector: each player stores his pace after his form bytes (the
 //!   chosen speed as f64 bits, then his job, grade and level codes, his sprint draw as a byte,
 //!   and the tick his job started as u32), so a resumed match keeps every held sprint.
+//!   Version 15 adds mood: each player stores his mood (f64, percent of a full mood) after
+//!   his pace, and after the players each side's bench mood (f64), so a resumed match moves
+//!   every mood as the unbroken match does. The shot in flight and the last completed pass,
+//!   which mood also reads, are cleared at every stoppage, so no snapshot holds them.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -79,7 +83,7 @@ use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 14;
+pub const VERSION: u16 = 15;
 /// The earliest layout version the strict reader still reads: version 8 has no matchday mark.
 const FIRST_READ: u16 = 8;
 /// The released builds from before the snapshot recorded its engine version: the full commit
@@ -869,6 +873,10 @@ fn encode(sim: &Simulation, w: &mut Writer) {
         w.u8(p.pace.level.code());
         w.u8(u8::from(p.pace.sprint));
         w.u32(p.pace.since);
+        w.f64_at(String::new, p.mood);
+    }
+    for mood in sim.bench_mood {
+        w.f64_at(String::new, mood);
     }
     w.u32(sim.queue.next);
     // A queue holds far fewer than 4 billion changes.
@@ -1128,7 +1136,11 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
             since,
             sprint,
         };
+        p.mood = r.f64()?;
         deltas.push((d, form));
+    }
+    for team in 0..2 {
+        sim.bench_mood[team] = r.f64()?;
     }
     for (i, (d, form)) in deltas.into_iter().enumerate() {
         sim.set_state(i, d, form);
@@ -1387,7 +1399,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 14"),
+                .contains("unknown version 1; this build reads 15"),
             "{err}"
         );
     }

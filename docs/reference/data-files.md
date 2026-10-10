@@ -20,6 +20,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `tuning.json` | 5 | Engine constants, the attribute contract with the state caps, the body jobs and consistency, decision weights, injury rates, the generator's world spread, fatigue curve, stream buffer, the hidden values' words and the match rating |
 | `rules/default.json` | 4 | The rule pack |
 | `tactics.json` | 1 | Ten formations, mentalities, team instructions, roles, duties, and the AI manager's settings |
+| `traits.json` | 1 | The trait catalogue: the 31 traits of play a player may carry, each with the engine choice it acts on and, for nine pairs, its opposite. Part of the content hash; a team file naming a trait it does not hold, or two opposites on one player, is refused |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
 | `realism-bands.json` | 4 | The band registry: every realism band the calibration run judges, with its measure, design range, smallest shift, and its record (where its real value is measured, the evidence label, the confidence counts, the condition, and whether it gates). Versions 3 and 2 still load. They are acceptance criteria, never tuning values |
@@ -27,7 +28,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `sensitivity.json` | 1 | The sensitivity rules: one rule per attribute job and per body job, the thresholds they are judged by, the size of a run, and the five-match rule. Only the sensitivity run and the rules stage of a change run read it; the content hash does not |
 | `gate-proof.json` | 1 | The gate proof: the broken copies of the engine that `engine-cli calibrate proof` plays, and the pass and fail rates of the last proof with the gate it measured. No match reads it; neither the content hash nor the old engine's cache key includes it |
 
-Every file starts with `"schema_version"`. A file with another version is refused, except `realism-bands.json`, which also reads versions 3 and 2: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files and `tactics.json` are read in version 2 and in version 1, which converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 3 and in versions 2 and 1, and `tuning.json` in versions 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy. A version 1 or 2 attribute file converts to version 3 the same way (see [Version 2 files](#version-2-files)). Any other version is refused the same way.
+Every file starts with `"schema_version"`. A file with another version is refused, except `realism-bands.json`, which also reads versions 3 and 2: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files are read in version 3 and in versions 2 and 1, and `tactics.json` in version 2 and in version 1; an older version converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 3 and in versions 2 and 1, and `tuning.json` in versions 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy. A version 1 or 2 attribute file converts to version 3 the same way (see [Version 2 files](#version-2-files)). Any other version is refused the same way.
 
 ## attributes.json
 
@@ -264,12 +265,43 @@ The attribute contract: how ratings become play.
 | consistency.match_max | the largest match part of a player's form, for consistency 1.0, in rating points | 1.0 | 0 to 3 |
 | consistency.period_max | the largest period part, for consistency 1.0, in rating points | 0.75 | 0 to 3 |
 | consistency.period_minutes | minutes of the match between two draws of the period part | 10 | 5 to 45 |
+| hooks.decel_anchor | the braking of a player whose turn stage is rating 10, m/s²; his turn factor (agility leading) scales it | 5.5 | 0.5 to 30 |
+| hooks.behind_effort | how much a presser's determination widens his press reach while his side trails | 0.3 | 0 to 1 |
+| hooks.flair_risk | how much a carrier's flair raises the score of a forward pass | 0.4 | 0 to 2 |
+| hooks.flair_gate | how many rating points of technique the take-on and chip gates drop for a top flair player | 2.0 | 0 to 5 |
+| hooks.free_kick_range_m | a direct free kick within this many metres of goal is struck at goal; beyond it, delivered toward the penalty mark | 30 | 0 to 40 |
+| hooks.restart_noise | the largest turn of a corner or free-kick delivery by an average taker, radians | 0.06 | 0 to 0.5 |
+| hooks.organise_back_line | the back line's own share of the line's organisation beside the keeper's | 0.5 | 0 to 1 |
+| hooks.anchor_space_m | how far an attacker with top off-ball movement moves his place away from the nearest defender, m | 2.0 | 0 to 6 |
+| hooks.rash_chase | how much a keeper's eccentricity widens the range from which he comes off his line | 0.3 | 0 to 1 |
+| person.mood.goal, .assist, .big_miss, .error, .card, .red_card, .fouled, .duel_won, .duel_lost | the mood impulse of the player's own event, percent of a full mood | 30, 15, −20, −4, −10, −25, 3, 3, −3 | −100 to 100 |
+| person.mood.team_goal_for, .team_goal_against | the mood impulse of every player of the side that scored, and of the side that conceded | 8, −10 | −100 to 100 |
+| person.mood.big_chance_xg | a shot of at least these expected goals that ends without a goal is a big miss | 0.3 | 0.05 to 1 |
+| person.mood.drift_per_minute | how far a mood moves toward its target in a minute, percent | 4 | 0 to 50 |
+| person.mood.score_weight | the drift target per goal of lead, at most two goals either way, percent | 15 | 0 to 50 |
+| person.mood.late_from_minute, .late_pressure | from this minute, in a game within one goal, the drift target drops by `late_pressure · (1 − pressure handling) / 2` | 75, 10 | 0 to 120, 0 to 50 |
+| person.mood.temperament_weight, .pressure_weight | how much temperament and pressure handling narrow the swing of every impulse | 0.5, 0.4 | 0 to 0.9 |
+| person.mood.leadership_weight | how much leadership adds to a player's weight in his side's mood | 1.0 | 0 to 3 |
+| person.mood.own_weight, .team_weight | rating points on the mental group at a full own mood and at a full team mood | 0.8, 0.4 | 0 to 3 |
+| person.mood.risk | how much a full mood raises a shot's and a forward pass's score and lowers holding the ball; a low mood the reverse | 0.25 | 0 to 2 |
+| person.familiarity.cost_per_point | rating points lost per point of gap between the natural rating and the rating at the position played | 0.15 | 0 to 1 |
+| person.familiarity.versatility_weight, .adaptability_weight | how much versatility and adaptability narrow that cost | 0.5, 0.3 | 0 to 0.9 |
+| person.occasions.professionalism | how much professionalism lowers the chance of a concentration lapse | 0.5 | 0 to 0.9 |
+| person.occasions.penalty_pressure | how much pressure handling narrows a penalty's spread, a shoot-out kick's included | 0.3 | 0 to 0.9 |
+| person.occasions.temper_foul | log-odds a tackler at a full low mood adds to his foul chance, for an average temperament | 0.6 | 0 to 3 |
+| person.occasions.cynical_foul, .dive_foul | log-odds an unsporting tackler adds against a running carrier, and an unsporting carrier adds by going down, per unit of sportsmanship skill below the average | 0.4, 0.3 | 0 to 3 |
+| person.occasions.adaptation | how much adaptability narrows the adaptation drop | 0.3 | 0 to 0.9 |
+| person.floor_drop | the shared floor: no stage reads more than this many rating points below the player's base | 7.0 | 0.5 to 12.7 |
 
 The curve is `F(r) = scale × e^((r − center) / width)`: with the shipped values a rating of 10 gives 8.0, 18 gives 21.7, and 2 gives 2.9, so each step up the scale is worth more than the one below. A contest between two players is `σ(logit(base) + k × (F(a) − F(b)))`, inside the action's floor and ceiling, where `σ` is the logistic function. A share is `σ(k × (F − F(10)))`, 0.5 at rating 10. A per-player factor is `1 + spread × (2 × share − 1)`, 1 at rating 10; the factors scale the receive, intercept, press, shape, block, sprint, turn, aerial reach, claim, organise and rush reads.
 
-Each action carries exactly the fields play reads of it. A missing field or one play does not read is refused by action, for example `content refused: tuning tuning.json: engine.contract.actions: action save: floor is missing`, and so is an action play reads nothing of.
+Each action carries exactly the fields play reads of it. A missing field or one play does not read is refused by action, for example `content refused: tuning tuning.json: engine.contract.actions: action save: floor is missing`, and so is an action play reads nothing of. The five actions of the newer attributes, `mark`, `off_ball_run` and `long_throw` (`k` and `spread`) and `corner` and `free_kick` (`k`), may be left out: an older tuning file without them, as a replay embeds it, reads each as neutral (share 0.5, factor 1).
 
-Top speed reads pace directly, not through the curve: the real speed of the player's pace from `speed.kmh`, its difference from a pace-10 player times `speed.amplification`, in metres per second, added to `speed.anchor_ms`. Acceleration is `accel.anchor` times the sprint factor.
+The hooks are how the newer attributes reach play. Marking divides `cover_distance` by the covering player's `mark` factor, so a better marker tracks a carrier tighter. An attacker with off-ball movement above the average whose target lies beyond the onside line comes back toward it by his off-ball skill (0 to 1), and moves his place `anchor_space_m` times that skill away from the nearest defender. A corner's or free kick's delivery turns from its aim by up to `restart_noise` times `1.5 − share` of its stage. A throw-in looks for team-mates up to 15 m times the thrower's `long_throw` factor. Flair adds `flair_risk` times his flair skill (−1 to 1) times the pass's forward share to a pass's score, and lowers the technique the take-on and chip gates need by `flair_gate` times that skill. While his side trails, a presser's reach grows by `behind_effort` times his determination skill. A keeper's chase range grows by `rash_chase` times his eccentricity skill. The back line's gap divides by the keeper's organise factor and the back line's mean, weighted by `organise_back_line`. Braking is `decel_anchor` times the turn factor. A tuning file without the `hooks` block reads every hook as before them: braking with the acceleration, no direct free kick taken (the taker decides), no delivery noise, the keeper alone organising the line, and no other term.
+
+The person block is how mood, familiarity and the personality values reach play. A player's mood runs from −100 to 100 percent of a full mood and starts each match at 0. His own events and his side's goals move it at once by their impulse times his swing, `(1 − temperament_weight · temperament)(1 − pressure_weight · pressure handling)`, each personality value read as a skill from −1 to 1 (0 at rating 10). Every second it drifts toward `score_weight` per goal of his side's lead. Each side keeps a bench mood that takes the side's events and the drift, and a substitute comes on at it times his swing. Mood moves the mental group through the pressure and momentum modifier slots, inside the mind cap, and moves the shot, forward-pass and hold scores by `risk` times mood over 100. Professionalism scales the lapse chance by `1 − occasions.professionalism · professionalism`; pressure handling scales a penalty's spread; temperament and sportsmanship add their log-odds to a tackle's foul chance. Familiarity reads the gap between his natural rating and his rating at his formation slot's position (see [engine modules](engine-modules.md#modifier-slots)); the pre-match level range includes it for a player in the lineup. The shared floor keeps every stage value at or above the player's base value less `floor_drop` points on the curve, after every state and his form. A tuning file without the `person` block plays as before it: mood stays 0, familiarity costs nothing, no occasion acts and no floor binds. No screen, report or event shows a mood or a personality value as a number.
+
+Top speed reads pace directly, not through the curve: the real speed of the player's pace from `speed.kmh`, its difference from a pace-10 player times `speed.amplification`, in metres per second, added to `speed.anchor_ms`. Acceleration is `accel.anchor` times the sprint factor. Braking is `hooks.decel_anchor` times the turn factor: a change of velocity against his run is clamped by his braking, any other by his acceleration.
 
 | states.caps.body, .mind, .familiarity, .surroundings | `[lowest, highest]` change of a rating a state family may make, in rating points | `[-2.0, 0.5]`, `[-1.0, 1.0]`, `[-1.25, 0.25]`, `[-0.75, 0.5]` | lowest −12.7 to 0, highest 0 to 12.7 |
 | states.caps.total | `[lowest, highest]` change of a rating all families together may make | `[-5.0, 2.25]` | as above |
@@ -296,7 +328,7 @@ A player's body acts in play from his team file. Height adds `reach_per_cm` metr
 
 While his side defends, each outfield player can lapse once per simulated minute, with the chance `lapse.per_minute` grown by `lapse.late_growth` for each 30 minutes past `lapse.late_from_minute`, and doubled for a shape `choose` share of 0 (concentration leading) or cut to nothing for a share of 1. For `lapse.ticks` he stops tracking his place.
 
-Each player carries a form offset, in tenths of a rating point, that his consistency sets. It has two parts: a match part drawn at kick-off (or as he comes on) and a period part drawn again every `consistency.period_minutes`. Each part is `max × (20 − consistency) / 19` times a draw from −1 to 1 (the sum of two uniform draws less 1), so a player of consistency 20.0 never moves and one of 1.0 swings by the whole maximum. Each part is centred over his side's players on the pitch, so a side's mean form is 0: consistency spreads a player's matches and periods without making a side better or worse. The offset is added to every rating a stage table reads, inside the total state cap; pace and the hidden values take none. A substitute's match part is drawn alone as he comes on, and his period part is 0 until the next period. The draws use the `fatigue.form_match` and `fatigue.form_period` stream keys.
+Each player carries a form offset, in tenths of a rating point, that his consistency sets. It has two parts: a match part drawn at kick-off (or as he comes on) and a period part drawn again every `consistency.period_minutes`. Each part is `max × (20 − consistency) / 19` times a draw from −1 to 1 (the sum of two uniform draws less 1), so a player of consistency 20.0 never moves and one of 1.0 swings by the whole maximum. Each part is centred over his side's players on the pitch, so a side's mean form is 0: consistency spreads a player's matches and periods without making a side better or worse. The offset acts on each stage after the blend: the stage's curve value is multiplied by `e^(degree × offset / width)`, where `degree` is its action's consistency degree in `attributes.json`, so degree 1.0 moves a stage as the offset added to its ratings would, and finishing and saving (1.3) swing more than a throw-in (0.7). Pace and the skill gates, which read ratings directly, and the hidden values take none. A substitute's match part is drawn alone as he comes on, and his period part is 0 until the next period. The draws use the `fatigue.form_match` and `fatigue.form_period` stream keys.
 
 ### generator
 
@@ -313,7 +345,7 @@ Each player carries a form offset, in tenths of a rating point, that his consist
 
 Each `world.offsets` entry holds `technical`, `mental`, `physical`, and `goalkeeping`. Every draw is a bell curve (mean plus spread times a unit normal) on the 1 to 20 scale: a club's level around its tier's mean, each player's level around his club's, and each attribute around the player's level plus his position's offset for the attribute's group, rounded to a tenth and kept to 1.0 to 20.0. A hidden value is drawn from `world.hidden` instead, in its place in the schema; one placed after the last visible attribute (consistency) comes from a stream of its own, drawn after the league, so adding it moved no other draw. `engine-cli generate` and the calibration leagues draw clubs of the top tier.
 
-`body` is optional and draws the body fields of a version 2 team file. `engine-cli generate` needs it; without it the generated players have no body fields.
+`body` is optional and draws the body fields of a team file. `engine-cli generate` needs it; without it the generated players have no body fields.
 
 | Field | Meaning | Bound |
 |---|---|---|
@@ -322,6 +354,21 @@ Each `world.offsets` entry holds `technical`, `mental`, `physical`, and `goalkee
 | body.nationality | `{ "home", "foreign", "foreign_share" }`: the club's country, the countries a foreign player comes from, and the share of foreign players | three upper-case letters each; 1 to 64 foreign codes; share 0 to 1 |
 
 The body fields are drawn from their own random stream, after every attribute of the league, so adding or changing the block never moves an attribute. The shipped values are provisional.
+
+`person` is optional and draws the person fields of a version 3 team file: position ratings, the feet, and the traits of play. `engine-cli generate` needs it; without it the generated players have none, and a match reads them as a converted player's. The personality values are hidden values after the last visible attribute, so they are drawn from `world.hidden` in the hidden-value stream.
+
+| Field | Meaning | Bound |
+|---|---|---|
+| person.positions.related | per natural position code, the positions related to it and the gap below his natural rating each sits at, such as `"CB": { "DM": 3.0, "LB": 4.0, "RB": 4.0 }` | position codes; gap 0 to 19 |
+| person.positions.spread | the bell spread around a related position's rating | 0 to 6 |
+| person.positions.far | `{ "mean", "spread" }`: the bell curve of every other position (and of a keeper's outfield positions and an outfield player's keeper position) | mean 1 to 20, spread 0 to 6 |
+| person.foot.left_share | the share of left-footed players | 0 to 1 |
+| person.foot.weaker | `{ "mean", "spread", "min", "max" }`: the weaker foot in percent of the strong one, rounded and kept to `min` to `max` | mean 1 to 100, spread 0 to 50, min 1 to 100, max min to 100 |
+| person.traits.count_weights | nine weights: how often a player carries 0, 1, ... 8 traits | each 0 or more, not all 0 |
+| person.traits.strong_share | the share of traits carried strong rather than moderate | 0 to 1 |
+| person.traits.keeper_only | the traits only a keeper carries; an outfield player never does | names in `traits.json`, or the content is refused naming the trait |
+
+A player's natural position is rated at his level, the mean of the visible attributes of the groups it plays; every draw is rounded to a tenth and kept to 1.0 up to that rating, so no position is above the natural one. Traits are picked one at a time from those he may carry, skipping any he has and any opposite of one he has. The shipped weights put about 80 percent of players on 0 to 2 traits, and the shipped weaker foot centres on 40 percent, so a good weaker foot is rare. The person fields come from a third random stream, after the bodies, so no attribute or body field moves.
 
 ### hidden
 
@@ -339,6 +386,8 @@ With no matches at the club, or none given, the value is not yet known and has n
 |---|---|---|---|---|
 | consistency | `rarely_off` | `steady` | `has_off_days` | `erratic` |
 | injury_proneness | `injury_prone` | `picks_up_knocks` | `rarely_injured` | `hardly_ever_injured` |
+
+Each of the eleven personality values has three bands: `high` from 14.0, `middling` from 7.0 and `low` from 1.0. The player panel composes these words into its summary word; a personality value never leaves the engine as a number.
 
 A schema whose hidden attribute has no word bands, or bands not falling from the highest or not ending at 1.0, is refused by name. The word is a key: the page owns its display text.
 
@@ -546,13 +595,13 @@ The sensitivity rules, which prove that every job moves its own statistic (see [
 | `schema_version` | 1 |
 | `design` | The size of a run: `matches` of the balanced design (an even number, 2 to 100,000), `arm_matches` of each arm (every job low, every job high), the `seed`, and the bootstrap `resamples` per interval (99 to 99,999) |
 | `defaults` | The thresholds of every rule: `min_move`, the least relative move of the statistic from the low to the high level in the job's direction (0 to 10), and `ceiling`, the largest share of the outcome move of all jobs together one job may carry (0 to 1) |
-| `rules` | One rule per job: `job` (an attribute or `height`, `age`, `nationality`), `kind` (`attribute` or `body`), `measure` (the counter the run reads), `statistic` (the job's statistic, word for word), and `levels`, the low and the high level. A rule may override `min_move` or `ceiling`, with a `reason` |
+| `rules` | One rule per job: `job` (an attribute, a personality value, or `height`, `age`, `nationality`), `kind` (`attribute` or `body`), `measure` (the counter the run reads), `statistic` (the job's statistic, word for word), and `levels`, the low and the high level. A rule may override `min_move` or `ceiling`, with a `reason`. `report_only: true` marks a rule that runs and reports: its word is printed, and the full run does not fail on it. The rules of the 21 jobs the newer attributes and the personality values brought carry it |
 | `derived` | Fields with no job in play, proven by their own derivation test: `build` |
 | `five_match` | The five-match rule: the `roles` (position codes), `runs` per role, `matches_per_run`, the `top` and `average` rating of every visible attribute of the two copies, and the `target` share of runs the top copy wins with its `tolerance` |
 
 An attribute's levels are ratings, 1.0 to 20.0 on the tenth grid. A body job's levels are centimetres for `height` (150 to 215), years for `age` (15 to 45), and percent of adaptation for `nationality` (0 to 100), since nationality acts through adaptation. The direction of each statistic comes from the job, in `attributes.json` or in `engine.contract.body.jobs` of `tuning.json`; the rules file does not repeat it.
 
-The measures are `pass_completion`, `take_on_completion`, `receipt_loss`, `box_finishing`, `cross_completion`, `headers_won`, `long_shots_on_target`, `tackles_won`, `skill_attempts`, `blocks`, `pass_progress`, `xg_per_shot`, `pressed_completion`, `loose_ball_share`, `tackle_attempts`, `fouls`, `lapses`, `anchor_distance`, `top_speed`, `close_loose_balls`, `full_time_energy`, `standing_tackles_lost`, `fouled_kept`, `aerial_balls_reached`, `half_time_gain`, `injuries`, `saves_held`, `far_saves`, `high_claims`, `near_saves`, `keeper_kicks`, `keeper_throws`, `crosses_claimed`, `offsides_won`, `sweeps`, `rating_spread`, `late_energy_loss` and `mental_rating`. Two jobs may share a measure: dribbling and agility both read `take_on_completion`, and jumping and height both read `aerial_balls_reached`.
+The measures are `pass_completion`, `take_on_completion`, `receipt_loss`, `box_finishing`, `cross_completion`, `headers_won`, `long_shots_on_target`, `tackles_won`, `skill_attempts`, `blocks`, `pass_progress`, `xg_per_shot`, `pressed_completion`, `loose_ball_share`, `tackle_attempts`, `fouls`, `lapses`, `anchor_distance`, `top_speed`, `close_loose_balls`, `full_time_energy`, `standing_tackles_lost`, `fouled_kept`, `aerial_balls_reached`, `half_time_gain`, `injuries`, `saves_held`, `far_saves`, `high_claims`, `near_saves`, `keeper_kicks`, `keeper_throws`, `crosses_claimed`, `offsides_won`, `sweeps`, `rating_spread`, `late_energy_loss`, `mental_rating`, `cover_distance`, `timed_runs`, `corner_delivery`, `free_kick_success`, `penalties_scored`, `throw_distance`, `flair_attempts`, `rash_chases`, `presses_behind` and `headers_in_traffic`. Two jobs may share a measure: dribbling and agility both read `take_on_completion`, and jumping and height both read `aerial_balls_reached`.
 
 The file is refused, naming the field, for:
 
@@ -569,6 +618,8 @@ Each rule reads one of three words:
 - **pass**: the lower end of the move's 95 percent interval reaches `min_move`, and the upper end of the share's interval stays within `ceiling`.
 - **fail**: the upper end of the move's interval is below `min_move` (too small, or the wrong way), or the lower end of the share's interval is above `ceiling`.
 - **not sure**: anything else. Not sure is never a pass.
+
+A personality value inert in a match (loyalty, money motivation, controversy) expects no move instead: its rule passes when the move's 95 percent interval lies inside `min_move` either way, fails when the interval of the absolute move lies at or beyond `min_move`, and is not sure otherwise.
 
 The five-match rule passes when the 95 percent interval of the pooled share of runs lies within `target` plus or minus `tolerance`, fails when it lies wholly outside, and is not sure otherwise.
 
@@ -643,17 +694,21 @@ The added time of a half is the sum of `per_kind` over the half's stoppages, plu
 
 ## teams/*.json
 
-Version 2 holds every rating in tenths of the 1 to 20 scale, written as a number with one decimal, and three body fields per player. Every player holds both hidden values, `consistency` and `injury_proneness`; a file still naming `injury_resistance` is refused by player and attribute:
+Version 3 holds every rating in tenths of the 1 to 20 scale, written as a number with one decimal, three body fields per player, and the player as a person: a rating at each of the ten positions, his feet, and his traits of play. Every player holds both hidden values, `consistency` and `injury_proneness`, and the eleven personality values in `attributes`; a file still naming `injury_resistance` is refused by player and attribute:
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "club": { "id": "club-00000001-00", "name": "Oakmere Rangers", "short_name": "OAK",
             "kit": { "primary": "#c8102e", "secondary": "#000000" },
             "ground": { "length": 100, "width": 64 } },
   "players": [
     { "id": "p-club-00000001-00-01", "name": "Peton Tavwood", "shirt": 1, "position": "GK",
-      "attributes": { "acceleration": 11.2, "...": 1.0 },
+      "attributes": { "acceleration": 11.2, "professionalism": 13.1, "...": 1.0 },
+      "positions": { "GK": 12.7, "CB": 3.1, "LB": 2.4, "RB": 2.9, "DM": 3.3, "CM": 2.8,
+                     "AM": 3.0, "LW": 1.9, "RW": 2.6, "ST": 3.4 },
+      "foot": { "strong": "right", "weaker": 45 },
+      "traits": { "rushes_out": "strong" },
       "height": 189, "age": 27, "nationality": "ENG" }
   ]
 }
@@ -676,14 +731,23 @@ Version 2 holds every rating in tenths of the 1 to 20 scale, written as a number
 | players[].height | whole centimetres, 150 to 215; required |
 | players[].age | whole years, 15 to 45; required |
 | players[].nationality | three upper-case letters, for example `ENG`; required |
+| players[].positions | all ten position codes, each 1.0 to 20.0 on the tenth grid; the listed `position` is his natural one and no other is above it; required |
+| players[].foot | `{ "strong", "weaker" }`: `strong` is `left` or `right`; `weaker` is the weaker foot as a whole percent of the strong one, 1 to 100; required |
+| players[].traits | trait name (from `traits.json`) to `moderate` or `strong`; optional, absent when he has none; never two opposites |
 
 The screens show a rating as its whole number, 1 to 20: 12.5 shows as 13.
 
-Before kick-off the AI manager picks the best-fitting player for each slot of the formation the side starts in, in slot order, by the slot role's attribute weights in `tactics.json`, and names a bench of up to `ai.bench_size` from the rest, the best remaining goalkeeper first. File order breaks ties. A bad value is refused by player and field:
+Before kick-off the AI manager picks a player for each slot of the formation the side starts in, in slot order: a player listed at the slot's position first, then one whose position the slot's role suits, then any outfield player, and within each group the best fit by the slot role's attribute weights in `tactics.json`. A substitute for a slot is picked the same way from the bench. It names a bench of up to `ai.bench_size` from the rest, the best remaining goalkeeper first. File order breaks ties. A bad value is refused by player and field:
 
 - a rating out of range: `content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 20.5; allowed 1.0 to 20.0`
 - a rating off the tenth grid: `content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 12.34; not on a tenth`
 - a missing body field: `content refused: team teams/x.json: players: player p-club-00000001-00-04: body field height is missing`
+- a position rated above the natural one: `content refused: team teams/x.json: players: player p-club-00000001-00-04: position rating CB is 15.0, above his natural position ST at 12.7`
+- a missing position: `content refused: team teams/x.json: players: player p-club-00000001-00-04: position rating GK is missing`
+- a weaker foot out of range: `content refused: team teams/x.json: players: player p-club-00000001-00-04: foot field weaker is 120; allowed 1 to 100`
+- two opposite traits: `content refused: team teams/x.json: players: player p-club-00000001-00-04: traits cuts_inside and hugs_touchline are opposites`
+- an unknown trait: `content refused: team teams/x.json: players: player p-club-00000001-00-04: trait spins_on_ball is not in the trait catalogue`
+- a personality value off the scale, like any rating: `content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute temperament is 21; allowed 1.0 to 20.0`
 
 ### Match condition
 
@@ -702,9 +766,33 @@ A player may carry an optional `condition` block: his condition for this match. 
 
 An unknown field is refused, and a value out of range is refused by player and field: `content refused: team teams/x.json: players: player p-club-00000001-00-04: condition field sharpness is 101; allowed 0 to 100`.
 
+### Version 2 files
+
+A version 2 team file has no position ratings, feet, traits or personality values, and none of the attributes the version 4 catalogue added. It still loads, from the content folder and from the inputs a replay file embeds, and converts with values from related attributes. For each player, filling only what is missing, each value is the mean of the listed attributes, rounded to a tenth and kept to 1.0 to 20.0:
+
+| New value | Converted from |
+|---|---|
+| marking | tackling, positioning, concentration |
+| off_ball_movement | anticipation, decisions |
+| corners | crossing, technique |
+| free_kicks | crossing, technique, finishing |
+| penalties | finishing, composure, technique |
+| long_throws | strength, technique |
+| flair | dribbling, technique, vision |
+| determination | work_rate, composure |
+| bravery | aggression, heading, strength |
+| eccentricity | rushing_out, aggression |
+| communication (outfield players only; it replaces the old value, and a keeper keeps his) | positioning, vision, decisions, composure, anticipation, work_rate, aggression, concentration, teamwork |
+| the eleven personality values | 10.0 |
+| `positions` | the listed position at his level, every other position 1.0 |
+| `foot` | weaker 50; the strong side fixed by his id (about one player in four is left-footed) |
+| `traits` | none |
+
+The table is compiled into the build and never edited, so an old replay's team file converts the same way however the catalogue is tuned. A converted file is then checked as a version 3 file.
+
 ### Version 1 files
 
-A version 1 team file holds every attribute as a whole number 1 to 100 and no body fields. It still loads, from the content folder and from the inputs a replay file embeds: each value `v` becomes `2v` tenths, so 62 becomes 12.4, and its players have no body fields. Values 1 to 4 become 1.0, the lowest rating; no player holds a rating under 1.0. Injury resistance `R` becomes injury proneness `21.0 − R` (exact on the tenths grid), and every player gets consistency 10.0. A version 1 file is checked as before: `content refused: team teams/x.json: players: player p-club-00000001-00-03: attribute pace is 120; allowed 1 to 100`. The shipped team files are version 1.
+A version 1 team file holds every attribute as a whole number 1 to 100 and no body fields. It still loads, from the content folder and from the inputs a replay file embeds: each value `v` becomes `2v` tenths, so 62 becomes 12.4, and its players have no body fields. Values 1 to 4 become 1.0, the lowest rating; no player holds a rating under 1.0. Injury resistance `R` becomes injury proneness `21.0 − R` (exact on the tenths grid), and every player gets consistency 10.0; it then converts as a version 2 file does (see [Version 2 files](#version-2-files-1)). A version 1 file is checked as before: `content refused: team teams/x.json: players: player p-club-00000001-00-03: attribute pace is 120; allowed 1 to 100`. The shipped team files are version 1.
 
 A match is played on the home team's ground. `club.ground` is optional: a file without it plays on 105 by 68 metres, and the default is never written back, so a file that gives 105 by 68 and one that gives no ground hash the same. The touchlines, the goal lines, the halfway line and every spot measured from them follow the ground; the goal, the goal and penalty areas, the penalty mark, the centre circle, the corner arcs and the 9.15 m kick distance keep their sizes from the Laws. The formation slots in `tactics.json` are drawn for 105 by 68 and scale with the ground: along the touchline by its length over 105, across by its width over 68. A ground outside the Laws is refused by club: `content refused: team teams/x.json: club.ground: Oakmere Rangers: the ground is 121 m long; the Laws allow 90 to 120 m`. A touchline that is not longer than the goal line is refused the same way.
 
@@ -826,7 +914,7 @@ lines.
 engine-cli generate --seed 7 --clubs 20 --out my-league
 ```
 
-Writes one version 2 file per club, named by club id. The same seed and the same content give the same files. Pass `--force` to overwrite. The tuning file must hold the `generator.body` block. Every generated value is drawn on 1.0 to 20.0, so the command lifts nothing; it still prints the count it would lift: `lifted 0 values below 1.0 to 1.0`.
+Writes one version 3 file per club, named by club id. The same seed and the same content give the same files. Pass `--force` to overwrite. The tuning file must hold the `generator.body` and `generator.person` blocks. Every generated value is drawn on 1.0 to 20.0, so the command lifts nothing; it still prints the count it would lift: `lifted 0 values below 1.0 to 1.0`.
 
 ## Runtime files
 

@@ -5,7 +5,7 @@
 use super::card::ModuleCard;
 use super::fast_model::{self, FastModel};
 use super::game::{self, PeopleModule, PresentationModule, SeasonModule, WorldModule};
-use super::modifier::{Modifier, condition, stand_ins};
+use super::modifier::{Modifier, condition, familiarity, mood, stand_ins};
 use super::viewer::{self, SkinModule};
 use super::{
     BallModule, ChangesModule, ClockModule, CommentaryHookModule, DecisionHookModule,
@@ -20,7 +20,7 @@ use crate::{ai, ball, decision, fatigue, hook_slots, possession, shot, steering}
 /// Every typed slot kind once: its `ModuleRef` variant, its `ResolvedModules` field, and its
 /// slot trait. `ModuleRef` and the resolver's builder are both generated from this one list,
 /// so a new kind is written here once, and the compiler then checks the `ResolvedModules`
-/// struct against it. The modifier kind is not listed: its six slots share one list.
+/// struct against it. The modifier kind is not listed: its seven slots share one list.
 macro_rules! for_each_slot_kind {
     ($callback:ident) => {
         $callback! {
@@ -132,7 +132,7 @@ pub const PRE_MATCH: Slot = Slot {
     required: false,
 };
 
-/// The modifier slots, in family order: body, mind, then surroundings.
+/// The modifier slots: body, mind, familiarity, then surroundings.
 pub const MODIFIER_FATIGUE: Slot = Slot {
     id: "engine.modifier.fatigue",
     required: false,
@@ -155,6 +155,11 @@ pub const MODIFIER_MOMENTUM: Slot = Slot {
 
 pub const MODIFIER_ADAPTATION: Slot = Slot {
     id: "engine.modifier.adaptation",
+    required: false,
+};
+
+pub const MODIFIER_FAMILIARITY: Slot = Slot {
+    id: "engine.modifier.familiarity",
     required: false,
 };
 
@@ -285,7 +290,7 @@ pub const FAST_MODEL: Slot = Slot {
 pub const SLOT_COUNT: usize = DECLS.len();
 
 /// The number of modifier slots.
-pub const MODIFIER_COUNT: usize = 6;
+pub const MODIFIER_COUNT: usize = 7;
 
 const FOULS_REGISTRATIONS: &[Registration] = &[Registration {
     name: "fouls",
@@ -495,8 +500,8 @@ const DECLS: &[SlotDecl] = &[
         registrations: &[Registration {
             name: "pressure",
             version: 1,
-            module: ModuleRef::Modifier(&stand_ins::PRESSURE_V1),
-            card: &stand_ins::PRESSURE_V1_CARD,
+            module: ModuleRef::Modifier(&mood::OwnMoodV1),
+            card: &mood::OWN_MOOD_V1_CARD,
         }],
         off: Some(Registration {
             name: "off",
@@ -510,8 +515,8 @@ const DECLS: &[SlotDecl] = &[
         registrations: &[Registration {
             name: "momentum",
             version: 1,
-            module: ModuleRef::Modifier(&stand_ins::MOMENTUM_V1),
-            card: &stand_ins::MOMENTUM_V1_CARD,
+            module: ModuleRef::Modifier(&mood::TeamMoodV1),
+            card: &mood::TEAM_MOOD_V1_CARD,
         }],
         off: Some(Registration {
             name: "off",
@@ -533,6 +538,21 @@ const DECLS: &[SlotDecl] = &[
             version: 0,
             module: ModuleRef::Modifier(&condition::ADAPTATION_OFF),
             card: &condition::ADAPTATION_OFF_CARD,
+        }),
+    },
+    SlotDecl {
+        slot: MODIFIER_FAMILIARITY,
+        registrations: &[Registration {
+            name: "familiarity",
+            version: 1,
+            module: ModuleRef::Modifier(&familiarity::FamiliarityV1),
+            card: &familiarity::FAMILIARITY_V1_CARD,
+        }],
+        off: Some(Registration {
+            name: "off",
+            version: 0,
+            module: ModuleRef::Modifier(&familiarity::FAMILIARITY_OFF),
+            card: &familiarity::FAMILIARITY_OFF_CARD,
         }),
     },
     SlotDecl {

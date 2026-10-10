@@ -153,6 +153,25 @@ fn old_save(dir: &Path, build: &str) -> PathBuf {
     path
 }
 
+/// The committed 0.1.0 save restamped as written by release `version`: the engine version in
+/// the header is replaced and the trailer checksum written again. The resolver reads only the
+/// header, so the body may stay that of the older match.
+fn release_save(dir: &Path, version: &str) -> PathBuf {
+    use sha2::{Digest, Sha256};
+    let mut bytes = std::fs::read(saved_0_1_0()).unwrap();
+    let at = engine::snapshot::ENGINE_VERSION_AT;
+    let slot = &mut bytes[at..at + engine::snapshot::ENGINE_VERSION_BYTES];
+    slot.fill(0);
+    slot[..version.len()].copy_from_slice(version.as_bytes());
+    let end = bytes.len() - 40;
+    let digest: [u8; 32] = Sha256::digest(&bytes[..end]).into();
+    bytes[end + 8..].copy_from_slice(&digest);
+    std::fs::create_dir_all(dir).unwrap();
+    let path = dir.join(format!("saved-{version}.smsn"));
+    std::fs::write(&path, bytes).unwrap();
+    path
+}
+
 fn refused(data: &Path, snapshot: &Path, previous: &Path) -> String {
     let out = bin(data)
         .arg("resume")
@@ -185,8 +204,14 @@ fn a_save_from_two_or_more_versions_back_is_refused_naming_its_version() {
 #[test]
 fn a_previous_release_save_is_refused_when_its_engine_is_missing() {
     let data = temp("missing");
-    let save = old_save(&data, "669f68b");
+    let save = release_save(&data, "0.2.0-beta.4");
     let stderr = refused(&data, &save, &data.join("no-previous"));
+    // A save of release 0.2.0-beta.1 is now two releases back.
+    let older = refused(
+        &data,
+        &old_save(&data, "669f68b"),
+        &data.join("no-previous"),
+    );
     let unreleased = refused(
         &data,
         &old_save(&data, "1234567"),
@@ -195,10 +220,14 @@ fn a_previous_release_save_is_refused_when_its_engine_is_missing() {
     let _ = std::fs::remove_dir_all(&data);
     assert!(
         stderr.contains(
-            "this match was saved by Touchline 0.2.0-beta.1, and the engine of 0.2.0-beta.1 is \
+            "this match was saved by Touchline 0.2.0-beta.4, and the engine of 0.2.0-beta.4 is \
              missing from this copy of the game"
         ),
         "{stderr}"
+    );
+    assert!(
+        older.contains("this match was saved by Touchline 0.2.0-beta.1, two or more versions back"),
+        "{older}"
     );
     assert!(
         unreleased.contains("saved by an unreleased build 1234567"),

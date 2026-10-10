@@ -11,9 +11,13 @@ import { BUILD_TEXT, buildWord, HIDDEN_TEXT, hiddenWord, keyWords } from '../src
 import { REPO_ROOT } from './helpers.js';
 
 const TUNING = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'content/tuning.json'), 'utf8'));
+const ATTRIBUTES = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'content/attributes.json'), 'utf8'));
+// The personality values have word bands too, but the panel composes their words into its
+// summary word, so this page's hidden-value text covers the other hidden values only.
+const PERSONALITY = new Set(ATTRIBUTES.attributes.filter((a) => a.group === 'personality').map((a) => a.name));
 
 test('every word key in the tuning file has its text, in the same order, best first', () => {
-  for (const [name, bands] of Object.entries(TUNING.hidden.words)) {
+  for (const [name, bands] of Object.entries(TUNING.hidden.words).filter(([n]) => !PERSONALITY.has(n))) {
     const keys = bands.map((b) => b.word);
     const text = Object.keys(HIDDEN_TEXT[name]);
     // The tuning lists bands from the highest rating down; for injury proneness the highest

@@ -88,6 +88,119 @@ pub struct GeneratorTuning {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
     pub body: Option<BodyTuning>,
+    /// What the person fields of a version 3 team file are drawn from: position ratings, the
+    /// feet, and the traits of play. Optional, so a tuning file written before them (as an old
+    /// replay embeds it) still loads; `engine-cli generate` needs it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub person: Option<PersonTuning>,
+}
+
+/// The person-field distributions of the generator.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct PersonTuning {
+    #[garde(dive)]
+    pub positions: PositionDraw,
+    #[garde(dive)]
+    pub foot: FootDraw,
+    #[garde(dive)]
+    pub traits: TraitDraw,
+}
+
+/// Position ratings: the natural position is the player's level; a position related to it
+/// sits `gap` below with a bell spread; any other is drawn around `far`. Every draw is kept to
+/// 1.0 up to the natural rating.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct PositionDraw {
+    /// Per natural position code, the related position codes and their gaps (0 to 19).
+    #[garde(custom(related_positions))]
+    pub related: BTreeMap<String, BTreeMap<String, f64>>,
+    #[garde(range(min = 0.0, max = 6.0))]
+    pub spread: f64,
+    #[garde(dive)]
+    pub far: FarDraw,
+}
+
+/// The bell curve of a position far from the natural one, on the 1 to 20 scale.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct FarDraw {
+    #[garde(range(min = 1.0, max = 20.0))]
+    pub mean: f64,
+    #[garde(range(min = 0.0, max = 6.0))]
+    pub spread: f64,
+}
+
+/// The feet: the share of left-footed players, and the weaker foot's percent.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct FootDraw {
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub left_share: f64,
+    #[garde(dive)]
+    pub weaker: WeakerDraw,
+}
+
+/// The weaker foot as a percent of the strong one: a bell curve, rounded and kept to `min` to
+/// `max`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct WeakerDraw {
+    #[garde(range(min = 1.0, max = 100.0))]
+    pub mean: f64,
+    #[garde(range(min = 0.0, max = 50.0))]
+    pub spread: f64,
+    #[garde(range(min = 1, max = 100))]
+    pub min: u8,
+    #[garde(range(min = self.min, max = 100))]
+    pub max: u8,
+}
+
+/// The traits of play: how many a player carries (a weight for each count 0 to 8), the share
+/// carried strong, and the traits only a keeper carries.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct TraitDraw {
+    #[garde(custom(check_count_weights))]
+    pub count_weights: [f64; 9],
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub strong_share: f64,
+    #[garde(skip)]
+    pub keeper_only: Vec<String>,
+}
+
+fn related_positions(map: &BTreeMap<String, BTreeMap<String, f64>>, _ctx: &()) -> garde::Result {
+    let known = |code: &str| Position::ALL.iter().any(|p| p.code() == code);
+    for (from, gaps) in map {
+        if !known(from) {
+            return Err(garde::Error::new(format!("{from} is not a position code")));
+        }
+        for (to, gap) in gaps {
+            if !known(to) || to == from {
+                return Err(garde::Error::new(format!(
+                    "{from}: {to} is not another position code"
+                )));
+            }
+            if !(0.0..=19.0).contains(gap) {
+                return Err(garde::Error::new(format!(
+                    "{from}: the gap to {to} is {gap}; allowed 0 to 19"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn check_count_weights(weights: &[f64; 9], _ctx: &()) -> garde::Result {
+    if weights.iter().any(|w| !w.is_finite() || *w < 0.0) {
+        return Err(garde::Error::new("every weight must be 0 or more"));
+    }
+    if weights.iter().sum::<f64>() <= 0.0 {
+        return Err(garde::Error::new("the weights must not all be 0"));
+    }
+    Ok(())
 }
 
 /// The body-field distributions: height per position, age, and nationality.

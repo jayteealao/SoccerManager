@@ -378,7 +378,7 @@ fn a_save_two_or_more_versions_back_is_refused_naming_its_version() {
     assert_eq!(resume["saved.tick"], (52 * 60 + 10) * 50);
     assert_eq!(resume["saved.millis"], 1_700_000_000_000u64);
     assert_eq!(resume["saved.teams"].as_array().map(Vec::len), Some(2));
-    assert_eq!(resume["engines"][1], "0.2.0-beta.1");
+    assert_eq!(resume["engines"][1], "0.2.0-beta.4");
     assert_eq!(resume["engines"][0], refused["launcher.version"]);
     assert_eq!(refused["engine.version"], refused["launcher.version"]);
     // The save stays on disk.

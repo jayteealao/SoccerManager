@@ -38,6 +38,8 @@ pub const ATTRIBUTES_FILE: &str = "attributes.json";
 pub const TUNING_FILE: &str = "tuning.json";
 pub const RULES_FILE: &str = "rules/default.json";
 pub const TACTICS_FILE: &str = "tactics.json";
+/// The trait catalogue: the traits of play a team file may give a player.
+pub const TRAITS_FILE: &str = "traits.json";
 pub const TEAM_A_FILE: &str = "teams/default-a.json";
 pub const TEAM_B_FILE: &str = "teams/default-b.json";
 /// The English commentary lines. The file stays out of `Content` and its digest: editing a
@@ -305,30 +307,44 @@ fn loaded<T>(
     }
 }
 
-/// Loads a team file's bytes in either version this build reads. A version 2 file has its
-/// ratings checked first, so a value off the tenth grid or outside 1.0 to 20.0 is refused
-/// naming the player and the attribute; a version 1 file is checked as version 1 and
-/// converted ([`convert::team_v1_to_v2`]). Either way a player without a version 4 attribute
-/// reads it as 10.0 for now ([`convert::fill_v4_added`]). The digest is that of the bytes read.
+/// Loads a team file's bytes in any version this build reads. A version 3 or 2 file has its
+/// ratings (and a version 3 file its position ratings) checked first, so a value off the tenth
+/// grid or outside 1.0 to 20.0 is refused naming the player and the field; a version 3 file's
+/// traits are checked against `traits`. A version 2 file converts to version 3
+/// ([`convert::team_v2_to_v3`]) and is then checked as a current file; a version 1 file is
+/// checked as version 1 and converted through version 2. The digest is that of the bytes read.
 pub fn load_team_bytes(
     bytes: &[u8],
     shown: &str,
     schema: &AttributeSchema,
+    traits: &traits::TraitCatalogue,
 ) -> Result<Loaded<TeamFile>, EngineError> {
     const KIND: &str = "team";
     match peek_version(KIND, bytes, shown)? {
         TEAM_VERSION => {
             check_ratings(bytes, shown)?;
-            let mut value: TeamFile = parse(KIND, bytes, shown)?;
-            for p in &mut value.players {
-                convert::fill_v4_added(p);
-            }
+            let value: TeamFile = parse(KIND, bytes, shown)?;
             let value = checked(KIND, shown, value, schema)?;
+            team::check_traits(&value, traits)
+                .map_err(|reason| refused(KIND, shown, "players".into(), reason))?;
             Ok(loaded(KIND, bytes, shown, value, TEAM_VERSION, None))
+        }
+        convert::TEAM_V2 => {
+            check_ratings(bytes, shown)?;
+            let value: TeamFile = parse(KIND, bytes, shown)?;
+            let value = checked(KIND, shown, convert::team_v2_to_v3(value, schema), schema)?;
+            Ok(loaded(
+                KIND,
+                bytes,
+                shown,
+                value,
+                convert::TEAM_V2,
+                Some(convert::TEAM_V2),
+            ))
         }
         convert::TEAM_V1 => {
             let v1 = parse_checked::<convert::TeamFileV1>(KIND, bytes, shown, schema)?;
-            let value = convert::team_v1_to_v2(v1);
+            let value = convert::team_v2_to_v3(convert::team_v1_to_v2(v1), schema);
             Ok(loaded(
                 KIND,
                 bytes,
@@ -342,9 +358,9 @@ pub fn load_team_bytes(
     }
 }
 
-/// Refuses the first rating of a version 2 team file that is off the tenth grid or outside
-/// 1.0 to 20.0, naming the player and the attribute. Anything else malformed is left to the
-/// full parse.
+/// Refuses the first rating of a version 2 or 3 team file that is off the tenth grid or outside
+/// 1.0 to 20.0, naming the player and the attribute or position. Anything else malformed is
+/// left to the full parse.
 fn check_ratings(bytes: &[u8], shown: &str) -> Result<(), EngineError> {
     let Ok(doc) = serde_json::from_slice::<serde_json::Value>(bytes) else {
         return Ok(());
@@ -354,19 +370,24 @@ fn check_ratings(bytes: &[u8], shown: &str) -> Result<(), EngineError> {
     };
     for p in players {
         let id = p.get("id").and_then(|v| v.as_str()).unwrap_or("?");
-        let Some(attributes) = p.get("attributes").and_then(|a| a.as_object()) else {
-            continue;
-        };
-        for (name, value) in attributes {
-            if let Some(x) = value.as_f64()
-                && let Err(e) = crate::rating::Rating::from_decimal(x)
-            {
-                return Err(refused(
-                    "team",
-                    shown,
-                    "players".into(),
-                    format!("player {id}: attribute {name} {e}"),
-                ));
+        for (key, label) in [
+            ("attributes", "attribute"),
+            ("positions", "position rating"),
+        ] {
+            let Some(values) = p.get(key).and_then(|a| a.as_object()) else {
+                continue;
+            };
+            for (name, value) in values {
+                if let Some(x) = value.as_f64()
+                    && let Err(e) = crate::rating::Rating::from_decimal(x)
+                {
+                    return Err(refused(
+                        "team",
+                        shown,
+                        "players".into(),
+                        format!("player {id}: {label} {name} {e}"),
+                    ));
+                }
             }
         }
     }
@@ -465,27 +486,25 @@ pub fn load_tactics_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TacticsSch
     }
 }
 
-/// Loads a slot file's bytes in either version this build reads; a version 1 file is
-/// converted ([`convert::slots_v1_to_v2`]). The digest is that of the bytes read.
+/// Loads a slot file's bytes in any version this build reads; a version 1 file is converted
+/// to version 2 ([`convert::slots_v1_to_v2`]) and a version 2 file to version 3
+/// ([`convert::slots_v2_to_v3`]). The digest is that of the bytes read.
 pub fn load_slots_bytes(bytes: &[u8]) -> Result<Loaded<SlotFile>, EngineError> {
     const KIND: &str = "slots";
-    match peek_version(KIND, bytes, SLOTS_FILE)? {
+    let found = peek_version(KIND, bytes, SLOTS_FILE)?;
+    match found {
         SLOTS_VERSION => load_json_bytes::<SlotFile>(KIND, bytes, SLOTS_FILE, SLOTS_VERSION, &()),
-        convert::SLOTS_V1 => {
-            let v1: serde_json::Value = parse(KIND, bytes, SLOTS_FILE)?;
-            let v2 = convert::slots_v1_to_v2(v1)
-                .map_err(|reason| refused(KIND, SLOTS_FILE, "slots".into(), reason))?;
-            let value: SlotFile = serde_json::from_value(v2)
+        convert::SLOTS_V1 | convert::SLOTS_V2 => {
+            let mut file: serde_json::Value = parse(KIND, bytes, SLOTS_FILE)?;
+            let bad = |reason| refused(KIND, SLOTS_FILE, "slots".into(), reason);
+            if found == convert::SLOTS_V1 {
+                file = convert::slots_v1_to_v2(file).map_err(bad)?;
+            }
+            let v3 = convert::slots_v2_to_v3(file).map_err(bad)?;
+            let value: SlotFile = serde_json::from_value(v3)
                 .map_err(|e| refused(KIND, SLOTS_FILE, "converted file".into(), e.to_string()))?;
             let value = checked(KIND, SLOTS_FILE, value, &())?;
-            Ok(loaded(
-                KIND,
-                bytes,
-                SLOTS_FILE,
-                value,
-                convert::SLOTS_V1,
-                Some(convert::SLOTS_V1),
-            ))
+            Ok(loaded(KIND, bytes, SLOTS_FILE, value, found, Some(found)))
         }
         found => Err(version_refused(KIND, SLOTS_FILE, found, SLOTS_VERSION)),
     }
@@ -496,17 +515,18 @@ pub fn hex12(digest: &[u8]) -> String {
     digest.iter().take(6).map(|b| format!("{b:02x}")).collect()
 }
 
-/// The bytes of the four content files, as read from a content folder or a replay file.
+/// The bytes of the five content files, as read from a content folder or a replay file.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ContentFiles {
     pub attributes: Vec<u8>,
     pub tuning: Vec<u8>,
     pub rules: Vec<u8>,
     pub tactics: Vec<u8>,
+    pub traits: Vec<u8>,
 }
 
 impl ContentFiles {
-    /// Reads the four files from `dir`, each once.
+    /// Reads the five files from `dir`, each once.
     pub fn read(dir: &ContentDir) -> Result<Self, EngineError> {
         let read = |rel: &str| read_bytes(&dir.path(rel), rel);
         Ok(Self {
@@ -514,18 +534,21 @@ impl ContentFiles {
             tuning: read(TUNING_FILE)?,
             rules: read(RULES_FILE)?,
             tactics: read(TACTICS_FILE)?,
+            traits: read(TRAITS_FILE)?,
         })
     }
 }
 
-/// The four files every match needs, plus a digest over their bytes.
+/// The five files every match needs, plus a digest over their bytes.
 #[derive(Debug, Clone)]
 pub struct Content {
     pub attributes: AttributeSchema,
     pub tuning: TuningFile,
     pub rules: RulePack,
     pub tactics: TacticsSchema,
-    /// SHA-256 over the four file digests in order: attributes, tuning, rules, tactics.
+    /// The trait catalogue: the traits of play a team file may give a player.
+    pub traits: traits::TraitCatalogue,
+    /// SHA-256 over the five file digests in order: attributes, tuning, rules, tactics, traits.
     /// When a flag state differs from the file's, the list of flags that are on is hashed
     /// in as well.
     pub digest: [u8; 32],
@@ -643,17 +666,39 @@ impl Content {
                 reason,
             });
         }
+        let traits = traits::load_traits_bytes(&files.traits, TRAITS_FILE)?;
+        // The generator gives a keeper only the keeper traits, so each must be a trait.
+        if let Some(name) = tuning.value.generator.person.as_ref().and_then(|p| {
+            p.traits
+                .keeper_only
+                .iter()
+                .find(|n| traits.value.get(n).is_none())
+        }) {
+            let (field, reason) = (
+                "generator.person.traits.keeper_only".to_string(),
+                format!("trait {name} is not in the trait catalogue"),
+            );
+            tracing::error!(signal = "content.refused", kind = "tuning", path = TUNING_FILE, field = %field, reason = %reason);
+            return Err(EngineError::Data {
+                kind: "tuning",
+                path: TUNING_FILE.to_string(),
+                field,
+                reason,
+            });
+        }
         let mut hasher = Sha256::new();
         hasher.update(attributes.digest);
         hasher.update(tuning.digest);
         hasher.update(rules.digest);
         hasher.update(tactics.digest);
+        hasher.update(traits.digest);
         let digest: [u8; 32] = hasher.finalize().into();
         let written = Self {
             attributes: attributes.value,
             tuning: tuning.value.clone(),
             rules: rules.value,
             tactics: tactics.value,
+            traits: traits.value,
             digest,
             flags: ActiveFlags::default(),
             modules,
@@ -702,25 +747,30 @@ impl Content {
         })
     }
 
-    /// Loads and validates one team file against the attribute schema of this content. A
-    /// version 1 file converts; its `converted_from` is `Some(1)`.
+    /// Loads and validates one team file against the attribute schema and the trait catalogue
+    /// of this content. A version 1 or 2 file converts; its `converted_from` is its version.
     pub fn load_team(
         &self,
         dir: &ContentDir,
         path: &Path,
     ) -> Result<Loaded<TeamFile>, EngineError> {
         let shown = dir.relative(path);
-        load_team_bytes(&read_bytes(path, &shown)?, &shown, &self.attributes)
+        load_team_bytes(
+            &read_bytes(path, &shown)?,
+            &shown,
+            &self.attributes,
+            &self.traits,
+        )
     }
 
-    /// Loads and validates one team file's bytes against the attribute schema of this
-    /// content; `shown` is the name errors give the file.
+    /// Loads and validates one team file's bytes against the attribute schema and the trait
+    /// catalogue of this content; `shown` is the name errors give the file.
     pub fn team_from_bytes(
         &self,
         bytes: &[u8],
         shown: &str,
     ) -> Result<Loaded<TeamFile>, EngineError> {
-        load_team_bytes(bytes, shown, &self.attributes)
+        load_team_bytes(bytes, shown, &self.attributes, &self.traits)
     }
 
     /// The tuning file as written, before any flag state is applied.

@@ -56,8 +56,16 @@ pub const SHARPNESS_OFF_CARD: ModuleCard = ModuleCard {
     keys: &[],
 };
 
+/// How much of the adaptation drop a player of personality `p` takes:
+/// `1 − occasions.adaptation · adaptability`, 1 for an average player and with no person
+/// block in the tuning.
+pub fn adaptation_scale(p: &crate::contract::PersonalityScales, t: &crate::tuning::Tuning) -> f64 {
+    1.0 - t.contract.person().occasions.adaptation * p.adaptability
+}
+
 /// Adaptation version 1 (mind family): `−(1 − adaptation / 100) · max_drop` on the mental
-/// group. Nationality acts through it: a player new to a country is given a low adaptation.
+/// group, narrowed by his adaptability ([`adaptation_scale`]). Nationality acts through it: a
+/// player new to a country is given a low adaptation.
 pub struct AdaptationV1;
 
 impl Modifier for AdaptationV1 {
@@ -66,19 +74,25 @@ impl Modifier for AdaptationV1 {
     }
 
     fn effect(&self, view: &MatchView<'_>, i: usize) -> Effect {
-        let body = &view.tuning().contract.body;
-        on(
-            Group::Mental,
-            BodyJobs::drop(&body.adaptation, view.condition(i).adaptation),
-        )
+        let t = view.tuning();
+        let drop = BodyJobs::drop(&t.contract.body.adaptation, view.condition(i).adaptation);
+        let drop = if drop == 0.0 {
+            drop
+        } else {
+            drop * adaptation_scale(&view.personality(i), t)
+        };
+        on(Group::Mental, drop)
     }
 }
 
 pub const ADAPTATION_V1_CARD: ModuleCard = ModuleCard {
     purpose: "Lowers a player's mental ratings while he adapts to a new country (mind family): language, climate and the league's style.",
-    inputs: "Each player's adaptation input (0 to 100 percent, from the team file's condition block; absent reads 100) and the body tuning.",
-    outputs: "A delta on the mental group, from 0 when fully adapted to minus max_drop when not at all.",
-    tuning: &["contract.body.adaptation.max_drop"],
+    inputs: "Each player's adaptation input (0 to 100 percent, from the team file's condition block; absent reads 100), his adaptability, the body tuning and the person tuning.",
+    outputs: "A delta on the mental group, from 0 when fully adapted to minus max_drop when not at all, narrowed by his adaptability.",
+    tuning: &[
+        "contract.body.adaptation.max_drop",
+        "contract.person.occasions.adaptation",
+    ],
     calibration: "none: no adaptation band in realism-bands.json",
     keys: &[],
 };

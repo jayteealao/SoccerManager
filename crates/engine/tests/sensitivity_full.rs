@@ -7,9 +7,9 @@
 //! ```
 //!
 //! It prints one line per rule (job, statistic, low, high, move and its interval, share and
-//! its interval, word) and the five-match share per role and pooled, writes the same as JSON to
-//! `target/sensitivity/rules.json`, and passes only when every rule and the five-match rule
-//! pass.
+//! its interval, word, and `report` after the word of a report-only rule) and the five-match
+//! share per role and pooled, writes the same as JSON to `target/sensitivity/rules.json`, and
+//! passes only when every rule without the report-only flag and the five-match rule pass.
 
 mod common;
 
@@ -18,7 +18,7 @@ use engine::sensitivity::{self, Size};
 
 #[test]
 #[ignore = "the full run plays about 6,400 matches; run it in release by hand"]
-fn every_sensitivity_rule_and_the_five_match_rule_pass() {
+fn every_blocking_sensitivity_rule_and_the_five_match_rule_pass() {
     let content = common::content();
     let dir = common::content_dir();
     let clubs = sensitivity::default_clubs(&content, &dir).unwrap();
@@ -43,14 +43,15 @@ fn every_sensitivity_rule_and_the_five_match_rule_pass() {
             format!("{:+.3} [{:+.3}, {:+.3}]", s.est, s.lo, s.hi)
         });
         println!(
-            "{:<17} {:<52} {:>9.4} {:>9.4} {:>26} {:>26} {}",
+            "{:<17} {:<52} {:>9.4} {:>9.4} {:>26} {:>26} {}{}",
             r.job,
             r.statistic,
             r.low,
             r.high,
             format!("{:+.3} [{:+.3}, {:+.3}]", r.mv.est, r.mv.lo, r.mv.hi),
             share,
-            r.word.name()
+            r.word.name(),
+            if r.report_only { " report" } else { "" }
         );
     }
     let count = |w: Word| rules.iter().filter(|r| r.word == w).count();
@@ -97,14 +98,13 @@ fn every_sensitivity_rule_and_the_five_match_rule_pass() {
     )
     .unwrap();
 
-    let failing: Vec<String> = rules
+    let failing: Vec<String> = sensitivity::blocking(&rules)
         .iter()
-        .filter(|r| r.word != Word::Pass)
         .map(|r| format!("{} {}", r.job, r.word.name()))
         .collect();
     assert!(
         failing.is_empty(),
-        "rules that do not pass: {}",
+        "rules without the report-only flag that do not pass: {}",
         failing.join(", ")
     );
     assert_eq!(five.word, Word::Pass, "five-match {:?}", five.pooled);

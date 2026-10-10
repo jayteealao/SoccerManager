@@ -64,6 +64,9 @@ pub struct Derived {
     pub max_speed: f64,
     /// Maximum acceleration in metres per second squared, from the sprint stage.
     pub max_accel: f64,
+    /// Maximum braking in metres per second squared: the braking anchor times the turn factor
+    /// (agility leading), or his acceleration when the tuning has no hooks.
+    pub max_decel: f64,
     /// The factor on the sideways part of a change of velocity, from the turn stage, less
     /// the cost of his height: 1 at rating 10 and the reference height.
     pub turn: f64,
@@ -79,6 +82,9 @@ pub struct Derived {
     /// The mean share of his determination and professionalism: how a tired player saves
     /// energy ([`crate::pace`]).
     pub tired_mix: f64,
+    /// The skills that act on an occasion without leading a stage: flair, determination,
+    /// eccentricity.
+    pub occasion: contract::OccasionSkills,
 }
 
 /// The per-player factors on values every player had alike before the contract, each
@@ -132,20 +138,40 @@ impl Derived {
         schema: &AttributeSchema,
         t: &Tuning,
     ) -> (Self, StageValues) {
-        Self::from_blend(a, &Blend::of(schema), schema, t, Body::default())
+        Self::from_blend(a, &Blend::of(schema), schema, t, Body::default(), 0)
     }
 
-    /// [`Derived::from_attributes`] with the schema's blend resolved once, for a squad, and
-    /// the player's body.
+    /// [`Derived::from_attributes`] with the schema's blend resolved once, for a squad, the
+    /// player's body, and his form offset in tenths, which moves each stage by its action's
+    /// consistency degree ([`Blend::values_with_form`]). The gates and top speed read his
+    /// ratings directly and take no form.
     pub fn from_blend(
         a: &Attributes,
         blend: &Blend,
         schema: &AttributeSchema,
         t: &Tuning,
         body: Body,
+        form: i8,
+    ) -> (Self, StageValues) {
+        Self::from_blend_floored(a, blend, schema, t, body, form, None)
+    }
+
+    /// [`Derived::from_blend`] with the shared floor on every stage: given `(base, drop)`, no
+    /// stage reads more than `drop` rating points below his base stage values `base`
+    /// ([`Blend::values_floored`]).
+    pub fn from_blend_floored(
+        a: &Attributes,
+        blend: &Blend,
+        schema: &AttributeSchema,
+        t: &Tuning,
+        body: Body,
+        form: i8,
+        floor: Option<(&StageValues, f64)>,
     ) -> (Self, StageValues) {
         let c = &t.contract;
-        let stages = blend.values(a, c);
+        let hooks = c.hooks();
+        let stages = blend.values_floored(a, c, form, floor);
+        let occasion = contract::occasion_skills(a, schema, c);
         let [pace, technique, agility, _] = contract::direct_ratings(a, schema);
         let knob = |action: contract::ActionKind, s: Stage| {
             contract::factor(c.actions.of(action).spread(), stages.share(s))
@@ -161,9 +187,20 @@ impl Derived {
         };
         let aerial_reach = knob(A::AerialReach, Stage::AERIAL_REACH_EXECUTE);
         let (work_share, tired_mix) = blend.pace_shares(a);
+        let max_accel = c.accel.anchor * knob(A::Sprint, Stage::SPRINT_EXECUTE);
+        // Agility owns stopping: the turn factor scales the braking anchor. With no hooks a
+        // player brakes with his acceleration, as before.
+        let max_decel = if hooks.decel_anchor > 0.0 {
+            hooks.decel_anchor * knob(A::Turn, Stage::TURN_EXECUTE)
+        } else {
+            max_accel
+        };
+        // Flair lowers the technique a player needs to try a gated skill.
+        let gate_drop = hooks.flair_gate * occasion.flair;
         let derived = Self {
             max_speed: c.speed.top_speed(pace),
-            max_accel: c.accel.anchor * knob(A::Sprint, Stage::SPRINT_EXECUTE),
+            max_accel,
+            max_decel,
             turn: c.body.turn_factor(knob(A::Turn, Stage::TURN_EXECUTE), body),
             reach_m: c.body.reach_m(t.reach_height, aerial_reach, body),
             knobs: Knobs {
@@ -179,13 +216,14 @@ impl Derived {
                 organise: knob(A::Organise, Stage::ORGANISE_EXECUTE),
             },
             gates: Gates {
-                chip_try: technique >= g.chip.technique_try,
+                chip_try: technique >= g.chip.technique_try - gate_drop,
                 chip_penalty: penalty(&g.chip),
-                take_on_try: technique >= g.take_on.technique_try,
+                take_on_try: technique >= g.take_on.technique_try - gate_drop,
                 take_on_penalty: penalty(&g.take_on),
             },
             work_share,
             tired_mix,
+            occasion,
         };
         (derived, stages)
     }
@@ -228,6 +266,9 @@ pub struct Player {
     pub form: i8,
     /// The match part of his form offset, kept for the period redraws.
     pub form_match: i8,
+    /// His mood, from -100 (a full low) to 100 (a full high), 0 at kick-off
+    /// ([`crate::sim::mood`]).
+    pub mood: f64,
     /// Energy from 1.0 (fresh) down to 0.0.
     pub energy: f64,
     pub pos: DVec2,
@@ -262,6 +303,11 @@ impl Player {
     /// Maximum acceleration in metres per second squared.
     pub fn max_accel(&self) -> f64 {
         self.derived.max_accel
+    }
+
+    /// Maximum braking in metres per second squared.
+    pub fn max_decel(&self) -> f64 {
+        self.derived.max_decel
     }
 }
 
@@ -300,6 +346,7 @@ pub(crate) mod test_support {
             deltas: [0; GROUP_COUNT],
             form: 0,
             form_match: 0,
+            mood: 0.0,
             energy: 1.0,
             pos: DVec2::ZERO,
             vel: DVec2::ZERO,
@@ -335,6 +382,8 @@ mod tests {
             Derived::from_attributes(&Attributes::from_entry(&entry_at(s, 100), s), s, t);
         assert_eq!(d.max_speed, t.contract.speed.anchor_ms);
         assert_eq!(d.max_accel, t.contract.accel.anchor);
+        assert_eq!(d.max_decel, t.contract.hooks().decel_anchor);
+        assert_eq!(d.occasion, contract::OccasionSkills::NEUTRAL);
         assert_eq!(d.turn, 1.0);
         assert_eq!(d.knobs, Knobs::NEUTRAL);
         for i in 0..contract::STAGE_COUNT {

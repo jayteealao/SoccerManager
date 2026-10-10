@@ -110,10 +110,11 @@ fn every_attribute_feeds_a_stage_and_has_a_job_with_a_statistic() {
 // --- Personality and the small weights.
 
 /// Shape AC-4 of the record: no state family moves a personality value, and nothing panics,
-/// with deltas on every state group and a form offset.
+/// with deltas on every state group and a form offset on the blend.
 #[test]
 fn no_state_moves_a_personality_value_and_nothing_panics() {
-    use engine::contract::states::{StatesTuning, effective, effective_with_form};
+    use engine::contract::stages::Blend;
+    use engine::contract::states::effective;
     let content = common::content();
     let schema = &content.attributes;
     let mut base = engine::player::Attributes {
@@ -131,23 +132,58 @@ fn no_state_moves_a_personality_value_and_nothing_panics() {
     for &i in &personality {
         base.values[i] = Rating::from_tenths(30);
     }
-    let deltas = [-20, -10, -5, 5];
-    let t = StatesTuning::default();
-    for moved in [
-        effective(&base, schema, deltas),
-        effective_with_form(&base, schema, deltas, -7, &t),
-        effective_with_form(&base, schema, deltas, 6, &t),
-    ] {
-        for &i in &personality {
-            assert_eq!(moved.get(i).tenths(), 30, "{}", schema.attributes[i].name);
-        }
-        let passing = schema.index("passing").unwrap();
-        assert_ne!(
-            moved.get(passing).tenths(),
-            100,
-            "a visible value still moves"
+    let moved = effective(&base, schema, [-20, -10, -5, 5]);
+    for &i in &personality {
+        assert_eq!(moved.get(i).tenths(), 30, "{}", schema.attributes[i].name);
+    }
+    let passing = schema.index("passing").unwrap();
+    assert_ne!(
+        moved.get(passing).tenths(),
+        100,
+        "a visible value still moves"
+    );
+    let blend = Blend::of(schema);
+    let tuning = Tuning::default();
+    for form in [-7, 6] {
+        let stages = blend.values_with_form(&moved, &tuning.contract, form);
+        assert!(stages.f.iter().all(|v| v.is_finite()));
+    }
+}
+
+/// Shape AC-18: with a consistency degree per action, a form offset moves each action by its
+/// own degree. Degrees planted at 0.5 on the pass and 1.5 on the shot, a player at 10.0
+/// throughout and an offset of +0.5: `ln(F / 8) * width / 0.5` of every stage equals its
+/// action's degree, and a degree of 0 leaves a stage at 8.
+#[test]
+fn each_action_moves_by_its_own_consistency_degree() {
+    use engine::contract::stages::Blend;
+    use engine::contract::{STAGES, Stage, StageKind};
+    let content = common::content();
+    let mut schema = content.attributes.clone();
+    schema.consistency_degrees.insert(ActionKind::Pass, 0.5);
+    schema.consistency_degrees.insert(ActionKind::Shot, 1.5);
+    schema.consistency_degrees.insert(ActionKind::Cross, 0.0);
+    let tuning = Tuning::default();
+    let width = tuning.contract.curve.width;
+    let flat = engine::player::Attributes {
+        values: [Rating::from_tenths(100); engine::data::MAX_ATTRIBUTES],
+        len: schema.len() as u8,
+    };
+    let stages = Blend::of(&schema).values_with_form(&flat, &tuning.contract, 5);
+    for (i, &(action, stage)) in STAGES.iter().enumerate() {
+        let degree = schema.consistency_degrees[&action];
+        let read = engine::math::ln(stages.f[i] / 8.0) * width / 0.5;
+        assert!(
+            (read - degree).abs() < 1e-9,
+            "{action}.{}: moved by degree {read}, its degree is {degree}",
+            stage.name()
         );
     }
+    let cross = Stage::find(ActionKind::Cross, StageKind::Execute).unwrap();
+    assert_eq!(stages.f(cross), 8.0);
+    let pass = Stage::find(ActionKind::Pass, StageKind::Execute).unwrap();
+    let shot = Stage::find(ActionKind::Shot, StageKind::Execute).unwrap();
+    assert!(stages.f(shot) > stages.f(pass) && stages.f(pass) > 8.0);
 }
 
 /// Shape AC-5 of the record: in every stage with small weights, each small weight is lighter
@@ -430,5 +466,180 @@ fn agility_under_the_threshold_loses_more_take_ons() {
     assert!(
         a - b > 3.0 * se,
         "agility 6.0 lost {a:.3}, 9.0 lost {b:.3}, se {se:.4}"
+    );
+}
+
+// --- Familiarity and the shared floor.
+
+/// The technical and mental groups' indices in a player's deltas.
+const TECHNICAL: usize = 0;
+const MENTAL: usize = 1;
+
+/// A position other than `played`, for his natural one.
+fn elsewhere(played: engine::data::team::Position) -> engine::data::team::Position {
+    use engine::data::team::Position;
+    if played == Position::ST {
+        Position::CB
+    } else {
+        Position::ST
+    }
+}
+
+/// Home player 5, natural 16, plays a position he is rated `at` in, rated `versatility` and
+/// `adaptability`: his technical and mental deltas at kick-off, in tenths.
+fn familiarity_deltas(at: f64, versatility: f64, adaptability: f64) -> [i8; 2] {
+    let me = index(0, 5);
+    let scene = Scene::new(calm_match(90));
+    let played = scene.played_position(me);
+    // The position ratings last: setting one refreshes his deltas.
+    let sim = scene
+        .rating(me, "versatility", versatility)
+        .rating(me, "adaptability", adaptability)
+        .position_rating(me, elsewhere(played), 16.0)
+        .position_rating(me, played, at)
+        .build();
+    let d = sim.players()[me].deltas;
+    [d[TECHNICAL], d[MENTAL]]
+}
+
+/// A player rated 8 at the position he plays, 16 at his natural one, loses some
+/// of his technical and mental values at kick-off, inside the familiarity cap; less with a
+/// high versatility or adaptability than a low one; nothing at his natural position.
+#[test]
+fn familiarity_lowers_technical_and_mental_inside_its_cap() {
+    let config = calm_match(90);
+    let cap = (config.tuning.contract.states.caps.familiarity[0] * 10.0).round() as i8;
+    let base = familiarity_deltas(8.0, 10.0, 10.0);
+    println!("rated 8, natural 16: {base:?} tenths (cap {cap})");
+    for d in base {
+        assert!(d < 0 && d >= cap, "{d}");
+    }
+    let (low_v, high_v) = (
+        familiarity_deltas(8.0, 5.0, 10.0),
+        familiarity_deltas(8.0, 18.0, 10.0),
+    );
+    let (low_a, high_a) = (
+        familiarity_deltas(8.0, 10.0, 5.0),
+        familiarity_deltas(8.0, 10.0, 18.0),
+    );
+    for g in 0..2 {
+        assert!(high_v[g] > low_v[g], "versatility {low_v:?} {high_v:?}");
+        assert!(high_a[g] > low_a[g], "adaptability {low_a:?} {high_a:?}");
+        assert!(low_v[g] >= cap && low_a[g] >= cap);
+    }
+    assert_eq!(familiarity_deltas(16.0, 10.0, 10.0), [0, 0]);
+}
+
+/// The worst case for home player 5: every attribute but the personality
+/// values at 18, played at a position he is rated 1 in (natural 18), his whole side at a full
+/// low mood, no energy, no sharpness and his form at the shipped bound below. Returns the ratio
+/// of each of his stage values to a flat-11 player's, the difference of each share, and his
+/// lowest visible effective rating. `plant` edits the configuration first.
+fn worst_case(plant: impl Fn(&mut MatchConfig)) -> (Vec<f64>, Vec<f64>, f64) {
+    use engine::contract::STAGE_COUNT;
+    let me = index(0, 5);
+    let mut config = calm_match(90);
+    let squad = config.players[me].squad;
+    config.teams[0].squad[squad].condition.sharpness = Some(0);
+    plant(&mut config);
+    let bound = common::content()
+        .tuning
+        .engine
+        .contract
+        .consistency
+        .bound_tenths();
+    let schema = config.attributes.clone();
+    let tuning = config.tuning.clone();
+    let mut scene = Scene::new(config);
+    for def in schema.attributes.iter().filter(|d| !d.is_personality()) {
+        scene = scene.rating(me, &def.name, 18.0);
+    }
+    let played = scene.played_position(me);
+    scene = scene
+        .position_rating(me, elsewhere(played), 18.0)
+        .position_rating(me, played, 1.0);
+    for slot in 0..11 {
+        scene = scene.mood(index(0, slot), -100.0);
+    }
+    let sim = scene.energy(me, 0.0).form(me, -bound).build();
+    let flat = engine::player::Attributes {
+        values: [Rating::from_tenths(110); engine::data::MAX_ATTRIBUTES],
+        len: schema.len() as u8,
+    };
+    let (_, eleven) = Derived::from_attributes(&flat, &schema, &tuning);
+    let skills = sim.skills(me);
+    let f: Vec<f64> = (0..STAGE_COUNT)
+        .map(|s| skills.stages.f[s] / eleven.f[s])
+        .collect();
+    let share: Vec<f64> = (0..STAGE_COUNT)
+        .map(|s| skills.stages.share[s] - eleven.share[s])
+        .collect();
+    let ratings = sim.effective_ratings(me);
+    let lowest = schema
+        .attributes
+        .iter()
+        .enumerate()
+        .filter(|(_, d)| !d.hidden && !d.is_personality())
+        .map(|(k, _)| f64::from(ratings.get(k).tenths()) / 10.0)
+        .fold(f64::INFINITY, f64::min);
+    (f, share, lowest)
+}
+
+/// The lowest stage of `ratios` on the rating scale: `11 + width · ln(ratio)`.
+fn lowest_rating(ratios: &[f64], width: f64) -> f64 {
+    ratios
+        .iter()
+        .map(|r| 11.0 + width * engine::math::ln(*r))
+        .fold(f64::INFINITY, f64::min)
+}
+
+/// An 18 in the worst case (the weaker foot not yet in it): with the shipped caps,
+/// the worst case keeps every stage value, every share (so every pressed execution share) and
+/// every visible effective rating at least a flat 11's.
+#[test]
+fn an_eighteen_in_the_worst_case_plays_no_action_below_eleven() {
+    let width = calm_match(90).tuning.contract.curve.width;
+    let (f, share, lowest) = worst_case(|_| {});
+    println!(
+        "shipped caps: lowest stage {:.2}, lowest visible rating {lowest:.1}",
+        lowest_rating(&f, width)
+    );
+    assert!(f.iter().all(|r| *r >= 1.0 - 1e-9), "{f:?}");
+    assert!(share.iter().all(|d| *d >= -1e-9), "{share:?}");
+    assert!(lowest >= 11.0, "{lowest}");
+}
+
+/// The floor, guarded failure: a planted stack past the shipped caps (the body and total
+/// caps widened to -8 points and the fatigue curve ending at 0.3) stays at or above a flat 11
+/// with the floor at 7 points, and falls below it with the floor out of reach (12.7 points),
+/// so the floor, not the caps, holds the line.
+#[test]
+fn the_floor_holds_a_planted_stack_the_caps_do_not() {
+    let width = calm_match(90).tuning.contract.curve.width;
+    let plant = |drop: f64| {
+        move |config: &mut MatchConfig| {
+            let caps = &mut config.tuning.contract.states.caps;
+            caps.body = [-8.0, 0.5];
+            caps.total = [-8.0, 2.25];
+            if let Some(last) = config.fatigue.curve.last_mut() {
+                last[1] = 0.3;
+            }
+            if let Some(person) = config.tuning.contract.person.as_mut() {
+                person.floor_drop = drop;
+            }
+        }
+    };
+    let (held, held_share, _) = worst_case(plant(7.0));
+    let (open, _, _) = worst_case(plant(12.7));
+    println!(
+        "planted stack: lowest stage {:.2} with the floor, {:.2} without",
+        lowest_rating(&held, width),
+        lowest_rating(&open, width)
+    );
+    assert!(held.iter().all(|r| *r >= 1.0 - 1e-9), "{held:?}");
+    assert!(held_share.iter().all(|d| *d >= -1e-9));
+    assert!(
+        open.iter().any(|r| *r < 1.0 - 1e-6),
+        "without the floor the planted stack must fall below 11"
     );
 }

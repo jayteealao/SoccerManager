@@ -710,6 +710,7 @@ mod tests {
             crate::data::ATTRIBUTES_FILE,
             crate::data::TUNING_FILE,
             crate::data::RULES_FILE,
+            crate::data::TRAITS_FILE,
         ] {
             let to = dir.join(rel);
             std::fs::create_dir_all(to.parent().unwrap()).unwrap();

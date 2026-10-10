@@ -69,6 +69,16 @@ pub struct SquadPlayer {
     /// His energy at kick-off, from his days of rest ([`Team::set_start_energy`]); 1.0
     /// when none are given.
     pub start_energy: f64,
+    /// His rating at each position, in [`Position::ALL`] order; his listed position is the
+    /// highest.
+    pub positions: [crate::rating::Rating; 10],
+    /// His strong foot and his weaker foot's percent.
+    pub foot: crate::data::team::Foot,
+    /// His traits of play, by name, each at its strength.
+    pub traits: Vec<(String, crate::data::traits::TraitStrength)>,
+    /// The personality values play reads on an occasion, computed once from his ratings
+    /// ([`crate::contract::personality_scales`]); no state moves them.
+    pub personality: crate::contract::PersonalityScales,
 }
 
 /// A team: club identity, an attack direction, the squad, the lineup and bench, the
@@ -179,29 +189,51 @@ impl Team {
         team.player_names = file.players.iter().map(|p| p.name.clone()).collect();
         team.player_nationalities = file.players.iter().map(|p| p.nationality.clone()).collect();
         let blend = crate::contract::stages::Blend::of(schema);
-        team.squad = file
-            .players
-            .iter()
-            .map(|entry| {
-                let attributes = Attributes::from_entry(&entry.attributes, schema);
-                let body = crate::contract::body::Body {
-                    height_cm: entry.height,
-                    age: entry.age,
-                };
-                let (derived, stages) =
-                    Derived::from_blend(&attributes, &blend, schema, tuning, body);
-                SquadPlayer {
-                    shirt: entry.shirt,
-                    position: entry.position,
-                    derived,
-                    stages,
-                    attributes,
-                    body,
-                    condition: entry.condition.unwrap_or_default(),
-                    start_energy: 1.0,
-                }
-            })
-            .collect();
+        team.squad =
+            file.players
+                .iter()
+                .map(|entry| {
+                    let attributes = Attributes::from_entry(&entry.attributes, schema);
+                    let body = crate::contract::body::Body {
+                        height_cm: entry.height,
+                        age: entry.age,
+                    };
+                    let (derived, stages) =
+                        Derived::from_blend(&attributes, &blend, schema, tuning, body, 0);
+                    // A file built in code without the person fields (a league generated without
+                    // their tuning) reads like a converted player.
+                    let rated = entry.positions.clone().unwrap_or_else(|| {
+                        crate::data::convert::listed_positions_only(entry, schema)
+                    });
+                    let positions = Position::ALL.map(|code| {
+                        rated
+                            .get(&code)
+                            .copied()
+                            .unwrap_or(crate::rating::Rating::from_tenths(
+                                crate::rating::MIN_TENTHS,
+                            ))
+                    });
+                    let foot = entry
+                        .foot
+                        .unwrap_or_else(|| crate::data::convert::converted_foot(&entry.id));
+                    let personality =
+                        crate::contract::personality_scales(&attributes, schema, &tuning.contract);
+                    SquadPlayer {
+                        personality,
+                        positions,
+                        foot,
+                        traits: entry.traits.iter().map(|(n, s)| (n.clone(), *s)).collect(),
+                        shirt: entry.shirt,
+                        position: entry.position,
+                        derived,
+                        stages,
+                        attributes,
+                        body,
+                        condition: entry.condition.unwrap_or_default(),
+                        start_energy: 1.0,
+                    }
+                })
+                .collect();
         team.bench = (PLAYERS_PER_TEAM..file.players.len()).collect();
         let players = team.starters();
         Ok((team, players))
@@ -241,6 +273,7 @@ impl Team {
             deltas: [0; crate::contract::states::GROUP_COUNT],
             form: 0,
             form_match: 0,
+            mood: 0.0,
             energy: s.start_energy,
             pos,
             vel: DVec2::ZERO,
@@ -267,7 +300,9 @@ impl Team {
     /// shape: the inactive slots and an acting keeper who is not in slot 0. A line with a
     /// player removed spreads its survivors evenly across its width, and a lone survivor keeps
     /// its own place across the pitch. The back line is then kept compact: no two neighbours
-    /// in it stand more than `back_line_gap` apart, so it narrows as players leave it. The
+    /// in it stand more than `back_line_gap` apart, divided by the line's organisation (the
+    /// keeper's and the back line's own, `hooks.organise_back_line` its share), so it narrows
+    /// as players leave it. The
     /// acting keeper takes the keeper's place.
     pub(crate) fn relayout(&mut self) {
         self.formation = self.base_formation;
@@ -302,11 +337,21 @@ impl Team {
         let mut back: Vec<usize> = self.back_line();
         back.retain(|&s| !out(s));
         back.sort_by(|a, b| self.formation[*a].1.total_cmp(&self.formation[*b].1));
-        // The acting keeper organises the line: a better organiser keeps it tighter.
-        let organise = self
-            .squad
-            .get(self.lineup[self.keeper_slot()])
-            .map_or(1.0, |k| k.derived.knobs.organise);
+        // The acting keeper and the back line organise the line together: better organisers
+        // keep it tighter. The line's own share is `hooks.organise_back_line`.
+        let knob = |s: usize| {
+            self.squad
+                .get(self.lineup[s])
+                .map_or(1.0, |p| p.derived.knobs.organise)
+        };
+        let keeper_organise = knob(self.keeper_slot());
+        let w = self.plan.organise_back_line;
+        let organise = if w > 0.0 && !back.is_empty() {
+            let line = back.iter().map(|&s| knob(s)).sum::<f64>() / back.len() as f64;
+            (1.0 - w) * keeper_organise + w * line
+        } else {
+            keeper_organise
+        };
         let gap = self.plan.back_line_gap / organise;
         let too_wide = back
             .windows(2)

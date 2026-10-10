@@ -1,4 +1,4 @@
-# Match stream protocol, version 6
+# Match stream protocol, version 7
 
 The engine serves one viewer over a WebSocket on `127.0.0.1`. The port is chosen by the
 operating system at every run and written to `engine.port` inside the runtime data folder.
@@ -68,6 +68,14 @@ each slot's overall level now and fresh. No field was removed and none changed m
 value is still never a number, and no number under a hidden attribute's name is ever sent.
 The tick frames are unchanged.
 
+Version 7 carries the player as a person. A `squad` entry gains five optional fields:
+`player.positions` (his rating at each of the ten positions, in tenths, by position code),
+`player.strong_foot`, `player.weaker_foot` (the weaker foot as a whole percent of the strong
+one), `player.traits` (his traits of play, each a `name` and a `strength`) and
+`player.personality` (each personality value as a word and a confidence, never a number). No
+field was removed and none changed meaning, and the tick frames are unchanged, so a protocol 6
+message still reads; a reader shows the fields it lacks as unknown.
+
 A test in `crates/protocol/tests/document.rs` holds this document to the code: every message
 the implementation names must appear below with every one of its fields.
 
@@ -76,7 +84,7 @@ the implementation names must appear below with every one of its fields.
 | Step | Rule |
 |---|---|
 | Address | `ws://127.0.0.1:<port>/?v=<protocol version>` |
-| Version | `v` must equal `6`. Any other value, or no value, is refused with both versions named. |
+| Version | `v` must equal `7`. Any other value, or no value, is refused with both versions named. |
 | Origin | Any port of `http://localhost` or `http://127.0.0.1`, or no `Origin` header at all. Any other origin is refused, including `null` (a sandboxed frame or a `data:` document) and a `file://` page. |
 | Clients | One viewer per match. |
 | First message | `hello`, always before the first tick frame. |
@@ -106,7 +114,7 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 
 | Field | Type | Meaning |
 |---|---|---|
-| `protocol.version` | integer | always 6 in this build |
+| `protocol.version` | integer | always 7 in this build |
 | `engine.version` | string | the engine crate version |
 | `build.hash` | string | the git hash the engine was built from |
 | `owner.id` | string | 32 hex characters, created once per machine |
@@ -180,6 +188,18 @@ Each entry of `squad` carries `player.id`, `player.name`, `player.shirt`, and
 | `player.matches_at_club` | integer | the matches he has played for the club, which set the hidden values' confidence; absent when the team file gives none |
 | `player.level` | integer | his overall level fresh, in tenths: the mean of the visible attributes of the groups his position plays (a keeper's goalkeeping, mental and physical; anyone else's technical, mental and physical) |
 | `player.plays_between` | array of two integers | the range his level runs today, in tenths: with his sharpness and his adaptation to the country taken off, then fresh. Equal when nothing takes off. A hidden value never moves it |
+| `player.positions` | object | his rating at each of the ten positions, by position code, in tenths of 1 to 20 (10 to 200); his natural position is the highest. A player converted from an older team file is rated at his listed position only, every other position 10. Absent before version 7 |
+| `player.strong_foot` | string | `left` or `right`; the strong foot is always 100. Absent before version 7 |
+| `player.weaker_foot` | integer | the weaker foot as a whole percent of the strong one, 1 to 100 (50 for a converted player). Absent before version 7 |
+| `player.traits` | array of objects | his traits of play, each a `name` from the trait catalogue (`traits.json`) and a `strength`; absent when he has none and before version 7 |
+| `player.personality` | object | each personality value, by name, as a word and a confidence like the hidden values below; never a number. Absent before version 7 |
+
+Each trait is an object:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `name` | string | the trait's name in the trait catalogue, such as `cuts_inside` |
+| `strength` | string | `moderate` or `strong` |
 
 Each hidden value is an object:
 
@@ -650,7 +670,7 @@ guess the WebSocket port on another and the operating system chooses both at eve
 |---|---|---|
 | `engine.state` | string | `idle` (the start screen, no match running), `starting`, `running`, `finished`, `crashed`, `refused`, `abandoned`, `not-found`, or `closed` (the player quit; launcher only) |
 | `socket.port` | int or null | the WebSocket port; present only while `running` |
-| `protocol.version` | int | the protocol version the engine speaks, `6` |
+| `protocol.version` | int | the protocol version the engine speaks, `7` |
 | `engine.pid` | int or null | the process identifier of the engine serving the match |
 | `engine.path` | string or null | the engine program the launcher runs; null when the engine serves the page itself |
 | `engine.reason` | string or null | the engine's own words when `refused`, for example `snapshot refused: <path>: checksum mismatch: the file is corrupt` |
@@ -761,12 +781,14 @@ differ only in the scale of the `hello`'s ratings. A page doubles a protocol 3 `
 ratings into tenths before any screen shows them, and keeps the stored frame as it is, so the
 file writes back byte for byte. A protocol 3 or 4 `hello` carries `player.injury_resistance`
 and no hidden value. A page drops that figure and shows both hidden values as not yet known:
-no old figure is ever turned into a word. A protocol 5 `hello` carries the hidden values as words but none of the squad entry's attributes, body fields or condition, so a page shows its hidden values and leaves the Squad screen's other columns empty.
+no old figure is ever turned into a word. A protocol 5 `hello` carries the hidden values as words but none of the squad entry's attributes, body fields or condition, so a page shows its hidden values and leaves the Squad screen's other columns empty. A protocol 6 `hello` carries no position ratings, feet, traits or personality; a page shows those as unknown.
 
 ### Inputs
 
-Format 4 stores these files, in this order. The two pack files are present only when the match
-ran a script pack.
+Format 4 stores these files, in this order. The slot file and the trait catalogue follow the
+team files; a file recorded before either existed lacks it, and plays with the built-in default
+selection and the trait catalogue as it first shipped. The two pack files are present only when
+the match ran a script pack.
 
 | Role | File |
 |---|---|
@@ -777,6 +799,8 @@ ran a script pack.
 | `commentary` | `commentary/en.json`: the script commentary hook runs on every event, so the lines are a match input |
 | `team_a` | the home team file |
 | `team_b` | the away team file |
+| `slots` | `slots.json` |
+| `traits` | `traits.json`: the trait catalogue the team files' traits are checked against |
 | `pack_manifest` | `pack.json` of the script pack |
 | `pack_script` | the pack's entry script |
 
@@ -814,7 +838,7 @@ which the log does not keep. The script runs with no wall-clock limit, so the re
 mark is reported, not made again.
 
 A reader refuses a file with the wrong magic, a format newer than the reader knows or older
-than 3, frames of a protocol version other than 3, 4, 5 and 6, a count mismatch, a truncated entry, an input or
+than 3, frames of a protocol version other than 3, 4, 5, 6 and 7, a count mismatch, a truncated entry, an input or
 record entry in a format-3 file, an input entry after the frames, an entry after the record, a
 format-4 file with no record or with two, a record without one of its fields or with a field
 it does not define, a field of the wrong type or outside its values, a header tick count that

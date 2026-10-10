@@ -146,6 +146,54 @@ pub struct SquadEntry {
         skip_serializing_if = "Option::is_none"
     )]
     pub plays_between: Option<[u8; 2]>,
+    /// His rating at each of the ten positions, by position code, in tenths of the 1 to 20
+    /// scale (10 to 200); his natural position is the highest. Protocol 7; an older hello
+    /// carries none.
+    #[serde(
+        rename = "player.positions",
+        default,
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    pub positions: BTreeMap<String, u8>,
+    /// His strong foot, `left` or `right`. Protocol 7.
+    #[serde(
+        rename = "player.strong_foot",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub strong_foot: Option<String>,
+    /// His weaker foot as a whole percent of the strong one, 1 to 100. Protocol 7.
+    #[serde(
+        rename = "player.weaker_foot",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub weaker_foot: Option<u8>,
+    /// His traits of play, each a name from the trait catalogue and a strength. Protocol 7;
+    /// absent when he has none.
+    #[serde(
+        rename = "player.traits",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub traits: Vec<TraitWire>,
+    /// His personality values, by name, each a word key and how sure the club is of it, never
+    /// a number. Protocol 7.
+    #[serde(
+        rename = "player.personality",
+        default,
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    pub personality: BTreeMap<String, HiddenWord>,
+}
+
+/// One trait of play a player carries: its name in the trait catalogue and its strength,
+/// `moderate` or `strong`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TraitWire {
+    pub name: String,
+    pub strength: String,
 }
 
 /// A hidden value as the club knows it. `word` is a lower-case key (for example
@@ -754,6 +802,23 @@ mod tests {
                         matches_at_club: Some(9),
                         level: Some(130),
                         plays_between: Some([124, 130]),
+                        positions: BTreeMap::from([
+                            ("GK".to_string(), 130),
+                            ("CB".to_string(), 10),
+                        ]),
+                        strong_foot: Some("left".into()),
+                        weaker_foot: Some(45),
+                        traits: vec![TraitWire {
+                            name: "rushes_out".into(),
+                            strength: "strong".into(),
+                        }],
+                        personality: BTreeMap::from([(
+                            "temperament".to_string(),
+                            HiddenWord {
+                                word: Some("high".into()),
+                                confidence: Confidence::Tentative,
+                            },
+                        )]),
                     }],
                     setup: Some(TeamSetup {
                         lineup: (0..11).collect(),

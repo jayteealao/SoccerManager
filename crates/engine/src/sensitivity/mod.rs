@@ -7,7 +7,8 @@
 //! fail or not sure from bootstrap intervals of its move and of its share of the outcome
 //! ([`words`]); and the five-match rule swaps one player for a top and an average copy
 //! ([`five_match`]). The thresholds, the levels and the size of a run live in
-//! `content/sensitivity.json` ([`rules`]).
+//! `content/sensitivity.json` ([`rules`]). A rule with the report-only flag runs and reports
+//! its word; only the rules without it can fail the full run ([`blocking`]).
 
 pub mod design;
 pub mod five_match;
@@ -110,6 +111,8 @@ pub fn run_rules(
                 factor: k,
                 direction: file.direction(r, &content.attributes, body),
                 thresholds: r.thresholds(file.defaults),
+                expect: file.expect(r, &content.attributes, body),
+                report_only: r.report_only,
             }
         })
         .collect();
@@ -121,4 +124,55 @@ pub fn run_rules(
         size.seed,
     );
     (Played { design: rows, arms }, results)
+}
+
+/// The rules that fail a full run: those whose word is not pass and that lack the
+/// report-only flag.
+pub fn blocking(results: &[RuleResult]) -> Vec<&RuleResult> {
+    results
+        .iter()
+        .filter(|r| r.word != words::Word::Pass && !r.report_only)
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sensitivity::rules::{Expect, Measure};
+    use words::{Interval, Word};
+
+    fn result(job: &str, word: Word, report_only: bool) -> RuleResult {
+        let i = Interval {
+            est: 0.0,
+            lo: 0.0,
+            hi: 0.0,
+        };
+        RuleResult {
+            job: job.into(),
+            statistic: "s".into(),
+            measure: Measure::PassCompletion,
+            low: 0.0,
+            high: 0.0,
+            mv: i,
+            share: None,
+            min_move: 0.05,
+            ceiling: 0.2,
+            expect: Expect::Move,
+            word,
+            report_only,
+        }
+    }
+
+    #[test]
+    fn a_failing_flagged_rule_is_not_blocking_and_a_failing_unflagged_rule_is() {
+        let results = [
+            result("marking", Word::Fail, true),
+            result("flair", Word::NotSure, true),
+            result("passing", Word::Fail, false),
+            result("vision", Word::Pass, false),
+            result("corners", Word::Pass, true),
+        ];
+        let jobs: Vec<&str> = blocking(&results).iter().map(|r| r.job.as_str()).collect();
+        assert_eq!(jobs, ["passing"]);
+    }
 }
