@@ -30,12 +30,19 @@ fn the_shipped_attribute_schema_has_thirty_to_fifty_grouped_names() {
         // The group is an enum: every loaded definition carries one of the four.
         let _ = def.group;
     }
-    // The default teams are version 1 files: every value converts to 2 to 200 tenths
-    // (0.2 to 20.0), and only a converted value may sit under 1.0.
+    // The default teams are version 1 files: every old value converts to 2 to 200 tenths
+    // (0.2 to 20.0), even, and only a converted value may sit under 1.0. A value added since
+    // (a mean of related values, or communication from the mental mean) may be any tenth.
+    let added = |name: &str| {
+        name == "communication"
+            || engine::data::convert::V3_RELATED
+                .iter()
+                .any(|(n, _)| *n == name)
+    };
     for team in common::default_teams(&content) {
         for p in &team.players {
             assert_eq!(p.attributes.len(), n, "player {} attribute count", p.id);
-            for (name, v) in &p.attributes {
+            for (name, v) in p.attributes.iter().filter(|(name, _)| !added(name)) {
                 assert!(
                     (2..=200).contains(&v.tenths()) && v.tenths() % 2 == 0,
                     "player {} {name} = {v}",
@@ -394,6 +401,23 @@ fn the_shipped_flags_block_matches_the_code_flags() {
 }
 
 /// The shipped tuning file as JSON.
+/// The shipped tuning file's value with the personality word bands taken out: they joined the
+/// file after version 5, so an older file converts without them.
+fn shipped_without_personality_words() -> serde_json::Value {
+    let mut v = shipped_tuning_json();
+    let content = common::content();
+    let words = v["hidden"]["words"].as_object_mut().unwrap();
+    for def in content
+        .attributes
+        .attributes
+        .iter()
+        .filter(|d| d.is_personality())
+    {
+        words.remove(&def.name).unwrap();
+    }
+    v
+}
+
 fn shipped_tuning_json() -> serde_json::Value {
     let path = common::content_dir().path(engine::data::TUNING_FILE);
     serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
@@ -415,7 +439,7 @@ fn a_version_3_tuning_file_converts_to_the_shipped_version_4() {
     let loaded = engine::data::load_tuning_bytes(&bytes, "tuning-v3.json").unwrap();
     assert_eq!(loaded.converted_from, Some(3));
     let shipped = engine::data::load_tuning_bytes(
-        &serde_json::to_vec(&shipped_tuning_json()).unwrap(),
+        &serde_json::to_vec(&shipped_without_personality_words()).unwrap(),
         "tuning.json",
     )
     .unwrap();
@@ -778,7 +802,7 @@ fn a_version_4_tuning_file_converts_to_the_shipped_version_5() {
     let loaded = engine::data::load_tuning_bytes(&bytes, "tuning-v4.json").unwrap();
     assert_eq!(loaded.converted_from, Some(4));
     let shipped = engine::data::load_tuning_bytes(
-        &serde_json::to_vec(&shipped_tuning_json()).unwrap(),
+        &serde_json::to_vec(&shipped_without_personality_words()).unwrap(),
         "tuning.json",
     )
     .unwrap();
@@ -808,4 +832,51 @@ fn word_bands_out_of_order_or_short_of_one_are_refused_by_name() {
         .unwrap_err()
         .to_string();
     assert!(err.contains("injury_proneness"), "{err}");
+}
+
+/// The trait catalogue is part of the content: the content holds its 31 traits, an edit to the
+/// file changes the content digest, a one-sided opposite is refused naming the trait, and a
+/// keeper-only trait the generator names but the catalogue lacks is refused naming it.
+#[test]
+fn the_trait_catalogue_is_part_of_the_content_and_its_digest() {
+    use engine::data::ContentFiles;
+    let shipped = ContentFiles::read(&common::content_dir()).unwrap();
+    let content = engine::Content::from_files(&shipped).unwrap();
+    assert_eq!(content.traits.traits.len(), 31);
+
+    let mut edited = shipped.clone();
+    let mut traits: serde_json::Value = serde_json::from_slice(&shipped.traits).unwrap();
+    traits["traits"][2]["hook"] = "shoot_threshold_by_distance".into();
+    edited.traits = serde_json::to_vec(&traits).unwrap();
+    let other = engine::Content::from_files(&edited).unwrap();
+    assert_ne!(other.digest, content.digest);
+
+    let mut traits: serde_json::Value = serde_json::from_slice(&shipped.traits).unwrap();
+    for t in traits["traits"].as_array_mut().unwrap() {
+        if t["name"] == "hugs_touchline" {
+            t.as_object_mut().unwrap().remove("opposite");
+        }
+    }
+    let mut one_sided = shipped.clone();
+    one_sided.traits = serde_json::to_vec(&traits).unwrap();
+    let err = engine::Content::from_files(&one_sided)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("trait cuts_inside: its opposite hugs_touchline does not name it back"),
+        "{err}"
+    );
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    tuning["generator"]["person"]["traits"]["keeper_only"][0] = "saves_with_feet".into();
+    let mut unknown = shipped.clone();
+    unknown.tuning = serde_json::to_vec(&tuning).unwrap();
+    let err = engine::Content::from_files(&unknown)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        err,
+        "content refused: tuning tuning.json: generator.person.traits.keeper_only: \
+         trait saves_with_feet is not in the trait catalogue"
+    );
 }

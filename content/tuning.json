@@ -554,6 +554,94 @@
         ],
         "foreign_share": 0.35
       }
+    },
+    "person": {
+      "positions": {
+        "related": {
+          "GK": {},
+          "CB": {
+            "DM": 3.0,
+            "LB": 4.0,
+            "RB": 4.0
+          },
+          "LB": {
+            "RB": 2.0,
+            "LW": 4.0,
+            "CB": 4.0
+          },
+          "RB": {
+            "LB": 2.0,
+            "RW": 4.0,
+            "CB": 4.0
+          },
+          "DM": {
+            "CM": 2.0,
+            "CB": 3.0
+          },
+          "CM": {
+            "DM": 2.0,
+            "AM": 3.0
+          },
+          "AM": {
+            "CM": 3.0,
+            "LW": 4.0,
+            "RW": 4.0,
+            "ST": 4.0
+          },
+          "LW": {
+            "RW": 2.0,
+            "AM": 4.0,
+            "ST": 5.0,
+            "LB": 4.0
+          },
+          "RW": {
+            "LW": 2.0,
+            "AM": 4.0,
+            "ST": 5.0,
+            "RB": 4.0
+          },
+          "ST": {
+            "AM": 4.0,
+            "LW": 5.0,
+            "RW": 5.0
+          }
+        },
+        "spread": 1.5,
+        "far": {
+          "mean": 3.0,
+          "spread": 1.5
+        }
+      },
+      "foot": {
+        "left_share": 0.25,
+        "weaker": {
+          "mean": 40.0,
+          "spread": 18.0,
+          "min": 10,
+          "max": 100
+        }
+      },
+      "traits": {
+        "count_weights": [
+          34.0,
+          28.0,
+          18.0,
+          9.0,
+          5.0,
+          3.0,
+          1.5,
+          1.0,
+          0.5
+        ],
+        "strong_share": 0.35,
+        "keeper_only": [
+          "rushes_out",
+          "stays_on_line",
+          "punches_rather_than_catches",
+          "kicks_long",
+          "throws_short"
+        ]
+      }
     }
   },
   "fatigue": {
@@ -635,6 +723,160 @@
         {
           "from": 1.0,
           "word": "hardly_ever_injured"
+        }
+      ],
+      "professionalism": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "temperament": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "pressure_handling": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "sportsmanship": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "leadership": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "adaptability": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "versatility": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "ambition": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "loyalty": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "money_motivation": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "controversy": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
         }
       ]
     }

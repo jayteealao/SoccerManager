@@ -19,14 +19,22 @@
 //! A version 3 attribute file takes the version 4 additions from a fourth frozen copy
 //! (`contract/frozen-v4.json`): the new performance attributes and the personality values,
 //! communication moved to the mental group, the new and changed stage tables, and a
-//! consistency degree per action. Until team files carry the version 4 attributes, a team file
-//! without one reads it as 10.0 ([`fill_v4_added`]).
+//! consistency degree per action.
+//!
+//! A version 1 or 2 team file converts to version 3 with values from related attributes
+//! ([`team_v2_to_v3`]): each new performance attribute is the mean of the attributes it grows
+//! from ([`V3_RELATED`]), an outfield player's communication is the mean of the old mental
+//! group, every personality value is 10.0, his listed position is rated at his level and every
+//! other at 1.0, and his weaker foot is 50 percent. The table is fixed in code and never edited,
+//! so an old replay's team file converts the same way however the catalogue is tuned later.
 
 use std::collections::BTreeMap;
 
 use garde::Validate;
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 
+use crate::contract::level::overall_level;
 use crate::contract::{ActionKind, GateDefs, StageKind};
 use crate::data::attributes::{
     ATTRIBUTES_VERSION, ActionTables, AttributeDef, AttributeSchema, Direction, Group, Job,
@@ -35,11 +43,15 @@ use crate::data::tactics::{
     AiTuning, Duty, Formation, Instructions, Mentality, Offset, PreferredActions, Role,
     TacticsSchema, Teammates,
 };
-use crate::data::team::{Club, MAX_SQUAD, PlayerEntry, Position, TEAM_VERSION, TeamFile};
-use crate::rating::Rating;
+use crate::data::team::{
+    Club, Foot, MAX_SQUAD, PlayerEntry, Position, Side, TEAM_VERSION, TeamFile,
+};
+use crate::player::Attributes;
+use crate::rating::{MAX_TENTHS, MIN_TENTHS, Rating};
 
-/// The team file version the converter reads.
+/// The team file versions the converters read.
 pub const TEAM_V1: u32 = 1;
+pub const TEAM_V2: u32 = 2;
 /// The tactics file version the converter reads.
 pub const TACTICS_V1: u32 = 1;
 /// The attribute file versions the converters read.
@@ -469,18 +481,138 @@ fn v1_name(def: &AttributeDef) -> Option<&str> {
     }
 }
 
-/// Gives `player` 10.0 for each version 4 attribute he lacks.
-///
-/// sdlc-debt: an interim neutral fill so the shipped version 1 and 2 team files load against
-/// the version 4 catalogue; the team-file conversion replaces it with values drawn from
-/// related attributes before this ships.
-pub fn fill_v4_added(player: &mut PlayerEntry) {
-    for name in V4_ADDED {
-        player
-            .attributes
-            .entry(name.to_string())
-            .or_insert(Rating::from_tenths(100));
+/// The new performance attributes of a version 3 team file and the attributes each is
+/// converted from: the mean of their ratings, rounded to a tenth. Never edited.
+pub const V3_RELATED: [(&str, &[&str]); 10] = [
+    ("marking", &["tackling", "positioning", "concentration"]),
+    ("off_ball_movement", &["anticipation", "decisions"]),
+    ("corners", &["crossing", "technique"]),
+    ("free_kicks", &["crossing", "technique", "finishing"]),
+    ("penalties", &["finishing", "composure", "technique"]),
+    ("long_throws", &["strength", "technique"]),
+    ("flair", &["dribbling", "technique", "vision"]),
+    ("determination", &["work_rate", "composure"]),
+    ("bravery", &["aggression", "heading", "strength"]),
+    ("eccentricity", &["rushing_out", "aggression"]),
+];
+
+/// The mental group before version 4; a converted outfield player's communication is their
+/// mean. Never edited.
+pub const MENTAL_V3: [&str; 9] = [
+    "positioning",
+    "vision",
+    "decisions",
+    "composure",
+    "anticipation",
+    "work_rate",
+    "aggression",
+    "concentration",
+    "teamwork",
+];
+
+/// The communication attribute, which moved from the goalkeeping group to the mental group.
+pub const COMMUNICATION: &str = "communication";
+
+/// The weaker foot of a converted player, in percent of the strong one.
+pub const CONVERTED_WEAKER_FOOT: u8 = 50;
+
+/// The mean of the ratings of `names` that `attributes` holds, rounded to a tenth (half up)
+/// and kept to 1.0 to 20.0; `None` when it holds none of them.
+fn mean_of(attributes: &BTreeMap<String, Rating>, names: &[&str]) -> Option<Rating> {
+    let values: Vec<u32> = names
+        .iter()
+        .filter_map(|n| attributes.get(*n))
+        .map(|r| u32::from(r.tenths()))
+        .collect();
+    if values.is_empty() {
+        return None;
     }
+    let n = values.len() as u32;
+    let mean = (values.iter().sum::<u32>() + n / 2) / n;
+    // The clamp keeps the mean inside 10..=200, so it fits a u8.
+    let tenths = mean.clamp(u32::from(MIN_TENTHS), u32::from(MAX_TENTHS)) as u8;
+    Some(Rating::from_tenths(tenths))
+}
+
+/// The strong side of a converted player, fixed by his id: left when the first byte of the
+/// SHA-256 of the id is divisible by 4 (about one in four), else right.
+pub fn strong_side_of(id: &str) -> Side {
+    if Sha256::digest(id.as_bytes())[0] % 4 == 0 {
+        Side::Left
+    } else {
+        Side::Right
+    }
+}
+
+/// The position ratings of a player whose file gives none: his listed position at his level
+/// (the overall level of his ratings there), every other position 1.0.
+pub fn listed_positions_only(
+    entry: &PlayerEntry,
+    schema: &AttributeSchema,
+) -> BTreeMap<Position, Rating> {
+    let level = overall_level(
+        &Attributes::from_entry(&entry.attributes, schema),
+        schema,
+        entry.position,
+    )
+    .clamp(MIN_TENTHS, MAX_TENTHS);
+    Position::ALL
+        .into_iter()
+        .map(|code| {
+            let tenths = if code == entry.position {
+                level
+            } else {
+                MIN_TENTHS
+            };
+            (code, Rating::from_tenths(tenths))
+        })
+        .collect()
+}
+
+/// The feet of a player whose file gives none: the strong side from his id
+/// ([`strong_side_of`]) and a weaker foot of 50 percent.
+pub fn converted_foot(id: &str) -> Foot {
+    Foot {
+        strong: strong_side_of(id),
+        weaker: CONVERTED_WEAKER_FOOT,
+    }
+}
+
+/// A version 2 team file (or a version 1 file converted to version 2) in the version 3 shape.
+/// For each player, in this order, filling only what is missing: each new performance
+/// attribute from its related ones ([`V3_RELATED`]); an outfield player's communication from
+/// the old mental group ([`MENTAL_V3`]), replacing his old value, while a keeper keeps his;
+/// each personality value 10.0; his listed position at his level and every other at 1.0; a
+/// weaker foot of 50 percent on the side his id fixes; no traits. The caller checks the result
+/// as a current file.
+pub fn team_v2_to_v3(mut file: TeamFile, schema: &AttributeSchema) -> TeamFile {
+    file.schema_version = TEAM_VERSION;
+    for p in &mut file.players {
+        for (name, from) in V3_RELATED {
+            if !p.attributes.contains_key(name)
+                && let Some(value) = mean_of(&p.attributes, from)
+            {
+                p.attributes.insert(name.to_string(), value);
+            }
+        }
+        if p.position != Position::GK
+            && let Some(value) = mean_of(&p.attributes, &MENTAL_V3)
+        {
+            p.attributes.insert(COMMUNICATION.to_string(), value);
+        }
+        for def in schema.attributes.iter().filter(|d| d.is_personality()) {
+            p.attributes
+                .entry(def.name.clone())
+                .or_insert(Rating::from_tenths(100));
+        }
+        if p.positions.is_none() {
+            p.positions = Some(listed_positions_only(p, schema));
+        }
+        if p.foot.is_none() {
+            p.foot = Some(converted_foot(&p.id));
+        }
+    }
+    file
 }
 
 /// The version 1 squad check, with its messages as version 1 gave them, against the names the
@@ -528,45 +660,44 @@ fn check_squad_v1(players: &[PlayerEntryV1], schema: &AttributeSchema) -> garde:
 /// A checked version 1 team file in the current shape: every value `v` becomes `2v`
 /// tenths, at least 1.0, so 1 to 4 become 1.0; injury resistance R becomes injury proneness
 /// 21.0 − R, which keeps the order of players and stays inside 1.0 to 20.0; every player gets
-/// consistency 10.0 and, for now, 10.0 for each version 4 attribute ([`fill_v4_added`]); no
-/// player has body fields.
+/// consistency 10.0; no player has body fields. The caller converts the result on to version 3
+/// ([`team_v2_to_v3`]).
 pub fn team_v1_to_v2(file: TeamFileV1) -> TeamFile {
     TeamFile {
-        schema_version: TEAM_VERSION,
+        schema_version: TEAM_V2,
         club: file.club,
         players: file
             .players
             .into_iter()
-            .map(|p| {
-                let mut entry = PlayerEntry {
-                    id: p.id,
-                    name: p.name,
-                    shirt: p.shirt,
-                    position: p.position,
-                    attributes: p
-                        .attributes
-                        .into_iter()
-                        .map(|(name, v)| {
-                            let t = (2 * v).max(crate::rating::MIN_TENTHS);
-                            if name == RESISTANCE {
-                                // 10..=200 mirrors onto 10..=200.
-                                (PRONENESS.to_string(), Rating::from_tenths(210 - t))
-                            } else {
-                                (name, Rating::from_tenths(t))
-                            }
-                        })
-                        .chain(std::iter::once((
-                            CONSISTENCY.to_string(),
-                            Rating::from_tenths(100),
-                        )))
-                        .collect(),
-                    height: None,
-                    age: None,
-                    nationality: None,
-                    condition: None,
-                };
-                fill_v4_added(&mut entry);
-                entry
+            .map(|p| PlayerEntry {
+                id: p.id,
+                name: p.name,
+                shirt: p.shirt,
+                position: p.position,
+                attributes: p
+                    .attributes
+                    .into_iter()
+                    .map(|(name, v)| {
+                        let t = (2 * v).max(crate::rating::MIN_TENTHS);
+                        if name == RESISTANCE {
+                            // 10..=200 mirrors onto 10..=200.
+                            (PRONENESS.to_string(), Rating::from_tenths(210 - t))
+                        } else {
+                            (name, Rating::from_tenths(t))
+                        }
+                    })
+                    .chain(std::iter::once((
+                        CONSISTENCY.to_string(),
+                        Rating::from_tenths(100),
+                    )))
+                    .collect(),
+                positions: None,
+                foot: None,
+                traits: BTreeMap::new(),
+                height: None,
+                age: None,
+                nationality: None,
+                condition: None,
             })
             .collect(),
     }

@@ -578,7 +578,7 @@ impl Simulation {
         // the bench keeper.
         self.ai[team].due = true;
         self.timeline.push((self.tick + 1, self.teams.clone()));
-        if let Some(short) = self.config.modules.clock.abandoned(&self.view()) {
+        if let Some(short) = self.short_team() {
             tracing::warn!(
                 signal = "rules.abandoned",
                 tick = self.tick + 1,
@@ -589,6 +589,15 @@ impl Simulation {
             self.referee.abandoned = true;
             self.enter_phase(Phase::FullTime, Cause::Abandoned);
         }
+    }
+
+    /// The team below the rule pack's minimum, unless the match is already over: a player
+    /// hurt or sent off once full time is reached does not end the match a second time.
+    fn short_team(&self) -> Option<usize> {
+        if self.referee.phase == Phase::FullTime {
+            return None;
+        }
+        self.config.modules.clock.abandoned(&self.view())
     }
 
     /// Records a match abandoned because `short` fell below the rule pack's minimum.
@@ -686,7 +695,7 @@ impl Simulation {
             }
             Phase::FullTime => {}
         }
-        if let Some(short) = self.config.modules.clock.abandoned(&self.view()) {
+        if let Some(short) = self.short_team() {
             tracing::warn!(
                 signal = "rules.abandoned",
                 tick = self.tick + 1,

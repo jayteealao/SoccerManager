@@ -9,18 +9,57 @@
 //! A player may also carry a `condition` block: his match sharpness, his adaptation to the
 //! country, the days of rest before the match, and the matches he has played for the club.
 //! These are per-match inputs; a file without the block re-serializes, and hashes, as before.
+//!
+//! Version 3 adds the player as a person: a rating 1.0 to 20.0 for each of the ten positions
+//! (`positions`; the listed position is his natural one and no other is above it), his strong
+//! foot and his weaker foot as a whole percent of the strong one (`foot`), and his traits of
+//! play (`traits`, name to strength, never two opposites). His eleven personality values sit in
+//! `attributes` beside the hidden ones. A version 1 or 2 file converts on load with values from
+//! related attributes.
 
 use std::collections::BTreeMap;
+use std::ops::RangeInclusive;
 
 use garde::Validate;
 use serde::{Deserialize, Serialize};
 
 use crate::data::attributes::AttributeSchema;
+use crate::data::traits::{TraitCatalogue, TraitStrength};
 use crate::pitch::Pitch;
 use crate::rating::{MAX_TENTHS, MIN_TENTHS, Rating};
 
-/// Schema version this build reads and writes. Version 1 files convert on load.
-pub const TEAM_VERSION: u32 = 2;
+/// Schema version this build reads and writes. Version 1 and 2 files convert on load.
+pub const TEAM_VERSION: u32 = 3;
+
+/// The weaker foot, as a whole percent of the strong one, that a version 3 file may give.
+pub const WEAKER_FOOT_PERCENT: RangeInclusive<u8> = 1..=100;
+
+/// The side of a player's strong foot, written `left` or `right`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Side {
+    Left,
+    Right,
+}
+
+impl Side {
+    /// The side as a data file and the wire write it.
+    pub fn code(self) -> &'static str {
+        match self {
+            Side::Left => "left",
+            Side::Right => "right",
+        }
+    }
+}
+
+/// A player's feet: the strong side (always 100) and the weaker foot as a whole percent of
+/// the strong one, 1 to 100.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Foot {
+    pub strong: Side,
+    pub weaker: u8,
+}
 
 /// Height in whole centimetres a version 2 file may give.
 pub const HEIGHT_CM: std::ops::RangeInclusive<u8> = 150..=215;
@@ -154,6 +193,21 @@ pub struct PlayerEntry {
     /// Attribute name to rating; the squad check compares it with the schema.
     #[garde(skip)]
     pub attributes: BTreeMap<String, Rating>,
+    /// His rating at each of the ten positions, 1.0 to 20.0; the listed position is the
+    /// highest. Required in a version 3 file; a converted player has his listed position at
+    /// his level and every other at 1.0.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(skip)]
+    pub positions: Option<BTreeMap<Position, Rating>>,
+    /// His strong foot and his weaker foot's percent. Required in a version 3 file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(skip)]
+    pub foot: Option<Foot>,
+    /// His traits of play, by name in the trait catalogue, each at a strength. Absent when he
+    /// has none.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[garde(skip)]
+    pub traits: BTreeMap<String, TraitStrength>,
     /// Height in whole centimetres, 150 to 215. Required in a version 2 file; a player
     /// converted from version 1 has none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -268,12 +322,76 @@ fn check_squad(players: &[PlayerEntry], schema: &AttributeSchema) -> garde::Resu
         }
         check_body(p)?;
         check_condition(p)?;
+        check_person(p)?;
         for name in p.attributes.keys() {
             if schema.index(name).is_none() {
                 return Err(garde::Error::new(format!(
                     "player {}: attribute {name} is not in the schema",
                     p.id
                 )));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Refuses a missing or out-of-range position rating, one above his natural (listed)
+/// position, or a missing or out-of-range foot, naming the player, the field, and the rule.
+fn check_person(p: &PlayerEntry) -> garde::Result {
+    let refuse = |reason: String| Err(garde::Error::new(format!("player {}: {reason}", p.id)));
+    let Some(positions) = &p.positions else {
+        return refuse("positions is missing".into());
+    };
+    for code in Position::ALL {
+        match positions.get(&code) {
+            None => return refuse(format!("position rating {} is missing", code.code())),
+            Some(v) if !(MIN_TENTHS..=MAX_TENTHS).contains(&v.tenths()) => {
+                return refuse(format!(
+                    "position rating {} is {v}; allowed 1.0 to 20.0",
+                    code.code()
+                ));
+            }
+            Some(_) => {}
+        }
+    }
+    let natural = positions[&p.position];
+    if let Some((code, v)) = positions.iter().find(|(_, v)| **v > natural) {
+        return refuse(format!(
+            "position rating {} is {v}, above his natural position {} at {natural}",
+            code.code(),
+            p.position.code()
+        ));
+    }
+    match p.foot {
+        None => refuse("foot is missing".into()),
+        Some(f) if !WEAKER_FOOT_PERCENT.contains(&f.weaker) => refuse(format!(
+            "foot field weaker is {}; allowed 1 to 100",
+            f.weaker
+        )),
+        Some(_) => Ok(()),
+    }
+}
+
+/// Refuses a trait the catalogue does not hold, or two opposite traits on one player, naming
+/// the player, the traits, and the rule.
+pub fn check_traits(file: &TeamFile, catalogue: &TraitCatalogue) -> Result<(), String> {
+    for p in &file.players {
+        for name in p.traits.keys() {
+            if catalogue.get(name).is_none() {
+                return Err(format!(
+                    "player {}: trait {name} is not in the trait catalogue",
+                    p.id
+                ));
+            }
+        }
+        for name in p.traits.keys() {
+            if let Some(opposite) = catalogue.opposite(name)
+                && p.traits.contains_key(opposite)
+            {
+                return Err(format!(
+                    "player {}: traits {name} and {opposite} are opposites",
+                    p.id
+                ));
             }
         }
     }

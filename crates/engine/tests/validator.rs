@@ -55,7 +55,7 @@ fn engine_events(config: engine::MatchConfig) -> (Vec<engine::EngineEvent>, Stre
 }
 
 /// The event-stream rules hold for the full engine before they judge anything else: seeds 1
-/// to 5 over 90 minutes; seeds 9, 11, 21 and 24, which bring injuries, a substitution the rule
+/// to 5 over 90 minutes; seeds 9, 11, 21 and 59, which bring injuries, a substitution the rule
 /// pack refuses and a straight red; a 10-minute match, which adds no time; a knockout match
 /// (seed 8) played through extra time and a shoot-out; and seed 26 between two generated
 /// top-flight clubs (league seed 1), which brings a second yellow.
@@ -64,7 +64,7 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
     use engine::EngineEventKind::{Card, ChangeRejected, HalfTime, Injury, Substitution};
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    let seeds = [1, 2, 3, 4, 5, 9, 11, 21, 24];
+    let seeds = [1, 2, 3, 4, 5, 9, 11, 21, 59];
     let mut streams: Vec<(String, (Vec<engine::EngineEvent>, StreamRules))> =
         common::run_many(0..=seeds.len() as u64 - 1, |i| {
             let seed = seeds[i as usize];
