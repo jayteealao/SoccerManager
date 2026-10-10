@@ -5,7 +5,8 @@
 //!
 //! - A job is URGENT (may sprint), NORMAL (jog or run) or CALM (stand or walk).
 //! - Raised tempo or pressing, or trailing late, lifts pressing and support jobs one step;
-//!   leading late with time wasting drops NORMAL jobs one step. An URGENT job never drops.
+//!   leading late with time wasting drops NORMAL jobs one step while the ball is dead or the
+//!   team has it. An URGENT job never drops.
 //! - The levels are stand, walk, jog, run, high speed and sprint; each level's speed is its
 //!   upper limit, and a sprint is the player's own top speed.
 //! - Work rate sets how often an URGENT job gets a sprint (one draw when the job starts), never
@@ -188,7 +189,8 @@ pub struct TeamPace {
     pub lift: bool,
     /// Trailing in the late minutes.
     pub trailing_late: bool,
-    /// Leading in the late minutes with time wasting on.
+    /// Leading in the late minutes with time wasting on, while the ball is dead or the team
+    /// has it. Out of possession the team keeps its grades.
     pub wasting_late: bool,
 }
 

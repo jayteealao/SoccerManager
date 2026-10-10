@@ -307,3 +307,65 @@ fn losing_the_ball_sends_the_nearest_presser_at_a_sprint_and_the_others_jog_back
     }
     assert!(presser_sprinted, "the nearest presser sprinted");
 }
+
+/// AC-14 with the person's narrowing: a team leading late with time wasting drops its NORMAL
+/// jobs one step while it has the ball, and keeps every grade while the opponent has it. The
+/// late window covers the whole match here, so a scene a minute in counts as late.
+#[test]
+fn a_leading_team_wastes_time_with_the_ball_and_keeps_its_grades_without_it() {
+    let mut config = shipped_config(7, 90).unwrap();
+    config.tuning.pace.late_minutes = 90;
+    let mut sim = Simulation::new(config).unwrap();
+    sim.tick = 3_000;
+    sim.summary.goals = [1, 0];
+    sim.teams[0].plan.time_wasting = 2.0;
+    let normal_home = |sim: &Simulation| -> Vec<(Job, Grade)> {
+        sim.players[..PLAYERS_PER_TEAM]
+            .iter()
+            .filter(|p| p.active() && base_grade(p.pace.job) == Grade::Normal)
+            .map(|p| (p.pace.job, p.pace.grade))
+            .collect()
+    };
+
+    // The home team has the ball: its NORMAL jobs walk.
+    hold(&mut sim, 6, DVec2::new(-10.0, 0.0));
+    settle(&mut sim);
+    sim.players[2].pos += DVec2::new(0.0, 12.0);
+    decide_and_pace(&mut sim);
+    let with_ball = normal_home(&sim);
+    assert!(!with_ball.is_empty(), "a home player has a NORMAL job");
+    for (job, grade) in &with_ball {
+        assert_eq!(*grade, Grade::Calm, "{job:?} with the ball");
+    }
+
+    // The away team has the ball: the home team keeps its grades, presses stay URGENT.
+    let winner = PLAYERS_PER_TEAM + 6;
+    hold(&mut sim, winner, DVec2::new(-10.0, 0.0));
+    sim.players[2].pos += DVec2::new(0.0, 12.0);
+    decide_and_pace(&mut sim);
+    let without_ball = normal_home(&sim);
+    assert!(!without_ball.is_empty(), "a home player has a NORMAL job");
+    for (job, grade) in &without_ball {
+        assert_eq!(*grade, Grade::Normal, "{job:?} without the ball");
+    }
+    for p in sim.players[..PLAYERS_PER_TEAM]
+        .iter()
+        .filter(|p| p.active())
+    {
+        if matches!(p.pace.job, Job::Press | Job::Recover) {
+            assert_eq!(p.pace.grade, Grade::Urgent, "{p:?}");
+        }
+    }
+
+    // Control: the same scene with time wasting off grades the home team as usual.
+    sim.teams[0].plan.time_wasting = 1.0;
+    hold(&mut sim, 6, DVec2::new(-10.0, 0.0));
+    decide_and_pace(&mut sim);
+    for (job, grade) in normal_home(&sim) {
+        assert_eq!(
+            grade,
+            Grade::Normal,
+            "{job:?} with the ball, no time wasting"
+        );
+    }
+}
