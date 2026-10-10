@@ -152,6 +152,19 @@ impl Blend {
     /// stage as the offset on its ratings did; a higher degree widens the swing, a lower one
     /// narrows it, and degree 0 leaves the stage still.
     pub fn values_with_form(&self, a: &Attributes, c: &ContractTuning, form: i8) -> StageValues {
+        self.values_floored(a, c, form, None)
+    }
+
+    /// [`Blend::values_with_form`] with the shared floor: given `(base, drop)`, each stage's
+    /// value after the form factor is kept at or above its base value less `drop` rating
+    /// points ([`super::states::floored`]), before its share is taken.
+    pub fn values_floored(
+        &self,
+        a: &Attributes,
+        c: &ContractTuning,
+        form: i8,
+        floor: Option<(&StageValues, f64)>,
+    ) -> StageValues {
         let o = f64::from(form) / 10.0;
         let mut on_curve = [f64::NAN; crate::data::attributes::MAX_ATTRIBUTES];
         let mut out = StageValues::flat(0.0, 0.5);
@@ -166,6 +179,9 @@ impl Blend {
             let mut v = v / self.totals[i];
             if form != 0 {
                 v *= super::consistency::stage_factor(self.degrees[i], o, c.curve.width);
+            }
+            if let Some((base, drop)) = floor {
+                v = super::states::floored(v, base.f[i], drop, c.curve.width);
             }
             out.f[i] = v;
             out.share[i] = curve::share(c.actions.of(action).k(), v, &c.curve);

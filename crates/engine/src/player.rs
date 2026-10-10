@@ -147,9 +147,24 @@ impl Derived {
         body: Body,
         form: i8,
     ) -> (Self, StageValues) {
+        Self::from_blend_floored(a, blend, schema, t, body, form, None)
+    }
+
+    /// [`Derived::from_blend`] with the shared floor on every stage: given `(base, drop)`, no
+    /// stage reads more than `drop` rating points below his base stage values `base`
+    /// ([`Blend::values_floored`]).
+    pub fn from_blend_floored(
+        a: &Attributes,
+        blend: &Blend,
+        schema: &AttributeSchema,
+        t: &Tuning,
+        body: Body,
+        form: i8,
+        floor: Option<(&StageValues, f64)>,
+    ) -> (Self, StageValues) {
         let c = &t.contract;
         let hooks = c.hooks();
-        let stages = blend.values_with_form(a, c, form);
+        let stages = blend.values_floored(a, c, form, floor);
         let occasion = contract::occasion_skills(a, schema, c);
         let [pace, technique, agility, _] = contract::direct_ratings(a, schema);
         let knob = |action: contract::ActionKind, s: Stage| {
@@ -242,6 +257,9 @@ pub struct Player {
     pub form: i8,
     /// The match part of his form offset, kept for the period redraws.
     pub form_match: i8,
+    /// His mood, from -100 (a full low) to 100 (a full high), 0 at kick-off
+    /// ([`crate::sim::mood`]).
+    pub mood: f64,
     /// Energy from 1.0 (fresh) down to 0.0.
     pub energy: f64,
     pub pos: DVec2,
@@ -317,6 +335,7 @@ pub(crate) mod test_support {
             deltas: [0; GROUP_COUNT],
             form: 0,
             form_match: 0,
+            mood: 0.0,
             energy: 1.0,
             pos: DVec2::ZERO,
             vel: DVec2::ZERO,

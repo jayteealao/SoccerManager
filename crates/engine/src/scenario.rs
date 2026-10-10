@@ -253,12 +253,73 @@ impl Scene {
         );
         entry.derived = derived;
         entry.stages = stages;
+        entry.personality = crate::contract::personality_scales(
+            &entry.attributes,
+            schema,
+            &sim.config.tuning.contract,
+        );
         sim.players[i].attributes = entry.attributes;
         let (deltas, form) = (sim.players[i].deltas, sim.players[i].form);
         // Writes the squad entry's values when he is at his base, else blends them again.
         sim.set_state(i, deltas, form);
         sim.teams[team].relayout();
         self
+    }
+
+    /// Sets player `i`'s mood (−100 to 100) and the effective values that follow from it.
+    pub fn mood(mut self, i: usize, mood: f64) -> Self {
+        self.sim.players[i].mood = mood.clamp(-crate::sim::mood::FULL, crate::sim::mood::FULL);
+        self.sim.refresh_effective();
+        self
+    }
+
+    /// Sets player `i`'s form offset, in tenths of a rating point, as its match part, and
+    /// rebuilds him.
+    pub fn form(mut self, i: usize, tenths: i8) -> Self {
+        let deltas = self.sim.players[i].deltas;
+        self.sim.players[i].form_match = tenths;
+        self.sim.set_state(i, deltas, tenths);
+        self
+    }
+
+    /// Sets player `i`'s rating at `position` (1.0 to 20.0, on the tenth grid) in his squad
+    /// entry, and the effective values that follow from it. His natural position is his
+    /// highest rating, so a rating above it makes `position` his natural one.
+    pub fn position_rating(
+        mut self,
+        i: usize,
+        position: crate::data::team::Position,
+        rating: f64,
+    ) -> Self {
+        let (team, squad) = (self.sim.players[i].team, self.sim.players[i].squad);
+        let k = crate::data::team::Position::ALL
+            .iter()
+            .position(|&p| p == position)
+            .expect("every position is listed");
+        let tenths = (rating * 10.0).round().clamp(10.0, 200.0) as u8;
+        self.sim.teams[team].squad[squad].positions[k] = crate::rating::Rating::from_tenths(tenths);
+        self.sim.refresh_effective();
+        self
+    }
+
+    /// Player `i` plays his formation slot's position as his natural one: his rating there is
+    /// raised to his highest.
+    pub fn familiar(mut self, i: usize) -> Self {
+        let played = self.sim.played_position(i);
+        let k = crate::data::team::Position::ALL
+            .iter()
+            .position(|&p| p == played)
+            .expect("every position is listed");
+        let (team, squad) = (self.sim.players[i].team, self.sim.players[i].squad);
+        let positions = &mut self.sim.teams[team].squad[squad].positions;
+        positions[k] = positions.iter().copied().max().unwrap_or_default();
+        self.sim.refresh_effective();
+        self
+    }
+
+    /// The position player `i` plays now: his formation slot's.
+    pub fn played_position(&self, i: usize) -> crate::data::team::Position {
+        self.sim.played_position(i)
     }
 
     /// The injury rolls' next draws, before the seeded stream.

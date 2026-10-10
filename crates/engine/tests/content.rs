@@ -463,8 +463,9 @@ fn a_tuning_file_of_version_9_is_refused_naming_both_versions() {
     );
 }
 
-/// A version 1 slot file (no sharpness or adaptation slot) converts to version 2 with both
-/// slots at their first version, and resolves to the built-in selection.
+/// A version 1 slot file (no sharpness, adaptation or familiarity slot) converts through
+/// version 2 to version 3 with the three slots at their first version, and resolves to the
+/// built-in selection.
 #[test]
 fn a_version_1_slot_file_converts_and_resolves_to_the_built_in_selection() {
     use engine::modules::{REGISTRY, ResolvedModules, SlotFile, resolve};
@@ -474,6 +475,7 @@ fn a_version_1_slot_file_converts_and_resolves_to_the_built_in_selection() {
     let slots = v1["slots"].as_object_mut().unwrap();
     slots.remove("engine.modifier.sharpness").unwrap();
     slots.remove("engine.modifier.adaptation").unwrap();
+    slots.remove("engine.modifier.familiarity").unwrap();
     let loaded = engine::data::load_slots_bytes(&serde_json::to_vec(&v1).unwrap()).unwrap();
     assert_eq!(loaded.converted_from, Some(1));
     assert_eq!(loaded.value, SlotFile::builtin_default());
@@ -489,7 +491,7 @@ fn a_version_1_slot_file_converts_and_resolves_to_the_built_in_selection() {
             err,
             EngineError::Version {
                 found: 9,
-                expected: 2,
+                expected: 3,
                 ..
             }
         ),
@@ -951,4 +953,70 @@ fn the_hooks_ship_read_neutral_when_absent_and_refuse_a_value_out_of_range() {
     wide.tuning = serde_json::to_vec(&tuning).unwrap();
     let err = engine::Content::from_files(&wide).unwrap_err().to_string();
     assert!(err.contains("engine.contract.hooks.flair_gate"), "{err}");
+}
+
+/// A version 2 slot file (no familiarity slot) converts to version 3 with the familiarity
+/// slot at its first version, and equals the built-in selection; the shipped file is it.
+#[test]
+fn a_version_2_slot_file_converts_and_the_shipped_file_is_the_built_in_selection() {
+    use engine::modules::SlotFile;
+    let path = common::content_dir().path(engine::data::SLOTS_FILE);
+    let bytes = std::fs::read(path).unwrap();
+    let shipped = engine::data::load_slots_bytes(&bytes).unwrap();
+    assert_eq!(shipped.converted_from, None);
+    assert_eq!(shipped.value, SlotFile::builtin_default());
+    let mut v2: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    v2["schema_version"] = 2.into();
+    let slots = v2["slots"].as_object_mut().unwrap();
+    slots.remove("engine.modifier.familiarity").unwrap();
+    let loaded = engine::data::load_slots_bytes(&serde_json::to_vec(&v2).unwrap()).unwrap();
+    assert_eq!(loaded.converted_from, Some(2));
+    assert_eq!(loaded.value, SlotFile::builtin_default());
+}
+
+/// The shipped tuning carries the person block; a tuning file without it loads and plays a
+/// ten-minute match exactly as one whose person values are all neutral; and a floor wider than
+/// a delta can hold is refused, naming the field.
+#[test]
+fn the_person_block_ships_reads_neutral_when_absent_and_refuses_a_wide_floor() {
+    use engine::contract::PersonTuning;
+    use engine::data::ContentFiles;
+    let shipped = ContentFiles::read(&common::content_dir()).unwrap();
+    let content = engine::Content::from_files(&shipped).unwrap();
+    assert!(content.tuning.engine.contract.person.is_some());
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    let contract = tuning["engine"]["contract"].as_object_mut().unwrap();
+    assert!(contract.remove("person").is_some());
+    let mut old = shipped.clone();
+    old.tuning = serde_json::to_vec(&tuning).unwrap();
+    let old = engine::Content::from_files(&old).unwrap();
+    assert_eq!(old.tuning.engine.contract.person(), PersonTuning::NEUTRAL);
+    let [a, b] = common::default_teams(&old);
+    let play = |config: engine::MatchConfig| {
+        let mut sim = engine::Simulation::new(config).unwrap();
+        while !sim.is_over() {
+            sim.step();
+        }
+        sim.finish();
+        let moods: Vec<u64> = (0..22).map(|i| sim.mood(i).to_bits()).collect();
+        (sim.take_events(), moods)
+    };
+    let absent = engine::MatchConfig::new(7, 10, &old, [&a, &b]).unwrap();
+    let mut neutral = absent.clone();
+    neutral.tuning.contract.person = Some(PersonTuning::NEUTRAL);
+    let (absent, neutral) = (play(absent), play(neutral));
+    assert_eq!(absent.0, neutral.0, "the events differ");
+    assert_eq!(absent.1, neutral.1);
+    assert!(
+        absent.1.iter().all(|&m| m == 0.0f64.to_bits()),
+        "no mood moves"
+    );
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    tuning["engine"]["contract"]["person"]["floor_drop"] = 13.0.into();
+    let mut wide = shipped.clone();
+    wide.tuning = serde_json::to_vec(&tuning).unwrap();
+    let err = engine::Content::from_files(&wide).unwrap_err().to_string();
+    assert!(err.contains("engine.contract.person.floor_drop"), "{err}");
 }

@@ -1,9 +1,9 @@
-//! The reader table: every new attribute, and agility and communication, names the engine
-//! function that reads it, and a scripted scene shows that changing it on one player from 5.0
-//! to 18.0 moves the decision or the outcome that function sets, by at least the row's least
-//! move. The three personality values inert in a match change nothing at all. A value with
-//! neither a row nor a place in the pending list fails the table, and so does a pending value
-//! that gains a row.
+//! The reader table: every new attribute and personality value, and agility and
+//! communication, names the engine function that reads it, and a scripted scene shows that
+//! changing it on one player from 5.0 to 18.0 moves the decision or the outcome that function
+//! sets, by at least the row's least move. The three personality values inert in a match
+//! change nothing at all. A value with neither a row nor a place in the pending list fails the
+//! table, and so does a pending value that gains a row.
 //!
 //! A row reads one quantity of its hook for the player at a rating: a distance, an angle, a
 //! chance, a score or a range. Each scene is deterministic: it reads the decision maker's
@@ -44,22 +44,11 @@ struct Row {
     scene: fn(f64) -> f64,
 }
 
-/// The values whose occasions the mood model, the familiarity input and the season goal read;
-/// no match reader exists for them yet.
+/// The values whose occasion the season goal reads; no match reader exists for them yet.
 ///
-/// sdlc-debt: the mood model, the familiarity input and the season goal give these values
-/// their readers and delete this list; the test fails when a listed value gains a row, so the
-/// list can only shrink.
-const AWAITS_READER: [&str; 8] = [
-    "professionalism",
-    "temperament",
-    "pressure_handling",
-    "sportsmanship",
-    "leadership",
-    "adaptability",
-    "versatility",
-    "ambition",
-];
+/// sdlc-debt: the season goal gives ambition its reader and deletes this list; the test fails
+/// when a listed value gains a row, so the list can only shrink.
+const AWAITS_READER: [&str; 1] = ["ambition"];
 
 /// The personality values inert in a match.
 const INERT: [&str; 3] = ["loyalty", "money_motivation", "controversy"];
@@ -436,6 +425,93 @@ fn agility(v: f64) -> f64 {
     (players[me].pos - start).length()
 }
 
+// --- The personality occasions.
+
+/// The home side has the ball; away defender 5, rated `v` in professionalism, at minute 10:
+/// his chance of a concentration lapse this minute.
+fn professionalism(v: f64) -> f64 {
+    let me = index(1, 5);
+    let carrier = index(0, 6);
+    let sim = far()
+        .carrier(Some(carrier))
+        .rating(me, "professionalism", v)
+        .tick(10 * engine::rules::clock::TICKS_PER_MINUTE)
+        .build();
+    engine::decision::lapse_chance(&sim.view(), me)
+}
+
+/// Home player 5, rated `v` in temperament: how far a mood event moves him (his swing).
+fn temperament(v: f64) -> f64 {
+    let me = index(0, 5);
+    let sim = far().rating(me, "temperament", v).build();
+    let m = sim.tuning().contract.person().mood;
+    engine::sim::mood::swing(&sim.personality(me), &m)
+}
+
+fn pressure_penalty(v: f64) -> f64 {
+    let spot = engine::pitch::Pitch::DEFAULT.penalty_spot(1.0);
+    strike("pressure_handling", v, ShotKind::Penalty, spot)
+}
+
+/// Away player 5, rated `v` in sportsmanship, tackles the home striker running at 5 m/s: the
+/// chance the tackle is a foul.
+fn sportsmanship(v: f64) -> f64 {
+    let tackler = index(1, 5);
+    let carrier = index(0, 9);
+    let at = DVec2::new(10.0, 2.0);
+    let sim = far()
+        .place(carrier, at)
+        .velocity(carrier, DVec2::new(5.0, 0.0))
+        .ball(DVec3::new(at.x, at.y, 0.0))
+        .carrier(Some(carrier))
+        .place(tackler, DVec2::new(11.0, 2.0))
+        .rating(tackler, "sportsmanship", v)
+        .build();
+    let fouls = sim.config().modules.fouls;
+    fouls.tackle_chances(&sim.view(), tackler, carrier).p_foul
+}
+
+/// Home player 5, rated `v` in leadership, at a full mood, his team-mates at 0: his side's
+/// mood.
+fn leadership(v: f64) -> f64 {
+    let me = index(0, 5);
+    let sim = far()
+        .rating(me, "leadership", v)
+        .mood(me, engine::sim::mood::FULL)
+        .build();
+    sim.team_mood(0)
+}
+
+/// Home player 5, natural 16, plays a position he is rated 8 in, rated `v` in `attribute`:
+/// the familiarity modifier's drop on his technical group, in rating points (a size).
+fn familiarity(attribute: &str, v: f64) -> f64 {
+    use engine::data::team::Position;
+    use engine::modules::modifier::Modifier;
+    let me = index(0, 5);
+    let scene = far();
+    let played = scene.played_position(me);
+    let natural = if played == Position::ST {
+        Position::CB
+    } else {
+        Position::ST
+    };
+    let sim = scene
+        .position_rating(me, natural, 16.0)
+        .position_rating(me, played, 8.0)
+        .rating(me, attribute, v)
+        .build();
+    let effect = engine::modules::modifier::familiarity::FamiliarityV1.effect(&sim.view(), me);
+    -effect.groups[0]
+}
+
+fn adaptability(v: f64) -> f64 {
+    familiarity("adaptability", v)
+}
+
+fn versatility(v: f64) -> f64 {
+    familiarity("versatility", v)
+}
+
 fn rows() -> Vec<Row> {
     vec![
         Row {
@@ -615,6 +691,69 @@ fn rows() -> Vec<Row> {
                 "braking follows the turn factor, whose spread every body knob shares (0.2)",
             ),
             scene: agility,
+        },
+        Row {
+            field: "professionalism",
+            reader: "decision::lapse_chance",
+            quantity: "a defender's chance of a concentration lapse in a minute",
+            dir: Dir::Down,
+            least: 0.10,
+            reason: None,
+            scene: professionalism,
+        },
+        Row {
+            field: "temperament",
+            reader: "sim::mood::swing",
+            quantity: "how far a mood event moves him",
+            dir: Dir::Down,
+            least: 0.10,
+            reason: None,
+            scene: temperament,
+        },
+        Row {
+            field: "pressure_handling",
+            reader: "decision::DecisionV1::shot_kick",
+            quantity: "turn of a penalty at the widest spread draw",
+            dir: Dir::Down,
+            least: 0.10,
+            reason: None,
+            scene: pressure_penalty,
+        },
+        Row {
+            field: "sportsmanship",
+            reader: "rules::fouls::foul_occasion",
+            quantity: "chance a tackle on a running carrier is a foul",
+            dir: Dir::Down,
+            least: 0.10,
+            reason: None,
+            scene: sportsmanship,
+        },
+        Row {
+            field: "leadership",
+            reader: "sim::mood::pull",
+            quantity: "his side's mood with him alone at a full mood",
+            dir: Dir::Up,
+            least: 0.10,
+            reason: None,
+            scene: leadership,
+        },
+        Row {
+            field: "adaptability",
+            reader: "modules::modifier::familiarity::FamiliarityV1",
+            quantity: "technical drop away from his natural position",
+            dir: Dir::Down,
+            least: 0.10,
+            reason: None,
+            scene: adaptability,
+        },
+        Row {
+            field: "versatility",
+            reader: "modules::modifier::familiarity::FamiliarityV1",
+            quantity: "technical drop away from his natural position",
+            dir: Dir::Down,
+            least: 0.10,
+            reason: None,
+            scene: versatility,
         },
     ]
 }

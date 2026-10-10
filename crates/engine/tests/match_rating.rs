@@ -119,11 +119,28 @@ fn a_match_resumed_at_minute_sixty_rates_its_players_as_the_unbroken_match() {
     assert_eq!(resumed.match_ratings(), whole.match_ratings());
 }
 
+/// `file` with every player rated at every position as at his listed one. The shipped teams
+/// rate each player at his listed position only, and the computer manager fills a full-back's
+/// or a winger's slot from either side, so some starters play away from their natural position
+/// at a cost (familiarity). Rated everywhere, the strength compared is the attributes alone.
+fn at_home_anywhere(file: &engine::data::TeamFile) -> engine::data::TeamFile {
+    let mut out = file.clone();
+    for p in &mut out.players {
+        if let Some(positions) = p.positions.as_mut()
+            && let Some(top) = positions.values().max().copied()
+        {
+            positions.values_mut().for_each(|r| *r = top);
+        }
+    }
+    out
+}
+
 #[test]
 fn a_stronger_side_is_rated_higher() {
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    let strong = common::stronger(&a);
+    let strong = at_home_anywhere(&common::stronger(&a));
+    let b = at_home_anywhere(&b);
     let means = common::run_many(1..=20, |seed| {
         let mut sim =
             Simulation::new(MatchConfig::new(seed, 90, &content, [&strong, &b]).unwrap()).unwrap();

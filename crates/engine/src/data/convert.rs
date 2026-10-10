@@ -424,6 +424,34 @@ pub fn slots_v1_to_v2(mut file: serde_json::Value) -> Result<serde_json::Value, 
     let obj = file
         .as_object_mut()
         .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert("schema_version".into(), serde_json::Value::from(SLOTS_V2));
+    let slots = obj
+        .get_mut("slots")
+        .and_then(|s| s.as_object_mut())
+        .ok_or_else(|| "slots is missing".to_string())?;
+    for (slot, module, version) in SLOTS_V2_ADDED {
+        slots.insert(
+            slot.into(),
+            serde_json::json!({ "module": module, "version": version }),
+        );
+    }
+    Ok(file)
+}
+
+/// The slot file version before the familiarity slot.
+pub const SLOTS_V2: u32 = 2;
+
+/// The slots a version 3 slot file declares that version 2 did not, with the module and
+/// version each takes when a version 2 file converts.
+pub const SLOTS_V3_ADDED: [(&str, &str, u32); 1] =
+    [("engine.modifier.familiarity", "familiarity", 1)];
+
+/// A version 2 slot file, as JSON, in the version 3 shape: the familiarity modifier slot
+/// takes its first version. The caller parses and resolves the result.
+pub fn slots_v2_to_v3(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
     obj.insert(
         "schema_version".into(),
         serde_json::Value::from(crate::modules::SLOTS_VERSION),
@@ -432,7 +460,7 @@ pub fn slots_v1_to_v2(mut file: serde_json::Value) -> Result<serde_json::Value, 
         .get_mut("slots")
         .and_then(|s| s.as_object_mut())
         .ok_or_else(|| "slots is missing".to_string())?;
-    for (slot, module, version) in SLOTS_V2_ADDED {
+    for (slot, module, version) in SLOTS_V3_ADDED {
         slots.insert(
             slot.into(),
             serde_json::json!({ "module": module, "version": version }),

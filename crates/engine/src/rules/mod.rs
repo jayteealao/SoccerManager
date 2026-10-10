@@ -272,6 +272,7 @@ impl Simulation {
     pub(crate) fn place_kick_off(&mut self, team: usize) {
         self.restart = true;
         self.last_kicker = None;
+        self.last_pass = None;
         self.pass_in_flight = None;
         self.restart_taker = None;
         self.clearers_tried = 0;
@@ -315,11 +316,22 @@ impl Simulation {
     /// place.
     pub(crate) fn goal(&mut self, team: usize) {
         self.summary.goals[team] += 1;
+        // A shot that went in is no miss.
+        self.shooter = None;
         if let Some(k) = self.last_kicker
             && self.players[k].team == team
         {
             self.tally(k, crate::sim::tally::Count::Goal);
+            self.mood_event(k, crate::sim::mood::MoodEvent::Goal);
+            if let Some((passer, receiver)) = self.last_pass
+                && receiver == k
+                && passer != k
+            {
+                self.mood_event(passer, crate::sim::mood::MoodEvent::Assist);
+            }
         }
+        self.team_mood_event(team, crate::sim::mood::MoodEvent::TeamGoalFor);
+        self.team_mood_event(1 - team, crate::sim::mood::MoodEvent::TeamGoalAgainst);
         self.tally_conceded(1 - team);
         #[cfg(feature = "sensitivity")]
         if self.shot_in_flight == Some(team)
@@ -425,6 +437,7 @@ impl Simulation {
         let fouled_team = self.players[c].team;
         self.summary.fouls[offender.team] += 1;
         self.tally(i, crate::sim::tally::Count::Foul);
+        self.mood_event(c, crate::sim::mood::MoodEvent::Fouled);
         // The offender makes no tackle attempt until the cooldown has passed, advantage or not.
         self.players[i].foul_ready = self.tick.saturating_add(t.foul_cooldown_ticks);
         let own_end = -self.teams[offender.team].attack_x;
@@ -547,6 +560,14 @@ impl Simulation {
         let team = self.players[i].team;
         discipline::book(&mut self.players[i], card);
         let sent_off = judge.sends_off(card);
+        self.mood_event(
+            i,
+            if sent_off {
+                crate::sim::mood::MoodEvent::RedCard
+            } else {
+                crate::sim::mood::MoodEvent::Card
+            },
+        );
         if card != Card::Red {
             self.summary.yellow[team] += 1;
             self.tally(i, crate::sim::tally::Count::Yellow);
@@ -736,6 +757,7 @@ impl Simulation {
         self.keeper_beaten = false;
         self.restart = true;
         self.last_kicker = None;
+        self.last_pass = None;
         self.pass_in_flight = None;
         self.restart_taker = None;
         self.clearers_tried = 0;
@@ -1157,6 +1179,7 @@ impl Simulation {
         self.keeper_beaten = false;
         self.restart = true;
         self.last_kicker = None;
+        self.last_pass = None;
         self.pass_in_flight = None;
         self.restart_taker = None;
         self.clearers_tried = 0;

@@ -203,6 +203,51 @@ pub fn effective(
     out
 }
 
+/// The shared floor: the curve value `f` of a stage whose base value is `base_f`, kept at or
+/// above `base_f · e^(−drop / width)`. Since `F(r − d) = F(r) · e^(−d / width)`, no
+/// combination of states and form takes the stage more than `drop` rating points below its
+/// base: with a drop of 7, an 18 never plays below 11.
+#[inline]
+pub fn floored(f: f64, base_f: f64, drop: f64, width: f64) -> f64 {
+    f.max(base_f * crate::math::exp(-drop / width))
+}
+
+/// The rating points left between the curve value `f` of a stage and its floor
+/// ([`floored`]): `drop` at the base, 0 at the floor, more than `drop` above the base. A
+/// further cost (the weaker foot) shrinks to it so the floor holds.
+#[inline]
+pub fn headroom(f: f64, base_f: f64, drop: f64, width: f64) -> f64 {
+    (drop - width * crate::math::ln(base_f / f)).max(0.0)
+}
+
+/// The familiarity drop, in rating points (0 or below), of a player with a rating at each
+/// position `positions` (in [`Position::ALL`] order) who plays `played`: the gap between his
+/// natural rating (his highest) and his rating at `played`, times `cost_per_point`, narrowed
+/// by his versatility and adaptability. 0 at his natural position. The family cap applies
+/// after.
+///
+/// [`Position::ALL`]: crate::data::team::Position::ALL
+pub fn familiarity_drop(
+    positions: &[Rating; 10],
+    played: crate::data::team::Position,
+    p: &super::PersonalityScales,
+    t: &super::params::FamiliarityTuning,
+) -> f64 {
+    let natural = positions.iter().map(|r| r.tenths()).max().unwrap_or(0);
+    let at = crate::data::team::Position::ALL
+        .iter()
+        .position(|&q| q == played)
+        .map_or(natural, |k| positions[k].tenths());
+    let gap = f64::from(natural.saturating_sub(at)) / 10.0;
+    if gap == 0.0 || t.cost_per_point == 0.0 {
+        return 0.0;
+    }
+    -t.cost_per_point
+        * gap
+        * (1.0 - t.versatility_weight * p.versatility)
+        * (1.0 - t.adaptability_weight * p.adaptability)
+}
+
 /// `r` moved by `d` tenths, kept inside 1.0 to 20.0.
 fn moved(r: Rating, d: i16) -> Rating {
     let t = (i16::from(r.tenths()) + d).clamp(i16::from(MIN_TENTHS), i16::from(MAX_TENTHS));
@@ -331,6 +376,48 @@ mod tests {
         assert_eq!(tired.get(idx("consistency")).tenths(), 100);
         assert_eq!(tired.get(idx("strength")).tenths(), 80);
         assert_eq!(tired.get(idx("decisions")).tenths(), 90);
+    }
+
+    #[test]
+    fn the_floor_holds_seven_points_and_headroom_counts_down_to_it() {
+        let width = 8.0;
+        let f = |r: f64| 8.0 * crate::math::exp((r - 10.0) / width);
+        // An 18 pushed 10 points down reads 11.
+        let held = floored(f(8.0), f(18.0), 7.0, width);
+        assert!((held - f(11.0)).abs() < 1e-9, "{held}");
+        // A drop within the limit is untouched.
+        assert_eq!(floored(f(13.0), f(18.0), 7.0, width), f(13.0));
+        assert!((headroom(f(18.0), f(18.0), 7.0, width) - 7.0).abs() < 1e-9);
+        assert!(headroom(f(11.0), f(18.0), 7.0, width).abs() < 1e-9);
+        assert!((headroom(f(15.0), f(18.0), 7.0, width) - 4.0).abs() < 1e-9);
+        assert_eq!(headroom(f(9.0), f(18.0), 7.0, width), 0.0);
+    }
+
+    #[test]
+    fn the_familiarity_drop_reads_the_gap_and_narrows_with_versatility() {
+        use crate::contract::PersonalityScales;
+        use crate::data::team::Position;
+        let t = crate::contract::ContractTuning::default()
+            .person()
+            .familiarity;
+        let mut positions = [Rating::from_tenths(10); 10];
+        positions[Position::ALL
+            .iter()
+            .position(|&p| p == Position::ST)
+            .unwrap()] = Rating::from_tenths(160);
+        positions[Position::ALL
+            .iter()
+            .position(|&p| p == Position::LW)
+            .unwrap()] = Rating::from_tenths(80);
+        let n = PersonalityScales::NEUTRAL;
+        assert_eq!(familiarity_drop(&positions, Position::ST, &n, &t), 0.0);
+        let away = familiarity_drop(&positions, Position::LW, &n, &t);
+        assert!((away + 0.15 * 8.0).abs() < 1e-12, "{away}");
+        let versatile = PersonalityScales {
+            versatility: 0.5,
+            ..n
+        };
+        assert!(familiarity_drop(&positions, Position::LW, &versatile, &t) > away);
     }
 
     #[test]

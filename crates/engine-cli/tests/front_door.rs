@@ -190,7 +190,7 @@ struct Watched {
 
 /// The `--fast-forward-to` tick of the launches whose match is left running. Their seed (7)
 /// stops play before it, so the worker has a save past kick-off once the page passes it.
-const FAST_FORWARD: u32 = 4_000;
+const FAST_FORWARD: u32 = 5_300;
 
 /// Connects to the running worker and kicks off. With `skip`, the page skips at once and
 /// reads to the close. Without, it reads and reports each tick as a page does until it has

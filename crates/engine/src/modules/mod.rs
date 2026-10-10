@@ -669,7 +669,7 @@ pub struct ResolvedModules {
     pub fatigue: &'static dyn FatigueModule,
     pub steering: &'static dyn SteeringModule,
     pub pre_match: &'static dyn PreMatchModule,
-    /// The four modifier slots, in registry order.
+    /// The seven modifier slots, in registry order.
     pub modifiers: Modifiers,
     pub clock: &'static dyn ClockModule,
     pub restarts: &'static dyn RestartsModule,

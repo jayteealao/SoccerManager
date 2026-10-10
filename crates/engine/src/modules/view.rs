@@ -71,6 +71,36 @@ impl<'a> MatchView<'a> {
         self.sim.body(i)
     }
 
+    /// Player `i`'s mood, −100 to 100 ([`crate::sim::mood`]).
+    #[inline]
+    pub fn mood(&self, i: usize) -> f64 {
+        self.sim.mood(i)
+    }
+
+    /// The mood of `team`: its players' moods on the pitch, weighted by leadership.
+    #[inline]
+    pub fn team_mood(&self, team: usize) -> f64 {
+        self.sim.team_mood(team)
+    }
+
+    /// The position player `i` plays now: his formation slot's.
+    #[inline]
+    pub fn played_position(&self, i: usize) -> crate::data::team::Position {
+        self.sim.played_position(i)
+    }
+
+    /// Player `i`'s rating at each position, from his squad entry.
+    #[inline]
+    pub fn position_ratings(&self, i: usize) -> &'a [crate::rating::Rating; 10] {
+        self.sim.position_ratings(i)
+    }
+
+    /// Player `i`'s personality scales, from his squad entry.
+    #[inline]
+    pub fn personality(&self, i: usize) -> crate::contract::PersonalityScales {
+        self.sim.personality(i)
+    }
+
     /// The current tick.
     #[inline]
     pub fn tick(&self) -> u32 {

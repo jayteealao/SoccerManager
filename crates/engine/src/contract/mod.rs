@@ -31,7 +31,8 @@ pub mod states;
 
 pub use curve::{contest, factor, logistic, logit, share};
 pub use params::{
-    ActionMap, ActionParams, ContractTuning, CurveTuning, HookTuning, LapseTuning, SpeedTuning,
+    ActionMap, ActionParams, ContractTuning, CurveTuning, HookTuning, LapseTuning, PersonTuning,
+    SpeedTuning,
 };
 pub use stages::{GateDef, GateDefs, StageTable, Weighted, stage_values};
 
@@ -562,6 +563,63 @@ pub fn occasion_skills(
         flair: skill("flair", ActionKind::Pass),
         determination: skill("determination", ActionKind::Press),
         eccentricity: skill("eccentricity", ActionKind::Rush),
+    }
+}
+
+/// The personality values play reads on an occasion, each a skill from −1 to 1 and 0 at
+/// rating 10: temperament (the mood swing and foul aggression after a setback),
+/// sportsmanship (cynical fouls and going down), pressure handling (the mood swing, late
+/// close games and penalties), professionalism (concentration lapses), leadership (his
+/// weight in his side's mood), adaptability (the familiarity and adaptation drops) and
+/// versatility (the familiarity drop).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PersonalityScales {
+    pub temperament: f64,
+    pub sportsmanship: f64,
+    pub pressure_handling: f64,
+    pub professionalism: f64,
+    pub leadership: f64,
+    pub adaptability: f64,
+    pub versatility: f64,
+}
+
+impl PersonalityScales {
+    /// Every value 0: the average person.
+    pub const NEUTRAL: PersonalityScales = PersonalityScales {
+        temperament: 0.0,
+        sportsmanship: 0.0,
+        pressure_handling: 0.0,
+        professionalism: 0.0,
+        leadership: 0.0,
+        adaptability: 0.0,
+        versatility: 0.0,
+    };
+}
+
+/// The personality scales of a player with ratings `a`: `2 · share(k, F(r)) − 1` of each
+/// value, with the strength `k` of the action whose occasion it shapes (tackle for
+/// temperament and sportsmanship, penalty for pressure handling, shape for professionalism,
+/// organise for leadership, receive for adaptability and versatility). A value the schema
+/// lacks reads 0. No state moves a personality value, so a squad entry computes them once.
+pub fn personality_scales(
+    a: &crate::player::Attributes,
+    schema: &crate::data::attributes::AttributeSchema,
+    c: &ContractTuning,
+) -> PersonalityScales {
+    let skill = |name: &str, action: ActionKind| {
+        schema.index(name).map_or(0.0, |i| {
+            let v = curve::f(a.get(i).decimal(), &c.curve);
+            2.0 * curve::share(c.actions.of(action).k(), v, &c.curve) - 1.0
+        })
+    };
+    PersonalityScales {
+        temperament: skill("temperament", ActionKind::Tackle),
+        sportsmanship: skill("sportsmanship", ActionKind::Tackle),
+        pressure_handling: skill("pressure_handling", ActionKind::Penalty),
+        professionalism: skill("professionalism", ActionKind::Shape),
+        leadership: skill("leadership", ActionKind::Organise),
+        adaptability: skill("adaptability", ActionKind::Receive),
+        versatility: skill("versatility", ActionKind::Receive),
     }
 }
 

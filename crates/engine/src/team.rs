@@ -73,6 +73,9 @@ pub struct SquadPlayer {
     pub foot: crate::data::team::Foot,
     /// His traits of play, by name, each at its strength.
     pub traits: Vec<(String, crate::data::traits::TraitStrength)>,
+    /// The personality values play reads on an occasion, computed once from his ratings
+    /// ([`crate::contract::personality_scales`]); no state moves them.
+    pub personality: crate::contract::PersonalityScales,
 }
 
 /// A team: club identity, an attack direction, the squad, the lineup and bench, the
@@ -210,7 +213,10 @@ impl Team {
                     let foot = entry
                         .foot
                         .unwrap_or_else(|| crate::data::convert::converted_foot(&entry.id));
+                    let personality =
+                        crate::contract::personality_scales(&attributes, schema, &tuning.contract);
                     SquadPlayer {
+                        personality,
                         positions,
                         foot,
                         traits: entry.traits.iter().map(|(n, s)| (n.clone(), *s)).collect(),
@@ -264,6 +270,7 @@ impl Team {
             deltas: [0; crate::contract::states::GROUP_COUNT],
             form: 0,
             form_match: 0,
+            mood: 0.0,
             energy: s.start_energy,
             pos,
             vel: DVec2::ZERO,

@@ -445,6 +445,9 @@ impl DecisionModule for DecisionV1 {
         // An option's skill term: `(2 · share − 1) · skill`, 0 at rating 10.
         let skill = |s: Stage| stages.skill(s) * w.skill;
         let flair_risk = t.contract.hooks().flair_risk;
+        // Mood: a carrier in good mood shoots and plays forward more and holds less; in low
+        // mood the reverse. 0 at a neutral mood and with no person block.
+        let mood_risk = t.contract.person().mood.risk * view.mood(c) / crate::sim::mood::FULL;
 
         // Pressure and space around the carrier.
         let mut nearest_opp = f64::INFINITY;
@@ -505,7 +508,8 @@ impl DecisionModule for DecisionV1 {
                     + under_pressure
                     + skill(choose)
                     + plan.shoot
-                    + role.shoot,
+                    + role.shoot
+                    + mood_risk,
             )
         } else {
             None
@@ -567,7 +571,8 @@ impl DecisionModule for DecisionV1 {
                 + plan.tempo
                 + layoff
                 + plan.slots[mate.slot].long_ball_target * (d / 45.0)
-                + flair;
+                + flair
+                + mood_risk * forward;
             passes[pass_count] = (j, score);
             pass_count += 1;
         }
@@ -596,7 +601,8 @@ impl DecisionModule for DecisionV1 {
                 + role.dribble
                 - plan.tempo
                 + lone_dribble;
-            let hold = w.hold + plan.hold - plan.tempo - w.hold_per_s * held_s + lone_hold;
+            let hold =
+                w.hold + plan.hold - plan.tempo - w.hold_per_s * held_s + lone_hold - mood_risk;
             // The skill gate: a pressed carrier whose technique is under the take-on's
             // threshold does not try to dribble past; he may still hold.
             let dribble = (!pressed || gates.take_on_try).then_some(dribble);
@@ -835,8 +841,14 @@ impl DecisionModule for DecisionV1 {
             }
             ShotKind::Open => (Stage::LONG_SHOT_EXECUTE, Some(Stage::LONG_SHOT_PRESSURE)),
         };
+        // Pressure handling narrows a penalty's spread, a shoot-out kick's included.
         let spread_scale = match kind {
-            ShotKind::Penalty => t.shots.penalty_spread,
+            ShotKind::Penalty => {
+                t.shots.penalty_spread
+                    * (1.0
+                        - t.contract.person().occasions.penalty_pressure
+                            * view.personality(c).pressure_handling)
+            }
             _ => 1.0,
         };
         let under = pressure.is_some() && pressed(view, c);
@@ -967,7 +979,12 @@ pub fn lapse_chance(view: &MatchView<'_>, i: usize) -> f64 {
     let minute = view.tick() / crate::rules::clock::TICKS_PER_MINUTE;
     let late = f64::from(minute.saturating_sub(l.late_from_minute)) / 30.0;
     let share = view.skills(i).share(Stage::SHAPE_CHOOSE);
-    (l.per_minute * (1.0 + l.late_growth * late) * 2.0 * (1.0 - share)).clamp(0.0, 1.0)
+    // Professionalism keeps a player's concentration.
+    let professional = 1.0
+        - view.tuning().contract.person().occasions.professionalism
+            * view.personality(i).professionalism;
+    (l.per_minute * (1.0 + l.late_growth * late) * 2.0 * (1.0 - share) * professional)
+        .clamp(0.0, 1.0)
 }
 
 /// A player in a concentration lapse holds where he stands: his target is his position until
@@ -1168,7 +1185,7 @@ fn cover(
 
 pub const DECISION_V1_CARD: ModuleCard = ModuleCard {
     purpose: "Sets every player's target (anchors, the lone forward's line hold, timed runs against the offside line, pressing, goal-side cover, chasing) and decides the carrier's option, pass, clearance, shot, and restart kick.",
-    inputs: "Every player's position, velocity, target, activity, slot, lapse, and effective values through the attribute contract (the carrier's see, choose, execute and pressure stages of passes, chips, crosses, shots, long shots, penalties, dribbles and keeper distribution, his skill gates and flair, the restart taker's corner, free-kick and long-throw stages, and every player's press, intercept, shape, rush, marking and off-ball run values, determination and eccentricity); both teams' shapes and plans; the score; the ball; the carrier and how long he has held the ball; the tick; and the engine tuning.",
+    inputs: "Every player's position, velocity, target, activity, slot, lapse, and effective values through the attribute contract (the carrier's see, choose, execute and pressure stages of passes, chips, crosses, shots, long shots, penalties, dribbles and keeper distribution, his skill gates and flair, the restart taker's corner, free-kick and long-throw stages, and every player's press, intercept, shape, rush, marking and off-ball run values, determination and eccentricity); the carrier's mood, pressure handling and professionalism; both teams' shapes and plans; the score; the ball; the carrier and how long he has held the ball; the tick; and the engine tuning.",
     outputs: "Every player's target, the carrier's option scores and choice, and the kick of a pass, clearance, shot, or restart.",
     tuning: &[
         "decision",
@@ -1176,6 +1193,9 @@ pub const DECISION_V1_CARD: ModuleCard = ModuleCard {
         "contract.actions",
         "contract.lapse",
         "contract.hooks",
+        "contract.person.mood.risk",
+        "contract.person.occasions.professionalism",
+        "contract.person.occasions.penalty_pressure",
         "shots.penalty_spread",
         "shot_range",
         "aim_noise",

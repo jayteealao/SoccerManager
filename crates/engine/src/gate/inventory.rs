@@ -68,6 +68,10 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         shot_on_target,
         shot_quality,
         blockers_tried,
+        shot_xg,
+        shooter,
+        last_pass,
+        bench_mood,
         restart_taker,
         clearers_tried,
         // Test seams under the `scenario` feature; no release build has them.
@@ -138,6 +142,17 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     w.f64_at(|| "shot_quality".into(), *shot_quality);
     w.mark(Bytes, || "blockers_tried".into());
     w.u32(*blockers_tried);
+    w.mark(Floats, || "shot_xg".into());
+    w.f64_at(|| "shot_xg".into(), *shot_xg);
+    w.mark(Bytes, || "shooter".into());
+    w.index(*shooter);
+    w.mark(Bytes, || "last_pass".into());
+    w.index(last_pass.map(|(passer, _)| passer));
+    w.index(last_pass.map(|(_, receiver)| receiver));
+    w.mark(Floats, || "bench_mood".into());
+    for (team, mood) in bench_mood.iter().enumerate() {
+        w.f64_at(|| format!("bench_mood[{team}]"), *mood);
+    }
     w.mark(Bytes, || "clearers_tried".into());
     w.u32(*clearers_tried);
     w.mark(Bytes, || "restart_taker".into());
@@ -370,6 +385,7 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
         deltas,
         form,
         form_match,
+        mood,
         energy,
         pos,
         vel,
@@ -408,6 +424,8 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
     w.mark(Bytes, || format!("players[{i}].form"));
     w.u8(*form as u8);
     w.u8(*form_match as u8);
+    w.mark(Floats, || format!("players[{i}].mood"));
+    w.f64_at(|| format!("players[{i}].mood"), *mood);
     w.mark(Floats, || format!("players[{i}].derived"));
     w.derived(&|| format!("players[{i}].derived"), derived, deltas);
 }
