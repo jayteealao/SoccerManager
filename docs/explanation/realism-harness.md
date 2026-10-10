@@ -138,10 +138,13 @@ Every figure below comes from the 8-thread reference machine: an AMD Ryzen 7 980
 | Realistic evaluation | 57,000 | other heavy work running | projected | about 70 minutes |
 | Realistic evaluation | 57,000 | idle | projected | about 39 to 46 minutes |
 | Change run, warm cache | 12,278 of the changed engine | idle | projected | about 8.4 to 9.9 minutes |
+| Change run, warm cache, `measures` build, against the old engine of 0.2.0-dev | 12,278 of the changed engine | idle apart from desktop programs (12 to 20 percent) | measured, twice | 799 and 805 s (about 13.3 minutes): play 4,171 s and checks 1,954 s of thread time, judge 24 s |
 
 The loaded projection of the realistic evaluation uses the measured rate of about 13 matches per second. The idle projections use about a third of a second of thread time per match over 8 threads. The lower idle figure assumes perfect scaling over the threads, and the higher figure assumes 85 percent scaling.
 
 A change run on a warm cache plays only the changed engine's matches. It plays a pilot of 11,400 matches, then grows each suite to its power target. On today's engine and the default content, the pilot sets three targets: equal 1,000, formations 200 per pairing, and strength 278. The formations suite stays at its pilot because the run judges it pooled over every pairing. The formations bands far outside their range also set no target. So a change run plays 12,278 of the changed engine's matches.
+
+The measured change run of the `measures` build took about 13.3 minutes, over the 10-minute limit. It played the same 12,278 matches at about 0.5 s of thread time per match, against about a third of a second in the projection: the running rule checker took almost a third of that time. The limit is not met; see the next section for what a miss means.
 
 On the reference machine, two other builds gave the same figures as the release build. One used whole-program optimisation (`lto = "fat"`, `codegen-units = 1`), and one used a native CPU target. Neither was faster by more than the spread between two release runs.
 
