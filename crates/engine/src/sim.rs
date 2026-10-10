@@ -15,6 +15,9 @@ mod pace_tests;
 mod possession;
 #[cfg(test)]
 mod shape_tests;
+mod slide;
+#[cfg(test)]
+mod slide_tests;
 pub mod tally;
 
 use crate::trace::Point;
@@ -595,6 +598,11 @@ pub struct Simulation {
     /// other team controls it. The kick-off and each restart set it; every dead ball clears
     /// it with `pass_in_flight`, so the snapshot never needs it.
     pub(crate) possession_phase: Option<usize>,
+    /// Each player's followed ball point, which his anchor's ball shift reads: in open play
+    /// it eases toward the ball, later the farther he is from it (the far-player delay of
+    /// the slide); every dead ball and each kick-off placement set it to the ball, so the
+    /// snapshot never needs it.
+    pub(crate) slide_ball: [DVec2; crate::modules::ROSTER],
     /// The shot in flight: whether it heads between the posts under the bar, its quality for
     /// the save roll, and the outfield defenders (one bit per roster index) who have already
     /// tried to block it. Cleared with `shot_in_flight`.
@@ -772,6 +780,7 @@ impl Simulation {
             keeper_beaten: false,
             pass_in_flight: None,
             possession_phase: None,
+            slide_ball: [DVec2::ZERO; crate::modules::ROSTER],
             restart_taker: None,
             clearers_tried: 0,
             shot_in_flight: None,
@@ -1300,6 +1309,7 @@ impl Simulation {
                         }
                     }
                 }
+                self.slide_tick();
                 if self.tick.is_multiple_of(t.decision_interval_ticks)
                     && let Some(kick) = self.decide()
                 {
@@ -1311,6 +1321,7 @@ impl Simulation {
                 self.summary.dead_ball_ticks += 1;
                 self.pace_off();
                 self.dead_ball_tick(&dead, &t);
+                self.slide_reset();
             }
             Phase::FullTime => {}
         }

@@ -73,6 +73,7 @@ fn hold(sim: &mut Simulation, c: usize, at: DVec2) {
     sim.control_since = sim.tick;
     sim.last_touch = Some(sim.players[c].team);
     sim.possession_phase = Some(sim.players[c].team);
+    sim.slide_reset();
 }
 
 /// The shape outcome of both teams for the match as it stands.
@@ -250,6 +251,9 @@ fn a_team_keeps_its_phase_until_the_other_team_controls_the_ball() {
     }
     sim.players[taker].pos = DVec2::new(8.0, -5.0);
     let t = std::sync::Arc::clone(&sim.tuning);
+    // The home centre-back whose target the check reads stands at his place, behind the
+    // pass: a player stranded far from play and from both his places heads for the nearer.
+    sim.players[2].pos = sim.teams[0].anchor(2, sim.ball.xy(), true, &t);
     sim.apply_kick(
         Kick::Pass {
             dir: DVec2::X,
@@ -347,6 +351,7 @@ fn rest_defence_keeps_the_minimum_goal_side_under_every_mentality() {
                 let at = DVec2::new(f64::from(k) * dt, 0.0);
                 sim.players[c].pos = at;
                 sim.ball = Ball::at(at);
+                sim.slide_reset();
                 settle_tick(&mut sim);
                 if k < grace || k % 10 != 0 {
                     continue;

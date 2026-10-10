@@ -188,8 +188,8 @@ struct Watched {
     ticks: Vec<Quantised>,
 }
 
-/// The `--fast-forward-to` tick of the launches whose match is left running. Their seed (3)
-/// stops play at ticks 1,989 and 2,450, before it, so the worker has a save past kick-off
+/// The `--fast-forward-to` tick of the launches whose match is left running. Their seed (7)
+/// stops play at ticks 1,005 and 2,994, before it, so the worker has a save past kick-off
 /// once the page passes it.
 const FAST_FORWARD: u32 = 4_000;
 
@@ -427,7 +427,7 @@ fn return_to_start_keeps_the_save_and_resume_finishes_the_same_match() {
         let data = temp("whole");
         let launched = launch(
             &data,
-            &["--no-start-screen", "--seed", "3", "--minutes", "3"],
+            &["--no-start-screen", "--seed", "7", "--minutes", "3"],
         );
         let running = wait_for(launched.port, 30, |s| s["engine.state"] == "running");
         watch(socket_port(&running), true).ticks
@@ -439,7 +439,7 @@ fn return_to_start_keeps_the_save_and_resume_finishes_the_same_match() {
         &data,
         &[
             "--seed",
-            "3",
+            "7",
             "--minutes",
             "3",
             "--fast-forward-to",
@@ -514,7 +514,7 @@ fn quit_saves_the_match_and_ends_both_processes() {
         &data,
         &[
             "--seed",
-            "3",
+            "7",
             "--minutes",
             "3",
             "--fast-forward-to",

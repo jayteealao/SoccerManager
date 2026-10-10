@@ -101,6 +101,15 @@ pub struct Tuning {
     pub compactness_x: f64,
     #[garde(range(min = 0.0, max = 3.0))]
     pub compactness_y: f64,
+    /// The far-player delay of the slide: seconds of follow time per metre of a player's
+    /// distance from the ball. Each outfield player's anchor shift follows his own followed
+    /// ball point ([`crate::team::follow`]), which eases toward the ball with a time constant
+    /// of this value times his distance, so a player near the ball slides at once and a far
+    /// one late. The only value tuned against the slide band; 0 turns the delay off (every
+    /// followed point is the ball), as before it existed.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 0.5))]
+    pub far_delay_s_per_m: f64,
     /// Defending: how far, in metres, the covering defender stands goal-side of the most
     /// advanced central attacker, and the half-width of the central channel in which an
     /// attacker is covered.
@@ -636,6 +645,7 @@ impl Default for Tuning {
             aim_noise: 0.06,
             compactness_x: 0.3,
             compactness_y: 0.3,
+            far_delay_s_per_m: FAR_DELAY_S_PER_M,
             cover_distance: default_cover_distance(),
             cover_channel: default_cover_channel(),
             back_line_gap: default_back_line_gap(),
@@ -734,6 +744,13 @@ const TACKLE_WIN_BASE: f64 = 0.5;
 fn default_tackle_win_base() -> f64 {
     0.05
 }
+/// The shipped far-player delay: seeded at 0.04 from the real far-player response (players 30
+/// to 45 m from the ball follow it over 1 s about half as much as players near it), then
+/// tuned only against the slide band (0.44 to 0.68 up the pitch, both phases, on each of four
+/// seeds) by halving and then bisecting: 0.04 and 0.02 left one seed below the band, and 0.01
+/// kept every figure inside it.
+const FAR_DELAY_S_PER_M: f64 = 0.01;
+
 fn default_lone_line_hold() -> f64 {
     0.0
 }
@@ -807,6 +824,24 @@ mod tests {
         let mut t = Tuning::default();
         t.pace.skip_at.press = 1.5;
         assert!(t.validate().is_err());
+    }
+
+    /// A tuning block written before the far-player delay loads with it off, so every
+    /// followed ball point is the ball; a delay above the bound is refused.
+    #[test]
+    fn a_tuning_block_without_the_far_player_delay_loads_with_it_off() {
+        let mut json = serde_json::to_value(Tuning::default()).unwrap();
+        let block = json.as_object_mut().unwrap();
+        assert!(block.remove("far_delay_s_per_m").is_some());
+        let t: Tuning = serde_json::from_value(json).unwrap();
+        assert_eq!(t.far_delay_s_per_m, 0.0);
+        assert!(Tuning::default().far_delay_s_per_m > 0.0);
+        let t = Tuning {
+            far_delay_s_per_m: 0.6,
+            ..Tuning::default()
+        };
+        let report = t.validate().unwrap_err().to_string();
+        assert!(report.contains("far_delay_s_per_m"), "{report}");
     }
 
     /// A tuning block written before the pace selector loads with it off: every player runs

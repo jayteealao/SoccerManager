@@ -809,3 +809,119 @@ fn word_bands_out_of_order_or_short_of_one_are_refused_by_name() {
         .to_string();
     assert!(err.contains("injury_proneness"), "{err}");
 }
+
+/// The shipped tactics file as JSON.
+fn shipped_tactics_json() -> serde_json::Value {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+}
+
+/// The names that would set a gap between lines or a share of the slide.
+const PLANTED: [&str; 3] = ["line_gap", "target_gap", "slide_share"];
+
+/// No content field sets a target gap between the lines or a share of the slide: the line
+/// gaps and the block's length come from where each role stands and the slide. A tactics
+/// file with such a field at the top level, in a mentality, a role, a formation or the stand
+/// table, and a tuning file with one in its engine block, are each refused by name.
+#[test]
+fn a_content_file_that_sets_a_line_gap_or_a_slide_share_is_refused() {
+    type Place = fn(&mut serde_json::Value) -> &mut serde_json::Value;
+    let places: [(&str, Place); 5] = [
+        ("top level", |v| v),
+        ("a mentality", |v| &mut v["mentalities"][0]),
+        ("a role", |v| &mut v["roles"][0]),
+        ("a formation", |v| &mut v["formations"][0]),
+        ("the stand table", |v| &mut v["stands"]),
+    ];
+    for name in PLANTED {
+        for (place, at) in places {
+            let mut v = shipped_tactics_json();
+            at(&mut v)
+                .as_object_mut()
+                .unwrap()
+                .insert(name.into(), 12.into());
+            let err = engine::data::load_tactics_bytes(&serde_json::to_vec(&v).unwrap(), "t.json")
+                .err()
+                .unwrap_or_else(|| panic!("{name} in {place} loaded"))
+                .to_string();
+            assert!(err.contains(name), "{name} in {place}: {err}");
+        }
+    }
+    for name in ["slide_share", "line_gap_m"] {
+        let mut v = shipped_tuning_json();
+        v["engine"]
+            .as_object_mut()
+            .unwrap()
+            .insert(name.into(), 0.5.into());
+        let err = engine::data::load_tuning_bytes(&serde_json::to_vec(&v).unwrap(), "t.json")
+            .err()
+            .unwrap_or_else(|| panic!("{name} in the engine block loaded"))
+            .to_string();
+        assert!(err.contains(name), "{name}: {err}");
+    }
+    // The shipped files load.
+    let shipped = serde_json::to_vec(&shipped_tactics_json()).unwrap();
+    assert!(engine::data::load_tactics_bytes(&shipped, "tactics.json").is_ok());
+}
+
+/// The keys allowed to name a gap or a share, each with why it sets no gap between lines
+/// and no share of the slide.
+const ALLOWED: [(&str, &str); 3] = [
+    (
+        "back_line_gap",
+        "the widest gap between neighbours inside the deepest line, a ceiling for the respread when a player leaves",
+    ),
+    (
+        "drop_gap_m",
+        "how far the carrier must be behind a player before he drops, a trigger distance",
+    ),
+    (
+        "foreign_share",
+        "the share of foreign players the club generator draws, not a match value",
+    ),
+];
+
+/// Every key of `v`, at any depth, whose name holds `gap`, `share` or `slide` and is not
+/// allowed, with its path.
+fn gap_or_share_keys(v: &serde_json::Value, path: &str, out: &mut Vec<String>) {
+    match v {
+        serde_json::Value::Object(map) => {
+            for (key, value) in map {
+                let here = format!("{path}.{key}");
+                let named = ["gap", "share", "slide"].iter().any(|w| key.contains(w));
+                if named && !ALLOWED.iter().any(|(allowed, _)| allowed == key) {
+                    out.push(here.clone());
+                }
+                gap_or_share_keys(value, &here, out);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for (i, item) in items.iter().enumerate() {
+                gap_or_share_keys(item, &format!("{path}[{i}]"), out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The shipped tactics and tuning files hold no key that names a gap or a share beyond the
+/// allowed ones; the scan reports a planted `midfield_gap`, so it is proven able to fail.
+#[test]
+fn no_shipped_key_names_a_line_gap_or_a_slide_share() {
+    for (file, v) in [
+        ("tactics.json", shipped_tactics_json()),
+        ("tuning.json", shipped_tuning_json()),
+    ] {
+        let mut found = Vec::new();
+        gap_or_share_keys(&v, file, &mut found);
+        assert!(found.is_empty(), "{found:?}");
+    }
+    let mut planted = shipped_tactics_json();
+    planted["roles"][2]
+        .as_object_mut()
+        .unwrap()
+        .insert("midfield_gap".into(), 12.into());
+    let mut found = Vec::new();
+    gap_or_share_keys(&planted, "tactics.json", &mut found);
+    assert_eq!(found, ["tactics.json.roles[2].midfield_gap"]);
+}

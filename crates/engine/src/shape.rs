@@ -64,15 +64,23 @@ impl ShapeOutcome {
 }
 
 /// The anchor of every active player with `phase` the team in possession (`None`: both
-/// teams stand out of possession). An inactive player's entry is his position.
+/// teams stand out of possession). An outfield player's ball shift reads his followed ball
+/// point ([`MatchView::slide_ball`]), so a far player's anchor slides late; the keeper's
+/// reads the ball. An inactive player's entry is his position.
 pub fn anchors(view: &MatchView<'_>, phase: Option<usize>) -> [DVec2; ROSTER] {
     let teams = view.teams();
     let t = view.tuning();
     let ball = view.ball().xy();
     let mut out = [DVec2::ZERO; ROSTER];
-    for (o, p) in out.iter_mut().zip(view.players()) {
+    for (i, (o, p)) in out.iter_mut().zip(view.players()).enumerate() {
         *o = if p.active() {
-            teams[p.team].anchor(p.slot, ball, phase == Some(p.team), t)
+            let team = &teams[p.team];
+            let seen = if p.slot == team.keeper_slot() {
+                ball
+            } else {
+                view.slide_ball(i)
+            };
+            team.anchor(p.slot, seen, phase == Some(p.team), t)
         } else {
             p.pos
         };

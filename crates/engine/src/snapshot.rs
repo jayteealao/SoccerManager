@@ -566,6 +566,8 @@ impl Simulation {
         let mut sim = Simulation::blank(config)?;
         let mut r = Reader::new(&snapshot.body);
         decode(&mut sim, &mut r).map_err(refuse)?;
+        // A snapshot is written only at a dead ball, where every followed point is the ball.
+        sim.slide_reset();
         sim.timeline = vec![(sim.tick, sim.teams.clone())];
         Ok(sim)
     }

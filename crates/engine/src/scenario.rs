@@ -47,10 +47,19 @@ impl Scene {
         self
     }
 
-    /// Puts the ball at rest at `at`.
+    /// Puts the ball at rest at `at`. Every player's followed ball point is the ball, as
+    /// for a block that has settled around it.
     pub fn ball(mut self, at: DVec3) -> Self {
         self.sim.ball.pos = at;
         self.sim.ball.vel = DVec3::ZERO;
+        self.sim.slide_reset();
+        self
+    }
+
+    /// Every player's followed ball point at `at`, as for a block still settled around a
+    /// ball that was there: the far-player delay then follows the ball from it.
+    pub fn follow_from(mut self, at: DVec2) -> Self {
+        self.sim.slide_ball = [at; crate::modules::ROSTER];
         self
     }
 

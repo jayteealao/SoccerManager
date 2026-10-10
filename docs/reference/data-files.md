@@ -112,6 +112,7 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 | aim_noise | rad | 0.06 | 0 to 0.6 |
 | compactness_x | ratio | 0.3 | 0 to 3 |
 | compactness_y | ratio | 0.3 | 0 to 3 |
+| far_delay_s_per_m | s per m | 0.01 | 0 to 0.5 |
 | cover_distance | m | 3.0 | 0 to 10 |
 | cover_channel | m | 12.0 | 0 to 34 |
 | back_line_gap | m | 12.0 | 4 to 30 |
@@ -193,6 +194,8 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 Every target a player moves to has a job, and each job an urgency grade. URGENT: the carrier's move, a press, a recovery run while his team has fewer outfield players goal-side of the ball than its mentality minimum (or the rest-defence guard holds him back farther than `pace.return_far_m` from his spot), a loose ball he reaches first, and a timed run. NORMAL: the other team's chase of a loose ball, a stand option that offers a pass while his team has the ball, a return to a place farther than `pace.return_far_m`, and following the ball in shape within `pace.calm_ball_m` of it. CALM: holding his place farther from the ball, a concentration lapse, and a dead ball with no job. Raised tempo or pressing above the default level, or trailing in the last `pace.late_minutes` minutes, lifts pressing jobs (press, chase) and the offer one grade; leading in those minutes with time wasting on drops each NORMAL job one grade while the ball is dead; in open play both teams keep their grades. An URGENT job never drops.
 
 The grade picks one of six levels, each run at its upper limit from `pace.limits_ms`: within `pace.stand_m` of the target a player stands; CALM walks; NORMAL jogs, or runs farther than `pace.run_from_m`; URGENT runs at high speed, or sprints at the player's own top speed when the job's sprint draw succeeded. No level is above his top speed. The draw is taken once when an URGENT job starts, with the chance `pace.sprint_mid + pace.sprint_slope × (work-rate share − 0.5)`: work rate sets how often an urgent job gets a sprint, not the speed of any level. Below `pace.tired_from` energy a player saves `(tired_from − energy) / tired_from`; with his tired mix, the mean share of his determination and professionalism, a saving times the mix at or above `pace.step_down_at` drops every level below a sprint one step, never below a walk while he is farther than `pace.stand_m` from his target, and a saving times one less the mix at or above the job's `pace.skip_at` value turns that job's sprint into high speed, the least urgent job's first. At a dead ball every player runs at his top speed until the restart. A tuning file without the `pace` block loads with `pace.enabled` false: every player runs at his top speed, as before the selector.
+
+Every outfield anchor moves with the ball by `compactness_x` and `compactness_y` of its position, in both phases. The ball point each player's anchor follows is his own: in open play it eases toward the ball with a time constant of `far_delay_s_per_m` seconds per metre of his distance from the ball, so a player near the ball follows it at once and a far one late; every dead ball and kick-off sets it to the ball. 0 turns the delay off, and a tuning file without the field loads with 0. The delay is the only value tuned against the team slide band, and no field sets a gap between the lines or a share of the slide: the gaps and the block's length come from where each role stands and the slide. A player farther than `anchor_ball_distance` from the ball and farther than `anchor_tolerance` from both his places (his anchors in and out of possession) heads for the nearer place, whatever stand option or held spot he had.
 
 While the other team has the ball, one back-line defender covers the ball carrier, or else the most advanced attacker, when that player is in the defending half and within `cover_channel` of the middle of the pitch: a carrier is tracked `cover_distance` goal-side of him, and any other attacker is covered from the defender's place in the line. No two neighbours in the back line stand more than `back_line_gap` apart, so the line narrows as players leave it.
 
@@ -586,10 +589,10 @@ The shipped copies:
 
 | Copy | Band it moves | Overrides | Expected move |
 |---|---|---|---|
-| `shots_up` | `shots_per_team` | `engine.shot_range` 22.4 | up about 10 percent |
-| `fouls_halved` | `fouls_per_team` | `engine.foul_base` 0.05, `engine.foul_aggression_weight` 0.025, `engine.foul_tackling_weight` 0.0125 | about half |
+| `shots_up` | `shots_per_team` | `engine.shot_range` 28.5 | up about 10 percent |
+| `fouls_halved` | `fouls_per_team` | `engine.foul_base` 0.04, `engine.foul_aggression_weight` 0.02, `engine.foul_tackling_weight` 0.01 | about half |
 | `card_storm` | `yellow_cards_per_team` | `engine.foul_base` 1.0, `engine.yellow_base` 1.0 | far up: every tackle a foul, every foul booked |
-| `pass_completion_down` | `pass_accuracy_pct` | `engine.aim_noise` 0.18 | down about 5 points |
+| `pass_completion_down` | `pass_accuracy_pct` | `engine.aim_noise` 0.5 | down about 5 points |
 
 `proof` holds:
 

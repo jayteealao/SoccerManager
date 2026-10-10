@@ -8,7 +8,7 @@
       "flag": {
         "hypothesis": "a longer shooting range raises the shots per team by about 10 percent",
         "overrides": {
-          "engine.shot_range": 22.4
+          "engine.shot_range": 28.5
         },
         "owner": "engine team",
         "removal_condition": "a broken copy of the gate proof; never on in play"
@@ -19,11 +19,11 @@
       "measure": "fouls_per_team",
       "move": "fouls per team about half",
       "flag": {
-        "hypothesis": "half the foul chance of each tackle halves the fouls per team",
+        "hypothesis": "two fifths of the foul chance of each tackle halves the fouls per team",
         "overrides": {
-          "engine.foul_aggression_weight": 0.025,
-          "engine.foul_base": 0.05,
-          "engine.foul_tackling_weight": 0.0125
+          "engine.foul_aggression_weight": 0.02,
+          "engine.foul_base": 0.04,
+          "engine.foul_tackling_weight": 0.01
         },
         "owner": "engine team",
         "removal_condition": "a broken copy of the gate proof; never on in play"
@@ -50,7 +50,7 @@
       "flag": {
         "hypothesis": "more aim noise on a pass lowers the pass accuracy by about 5 points",
         "overrides": {
-          "engine.aim_noise": 0.18
+          "engine.aim_noise": 0.5
         },
         "owner": "engine team",
         "removal_condition": "a broken copy of the gate proof; never on in play"

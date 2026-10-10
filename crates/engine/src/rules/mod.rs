@@ -311,6 +311,7 @@ impl Simulation {
         self.control_since = self.tick;
         self.last_touch = Some(team);
         self.possession_phase = Some(team);
+        self.slide_reset();
         self.restart_taker = Some(kicker);
         #[cfg(feature = "measures")]
         if let Some(m) = self.measures.as_deref_mut() {
@@ -755,6 +756,7 @@ impl Simulation {
         self.last_kicker = None;
         self.pass_in_flight = None;
         self.possession_phase = None;
+        self.slide_reset();
         self.restart_taker = None;
         self.clearers_tried = 0;
         self.end_shot();

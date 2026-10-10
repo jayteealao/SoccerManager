@@ -30,6 +30,7 @@
     "aim_noise": 0.06,
     "compactness_x": 0.3,
     "compactness_y": 0.3,
+    "far_delay_s_per_m": 0.01,
     "cover_distance": 3.0,
     "cover_channel": 12.0,
     "back_line_gap": 12.0,

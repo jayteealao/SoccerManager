@@ -333,6 +333,7 @@ impl DecisionModule for DecisionV1 {
                 // the line hold and cover then take their players from there.
                 let shaped = shape::apply(view, phase, &anchors, &mut targets);
                 hold_the_line(view, &mut targets, team, c);
+                back_to_place(view, &mut targets);
                 // Pressers run at the point where they can meet the carrier's run, and go for
                 // the ball once they are close.
                 let run = players[c].vel;
@@ -406,6 +407,7 @@ impl DecisionModule for DecisionV1 {
                     }
                 }
                 let shaped = shape::apply(view, phase, &anchors, &mut targets);
+                back_to_place(view, &mut targets);
                 let mut chasing_keepers = [None; 2];
                 for (team, &i) in nearest.iter().enumerate() {
                     if i != usize::MAX {
@@ -1053,6 +1055,35 @@ fn lapse_jobs(view: &MatchView<'_>, jobs: &mut [Job; ROSTER]) {
     for (job, p) in jobs.iter_mut().zip(view.players()) {
         if tick < p.lapse_until && p.active() {
             *job = Job::Hold;
+        }
+    }
+}
+
+/// A player left far from play and from his place, as after a restart he took near a
+/// corner flag, gets back into the team's shape by the shortest way: while he is farther from
+/// the ball than `anchor_ball_distance` and farther than `anchor_tolerance` from both his
+/// places (his anchors in and out of possession, read with the ball itself), his target is
+/// the nearer place, whatever option or held spot the shape pass gave him. Pressers, chasers
+/// and the cover defender take their targets after this, and a lapse still holds him.
+fn back_to_place(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER]) {
+    let t = view.tuning();
+    let ball = view.ball().xy();
+    let teams = view.teams();
+    for (i, p) in view.players().iter().enumerate() {
+        if !p.active()
+            || i == view.keeper(p.team)
+            || (p.pos - ball).length() <= t.anchor_ball_distance
+        {
+            continue;
+        }
+        let [a_in, a_out] = [true, false].map(|has| teams[p.team].anchor(p.slot, ball, has, t));
+        let nearer = if (p.pos - a_in).length() <= (p.pos - a_out).length() {
+            a_in
+        } else {
+            a_out
+        };
+        if (p.pos - nearer).length() > t.anchor_tolerance {
+            targets[i] = nearer;
         }
     }
 }

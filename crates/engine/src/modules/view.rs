@@ -198,6 +198,13 @@ impl<'a> MatchView<'a> {
         self.sim.possession_phase
     }
 
+    /// Player `i`'s followed ball point: the point his anchor's ball shift reads, which
+    /// follows the ball later the farther he is from it. The ball itself at a dead ball.
+    #[inline]
+    pub fn slide_ball(&self, i: usize) -> crate::math::DVec2 {
+        self.sim.slide_ball[i]
+    }
+
     /// Player `i`'s familiarity with his place and the team's tactic, in rating points: the
     /// familiarity family's delta on the mental group, within the family's cap. 0 while no
     /// modifier feeds the family.

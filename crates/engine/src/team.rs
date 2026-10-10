@@ -454,7 +454,9 @@ impl Team {
     /// plan's block depth, the slot's duty, and its stand for the phase (the team has the
     /// ball when `in_possession`), widened by the plan, mirrored for the team's attack
     /// direction as [`Team::slot_base`] is, plus the ball shift. A central slot takes no
-    /// sideways stand.
+    /// sideways stand. In play the shift reads each outfield player's followed ball point
+    /// ([`follow`]), so a far player's anchor slides late; the validator, the restarts and
+    /// the keeper pass the ball itself.
     pub fn anchor(&self, slot: usize, ball: DVec2, in_possession: bool, t: &Tuning) -> DVec2 {
         if slot == self.keeper_slot() {
             // The keeper stands on the line from the goal centre toward the ball.
@@ -481,6 +483,19 @@ impl Team {
         );
         let shift = DVec2::new(ball.x * t.compactness_x, ball.y * t.compactness_y);
         self.pitch.clamp(base + shift, 0.5)
+    }
+}
+
+/// One tick of a player's followed ball point: `seen` eases toward `ball` with a time
+/// constant of `k` seconds per metre of the player's `distance` from the ball, so a player
+/// near the ball follows it at once and a far one late. When the time constant is no longer
+/// than the step `dt` (always when `k` is 0) the point is the ball.
+pub fn follow(seen: DVec2, ball: DVec2, distance: f64, k: f64, dt: f64) -> DVec2 {
+    let tau = k * distance;
+    if tau <= dt {
+        ball
+    } else {
+        seen + (ball - seen) * (dt / tau)
     }
 }
 
@@ -793,5 +808,45 @@ mod tests {
         assert_eq!(team.slot_side(6), 0.0);
         assert!(team.plan.slots[6].in_possession.y != 0.0);
         assert_eq!(team.anchor(6, DVec2::ZERO, true, t).y, 0.0);
+    }
+
+    const DT: f64 = 0.02;
+
+    #[test]
+    fn with_no_delay_the_followed_point_is_the_ball_bit_for_bit() {
+        let ball = DVec2::new(12.345_678, -7.654_321);
+        for seen in [DVec2::ZERO, DVec2::new(-40.0, 30.0)] {
+            for d in [0.0, 5.0, 60.0] {
+                assert_eq!(follow(seen, ball, d, 0.0, DT), ball);
+            }
+        }
+    }
+
+    #[test]
+    fn a_farther_player_follows_the_ball_later() {
+        let (seen, ball) = (DVec2::ZERO, DVec2::new(10.0, 20.0));
+        let near = follow(seen, ball, 10.0, 0.04, DT);
+        let far = follow(seen, ball, 40.0, 0.04, DT);
+        assert!((far - ball).length() > (near - ball).length());
+        // Within half a metre of a step's worth of delay the point is the ball.
+        assert_eq!(follow(seen, ball, 0.4, 0.04, DT), ball);
+    }
+
+    #[test]
+    fn the_followed_point_lies_between_where_it_was_and_the_ball_and_arrives() {
+        let ball = DVec2::new(-25.0, 18.0);
+        let mut seen = DVec2::new(30.0, -20.0);
+        for _ in 0..2_000 {
+            let next = follow(seen, ball, 45.0, 0.04, DT);
+            let gap = ball - seen;
+            if gap.length() > 1e-6 {
+                // On the segment from `seen` to `ball`.
+                let along = (next - seen).dot(gap) / gap.length_squared();
+                assert!((0.0..=1.0).contains(&along), "{along}");
+                assert!(((next - seen) - gap * along).length() < 1e-9);
+            }
+            seen = next;
+        }
+        assert!((seen - ball).length() < 1e-6, "{seen}");
     }
 }

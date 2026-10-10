@@ -28,6 +28,7 @@ fn hold(sim: &mut Simulation, c: usize, at: DVec2) {
     sim.control_since = sim.tick;
     sim.last_touch = Some(sim.players[c].team);
     sim.possession_phase = Some(sim.players[c].team);
+    sim.slide_reset();
 }
 
 /// The decision pass and the pace pass of one live tick.
@@ -138,6 +139,7 @@ fn the_first_chaser_goes_for_a_loose_ball_and_the_other_chases() {
     settle(&mut sim);
     sim.carrier = None;
     sim.ball = Ball::at(DVec2::new(0.0, 20.0));
+    sim.slide_reset();
     let (home, away) = (6, PLAYERS_PER_TEAM + 6);
     sim.players[home].pos = DVec2::new(0.0, 17.0);
     sim.players[away].pos = DVec2::new(0.0, 25.0);
