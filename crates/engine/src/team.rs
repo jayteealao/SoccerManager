@@ -250,6 +250,7 @@ impl Team {
             yellow: 0,
             foul_ready: 0,
             lapse_until: 0,
+            pace: crate::pace::Pace::OFF,
         }
     }
 

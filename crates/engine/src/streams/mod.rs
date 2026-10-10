@@ -252,7 +252,7 @@ impl Streams {
             UNUSED => {
                 let id = key.stream_id();
                 self.used.push((id, self.fresh(id)));
-                // At most `KEY_COUNT` (2,916) streams, below `u16::MAX`.
+                // At most `KEY_COUNT` (3,321) streams, below `u16::MAX`.
                 let at = (self.used.len() - 1) as u16;
                 let used = &self.used;
                 let place = self.order.partition_point(|&o| used[usize::from(o)].0 < id);

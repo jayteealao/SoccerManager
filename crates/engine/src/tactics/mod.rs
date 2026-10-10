@@ -197,6 +197,9 @@ pub struct TeamPlan {
     pub directness: f64,
     /// A factor on the team's restart delay while it leads.
     pub time_wasting: f64,
+    /// Tempo above normal or pressing above its default level: pressing and support jobs
+    /// rise one urgency grade ([`crate::pace`]).
+    pub pace_lift: bool,
     pub shoot: f64,
     pub progress: f64,
     pub hold: f64,
@@ -250,6 +253,8 @@ impl TeamPlan {
             tempo: ins.tempo.levels[level(TEMPO)].value,
             directness: ins.passing_directness.levels[level(DIRECTNESS)].value,
             time_wasting: ins.time_wasting.levels[level(TIME_WASTING)].value,
+            pace_lift: ins.tempo.levels[level(TEMPO)].value > 0.0
+                || tactics.instructions[PRESSING] > ins.defaults()[PRESSING],
             shoot: mentality.shoot,
             progress: mentality.progress,
             hold: mentality.hold,
@@ -271,6 +276,7 @@ impl TeamPlan {
             tempo: 0.0,
             directness: 0.0,
             time_wasting: 1.0,
+            pace_lift: false,
             shoot: 0.0,
             progress: 0.0,
             hold: 0.0,
@@ -301,6 +307,7 @@ mod tests {
         assert_eq!(plan.press_count, 2);
         assert_eq!(plan.press_distance, t.press_distance);
         assert_eq!(plan.time_wasting, 1.0);
+        assert!(!plan.pace_lift);
         assert!(plan.slots.iter().all(|s| s.depth == 0.0));
     }
 
@@ -317,6 +324,10 @@ mod tests {
         assert!(plan.shoot > 0.0);
         assert_eq!(plan.press_count, 3);
         assert!(plan.press_distance > t.press_distance);
+        assert!(
+            plan.pace_lift,
+            "high pressing lifts the pace of pressing jobs"
+        );
     }
 
     #[test]

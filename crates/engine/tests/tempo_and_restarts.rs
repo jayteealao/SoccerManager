@@ -224,9 +224,12 @@ fn an_opponent_inside_the_tackle_reach_can_win_the_ball() {
 
 /// The home carrier runs at `speed` metres per second with an away player 0.5 m from the
 /// ball. The tackle roll lies between the standing win chance and the running win chance.
+/// The pace selector is off: the scene judges the tackle on the speed it sets, which the
+/// selector would cut to his chosen pace in the same step.
 fn running(speed: f64) -> Simulation {
     let mut config = calm_match(90);
     config.tuning.tackle_dribble_win = 0.5;
+    config.tuning.pace = engine::tuning::PaceTuning::off();
     let sim = Simulation::new(config.clone()).unwrap();
     let (tackler, carrier) = (sim.skills(index(1, 5)), sim.skills(index(0, 5)));
     let base = engine::rules::fouls::win_chance(tackler, carrier, &config.tuning);

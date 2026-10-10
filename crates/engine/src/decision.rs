@@ -20,6 +20,7 @@ use crate::modules::{
     CarrierPlan, CoverTrace, DecisionModule, MATES, MatchView, ModuleCard, OptionDraft,
     OptionDraws, ROSTER, RestartPass, Scored, ShotDraws, Targets, TargetsTrace,
 };
+use crate::pace::Job;
 use crate::pitch;
 use crate::plugin::OptionOffsets;
 use crate::rules::offside;
@@ -330,7 +331,7 @@ impl DecisionModule for DecisionV1 {
                 }
                 // Stand options from the role menus and the rest-defence guard; pressing,
                 // the line hold and cover then take their players from there.
-                shape::apply(view, phase, &anchors, &mut targets);
+                let shaped = shape::apply(view, phase, &anchors, &mut targets);
                 hold_the_line(view, &mut targets, team, c);
                 // Pressers run at the point where they can meet the carrier's run, and go for
                 // the ball once they are close.
@@ -351,8 +352,26 @@ impl DecisionModule for DecisionV1 {
                 }
                 let cover = cover(view, &mut targets, def, c, &pressers[..count], keepers[def]);
                 hold_lapses(view, &mut targets);
+                let mut jobs = shape_jobs(view, phase, &targets, &shaped);
+                jobs[c] = Job::Carry;
+                for &(_, i) in &pressers[..count] {
+                    if i != usize::MAX {
+                        jobs[i] = Job::Press;
+                    }
+                }
+                recovery_jobs(view, &mut jobs, def, keepers[def]);
+                if let CoverTrace::Covered { defender, .. } = cover {
+                    // The cover defender runs urgently only while the carrier is goal-side
+                    // of him: between him and his own goal.
+                    let ax = teams[def].attack_x;
+                    if (players[c].pos.x - players[defender].pos.x) * ax < 0.0 {
+                        jobs[defender] = Job::Recover;
+                    }
+                }
+                lapse_jobs(view, &mut jobs);
                 Targets {
                     targets,
+                    jobs,
                     trace: TargetsTrace::Carrier {
                         def,
                         count,
@@ -386,7 +405,7 @@ impl DecisionModule for DecisionV1 {
                         nearest[p.team] = i;
                     }
                 }
-                shape::apply(view, phase, &anchors, &mut targets);
+                let shaped = shape::apply(view, phase, &anchors, &mut targets);
                 let mut chasing_keepers = [None; 2];
                 for (team, &i) in nearest.iter().enumerate() {
                     if i != usize::MAX {
@@ -400,8 +419,42 @@ impl DecisionModule for DecisionV1 {
                     }
                 }
                 hold_lapses(view, &mut targets);
+                let mut jobs = shape_jobs(view, phase, &targets, &shaped);
+                // The chaser who reaches the ball first, at his top speed, goes for a loose
+                // ball; the other team's chaser chases.
+                let time =
+                    |i: usize| (players[i].pos - predicted).length() / players[i].max_speed();
+                let first = match nearest {
+                    [a, b] if a != usize::MAX && b != usize::MAX => {
+                        Some(if time(b) < time(a) { b } else { a })
+                    }
+                    [a, b] => (a != usize::MAX)
+                        .then_some(a)
+                        .or((b != usize::MAX).then_some(b)),
+                };
+                for &i in &nearest {
+                    if i != usize::MAX {
+                        jobs[i] = if Some(i) == first {
+                            Job::LooseBall
+                        } else {
+                            Job::Chase
+                        };
+                    }
+                }
+                for gk in chasing_keepers.into_iter().flatten() {
+                    jobs[gk] = Job::LooseBall;
+                }
+                // A pass in flight or a loose ball: the team out of possession (both, with no
+                // phase) recovers as it does against a carrier. A chaser keeps his chase.
+                for (def, &keeper) in keepers.iter().enumerate() {
+                    if phase != Some(def) {
+                        recovery_jobs(view, &mut jobs, def, keeper);
+                    }
+                }
+                lapse_jobs(view, &mut jobs);
                 Targets {
                     targets,
+                    jobs,
                     trace: TargetsTrace::Loose {
                         nearest,
                         nearest_dist,
@@ -921,6 +974,89 @@ pub fn lapse_chance(view: &MatchView<'_>, i: usize) -> f64 {
     (l.per_minute * (1.0 + l.late_growth * late) * 2.0 * (1.0 - share)).clamp(0.0, 1.0)
 }
 
+/// The job of every active player from his shape: `Recover` when the rest-defence guard
+/// held him back to keep the mentality minimum goal-side and his spot is farther than
+/// `return_far_m` (goal-side cover is missing until he gets there), `Offer` when his team is
+/// in possession and his stand option fired, `Return` farther than `return_far_m` from his
+/// target, `Follow` within `calm_ball_m` of the ball, otherwise `Hold`. An inactive player's
+/// job is `Hold`. Out of possession a stand option offers no pass, so its player's job comes
+/// from the distances.
+fn shape_jobs(
+    view: &MatchView<'_>,
+    phase: Option<usize>,
+    targets: &[DVec2; ROSTER],
+    shaped: &[shape::ShapeOutcome; 2],
+) -> [Job; ROSTER] {
+    let t = &view.tuning().pace;
+    let ball = view.ball().xy();
+    let mut jobs = [Job::Hold; ROSTER];
+    for ((job, p), &target) in jobs.iter_mut().zip(view.players()).zip(targets) {
+        if !p.active() {
+            continue;
+        }
+        let far = (target - p.pos).length() > t.return_far_m;
+        *job = if far && shaped[p.team].held & (1 << p.slot) != 0 {
+            Job::Recover
+        } else if phase == Some(p.team) && shaped[p.team].option[p.slot].is_some() {
+            Job::Offer
+        } else if far {
+            Job::Return
+        } else if (p.pos - ball).length() <= t.calm_ball_m {
+            Job::Follow
+        } else {
+            Job::Hold
+        };
+    }
+    jobs
+}
+
+/// Recovery runs while goal-side cover is missing: while team `def` has fewer active
+/// outfield players goal-side of the ball than its mentality minimum (never more than its
+/// active outfield players less one), the players ahead of the ball nearest to getting
+/// goal-side recover, one per missing player. A presser keeps his press, and a chaser his
+/// chase.
+fn recovery_jobs(view: &MatchView<'_>, jobs: &mut [Job; ROSTER], def: usize, keeper: usize) {
+    let players = view.players();
+    let side = &view.teams()[def];
+    let ball = view.ball().xy();
+    let first = def * PLAYERS_PER_TEAM;
+    // Metres ahead of the ball toward the other goal: below zero is goal-side.
+    let ahead = |i: usize| (players[i].pos.x - ball.x) * side.attack_x;
+    let outfield =
+        || (first..first + PLAYERS_PER_TEAM).filter(|&i| i != keeper && players[i].active());
+    let active = outfield().count();
+    let minimum = side.plan.rest_defence.min(active.saturating_sub(1));
+    let behind = outfield().filter(|&i| ahead(i) < 0.0).count();
+    let mut missing = minimum.saturating_sub(behind);
+    if missing == 0 {
+        return;
+    }
+    let mut candidates: Vec<(f64, usize)> = outfield()
+        .filter(|&i| {
+            ahead(i) >= 0.0 && !matches!(jobs[i], Job::Press | Job::LooseBall | Job::Chase)
+        })
+        .map(|i| (ahead(i), i))
+        .collect();
+    candidates.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+    for (_, i) in candidates {
+        if missing == 0 {
+            break;
+        }
+        jobs[i] = Job::Recover;
+        missing -= 1;
+    }
+}
+
+/// A player in a concentration lapse holds: his job is `Hold` until the lapse ends.
+fn lapse_jobs(view: &MatchView<'_>, jobs: &mut [Job; ROSTER]) {
+    let tick = view.tick();
+    for (job, p) in jobs.iter_mut().zip(view.players()) {
+        if tick < p.lapse_until && p.active() {
+            *job = Job::Hold;
+        }
+    }
+}
+
 /// A player in a concentration lapse holds where he stands: his target is his position until
 /// the lapse ends.
 fn hold_lapses(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER]) {
@@ -1056,11 +1192,12 @@ fn cover(
 }
 
 pub const DECISION_V1_CARD: ModuleCard = ModuleCard {
-    purpose: "Sets every player's target (anchors at each position's stand for the possession phase, stand options from the role menus, the rest-defence guard, the lone forward's line hold, pressing, goal-side cover, chasing) and decides the carrier's option, pass, clearance, shot, and restart kick.",
+    purpose: "Sets every player's target (anchors at each position's stand for the possession phase, stand options from the role menus, the rest-defence guard, the lone forward's line hold, pressing, goal-side cover, chasing) and the job each target is for (carry, press, recovery run, loose ball, chase, offer, return, follow, hold), and decides the carrier's option, pass, clearance, shot, and restart kick.",
     inputs: "Every player's position, velocity, target, activity, slot, lapse, and effective values through the attribute contract (the carrier's see, choose, execute and pressure stages of passes, chips, crosses, shots, long shots, penalties, dribbles and keeper distribution, his skill gates, and every player's press, intercept, shape and rush factors); both teams' shapes and plans (the stand table, the role menus, the stand-option sizes, the mentality's rest-defence minimum and the guard); the possession phase; each player's familiarity (the familiarity family); the ball; the carrier and how long he has held the ball; the tick; and the engine tuning.",
-    outputs: "Every player's target, the carrier's option scores and choice, and the kick of a pass, clearance, shot, or restart.",
+    outputs: "Every player's target and its job, the carrier's option scores and choice, and the kick of a pass, clearance, shot, or restart. The loop grades each job, draws an urgent job's sprint on its key, and picks the pace level steering arrives at.",
     tuning: &[
         "decision",
+        "pace",
         "contract.curve",
         "contract.actions",
         "contract.lapse",
@@ -1098,6 +1235,7 @@ pub const DECISION_V1_CARD: ModuleCard = ModuleCard {
         Action::ShotSpread,
         Action::ShotLoft,
         Action::Lapse,
+        Action::PaceSprint,
     ],
 };
 

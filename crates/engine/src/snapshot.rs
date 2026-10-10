@@ -46,6 +46,9 @@
 //!   summary every player's tally by side and squad index (whether he took the pitch, fifteen
 //!   counts, and his expected goals), so a resumed match rates its players as the unbroken
 //!   match does.
+//!   Version 14 adds the pace selector: each player stores his pace after his form bytes (the
+//!   chosen speed as f64 bits, then his job, grade and level codes, his sprint draw as a byte,
+//!   and the tick his job started as u32), so a resumed match keeps every held sprint.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -63,6 +66,7 @@ use crate::canon::{self, NONE, Writer};
 use crate::data::rules::StoppageKind;
 use crate::error::EngineError;
 use crate::math::{DVec2, DVec3};
+use crate::pace::{Grade, Job, Level, Pace};
 use crate::player::Status;
 use crate::record::TickSink;
 use crate::rules::clock::Tally;
@@ -75,7 +79,7 @@ use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 13;
+pub const VERSION: u16 = 14;
 /// The earliest layout version the strict reader still reads: version 8 has no matchday mark.
 const FIRST_READ: u16 = 8;
 /// The released builds from before the snapshot recorded its engine version: the full commit
@@ -859,6 +863,12 @@ fn encode(sim: &Simulation, w: &mut Writer) {
         }
         w.u8(p.form as u8);
         w.u8(p.form_match as u8);
+        w.f64_at(String::new, p.pace.speed);
+        w.u8(p.pace.job.code());
+        w.u8(p.pace.grade.code());
+        w.u8(p.pace.level.code());
+        w.u8(u8::from(p.pace.sprint));
+        w.u32(p.pace.since);
     }
     w.u32(sim.queue.next);
     // A queue holds far fewer than 4 billion changes.
@@ -1103,6 +1113,21 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
         let d = r.deltas()?;
         let form = r.u8()? as i8;
         p.form_match = r.u8()? as i8;
+        let speed = r.f64()?;
+        let unknown = "malformed body: an unknown pace";
+        let job = Job::from_code(r.u8()?).ok_or(unknown)?;
+        let grade = Grade::from_code(r.u8()?).ok_or(unknown)?;
+        let level = Level::from_code(r.u8()?).ok_or(unknown)?;
+        let sprint = r.bool()?;
+        let since = r.u32()?;
+        p.pace = Pace {
+            job,
+            grade,
+            level,
+            speed,
+            since,
+            sprint,
+        };
         deltas.push((d, form));
     }
     for (i, (d, form)) in deltas.into_iter().enumerate() {
@@ -1362,7 +1387,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 13"),
+                .contains("unknown version 1; this build reads 14"),
             "{err}"
         );
     }

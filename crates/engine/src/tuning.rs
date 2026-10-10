@@ -211,6 +211,133 @@ pub struct Tuning {
     /// acceleration, and concentration lapses.
     #[garde(dive)]
     pub contract: ContractTuning,
+    /// The pace selector: the six levels, the distances that choose between them, the sprint
+    /// chance, the tired mix and the late minutes. A tuning file without this block loads with
+    /// the selector off, so every player runs at his top speed, as before it existed.
+    #[serde(default = "PaceTuning::off")]
+    #[garde(dive)]
+    pub pace: PaceTuning,
+}
+
+/// The pace selector's values ([`crate::pace`]). Speeds in metres per second, distances in
+/// metres, shares and thresholds from 0 to 1.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct PaceTuning {
+    /// `false` turns the selector off: every player runs at his top speed.
+    #[garde(skip)]
+    pub enabled: bool,
+    /// The upper limits of stand, walk, jog, run and high speed; a sprint is the player's top
+    /// speed. Strictly rising and positive.
+    #[garde(custom(rising_limits))]
+    pub limits_ms: [f64; 5],
+    /// Within this distance of his target a player stands.
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub stand_m: f64,
+    /// Farther than this from his target, a player in shape returns to it (NORMAL).
+    #[garde(range(min = 0.0, max = 60.0))]
+    pub return_far_m: f64,
+    /// Farther than this from his target, a NORMAL job runs rather than jogs.
+    #[garde(range(min = 0.0, max = 120.0))]
+    pub run_from_m: f64,
+    /// Within this distance of the ball, a player in shape follows it (NORMAL); farther, he
+    /// holds (CALM).
+    #[garde(range(min = 0.0, max = 120.0))]
+    pub calm_ball_m: f64,
+    /// The sprint chance of an URGENT job: `sprint_mid + sprint_slope · (work-rate share − 0.5)`,
+    /// inside 0 to 1 at a share of 0 and of 1.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub sprint_mid: f64,
+    #[garde(range(min = 0.0, max = 2.0), custom(chance_in_range(&self.sprint_mid)))]
+    pub sprint_slope: f64,
+    /// Below this energy a player saves energy.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub tired_from: f64,
+    /// A tired player whose saving times his tired mix reaches this moves a step slower at
+    /// every level below a sprint.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub step_down_at: f64,
+    /// Per URGENT job: a tired player whose saving times one less his tired mix reaches this
+    /// skips the job's sprint. Lower for a less urgent job.
+    #[garde(dive)]
+    pub skip_at: SkipAt,
+    /// The late minutes of a match: the last this many minutes of its regulation length.
+    #[garde(range(min = 0, max = 60))]
+    pub late_minutes: u32,
+}
+
+/// The sprint skip threshold of each URGENT job.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct SkipAt {
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub carry: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub timed_run: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub press: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub loose_ball: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub recovery: f64,
+}
+
+/// Refuses level limits that are not positive and strictly rising.
+fn rising_limits(limits: &[f64; 5], _ctx: &()) -> garde::Result {
+    if limits[0] <= 0.0 || limits.windows(2).any(|w| w[1] <= w[0]) {
+        return Err(garde::Error::new(
+            "must be positive and strictly rising".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Refuses a sprint chance outside 0 to 1 at a work-rate share of 0 or of 1.
+fn chance_in_range(mid: &f64) -> impl FnOnce(&f64, &()) -> garde::Result + '_ {
+    move |slope, _| {
+        let half = slope / 2.0;
+        if mid - half < 0.0 || mid + half > 1.0 {
+            return Err(garde::Error::new(format!(
+                "gives a sprint chance outside 0 to 1 with sprint_mid {mid}"
+            )));
+        }
+        Ok(())
+    }
+}
+
+impl PaceTuning {
+    /// The shipped values: most open-play time at walk and jog, sprints only for URGENT jobs.
+    pub fn shipped() -> Self {
+        Self {
+            enabled: true,
+            limits_ms: [0.2, 2.0, 4.0, 5.5, 7.0],
+            stand_m: 1.0,
+            return_far_m: 5.0,
+            run_from_m: 15.0,
+            calm_ball_m: 30.0,
+            sprint_mid: 0.5,
+            sprint_slope: 1.0,
+            tired_from: 0.5,
+            step_down_at: 0.25,
+            skip_at: SkipAt {
+                carry: 0.10,
+                timed_run: 0.10,
+                press: 0.20,
+                loose_ball: 0.35,
+                recovery: 0.35,
+            },
+            late_minutes: 15,
+        }
+    }
+
+    /// The selector off, with the shipped values kept for the day it is turned on: a tuning
+    /// file written before the selector existed plays as it did.
+    pub fn off() -> Self {
+        Self {
+            enabled: false,
+            ..Self::shipped()
+        }
+    }
 }
 
 /// How a clearance flies. A carrier's clearance goes toward the far half, turned by up to
@@ -576,6 +703,7 @@ impl Default for Tuning {
             shots: ShotTuning::default(),
             clearances: ClearanceTuning::default(),
             contract: ContractTuning::default(),
+            pace: PaceTuning::shipped(),
         }
     }
 }
@@ -661,5 +789,35 @@ mod tests {
                 .contains("keeper_catch_chance: greater than 1"),
             "{report}"
         );
+    }
+
+    #[test]
+    fn pace_levels_that_do_not_rise_or_a_chance_outside_one_are_refused() {
+        let mut t = Tuning::default();
+        t.pace.limits_ms = [0.2, 2.0, 2.0, 5.5, 7.0];
+        let report = t.validate().unwrap_err().to_string();
+        assert!(report.contains("pace.limits_ms"), "{report}");
+        let mut t = Tuning::default();
+        t.pace.limits_ms[0] = 0.0;
+        assert!(t.validate().is_err());
+        let mut t = Tuning::default();
+        t.pace.sprint_mid = 0.8;
+        let report = t.validate().unwrap_err().to_string();
+        assert!(report.contains("pace.sprint_slope"), "{report}");
+        let mut t = Tuning::default();
+        t.pace.skip_at.press = 1.5;
+        assert!(t.validate().is_err());
+    }
+
+    /// A tuning block written before the pace selector loads with it off: every player runs
+    /// at his top speed, as before it existed.
+    #[test]
+    fn a_tuning_block_without_the_pace_block_loads_with_the_selector_off() {
+        let mut json = serde_json::to_value(Tuning::default()).unwrap();
+        assert!(json.as_object_mut().unwrap().remove("pace").is_some());
+        let t: Tuning = serde_json::from_value(json).unwrap();
+        assert_eq!(t.pace, PaceTuning::off());
+        assert!(!t.pace.enabled);
+        assert!(Tuning::default().pace.enabled);
     }
 }

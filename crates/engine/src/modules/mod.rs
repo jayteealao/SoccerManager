@@ -408,10 +408,12 @@ pub enum TargetsTrace {
     },
 }
 
-/// Every player's target for this tick, in roster order.
+/// Every player's target for this tick, in roster order, and the job each target is for
+/// ([`crate::pace::Job`]), which sets its urgency grade.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Targets {
     pub targets: [DVec2; ROSTER],
+    pub jobs: [crate::pace::Job; ROSTER],
     pub trace: TargetsTrace,
 }
 

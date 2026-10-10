@@ -382,6 +382,7 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
         yellow,
         foul_ready,
         lapse_until,
+        pace,
     } = p;
     use FieldKind::{Bytes, Floats};
     w.mark(Floats, || format!("players[{i}].pos"));
@@ -411,6 +412,14 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
     w.mark(Bytes, || format!("players[{i}].form"));
     w.u8(*form as u8);
     w.u8(*form_match as u8);
+    w.mark(Bytes, || format!("players[{i}].pace"));
+    w.u8(pace.job.code());
+    w.u8(pace.grade.code());
+    w.u8(pace.level.code());
+    w.u8(u8::from(pace.sprint));
+    w.u32(pace.since);
+    w.mark(Floats, || format!("players[{i}].pace.speed"));
+    w.f64_at(|| format!("players[{i}].pace.speed"), pace.speed);
     w.mark(Floats, || format!("players[{i}].derived"));
     w.derived(&|| format!("players[{i}].derived"), derived, deltas);
 }

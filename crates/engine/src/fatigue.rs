@@ -363,6 +363,29 @@ mod tests {
         assert!((drain(&p, base, &f, speed, t.dt, 1.2) - fast * 1.2).abs() < 1e-15);
     }
 
+    /// The pace selector lowers the drain through speed alone: the same player at the jog
+    /// limit drains less per tick than at his top speed, by the same formula.
+    #[test]
+    fn a_player_at_the_jog_limit_drains_less_than_at_his_top_speed() {
+        let f = fatigue();
+        let t = Tuning::default();
+        let speed = &t.contract.speed;
+        let (d, stages) = flat(100, &t);
+        let base = Skills::new(&stages, &d);
+        let mut p = flat_player(0, 100, &t);
+        let jog = crate::pace::speed(crate::pace::Level::Jog, p.max_speed(), &t.pace);
+        assert_eq!(jog, 4.0);
+        p.vel = crate::math::DVec2::new(p.max_speed(), 0.0);
+        let top = drain(&p, base, &f, speed, t.dt, 1.0);
+        p.vel = crate::math::DVec2::new(jog, 0.0);
+        let jogging = drain(&p, base, &f, speed, t.dt, 1.0);
+        assert!(jogging < top, "{jogging} against {top}");
+        let r = jog / speed.anchor_ms;
+        let expected = (f.drain_base_per_s + f.drain_effort_per_s * r * r) * t.dt * 1.0;
+        let stamina_scale = 1.5 - base.share(Stage::ENDURE_EXECUTE);
+        assert!((jogging - expected * stamina_scale).abs() < 1e-15);
+    }
+
     /// The fatigue curve reads as a delta on the rating curve: `width · ln(multiplier)`,
     /// times the group weight, and nothing at or above the threshold.
     #[test]

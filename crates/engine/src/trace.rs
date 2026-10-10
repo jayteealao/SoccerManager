@@ -178,7 +178,7 @@ impl Trace {
     }
 }
 
-/// `true` for the 20 actions whose draw is tested against a probability. The other 18 are
+/// `true` for the 21 actions whose draw is tested against a probability. The other 18 are
 /// value draws: score noise, aims, angles, lofts, the keeper's dive, and added time. The
 /// list is outside the stream table, so the scheme digest does not change.
 pub fn is_chance(action: Action) -> bool {
@@ -202,7 +202,8 @@ pub fn is_chance(action: Action) -> bool {
         | Action::InjuryMinute
         | Action::InjuryTackle
         | Action::Lapse
-        | Action::Header => true,
+        | Action::Header
+        | Action::PaceSprint => true,
         Action::FormMatch | Action::FormPeriod => false,
         Action::ShotScore
         | Action::PassScore
@@ -418,6 +419,9 @@ pub fn points_of(action: Action) -> &'static [Point] {
         Action::Lapse => &[Point::Cover],
         Action::Header => &[Point::LooseBall],
         Action::FormMatch | Action::FormPeriod => &[Point::Form],
+        // An urgent job starts on a live tick, whose decision pass traces the press and
+        // cover, or the chase of a loose ball.
+        Action::PaceSprint => &[Point::Press, Point::Chase],
     }
 }
 

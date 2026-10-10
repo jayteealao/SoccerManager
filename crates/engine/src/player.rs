@@ -14,6 +14,7 @@ use crate::contract::states::GROUP_COUNT;
 use crate::contract::{self, Gates, Stage, StageValues, stages::Blend};
 use crate::data::attributes::{AttributeSchema, MAX_ATTRIBUTES};
 use crate::math::DVec2;
+use crate::pace::Pace;
 use crate::rating::{MIN_TENTHS, Rating};
 use crate::tuning::Tuning;
 
@@ -73,6 +74,11 @@ pub struct Derived {
     pub knobs: Knobs,
     /// The skill gates.
     pub gates: Gates,
+    /// His work rate as a share from 0 to 1: how often an URGENT job of his gets a sprint.
+    pub work_share: f64,
+    /// The mean share of his determination and professionalism: how a tired player saves
+    /// energy ([`crate::pace`]).
+    pub tired_mix: f64,
 }
 
 /// The per-player factors on values every player had alike before the contract, each
@@ -154,6 +160,7 @@ impl Derived {
             }
         };
         let aerial_reach = knob(A::AerialReach, Stage::AERIAL_REACH_EXECUTE);
+        let (work_share, tired_mix) = blend.pace_shares(a);
         let derived = Self {
             max_speed: c.speed.top_speed(pace),
             max_accel: c.accel.anchor * knob(A::Sprint, Stage::SPRINT_EXECUTE),
@@ -177,6 +184,8 @@ impl Derived {
                 take_on_try: technique >= g.take_on.technique_try,
                 take_on_penalty: penalty(&g.take_on),
             },
+            work_share,
+            tired_mix,
         };
         (derived, stages)
     }
@@ -235,6 +244,8 @@ pub struct Player {
     /// The first tick after a concentration lapse; until then the player holds where he
     /// stands.
     pub lapse_until: u32,
+    /// His job, its grade, and the pace steering arrives at ([`crate::pace`]).
+    pub pace: Pace,
 }
 
 impl Player {
@@ -298,6 +309,7 @@ pub(crate) mod test_support {
             yellow: 0,
             foul_ready: 0,
             lapse_until: 0,
+            pace: Pace::OFF,
         }
     }
 }

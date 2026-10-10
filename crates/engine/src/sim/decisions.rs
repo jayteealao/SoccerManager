@@ -1,4 +1,5 @@
-//! The decision pass of the central loop: every player's target and the carrier's kick. The
+//! The decision pass of the central loop: every player's target, the job it is for, and the
+//! carrier's kick. The
 //! decision module decides; this pass draws every noise and aim value on the module's keys,
 //! in the order the decision maker always drew them, and writes the targets.
 
@@ -17,8 +18,19 @@ impl Simulation {
     pub(crate) fn decide(&mut self) -> Option<Kick> {
         let decision = self.config.modules.decision;
         let targets = decision.targets(&self.view());
-        for (p, &target) in self.players.iter_mut().zip(targets.targets.iter()) {
+        let tick = self.tick;
+        for ((p, &target), &job) in self
+            .players
+            .iter_mut()
+            .zip(targets.targets.iter())
+            .zip(targets.jobs.iter())
+        {
             p.target = target;
+            // A new job starts its own pace: the pace pass draws a new sprint for it.
+            if p.pace.job != job {
+                p.pace.job = job;
+                p.pace.since = tick;
+            }
         }
         match targets.trace {
             TargetsTrace::Carrier {

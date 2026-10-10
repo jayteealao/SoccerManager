@@ -20,6 +20,7 @@ pub mod match_rating;
 pub mod math;
 pub mod modules;
 pub mod observe;
+pub mod pace;
 pub mod pitch;
 pub mod player;
 pub mod plugin;

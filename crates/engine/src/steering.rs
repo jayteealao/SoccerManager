@@ -116,10 +116,12 @@ pub fn next_velocity(players: &[Player], i: usize, t: &Tuning) -> DVec2 {
 }
 
 /// The velocity of `p` after one tick of arriving at its target plus the separation push
-/// `push`, within its acceleration and speed.
+/// `push`, within its acceleration and the speed of its chosen pace: the pace selector's speed,
+/// never above his top speed. With the selector off the chosen speed is unlimited, so he
+/// arrives at his top speed as before the selector.
 #[inline(always)]
 fn steer(p: &Player, push: DVec2, t: &Tuning) -> DVec2 {
-    let max_speed = p.max_speed();
+    let max_speed = p.pace.speed.min(p.max_speed());
     let max_accel = p.max_accel();
     let desired = arrive(p.pos, p.target, max_speed, max_accel, t.arrive_radius) + push;
     let mut change = clamp_len(desired - p.vel, max_accel * t.dt);
@@ -207,7 +209,7 @@ impl SteeringModule for SteeringV1 {
 
 pub const STEERING_V1_CARD: ModuleCard = ModuleCard {
     purpose: "Steers each player toward its target: arrive with braking, plus separation from close players, within its speed and acceleration.",
-    inputs: "Every player's position, velocity, target, activity, and effective pace, and the engine tuning.",
+    inputs: "Every player's position, velocity, target, activity, effective pace, and the speed of his chosen pace level, and the engine tuning.",
     outputs: "The next velocity of one player, and every player's position once players closer than the minimum distance are pushed apart.",
     tuning: &[
         "arrive_radius",

@@ -9,6 +9,9 @@ mod fatigue;
 mod hooks;
 mod manager;
 mod movement;
+mod pace;
+#[cfg(test)]
+mod pace_tests;
 mod possession;
 #[cfg(test)]
 mod shape_tests;
@@ -1259,9 +1262,11 @@ impl Simulation {
                 {
                     self.apply_kick(kick, &t, true);
                 }
+                self.pace_tick();
             }
             Phase::DeadBall(dead) => {
                 self.summary.dead_ball_ticks += 1;
+                self.pace_off();
                 self.dead_ball_tick(&dead, &t);
             }
             Phase::FullTime => {}

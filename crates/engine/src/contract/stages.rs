@@ -91,6 +91,9 @@ pub struct Blend {
     parts: [[(usize, f64); BLEND_PARTS]; STAGE_COUNT],
     counts: [usize; STAGE_COUNT],
     totals: [f64; STAGE_COUNT],
+    /// The indices of work rate, determination and professionalism, which the pace selector
+    /// reads as rating shares; `None` for one the schema does not hold.
+    pace: [Option<usize>; 3],
 }
 
 impl Blend {
@@ -118,7 +121,25 @@ impl Blend {
             parts,
             counts,
             totals,
+            pace: ["work_rate", "determination", "professionalism"].map(|name| schema.index(name)),
         }
+    }
+
+    /// The pace selector's two values of a player with ratings `a`: his work-rate share, and
+    /// his tired mix (the mean share of determination and professionalism). A rating the
+    /// schema does not hold reads the floor, as every missing rating does.
+    pub fn pace_shares(&self, a: &Attributes) -> (f64, f64) {
+        let share = |slot: Option<usize>| {
+            crate::contract::share_of(slot.map_or(
+                crate::rating::Rating::from_tenths(crate::rating::MIN_TENTHS),
+                |i| a.get(i),
+            ))
+        };
+        let [work, determination, professionalism] = self.pace;
+        (
+            share(work),
+            (share(determination) + share(professionalism)) / 2.0,
+        )
     }
 
     /// The stage values of a player with ratings `a`: per stage, the weighted mean of the

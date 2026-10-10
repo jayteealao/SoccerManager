@@ -365,6 +365,26 @@
         "period_max": 0.75,
         "period_minutes": 10
       }
+    },
+    "pace": {
+      "enabled": true,
+      "limits_ms": [0.2, 2.0, 4.0, 5.5, 7.0],
+      "stand_m": 1.0,
+      "return_far_m": 5.0,
+      "run_from_m": 15.0,
+      "calm_ball_m": 30.0,
+      "sprint_mid": 0.5,
+      "sprint_slope": 1.0,
+      "tired_from": 0.5,
+      "step_down_at": 0.25,
+      "skip_at": {
+        "carry": 0.1,
+        "timed_run": 0.1,
+        "press": 0.2,
+        "loose_ball": 0.35,
+        "recovery": 0.35
+      },
+      "late_minutes": 15
     }
   },
   "generator": {
