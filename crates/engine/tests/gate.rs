@@ -686,8 +686,15 @@ fn band_result_holds_every_band(entry: &golden::LedgerEntry, index: usize) {
         .map(|b| b["band"].as_str().unwrap())
         .collect();
     let registry = read("content/realism-bands.json");
-    let bands = registry["bands"].as_array().unwrap();
-    assert_eq!(bands.len(), 18, "the registry holds 18 bands");
+    // The bands that only report (gates false) were added after these runs; a band run
+    // judges the 18 that gate.
+    let bands: Vec<&serde_json::Value> = registry["bands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|b| b["gates"] != false)
+        .collect();
+    assert_eq!(bands.len(), 18, "the registry holds 18 gating bands");
     let played = ["equal", "strength", "formations"];
     let names: Vec<&str> = bands
         .iter()

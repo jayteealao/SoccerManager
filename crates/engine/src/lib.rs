@@ -18,6 +18,8 @@ pub mod gate;
 pub mod hook_slots;
 pub mod match_rating;
 pub mod math;
+#[cfg(feature = "measures")]
+pub mod measures;
 pub mod modules;
 pub mod observe;
 pub mod pace;

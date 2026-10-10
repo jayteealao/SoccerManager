@@ -121,6 +121,128 @@ The last line is the joint verdict. It passes only when every band passes and no
 
 To judge a finished run again, for example after editing a band in `realism-bands.json`, run the same command into the same folder. Nothing plays; the run says `judged again from <n> stored rows; 0 matches played` and names the bands that changed since it was last judged.
 
+## Read the real values beside the verdict
+
+Every run reads each band's real value from the measured real data and prints it beside the verdict. The line before the table says which folder it read and how many bands have no real value:
+
+```text
+real data: C:\Users\you\SoccerManager\.scratch\out (default); 0 of 53 bands without a real value; 3 with no real counterpart
+```
+
+- `real` is the value measured on real matches; `distance` is the run's value minus it. A band inside its design range can still sit far from real football: the distance says how far.
+- `no real data here` means the folder, the file or the key is not there. `calib.real.bands` in `report.json` names the file and the reason.
+- `no real counterpart` marks the three bands of the strength and red-card suites: they measure engine experiments that no real match repeats, so they have no real value by design and are never counted as missing.
+- `(report only: ...)` at the end of a line marks a band that does not change the verdict: its band file says `gates: false`, its real sample is under its own floor, or its real value comes from too few competitions and seasons.
+
+The last line after the table is the realism claim. Only bands labelled `validation` in the band file count toward it; every shipped band is `calibration`, so today the claim says `none`.
+
+The real values never change a verdict, `calib.pass` or the exit code.
+
+## Read the reported bands
+
+Most bands only report: they are measured and judged, but never change the verdict. Their table follows the verdict table:
+
+```text
+reported bands (they never change the verdict):
+...
+reported: <p> pass, <f> fail, <n> not sure (<a> accepted, not shown equivalent); they never change the verdict
+matches: <total> in total; <pairs> pairs; observations: changed engine <n>, old engine <m>
+```
+
+Each row has a word by the same rules as a gating band. A change run judges a reported band by the paired test where it can, and by its range on this engine alone where it cannot; the row then says why, for example `range only: base has no measures` when the old engine was built without the measures. A band of the measures (shot distance, passes by kind and length, goals by phase, possession by third, running) needs a build with them: build with `--features measures` (see "Record the realism measures"). The per-club spread, `worst_to_best_spread`, takes each club that plays 34 matches in the run; a run where none does reads `no value: no club has 34 matches in this run`.
+
+The reported bands never move the joint word, its threshold, `calib.pass` or the exit code. Read a `fail` there as a gap between the engine and real football to look into, not as a broken change.
+
+## Read a distribution band
+
+Six reported bands judge a whole distribution: goals per match, the scoreline table, passes per team, and in a measures build shot distance and possession chains in passes and in seconds. Their rows read differently:
+
+```text
+goals_distribution       equal      -                 0.84013            0 to 0.42        whole sample    0.84013  fail (upper bound 1.01768, noise floor 0.20984)
+```
+
+- The value is a distance: how far the run's whole sample sits from the real sample (Wasserstein-1, in goals here; total variation, a share, for `scoreline_cells`). The distance column repeats it, and the real column reads `whole sample`, because the real side is a whole sample, not one value.
+- The range runs from 0 to the band's margin: the largest distance that still counts as the same distribution.
+- The upper bound is how far the distance could be, given the matches on both sides. The band passes when the upper bound is within the margin, and fails when even the low end of the distance is beyond it. In between it is `not sure`: play more matches, or accept that the real sample is too small to tell.
+- The noise floor is the distance a perfect engine would still show at these sample sizes. When the margin is at or under it the band can never pass, and the row says `margin below noise floor (floor <f>)`. For the shot and chain bands, whose real sample is 200 matches, the floor comes mostly from the real side; more engine matches cannot lower it.
+- With no real data here the band has no value: `no value: no real data here: <path>: <reason>`.
+
+`calib.real` gives the mean of each real sample beside its record, and `calib.reported` holds each row's `upper` and `noise_floor`.
+
+## Read the formation field rating
+
+A run of the formations suite that finished every pairing prints, after the reported bands, a rating of each formation against the field:
+
+```text
+formation field rating (report only; it never changes the verdict), 2 matches per pairing:
+formation       win rate  field rating   weight  nash average  flag
+4-4-2             0.0500        0.0000   0.2500        0.0000  -
+...
+field rating: 0 of 10 formations flagged (field rating above win rate by more than 0.10); it never changes the verdict
+```
+
+- The win rate is the formation's share of wins over every formation of the field, itself included, each counted once. A draw is not a win.
+- The field rating is the same share of wins, but against the field as its Nash equilibrium weighs it: formations no equilibrium plays weigh nothing, and copies of one style share their weight. The weight column gives each formation's weight in that equilibrium.
+- The Nash average is wins minus losses against that field. It is 0 for a formation the equilibrium plays and at most 0 for one it does not.
+- `flagged` marks a formation whose field rating exceeds its win rate by more than 0.10: it loses mostly to formations the field does not play, and its win rate undersells it.
+
+The rating never changes a band, the verdict, `calib.pass` or the exit code. Read a flag as a question about the formations, not as a failure. With few matches per pairing each share is 0, 0.5 or 1, and the equilibrium can jump from run to run: read a flag only from a run with many matches per pairing. A run that played only some pairings (`--pairing`), or in which a pairing finished no match, prints `formation field rating: needs every pairing (<k> of <n> played)` instead and writes no `calib.nash`.
+
+## Accept a not-sure band
+
+A reported or gating band can stay `not sure` however many matches you play, for example a band whose real value is too uncertain to separate pass from fail. Once you have looked at it, accept it for this run:
+
+```bash
+target/release/engine-cli calibrate accept goals_poisson_ratio --run runs/change-42
+```
+
+Then run the same calibrate command again. Nothing plays; the band's row reads `not sure (accepted, not shown equivalent)`. An accepted band is not shown to match real football: it is never counted as a pass, and it never changes the verdict or the exit code. Only a band that reads `not sure` can be accepted; a `pass` or `fail` band is refused by name. The acceptance belongs to the run in that folder: a new run there (another identity) ignores it, and says `acceptances ignored: ...`.
+
+## Promote a reported band to gate
+
+A band gates once you trust its range: its real value is measured, its range starts at least two real standard errors either side of the real value, and a full run has judged the engine against it. Set its `gates` to `true` in `content/realism-bands.json`, then run a finished run's command again into its folder: the band now sits in the verdict table, and the joint word counts it. Promote a band only by a recorded product-owner decision, as for any band change, and add a Content entry to `CHANGELOG.md` that names the band.
+
+Some promoted bands still do not gate as you might expect:
+
+- A band whose real sample is under its own floor (`real.floor`) stays in the reported table, with `report only: real sample too small to gate (sample <s> under floor <f>)`. The running bands are in this state: their real value comes from 7 tracked matches.
+- A band of the measures is judged by its range alone while the old engine of a change run has no measures (`range only: base has no measures`).
+- A promotion changes the gate, so [run the gate proof](#run-the-gate-proof) again.
+
+## Run the gate proof
+
+The gate proof measures how often the gate passes an unchanged engine and how often it catches a broken one. Run it again whenever the gate changes: after a promotion or any other band edit, a change of the realism measures, or a change of the judging code. Until then, every calibrate run prints `gate changed since the last proof: <part> <proof value> -> <current value>` for each part that differs.
+
+Build `engine-cli` with the measures, then start the proof on an idle machine:
+
+```bash
+cargo build --release -p engine-cli --features measures
+target/release/engine-cli calibrate proof --seed 2027
+```
+
+It plays about 30 change runs of this build against itself: 10 self runs on new seeds, and 5 runs of each of the four broken copies that `content/gate-proof.json` declares. On an 8-thread machine it takes several hours. Each run's log is in `<out>/<run>.log`, and the default `<out>` is `SM_DATA_DIR/proofs/<registry>-<verdict code>`. If the proof stops, run the same command again: each finished run is judged again from its stored rows, and nothing plays twice. When it ends, it writes the rates into `content/gate-proof.json`. Commit that file, with a Content entry in `CHANGELOG.md`.
+
+A build without the measures refuses the proof with `this build has no measures`, because only the measures build judges every whole-distribution band.
+
+## Read the gate proof
+
+The proof prints its summary and writes it under `proof` in `content/gate-proof.json`:
+
+- `gate`: the band registry digest, the measures version and the judging-code digest that the proof measured. A calibrate run compares them with its own gate.
+- `self`: the 10 self runs, each with its joint word, the bands that read fail or not sure, the bands whose change passed the joint threshold (`significant`), and the bands that moved (`moved`: past the threshold and at least their smallest shift). Then the pass, fail and not-sure rates by joint word, the `false_alarm_rate` (runs with any significant band) and the `move_rate` (runs with any moved band). A `not sure` run is not a pass. A band outside its range reads `fail` in every run, the self runs included, so while the engine sits outside some ranges the pass rate is 0 whatever the gate does: read the false-alarm rate for the gate itself.
+- `copies`: for each broken copy, its fail rate (runs whose joint word is `fail`), its `detection_rate` (runs in which the band it names moved), `missed` (runs in which no band moved), and `moved` (each band that moved, with the number of runs it did). A copy with misses is a broken engine that the gate did not catch every time.
+- `distribution_bands`: for each whole-distribution band, the copies that moved it. An empty list means that no copy moved it, so the proof does not show that this band catches a broken engine.
+- `counts`: the total matches, the pairs, and the matches of each engine over every run.
+
+## Point at another real-data folder
+
+By default the run reads `.scratch/out` in the main checkout, also from a linked worktree. To read another folder, name it:
+
+```bash
+target/release/engine-cli calibrate --suite equal --seed 42 --matches 200 --real-data D:/realism/out
+```
+
+A checkout without the measured data, such as a CI runner, reads `no real data here` for every band with a real counterpart, and the run goes on.
+
 ## Read the stage table
 
 Every run ends with the time and memory of each stage: `play`, `checks`, `commentary`, `writing`, `disk`, `judge`, and `total`. Use it to find where a slow run spends its time before you optimise. The times are thread time summed over the threads, so on the 8 threads of the reference machine `play` can read up to eight times the run's wall time. The `total` row is the wall time of the whole command. The `checks` time is estimated from every 16th call of the rule checker.
@@ -215,6 +337,26 @@ target/release/engine-cli calibrate --base main --suite equal
 The stage adds the rules' 6,400 matches to the change run, a few minutes on an 8-core machine. It prints the same table and the line `rules stage: 41 touched sensitivity rules checked at 82 levels, <failed> failed, <not sure> not sure`, and writes the rows to `calib.rules` in `report.json`. The words are information and do not change the joint verdict. A build without the feature prints that it has no sensitivity rules.
 
 A change that moves play still needs the full suites below: a tuning that passes the rules must keep the bands.
+
+## Record the realism measures
+
+The realism measures describe the shape of play beside the bands' averages: where shots come from, passes by kind and length, how goals began, where each side has the ball, and how long its possessions last. They also record how far and how fast each player ran. Build `engine-cli` with the `measures` feature to record them:
+
+```bash
+cargo build --release -p engine-cli --features measures
+target/release/engine-cli calibrate --suite equal
+```
+
+Each match's row then holds, per side:
+
+- the shots in 1 m bins of distance from the centre of the goal attacked, to 40 m and over, penalties included;
+- the open-play passes played and completed, by kind (ground pass, long pass or chip, cross) and length (under 10 m, 10 to 25 m, over 25 m), with the keeper's throws and kicks apart;
+- the goals by phase: open play, or the corner, free kick, penalty, throw-in, kick-off or goal kick that began the scoring side's possession;
+- the open-play ticks with the ball in each third, counted from the side's own goal line;
+- the possession chains, by length in passes and in 2-second bins of time;
+- each player's ticks on the pitch, metres covered, ball-in-play time in each speed zone (walk under 2 m/s, jog 2 to 4, run 4 to 5.5, high intensity 5.5 to 7, sprint 7 and over) and peak speed.
+
+The measures read the match and change nothing: a seed plays the same match with or without them, and `calib.results_digest` is the same. A build without the feature prints that it has no measures as the run starts, writes zeros in the measure columns, and judges the bands of the band file only. `calib.rows.measures` in `report.json` says which build ran.
 
 ## Build a faster calibrate binary
 

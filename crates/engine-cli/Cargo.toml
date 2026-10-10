@@ -15,6 +15,10 @@ path = "src/main.rs"
 # count with. Off by default, so no match of a normal build pays for the probe's count sites;
 # build `engine-cli` with `--features sensitivity` to check the rules in `calibrate --base`.
 sensitivity = ["engine/sensitivity"]
+# The realism measures: the engine's count sites and the per-player running sink, written
+# into the compact rows. Off by default, so no match of a normal build pays for them; build
+# `engine-cli` with `--features measures` to record them in `calibrate`.
+measures = ["engine/measures"]
 
 # The rules stage's own test builds only with the rules.
 [[test]]
@@ -34,6 +38,7 @@ tracing-subscriber = { workspace = true }
 serde = { workspace = true }
 garde = { workspace = true }
 sha2 = { workspace = true }
+flate2 = { workspace = true }
 
 # Below-normal priority for the background matchday's threads and the process affinity mask
 # (std counts every core on Windows under an affinity mask and sets no thread priority).

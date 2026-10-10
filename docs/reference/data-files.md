@@ -22,11 +22,12 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `tactics.json` | 1 | Ten formations, mentalities, team instructions, roles, duties, and the AI manager's settings |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
-| `realism-bands.json` | 3 | The band registry: every realism band the calibration run judges, with its measure, range, and smallest shift. Version 2 still loads. They are acceptance criteria, never tuning values |
+| `realism-bands.json` | 4 | The band registry: every realism band the calibration run judges, with its measure, design range, smallest shift, and its record (where its real value is measured, the evidence label, the confidence counts, the condition, and whether it gates). Versions 3 and 2 still load. They are acceptance criteria, never tuning values |
 | `fast-model.json` | 3 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
 | `sensitivity.json` | 1 | The sensitivity rules: one rule per attribute job and per body job, the thresholds they are judged by, the size of a run, and the five-match rule. Only the sensitivity run and the rules stage of a change run read it; the content hash does not |
+| `gate-proof.json` | 1 | The gate proof: the broken copies of the engine that `engine-cli calibrate proof` plays, and the pass and fail rates of the last proof with the gate it measured. No match reads it; neither the content hash nor the old engine's cache key includes it |
 
-Every file starts with `"schema_version"`. A file with another version is refused, except `realism-bands.json`, which also reads version 2: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files and `tactics.json` are read in version 2 and in version 1, which converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 3 and in versions 2 and 1, and `tuning.json` in versions 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy. A version 1 or 2 attribute file converts to version 3 the same way (see [Version 2 files](#version-2-files)). Any other version is refused the same way.
+Every file starts with `"schema_version"`. A file with another version is refused, except `realism-bands.json`, which also reads versions 3 and 2: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files and `tactics.json` are read in version 2 and in version 1, which converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 3 and in versions 2 and 1, and `tuning.json` in versions 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy. A version 1 or 2 attribute file converts to version 3 the same way (see [Version 2 files](#version-2-files)). Any other version is refused the same way.
 
 ## attributes.json
 
@@ -429,10 +430,11 @@ The band registry: every realism band the calibration run judges. The bands are 
 
 | Field | Holds |
 |---|---|
-| `schema_version` | 3 |
+| `schema_version` | 4 |
 | `sample_size` | the match count the time budget is set for: 1000 |
 | `wall_minutes_per_sample` | the time budget of a suite of `sample_size` matches, in minutes; each suite's `wall_ms` check scales it to the run's match count |
 | `stronger_team.attribute_boost` | the factor the strength suite raises every attribute of the stronger club by |
+| `generalisation_floor` | the least competitions times seasons a band with a real counterpart needs to gate: 2. A band under it only reports |
 | `bands` | the bands, in the order the run shows them |
 
 Each band:
@@ -442,20 +444,72 @@ Each band:
 | `band` | its name, unique in the file |
 | `suites` | the suites that judge it: `equal`, `strength`, `formations`, `red-card` |
 | `measure` | what it measures; see below |
-| `lo`, `hi` | its range, both ends included; `hi` is at least `lo` |
-| `smallest_shift` | the smallest change a change run must have the power to see, above 0 |
+| `design.lo`, `design.hi` | its design range, both ends included; `hi` is at least `lo`. The band passes on it |
+| `design.smallest_shift` | the smallest change a change run must have the power to see, above 0 |
 | `group` | optional: a name the report gives bands of one figure, such as `possession_pct` for the home and away bands |
+| `real.source` | where the real value is measured: a pointer into the real-data folder, or `{"none": "<reason>"}` for a band with no real counterpart; see below |
+| `real.sample` | the sample size behind the real value, such as 1826 matches; 0, and only 0, for a band with no real counterpart |
+| `real.date` | the date the real value was measured, such as `2026-09-22`; for a band with no real counterpart, the date of that decision |
+| `real.floor` | optional: the least real sample the band needs to gate; a band whose `real.sample` is under it only reports, because the real data, not the run, then sets its uncertainty. Never on a band with no real counterpart |
+| `evidence` | `calibration` (tuning may read it) or `validation` (nothing was tuned on it). Only validation bands count toward a realism claim |
+| `confidence.measurement.count` | the units behind the real value: matches, team-matches or shots |
+| `confidence.generalisation` | `competitions`, `seasons` (distinct seasons in the pool) and `clubs` behind the real value |
+| `condition` | the pitch and weather the band holds for: `dry`, `wet`, `worn` or `windy`. Every shipped band is `dry` |
+| `max_from_dry` | optional: the most a band of another condition may sit from its dry band; refused on a `dry` band |
+| `gates` | `true` when the band changes the verdict; `false` when it only reports. No default |
 
-A measure is one of four kinds. Its fields come from a closed list. Each side has `goals`, `shots`, `shots_on_target`, `xg`, `passes`, `passes_completed`, `pass_accuracy_pct`, `possession_pct`, `fouls`, `offsides`, `corners`, `throw_ins`, `goal_kicks`, `yellow`, `red`, and `substitutions`, named as `goals.home`, `goals.away`, or `goals.{side}` for each side in turn; each match has `injuries` and `ball_in_play_s`.
+The file holds no real value. The calibrate command reads each value in place from the real-data folder (`--real-data`, by default the main checkout's `.scratch/out`) at each judgement, with its standard error from the same rows, and reports it beside the verdict; it never changes the verdict. A pointer has `dataset` (the pool, in words), `file` (a file of the folder; a name ending in `.gz` is decompressed), and `key`, read by one of these kinds:
+
+- A JSON file: `key` is a dotted path, such as `shot.goals`; a `*` part takes the mean over every child, such as `*.shots` over the five leagues, and the spread of the children gives the standard error. `den` names a second path and makes the value the ratio (no standard error). `"reduce": "share"` marks a share from 0 to 1, whose error comes from `real.sample`.
+- A CSV file with no quoted field: `"reduce": "mean"` is the mean over the kept rows of the sum of the `+`-joined columns of `key`, such as `hg+ag`; `"reduce": "share"` is the share of kept rows whose sum holds `op` against `value`. `where` keeps the rows whose columns hold one of the listed values, such as `{"comp": ["England", "France"]}`.
+- A group share: `"reduce": "group_share"`, `group_by` and `tokens`: the share of distinct `group_by` values with at least one row whose `key` column, split on spaces, holds a listed token. `sending_off_share` reads it over `wy2_events.csv.gz`: the matches with tag 1701 or 1703 over all matches.
+- A JSON `key` of several paths joined by `+` sums them, such as `goal_origin.Regular Play+goal_origin.From Counter`.
+
+A CSV `key` may join columns by `+` or `-`, such as `hg-ag`. More CSV reductions:
+
+- `"reduce": "bin_share"` with `bins: [lo, hi]`: the share of kept rows whose key lies from `lo` (included) to `hi` (not included).
+- `"reduce": "goal_distance"` with `goal: [x, y]`: the mean distance from the point the key names as `x:y` to the goal.
+- `"reduce": "scoreline"` with `scores`, such as `["5-1"]`: the share of kept rows whose two key columns (`a:b`) hold one of the scores, either way round.
+- `"reduce": "factorial_ratio"`: `n × Σ x(x−1) / (Σ x)²` over the kept rows, 1 for a Poisson count.
+- `"reduce": "group_range"` with `group_by` and `window`: for each group with at least `window` kept rows, the largest key less the smallest over its first `window` rows; the mean over those groups.
+- `"reduce": "group_max"` with `group_by` (columns joined by `+`): the largest key of each group; the mean over the groups.
+
+Three reductions read a whole sample for a whole-distribution band (`distribution` or `cells`, below), one histogram per real match; each file is read once, even when several bands point into it:
+
+- `"reduce": "histogram"` with `group_by`: each kept row adds its key to the histogram of its `group_by` value (a match), binned by the band's `width` and `bins`. The key is a sum of columns, such as `hg+ag`, or a point `x:y` measured to `goal`, such as the shots of `sb_events.csv.gz`.
+- `"reduce": "cells"` with `group_by`: each kept row is a match, its key the score `home:away`, one cell of the band's table.
+- `"reduce": "chains"` with `group_by`, `chain` and `count`: the rows of each `group_by` value (a match) and `chain` value (a possession) are one chain, every row of the file counted. `"count": "passes"` measures each chain by its rows whose key holds one of `tokens` (split on spaces) and, with `where` and `same`, pass those filters, such as the possession team's `Pass` rows. `"count": "seconds"` measures it from its first row's `time` column (seconds, or `HH:MM:SS.mmm`) to its last row's `time` plus its key, a duration column (blank reads 0), within the first row's `period` column.
+
+For such a band `calib.real` shows the mean of the sample's points (each bin at its lower edge; for cells, home plus away goals as capped) with its standard error over matches, and `confidence.measurement.count` the real matches read.
+
+Any CSV pointer may also hold `weight` (a column that weights each row, for a mean or a bin share), `range` (`{"column": [lo, hi]}`: keeps the rows whose numeric column lies from `lo`, included, to `hi`, not included), `same` (`["a", "b"]`: keeps the rows whose two columns hold the same value), and `skip_blank` (`true`: skips a row whose key or weight is blank rather than refusing it).
+
+`scale` multiplies the value and its error, such as 0.5 for a per-match rate per team. The three bands of the strength and red-card suites measure engine experiments that no real match repeats, so their `real.source` is `{"none": "<reason>"}`: the report says `no real counterpart` and counts them apart from the bands without a real value.
+
+The report derives two words from the numbers by fixed rules. Measurement: `precise` when the real value's standard error is at most a quarter of the smallest shift, `fair` when it is at most the smallest shift, `rough` above, `unknown` without an error, `n/a` with no real counterpart. Generalisation, competitions times seasons against `generalisation_floor`: `broad` at twice the floor or more, `narrow` at the floor or more, `thin` under it, `n/a` with no real counterpart. A `thin` band, a band with `gates: false`, and a band whose real sample is under its `real.floor` print `report only`: they are judged and reported apart ("Reported bands" in `cli.md`), and left out of the joint verdict, its threshold and `calib.pass`. The floors never apply to a band with no real counterpart.
+
+A band set from a real value has a design range that starts at least two of the real value's standard errors either side of it. A new band ships with `gates: false` and only reports. To promote it to gate, set `gates: true` once its real value is measured, its range follows that rule, and the engine has been judged against it in a full run; the next judgement of a finished run counts it, with no match played.
+
+A measure is one of ten kinds. Its fields come from a closed list. Each side has `goals`, `shots`, `shots_on_target`, `xg`, `passes`, `passes_completed`, `pass_accuracy_pct`, `possession_pct`, `fouls`, `offsides`, `corners`, `throw_ins`, `goal_kicks`, `yellow`, `red`, and `substitutions`, named as `goals.home`, `goals.away`, or `goals.{side}` for each side in turn; each match has `injuries` and `ball_in_play_s`.
+
+A build with the `measures` feature also gives each side the realism measures of the compact rows: `shot_distance_m` (summed over the side's shots), `pass_attempts.<cell>` and `pass_completed.<cell>` (by kind and length, such as `ground_lt10`, `ground_10_25`, `chip_gt25` and `cross_10_25`), `goals_phase.<phase>` (such as `open_play`, `corner`, `free_kick`, `penalty` and `throw_in`), `third_ticks.<third>` (`own`, `middle`, `final`), `chains`, `chain_passes`, `chain_seconds`, `players_used`, `minutes_on`, `distance_m`, `peak_mps` (summed over the players who played), and `zone_ticks.<zone>` (`walk`, `jog`, `run`, `hi`, `sprint`). A band that reads them takes only the matches whose rows carry them; a build without them gives such a band no value.
 
 - `{"kind": "mean", "per": "match", "of": [...]}`: the mean over matches of the sum of the fields, such as goals per match. With `"per": "team"` and `{side}` fields, the mean over each team of each match.
 - `{"kind": "share", "of": [...], "op": ">=", "value": 10}`: the share of matches whose sum of the fields holds against the value; `op` is `>=`, `==`, or `<=`.
 - `{"kind": "ratio", "num": [...], "den": [...]}`: the sum of the numerator fields over the sum of the denominator fields, pooled over the matches.
+- `{"kind": "difference", "of": [...], "minus": [...]}`: the mean over matches of the sum of `of` less the sum of `minus`, such as the home goal difference.
+- `{"kind": "scoreline", "scores": [[5, 1]]}`: the share of matches that end in one of the scores, either way round.
+- `{"kind": "factorial_ratio", "of": ["goals.{side}"]}`: over each team of each match, `n × Σ x(x−1) / (Σ x)²`: 1 when the count spreads as a Poisson count, above 1 when it spreads more.
+- `{"kind": "club_range", "of": [...], "minus": [...], "window": 34}`: for each club with at least `window` matches in the run, its per-match sum of `of` less the sum of `minus` (read for the other side) over its first `window` matches, largest less smallest; the mean over those clubs. It has no per-match form, so a change run judges it by its range alone.
 - `{"kind": "builtin", "name": ...}`: a measure of a whole suite: `stronger_team_win_rate` (strength), `reduced_minus_full` and `full_over_control` (red-card).
+- `{"kind": "distribution", "of": "goals", "width": 1, "bins": 11}`: a whole distribution, each match's histogram of its source over `bins` bins of `width`, the last bin holding everything above it. The sources: `goals` (the match's goals, both sides), `passes` (each side's passes, two points a match), and, in a `measures` build, `shot_distance` (41 bins of 1 m), `chain_passes` (16 bins of one pass) and `chain_seconds` (31 bins of 2 seconds), which must name the rows' own bins. The value is the Wasserstein-1 distance of the run's whole sample from the real one, in the source's unit.
+- `{"kind": "cells", "max": 5}`: the scoreline table, each match one cell, each side's goals capped at `max` as "max or more"; the value is the total-variation distance from the real table, a share from 0 to 1.
 
-A field outside the list, a measure without fields, a range with `hi` below `lo`, a `smallest_shift` that is not above 0, an unknown suite, and a band name used twice are refused, and the message names the band and the field, for example `content refused: realism bands realism-bands.json: bands[0] (goals_per_match).hi: hi 2 is below lo 2.4`.
+A whole-distribution band's design range runs from 0 to its margin. It is an equivalence test: both samples are resampled by whole match, 1,999 times; it passes when the 97th percentile of the resampled distance (`upper`) is within the margin, fails when the 3rd percentile is beyond it, and is not sure otherwise. Its noise floor (`noise_floor`) is the 97th percentile of the centred resampled distance; a margin at or under it reads not sure with "margin below noise floor". A distribution with an unknown source, a `width` not above 0, fewer than 2 bins, or a measures source with other bins than the rows', and cells with `max` outside 1 to 20, are refused by name.
 
-A file of version 2, with one fixed field per band, still loads: it is read as version 3 in memory, with each band's smallest shift a quarter of its range, and the report's `calib.registry.migrated_from` says `2`. The file is not rewritten. A file of version 1 is refused.
+A field outside the list, a measure without fields, a range with `hi` below `lo`, a `smallest_shift` that is not above 0, an unknown suite, and a band name used twice are refused, and the message names the band and the field, for example `content refused: realism bands realism-bands.json: bands[0] (goals_per_match).design.hi: hi 2 is below lo 2.4`. A band without one of `design.lo`, `design.hi`, `design.smallest_shift`, `real.source`, `real.sample`, `real.date`, `evidence`, `confidence.measurement`, `confidence.generalisation`, `condition` and `gates` is refused by name, for example `bands[11] (corners_per_team).gates: is required`; so are a source that holds both `none` and a pointer, a pointer without `dataset`, `file` and `key`, a blank reason, a pointer with `real.sample` 0, a band with no counterpart and a sample above 0 or a `real.floor`, an `evidence` other than the two words, and `max_from_dry` on a `dry` band.
+
+A file of version 3, with the range flat on each band and no record, still loads: in memory each band gates, its condition is `dry`, and it has no real record, so the report counts it as without a real value (`no real record`). Its bands judge as the version 4 file's: the digests hash only what decides a verdict. A file of version 2, with one fixed field per band, migrates through version 3, with each band's smallest shift a quarter of its range. The report's `calib.registry.migrated_from` says `3` or `2`. The file is not rewritten. A file of version 1 is refused.
 
 ## fast-model.json
 
@@ -517,6 +571,40 @@ Each rule reads one of three words:
 - **not sure**: anything else. Not sure is never a pass.
 
 The five-match rule passes when the 95 percent interval of the pooled share of runs lies within `target` plus or minus `tolerance`, fails when it lies wholly outside, and is not sure otherwise.
+
+## gate-proof.json
+
+The gate proof (see [Run the gate proof](../how-to/calibration.md#run-the-gate-proof)). `engine-cli calibrate proof` reads the copies and writes `proof`; every `calibrate` run compares `proof.gate` with its own gate and says when they differ. An unknown field is refused by name.
+
+| Field | Holds |
+|---|---|
+| `schema_version` | 1 |
+| `copies` | The broken copies, each with `name` (the flag's name in the proof's content folder), `measure` (the band whose measure it moves), `move` (the expected move, in words), and `flag`, a flag body as in [flags](#flags) without `state`: `owner`, `hypothesis`, `removal_condition`, and `overrides` |
+| `proof` | `null` until a proof runs; then the last proof, below |
+
+The shipped copies:
+
+| Copy | Band it moves | Overrides | Expected move |
+|---|---|---|---|
+| `shots_up` | `shots_per_team` | `engine.shot_range` 22.4 | up about 10 percent |
+| `fouls_halved` | `fouls_per_team` | `engine.foul_base` 0.05, `engine.foul_aggression_weight` 0.025, `engine.foul_tackling_weight` 0.0125 | about half |
+| `card_storm` | `yellow_cards_per_team` | `engine.foul_base` 1.0, `engine.yellow_base` 1.0 | far up: every tackle a foul, every foul booked |
+| `pass_completion_down` | `pass_accuracy_pct` | `engine.aim_noise` 0.18 | down about 5 points |
+
+`proof` holds:
+
+| Field | Holds |
+|---|---|
+| `gate` | The gate the proof measured: `registry` (the band registry's digest), `measures` (the measures version), and `verdict_code` (the digest of the judging code) |
+| `made_at` | When the proof was written, in UTC |
+| `build` | The build that played it: `hash` (the commit, `-dirty` when the tree held changes) and `measures` (`true`) |
+| `seed`, `matches`, `minutes` | The first run seed, the cap of each change run, and the minutes of each match |
+| `self` | The self runs, each with `name`, `seed`, `reseed` (the salt of the changed engine's new match seeds), `word` (the joint word), `matches`, `failed` and `not_sure` (the bands with that word in either table), `significant` (the bands whose change, over its standard error, passed the run's joint threshold) and `moved` (the significant bands whose change is also at least their smallest shift); and, each over the self runs, `pass_rate`, `fail_rate` and `not_sure_rate` (by joint word), `false_alarm_rate` (runs with a significant band) and `move_rate` (runs with a moved band). A `not sure` run is not a pass |
+| `copies` | One entry per copy: `name`; `runs`, each with `seed`, `word`, `matches`, `failed` (the bands that read `fail`: moved, or outside their range) and `moved` (the bands that moved, empty for a missed detection); `fail_rate` (runs whose joint word is `fail`, over the runs); `detection_rate` (runs in which the band the copy names moved); `missed` (runs in which no band moved); and `moved`, each band that moved with the number of runs it did |
+| `distribution_bands` | One entry per whole-distribution band: `band` and `moved_by`, the copies that moved it in any run; empty when no copy did |
+| `counts` | Over every run: `runs`, `total_matches`, `pairs`, and `observations`, the matches of each engine (`changed`, `old`) |
+
+The file holds engine results and band names only, never a real value.
 
 ## Position codes
 
@@ -757,6 +845,7 @@ The engine writes these files to the data folder. The data folder is `SM_DATA_DI
 | `runs/<run.id>/run.json` | `calibrate`, when it opens the run folder | the run's identity: its `run.id`, its start in Unix milliseconds, and the build, content, fixtures hash, flags, paired flag, seed, minutes, strength boost, random-number scheme, fixture scheme, measures version, and band registry version. A run into the same folder resumes only when its identity is the same |
 | `runs/<run.id>/report.json` | `calibrate` | the run report, as the `run-report` record |
 | `runs/<run.id>/target.json` | `calibrate` | the run's matches per suite, the pilot and cap of a change run, and the digest of each band it was last judged with |
+| `runs/<run.id>/accepted.json` | `calibrate accept` | the bands accepted as `not sure`: `schema_version` (1), `run_id`, `identity` (the first 12 hex characters of the SHA-256 of the run's identity, as `report.json` holds it under `run.identity`), and `accepted`, one entry per band with `band`, `at` (Unix milliseconds) and `word` (`not sure`). A file of another run or identity, or one that cannot be read, is ignored, and `calib.accepted.ignored` says why |
 | `runs/<run.id>/rows/<session>-<thread>.rows` | `calibrate` | one compact row per match of the run; see "The row file" below |
 | `runs/<run.id>/ledger/<session>-<suite>-<thread>.jsonl` | `calibrate`, after each finished work unit | one JSON line per finished work unit: the `suite`, the `unit`'s place among its suite's units in the session, and the `fixtures`, each with its fixture `key`, engine `seed`, and `match` identifier. A run into the same folder plays only the fixtures that have no line |
 | `runs/<run.id>/stats/<match.id>.json` | `calibrate` | the statistics record of each recorded match: about 1 in 16 and every outlier, or every match with `--keep-events all` |
@@ -788,7 +877,7 @@ The file starts with a header:
 | Bytes | Field |
 |---|---|
 | 6 | the magic `SMROWS` |
-| 4 | the format version: 1 |
+| 4 | the format version: 2 (format 1, written before the realism measures, is still read) |
 | 4 | the measures version (`run.identity.measures`) |
 | 4 | the number of columns |
 | per column | 1 byte name length, the name, 1 byte type: 1 is an 8-bit integer, 4 a 32-bit integer, 8 a 64-bit integer, 9 a 64-bit float |
@@ -803,7 +892,7 @@ Blocks follow, one per finished work unit:
 | per column | the column's value for every row of the block, in row order |
 | 8 | the first 8 bytes of the SHA-256 of the block's bytes before them |
 
-The columns of format 1, in file order (a `.home` and `.away` pair is one column per team):
+The columns of format 1, which open format 2, in file order (a `.home` and `.away` pair is one column per team):
 
 | Column | Type | Holds |
 |---|---|---|
@@ -824,11 +913,32 @@ The columns of format 1, in file order (a `.home` and `.away` pair is one column
 | `ticks` | 32-bit | ticks played |
 | `duration_us` | 64-bit | the match's wall time in microseconds |
 
+Format 2 appends the realism measures. A build without the `measures` feature writes them as zeros, with `measures.present` 0. Each `<side>` is `home` or `away`:
+
+| Column | Type | Holds |
+|---|---|---|
+| `measures.present` | 8-bit | 1 when a `measures` build played the match |
+| `shot_bin.<side>.00` to `.40` | 32-bit | shots by distance from the ball at the kick to the centre of the goal attacked, in 1 m bins (`00` is under 1 m), `40` for 40 m and over; penalties included, so the bins sum to `shots` |
+| `shot_distance_m.<side>` | float | the sum of those distances, in metres |
+| `pass_attempts.<side>.<cell>`, `pass_completed.<side>.<cell>` | 32-bit | open-play passes played and completed, by cell: `ground_`, `chip_` (a long pass or chip) and `cross_`, each `lt10` (under 10 m), `10_25` or `gt25` (over 25 m), then `keeper_throw`, `keeper_kick`, and `unknown` (a pass kicked without a plan, 0 in a sound build); they sum to `passes` and `passes_completed` |
+| `goals_phase.<side>.<phase>` | 32-bit | goals by phase: `open_play`, `corner`, `free_kick`, `penalty`, `throw_in`, `kick_off`, `goal_kick`, the restart that began the scoring side's possession chain; they sum to `goals` |
+| `third_ticks.<side>.own`, `.middle`, `.final` | 32-bit | open-play ticks credited to the side with the ball in each third, counted from its own goal line; they sum to `possession_ticks` |
+| `chains.<side>` | 32-bit | possession chains: from a gain or a restart taken to an opponent's touch, the ball going dead, a goal or full time |
+| `chain_passes_bin.<side>.00` to `.15` | 32-bit | chains by passes, the side's open-play passes and restart kicks; `15` for 15 and over |
+| `chain_seconds_bin.<side>.00` to `.30` | 32-bit | chains by length in 2-second bins; `30` for 60 s and over |
+| `chain_passes.<side>`, `chain_ticks.<side>` | 32-bit, 64-bit | the sums of the chains' passes and ticks |
+| `player.<side>.00` to `.15` `.squad` | 8-bit | the player's place in his team file, slots in order of first appearance |
+| `player.<side>.<slot>.ticks_on` | 32-bit | ticks on the pitch: his minutes played, times 3,000 |
+| `player.<side>.<slot>.distance_m` | float | metres covered: speed times the tick over every tick on the pitch |
+| `player.<side>.<slot>.walk`, `.jog`, `.run`, `.hi`, `.sprint` | 32-bit | ball-in-play ticks in each speed zone: under 2 m/s, 2 to 4, 4 to 5.5, 5.5 to 7, 7 and over |
+| `player.<side>.<slot>.peak_mps` | float | his highest speed, m/s |
+| `physical_overflow.<side>` | 32-bit | players of the side beyond the 16 slots |
+
 A failed or panicked match has a row with its key, its seed, its outcome and zero counts.
 
 The statistics file rounds what the row keeps unrounded: `stats.xg` is `xg` to 2 decimals, `stats.pass_accuracy_pct` is `100 x passes_completed / passes` to 1 decimal (0 with no pass), `stats.possession_pct` is each team's `possession_ticks` over both teams' to 1 decimal, and `stats.ball_in_play_s` is `(live_ticks + 25) / 50`, rounded down. The bands read these rounded figures, rebuilt from the rows with the same functions, so a run's bands do not depend on which matches have a statistics file.
 
-A block is written and synced before its unit's ledger line. A row counts only when the ledger line of its key was written by the session in the file's name, with the same engine seed; the rows of a unit cut off before its ledger line are never read, and the unit plays again. Reading a file stops at a block cut off part-way or with a wrong checksum, which only a stopped run leaves at the end of a file. A file of another format version is refused by name. `calib.results_digest` hashes, for every arm in key order, each row's key and its columns except `record.reasons` and `duration_us`.
+A block is written and synced before its unit's ledger line. A row counts only when the ledger line of its key was written by the session in the file's name, with the same engine seed; the rows of a unit cut off before its ledger line are never read, and the unit plays again. Reading a file stops at a block cut off part-way or with a wrong checksum, which only a stopped run leaves at the end of a file. A file of another format version, or of format 1 or 2 with another measures version or column list, is refused by name. `calib.results_digest` hashes, for every arm in key order, each row's key and its format 1 columns except `record.reasons` and `duration_us`, so it is the same with or without the measures.
 
 ### The snapshot file
 

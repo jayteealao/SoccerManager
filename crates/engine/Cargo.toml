@@ -35,6 +35,10 @@ scenario = []
 # normal build pays for the probe's count sites. The rules' tests need it:
 # `cargo test -p engine --features sensitivity --test sensitivity`.
 sensitivity = []
+# The realism measures and the count sites that fill them (shot distance, pass kind and
+# length, goal phase, possession by third, possession chains). Off by default, so no match
+# of a normal build pays for a count site. Calibration's `measures` build enables it.
+measures = []
 
 [dev-dependencies]
 criterion = { workspace = true }
@@ -56,3 +60,8 @@ required-features = ["sensitivity"]
 [[test]]
 name = "sensitivity_full"
 required-features = ["sensitivity"]
+
+# The realism measures' own test builds only with the measures: a plain `cargo test` skips it.
+[[test]]
+name = "measures"
+required-features = ["measures"]

@@ -646,6 +646,11 @@ pub struct Simulation {
     /// build with the `sensitivity` feature has it, so a normal match pays for no count site.
     #[cfg(feature = "sensitivity")]
     pub(crate) probe: Option<Box<crate::sensitivity::probe::JobProbe>>,
+    /// Test seam for the realism measures: absent unless a calibration run attaches them
+    /// ([`Simulation::with_measures`]). Never hashed and never stored. Only a build with the
+    /// `measures` feature has it, so a normal match pays for no count site.
+    #[cfg(feature = "measures")]
+    pub(crate) measures: Option<Box<crate::measures::MatchMeasures>>,
 }
 
 impl Simulation {
@@ -793,6 +798,8 @@ impl Simulation {
             tallies,
             #[cfg(feature = "sensitivity")]
             probe: None,
+            #[cfg(feature = "measures")]
+            measures: None,
             config,
         };
         // Every starter plays; the condition inputs (sharpness, adaptation, a short rest)
@@ -848,6 +855,27 @@ impl Simulation {
     #[cfg(feature = "sensitivity")]
     pub fn probe(&self) -> Option<&crate::sensitivity::probe::JobProbe> {
         self.probe.as_deref()
+    }
+
+    /// Attaches the realism measures: from now on the count sites fill them. They read the
+    /// match and write nothing else, so every tick stays as it would be. Attached before
+    /// the first step, the opening kick-off begins the first chain.
+    #[cfg(feature = "measures")]
+    pub fn with_measures(&mut self) {
+        let mut m = Box::<crate::measures::MatchMeasures>::default();
+        if self.tick == 0
+            && self.restart_taker.is_some()
+            && let Some(team) = self.last_touch
+        {
+            m.restart_taken(crate::StoppageKind::KickOff, team, self.tick);
+        }
+        self.measures = Some(m);
+    }
+
+    /// The realism measures, when a calibration run attached them.
+    #[cfg(feature = "measures")]
+    pub fn measures(&self) -> Option<&crate::measures::MatchMeasures> {
+        self.measures.as_deref()
     }
 
     /// The roster index of the player keeping goal for `team`: slot 0, a goalkeeper who came
@@ -1201,6 +1229,10 @@ impl Simulation {
             return;
         }
         self.finished = true;
+        #[cfg(feature = "measures")]
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.finish(self.tick);
+        }
         self.streams.begin_tick(self.tick);
         self.enter_phase(Phase::FullTime, crate::rules::phases::Cause::MatchEnd);
         // A match abandoned before its period's added time was announced has none.
@@ -1256,6 +1288,17 @@ impl Simulation {
                 self.summary.live_ticks += 1;
                 if let Some(team) = self.last_touch {
                     self.summary.possession_ticks[team] += 1;
+                    #[cfg(feature = "measures")]
+                    if self.measures.is_some() {
+                        let third = crate::measures::third_of(
+                            self.ball.pos.x,
+                            self.teams[team].attack_x,
+                            self.config.pitch().length(),
+                        );
+                        if let Some(m) = self.measures.as_deref_mut() {
+                            m.live_tick(team, third);
+                        }
+                    }
                 }
                 if self.tick.is_multiple_of(t.decision_interval_ticks)
                     && let Some(kick) = self.decide()
@@ -1401,6 +1444,13 @@ impl Simulation {
                 if self.probe.is_some() {
                     self.probe_shot(c, team, from, attack_x, penalty, xg);
                 }
+                #[cfg(feature = "measures")]
+                if self.measures.is_some() {
+                    let distance = (self.teams[team].target_goal() - from).length();
+                    if let Some(m) = self.measures.as_deref_mut() {
+                        m.shot(team, distance);
+                    }
+                }
                 self.shot_in_flight = Some(team);
                 self.shot_quality = quality;
                 shooter = Some((team, attack_x, c));
@@ -1410,12 +1460,20 @@ impl Simulation {
                 if let Some(p) = self.probe.as_deref_mut() {
                     p.kicked_other();
                 }
+                #[cfg(feature = "measures")]
+                if let Some(m) = self.measures.as_deref_mut() {
+                    m.restart_kicked(team);
+                }
             } else if matches!(kick, Kick::Clear { .. }) {
                 self.summary.clearances[team] += 1;
                 self.tally(c, tally::Count::Clearance);
                 #[cfg(feature = "sensitivity")]
                 if let Some(p) = self.probe.as_deref_mut() {
                     p.kicked_other();
+                }
+                #[cfg(feature = "measures")]
+                if let Some(m) = self.measures.as_deref_mut() {
+                    m.kicked_other();
                 }
             } else {
                 self.summary.passes[team] += 1;
@@ -1428,6 +1486,14 @@ impl Simulation {
                         p.kicked_pass(c, team, from, attack_x);
                     }
                 }
+                #[cfg(feature = "measures")]
+                if let Some(m) = self.measures.as_deref_mut() {
+                    m.kicked_pass(c, team);
+                }
+            }
+            #[cfg(feature = "measures")]
+            if let Some(m) = self.measures.as_deref_mut() {
+                m.touched(team, self.tick);
             }
             self.last_touch = Some(team);
             self.last_kicker = Some(c);

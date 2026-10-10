@@ -270,6 +270,10 @@ impl Simulation {
     /// Places every player for a kick-off by `team` at once, as at the start of a half, and
     /// gives the centre-forward the ball.
     pub(crate) fn place_kick_off(&mut self, team: usize) {
+        #[cfg(feature = "measures")]
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.dead(self.tick);
+        }
         self.restart = true;
         self.last_kicker = None;
         self.pass_in_flight = None;
@@ -308,6 +312,10 @@ impl Simulation {
         self.last_touch = Some(team);
         self.possession_phase = Some(team);
         self.restart_taker = Some(kicker);
+        #[cfg(feature = "measures")]
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.restart_taken(StoppageKind::KickOff, team, self.tick);
+        }
         self.referee.offside = 0;
         self.enter_phase(Phase::Live, Cause::KickOffTaken);
     }
@@ -317,6 +325,10 @@ impl Simulation {
     /// place.
     pub(crate) fn goal(&mut self, team: usize) {
         self.summary.goals[team] += 1;
+        #[cfg(feature = "measures")]
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.goal(team, self.tick);
+        }
         if let Some(k) = self.last_kicker
             && self.players[k].team == team
         {
@@ -426,6 +438,10 @@ impl Simulation {
         let offender = self.players[i];
         let fouled_team = self.players[c].team;
         self.summary.fouls[offender.team] += 1;
+        #[cfg(feature = "measures")]
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.dead(self.tick);
+        }
         self.tally(i, crate::sim::tally::Count::Foul);
         // The offender makes no tackle attempt until the cooldown has passed, advantage or not.
         self.players[i].foul_ready = self.tick.saturating_add(t.foul_cooldown_ticks);
@@ -724,6 +740,10 @@ impl Simulation {
         direct: bool,
     ) {
         self.show_pending_cards();
+        #[cfg(feature = "measures")]
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.dead(self.tick);
+        }
         if self.referee.abandoned {
             return;
         }
@@ -844,6 +864,10 @@ impl Simulation {
         self.last_touch = Some(dead.team);
         self.possession_phase = Some(dead.team);
         self.restart_taker = Some(dead.taker);
+        #[cfg(feature = "measures")]
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.restart_taken(dead.kind, dead.team, self.tick);
+        }
         let kick = match dead.kind {
             StoppageKind::ThrowIn | StoppageKind::Corner => {
                 Some((self.restart_pass(dead.taker, dead.kind), false))
