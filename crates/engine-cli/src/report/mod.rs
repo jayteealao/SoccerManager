@@ -950,6 +950,10 @@ pub struct RuleRow {
     pub roles: Option<BTreeMap<String, f64>>,
     /// `pass`, `fail` or `not_sure`.
     pub word: &'static str,
+    /// The rule runs and reports: its word is information, and a full sensitivity run does
+    /// not fail on it. Written only when set.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub report_only: bool,
 }
 
 /// An estimate and its 95 percent interval.

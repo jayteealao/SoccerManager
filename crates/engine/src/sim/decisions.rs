@@ -7,7 +7,7 @@ use serde_json::json;
 use crate::data::rules::StoppageKind;
 use crate::decision::{Kick, Options, offsets_json};
 use crate::math::DVec2;
-use crate::modules::{CarrierPlan, CoverTrace, OptionDraws, ShotDraws, TargetsTrace};
+use crate::modules::{CarrierPlan, CoverTrace, OptionDraws, ShotDraws, ShotKind, TargetsTrace};
 use crate::sim::Simulation;
 use crate::streams::{Action, Key};
 use crate::trace::Point;
@@ -19,6 +19,10 @@ impl Simulation {
         let targets = decision.targets(&self.view());
         for (p, &target) in self.players.iter_mut().zip(targets.targets.iter()) {
             p.target = target;
+        }
+        #[cfg(feature = "sensitivity")]
+        if self.probe.is_some() {
+            self.probe_targets(targets.trace);
         }
         match targets.trace {
             TargetsTrace::Carrier {
@@ -145,7 +149,9 @@ impl Simulation {
             self.probe_plan(c, choice, plan);
         }
         match plan {
-            CarrierPlan::Shot { goal, keeper } => Some(self.shot_kick(c, goal, keeper, 1.0)),
+            CarrierPlan::Shot { goal, keeper } => {
+                Some(self.shot_kick(c, goal, keeper, ShotKind::Open))
+            }
             CarrierPlan::Pass { j } => {
                 let aim = self.streams.draw(Key::player(Action::PassAim, carrier));
                 Some(decision.pass_kick(&self.view(), c, j, aim))
@@ -168,17 +174,16 @@ impl Simulation {
 }
 
 impl Simulation {
-    /// Player `c` shoots at the goal centred on `goal`, which `keeper` defends; `spread_scale`
-    /// scales the aim noise (1 in open play, less for a kick from the penalty mark). An
-    /// open-play shot and a shoot-out kick both come from here, and the draws are taken in
-    /// the same order either way: the side (only with the keeper off the pitch), the aim, the
-    /// spread, and the loft.
+    /// Player `c` shoots a shot of `kind` at the goal centred on `goal`, which `keeper`
+    /// defends. An open-play shot, a penalty, a direct free kick and a shoot-out kick all come
+    /// from here, and the draws are taken in the same order every time: the side (only with
+    /// the keeper off the pitch), the aim, the spread, and the loft.
     pub(crate) fn shot_kick(
         &mut self,
         c: usize,
         goal: DVec2,
         keeper: usize,
-        spread_scale: f64,
+        kind: ShotKind,
     ) -> Kick {
         let decision = self.config.modules.decision;
         let carrier = crate::streams::PlayerKey::of(&self.players[c]);
@@ -195,18 +200,35 @@ impl Simulation {
             spread,
             loft,
         };
-        decision.shot_kick(&self.view(), c, goal, keeper, spread_scale, &draws)
+        decision.shot_kick(&self.view(), c, goal, keeper, kind, &draws)
     }
 }
 
 impl Simulation {
-    /// The kick that takes a restart, from the decision module.
-    pub(crate) fn restart_pass(&mut self, taker: usize, kind: StoppageKind) -> Kick {
-        let pass = self
-            .config
-            .modules
-            .decision
-            .restart_pass(&self.view(), taker, kind);
+    /// The kick that takes a restart, from the decision module. A corner or a free kick draws
+    /// the taker's pass aim for its delivery when the tuning gives deliveries a noise; a
+    /// throw-in and a goal kick draw nothing.
+    pub(crate) fn restart_pass(&mut self, taker: usize, kind: StoppageKind, direct: bool) -> Kick {
+        let delivered = matches!(kind, StoppageKind::Corner | StoppageKind::FreeKick);
+        let aim = if delivered && self.config.tuning.contract.hooks().restart_noise > 0.0 {
+            let p = crate::streams::PlayerKey::of(&self.players[taker]);
+            self.streams.draw(Key::player(Action::PassAim, p))
+        } else {
+            0.5
+        };
+        let pass =
+            self.config
+                .modules
+                .decision
+                .restart_pass(&self.view(), taker, kind, direct, aim);
+        #[cfg(feature = "sensitivity")]
+        if kind == StoppageKind::ThrowIn {
+            let team = self.players[taker].team;
+            let distance = (pass.target - self.players[taker].pos).length();
+            if let Some(p) = self.probe.as_deref_mut() {
+                p.throw_in(team, distance);
+            }
+        }
         if let Some(trace) = self.streams.trace_mut() {
             let candidates: Vec<_> = pass.candidates[..pass.count]
                 .iter()

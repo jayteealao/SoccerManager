@@ -687,10 +687,10 @@ fn a_plain_run_keeps_the_formations_checks_per_pairing_unchanged() {
     let out = formations(&data, &content, &run, &["--matches", "8"]);
     let r = report(&out, &run);
     let expected = json!([
-        {"band": "goalless_share", "pairing": "4-4-2 v 4-2-3-1", "value": 0.75, "lo": 0.04, "hi": 0.12, "pass": false, "se": 0.15309},
-        {"band": "goalless_share", "pairing": "4-4-2 v 4-3-3", "value": 0.5, "lo": 0.04, "hi": 0.12, "pass": false, "se": 0.17678},
-        {"band": "goals_per_match", "pairing": "4-4-2 v 4-2-3-1", "value": 0.25, "lo": 2.4, "hi": 3.2, "pass": false, "se": 0.15309},
-        {"band": "goals_per_match", "pairing": "4-4-2 v 4-3-3", "value": 0.625, "lo": 2.4, "hi": 3.2, "pass": false, "se": 0.24606},
+        {"band": "goalless_share", "pairing": "4-4-2 v 4-2-3-1", "value": 1.0, "lo": 0.04, "hi": 0.12, "pass": false, "se": 0.0},
+        {"band": "goalless_share", "pairing": "4-4-2 v 4-3-3", "value": 0.375, "lo": 0.04, "hi": 0.12, "pass": false, "se": 0.17116},
+        {"band": "goals_per_match", "pairing": "4-4-2 v 4-2-3-1", "value": 0.0, "lo": 2.4, "hi": 3.2, "pass": false, "se": 0.0},
+        {"band": "goals_per_match", "pairing": "4-4-2 v 4-3-3", "value": 0.875, "lo": 2.4, "hi": 3.2, "pass": false, "se": 0.27599},
         {"band": "ten_plus_goals_share", "pairing": "4-4-2 v 4-2-3-1", "value": 0.0, "lo": 0.0, "hi": 0.005, "pass": true, "se": 0.0},
         {"band": "ten_plus_goals_share", "pairing": "4-4-2 v 4-3-3", "value": 0.0, "lo": 0.0, "hi": 0.005, "pass": true, "se": 0.0}
     ]);

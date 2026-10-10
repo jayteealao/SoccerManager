@@ -950,7 +950,8 @@ impl Simulation {
 
     /// Sets player `i`'s state deltas and form offset and derives his effective values from
     /// them: his squad entry's when all are 0, otherwise blended again from his ratings moved
-    /// by both ([`crate::contract::states::effective_with_form`]) through the contract.
+    /// by his deltas ([`crate::contract::states::effective`]), with the form offset moving each
+    /// stage by its action's consistency degree after the blend.
     pub(crate) fn set_state(
         &mut self,
         i: usize,
@@ -964,19 +965,14 @@ impl Simulation {
             self.stages[i] = entry.stages;
         } else {
             let schema = &self.config.attributes;
-            let ratings = crate::contract::states::effective_with_form(
-                &entry.attributes,
-                schema,
-                deltas,
-                form,
-                &self.config.tuning.contract.states,
-            );
+            let ratings = crate::contract::states::effective(&entry.attributes, schema, deltas);
             let (derived, stages) = crate::player::Derived::from_blend(
                 &ratings,
                 &self.blend,
                 schema,
                 &self.config.tuning,
                 entry.body,
+                form,
             );
             self.players[i].derived = derived;
             self.stages[i] = stages;
@@ -1404,10 +1400,7 @@ impl Simulation {
                 self.pass_in_flight = Some(team);
                 #[cfg(feature = "sensitivity")]
                 if self.probe.is_some() {
-                    let (from, attack_x) = (self.ball.xy(), self.teams[team].attack_x);
-                    if let Some(p) = self.probe.as_deref_mut() {
-                        p.kicked_pass(c, team, from, attack_x);
-                    }
+                    self.probe_pass(c, team);
                 }
             }
             self.last_touch = Some(team);

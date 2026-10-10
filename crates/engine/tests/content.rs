@@ -9,6 +9,7 @@
 mod common;
 
 use engine::EngineError;
+use engine::contract::{ActionKind, StageKind};
 use engine::data::{
     ATTRIBUTES_VERSION, AttributeSchema, RULES_VERSION, RulePack, StoppageKind, load_json,
 };
@@ -722,8 +723,10 @@ fn a_personality_value_outside_its_rules_is_refused_by_name() {
 }
 
 /// The version 3 file the build shipped before converts to version 4 with the same names,
-/// groups, jobs, tables, consistency degrees and gates as the shipped file; only the order of
-/// the attributes differs, as the new ones are appended.
+/// groups, jobs and gates as the shipped file; only the order of the attributes differs, as
+/// the new ones are appended. Its tables are the shipped ones but for the two small weights of
+/// bravery the shipped file tunes, and it keeps the uniform consistency degree 1.0, which is how
+/// a version 3 catalogue played.
 #[test]
 fn the_version_3_catalogue_converts_to_the_shipped_version_4() {
     let bytes = std::fs::read(common::fixture_path("attributes-v3.json")).unwrap();
@@ -741,18 +744,40 @@ fn the_version_3_catalogue_converts_to_the_shipped_version_4() {
         defs
     };
     assert_eq!(by_name(converted), by_name(shipped));
-    assert_eq!(converted.actions, shipped.actions);
-    assert_eq!(converted.consistency_degrees, shipped.consistency_degrees);
+    let mut tuned = shipped.actions.clone();
+    for action in [ActionKind::Block, ActionKind::Tackle] {
+        let table = tuned
+            .get_mut(&action)
+            .unwrap()
+            .get_mut(&StageKind::Execute)
+            .unwrap();
+        assert_eq!(table.minor[0].attribute, "bravery");
+        assert_eq!(table.minor[0].weight, 0.14);
+        table.minor[0].weight = 0.05;
+    }
+    assert_eq!(converted.actions, tuned);
+    assert_eq!(
+        converted.consistency_degrees.len(),
+        shipped.consistency_degrees.len()
+    );
+    assert!(converted.consistency_degrees.values().all(|&d| d == 1.0));
     assert_eq!(converted.gates, shipped.gates);
 }
 
-/// Every action with a table has a consistency degree, 1.0 in this build.
+/// Every action with a table has its own consistency degree: finishing and saving swing most,
+/// the body's actions least, and the injury roll, whose main is a hidden value, not at all.
 #[test]
-fn every_action_has_a_consistency_degree_of_one() {
+fn every_action_has_its_own_consistency_degree() {
     let content = common::content();
     let degrees = &content.attributes.consistency_degrees;
     assert_eq!(degrees.len(), engine::contract::ACTION_COUNT);
-    assert!(degrees.values().all(|&d| d == 1.0), "{degrees:?}");
+    let d = |a: ActionKind| degrees[&a];
+    assert_eq!(d(ActionKind::Shot), 1.3);
+    assert_eq!(d(ActionKind::Save), 1.3);
+    assert_eq!(d(ActionKind::Pass), 0.9);
+    assert_eq!(d(ActionKind::Sprint), 0.4);
+    assert_eq!(d(ActionKind::Injury), 0.0);
+    assert!(degrees.values().any(|&v| v != 1.0), "{degrees:?}");
 }
 
 /// The trait catalogue loads with its 31 traits, nine opposite pairs named from both sides,
@@ -879,4 +904,51 @@ fn the_trait_catalogue_is_part_of_the_content_and_its_digest() {
         "content refused: tuning tuning.json: generator.person.traits.keeper_only: \
          trait saves_with_feet is not in the trait catalogue"
     );
+}
+
+/// The hooks: the shipped tuning carries the five new actions' entries and the hooks block; a
+/// tuning file without them (as an old replay embeds it) loads with every hook neutral and
+/// plays; and a hook value out of its range is refused naming the field.
+#[test]
+fn the_hooks_ship_read_neutral_when_absent_and_refuse_a_value_out_of_range() {
+    use engine::contract::{ActionKind, HookTuning};
+    use engine::data::ContentFiles;
+    let shipped = ContentFiles::read(&common::content_dir()).unwrap();
+    let content = engine::Content::from_files(&shipped).unwrap();
+    let c = &content.tuning.engine.contract;
+    for a in [
+        ActionKind::Mark,
+        ActionKind::OffBallRun,
+        ActionKind::Corner,
+        ActionKind::FreeKick,
+        ActionKind::LongThrow,
+    ] {
+        assert!(c.actions.get(a).is_some(), "{a} has its entry");
+    }
+    assert!(c.hooks.is_some());
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    let contract = tuning["engine"]["contract"].as_object_mut().unwrap();
+    assert!(contract.remove("hooks").is_some());
+    let actions = contract["actions"].as_object_mut().unwrap();
+    for name in ["mark", "off_ball_run", "corner", "free_kick", "long_throw"] {
+        assert!(actions.remove(name).is_some(), "{name}");
+    }
+    let mut old = shipped.clone();
+    old.tuning = serde_json::to_vec(&tuning).unwrap();
+    let old = engine::Content::from_files(&old).unwrap();
+    assert_eq!(old.tuning.engine.contract.hooks(), HookTuning::NEUTRAL);
+    let [a, b] = common::default_teams(&old);
+    let config = engine::MatchConfig::new(7, 5, &old, [&a, &b]).unwrap();
+    let mut sim = engine::Simulation::new(config).unwrap();
+    while !sim.is_over() {
+        sim.step();
+    }
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    tuning["engine"]["contract"]["hooks"]["flair_gate"] = 9.0.into();
+    let mut wide = shipped.clone();
+    wide.tuning = serde_json::to_vec(&tuning).unwrap();
+    let err = engine::Content::from_files(&wide).unwrap_err().to_string();
+    assert!(err.contains("engine.contract.hooks.flair_gate"), "{err}");
 }

@@ -8,8 +8,10 @@
 //! his side who drew it, so a side's mean offset is 0: consistency spreads a player's matches
 //! and periods without adding team-level variance.
 //!
-//! The offset moves every rating a stage table reads, through the same rebuild the states
-//! use ([`super::states::effective_with_form`]); pace and the hidden values take none.
+//! The offset moves each stage after the blend by the degree of its action
+//! ([`stage_factor`], [`super::stages::Blend::values_with_form`]), through the same rebuild the
+//! states use, so finishing and saving swing more than a throw-in. Pace and the skill gates,
+//! which read ratings directly, take none.
 
 use garde::Validate;
 use serde::{Deserialize, Serialize};
@@ -47,6 +49,13 @@ pub fn spread(c: f64, max: f64) -> f64 {
 /// the schema index of his consistency: [`spread`] on that rating.
 pub fn spread_of(attributes: &crate::player::Attributes, consistency: usize, max: f64) -> f64 {
     spread(attributes.get(consistency).decimal(), max)
+}
+
+/// The factor a form offset of `offset` rating points puts on a stage's curve value for an
+/// action of consistency degree `degree`: `e^(degree · offset / width)`. Degree 1.0 equals the
+/// offset added to every rating the stage blends; degree 0 leaves the stage as it is.
+pub fn stage_factor(degree: f64, offset: f64, width: f64) -> f64 {
+    crate::math::exp(degree * offset / width)
 }
 
 /// A bounded zero-mean draw from two uniform draws in [0, 1): their sum less 1, a triangular
@@ -103,6 +112,21 @@ mod tests {
         assert!(o.iter().sum::<f64>().abs() < 1e-12, "{o:?}");
         let mut none: [f64; 0] = [];
         centre(&mut none);
+    }
+
+    #[test]
+    fn the_stage_factor_follows_the_degree_and_degree_one_equals_the_offset_on_the_rating() {
+        let c = crate::contract::CurveTuning {
+            scale: 8.0,
+            center: 10.0,
+            width: 8.0,
+        };
+        assert_eq!(stage_factor(0.0, 0.5, 8.0), 1.0);
+        let moved = crate::contract::curve::f(12.5, &c);
+        let factor = crate::contract::curve::f(12.0, &c) * stage_factor(1.0, 0.5, 8.0);
+        assert!((moved - factor).abs() < 1e-12);
+        assert!(stage_factor(1.3, 0.5, 8.0) > stage_factor(0.9, 0.5, 8.0));
+        assert!(stage_factor(1.3, -0.5, 8.0) < stage_factor(0.9, -0.5, 8.0));
     }
 
     #[test]

@@ -24,7 +24,7 @@ use crate::data::rules::{RulePack, StoppageKind};
 use crate::decision::Kick;
 use crate::fatigue::InjurySource;
 use crate::math::DVec2;
-use crate::modules::{PeriodEnd, ShootoutLineup};
+use crate::modules::{PeriodEnd, ShootoutLineup, ShotKind};
 use crate::pitch::{Exit, Line};
 use crate::player::Status;
 use crate::sim::{DecidedBy, EngineEventKind, EventDetail, Simulation};
@@ -832,9 +832,12 @@ impl Simulation {
         self.take_restart(dead, t);
     }
 
-    /// The taker restarts play. A throw-in, a corner, a goal kick, an indirect free kick, and a
-    /// penalty are kicked at once, and only the free kick can put a player offside; after any other
-    /// restart the taker holds the ball and decides on the next tick.
+    /// The taker restarts play. A throw-in, a corner, a goal kick, a free kick, and a penalty
+    /// are kicked at once, and only the free kick can put a player offside; after any other
+    /// restart the taker holds the ball and decides on the next tick. A direct free kick within
+    /// `hooks.free_kick_range_m` of goal is struck at goal with the free-kick stage; beyond it,
+    /// it is delivered toward the penalty mark. With no hooks in the tuning (range 0) the
+    /// taker of a direct free kick holds the ball and decides, as before.
     fn take_restart(&mut self, dead: &DeadBall, t: &Tuning) {
         if self.referee.shootout.is_some() {
             self.take_shootout_kick(dead, t);
@@ -845,25 +848,38 @@ impl Simulation {
         self.control_since = self.tick;
         self.last_touch = Some(dead.team);
         self.restart_taker = Some(dead.taker);
+        #[cfg(feature = "sensitivity")]
+        if self.probe.is_some() {
+            self.probe_restart(dead);
+        }
+        let range = t.contract.hooks().free_kick_range_m;
+        let goal = self.teams[dead.team].target_goal();
         let kick = match dead.kind {
             StoppageKind::ThrowIn | StoppageKind::Corner => {
-                Some((self.restart_pass(dead.taker, dead.kind), false))
+                Some((self.restart_pass(dead.taker, dead.kind, false), false))
             }
             StoppageKind::GoalKick => {
                 let kick = self
                     .decide_carrier(dead.taker)
-                    .unwrap_or_else(|| self.restart_pass(dead.taker, dead.kind));
+                    .unwrap_or_else(|| self.restart_pass(dead.taker, dead.kind, false));
                 Some((kick, false))
             }
             StoppageKind::FreeKick if !dead.direct => {
-                Some((self.restart_pass(dead.taker, dead.kind), true))
+                Some((self.restart_pass(dead.taker, dead.kind, false), true))
+            }
+            StoppageKind::FreeKick if range > 0.0 && (dead.spot - goal).length() <= range => {
+                let keeper = self.keeper(1 - dead.team);
+                let kick = self.shot_kick(dead.taker, goal, keeper, ShotKind::FreeKick);
+                Some((kick, true))
+            }
+            StoppageKind::FreeKick if range > 0.0 => {
+                Some((self.restart_pass(dead.taker, dead.kind, true), true))
             }
             // IFAB Law 14: a penalty is a direct kick at goal from the mark, never a pass, a
             // dribble, or a held ball, and nobody may close the taker down before it is taken.
             StoppageKind::Penalty => {
-                let goal = self.teams[dead.team].target_goal();
                 let keeper = self.keeper(1 - dead.team);
-                let kick = self.shot_kick(dead.taker, goal, keeper, t.shots.penalty_spread);
+                let kick = self.shot_kick(dead.taker, goal, keeper, ShotKind::Penalty);
                 self.trace_restart_taken(dead, "penalty");
                 self.kick_ball(kick, t, false, true);
                 return;
@@ -1190,7 +1206,7 @@ impl Simulation {
         let end = state.end;
         let goal = self.config.pitch().goal_centre(end);
         self.enter_phase(Phase::Live, Cause::ShootoutKickTaken);
-        let kick = self.shot_kick(dead.taker, goal, keeper, t.shots.penalty_spread);
+        let kick = self.shot_kick(dead.taker, goal, keeper, ShotKind::Penalty);
         let diver = crate::streams::PlayerKey::of(&self.players[keeper]);
         let dive = self
             .streams

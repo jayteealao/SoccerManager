@@ -193,7 +193,7 @@ impl Team {
                         age: entry.age,
                     };
                     let (derived, stages) =
-                        Derived::from_blend(&attributes, &blend, schema, tuning, body);
+                        Derived::from_blend(&attributes, &blend, schema, tuning, body, 0);
                     // A file built in code without the person fields (a league generated without
                     // their tuning) reads like a converted player.
                     let rated = entry.positions.clone().unwrap_or_else(|| {
@@ -289,7 +289,9 @@ impl Team {
     /// shape: the inactive slots and an acting keeper who is not in slot 0. A line with a
     /// player removed spreads its survivors evenly across its width, and a lone survivor keeps
     /// its own place across the pitch. The back line is then kept compact: no two neighbours
-    /// in it stand more than `back_line_gap` apart, so it narrows as players leave it. The
+    /// in it stand more than `back_line_gap` apart, divided by the line's organisation (the
+    /// keeper's and the back line's own, `hooks.organise_back_line` its share), so it narrows
+    /// as players leave it. The
     /// acting keeper takes the keeper's place.
     pub(crate) fn relayout(&mut self) {
         self.formation = self.base_formation;
@@ -324,11 +326,21 @@ impl Team {
         let mut back: Vec<usize> = self.back_line();
         back.retain(|&s| !out(s));
         back.sort_by(|a, b| self.formation[*a].1.total_cmp(&self.formation[*b].1));
-        // The acting keeper organises the line: a better organiser keeps it tighter.
-        let organise = self
-            .squad
-            .get(self.lineup[self.keeper_slot()])
-            .map_or(1.0, |k| k.derived.knobs.organise);
+        // The acting keeper and the back line organise the line together: better organisers
+        // keep it tighter. The line's own share is `hooks.organise_back_line`.
+        let knob = |s: usize| {
+            self.squad
+                .get(self.lineup[s])
+                .map_or(1.0, |p| p.derived.knobs.organise)
+        };
+        let keeper_organise = knob(self.keeper_slot());
+        let w = self.plan.organise_back_line;
+        let organise = if w > 0.0 && !back.is_empty() {
+            let line = back.iter().map(|&s| knob(s)).sum::<f64>() / back.len() as f64;
+            (1.0 - w) * keeper_organise + w * line
+        } else {
+            keeper_organise
+        };
         let gap = self.plan.back_line_gap / organise;
         let too_wide = back
             .windows(2)

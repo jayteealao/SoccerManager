@@ -245,6 +245,24 @@
         "rush": {
           "k": 0.054,
           "spread": 0.2
+        },
+        "mark": {
+          "k": 0.054,
+          "spread": 0.4
+        },
+        "off_ball_run": {
+          "k": 0.054,
+          "spread": 0.2
+        },
+        "corner": {
+          "k": 0.054
+        },
+        "free_kick": {
+          "k": 0.054
+        },
+        "long_throw": {
+          "k": 0.054,
+          "spread": 0.5
         }
       },
       "speed": {
@@ -364,6 +382,17 @@
         "match_max": 1.0,
         "period_max": 0.75,
         "period_minutes": 10
+      },
+      "hooks": {
+        "decel_anchor": 5.5,
+        "behind_effort": 0.3,
+        "flair_risk": 0.4,
+        "flair_gate": 2.0,
+        "free_kick_range_m": 30.0,
+        "restart_noise": 0.06,
+        "organise_back_line": 0.5,
+        "anchor_space_m": 2.0,
+        "rash_chase": 0.3
       }
     }
   },

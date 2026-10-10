@@ -110,10 +110,11 @@ fn every_attribute_feeds_a_stage_and_has_a_job_with_a_statistic() {
 // --- Personality and the small weights.
 
 /// Shape AC-4 of the record: no state family moves a personality value, and nothing panics,
-/// with deltas on every state group and a form offset.
+/// with deltas on every state group and a form offset on the blend.
 #[test]
 fn no_state_moves_a_personality_value_and_nothing_panics() {
-    use engine::contract::states::{StatesTuning, effective, effective_with_form};
+    use engine::contract::stages::Blend;
+    use engine::contract::states::effective;
     let content = common::content();
     let schema = &content.attributes;
     let mut base = engine::player::Attributes {
@@ -131,23 +132,58 @@ fn no_state_moves_a_personality_value_and_nothing_panics() {
     for &i in &personality {
         base.values[i] = Rating::from_tenths(30);
     }
-    let deltas = [-20, -10, -5, 5];
-    let t = StatesTuning::default();
-    for moved in [
-        effective(&base, schema, deltas),
-        effective_with_form(&base, schema, deltas, -7, &t),
-        effective_with_form(&base, schema, deltas, 6, &t),
-    ] {
-        for &i in &personality {
-            assert_eq!(moved.get(i).tenths(), 30, "{}", schema.attributes[i].name);
-        }
-        let passing = schema.index("passing").unwrap();
-        assert_ne!(
-            moved.get(passing).tenths(),
-            100,
-            "a visible value still moves"
+    let moved = effective(&base, schema, [-20, -10, -5, 5]);
+    for &i in &personality {
+        assert_eq!(moved.get(i).tenths(), 30, "{}", schema.attributes[i].name);
+    }
+    let passing = schema.index("passing").unwrap();
+    assert_ne!(
+        moved.get(passing).tenths(),
+        100,
+        "a visible value still moves"
+    );
+    let blend = Blend::of(schema);
+    let tuning = Tuning::default();
+    for form in [-7, 6] {
+        let stages = blend.values_with_form(&moved, &tuning.contract, form);
+        assert!(stages.f.iter().all(|v| v.is_finite()));
+    }
+}
+
+/// Shape AC-18: with a consistency degree per action, a form offset moves each action by its
+/// own degree. Degrees planted at 0.5 on the pass and 1.5 on the shot, a player at 10.0
+/// throughout and an offset of +0.5: `ln(F / 8) * width / 0.5` of every stage equals its
+/// action's degree, and a degree of 0 leaves a stage at 8.
+#[test]
+fn each_action_moves_by_its_own_consistency_degree() {
+    use engine::contract::stages::Blend;
+    use engine::contract::{STAGES, Stage, StageKind};
+    let content = common::content();
+    let mut schema = content.attributes.clone();
+    schema.consistency_degrees.insert(ActionKind::Pass, 0.5);
+    schema.consistency_degrees.insert(ActionKind::Shot, 1.5);
+    schema.consistency_degrees.insert(ActionKind::Cross, 0.0);
+    let tuning = Tuning::default();
+    let width = tuning.contract.curve.width;
+    let flat = engine::player::Attributes {
+        values: [Rating::from_tenths(100); engine::data::MAX_ATTRIBUTES],
+        len: schema.len() as u8,
+    };
+    let stages = Blend::of(&schema).values_with_form(&flat, &tuning.contract, 5);
+    for (i, &(action, stage)) in STAGES.iter().enumerate() {
+        let degree = schema.consistency_degrees[&action];
+        let read = engine::math::ln(stages.f[i] / 8.0) * width / 0.5;
+        assert!(
+            (read - degree).abs() < 1e-9,
+            "{action}.{}: moved by degree {read}, its degree is {degree}",
+            stage.name()
         );
     }
+    let cross = Stage::find(ActionKind::Cross, StageKind::Execute).unwrap();
+    assert_eq!(stages.f(cross), 8.0);
+    let pass = Stage::find(ActionKind::Pass, StageKind::Execute).unwrap();
+    let shot = Stage::find(ActionKind::Shot, StageKind::Execute).unwrap();
+    assert!(stages.f(shot) > stages.f(pass) && stages.f(pass) > 8.0);
 }
 
 /// Shape AC-5 of the record: in every stage with small weights, each small weight is lighter

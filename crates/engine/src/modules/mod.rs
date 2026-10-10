@@ -463,6 +463,18 @@ pub enum CarrierPlan {
     Move { target: DVec2 },
 }
 
+/// What kind of shot a kick is, for the stage it reads and its aim noise.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShotKind {
+    /// A shot in open play: the shot stages inside the penalty area, the long-shot stages
+    /// outside it.
+    Open,
+    /// A placed kick from the penalty mark, in a match or a shoot-out.
+    Penalty,
+    /// A direct free kick struck at goal from the spot.
+    FreeKick,
+}
+
 /// The raw draws of a shot: the side (only when the keeper is off the pitch), the aim, the
 /// spread, and the loft.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -516,18 +528,26 @@ pub trait DecisionModule: Send + Sync + 'static {
     fn clear_kick(&self, view: &MatchView<'_>, c: usize, wide: bool, aim: f64) -> Kick;
     /// `true` when a shot at a goal `keeper` defends draws its side.
     fn shot_draws_side(&self, view: &MatchView<'_>, keeper: usize) -> bool;
-    /// Player `c`'s shot at `goal`, which `keeper` defends, given the draws.
+    /// Player `c`'s shot of `kind` at `goal`, which `keeper` defends, given the draws.
     fn shot_kick(
         &self,
         view: &MatchView<'_>,
         c: usize,
         goal: DVec2,
         keeper: usize,
-        spread_scale: f64,
+        kind: ShotKind,
         draws: &ShotDraws,
     ) -> Kick;
-    /// The kick that takes a restart of `kind`.
-    fn restart_pass(&self, view: &MatchView<'_>, taker: usize, kind: StoppageKind) -> RestartPass;
+    /// The kick that takes a restart of `kind` (`direct` for a direct free kick), given the
+    /// taker's aim draw, which only a corner or a free kick reads.
+    fn restart_pass(
+        &self,
+        view: &MatchView<'_>,
+        taker: usize,
+        kind: StoppageKind,
+        direct: bool,
+        aim: f64,
+    ) -> RestartPass;
     /// The chance that player `i`, on the side without the ball, lapses in this minute of
     /// play. The loop draws the `Lapse` key against it.
     fn lapse_chance(&self, view: &MatchView<'_>, i: usize) -> f64;

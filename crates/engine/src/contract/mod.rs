@@ -30,7 +30,9 @@ pub mod stages;
 pub mod states;
 
 pub use curve::{contest, factor, logistic, logit, share};
-pub use params::{ActionMap, ActionParams, ContractTuning, CurveTuning, LapseTuning, SpeedTuning};
+pub use params::{
+    ActionMap, ActionParams, ContractTuning, CurveTuning, HookTuning, LapseTuning, SpeedTuning,
+};
 pub use stages::{GateDef, GateDefs, StageTable, Weighted, stage_values};
 
 use serde::{Deserialize, Serialize};
@@ -71,15 +73,17 @@ pub enum ActionKind {
     KeeperThrow,
     Organise,
     Rush,
-    /// Staying tight to the attacker a defender covers. Play reads no stage of it yet.
+    /// Staying tight to the attacker a defender covers: how close goal-side cover tracks a
+    /// carrier.
     Mark,
-    /// An attacker's run against the offside line. Play reads no stage of it yet.
+    /// An attacker's run against the offside line: how far an attacker beyond the line comes
+    /// back onside, and the space he makes at his anchor.
     OffBallRun,
-    /// The delivery of a corner. Play reads no stage of it yet.
+    /// The delivery of a corner: how far it turns from its aim.
     Corner,
-    /// The strike or delivery of a direct free kick. Play reads no stage of it yet.
+    /// The strike or delivery of a direct free kick, and the delivery of an indirect one.
     FreeKick,
-    /// A long throw-in. Play reads no stage of it yet.
+    /// A throw-in: how far the thrower looks for a team-mate.
     LongThrow,
 }
 
@@ -518,6 +522,47 @@ pub fn direct_ratings(
     schema: &crate::data::attributes::AttributeSchema,
 ) -> [f64; 4] {
     schema.required_indices().map(|i| a.get(i).decimal())
+}
+
+/// The skills of the attributes that act on an occasion without leading a stage of their
+/// own, each from −1 to 1 and 0 at rating 10: flair (a forward pass's score, the take-on and
+/// chip gates), determination (press reach while his side trails) and eccentricity (a
+/// keeper's chase range).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OccasionSkills {
+    pub flair: f64,
+    pub determination: f64,
+    pub eccentricity: f64,
+}
+
+impl OccasionSkills {
+    /// Every skill 0: the average player.
+    pub const NEUTRAL: OccasionSkills = OccasionSkills {
+        flair: 0.0,
+        determination: 0.0,
+        eccentricity: 0.0,
+    };
+}
+
+/// The occasion skills of a player with ratings `a`: `2 · share(k, F(r)) − 1` of each rating,
+/// with the strength `k` of the action whose choice it shapes (pass for flair, press for
+/// determination, rush for eccentricity). An attribute the schema lacks reads 0.
+pub fn occasion_skills(
+    a: &crate::player::Attributes,
+    schema: &crate::data::attributes::AttributeSchema,
+    c: &ContractTuning,
+) -> OccasionSkills {
+    let skill = |name: &str, action: ActionKind| {
+        schema.index(name).map_or(0.0, |i| {
+            let v = curve::f(a.get(i).decimal(), &c.curve);
+            2.0 * curve::share(c.actions.of(action).k(), v, &c.curve) - 1.0
+        })
+    };
+    OccasionSkills {
+        flair: skill("flair", ActionKind::Pass),
+        determination: skill("determination", ActionKind::Press),
+        eccentricity: skill("eccentricity", ActionKind::Rush),
+    }
 }
 
 /// A rating as a share from 0 to 1, `tenths / 200`: the value a plugin hook sees for a

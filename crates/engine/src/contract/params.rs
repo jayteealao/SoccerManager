@@ -1,6 +1,7 @@
 //! The contract block of the tuning file (`engine.contract`): the curve, each action's
 //! strength and limits, the top-speed map, the acceleration anchor, the concentration
-//! lapses, the state caps, the body jobs, and consistency.
+//! lapses, the state caps, the body jobs, consistency, and the values of the nearest hooks
+//! through which the newer attributes reach play.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -36,6 +37,77 @@ pub struct ContractTuning {
     /// The spread of each player's play around his ratings.
     #[garde(dive)]
     pub consistency: super::consistency::ConsistencyTuning,
+    /// The values of the nearest hooks: braking, effort when behind, flair, the direct free
+    /// kick, restart delivery, the back line's organisation, the space an attacker makes at
+    /// his anchor, and a keeper's rash chases. Optional, so a tuning file written before them
+    /// (as an old replay embeds it) still loads, and then every hook plays as before them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub hooks: Option<HookTuning>,
+}
+
+impl ContractTuning {
+    /// The hook values: the file's, or [`HookTuning::NEUTRAL`] when it has none.
+    #[inline]
+    pub fn hooks(&self) -> HookTuning {
+        self.hooks.unwrap_or(HookTuning::NEUTRAL)
+    }
+}
+
+/// The values of the nearest hooks (`engine.contract.hooks`). Each hook is neutral for a
+/// rating-10 player, so the average player plays as before and the spread between players is
+/// what moves; the direct free kick and the restart delivery noise are the exceptions, since
+/// play had neither before.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct HookTuning {
+    /// The braking of a player whose turn stage is rating 10, m/s²; his turn factor (agility
+    /// leading) scales it.
+    #[garde(range(min = 0.5, max = 30.0))]
+    pub decel_anchor: f64,
+    /// How much a presser's determination widens his press reach while his side trails.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub behind_effort: f64,
+    /// How much a carrier's flair raises the score of a forward pass.
+    #[garde(range(min = 0.0, max = 2.0))]
+    pub flair_risk: f64,
+    /// How many rating points of technique the take-on and chip gates drop for a top flair
+    /// player.
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub flair_gate: f64,
+    /// A direct free kick within this many metres of goal is shot; beyond it, delivered.
+    #[garde(range(min = 0.0, max = 40.0))]
+    pub free_kick_range_m: f64,
+    /// The largest turn of a corner or free-kick delivery by an average taker, radians.
+    #[garde(range(min = 0.0, max = 0.5))]
+    pub restart_noise: f64,
+    /// The weight of the back line's own organisation beside the keeper's.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub organise_back_line: f64,
+    /// How far an attacker with good off-ball movement moves his anchor away from the
+    /// nearest defender, metres at the top of the scale.
+    #[garde(range(min = 0.0, max = 6.0))]
+    pub anchor_space_m: f64,
+    /// How much a keeper's eccentricity widens the range from which he comes off his line.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub rash_chase: f64,
+}
+
+impl HookTuning {
+    /// Every hook as play was before the hooks: braking with the acceleration, no effort when
+    /// behind, no flair term, no direct free kick taken, no delivery noise, the keeper alone
+    /// organising the line, no anchor space and no rash chase.
+    pub const NEUTRAL: HookTuning = HookTuning {
+        decel_anchor: 0.0,
+        behind_effort: 0.0,
+        flair_risk: 0.0,
+        flair_gate: 0.0,
+        free_kick_range_m: 0.0,
+        restart_noise: 0.0,
+        organise_back_line: 0.0,
+        anchor_space_m: 0.0,
+        rash_chase: 0.0,
+    };
 }
 
 /// The curve `F(r) = scale · e^((r − center) / width)`.
@@ -122,11 +194,9 @@ pub fn uses(action: ActionKind) -> [bool; 4] {
         | A::Organise
         | A::Rush => [true, false, false, true],
         A::Shield => [false, false, false, false],
-        // The five actions the record added: their stages are blended, but play reads none of
-        // their values yet, so they carry no tuning entry.
-        A::Mark | A::OffBallRun | A::Corner | A::FreeKick | A::LongThrow => {
-            [false, false, false, false]
-        }
+        // The five actions the record added; each may be absent ([`neutral_when_absent`]).
+        A::Mark | A::OffBallRun | A::LongThrow => [true, false, false, true],
+        A::Corner | A::FreeKick => [true, false, false, false],
         A::Pass
         | A::Chip
         | A::Cross
@@ -140,6 +210,17 @@ pub fn uses(action: ActionKind) -> [bool; 4] {
         | A::KeeperKick
         | A::KeeperThrow => [true, false, false, false],
     }
+}
+
+/// `true` for an action a tuning file may leave out, which then reads neutral (strength 0:
+/// share 0.5, factor 1): the five actions the record added, so a tuning file written before
+/// they had values (as an old replay embeds it) still loads and plays as it did.
+pub fn neutral_when_absent(action: ActionKind) -> bool {
+    use ActionKind as A;
+    matches!(
+        action,
+        A::Mark | A::OffBallRun | A::Corner | A::FreeKick | A::LongThrow
+    )
 }
 
 /// One value per action, read by index on the hot path; in a file, an object keyed by the
@@ -213,7 +294,7 @@ fn check_actions(map: &ActionMap<ActionParams>, _ctx: &()) -> garde::Result {
         let [k, base, limits, spread] = uses(a);
         let name = a.name();
         let Some(p) = map.get(a) else {
-            if k || base || limits || spread {
+            if (k || base || limits || spread) && !neutral_when_absent(a) {
                 return Err(garde::Error::new(format!("action {name} is missing")));
             }
             continue;
@@ -386,9 +467,11 @@ impl Default for ContractTuning {
                 | A::AerialReach
                 | A::Organise
                 | A::Rush => Some(knob(0.054, 0.2)),
-                A::Shield | A::Mark | A::OffBallRun | A::Corner | A::FreeKick | A::LongThrow => {
-                    None
-                }
+                A::Shield => None,
+                A::Mark => Some(knob(0.054, 0.4)),
+                A::OffBallRun => Some(knob(0.054, 0.2)),
+                A::LongThrow => Some(knob(0.054, 0.5)),
+                A::Corner | A::FreeKick => Some(k_only(0.054)),
                 A::Shot => Some(k_only(0.07)),
                 A::LongShot => Some(k_only(0.02)),
                 A::Dribble => Some(k_only(0.071)),
@@ -421,6 +504,17 @@ impl Default for ContractTuning {
                 period_max: 0.75,
                 period_minutes: 10,
             },
+            hooks: Some(HookTuning {
+                decel_anchor: 5.5,
+                behind_effort: 0.3,
+                flair_risk: 0.4,
+                flair_gate: 2.0,
+                free_kick_range_m: 30.0,
+                restart_noise: 0.06,
+                organise_back_line: 0.5,
+                anchor_space_m: 2.0,
+                rash_chase: 0.3,
+            }),
         }
     }
 }
@@ -461,6 +555,35 @@ mod tests {
         c.actions.0[ActionKind::Tackle as usize] = Some(k_only(0.2));
         let text = c.validate().unwrap_err().to_string();
         assert!(text.contains("action tackle: floor is missing"), "{text}");
+    }
+
+    #[test]
+    fn the_five_new_actions_may_be_absent_and_read_neutral_but_no_other() {
+        let mut c = ContractTuning::default();
+        for a in [
+            ActionKind::Mark,
+            ActionKind::OffBallRun,
+            ActionKind::Corner,
+            ActionKind::FreeKick,
+            ActionKind::LongThrow,
+        ] {
+            c.actions.0[a as usize] = None;
+            assert_eq!(c.actions.of(a).k(), 0.0);
+        }
+        assert!(c.validate().is_ok());
+        c.actions.0[ActionKind::Press as usize] = None;
+        let text = c.validate().unwrap_err().to_string();
+        assert!(text.contains("action press is missing"), "{text}");
+    }
+
+    #[test]
+    fn a_file_without_hooks_reads_them_neutral() {
+        let c = ContractTuning {
+            hooks: None,
+            ..Default::default()
+        };
+        assert_eq!(c.hooks(), HookTuning::NEUTRAL);
+        assert!(c.validate().is_ok());
     }
 
     #[test]

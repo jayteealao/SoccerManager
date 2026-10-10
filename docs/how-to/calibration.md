@@ -196,7 +196,7 @@ The sensitivity rules check that every attribute and body job still moves its ow
 cargo test --release -p engine --features sensitivity --test sensitivity --test sensitivity_full -- --ignored --nocapture
 ```
 
-The rules and the counters they read build only with the engine's `sensitivity` feature, which the command turns on; a normal build has neither, so its matches pay nothing for them. The run plays the balanced design, the two arms and the five-match rule at the size `content/sensitivity.json` sets, about 6,400 matches, a few minutes on an 8-core machine. It also runs the check that a working job passes its rule, a job planted at zero weight fails it and amplified pace does not pass its ceiling, about 2,600 more matches. It prints one line per rule and the five-match shares, and writes the same to `target/sensitivity/rules.json`. The test passes only when every rule and the five-match rule pass.
+The rules and the counters they read build only with the engine's `sensitivity` feature, which the command turns on; a normal build has neither, so its matches pay nothing for them. The run plays the balanced design, the two arms and the five-match rule at the size `content/sensitivity.json` sets, about 6,400 matches, a few minutes on an 8-core machine. It also runs the check that a working job passes its rule, a job planted at zero weight fails it and amplified pace does not pass its ceiling, about 2,600 more matches. It prints one line per rule and the five-match shares, and writes the same to `target/sensitivity/rules.json`. A rule with the report-only flag prints `report` after its word: the rules of the jobs the newer attributes and the personality values brought run and report, and their words do not fail the run. The test passes when every rule without the flag and the five-match rule pass.
 
 Read each line:
 
@@ -212,7 +212,7 @@ cargo build --release -p engine-cli --features sensitivity
 target/release/engine-cli calibrate --base main --suite equal
 ```
 
-The stage adds the rules' 6,400 matches to the change run, a few minutes on an 8-core machine. It prints the same table and the line `rules stage: 41 touched sensitivity rules checked at 82 levels, <failed> failed, <not sure> not sure`, and writes the rows to `calib.rules` in `report.json`. The words are information and do not change the joint verdict. A build without the feature prints that it has no sensitivity rules.
+The stage adds the rules' 6,400 matches to the change run, a few minutes on an 8-core machine. It prints the same table, with `report` after the word of a report-only rule, and the line `rules stage: 62 touched sensitivity rules checked at 124 levels, <failed> failed, <not sure> not sure`, and writes the rows to `calib.rules` in `report.json`. The words are information and do not change the joint verdict. A build without the feature prints that it has no sensitivity rules.
 
 A change that moves play still needs the full suites below: a tuning that passes the rules must keep the bands.
 

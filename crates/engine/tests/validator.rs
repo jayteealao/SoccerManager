@@ -55,16 +55,16 @@ fn engine_events(config: engine::MatchConfig) -> (Vec<engine::EngineEvent>, Stre
 }
 
 /// The event-stream rules hold for the full engine before they judge anything else: seeds 1
-/// to 5 over 90 minutes; seeds 9, 11, 21 and 59, which bring injuries, a substitution the rule
-/// pack refuses and a straight red; a 10-minute match, which adds no time; a knockout match
-/// (seed 8) played through extra time and a shoot-out; and seed 26 between two generated
-/// top-flight clubs (league seed 1), which brings a second yellow.
+/// to 5 over 90 minutes; seeds 9, 11, 21 and 28, which bring injuries and a substitution the
+/// rule pack refuses; a 10-minute match, which adds no time; a knockout match (seed 8) played
+/// through extra time and a shoot-out; and seeds 22 and 11 between two generated top-flight
+/// clubs (league seed 1), which bring a second yellow and a straight red.
 #[test]
 fn the_full_engines_event_streams_keep_the_event_rules() {
     use engine::EngineEventKind::{Card, ChangeRejected, HalfTime, Injury, Substitution};
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    let seeds = [1, 2, 3, 4, 5, 9, 11, 21, 59];
+    let seeds = [1, 2, 3, 4, 5, 9, 11, 21, 28];
     let mut streams: Vec<(String, (Vec<engine::EngineEvent>, StreamRules))> =
         common::run_many(0..=seeds.len() as u64 - 1, |i| {
             let seed = seeds[i as usize];
@@ -83,8 +83,11 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
     );
     streams.push(("knockout seed 8".into(), (events, rules)));
     let league = engine::data::generate_league(1, 2, &content);
-    let generated = engine::MatchConfig::new(26, 90, &content, [&league[0], &league[1]]).unwrap();
-    streams.push(("generated seed 26".into(), engine_events(generated)));
+    for seed in [22, 11] {
+        let generated =
+            engine::MatchConfig::new(seed, 90, &content, [&league[0], &league[1]]).unwrap();
+        streams.push((format!("generated seed {seed}"), engine_events(generated)));
+    }
     let all: Vec<&engine::EngineEvent> = streams.iter().flat_map(|(_, (e, _))| e).collect();
     let has = |f: &dyn Fn(&engine::EngineEvent) -> bool| all.iter().any(|e| f(e));
     assert!(has(&|e| e.kind == Injury), "an injury is judged");

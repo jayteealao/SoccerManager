@@ -173,6 +173,9 @@ pub struct TeamPlan {
     pub press_distance: f64,
     /// The widest gap between two neighbours in the back line, from the tuning.
     pub back_line_gap: f64,
+    /// The back line's own share of the line's organisation beside the keeper's, from the
+    /// tuning's hooks.
+    pub organise_back_line: f64,
     pub tempo: f64,
     pub directness: f64,
     /// A factor on the team's restart delay while it leads.
@@ -211,6 +214,7 @@ impl TeamPlan {
             press_count: usize::from(press.press_count),
             press_distance: t.press_distance * press.press_distance_scale,
             back_line_gap: t.back_line_gap,
+            organise_back_line: t.contract.hooks().organise_back_line,
             tempo: ins.tempo.levels[level(TEMPO)].value,
             directness: ins.passing_directness.levels[level(DIRECTNESS)].value,
             time_wasting: ins.time_wasting.levels[level(TIME_WASTING)].value,
@@ -229,6 +233,7 @@ impl TeamPlan {
             press_count: 2,
             press_distance: t.press_distance,
             back_line_gap: t.back_line_gap,
+            organise_back_line: t.contract.hooks().organise_back_line,
             tempo: 0.0,
             directness: 0.0,
             time_wasting: 1.0,

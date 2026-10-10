@@ -186,27 +186,78 @@ impl Scene {
     /// Opens a penalty for `team` taken by player `taker`: the taker and the ball on the
     /// penalty mark of the goal `team` attacks, the defending side's acting keeper on his goal
     /// line, and the kick due on the next step.
-    pub fn penalty(mut self, team: usize, taker: usize) -> Self {
+    pub fn penalty(self, team: usize, taker: usize) -> Self {
         let attack_x = self.sim.teams[team].attack_x;
         let spot = self.sim.config.pitch().penalty_spot(attack_x);
         let keeper = self.sim.keeper(1 - team);
         let line_x = attack_x * (self.sim.config.pitch().half_length() - 0.5);
+        self.place(keeper, DVec2::new(line_x, 0.0)).restart(
+            StoppageKind::Penalty,
+            team,
+            taker,
+            spot,
+            true,
+        )
+    }
+
+    /// Opens a restart of `kind` for `team` taken by player `taker` at `spot` (`direct` for a
+    /// direct free kick): the taker and the ball at the spot, nobody on the ball, and the
+    /// restart due on the next step.
+    pub fn restart(
+        mut self,
+        kind: StoppageKind,
+        team: usize,
+        taker: usize,
+        spot: DVec2,
+        direct: bool,
+    ) -> Self {
         self = self
             .place(taker, spot)
-            .place(keeper, DVec2::new(line_x, 0.0))
             .ball(DVec3::new(spot.x, spot.y, 0.0))
             .carrier(None);
         let sim = &mut self.sim;
         sim.last_touch = Some(team);
         sim.seat_phase(crate::rules::Phase::DeadBall(crate::rules::DeadBall {
-            kind: StoppageKind::Penalty,
+            kind,
             team,
             spot,
-            direct: true,
+            direct,
             since: sim.tick,
             ready_at: sim.tick,
             taker,
         }));
+        self
+    }
+
+    /// Sets player `i`'s rating of `attribute` to `value` (1.0 to 20.0, on the tenth grid) in
+    /// his squad entry and on the pitch, and derives his values again from it, as a team file
+    /// with that rating would give them at load; his side's line is laid out again, since
+    /// its organisation reads its players' values.
+    pub fn rating(mut self, i: usize, attribute: &str, value: f64) -> Self {
+        let sim = &mut self.sim;
+        let schema = &sim.config.attributes;
+        let index = schema
+            .index(attribute)
+            .unwrap_or_else(|| panic!("{attribute} is not an attribute"));
+        let (team, squad) = (sim.players[i].team, sim.players[i].squad);
+        let tenths = (value * 10.0).round().clamp(10.0, 200.0) as u8;
+        let entry = &mut sim.teams[team].squad[squad];
+        entry.attributes.values[index] = crate::rating::Rating::from_tenths(tenths);
+        let (derived, stages) = crate::player::Derived::from_blend(
+            &entry.attributes,
+            &sim.blend,
+            schema,
+            &sim.config.tuning,
+            entry.body,
+            0,
+        );
+        entry.derived = derived;
+        entry.stages = stages;
+        sim.players[i].attributes = entry.attributes;
+        let (deltas, form) = (sim.players[i].deltas, sim.players[i].form);
+        // Writes the squad entry's values when he is at his base, else blends them again.
+        sim.set_state(i, deltas, form);
+        sim.teams[team].relayout();
         self
     }
 

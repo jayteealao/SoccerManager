@@ -313,8 +313,8 @@ impl Simulation {
                             .tested(Key::player(Action::Header, p), &[chance]);
                         let won = draw < chance;
                         #[cfg(feature = "sensitivity")]
-                        if let Some(probe) = self.probe.as_deref_mut() {
-                            probe.header(self.players[i].team, won);
+                        if self.probe.is_some() {
+                            self.probe_header(i, won);
                         }
                         if self.trace_on() {
                             self.trace_point(
