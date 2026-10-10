@@ -20,14 +20,12 @@ impl Simulation {
         let minute = self.referee.clock.minute(tick).0;
         let late = minute + t.late_minutes >= self.config.rules.regulation_minutes();
         let dead = self.referee.phase != Phase::Live;
-        let possession = self.possession_phase;
         let ctx: [TeamPace; 2] = std::array::from_fn(|team| {
             let plan = &self.teams[team].plan;
             let (mine, theirs) = (goals[team], goals[1 - team]);
-            // A team wastes time while the ball is dead or while it has the ball; out of
-            // possession its players keep their grades, so nobody walks back while the
-            // opponent attacks.
-            let wasting = plan.time_wasting > 1.0 && (dead || possession == Some(team));
+            // A team wastes time only while the ball is dead; in open play both teams keep
+            // their grades, with or without the ball.
+            let wasting = plan.time_wasting > 1.0 && dead;
             TeamPace {
                 lift: plan.pace_lift,
                 trailing_late: late && mine < theirs,

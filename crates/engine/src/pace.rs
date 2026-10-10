@@ -5,15 +5,16 @@
 //!
 //! - A job is URGENT (may sprint), NORMAL (jog or run) or CALM (stand or walk).
 //! - Raised tempo or pressing, or trailing late, lifts pressing and support jobs one step;
-//!   leading late with time wasting drops NORMAL jobs one step while the ball is dead or the
-//!   team has it. An URGENT job never drops.
+//!   leading late with time wasting drops NORMAL jobs one step while the ball is dead. In open
+//!   play both teams keep their grades. An URGENT job never drops.
 //! - The levels are stand, walk, jog, run, high speed and sprint; each level's speed is its
 //!   upper limit, and a sprint is the player's own top speed.
 //! - Work rate sets how often an URGENT job gets a sprint (one draw when the job starts), never
 //!   the speed of a level.
 //! - A tired player saves energy by his determination and professionalism: a high one keeps
-//!   his sprints and moves a step slower at every other level; a low one skips the less urgent
-//!   sprints first and keeps his other levels.
+//!   his sprints and moves a step slower at every other level, down to a walk while he is
+//!   away from his target; a low one skips the less urgent sprints first and keeps his other
+//!   levels.
 
 use crate::tuning::PaceTuning;
 
@@ -189,8 +190,8 @@ pub struct TeamPace {
     pub lift: bool,
     /// Trailing in the late minutes.
     pub trailing_late: bool,
-    /// Leading in the late minutes with time wasting on, while the ball is dead or the team
-    /// has it. Out of possession the team keeps its grades.
+    /// Leading in the late minutes with time wasting on, while the ball is dead. In open play
+    /// the team keeps its grades, with or without the ball.
     pub wasting_late: bool,
 }
 
@@ -297,7 +298,8 @@ pub fn level(
             Level::Sprint
         }
     } else if saving * mix >= t.step_down_at && saving > 0.0 {
-        base.down()
+        // A step slower, but a player away from his target still moves: a walk stays a walk.
+        base.down().max(Level::Walk)
     } else {
         base
     }
@@ -483,6 +485,27 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// A tired player who steps down still walks to a target beyond the stand distance: the
+    /// step down never leaves him standing while his place moves away.
+    #[test]
+    fn a_tired_step_down_still_walks_to_a_target_away_from_him() {
+        let t = tuning();
+        let tired = saving(0.1, &t);
+        assert!(tired * 1.0 >= t.step_down_at, "the step down applies");
+        assert_eq!(
+            level(Grade::Calm, Job::Hold, 6.0, false, tired, 1.0, &t),
+            Level::Walk
+        );
+        assert_eq!(
+            level(Grade::Normal, Job::Return, 6.0, false, tired, 1.0, &t),
+            Level::Walk
+        );
+        assert_eq!(
+            level(Grade::Calm, Job::Hold, 0.5, false, tired, 1.0, &t),
+            Level::Stand
+        );
     }
 
     #[test]

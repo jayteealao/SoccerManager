@@ -2,9 +2,11 @@
 //! match state directly, so the tests live with the central loop.
 
 use crate::ball::Ball;
+use crate::data::rules::StoppageKind;
 use crate::data::test_support::shipped_config;
 use crate::math::DVec2;
 use crate::pace::{Grade, Job, Level, base_grade};
+use crate::rules::{DeadBall, Phase};
 use crate::sim::Simulation;
 use crate::team::PLAYERS_PER_TEAM;
 
@@ -308,11 +310,13 @@ fn losing_the_ball_sends_the_nearest_presser_at_a_sprint_and_the_others_jog_back
     assert!(presser_sprinted, "the nearest presser sprinted");
 }
 
-/// AC-14 with the person's narrowing: a team leading late with time wasting drops its NORMAL
-/// jobs one step while it has the ball, and keeps every grade while the opponent has it. The
-/// late window covers the whole match here, so a scene a minute in counts as late.
+/// AC-14 as narrowed: a team leading late with time wasting drops its NORMAL jobs one step
+/// only while the ball is dead. In open play it keeps its grades with the ball and without it.
+/// The late window covers the whole match here, so a scene a minute in counts as late. The
+/// pace pass runs only in the live phase today; the dead-ball half calls it directly, as the
+/// restarts slice will.
 #[test]
-fn a_leading_team_wastes_time_with_the_ball_and_keeps_its_grades_without_it() {
+fn a_leading_team_wastes_time_only_at_a_dead_ball() {
     let mut config = shipped_config(7, 90).unwrap();
     config.tuning.pace.late_minutes = 90;
     let mut sim = Simulation::new(config).unwrap();
@@ -326,8 +330,18 @@ fn a_leading_team_wastes_time_with_the_ball_and_keeps_its_grades_without_it() {
             .map(|p| (p.pace.job, p.pace.grade))
             .collect()
     };
+    let urgent_home_stay_urgent = |sim: &Simulation, when: &str| {
+        for p in sim.players[..PLAYERS_PER_TEAM]
+            .iter()
+            .filter(|p| p.active())
+        {
+            if matches!(p.pace.job, Job::Press | Job::Recover) {
+                assert_eq!(p.pace.grade, Grade::Urgent, "{p:?} {when}");
+            }
+        }
+    };
 
-    // The home team has the ball: its NORMAL jobs walk.
+    // Open play, the home team has the ball: it keeps its grades.
     hold(&mut sim, 6, DVec2::new(-10.0, 0.0));
     settle(&mut sim);
     sim.players[2].pos += DVec2::new(0.0, 12.0);
@@ -335,10 +349,11 @@ fn a_leading_team_wastes_time_with_the_ball_and_keeps_its_grades_without_it() {
     let with_ball = normal_home(&sim);
     assert!(!with_ball.is_empty(), "a home player has a NORMAL job");
     for (job, grade) in &with_ball {
-        assert_eq!(*grade, Grade::Calm, "{job:?} with the ball");
+        assert_eq!(*grade, Grade::Normal, "{job:?} with the ball in open play");
     }
 
-    // The away team has the ball: the home team keeps its grades, presses stay URGENT.
+    // Open play, the away team has the ball: the home team keeps its grades, presses stay
+    // URGENT.
     let winner = PLAYERS_PER_TEAM + 6;
     hold(&mut sim, winner, DVec2::new(-10.0, 0.0));
     sim.players[2].pos += DVec2::new(0.0, 12.0);
@@ -348,24 +363,35 @@ fn a_leading_team_wastes_time_with_the_ball_and_keeps_its_grades_without_it() {
     for (job, grade) in &without_ball {
         assert_eq!(*grade, Grade::Normal, "{job:?} without the ball");
     }
-    for p in sim.players[..PLAYERS_PER_TEAM]
-        .iter()
-        .filter(|p| p.active())
-    {
-        if matches!(p.pace.job, Job::Press | Job::Recover) {
-            assert_eq!(p.pace.grade, Grade::Urgent, "{p:?}");
-        }
-    }
+    urgent_home_stay_urgent(&sim, "without the ball");
 
-    // Control: the same scene with time wasting off grades the home team as usual.
+    // The ball goes dead: the home team's NORMAL jobs drop to CALM, its URGENT jobs stay.
+    let spot = sim.ball.xy();
+    sim.seat_phase(Phase::DeadBall(DeadBall {
+        kind: StoppageKind::ThrowIn,
+        team: 0,
+        spot,
+        direct: false,
+        since: sim.tick,
+        ready_at: sim.tick + 100,
+        taker: 6,
+    }));
+    sim.pace_tick();
+    let dead = normal_home(&sim);
+    assert!(!dead.is_empty(), "a home player has a NORMAL job");
+    for (job, grade) in &dead {
+        assert_eq!(*grade, Grade::Calm, "{job:?} at a dead ball");
+    }
+    urgent_home_stay_urgent(&sim, "at a dead ball");
+
+    // Control: the same dead ball with time wasting off grades the home team as usual.
     sim.teams[0].plan.time_wasting = 1.0;
-    hold(&mut sim, 6, DVec2::new(-10.0, 0.0));
-    decide_and_pace(&mut sim);
+    sim.pace_tick();
     for (job, grade) in normal_home(&sim) {
         assert_eq!(
             grade,
             Grade::Normal,
-            "{job:?} with the ball, no time wasting"
+            "{job:?} at a dead ball, no time wasting"
         );
     }
 }

@@ -19,6 +19,11 @@ const MINUTE: f64 = 3000.0;
 
 const SEEDS: [u64; 4] = [1, 2, 3, 4];
 
+/// Matches in each seed set of the work-rate comparison. Four matches per set left the
+/// equal-squad control at 0.190, above the 15 percent shift; sixteen bring the seed noise
+/// well under it.
+const BATCH: u64 = 16;
+
 /// `file` with every outfield player's `name` rating set by `rating(k)`, `k` counting the
 /// outfield players in file order.
 fn with_ratings(file: &TeamFile, name: &str, rating: impl Fn(usize) -> f64) -> TeamFile {
@@ -155,15 +160,17 @@ fn squad_running(file: &TeamFile, away: &TeamFile, seeds: &[u64]) -> Running {
 }
 
 /// AC-12: two squads that differ only in work rate (6 against 16 for every outfield player)
-/// play the same opponent on the same seeds. The high squad sprints at least 15 percent more
+/// play the same opponent on the same `BATCH` seeds. The high squad sprints at least 15 percent more
 /// often per ball-in-play minute; the distance per ball-in-play minute differs by less than 5
 /// percent. Control: the same squad on two seed sets differs by less than the 15 percent.
 #[test]
 fn work_rate_changes_how_often_a_squad_sprints_not_how_far_it_runs() {
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    let low = squad_running(&with_ratings(&a, "work_rate", |_| 6.0), &b, &SEEDS);
-    let high = squad_running(&with_ratings(&a, "work_rate", |_| 16.0), &b, &SEEDS);
+    let seeds: Vec<u64> = (1..=BATCH).collect();
+    let other_seeds: Vec<u64> = (BATCH + 1..=2 * BATCH).collect();
+    let low = squad_running(&with_ratings(&a, "work_rate", |_| 6.0), &b, &seeds);
+    let high = squad_running(&with_ratings(&a, "work_rate", |_| 16.0), &b, &seeds);
     let (ls, hs) = (low.sprints_per_minute(), high.sprints_per_minute());
     let (lm, hm) = (low.metres_per_minute(), high.metres_per_minute());
     eprintln!(
@@ -175,8 +182,8 @@ fn work_rate_changes_how_often_a_squad_sprints_not_how_far_it_runs() {
     let distance_gap = (hm - lm).abs() / lm;
     assert!(distance_gap < 0.05, "distance differs by {distance_gap:.3}");
     // Control: the same squad on another seed set.
-    let other = squad_running(&a, &b, &[5, 6, 7, 8]);
-    let same = squad_running(&a, &b, &SEEDS);
+    let other = squad_running(&a, &b, &other_seeds);
+    let same = squad_running(&a, &b, &seeds);
     let (os, ss) = (other.sprints_per_minute(), same.sprints_per_minute());
     let control_gap = (os - ss).abs() / os.min(ss);
     eprintln!("control: {ss:.4} against {os:.4} sprints per minute ({control_gap:.3})");
