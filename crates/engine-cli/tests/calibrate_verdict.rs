@@ -890,7 +890,10 @@ fn write_proof(content: &Path, registry: &str, measures: u64, verdict_code: &str
         "made_at": "2026-10-09T00:00:00Z",
         "build": { "hash": "test", "measures": true },
         "seed": 1, "matches": 1, "minutes": 5,
-        "self": { "runs": [], "pass_rate": 0.0, "fail_rate": 0.0, "not_sure_rate": 0.0 },
+        "self": {
+            "runs": [], "pass_rate": 0.0, "fail_rate": 0.0, "not_sure_rate": 0.0,
+            "false_alarm_rate": 0.0, "move_rate": 0.0
+        },
         "copies": [],
         "distribution_bands": [],
         "counts": { "runs": 0, "total_matches": 0, "pairs": 0, "observations": {} }
