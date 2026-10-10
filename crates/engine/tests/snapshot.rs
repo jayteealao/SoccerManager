@@ -6,7 +6,7 @@
 
 mod common;
 
-use common::{full_match, scoring_match};
+use common::{content, default_teams, full_match, scoring_match};
 use engine::record::RECORD_BYTES;
 use engine::rules::clock::TICKS_PER_MINUTE;
 use engine::snapshot::{MarkFixture, MatchdayMark};
@@ -16,9 +16,17 @@ use engine::{
 };
 use sha2::{Digest, Sha256};
 
-/// The continuation test resumes the seed-6 match from the first stoppage at or after this
+/// The continuation test resumes the seed-5 match from the first stoppage at or after this
 /// tick, early in the second half, before the AI manager's substitutions and tactics changes.
 const FROM_TICK: u32 = 50 * TICKS_PER_MINUTE;
+
+/// The seed-5, 90-minute match on the shipped content and default teams: after `FROM_TICK` it
+/// brings substitutions and an applied tactics change.
+fn resume_match() -> engine::MatchConfig {
+    let content = content();
+    let [a, b] = default_teams(&content);
+    engine::MatchConfig::new(5, 90, &content, [&a, &b]).unwrap()
+}
 const OWNER: [u8; 16] = [7; 16];
 
 /// Keeps every record and captures the snapshot at one stoppage.
@@ -56,7 +64,7 @@ fn bytes(records: &[TickRecord]) -> Vec<u8> {
 
 fn whole_match() -> (Capture, Simulation) {
     let mut capture = Capture::default();
-    let mut sim = Simulation::new(scoring_match()).unwrap();
+    let mut sim = Simulation::new(resume_match()).unwrap();
     sim.run(&mut capture).unwrap();
     (capture, sim)
 }
@@ -102,7 +110,7 @@ fn a_resumed_match_continues_tick_for_tick() {
 
     // Through the file format, as a resume reads it.
     let read = Snapshot::from_bytes(&snapshot.to_bytes(), "snapshot.smsn").unwrap();
-    let mut resumed = Simulation::from_snapshot(scoring_match(), &read).unwrap();
+    let mut resumed = Simulation::from_snapshot(resume_match(), &read).unwrap();
     assert_eq!(resumed.tick(), from);
     let mut sink = VecSink::default();
     resumed.run(&mut sink).unwrap();
@@ -132,7 +140,7 @@ fn a_snapshot_written_read_and_written_again_is_the_same_bytes() {
     let (whole, _) = whole_match();
     let first = whole.snapshot.unwrap().to_bytes();
     let read = Snapshot::from_bytes(&first, "snapshot.smsn").unwrap();
-    let rebuilt = Simulation::from_snapshot(scoring_match(), &read).unwrap();
+    let rebuilt = Simulation::from_snapshot(resume_match(), &read).unwrap();
     let second = Snapshot::capture(&rebuilt, OWNER, 1_700_000_000_000).to_bytes();
     assert!(first == second, "a field does not round-trip");
 }

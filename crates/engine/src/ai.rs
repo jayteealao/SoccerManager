@@ -97,12 +97,15 @@ pub fn role_fit(
     if weight > 0.0 { sum / weight } else { 0.0 }
 }
 
-/// The best player in `candidates` for `role`: players whose position the role suits come
-/// first, then any outfield player (or any player for a goalkeeper's role). Ties go to the
-/// lower squad index.
+/// The best player in `candidates` for `role` in a slot at `position`: players whose listed
+/// position is the slot's own come first, then players whose position the role suits, then
+/// any outfield player (or any player for a goalkeeper's role), then anyone. Within a tier the
+/// best role fit wins, and ties go to the lower squad index. So a left-back takes the left-back
+/// slot and a right-back the right, whichever fits the full-back's role better.
 pub(crate) fn best_for(
     team: &Team,
     candidates: &[usize],
+    position: Position,
     role: usize,
     schema: &TacticsSchema,
     attrs: &AttributeSchema,
@@ -121,7 +124,8 @@ pub(crate) fn best_for(
             })
             .map(|(_, s)| s)
     };
-    pick(&|p| suits.contains(&p))
+    pick(&|p| p == position)
+        .or_else(|| pick(&|p| suits.contains(&p)))
         .or_else(|| pick(&|p| keeper_role || p != Position::GK))
         .or_else(|| pick(&|_| true))
 }
@@ -133,9 +137,9 @@ pub fn pre_match(team: &Team, schema: &TacticsSchema, attrs: &AttributeSchema) -
 }
 
 /// The AI manager's pre-match setup for `team` starting with `tactics`: the best-fitting
-/// player for each slot's role in slot order, and a bench of `bench_size` with the best
-/// remaining goalkeeper first and then the best remaining players by fit to their own
-/// position's first role. So a side that starts in another formation fields players whose
+/// player for each slot's position and role in slot order (see [`best_for`]), and a bench of
+/// `bench_size` with the best remaining goalkeeper first and then the best remaining players
+/// by fit to their own position's first role. So a side that starts in another formation fields players whose
 /// position suits that formation's slots, as it does in the default one.
 pub fn pre_match_for(
     team: &Team,
@@ -145,10 +149,12 @@ pub fn pre_match_for(
 ) -> Setup {
     let mut free: Vec<usize> = (0..team.squad.len()).collect();
     let mut lineup = [0usize; PLAYERS_PER_TEAM];
+    let slots = &schema.formations[usize::from(tactics.formation)].slots;
     for (slot, place) in lineup.iter_mut().enumerate() {
         let role = usize::from(tactics.roles[slot].role);
         // A validated squad holds at least eleven players.
-        let pick = best_for(team, &free, role, schema, attrs).unwrap_or(free[0]);
+        let pick =
+            best_for(team, &free, slots[slot].position, role, schema, attrs).unwrap_or(free[0]);
         *place = pick;
         free.retain(|&s| s != pick);
     }
@@ -161,7 +167,7 @@ pub fn pre_match_for(
         .filter(|&s| team.squad[s].position == Position::GK)
         .collect();
     if size > 0
-        && let Some(gk) = best_for(team, &keepers, keeper_role, schema, attrs)
+        && let Some(gk) = best_for(team, &keepers, Position::GK, keeper_role, schema, attrs)
     {
         bench.push(gk);
         free.retain(|&s| s != gk);
@@ -205,7 +211,7 @@ impl PreMatchModule for PreMatchV1 {
 }
 
 pub const PRE_MATCH_V1_CARD: ModuleCard = ModuleCard {
-    purpose: "Picks each team's lineup by role fit for the formation it starts in, a bench with the best spare goalkeeper first, and the tactics file's default tactics.",
+    purpose: "Picks each team's lineup for the formation it starts in, a player listed at each slot's position first and then by role fit, a bench with the best spare goalkeeper first, and the tactics file's default tactics.",
     inputs: "The team's squad with positions and attributes, the tactics schema's roles and AI bench size, and the attribute schema.",
     outputs: "The setup: the tactics, the squad index of each slot, and the bench.",
     tuning: &["tactics.roles", "tactics.ai.bench_size"],
@@ -443,8 +449,8 @@ impl Check<'_, '_> {
         t
     }
 
-    /// The best substitute on the bench for `slot`'s role, leaving out anyone already queued
-    /// to come on.
+    /// The best substitute on the bench for `slot`'s position and role (see [`best_for`]),
+    /// leaving out anyone already queued to come on.
     fn substitute_for(&self, slot: usize) -> Option<usize> {
         let side = &self.view.teams()[self.team];
         let incoming = self.queue.incoming(self.team);
@@ -454,14 +460,10 @@ impl Check<'_, '_> {
             .copied()
             .filter(|s| !incoming.contains(s))
             .collect();
+        let schema = self.view.tactics();
+        let position = schema.formations[usize::from(side.tactics.formation)].slots[slot].position;
         let role = usize::from(side.tactics.roles[slot].role);
-        best_for(
-            side,
-            &free,
-            role,
-            self.view.tactics(),
-            self.view.attributes(),
-        )
+        best_for(side, &free, position, role, schema, self.view.attributes())
     }
 
     /// The best goalkeeper on the bench by fit to the goalkeeper's role, leaving out anyone
@@ -477,7 +479,14 @@ impl Check<'_, '_> {
             .collect();
         let schema = self.view.tactics();
         let role = schema.default_role(Position::GK);
-        best_for(side, &keepers, role, schema, self.view.attributes())
+        best_for(
+            side,
+            &keepers,
+            Position::GK,
+            role,
+            schema,
+            self.view.attributes(),
+        )
     }
 }
 
@@ -576,5 +585,54 @@ mod tests {
         let one = pre_match(&team, &content.tactics, &content.attributes);
         let two = pre_match(&team, &content.tactics, &content.attributes);
         assert_eq!(one, two);
+    }
+
+    #[test]
+    fn full_backs_and_wingers_start_on_their_own_side_whatever_their_fit() {
+        use crate::rating::Rating;
+        let content = shipped_content();
+        let wide = [Position::LB, Position::RB, Position::LW, Position::RW];
+        for file in default_teams(&content) {
+            // One side's full-backs and wingers fit their role far better than the other's.
+            for strong in [[Position::RB, Position::RW], [Position::LB, Position::LW]] {
+                let mut file = file.clone();
+                for p in &mut file.players {
+                    let tenths = if strong.contains(&p.position) {
+                        200
+                    } else if wide.contains(&p.position) {
+                        10
+                    } else {
+                        continue;
+                    };
+                    p.attributes
+                        .values_mut()
+                        .for_each(|v| *v = Rating::from_tenths(tenths));
+                }
+                let (team, _) =
+                    Team::from_file(0, &file, &content.attributes, &content.tuning.engine).unwrap();
+                let setup = pre_match(&team, &content.tactics, &content.attributes);
+                let slots = &content.tactics.formations[usize::from(setup.tactics.formation)].slots;
+                // Each shipped squad has a natural player for every slot of the default
+                // formation, so every starter plays his listed position.
+                for (slot, &s) in setup.lineup.iter().enumerate() {
+                    assert_eq!(team.squad[s].position, slots[slot].position, "slot {slot}");
+                }
+                // A substitute for a wide slot is picked the same way.
+                let all: Vec<usize> = (0..team.squad.len()).collect();
+                for position in wide {
+                    let role = content.tactics.default_role(position);
+                    let pick = best_for(
+                        &team,
+                        &all,
+                        position,
+                        role,
+                        &content.tactics,
+                        &content.attributes,
+                    )
+                    .unwrap();
+                    assert_eq!(team.squad[pick].position, position);
+                }
+            }
+        }
     }
 }
