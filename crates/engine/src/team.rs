@@ -42,6 +42,9 @@ pub const FORMATION_442: [(f64, f64); PLAYERS_PER_TEAM] = [
 /// a back three or five with its centre-back a little deeper is one line.
 const BACK_LINE_BAND: f64 = 4.0;
 
+/// Metres off the centre line within which a slot is central: it plays on neither side.
+pub const CENTRAL_M: f64 = 0.5;
+
 /// The lowest and highest of `ys`.
 fn span(ys: impl Iterator<Item = f64>) -> (f64, f64) {
     ys.fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), y| {
@@ -404,14 +407,27 @@ impl Team {
 
     /// A slot position in pitch coordinates with the ball at the centre. The formation is
     /// drawn for 105 by 68 and scales to the ground: along the touchline by its length over
-    /// 105, across by its width over 68.
+    /// 105, across by its width over 68. It is drawn for a team attacking positive `x`; a team
+    /// attacking the other way mirrors both the length and the width, so a left-back stands
+    /// on his own team's left at either end.
     pub fn slot_base(&self, slot: usize) -> DVec2 {
         let (fx, fy) = self.formation[slot];
         let (sx, sy) = self.pitch.scale();
         DVec2::new(
             (fx * sx - self.pitch.half_length()) * self.attack_x,
-            fy * sy,
+            fy * sy * self.attack_x,
         )
+    }
+
+    /// The side of the centre line slot `slot` plays on, in the team's own frame: -1 or +1,
+    /// and 0 for a central slot (less than half a metre off the centre line).
+    pub fn slot_side(&self, slot: usize) -> f64 {
+        let fy = self.formation[slot].1;
+        if fy.abs() < CENTRAL_M {
+            0.0
+        } else {
+            fy.signum()
+        }
     }
 
     /// Removes `slot` from the formation, as when its player leaves play: every line is laid
@@ -434,8 +450,10 @@ impl Team {
     }
 
     /// The formation anchor for `slot` given the ball position: the slot moved up by the
-    /// plan's block depth, the slot's duty, and the role's offset for the phase (the team has
-    /// the ball when `in_possession`), widened by the plan, plus the ball shift.
+    /// plan's block depth, the slot's duty, and its stand for the phase (the team has the
+    /// ball when `in_possession`), widened by the plan, mirrored for the team's attack
+    /// direction as [`Team::slot_base`] is, plus the ball shift. A central slot takes no
+    /// sideways stand.
     pub fn anchor(&self, slot: usize, ball: DVec2, in_possession: bool, t: &Tuning) -> DVec2 {
         if slot == self.keeper_slot() {
             // The keeper stands on the line from the goal centre toward the ball.
@@ -455,10 +473,10 @@ impl Team {
         // The role's offset comes after the existing sums, so an offset of 0 keeps every
         // anchor's bits.
         let depth = (fx + self.plan.block_depth + plan.depth + offset.x) * sx;
-        let side = if fy < 0.0 { -1.0 } else { 1.0 };
+        let side = self.slot_side(slot);
         let base = DVec2::new(
             (depth - self.pitch.half_length()) * self.attack_x,
-            (fy * self.plan.width + side * offset.y) * sy,
+            (fy * self.plan.width + side * offset.y) * sy * self.attack_x,
         );
         let shift = DVec2::new(ball.x * t.compactness_x, ball.y * t.compactness_y);
         self.pitch.clamp(base + shift, 0.5)
@@ -708,5 +726,71 @@ mod tests {
         let away = bare(1);
         assert_eq!(home.slot_base(0).x, -away.slot_base(0).x);
         assert!(home.slot_base(9).x > 0.0 && away.slot_base(9).x < 0.0);
+        // The whole place mirrors through the centre spot, length and width.
+        for slot in 0..PLAYERS_PER_TEAM {
+            assert_eq!(home.slot_base(slot), -away.slot_base(slot), "slot {slot}");
+        }
+    }
+
+    /// `true` when a pitch point stands on the left of a team attacking `attack_x`: the left
+    /// of a team attacking positive `x` is negative `y`, as the formation is drawn.
+    fn on_left(at: DVec2, attack_x: f64) -> bool {
+        at.y * attack_x < 0.0
+    }
+
+    #[test]
+    fn a_left_back_stands_on_his_own_left_for_both_teams_in_both_halves() {
+        let content = shipped_content();
+        let schema = &content.tactics;
+        let t = &content.tuning.engine;
+        for index in 0..2 {
+            let mut team = bare(index);
+            team.set_tactics(Tactics::defaults(schema), schema, t);
+            // Slot 1 is the 4-4-2's left-back, slot 4 its right-back.
+            assert_eq!(team.plan.slots[1].position, Some(Position::LB));
+            for half in 0..2 {
+                if half == 1 {
+                    team.switch_ends();
+                }
+                let ax = team.attack_x;
+                assert!(on_left(team.slot_base(1), ax), "team {index} half {half}");
+                assert!(!on_left(team.slot_base(4), ax), "team {index} half {half}");
+                for ball in [
+                    DVec2::ZERO,
+                    DVec2::new(30.0, 20.0),
+                    DVec2::new(-30.0, -20.0),
+                ] {
+                    for phase in [true, false] {
+                        let lb = team.anchor(1, ball, phase, t);
+                        let rb = team.anchor(4, ball, phase, t);
+                        assert!(
+                            (lb.y - rb.y) * ax < 0.0,
+                            "team {index} half {half} ball {ball} in possession {phase}: \
+                             left-back {lb} right-back {rb}"
+                        );
+                    }
+                }
+                // The keeper stands on the line from his goal toward the ball, either way.
+                let keeper = team.anchor(0, DVec2::ZERO, false, t);
+                assert_eq!(keeper.y, 0.0);
+                assert!(keeper.x * ax < 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn a_central_slot_takes_no_sideways_stand() {
+        let content = shipped_content();
+        let schema = &content.tactics;
+        let t = &content.tuning.engine;
+        let mut team = bare(0);
+        let mut tactics = Tactics::defaults(schema);
+        tactics.set_formation(schema.formation_index("4-3-3").unwrap() as u8, schema);
+        team.set_tactics(tactics, schema, t);
+        // Slot 6 is the 4-3-3's defensive midfielder on the centre line; his position's
+        // stand has a sideways part, which a central slot does not take.
+        assert_eq!(team.slot_side(6), 0.0);
+        assert!(team.plan.slots[6].in_possession.y != 0.0);
+        assert_eq!(team.anchor(6, DVec2::ZERO, true, t).y, 0.0);
     }
 }

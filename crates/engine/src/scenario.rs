@@ -67,7 +67,15 @@ impl Scene {
         self.sim.control_since = 0;
         if let Some(c) = c {
             self.sim.last_touch = Some(self.sim.players[c].team);
+            self.sim.possession_phase = Some(self.sim.players[c].team);
         }
+        self
+    }
+
+    /// The team in possession, kept through a loose ball and a pass in flight; `None`
+    /// before anyone controls the ball.
+    pub fn phase(mut self, team: Option<usize>) -> Self {
+        self.sim.possession_phase = team;
         self
     }
 

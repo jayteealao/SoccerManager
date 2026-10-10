@@ -125,6 +125,11 @@ pub use message::{
 /// `base`, each wire slot's overall level now and fresh. Every added field is optional, so an
 /// older message still reads; no field was removed and the tick frames are unchanged. A hidden
 /// value is never part of a level.
+///
+/// The hello's `tactics` may also carry the tactics file's optional stand table (`stands`),
+/// stand-option sizes (`stand_options`), rest-defence guard (`rest_defence`), each role's
+/// `options` and each mentality's `rest_defence`. They are additive within version 6: a
+/// reader that knows none of them ignores them.
 pub const PROTOCOL_VERSION: u16 = 6;
 
 /// The protocol version before ratings moved to tenths. Replay readers still read its

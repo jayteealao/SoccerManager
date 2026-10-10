@@ -212,7 +212,7 @@ impl Simulation {
 
     /// Player `i` deflected the shot in flight: his side touched the ball last and the shot
     /// is over.
-    fn deflected_by(&mut self, i: usize) {
+    pub(crate) fn deflected_by(&mut self, i: usize) {
         if self.ball.vel.z > 0.0 && self.ball.pos.z <= 0.0 {
             self.ball.pos.z = 0.001;
         }
@@ -461,6 +461,7 @@ impl Simulation {
             self.summary.possession_changes += 1;
         }
         self.last_touch = Some(team);
+        self.possession_phase = Some(team);
         self.carrier = Some(i);
         self.control_since = self.tick;
         self.script_cache = None;

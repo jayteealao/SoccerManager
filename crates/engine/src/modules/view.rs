@@ -191,6 +191,26 @@ impl<'a> MatchView<'a> {
         self.sim.pass_in_flight
     }
 
+    /// The team in possession: the team of the last player who gained control of the ball,
+    /// kept through a loose ball and a pass in flight. `None` while the ball is dead.
+    #[inline]
+    pub fn possession_phase(&self) -> Option<usize> {
+        self.sim.possession_phase
+    }
+
+    /// Player `i`'s familiarity with his place and the team's tactic, in rating points: the
+    /// familiarity family's delta on the mental group, within the family's cap. 0 while no
+    /// modifier feeds the family.
+    pub fn familiarity(&self, i: usize) -> f64 {
+        use crate::data::attributes::Group;
+        use crate::modules::modifier::Family;
+        self.sim
+            .config
+            .modules
+            .modifiers
+            .family_delta(self, i, Family::Familiarity, Group::Mental)
+    }
+
     /// The team whose shot is in flight and not yet resolved.
     #[inline]
     pub fn shot_in_flight(&self) -> Option<usize> {

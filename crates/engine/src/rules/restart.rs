@@ -128,8 +128,8 @@ pub fn preferred_taker(
     }
 }
 
-/// Where a player of `team` stands for a kick-off: the formation slot, kept inside its own
-/// half.
+/// Where a player of `team` stands for a kick-off: the formation slot, mirrored in length and
+/// width for a team attacking negative `x` ([`Team::slot_base`]), kept inside its own half.
 pub fn kick_off_position(team: &Team, slot: usize) -> DVec2 {
     let base = team.slot_base(slot);
     let depth = base.x * team.attack_x;
@@ -568,6 +568,99 @@ mod tests {
                     "player {i} at {at}"
                 );
                 assert!((at - spot).length() >= KICK_DISTANCE);
+            }
+        }
+    }
+
+    /// The kick-off places of the 4-4-2 and the 4-3-3 for both teams, in metres from the home
+    /// goal line and across: the same table the viewer's kick-off test pins
+    /// (`viewer/tests/prematch.test.js`), so the two drawings agree. The away team mirrors
+    /// the length and the width.
+    #[test]
+    fn kick_off_places_mirror_for_the_away_team_and_match_the_viewer_table() {
+        type Places = [(f64, f64); PLAYERS_PER_TEAM];
+        let table: [(&str, Places, Places); 2] = [
+            (
+                "4-4-2",
+                [
+                    (5.0, 0.0),
+                    (25.0, -22.0),
+                    (25.0, -8.0),
+                    (25.0, 8.0),
+                    (25.0, 22.0),
+                    (45.0, -24.0),
+                    (45.0, -8.0),
+                    (45.0, 8.0),
+                    (45.0, 24.0),
+                    (51.5, -8.0),
+                    (51.5, 8.0),
+                ],
+                [
+                    (100.0, 0.0),
+                    (80.0, 22.0),
+                    (80.0, 8.0),
+                    (80.0, -8.0),
+                    (80.0, -22.0),
+                    (60.0, 24.0),
+                    (60.0, 8.0),
+                    (60.0, -8.0),
+                    (60.0, -24.0),
+                    (53.5, 8.0),
+                    (53.5, -8.0),
+                ],
+            ),
+            (
+                "4-3-3",
+                [
+                    (5.0, 0.0),
+                    (25.0, -22.0),
+                    (25.0, -8.0),
+                    (25.0, 8.0),
+                    (25.0, 22.0),
+                    (43.0, -15.0),
+                    (38.0, 0.0),
+                    (43.0, 15.0),
+                    (51.5, -22.0),
+                    (51.5, 22.0),
+                    (51.5, 0.0),
+                ],
+                [
+                    (100.0, 0.0),
+                    (80.0, 22.0),
+                    (80.0, 8.0),
+                    (80.0, -8.0),
+                    (80.0, -22.0),
+                    (62.0, 15.0),
+                    (67.0, 0.0),
+                    (62.0, -15.0),
+                    (53.5, 22.0),
+                    (53.5, -22.0),
+                    (53.5, 0.0),
+                ],
+            ),
+        ];
+        let content = crate::data::test_support::shipped_content();
+        let schema = &content.tactics;
+        for (name, home, away) in table {
+            for (index, places) in [(0, home), (1, away)] {
+                let mut team = crate::team::test_support::bare(index);
+                let mut tactics = crate::tactics::Tactics::defaults(schema);
+                tactics.set_formation(schema.formation_index(name).unwrap() as u8, schema);
+                team.set_tactics(tactics, schema, &content.tuning.engine);
+                // The viewer draws the formation file's slots; the engine also closes a back
+                // line wider than its keeper's organisation allows, which the viewer cannot
+                // know before the match. The shared table pins the mirror rule, so the back
+                // line keeps its file places here.
+                team.plan.back_line_gap = f64::INFINITY;
+                team.relayout();
+                for (slot, (x, y)) in places.into_iter().enumerate() {
+                    let at = kick_off_position(&team, slot);
+                    let want = DVec2::new(x - 52.5, y);
+                    assert!(
+                        (at - want).length() < 1e-9,
+                        "{name} team {index} slot {slot}: {at} against {want}"
+                    );
+                }
             }
         }
     }

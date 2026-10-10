@@ -191,7 +191,20 @@ fn a_version_1_tactics_file_converts_to_the_shipped_version_2_file() {
     let v1 = fixture_bytes("tactics-v1.json");
     let converted = engine::data::load_tactics_bytes(&v1, "tactics-v1.json").unwrap();
     assert_eq!(converted.converted_from, Some(1));
-    assert_eq!(converted.value, common::content().tactics);
+    // The stand table, the stand options and their sizes, each role's menu and the
+    // rest-defence guard are optional parts of version 2 that a version 1 file has none of:
+    // it converts with them neutral, so it plays as it did.
+    let mut shipped = common::content().tactics;
+    shipped.stands = Default::default();
+    shipped.stand_options = None;
+    shipped.rest_defence = None;
+    for role in &mut shipped.roles {
+        role.options = Default::default();
+    }
+    for mentality in &mut shipped.mentalities {
+        mentality.rest_defence = 0;
+    }
+    assert_eq!(converted.value, shipped);
 }
 
 /// A team file with `ground` set in its club, as bytes.

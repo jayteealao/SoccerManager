@@ -8,8 +8,10 @@ pub mod planned;
 pub mod verdict;
 
 use crate::data::tactics::{
-    DIRECTNESS, LINE_HEIGHT, Offset, PRESSING, TEMPO, TIME_WASTING, TacticsSchema, WIDTH,
+    DIRECTNESS, LINE_HEIGHT, MENU_MAX, Offset, PRESSING, RestDefence, StandOffset, StandOption,
+    StandOptionSizes, TEMPO, TIME_WASTING, TacticsSchema, WIDTH,
 };
+use crate::data::team::Position;
 use crate::team::PLAYERS_PER_TEAM;
 use crate::tuning::Tuning;
 
@@ -145,20 +147,38 @@ impl TacticsPatch {
     }
 }
 
-/// What one slot's role and duty add to play.
+/// A role's stand options for one phase, in preference order; `None` ends the list.
+pub type Menu = [Option<StandOption>; MENU_MAX];
+
+/// `list` as a [`Menu`]. A checked file lists at most [`MENU_MAX`] options.
+fn menu(list: &[StandOption]) -> Menu {
+    let mut out = [None; MENU_MAX];
+    for (o, &option) in out.iter_mut().zip(list) {
+        *o = Some(option);
+    }
+    out
+}
+
+/// What one slot's position, role and duty add to play.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct SlotPlan {
+    /// The position the formation gives the slot; `None` in the neutral plan.
+    pub position: Option<Position>,
     /// Metres the anchor moves up the pitch.
     pub depth: f64,
     pub shoot: f64,
     pub dribble: f64,
     /// Added to a forward pass in proportion to its progress.
     pub progress: f64,
-    /// Metres the anchor moves while the team has the ball, and while it does not.
+    /// Metres the anchor moves while the team has the ball, and while it does not: the
+    /// position's stand plus the role's offset.
     pub in_possession: Offset,
     pub out_of_possession: Offset,
     /// Added to a teammate's pass to this slot in proportion to the pass length.
     pub long_ball_target: f64,
+    /// The role's stand options while the team has the ball, and while it does not.
+    pub menu_in: Menu,
+    pub menu_out: Menu,
 }
 
 /// The numbers play reads from a team's tactics.
@@ -180,6 +200,12 @@ pub struct TeamPlan {
     pub shoot: f64,
     pub progress: f64,
     pub hold: f64,
+    /// The fewest outfield players who stay goal-side of the ball while the team has it.
+    pub rest_defence: usize,
+    /// The sizes of the stand options; `None` takes no option.
+    pub sizes: Option<StandOptionSizes>,
+    /// The rest-defence guard; `None` holds nobody back.
+    pub rest: Option<RestDefence>,
     pub slots: [SlotPlan; PLAYERS_PER_TEAM],
 }
 
@@ -190,19 +216,29 @@ impl TeamPlan {
         let ins = &schema.instructions;
         let press = &ins.pressing.levels[level(PRESSING)];
         let mentality = &schema.mentalities[usize::from(tactics.mentality)];
+        let formation = &schema.formations[usize::from(tactics.formation)];
+        // The position's stand from its slot, then the role's own offset.
+        let add = |a: StandOffset, b: Offset| Offset {
+            x: a.x + b.x,
+            y: a.y + b.y,
+        };
         let mut slots = [SlotPlan::default(); PLAYERS_PER_TEAM];
-        for (plan, rd) in slots.iter_mut().zip(&tactics.roles) {
+        for ((plan, rd), slot) in slots.iter_mut().zip(&tactics.roles).zip(&formation.slots) {
             let role = &schema.roles[usize::from(rd.role)];
             let duty = &schema.duties[usize::from(rd.duty)];
             let actions = &role.preferred_actions;
+            let stand = schema.stands.of(slot.position);
             *plan = SlotPlan {
+                position: Some(slot.position),
                 depth: duty.depth,
                 shoot: actions.shoot * duty.scale,
                 dribble: actions.dribble * duty.scale + duty.risk,
                 progress: actions.progress * duty.scale + duty.risk,
-                in_possession: role.in_possession,
-                out_of_possession: role.out_of_possession,
+                in_possession: add(stand.in_possession, role.in_possession),
+                out_of_possession: add(stand.out_of_possession, role.out_of_possession),
                 long_ball_target: role.teammates.long_ball_target,
+                menu_in: menu(&role.options.in_possession),
+                menu_out: menu(&role.options.out_of_possession),
             };
         }
         Self {
@@ -217,6 +253,9 @@ impl TeamPlan {
             shoot: mentality.shoot,
             progress: mentality.progress,
             hold: mentality.hold,
+            rest_defence: usize::from(mentality.rest_defence),
+            sizes: schema.stand_options,
+            rest: schema.rest_defence,
             slots,
         }
     }
@@ -235,6 +274,9 @@ impl TeamPlan {
             shoot: 0.0,
             progress: 0.0,
             hold: 0.0,
+            rest_defence: 0,
+            sizes: None,
+            rest: None,
             slots: [SlotPlan::default(); PLAYERS_PER_TEAM],
         }
     }

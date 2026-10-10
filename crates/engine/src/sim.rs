@@ -10,6 +10,8 @@ mod hooks;
 mod manager;
 mod movement;
 mod possession;
+#[cfg(test)]
+mod shape_tests;
 pub mod tally;
 
 use crate::trace::Point;
@@ -585,6 +587,11 @@ pub struct Simulation {
     /// both, like `last_kicker`, so the snapshot never needs them.
     pub(crate) pass_in_flight: Option<usize>,
     pub(crate) shot_in_flight: Option<usize>,
+    /// The team in possession: the team of the last player who gained control of the ball,
+    /// kept through a loose ball, a deflection and a pass in flight until a player of the
+    /// other team controls it. The kick-off and each restart set it; every dead ball clears
+    /// it with `pass_in_flight`, so the snapshot never needs it.
+    pub(crate) possession_phase: Option<usize>,
     /// The shot in flight: whether it heads between the posts under the bar, its quality for
     /// the save roll, and the outfield defenders (one bit per roster index) who have already
     /// tried to block it. Cleared with `shot_in_flight`.
@@ -756,6 +763,7 @@ impl Simulation {
             ai: [AiState::default(); 2],
             keeper_beaten: false,
             pass_in_flight: None,
+            possession_phase: None,
             restart_taker: None,
             clearers_tried: 0,
             shot_in_flight: None,
@@ -1073,6 +1081,12 @@ impl Simulation {
     /// The player controlling the ball, if any.
     pub fn carrier(&self) -> Option<usize> {
         self.carrier
+    }
+
+    /// The team in possession, kept through a loose ball and a pass in flight; `None` while
+    /// the ball is dead.
+    pub fn possession_phase(&self) -> Option<usize> {
+        self.possession_phase
     }
 
     /// The team that touched the ball last.

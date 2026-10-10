@@ -36,17 +36,28 @@ test('the risk word follows the injury-proneness word, and with no word it is no
 /// The engine's kick-off places (crates/engine/src/rules/restart.rs, kick_off_position) in
 /// metres from the home goal line and metres across, worked by hand from the tactics file: a
 /// slot deeper than 1 m short of halfway keeps its place, any other stands 1 m inside its own
-/// half, and the away side's length is mirrored.
+/// half, and the away side's length and width are both mirrored. The engine pins the same
+/// table (restart.rs, kick_off_places_mirror_for_the_away_team_and_match_the_viewer_table).
 const ENGINE = {
   '4-4-2': {
     home: [[5, 0], [25, -22], [25, -8], [25, 8], [25, 22], [45, -24], [45, -8], [45, 8], [45, 24], [51.5, -8], [51.5, 8]],
-    away: [[100, 0], [80, -22], [80, -8], [80, 8], [80, 22], [60, -24], [60, -8], [60, 8], [60, 24], [53.5, -8], [53.5, 8]],
+    away: [[100, 0], [80, 22], [80, 8], [80, -8], [80, -22], [60, 24], [60, 8], [60, -8], [60, -24], [53.5, 8], [53.5, -8]],
   },
   '4-3-3': {
     home: [[5, 0], [25, -22], [25, -8], [25, 8], [25, 22], [43, -15], [38, 0], [43, 15], [51.5, -22], [51.5, 22], [51.5, 0]],
-    away: [[100, 0], [80, -22], [80, -8], [80, 8], [80, 22], [62, -15], [67, 0], [62, 15], [53.5, -22], [53.5, 22], [53.5, 0]],
+    away: [[100, 0], [80, 22], [80, 8], [80, -8], [80, -22], [62, 15], [67, 0], [62, -15], [53.5, 22], [53.5, -22], [53.5, 0]],
   },
 };
+
+test('the away left-back stands on the other side of the drawing from the home left-back', () => {
+  const slots = formationSlots(SCHEMA, '4-4-2');
+  // Slot 1 is the left-back. Each team's left is its own: the home side attacks to the right,
+  // the away side to the left, so the two left-backs stand on opposite sides of the centre.
+  const home = kickOffDots(slots, 0)[1];
+  const away = kickOffDots(slots, 1)[1];
+  assert.equal(home.position, 'LB');
+  assert.ok((home.top - 50) * (away.top - 50) < 0, `home ${home.top} away ${away.top}`);
+});
 
 test('kick-off places match the engine rule for 4-4-2 and 4-3-3 on both sides', () => {
   for (const [name, sides] of Object.entries(ENGINE)) {

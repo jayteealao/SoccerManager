@@ -273,6 +273,7 @@ impl Simulation {
         self.restart = true;
         self.last_kicker = None;
         self.pass_in_flight = None;
+        self.possession_phase = None;
         self.restart_taker = None;
         self.clearers_tried = 0;
         self.end_shot();
@@ -305,6 +306,7 @@ impl Simulation {
         self.carrier = Some(kicker);
         self.control_since = self.tick;
         self.last_touch = Some(team);
+        self.possession_phase = Some(team);
         self.restart_taker = Some(kicker);
         self.referee.offside = 0;
         self.enter_phase(Phase::Live, Cause::KickOffTaken);
@@ -686,7 +688,11 @@ impl Simulation {
             }
             Phase::FullTime => {}
         }
-        if let Some(short) = self.config.modules.clock.abandoned(&self.view()) {
+        // An injury on the full-time tick (the fatigue pass runs after the clock) ends
+        // nothing: the match is already over.
+        if self.referee.phase != Phase::FullTime
+            && let Some(short) = self.config.modules.clock.abandoned(&self.view())
+        {
             tracing::warn!(
                 signal = "rules.abandoned",
                 tick = self.tick + 1,
@@ -728,6 +734,7 @@ impl Simulation {
         self.restart = true;
         self.last_kicker = None;
         self.pass_in_flight = None;
+        self.possession_phase = None;
         self.restart_taker = None;
         self.clearers_tried = 0;
         self.end_shot();
@@ -835,6 +842,7 @@ impl Simulation {
         self.carrier = Some(dead.taker);
         self.control_since = self.tick;
         self.last_touch = Some(dead.team);
+        self.possession_phase = Some(dead.team);
         self.restart_taker = Some(dead.taker);
         let kick = match dead.kind {
             StoppageKind::ThrowIn | StoppageKind::Corner => {
@@ -1133,6 +1141,7 @@ impl Simulation {
         self.restart = true;
         self.last_kicker = None;
         self.pass_in_flight = None;
+        self.possession_phase = None;
         self.restart_taker = None;
         self.clearers_tried = 0;
         self.end_shot();

@@ -53,6 +53,178 @@ pub struct TacticsSchema {
     pub duties: Vec<Duty>,
     #[garde(dive)]
     pub ai: AiTuning,
+    /// Where each position stands in and out of possession, as an offset from its formation
+    /// slot. A file without it stands every position on its slot.
+    #[serde(default)]
+    #[garde(dive)]
+    pub stands: Stands,
+    /// The sizes of the stand options. A file without it takes no stand option.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub stand_options: Option<StandOptionSizes>,
+    /// How the rest-defence guard holds players back. A file without it holds nobody back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub rest_defence: Option<RestDefence>,
+}
+
+/// Each position's stand per phase, as an offset from its formation slot: metres up the
+/// pitch (`x`) and away from the centre line on the slot's side (`y`). The stand is never an
+/// offset from the ball; the ball shift moves the whole block after it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields, default)]
+pub struct Stands {
+    #[garde(dive)]
+    pub gk: PhaseStand,
+    #[garde(dive)]
+    pub cb: PhaseStand,
+    #[garde(dive)]
+    pub lb: PhaseStand,
+    #[garde(dive)]
+    pub rb: PhaseStand,
+    #[garde(dive)]
+    pub dm: PhaseStand,
+    #[garde(dive)]
+    pub cm: PhaseStand,
+    #[garde(dive)]
+    pub am: PhaseStand,
+    #[garde(dive)]
+    pub lw: PhaseStand,
+    #[garde(dive)]
+    pub rw: PhaseStand,
+    #[garde(dive)]
+    pub st: PhaseStand,
+}
+
+impl Stands {
+    /// The stand of `position`.
+    pub fn of(&self, position: Position) -> PhaseStand {
+        match position {
+            Position::GK => self.gk,
+            Position::CB => self.cb,
+            Position::LB => self.lb,
+            Position::RB => self.rb,
+            Position::DM => self.dm,
+            Position::CM => self.cm,
+            Position::AM => self.am,
+            Position::LW => self.lw,
+            Position::RW => self.rw,
+            Position::ST => self.st,
+        }
+    }
+}
+
+/// One position's stand while its team has the ball and while the other team has it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields, default)]
+pub struct PhaseStand {
+    #[garde(dive)]
+    pub in_possession: StandOffset,
+    #[garde(dive)]
+    pub out_of_possession: StandOffset,
+}
+
+/// A stand offset in metres, each part from -40 to 40.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct StandOffset {
+    #[garde(range(min = -40.0, max = 40.0))]
+    pub x: f64,
+    #[garde(range(min = -40.0, max = 40.0))]
+    pub y: f64,
+}
+
+/// A stand option a role may take from its menu. None names a partner: a pairing such as a
+/// full-back overlapping a winger follows from where the team-mates stand, whoever they are.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StandOption {
+    /// Come short toward the ball, to give the carrier a passing option.
+    Drop,
+    /// Move further from the centre line.
+    Widen,
+    /// Move into the channel between the centre and the wing.
+    HalfSpace,
+    /// Run round the outside of a team-mate ahead on the same side.
+    Overlap,
+    /// Run inside a team-mate ahead on the same side who holds the touchline.
+    Underlap,
+}
+
+impl StandOption {
+    pub fn name(self) -> &'static str {
+        match self {
+            StandOption::Drop => "drop",
+            StandOption::Widen => "widen",
+            StandOption::HalfSpace => "half_space",
+            StandOption::Overlap => "overlap",
+            StandOption::Underlap => "underlap",
+        }
+    }
+}
+
+/// The most options a menu may list for one phase.
+pub const MENU_MAX: usize = 5;
+
+/// A role's stand options per phase, in preference order.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields, default)]
+pub struct OptionMenu {
+    #[garde(length(max = MENU_MAX))]
+    pub in_possession: Vec<StandOption>,
+    #[garde(length(max = MENU_MAX))]
+    pub out_of_possession: Vec<StandOption>,
+}
+
+/// The sizes the stand options read, in metres.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct StandOptionSizes {
+    /// How far a dropping player comes short of his stand.
+    #[garde(range(min = 0.0, max = 30.0))]
+    pub drop_m: f64,
+    /// How far behind a player the carrier must be for him to drop.
+    #[garde(range(min = 0.0, max = 60.0))]
+    pub drop_gap_m: f64,
+    /// How far a widening player moves out.
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub widen_m: f64,
+    /// The distance of the half-space line from the centre line, drawn for a 68 m width.
+    #[garde(range(min = 0.0, max = 40.0))]
+    pub half_space_y: f64,
+    /// How far ahead of the team-mate an overlapping player runs, and how far outside him.
+    #[garde(range(min = 0.0, max = 30.0))]
+    pub overlap_ahead_m: f64,
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub overlap_out_m: f64,
+    /// How far ahead of the team-mate an underlapping player runs, and how far inside him.
+    #[garde(range(min = 0.0, max = 30.0))]
+    pub underlap_ahead_m: f64,
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub underlap_in_m: f64,
+    /// The space a team-mate takes up: another player this close to a spot fills it.
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub space_m: f64,
+    /// How near the ball a team-mate must be for a player to overlap or underlap him.
+    #[garde(range(min = 0.0, max = 40.0))]
+    pub near_ball_m: f64,
+}
+
+/// How the rest-defence guard holds players back while the team has the ball.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct RestDefence {
+    /// Metres goal-side of the ball a held player stands at the least.
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub hold_margin_m: f64,
+    /// Above the minimum, a support or defend duty goes forward only with a team-mate
+    /// goal-side within this many metres across.
+    #[garde(range(min = 0.0, max = 100.0))]
+    pub lane_m: f64,
+    /// The familiarity, in rating points, a team-mate needs to stay and cover a full-back
+    /// who went forward.
+    #[garde(range(min = -12.7, max = 12.7))]
+    pub cover_familiarity_min: f64,
 }
 
 /// Eleven slots in attack coordinates: `x` metres from the own goal line, `y` across.
@@ -91,6 +263,10 @@ pub struct Mentality {
     pub progress: f64,
     #[garde(range(min = -2.0, max = 2.0))]
     pub hold: f64,
+    /// The fewest outfield players who stay goal-side of the ball while the team has it.
+    #[serde(default)]
+    #[garde(range(min = 0, max = 10))]
+    pub rest_defence: u8,
 }
 
 /// The six instructions. Each has a default level and two to five levels.
@@ -237,6 +413,10 @@ pub struct Role {
     pub preferred_actions: PreferredActions,
     #[garde(dive)]
     pub teammates: Teammates,
+    /// The stand options the player may take, per phase, in preference order.
+    #[serde(default)]
+    #[garde(dive)]
+    pub options: OptionMenu,
 }
 
 /// An anchor offset in metres, each part from -15 to 15.
@@ -391,6 +571,17 @@ impl TacticsSchema {
             }
         }
         for role in &self.roles {
+            for (phase, menu) in [
+                ("in_possession", &role.options.in_possession),
+                ("out_of_possession", &role.options.out_of_possession),
+            ] {
+                if let Some(k) = (1..menu.len()).find(|&k| menu[..k].contains(&menu[k])) {
+                    return Err((
+                        format!("roles.{}.options.{phase}", role.name),
+                        format!("{} appears twice", menu[k].name()),
+                    ));
+                }
+            }
             for name in role.attributes.keys() {
                 let Some(idx) = attributes.index(name) else {
                     return Err((
@@ -561,6 +752,62 @@ mod tests {
             "content refused: tactics tactics.json: roles.central_defender.attributes: \
              role central_defender names attribute injury_proneness, which is hidden; a role may \
              name only visible attributes"
+        );
+    }
+
+    /// Shape AC-6, content part: every role's menu holds only the five stand options, and no
+    /// option names a partner; a menu entry that names one, or an option listed twice, is
+    /// refused.
+    #[test]
+    fn menus_hold_only_stand_options_and_no_partner() {
+        use super::StandOption;
+        let content = shipped_content();
+        let t = &content.tactics;
+        let kinds = [
+            StandOption::Drop,
+            StandOption::Widen,
+            StandOption::HalfSpace,
+            StandOption::Overlap,
+            StandOption::Underlap,
+        ];
+        let mut listed = 0;
+        for role in &t.roles {
+            for o in role
+                .options
+                .in_possession
+                .iter()
+                .chain(&role.options.out_of_possession)
+            {
+                assert!(kinds.contains(o), "role {}", role.name);
+                listed += 1;
+            }
+        }
+        assert!(listed > 0);
+        assert_eq!(
+            t.mentalities
+                .iter()
+                .map(|m| m.rest_defence)
+                .collect::<Vec<_>>(),
+            [6, 5, 4, 3, 2]
+        );
+        assert!(t.stand_options.is_some() && t.rest_defence.is_some());
+        // A menu entry naming a partner does not load.
+        let err = with_tactics(|v| {
+            v["roles"][3]["options"]["in_possession"][0] = serde_json::json!({"overlap": "winger"});
+        });
+        assert!(err.to_string().contains("tactics"), "{err}");
+        let err = with_tactics(|v| {
+            v["roles"][3]["options"]["partner"] = "winger".into();
+        });
+        assert!(err.to_string().contains("tactics"), "{err}");
+        // An option listed twice is refused by role and phase.
+        let err = with_tactics(|v| {
+            v["roles"][3]["options"]["in_possession"] = serde_json::json!(["widen", "widen"]);
+        });
+        assert_eq!(
+            err.to_string(),
+            "content refused: tactics tactics.json: roles.full_back.options.in_possession: \
+             widen appears twice"
         );
     }
 

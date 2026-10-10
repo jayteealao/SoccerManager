@@ -23,6 +23,7 @@ use crate::modules::{
 use crate::pitch;
 use crate::plugin::OptionOffsets;
 use crate::rules::offside;
+use crate::shape;
 use crate::sim::{WIDE_SPREAD, wide_of_goal};
 use crate::streams::{Action, map_range};
 use crate::team::PLAYERS_PER_TEAM;
@@ -295,12 +296,15 @@ impl DecisionModule for DecisionV1 {
                 let count = teams[def].pressers().min(MAX_PRESSERS);
                 let reach = teams[def].plan.press_distance;
                 let mut pressers = [(f64::INFINITY, usize::MAX); MAX_PRESSERS];
+                // The carrier's team is in possession.
+                let phase = Some(team);
+                let anchors = shape::anchors(view, phase);
                 for i in 0..n {
                     let p = &players[i];
                     if !p.active() {
                         continue;
                     }
-                    let anchor = teams[p.team].anchor(p.slot, ball_xy, p.team == team, t);
+                    let anchor = anchors[i];
                     // Out of possession, a player who keeps his place less well than the
                     // average (shape stage under 1) trails his anchor by the shortfall.
                     let lag = 1.0 - p.derived.knobs.shape;
@@ -324,6 +328,9 @@ impl DecisionModule for DecisionV1 {
                         }
                     }
                 }
+                // Stand options from the role menus and the rest-defence guard; pressing,
+                // the line hold and cover then take their players from there.
+                shape::apply(view, phase, &anchors, &mut targets);
                 hold_the_line(view, &mut targets, team, c);
                 // Pressers run at the point where they can meet the carrier's run, and go for
                 // the ball once they are close.
@@ -363,20 +370,23 @@ impl DecisionModule for DecisionV1 {
                     .clamp(ball_xy + DVec2::new(ball.vel.x, ball.vel.y) * 0.3, 0.3);
                 let mut nearest = [usize::MAX; 2];
                 let mut nearest_dist = [f64::INFINITY; 2];
+                // A loose ball or a pass in flight: each team keeps its phase until a player
+                // of the other team controls the ball.
+                let phase = view.possession_phase();
+                let anchors = shape::anchors(view, phase);
                 for i in 0..n {
                     let p = &players[i];
                     if !p.active() {
                         continue;
                     }
-                    // A loose ball: neither team has it, so both stand as out of possession.
-                    let anchor = teams[p.team].anchor(p.slot, ball_xy, false, t);
-                    targets[i] = anchor;
+                    targets[i] = anchors[i];
                     let d = (p.pos - ball_xy).length();
                     if i != keepers[p.team] && d < nearest_dist[p.team] {
                         nearest_dist[p.team] = d;
                         nearest[p.team] = i;
                     }
                 }
+                shape::apply(view, phase, &anchors, &mut targets);
                 let mut chasing_keepers = [None; 2];
                 for (team, &i) in nearest.iter().enumerate() {
                     if i != usize::MAX {
@@ -1046,8 +1056,8 @@ fn cover(
 }
 
 pub const DECISION_V1_CARD: ModuleCard = ModuleCard {
-    purpose: "Sets every player's target (anchors, the lone forward's line hold, pressing, goal-side cover, chasing) and decides the carrier's option, pass, clearance, shot, and restart kick.",
-    inputs: "Every player's position, velocity, target, activity, slot, lapse, and effective values through the attribute contract (the carrier's see, choose, execute and pressure stages of passes, chips, crosses, shots, long shots, penalties, dribbles and keeper distribution, his skill gates, and every player's press, intercept, shape and rush factors); both teams' shapes and plans; the ball; the carrier and how long he has held the ball; the tick; and the engine tuning.",
+    purpose: "Sets every player's target (anchors at each position's stand for the possession phase, stand options from the role menus, the rest-defence guard, the lone forward's line hold, pressing, goal-side cover, chasing) and decides the carrier's option, pass, clearance, shot, and restart kick.",
+    inputs: "Every player's position, velocity, target, activity, slot, lapse, and effective values through the attribute contract (the carrier's see, choose, execute and pressure stages of passes, chips, crosses, shots, long shots, penalties, dribbles and keeper distribution, his skill gates, and every player's press, intercept, shape and rush factors); both teams' shapes and plans (the stand table, the role menus, the stand-option sizes, the mentality's rest-defence minimum and the guard); the possession phase; each player's familiarity (the familiarity family); the ball; the carrier and how long he has held the ball; the tick; and the engine tuning.",
     outputs: "Every player's target, the carrier's option scores and choice, and the kick of a pass, clearance, shot, or restart.",
     tuning: &[
         "decision",

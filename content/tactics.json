@@ -163,11 +163,11 @@
     }
   ],
   "mentalities": [
-    { "name": "defensive", "block_depth": -8.0, "shoot": -0.3, "progress": -0.3, "hold": 0.2 },
-    { "name": "cautious", "block_depth": -4.0, "shoot": -0.15, "progress": -0.15, "hold": 0.1 },
-    { "name": "balanced", "block_depth": 0.0, "shoot": 0.0, "progress": 0.0, "hold": 0.0 },
-    { "name": "positive", "block_depth": 4.0, "shoot": 0.15, "progress": 0.15, "hold": -0.1 },
-    { "name": "attacking", "block_depth": 8.0, "shoot": 0.3, "progress": 0.3, "hold": -0.2 }
+    { "name": "defensive", "block_depth": -8.0, "shoot": -0.3, "progress": -0.3, "hold": 0.2, "rest_defence": 6 },
+    { "name": "cautious", "block_depth": -4.0, "shoot": -0.15, "progress": -0.15, "hold": 0.1, "rest_defence": 5 },
+    { "name": "balanced", "block_depth": 0.0, "shoot": 0.0, "progress": 0.0, "hold": 0.0, "rest_defence": 4 },
+    { "name": "positive", "block_depth": 4.0, "shoot": 0.15, "progress": 0.15, "hold": -0.1, "rest_defence": 3 },
+    { "name": "attacking", "block_depth": 8.0, "shoot": 0.3, "progress": 0.3, "hold": -0.2, "rest_defence": 2 }
   ],
   "instructions": {
     "pressing": {
@@ -226,7 +226,8 @@
       "in_possession": { "x": 0.0, "y": 0.0 },
       "out_of_possession": { "x": 0.0, "y": 0.0 },
       "preferred_actions": { "shoot": 0.0, "dribble": 0.0, "progress": 0.0 },
-      "teammates": { "long_ball_target": 0.0 }
+      "teammates": { "long_ball_target": 0.0 },
+      "options": { "in_possession": [], "out_of_possession": [] }
     },
     {
       "name": "central_defender",
@@ -235,7 +236,8 @@
       "in_possession": { "x": 0.0, "y": 0.0 },
       "out_of_possession": { "x": 0.0, "y": 0.0 },
       "preferred_actions": { "shoot": -0.2, "dribble": -0.2, "progress": 0.0 },
-      "teammates": { "long_ball_target": 0.0 }
+      "teammates": { "long_ball_target": 0.0 },
+      "options": { "in_possession": ["widen"], "out_of_possession": [] }
     },
     {
       "name": "ball_playing_defender",
@@ -244,7 +246,8 @@
       "in_possession": { "x": 0.0, "y": 0.0 },
       "out_of_possession": { "x": 0.0, "y": 0.0 },
       "preferred_actions": { "shoot": -0.2, "dribble": -0.1, "progress": 0.1 },
-      "teammates": { "long_ball_target": 0.0 }
+      "teammates": { "long_ball_target": 0.0 },
+      "options": { "in_possession": ["widen"], "out_of_possession": [] }
     },
     {
       "name": "full_back",
@@ -253,7 +256,8 @@
       "in_possession": { "x": 0.0, "y": 0.0 },
       "out_of_possession": { "x": 0.0, "y": 0.0 },
       "preferred_actions": { "shoot": -0.1, "dribble": 0.0, "progress": 0.0 },
-      "teammates": { "long_ball_target": 0.0 }
+      "teammates": { "long_ball_target": 0.0 },
+      "options": { "in_possession": ["overlap", "underlap", "widen"], "out_of_possession": [] }
     },
     {
       "name": "wing_back",
@@ -262,7 +266,8 @@
       "in_possession": { "x": 0.0, "y": 0.0 },
       "out_of_possession": { "x": 0.0, "y": 0.0 },
       "preferred_actions": { "shoot": -0.1, "dribble": 0.1, "progress": 0.1 },
-      "teammates": { "long_ball_target": 0.0 }
+      "teammates": { "long_ball_target": 0.0 },
+      "options": { "in_possession": ["overlap", "underlap", "widen"], "out_of_possession": [] }
     },
     {
       "name": "defensive_midfielder",
@@ -271,7 +276,8 @@
       "in_possession": { "x": 0.0, "y": 0.0 },
       "out_of_possession": { "x": 0.0, "y": 0.0 },
       "preferred_actions": { "shoot": -0.1, "dribble": -0.05, "progress": 0.0 },
-      "teammates": { "long_ball_target": 0.0 }
+      "teammates": { "long_ball_target": 0.0 },
+      "options": { "in_possession": ["drop", "half_space"], "out_of_possession": ["drop"] }
     },
     {
       "name": "central_midfielder",
@@ -280,7 +286,8 @@
       "in_possession": { "x": 0.0, "y": 0.0 },
       "out_of_possession": { "x": 0.0, "y": 0.0 },
       "preferred_actions": { "shoot": 0.0, "dribble": 0.0, "progress": 0.0 },
-      "teammates": { "long_ball_target": 0.0 }
+      "teammates": { "long_ball_target": 0.0 },
+      "options": { "in_possession": ["drop", "half_space", "widen"], "out_of_possession": [] }
     },
     {
       "name": "playmaker",
@@ -289,7 +296,8 @@
       "in_possession": { "x": 0.0, "y": 0.0 },
       "out_of_possession": { "x": 0.0, "y": 0.0 },
       "preferred_actions": { "shoot": 0.0, "dribble": 0.0, "progress": 0.15 },
-      "teammates": { "long_ball_target": 0.0 }
+      "teammates": { "long_ball_target": 0.0 },
+      "options": { "in_possession": ["drop", "half_space"], "out_of_possession": [] }
     },
     {
       "name": "attacking_midfielder",
@@ -298,7 +306,8 @@
       "in_possession": { "x": 0.0, "y": 0.0 },
       "out_of_possession": { "x": 0.0, "y": 0.0 },
       "preferred_actions": { "shoot": 0.1, "dribble": 0.05, "progress": 0.05 },
-      "teammates": { "long_ball_target": 0.0 }
+      "teammates": { "long_ball_target": 0.0 },
+      "options": { "in_possession": ["half_space", "widen"], "out_of_possession": [] }
     },
     {
       "name": "winger",
@@ -307,7 +316,8 @@
       "in_possession": { "x": 0.0, "y": 0.0 },
       "out_of_possession": { "x": 0.0, "y": 0.0 },
       "preferred_actions": { "shoot": 0.0, "dribble": 0.15, "progress": 0.05 },
-      "teammates": { "long_ball_target": 0.0 }
+      "teammates": { "long_ball_target": 0.0 },
+      "options": { "in_possession": ["widen", "half_space"], "out_of_possession": [] }
     },
     {
       "name": "inside_forward",
@@ -316,7 +326,8 @@
       "in_possession": { "x": 0.0, "y": 0.0 },
       "out_of_possession": { "x": 0.0, "y": 0.0 },
       "preferred_actions": { "shoot": 0.15, "dribble": 0.1, "progress": 0.0 },
-      "teammates": { "long_ball_target": 0.0 }
+      "teammates": { "long_ball_target": 0.0 },
+      "options": { "in_possession": ["half_space", "widen"], "out_of_possession": [] }
     },
     {
       "name": "striker",
@@ -325,7 +336,8 @@
       "in_possession": { "x": 0.0, "y": 0.0 },
       "out_of_possession": { "x": 0.0, "y": 0.0 },
       "preferred_actions": { "shoot": 0.15, "dribble": 0.0, "progress": 0.0 },
-      "teammates": { "long_ball_target": 0.0 }
+      "teammates": { "long_ball_target": 0.0 },
+      "options": { "in_possession": ["drop", "widen"], "out_of_possession": [] }
     },
     {
       "name": "target_forward",
@@ -334,7 +346,8 @@
       "in_possession": { "x": 0.0, "y": 0.0 },
       "out_of_possession": { "x": 0.0, "y": 0.0 },
       "preferred_actions": { "shoot": 0.05, "dribble": -0.1, "progress": 0.0 },
-      "teammates": { "long_ball_target": 0.0 }
+      "teammates": { "long_ball_target": 0.0 },
+      "options": { "in_possession": ["drop"], "out_of_possession": [] }
     }
   ],
   "duties": [
@@ -353,5 +366,30 @@
     "fatigue_from_minute": 55,
     "keep_for_injury_until_minute": 80,
     "bench_size": 7
-  }
+  },
+  "stands": {
+    "gk": { "in_possession": { "x": 0.0, "y": 0.0 }, "out_of_possession": { "x": 0.0, "y": 0.0 } },
+    "cb": { "in_possession": { "x": 17.4, "y": 3.9 }, "out_of_possession": { "x": 6.5, "y": 1.2 } },
+    "lb": { "in_possession": { "x": 27.3, "y": -1.5 }, "out_of_possession": { "x": 10.6, "y": -6.1 } },
+    "rb": { "in_possession": { "x": 27.3, "y": -1.5 }, "out_of_possession": { "x": 10.6, "y": -6.1 } },
+    "dm": { "in_possession": { "x": 12.8, "y": 3.3 }, "out_of_possession": { "x": 0.4, "y": 2.9 } },
+    "cm": { "in_possession": { "x": 12.8, "y": 3.3 }, "out_of_possession": { "x": 0.4, "y": 2.9 } },
+    "am": { "in_possession": { "x": 12.8, "y": 3.3 }, "out_of_possession": { "x": 0.4, "y": 2.9 } },
+    "lw": { "in_possession": { "x": 20.3, "y": -7.1 }, "out_of_possession": { "x": 3.0, "y": -8.3 } },
+    "rw": { "in_possession": { "x": 20.3, "y": -7.1 }, "out_of_possession": { "x": 3.0, "y": -8.3 } },
+    "st": { "in_possession": { "x": 6.0, "y": 2.4 }, "out_of_possession": { "x": -7.1, "y": 2.7 } }
+  },
+  "stand_options": {
+    "drop_m": 8.0,
+    "drop_gap_m": 15.0,
+    "widen_m": 6.0,
+    "half_space_y": 14.0,
+    "overlap_ahead_m": 8.0,
+    "overlap_out_m": 4.0,
+    "underlap_ahead_m": 8.0,
+    "underlap_in_m": 6.0,
+    "space_m": 6.0,
+    "near_ball_m": 10.0
+  },
+  "rest_defence": { "hold_margin_m": 2.0, "lane_m": 15.0, "cover_familiarity_min": -0.5 }
 }

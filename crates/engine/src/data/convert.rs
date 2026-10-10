@@ -533,6 +533,7 @@ pub fn tactics_v1_to_v2(file: TacticsV1) -> TacticsSchema {
                     progress: r.progress,
                 },
                 teammates: Teammates::default(),
+                options: Default::default(),
             })
             .collect(),
         duties: file
@@ -546,5 +547,8 @@ pub fn tactics_v1_to_v2(file: TacticsV1) -> TacticsSchema {
             })
             .collect(),
         ai: file.ai,
+        stands: Default::default(),
+        stand_options: None,
+        rest_defence: None,
     }
 }

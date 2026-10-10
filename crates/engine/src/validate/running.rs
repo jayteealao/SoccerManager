@@ -486,7 +486,12 @@ impl RunningCheck {
             // two anchors counts.
             let d_anchor = [true, false]
                 .map(|has| (*p - teams[team].anchor(slot, ball, has, &self.tuning)).length());
-            let d_anchor = d_anchor[0].min(d_anchor[1]);
+            let d_anchor = d_anchor[0].min(d_anchor[1]).min(kick_off_place_distance(
+                &teams[team],
+                slot,
+                *p,
+                ball,
+            ));
             let d_ball = (*p - ball).length();
             let prev_dist = self.prev_dist[i];
             let closing = d_ball < prev_dist[0] - 1e-3 || d_anchor < prev_dist[1] - 1e-3;
@@ -618,6 +623,19 @@ impl TickSink for RunningCheck {
     fn on_tick(&mut self, record: &TickRecord) -> Result<(), EngineError> {
         self.tick(record);
         Ok(())
+    }
+}
+
+/// While the ball waits on the centre spot for a kick-off, the referee stands each player on
+/// his kick-off place: the formation slot in his own half (Law 8). It counts as a third
+/// reference for the anchor rule, so a player standing there is not drifting even when his
+/// stand for the phase lies far from his slot. In play the ball is never exactly on the
+/// centre spot for long, and the reference is infinitely far.
+pub(crate) fn kick_off_place_distance(team: &Team, slot: usize, at: DVec2, ball: DVec2) -> f64 {
+    if ball == DVec2::ZERO {
+        (at - crate::rules::restart::kick_off_position(team, slot)).length()
+    } else {
+        f64::INFINITY
     }
 }
 

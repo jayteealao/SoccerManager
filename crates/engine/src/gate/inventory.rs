@@ -64,6 +64,7 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         ai,
         keeper_beaten,
         pass_in_flight,
+        possession_phase,
         shot_in_flight,
         shot_on_target,
         shot_quality,
@@ -130,6 +131,8 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     w.bool(*keeper_beaten);
     w.mark(Bytes, || "pass_in_flight".into());
     w.index(*pass_in_flight);
+    w.mark(Bytes, || "possession_phase".into());
+    w.index(*possession_phase);
     w.mark(Bytes, || "shot_in_flight".into());
     w.index(*shot_in_flight);
     w.mark(Bytes, || "shot_on_target".into());

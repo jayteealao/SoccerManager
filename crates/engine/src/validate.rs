@@ -225,7 +225,14 @@ impl Validator {
                 // slot's two anchors counts.
                 let d_anchor = [true, false]
                     .map(|has| (*p - teams[team].anchor(slot, ball, has, &self.tuning)).length());
-                let d_anchor = d_anchor[0].min(d_anchor[1]);
+                let d_anchor = d_anchor[0]
+                    .min(d_anchor[1])
+                    .min(running::kick_off_place_distance(
+                        &teams[team],
+                        slot,
+                        *p,
+                        ball,
+                    ));
                 let d_ball = (*p - ball).length();
                 let closing = d_ball < prev_dist[i][0] - 1e-3 || d_anchor < prev_dist[i][1] - 1e-3;
                 prev_dist[i] = [d_ball, d_anchor];

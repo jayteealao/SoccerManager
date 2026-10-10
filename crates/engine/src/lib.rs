@@ -32,6 +32,7 @@ pub mod rules;
 pub mod scenario;
 #[cfg(feature = "sensitivity")]
 pub mod sensitivity;
+pub mod shape;
 pub mod shot;
 pub mod sim;
 pub mod snapshot;
