@@ -127,10 +127,17 @@ pub struct ProofBuild {
 #[serde(deny_unknown_fields)]
 pub struct SelfRuns {
     pub runs: Vec<SelfRun>,
-    /// Runs whose joint word is pass, over the runs; a not sure is not a pass.
+    /// Runs whose joint word is pass, over the runs; a not sure is not a pass. A band
+    /// outside its range fails every run, so these rates follow the engine's ranges too.
     pub pass_rate: f64,
     pub fail_rate: f64,
     pub not_sure_rate: f64,
+    /// Runs in which any band's change passed the joint threshold: the false alarms the
+    /// joint test caps at 3 percent.
+    pub false_alarm_rate: f64,
+    /// Runs in which any band moved: a change past the threshold and at least its smallest
+    /// shift.
+    pub move_rate: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -147,6 +154,10 @@ pub struct SelfRun {
     pub failed: Vec<String>,
     /// Bands that read not sure, in either table.
     pub not_sure: Vec<String>,
+    /// Bands whose change passed the joint threshold.
+    pub significant: Vec<String>,
+    /// Bands that moved: past the threshold and at least their smallest shift.
+    pub moved: Vec<String>,
 }
 
 /// One broken copy's runs.
@@ -157,9 +168,11 @@ pub struct CopyProof {
     pub runs: Vec<CopyRun>,
     /// Runs whose joint word is fail, over the runs.
     pub fail_rate: f64,
-    /// Runs in which no band read fail: missed detections.
+    /// Runs in which the band the copy names moved, over the runs.
+    pub detection_rate: f64,
+    /// Runs in which no band moved: missed detections.
     pub missed: u32,
-    /// Each band that read fail, with the number of runs it did.
+    /// Each band that moved, with the number of runs it did.
     pub moved: BTreeMap<String, u32>,
 }
 
@@ -169,7 +182,9 @@ pub struct CopyRun {
     pub seed: u64,
     pub word: String,
     pub matches: u32,
-    /// Bands that read fail, in either table; empty for a missed detection.
+    /// Bands that read fail, in either table: moved, or outside their range.
+    pub failed: Vec<String>,
+    /// Bands that moved; empty for a missed detection.
     pub moved: Vec<String>,
 }
 
@@ -311,11 +326,13 @@ pub struct RunMeta {
     pub reseed: Option<u64>,
 }
 
-/// What a run's report says: its joint word, its bands by word, its matches.
+/// What a run's report says: its joint word, its bands by word and by change, its matches.
 struct Read {
     word: String,
     failed: Vec<String>,
     not_sure: Vec<String>,
+    significant: Vec<String>,
+    moved: Vec<String>,
     total: u32,
     pairs: u32,
     observations: Vec<(String, u32)>,
@@ -328,9 +345,24 @@ fn read_report(report: &Value) -> Read {
         .to_string();
     let mut failed = BTreeSet::new();
     let mut not_sure = BTreeSet::new();
+    let mut significant = BTreeSet::new();
+    let mut moved = BTreeSet::new();
+    let critical = report["calib.joint"]["critical"].as_f64();
     for table in ["calib.verdicts", "calib.reported"] {
         for row in report[table].as_array().into_iter().flatten() {
             let band = row["band"].as_str().unwrap_or_default().to_string();
+            // The gate's own rule: a change past the joint threshold moved the band when it
+            // is also at least the band's smallest shift. A row judged by its range alone
+            // has no change.
+            let change = (row["diff"].as_f64(), row["se"].as_f64(), critical);
+            if let (Some(diff), Some(se), Some(c)) = change {
+                if se > 0.0 && diff.abs() / se > c {
+                    significant.insert(band.clone());
+                    if diff.abs() >= row["smallest_shift"].as_f64().unwrap_or(f64::INFINITY) {
+                        moved.insert(band.clone());
+                    }
+                }
+            }
             match row["word"].as_str() {
                 Some("fail") => {
                     failed.insert(band);
@@ -348,6 +380,8 @@ fn read_report(report: &Value) -> Read {
         word,
         failed: failed.into_iter().collect(),
         not_sure: not_sure.into_iter().collect(),
+        significant: significant.into_iter().collect(),
+        moved: moved.into_iter().collect(),
         total: n(&counts["total_matches"]),
         pairs: n(&counts["pairs"]),
         observations: counts["observations"]
@@ -402,14 +436,19 @@ pub fn summarise(
                 matches: r.total,
                 failed: r.failed,
                 not_sure: r.not_sure,
+                significant: r.significant,
+                moved: r.moved,
             }
         })
         .collect();
     let words = |w: &str| runs.iter().filter(|r| r.word == w).count();
+    let any = |f: fn(&SelfRun) -> &Vec<String>| runs.iter().filter(|r| !f(r).is_empty()).count();
     let self_proof = SelfRuns {
         pass_rate: rate(words("pass"), runs.len()),
         fail_rate: rate(words("fail"), runs.len()),
         not_sure_rate: rate(words("not sure"), runs.len()),
+        false_alarm_rate: rate(any(|r| &r.significant), runs.len()),
+        move_rate: rate(any(|r| &r.moved), runs.len()),
         runs,
     };
     let copy_proofs: Vec<CopyProof> = copies
@@ -425,7 +464,8 @@ pub fn summarise(
                         seed: meta.seed,
                         word: r.word,
                         matches: r.total,
-                        moved: r.failed,
+                        failed: r.failed,
+                        moved: r.moved,
                     }
                 })
                 .collect();
@@ -436,6 +476,12 @@ pub fn summarise(
             CopyProof {
                 name: copy.name.clone(),
                 fail_rate: rate(runs.iter().filter(|r| r.word == "fail").count(), runs.len()),
+                detection_rate: rate(
+                    runs.iter()
+                        .filter(|r| r.moved.contains(&copy.measure))
+                        .count(),
+                    runs.len(),
+                ),
                 missed: u32::try_from(runs.iter().filter(|r| r.moved.is_empty()).count())
                     .unwrap_or(u32::MAX),
                 moved,
@@ -465,18 +511,23 @@ pub fn render(p: &Proof) -> String {
         p.gate.registry, p.gate.measures, p.gate.verdict_code
     );
     out.push_str(&format!(
-        "self runs: {} runs, pass rate {:.2}, fail rate {:.2}, not sure rate {:.2}\n",
+        "self runs: {} runs, pass rate {:.2}, fail rate {:.2}, not sure rate {:.2}; false \
+         alarm rate {:.2}, move rate {:.2}\n",
         p.self_runs.runs.len(),
         p.self_runs.pass_rate,
         p.self_runs.fail_rate,
-        p.self_runs.not_sure_rate
+        p.self_runs.not_sure_rate,
+        p.self_runs.false_alarm_rate,
+        p.self_runs.move_rate
     ));
     for c in &p.copies {
         let moved: Vec<String> = c.moved.iter().map(|(b, n)| format!("{b} {n}")).collect();
         out.push_str(&format!(
-            "copy {}: fail rate {:.2} over {} runs; {} missed; bands moved: {}\n",
+            "copy {}: fail rate {:.2}, detection rate {:.2} over {} runs; {} missed; bands \
+             moved: {}\n",
             c.name,
             c.fail_rate,
+            c.detection_rate,
             c.runs.len(),
             c.missed,
             if moved.is_empty() {
@@ -610,14 +661,23 @@ mod tests {
         }
     }
 
-    fn report(word: &str, verdicts: &[(&str, &str)], reported: &[(&str, &str)]) -> Value {
-        let rows = |r: &[(&str, &str)]| -> Vec<Value> {
+    /// A row of `band` with its word and, unless `None`, a change of `diff` with standard
+    /// error 1 and smallest shift 2.5; the run's joint threshold is 2.
+    type Row<'a> = (&'a str, &'a str, Option<f64>);
+
+    fn report(word: &str, verdicts: &[Row<'_>], reported: &[Row<'_>]) -> Value {
+        let rows = |r: &[Row<'_>]| -> Vec<Value> {
             r.iter()
-                .map(|(b, w)| json!({ "band": b, "word": w }))
+                .map(|(b, w, diff)| match diff {
+                    Some(d) => json!({
+                        "band": b, "word": w, "diff": d, "se": 1.0, "smallest_shift": 2.5
+                    }),
+                    None => json!({ "band": b, "word": w }),
+                })
                 .collect()
         };
         json!({
-            "calib.joint": { "word": word },
+            "calib.joint": { "word": word, "critical": 2.0 },
             "calib.verdicts": rows(verdicts),
             "calib.reported": rows(reported),
             "calib.counts": {
@@ -648,16 +708,39 @@ mod tests {
     }
 
     #[test]
-    fn a_not_sure_self_run_is_never_a_pass() {
-        let mut selfs: Vec<(RunMeta, Value)> = (0..9)
-            .map(|i| (meta(i), report("pass", &[("goals", "pass")], &[])))
+    fn a_not_sure_self_run_is_never_a_pass_and_false_alarms_count_by_change() {
+        let mut selfs: Vec<(RunMeta, Value)> = (0..8)
+            .map(|i| {
+                (
+                    meta(i),
+                    report("pass", &[("goals", "pass", Some(0.5))], &[]),
+                )
+            })
             .collect();
+        // A band outside its range fails without a change; a significant change under the
+        // smallest shift is a false alarm but no move.
+        selfs.push((
+            meta(8),
+            report(
+                "fail",
+                &[("goals", "fail", Some(0.5))],
+                &[("x", "pass", Some(-2.2))],
+            ),
+        ));
         selfs.push((
             meta(9),
-            report("not sure", &[("goals", "not sure")], &[("x", "pass")]),
+            report(
+                "not sure",
+                &[("goals", "not sure", None)],
+                &[("x", "pass", None)],
+            ),
         ));
         let (s, _, _, counts) = summarise(&selfs, &[], &[], &[]);
-        assert_eq!((s.pass_rate, s.not_sure_rate, s.fail_rate), (0.9, 0.1, 0.0));
+        assert_eq!((s.pass_rate, s.fail_rate, s.not_sure_rate), (0.8, 0.1, 0.1));
+        assert_eq!((s.false_alarm_rate, s.move_rate), (0.1, 0.0));
+        assert_eq!(s.runs[8].failed, ["goals"]);
+        assert_eq!(s.runs[8].significant, ["x"]);
+        assert!(s.runs[8].moved.is_empty());
         assert_eq!(s.runs[9].not_sure, ["goals"]);
         assert_eq!(s.runs[9].reseed, 10);
         assert_eq!(
@@ -668,17 +751,20 @@ mod tests {
     }
 
     #[test]
-    fn a_copy_counts_its_fails_its_moves_from_both_tables_and_its_misses() {
+    fn a_copy_counts_its_moves_from_both_tables_apart_from_its_fails_and_its_misses() {
         let runs: Vec<(String, RunMeta, Value)> = (0..5)
             .map(|j| {
                 let r = if j < 4 {
                     report(
                         "fail",
-                        &[("shots_per_team", "fail"), ("goals", "pass")],
-                        &[("goals_distribution", "fail")],
+                        &[
+                            ("shots_per_team", "fail", Some(3.0)),
+                            ("goals", "fail", Some(0.1)),
+                        ],
+                        &[("goals_distribution", "fail", Some(-4.0))],
                     )
                 } else {
-                    report("not sure", &[("shots_per_team", "not sure")], &[])
+                    report("fail", &[("goals", "fail", Some(0.1))], &[])
                 };
                 ("shots_up".to_string(), meta(j), r)
             })
@@ -690,11 +776,14 @@ mod tests {
         let (_, copies, bands, counts) =
             summarise(&[], &runs, &[copy("shots_up"), copy("idle")], &dist);
         let c = &copies[0];
-        assert_eq!(c.fail_rate, 0.8);
+        assert_eq!(c.fail_rate, 1.0);
+        assert_eq!(c.detection_rate, 0.8);
         assert_eq!(c.missed, 1);
         assert!(c.runs[4].moved.is_empty());
+        assert_eq!(c.runs[4].failed, ["goals"]);
         assert_eq!(c.moved["shots_per_team"], 4);
         assert_eq!(c.moved["goals_distribution"], 4);
+        assert!(!c.moved.contains_key("goals"), "a range fail is not a move");
         assert_eq!(copies[1].runs.len(), 0);
         assert_eq!(copies[1].fail_rate, 0.0);
         assert_eq!(bands[0].moved_by, ["shots_up"]);

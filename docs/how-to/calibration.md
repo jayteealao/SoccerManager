@@ -228,8 +228,8 @@ A build without the measures refuses the proof with `this build has no measures`
 The proof prints its summary and writes it under `proof` in `content/gate-proof.json`:
 
 - `gate`: the band registry digest, the measures version and the judging-code digest that the proof measured. A calibrate run compares them with its own gate.
-- `self`: the 10 self runs, each with its joint word and the bands that read fail or not sure, and the pass, fail and not-sure rates. A `not sure` run is not a pass.
-- `copies`: for each broken copy, its fail rate (runs whose joint word is `fail`), `missed` (runs in which no band read `fail`), and `moved` (each band that read `fail`, with the number of runs it did). A copy with misses is a broken engine that the gate did not catch every time.
+- `self`: the 10 self runs, each with its joint word, the bands that read fail or not sure, the bands whose change passed the joint threshold (`significant`), and the bands that moved (`moved`: past the threshold and at least their smallest shift). Then the pass, fail and not-sure rates by joint word, the `false_alarm_rate` (runs with any significant band) and the `move_rate` (runs with any moved band). A `not sure` run is not a pass. A band outside its range reads `fail` in every run, the self runs included, so while the engine sits outside some ranges the pass rate is 0 whatever the gate does: read the false-alarm rate for the gate itself.
+- `copies`: for each broken copy, its fail rate (runs whose joint word is `fail`), its `detection_rate` (runs in which the band it names moved), `missed` (runs in which no band moved), and `moved` (each band that moved, with the number of runs it did). A copy with misses is a broken engine that the gate did not catch every time.
 - `distribution_bands`: for each whole-distribution band, the copies that moved it. An empty list means that no copy moved it, so the proof does not show that this band catches a broken engine.
 - `counts`: the total matches, the pairs, and the matches of each engine over every run.
 
