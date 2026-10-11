@@ -243,10 +243,15 @@
     container-type: inline-size;
   }
 
-  /* In a narrow column the three stub columns give way to the figures. */
+  /* In a narrow column the three stub columns give way to the figures, and the reserve bar
+     shortens so the mood word fits without a sideways scroll. */
   @container (max-width: 400px) {
     .stubcol {
       display: none;
+    }
+
+    .res .bar {
+      width: 26px;
     }
   }
 </style>
