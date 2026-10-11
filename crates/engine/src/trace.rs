@@ -668,14 +668,10 @@ pub fn note_points(seen: &mut std::collections::BTreeSet<Point>, records: &[Trac
 
 /// The points the 22 gate matches never reach. Each has a scene test in
 /// `crates/engine/tests/trace.rs` that forces it and checks its record. The shipped teams
-/// carry no traits, so no gate match meets an override's moment.
+/// carry no traits, so no gate match meets an override's moment. Since the player as a
+/// person changed play, the gate matches reach an offside.
 #[cfg(feature = "scenario")]
-pub const SCENE_ONLY: &[Point] = &[
-    Point::CrossClear,
-    Point::Abandoned,
-    Point::Offside,
-    Point::TraitOverride,
-];
+pub const SCENE_ONLY: &[Point] = &[Point::CrossClear, Point::Abandoned, Point::TraitOverride];
 
 /// Checks the partition: the points the gate matches reached plus [`SCENE_ONLY`] are
 /// exactly [`Point::ALL`]. Returns the missing points by name, or the scene-only points the

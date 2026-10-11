@@ -24,7 +24,9 @@ fn run(data: &Path, args: &[&str]) -> Output {
         .unwrap()
 }
 
-/// The small fit, played once per test binary: its folder and its report.
+/// The small fit, played once per test binary: its folder and its report. Twenty minutes a
+/// match, so every side and pairing group has a corner to fit; in ten minutes some group can
+/// have none, and its count cannot be fitted.
 fn small_fit() -> &'static (PathBuf, Value) {
     static FIT: OnceLock<(PathBuf, Value)> = OnceLock::new();
     FIT.get_or_init(|| {
@@ -41,7 +43,7 @@ fn small_fit() -> &'static (PathBuf, Value) {
                 "--draws",
                 "2",
                 "--minutes",
-                "10",
+                "20",
                 "--jobs",
                 "4",
                 "--gate-fixture",
